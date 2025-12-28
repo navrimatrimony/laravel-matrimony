@@ -34,7 +34,11 @@ Route::get('/matrimony/profile/edit', [MatrimonyProfileController::class, 'edit'
 Route::post('/matrimony/profile/update', [MatrimonyProfileController::class, 'update'])
     ->name('matrimony.profile.update');
 
+Route::get('/profile/{id}', [\App\Http\Controllers\MatrimonyProfileController::class, 'show'])
+    ->middleware('auth');
 
+Route::get('/profiles', [\App\Http\Controllers\MatrimonyProfileController::class, 'index'])
+    ->middleware('auth');
 
 });
 

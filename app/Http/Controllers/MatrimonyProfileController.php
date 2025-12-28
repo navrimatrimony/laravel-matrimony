@@ -55,6 +55,18 @@ public function update(Request $request)
     ->with('success', 'Profile updated successfully');
 
 }
+public function show($id)
+{
+    $profile = \App\Models\Profile::findOrFail($id);
+
+    return view('matrimony.show', compact('profile'));
+}
+public function index()
+{
+    $profiles = \App\Models\Profile::latest()->get();
+
+    return view('matrimony.index', compact('profiles'));
+}
 
 
 }
