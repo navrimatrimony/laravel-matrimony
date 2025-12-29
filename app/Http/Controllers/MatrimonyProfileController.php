@@ -24,6 +24,8 @@ public function store(Request $request)
         'date_of_birth'  => $request->date_of_birth,
         'education'      => $request->education,
         'location'       => $request->location,
+		'caste' 		 => $request->caste,
+
     ]);
 
     return redirect()
@@ -48,6 +50,7 @@ public function update(Request $request)
         'date_of_birth'  => $request->date_of_birth,
         'education'      => $request->education,
         'location'       => $request->location,
+		'caste'          => $request->caste,
     ]);
 
     return redirect()
@@ -59,14 +62,58 @@ public function show($id)
 {
     $profile = \App\Models\Profile::findOrFail($id);
 
-    return view('matrimony.show', compact('profile'));
+    $viewer = auth()->user();   // सध्या login user
+    $isOwnProfile = $viewer && ($viewer->id === $profile->user_id);
+
+    $interestAlreadySent = false;
+
+if (auth()->check()) {
+    $interestAlreadySent = \App\Models\Interest::where('sender_id', auth()->id())
+        ->where('receiver_id', $profile->user_id)
+        ->exists();
 }
-public function index()
+
+return view(
+    'matrimony.show',
+    compact('profile', 'isOwnProfile', 'interestAlreadySent')
+);
+
+}
+
+public function index(\Illuminate\Http\Request $request)
 {
-    $profiles = \App\Models\Profile::latest()->get();
+    $query = \App\Models\Profile::latest();
+
+    // Caste search
+    if ($request->filled('caste')) {
+        $query->where('caste', $request->caste);
+    }
+
+    // Location search
+    if ($request->filled('location')) {
+        $query->where('location', $request->location);
+    }
+
+    // Age From (DOB <= calculated date)
+    if ($request->filled('age_from')) {
+        $date = now()->subYears($request->age_from)->toDateString();
+        $query->where('date_of_birth', '<=', $date);
+    }
+
+    // Age To (DOB >= calculated date)
+    if ($request->filled('age_to')) {
+        $date = now()->subYears($request->age_to)->toDateString();
+        $query->where('date_of_birth', '>=', $date);
+    }
+
+    $profiles = $query->get();
 
     return view('matrimony.index', compact('profiles'));
 }
+
+
+
+
 
 
 }

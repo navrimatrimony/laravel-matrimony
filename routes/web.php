@@ -3,6 +3,7 @@
 use App\Http\Controllers\ProfileController;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\MatrimonyProfileController;
+use App\Http\Controllers\InterestController;
 /*
 |--------------------------------------------------------------------------
 | Web Routes
@@ -39,6 +40,16 @@ Route::get('/profile/{id}', [\App\Http\Controllers\MatrimonyProfileController::c
 
 Route::get('/profiles', [\App\Http\Controllers\MatrimonyProfileController::class, 'index'])
     ->middleware('auth');
+
+
+
+Route::middleware(['auth'])->group(function () {
+
+    Route::post('/interests/send/{user}', [InterestController::class, 'store'])
+        ->name('interests.send');
+
+});
+
 
 });
 

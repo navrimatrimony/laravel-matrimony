@@ -19,6 +19,10 @@
 
     <label>Location</label><br>
     <input type="text" name="location" value="{{ $profile->location }}"><br><br>
+	
+	<label>Caste</label><br>
+	<input type="text" name="caste" value="{{ $profile->caste }}"><br><br>
+
 
     <button type="submit">Update Profile</button>
 </form>

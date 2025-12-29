@@ -12,6 +12,9 @@
     <label>Education</label><br>
     <input type="text" name="education"><br><br>
 
+    <label>Caste</label><br>
+    <input type="text" name="caste"><br><br>
+
     <label>Location</label><br>
     <input type="text" name="location"><br><br>
 

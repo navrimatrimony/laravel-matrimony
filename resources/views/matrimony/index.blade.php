@@ -11,6 +11,34 @@
     </p>
 @else
 
+<form method="GET" action="{{ url('/profiles') }}" style="margin-bottom:20px;">
+    <div>
+        <label>Age From:</label>
+        <input type="number" name="age_from" value="{{ request('age_from') }}">
+    </div>
+
+    <div>
+        <label>Age To:</label>
+        <input type="number" name="age_to" value="{{ request('age_to') }}">
+    </div>
+
+    <div>
+        <label>Caste:</label>
+        <input type="text" name="caste" value="{{ request('caste') }}">
+    </div>
+
+    <div>
+        <label>Location:</label>
+        <input type="text" name="location" value="{{ request('location') }}">
+    </div>
+
+    <div style="margin-top:10px;">
+        <button type="submit">Search</button>
+        <a href="{{ url('/profiles') }}">Reset</a>
+    </div>
+</form>
+
+
     @foreach ($profiles as $profile)
         <div class="bg-white shadow rounded p-4 mb-4 flex justify-between items-center">
             <div>

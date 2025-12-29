@@ -15,6 +15,31 @@
                     <x-nav-link :href="route('dashboard')" :active="request()->routeIs('dashboard')">
                         {{ __('Dashboard') }}
                     </x-nav-link>
+					
+				@php
+    $hasProfile = auth()->user() && auth()->user()->profile;
+@endphp
+
+@php
+    $hasProfile = auth()->user() && auth()->user()->profile;
+@endphp
+
+<!-- Matrimony Profile -->
+<x-nav-link
+    href="{{ $hasProfile ? url('matrimony/profile/edit') : url('matrimony/profile/create') }}"
+    :active="request()->is('matrimony/profile/*')">
+    Matrimony Profile
+</x-nav-link>
+
+<!-- Browse / Search Profiles -->
+<x-nav-link
+    href="{{ url('/profiles') }}"
+    :active="request()->is('profiles')">
+    Search Profiles
+</x-nav-link>
+
+
+
                 </div>
             </div>
 

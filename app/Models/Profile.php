@@ -6,11 +6,13 @@ use Illuminate\Database\Eloquent\Model;
 use App\Models\User;
 class Profile extends Model
 {
-	protected $fillable = [
+protected $fillable = [
+    'user_id',
     'full_name',
-	'gender',
+    'gender',
     'date_of_birth',
     'education',
+    'caste',
     'location',
 ];
 
