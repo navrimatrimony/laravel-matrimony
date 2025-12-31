@@ -46,7 +46,23 @@ class RegisteredUserController extends Controller
         Auth::login($user);
 
         // 5️⃣ Dashboard कडे पाठवा
+               /*
+        |--------------------------------------------------------------------------
+        | Mandatory Matrimony Profile Check (SSOT v3.1)
+        |--------------------------------------------------------------------------
+        |
+        | 👉 Registration नंतर profile असणं compulsory आहे
+        | 👉 Profile नसल्यास user ला थेट create page वर पाठवा
+        |
+        */
+
+        if (!$user->matrimonyProfile) {
+            return redirect()->route('matrimony.profile.create');
+        }
+
+        // (Future use) profile असल्यास dashboard
         return redirect('/dashboard');
+
 
     }
 }

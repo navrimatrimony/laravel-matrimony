@@ -1,56 +1,82 @@
 <?php
 
-use App\Http\Controllers\ProfileController;
 use Illuminate\Support\Facades\Route;
+use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\MatrimonyProfileController;
 use App\Http\Controllers\InterestController;
+
 /*
 |--------------------------------------------------------------------------
-| Web Routes
+| Public Routes
 |--------------------------------------------------------------------------
 */
 Route::get('/', function () {
     return view('welcome');
 });
 
+/*
+|--------------------------------------------------------------------------
+| Dashboard
+|--------------------------------------------------------------------------
+*/
 Route::get('/dashboard', function () {
     return view('dashboard');
 })->middleware(['auth', 'verified'])->name('dashboard');
 
+/*
+|--------------------------------------------------------------------------
+| Authenticated Routes
+|--------------------------------------------------------------------------
+*/
 Route::middleware('auth')->group(function () {
-    Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
-    Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
-    Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
-	
-// Matrimony Profile Routes (Day 8)
-Route::get('/matrimony/profile/create', [MatrimonyProfileController::class, 'create'])
-    ->name('matrimony.profile.create');
 
-Route::post('/matrimony/profile/store', [MatrimonyProfileController::class, 'store'])
-    ->name('matrimony.profile.store');
+    /*
+    | User Account Profile (Laravel default)
+    */
+    Route::get('/profile', [ProfileController::class, 'edit'])
+        ->name('profile.edit');
 
-Route::get('/matrimony/profile/edit', [MatrimonyProfileController::class, 'edit'])
-    ->name('matrimony.profile.edit');
+    Route::patch('/profile', [ProfileController::class, 'update'])
+        ->name('profile.update');
 
-Route::post('/matrimony/profile/update', [MatrimonyProfileController::class, 'update'])
-    ->name('matrimony.profile.update');
+    Route::delete('/profile', [ProfileController::class, 'destroy'])
+        ->name('profile.destroy');
 
-Route::get('/profile/{id}', [\App\Http\Controllers\MatrimonyProfileController::class, 'show'])
-    ->middleware('auth');
+    /*
+    | Matrimony Profile
+    */
+    Route::get('/matrimony/profile/create', [MatrimonyProfileController::class, 'create'])
+        ->name('matrimony.profile.create');
 
-Route::get('/profiles', [\App\Http\Controllers\MatrimonyProfileController::class, 'index'])
-    ->middleware('auth');
+    Route::post('/matrimony/profile/store', [MatrimonyProfileController::class, 'store'])
+        ->name('matrimony.profile.store');
 
+    Route::get('/matrimony/profile/edit', [MatrimonyProfileController::class, 'edit'])
+        ->name('matrimony.profile.edit');
 
+    Route::post('/matrimony/profile/update', [MatrimonyProfileController::class, 'update'])
+        ->name('matrimony.profile.update');
 
-Route::middleware(['auth'])->group(function () {
+    /*
+    | Matrimony Profiles (View / Search)
+    */
+    Route::get('/profiles', [MatrimonyProfileController::class, 'index'])
+        ->name('matrimony.profiles.index');
 
+    Route::get('/profile/{id}', [MatrimonyProfileController::class, 'show'])
+        ->name('matrimony.profile.show');
+
+    /*
+    | Interests
+    */
     Route::post('/interests/send/{user}', [InterestController::class, 'store'])
         ->name('interests.send');
 
-});
+    Route::get('/interests/sent', [InterestController::class, 'sent'])
+        ->name('interests.sent');
 
-
+    Route::get('/interests/received', [InterestController::class, 'received'])
+        ->name('interests.received');
 });
 
 require __DIR__.'/auth.php';
