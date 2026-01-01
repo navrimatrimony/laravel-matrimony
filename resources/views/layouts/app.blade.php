@@ -4,6 +4,9 @@
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <meta name="csrf-token" content="{{ csrf_token() }}">
+		<meta name="robots" content="noindex, nofollow">
+		<meta name="googlebot" content="noindex, nofollow">
+
 
         <title>{{ config('app.name', 'Laravel') }}</title>
 
@@ -28,10 +31,13 @@
             @endisset
 
             <!-- Page Content -->
-            <main>
-              @yield('content')
+            <!-- Page Content -->
+				<main>
+    @yield('content')
+</main>
 
-            </main>
+
+
         </div>
     </body>
 </html>

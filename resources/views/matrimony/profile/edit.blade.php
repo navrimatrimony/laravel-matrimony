@@ -1,28 +1,42 @@
-<h1>Matrimony Profile Edit</h1>
-@if (session('success'))
-    <p style="color: green;">
-        {{ session('success') }}
-    </p>
-@endif
+@extends('layouts.app')
 
-<form method="POST" action="{{ route('matrimony.profile.update') }}">
-    @csrf
+@section('content')
 
-    <label>Full Name</label><br>
-    <input type="text" name="full_name" value="{{ $profile->full_name }}"><br><br>
+<div class="py-12">
+    <div class="max-w-3xl mx-auto sm:px-6 lg:px-8">
+        <div class="bg-white dark:bg-gray-800 shadow-sm sm:rounded-lg">
+            <div class="p-6 text-gray-900 dark:text-gray-100">
 
-    <label>Date of Birth</label><br>
-    <input type="date" name="date_of_birth" value="{{ $profile->date_of_birth }}"><br><br>
+                <h1 class="text-2xl font-bold mb-6">
+                    Edit Matrimony Profile
+                </h1>
 
-    <label>Education</label><br>
-    <input type="text" name="education" value="{{ $profile->education }}"><br><br>
+                <form method="POST" action="{{ route('matrimony.profile.update') }}">
+                    @csrf
 
-    <label>Location</label><br>
-    <input type="text" name="location" value="{{ $profile->location }}"><br><br>
-	
-	<label>Caste</label><br>
-	<input type="text" name="caste" value="{{ $profile->caste }}"><br><br>
+                    <label>Full Name</label><br>
+                    <input type="text" name="full_name" value="{{ $profile->full_name }}"><br><br>
 
+                    <label>Date of Birth</label><br>
+                    <input type="date" name="date_of_birth" value="{{ $profile->date_of_birth }}"><br><br>
 
-    <button type="submit">Update Profile</button>
-</form>
+                    <label>Education</label><br>
+                    <input type="text" name="education" value="{{ $profile->education }}"><br><br>
+
+                    <label>Caste</label><br>
+                    <input type="text" name="caste" value="{{ $profile->caste }}"><br><br>
+
+                    <label>Location</label><br>
+                    <input type="text" name="location" value="{{ $profile->location }}"><br><br>
+
+                    <button type="submit">
+                        Update Profile
+                    </button>
+                </form>
+
+            </div>
+        </div>
+    </div>
+</div>
+
+@endsection

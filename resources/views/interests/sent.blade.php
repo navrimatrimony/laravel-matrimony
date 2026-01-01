@@ -1,38 +1,69 @@
 @extends('layouts.app')
 
 @section('content')
-<div class="container">
 
-    <h2 class="text-xl font-bold mb-4">Sent Interests</h2>
+{{--
+|--------------------------------------------------------------------------
+| Sent Interests Page
+|--------------------------------------------------------------------------
+| PURPOSE:
+|   - Logged-in user ने कोणकोणाला interest पाठवला आहे
+|     ते यादीत दाखवणे
+|
+| DATA SOURCE:
+|   - $sentInterests
+|     → InterestController@sent मधून येतो
+|
+| SSOT RULE:
+|   - Classic Blade Layout ONLY
+|   - @extends / @section वापरायचा
+|--------------------------------------------------------------------------
+--}}
 
-    {{-- 
-        Meaning:
-        $sentInterests =
-        Logged-in user ने पाठवलेले सर्व interests
-    --}}
+<div class="py-12">
+    <div class="max-w-5xl mx-auto sm:px-6 lg:px-8">
 
-    @if ($sentInterests->count() === 0)
-        <p class="text-gray-600">
-            You have not sent any interests yet.
-        </p>
-    @else
-        @foreach ($sentInterests as $interest)
-            <div class="card mb-2 p-2 border rounded">
+        <div class="bg-white dark:bg-gray-800 shadow sm:rounded-lg">
+            <div class="p-6 text-gray-900 dark:text-gray-100">
 
-                <p>
-                    <strong>To:</strong>
-                    {{ $interest->receiverProfile->full_name ?? 'Profile Deleted' }}
+                <h2 class="text-xl font-bold mb-4">
+                    Sent Interests
+                </h2>
 
-                </p>
+                {{-- No interests case --}}
+                @if ($sentInterests->count() === 0)
+                    <p class="text-gray-600 dark:text-gray-400">
+                        You have not sent any interests yet.
+                    </p>
+                @else
 
-                <a href="{{ route('matrimony.profile.show', $interest->receiverProfile->id) }}">
-				View Matrimony Profile
-				</a>
+                    {{-- Sent interests list --}}
+                    @foreach ($sentInterests as $interest)
+                        <div class="border rounded p-3 mb-3">
 
+                            <p>
+                                <strong>To:</strong>
+                                {{ $interest->receiverProfile->full_name ?? 'Profile Deleted' }}
+                            </p>
+
+                            @if ($interest->receiverProfile)
+                                <a
+                                    href="{{ route('matrimony.profile.show', $interest->receiverProfile->id) }}"
+                                    class="text-blue-600 hover:underline"
+                                >
+                                    View Matrimony Profile
+                                </a>
+                            @endif
+
+                        </div>
+                    @endforeach
+
+                @endif
 
             </div>
-        @endforeach
-    @endif
+        </div>
 
+    </div>
 </div>
+
 @endsection

@@ -32,9 +32,14 @@ class MatrimonyProfileController extends Controller
     |
     */
     public function create()
-    {
-        return view('matrimony.profile.create');
-    }
+{
+    // 🔒 RULE:
+    // Create page नेहमी form दाखवतो
+    // Guard logic इथे ठेवायचा नाही
+
+    return view('matrimony.profile.create');
+}
+
 
     /*
     |--------------------------------------------------------------------------
@@ -72,14 +77,26 @@ class MatrimonyProfileController extends Controller
     |
     */
     public function edit()
-    {
-        $user = auth()->user();
+{
+    // Logged-in user
+    $user = auth()->user();
 
-        return view('matrimony.profile.edit', [
-            // ❗ SSOT: $user->profile ❌
-            'profile' => $user->matrimonyProfile
-        ]);
+    // User ची matrimony profile
+    $profile = $user->matrimonyProfile;
+
+    // 🔴 IMPORTANT GUARD
+    // Profile अस्तित्वात नसेल तर edit page दाखवायचा नाही
+    if (!$profile) {
+        // User ला create profile page ला redirect करा
+        return redirect()
+            ->route('matrimony.profile.create')
+            ->with('error', 'Please create your matrimony profile first.');
     }
+
+    // Profile exists → edit page
+    return view('matrimony.profile.edit', compact('profile'));
+}
+
 
     /*
     |--------------------------------------------------------------------------
@@ -139,9 +156,10 @@ public function show($id)
     }
 
     return view(
-        'matrimony.show',
-        compact('profile', 'isOwnProfile', 'interestAlreadySent')
-    );
+    'matrimony.profile.show',
+    compact('profile', 'isOwnProfile', 'interestAlreadySent')
+);
+
 }
 
 
@@ -182,6 +200,7 @@ public function show($id)
 
         $profiles = $query->get();
 
-        return view('matrimony.index', compact('profiles'));
+        return view('matrimony.profile.index', compact('profiles'));
+
     }
 }

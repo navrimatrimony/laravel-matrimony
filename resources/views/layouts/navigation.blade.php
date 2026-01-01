@@ -14,53 +14,52 @@
                 <div class="hidden space-x-8 sm:-my-px sm:ms-10 sm:flex">
 
                     {{-- Dashboard --}}
-                    <x-nav-link :href="route('dashboard')" :active="request()->routeIs('dashboard')">
-                        {{ __('Dashboard') }}
-                    </x-nav-link>
+                  {{-- 
+|--------------------------------------------------------------------------
+| Matrimony Main Navigation (SSOT Day 13)
+|--------------------------------------------------------------------------
+| PURPOSE:
+|   Logged-in user ला Matrimony related सगळे actions
+|   top menu मधूनच accessible असावेत.
+|
+| IMPORTANT:
+|   User ने URL लक्षात ठेवायची गरज नसावी.
+|   "कुठे आहे?" हा प्रश्न कधीही येऊ नये.
+|
+| SSOT RULES:
+|   - Rule 15: All matrimony actions MUST be visible in TOP MENU
+|   - Rule 13: UI-first, no hidden flows
+|--------------------------------------------------------------------------
+--}}
 
-                    @php
-                        /*
-                        |--------------------------------------------------------------------------
-                        | Matrimony Profile Check
-                        |--------------------------------------------------------------------------
-                        | Purpose:
-                        | - User ने आधी profile create केली आहे का?
-                        | - असल्यास edit ला पाठवा, नसल्यास create ला
-                        */
-                      $hasProfile = auth()->user() && auth()->user()->matrimonyProfile;
+<x-nav-link :href="route('matrimony.profile.create')" 
+            :active="request()->routeIs('matrimony.profile.create')">
+    {{ __('Create Profile') }}
+</x-nav-link>
 
-                    @endphp
+<x-nav-link :href="route('matrimony.profile.edit')" 
+            :active="request()->routeIs('matrimony.profile.edit')">
+    {{ __('Edit Profile') }}
+</x-nav-link>
 
-                    {{-- Matrimony Profile --}}
-                    <x-nav-link
-                       href="{{ $hasProfile 
-							? route('matrimony.profile.edit') 
-							: route('matrimony.profile.create') }}"
+<x-nav-link :href="route('matrimony.profiles.index')" 
+            :active="request()->routeIs('matrimony.profiles.index')">
+    {{ __('Search Profiles') }}
+</x-nav-link>
 
-                        :active="request()->is('matrimony/profile/*')">
-                        Matrimony Profile
-                    </x-nav-link>
+<x-nav-link :href="route('interests.sent')" 
+            :active="request()->routeIs('interests.sent')">
+    {{ __('Interests Sent') }}
+</x-nav-link>
 
-                    {{-- Search Profiles --}}
-                    <x-nav-link
-                        href="{{ url('/profiles') }}"
-                        :active="request()->is('profiles')">
-                        Search Profiles
-                    </x-nav-link>
+<x-nav-link :href="route('interests.received')" 
+            :active="request()->routeIs('interests.received')">
+    {{ __('Interests Received') }}
+</x-nav-link>
 
-                    {{-- Sent Interests --}}
-                    <x-nav-link
-                        href="{{ route('interests.sent') }}"
-                        :active="request()->routeIs('interests.sent')">
-                        Sent Interests
-                    </x-nav-link>
+					
 
-                    {{-- Received Interests --}}
-                    <x-nav-link
-                        href="{{ route('interests.received') }}"
-                        :active="request()->routeIs('interests.received')">
-                        Received Interests
-                    </x-nav-link>
+                   
 
                 </div>
             </div>
