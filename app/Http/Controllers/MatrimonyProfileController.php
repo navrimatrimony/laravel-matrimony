@@ -32,13 +32,21 @@ class MatrimonyProfileController extends Controller
     |
     */
     public function create()
-{
-    // 🔒 RULE:
-    // Create page नेहमी form दाखवतो
-    // Guard logic इथे ठेवायचा नाही
-
-    return view('matrimony.profile.create');
-}
+    {
+        $user = auth()->user();
+    
+        // 🔒 GUARD:
+        // Profile आधीच असेल तर पुन्हा create करू देऊ नका
+        if ($user->matrimonyProfile) {
+            return redirect()
+                ->route('matrimony.profiles.index')
+                ->with('info', 'Your matrimony profile already exists. You can search profiles.');
+        }
+    
+        // Profile नाही → create form
+        return view('matrimony.profile.create');
+    }
+    
 
 
     /*
@@ -64,8 +72,9 @@ class MatrimonyProfileController extends Controller
         ]);
 
         return redirect()
-            ->route('matrimony.profile.edit')
-            ->with('success', 'Matrimony profile created successfully');
+        ->route('matrimony.profiles.index')
+        ->with('success', 'Matrimony profile created successfully. You can now search profiles.');
+    
     }
 
     /*

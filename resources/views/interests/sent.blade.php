@@ -43,17 +43,18 @@
 
                             <p>
                                 <strong>To:</strong>
-                                {{ $interest->receiverProfile->full_name ?? 'Profile Deleted' }}
-                            </p>
+                                {{-- Receiver Profile Name --}}
+        
+{{ $interest->receiverProfile->full_name ?? 'Profile Deleted' }}
 
-                            @if ($interest->receiverProfile)
-                                <a
-                                    href="{{ route('matrimony.profile.show', $interest->receiverProfile->id) }}"
-                                    class="text-blue-600 hover:underline"
-                                >
-                                    View Matrimony Profile
-                                </a>
-                            @endif
+{{-- Receiver Profile Link (Null Safe) --}}
+@if ($interest->receiverProfile)
+    <a href="{{ route('matrimony.profile.show', $interest->receiverProfile->id) }}">
+        View Matrimony Profile
+    </a>
+@endif
+
+
 
                         </div>
                     @endforeach
