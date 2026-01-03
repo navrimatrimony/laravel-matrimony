@@ -18,12 +18,15 @@
                 <strong>From:</strong>
 {{ $interest->senderProfile->full_name ?? 'Profile Deleted' }}
 
-            </p>
+@if ($interest->senderProfile)
+    <a href="{{ route('matrimony.profile.show', $interest->senderProfile->id) }}">
+        View Matrimony Profile
+    </a>
+@endif
+ </p>
 
             {{-- Matrimony Profile Link --}}
-           <a href="{{ route('matrimony.profile.show', $interest->senderProfile->id) }}">
-    View Matrimony Profile
-</a>
+           
  
 
 
