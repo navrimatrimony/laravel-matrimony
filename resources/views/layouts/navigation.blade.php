@@ -14,6 +14,7 @@
                 <div class="hidden space-x-8 sm:-my-px sm:ms-10 sm:flex">
 
                     {{-- Dashboard --}}
+                    
                   {{-- 
 |--------------------------------------------------------------------------
 | Matrimony Main Navigation (SSOT Day 13)
@@ -32,15 +33,21 @@
 |--------------------------------------------------------------------------
 --}}
 
-<x-nav-link :href="route('matrimony.profile.create')" 
-            :active="request()->routeIs('matrimony.profile.create')">
-    {{ __('Create Profile') }}
-</x-nav-link>
+@auth
+    @if (!auth()->user()->matrimonyProfile)
+        <x-nav-link :href="route('matrimony.profile.create')" 
+                    :active="request()->routeIs('matrimony.profile.create')">
+            {{ __('Create Profile') }}
+        </x-nav-link>
+    @else
+        <x-nav-link :href="route('matrimony.profile.edit')" 
+                    :active="request()->routeIs('matrimony.profile.edit')">
+            {{ __('Edit Profile') }}
+        </x-nav-link>
+    @endif
+@endauth
 
-<x-nav-link :href="route('matrimony.profile.edit')" 
-            :active="request()->routeIs('matrimony.profile.edit')">
-    {{ __('Edit Profile') }}
-</x-nav-link>
+
 
 <x-nav-link :href="route('matrimony.profiles.index')" 
             :active="request()->routeIs('matrimony.profiles.index')">
@@ -115,6 +122,22 @@
             <x-responsive-nav-link :href="route('dashboard')" :active="request()->routeIs('dashboard')">
                 {{ __('Dashboard') }}
             </x-responsive-nav-link>
+
+            @auth
+    @if (!auth()->user()->matrimonyProfile)
+        <x-responsive-nav-link :href="route('matrimony.profile.create')">
+            Create Profile
+        </x-responsive-nav-link>
+    @else
+        <x-responsive-nav-link :href="route('matrimony.profile.edit')">
+            Edit Profile
+        </x-responsive-nav-link>
+    @endif
+
+    <x-responsive-nav-link :href="route('matrimony.profiles.index')">
+        Search Profiles
+    </x-responsive-nav-link>
+@endauth
 
             <x-responsive-nav-link :href="route('interests.sent')">
                 Sent Interests
