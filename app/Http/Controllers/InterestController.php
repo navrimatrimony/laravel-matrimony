@@ -34,6 +34,14 @@ class InterestController extends Controller
     */
     public function store(User $user)
     {
+        $authUser = auth()->user();
+
+if (!$authUser->matrimonyProfile) {
+    return redirect()
+        ->route('matrimony.profile.create')
+        ->with('error', 'Please create your matrimony profile first.');
+}
+
         // Logged-in user
         $authUser = auth()->user();
 
@@ -78,6 +86,14 @@ class InterestController extends Controller
     */
     public function sent()
     {
+        $authUser = auth()->user();
+
+if (!$authUser->matrimonyProfile) {
+    return redirect()
+        ->route('matrimony.profile.create')
+        ->with('error', 'Please create your matrimony profile first.');
+}
+
         $myProfileId = auth()->user()->matrimonyProfile->id;
 
         $sentInterests = Interest::with('receiverProfile')
@@ -99,6 +115,14 @@ class InterestController extends Controller
     */
     public function received()
     {
+        $authUser = auth()->user();
+
+if (!$authUser->matrimonyProfile) {
+    return redirect()
+        ->route('matrimony.profile.create')
+        ->with('error', 'Please create your matrimony profile first.');
+}
+
         $myProfileId = auth()->user()->matrimonyProfile->id;
 
         $receivedInterests = Interest::with('senderProfile')

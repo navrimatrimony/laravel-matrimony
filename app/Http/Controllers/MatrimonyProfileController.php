@@ -78,6 +78,14 @@ class MatrimonyProfileController extends Controller
     */
     public function edit()
 {
+    $user = auth()->user();
+
+if (!$user->matrimonyProfile) {
+    return redirect()
+        ->route('matrimony.profile.create')
+        ->with('error', 'Please create your matrimony profile first.');
+}
+
     // Logged-in user
     $user = auth()->user();
 
@@ -110,6 +118,14 @@ class MatrimonyProfileController extends Controller
     {
         $user = auth()->user();
 
+if (!$user->matrimonyProfile) {
+    return redirect()
+        ->route('matrimony.profile.create')
+        ->with('error', 'Please create your matrimony profile first.');
+}
+
+        $user = auth()->user();
+
         $user->matrimonyProfile->update([
             'full_name'     => $request->full_name,
             'date_of_birth' => $request->date_of_birth,
@@ -138,6 +154,14 @@ class MatrimonyProfileController extends Controller
 
 public function show($id)
 {
+    $authUser = auth()->user();
+
+if (!$authUser->matrimonyProfile) {
+    return redirect()
+        ->route('matrimony.profile.create')
+        ->with('error', 'Please create your matrimony profile first.');
+}
+
     // Matrimony profile fetch करा
     $profile = MatrimonyProfile::findOrFail($id);
 
