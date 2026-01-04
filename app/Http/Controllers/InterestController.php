@@ -132,4 +132,110 @@ if (!$authUser->matrimonyProfile) {
 
         return view('interests.received', compact('receivedInterests'));
     }
+
+    /*
+|--------------------------------------------------------------------------
+| Accept Interest
+|--------------------------------------------------------------------------
+|
+| 👉 Received interest accept करण्यासाठी
+| 👉 Only receiver profile ला allow
+|
+*/
+public function accept(\App\Models\Interest $interest)
+{
+    $user = auth()->user();
+
+    // 🔒 Guard: login आवश्यक
+    if (!$user || !$user->matrimonyProfile) {
+        abort(403);
+    }
+
+    // 🔒 Guard: हा interest logged-in user चाच असला पाहिजे
+    if ($interest->receiver_profile_id !== $user->matrimonyProfile->id) {
+        abort(403);
+    }
+
+    // 🔒 Guard: फक्त pending interest accept करता येईल
+    if ($interest->status !== 'pending') {
+        return back()->with('error', 'This interest is already processed.');
+    }
+
+    // ✅ Accept
+    $interest->update([
+        'status' => 'accepted',
+    ]);
+
+    return back()->with('success', 'Interest accepted.');
+}
+
+
+/*
+|--------------------------------------------------------------------------
+| Reject Interest
+|--------------------------------------------------------------------------
+|
+| 👉 Received interest reject करण्यासाठी
+|
+*/
+public function reject(\App\Models\Interest $interest)
+{
+    $user = auth()->user();
+
+    // 🔒 Guard: login आवश्यक
+    if (!$user || !$user->matrimonyProfile) {
+        abort(403);
+    }
+
+    // 🔒 Guard: हा interest logged-in user चाच असला पाहिजे
+    if ($interest->receiver_profile_id !== $user->matrimonyProfile->id) {
+        abort(403);
+    }
+
+    // 🔒 Guard: फक्त pending interest reject करता येईल
+    if ($interest->status !== 'pending') {
+        return back()->with('error', 'This interest is already processed.');
+    }
+
+    // ✅ Reject
+    $interest->update([
+        'status' => 'rejected',
+    ]);
+
+    return back()->with('success', 'Interest rejected.');
+}
+/*
+|--------------------------------------------------------------------------
+| Withdraw (Cancel) Interest
+|--------------------------------------------------------------------------
+|
+| 👉 Sender ला pending interest cancel करण्यासाठी
+|
+*/
+public function withdraw(\App\Models\Interest $interest)
+{
+    $user = auth()->user();
+
+    // 🔒 Guard: login + profile आवश्यक
+    if (!$user || !$user->matrimonyProfile) {
+        abort(403);
+    }
+
+    // 🔒 Guard: फक्त sender च withdraw करू शकतो
+    if ($interest->sender_profile_id !== $user->matrimonyProfile->id) {
+        abort(403);
+    }
+
+    // 🔒 Guard: फक्त pending interest withdraw करता येईल
+    if ($interest->status !== 'pending') {
+        return back()->with('error', 'Only pending interests can be withdrawn.');
+    }
+
+    // ✅ Withdraw = delete record
+    $interest->delete();
+
+    return back()->with('success', 'Interest withdrawn successfully.');
+}
+
+
 }

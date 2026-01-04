@@ -39,20 +39,49 @@
 
                     {{-- Sent interests list --}}
                     @foreach ($sentInterests as $interest)
-                        <div class="border rounded p-3 mb-3">
+                    <div class="border rounded-lg p-4 mb-4 bg-gray-50 dark:bg-gray-700">
 
-                            <p>
-                                <strong>To:</strong>
-                                {{-- Receiver Profile Name --}}
-        
-{{ $interest->receiverProfile->full_name ?? 'Profile Deleted' }}
+    {{-- Receiver Name --}}
+    <p class="text-lg font-semibold">
+        To: {{ $interest->receiverProfile->full_name ?? 'Profile Deleted' }}
+    </p>
 
-{{-- Receiver Profile Link (Null Safe) --}}
-@if ($interest->receiverProfile)
-    <a href="{{ route('matrimony.profile.show', $interest->receiverProfile->id) }}">
-        View Matrimony Profile
-    </a>
+    {{-- Profile Link --}}
+    @if ($interest->receiverProfile)
+        <p class="mt-1">
+            <a href="{{ route('matrimony.profile.show', $interest->receiverProfile->id) }}"
+               class="text-blue-600 hover:underline">
+                View Matrimony Profile
+            </a>
+        </p>
+    @endif
+
+    {{-- Status --}}
+    <p class="mt-2">
+        Status:
+        @if ($interest->status === 'pending')
+            <span class="text-yellow-600 font-semibold">Pending</span>
+        @elseif ($interest->status === 'accepted')
+            <span class="text-green-600 font-semibold">Accepted</span>
+        @elseif ($interest->status === 'rejected')
+            <span class="text-red-600 font-semibold">Rejected</span>
+        @endif
+    </p>
+    {{-- 🔴 Withdraw button (ONLY for pending interests) --}}
+@if ($interest->status === 'pending')
+    <form method="POST"
+          action="{{ route('interests.withdraw', $interest->id) }}"
+          class="mt-3">
+        @csrf
+        <button type="submit"
+            class="text-sm text-red-600 hover:underline"
+            onclick="return confirm('Are you sure you want to withdraw this interest?')">
+            Withdraw Interest
+        </button>
+    </form>
 @endif
+
+</div>
 
 
 

@@ -21,12 +21,12 @@
     </h1>
 
     <div class="bg-white shadow rounded p-6 space-y-3">
-        <p><strong>Full Name:</strong> {{ $profile->full_name }}</p>
-        <p><strong>Gender:</strong> {{ $profile->gender }}</p>
-        <p><strong>Date of Birth:</strong> {{ $profile->date_of_birth }}</p>
-        <p><strong>Education:</strong> {{ $profile->education }}</p>
-        <p><strong>Location:</strong> {{ $profile->location }}</p>
-		<p><strong>Caste:</strong> {{ $profile->caste }}</p>
+        <p><strong>Full Name:</strong> {{ $matrimonyProfile->full_name }}</p>
+        <p><strong>Gender:</strong> {{ $matrimonyProfile->gender }}</p>
+        <p><strong>Date of Birth:</strong> {{ $matrimonyProfile->date_of_birth }}</p>
+        <p><strong>Education:</strong> {{ $matrimonyProfile->education }}</p>
+        <p><strong>Location:</strong> {{ $matrimonyProfile->location }}</p>
+		<p><strong>Caste:</strong> {{ $matrimonyProfile->caste }}</p>
 
     </div>
 	
@@ -34,7 +34,7 @@
 
 <p><strong>DEBUG INFO</strong></p>
 <p>Login User ID: {{ auth()->id() }}</p>
-<p>Profile User ID: {{ $profile->user_id }}</p>
+<p>Profile User ID: {{ $matrimonyProfile->user_id }}</p>
 <p>isOwnProfile: {{ $isOwnProfile ? 'TRUE' : 'FALSE' }}</p>
 
 <hr>
@@ -50,7 +50,7 @@
             Interest Sent
         </button>
     @else
-        <form method="POST" action="{{ route('interests.send', $profile->user_id) }}">
+        <form method="POST" action="{{ route('interests.send', $matrimonyProfile->user_id) }}">
             @csrf
             <button type="submit"
                 style="margin-top:15px; padding:10px; background:#ec4899; color:white; border:none;">

@@ -40,6 +40,18 @@
             {{ __('Create Profile') }}
         </x-nav-link>
     @else
+    {{-- Matrimony Profile View Link --}}
+   
+@if(auth()->check() && auth()->user()->matrimonyProfile)
+    <x-nav-link 
+        :href="route('matrimony.profile.show', auth()->user()->matrimonyProfile->id)" 
+        :active="request()->routeIs('matrimony.profile.show')"
+    >
+        {{ __('My Profile') }}
+    </x-nav-link>
+@endif
+
+
         <x-nav-link :href="route('matrimony.profile.edit')" 
                     :active="request()->routeIs('matrimony.profile.edit')">
             {{ __('Edit Profile') }}
@@ -125,6 +137,14 @@
             Create Profile
         </x-responsive-nav-link>
     @else
+    {{-- Matrimony Profile View Link (Mobile) --}}
+<x-responsive-nav-link 
+    :href="route('matrimony.profile.show', auth()->user()->matrimonyProfile->id)" 
+    :active="request()->routeIs('matrimony.profile.show')"
+>
+    {{ __('My Profile') }}
+</x-responsive-nav-link>
+
         <x-responsive-nav-link :href="route('matrimony.profile.edit')">
             Edit Profile
         </x-responsive-nav-link>

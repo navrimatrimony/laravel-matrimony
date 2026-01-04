@@ -89,30 +89,20 @@ class MatrimonyProfileController extends Controller
 {
     $user = auth()->user();
 
-if (!$user->matrimonyProfile) {
-    return redirect()
-        ->route('matrimony.profile.create')
-        ->with('error', 'Please create your matrimony profile first.');
-}
-
-    // Logged-in user
-    $user = auth()->user();
-
-    // User ची matrimony profile
-    $profile = $user->matrimonyProfile;
-
-    // 🔴 IMPORTANT GUARD
-    // Profile अस्तित्वात नसेल तर edit page दाखवायचा नाही
-    if (!$profile) {
-        // User ला create profile page ला redirect करा
+    // 🔒 GUARD: Profile नसेल तर edit allowed नाही
+    if (!$user->matrimonyProfile) {
         return redirect()
             ->route('matrimony.profile.create')
             ->with('error', 'Please create your matrimony profile first.');
     }
 
-    // Profile exists → edit page
-    return view('matrimony.profile.edit', compact('profile'));
+    // ✅ Profile exists → edit page
+    return view('matrimony.profile.edit', [
+        'matrimonyProfile' => $user->matrimonyProfile
+    ]);
 }
+
+
 
 
     /*
@@ -125,16 +115,17 @@ if (!$user->matrimonyProfile) {
     */
     public function update(Request $request)
     {
+        // ✅ Logged-in user घ्या (MANDATORY)
         $user = auth()->user();
-
-if (!$user->matrimonyProfile) {
-    return redirect()
-        ->route('matrimony.profile.create')
-        ->with('error', 'Please create your matrimony profile first.');
-}
-
-        $user = auth()->user();
-
+    
+        // 🔒 GUARD: Profile नसेल तर update allow नाही
+        if (!$user->matrimonyProfile) {
+            return redirect()
+                ->route('matrimony.profile.create')
+                ->with('error', 'Please create your matrimony profile first.');
+        }
+    
+        // ✅ Update matrimony profile
         $user->matrimonyProfile->update([
             'full_name'     => $request->full_name,
             'date_of_birth' => $request->date_of_birth,
@@ -142,11 +133,12 @@ if (!$user->matrimonyProfile) {
             'location'      => $request->location,
             'caste'         => $request->caste,
         ]);
-
+    
         return redirect()
             ->route('matrimony.profile.edit')
             ->with('success', 'Matrimony profile updated successfully');
     }
+    
 
     /*
     |--------------------------------------------------------------------------
@@ -172,10 +164,12 @@ if (!$authUser->matrimonyProfile) {
 }
 
     // Matrimony profile fetch करा
-    $profile = MatrimonyProfile::findOrFail($id);
+    $matrimonyProfile = MatrimonyProfile::findOrFail($id);
+
 
     $viewer = auth()->user();   // सध्या login user
-    $isOwnProfile = $viewer && ($viewer->id === $profile->user_id);
+    $isOwnProfile = $viewer && ($viewer->id === $matrimonyProfile->user_id);
+
 
     $interestAlreadySent = false;
 
@@ -184,14 +178,20 @@ if (!$authUser->matrimonyProfile) {
             'sender_profile_id',
             auth()->user()->matrimonyProfile->id
         )
-        ->where('receiver_profile_id', $profile->id)
+        ->where('receiver_profile_id', $matrimonyProfile->id)
+
         ->exists();
     }
 
     return view(
-    'matrimony.profile.show',
-    compact('profile', 'isOwnProfile', 'interestAlreadySent')
-);
+        'matrimony.profile.show',
+        [
+            'matrimonyProfile'     => $matrimonyProfile,
+            'isOwnProfile'         => $isOwnProfile,
+            'interestAlreadySent'  => $interestAlreadySent,
+        ]
+    );
+    
 
 }
 

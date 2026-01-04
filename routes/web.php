@@ -66,6 +66,20 @@ Route::middleware('auth')->group(function () {
 
     Route::get('/interests/received', [InterestController::class, 'received'])
         ->name('interests.received');
+
+        // 🔴 Interest Accept
+Route::post('/interests/{interest}/accept', [App\Http\Controllers\InterestController::class, 'accept'])
+->name('interests.accept');
+
+// 🔴 Interest Reject
+Route::post('/interests/{interest}/reject', [App\Http\Controllers\InterestController::class, 'reject'])
+->name('interests.reject');
+
+// 🔴 Withdraw (Cancel) Interest
+Route::post('/interests/{interest}/withdraw', [App\Http\Controllers\InterestController::class, 'withdraw'])
+    ->name('interests.withdraw');
+
+
 });
 
 require __DIR__.'/auth.php';

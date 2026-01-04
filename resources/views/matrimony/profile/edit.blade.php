@@ -15,19 +15,19 @@
                     @csrf
 
                     <label>Full Name</label><br>
-                    <input type="text" name="full_name" value="{{ $profile->full_name }}"><br><br>
+                    <input type="text" name="full_name" value="{{ $matrimonyProfile->full_name }}"><br><br>
 
                     <label>Date of Birth</label><br>
-                    <input type="date" name="date_of_birth" value="{{ $profile->date_of_birth }}"><br><br>
+                    <input type="date" name="date_of_birth" value="{{ $matrimonyProfile->date_of_birth }}"><br><br>
 
                     <label>Education</label><br>
-                    <input type="text" name="education" value="{{ $profile->education }}"><br><br>
+                    <input type="text" name="education" value="{{ $matrimonyProfile->education }}"><br><br>
 
                     <label>Caste</label><br>
-                    <input type="text" name="caste" value="{{ $profile->caste }}"><br><br>
+                    <input type="text" name="caste" value="{{ $matrimonyProfile->caste }}"><br><br>
 
                     <label>Location</label><br>
-                    <input type="text" name="location" value="{{ $profile->location }}"><br><br>
+                    <input type="text" name="location" value="{{ $matrimonyProfile->location }}"><br><br>
 
                     <button type="submit">
                         Update Profile
