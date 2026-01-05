@@ -81,5 +81,5 @@ Route::post('/interests/{interest}/withdraw', [App\Http\Controllers\InterestCont
 
 
 });
-
 require __DIR__.'/auth.php';
+
