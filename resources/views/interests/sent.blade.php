@@ -57,16 +57,17 @@
     @endif
 
     {{-- Status --}}
-    <p class="mt-2">
-        Status:
-        @if ($interest->status === 'pending')
-            <span class="text-yellow-600 font-semibold">Pending</span>
-        @elseif ($interest->status === 'accepted')
-            <span class="text-green-600 font-semibold">Accepted</span>
-        @elseif ($interest->status === 'rejected')
-            <span class="text-red-600 font-semibold">Rejected</span>
-        @endif
-    </p>
+    <p>
+    <span class="text-gray-500">Status:</span>
+    @if ($interest->status === 'pending')
+        <span class="text-yellow-600 font-semibold">Pending</span>
+    @elseif ($interest->status === 'accepted')
+        <span class="text-green-600 font-semibold">Accepted</span>
+    @elseif ($interest->status === 'rejected')
+        <span class="text-red-600 font-semibold">Rejected</span>
+    @endif
+</p>
+
     {{-- 🔴 Withdraw button (ONLY for pending interests) --}}
 @if ($interest->status === 'pending')
     <form method="POST"

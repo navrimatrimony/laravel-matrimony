@@ -1,18 +1,7 @@
 @extends('layouts.app')
 
 @section('content')
-{{-- Flash Messages --}}
-@if (session('success'))
-    <div style="margin:15px 0; padding:10px; background:#d1fae5; color:#065f46; border:1px solid #10b981;">
-        {{ session('success') }}
-    </div>
-@endif
 
-@if (session('error'))
-    <div style="margin:15px 0; padding:10px; background:#fee2e2; color:#7f1d1d; border:1px solid #ef4444;">
-        {{ session('error') }}
-    </div>
-@endif
 
 
 <div class="max-w-3xl mx-auto py-8">
@@ -20,22 +9,64 @@
         Matrimony Profile
     </h1>
 
-    <div class="bg-white shadow rounded p-6 space-y-3">
-        <p><strong>Full Name:</strong> {{ $matrimonyProfile->full_name }}</p>
-        <p><strong>Gender:</strong> {{ $matrimonyProfile->gender }}</p>
-        <p><strong>Date of Birth:</strong> {{ $matrimonyProfile->date_of_birth }}</p>
-        <p><strong>Education:</strong> {{ $matrimonyProfile->education }}</p>
-        <p><strong>Location:</strong> {{ $matrimonyProfile->location }}</p>
-		<p><strong>Caste:</strong> {{ $matrimonyProfile->caste }}</p>
 
+
+    
+<div class="bg-white shadow rounded-lg p-6">
+
+{{-- Profile Photo --}}
+@if ($matrimonyProfile->profile_photo)
+    <div class="mb-6 flex justify-center">
+        <img
+            src="{{ asset('storage/' . $matrimonyProfile->profile_photo) }}"
+            alt="Profile Photo"
+            class="w-40 h-40 rounded-full object-cover border"
+        >
     </div>
+@endif
+
+{{-- Name & Gender --}}
+<div class="text-center mb-6">
+    <h2 class="text-2xl font-semibold">
+        {{ $matrimonyProfile->full_name }}
+    </h2>
+    <p class="text-gray-500">
+        {{ ucfirst($matrimonyProfile->gender) }}
+    </p>
+</div>
+
+{{-- Biodata Grid --}}
+<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+
+    <div>
+        <p class="text-gray-500 text-sm">Date of Birth</p>
+        <p class="font-medium text-base">{{ $matrimonyProfile->date_of_birth }}</p>
+    </div>
+
+    <div>
+        <p class="text-gray-500 text-sm">Education</p>
+        <p class="font-medium text-base">{{ $matrimonyProfile->education }}</p>
+    </div>
+
+    <div>
+        <p class="text-gray-500 text-sm">Location</p>
+        <p class="font-medium text-base">{{ $matrimonyProfile->location }}</p>
+    </div>
+
+    <div>
+        <p class="text-gray-500 text-sm">Caste</p>
+        <p class="font-medium text-base">{{ $matrimonyProfile->caste }}</p>
+    </div>
+
+</div>
+
+
+</div>
+
 	
 	<hr>
 
-<p><strong>DEBUG INFO</strong></p>
-<p>Login User ID: {{ auth()->id() }}</p>
-<p>Profile User ID: {{ $matrimonyProfile->user_id }}</p>
-<p>isOwnProfile: {{ $isOwnProfile ? 'TRUE' : 'FALSE' }}</p>
+
 
 <hr>
 

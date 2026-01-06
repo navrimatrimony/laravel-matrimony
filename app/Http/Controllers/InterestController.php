@@ -72,7 +72,7 @@ if (!$authUser->matrimonyProfile) {
             ]
         );
 
-        return back()->with('success', 'Interest पाठवले गेले.');
+        return back()->with('success', 'Interest sent successfully.');
     }
 
     /*

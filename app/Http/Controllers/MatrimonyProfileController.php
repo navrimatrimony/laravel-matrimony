@@ -80,7 +80,6 @@ public function store(Request $request)
 
     return redirect()
         ->route('matrimony.profile.upload-photo')
-
         ->with('success', 'Matrimony profile created successfully. Please upload your photo.');
 }
 
@@ -174,6 +173,13 @@ public function storePhoto(Request $request)
     ]);
 
     $user = auth()->user();
+
+    // 🔒 Guard: MatrimonyProfile must exist
+if (!$user->matrimonyProfile) {
+    return redirect()
+        ->route('matrimony.profile.create')
+        ->with('error', 'Please create your profile first.');
+}
 
     $photoPath = $request->file('profile_photo')
         ->store('matrimony_photos', 'public');

@@ -34,8 +34,11 @@
                     <label>Profile Photo</label><br>
 
 @if ($matrimonyProfile->profile_photo)
-    <img src="{{ asset('storage/' . $matrimonyProfile->profile_photo) }}"
-         style="width:120px; margin-bottom:10px;">
+<img
+    src="{{ asset('storage/' . $matrimonyProfile->profile_photo) }}"
+    class="w-24 h-24 object-cover rounded mb-3"
+>
+
 @endif
 
 <input type="file" name="profile_photo"><br><br>
