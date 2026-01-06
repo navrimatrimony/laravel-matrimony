@@ -51,31 +51,40 @@ class MatrimonyProfileController extends Controller
 
     /*
     |--------------------------------------------------------------------------
-    | Store Matrimony Profile (FIRST TIME CREATE)
-    |--------------------------------------------------------------------------
-    |
-    | 👉 User चा पहिल्यांदा biodata save करण्यासाठी
-    | 👉 $user->matrimonyProfile() relation वापरतो
+   
     |
     */
-    public function store(Request $request)
-    {
-        $user = auth()->user();
+    /*------------------------------------------------------------------------
 
-        $user->matrimonyProfile()->create([
-            'full_name'     => $request->full_name,
-            'gender'        => $user->gender, // system-derived
-            'date_of_birth' => $request->date_of_birth,
-            'education'     => $request->education,
-            'location'      => $request->location,
-            'caste'         => $request->caste,
-        ]);
+/*
+|--------------------------------------------------------------------------
+| Store Matrimony Profile (FIRST TIME CREATE)
+|--------------------------------------------------------------------------
+|
+| 👉 User चा पहिल्यांदा biodata save करण्यासाठी
+| 👉 $user->matrimonyProfile() relation वापरतो
+|
+*/
+public function store(Request $request)
+{
+    $user = auth()->user();
 
-        return redirect()
-        ->route('matrimony.profiles.index')
-        ->with('success', 'Matrimony profile created successfully. You can now search profiles.');
-    
-    }
+    $user->matrimonyProfile()->create([
+        'full_name'     => $request->full_name,
+        'gender'        => $user->gender, // system-derived
+        'date_of_birth' => $request->date_of_birth,
+        'education'     => $request->education,
+        'location'      => $request->location,
+        'caste'         => $request->caste,
+    ]);
+
+    return redirect()
+        ->route('matrimony.profile.upload-photo')
+
+        ->with('success', 'Matrimony profile created successfully. Please upload your photo.');
+}
+
+
 
     /*
     |--------------------------------------------------------------------------
@@ -114,31 +123,70 @@ class MatrimonyProfileController extends Controller
     |
     */
     public function update(Request $request)
-    {
-        // ✅ Logged-in user घ्या (MANDATORY)
-        $user = auth()->user();
-    
-        // 🔒 GUARD: Profile नसेल तर update allow नाही
-        if (!$user->matrimonyProfile) {
-            return redirect()
-                ->route('matrimony.profile.create')
-                ->with('error', 'Please create your matrimony profile first.');
-        }
-    
-        // ✅ Update matrimony profile
-        $user->matrimonyProfile->update([
-            'full_name'     => $request->full_name,
-            'date_of_birth' => $request->date_of_birth,
-            'education'     => $request->education,
-            'location'      => $request->location,
-            'caste'         => $request->caste,
-        ]);
-    
+{
+    $user = auth()->user();
+
+    if (!$user->matrimonyProfile) {
         return redirect()
-            ->route('matrimony.profile.edit')
-            ->with('success', 'Matrimony profile updated successfully');
+            ->route('matrimony.profile.create')
+            ->with('error', 'Please create your matrimony profile first.');
     }
-    
+
+    // 🔴 PHOTO UPLOAD LOGIC (IMPORTANT)
+    $photoPath = $user->matrimonyProfile->profile_photo;
+
+    if ($request->hasFile('profile_photo')) {
+        $photoPath = $request->file('profile_photo')
+            ->store('matrimony_photos', 'public');
+    }
+
+    $user->matrimonyProfile->update([
+        'full_name'     => $request->full_name,
+        'date_of_birth' => $request->date_of_birth,
+        'education'     => $request->education,
+        'location'      => $request->location,
+        'caste'         => $request->caste,
+        'profile_photo' => $photoPath, // 🔴 THIS WAS MISSING
+    ]);
+
+    return redirect()
+        ->route('matrimony.profile.edit')
+        ->with('success', 'Profile updated successfully.');
+}
+
+public function uploadPhoto()
+{
+    $user = auth()->user();
+
+    if (!$user->matrimonyProfile) {
+        return redirect()
+            ->route('matrimony.profile.create')
+            ->with('error', 'Please create your profile first.');
+    }
+
+    return view('matrimony.profile.upload-photo');
+}
+
+public function storePhoto(Request $request)
+{
+    $request->validate([
+        'profile_photo' => 'required|image|max:2048',
+    ]);
+
+    $user = auth()->user();
+
+    $photoPath = $request->file('profile_photo')
+        ->store('matrimony_photos', 'public');
+
+    $user->matrimonyProfile->update([
+        'profile_photo' => $photoPath,
+    ]);
+
+    return redirect()
+        ->route('matrimony.profiles.index')
+        ->with('success', 'Profile photo uploaded successfully.');
+}
+
 
     /*
     |--------------------------------------------------------------------------
@@ -219,17 +267,7 @@ if (!$authUser->matrimonyProfile) {
             $query->where('location', $request->location);
         }
 
-        // Age From
-        if ($request->filled('age_from')) {
-            $date = now()->subYears($request->age_from)->toDateString();
-            $query->where('date_of_birth', '<=', $date);
-        }
-
-        // Age To
-        if ($request->filled('age_to')) {
-            $date = now()->subYears($request->age_to)->toDateString();
-            $query->where('date_of_birth', '>=', $date);
-        }
+        
 
         $profiles = $query->get();
 

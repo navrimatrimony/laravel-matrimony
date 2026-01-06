@@ -45,6 +45,13 @@ Route::middleware('auth')->group(function () {
 
     Route::post('/matrimony/profile/update', [MatrimonyProfileController::class, 'update'])
         ->name('matrimony.profile.update');
+		
+	Route::get('/matrimony/profile/upload-photo', [MatrimonyProfileController::class, 'uploadPhoto'])
+    ->name('matrimony.profile.upload-photo');
+
+	Route::post('/matrimony/profile/upload-photo', [MatrimonyProfileController::class, 'storePhoto'])
+    ->name('matrimony.profile.store-photo');
+
 
     /*
     | Matrimony Profiles (View / Search)
@@ -82,4 +89,3 @@ Route::post('/interests/{interest}/withdraw', [App\Http\Controllers\InterestCont
 
 });
 require __DIR__.'/auth.php';
-

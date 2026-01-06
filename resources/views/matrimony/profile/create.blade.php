@@ -12,7 +12,8 @@
                 </h1>
 
                 <form method="POST" action="{{ route('matrimony.profile.store') }}">
-                    @csrf
+    @csrf
+
 
                     <label>Full Name</label><br>
                     <input type="text" name="full_name"><br><br>
@@ -29,6 +30,8 @@
                     <label>Location</label><br>
                     <input type="text" name="location"><br><br>
 
+                    
+
                     <button type="submit">
                         Save Profile
                     </button>
@@ -40,4 +43,3 @@
 </div>
 
 @endsection
-

@@ -33,6 +33,49 @@
             <!-- Page Content -->
             <!-- Page Content -->
 				<main>
+                {{-- Flash Messages --}}
+@if (session('success'))
+    <div style="
+        margin: 15px auto;
+        max-width: 800px;
+        padding: 12px;
+        background: #d1fae5;
+        color: #065f46;
+        border: 1px solid #10b981;
+        border-radius: 6px;
+    ">
+        {{ session('success') }}
+    </div>
+@endif
+
+@if (session('error'))
+    <div style="
+        margin: 15px auto;
+        max-width: 800px;
+        padding: 12px;
+        background: #fee2e2;
+        color: #991b1b;
+        border: 1px solid #ef4444;
+        border-radius: 6px;
+    ">
+        {{ session('error') }}
+    </div>
+@endif
+
+@if (session('info'))
+    <div style="
+        margin: 15px auto;
+        max-width: 800px;
+        padding: 12px;
+        background: #e0f2fe;
+        color: #075985;
+        border: 1px solid #38bdf8;
+        border-radius: 6px;
+    ">
+        {{ session('info') }}
+    </div>
+@endif
+
     @yield('content')
 </main>
 

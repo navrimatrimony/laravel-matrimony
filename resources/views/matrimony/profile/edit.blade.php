@@ -11,7 +11,10 @@
                     Edit Matrimony Profile
                 </h1>
 
-                <form method="POST" action="{{ route('matrimony.profile.update') }}">
+                <form method="POST"
+      action="{{ route('matrimony.profile.update') }}"
+      enctype="multipart/form-data">
+
                     @csrf
 
                     <label>Full Name</label><br>
@@ -28,6 +31,14 @@
 
                     <label>Location</label><br>
                     <input type="text" name="location" value="{{ $matrimonyProfile->location }}"><br><br>
+                    <label>Profile Photo</label><br>
+
+@if ($matrimonyProfile->profile_photo)
+    <img src="{{ asset('storage/' . $matrimonyProfile->profile_photo) }}"
+         style="width:120px; margin-bottom:10px;">
+@endif
+
+<input type="file" name="profile_photo"><br><br>
 
                     <button type="submit">
                         Update Profile

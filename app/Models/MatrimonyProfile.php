@@ -48,14 +48,16 @@ class MatrimonyProfile extends Model
     |
     */
     protected $fillable = [
-        'user_id',        // User शी relation
+        'user_id',
         'full_name',
         'gender',
         'date_of_birth',
         'caste',
         'education',
         'location',
+        'profile_photo', // 🔴 uploaded photo path
     ];
+    
 
     /*
     |--------------------------------------------------------------------------

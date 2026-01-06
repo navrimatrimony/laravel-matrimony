@@ -56,14 +56,25 @@
                     @foreach ($profiles as $profile)
                         <div class="bg-white text-gray-900 border border-gray-200 rounded-lg p-4 mb-4 flex justify-between items-center">
 
-                            <div>
-                                <p class="font-semibold text-lg">
-                                    {{ $profile->full_name }}
-                                </p>
-                                <p class="text-sm text-gray-600">
-                                    {{ $profile->gender }} | {{ $profile->location }}
-                                </p>
-                            </div>
+                        <div class="flex items-center gap-4">
+
+@if ($profile->profile_photo)
+    <img src="{{ asset('storage/' . $profile->profile_photo) }}"
+         alt="Profile Photo"
+         class="w-16 h-16 object-cover rounded-full border border-gray-300">
+@endif
+
+<div>
+    <p class="font-semibold text-lg">
+        {{ $profile->full_name }}
+    </p>
+    <p class="text-sm text-gray-600">
+        {{ $profile->gender }} | {{ $profile->location }}
+    </p>
+</div>
+
+</div>
+
 
                             <div>
                                 <a
