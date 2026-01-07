@@ -5,6 +5,8 @@ namespace App\Http\Controllers;
 use App\Models\Interest;
 use App\Models\User;
 use Illuminate\Http\Request;
+use App\Models\MatrimonyProfile;
+
 
 /*
 |--------------------------------------------------------------------------
@@ -32,7 +34,8 @@ class InterestController extends Controller
     | - समोरच्या user च्या MatrimonyProfile ला
     |
     */
-    public function store(User $user)
+    public function store(MatrimonyProfile $matrimonyProfile)
+
     {
         $authUser = auth()->user();
 
@@ -49,7 +52,8 @@ if (!$authUser->matrimonyProfile) {
         $senderProfile = $authUser->matrimonyProfile;
 
         // Receiver MatrimonyProfile
-        $receiverProfile = $user->matrimonyProfile;
+        $receiverProfile = $matrimonyProfile;
+
 
         // Safety checks (५वीच्या पातळीवर)
         if (!$senderProfile || !$receiverProfile) {

@@ -58,11 +58,24 @@
 
                         <div class="flex items-center gap-4">
 
-@if ($profile->profile_photo)
-    <img src="{{ asset('storage/' . $profile->profile_photo) }}"
-         alt="Profile Photo"
-         class="w-16 h-16 object-cover rounded-full border border-gray-300">
+
+   @if($profile->profile_photo)
+    <img
+    src="{{ $profile->profile_photo
+        ? asset('uploads/matrimony_photos/'.$profile->profile_photo)
+        : asset('uploads/matrimony_photos/default-profile.png') }}"
+    alt="Profile Photo"
+    class="w-16 h-16 rounded-full object-cover border border-gray-300"
+/>
+
+@else
+    <img
+        src="{{ asset('images/default-avatar.png') }}"
+        alt="Profile Photo"
+        class="w-16 h-16 object-cover rounded-full border border-gray-300"
+    />
 @endif
+
 
 <div>
     <p class="font-semibold text-lg">

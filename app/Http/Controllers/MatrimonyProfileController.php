@@ -134,10 +134,22 @@ public function store(Request $request)
     // 🔴 PHOTO UPLOAD LOGIC (IMPORTANT)
     $photoPath = $user->matrimonyProfile->profile_photo;
 
-    if ($request->hasFile('profile_photo')) {
-        $photoPath = $request->file('profile_photo')
-            ->store('matrimony_photos', 'public');
-    }
+    if ($request->hasFile('profile_photo')) 
+    $photoPath = $user->matrimonyProfile->profile_photo;
+
+if ($request->hasFile('profile_photo')) {
+
+    $file = $request->file('profile_photo');
+    $filename = time().'_'.$file->getClientOriginalName();
+
+    $file->move(
+        public_path('uploads/matrimony_photos'),
+        $filename
+    );
+
+    $photoPath = $filename;
+}
+
 
     $user->matrimonyProfile->update([
         'full_name'     => $request->full_name,
@@ -181,12 +193,28 @@ if (!$user->matrimonyProfile) {
         ->with('error', 'Please create your profile first.');
 }
 
-    $photoPath = $request->file('profile_photo')
-        ->store('matrimony_photos', 'public');
+    $file = $request->file('profile_photo');
 
-    $user->matrimonyProfile->update([
-        'profile_photo' => $photoPath,
-    ]);
+// 🔒 PROFILE PHOTO UPLOAD (SSOT locked)
+// 👉 DB मध्ये फक्त filename save होईल
+
+$file = $request->file('profile_photo');
+
+// ⚠️ basename वापरून path duplication थांबवतो
+$filename = time().'_'.basename($file->getClientOriginalName());
+
+// 📁 Physical upload location
+$file->move(
+    public_path('uploads/matrimony_photos'),
+    $filename
+);
+
+// 🗂️ DB: ONLY filename (NO folder)
+$user->matrimonyProfile->update([
+    'profile_photo' => $filename,
+]);
+
+
 
     return redirect()
         ->route('matrimony.profiles.index')

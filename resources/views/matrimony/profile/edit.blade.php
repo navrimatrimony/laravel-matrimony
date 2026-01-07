@@ -32,14 +32,18 @@
                     <label>Location</label><br>
                     <input type="text" name="location" value="{{ $matrimonyProfile->location }}"><br><br>
                     <label>Profile Photo</label><br>
-
+                    
+                    {{-- Existing Profile Photo Preview --}}
 @if ($matrimonyProfile->profile_photo)
-<img
-    src="{{ asset('storage/' . $matrimonyProfile->profile_photo) }}"
-    class="w-24 h-24 object-cover rounded mb-3"
->
-
+    <div style="margin-bottom:10px;">
+        <img
+            src="{{ asset('uploads/matrimony_photos/'.$matrimonyProfile->profile_photo) }}"
+            alt="Profile Photo"
+            style="width:120px; height:120px; object-fit:cover; border-radius:50%; border:1px solid #ccc;"
+        >
+    </div>
 @endif
+
 
 <input type="file" name="profile_photo"><br><br>
 

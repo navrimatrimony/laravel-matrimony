@@ -65,8 +65,9 @@ Route::middleware('auth')->group(function () {
     /*
     | Interests
     */
-    Route::post('/interests/send/{user}', [InterestController::class, 'store'])
-        ->name('interests.send');
+    Route::post('/interests/send/{matrimony_profile}', [InterestController::class, 'store'])
+    ->name('interests.send');
+
 
     Route::get('/interests/sent', [InterestController::class, 'sent'])
         ->name('interests.sent');

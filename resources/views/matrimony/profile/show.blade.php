@@ -18,12 +18,13 @@
 @if ($matrimonyProfile->profile_photo)
     <div class="mb-6 flex justify-center">
         <img
-            src="{{ asset('storage/' . $matrimonyProfile->profile_photo) }}"
+            src="{{ asset('uploads/matrimony_photos/'.$matrimonyProfile->profile_photo) }}"
             alt="Profile Photo"
             class="w-40 h-40 rounded-full object-cover border"
-        >
+        />
     </div>
 @endif
+
 
 {{-- Name & Gender --}}
 <div class="text-center mb-6">
@@ -81,7 +82,8 @@
             Interest Sent
         </button>
     @else
-        <form method="POST" action="{{ route('interests.send', $matrimonyProfile->user_id) }}">
+        <form method="POST" action="{{ route('interests.send', $matrimonyProfile->id
+) }}">
             @csrf
             <button type="submit"
                 style="margin-top:15px; padding:10px; background:#ec4899; color:white; border:none;">
