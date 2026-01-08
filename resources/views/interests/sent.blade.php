@@ -39,50 +39,65 @@
 
                     {{-- Sent interests list --}}
                     @foreach ($sentInterests as $interest)
-                    <div class="border rounded-lg p-4 mb-4 bg-gray-50 dark:bg-gray-700">
+                    <div class="border rounded-lg p-4 mb-4 bg-gray-50 dark:bg-gray-700 flex items-center justify-between">
 
-    {{-- Receiver Name --}}
-    <p class="text-lg font-semibold">
-        To: {{ $interest->receiverProfile->full_name ?? 'Profile Deleted' }}
-    </p>
+                        <div>
+                            {{-- Receiver Name --}}
+                            <p class="text-lg font-semibold">
+                                To: {{ $interest->receiverProfile->full_name ?? 'Profile Deleted' }}
+                            </p>
 
-    {{-- Profile Link --}}
-    @if ($interest->receiverProfile)
-        <p class="mt-1">
-            <a href="{{ route('matrimony.profile.show', $interest->receiverProfile->id) }}"
-               class="text-blue-600 hover:underline">
-                View Matrimony Profile
-            </a>
-        </p>
-    @endif
+                            {{-- Profile Link --}}
+                            @if ($interest->receiverProfile)
+                                <p class="mt-1">
+                                    <a href="{{ route('matrimony.profile.show', $interest->receiverProfile->id) }}"
+                                       class="text-blue-600 hover:underline">
+                                        View Matrimony Profile
+                                    </a>
+                                </p>
+                            @endif
 
-    {{-- Status --}}
-    <p>
-    <span class="text-gray-500">Status:</span>
-    @if ($interest->status === 'pending')
-        <span class="text-yellow-600 font-semibold">Pending</span>
-    @elseif ($interest->status === 'accepted')
-        <span class="text-green-600 font-semibold">Accepted</span>
-    @elseif ($interest->status === 'rejected')
-        <span class="text-red-600 font-semibold">Rejected</span>
-    @endif
-</p>
+                            {{-- Status --}}
+                            <p class="mt-1">
+                                <span class="text-gray-500">Status:</span>
+                                @if ($interest->status === 'pending')
+                                    <span class="text-yellow-600 font-semibold">Pending</span>
+                                @elseif ($interest->status === 'accepted')
+                                    <span class="text-green-600 font-semibold">Accepted</span>
+                                @elseif ($interest->status === 'rejected')
+                                    <span class="text-red-600 font-semibold">Rejected</span>
+                                @endif
+                            </p>
 
-    {{-- 🔴 Withdraw button (ONLY for pending interests) --}}
-@if ($interest->status === 'pending')
-    <form method="POST"
-          action="{{ route('interests.withdraw', $interest->id) }}"
-          class="mt-3">
-        @csrf
-        <button type="submit"
-            class="text-sm text-red-600 hover:underline"
-            onclick="return confirm('Are you sure you want to withdraw this interest?')">
-            Withdraw Interest
-        </button>
-    </form>
-@endif
+                            {{-- 🔴 Withdraw button (ONLY for pending interests) --}}
+                            @if ($interest->status === 'pending')
+                                <form method="POST"
+                                      action="{{ route('interests.withdraw', $interest->id) }}"
+                                      class="mt-3">
+                                    @csrf
+                                    <button type="submit"
+                                        class="text-sm text-red-600 hover:underline"
+                                        onclick="return confirm('Are you sure you want to withdraw this interest?')">
+                                        Withdraw Interest
+                                    </button>
+                                </form>
+                            @endif
+                        </div>
 
-</div>
+                        {{-- Receiver Photo (Right Side) --}}
+                        <div>
+                            @if ($interest->receiverProfile && $interest->receiverProfile->profile_photo)
+                                <img
+                                    src="{{ asset('uploads/matrimony_photos/'.$interest->receiverProfile->profile_photo) }}"
+                                    alt="Profile Photo"
+                                    class="w-14 h-14 rounded-full object-cover border">
+                            @else
+                                <img
+                                    src="{{ asset('images/default-profile.png') }}"
+                                    alt="Default Profile Photo"
+                                    class="w-14 h-14 rounded-full object-cover border opacity-70">
+                            @endif
+                        </div>
 
 
 

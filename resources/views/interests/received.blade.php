@@ -36,6 +36,22 @@
                         <span class="text-red-600 font-semibold">Rejected</span>
                     @endif
                 </p>
+<div class="flex items-center gap-4">
+    @if ($interest->senderProfile && $interest->senderProfile->profile_photo)
+        <img
+            src="{{ asset('uploads/matrimony_photos/'.$interest->senderProfile->profile_photo) }}"
+            class="w-14 h-14 rounded-full object-cover border"
+        >
+    @else
+        <img
+            src="{{ asset('images/default-profile.png') }}"
+            class="w-14 h-14 rounded-full object-cover border opacity-70"
+        >
+    @endif
+
+    <div>
+    </div>
+</div>
 
                 {{-- Accept / Reject --}}
                 @if ($interest->status === 'pending')

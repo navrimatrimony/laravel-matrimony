@@ -47,7 +47,8 @@
 
 <input type="file" name="profile_photo"><br><br>
 
-                    <button type="submit">
+<button type="submit"
+                        class="bg-blue-600 text-white px-6 py-2 rounded-lg font-semibold hover:bg-blue-700 transition-colors mt-4">
                         Update Profile
                     </button>
                 </form>

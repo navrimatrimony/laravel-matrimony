@@ -186,6 +186,19 @@ if (!$user->matrimonyProfile) {
         ->with('error', 'Please create your profile first.');
 }
 
+// 🔐 AUTHORIZATION HARDENING (DAY 20)
+// 👉 Logged-in user कडे profile आहेच (वर check केले)
+// 👉 पण future-proofing साठी explicit ownership स्पष्ट करतो
+
+$matrimonyProfile = $user->matrimonyProfile;
+
+// ❌ Extra safety: profile mismatch impossible, पण explicit guard
+if ($matrimonyProfile->user_id !== $user->id) {
+    abort(403, 'Unauthorized profile photo update attempt.');
+}
+
+
+
     $file = $request->file('profile_photo');
 
 // 🔒 PROFILE PHOTO UPLOAD (SSOT locked)

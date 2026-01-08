@@ -17,32 +17,76 @@
                 <hr class="mb-4 border-gray-300">
 
                 {{-- Search / Filter Form --}}
-                <form method="GET" action="{{ route('matrimony.profiles.index') }}" class="mb-6 space-y-3">
+                <form>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
 
-                    <div>
-                        <label>Age From:</label>
-                        <input type="number" name="age_from" value="{{ request('age_from') }}">
+                    {{-- Age From --}}
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">
+                                Age From
+                            </label>
+                            <input
+                                type="number"
+                                name="age_from"
+                                value="{{ request('age_from') }}"
+                                class="w-full border rounded px-3 py-2"
+                                placeholder="Min age">
+                        </div>
+
+                        {{-- Age To --}}
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">
+                                Age To
+                            </label>
+                            <input
+                                type="number"
+                                name="age_to"
+                                value="{{ request('age_to') }}"
+                                class="w-full border rounded px-3 py-2"
+                                placeholder="Max age">
+                        </div>
+
+                        {{-- Caste --}}
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">
+                                Caste
+                            </label>
+                            <input
+                                type="text"
+                                name="caste"
+                                value="{{ request('caste') }}"
+                                class="w-full border rounded px-3 py-2"
+                                placeholder="Caste">
+                        </div>
+
+                        {{-- Location --}}
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">
+                                Location
+                            </label>
+                            <input
+                                type="text"
+                                name="location"
+                                value="{{ request('location') }}"
+                                class="w-full border rounded px-3 py-2"
+                                placeholder="City">
+                        </div>
                     </div>
 
-                    <div>
-                        <label>Age To:</label>
-                        <input type="number" name="age_to" value="{{ request('age_to') }}">
-                    </div>
+                    <div class="flex gap-4 mb-8">
+    <button
+        type="submit"
+        class="bg-blue-600 text-white px-5 py-2 rounded">
+        Search
+    </button>
 
-                    <div>
-                        <label>Caste:</label>
-                        <input type="text" name="caste" value="{{ request('caste') }}">
-                    </div>
+    <a
+        href="{{ route('matrimony.profiles.index') }}"
+        class="text-gray-600 underline pt-2">
+        Reset
+    </a>
+</div>
 
-                    <div>
-                        <label>Location:</label>
-                        <input type="text" name="location" value="{{ request('location') }}">
-                    </div>
-
-                    <div class="mt-2">
-                        <button type="submit">Search</button>
-                        <a href="{{ route('matrimony.profiles.index') }}">Reset</a>
-                    </div>
 
                 </form>
 
@@ -87,7 +131,13 @@
         {{ $profile->full_name }}
     </p>
     <p class="text-sm text-gray-600">
-        {{ $profile->gender }} | {{ $profile->location }}
+       <span class="text-sm text-gray-600">
+    {{ ucfirst($profile->gender) }}
+    @if ($profile->location)
+        | {{ ucfirst($profile->location) }}
+    @endif
+</span>
+
     </p>
 </div>
 
