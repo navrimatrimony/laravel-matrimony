@@ -49,13 +49,6 @@ class MatrimonyProfileController extends Controller
     
 
 
-    /*
-    |--------------------------------------------------------------------------
-   
-    |
-    */
-    /*------------------------------------------------------------------------
-
 /*
 |--------------------------------------------------------------------------
 | Store Matrimony Profile (FIRST TIME CREATE)
@@ -235,23 +228,31 @@ $user->matrimonyProfile->update([
     */
  
 
-public function show($id)
+
+
+  public function show(MatrimonyProfile $matrimonyProfile)
 {
+    // 🔒 GUARD: Guest users are NOT allowed to view single profiles
+    if (!auth()->check()) {
+        return redirect()
+            ->route('login')
+            ->with('error', 'Please login to view matrimony profiles.');
+    }
+
     $authUser = auth()->user();
 
-if (!$authUser->matrimonyProfile) {
-    return redirect()
-        ->route('matrimony.profile.create')
-        ->with('error', 'Please create your matrimony profile first.');
-}
 
-    // Matrimony profile fetch करा
-    $matrimonyProfile = MatrimonyProfile::findOrFail($id);
+// 🔒 Logged-in but no profile
+    if (!$authUser->matrimonyProfile) {
+        return redirect()
+            ->route('matrimony.profile.create')
+            ->with('error', 'Please create your matrimony profile first.');
+    }
 
-
-    $viewer = auth()->user();   // सध्या login user
-    $isOwnProfile = $viewer && ($viewer->id === $matrimonyProfile->user_id);
-
+    $viewer = auth()->user(); // logged-in user
+    $isOwnProfile = $viewer && (
+        $viewer->matrimonyProfile->id === $matrimonyProfile->id
+    );
 
     $interestAlreadySent = false;
 
@@ -261,7 +262,6 @@ if (!$authUser->matrimonyProfile) {
             auth()->user()->matrimonyProfile->id
         )
         ->where('receiver_profile_id', $matrimonyProfile->id)
-
         ->exists();
     }
 
@@ -273,9 +273,8 @@ if (!$authUser->matrimonyProfile) {
             'interestAlreadySent'  => $interestAlreadySent,
         ]
     );
-    
-
 }
+
 
 
     /*

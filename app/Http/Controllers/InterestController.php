@@ -38,6 +38,22 @@ class InterestController extends Controller
 
     {
         $authUser = auth()->user();
+		// Logged-in user
+$authUser = auth()->user();
+
+// 🔒 Sender profile (logged-in user's matrimony profile)
+$senderProfile = $authUser->matrimonyProfile;
+
+// 🔒 Receiver profile (profile from route-model binding)
+$receiverProfile = $matrimonyProfile;
+
+// 🔒 GUARD: Cannot send interest to own profile
+if ($senderProfile->id === $receiverProfile->id) {
+    return redirect()
+        ->back()
+        ->with('error', 'You cannot send interest to your own profile.');
+}
+
 
 if (!$authUser->matrimonyProfile) {
     return redirect()
@@ -48,11 +64,13 @@ if (!$authUser->matrimonyProfile) {
         // Logged-in user
         $authUser = auth()->user();
 
-        // Sender MatrimonyProfile
-        $senderProfile = $authUser->matrimonyProfile;
+       // 🔒 GUARD: Cannot send interest to own profile
+if ($senderProfile->id === $receiverProfile->id) {
+    return redirect()
+        ->back()
+        ->with('error', 'You cannot send interest to your own profile.');
+}
 
-        // Receiver MatrimonyProfile
-        $receiverProfile = $matrimonyProfile;
 
 
         // Safety checks (५वीच्या पातळीवर)

@@ -15,15 +15,26 @@
 <div class="bg-white shadow rounded-lg p-6">
 
 {{-- Profile Photo --}}
-@if ($matrimonyProfile->profile_photo)
-    <div class="mb-6 flex justify-center">
+<div class="mb-6 flex justify-center">
+
+    @if ($matrimonyProfile->profile_photo)
+        {{-- Uploaded profile photo --}}
         <img
             src="{{ asset('uploads/matrimony_photos/'.$matrimonyProfile->profile_photo) }}"
             alt="Profile Photo"
             class="w-40 h-40 rounded-full object-cover border"
         />
-    </div>
-@endif
+    @else
+        {{-- Default placeholder photo (no upload yet) --}}
+        <img
+            src="{{ asset('images/default-profile.png') }}"
+            alt="Default Profile Photo"
+            class="w-40 h-40 rounded-full object-cover border opacity-70"
+        />
+    @endif
+
+</div>
+
 
 
 {{-- Name & Gender --}}
@@ -72,9 +83,15 @@
 <hr>
 
 	
-	    {{-- Interest Section --}}
+{{-- 🔒 Interest button hidden on own profile --}}
+
    
-@if (!$isOwnProfile)
+
+@if (auth()->check() && !$isOwnProfile)
+
+	<h3 class="text-lg font-semibold mt-6 mb-3 text-center">
+    Express Interest
+</h3>
 
     @if ($interestAlreadySent)
         <button disabled
@@ -82,8 +99,8 @@
             Interest Sent
         </button>
     @else
-        <form method="POST" action="{{ route('interests.send', $matrimonyProfile->id
-) }}">
+        <form method="POST" action="{{ route('interests.send', $matrimonyProfile) }}">
+
             @csrf
             <button type="submit"
                 style="margin-top:15px; padding:10px; background:#ec4899; color:white; border:none;">

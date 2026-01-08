@@ -59,8 +59,10 @@ Route::middleware('auth')->group(function () {
     Route::get('/profiles', [MatrimonyProfileController::class, 'index'])
         ->name('matrimony.profiles.index');
 
-    Route::get('/profile/{id}', [MatrimonyProfileController::class, 'show'])
-        ->name('matrimony.profile.show');
+    Route::get('/profile/{matrimonyProfile}', [MatrimonyProfileController::class, 'show'])
+    ->name('matrimony.profile.show');
+
+
 
     /*
     | Interests
