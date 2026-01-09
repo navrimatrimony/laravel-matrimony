@@ -23,3 +23,6 @@ Homestead.json
 Homestead.yaml
 Thumbs.db
 /public/uploads/
+# SSOT master file (local only)
+laravel-matrimony-master 31Dec25.md
+

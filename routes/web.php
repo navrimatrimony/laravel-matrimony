@@ -59,16 +59,20 @@ Route::middleware('auth')->group(function () {
     Route::get('/profiles', [MatrimonyProfileController::class, 'index'])
         ->name('matrimony.profiles.index');
 
-    Route::get('/profile/{matrimonyProfile}', [MatrimonyProfileController::class, 'show'])
+    // 🔒 SSOT: MatrimonyProfile route MUST use matrimony_profile_id
+Route::get('/profile/{matrimony_profile_id}', [MatrimonyProfileController::class, 'show'])
     ->name('matrimony.profile.show');
+
 
 
 
     /*
     | Interests
     */
-    Route::post('/interests/send/{matrimony_profile}', [InterestController::class, 'store'])
+    // 🔒 SSOT: MatrimonyProfile route param consistency
+Route::post('/interests/send/{matrimony_profile_id}', [InterestController::class, 'store'])
     ->name('interests.send');
+
 
 
     Route::get('/interests/sent', [InterestController::class, 'sent'])

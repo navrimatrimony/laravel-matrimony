@@ -3,7 +3,6 @@
 namespace App\Http\Controllers;
 
 use App\Models\Interest;
-use App\Models\User;
 use Illuminate\Http\Request;
 use App\Models\MatrimonyProfile;
 
@@ -27,75 +26,64 @@ class InterestController extends Controller
     |--------------------------------------------------------------------------
     |
     | Route:
-    | POST /interests/send/{user}
+    | POST /interests/send/{matrimony_profile}
     |
     | Meaning:
     | - Logged-in user च्या MatrimonyProfile कडून
     | - समोरच्या user च्या MatrimonyProfile ला
     |
     */
-    public function store(MatrimonyProfile $matrimonyProfile)
+    
 
-    {
-        $authUser = auth()->user();
-		// Logged-in user
-$authUser = auth()->user();
+   // 🔒 SSOT-COMPLIANT ROUTE MODEL BINDING
+// Route param: {matrimony_profile_id}
 
-// 🔒 Sender profile (logged-in user's matrimony profile)
-$senderProfile = $authUser->matrimonyProfile;
+public function store(MatrimonyProfile $matrimony_profile_id)
+{
+    // 🔁 Internal SSOT variable alias
+    $matrimonyProfile = $matrimony_profile_id;
 
-// 🔒 Receiver profile (profile from route-model binding)
-$receiverProfile = $matrimonyProfile;
+    // 🔒 AUTH USER (authentication only)
+    $authUser = auth()->user();
 
-// 🔒 GUARD: Cannot send interest to own profile
-if ($senderProfile->id === $receiverProfile->id) {
-    return redirect()
-        ->back()
-        ->with('error', 'You cannot send interest to your own profile.');
-}
-
-
-if (!$authUser->matrimonyProfile) {
-    return redirect()
-        ->route('matrimony.profile.create')
-        ->with('error', 'Please create your matrimony profile first.');
-}
-
-        // Logged-in user
-        $authUser = auth()->user();
-
-       // 🔒 GUARD: Cannot send interest to own profile
-if ($senderProfile->id === $receiverProfile->id) {
-    return redirect()
-        ->back()
-        ->with('error', 'You cannot send interest to your own profile.');
-}
-
-
-
-        // Safety checks (५वीच्या पातळीवर)
-        if (!$senderProfile || !$receiverProfile) {
-            abort(403, 'Matrimony profile missing');
-        }
-
-        // स्वतःलाच interest जाऊ नये
-        if ($senderProfile->id === $receiverProfile->id) {
-            abort(403);
-        }
-
-        // Duplicate interest टाळण्यासाठी
-        Interest::firstOrCreate(
-            [
-                'sender_profile_id'   => $senderProfile->id,
-                'receiver_profile_id' => $receiverProfile->id,
-            ],
-            [
-                'status' => 'pending',
-            ]
-        );
-
-        return back()->with('success', 'Interest sent successfully.');
+    // 🔒 GUARD: MatrimonyProfile must exist
+    if (!$authUser || !$authUser->matrimonyProfile) {
+        return redirect()
+            ->route('matrimony.profile.create')
+            ->with('error', 'Please create your matrimony profile first.');
     }
+
+    // 🔒 Sender & Receiver Profiles (SSOT)
+    $senderProfile   = $authUser->matrimonyProfile;
+    $receiverProfile = $matrimonyProfile;
+
+    // 🔒 GUARD: Cannot send interest to own profile
+    if ($senderProfile->id === $receiverProfile->id) {
+        return back()->with(
+            'error',
+            'You cannot send interest to your own profile.'
+        );
+    }
+
+    // 🔒 Safety check (defensive)
+    if (!$senderProfile || !$receiverProfile) {
+        abort(403, 'Matrimony profile missing');
+    }
+
+    // 🔁 Duplicate interest protection
+    Interest::firstOrCreate(
+        [
+            'sender_profile_id'   => $senderProfile->id,
+            'receiver_profile_id' => $receiverProfile->id,
+        ],
+        [
+            'status' => 'pending',
+        ]
+    );
+
+    return back()->with('success', 'Interest sent successfully.');
+}
+
 
     /*
     |--------------------------------------------------------------------------

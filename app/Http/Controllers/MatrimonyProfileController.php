@@ -242,9 +242,15 @@ $user->matrimonyProfile->update([
  
 
 
-
-  public function show(MatrimonyProfile $matrimonyProfile)
+// 🔒 SSOT-COMPLIANT ROUTE MODEL BINDING
+// Route param: {matrimony_profile_id}
+// Internal variable: $matrimonyProfile (SSOT rule)
+public function show(MatrimonyProfile $matrimony_profile_id)
 {
+    // 🔁 clarity alias (SSOT variable rule)
+    $matrimonyProfile = $matrimony_profile_id;
+
+
     // 🔒 GUARD: Guest users are NOT allowed to view single profiles
     if (!auth()->check()) {
         return redirect()

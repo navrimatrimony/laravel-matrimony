@@ -97,7 +97,7 @@
                     </p>
                 @else
 
-                    @foreach ($profiles as $profile)
+                    @foreach ($profiles as $matrimonyProfile)
                         <div class="bg-white text-gray-900 border border-gray-200 rounded-lg p-4 mb-4 flex justify-between items-center">
 
                         <div class="flex items-center gap-4">
@@ -106,10 +106,12 @@
   {{-- Profile Photo --}}
 <div class="mb-4 flex justify-center">
 
-    @if ($profile->profile_photo)
+    @if ($matrimonyProfile->
+profile_photo)
         {{-- Uploaded photo --}}
         <img
-            src="{{ asset('uploads/matrimony_photos/'.$profile->profile_photo) }}"
+            src="{{ asset('uploads/matrimony_photos/'.$matrimonyProfile->
+profile_photo) }}"
             alt="Profile Photo"
             class="w-24 h-24 rounded-full object-cover border"
         />
@@ -128,13 +130,17 @@
 
 <div>
     <p class="font-semibold text-lg">
-        {{ $profile->full_name }}
+        {{ $matrimonyProfile->
+full_name }}
     </p>
     <p class="text-sm text-gray-600">
        <span class="text-sm text-gray-600">
-    {{ ucfirst($profile->gender) }}
-    @if ($profile->location)
-        | {{ ucfirst($profile->location) }}
+    {{ ucfirst($matrimonyProfile->
+gender) }}
+    @if ($matrimonyProfile->
+location)
+        | {{ ucfirst($matrimonyProfile->
+location) }}
     @endif
 </span>
 
@@ -146,7 +152,8 @@
 
                             <div>
                                 <a
-                                    href="{{ route('matrimony.profile.show', $profile->id) }}"
+                                    href="{{ route('matrimony.profile.show', $matrimonyProfile->
+id) }}"
                                     class="text-blue-600 hover:underline font-medium"
                                 >
                                     View Profile
