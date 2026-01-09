@@ -1,6 +1,16 @@
 <x-guest-layout>
     <!-- Session Status -->
     <x-auth-session-status class="mb-4" :status="session('status')" />
+    {{-- Navigation links for usability --}}
+<div class="mt-6 text-center text-sm text-gray-600">
+    <a href="{{ url('/') }}" class="underline hover:text-gray-900">
+        Home
+    </a>
+    |
+    <a href="{{ route('register') }}" class="underline hover:text-gray-900">
+        New user? Register here
+    </a>
+</div>
 
     <form method="POST" action="{{ route('login') }}">
         @csrf

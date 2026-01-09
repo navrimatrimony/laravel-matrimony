@@ -30,11 +30,15 @@
                     <label>Location</label><br>
                     <input type="text" name="location"><br><br>
 
-                    
+                    <button
+    type="submit"
+    style="margin-top:20px; padding:12px 20px; background:#4f46e5; color:white; border:none; border-radius:6px; font-size:16px;"
+>
+    Save Profile
+</button>
 
-                    <button type="submit">
-                        Save Profile
-                    </button>
+
+                    
                 </form>
 
             </div>

@@ -318,8 +318,20 @@ public function show(MatrimonyProfile $matrimony_profile_id)
         if ($request->filled('location')) {
             $query->where('location', $request->location);
         }
-
-        
+        // Age filter (from date_of_birth)
+        if ($request->filled('age_from') || $request->filled('age_to')) {
+            $query->whereNotNull('date_of_birth');
+            
+            if ($request->filled('age_from')) {
+                $minDate = now()->subYears($request->age_from)->format('Y-m-d');
+                $query->whereDate('date_of_birth', '<=', $minDate);
+            }
+            
+            if ($request->filled('age_to')) {
+                $maxDate = now()->subYears($request->age_to + 1)->addDay()->format('Y-m-d');
+                $query->whereDate('date_of_birth', '>=', $maxDate);
+            }
+        }
 
         $profiles = $query->get();
 

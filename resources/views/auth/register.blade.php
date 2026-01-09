@@ -1,6 +1,16 @@
 <x-guest-layout>
     <form method="POST" action="{{ route('register') }}">
         @csrf
+        {{-- Navigation links for usability --}}
+<div class="mt-6 text-center text-sm text-gray-600">
+    <a href="{{ url('/') }}" class="underline hover:text-gray-900">
+        Home
+    </a>
+    |
+    <a href="{{ route('login') }}" class="underline hover:text-gray-900">
+        Already have an account? Login here
+    </a>
+</div>
 
         <!-- Name -->
         <div>
@@ -64,6 +74,7 @@
             <x-primary-button class="ms-4">
                 {{ __('Register') }}
             </x-primary-button>
+            
         </div>
     </form>
 </x-guest-layout>
