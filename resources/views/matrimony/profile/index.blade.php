@@ -134,31 +134,46 @@ profile_photo) }}"
 full_name }}
     </p>
     <p class="text-sm text-gray-600">
-       <span class="text-sm text-gray-600">
-    {{ ucfirst($matrimonyProfile->
-gender) }}
-    @if ($matrimonyProfile->
-location)
-        | {{ ucfirst($matrimonyProfile->
-location) }}
-    @endif
-</span>
+    <span class="text-sm text-gray-600">
+        {{-- Gender --}}
+        {{ ucfirst($matrimonyProfile->gender) }}
 
-    </p>
+        {{-- Age (calculated from DOB) --}}
+        @if ($matrimonyProfile->date_of_birth)
+            | {{ \Carbon\Carbon::parse($matrimonyProfile->date_of_birth)->age }} yrs
+        @endif
+
+        {{-- Location --}}
+        @if ($matrimonyProfile->location)
+            | {{ ucfirst($matrimonyProfile->location) }}
+        @endif
+    </span>
+</p>
+
 </div>
 
 </div>
 
 
-                            <div>
-                                <a
-                                    href="{{ route('matrimony.profile.show', $matrimonyProfile->
-id) }}"
-                                    class="text-blue-600 hover:underline font-medium"
-                                >
-                                    View Profile
-                                </a>
-                            </div>
+<div>
+    @auth
+        <a
+            href="{{ route('matrimony.profile.show', $matrimonyProfile->id) }}"
+            class="text-blue-600 hover:underline font-medium"
+        >
+            View Profile
+        </a>
+    @else
+        <a
+            href="{{ route('login') }}"
+            class="text-gray-500 hover:underline font-medium"
+            title="Login required to view full profile"
+        >
+            Login to View Profile
+        </a>
+    @endauth
+</div>
+ 
 
                         </div>
                     @endforeach
