@@ -5,6 +5,11 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use App\Models\User;
+use Illuminate\Support\Facades\Hash;
+use Illuminate\Auth\Events\Registered;
+use Illuminate\Validation\Rules;
+
 
 class AuthController extends Controller
 {
@@ -46,4 +51,45 @@ class AuthController extends Controller
             ],
         ]);
     }
+    /**
+ * Mobile API Register (JSON + Sanctum Token)
+ */
+public function register(Request $request)
+{
+    // 1️⃣ Validate input
+    $request->validate([
+        'name' => ['required', 'string', 'max:255'],
+        'gender' => ['required', 'in:male,female'],
+        'email' => ['required', 'string', 'lowercase', 'email', 'max:255', 'unique:users,email'],
+        'password' => ['required', Rules\Password::defaults()],
+    ]);
+
+    // 2️⃣ Create user
+    $user = User::create([
+        'name' => $request->name,
+        'gender' => $request->gender,
+        'email' => $request->email,
+        'password' => Hash::make($request->password),
+    ]);
+
+    // 3️⃣ Fire registered event
+    event(new Registered($user));
+
+    // 4️⃣ Create Sanctum token
+    $token = $user->createToken('mobile-app')->plainTextToken;
+
+    // 5️⃣ JSON response
+    return response()->json([
+        'success' => true,
+        'message' => 'Registration successful',
+        'token' => $token,
+        'user' => [
+            'id' => $user->id,
+            'name' => $user->name,
+            'email' => $user->email,
+            'gender' => $user->gender,
+        ],
+    ], 200);
+}
+
 }

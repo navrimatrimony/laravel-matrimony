@@ -36,8 +36,7 @@ return new class extends Migration
                   ->cascadeOnDelete();
 
             // Basic biodata fields
-            $table->string('full_name');
-            $table->string('gender');          // users.gender snapshot
+            $table->string('full_name');                  // users.gender snapshot
             $table->date('date_of_birth')->nullable();
             $table->string('caste')->nullable();
             $table->string('education')->nullable();
