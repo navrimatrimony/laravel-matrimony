@@ -62,14 +62,18 @@ public function store(Request $request)
 {
     $user = auth()->user();
 
-    $user->matrimonyProfile()->create([
+    MatrimonyProfile::updateOrCreate(
+    ['user_id' => $user->id],
+    [
         'full_name'     => $request->full_name,
         'gender'        => $user->gender, // system-derived
         'date_of_birth' => $request->date_of_birth,
         'education'     => $request->education,
         'location'      => $request->location,
         'caste'         => $request->caste,
-    ]);
+    ]
+);
+
 
     return redirect()
         ->route('matrimony.profile.upload-photo')

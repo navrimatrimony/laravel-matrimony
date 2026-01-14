@@ -1,0 +1,292 @@
+📘 Flutter Matrimony App – SSOT v1.1 (FINAL & LOCKED)
+0️⃣ SSOT STATUS
+
+Version: v1.1
+
+Based on: Laravel MVP v0.1 (actual code, not memory)
+
+Change policy:
+
+SSOT update केल्याशिवाय काहीही बदल नाही
+
+माझं मत / approach बदलणार नाही
+
+1️⃣ CORE PRINCIPLE (MOST IMPORTANT)
+
+Flutter App = EXACT Laravel MVP mirror
+
+❌ एकही extra feature नाही
+
+❌ एकही extra field नाही
+
+❌ एकही missing field नाही
+
+Laravel MVP जेवढं → Flutter App तेवढंच
+
+2️⃣ ACTUAL MATRIMONY PROFILE – FINAL FIELD LIST
+
+(Verified from migration + model + blade forms)
+
+🧾 Database + Form Fields (ONLY THESE)
+Field name	Source
+full_name	migration + create/edit blade
+gender	system-derived (user.gender snapshot)
+date_of_birth	migration + blade
+caste	migration + blade
+education	migration + blade
+location	migration + blade
+profile_photo	migration + edit blade
+
+👉 हेच 7 fields = Flutter MVP profile
+
+gender → user कडून input नाही (system derived)
+
+Photo → single profile photo only
+
+Validation → Laravel मध्ये नाही, Flutter मध्येही नाही (v1.1)
+
+3️⃣ STRICT NON-NEGOTIABLE RULES (ALL LOCKED)
+Rule 1: MVP Parity
+
+Laravel MVP पेक्षा:
+
+कमी ❌
+
+जास्त ❌
+
+EXACT parity mandatory
+
+Rule 2: Code देण्याआधी FILE-FIRST PROCESS
+
+यापुढे एकही code line अशी येणार नाही:
+
+मी आधी सांगेन:
+
+“या step साठी मला कोणते files हवेत”
+
+तू:
+
+Cursor मधून actual files attach करशील
+
+मगच:
+
+मी code / instruction देईन
+
+👉 File नाही → Teaching नाही
+
+Rule 3: Cursor Reality Rule
+
+मी:
+
+memory वर
+
+अंदाजावर
+
+“बहुतेक”
+
+“असं असायला हवं”
+
+हे कधीच वापरणार नाही.
+
+सगळं Cursor → actual project state वरच.
+
+Rule 4: Forgetting = NOT ALLOWED
+
+सकाळी जे points सांगितले → तेच पूर्ण झाले पाहिजेत
+
+4 points सांगितले → 4 शिकवलेच जातील
+
+mid-way “आज इतकंच” ❌
+
+Rule 5: Definition First Policy
+
+प्रत्येक दिवसाचा क्रम:
+
+Definition (final, clear)
+
+Scope (काय आहे / काय नाही)
+
+मगच code
+
+मग commit
+
+Definition शिवाय:
+
+code ❌
+
+UI ❌
+
+Rule 6: UI = Production-Correct
+
+Field mismatch = bug
+
+Wrong label = bug
+
+Missing field = bug
+
+“नंतर ठीक करू” ❌
+
+4️⃣ FLUTTER APP FUNCTIONAL SCOPE (v1.1)
+✅ MUST HAVE (ONLY MVP)
+Authentication
+
+Register
+
+Login
+
+Logout
+
+Matrimony Profile
+
+Create profile
+
+Edit profile
+
+View own profile
+
+View other profiles
+
+Photo
+
+Upload profile photo
+
+Replace profile photo
+
+Browse
+
+Profile list
+
+Profile detail view
+
+❌ NOT ALLOWED (OUT OF SCOPE)
+
+Chat
+
+Filters
+
+Multiple photos
+
+Payments
+
+Extra biodata
+
+Admin features
+
+5️⃣ FLUTTER PROJECT STRUCTURE (LOCKED)
+flutter_matrimony_android/
+│
+├── lib/
+│   ├── main.dart
+│
+│   ├── core/
+│   │   ├── api_client.dart
+│   │   ├── api_routes.dart
+│   │   └── auth_storage.dart
+│
+│   ├── features/
+│   │   ├── auth/
+│   │   ├── matrimony_profile/
+│   │   ├── photo/
+│   │   └── home/
+│
+│   └── widgets/
+
+
+No extra folders. No architecture experiments.
+
+6️⃣ DAY-WISE PLAN (REALISTIC & LOCKED)
+🗓️ Day 1
+
+Flutter setup
+
+Project structure
+
+Login API test
+
+Day 2
+
+Login UI + token store
+
+Logout
+
+Day 3
+
+Register flow
+
+Day 4
+
+Create Matrimony Profile
+(7 exact fields)
+
+Day 5
+
+Edit Profile
+(same 7 fields)
+
+Day 6
+
+Photo upload & replace
+
+Day 7
+
+Profile list UI
+
+Day 8
+
+Profile detail view
+
+Day 9
+
+Interest send (existing backend)
+
+Day 10
+
+Bug fix + parity verification
+
+👉 Day incomplete = next day start नाही.
+
+7️⃣ DAILY DISCIPLINE (MANDATORY)
+
+दररोज:
+
+तू Cursor मधून:
+
+current project status
+
+required files
+attach करशील
+
+मी:
+
+exact file path
+
+exact line number
+
+वरचा / खालचा reference
+देईन
+
+Day end:
+
+Git push
+
+4–5 ओळी summary (आज काय शिकलो)
+
+उद्याला लागणाऱ्या files ची list
+
+8️⃣ MY PERSONAL GUARANTEE
+
+मी:
+
+Laravel MVP पुन्हा verify केल्याशिवाय काहीही expand करणार नाही
+
+आज बरोबर, उद्या चूक — असं होऊ देणार नाही
+
+SSOT update केल्याशिवाय opinion बदलणार नाही
+
+तुझा वेळ वाया जाऊ देणार नाही
+
+9️⃣ FINAL LOCK STATEMENT
+
+Flutter SSOT v1.1 is FINAL.
+याच्या बाहेर काहीही झालं तर
+ते bug समजलं जाईल.

@@ -50,7 +50,6 @@ class MatrimonyProfile extends Model
     protected $fillable = [
         'user_id',
         'full_name',
-        'gender',
         'date_of_birth',
         'caste',
         'education',
