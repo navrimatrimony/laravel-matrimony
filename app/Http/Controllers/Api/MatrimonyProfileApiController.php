@@ -150,4 +150,24 @@ public function update(Request $request)
         ]);
     }
 
+    /**
+     * Get matrimony profile by ID
+     */
+    public function showById($id)
+    {
+        $profile = MatrimonyProfile::find($id);
+
+        if (!$profile) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Profile not found',
+            ], 404);
+        }
+
+        return response()->json([
+            'success' => true,
+            'profile' => $profile,
+        ]);
+    }
+
 }
