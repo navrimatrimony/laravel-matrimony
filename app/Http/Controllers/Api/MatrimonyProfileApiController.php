@@ -138,11 +138,55 @@ public function update(Request $request)
     }
 
     /**
-     * List all matrimony profiles
+     * List all matrimony profiles with filters
      */
     public function index(Request $request)
     {
-        $profiles = MatrimonyProfile::latest()->get();
+        $query = MatrimonyProfile::with('user')->latest();
+
+        // Caste filter
+        if ($request->filled('caste')) {
+            $query->where('caste', $request->caste);
+        }
+
+        // Location filter
+        if ($request->filled('location')) {
+            $query->where('location', $request->location);
+        }
+
+        // Age filter (from date_of_birth)
+        if ($request->filled('age_from') || $request->filled('age_to')) {
+            $query->whereNotNull('date_of_birth');
+            
+            if ($request->filled('age_from')) {
+                $minDate = now()->subYears($request->age_from)->format('Y-m-d');
+                $query->whereDate('date_of_birth', '<=', $minDate);
+            }
+            
+            if ($request->filled('age_to')) {
+                $maxDate = now()->subYears($request->age_to + 1)->addDay()->format('Y-m-d');
+                $query->whereDate('date_of_birth', '>=', $maxDate);
+            }
+        }
+
+        $profiles = $query->get();
+
+        // Transform to include gender from user relationship (SSOT-approved fields only)
+        $profiles = $profiles->map(function ($profile) {
+            return [
+                'id' => $profile->id,
+                'user_id' => $profile->user_id,
+                'full_name' => $profile->full_name,
+                'gender' => $profile->user->gender ?? null,
+                'date_of_birth' => $profile->date_of_birth,
+                'caste' => $profile->caste,
+                'education' => $profile->education,
+                'location' => $profile->location,
+                'profile_photo' => $profile->profile_photo,
+                'created_at' => $profile->created_at,
+                'updated_at' => $profile->updated_at,
+            ];
+        });
 
         return response()->json([
             'success' => true,
@@ -155,7 +199,7 @@ public function update(Request $request)
      */
     public function showById($id)
     {
-        $profile = MatrimonyProfile::find($id);
+        $profile = MatrimonyProfile::with('user')->find($id);
 
         if (!$profile) {
             return response()->json([
@@ -164,9 +208,24 @@ public function update(Request $request)
             ], 404);
         }
 
+        // Transform to include gender from user relationship (SSOT-approved field)
+        $profileData = [
+            'id' => $profile->id,
+            'user_id' => $profile->user_id,
+            'full_name' => $profile->full_name,
+            'gender' => $profile->user->gender ?? null,
+            'date_of_birth' => $profile->date_of_birth,
+            'caste' => $profile->caste,
+            'education' => $profile->education,
+            'location' => $profile->location,
+            'profile_photo' => $profile->profile_photo,
+            'created_at' => $profile->created_at,
+            'updated_at' => $profile->updated_at,
+        ];
+
         return response()->json([
             'success' => true,
-            'profile' => $profile,
+            'profile' => $profileData,
         ]);
     }
 
