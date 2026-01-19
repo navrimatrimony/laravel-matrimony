@@ -96,29 +96,4 @@ Route::post('/interests/{interest}/withdraw', [App\Http\Controllers\InterestCont
 
 
 });
-
-/*
-|--------------------------------------------------------------------------
-| TEMPORARY DEBUG ROUTE (Remove after testing)
-|--------------------------------------------------------------------------
-*/
-Route::get('/__test-interest-api', function () {
-    $user = auth()->user();
-    
-    if (!$user) {
-        return "NO USER";
-    }
-    
-    $profileExists = $user->matrimonyProfile ? 'YES' : 'NO';
-    $sentCount = 0;
-    $receivedCount = 0;
-    
-    if ($user->matrimonyProfile) {
-        $sentCount = \App\Models\Interest::where('sender_profile_id', $user->matrimonyProfile->id)->count();
-        $receivedCount = \App\Models\Interest::where('receiver_profile_id', $user->matrimonyProfile->id)->count();
-    }
-    
-    return "User ID: {$user->id}\nMatrimony Profile Exists: {$profileExists}\nSent Interests: {$sentCount}\nReceived Interests: {$receivedCount}";
-});
-
 require __DIR__.'/auth.php';
