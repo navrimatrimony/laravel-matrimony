@@ -11,22 +11,31 @@ class MatrimonyProfileApiController extends Controller
     /**
      * Store matrimony profile for logged-in user
      * SSOT: User ≠ MatrimonyProfile
+     * CREATE ONLY - returns 409 if profile already exists
      */
     public function store(Request $request)
     {
         $user = $request->user(); // sanctum authenticated user
 
-        $profile = MatrimonyProfile::updateOrCreate(
-    ['user_id' => $user->id],
-    [
-        'full_name'     => $request->full_name,
-        'date_of_birth' => $request->date_of_birth,
-        'caste'         => $request->caste,
-        'education'     => $request->education,
-        'location'      => $request->location,
-    ]
-);
+        // Check if profile already exists
+        $existingProfile = MatrimonyProfile::where('user_id', $user->id)->first();
 
+        if ($existingProfile) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Profile already exists',
+            ], 409);
+        }
+
+        // Create new profile
+        $profile = MatrimonyProfile::create([
+            'user_id'      => $user->id,
+            'full_name'     => $request->full_name,
+            'date_of_birth' => $request->date_of_birth,
+            'caste'         => $request->caste,
+            'education'     => $request->education,
+            'location'      => $request->location,
+        ]);
 
         return response()->json([
             'success' => true,
@@ -125,6 +134,19 @@ public function update(Request $request)
                 'profile_photo' => $filename,
                 'url' => asset('uploads/matrimony_photos/' . $filename),
             ],
+        ]);
+    }
+
+    /**
+     * List all matrimony profiles
+     */
+    public function index(Request $request)
+    {
+        $profiles = MatrimonyProfile::latest()->get();
+
+        return response()->json([
+            'success' => true,
+            'profiles' => $profiles,
         ]);
     }
 

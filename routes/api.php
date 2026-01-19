@@ -36,6 +36,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/matrimony-profile', [MatrimonyProfileApiController::class, 'show']);  // FETCH
     Route::put('/matrimony-profile', [MatrimonyProfileApiController::class, 'update']); // UPDATE
     Route::post('/matrimony-profile/photo', [MatrimonyProfileApiController::class, 'uploadPhoto']); // PHOTO UPLOAD
+    Route::get('/matrimony-profiles', [MatrimonyProfileApiController::class, 'index']); // LIST ALL PROFILES
     Route::post('/logout', [AuthController::class, 'logout']); // LOGOUT
 });
 
