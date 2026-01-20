@@ -747,3 +747,301 @@ FLUTTER SSOT v2.4 IS FINAL
 
 ▶ याच्या बाहेर काहीही झालं
 ▶ तर ते BUG समजलं जाईल
+
+============================================================
+Daywise learning summary 
+============================================================
+
+
+📘 DAY 1 — Learning Summary (SSOT FORMAT)
+
+Date : 2026-01-10
+Day : Day 1
+Status : ☑️ Completed
+
+आज काय शिकलो:
+
+Flutter project create कसा करायचा
+
+Android Studio मध्ये Flutter project कसा open करायचा
+
+Emulator कसा start करायचा
+
+Default Flutter app emulator वर कशी run होते
+
+आज अडचण काय आली (असल्यास):
+• Emulator selection (Remote vs Virtual) confusion
+
+Decision / Note:
+• Local Virtual Emulator वापरायचा (Remote नाही)
+
+Next Day Prerequisite:
+• Day 1 complete (DONE)
+
+------------------------------------------------------------
+------------------------------------------------------------
+
+
+🧾 DAY 2 SUMMARY (COPY–PASTE READY — SSOT FORMAT)
+Date      : 2026-01-11
+Day       : Day 2
+Status    : ☑️ Completed
+------------------------------------------------------------
+आज काय शिकलो:
+1) Flutter मध्ये screen म्हणजे Dart class काय असते
+2) Navigator.push वापरून screen navigation कसं करायचं
+3) Relative import (../) कसा आणि का वापरायचा
+4) Button click वर UI flow कसं बदलतं
+
+आज अडचण काय आली (असल्यास):
+• Import path आणि self-import मुळे build error आला
+
+Decision / Note (important):
+• Screen वापरण्याआधी योग्य import असणं अनिवार्य
+• Self-import कधीही करायचा नाही
+
+Next Day Prerequisite (जर काही लागणार असेल तर):
+• Laravel backend login API files ready असणे
+------------------------------------------------------------
+------------------------------------------------------------
+
+Date      : 2026-01-12
+Day       : Day 3
+Status    : ☑️ Completed
+------------------------------------------------------------
+आज काय शिकलो:
+1) Laravel login API चा exact request–response contract
+2) 401 vs 422 error difference आणि कारण
+3) Sanctum token backend कसा generate करतो
+4) Flutter मध्ये API client skeleton कसा तयार करायचा
+
+आज अडचण काय आली (असल्यास):
+• नाही
+
+Decision / Note (important):
+• Day 3 ला actual API call करू नये (SSOT gate)
+
+Next Day Prerequisite:
+• Valid test user credentials (email + password)
+------------------------------------------------------------
+------------------------------------------------------------
+
+Date      : 2026-01-12
+Day       : Day 4
+Status    : ☑️ Completed
+------------------------------------------------------------
+आज काय शिकलो:
+1) Flutter मधून real POST login API call कसा करायचा
+2) Stateless vs Stateful widget वापराचा practical फरक
+3) Network hang टाळण्यासाठी timeout + try/catch का गरजेचे
+4) Sanctum token-based login साठी database migration का critical
+
+आज अडचण काय आली (असल्यास):
+• Production DB मध्ये Sanctum token table missing होती
+
+Decision / Note (important):
+• Git deploy नंतर DB migration apply करणे अनिवार्य
+
+Next Day Prerequisite:
+• Register API backend verify
+------------------------------------------------------------
+------------------------------------------------------------
+Date      : 2026-01-12
+Day       : Day 5
+Status    : ☑️ Completed
+------------------------------------------------------------
+आज काय शिकलो:
+1) Flutter साठी independent Mobile Register API (/api/register) Laravel मध्ये का आणि कशी तयार करावी
+2) Web register (redirect-based) आणि Mobile register (JSON-based) यामधील नेमका फरक
+3) Flutter Register screen वरून Laravel API ला real data कसा पाठवायचा
+4) Register नंतर Sanctum token generate करून auto-login कसा होतो
+5) User register झाला तरी Matrimony Profile नसल्यामुळे website वर data का दिसत नाही (expected behavior)
+
+आज अडचण काय आली (असल्यास):
+• Live server वर /api/register route आणि controller method initially deploy झालेले नव्हते
+
+Decision / Note (important):
+• Day 5 मध्ये फक्त User register + auto-login scope आहे; Matrimony Profile create हा Day 6 चा विषय आहे
+
+Next Day Prerequisite (जर काही लागणार असेल तर):
+• Matrimony Profile create API आणि profile-exists check logic verify करणे
+------------------------------------------------------------
+------------------------------------------------------------
+Date : 2026-01-13
+Day : Day 6
+Status : ☑️ Completed
+
+आज काय शिकलो:
+
+Login झाल्यानंतर Matrimony Profile Create form कधी आणि का दाखवायचा हे logic
+
+Laravel MVP मधील fixed 7 fields Flutter form शी exact map कसे करायचे
+
+Matrimony Profile store API ला Flutter मधून real data कसा पाठवायचा
+
+Profile save successful झाल्यावर next screen / state change कसा handle करायचा
+
+Profile data database मध्ये correctly insert होतोय का ते verify कसे करायचे
+
+
+------------------------------------------------------------
+------------------------------------------------------------
+Date      : 2026-01-14
+Day       : Day 7
+Status    : ☑️ Completed
+------------------------------------------------------------
+आज काय शिकलो:
+1) Flutter मध्ये Create आणि Edit साठी एकाच screen चा वापर करताना existingProfile null / not-null हा single source decision point कसा असतो हे practically शिकलो.
+2) Edit Profile नीट चालण्यासाठी backend मध्ये GET /api/matrimony-profile API अनिवार्य असते; GET route नसल्यामुळे Flutter मध्ये Edit screen Create mode मध्ये जात होता हे debug करून समजलं.
+3) Create (POST) आणि Update (PUT) हे backend वर वेगळे intent असले पाहिजेत; POST आणि PUT वेगळे केल्यामुळे future confusion आणि bugs permanently टळतात हे शिकलो.
+4) Flutter update API अजूनही POST वापरत असल्यामुळे update काम करत नव्हता; http.put वापरणे आणि backend PUT route align करणे किती critical आहे हे practically अनुभवलं.
+5) Web controller आणि API controller वेगळे असले तरी “1 user = 1 matrimony profile” हा business rule backend मध्ये strictly enforce करणे (updateOrCreate + explicit update) हेच खरे SSOT असते हे end-to-end समजलं.
+
+आज अडचण काय आली (असल्यास):
+• Backend मध्ये GET profile API नसल्यामुळे Edit Profile screen ला data मिळत नव्हता आणि Flutter Create mode मध्ये जात होता.
+
+Decision / Note (important):
+• Day 7 ला GET (fetch), POST (create), PUT (update) हे तीनही API स्पष्टपणे वेगळे करून profile edit flow future-safe केला.
+• Flutter आणि Laravel यांचा exact intent-match (HTTP method + route) हा non-negotiable rule म्हणून lock केला
+
+------------------------------------------------------------
+Day: Day 8
+Topic: Photo Upload (Single Photo)
+Status: ☑️ Completed
+------------------------------------------------------------
+आज काय शिकलो:
+
+Gallery मधून image pick करणे
+
+Multipart request ने file upload
+
+Local + network photo preview
+
+Backend contract न मोडता sensitive feature implement करणे
+
+Decision / Note:
+
+Android permissions manifest-only declare केल्या
+
+Runtime permission handling deferred (by design)
+
+Next Day Prerequisite:
+
+Laravel profile list API verified
+------------------------------------------------------------
+Date      : 2026-01-18
+Day       : Day 9
+Status    : ☑️ Completed
+------------------------------------------------------------
+आज काय शिकलो:
+
+1) Flutter Home screen वर profile list दाखवण्यासाठी backend मध्ये dedicated
+   GET /api/matrimony-profiles API असणे किती critical आहे हे end-to-end debug करून शिकलो.
+
+2) “List API आहे पण Detail API नाही” हा design gap Flutter मध्ये profile click
+   केल्यावर 404 देतो हे समजलं; त्यामुळे GET /api/matrimony-profiles/{id}
+   हा route backend मध्ये explicit add करणे आवश्यक आहे हे practically clear झालं.
+
+3) Flutter मध्ये loading state (_isLoading) आणि setState() चुकल्यास
+   UI silently break होते; success path मध्येही setState अनिवार्य आहे
+   हे real bug मधून शिकलो.
+
+4) Profile photo handling मध्ये Flutter/Laravel दोष नसून
+   जुने (legacy) uploads – space असलेले filenames, corrupt images,
+   2016–2021 काळातील uploads – हे actual root cause असू शकतात
+   हे database + filesystem proof ने समजलं.
+
+5) “New uploads future-safe, old data broken” हा production reality accept करून
+   default avatar fallback हा correct engineering decision आहे
+   हे maturity level ला समजलं.
+
+------------------------------------------------------------
+आज अडचण काय आली (असल्यास):
+
+• Backend मध्ये सुरुवातीला GET /api/matrimony-profiles route missing होता,
+  त्यामुळे Home screen वर profile list 404 येत होती.
+• Profile detail API (/api/matrimony-profiles/{id}) route नसल्यामुळे
+  profile card click केल्यावर detail screen ‘Profile not found’ दाखवत होता.
+• काही जुन्या profiles चे photos दिसत नव्हते, पण same folder मधले
+  नवीन photos नीट दिसत होते — त्यामुळे confusion वाढला.
+
+------------------------------------------------------------
+Decision / Note (important):
+
+• Profile Browse (list) आणि Profile Detail (by id) हे दोन independent APIs
+  backend मध्ये explicit define करणे SSOT म्हणून lock केले.
+• Legacy (old) profile photos broken असतील तर OPTION A — Ignore
+  हा conscious, documented decision घेतला.
+• Flutter side वर default avatar fallback कायम ठेवण्याचा निर्णय घेतला.
+• New uploads pipeline clean असल्यामुळे future मध्ये हा photo issue येणार नाही
+  याची खात्री केली.
+
+------------------------------------------------------------
+Date      : 2026-01-19
+Day       : Day 10
+Status    : ☑️ Completed
+
+आज काय शिकलो (Day 10 Learnings):
+
+1) Web-based Laravel features Flutter मध्ये direct copy न करता
+   API-first आणि UX-first पद्धतीने कसे implement करायचे ते शिकलो.
+
+2) Interest system end-to-end कसा build करायचा हे शिकलो:
+   - Send Interest
+   - Sent / Received Interests
+   - Accept / Reject / Withdraw
+   - Ownership आणि status-based rules (pending / accepted / rejected)
+
+3) Backend API ready असताना Flutter मध्ये
+   state management कसे हाताळायचे (local state + in-memory cache) हे शिकलो.
+
+4) UX bug आणि feature bug यामधील फरक समजला:
+   - Backend बरोबर असूनही UX incomplete असू शकतो
+   - Flutter-side polish ने production quality कशी वाढते
+
+5) Navigation flow कसा logically design करायचा हे शिकलो:
+   - Create Profile → Photo Upload → Dashboard
+   - Explicit navigation (pushReplacement) का महत्त्वाची आहे
+
+6) Dashboard म्हणजे काय हे practically समजले:
+   - Dashboard = central hub
+   - Search / Browse हा dashboard मधील एक option असतो
+   - Auto-browse UX योग्य नाही
+
+7) मोठा screen (HomeScreen) safely refactor करून
+   वेगळे screens (Dashboard vs Browse Profiles) कसे वेगळे करायचे ते शिकलो.
+
+8) Existing APIs वापरून Flutter मध्ये
+   dashboard statistics (counts, pending/accepted/rejected)
+   कसे calculate आणि display करायचे ते शिकलो
+   (backend बदल न करता).
+
+9) SSOT discipline कसा पाळायचा ते शिकलो:
+   - अंदाज न घेता Cursor scan वापरणे
+   - एकावेळी एकच fix करणे
+   - Backend, API, Flutter boundaries clear ठेवणे
+
+10) Phase-1 MVP म्हणजे काय याची स्पष्ट समज आली:
+    - Feature completeness
+    - Correct UX flow
+    - Dashboard visibility
+    - Production-ready navigation
+
+Decision / Note (Important):
+
+• Flutter Matrimony App Phase-1 (MVP) Day 10 ला
+  functional, UX-wise आणि architectural दृष्टीने complete झाला.
+• Backend न बदलता Flutter-side polish ने real app feel मिळतो.
+• पुढील Phase (AI / filters / monetization) साठी strong base तयार झाला.
+
+Next Phase:
+
+• Phase 2 Planning (Advanced Search / AI Matching / Business Logic)
+  किंवा
+• Release Preparation (APK, testing, Play Store readiness)
+
+
+------------------------------------------------------------
+
+
+------------------------------------------------------------
