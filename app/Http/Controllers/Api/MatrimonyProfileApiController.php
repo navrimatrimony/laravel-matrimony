@@ -59,9 +59,15 @@ public function show(Request $request)
         ], 404);
     }
 
+    // Hide rejected images - return null for profile_photo if explicitly rejected
+    $profileData = $profile->toArray();
+    if ($profile->photo_approved === false || !$profile->profile_photo) {
+        $profileData['profile_photo'] = null;
+    }
+
     return response()->json([
         'success' => true,
-        'profile' => $profile,
+        'profile' => $profileData,
     ]);
 }
 /**
@@ -88,10 +94,16 @@ public function update(Request $request)
         'location'      => $request->location,
     ]);
 
+    // Hide rejected images - return null for profile_photo if explicitly rejected
+    $profileData = $profile->toArray();
+    if ($profile->photo_approved === false || !$profile->profile_photo) {
+        $profileData['profile_photo'] = null;
+    }
+
     return response()->json([
         'success' => true,
         'message' => 'Matrimony profile updated',
-        'profile' => $profile,
+        'profile' => $profileData,
     ]);
 }
 
@@ -123,8 +135,22 @@ public function update(Request $request)
             $filename
         );
 
+        // Apply policy-based approval status
+        $photoApprovalRequired = \App\Services\AdminSettingService::isPhotoApprovalRequired();
+        
+        if ($photoApprovalRequired) {
+            // Policy: Approval required - photo hidden until admin approves
+            $photoApproved = false;
+        } else {
+            // Policy: No approval required - photo visible immediately
+            $photoApproved = true;
+        }
+        
         $profile->update([
             'profile_photo' => $filename,
+            'photo_approved' => $photoApproved,
+            'photo_rejected_at' => null,
+            'photo_rejection_reason' => null,
         ]);
 
         return response()->json([
@@ -143,6 +169,10 @@ public function update(Request $request)
     public function index(Request $request)
     {
         $query = MatrimonyProfile::with('user')->latest();
+
+        // Exclude suspended and soft-deleted profiles
+        $query->where('is_suspended', false);
+        // Soft deletes are automatically excluded by Laravel's SoftDeletes trait
 
         // Caste filter
         if ($request->filled('caste')) {
@@ -182,7 +212,7 @@ public function update(Request $request)
                 'caste' => $profile->caste,
                 'education' => $profile->education,
                 'location' => $profile->location,
-                'profile_photo' => $profile->profile_photo,
+                'profile_photo' => ($profile->profile_photo && $profile->photo_approved !== false) ? $profile->profile_photo : null,
                 'created_at' => $profile->created_at,
                 'updated_at' => $profile->updated_at,
             ];
@@ -218,7 +248,7 @@ public function update(Request $request)
             'caste' => $profile->caste,
             'education' => $profile->education,
             'location' => $profile->location,
-            'profile_photo' => $profile->profile_photo,
+            'profile_photo' => ($profile->profile_photo && $profile->photo_approved !== false) ? $profile->profile_photo : null,
             'created_at' => $profile->created_at,
             'updated_at' => $profile->updated_at,
         ];

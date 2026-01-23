@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 /*
 |--------------------------------------------------------------------------
@@ -22,7 +23,7 @@ use Illuminate\Database\Eloquent\Model;
 
 class MatrimonyProfile extends Model
 {
-    use HasFactory;
+    use HasFactory, SoftDeletes;
 
     /*
     |--------------------------------------------------------------------------
@@ -55,6 +56,16 @@ class MatrimonyProfile extends Model
         'education',
         'location',
         'profile_photo', // 🔴 uploaded photo path
+        'is_suspended',
+        'photo_approved',
+        'photo_rejected_at',
+        'photo_rejection_reason',
+    ];
+    
+    protected $casts = [
+        'is_suspended' => 'boolean',
+        'photo_approved' => 'boolean',
+        'photo_rejected_at' => 'datetime',
     ];
     
 

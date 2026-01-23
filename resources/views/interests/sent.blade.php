@@ -86,7 +86,7 @@
 
                         {{-- Receiver Photo (Right Side) --}}
                         <div>
-                            @if ($interest->receiverProfile && $interest->receiverProfile->profile_photo)
+                            @if ($interest->receiverProfile && $interest->receiverProfile->profile_photo && $interest->receiverProfile->photo_approved !== false)
                                 <img
                                     src="{{ asset('uploads/matrimony_photos/'.$interest->receiverProfile->profile_photo) }}"
                                     alt="Profile Photo"

@@ -37,7 +37,7 @@
                     @endif
                 </p>
 <div class="flex items-center gap-4">
-    @if ($interest->senderProfile && $interest->senderProfile->profile_photo)
+    @if ($interest->senderProfile && $interest->senderProfile->profile_photo && $interest->senderProfile->photo_approved !== false)
         <img
             src="{{ asset('uploads/matrimony_photos/'.$interest->senderProfile->profile_photo) }}"
             class="w-14 h-14 rounded-full object-cover border"

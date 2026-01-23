@@ -106,17 +106,15 @@
   {{-- Profile Photo --}}
 <div class="mb-4 flex justify-center">
 
-    @if ($matrimonyProfile->
-profile_photo)
-        {{-- Uploaded photo --}}
+    @if ($matrimonyProfile->profile_photo && $matrimonyProfile->photo_approved !== false)
+        {{-- Uploaded and approved photo --}}
         <img
-            src="{{ asset('uploads/matrimony_photos/'.$matrimonyProfile->
-profile_photo) }}"
+            src="{{ asset('uploads/matrimony_photos/'.$matrimonyProfile->profile_photo) }}"
             alt="Profile Photo"
             class="w-24 h-24 rounded-full object-cover border"
         />
     @else
-        {{-- Default placeholder --}}
+        {{-- Default placeholder (no upload yet or rejected) --}}
         <img
             src="{{ asset('images/default-profile.png') }}"
             alt="Default Profile Photo"

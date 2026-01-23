@@ -75,13 +75,24 @@
                 </p>
             </div>
 
+            {{-- Photo Rejection Alert --}}
+            @if ($profile->photo_rejection_reason)
+                <div style="margin-bottom:1.5rem; padding:1.25rem; background:#fee2e2; border:2px solid #fca5a5; border-radius:8px; color:#991b1b;">
+                    <p style="font-weight:700; margin-bottom:0.5rem; font-size:1.1rem;">Your profile photo was removed by admin.</p>
+                    <p style="margin:0; font-size:0.95rem;"><strong>Reason:</strong> {{ $profile->photo_rejection_reason }}</p>
+                    <p style="margin-top:0.75rem; margin-bottom:0; font-size:0.875rem; color:#7f1d1d;">
+                        Please upload a new photo that meets our guidelines.
+                    </p>
+                </div>
+            @endif
+
             {{-- Profile Summary Card with Photo --}}
             <div class="bg-white rounded-lg shadow-lg p-6 mb-6 border-l-4 border-red-600">
                 <div class="flex flex-col md:flex-row items-center md:items-start gap-6">
                     
                     {{-- Profile Photo --}}
                     <div class="flex-shrink-0">
-                        @if ($profile->profile_photo)
+                        @if ($profile->profile_photo && $profile->photo_approved !== false)
                             <img src="{{ asset('uploads/matrimony_photos/'.$profile->profile_photo) }}" 
                                  alt="Profile Photo" 
                                  class="w-24 h-24 rounded-full object-cover border-4 border-red-200 shadow-md">
@@ -239,7 +250,7 @@
                             <div class="flex items-center gap-3">
                                 {{-- Sender Photo - Smaller and Round --}}
                                 <div class="flex-shrink-0">
-                                    @if ($interest->senderProfile && $interest->senderProfile->profile_photo)
+                                    @if ($interest->senderProfile && $interest->senderProfile->profile_photo && $interest->senderProfile->photo_approved !== false)
                                         <img src="{{ asset('uploads/matrimony_photos/'.$interest->senderProfile->profile_photo) }}" 
                                              alt="Profile" 
                                              class="w-14 h-14 rounded-full object-cover border-2 border-red-200">
@@ -297,7 +308,7 @@
                             <div class="flex items-center gap-3">
                                 {{-- Receiver Photo - Smaller and Round --}}
                                 <div class="flex-shrink-0">
-                                    @if ($interest->receiverProfile && $interest->receiverProfile->profile_photo)
+                                    @if ($interest->receiverProfile && $interest->receiverProfile->profile_photo && $interest->receiverProfile->photo_approved !== false)
                                         <img src="{{ asset('uploads/matrimony_photos/'.$interest->receiverProfile->profile_photo) }}" 
                                              alt="Profile" 
                                              class="w-14 h-14 rounded-full object-cover border-2 border-red-200">

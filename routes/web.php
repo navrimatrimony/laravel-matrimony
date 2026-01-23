@@ -3,6 +3,8 @@
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\MatrimonyProfileController;
 use App\Http\Controllers\InterestController;
+use App\Http\Controllers\AdminController;
+use App\Http\Controllers\AbuseReportController;
 
 /*
 |--------------------------------------------------------------------------
@@ -94,6 +96,56 @@ Route::post('/interests/{interest}/reject', [App\Http\Controllers\InterestContro
 Route::post('/interests/{interest}/withdraw', [App\Http\Controllers\InterestController::class, 'withdraw'])
     ->name('interests.withdraw');
 
+    /*
+    | Abuse Reports (User action)
+    */
+    Route::post('/abuse-reports/{matrimony_profile}', [AbuseReportController::class, 'store'])
+        ->name('abuse-reports.store');
 
 });
+
+/*
+|--------------------------------------------------------------------------
+| Admin Routes (Admin only)
+|--------------------------------------------------------------------------
+*/
+Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(function () {
+    
+    /*
+    | Profile View (Admin - bypasses suspension checks)
+    */
+    Route::get('/profiles/{id}', [AdminController::class, 'showProfile'])
+        ->name('profiles.show');
+    
+    /*
+    | Profile Moderation
+    */
+    Route::post('/profiles/{profile}/suspend', [AdminController::class, 'suspendProfile'])
+        ->name('profiles.suspend');
+    
+    Route::post('/profiles/{profile}/unsuspend', [AdminController::class, 'unsuspendProfile'])
+        ->name('profiles.unsuspend');
+    
+    Route::post('/profiles/{profile}/soft-delete', [AdminController::class, 'softDeleteProfile'])
+        ->name('profiles.soft-delete');
+    
+    /*
+    | Image Moderation
+    */
+    Route::post('/profiles/{profile}/approve-image', [AdminController::class, 'approveImage'])
+        ->name('profiles.approve-image');
+    
+    Route::post('/profiles/{profile}/reject-image', [AdminController::class, 'rejectImage'])
+        ->name('profiles.reject-image');
+    
+    /*
+    | Abuse Reports
+    */
+    Route::get('/abuse-reports', [AbuseReportController::class, 'index'])
+        ->name('abuse-reports.index');
+    
+    Route::post('/abuse-reports/{report}/resolve', [AbuseReportController::class, 'resolve'])
+        ->name('abuse-reports.resolve');
+});
+
 require __DIR__.'/auth.php';

@@ -62,6 +62,10 @@ public function store(Request $request)
 {
     $user = auth()->user();
 
+    // Policy: Check manual activation requirement
+    $manualActivationRequired = \App\Services\AdminSettingService::isManualProfileActivationRequired();
+    $isSuspended = $manualActivationRequired ? true : false;
+
     MatrimonyProfile::updateOrCreate(
     ['user_id' => $user->id],
     [
@@ -71,6 +75,7 @@ public function store(Request $request)
         'education'     => $request->education,
         'location'      => $request->location,
         'caste'         => $request->caste,
+        'is_suspended'  => $isSuspended,
     ]
 );
 
@@ -147,15 +152,48 @@ if ($request->hasFile('profile_photo')) {
     $photoPath = $filename;
 }
 
-
-    $user->matrimonyProfile->update([
+    // Prepare update data
+    $updateData = [
         'full_name'     => $request->full_name,
         'date_of_birth' => $request->date_of_birth,
         'education'     => $request->education,
         'location'      => $request->location,
         'caste'         => $request->caste,
-        'profile_photo' => $photoPath, // 🔴 THIS WAS MISSING
-    ]);
+        'profile_photo' => $photoPath,
+    ];
+
+    // If new photo uploaded, apply policy-based approval status
+    if ($request->hasFile('profile_photo')) {
+        $photoApprovalRequired = \App\Services\AdminSettingService::isPhotoApprovalRequired();
+        
+        if ($photoApprovalRequired) {
+            // Policy: Approval required - photo hidden until admin approves
+            $updateData['photo_approved'] = false;
+        } else {
+            // Policy: No approval required - photo visible immediately
+            $updateData['photo_approved'] = true;
+        }
+        
+        $updateData['photo_rejected_at'] = null;
+        $updateData['photo_rejection_reason'] = null; // Clear rejection reason on new upload
+    }
+
+    // Policy: Check suspend after profile edit
+    $suspendAfterEdit = \App\Services\AdminSettingService::shouldSuspendAfterProfileEdit();
+    if ($suspendAfterEdit) {
+        $suspendMode = \App\Services\AdminSettingService::getSuspendMode();
+        
+        if ($suspendMode === 'full') {
+            // Policy: Full suspension - entire profile suspended
+            $updateData['is_suspended'] = true;
+        } elseif ($suspendMode === 'new_content_only') {
+            // Policy: New content only - profile remains active but new edits hidden
+            // Note: This requires additional tracking which is out of scope
+            // For now, we'll treat it as no suspension
+        }
+    }
+
+    $user->matrimonyProfile->update($updateData);
 
     return redirect()
         ->route('matrimony.profile.edit')
@@ -220,8 +258,22 @@ $file->move(
 );
 
 // 🗂️ DB: ONLY filename (NO folder)
+// Apply policy-based approval status
+$photoApprovalRequired = \App\Services\AdminSettingService::isPhotoApprovalRequired();
+
+if ($photoApprovalRequired) {
+    // Policy: Approval required - photo hidden until admin approves
+    $photoApproved = false;
+} else {
+    // Policy: No approval required - photo visible immediately
+    $photoApproved = true;
+}
+
 $user->matrimonyProfile->update([
     'profile_photo' => $filename,
+    'photo_approved' => $photoApproved,
+    'photo_rejected_at' => null,
+    'photo_rejection_reason' => null,
 ]);
 
 
@@ -264,8 +316,7 @@ public function show(MatrimonyProfile $matrimony_profile_id)
 
     $authUser = auth()->user();
 
-
-// 🔒 Logged-in but no profile
+    // 🔒 Logged-in but no profile
     if (!$authUser->matrimonyProfile) {
         return redirect()
             ->route('matrimony.profile.create')
@@ -276,6 +327,11 @@ public function show(MatrimonyProfile $matrimony_profile_id)
     $isOwnProfile = $viewer && (
         $viewer->matrimonyProfile->id === $matrimonyProfile->id
     );
+
+    // 🔒 GUARD: Cannot view suspended or soft-deleted profiles (unless owner viewing own profile)
+    if (!$isOwnProfile && ($matrimonyProfile->is_suspended || $matrimonyProfile->trashed())) {
+        abort(404, 'Profile not found.');
+    }
 
     $interestAlreadySent = false;
 
@@ -288,12 +344,22 @@ public function show(MatrimonyProfile $matrimony_profile_id)
         ->exists();
     }
 
+    // Check if user has already submitted an open abuse report for this profile
+    $hasAlreadyReported = false;
+    if (auth()->check() && !$isOwnProfile) {
+        $hasAlreadyReported = \App\Models\AbuseReport::where('reporter_user_id', auth()->id())
+            ->where('reported_profile_id', $matrimonyProfile->id)
+            ->where('status', 'open')
+            ->exists();
+    }
+
     return view(
         'matrimony.profile.show',
         [
             'matrimonyProfile'     => $matrimonyProfile,
             'isOwnProfile'         => $isOwnProfile,
             'interestAlreadySent'  => $interestAlreadySent,
+            'hasAlreadyReported'   => $hasAlreadyReported,
         ]
     );
 }
@@ -312,6 +378,10 @@ public function show(MatrimonyProfile $matrimony_profile_id)
     public function index(Request $request)
     {
         $query = MatrimonyProfile::latest();
+
+        // Exclude suspended and soft-deleted profiles
+        $query->where('is_suspended', false);
+        // Soft deletes are automatically excluded by Laravel's SoftDeletes trait
 
         // Caste filter
         if ($request->filled('caste')) {

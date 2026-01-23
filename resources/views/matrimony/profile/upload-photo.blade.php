@@ -11,6 +11,13 @@
     Upload Profile Photo
 </h1>
 
+@if (auth()->check() && auth()->user()->matrimonyProfile && auth()->user()->matrimonyProfile->photo_rejection_reason)
+    <div style="margin-bottom:1.5rem; padding:1rem; background:#fee2e2; border:1px solid #fca5a5; border-radius:8px; color:#991b1b;">
+        <p style="font-weight:600; margin-bottom:0.5rem;">Your profile photo was removed by admin.</p>
+        <p style="margin:0;"><strong>Reason:</strong> {{ auth()->user()->matrimonyProfile->photo_rejection_reason }}</p>
+    </div>
+@endif
+
 <form method="POST"
       action="{{ route('matrimony.profile.store-photo') }}"
       enctype="multipart/form-data">

@@ -78,10 +78,12 @@
     </x-nav-link>
 @endauth
 
-
-					
-
-                   
+@if (auth()->check() && auth()->user()->is_admin === true)
+    <x-nav-link :href="route('admin.abuse-reports.index')" 
+                :active="request()->routeIs('admin.abuse-reports.*')">
+        Admin Abuse Reports
+    </x-nav-link>
+@endif
 
                 </div>
             </div>
@@ -172,6 +174,11 @@
     </x-responsive-nav-link>
 @endauth
 
+@if (auth()->check() && auth()->user()->is_admin === true)
+    <x-responsive-nav-link :href="route('admin.abuse-reports.index')">
+        Admin Abuse Reports
+    </x-responsive-nav-link>
+@endif
 
         </div>
 
