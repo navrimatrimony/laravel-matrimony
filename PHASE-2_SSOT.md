@@ -711,5 +711,65 @@ Admin accountability साठी admin_audit_logs table आणि AdminAuditLog
 एकही admin action, route किंवा Day-4 scope feature implement केलेला नाही; SSOT boundaries पूर्णपणे पाळल्या.
 
 ===================================================
+✅ PHASE-2 — DAY 4 SUMMARY (ADMIN MODERATION & VISIBILITY)
+
+Day-4 मध्ये admin moderation actions पूर्णपणे implement व verify करण्यात आले.
+Admin कडे profile suspend / unsuspend, soft delete, image approve / reject हे सर्व actions reason-mandatory व audit-logged स्वरूपात उपलब्ध आहेत.
+Suspended profile ची visibility SSOT नुसार दुरुस्त केली आहे: profile owner ला स्वतःचा suspended profile दिसतो, इतर users व search मधून तो hidden राहतो.
+Image delete / reject केल्यावर user ला स्पष्ट dashboard alert द्वारे कारण दाखवले जाते, जे नवीन image upload झाल्यावर आपोआप clear होते.
+Abuse reporting, admin resolve flow, audit logging आणि user feedback सर्व SSOT-compliant व production-ready आहेत.
+===================================================
+Day 5 – Admin Profile Field Configuration (FOUNDATION)
+
+Profile field settings साठी single source database table तयार केला.
+Admin-only write layer implement करून field flags update करण्याची सुरक्षित व्यवस्था केली.
+Read-only ProfileFieldConfigurationService future days साठी तयार केला, पण अजून consume केला नाही.
+Completeness, visibility, search, interest logic अजिबात touch केला नाही.
+Browser + DB verification successful; education field searchable flag update persist झाला.
+Day-5 scope SSOT नुसार पूर्णपणे complete आणि locked.
+===================================================
+Day 6 मध्ये Admin Profile Field Configuration साठी स्वतंत्र
+database-backed system (profile_field_configs) तयार केला.
+Field म्हणजे logical concept आणि Field Config म्हणजे behaviour control
+हा फरक स्पष्टपणे समजला.
+Configuration (store) आणि Business Logic (use) हे वेगळ्या दिवसांत
+करल्यामुळे rework आणि scope breach टाळता आला.
+Field rendering (text / dropdown / options) Phase-2 बाहेर ठेवणे
+हे conscious आणि SSOT-correct engineering decision घेतले.
 
 ===================================================
+Day-7 Learning:
+Admin आणि User context वेगळे न ठेवल्यास visibility logic बरोबर असूनही system चुकीचं वागतो.
+Bug बहुतेक वेळा business logic मध्ये नसून redirect / flow control मध्ये असतो.
+SSOT-based scope discipline पाळल्याने rework टळतो आणि debugging deterministic होते.
+Missing controller किंवा wrong redirect हे production-grade failures ठरू शकतात.
+
+
+===================================================
+🔚 Day-8 Completion Rule (NON-NEGOTIABLE)
+
+Day-8 COMPLETE मानायला:
+
+Demo profile concept clear आहे
+
+View tracking rules verified आहेत
+
+View-back policy contradictions नाहीत
+
+एकही interest / shortlist logic touched नाही
+
+👉 हे सगळं ✔️ असेल तरच आपण Day-9 (Interactions) कडे जाऊ.
+=============================================
+
+🟢 Phase-2 Day-9 — FORMALLY CLOSED
+Closure justification (SSOT-aligned):
+
+Block = hard isolation → 404 expected, accepted
+
+Interest / Block / Shortlist तिन्ही complete & verified
+
+कोणतीही SSOT violation नाही
+
+Temporary UX gap consciously accepted (documented)
+
+👉 Day-9 CLOSED.

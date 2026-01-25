@@ -37,18 +37,7 @@
                 $totalProfilesCount = \App\Models\MatrimonyProfile::where('id', '!=', $myProfileId)->count();
 
                 // Profile Completeness Calculation
-                $fields = [
-                    'full_name' => $profile->full_name,
-                    'date_of_birth' => $profile->date_of_birth,
-                    'gender' => $profile->gender,
-                    'caste' => $profile->caste,
-                    'education' => $profile->education,
-                    'location' => $profile->location,
-                    'profile_photo' => $profile->profile_photo,
-                ];
-                $filledFields = count(array_filter($fields));
-                $totalFields = count($fields);
-                $completenessPercentage = round(($filledFields / $totalFields) * 100);
+                $completenessPercentage = \App\Services\ProfileCompletenessService::percentage($profile);
 
                 // Recent Interests (Last 3 received)
                 $recentReceivedInterests = \App\Models\Interest::with('senderProfile')
@@ -90,16 +79,26 @@
             <div class="bg-white rounded-lg shadow-lg p-6 mb-6 border-l-4 border-red-600">
                 <div class="flex flex-col md:flex-row items-center md:items-start gap-6">
                     
-                    {{-- Profile Photo --}}
+                    {{-- Profile Photo with Gender-based Fallback --}}
                     <div class="flex-shrink-0">
                         @if ($profile->profile_photo && $profile->photo_approved !== false)
                             <img src="{{ asset('uploads/matrimony_photos/'.$profile->profile_photo) }}" 
                                  alt="Profile Photo" 
                                  class="w-24 h-24 rounded-full object-cover border-4 border-red-200 shadow-md">
                         @else
-                            <img src="{{ asset('images/default-profile.png') }}" 
-                                 alt="Default Photo" 
-                                 class="w-24 h-24 rounded-full object-cover border-4 border-red-200 shadow-md opacity-70">
+                            @php
+                                $gender = $profile->gender ?? null;
+                                if ($gender === 'male') {
+                                    $placeholderSrc = asset('images/placeholders/male-profile.svg');
+                                } elseif ($gender === 'female') {
+                                    $placeholderSrc = asset('images/placeholders/female-profile.svg');
+                                } else {
+                                    $placeholderSrc = asset('images/placeholders/default-profile.svg');
+                                }
+                            @endphp
+                            <img src="{{ $placeholderSrc }}" 
+                                 alt="Profile Placeholder" 
+                                 class="w-24 h-24 rounded-full object-cover border-4 border-red-200 shadow-md">
                         @endif
                     </div>
 
@@ -248,16 +247,20 @@
                     @forelse ($recentReceivedInterests as $interest)
                         <div class="border-b border-gray-200 pb-3 mb-3 last:border-0 last:mb-0 last:pb-0">
                             <div class="flex items-center gap-3">
-                                {{-- Sender Photo - Smaller and Round --}}
+                                {{-- Sender Photo with Gender-based Fallback --}}
                                 <div class="flex-shrink-0">
                                     @if ($interest->senderProfile && $interest->senderProfile->profile_photo && $interest->senderProfile->photo_approved !== false)
                                         <img src="{{ asset('uploads/matrimony_photos/'.$interest->senderProfile->profile_photo) }}" 
                                              alt="Profile" 
                                              class="w-14 h-14 rounded-full object-cover border-2 border-red-200">
                                     @else
-                                        <img src="{{ asset('images/default-profile.png') }}" 
-                                             alt="Default" 
-                                             class="w-14 h-14 rounded-full object-cover border-2 border-red-200 opacity-70">
+                                        @php
+                                            $sG = $interest->senderProfile->gender ?? null;
+                                            $sP = $sG === 'male' ? asset('images/placeholders/male-profile.svg') : ($sG === 'female' ? asset('images/placeholders/female-profile.svg') : asset('images/placeholders/default-profile.svg'));
+                                        @endphp
+                                        <img src="{{ $sP }}" 
+                                             alt="Placeholder" 
+                                             class="w-14 h-14 rounded-full object-cover border-2 border-red-200">
                                     @endif
                                 </div>
 
@@ -306,16 +309,20 @@
                     @forelse ($recentSentInterests as $interest)
                         <div class="border-b border-gray-200 pb-3 mb-3 last:border-0 last:mb-0 last:pb-0">
                             <div class="flex items-center gap-3">
-                                {{-- Receiver Photo - Smaller and Round --}}
+                                {{-- Receiver Photo with Gender-based Fallback --}}
                                 <div class="flex-shrink-0">
                                     @if ($interest->receiverProfile && $interest->receiverProfile->profile_photo && $interest->receiverProfile->photo_approved !== false)
                                         <img src="{{ asset('uploads/matrimony_photos/'.$interest->receiverProfile->profile_photo) }}" 
                                              alt="Profile" 
                                              class="w-14 h-14 rounded-full object-cover border-2 border-red-200">
                                     @else
-                                        <img src="{{ asset('images/default-profile.png') }}" 
-                                             alt="Default" 
-                                             class="w-14 h-14 rounded-full object-cover border-2 border-red-200 opacity-70">
+                                        @php
+                                            $rG = $interest->receiverProfile->gender ?? null;
+                                            $rP = $rG === 'male' ? asset('images/placeholders/male-profile.svg') : ($rG === 'female' ? asset('images/placeholders/female-profile.svg') : asset('images/placeholders/default-profile.svg'));
+                                        @endphp
+                                        <img src="{{ $rP }}" 
+                                             alt="Placeholder" 
+                                             class="w-14 h-14 rounded-full object-cover border-2 border-red-200">
                                     @endif
                                 </div>
 

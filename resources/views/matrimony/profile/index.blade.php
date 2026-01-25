@@ -18,107 +18,95 @@
 
                 {{-- Search / Filter Form --}}
                 <form method="GET" action="{{ route('matrimony.profiles.index') }}">
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-
-                    {{-- Age From --}}
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
                         <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-1">
-                                Age From
-                            </label>
-                            <input
-                                type="number"
-                                name="age_from"
-                                value="{{ request('age_from') }}"
-                                class="w-full border rounded px-3 py-2"
-                                placeholder="Min age">
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Age From</label>
+                            <input type="number" name="age_from" value="{{ request('age_from') }}" class="w-full border rounded px-3 py-2" placeholder="Min age">
                         </div>
-
-                        {{-- Age To --}}
                         <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-1">
-                                Age To
-                            </label>
-                            <input
-                                type="number"
-                                name="age_to"
-                                value="{{ request('age_to') }}"
-                                class="w-full border rounded px-3 py-2"
-                                placeholder="Max age">
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Age To</label>
+                            <input type="number" name="age_to" value="{{ request('age_to') }}" class="w-full border rounded px-3 py-2" placeholder="Max age">
                         </div>
-
-                        {{-- Caste --}}
                         <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-1">
-                                Caste
-                            </label>
-                            <input
-                                type="text"
-                                name="caste"
-                                value="{{ request('caste') }}"
-                                class="w-full border rounded px-3 py-2"
-                                placeholder="Caste">
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Caste</label>
+                            <input type="text" name="caste" value="{{ request('caste') }}" class="w-full border rounded px-3 py-2" placeholder="Caste">
                         </div>
-
-                        {{-- Location --}}
                         <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-1">
-                                Location
-                            </label>
-                            <input
-                                type="text"
-                                name="location"
-                                value="{{ request('location') }}"
-                                class="w-full border rounded px-3 py-2"
-                                placeholder="City">
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Location</label>
+                            <input type="text" name="location" value="{{ request('location') }}" class="w-full border rounded px-3 py-2" placeholder="City">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Height From (cm)</label>
+                            <input type="number" name="height_from" value="{{ request('height_from') }}" class="w-full border rounded px-3 py-2" placeholder="Min cm">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Height To (cm)</label>
+                            <input type="number" name="height_to" value="{{ request('height_to') }}" class="w-full border rounded px-3 py-2" placeholder="Max cm">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Marital Status</label>
+                            <select name="marital_status" class="w-full border rounded px-3 py-2">
+                                <option value="">—</option>
+                                <option value="single" {{ request('marital_status') === 'single' ? 'selected' : '' }}>Single</option>
+                                <option value="divorced" {{ request('marital_status') === 'divorced' ? 'selected' : '' }}>Divorced</option>
+                                <option value="widowed" {{ request('marital_status') === 'widowed' ? 'selected' : '' }}>Widowed</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Education</label>
+                            <input type="text" name="education" value="{{ request('education') }}" class="w-full border rounded px-3 py-2" placeholder="Education">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Per page</label>
+                            <select name="per_page" class="w-full border rounded px-3 py-2">
+                                @foreach ([15, 25, 50] as $n)
+                                    <option value="{{ $n }}" {{ (int) request('per_page', 15) === $n ? 'selected' : '' }}>{{ $n }}</option>
+                                @endforeach
+                            </select>
                         </div>
                     </div>
-
                     <div class="flex gap-4 mb-8">
-    <button
-        type="submit"
-        class="bg-blue-600 text-white px-5 py-2 rounded">
-        Search
-    </button>
-
-    <a
-        href="{{ route('matrimony.profiles.index') }}"
-        class="text-gray-600 underline pt-2">
-        Reset
-    </a>
-</div>
-
-
+                        <button type="submit" class="bg-blue-600 text-white px-5 py-2 rounded">Search</button>
+                        <a href="{{ route('matrimony.profiles.index') }}" class="text-gray-600 underline pt-2">Reset</a>
+                    </div>
                 </form>
 
                 {{-- Profiles List --}}
                 @if ($profiles->isEmpty())
-                    <p class="text-gray-600">
-                        No profiles found.
-                    </p>
+                    <p class="text-gray-600">No profiles found.</p>
                 @else
-
                     @foreach ($profiles as $matrimonyProfile)
                         <div class="bg-white text-gray-900 border border-gray-200 rounded-lg p-4 mb-4 flex justify-between items-center">
 
                         <div class="flex items-center gap-4">
 
 
-  {{-- Profile Photo --}}
+  {{-- Profile Photo with Gender-based Fallback --}}
 <div class="mb-4 flex justify-center">
 
     @if ($matrimonyProfile->profile_photo && $matrimonyProfile->photo_approved !== false)
-        {{-- Uploaded and approved photo --}}
+        {{-- Real uploaded photo --}}
         <img
             src="{{ asset('uploads/matrimony_photos/'.$matrimonyProfile->profile_photo) }}"
             alt="Profile Photo"
             class="w-24 h-24 rounded-full object-cover border"
         />
     @else
-        {{-- Default placeholder (no upload yet or rejected) --}}
+        {{-- Gender-based placeholder fallback (UI only) --}}
+        @php
+            $gender = $matrimonyProfile->gender ?? null;
+            if ($gender === 'male') {
+                $placeholderSrc = asset('images/placeholders/male-profile.svg');
+            } elseif ($gender === 'female') {
+                $placeholderSrc = asset('images/placeholders/female-profile.svg');
+            } else {
+                $placeholderSrc = asset('images/placeholders/default-profile.svg');
+            }
+        @endphp
         <img
-            src="{{ asset('images/default-profile.png') }}"
-            alt="Default Profile Photo"
-            class="w-24 h-24 rounded-full object-cover border opacity-70"
+            src="{{ $placeholderSrc }}"
+            alt="Profile Placeholder"
+            class="w-24 h-24 rounded-full object-cover border"
         />
     @endif
 
@@ -127,10 +115,7 @@
 
 
 <div>
-    <p class="font-semibold text-lg">
-        {{ $matrimonyProfile->
-full_name }}
-    </p>
+    <p class="font-semibold text-lg">{{ $matrimonyProfile->full_name }}</p>
     <p class="text-sm text-gray-600">
     <span class="text-sm text-gray-600">
         {{-- Gender --}}
@@ -176,6 +161,7 @@ full_name }}
                         </div>
                     @endforeach
 
+                    <div class="mt-6">{{ $profiles->links() }}</div>
                 @endif
 
             </div>

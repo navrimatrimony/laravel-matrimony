@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200">
+  <defs>
+    <linearGradient id="femaleBg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#fce7f3"/>
+      <stop offset="100%" style="stop-color:#fbcfe8"/>
+    </linearGradient>
+  </defs>
+  <!-- Background circle -->
+  <circle cx="100" cy="100" r="100" fill="url(#femaleBg)"/>
+  <!-- Hair -->
+  <ellipse cx="100" cy="65" rx="42" ry="38" fill="#ec4899"/>
+  <!-- Head -->
+  <circle cx="100" cy="75" r="32" fill="#ec4899"/>
+  <!-- Hair sides -->
+  <ellipse cx="62" cy="85" rx="12" ry="25" fill="#ec4899"/>
+  <ellipse cx="138" cy="85" rx="12" ry="25" fill="#ec4899"/>
+  <!-- Body/Shoulders -->
+  <ellipse cx="100" cy="168" rx="50" ry="42" fill="#ec4899"/>
+  <!-- Neckline detail -->
+  <ellipse cx="100" cy="135" rx="18" ry="12" fill="#db2777"/>
+</svg>

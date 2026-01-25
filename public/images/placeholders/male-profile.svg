@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200">
+  <defs>
+    <linearGradient id="maleBg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#e0f2fe"/>
+      <stop offset="100%" style="stop-color:#bae6fd"/>
+    </linearGradient>
+  </defs>
+  <!-- Background circle -->
+  <circle cx="100" cy="100" r="100" fill="url(#maleBg)"/>
+  <!-- Head -->
+  <circle cx="100" cy="75" r="35" fill="#0ea5e9"/>
+  <!-- Body/Shoulders -->
+  <ellipse cx="100" cy="165" rx="55" ry="45" fill="#0ea5e9"/>
+  <!-- Shirt collar detail -->
+  <path d="M75 130 L100 150 L125 130" fill="none" stroke="#0284c7" stroke-width="3"/>
+</svg>

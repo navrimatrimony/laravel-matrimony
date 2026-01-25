@@ -21,6 +21,14 @@
                     <label>Date of Birth</label><br>
                     <input type="date" name="date_of_birth"><br><br>
 
+                    <label>Marital Status</label><br>
+                    <select name="marital_status" required>
+                        <option value="">— Select —</option>
+                        <option value="single" {{ old('marital_status') === 'single' ? 'selected' : '' }}>Single</option>
+                        <option value="divorced" {{ old('marital_status') === 'divorced' ? 'selected' : '' }}>Divorced</option>
+                        <option value="widowed" {{ old('marital_status') === 'widowed' ? 'selected' : '' }}>Widowed</option>
+                    </select><br><br>
+
                     <label>Education</label><br>
                     <input type="text" name="education"><br><br>
 
@@ -30,10 +38,7 @@
                     <label>Location</label><br>
                     <input type="text" name="location"><br><br>
 
-                    <button
-    type="submit"
-    style="margin-top:20px; padding:12px 20px; background:#4f46e5; color:white; border:none; border-radius:6px; font-size:16px;"
->
+                    <button type="submit" style="background-color: #4f46e5; color: white; padding: 12px 24px; border-radius: 6px; font-weight: 600; font-size: 16px; border: none; cursor: pointer; margin-top: 20px;">
     Save Profile
 </button>
 

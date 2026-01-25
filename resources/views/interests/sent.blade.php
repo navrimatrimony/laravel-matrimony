@@ -84,7 +84,7 @@
                             @endif
                         </div>
 
-                        {{-- Receiver Photo (Right Side) --}}
+                        {{-- Receiver Photo (Right Side) with Gender-based Fallback --}}
                         <div>
                             @if ($interest->receiverProfile && $interest->receiverProfile->profile_photo && $interest->receiverProfile->photo_approved !== false)
                                 <img
@@ -92,10 +92,20 @@
                                     alt="Profile Photo"
                                     class="w-14 h-14 rounded-full object-cover border">
                             @else
+                                @php
+                                    $recGender = $interest->receiverProfile->gender ?? null;
+                                    if ($recGender === 'male') {
+                                        $recPlaceholder = asset('images/placeholders/male-profile.svg');
+                                    } elseif ($recGender === 'female') {
+                                        $recPlaceholder = asset('images/placeholders/female-profile.svg');
+                                    } else {
+                                        $recPlaceholder = asset('images/placeholders/default-profile.svg');
+                                    }
+                                @endphp
                                 <img
-                                    src="{{ asset('images/default-profile.png') }}"
-                                    alt="Default Profile Photo"
-                                    class="w-14 h-14 rounded-full object-cover border opacity-70">
+                                    src="{{ $recPlaceholder }}"
+                                    alt="Profile Placeholder"
+                                    class="w-14 h-14 rounded-full object-cover border">
                             @endif
                         </div>
 

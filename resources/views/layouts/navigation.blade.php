@@ -11,7 +11,7 @@
                 </div>
 
                 <!-- Navigation Links -->
-                <div class="hidden space-x-8 sm:-my-px sm:ms-10 sm:flex">
+                <div class="hidden space-x-8 md:-my-px md:ms-10 md:flex">
 
                     {{-- Dashboard --}}
                     
@@ -76,12 +76,34 @@
                 :active="request()->routeIs('interests.received')">
         {{ __('Interests Received') }}
     </x-nav-link>
+
+    <x-nav-link :href="route('shortlist.index')" 
+                :active="request()->routeIs('shortlist.index')">
+        {{ __('Shortlist') }}
+    </x-nav-link>
+
+    <x-nav-link :href="route('blocks.index')" 
+                :active="request()->routeIs('blocks.index')">
+        {{ __('Blocked') }}
+    </x-nav-link>
+
+    {{-- Notifications with unread badge --}}
+    <x-nav-link :href="route('notifications.index')" 
+                :active="request()->routeIs('notifications.*')"
+                class="relative">
+        {{ __('Notifications') }}
+        @php $unreadCount = auth()->user()->unreadNotifications()->count(); @endphp
+        <span 
+            id="notification-badge" 
+            class="absolute -top-1 -right-2 inline-flex items-center justify-center px-1.5 py-0.5 text-xs font-bold leading-none text-white bg-red-600 rounded-full {{ $unreadCount > 0 ? '' : 'hidden' }}"
+        >{{ $unreadCount > 99 ? '99+' : $unreadCount }}</span>
+    </x-nav-link>
 @endauth
 
 @if (auth()->check() && auth()->user()->is_admin === true)
-    <x-nav-link :href="route('admin.abuse-reports.index')" 
-                :active="request()->routeIs('admin.abuse-reports.*')">
-        Admin Abuse Reports
+    <x-nav-link :href="route('admin.dashboard')" 
+                :active="request()->routeIs('admin.*')">
+        Admin
     </x-nav-link>
 @endif
 
@@ -90,7 +112,7 @@
 
             <!-- Settings Dropdown -->
             @auth
-            <div class="hidden sm:flex sm:items-center sm:ms-6">
+            <div class="hidden md:flex md:items-center md:ms-6">
                 <x-dropdown align="right" width="48">
                     <x-slot name="trigger">
                         <button class="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md text-gray-500 dark:text-gray-400 bg-white dark:bg-gray-800 hover:text-gray-700 dark:hover:text-gray-300 focus:outline-none transition ease-in-out duration-150">
@@ -121,7 +143,7 @@
             @endauth
 
             <!-- Hamburger -->
-            <div class="-me-2 flex items-center sm:hidden">
+            <div class="-me-2 flex items-center md:hidden">
                 <button @click="open = ! open" class="inline-flex items-center justify-center p-2 rounded-md text-gray-400 dark:text-gray-500 hover:text-gray-500 dark:hover:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-900 focus:outline-none transition duration-150 ease-in-out">
                     <svg class="h-6 w-6" stroke="currentColor" fill="none" viewBox="0 0 24 24">
                         <path :class="{'hidden': open, 'inline-flex': ! open }" class="inline-flex" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
@@ -133,7 +155,7 @@
     </div>
 
     <!-- Responsive Navigation Menu -->
-    <div :class="{'block': open, 'hidden': ! open}" class="hidden sm:hidden">
+    <div :class="{'block': open, 'hidden': ! open}" class="hidden md:hidden">
         <div class="pt-2 pb-3 space-y-1">
 
             
@@ -172,11 +194,31 @@
     <x-responsive-nav-link :href="route('interests.received')">
         Received Interests
     </x-responsive-nav-link>
+
+    <x-responsive-nav-link :href="route('shortlist.index')">
+        Shortlist
+    </x-responsive-nav-link>
+
+    <x-responsive-nav-link :href="route('blocks.index')">
+        Blocked
+    </x-responsive-nav-link>
+
+    {{-- Notifications with unread badge (mobile) --}}
+    <x-responsive-nav-link :href="route('notifications.index')" class="relative inline-flex items-center">
+        Notifications
+        @php $unreadCountMobile = auth()->user()->unreadNotifications()->count(); @endphp
+        @if($unreadCountMobile > 0)
+            <span 
+                id="notification-badge-mobile" 
+                class="ml-2 inline-flex items-center justify-center px-1.5 py-0.5 text-xs font-bold leading-none text-white bg-red-600 rounded-full"
+            >{{ $unreadCountMobile > 99 ? '99+' : $unreadCountMobile }}</span>
+        @endif
+    </x-responsive-nav-link>
 @endauth
 
 @if (auth()->check() && auth()->user()->is_admin === true)
-    <x-responsive-nav-link :href="route('admin.abuse-reports.index')">
-        Admin Abuse Reports
+    <x-responsive-nav-link :href="route('admin.dashboard')">
+        Admin
     </x-responsive-nav-link>
 @endif
 
@@ -204,3 +246,59 @@
         </div>
     </div>
 </nav>
+
+{{-- Notification count polling (no WebSockets, no push) --}}
+@auth
+<script>
+(function() {
+    const POLL_INTERVAL = 30000; // 30 seconds
+    const badge = document.getElementById('notification-badge');
+    const badgeMobile = document.getElementById('notification-badge-mobile');
+
+    function updateNotificationCount() {
+        fetch('{{ route("notifications.unread-count") }}', {
+            method: 'GET',
+            headers: {
+                'Accept': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest'
+            },
+            credentials: 'same-origin'
+        })
+        .then(response => response.json())
+        .then(data => {
+            const count = data.count || 0;
+            const displayCount = count > 99 ? '99+' : count;
+
+            // Update desktop badge
+            if (badge) {
+                badge.textContent = displayCount;
+                if (count > 0) {
+                    badge.classList.remove('hidden');
+                } else {
+                    badge.classList.add('hidden');
+                }
+            }
+
+            // Update mobile badge
+            if (badgeMobile) {
+                badgeMobile.textContent = displayCount;
+                if (count > 0) {
+                    badgeMobile.style.display = 'inline-flex';
+                } else {
+                    badgeMobile.style.display = 'none';
+                }
+            }
+        })
+        .catch(err => {
+            // Silent fail - don't disrupt user experience
+            console.warn('Notification poll failed:', err);
+        });
+    }
+
+    // Start polling after page load
+    if (badge || badgeMobile) {
+        setInterval(updateNotificationCount, POLL_INTERVAL);
+    }
+})();
+</script>
+@endauth

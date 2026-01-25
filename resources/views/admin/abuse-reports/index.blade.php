@@ -1,29 +1,22 @@
-@extends('layouts.app')
+@extends('layouts.admin')
 
 @section('content')
-<div class="max-w-5xl mx-auto py-8">
-    <h1 class="text-2xl font-bold mb-6">Admin — Abuse Reports</h1>
-
-    @if (session('success'))
-        <p style="color:green; margin-bottom:1rem;">{{ session('success') }}</p>
-    @endif
-    @if (session('error'))
-        <p style="color:red; margin-bottom:1rem;">{{ session('error') }}</p>
-    @endif
-
-    <table border="1" cellpadding="8" cellspacing="0" style="width:100%; border-collapse:collapse;">
-        <thead>
-            <tr>
-                <th>ID</th>
-                <th>Reported Profile ID</th>
-                <th>Reporter User ID</th>
-                <th>Reason</th>
-                <th>Report Status</th>
-                <th>Profile Status</th>
-                <th>Actions</th>
-            </tr>
-        </thead>
-        <tbody>
+<div class="bg-white dark:bg-gray-800 shadow rounded-lg overflow-hidden">
+    <div class="p-6">
+        <h1 class="text-2xl font-bold text-gray-800 dark:text-gray-100 mb-6">Abuse Reports</h1>
+            <table class="w-full border-collapse">
+                <thead>
+                    <tr class="border-b border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-700/50">
+                        <th class="text-left py-3 px-4 font-semibold text-gray-700 dark:text-gray-300">ID</th>
+                        <th class="text-left py-3 px-4 font-semibold text-gray-700 dark:text-gray-300">Profile</th>
+                        <th class="text-left py-3 px-4 font-semibold text-gray-700 dark:text-gray-300">Reporter</th>
+                        <th class="text-left py-3 px-4 font-semibold text-gray-700 dark:text-gray-300">Reason</th>
+                        <th class="text-left py-3 px-4 font-semibold text-gray-700 dark:text-gray-300">Status</th>
+                        <th class="text-left py-3 px-4 font-semibold text-gray-700 dark:text-gray-300">Profile status</th>
+                        <th class="text-left py-3 px-4 font-semibold text-gray-700 dark:text-gray-300">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
             @forelse ($reports as $report)
                 @php
                     // Determine profile status using existing fields
@@ -44,50 +37,44 @@
                         $profileStatusColor = '#ef4444'; // red
                     }
                 @endphp
-                <tr>
-                    <td>{{ $report->id }}</td>
-                    <td>
-                        <a href="{{ route('admin.profiles.show', $report->reported_profile_id) }}" 
-                           style="color:#2563eb; text-decoration:underline;" 
-                           target="_blank">
+                <tr class="border-b border-gray-100 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700/30">
+                    <td class="py-3 px-4">{{ $report->id }}</td>
+                    <td class="py-3 px-4">
+                        <a href="{{ route('admin.profiles.show', $report->reported_profile_id) }}" class="text-indigo-600 hover:underline font-medium">
                             {{ $report->reported_profile_id }}
                         </a>
                     </td>
-                    <td>{{ $report->reporter_user_id }}</td>
-                    <td>{{ $report->reason }}</td>
-                    <td>{{ $report->status }}</td>
-                    <td>
-                        <span style="display:inline-block; padding:4px 8px; background:{{ $profileStatusColor }}; color:white; border-radius:4px; font-size:0.875em; font-weight:500;">
-                            {{ $profileStatus }}
-                        </span>
+                    <td class="py-3 px-4">{{ $report->reporter_user_id }}</td>
+                    <td class="py-3 px-4 text-gray-700">{{ Str::limit($report->reason, 60) }}</td>
+                    <td class="py-3 px-4">{{ $report->status }}</td>
+                    <td class="py-3 px-4">
+                        <span class="inline-block px-2 py-1 rounded text-xs font-medium text-white" style="background:{{ $profileStatusColor }};">{{ $profileStatus }}</span>
                     </td>
-                    <td>
+                    <td class="py-3 px-4">
                         @if ($report->status === 'open')
-                            <form method="POST" action="{{ route('admin.abuse-reports.resolve', $report) }}" style="margin:0;">
+                            <form method="POST" action="{{ route('admin.abuse-reports.resolve', $report) }}" class="space-y-2">
                                 @csrf
-                                <textarea name="reason" rows="2" required placeholder="Resolution reason (min 10 chars)" style="width:100%; margin-bottom:6px;"></textarea>
-                                <button type="submit" style="padding:6px 12px; background:#059669; color:white; border:none; cursor:pointer;">Mark as Resolved</button>
-                                <p style="font-size:0.85em; color:#666; margin-top:4px; margin-bottom:0;">
-                                    Note: This closes the report only. Profile moderation (suspend/delete) is separate.
-                                </p>
+                                <textarea name="reason" rows="2" required placeholder="Resolution reason (min 10 chars)" class="w-full border border-gray-300 rounded px-2 py-1 text-sm"></textarea>
+                                <button type="submit" style="background-color: #059669; color: white; padding: 6px 12px; border-radius: 4px; font-weight: 600; font-size: 14px; border: none; cursor: pointer;">Mark resolved</button>
+                                <p class="text-xs text-gray-500">Closes report only. Profile moderation is separate.</p>
                             </form>
                         @else
-                            <span style="color:#059669;">Resolved</span>
+                            <span class="text-emerald-600 font-medium">Resolved</span>
                             @if ($report->resolution_reason)
-                                <br><small style="color:#666;">{{ Str::limit($report->resolution_reason, 50) }}</small>
+                                <br><span class="text-sm text-gray-500">{{ Str::limit($report->resolution_reason, 50) }}</span>
                             @endif
                         @endif
                     </td>
                 </tr>
             @empty
                 <tr>
-                    <td colspan="7">No abuse reports.</td>
+                    <td colspan="7" class="py-8 px-4 text-center text-gray-500">No abuse reports.</td>
                 </tr>
             @endforelse
-        </tbody>
-    </table>
-
-    <div style="margin-top:1rem;">
+                </tbody>
+            </table>
+    </div>
+    <div class="px-6 py-4 border-t border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-700/30">
         {{ $reports->links() }}
     </div>
 </div>

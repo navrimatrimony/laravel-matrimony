@@ -2,8 +2,12 @@
 
 namespace App\Http\Controllers;
 
-use Illuminate\Http\Request;
+use App\Models\Block;
 use App\Models\MatrimonyProfile;
+use App\Models\Shortlist;
+use App\Services\ProfileCompletenessService;
+use App\Services\ViewTrackingService;
+use Illuminate\Http\Request;
 
 
 /*
@@ -60,6 +64,10 @@ class MatrimonyProfileController extends Controller
 */
 public function store(Request $request)
 {
+    $request->validate([
+        'marital_status' => 'required|in:single,divorced,widowed',
+    ]);
+
     $user = auth()->user();
 
     // Policy: Check manual activation requirement
@@ -69,13 +77,14 @@ public function store(Request $request)
     MatrimonyProfile::updateOrCreate(
     ['user_id' => $user->id],
     [
-        'full_name'     => $request->full_name,
-        'gender'        => $user->gender, // system-derived
-        'date_of_birth' => $request->date_of_birth,
-        'education'     => $request->education,
-        'location'      => $request->location,
-        'caste'         => $request->caste,
-        'is_suspended'  => $isSuspended,
+        'full_name'      => $request->full_name,
+        'gender'         => $user->gender, // system-derived
+        'date_of_birth'  => $request->date_of_birth,
+        'marital_status' => $request->marital_status,
+        'education'      => $request->education,
+        'location'       => $request->location,
+        'caste'          => $request->caste,
+        'is_suspended'   => $isSuspended,
     ]
 );
 
@@ -125,6 +134,10 @@ public function store(Request $request)
     */
     public function update(Request $request)
 {
+    $request->validate([
+        'marital_status' => 'required|in:single,divorced,widowed',
+    ]);
+
     $user = auth()->user();
 
     if (!$user->matrimonyProfile) {
@@ -154,12 +167,13 @@ if ($request->hasFile('profile_photo')) {
 
     // Prepare update data
     $updateData = [
-        'full_name'     => $request->full_name,
-        'date_of_birth' => $request->date_of_birth,
-        'education'     => $request->education,
-        'location'      => $request->location,
-        'caste'         => $request->caste,
-        'profile_photo' => $photoPath,
+        'full_name'      => $request->full_name,
+        'date_of_birth'  => $request->date_of_birth,
+        'marital_status' => $request->marital_status,
+        'education'      => $request->education,
+        'location'       => $request->location,
+        'caste'          => $request->caste,
+        'profile_photo'  => $photoPath,
     ];
 
     // If new photo uploaded, apply policy-based approval status
@@ -333,6 +347,20 @@ public function show(MatrimonyProfile $matrimony_profile_id)
         abort(404, 'Profile not found.');
     }
 
+    // 🔒 GUARD: Block excludes profile view (either direction)
+    if (!$isOwnProfile && $viewer->matrimonyProfile) {
+        $bid = $viewer->matrimonyProfile->id;
+        $vid = $matrimonyProfile->id;
+        $blocked = Block::where(function ($q) use ($bid, $vid) {
+            $q->where('blocker_profile_id', $bid)->where('blocked_profile_id', $vid);
+        })->orWhere(function ($q) use ($bid, $vid) {
+            $q->where('blocker_profile_id', $vid)->where('blocked_profile_id', $bid);
+        })->exists();
+        if ($blocked) {
+            abort(404, 'Profile not found.');
+        }
+    }
+
     $interestAlreadySent = false;
 
     if (auth()->check()) {
@@ -353,6 +381,18 @@ public function show(MatrimonyProfile $matrimony_profile_id)
             ->exists();
     }
 
+    $inShortlist = false;
+    if (!$isOwnProfile && $viewer->matrimonyProfile) {
+        $inShortlist = Shortlist::where('owner_profile_id', $viewer->matrimonyProfile->id)
+            ->where('shortlisted_profile_id', $matrimonyProfile->id)
+            ->exists();
+    }
+
+    if (!$isOwnProfile && $viewer->matrimonyProfile) {
+        ViewTrackingService::recordView($viewer->matrimonyProfile, $matrimonyProfile);
+        ViewTrackingService::maybeTriggerViewBack($viewer->matrimonyProfile, $matrimonyProfile);
+    }
+
     return view(
         'matrimony.profile.show',
         [
@@ -360,6 +400,7 @@ public function show(MatrimonyProfile $matrimony_profile_id)
             'isOwnProfile'         => $isOwnProfile,
             'interestAlreadySent'  => $interestAlreadySent,
             'hasAlreadyReported'   => $hasAlreadyReported,
+            'inShortlist'          => $inShortlist,
         ]
     );
 }
@@ -395,19 +436,57 @@ public function show(MatrimonyProfile $matrimony_profile_id)
         // Age filter (from date_of_birth)
         if ($request->filled('age_from') || $request->filled('age_to')) {
             $query->whereNotNull('date_of_birth');
-            
             if ($request->filled('age_from')) {
-                $minDate = now()->subYears($request->age_from)->format('Y-m-d');
+                $minDate = now()->subYears((int) $request->age_from)->format('Y-m-d');
                 $query->whereDate('date_of_birth', '<=', $minDate);
             }
-            
             if ($request->filled('age_to')) {
-                $maxDate = now()->subYears($request->age_to + 1)->addDay()->format('Y-m-d');
+                $maxDate = now()->subYears((int) $request->age_to + 1)->addDay()->format('Y-m-d');
                 $query->whereDate('date_of_birth', '>=', $maxDate);
             }
         }
 
-        $profiles = $query->get();
+        // Height filter (height_cm)
+        if ($request->filled('height_from')) {
+            $query->whereNotNull('height_cm')->where('height_cm', '>=', (int) $request->height_from);
+        }
+        if ($request->filled('height_to')) {
+            $query->whereNotNull('height_cm')->where('height_cm', '<=', (int) $request->height_to);
+        }
+
+        if ($request->filled('marital_status')) {
+            $query->where('marital_status', $request->marital_status);
+        }
+        if ($request->filled('education')) {
+            $query->where('education', $request->education);
+        }
+
+        // 70% completeness or admin override (search visibility only)
+        $query->whereRaw(ProfileCompletenessService::sqlSearchVisible());
+
+        // Admin global toggle: hide demo profiles from search when OFF (Day-8)
+        $demoVisible = \App\Models\AdminSetting::getBool('demo_profiles_visible_in_search', true);
+        if (!$demoVisible) {
+            $query->where(function ($q) {
+                $q->where('is_demo', false)->orWhereNull('is_demo');
+            });
+        }
+
+        // Exclude blocked profiles (either direction) when viewer has profile
+        $myId = auth()->user()?->matrimonyProfile?->id;
+        if ($myId) {
+            $blockedIds = Block::where('blocker_profile_id', $myId)->pluck('blocked_profile_id')
+                ->merge(Block::where('blocked_profile_id', $myId)->pluck('blocker_profile_id'))
+                ->unique()
+                ->values();
+            if ($blockedIds->isNotEmpty()) {
+                $query->whereNotIn('id', $blockedIds);
+            }
+        }
+
+        $perPage = (int) $request->input('per_page', 15);
+        $perPage = $perPage >= 1 && $perPage <= 100 ? $perPage : 15;
+        $profiles = $query->paginate($perPage)->withQueryString();
 
         return view('matrimony.profile.index', compact('profiles'));
 

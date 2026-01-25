@@ -43,9 +43,19 @@
             class="w-14 h-14 rounded-full object-cover border"
         >
     @else
+        @php
+            $senderGender = $interest->senderProfile->gender ?? null;
+            if ($senderGender === 'male') {
+                $senderPlaceholder = asset('images/placeholders/male-profile.svg');
+            } elseif ($senderGender === 'female') {
+                $senderPlaceholder = asset('images/placeholders/female-profile.svg');
+            } else {
+                $senderPlaceholder = asset('images/placeholders/default-profile.svg');
+            }
+        @endphp
         <img
-            src="{{ asset('images/default-profile.png') }}"
-            class="w-14 h-14 rounded-full object-cover border opacity-70"
+            src="{{ $senderPlaceholder }}"
+            class="w-14 h-14 rounded-full object-cover border"
         >
     @endif
 
@@ -60,25 +70,17 @@
                         {{-- Accept --}}
                         <form method="POST" action="{{ route('interests.accept', $interest) }}">
                             @csrf
-                            <button type="submit"
-                                style="background-color: #16a34a; color: white; padding: 0.625rem 1.5rem; border-radius: 0.375rem; font-weight: 600; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); width: 100%;"
-                                class="sm:w-auto hover:bg-green-700 transition-colors">
+                            <button type="submit" class="inline-flex items-center px-4 py-2 bg-green-600 border border-transparent rounded-md font-semibold text-sm text-white tracking-wide hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 transition disabled:opacity-50 disabled:cursor-not-allowed shadow-sm w-full sm:w-auto">
                                 Accept
                             </button>
-
-
                         </form>
 
                         {{-- Reject --}}
                         <form method="POST" action="{{ route('interests.reject', $interest) }}">
                             @csrf
-                            <button type="submit"
-                                style="border: 2px solid #dc2626; background-color: white; color: #dc2626; padding: 0.625rem 1.5rem; border-radius: 0.375rem; font-weight: 600; width: 100%;"
-                                class="sm:w-auto hover:bg-red-50 transition-colors">
+                            <button type="submit" class="inline-flex items-center px-4 py-2 bg-white border-2 border-red-600 rounded-md font-semibold text-sm text-red-600 tracking-wide hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 transition w-full sm:w-auto">
                                 Reject
                             </button>
-
-
                         </form>
 
                     </div>

@@ -3,8 +3,12 @@
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\MatrimonyProfileController;
 use App\Http\Controllers\InterestController;
+use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\AdminController;
 use App\Http\Controllers\AbuseReportController;
+use App\Http\Controllers\BlockController;
+use App\Http\Controllers\ShortlistController;
+use App\Http\Controllers\Admin\DemoProfileController;
 
 /*
 |--------------------------------------------------------------------------
@@ -97,11 +101,33 @@ Route::post('/interests/{interest}/withdraw', [App\Http\Controllers\InterestCont
     ->name('interests.withdraw');
 
     /*
+    | Block (SSOT Day-5)
+    */
+    Route::get('/blocks', [BlockController::class, 'index'])->name('blocks.index');
+    Route::post('/blocks/{matrimony_profile_id}', [BlockController::class, 'store'])->name('blocks.store');
+    Route::delete('/blocks/{matrimony_profile_id}', [BlockController::class, 'destroy'])->name('blocks.destroy');
+
+    /*
+    | Shortlist (SSOT Day-5)
+    */
+    Route::get('/shortlist', [ShortlistController::class, 'index'])->name('shortlist.index');
+    Route::post('/shortlist/{matrimony_profile_id}', [ShortlistController::class, 'store'])->name('shortlist.store');
+    Route::delete('/shortlist/{matrimony_profile_id}', [ShortlistController::class, 'destroy'])->name('shortlist.destroy');
+
+    /*
     | Abuse Reports (User action)
     */
     Route::post('/abuse-reports/{matrimony_profile}', [AbuseReportController::class, 'store'])
         ->name('abuse-reports.store');
 
+    /*
+    | Notifications (Day-10 — R5)
+    */
+    Route::get('/notifications', [NotificationController::class, 'index'])->name('notifications.index');
+    Route::post('/notifications/mark-all-read', [NotificationController::class, 'markAllRead'])->name('notifications.mark-all-read');
+    Route::get('/notifications/unread-count', [NotificationController::class, 'unreadCount'])->name('notifications.unread-count');
+    Route::get('/notifications/{id}', [NotificationController::class, 'show'])->name('notifications.show');
+    Route::post('/notifications/{id}/mark-read', [NotificationController::class, 'markRead'])->name('notifications.mark-read');
 });
 
 /*
@@ -110,7 +136,16 @@ Route::post('/interests/{interest}/withdraw', [App\Http\Controllers\InterestCont
 |--------------------------------------------------------------------------
 */
 Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(function () {
-    
+    Route::redirect('/', '/admin/dashboard', 302);
+    Route::get('/dashboard', function () {
+        $totalProfiles = \App\Models\MatrimonyProfile::count();
+        $activeProfiles = \App\Models\MatrimonyProfile::where('is_suspended', false)->count();
+        $suspendedProfiles = \App\Models\MatrimonyProfile::where('is_suspended', true)->count();
+        $demoProfiles = \App\Models\MatrimonyProfile::where('is_demo', true)->count();
+        $pendingAbuseReports = \App\Models\AbuseReport::where('status', 'open')->count();
+        return view('admin.dashboard', compact('totalProfiles', 'activeProfiles', 'suspendedProfiles', 'demoProfiles', 'pendingAbuseReports'));
+    })->name('dashboard');
+
     /*
     | Profile View (Admin - bypasses suspension checks)
     */
@@ -137,6 +172,9 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
     
     Route::post('/profiles/{profile}/reject-image', [AdminController::class, 'rejectImage'])
         ->name('profiles.reject-image');
+
+    Route::post('/profiles/{profile}/override-visibility', [AdminController::class, 'overrideVisibility'])
+        ->name('profiles.override-visibility');
     
     /*
     | Abuse Reports
@@ -146,6 +184,20 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
     
     Route::post('/abuse-reports/{report}/resolve', [AbuseReportController::class, 'resolve'])
         ->name('abuse-reports.resolve');
+
+    Route::get('/demo-profile/create', [DemoProfileController::class, 'create'])->name('demo-profile.create');
+    Route::post('/demo-profile', [DemoProfileController::class, 'store'])->name('demo-profile.store');
+    Route::get('/demo-profile/bulk-create', [DemoProfileController::class, 'bulkCreate'])->name('demo-profile.bulk-create');
+    Route::post('/demo-profiles/bulk', [DemoProfileController::class, 'bulkStore'])->name('demo-profile.bulk-store');
+
+    Route::get('/view-back-settings', [AdminController::class, 'viewBackSettings'])->name('view-back-settings.index');
+    Route::post('/view-back-settings', [AdminController::class, 'updateViewBackSettings'])->name('view-back-settings.update');
+
+    Route::get('/demo-search-settings', [AdminController::class, 'demoSearchSettings'])->name('demo-search-settings.index');
+    Route::post('/demo-search-settings', [AdminController::class, 'updateDemoSearchSettings'])->name('demo-search-settings.update');
+
+    Route::get('/notifications', [AdminController::class, 'userNotificationsIndex'])->name('notifications.index');
+    Route::get('/notifications/user', [AdminController::class, 'userNotificationsShow'])->name('notifications.user.show');
 });
 
 require __DIR__.'/auth.php';

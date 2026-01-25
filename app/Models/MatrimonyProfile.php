@@ -51,21 +51,29 @@ class MatrimonyProfile extends Model
     protected $fillable = [
         'user_id',
         'full_name',
+        'gender',
         'date_of_birth',
+        'marital_status',
         'caste',
         'education',
         'location',
-        'profile_photo', // 🔴 uploaded photo path
+        'height_cm',
+        'profile_photo',
         'is_suspended',
         'photo_approved',
         'photo_rejected_at',
         'photo_rejection_reason',
+        'is_demo',
+        'visibility_override',
+        'visibility_override_reason',
     ];
-    
+
     protected $casts = [
         'is_suspended' => 'boolean',
         'photo_approved' => 'boolean',
         'photo_rejected_at' => 'datetime',
+        'is_demo' => 'boolean',
+        'visibility_override' => 'boolean',
     ];
     
 

@@ -23,6 +23,14 @@
                     <label>Date of Birth</label><br>
                     <input type="date" name="date_of_birth" value="{{ $matrimonyProfile->date_of_birth }}"><br><br>
 
+                    <label>Marital Status</label><br>
+                    <select name="marital_status" required>
+                        <option value="">— Select —</option>
+                        <option value="single" {{ old('marital_status', $matrimonyProfile->marital_status) === 'single' ? 'selected' : '' }}>Single</option>
+                        <option value="divorced" {{ old('marital_status', $matrimonyProfile->marital_status) === 'divorced' ? 'selected' : '' }}>Divorced</option>
+                        <option value="widowed" {{ old('marital_status', $matrimonyProfile->marital_status) === 'widowed' ? 'selected' : '' }}>Widowed</option>
+                    </select><br><br>
+
                     <label>Education</label><br>
                     <input type="text" name="education" value="{{ $matrimonyProfile->education }}"><br><br>
 
@@ -47,8 +55,7 @@
 
 <input type="file" name="profile_photo"><br><br>
 
-<button type="submit"
-                        class="bg-blue-600 text-white px-6 py-2 rounded-lg font-semibold hover:bg-blue-700 transition-colors mt-4">
+<button type="submit" class="inline-flex items-center px-4 py-2 bg-indigo-600 border border-transparent rounded-md font-semibold text-sm text-white tracking-wide hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition disabled:opacity-50 disabled:cursor-not-allowed mt-4">
                         Update Profile
                     </button>
                 </form>

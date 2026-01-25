@@ -71,9 +71,9 @@
                 {{ __('Already registered?') }}
             </a>
 
-            <x-primary-button class="ms-4">
-                {{ __('Register') }}
-            </x-primary-button>
+            <button type="submit" style="background-color: #4f46e5; color: white; padding: 10px 24px; border-radius: 6px; font-weight: 600; font-size: 14px; border: none; cursor: pointer; margin-left: 16px;">
+                Register
+            </button>
             
         </div>
     </form>

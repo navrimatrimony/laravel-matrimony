@@ -3,8 +3,12 @@
 namespace App\Http\Controllers;
 
 use App\Models\Interest;
-use Illuminate\Http\Request;
 use App\Models\MatrimonyProfile;
+use App\Notifications\InterestAcceptedNotification;
+use App\Notifications\InterestRejectedNotification;
+use App\Notifications\InterestSentNotification;
+use App\Services\ProfileCompletenessService;
+use Illuminate\Http\Request;
 
 
 /*
@@ -70,8 +74,16 @@ public function store(MatrimonyProfile $matrimony_profile_id)
         abort(403, 'Matrimony profile missing');
     }
 
+    // 🔒 70% completeness required for send and receive
+    if (!ProfileCompletenessService::meetsThreshold($senderProfile)) {
+        return back()->with('error', 'Your profile must be at least 70% complete to send interest.');
+    }
+    if (!ProfileCompletenessService::meetsThreshold($receiverProfile)) {
+        return back()->with('error', 'You cannot send interest to this profile.');
+    }
+
     // 🔁 Duplicate interest protection
-    Interest::firstOrCreate(
+    $interest = Interest::firstOrCreate(
         [
             'sender_profile_id'   => $senderProfile->id,
             'receiver_profile_id' => $receiverProfile->id,
@@ -80,6 +92,13 @@ public function store(MatrimonyProfile $matrimony_profile_id)
             'status' => 'pending',
         ]
     );
+
+    if ($interest->wasRecentlyCreated) {
+        $receiverOwner = $receiverProfile->user;
+        if ($receiverOwner) {
+            $receiverOwner->notify(new InterestSentNotification($senderProfile));
+        }
+    }
 
     return back()->with('success', 'Interest sent successfully.');
 }
@@ -171,10 +190,21 @@ public function accept(\App\Models\Interest $interest)
         return back()->with('error', 'This interest is already processed.');
     }
 
+    // 🔒 70% completeness required to receive (accept) interest
+    $receiverProfile = $interest->receiverProfile;
+    if (!$receiverProfile || !ProfileCompletenessService::meetsThreshold($receiverProfile)) {
+        return back()->with('error', 'Your profile must be at least 70% complete to accept interest.');
+    }
+
     // ✅ Accept
     $interest->update([
         'status' => 'accepted',
     ]);
+
+    $senderOwner = $interest->senderProfile?->user;
+    if ($senderOwner) {
+        $senderOwner->notify(new InterestAcceptedNotification($receiverProfile));
+    }
 
     return back()->with('success', 'Interest accepted.');
 }
@@ -211,6 +241,11 @@ public function reject(\App\Models\Interest $interest)
     $interest->update([
         'status' => 'rejected',
     ]);
+
+    $senderOwner = $interest->senderProfile?->user;
+    if ($senderOwner) {
+        $senderOwner->notify(new InterestRejectedNotification($user->matrimonyProfile));
+    }
 
     return back()->with('success', 'Interest rejected.');
 }

@@ -2,267 +2,327 @@
 
 namespace App\Http\Controllers;
 
-use Illuminate\Http\Request;
+use App\Models\AbuseReport;
+use App\Models\Interest;
 use App\Models\MatrimonyProfile;
-use App\Services\AuditLogService;
+use App\Models\Shortlist;
+use App\Models\User;
+use App\Models\AdminSetting;
+use App\Notifications\ImageRejectedNotification;
+use App\Services\ViewTrackingService;
+use App\Notifications\ProfileSoftDeletedNotification;
 use App\Notifications\ProfileSuspendedNotification;
 use App\Notifications\ProfileUnsuspendedNotification;
-use App\Notifications\ProfileSoftDeletedNotification;
-use App\Notifications\ImageApprovedNotification;
-use App\Notifications\ImageRejectedNotification;
+use App\Services\AuditLogService;
+use Illuminate\Http\Request;
 
 /*
 |--------------------------------------------------------------------------
-| AdminController
+| AdminController (SSOT Day-6 — Recovery-Day-R1)
 |--------------------------------------------------------------------------
 |
-| 👉 Handles admin moderation actions
-| 👉 All actions require mandatory reasons and audit logging
-| 👉 All actions operate on MatrimonyProfile (not User)
+| Admin moderation: suspend, unsuspend, soft delete, image approve/reject.
+| Mandatory reason, audit log, and SSOT-allowed user notifications only.
 |
 */
 class AdminController extends Controller
 {
+    private const REASON_RULES = ['required', 'string', 'min:10'];
+
     /**
-     * View a MatrimonyProfile (admin only - bypasses suspension checks)
+     * Admin view profile (bypasses suspension / soft-delete checks).
      */
-    public function showProfile($id)
+    public function showProfile(string $id)
     {
-        // Admin can view profiles regardless of suspension or soft-delete status
-        // Load with trashed to include soft-deleted profiles
-        $matrimonyProfile = MatrimonyProfile::withTrashed()->findOrFail($id);
+        $profile = MatrimonyProfile::withTrashed()->findOrFail($id);
+        $user = auth()->user();
+        $isOwnProfile = $user->matrimonyProfile && $user->matrimonyProfile->id === (int) $id;
 
-        // Admin viewing someone else's profile
-        $isOwnProfile = false;
         $interestAlreadySent = false;
-        $hasAlreadyReported = false; // Admin does not submit abuse reports
+        if ($user->matrimonyProfile) {
+            $interestAlreadySent = Interest::where('sender_profile_id', $user->matrimonyProfile->id)
+                ->where('receiver_profile_id', $profile->id)
+                ->exists();
+        }
 
-        return view(
-            'matrimony.profile.show',
-            [
-                'matrimonyProfile' => $matrimonyProfile,
-                'isOwnProfile' => $isOwnProfile,
-                'interestAlreadySent' => $interestAlreadySent,
-                'hasAlreadyReported' => $hasAlreadyReported,
-            ]
-        );
+        $hasAlreadyReported = AbuseReport::where('reporter_user_id', $user->id)
+            ->where('reported_profile_id', $profile->id)
+            ->where('status', 'open')
+            ->exists();
+
+        $inShortlist = false;
+        if (!$isOwnProfile && $user->matrimonyProfile) {
+            $inShortlist = Shortlist::where('owner_profile_id', $user->matrimonyProfile->id)
+                ->where('shortlisted_profile_id', $profile->id)
+                ->exists();
+        }
+
+        if (!$isOwnProfile && $user->matrimonyProfile) {
+            ViewTrackingService::recordView($user->matrimonyProfile, $profile);
+            ViewTrackingService::maybeTriggerViewBack($user->matrimonyProfile, $profile);
+        }
+
+        return view('matrimony.profile.show', [
+            'matrimonyProfile' => $profile,
+            'isOwnProfile' => $isOwnProfile,
+            'interestAlreadySent' => $interestAlreadySent,
+            'hasAlreadyReported' => $hasAlreadyReported,
+            'inShortlist' => $inShortlist,
+        ]);
     }
 
     /**
-     * Suspend a MatrimonyProfile
+     * Suspend profile. Audit log + notify user.
      */
-    public function suspendProfile(Request $request, MatrimonyProfile $profile)
+    public function suspendProfile(Request $request, MatrimonyProfile $profile): \Illuminate\Http\RedirectResponse
     {
-        $request->validate([
-            'reason' => 'required|string|min:10',
-        ]);
+        $request->validate(['reason' => self::REASON_RULES]);
 
-        $admin = $request->user();
+        $profile->update(['is_suspended' => true]);
 
-        // Update profile
-        $profile->update([
-            'is_suspended' => true,
-        ]);
-
-        // Audit log
         AuditLogService::log(
-            $admin,
+            $request->user(),
             'suspend',
             'MatrimonyProfile',
             $profile->id,
             $request->reason,
-            $profile->is_demo ?? false
+            (bool) ($profile->is_demo ?? false)
         );
 
-        // Notify user
-        if ($profile->user) {
-            $profile->user->notify(new ProfileSuspendedNotification($request->reason));
+        $owner = $profile->user;
+        if ($owner) {
+            $owner->notify(new ProfileSuspendedNotification($request->reason));
         }
 
-        if ($request->expectsJson()) {
-            return response()->json([
-                'success' => true,
-                'message' => 'Profile suspended successfully.',
-            ]);
-        }
-
-        return redirect()->back()->with('success', 'Profile suspended successfully.');
+        return redirect()->route('admin.profiles.show', $profile->id)->with('success', 'Profile suspended.');
     }
 
     /**
-     * Unsuspend a MatrimonyProfile
+     * Unsuspend profile. Audit log + notify user.
      */
-    public function unsuspendProfile(Request $request, MatrimonyProfile $profile)
+    public function unsuspendProfile(Request $request, MatrimonyProfile $profile): \Illuminate\Http\RedirectResponse
     {
-        $request->validate([
-            'reason' => 'required|string|min:10',
-        ]);
+        $request->validate(['reason' => self::REASON_RULES]);
 
-        $admin = $request->user();
+        $profile->update(['is_suspended' => false]);
 
-        // Update profile
-        $profile->update([
-            'is_suspended' => false,
-        ]);
-
-        // Audit log
         AuditLogService::log(
-            $admin,
+            $request->user(),
             'unsuspend',
             'MatrimonyProfile',
             $profile->id,
             $request->reason,
-            $profile->is_demo ?? false
+            (bool) ($profile->is_demo ?? false)
         );
 
-        // Notify user
-        if ($profile->user) {
-            $profile->user->notify(new ProfileUnsuspendedNotification($request->reason));
+        $owner = $profile->user;
+        if ($owner) {
+            $owner->notify(new ProfileUnsuspendedNotification($request->reason));
         }
 
-        if ($request->expectsJson()) {
-            return response()->json([
-                'success' => true,
-                'message' => 'Profile unsuspended successfully.',
-            ]);
-        }
-
-        return redirect()->back()->with('success', 'Profile unsuspended successfully.');
+        return redirect()->route('admin.profiles.show', $profile->id)->with('success', 'Profile unsuspended.');
     }
 
     /**
-     * Soft delete a MatrimonyProfile (real users only)
+     * Soft delete profile. Audit log + notify user. No hard delete.
      */
-    public function softDeleteProfile(Request $request, MatrimonyProfile $profile)
+    public function softDeleteProfile(Request $request, MatrimonyProfile $profile): \Illuminate\Http\RedirectResponse
     {
-        $request->validate([
-            'reason' => 'required|string|min:10',
-        ]);
+        $request->validate(['reason' => self::REASON_RULES]);
 
-        $admin = $request->user();
+        $profileId = $profile->id;
+        $owner = $profile->user;
+        $isDemo = (bool) ($profile->is_demo ?? false);
 
-        // Check if demo profile (soft delete only for real users)
-        if ($profile->is_demo ?? false) {
-            if ($request->expectsJson()) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Cannot soft delete demo profiles.',
-                ], 403);
-            }
-            return redirect()->back()->with('error', 'Cannot soft delete demo profiles.');
-        }
-
-        // Soft delete profile
         $profile->delete();
 
-        // Audit log
         AuditLogService::log(
-            $admin,
+            $request->user(),
             'soft_delete',
             'MatrimonyProfile',
-            $profile->id,
+            $profileId,
             $request->reason,
-            false
+            $isDemo
         );
 
-        // Notify user
-        if ($profile->user) {
-            $profile->user->notify(new ProfileSoftDeletedNotification($request->reason));
+        if ($owner) {
+            $owner->notify(new ProfileSoftDeletedNotification($request->reason));
         }
 
-        if ($request->expectsJson()) {
-            return response()->json([
-                'success' => true,
-                'message' => 'Profile soft deleted successfully.',
-            ]);
-        }
-
-        return redirect()->back()->with('success', 'Profile soft deleted successfully.');
+        return redirect()->route('admin.profiles.show', $profileId)->with('success', 'Profile soft deleted.');
     }
 
     /**
-     * Approve profile image
+     * Approve profile image. Audit log only. NO user notification (SSOT-forbidden).
      */
-    public function approveImage(Request $request, MatrimonyProfile $profile)
+    public function approveImage(Request $request, MatrimonyProfile $profile): \Illuminate\Http\RedirectResponse
     {
-        $request->validate([
-            'reason' => 'required|string|min:10',
-        ]);
+        $request->validate(['reason' => self::REASON_RULES]);
 
-        $admin = $request->user();
-
-        // Update profile
         $profile->update([
             'photo_approved' => true,
             'photo_rejected_at' => null,
             'photo_rejection_reason' => null,
         ]);
 
-        // Audit log
         AuditLogService::log(
-            $admin,
+            $request->user(),
             'image_approve',
             'MatrimonyProfile',
             $profile->id,
             $request->reason,
-            $profile->is_demo ?? false
+            (bool) ($profile->is_demo ?? false)
         );
 
-        // Notify user
-        if ($profile->user) {
-            $profile->user->notify(new ImageApprovedNotification($request->reason));
-        }
-
-        if ($request->expectsJson()) {
-            return response()->json([
-                'success' => true,
-                'message' => 'Image approved successfully.',
-            ]);
-        }
-
-        return redirect()->back()->with('success', 'Image approved successfully.');
+        return redirect()->route('admin.profiles.show', $profile->id)->with('success', 'Image approved.');
     }
 
     /**
-     * Reject profile image
+     * Reject profile image. Audit log + notify user.
      */
-    public function rejectImage(Request $request, MatrimonyProfile $profile)
+    public function rejectImage(Request $request, MatrimonyProfile $profile): \Illuminate\Http\RedirectResponse
     {
-        $request->validate([
-            'reason' => 'required|string|min:10',
-        ]);
+        $request->validate(['reason' => self::REASON_RULES]);
 
-        $admin = $request->user();
-
-        // Update profile (hide image immediately)
         $profile->update([
             'photo_approved' => false,
             'photo_rejected_at' => now(),
             'photo_rejection_reason' => $request->reason,
         ]);
 
-        // Audit log
         AuditLogService::log(
-            $admin,
+            $request->user(),
             'image_reject',
             'MatrimonyProfile',
             $profile->id,
             $request->reason,
-            $profile->is_demo ?? false
+            (bool) ($profile->is_demo ?? false)
         );
 
-        // Notify user
-        if ($profile->user) {
-            $profile->user->notify(new ImageRejectedNotification($request->reason));
+        $owner = $profile->user;
+        if ($owner) {
+            $owner->notify(new ImageRejectedNotification($request->reason));
         }
 
-        if ($request->expectsJson()) {
-            return response()->json([
-                'success' => true,
-                'message' => 'Image rejected successfully.',
-            ]);
+        return redirect()->route('admin.profiles.show', $profile->id)->with('success', 'Image rejected.');
+    }
+
+    /**
+     * Override visibility: force profile visible in search even if <70% complete.
+     * Mandatory reason, audit log, is_demo. Affects search only; interest rules unchanged.
+     */
+    public function overrideVisibility(Request $request, MatrimonyProfile $profile): \Illuminate\Http\RedirectResponse
+    {
+        $request->validate(['reason' => self::REASON_RULES]);
+
+        $profile->update([
+            'visibility_override' => true,
+            'visibility_override_reason' => $request->reason,
+        ]);
+
+        AuditLogService::log(
+            $request->user(),
+            'visibility_override',
+            'MatrimonyProfile',
+            $profile->id,
+            $request->reason,
+            (bool) ($profile->is_demo ?? false)
+        );
+
+        return redirect()->route('admin.profiles.show', $profile->id)->with('success', 'Visibility override applied.');
+    }
+
+    /**
+     * View-back settings (Day-9). Enable/disable, probability 0–100, delay min/max.
+     */
+    public function viewBackSettings()
+    {
+        $enabled = AdminSetting::getBool('view_back_enabled', false);
+        $probability = (int) AdminSetting::getValue('view_back_probability', '0');
+        $probability = max(0, min(100, $probability));
+        $delayMin = (int) AdminSetting::getValue('view_back_delay_min', '0');
+        $delayMax = (int) AdminSetting::getValue('view_back_delay_max', '0');
+        return view('admin.view-back-settings.index', [
+            'viewBackEnabled' => $enabled,
+            'viewBackProbability' => $probability,
+            'viewBackDelayMin' => max(0, $delayMin),
+            'viewBackDelayMax' => max(0, $delayMax),
+        ]);
+    }
+
+    /**
+     * Update view-back settings. Persisted via AdminSetting.
+     */
+    public function updateViewBackSettings(Request $request): \Illuminate\Http\RedirectResponse
+    {
+        $request->validate([
+            'view_back_enabled' => 'nullable|in:0,1',
+            'view_back_probability' => 'required|integer|min:0|max:100',
+            'view_back_delay_min' => 'required|integer|min:0|max:1440',
+            'view_back_delay_max' => 'required|integer|min:0|max:1440',
+        ]);
+
+        $delayMin = (int) $request->input('view_back_delay_min', 0);
+        $delayMax = (int) $request->input('view_back_delay_max', 0);
+
+        // Ensure max >= min
+        if ($delayMax < $delayMin) {
+            $delayMax = $delayMin;
         }
 
-        return redirect()->back()->with('success', 'Image rejected successfully.');
+        AdminSetting::setValue('view_back_enabled', $request->has('view_back_enabled') ? '1' : '0');
+        AdminSetting::setValue('view_back_probability', (string) $request->input('view_back_probability', 0));
+        AdminSetting::setValue('view_back_delay_min', (string) $delayMin);
+        AdminSetting::setValue('view_back_delay_max', (string) $delayMax);
+
+        return redirect()->route('admin.view-back-settings.index')
+            ->with('success', 'View-back settings updated.');
+    }
+
+    /**
+     * Demo search visibility (Day-8). Global toggle: show/hide demo profiles in search.
+     */
+    public function demoSearchSettings()
+    {
+        $visible = AdminSetting::getBool('demo_profiles_visible_in_search', true);
+        return view('admin.demo-search-settings.index', [
+            'demoProfilesVisibleInSearch' => $visible,
+        ]);
+    }
+
+    /**
+     * Update demo search visibility. Persisted via AdminSetting.
+     */
+    public function updateDemoSearchSettings(Request $request): \Illuminate\Http\RedirectResponse
+    {
+        $request->validate([
+            'demo_profiles_visible_in_search' => 'nullable|in:0,1',
+        ]);
+        AdminSetting::setValue('demo_profiles_visible_in_search', $request->has('demo_profiles_visible_in_search') ? '1' : '0');
+        return redirect()->route('admin.demo-search-settings.index')
+            ->with('success', 'Demo search visibility updated.');
+    }
+
+    /**
+     * Admin debug: view notifications for any user (R5).
+     * Form to enter user ID, then view that user's notifications (read-only).
+     */
+    public function userNotificationsIndex()
+    {
+        return view('admin.notifications.index');
+    }
+
+    /**
+     * Admin debug: list notifications for user (user_id query). Read-only, no actions.
+     */
+    public function userNotificationsShow(Request $request)
+    {
+        $request->validate(['user_id' => 'required|integer|min:1']);
+        $user = User::findOrFail($request->user_id);
+        $notifications = $user->notifications()->orderByDesc('created_at')->paginate(50)->withQueryString();
+        return view('admin.notifications.user', [
+            'targetUser' => $user,
+            'notifications' => $notifications,
+        ]);
     }
 }
