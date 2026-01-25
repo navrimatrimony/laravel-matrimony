@@ -156,10 +156,6 @@
     
 <div class="bg-white shadow rounded-lg p-6">
 
-@php
-    $completenessPct = \App\Services\ProfileCompletenessService::percentage($matrimonyProfile);
-@endphp
-
 {{-- Profile Completeness --}}
 <div class="mb-6">
     <div class="flex justify-between items-center mb-1">

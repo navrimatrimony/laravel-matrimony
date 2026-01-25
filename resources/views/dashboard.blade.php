@@ -6,7 +6,7 @@
     <div class="max-w-7xl mx-auto sm:px-6 lg:px-8">
 
         {{-- No Profile Case --}}
-        @if (!auth()->user()->matrimonyProfile)
+        @if (!$hasProfile)
 
             <div class="bg-white shadow-sm rounded-lg p-6">
                 <h3 class="text-xl font-semibold mb-4">
@@ -24,35 +24,6 @@
             </div>
 
         @else
-
-            @php
-                $profile = auth()->user()->matrimonyProfile;
-                $myProfileId = $profile->id;
-
-                // Statistics
-                $sentInterestsCount = \App\Models\Interest::where('sender_profile_id', $myProfileId)->count();
-                $receivedPendingCount = \App\Models\Interest::where('receiver_profile_id', $myProfileId)->where('status', 'pending')->count();
-                $acceptedInterestsCount = \App\Models\Interest::where('receiver_profile_id', $myProfileId)->where('status', 'accepted')->count();
-                $rejectedInterestsCount = \App\Models\Interest::where('receiver_profile_id', $myProfileId)->where('status', 'rejected')->count();
-                $totalProfilesCount = \App\Models\MatrimonyProfile::where('id', '!=', $myProfileId)->count();
-
-                // Profile Completeness Calculation
-                $completenessPercentage = \App\Services\ProfileCompletenessService::percentage($profile);
-
-                // Recent Interests (Last 3 received)
-                $recentReceivedInterests = \App\Models\Interest::with('senderProfile')
-                    ->where('receiver_profile_id', $myProfileId)
-                    ->latest()
-                    ->limit(3)
-                    ->get();
-
-                // Recent Sent Interests (Last 3)
-                $recentSentInterests = \App\Models\Interest::with('receiverProfile')
-                    ->where('sender_profile_id', $myProfileId)
-                    ->latest()
-                    ->limit(3)
-                    ->get();
-            @endphp
 
             {{-- Welcome Section --}}
             <div class="mb-6">

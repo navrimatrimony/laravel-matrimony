@@ -92,11 +92,10 @@
                 :active="request()->routeIs('notifications.*')"
                 class="relative">
         {{ __('Notifications') }}
-        @php $unreadCount = auth()->user()->unreadNotifications()->count(); @endphp
         <span 
             id="notification-badge" 
-            class="absolute -top-1 -right-2 inline-flex items-center justify-center px-1.5 py-0.5 text-xs font-bold leading-none text-white bg-red-600 rounded-full {{ $unreadCount > 0 ? '' : 'hidden' }}"
-        >{{ $unreadCount > 99 ? '99+' : $unreadCount }}</span>
+            class="absolute -top-1 -right-2 inline-flex items-center justify-center px-1.5 py-0.5 text-xs font-bold leading-none text-white bg-red-600 rounded-full {{ $unreadNotificationCount > 0 ? '' : 'hidden' }}"
+        >{{ $unreadNotificationCount > 99 ? '99+' : $unreadNotificationCount }}</span>
     </x-nav-link>
 @endauth
 
@@ -206,12 +205,11 @@
     {{-- Notifications with unread badge (mobile) --}}
     <x-responsive-nav-link :href="route('notifications.index')" class="relative inline-flex items-center">
         Notifications
-        @php $unreadCountMobile = auth()->user()->unreadNotifications()->count(); @endphp
-        @if($unreadCountMobile > 0)
+        @if($unreadNotificationCount > 0)
             <span 
                 id="notification-badge-mobile" 
                 class="ml-2 inline-flex items-center justify-center px-1.5 py-0.5 text-xs font-bold leading-none text-white bg-red-600 rounded-full"
-            >{{ $unreadCountMobile > 99 ? '99+' : $unreadCountMobile }}</span>
+            >{{ $unreadNotificationCount > 99 ? '99+' : $unreadNotificationCount }}</span>
         @endif
     </x-responsive-nav-link>
 @endauth

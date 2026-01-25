@@ -22,7 +22,8 @@ class NotificationController extends Controller
     {
         $user = $request->user();
         $notifications = $user->notifications()->paginate(20);
-        return view('notifications.index', compact('notifications'));
+        $unreadNotifications = $user->unreadNotifications;
+        return view('notifications.index', compact('notifications', 'unreadNotifications'));
     }
 
     /**

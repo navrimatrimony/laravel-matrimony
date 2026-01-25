@@ -131,4 +131,18 @@ class ViewTrackingService
             $q->where('blocker_profile_id', $profileB)->where('blocked_profile_id', $profileA);
         })->exists();
     }
+
+    /**
+     * Get all profile IDs blocked by or blocking the given profile (bidirectional).
+     * Used for search exclusion. Single source for blocked-IDs retrieval.
+     *
+     * @return \Illuminate\Support\Collection<int>
+     */
+    public static function getBlockedProfileIds(int $profileId): \Illuminate\Support\Collection
+    {
+        return Block::where('blocker_profile_id', $profileId)->pluck('blocked_profile_id')
+            ->merge(Block::where('blocked_profile_id', $profileId)->pluck('blocker_profile_id'))
+            ->unique()
+            ->values();
+    }
 }

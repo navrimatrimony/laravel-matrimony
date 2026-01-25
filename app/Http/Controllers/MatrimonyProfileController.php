@@ -2,7 +2,6 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Block;
 use App\Models\MatrimonyProfile;
 use App\Models\Shortlist;
 use App\Services\ProfileCompletenessService;
@@ -349,14 +348,7 @@ public function show(MatrimonyProfile $matrimony_profile_id)
 
     // 🔒 GUARD: Block excludes profile view (either direction)
     if (!$isOwnProfile && $viewer->matrimonyProfile) {
-        $bid = $viewer->matrimonyProfile->id;
-        $vid = $matrimonyProfile->id;
-        $blocked = Block::where(function ($q) use ($bid, $vid) {
-            $q->where('blocker_profile_id', $bid)->where('blocked_profile_id', $vid);
-        })->orWhere(function ($q) use ($bid, $vid) {
-            $q->where('blocker_profile_id', $vid)->where('blocked_profile_id', $bid);
-        })->exists();
-        if ($blocked) {
+        if (ViewTrackingService::isBlocked($viewer->matrimonyProfile->id, $matrimonyProfile->id)) {
             abort(404, 'Profile not found.');
         }
     }
@@ -393,6 +385,9 @@ public function show(MatrimonyProfile $matrimony_profile_id)
         ViewTrackingService::maybeTriggerViewBack($viewer->matrimonyProfile, $matrimonyProfile);
     }
 
+    // Profile completeness (from service, passed to view)
+    $completenessPct = ProfileCompletenessService::percentage($matrimonyProfile);
+
     return view(
         'matrimony.profile.show',
         [
@@ -401,6 +396,7 @@ public function show(MatrimonyProfile $matrimony_profile_id)
             'interestAlreadySent'  => $interestAlreadySent,
             'hasAlreadyReported'   => $hasAlreadyReported,
             'inShortlist'          => $inShortlist,
+            'completenessPct'      => $completenessPct,
         ]
     );
 }
@@ -475,10 +471,7 @@ public function show(MatrimonyProfile $matrimony_profile_id)
         // Exclude blocked profiles (either direction) when viewer has profile
         $myId = auth()->user()?->matrimonyProfile?->id;
         if ($myId) {
-            $blockedIds = Block::where('blocker_profile_id', $myId)->pluck('blocked_profile_id')
-                ->merge(Block::where('blocked_profile_id', $myId)->pluck('blocker_profile_id'))
-                ->unique()
-                ->values();
+            $blockedIds = ViewTrackingService::getBlockedProfileIds($myId);
             if ($blockedIds->isNotEmpty()) {
                 $query->whereNotIn('id', $blockedIds);
             }

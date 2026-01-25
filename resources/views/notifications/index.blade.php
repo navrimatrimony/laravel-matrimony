@@ -8,10 +8,7 @@
         <p class="text-green-600 mb-4">{{ session('success') }}</p>
     @endif
 
-    @php
-        $unread = auth()->user()->unreadNotifications;
-    @endphp
-    @if ($unread->isNotEmpty())
+    @if ($unreadNotifications->isNotEmpty())
         <form method="POST" action="{{ route('notifications.mark-all-read') }}" class="mb-4">
             @csrf
             <button type="submit" style="background-color: #4f46e5; color: white; padding: 10px 20px; border-radius: 6px; font-weight: 600; font-size: 14px; border: none; cursor: pointer;">Mark all as read</button>

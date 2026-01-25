@@ -121,6 +121,24 @@ LAW 7: Phase-2 Discipline Enforcement
 - These Core System Laws are NON-NEGOTIABLE.
 - Any implementation that violates these laws SHALL be considered a Phase-2 breach.
 - If ambiguity arises, these laws override local implementation decisions.
+------------------------------------------------
+LAW 8: Blade Purity Law (Permanent)
+------------------------------------------------
+Blade views SHALL contain display logic only.
+Blade views SHALL NOT:
+execute database queries
+call services for business logic
+compute business rules or thresholds
+All data required by Blade MUST be passed explicitly from Controller or View Composer.
+Violation of this law is considered a hygiene breach and MUST be corrected immediately.
+------------------------------------------------
+LAW 9: Service Authority Rule
+------------------------------------------------
+Any business rule that is used in more than one controller
+MUST be implemented in a single Service class.
+Controllers SHALL NOT reimplement or duplicate such logic.
+Controllers may only consume services, not recreate rules.
+------------------------------------------------
 
 ============================================================
 2. EXECUTION DISCIPLINE & ROLE SEPARATION (NON-NEGOTIABLE)
@@ -215,6 +233,13 @@ The following constants SHALL NOT be changed without SSOT update:
 - Audit logs SHALL include: admin_id, action_type, entity_type, entity_id, reason, timestamp, is_demo flag
 - Audit logs SHALL be basic only (no immutability, export, or advanced features)
 - All admin actions SHALL generate audit log entries
+-----------------------------------
+Clarification:
+Any admin-triggered state change (including settings, toggles, probabilities)
+SHALL be treated as an admin action and MUST:
+require explicit intent
+generate an audit log entry
+include a human-readable reason
 ------------------------------------------------------------
 ADMIN PANEL STRUCTURE & GROUPING RULE (DATEBOOK-ALIGNED)
 
@@ -548,6 +573,13 @@ SEQUENCE VALIDATION RULE:
 - Any required data structure, configuration, or rule MUST exist in a completed prior day.
 - Violation of this rule invalidates the entire day.
 
+Hygiene Day Rule:
+
+At the end of every 3–4 implementation days,
+a dedicated Hygiene / Verification Day MUST be scheduled.
+During this day:
+No new features are allowed
+Only SSOT compliance, duplication removal, and boundary corrections are permitted
 ===========================================================
 IMAGE MODERATION POLICY (ADMIN-CONTROLLED)
 
@@ -772,7 +804,7 @@ Interest / Block / Shortlist तिन्ही complete & verified
 
 Temporary UX gap consciously accepted (documented)
 
-👉 Day-9 CLOSED.
+👉 Day-10 CLOSED.
 =======================================
 ✅ Phase-2 Day-10 — OFFICIALLY CLOSED
 

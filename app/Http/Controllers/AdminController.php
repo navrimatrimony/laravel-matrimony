@@ -14,6 +14,7 @@ use App\Notifications\ProfileSoftDeletedNotification;
 use App\Notifications\ProfileSuspendedNotification;
 use App\Notifications\ProfileUnsuspendedNotification;
 use App\Services\AuditLogService;
+use App\Services\ProfileCompletenessService;
 use Illuminate\Http\Request;
 
 /*
@@ -62,12 +63,16 @@ class AdminController extends Controller
             ViewTrackingService::maybeTriggerViewBack($user->matrimonyProfile, $profile);
         }
 
+        // Profile completeness (from service, passed to view)
+        $completenessPct = ProfileCompletenessService::percentage($profile);
+
         return view('matrimony.profile.show', [
             'matrimonyProfile' => $profile,
             'isOwnProfile' => $isOwnProfile,
             'interestAlreadySent' => $interestAlreadySent,
             'hasAlreadyReported' => $hasAlreadyReported,
             'inShortlist' => $inShortlist,
+            'completenessPct' => $completenessPct,
         ]);
     }
 
@@ -270,10 +275,22 @@ class AdminController extends Controller
             $delayMax = $delayMin;
         }
 
-        AdminSetting::setValue('view_back_enabled', $request->has('view_back_enabled') ? '1' : '0');
-        AdminSetting::setValue('view_back_probability', (string) $request->input('view_back_probability', 0));
+        $enabled = $request->has('view_back_enabled') ? '1' : '0';
+        $probability = (string) $request->input('view_back_probability', 0);
+
+        AdminSetting::setValue('view_back_enabled', $enabled);
+        AdminSetting::setValue('view_back_probability', $probability);
         AdminSetting::setValue('view_back_delay_min', (string) $delayMin);
         AdminSetting::setValue('view_back_delay_max', (string) $delayMax);
+
+        AuditLogService::log(
+            $request->user(),
+            'update_view_back_settings',
+            'AdminSetting',
+            null,
+            "enabled={$enabled}, probability={$probability}%, delay={$delayMin}-{$delayMax}min",
+            false
+        );
 
         return redirect()->route('admin.view-back-settings.index')
             ->with('success', 'View-back settings updated.');
@@ -298,7 +315,19 @@ class AdminController extends Controller
         $request->validate([
             'demo_profiles_visible_in_search' => 'nullable|in:0,1',
         ]);
-        AdminSetting::setValue('demo_profiles_visible_in_search', $request->has('demo_profiles_visible_in_search') ? '1' : '0');
+
+        $visible = $request->has('demo_profiles_visible_in_search') ? '1' : '0';
+        AdminSetting::setValue('demo_profiles_visible_in_search', $visible);
+
+        AuditLogService::log(
+            $request->user(),
+            'update_demo_search_settings',
+            'AdminSetting',
+            null,
+            "demo_profiles_visible_in_search={$visible}",
+            false
+        );
+
         return redirect()->route('admin.demo-search-settings.index')
             ->with('success', 'Demo search visibility updated.');
     }

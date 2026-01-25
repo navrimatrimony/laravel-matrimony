@@ -9,6 +9,7 @@ use App\Http\Controllers\AbuseReportController;
 use App\Http\Controllers\BlockController;
 use App\Http\Controllers\ShortlistController;
 use App\Http\Controllers\Admin\DemoProfileController;
+use App\Http\Controllers\DashboardController;
 
 /*
 |--------------------------------------------------------------------------
@@ -24,9 +25,9 @@ Route::get('/', function () {
 | Dashboard
 |--------------------------------------------------------------------------
 */
-Route::get('/dashboard', function () {
-    return view('dashboard');
-})->middleware(['auth'])->name('dashboard');
+Route::get('/dashboard', [DashboardController::class, 'index'])
+    ->middleware(['auth'])
+    ->name('dashboard');
 
 
 /*
