@@ -202,3 +202,4 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
 });
 
 require __DIR__.'/auth.php';
+require __DIR__ . '/admin_migrate.php';
