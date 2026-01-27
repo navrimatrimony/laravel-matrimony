@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\MatrimonyProfile;
+use App\Models\ProfileFieldConfig;
 use App\Models\Shortlist;
 use App\Services\ProfileCompletenessService;
 use App\Services\ViewTrackingService;
@@ -420,17 +421,26 @@ public function show(MatrimonyProfile $matrimony_profile_id)
         $query->where('is_suspended', false);
         // Soft deletes are automatically excluded by Laravel's SoftDeletes trait
 
-        // Caste filter
-        if ($request->filled('caste')) {
+        // Load searchable field configs (Day-13 SSOT: enforce searchable flag)
+        $searchableFields = ProfileFieldConfig::where('is_searchable', true)
+            ->pluck('field_key')
+            ->toArray();
+
+        // Helper: check if field is searchable
+        $isSearchable = fn(string $fieldKey) => in_array($fieldKey, $searchableFields, true);
+
+        // Caste filter (only if searchable)
+        if ($isSearchable('caste') && $request->filled('caste')) {
             $query->where('caste', $request->caste);
         }
 
-        // Location filter
-        if ($request->filled('location')) {
+        // Location filter (only if searchable)
+        if ($isSearchable('location') && $request->filled('location')) {
             $query->where('location', $request->location);
         }
-        // Age filter (from date_of_birth)
-        if ($request->filled('age_from') || $request->filled('age_to')) {
+
+        // Age filter from date_of_birth (only if searchable)
+        if ($isSearchable('date_of_birth') && ($request->filled('age_from') || $request->filled('age_to'))) {
             $query->whereNotNull('date_of_birth');
             if ($request->filled('age_from')) {
                 $minDate = now()->subYears((int) $request->age_from)->format('Y-m-d');
@@ -442,18 +452,23 @@ public function show(MatrimonyProfile $matrimony_profile_id)
             }
         }
 
-        // Height filter (height_cm)
-        if ($request->filled('height_from')) {
-            $query->whereNotNull('height_cm')->where('height_cm', '>=', (int) $request->height_from);
-        }
-        if ($request->filled('height_to')) {
-            $query->whereNotNull('height_cm')->where('height_cm', '<=', (int) $request->height_to);
+        // Height filter (only if searchable)
+        if ($isSearchable('height_cm')) {
+            if ($request->filled('height_from')) {
+                $query->whereNotNull('height_cm')->where('height_cm', '>=', (int) $request->height_from);
+            }
+            if ($request->filled('height_to')) {
+                $query->whereNotNull('height_cm')->where('height_cm', '<=', (int) $request->height_to);
+            }
         }
 
-        if ($request->filled('marital_status')) {
+        // Marital status filter (only if searchable)
+        if ($isSearchable('marital_status') && $request->filled('marital_status')) {
             $query->where('marital_status', $request->marital_status);
         }
-        if ($request->filled('education')) {
+
+        // Education filter (only if searchable)
+        if ($isSearchable('education') && $request->filled('education')) {
             $query->where('education', $request->education);
         }
 
