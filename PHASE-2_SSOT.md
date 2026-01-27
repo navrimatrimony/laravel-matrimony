@@ -826,3 +826,4 @@ Day 13: Search filters आधीपासून अस्तित्वात �
 
 Day 14: Search visibility, interest eligibility आणि admin actions (suspend, override, image reject) यांचा real-world interaction flow समजून घेतला; incomplete UI features शिकवणे टाळून फक्त existing behavior lock केला.
 ==========================================
+Day 15: button on off add kele. 
