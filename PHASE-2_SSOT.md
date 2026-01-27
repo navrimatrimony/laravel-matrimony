@@ -816,3 +816,13 @@ Codebase SSOT-compliant आहे; कोणतेही pending logic, dead fea
 
 Phase-2 Day-10 हा stable baseline म्हणून Git tag (phase-2-day10-stable) सह lock करण्यात आला.
 ====================================
+🧾 SSOT ADDITION — Day 11 to Day 14 (Learning Summary)
+
+Day 11: Interest lifecycle (send / accept / reject / withdraw) पूर्णपणे implement झाला आणि self-interest, duplicate interest, block rules backend guards ने enforce केले.
+
+Day 12: Profile completeness (70% rule) आणि visibility logic स्पष्टपणे समजली; completeness search साठी strict आहे, profile view साठी नाही, आणि admin override फक्त search वर लागू होतो.
+
+Day 13: Search filters आधीपासून अस्तित्वात असताना admin-driven searchable policy backend मध्ये enforce केली; UI toggle नसतानाही system future-ready आणि SSOT-compliant ठेवला.
+
+Day 14: Search visibility, interest eligibility आणि admin actions (suspend, override, image reject) यांचा real-world interaction flow समजून घेतला; incomplete UI features शिकवणे टाळून फक्त existing behavior lock केला.
+==========================================
