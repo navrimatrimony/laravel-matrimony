@@ -6,6 +6,7 @@ use App\Models\MatrimonyProfile;
 use App\Models\ProfileFieldConfig;
 use App\Models\Shortlist;
 use App\Services\ProfileCompletenessService;
+use App\Services\ProfileFieldConfigurationService;
 use App\Services\ViewTrackingService;
 use Illuminate\Http\Request;
 
@@ -47,8 +48,15 @@ class MatrimonyProfileController extends Controller
                 ->with('info', 'Your matrimony profile already exists. You can search profiles.');
         }
     
+        // Day-18: Pass visible and enabled fields info to view
+        $visibleFields = ProfileFieldConfigurationService::getVisibleFieldKeys();
+        $enabledFields = ProfileFieldConfigurationService::getEnabledFieldKeys();
+        
         // Profile नाही → create form
-        return view('matrimony.profile.create');
+        return view('matrimony.profile.create', [
+            'visibleFields' => $visibleFields,
+            'enabledFields' => $enabledFields,
+        ]);
     }
     
 
@@ -74,19 +82,37 @@ public function store(Request $request)
     $manualActivationRequired = \App\Services\AdminSettingService::isManualProfileActivationRequired();
     $isSuspended = $manualActivationRequired ? true : false;
 
-    MatrimonyProfile::updateOrCreate(
-    ['user_id' => $user->id],
-    [
+    // Day-18: Only include enabled fields in create/update
+    $enabledFields = ProfileFieldConfigurationService::getEnabledFieldKeys();
+    $enabledFieldsMap = array_flip($enabledFields);
+
+    $profileData = [
         'full_name'      => $request->full_name,
         'gender'         => $user->gender, // system-derived
-        'date_of_birth'  => $request->date_of_birth,
-        'marital_status' => $request->marital_status,
-        'education'      => $request->education,
-        'location'       => $request->location,
-        'caste'          => $request->caste,
         'is_suspended'   => $isSuspended,
-    ]
-);
+    ];
+
+    // Only add enabled fields from request
+    if (isset($enabledFieldsMap['date_of_birth']) && $request->has('date_of_birth')) {
+        $profileData['date_of_birth'] = $request->date_of_birth;
+    }
+    if (isset($enabledFieldsMap['marital_status']) && $request->has('marital_status')) {
+        $profileData['marital_status'] = $request->marital_status;
+    }
+    if (isset($enabledFieldsMap['education']) && $request->has('education')) {
+        $profileData['education'] = $request->education;
+    }
+    if (isset($enabledFieldsMap['location']) && $request->has('location')) {
+        $profileData['location'] = $request->location;
+    }
+    if (isset($enabledFieldsMap['caste']) && $request->has('caste')) {
+        $profileData['caste'] = $request->caste;
+    }
+
+    MatrimonyProfile::updateOrCreate(
+        ['user_id' => $user->id],
+        $profileData
+    );
 
 
     return redirect()
@@ -115,9 +141,15 @@ public function store(Request $request)
             ->with('error', 'Please create your matrimony profile first.');
     }
 
+    // Day-18: Pass visible and enabled fields info to view
+    $visibleFields = ProfileFieldConfigurationService::getVisibleFieldKeys();
+    $enabledFields = ProfileFieldConfigurationService::getEnabledFieldKeys();
+    
     // ✅ Profile exists → edit page
     return view('matrimony.profile.edit', [
-        'matrimonyProfile' => $user->matrimonyProfile
+        'matrimonyProfile' => $user->matrimonyProfile,
+        'visibleFields' => $visibleFields,
+        'enabledFields' => $enabledFields,
     ]);
 }
 
@@ -165,16 +197,32 @@ if ($request->hasFile('profile_photo')) {
     $photoPath = $filename;
 }
 
+    // Day-18: Only include enabled fields in update
+    $enabledFields = ProfileFieldConfigurationService::getEnabledFieldKeys();
+    $enabledFieldsMap = array_flip($enabledFields);
+
     // Prepare update data
     $updateData = [
         'full_name'      => $request->full_name,
-        'date_of_birth'  => $request->date_of_birth,
-        'marital_status' => $request->marital_status,
-        'education'      => $request->education,
-        'location'       => $request->location,
-        'caste'          => $request->caste,
         'profile_photo'  => $photoPath,
     ];
+
+    // Only add enabled fields from request
+    if (isset($enabledFieldsMap['date_of_birth']) && $request->has('date_of_birth')) {
+        $updateData['date_of_birth'] = $request->date_of_birth;
+    }
+    if (isset($enabledFieldsMap['marital_status']) && $request->has('marital_status')) {
+        $updateData['marital_status'] = $request->marital_status;
+    }
+    if (isset($enabledFieldsMap['education']) && $request->has('education')) {
+        $updateData['education'] = $request->education;
+    }
+    if (isset($enabledFieldsMap['location']) && $request->has('location')) {
+        $updateData['location'] = $request->location;
+    }
+    if (isset($enabledFieldsMap['caste']) && $request->has('caste')) {
+        $updateData['caste'] = $request->caste;
+    }
 
     // If new photo uploaded, apply policy-based approval status
     if ($request->hasFile('profile_photo')) {
@@ -389,6 +437,21 @@ public function show(MatrimonyProfile $matrimony_profile_id)
     // Profile completeness (from service, passed to view)
     $completenessPct = ProfileCompletenessService::percentage($matrimonyProfile);
 
+    // Day-18: Calculate individual boolean visibility flags (Blade Purity Law compliance)
+    $visibleFields = ProfileFieldConfigurationService::getVisibleFieldKeys();
+    $profilePhotoVisible = in_array('profile_photo', $visibleFields, true);
+    $dateOfBirthVisible = in_array('date_of_birth', $visibleFields, true);
+    $maritalStatusVisible = in_array('marital_status', $visibleFields, true);
+    $educationVisible = in_array('education', $visibleFields, true);
+    $locationVisible = in_array('location', $visibleFields, true);
+    $casteVisible = in_array('caste', $visibleFields, true);
+
+    // Match explanation data (rule-based comparison)
+    $matchData = null;
+    if (!$isOwnProfile && $viewer->matrimonyProfile) {
+        $matchData = self::calculateMatchExplanation($viewer->matrimonyProfile, $matrimonyProfile);
+    }
+
     return view(
         'matrimony.profile.show',
         [
@@ -398,6 +461,13 @@ public function show(MatrimonyProfile $matrimony_profile_id)
             'hasAlreadyReported'   => $hasAlreadyReported,
             'inShortlist'          => $inShortlist,
             'completenessPct'      => $completenessPct,
+            'profilePhotoVisible' => $profilePhotoVisible,
+            'dateOfBirthVisible'  => $dateOfBirthVisible,
+            'maritalStatusVisible' => $maritalStatusVisible,
+            'educationVisible'     => $educationVisible,
+            'locationVisible'      => $locationVisible,
+            'casteVisible'         => $casteVisible,
+            'matchData'            => $matchData,
         ]
     );
 }
@@ -421,13 +491,15 @@ public function show(MatrimonyProfile $matrimony_profile_id)
         $query->where('is_suspended', false);
         // Soft deletes are automatically excluded by Laravel's SoftDeletes trait
 
-        // Load searchable field configs (Day-13 SSOT: enforce searchable flag)
-        $searchableFields = ProfileFieldConfig::where('is_searchable', true)
-            ->pluck('field_key')
-            ->toArray();
+        // Day-18: Only use enabled AND searchable fields for search
+        $searchableFields = ProfileFieldConfigurationService::getSearchableFieldKeys();
+        $enabledFields = ProfileFieldConfigurationService::getEnabledFieldKeys();
+        
+        // Intersection: fields that are both enabled and searchable
+        $enabledSearchableFields = array_intersect($searchableFields, $enabledFields);
 
-        // Helper: check if field is searchable
-        $isSearchable = fn(string $fieldKey) => in_array($fieldKey, $searchableFields, true);
+        // Helper: check if field is enabled and searchable
+        $isSearchable = fn(string $fieldKey) => in_array($fieldKey, $enabledSearchableFields, true);
 
         // Caste filter (only if searchable)
         if ($isSearchable('caste') && $request->filled('caste')) {
@@ -498,5 +570,110 @@ public function show(MatrimonyProfile $matrimony_profile_id)
 
         return view('matrimony.profile.index', compact('profiles'));
 
+    }
+
+    /**
+     * Calculate match explanation between viewer's profile and viewed profile.
+     * Rule-based comparison, no AI/ML. Returns match data for UI display.
+     *
+     * @param MatrimonyProfile $viewerProfile Viewer's own profile
+     * @param MatrimonyProfile $viewedProfile Profile being viewed
+     * @return array|null Match explanation data or null if own profile
+     */
+    private static function calculateMatchExplanation(MatrimonyProfile $viewerProfile, MatrimonyProfile $viewedProfile): array
+    {
+        $matches = [];
+        $commonGround = [];
+
+        // Define comparison fields (preferences to check)
+        $preferenceFields = [
+            'education' => ['label' => 'शिक्षण', 'icon' => '🎓'],
+            'location' => ['label' => 'शहर', 'icon' => '📍'],
+            'caste' => ['label' => 'जात', 'icon' => '🗣️'],
+            'marital_status' => ['label' => 'वैवाहिक स्थिती', 'icon' => '💑'],
+        ];
+
+        // Age comparison (from date_of_birth)
+        if ($viewerProfile->date_of_birth && $viewedProfile->date_of_birth) {
+            $viewerAge = now()->diffInYears($viewerProfile->date_of_birth);
+            $viewedAge = now()->diffInYears($viewedProfile->date_of_birth);
+            $ageDiff = abs($viewerAge - $viewedAge);
+            
+            // Consider age match if within 5 years (flexible)
+            if ($ageDiff <= 5) {
+                $matches[] = [
+                    'field' => 'age',
+                    'label' => 'वय',
+                    'icon' => '🎂',
+                    'matched' => true,
+                ];
+            } else {
+                $matches[] = [
+                    'field' => 'age',
+                    'label' => 'वय',
+                    'icon' => '🎂',
+                    'matched' => false,
+                ];
+            }
+        }
+
+        // Compare other preference fields
+        foreach ($preferenceFields as $fieldKey => $fieldInfo) {
+            $viewerValue = $viewerProfile->$fieldKey;
+            $viewedValue = $viewedProfile->$fieldKey;
+
+            if ($viewerValue && $viewedValue) {
+                $isMatch = strtolower(trim($viewerValue)) === strtolower(trim($viewedValue));
+                
+                $matches[] = [
+                    'field' => $fieldKey,
+                    'label' => $fieldInfo['label'],
+                    'icon' => $fieldInfo['icon'],
+                    'matched' => $isMatch,
+                ];
+
+                // Add to common ground if matched
+                if ($isMatch) {
+                    $commonGround[] = [
+                        'field' => $fieldKey,
+                        'label' => $fieldInfo['label'],
+                        'icon' => $fieldInfo['icon'],
+                        'value' => $viewedValue,
+                    ];
+                }
+            }
+        }
+
+        // Calculate match summary
+        $matchedCount = count(array_filter($matches, fn($m) => $m['matched']));
+        $totalCount = count($matches);
+
+        // Generate summary text
+        if ($totalCount > 0) {
+            if ($matchedCount > 0) {
+                $summaryText = "तुमची प्रोफाइल त्यांच्या {$totalCount} पैकी {$matchedCount} अपेक्षांशी जुळते";
+            } else {
+                $summaryText = "या प्रोफाइलशी काही बाबतीत साम्य आहे";
+            }
+        } else {
+            $summaryText = "या प्रोफाइलशी काही बाबतीत साम्य आहे";
+        }
+
+        // Celebration text
+        $celebrationText = null;
+        if ($matchedCount >= 3) {
+            $celebrationText = "बर्‍याच गोष्टी जुळत आहेत";
+        } elseif ($matchedCount > 0) {
+            $celebrationText = "चांगली सुरुवात 👍";
+        }
+
+        return [
+            'matches' => $matches,
+            'commonGround' => $commonGround,
+            'matchedCount' => $matchedCount,
+            'totalCount' => $totalCount,
+            'summaryText' => $summaryText,
+            'celebrationText' => $celebrationText,
+        ];
     }
 }

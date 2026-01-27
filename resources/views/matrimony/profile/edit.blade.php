@@ -17,12 +17,23 @@
 
                     @csrf
 
+                    {{-- Day-18: Only show enabled and visible fields --}}
+                    @php
+                        $visibleFields = $visibleFields ?? [];
+                        $enabledFields = $enabledFields ?? [];
+                        $isVisible = fn($fieldKey) => in_array($fieldKey, $visibleFields, true);
+                        $isEnabled = fn($fieldKey) => in_array($fieldKey, $enabledFields, true);
+                    @endphp
+
                     <label>Full Name</label><br>
                     <input type="text" name="full_name" value="{{ $matrimonyProfile->full_name }}"><br><br>
 
+                    @if ($isEnabled('date_of_birth') && $isVisible('date_of_birth'))
                     <label>Date of Birth</label><br>
                     <input type="date" name="date_of_birth" value="{{ $matrimonyProfile->date_of_birth }}"><br><br>
+                    @endif
 
+                    @if ($isEnabled('marital_status') && $isVisible('marital_status'))
                     <label>Marital Status</label><br>
                     <select name="marital_status" required>
                         <option value="">— Select —</option>
@@ -30,30 +41,39 @@
                         <option value="divorced" {{ old('marital_status', $matrimonyProfile->marital_status) === 'divorced' ? 'selected' : '' }}>Divorced</option>
                         <option value="widowed" {{ old('marital_status', $matrimonyProfile->marital_status) === 'widowed' ? 'selected' : '' }}>Widowed</option>
                     </select><br><br>
+                    @endif
 
+                    @if ($isEnabled('education') && $isVisible('education'))
                     <label>Education</label><br>
                     <input type="text" name="education" value="{{ $matrimonyProfile->education }}"><br><br>
+                    @endif
 
+                    @if ($isEnabled('caste') && $isVisible('caste'))
                     <label>Caste</label><br>
                     <input type="text" name="caste" value="{{ $matrimonyProfile->caste }}"><br><br>
+                    @endif
 
+                    @if ($isEnabled('location') && $isVisible('location'))
                     <label>Location</label><br>
                     <input type="text" name="location" value="{{ $matrimonyProfile->location }}"><br><br>
+                    @endif
+
+                    @if ($isEnabled('profile_photo') && $isVisible('profile_photo'))
                     <label>Profile Photo</label><br>
                     
                     {{-- Existing Profile Photo Preview --}}
-@if ($matrimonyProfile->profile_photo)
-    <div style="margin-bottom:10px;">
-        <img
-            src="{{ asset('uploads/matrimony_photos/'.$matrimonyProfile->profile_photo) }}"
-            alt="Profile Photo"
-            style="width:120px; height:120px; object-fit:cover; border-radius:50%; border:1px solid #ccc;"
-        >
-    </div>
-@endif
+                    @if ($matrimonyProfile->profile_photo)
+                    <div style="margin-bottom:10px;">
+                        <img
+                            src="{{ asset('uploads/matrimony_photos/'.$matrimonyProfile->profile_photo) }}"
+                            alt="Profile Photo"
+                            style="width:120px; height:120px; object-fit:cover; border-radius:50%; border:1px solid #ccc;"
+                        >
+                    </div>
+                    @endif
 
-
-<input type="file" name="profile_photo"><br><br>
+                    <input type="file" name="profile_photo"><br><br>
+                    @endif
 
 <button type="submit" class="inline-flex items-center px-4 py-2 bg-indigo-600 border border-transparent rounded-md font-semibold text-sm text-white tracking-wide hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition disabled:opacity-50 disabled:cursor-not-allowed mt-4">
                         Update Profile

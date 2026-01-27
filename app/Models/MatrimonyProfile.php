@@ -66,6 +66,11 @@ class MatrimonyProfile extends Model
         'is_demo',
         'visibility_override',
         'visibility_override_reason',
+        'edited_by',
+        'edited_at',
+        'edit_reason',
+        'edited_source',
+        'admin_edited_fields',
     ];
 
     protected $casts = [
@@ -74,6 +79,8 @@ class MatrimonyProfile extends Model
         'photo_rejected_at' => 'datetime',
         'is_demo' => 'boolean',
         'visibility_override' => 'boolean',
+        'edited_at' => 'datetime',
+        'admin_edited_fields' => 'array',
     ];
     
 

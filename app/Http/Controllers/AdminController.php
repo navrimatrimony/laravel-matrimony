@@ -8,6 +8,7 @@ use App\Models\MatrimonyProfile;
 use App\Models\Shortlist;
 use App\Models\User;
 use App\Models\AdminSetting;
+use App\Models\ProfileFieldConfig;
 use App\Notifications\ImageRejectedNotification;
 use App\Services\ViewTrackingService;
 use App\Notifications\ProfileSoftDeletedNotification;
@@ -342,6 +343,83 @@ class AdminController extends Controller
     }
 
     /**
+     * List all profile field configurations (Day-17).
+     */
+    public function profileFieldConfigIndex()
+    {
+        $fieldConfigs = ProfileFieldConfig::orderBy('field_key')->get();
+        return view('admin.profile-field-config.index', [
+            'fieldConfigs' => $fieldConfigs,
+        ]);
+    }
+
+    /**
+     * Update profile field configuration flags (Day-17).
+     * Bulk update: updates all fields in single request.
+     */
+    public function profileFieldConfigUpdate(Request $request): \Illuminate\Http\RedirectResponse
+    {
+        $request->validate([
+            'reason' => self::REASON_RULES,
+            'fields' => 'required|array',
+            'fields.*.id' => 'required|integer|exists:profile_field_configs,id',
+            // Checkboxes are optional (absent = unchecked)
+            'fields.*.is_enabled' => 'sometimes|in:1',
+            'fields.*.is_visible' => 'sometimes|in:1',
+            'fields.*.is_searchable' => 'sometimes|in:1',
+            'fields.*.is_mandatory' => 'sometimes|in:1',
+        ]);
+
+        $updatedCount = 0;
+        $changes = [];
+
+        foreach ($request->input('fields', []) as $fieldData) {
+            $field = ProfileFieldConfig::findOrFail($fieldData['id']);
+            $original = [
+                'is_enabled' => $field->is_enabled,
+                'is_visible' => $field->is_visible,
+                'is_searchable' => $field->is_searchable,
+                'is_mandatory' => $field->is_mandatory,
+            ];
+
+            // HTML checkboxes: present = checked (value='1'), absent = unchecked
+            $updates = [
+                'is_enabled' => isset($fieldData['is_enabled']) && $fieldData['is_enabled'] == '1',
+                'is_visible' => isset($fieldData['is_visible']) && $fieldData['is_visible'] == '1',
+                'is_searchable' => isset($fieldData['is_searchable']) && $fieldData['is_searchable'] == '1',
+                'is_mandatory' => isset($fieldData['is_mandatory']) && $fieldData['is_mandatory'] == '1',
+            ];
+
+            // Only update if there are actual changes
+            if ($updates !== $original) {
+                $field->update($updates);
+                $updatedCount++;
+                $fieldChanges = [];
+                foreach ($updates as $key => $value) {
+                    if ($value !== $original[$key]) {
+                        $fieldChanges[] = "{$key}: " . ($original[$key] ? 'true' : 'false') . " → " . ($value ? 'true' : 'false');
+                    }
+                }
+                $changes[] = $field->field_key . ' (' . implode(', ', $fieldChanges) . ')';
+            }
+        }
+
+        if ($updatedCount > 0) {
+            AuditLogService::log(
+                $request->user(),
+                'profile_field_config_update',
+                'profile_field_configs',
+                null,
+                "Updated {$updatedCount} field(s). Changes: " . implode('; ', $changes) . ". Reason: {$request->reason}",
+                false
+            );
+        }
+
+        return redirect()->route('admin.profile-field-config.index')
+            ->with('success', "Updated {$updatedCount} field configuration(s).");
+    }
+
+    /**
      * Admin debug: list notifications for user (user_id query). Read-only, no actions.
      */
     public function userNotificationsShow(Request $request)
@@ -353,5 +431,87 @@ class AdminController extends Controller
             'targetUser' => $user,
             'notifications' => $notifications,
         ]);
+    }
+
+    /**
+     * Admin update profile (edit mode)
+     * Updates profile fields and tracks which fields were edited by admin
+     */
+    public function updateProfile(Request $request, MatrimonyProfile $profile)
+    {
+        // Guard: Admin only
+        if (!auth()->check() || !auth()->user()->is_admin) {
+            abort(403, 'Admin access required');
+        }
+
+        // Validate edit reason (mandatory)
+        $request->validate([
+            'edit_reason' => self::REASON_RULES,
+            'full_name' => 'nullable|string|max:255',
+            'date_of_birth' => 'nullable|date',
+            'marital_status' => 'nullable|in:single,divorced,widowed',
+            'education' => 'nullable|string|max:255',
+            'location' => 'nullable|string|max:255',
+            'caste' => 'nullable|string|max:255',
+        ]);
+
+        $admin = auth()->user();
+        $originalData = $profile->only(['full_name', 'date_of_birth', 'marital_status', 'education', 'location', 'caste']);
+        $editedFields = [];
+
+        // Track which fields were actually changed
+        $updateData = [];
+        $editableFields = ['full_name', 'date_of_birth', 'marital_status', 'education', 'location', 'caste'];
+        
+        foreach ($editableFields as $field) {
+            if ($request->has($field)) {
+                $newValue = $request->input($field);
+                $oldValue = $originalData[$field] ?? null;
+                
+                // Normalize for comparison
+                $newValue = $newValue === '' ? null : $newValue;
+                $oldValue = $oldValue === '' ? null : $oldValue;
+                
+                if ($newValue != $oldValue) {
+                    $updateData[$field] = $newValue;
+                    $editedFields[] = $field;
+                }
+            }
+        }
+
+        // If no fields changed, return with error
+        if (empty($editedFields)) {
+            return redirect()
+                ->back()
+                ->withInput()
+                ->with('error', 'No changes detected. Please modify at least one field.');
+        }
+
+        // Merge with existing admin_edited_fields
+        $existingAdminEditedFields = $profile->admin_edited_fields ?? [];
+        $mergedAdminEditedFields = array_unique(array_merge($existingAdminEditedFields, $editedFields));
+
+        // Update profile with edited fields and metadata
+        $updateData['edited_by'] = $admin->id;
+        $updateData['edited_at'] = now();
+        $updateData['edit_reason'] = $request->input('edit_reason');
+        $updateData['edited_source'] = 'admin';
+        $updateData['admin_edited_fields'] = $mergedAdminEditedFields;
+
+        $profile->update($updateData);
+
+        // Create audit log entry
+        AuditLogService::log(
+            $admin,
+            'profile_edit',
+            'MatrimonyProfile',
+            $profile->id,
+            $request->input('edit_reason'),
+            $profile->is_demo ?? false
+        );
+
+        return redirect()
+            ->route('admin.profiles.show', $profile)
+            ->with('success', 'Profile updated successfully. Edited fields: ' . implode(', ', $editedFields));
     }
 }

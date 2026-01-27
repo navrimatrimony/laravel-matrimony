@@ -154,6 +154,12 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
         ->name('profiles.show');
     
     /*
+    | Profile Edit (Admin)
+    */
+    Route::put('/profiles/{profile}', [AdminController::class, 'updateProfile'])
+        ->name('profiles.update');
+    
+    /*
     | Profile Moderation
     */
     Route::post('/profiles/{profile}/suspend', [AdminController::class, 'suspendProfile'])
@@ -196,6 +202,9 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
 
     Route::get('/demo-search-settings', [AdminController::class, 'demoSearchSettings'])->name('demo-search-settings.index');
     Route::post('/demo-search-settings', [AdminController::class, 'updateDemoSearchSettings'])->name('demo-search-settings.update');
+
+    Route::get('/profile-field-config', [AdminController::class, 'profileFieldConfigIndex'])->name('profile-field-config.index');
+    Route::post('/profile-field-config', [AdminController::class, 'profileFieldConfigUpdate'])->name('profile-field-config.update');
 
     Route::get('/notifications', [AdminController::class, 'userNotificationsIndex'])->name('notifications.index');
     Route::get('/notifications/user', [AdminController::class, 'userNotificationsShow'])->name('notifications.user.show');
