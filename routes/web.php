@@ -203,21 +203,4 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
 
 require __DIR__.'/auth.php';
 
-use Illuminate\Support\Facades\Artisan;
-
-Route::get('/_run_migrations_987654', function () {
-
-    // 🔐 ONE-TIME SECRET TOKEN CHECK
-    if (request()->query('key') !== 'MIGRATE_ONLY_ONCE_2026') {
-        abort(403, 'Unauthorized');
-    }
-
-    // 🚀 SAFE MIGRATION (NO DATA LOSS)
-    Artisan::call('migrate', [
-        '--force' => true,
-    ]);
-
-    return "<pre>MIGRATION COMPLETED SUCCESSFULLY\n\n" . Artisan::output() . "</pre>";
-});
-
 
