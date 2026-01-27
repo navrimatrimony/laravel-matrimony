@@ -3,18 +3,29 @@
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Artisan;
 
+/*
+|--------------------------------------------------------------------------
+| ONE-TIME BOOTSTRAP MIGRATION ROUTE
+|--------------------------------------------------------------------------
+| Purpose: Run migrations on shared hosting (no SSH, no admin yet)
+| Security: Secret token in URL
+| MUST BE DELETED AFTER SUCCESS
+|--------------------------------------------------------------------------
+*/
+
 Route::get('/_run_migrations_987654', function () {
 
-    // 🔐 BASIC SAFETY CHECK (logged-in admin only)
-    if (!auth()->check() || !auth()->user()->is_admin) {
+    // 🔐 SECRET TOKEN CHECK (temporary)
+    $key = request()->query('key');
+
+    if ($key !== 'MIGRATE_ONLY_ONCE_2026') {
         abort(403, 'Unauthorized');
     }
 
-    // 🧠 Run migrations safely
+    // 🚀 Run migrations safely
     Artisan::call('migrate', [
         '--force' => true,
     ]);
 
-    return "<pre>Migration completed successfully.\n\n" . Artisan::output() . "</pre>";
+    return "<pre>MIGRATION COMPLETED SUCCESSFULLY\n\n" . Artisan::output() . "</pre>";
 });
-
