@@ -31,9 +31,7 @@ class ProfileViewedNotification extends Notification
     public function toArray(object $notifiable): array
     {
         $name = $this->viewerProfile->full_name ?? 'Someone';
-        $message = $this->isViewBack
-            ? "A demo profile ({$name}) viewed your profile."
-            : "Your profile was viewed by {$name}.";
+        $message = "{$name} viewed your profile.";
 
         return [
             'type' => 'profile_viewed',

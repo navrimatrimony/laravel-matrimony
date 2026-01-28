@@ -381,6 +381,19 @@ for Phase-2 only.
 - Demo analytics separation SHALL NOT be implemented
 - Demo-to-real conversion SHALL NOT be implemented
 - Multiple photo galleries for demo profiles SHALL NOT be implemented
+🔹 Demo Profile Auto Name (INTERNAL ONLY)
+
+- Demo profiles MAY have auto-generated full_name at creation time only.
+- Name generation SHALL apply ONLY to demo profiles (is_demo = true).
+- Real user profiles SHALL NEVER have auto-generated names.
+- Name selection MAY be based on available caste / religion data
+  using predefined internal name pools.
+- Gender MUST be respected while selecting names.
+- Name is generated ONCE at creation time and SHALL NOT change later.
+- If caste / religion is missing or no matching name pool exists,
+  system SHALL fallback to a generic name (e.g. "Demo Profile 123").
+- This behavior is INTERNAL and SHALL NOT be configurable by admin or user.
+
 
 ============================================================
 7. VIEW & VIEW-BACK
@@ -827,3 +840,15 @@ Day 13: Search filters आधीपासून अस्तित्वात �
 Day 14: Search visibility, interest eligibility आणि admin actions (suspend, override, image reject) यांचा real-world interaction flow समजून घेतला; incomplete UI features शिकवणे टाळून फक्त existing behavior lock केला.
 ==========================================
 Day 15: button on off add kele. 
+
+==================
+Day: Phase-2 Polish – Demo Profile Auto Name
+
+- Demo profiles now get auto-generated full_name at creation time
+- Name generation based on caste + gender using internal static pools
+- Random selection, duplicates allowed
+- Safe fallback to "Demo Profile <index>" for all edge cases
+- Real user profiles fully unaffected
+- No database, Blade, or API changes
+
+Status: ✅ Completed & Locked
