@@ -42,7 +42,7 @@ class DemoProfileController extends Controller
         $defaults = DemoProfileDefaultsService::defaults(0, $genderOverride);
         $profile = MatrimonyProfile::create([
             'user_id' => $demoUser->id,
-            'full_name' => 'Demo Profile',
+            'full_name' => $defaults['full_name'],
             'gender' => $defaults['gender'],
             'date_of_birth' => $defaults['date_of_birth'],
             'marital_status' => $defaults['marital_status'],
@@ -93,7 +93,7 @@ class DemoProfileController extends Controller
             $defaults = DemoProfileDefaultsService::defaults($i, $genderOverride);
             MatrimonyProfile::create([
                 'user_id' => $user->id,
-                'full_name' => DemoProfileDefaultsService::fullNameForIndex($i),
+                'full_name' => $defaults['full_name'],
                 'gender' => $defaults['gender'],
                 'date_of_birth' => $defaults['date_of_birth'],
                 'marital_status' => $defaults['marital_status'],

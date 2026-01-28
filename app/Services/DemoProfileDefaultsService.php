@@ -37,14 +37,90 @@ class DemoProfileDefaultsService
     ];
 
     /**
+     * Name pools mapped by caste and gender.
+     * Simple Indian first names (no religion inference).
+     */
+    private static function getNamePools(): array
+    {
+        return [
+            'Brahmin' => [
+                'male' => ['Arjun', 'Rohan', 'Aditya', 'Vikram', 'Karan', 'Rahul', 'Siddharth', 'Aryan', 'Krishna', 'Dev'],
+                'female' => ['Priya', 'Ananya', 'Kavya', 'Meera', 'Shreya', 'Aditi', 'Divya', 'Riya', 'Sneha', 'Anjali'],
+            ],
+            'Kshatriya' => [
+                'male' => ['Raj', 'Vikram', 'Arjun', 'Karan', 'Yash', 'Rohan', 'Aryan', 'Krishna', 'Dev', 'Rahul'],
+                'female' => ['Rajni', 'Kavya', 'Meera', 'Priya', 'Ananya', 'Shreya', 'Aditi', 'Divya', 'Riya', 'Sneha'],
+            ],
+            'Vaishya' => [
+                'male' => ['Rahul', 'Arjun', 'Vikram', 'Karan', 'Aditya', 'Rohan', 'Aryan', 'Yash', 'Dev', 'Krishna'],
+                'female' => ['Priya', 'Ananya', 'Kavya', 'Meera', 'Shreya', 'Aditi', 'Divya', 'Riya', 'Sneha', 'Anjali'],
+            ],
+            'Maratha' => [
+                'male' => ['Raj', 'Vikram', 'Arjun', 'Karan', 'Yash', 'Rohan', 'Aryan', 'Krishna', 'Dev', 'Rahul'],
+                'female' => ['Rajni', 'Kavya', 'Meera', 'Priya', 'Ananya', 'Shreya', 'Aditi', 'Divya', 'Riya', 'Sneha'],
+            ],
+            'Rajput' => [
+                'male' => ['Raj', 'Vikram', 'Arjun', 'Karan', 'Yash', 'Rohan', 'Aryan', 'Krishna', 'Dev', 'Rahul'],
+                'female' => ['Rajni', 'Kavya', 'Meera', 'Priya', 'Ananya', 'Shreya', 'Aditi', 'Divya', 'Riya', 'Sneha'],
+            ],
+            'Jat' => [
+                'male' => ['Raj', 'Vikram', 'Arjun', 'Karan', 'Yash', 'Rohan', 'Aryan', 'Krishna', 'Dev', 'Rahul'],
+                'female' => ['Rajni', 'Kavya', 'Meera', 'Priya', 'Ananya', 'Shreya', 'Aditi', 'Divya', 'Riya', 'Sneha'],
+            ],
+            'Gujar' => [
+                'male' => ['Raj', 'Vikram', 'Arjun', 'Karan', 'Yash', 'Rohan', 'Aryan', 'Krishna', 'Dev', 'Rahul'],
+                'female' => ['Rajni', 'Kavya', 'Meera', 'Priya', 'Ananya', 'Shreya', 'Aditi', 'Divya', 'Riya', 'Sneha'],
+            ],
+            'Patel' => [
+                'male' => ['Raj', 'Vikram', 'Arjun', 'Karan', 'Yash', 'Rohan', 'Aryan', 'Krishna', 'Dev', 'Rahul'],
+                'female' => ['Rajni', 'Kavya', 'Meera', 'Priya', 'Ananya', 'Shreya', 'Aditi', 'Divya', 'Riya', 'Sneha'],
+            ],
+            'Reddy' => [
+                'male' => ['Raj', 'Vikram', 'Arjun', 'Karan', 'Yash', 'Rohan', 'Aryan', 'Krishna', 'Dev', 'Rahul'],
+                'female' => ['Rajni', 'Kavya', 'Meera', 'Priya', 'Ananya', 'Shreya', 'Aditi', 'Divya', 'Riya', 'Sneha'],
+            ],
+            'Nair' => [
+                'male' => ['Arjun', 'Rohan', 'Aditya', 'Vikram', 'Karan', 'Rahul', 'Siddharth', 'Aryan', 'Krishna', 'Dev'],
+                'female' => ['Priya', 'Ananya', 'Kavya', 'Meera', 'Shreya', 'Aditi', 'Divya', 'Riya', 'Sneha', 'Anjali'],
+            ],
+            'Iyengar' => [
+                'male' => ['Arjun', 'Rohan', 'Aditya', 'Vikram', 'Karan', 'Rahul', 'Siddharth', 'Aryan', 'Krishna', 'Dev'],
+                'female' => ['Priya', 'Ananya', 'Kavya', 'Meera', 'Shreya', 'Aditi', 'Divya', 'Riya', 'Sneha', 'Anjali'],
+            ],
+            'Iyer' => [
+                'male' => ['Arjun', 'Rohan', 'Aditya', 'Vikram', 'Karan', 'Rahul', 'Siddharth', 'Aryan', 'Krishna', 'Dev'],
+                'female' => ['Priya', 'Ananya', 'Kavya', 'Meera', 'Shreya', 'Aditi', 'Divya', 'Riya', 'Sneha', 'Anjali'],
+            ],
+            'Vellalar' => [
+                'male' => ['Arjun', 'Rohan', 'Aditya', 'Vikram', 'Karan', 'Rahul', 'Siddharth', 'Aryan', 'Krishna', 'Dev'],
+                'female' => ['Priya', 'Ananya', 'Kavya', 'Meera', 'Shreya', 'Aditi', 'Divya', 'Riya', 'Sneha', 'Anjali'],
+            ],
+            'Namboodiri' => [
+                'male' => ['Arjun', 'Rohan', 'Aditya', 'Vikram', 'Karan', 'Rahul', 'Siddharth', 'Aryan', 'Krishna', 'Dev'],
+                'female' => ['Priya', 'Ananya', 'Kavya', 'Meera', 'Shreya', 'Aditi', 'Divya', 'Riya', 'Sneha', 'Anjali'],
+            ],
+            'Kamma' => [
+                'male' => ['Raj', 'Vikram', 'Arjun', 'Karan', 'Yash', 'Rohan', 'Aryan', 'Krishna', 'Dev', 'Rahul'],
+                'female' => ['Rajni', 'Kavya', 'Meera', 'Priya', 'Ananya', 'Shreya', 'Aditi', 'Divya', 'Riya', 'Sneha'],
+            ],
+            'Kapu' => [
+                'male' => ['Raj', 'Vikram', 'Arjun', 'Karan', 'Yash', 'Rohan', 'Aryan', 'Krishna', 'Dev', 'Rahul'],
+                'female' => ['Rajni', 'Kavya', 'Meera', 'Priya', 'Ananya', 'Shreya', 'Aditi', 'Divya', 'Riya', 'Sneha'],
+            ],
+        ];
+    }
+
+    /**
      * Returns mandatory field defaults. Age ≥21. No NULLs for required fields.
      * All except gender are randomly generated per call (no duplication across profiles).
      * 
      * profile_photo is randomly selected from unused images in engagement folder at creation time.
      * Stored as full relative path from matrimony_photos (e.g., "engagement/female/f1.jpg").
      * Each image is used only once across all demo profiles. Falls back to null if no unused images available.
+     * 
+     * full_name is auto-generated based on gender and caste at creation time only.
      *
-     * @param int         $index          0-based index (bulk: for unique naming, etc.)
+     * @param int         $index          0-based index (bulk: for unique naming fallback)
      * @param string|null $genderOverride male|female, or null for random
      */
     public static function defaults(int $index = 0, ?string $genderOverride = null): array
@@ -56,6 +132,7 @@ class DemoProfileDefaultsService
         $location = self::LOCATION_OPTIONS[array_rand(self::LOCATION_OPTIONS)];
         $caste = self::randomCaste();
         $profilePhoto = self::randomDemoPhoto($gender);
+        $fullName = self::generateFullName($gender, $caste, $index);
 
         return [
             'gender' => $gender,
@@ -66,9 +143,61 @@ class DemoProfileDefaultsService
             'caste' => $caste,
             'profile_photo' => $profilePhoto,
             'photo_approved' => true,
+            'full_name' => $fullName,
         ];
     }
 
+    /**
+     * Generate full_name for demo profile based on gender and caste.
+     * Falls back to "Demo Profile {index+1}" if caste is missing or not mapped.
+     *
+     * @param string $gender male|female
+     * @param string|null $caste Caste value or null
+     * @param int $index 0-based index for fallback naming
+     * @return string Generated full name
+     */
+    public static function generateFullName(string $gender, ?string $caste, int $index = 0): string
+    {
+        // Validate gender
+        if (!in_array($gender, self::GENDERS, true)) {
+            return 'Demo Profile ' . ($index + 1);
+        }
+
+        // If caste is missing or empty, use fallback
+        if (empty($caste) || !is_string($caste)) {
+            return 'Demo Profile ' . ($index + 1);
+        }
+
+        // Get name pools
+        $namePools = self::getNamePools();
+
+        // Check if caste is mapped
+        if (!isset($namePools[$caste]) || !isset($namePools[$caste][$gender])) {
+            return 'Demo Profile ' . ($index + 1);
+        }
+
+        // Get names for this caste and gender
+        $names = $namePools[$caste][$gender];
+
+        // If pool is empty, use fallback
+        if (empty($names) || !is_array($names)) {
+            return 'Demo Profile ' . ($index + 1);
+        }
+
+        // Randomly select one name
+        $selectedName = $names[array_rand($names)];
+
+        // Ensure name doesn't exceed max length (255 chars)
+        if (strlen($selectedName) > 255) {
+            return 'Demo Profile ' . ($index + 1);
+        }
+
+        return $selectedName;
+    }
+
+    /**
+     * @deprecated Use generateFullName() instead. Kept for backward compatibility.
+     */
     public static function fullNameForIndex(int $index): string
     {
         return 'Demo Profile ' . ($index + 1);
