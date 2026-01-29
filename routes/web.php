@@ -206,6 +206,8 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
     Route::get('/profile-field-config', [AdminController::class, 'profileFieldConfigIndex'])->name('profile-field-config.index');
     Route::post('/profile-field-config', [AdminController::class, 'profileFieldConfigUpdate'])->name('profile-field-config.update');
 
+    Route::get('/field-registry', [AdminController::class, 'fieldRegistryIndex'])->name('field-registry.index');
+
     Route::get('/notifications', [AdminController::class, 'userNotificationsIndex'])->name('notifications.index');
     Route::get('/notifications/user', [AdminController::class, 'userNotificationsShow'])->name('notifications.user.show');
 });

@@ -9,6 +9,7 @@ use App\Models\Shortlist;
 use App\Models\User;
 use App\Models\AdminSetting;
 use App\Models\ProfileFieldConfig;
+use App\Models\FieldRegistry;
 use App\Notifications\ImageRejectedNotification;
 use App\Services\ViewTrackingService;
 use App\Notifications\ProfileSoftDeletedNotification;
@@ -351,6 +352,18 @@ class AdminController extends Controller
         return view('admin.profile-field-config.index', [
             'fieldConfigs' => $fieldConfigs,
         ]);
+    }
+
+    /**
+     * Phase-3 Day 1 — Field Registry (read-only). CORE fields only.
+     */
+    public function fieldRegistryIndex()
+    {
+        $fields = FieldRegistry::where('field_type', 'CORE')
+            ->orderBy('category')
+            ->orderBy('display_order')
+            ->get();
+        return view('admin.field-registry.index', ['fields' => $fields]);
     }
 
     /**
