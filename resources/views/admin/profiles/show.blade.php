@@ -2,8 +2,17 @@
 
 @section('content')
 <div class="bg-white dark:bg-gray-800 shadow rounded-lg p-6" x-data="{ adminEditMode: false }">
+    @if ($errors->any())
+        <div class="mb-4 px-4 py-3 rounded-lg bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 text-red-800 dark:text-red-200 text-sm">{{ $errors->first() }}</div>
+    @endif
     <h1 class="text-2xl font-bold text-gray-800 dark:text-gray-100 mb-1">Admin — Profile #{{ $matrimonyProfile->id }}</h1>
-    <p class="text-sm text-gray-500 dark:text-gray-400 mb-6">{{ $matrimonyProfile->full_name ?? '—' }}@if (!empty($matrimonyProfile->is_demo)) <span class="inline-block ml-2 px-2 py-0.5 text-xs font-semibold bg-sky-100 dark:bg-sky-900/40 text-sky-700 dark:text-sky-300 rounded">Demo</span>@endif</p>
+    <p class="text-sm text-gray-500 dark:text-gray-400 mb-4">{{ $matrimonyProfile->full_name ?? '—' }}@if (!empty($matrimonyProfile->is_demo)) <span class="inline-block ml-2 px-2 py-0.5 text-xs font-semibold bg-sky-100 dark:bg-sky-900/40 text-sky-700 dark:text-sky-300 rounded">Demo</span>@endif</p>
+
+    <div class="mb-6">
+        <button type="button" @click="adminEditMode = !adminEditMode" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-md font-medium text-sm transition-colors">
+            <span x-text="adminEditMode ? 'Cancel Edit' : 'Edit Profile'"></span>
+        </button>
+    </div>
 
     <div x-data="{ activeAction: null }" class="mb-6 p-6 rounded-lg border-2 border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-700/50">
         <div class="flex justify-between items-center mb-4">
@@ -293,6 +302,37 @@
                 <p style="margin:0;"><strong>Reason:</strong> {{ $matrimonyProfile->photo_rejection_reason }}</p>
             </div>
         @endif
+
+        <div class="mb-6">
+            <h3 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2 uppercase">Field Lock Status (Day-6, read-only)</h3>
+            @php
+                $coreFieldKeys = ['full_name', 'date_of_birth', 'marital_status', 'education', 'location', 'caste', 'height_cm'];
+            @endphp
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2 text-xs">
+                @foreach ($coreFieldKeys as $fk)
+                    <div class="px-3 py-2 rounded bg-gray-50 dark:bg-gray-700/50">
+                        <span class="font-medium">{{ $fk }}:</span>
+                        @if (isset($fieldLocks[$fk]))
+                            <span class="text-amber-600 dark:text-amber-400">Locked</span>
+                            <span class="block text-gray-500">{{ $fieldLocks[$fk]['locked_by_name'] ?? '—' }}</span>
+                            <span class="block text-gray-500">{{ $fieldLocks[$fk]['locked_at'] ?? '—' }}</span>
+                        @else
+                            <span class="text-gray-500">No</span>
+                        @endif
+                    </div>
+                @endforeach
+                @foreach ($fieldLocks ?? [] as $fk => $lock)
+                    @if (!in_array($fk, $coreFieldKeys, true))
+                        <div class="px-3 py-2 rounded bg-gray-50 dark:bg-gray-700/50">
+                            <span class="font-medium">{{ $fk }} (EXT):</span>
+                            <span class="text-amber-600 dark:text-amber-400">Locked</span>
+                            <span class="block text-gray-500">{{ $lock['locked_by_name'] ?? '—' }}</span>
+                            <span class="block text-gray-500">{{ $lock['locked_at'] ?? '—' }}</span>
+                        </div>
+                    @endif
+                @endforeach
+            </div>
+        </div>
 
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>

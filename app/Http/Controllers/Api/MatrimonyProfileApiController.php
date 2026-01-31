@@ -86,6 +86,24 @@ public function update(Request $request)
         ], 404);
     }
 
+    // Day-6.4: Detect only ACTUALLY CHANGED core fields for lock check
+    $coreFields = ['full_name', 'date_of_birth', 'caste', 'education', 'location'];
+    $changedFields = [];
+    foreach ($coreFields as $field) {
+        if (!$request->has($field)) {
+            continue;
+        }
+        $newVal = $request->input($field) === '' ? null : $request->input($field);
+        $oldVal = $profile->$field === '' ? null : $profile->$field;
+        if ((string) $newVal !== (string) $oldVal) {
+            $changedFields[] = $field;
+        }
+    }
+
+    if (!empty($changedFields)) {
+        \App\Services\ProfileFieldLockService::assertNotLocked($profile, $changedFields, $user);
+    }
+
     $profile->update([
         'full_name'     => $request->full_name,
         'date_of_birth' => $request->date_of_birth,
@@ -93,6 +111,10 @@ public function update(Request $request)
         'education'     => $request->education,
         'location'      => $request->location,
     ]);
+
+    if (!empty($changedFields)) {
+        \App\Services\ProfileFieldLockService::applyLocks($profile, $changedFields, 'CORE', $user);
+    }
 
     // Hide rejected images - return null for profile_photo if explicitly rejected
     $profileData = $profile->toArray();

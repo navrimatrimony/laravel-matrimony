@@ -20,6 +20,7 @@ use App\Services\AuditLogService;
 use App\Services\ConflictResolutionService;
 use App\Services\ExtendedFieldService;
 use App\Services\ProfileCompletenessService;
+use App\Services\ProfileFieldLockService;
 use Illuminate\Http\Request;
 
 /*
@@ -82,6 +83,9 @@ class AdminController extends Controller
         // Profile completeness (from service, passed to view)
         $completenessPct = ProfileCompletenessService::percentage($profile);
 
+        // Day-6: Field lock info for admin visibility (read-only)
+        $fieldLocks = ProfileFieldLockService::getLocksForProfile($profile);
+
         return view('admin.profiles.show', [
             'matrimonyProfile' => $profile,
             'isOwnProfile' => $isOwnProfile,
@@ -89,6 +93,7 @@ class AdminController extends Controller
             'hasAlreadyReported' => $hasAlreadyReported,
             'inShortlist' => $inShortlist,
             'completenessPct' => $completenessPct,
+            'fieldLocks' => $fieldLocks,
         ]);
     }
 
@@ -562,13 +567,25 @@ class AdminController extends Controller
             }
         }
 
-        // If no CORE fields and no extended_fields, return with error
+        // Day-6.2: Only treat actually-changed EXTENDED fields as overwrite attempts
         $hasExtendedFields = $request->has('extended_fields') && is_array($request->input('extended_fields'));
-        if (empty($editedFields) && !$hasExtendedFields) {
+        $changedExtendedKeys = $hasExtendedFields
+            ? ExtendedFieldService::getChangedExtendedFieldKeys($profile, $request->input('extended_fields'))
+            : [];
+
+        if (empty($editedFields) && empty($changedExtendedKeys)) {
             return redirect()
                 ->back()
                 ->withInput()
                 ->with('error', 'No changes detected. Please modify at least one field.');
+        }
+
+        // Day-6: Overwrite protection - authority-aware (equal/higher can edit locked)
+        if (!empty($editedFields)) {
+            ProfileFieldLockService::assertNotLocked($profile, $editedFields, $admin);
+        }
+        if (!empty($changedExtendedKeys)) {
+            ProfileFieldLockService::assertNotLocked($profile, $changedExtendedKeys, $admin);
         }
 
         if (!empty($editedFields)) {
@@ -583,7 +600,9 @@ class AdminController extends Controller
             $updateData['admin_edited_fields'] = $mergedAdminEditedFields;
 
             $profile->update($updateData);
-        } elseif ($hasExtendedFields) {
+            // Day-6: Apply lock to edited CORE fields after successful update
+            ProfileFieldLockService::applyLocks($profile, $editedFields, 'CORE', $admin);
+        } elseif (!empty($changedExtendedKeys)) {
             $profile->update([
                 'edited_by' => $admin->id,
                 'edited_at' => now(),
@@ -604,7 +623,11 @@ class AdminController extends Controller
 
         // Persist EXTENDED field values (service-first; throws ValidationException on invalid)
         if ($hasExtendedFields) {
-            ExtendedFieldService::saveValuesForProfile($profile, $request->input('extended_fields'));
+            ExtendedFieldService::saveValuesForProfile($profile, $request->input('extended_fields'), $admin);
+            // Day-6: Apply lock only to EXTENDED fields that were actually edited
+            if (!empty($changedExtendedKeys)) {
+                ProfileFieldLockService::applyLocks($profile, $changedExtendedKeys, 'EXTENDED', $admin);
+            }
         }
 
         $message = !empty($editedFields)

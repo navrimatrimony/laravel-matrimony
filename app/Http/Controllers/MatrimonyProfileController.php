@@ -7,6 +7,7 @@ use App\Models\ProfileFieldConfig;
 use App\Models\Shortlist;
 use App\Services\ProfileCompletenessService;
 use App\Services\ProfileFieldConfigurationService;
+use App\Services\ProfileFieldLockService;
 use App\Services\ViewTrackingService;
 use Illuminate\Http\Request;
 
@@ -255,7 +256,30 @@ if ($request->hasFile('profile_photo')) {
         }
     }
 
+    // Day-6.4: Detect only ACTUALLY CHANGED core fields for lock check
+    $coreFieldKeys = ['full_name', 'date_of_birth', 'marital_status', 'education', 'location', 'caste'];
+    $existingProfile = $user->matrimonyProfile;
+    $changedCoreFields = [];
+    foreach ($coreFieldKeys as $field) {
+        if (!array_key_exists($field, $updateData)) {
+            continue;
+        }
+        $newVal = $updateData[$field] === '' ? null : $updateData[$field];
+        $oldVal = $existingProfile->$field === '' ? null : $existingProfile->$field;
+        if ((string) $newVal !== (string) $oldVal) {
+            $changedCoreFields[] = $field;
+        }
+    }
+
+    // Day-6: Overwrite protection - authority-aware, only on changed fields
+    ProfileFieldLockService::assertNotLocked($existingProfile, $changedCoreFields, $user);
+
     $user->matrimonyProfile->update($updateData);
+
+    // Day-6: Apply lock to ONLY actually changed CORE fields after successful update
+    if (!empty($changedCoreFields)) {
+        ProfileFieldLockService::applyLocks($existingProfile, $changedCoreFields, 'CORE', $user);
+    }
 
     return redirect()
         ->route('matrimony.profile.edit')

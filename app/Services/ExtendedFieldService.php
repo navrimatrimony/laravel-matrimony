@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\FieldRegistry;
 use App\Models\MatrimonyProfile;
 use App\Models\ProfileExtendedField;
+use App\Services\ProfileFieldLockService;
 use Carbon\Carbon;
 use Illuminate\Validation\ValidationException;
 
@@ -20,8 +21,35 @@ class ExtendedFieldService
         return $out;
     }
 
-    public static function saveValuesForProfile(MatrimonyProfile $profile, array $input): void
+    /**
+     * Returns field keys whose value actually changed (Day-6.2: intent detection).
+     */
+    public static function getChangedExtendedFieldKeys(MatrimonyProfile $profile, array $input): array
     {
+        $existing = static::getValuesForProfile($profile);
+        $changed = [];
+        foreach ($input as $field_key => $value) {
+            $registry = FieldRegistry::where('field_key', $field_key)->where('field_type', 'EXTENDED')->first();
+            if (!$registry) {
+                continue;
+            }
+            $normalized = static::normalizeValue($registry, $value);
+            $oldVal = $existing[$field_key] ?? null;
+            $oldVal = $oldVal === '' ? null : $oldVal;
+            $normalized = $normalized === '' ? null : $normalized;
+            if ((string) $normalized !== (string) $oldVal) {
+                $changed[] = $field_key;
+            }
+        }
+        return $changed;
+    }
+
+    public static function saveValuesForProfile(MatrimonyProfile $profile, array $input, ?\App\Models\User $actor = null): void
+    {
+        $changedKeys = static::getChangedExtendedFieldKeys($profile, $input);
+        // Day-6: Overwrite protection - authority-aware (equal/higher can edit locked)
+        ProfileFieldLockService::assertNotLocked($profile, $changedKeys, $actor);
+
         foreach ($input as $field_key => $value) {
             $registry = FieldRegistry::where('field_key', $field_key)
                 ->where('field_type', 'EXTENDED')

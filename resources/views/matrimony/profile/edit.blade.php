@@ -11,6 +11,10 @@
                     Edit Matrimony Profile
                 </h1>
 
+                @if ($errors->any())
+                    <div class="mb-4 px-4 py-3 rounded-lg bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 text-red-800 dark:text-red-200 text-sm">{{ $errors->first() }}</div>
+                @endif
+
                 <form method="POST"
       action="{{ route('matrimony.profile.update') }}"
       enctype="multipart/form-data">
