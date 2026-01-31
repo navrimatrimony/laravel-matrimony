@@ -5,13 +5,19 @@
     <div class="p-6">
         <div class="flex items-center justify-between mb-6">
             <div>
-                <h1 class="text-2xl font-bold text-gray-800 dark:text-gray-100 mb-2">Field Registry</h1>
-                <p class="text-gray-500 dark:text-gray-400 text-sm">CORE fields metadata. Read-only.</p>
+                <h1 class="text-2xl font-bold text-gray-800 dark:text-gray-100 mb-2">EXTENDED Fields</h1>
+                <p class="text-gray-500 dark:text-gray-400 text-sm">EXTENDED field definitions. Admin can create new fields.</p>
             </div>
             <div class="flex gap-3">
-                <a href="{{ route('admin.field-registry.extended.index') }}" class="text-sm text-indigo-600 hover:text-indigo-800 dark:text-indigo-400 dark:hover:text-indigo-300">View EXTENDED fields →</a>
+                <a href="{{ route('admin.field-registry.extended.create') }}" style="background-color: #4f46e5; color: white; padding: 10px 20px; border-radius: 6px; font-weight: 600; font-size: 14px; border: none; cursor: pointer; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">Create EXTENDED Field</a>
+                <a href="{{ route('admin.field-registry.index') }}" class="text-sm text-indigo-600 hover:text-indigo-800 dark:text-indigo-400 dark:hover:text-indigo-300">← View CORE fields</a>
             </div>
         </div>
+
+        @if (session('success'))
+            <div class="mb-4 px-4 py-3 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-800">{{ session('success') }}</div>
+        @endif
+
         <div class="overflow-x-auto">
             <table class="w-full border-collapse">
                 <thead>
@@ -19,10 +25,8 @@
                         <th class="text-left py-3 px-4 font-semibold text-gray-700 dark:text-gray-300">field_key</th>
                         <th class="text-left py-3 px-4 font-semibold text-gray-700 dark:text-gray-300">field_type</th>
                         <th class="text-left py-3 px-4 font-semibold text-gray-700 dark:text-gray-300">data_type</th>
-                        <th class="text-left py-3 px-4 font-semibold text-gray-700 dark:text-gray-300">is_mandatory</th>
-                        <th class="text-left py-3 px-4 font-semibold text-gray-700 dark:text-gray-300">is_searchable</th>
-                        <th class="text-left py-3 px-4 font-semibold text-gray-700 dark:text-gray-300">category</th>
                         <th class="text-left py-3 px-4 font-semibold text-gray-700 dark:text-gray-300">display_label</th>
+                        <th class="text-left py-3 px-4 font-semibold text-gray-700 dark:text-gray-300">category</th>
                         <th class="text-left py-3 px-4 font-semibold text-gray-700 dark:text-gray-300">display_order</th>
                         <th class="text-left py-3 px-4 font-semibold text-gray-700 dark:text-gray-300">is_archived</th>
                     </tr>
@@ -30,19 +34,17 @@
                 <tbody>
                     @forelse ($fields as $field)
                         <tr class="border-b border-gray-100 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700/30">
-                            <td class="py-3 px-4 text-gray-800 dark:text-gray-200">{{ $field->field_key }}</td>
+                            <td class="py-3 px-4 text-gray-800 dark:text-gray-200 font-mono text-sm">{{ $field->field_key }}</td>
                             <td class="py-3 px-4 text-gray-700 dark:text-gray-300">{{ $field->field_type }}</td>
                             <td class="py-3 px-4 text-gray-700 dark:text-gray-300">{{ $field->data_type }}</td>
-                            <td class="py-3 px-4 text-gray-700 dark:text-gray-300">{{ $field->is_mandatory ? 'Yes' : 'No' }}</td>
-                            <td class="py-3 px-4 text-gray-700 dark:text-gray-300">{{ $field->is_searchable ? 'Yes' : 'No' }}</td>
-                            <td class="py-3 px-4 text-gray-700 dark:text-gray-300">{{ $field->category }}</td>
                             <td class="py-3 px-4 text-gray-700 dark:text-gray-300">{{ $field->display_label }}</td>
+                            <td class="py-3 px-4 text-gray-700 dark:text-gray-300">{{ $field->category }}</td>
                             <td class="py-3 px-4 text-gray-700 dark:text-gray-300">{{ $field->display_order }}</td>
                             <td class="py-3 px-4 text-gray-700 dark:text-gray-300">{{ $field->is_archived ? 'Yes' : 'No' }}</td>
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="9" class="py-8 px-4 text-center text-gray-500">No CORE fields in registry.</td>
+                            <td colspan="7" class="py-8 px-4 text-center text-gray-500">No EXTENDED fields defined yet. <a href="{{ route('admin.field-registry.extended.create') }}" class="text-indigo-600 hover:underline">Create one</a></td>
                         </tr>
                     @endforelse
                 </tbody>

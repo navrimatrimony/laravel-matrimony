@@ -148,6 +148,11 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
     })->name('dashboard');
 
     /*
+    | Profiles List (Admin)
+    */
+    Route::get('/profiles', [AdminController::class, 'profilesIndex'])->name('profiles.index');
+
+    /*
     | Profile View (Admin - bypasses suspension checks)
     */
     Route::get('/profiles/{id}', [AdminController::class, 'showProfile'])
@@ -208,8 +213,19 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
 
     Route::get('/field-registry', [AdminController::class, 'fieldRegistryIndex'])->name('field-registry.index');
 
+    Route::get('/field-registry/extended', [AdminController::class, 'extendedFieldsIndex'])->name('field-registry.extended.index');
+    Route::get('/field-registry/extended/create', [AdminController::class, 'extendedFieldsCreate'])->name('field-registry.extended.create');
+    Route::post('/field-registry/extended', [AdminController::class, 'extendedFieldsStore'])->name('field-registry.extended.store');
+
     Route::get('/notifications', [AdminController::class, 'userNotificationsIndex'])->name('notifications.index');
     Route::get('/notifications/user', [AdminController::class, 'userNotificationsShow'])->name('notifications.user.show');
+
+    /*
+    | Conflict Records (Phase-3 Day-4 — list + test create only)
+    */
+    Route::get('/conflict-records', [AdminController::class, 'conflictRecordsIndex'])->name('conflict-records.index');
+    Route::get('/conflict-records/create', [AdminController::class, 'conflictRecordsCreate'])->name('conflict-records.create');
+    Route::post('/conflict-records', [AdminController::class, 'conflictRecordsStore'])->name('conflict-records.store');
 });
 
 require __DIR__.'/auth.php';

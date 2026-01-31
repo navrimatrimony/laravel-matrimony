@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\AbuseReport;
+use App\Models\ConflictRecord;
 use App\Models\Interest;
 use App\Models\MatrimonyProfile;
 use App\Models\Shortlist;
@@ -16,6 +17,7 @@ use App\Notifications\ProfileSoftDeletedNotification;
 use App\Notifications\ProfileSuspendedNotification;
 use App\Notifications\ProfileUnsuspendedNotification;
 use App\Services\AuditLogService;
+use App\Services\ExtendedFieldService;
 use App\Services\ProfileCompletenessService;
 use Illuminate\Http\Request;
 
@@ -31,6 +33,17 @@ use Illuminate\Http\Request;
 class AdminController extends Controller
 {
     private const REASON_RULES = ['required', 'string', 'min:10'];
+
+    /**
+     * Admin profiles list (all profiles, includes suspended/trashed).
+     */
+    public function profilesIndex(Request $request)
+    {
+        $perPage = (int) $request->input('per_page', 15);
+        $perPage = $perPage >= 1 && $perPage <= 100 ? $perPage : 15;
+        $profiles = MatrimonyProfile::withTrashed()->latest()->paginate($perPage)->withQueryString();
+        return view('admin.profiles.index', compact('profiles'));
+    }
 
     /**
      * Admin view profile (bypasses suspension / soft-delete checks).
@@ -68,7 +81,7 @@ class AdminController extends Controller
         // Profile completeness (from service, passed to view)
         $completenessPct = ProfileCompletenessService::percentage($profile);
 
-        return view('matrimony.profile.show', [
+        return view('admin.profiles.show', [
             'matrimonyProfile' => $profile,
             'isOwnProfile' => $isOwnProfile,
             'interestAlreadySent' => $interestAlreadySent,
@@ -367,6 +380,62 @@ class AdminController extends Controller
     }
 
     /**
+     * Phase-3 Day 2 — EXTENDED Fields list (read-only).
+     */
+    public function extendedFieldsIndex()
+    {
+        $fields = FieldRegistry::where('field_type', 'EXTENDED')
+            ->orderBy('category')
+            ->orderBy('display_order')
+            ->get();
+        return view('admin.field-registry.extended.index', ['fields' => $fields]);
+    }
+
+    /**
+     * Phase-3 Day 2 — EXTENDED Field creation form.
+     */
+    public function extendedFieldsCreate()
+    {
+        return view('admin.field-registry.extended.create');
+    }
+
+    /**
+     * Phase-3 Day 2 — Store new EXTENDED field definition.
+     */
+    public function extendedFieldsStore(Request $request): \Illuminate\Http\RedirectResponse
+    {
+        $validated = $request->validate([
+            'field_key' => ['required', 'string', 'max:64', 'regex:/^[a-z0-9_]+$/', 'unique:field_registry,field_key'],
+            'data_type' => ['required', 'in:text,number,date,boolean,select'],
+            'display_label' => ['required', 'string', 'max:128'],
+            'category' => ['nullable', 'string', 'max:64'],
+            'display_order' => ['nullable', 'integer', 'min:0'],
+        ], [
+            'field_key.regex' => 'Field key must contain only lowercase letters, numbers, and underscores.',
+            'field_key.unique' => 'This field key already exists.',
+            'data_type.in' => 'Data type must be one of: text, number, date, boolean, select.',
+        ]);
+
+        FieldRegistry::create([
+            'field_key' => $validated['field_key'],
+            'field_type' => 'EXTENDED',
+            'data_type' => $validated['data_type'],
+            'display_label' => $validated['display_label'],
+            'category' => $validated['category'] ?? 'basic',
+            'display_order' => $validated['display_order'] ?? 0,
+            'is_mandatory' => false,
+            'is_searchable' => false,
+            'is_user_editable' => true,
+            'is_system_overwritable' => true,
+            'lock_after_user_edit' => true,
+            'is_archived' => false,
+        ]);
+
+        return redirect()->route('admin.field-registry.extended.index')
+            ->with('success', 'EXTENDED field created successfully.');
+    }
+
+    /**
      * Update profile field configuration flags (Day-17).
      * Bulk update: updates all fields in single request.
      */
@@ -492,26 +561,35 @@ class AdminController extends Controller
             }
         }
 
-        // If no fields changed, return with error
-        if (empty($editedFields)) {
+        // If no CORE fields and no extended_fields, return with error
+        $hasExtendedFields = $request->has('extended_fields') && is_array($request->input('extended_fields'));
+        if (empty($editedFields) && !$hasExtendedFields) {
             return redirect()
                 ->back()
                 ->withInput()
                 ->with('error', 'No changes detected. Please modify at least one field.');
         }
 
-        // Merge with existing admin_edited_fields
-        $existingAdminEditedFields = $profile->admin_edited_fields ?? [];
-        $mergedAdminEditedFields = array_unique(array_merge($existingAdminEditedFields, $editedFields));
+        if (!empty($editedFields)) {
+            // Merge with existing admin_edited_fields
+            $existingAdminEditedFields = $profile->admin_edited_fields ?? [];
+            $mergedAdminEditedFields = array_unique(array_merge($existingAdminEditedFields, $editedFields));
 
-        // Update profile with edited fields and metadata
-        $updateData['edited_by'] = $admin->id;
-        $updateData['edited_at'] = now();
-        $updateData['edit_reason'] = $request->input('edit_reason');
-        $updateData['edited_source'] = 'admin';
-        $updateData['admin_edited_fields'] = $mergedAdminEditedFields;
+            $updateData['edited_by'] = $admin->id;
+            $updateData['edited_at'] = now();
+            $updateData['edit_reason'] = $request->input('edit_reason');
+            $updateData['edited_source'] = 'admin';
+            $updateData['admin_edited_fields'] = $mergedAdminEditedFields;
 
-        $profile->update($updateData);
+            $profile->update($updateData);
+        } elseif ($hasExtendedFields) {
+            $profile->update([
+                'edited_by' => $admin->id,
+                'edited_at' => now(),
+                'edit_reason' => $request->input('edit_reason'),
+                'edited_source' => 'admin',
+            ]);
+        }
 
         // Create audit log entry
         AuditLogService::log(
@@ -523,8 +601,63 @@ class AdminController extends Controller
             $profile->is_demo ?? false
         );
 
+        // Persist EXTENDED field values (service-first; throws ValidationException on invalid)
+        if ($hasExtendedFields) {
+            ExtendedFieldService::saveValuesForProfile($profile, $request->input('extended_fields'));
+        }
+
+        $message = !empty($editedFields)
+            ? 'Profile updated successfully. Edited fields: ' . implode(', ', $editedFields)
+            : 'Profile updated successfully. Extended fields saved.';
+
         return redirect()
             ->route('admin.profiles.show', $profile)
-            ->with('success', 'Profile updated successfully. Edited fields: ' . implode(', ', $editedFields));
+            ->with('success', $message);
+    }
+
+    /**
+     * Phase-3 Day-4: Conflict records list (read-only).
+     */
+    public function conflictRecordsIndex()
+    {
+        $records = ConflictRecord::with('profile')->latest('detected_at')->paginate(20);
+        return view('admin.conflict-records.index', compact('records'));
+    }
+
+    /**
+     * Phase-3 Day-4: Form to create a conflict record manually (testing only).
+     */
+    public function conflictRecordsCreate()
+    {
+        $profiles = MatrimonyProfile::withTrashed()->orderBy('id')->get(['id', 'full_name']);
+        return view('admin.conflict-records.create', compact('profiles'));
+    }
+
+    /**
+     * Phase-3 Day-4: Store a conflict record (testing only, minimal validation).
+     */
+    public function conflictRecordsStore(Request $request)
+    {
+        $request->validate([
+            'profile_id' => ['required', 'exists:matrimony_profiles,id'],
+            'field_name' => ['required', 'string', 'max:255'],
+            'field_type' => ['required', 'in:CORE,EXTENDED'],
+            'old_value' => ['nullable', 'string'],
+            'new_value' => ['nullable', 'string'],
+            'source' => ['required', 'in:OCR,USER,ADMIN,MATCHMAKER,SYSTEM'],
+        ]);
+
+        ConflictRecord::create([
+            'profile_id' => $request->profile_id,
+            'field_name' => $request->field_name,
+            'field_type' => $request->field_type,
+            'old_value' => $request->old_value,
+            'new_value' => $request->new_value,
+            'source' => $request->source,
+            'detected_at' => now(),
+            'resolution_status' => 'PENDING',
+        ]);
+
+        return redirect()->route('admin.conflict-records.index')->with('success', 'Conflict record created (testing).');
     }
 }

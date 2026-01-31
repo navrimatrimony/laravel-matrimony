@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Services\ExtendedFieldService;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
@@ -99,6 +100,26 @@ class MatrimonyProfile extends Model
     {
         return $this->belongsTo(User::class);
     }
+
+    /*
+    |--------------------------------------------------------------------------
+    | EXTENDED Field Values Accessor
+    |--------------------------------------------------------------------------
+    |
+    | Returns array of EXTENDED field values for this profile.
+    | Format: [field_key => field_value]
+    |
+    | Uses ExtendedFieldService internally to maintain single source of logic.
+    |
+    | Usage:
+    | $profile->getExtendedFieldValues()
+    |
+    */
+    public function getExtendedFieldValues(): array
+    {
+        return ExtendedFieldService::getValuesForProfile($this);
+    }
+
 	public $timestamps = true;
 
 }
