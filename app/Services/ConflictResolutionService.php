@@ -1,0 +1,85 @@
+<?php
+
+namespace App\Services;
+
+use App\Models\ConflictRecord;
+use App\Models\User;
+use Illuminate\Validation\ValidationException;
+
+/**
+ * Phase-3 Day-5: Authority-based conflict resolution.
+ * Authority order (locked): Admin > User > Matchmaker > OCR/System
+ * OCR/System never resolve. Resolved conflicts are immutable.
+ */
+class ConflictResolutionService
+{
+    private const RANK_ADMIN = 1;
+    private const RANK_USER = 2;
+    private const RANK_MATCHMAKER = 3;
+    private const RANK_SYSTEM = 99;
+
+    public static function approveConflict(ConflictRecord $record, User $resolver, string $reason): void
+    {
+        static::resolve($record, $resolver, $reason, 'APPROVED');
+    }
+
+    public static function rejectConflict(ConflictRecord $record, User $resolver, string $reason): void
+    {
+        static::resolve($record, $resolver, $reason, 'REJECTED');
+    }
+
+    public static function overrideConflict(ConflictRecord $record, User $resolver, string $reason): void
+    {
+        static::resolve($record, $resolver, $reason, 'OVERRIDDEN');
+    }
+
+    private static function resolve(ConflictRecord $record, User $resolver, string $reason, string $newStatus): void
+    {
+        $reason = trim($reason);
+        if ($reason === '') {
+            throw ValidationException::withMessages([
+                'resolution_reason' => ['Resolution reason is required and cannot be empty.'],
+            ]);
+        }
+
+        if ($record->resolution_status !== 'PENDING') {
+            throw ValidationException::withMessages([
+                'conflict' => ['Conflict is already resolved and cannot be modified.'],
+            ]);
+        }
+
+        $resolverRank = static::getAuthorityRank($resolver);
+        if ($resolverRank >= static::RANK_SYSTEM) {
+            throw ValidationException::withMessages([
+                'resolver' => ['OCR/System cannot perform human resolution.'],
+            ]);
+        }
+
+        $record->update([
+            'resolution_status' => $newStatus,
+            'resolved_by' => $resolver->id,
+            'resolved_at' => now(),
+            'resolution_reason' => $reason,
+        ]);
+    }
+
+    /**
+     * Authority order: Admin (1) > User (2) > Matchmaker (3) > System/OCR (99)
+     */
+    private static function getAuthorityRank(User $user): int
+    {
+        if ($user->is_admin ?? false) {
+            return static::RANK_ADMIN;
+        }
+        return static::RANK_USER;
+    }
+
+    public static function canResolve(ConflictRecord $record, User $user): bool
+    {
+        if ($record->resolution_status !== 'PENDING') {
+            return false;
+        }
+        $rank = static::getAuthorityRank($user);
+        return $rank < static::RANK_SYSTEM;
+    }
+}

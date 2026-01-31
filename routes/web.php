@@ -221,11 +221,14 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
     Route::get('/notifications/user', [AdminController::class, 'userNotificationsShow'])->name('notifications.user.show');
 
     /*
-    | Conflict Records (Phase-3 Day-4 — list + test create only)
+    | Conflict Records (Phase-3 Day-4/5 — list, create, resolve)
     */
     Route::get('/conflict-records', [AdminController::class, 'conflictRecordsIndex'])->name('conflict-records.index');
     Route::get('/conflict-records/create', [AdminController::class, 'conflictRecordsCreate'])->name('conflict-records.create');
     Route::post('/conflict-records', [AdminController::class, 'conflictRecordsStore'])->name('conflict-records.store');
+    Route::post('/conflict-records/{record}/approve', [AdminController::class, 'conflictRecordApprove'])->name('conflict-records.approve');
+    Route::post('/conflict-records/{record}/reject', [AdminController::class, 'conflictRecordReject'])->name('conflict-records.reject');
+    Route::post('/conflict-records/{record}/override', [AdminController::class, 'conflictRecordOverride'])->name('conflict-records.override');
 });
 
 require __DIR__.'/auth.php';

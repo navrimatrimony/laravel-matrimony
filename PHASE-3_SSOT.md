@@ -1417,3 +1417,12 @@ Admin साठी read-only list UI दिली व manual conflict creation (
 Default resolution_status = PENDING, records immutable ठेवून authority-based resolution पुढील दिवसासाठी defer केली.
 OCR, auto-detection, resolution workflow, Phase-2 behavior — काहीही touch केले नाही.
 ---------------------
+Day-5
+Conflict Resolution Framework implement करून
+authority order (Admin > User > Matchmaker > OCR) strict enforce केला.
+Approve / Reject / Override actions audit-safe ठेवून
+resolution_reason, resolved_by, resolved_at mandatory केले.
+Resolved conflicts immutable ठेवले; profile data mutation जाणीवपूर्वक टाळली.
+Decision (conflict record) आणि execution (profile update) वेगळे ठेवण्याचा
+governance principle practically समजला.
+---------------------------------------

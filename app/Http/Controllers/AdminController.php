@@ -17,6 +17,7 @@ use App\Notifications\ProfileSoftDeletedNotification;
 use App\Notifications\ProfileSuspendedNotification;
 use App\Notifications\ProfileUnsuspendedNotification;
 use App\Services\AuditLogService;
+use App\Services\ConflictResolutionService;
 use App\Services\ExtendedFieldService;
 use App\Services\ProfileCompletenessService;
 use Illuminate\Http\Request;
@@ -659,5 +660,35 @@ class AdminController extends Controller
         ]);
 
         return redirect()->route('admin.conflict-records.index')->with('success', 'Conflict record created (testing).');
+    }
+
+    /**
+     * Phase-3 Day-5: Approve conflict (service handles authority + validation).
+     */
+    public function conflictRecordApprove(Request $request, ConflictRecord $record)
+    {
+        $request->validate(['resolution_reason' => ['required', 'string', 'min:10']]);
+        ConflictResolutionService::approveConflict($record, $request->user(), $request->resolution_reason);
+        return redirect()->route('admin.conflict-records.index')->with('success', 'Conflict approved.');
+    }
+
+    /**
+     * Phase-3 Day-5: Reject conflict (service handles authority + validation).
+     */
+    public function conflictRecordReject(Request $request, ConflictRecord $record)
+    {
+        $request->validate(['resolution_reason' => ['required', 'string', 'min:10']]);
+        ConflictResolutionService::rejectConflict($record, $request->user(), $request->resolution_reason);
+        return redirect()->route('admin.conflict-records.index')->with('success', 'Conflict rejected.');
+    }
+
+    /**
+     * Phase-3 Day-5: Override conflict (service handles authority + validation).
+     */
+    public function conflictRecordOverride(Request $request, ConflictRecord $record)
+    {
+        $request->validate(['resolution_reason' => ['required', 'string', 'min:10']]);
+        ConflictResolutionService::overrideConflict($record, $request->user(), $request->resolution_reason);
+        return redirect()->route('admin.conflict-records.index')->with('success', 'Conflict overridden.');
     }
 }
