@@ -219,6 +219,8 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
     Route::get('/field-registry/extended', [AdminController::class, 'extendedFieldsIndex'])->name('field-registry.extended.index');
     Route::get('/field-registry/extended/create', [AdminController::class, 'extendedFieldsCreate'])->name('field-registry.extended.create');
     Route::post('/field-registry/extended', [AdminController::class, 'extendedFieldsStore'])->name('field-registry.extended.store');
+    Route::post('/field-registry/{field}/archive', [AdminController::class, 'archiveFieldRegistry'])->name('field-registry.archive');
+    Route::post('/field-registry/{field}/unarchive', [AdminController::class, 'unarchiveFieldRegistry'])->name('field-registry.unarchive');
 
     Route::get('/notifications', [AdminController::class, 'userNotificationsIndex'])->name('notifications.index');
     Route::get('/notifications/user', [AdminController::class, 'userNotificationsShow'])->name('notifications.user.show');

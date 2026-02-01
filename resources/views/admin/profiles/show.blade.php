@@ -38,6 +38,38 @@
     </div>
     @endif
 
+    {{-- Day 8: Field value history (read-only) --}}
+    @if (!empty($fieldHistory ?? []) && $fieldHistory->isNotEmpty())
+    <div class="mb-4 p-4 rounded-lg border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-700/30">
+        <h3 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Field Value History (Day 8)</h3>
+        <p class="text-xs text-gray-500 dark:text-gray-400 mb-3">Read-only. Last 100 changes. No edit/delete.</p>
+        <div class="overflow-x-auto max-h-64 overflow-y-auto">
+            <table class="w-full border-collapse text-xs">
+                <thead class="sticky top-0 bg-gray-100 dark:bg-gray-700">
+                    <tr class="border-b border-gray-200 dark:border-gray-600">
+                        <th class="text-left py-2 px-2 font-semibold text-gray-700 dark:text-gray-300">field_key</th>
+                        <th class="text-left py-2 px-2 font-semibold text-gray-700 dark:text-gray-300">field_type</th>
+                        <th class="text-left py-2 px-2 font-semibold text-gray-700 dark:text-gray-300">old → new</th>
+                        <th class="text-left py-2 px-2 font-semibold text-gray-700 dark:text-gray-300">changed_by</th>
+                        <th class="text-left py-2 px-2 font-semibold text-gray-700 dark:text-gray-300">changed_at</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach ($fieldHistory as $h)
+                    <tr class="border-b border-gray-100 dark:border-gray-600">
+                        <td class="py-2 px-2 font-mono text-gray-800 dark:text-gray-200">{{ $h->field_key }}</td>
+                        <td class="py-2 px-2 text-gray-700 dark:text-gray-300">{{ $h->field_type }}</td>
+                        <td class="py-2 px-2 text-gray-700 dark:text-gray-300">{{ Str::limit($h->old_value ?? '—', 20) }} → {{ Str::limit($h->new_value ?? '—', 20) }}</td>
+                        <td class="py-2 px-2 text-gray-700 dark:text-gray-300">{{ $h->changed_by }}</td>
+                        <td class="py-2 px-2 text-gray-600 dark:text-gray-400">{{ $h->changed_at?->format('Y-m-d H:i') ?? '—' }}</td>
+                    </tr>
+                    @endforeach
+                </tbody>
+            </table>
+        </div>
+    </div>
+    @endif
+
     <div class="mb-6">
         <button type="button" @click="adminEditMode = !adminEditMode" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-md font-medium text-sm transition-colors">
             <span x-text="adminEditMode ? 'Cancel Edit' : 'Edit Profile'"></span>

@@ -29,6 +29,7 @@
                         <th class="text-left py-3 px-4 font-semibold text-gray-700 dark:text-gray-300">category</th>
                         <th class="text-left py-3 px-4 font-semibold text-gray-700 dark:text-gray-300">display_order</th>
                         <th class="text-left py-3 px-4 font-semibold text-gray-700 dark:text-gray-300">is_archived</th>
+                        <th class="text-left py-3 px-4 font-semibold text-gray-700 dark:text-gray-300">Day 8</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -41,10 +42,23 @@
                             <td class="py-3 px-4 text-gray-700 dark:text-gray-300">{{ $field->category }}</td>
                             <td class="py-3 px-4 text-gray-700 dark:text-gray-300">{{ $field->display_order }}</td>
                             <td class="py-3 px-4 text-gray-700 dark:text-gray-300">{{ $field->is_archived ? 'Yes' : 'No' }}</td>
+                            <td class="py-3 px-4">
+                                @if ($field->is_archived)
+                                    <form method="POST" action="{{ route('admin.field-registry.unarchive', $field) }}" class="inline">
+                                        @csrf
+                                        <button type="submit" class="text-xs px-2 py-1 rounded bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-200 dark:hover:bg-emerald-800/50">Unarchive</button>
+                                    </form>
+                                @else
+                                    <form method="POST" action="{{ route('admin.field-registry.archive', $field) }}" class="inline">
+                                        @csrf
+                                        <button type="submit" class="text-xs px-2 py-1 rounded bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300 hover:bg-amber-200 dark:hover:bg-amber-800/50">Archive</button>
+                                    </form>
+                                @endif
+                            </td>
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="7" class="py-8 px-4 text-center text-gray-500">No EXTENDED fields defined yet. <a href="{{ route('admin.field-registry.extended.create') }}" class="text-indigo-600 hover:underline">Create one</a></td>
+                            <td colspan="8" class="py-8 px-4 text-center text-gray-500">No EXTENDED fields defined yet. <a href="{{ route('admin.field-registry.extended.create') }}" class="text-indigo-600 hover:underline">Create one</a></td>
                         </tr>
                     @endforelse
                 </tbody>

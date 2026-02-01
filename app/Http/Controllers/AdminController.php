@@ -22,6 +22,7 @@ use App\Services\ExtendedFieldService;
 use App\Services\ProfileCompletenessService;
 use App\Services\ProfileFieldLockService;
 use App\Services\ProfileLifecycleService;
+use App\Services\FieldValueHistoryService;
 use Illuminate\Http\Request;
 
 /*
@@ -90,6 +91,9 @@ class AdminController extends Controller
         // Day 7: Lifecycle state — allowed transition targets
         $lifecycleAllowedTargets = ProfileLifecycleService::getAllowedTargets($profile->lifecycle_state ?? 'Active');
 
+        // Day 8: Field value history (read-only)
+        $fieldHistory = FieldValueHistoryService::getHistoryForProfile($profile);
+
         return view('admin.profiles.show', [
             'matrimonyProfile' => $profile,
             'isOwnProfile' => $isOwnProfile,
@@ -99,6 +103,7 @@ class AdminController extends Controller
             'completenessPct' => $completenessPct,
             'fieldLocks' => $fieldLocks,
             'lifecycleAllowedTargets' => $lifecycleAllowedTargets,
+            'fieldHistory' => $fieldHistory,
         ]);
     }
 
@@ -465,6 +470,30 @@ class AdminController extends Controller
     }
 
     /**
+     * Day 8: Archive field (soft). No delete. Hidden from new entry.
+     */
+    public function archiveFieldRegistry(FieldRegistry $field): \Illuminate\Http\RedirectResponse
+    {
+        if (!auth()->check() || !auth()->user()->is_admin) {
+            abort(403, 'Admin access required');
+        }
+        $field->update(['is_archived' => true]);
+        return redirect()->back()->with('success', 'Field archived. Existing profile values unchanged.');
+    }
+
+    /**
+     * Day 8: Unarchive field. Reactivate for new entry.
+     */
+    public function unarchiveFieldRegistry(FieldRegistry $field): \Illuminate\Http\RedirectResponse
+    {
+        if (!auth()->check() || !auth()->user()->is_admin) {
+            abort(403, 'Admin access required');
+        }
+        $field->update(['is_archived' => false]);
+        return redirect()->back()->with('success', 'Field unarchived.');
+    }
+
+    /**
      * Update profile field configuration flags (Day-17).
      * Bulk update: updates all fields in single request.
      */
@@ -564,15 +593,16 @@ class AdminController extends Controller
             'education' => 'nullable|string|max:255',
             'location' => 'nullable|string|max:255',
             'caste' => 'nullable|string|max:255',
+            'height_cm' => 'nullable|integer|min:50|max:250',
         ]);
 
         $admin = auth()->user();
-        $originalData = $profile->only(['full_name', 'date_of_birth', 'marital_status', 'education', 'location', 'caste']);
+        $originalData = $profile->only(['full_name', 'date_of_birth', 'marital_status', 'education', 'location', 'caste', 'height_cm']);
         $editedFields = [];
 
         // Track which fields were actually changed
         $updateData = [];
-        $editableFields = ['full_name', 'date_of_birth', 'marital_status', 'education', 'location', 'caste'];
+        $editableFields = ['full_name', 'date_of_birth', 'marital_status', 'education', 'location', 'caste', 'height_cm'];
         
         foreach ($editableFields as $field) {
             if ($request->has($field)) {
@@ -621,6 +651,20 @@ class AdminController extends Controller
             $updateData['edit_reason'] = $request->input('edit_reason');
             $updateData['edited_source'] = 'admin';
             $updateData['admin_edited_fields'] = $mergedAdminEditedFields;
+
+            // Day 8: Record CORE field value history before overwrite (updates only)
+            foreach ($editedFields as $fieldKey) {
+                $oldVal = ($originalData[$fieldKey] ?? '') === '' ? null : (string) ($originalData[$fieldKey] ?? null);
+                $newVal = isset($updateData[$fieldKey]) ? ($updateData[$fieldKey] === '' ? null : (string) $updateData[$fieldKey]) : null;
+                \App\Services\FieldValueHistoryService::record(
+                    $profile->id,
+                    $fieldKey,
+                    'CORE',
+                    $oldVal,
+                    $newVal,
+                    \App\Services\FieldValueHistoryService::CHANGED_BY_ADMIN
+                );
+            }
 
             $profile->update($updateData);
             // Day-6: Apply lock to edited CORE fields after successful update

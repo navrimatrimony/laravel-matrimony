@@ -176,6 +176,7 @@ public function store(Request $request)
 {
     $request->validate([
         'marital_status' => 'required|in:single,divorced,widowed',
+        'height_cm' => 'nullable|integer|min:50|max:250',
     ]);
 
     $user = auth()->user();
@@ -238,6 +239,9 @@ if ($request->hasFile('profile_photo')) {
     if (isset($enabledFieldsMap['caste']) && $request->has('caste')) {
         $updateData['caste'] = $request->caste;
     }
+    if (isset($enabledFieldsMap['height_cm']) && $request->has('height_cm')) {
+        $updateData['height_cm'] = $request->height_cm;
+    }
 
     // If new photo uploaded, apply policy-based approval status
     if ($request->hasFile('profile_photo')) {
@@ -271,7 +275,7 @@ if ($request->hasFile('profile_photo')) {
     }
 
     // Day-6.4: Detect only ACTUALLY CHANGED core fields for lock check
-    $coreFieldKeys = ['full_name', 'date_of_birth', 'marital_status', 'education', 'location', 'caste'];
+    $coreFieldKeys = ['full_name', 'date_of_birth', 'marital_status', 'education', 'location', 'caste', 'height_cm'];
     $existingProfile = $user->matrimonyProfile;
     $changedCoreFields = [];
     foreach ($coreFieldKeys as $field) {
@@ -287,6 +291,20 @@ if ($request->hasFile('profile_photo')) {
 
     // Day-6: Overwrite protection - authority-aware, only on changed fields
     ProfileFieldLockService::assertNotLocked($existingProfile, $changedCoreFields, $user);
+
+    // Day 8: Record CORE field value history before overwrite (updates only)
+    foreach ($changedCoreFields as $fieldKey) {
+        $oldVal = $existingProfile->$fieldKey === '' ? null : (string) $existingProfile->$fieldKey;
+        $newVal = isset($updateData[$fieldKey]) ? ($updateData[$fieldKey] === '' ? null : (string) $updateData[$fieldKey]) : null;
+        \App\Services\FieldValueHistoryService::record(
+            $existingProfile->id,
+            $fieldKey,
+            'CORE',
+            $oldVal,
+            $newVal,
+            \App\Services\FieldValueHistoryService::CHANGED_BY_USER
+        );
+    }
 
     $user->matrimonyProfile->update($updateData);
 

@@ -57,6 +57,11 @@
                     <input type="text" name="caste" value="{{ $matrimonyProfile->caste }}"><br><br>
                     @endif
 
+                    <label>Height (cm)</label><br>
+                    <input type="number" name="height_cm" value="{{ old('height_cm', $matrimonyProfile->height_cm ?? '') }}" placeholder="170"><br>
+                    @error('height_cm') <div class="text-danger">{{ $message }}</div> @enderror
+                    <br>
+
                     @if ($isEnabled('location') && $isVisible('location'))
                     <label>Location</label><br>
                     <input type="text" name="location" value="{{ $matrimonyProfile->location }}"><br><br>

@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\FieldRegistry;
 use App\Models\MatrimonyProfile;
 use App\Models\ProfileExtendedField;
+use App\Services\FieldValueHistoryService;
 use App\Services\ProfileFieldLockService;
 use Carbon\Carbon;
 use Illuminate\Validation\ValidationException;
@@ -61,6 +62,17 @@ class ExtendedFieldService
                 ]);
             }
 
+            // Day 8: Archived fields hidden from new entry; existing profile values allowed
+            $row = ProfileExtendedField::firstOrNew([
+                'profile_id' => $profile->id,
+                'field_key'  => $field_key,
+            ]);
+            if (($registry->is_archived ?? false) && !$row->exists) {
+                throw ValidationException::withMessages([
+                    $field_key => ['This field is archived and cannot be set for new entry.'],
+                ]);
+            }
+
             if (!static::validateValue($registry, $value)) {
                 throw ValidationException::withMessages([
                     $field_key => ['Invalid value for data type ' . $registry->data_type . '.'],
@@ -68,10 +80,23 @@ class ExtendedFieldService
             }
 
             $normalized = static::normalizeValue($registry, $value);
-            $row = ProfileExtendedField::firstOrNew([
-                'profile_id' => $profile->id,
-                'field_key'  => $field_key,
-            ]);
+            // $row already loaded above for archive check
+            $oldValue = $row->exists ? ($row->field_value ?? null) : null;
+            $newValue = $normalized === '' ? null : $normalized;
+            // Day 8: Record history only on update (value actually changed)
+            if ($row->exists && (string) $oldValue !== (string) $newValue) {
+                $changedBy = ($actor && ($actor->is_admin ?? false))
+                    ? FieldValueHistoryService::CHANGED_BY_ADMIN
+                    : FieldValueHistoryService::CHANGED_BY_USER;
+                FieldValueHistoryService::record(
+                    $profile->id,
+                    $field_key,
+                    'EXTENDED',
+                    $oldValue,
+                    $newValue,
+                    $changedBy
+                );
+            }
             $row->field_value = $normalized;
             $row->save();
         }

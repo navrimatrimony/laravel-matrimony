@@ -44,14 +44,21 @@ class ProfileFieldConfigurationService
 
     /**
      * Get all field keys marked as enabled.
+     * CORE field height_cm is always included for user edit (same level as education, location, caste).
      *
      * @return array<string> Array of field_key values
      */
     public static function getEnabledFieldKeys(): array
     {
-        return ProfileFieldConfig::where('is_enabled', true)
+        $keys = ProfileFieldConfig::where('is_enabled', true)
             ->pluck('field_key')
             ->toArray();
+
+        if (!in_array('height_cm', $keys, true)) {
+            $keys[] = 'height_cm';
+        }
+
+        return $keys;
     }
 
     /**

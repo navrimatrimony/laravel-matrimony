@@ -246,7 +246,7 @@ PROFILE LIFECYCLE STATES (CANONICAL)
 - `Search-Hidden` — Profile exists but hidden from search
 - `Suspended` — Profile temporarily disabled
 - `Archived` — Profile permanently archived
-- `Demo-Hidden` — Demo profile hidden from search (admin-controlled)
+- `Owner-Hidden` — Profile hidden from search by owner/admin; not searchable, interactions blocked; owner can edit
 
 **State-Behavior Matrix:**
 
@@ -257,7 +257,9 @@ PROFILE LIFECYCLE STATES (CANONICAL)
 | Search-Hidden | Yes | No | Yes |
 | Suspended | No | No | No |
 | Archived | No | No | No |
-| Demo-Hidden | Yes | No | No |
+| Owner-Hidden | Yes | No | No |
+
+**Note:** The state "Owner-Hidden" was previously referred to as "Demo-Hidden" in earlier SSOT versions; the rename is for semantic accuracy. Behavior is unchanged.
 
 **State Transition Rules:**
 - State transitions SHALL be controlled and intentional
@@ -781,7 +783,7 @@ Implement canonical profile lifecycle states and state transition rules.
 
 **Allowed Scope (TODAY ONLY):**
 - Add `lifecycle_state` field to `matrimony_profiles` table
-- Define state enum (Draft, Active, Search-Hidden, Suspended, Archived, Demo-Hidden)
+- Define state enum (Draft, Active, Search-Hidden, Suspended, Archived, Owner-Hidden)
 - Implement state transition validation
 - Implement state-based behavior rules (editable, searchable, interaction allowed)
 - Create admin UI for state transitions
@@ -1433,7 +1435,18 @@ Admin, User, API सर्व flows मध्ये lock enforcement + Phase-2 b
 --------------------------
 Day-7 Summary (SSOT):
 Profile lifecycle साठी canonical lifecycle_state governance layer implement करून scattered flags वर centralized control enforce केला.
-Admin-controlled explicit state transitions (Active, Suspended, Archived, Search-Hidden, Demo-Hidden) lock केले.
+Admin-controlled explicit state transitions (Active, Suspended, Archived, Search-Hidden, Owner-Hidden) lock केले.
 Receiver आणि sender दोन्ही बाजूंनी interaction guards (interest, shortlist) lifecycle_state नुसार strict enforce केले.
 Phase-2 behavior न मोडता lifecycle governance production-safe पद्धतीने complete केली
 ------------------------
+Date      : 2026-02-03
+Day       : Day 8
+Status    : ☑️ Completed
+
+Summary:
+CORE आणि EXTENDED fields साठी append-only historical value tracking implement केली.
+field_registry.is_archived वापरून field soft-archive governance enforce केली.
+Locked CORE fields वर overwrite block करून user feedback (error / warning) correct केला.
+Phase-2 behavior intact ठेवून CORE height_cm field end-to-end stable केला.
+
+-----------------------------
