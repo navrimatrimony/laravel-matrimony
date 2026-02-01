@@ -18,7 +18,18 @@
                 <label class="block text-xs text-gray-500 dark:text-gray-400 mb-1">Target state</label>
                 <select name="lifecycle_state" class="border border-gray-300 dark:border-gray-600 rounded px-3 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 text-sm">
                     @foreach ($lifecycleAllowedTargets as $target)
-                        <option value="{{ $target }}">{{ $target }}</option>
+                        @php
+                            $tooltip = match($target) {
+                                'Active' => 'Profile is fully active. Visible in search, accessible via direct link, and interest / shortlist are allowed.',
+                                'Search-Hidden' => 'Profile is hidden from search results. Still accessible via direct link and interactions are allowed. Owner can edit the profile.',
+                                'Owner-Hidden' => 'Profile is visible only to the owner. Hidden from search and direct access by others. Interest and shortlist are blocked. Owner can still edit the profile.',
+                                'Draft' => 'Profile is incomplete. Not visible in search and interactions are disabled. Owner can edit the profile.',
+                                'Suspended' => 'Profile is temporarily disabled by admin. Search, view, edit, and interactions are blocked.',
+                                'Archived' => 'Profile is permanently inactive. Search, view, edit, and interactions are blocked.',
+                                default => '',
+                            };
+                        @endphp
+                        <option value="{{ $target }}" title="{{ $tooltip }}">{{ $target }}</option>
                     @endforeach
                 </select>
             </div>

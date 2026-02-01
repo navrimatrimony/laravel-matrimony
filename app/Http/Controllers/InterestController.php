@@ -75,7 +75,7 @@ public function store(MatrimonyProfile $matrimony_profile_id)
         abort(403, 'Matrimony profile missing');
     }
 
-    // Day 7: Sender lifecycle — Archived/Suspended/Demo-Hidden cannot send interest
+    // Day 7: Sender lifecycle — Archived/Suspended/Owner-Hidden cannot send interest
     if (!ProfileLifecycleService::canInitiateInteraction($senderProfile)) {
         return back()->with('error', 'Your profile cannot send interest in its current state.');
     }
@@ -88,7 +88,7 @@ public function store(MatrimonyProfile $matrimony_profile_id)
         return back()->with('error', 'You cannot send interest to this profile.');
     }
 
-    // Day 7: Archived/Suspended/Demo-Hidden → interest blocked
+    // Day 7: Archived/Suspended/Owner-Hidden → interest blocked
     if (!ProfileLifecycleService::canReceiveInterest($receiverProfile)) {
         return back()->with('error', 'You cannot send interest to this profile.');
     }

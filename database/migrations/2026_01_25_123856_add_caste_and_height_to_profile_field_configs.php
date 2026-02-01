@@ -2,6 +2,7 @@
 
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 /*
 |--------------------------------------------------------------------------
@@ -16,6 +17,10 @@ return new class extends Migration
 {
     public function up(): void
     {
+        if (!Schema::hasTable('profile_field_configs')) {
+            return;
+        }
+
         // Insert caste config if not exists
         if (!DB::table('profile_field_configs')->where('field_key', 'caste')->exists()) {
             DB::table('profile_field_configs')->insert([
@@ -45,6 +50,9 @@ return new class extends Migration
 
     public function down(): void
     {
+        if (!Schema::hasTable('profile_field_configs')) {
+            return;
+        }
         DB::table('profile_field_configs')->whereIn('field_key', ['caste', 'height_cm'])->delete();
     }
 };

@@ -43,7 +43,7 @@ class MatrimonyProfile extends Model
     public const LIFECYCLE_SEARCH_HIDDEN = 'Search-Hidden';
     public const LIFECYCLE_SUSPENDED = 'Suspended';
     public const LIFECYCLE_ARCHIVED = 'Archived';
-    public const LIFECYCLE_DEMO_HIDDEN = 'Demo-Hidden';
+    public const LIFECYCLE_OWNER_HIDDEN = 'Owner-Hidden';
 
     /*
     |--------------------------------------------------------------------------
@@ -155,9 +155,9 @@ class MatrimonyProfile extends Model
         return ($this->lifecycle_state ?? '') === self::LIFECYCLE_ARCHIVED;
     }
 
-    public function isDemoHidden(): bool
+    public function isOwnerHidden(): bool
     {
-        return ($this->lifecycle_state ?? '') === self::LIFECYCLE_DEMO_HIDDEN;
+        return ($this->lifecycle_state ?? '') === self::LIFECYCLE_OWNER_HIDDEN;
     }
 
 	public $timestamps = true;

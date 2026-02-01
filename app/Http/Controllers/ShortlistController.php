@@ -48,12 +48,17 @@ class ShortlistController extends Controller
                 ->with('error', 'Create your profile first.');
         }
 
-        // Day 7: Sender lifecycle — Archived/Suspended/Demo-Hidden cannot add to shortlist
+        // Day 7: Sender lifecycle — Archived/Suspended/Owner-Hidden cannot add to shortlist
         if (!ProfileLifecycleService::canInitiateInteraction($owner)) {
             return back()->with('error', 'Your profile cannot add to shortlist in its current state.');
         }
 
         $target = $matrimony_profile_id;
+
+        // Day 7: Receiver lifecycle — cannot shortlist profiles that disallow interaction
+        if (!ProfileLifecycleService::canReceiveInterest($target)) {
+            return back()->with('error', 'You cannot add this profile to your shortlist.');
+        }
 
         if ($owner->id === $target->id) {
             return back()->with('error', 'You cannot shortlist yourself.');

@@ -15,11 +15,11 @@ class ProfileLifecycleService
     /** Allowed transitions: from => [to, ...] */
     private const ALLOWED_TRANSITIONS = [
         'Draft' => ['Active', 'Archived'],
-        'Active' => ['Search-Hidden', 'Suspended', 'Archived', 'Demo-Hidden'],
+        'Active' => ['Search-Hidden', 'Suspended', 'Archived', 'Owner-Hidden'],
         'Search-Hidden' => ['Active', 'Suspended', 'Archived'],
         'Suspended' => ['Active', 'Archived'],
         'Archived' => ['Active'],
-        'Demo-Hidden' => ['Active', 'Archived'],
+        'Owner-Hidden' => ['Active', 'Archived'],
     ];
 
     public static function getAllowedTargets(string $currentState): array
@@ -52,14 +52,14 @@ class ProfileLifecycleService
         $profile->update(['lifecycle_state' => $targetState]);
     }
 
-    /** Visibility: Archived/Suspended/Demo-Hidden (lifecycle_state) → not visible to others. Backward compat: is_suspended, trashed() */
+    /** Visibility: Archived/Suspended/Owner-Hidden (lifecycle_state) → not visible to others. Backward compat: is_suspended, trashed() */
     public static function isVisibleToOthers(MatrimonyProfile $profile): bool
     {
         if ($profile->trashed()) {
             return false;
         }
         $state = $profile->lifecycle_state ?? 'Active';
-        if (in_array($state, ['Archived', 'Suspended', 'Demo-Hidden'], true)) {
+        if (in_array($state, ['Archived', 'Suspended', 'Owner-Hidden'], true)) {
             return false;
         }
         if ($profile->is_suspended ?? false) {
@@ -84,14 +84,14 @@ class ProfileLifecycleService
         return true;
     }
 
-    /** Sender: Draft/Archived/Suspended/Demo-Hidden → cannot initiate (send interest, shortlist). Backward compat: is_suspended, trashed() */
+    /** Sender: Draft/Archived/Suspended/Owner-Hidden → cannot initiate (send interest, shortlist). Backward compat: is_suspended, trashed() */
     public static function canInitiateInteraction(MatrimonyProfile $profile): bool
     {
         if ($profile->trashed()) {
             return false;
         }
         $state = $profile->lifecycle_state ?? 'Active';
-        if (in_array($state, ['Draft', 'Archived', 'Suspended', 'Demo-Hidden'], true)) {
+        if (in_array($state, ['Draft', 'Archived', 'Suspended', 'Owner-Hidden'], true)) {
             return false;
         }
         if ($profile->is_suspended ?? false) {
@@ -100,14 +100,14 @@ class ProfileLifecycleService
         return true;
     }
 
-    /** Interest: Draft/Archived/Suspended/Demo-Hidden → blocked. Backward compat: is_suspended, trashed() */
+    /** Interest: Draft/Archived/Suspended/Owner-Hidden → blocked. Backward compat: is_suspended, trashed() */
     public static function canReceiveInterest(MatrimonyProfile $profile): bool
     {
         if ($profile->trashed()) {
             return false;
         }
         $state = $profile->lifecycle_state ?? 'Active';
-        if (in_array($state, ['Draft', 'Archived', 'Suspended', 'Demo-Hidden'], true)) {
+        if (in_array($state, ['Draft', 'Archived', 'Suspended', 'Owner-Hidden'], true)) {
             return false;
         }
         if ($profile->is_suspended ?? false) {

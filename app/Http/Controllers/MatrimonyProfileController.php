@@ -142,10 +142,10 @@ public function store(Request $request)
             ->with('error', 'Please create your matrimony profile first.');
     }
 
-    // Day 7: Archived/Suspended → edit blocked
+    // Day 7: Archived/Suspended → edit blocked (redirect to show to avoid loop)
     if (!\App\Services\ProfileLifecycleService::isEditable($user->matrimonyProfile)) {
         return redirect()
-            ->route('matrimony.profile.edit')
+            ->route('matrimony.profile.show', $user->matrimonyProfile)
             ->with('error', 'Your profile cannot be edited in its current state.');
     }
 

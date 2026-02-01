@@ -16,7 +16,11 @@ return new class extends Migration
                 $table->unsignedSmallInteger('height_cm')->nullable()->after('location');
             }
             if (!Schema::hasColumn('matrimony_profiles', 'visibility_override')) {
-                $table->boolean('visibility_override')->default(false)->after('is_demo');
+                if (Schema::hasColumn('matrimony_profiles', 'is_demo')) {
+                    $table->boolean('visibility_override')->default(false)->after('is_demo');
+                } else {
+                    $table->boolean('visibility_override')->default(false);
+                }
             }
             if (!Schema::hasColumn('matrimony_profiles', 'visibility_override_reason')) {
                 $table->text('visibility_override_reason')->nullable()->after('visibility_override');
