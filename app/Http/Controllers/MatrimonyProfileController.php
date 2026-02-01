@@ -142,6 +142,13 @@ public function store(Request $request)
             ->with('error', 'Please create your matrimony profile first.');
     }
 
+    // Day 7: Archived/Suspended → edit blocked
+    if (!\App\Services\ProfileLifecycleService::isEditable($user->matrimonyProfile)) {
+        return redirect()
+            ->route('matrimony.profile.edit')
+            ->with('error', 'Your profile cannot be edited in its current state.');
+    }
+
     // Day-18: Pass visible and enabled fields info to view
     $visibleFields = ProfileFieldConfigurationService::getVisibleFieldKeys();
     $enabledFields = ProfileFieldConfigurationService::getEnabledFieldKeys();
@@ -177,6 +184,13 @@ public function store(Request $request)
         return redirect()
             ->route('matrimony.profile.create')
             ->with('error', 'Please create your matrimony profile first.');
+    }
+
+    // Day 7: Archived/Suspended → edit blocked
+    if (!\App\Services\ProfileLifecycleService::isEditable($user->matrimonyProfile)) {
+        return redirect()
+            ->back()
+            ->with('error', 'Your profile cannot be edited in its current state.');
     }
 
     // 🔴 PHOTO UPLOAD LOGIC (IMPORTANT)
@@ -414,8 +428,8 @@ public function show(MatrimonyProfile $matrimony_profile_id)
         $viewer->matrimonyProfile->id === $matrimonyProfile->id
     );
 
-    // 🔒 GUARD: Cannot view suspended or soft-deleted profiles (unless owner viewing own profile)
-    if (!$isOwnProfile && ($matrimonyProfile->is_suspended || $matrimonyProfile->trashed())) {
+    // 🔒 GUARD: Day 7 lifecycle — Archived/Suspended not visible to others (backward compat: is_suspended, trashed)
+    if (!$isOwnProfile && !\App\Services\ProfileLifecycleService::isVisibleToOthers($matrimonyProfile)) {
         abort(404, 'Profile not found.');
     }
 
@@ -511,8 +525,10 @@ public function show(MatrimonyProfile $matrimony_profile_id)
     {
         $query = MatrimonyProfile::latest();
 
-        // Exclude suspended and soft-deleted profiles
-        $query->where('is_suspended', false);
+        // Day 7: Only Active profiles searchable; NULL treated as Active (backward compat)
+        $query->where(function ($q) {
+            $q->where('lifecycle_state', 'Active')->orWhereNull('lifecycle_state');
+        })->where('is_suspended', false);
         // Soft deletes are automatically excluded by Laravel's SoftDeletes trait
 
         // Day-18: Only use enabled AND searchable fields for search

@@ -187,6 +187,9 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
 
     Route::post('/profiles/{profile}/override-visibility', [AdminController::class, 'overrideVisibility'])
         ->name('profiles.override-visibility');
+
+    Route::post('/profiles/{profile}/lifecycle-state', [AdminController::class, 'updateLifecycleState'])
+        ->name('profiles.lifecycle-state');
     
     /*
     | Abuse Reports

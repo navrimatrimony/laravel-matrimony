@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\MatrimonyProfile;
 use App\Models\Shortlist;
+use App\Services\ProfileLifecycleService;
 use Illuminate\Http\Request;
 
 /*
@@ -45,6 +46,11 @@ class ShortlistController extends Controller
         if (!$owner) {
             return redirect()->route('matrimony.profile.create')
                 ->with('error', 'Create your profile first.');
+        }
+
+        // Day 7: Sender lifecycle — Archived/Suspended/Demo-Hidden cannot add to shortlist
+        if (!ProfileLifecycleService::canInitiateInteraction($owner)) {
+            return back()->with('error', 'Your profile cannot add to shortlist in its current state.');
         }
 
         $target = $matrimony_profile_id;

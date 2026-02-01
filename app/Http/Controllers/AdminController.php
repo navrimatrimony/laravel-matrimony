@@ -21,6 +21,7 @@ use App\Services\ConflictResolutionService;
 use App\Services\ExtendedFieldService;
 use App\Services\ProfileCompletenessService;
 use App\Services\ProfileFieldLockService;
+use App\Services\ProfileLifecycleService;
 use Illuminate\Http\Request;
 
 /*
@@ -86,6 +87,9 @@ class AdminController extends Controller
         // Day-6: Field lock info for admin visibility (read-only)
         $fieldLocks = ProfileFieldLockService::getLocksForProfile($profile);
 
+        // Day 7: Lifecycle state — allowed transition targets
+        $lifecycleAllowedTargets = ProfileLifecycleService::getAllowedTargets($profile->lifecycle_state ?? 'Active');
+
         return view('admin.profiles.show', [
             'matrimonyProfile' => $profile,
             'isOwnProfile' => $isOwnProfile,
@@ -94,6 +98,7 @@ class AdminController extends Controller
             'inShortlist' => $inShortlist,
             'completenessPct' => $completenessPct,
             'fieldLocks' => $fieldLocks,
+            'lifecycleAllowedTargets' => $lifecycleAllowedTargets,
         ]);
     }
 
@@ -256,6 +261,24 @@ class AdminController extends Controller
         );
 
         return redirect()->route('admin.profiles.show', $profile->id)->with('success', 'Visibility override applied.');
+    }
+
+    /**
+     * Day 7: Change profile lifecycle_state. Validates transitions via ProfileLifecycleService.
+     */
+    public function updateLifecycleState(Request $request, MatrimonyProfile $profile): \Illuminate\Http\RedirectResponse
+    {
+        if (!auth()->check() || !auth()->user()->is_admin) {
+            abort(403, 'Admin access required');
+        }
+
+        $request->validate([
+            'lifecycle_state' => ['required', 'string', 'in:' . implode(',', ProfileLifecycleService::getStates())],
+        ]);
+
+        ProfileLifecycleService::transitionTo($profile, $request->lifecycle_state, $request->user());
+
+        return redirect()->route('admin.profiles.show', $profile->id)->with('success', 'Lifecycle state updated to ' . $request->lifecycle_state);
     }
 
     /**

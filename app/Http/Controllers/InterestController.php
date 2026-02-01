@@ -8,6 +8,7 @@ use App\Notifications\InterestAcceptedNotification;
 use App\Notifications\InterestRejectedNotification;
 use App\Notifications\InterestSentNotification;
 use App\Services\ProfileCompletenessService;
+use App\Services\ProfileLifecycleService;
 use Illuminate\Http\Request;
 
 
@@ -74,11 +75,21 @@ public function store(MatrimonyProfile $matrimony_profile_id)
         abort(403, 'Matrimony profile missing');
     }
 
+    // Day 7: Sender lifecycle — Archived/Suspended/Demo-Hidden cannot send interest
+    if (!ProfileLifecycleService::canInitiateInteraction($senderProfile)) {
+        return back()->with('error', 'Your profile cannot send interest in its current state.');
+    }
+
     // 🔒 70% completeness required for send and receive
     if (!ProfileCompletenessService::meetsThreshold($senderProfile)) {
         return back()->with('error', 'Your profile must be at least 70% complete to send interest.');
     }
     if (!ProfileCompletenessService::meetsThreshold($receiverProfile)) {
+        return back()->with('error', 'You cannot send interest to this profile.');
+    }
+
+    // Day 7: Archived/Suspended/Demo-Hidden → interest blocked
+    if (!ProfileLifecycleService::canReceiveInterest($receiverProfile)) {
         return back()->with('error', 'You cannot send interest to this profile.');
     }
 

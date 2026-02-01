@@ -37,6 +37,14 @@ class MatrimonyProfile extends Model
     */
     protected $table = 'matrimony_profiles';
 
+    /** Phase-3 Day 7: Canonical lifecycle states (SSOT) */
+    public const LIFECYCLE_DRAFT = 'Draft';
+    public const LIFECYCLE_ACTIVE = 'Active';
+    public const LIFECYCLE_SEARCH_HIDDEN = 'Search-Hidden';
+    public const LIFECYCLE_SUSPENDED = 'Suspended';
+    public const LIFECYCLE_ARCHIVED = 'Archived';
+    public const LIFECYCLE_DEMO_HIDDEN = 'Demo-Hidden';
+
     /*
     |--------------------------------------------------------------------------
     | Mass Assignable Fields
@@ -72,6 +80,7 @@ class MatrimonyProfile extends Model
         'edit_reason',
         'edited_source',
         'admin_edited_fields',
+        'lifecycle_state',
     ];
 
     protected $casts = [
@@ -118,6 +127,37 @@ class MatrimonyProfile extends Model
     public function getExtendedFieldValues(): array
     {
         return ExtendedFieldService::getValuesForProfile($this);
+    }
+
+    /** Phase-3 Day 7: Lifecycle state helpers */
+    public function isDraft(): bool
+    {
+        return ($this->lifecycle_state ?? '') === self::LIFECYCLE_DRAFT;
+    }
+
+    public function isActive(): bool
+    {
+        return ($this->lifecycle_state ?? '') === self::LIFECYCLE_ACTIVE;
+    }
+
+    public function isSearchHidden(): bool
+    {
+        return ($this->lifecycle_state ?? '') === self::LIFECYCLE_SEARCH_HIDDEN;
+    }
+
+    public function isSuspended(): bool
+    {
+        return ($this->lifecycle_state ?? '') === self::LIFECYCLE_SUSPENDED;
+    }
+
+    public function isArchived(): bool
+    {
+        return ($this->lifecycle_state ?? '') === self::LIFECYCLE_ARCHIVED;
+    }
+
+    public function isDemoHidden(): bool
+    {
+        return ($this->lifecycle_state ?? '') === self::LIFECYCLE_DEMO_HIDDEN;
     }
 
 	public $timestamps = true;

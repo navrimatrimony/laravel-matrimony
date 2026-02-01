@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use App\Models\Interest;
 use App\Models\MatrimonyProfile;
+use App\Services\ProfileLifecycleService;
 
 class InterestApiController extends Controller
 {
@@ -45,6 +46,22 @@ class InterestApiController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => 'Matrimony profile missing.',
+            ], 403);
+        }
+
+        // Day 7: Sender lifecycle — Archived/Suspended/Demo-Hidden cannot send interest
+        if (!ProfileLifecycleService::canInitiateInteraction($senderProfile)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Your profile cannot send interest in its current state.',
+            ], 403);
+        }
+
+        // Day 7: Archived/Suspended/Demo-Hidden → interest blocked (receiver)
+        if (!ProfileLifecycleService::canReceiveInterest($receiverProfile)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'You cannot send interest to this profile.',
             ], 403);
         }
 

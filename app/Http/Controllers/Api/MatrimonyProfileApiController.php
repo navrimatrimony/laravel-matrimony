@@ -86,6 +86,14 @@ public function update(Request $request)
         ], 404);
     }
 
+    // Day 7: Archived/Suspended → edit blocked
+    if (!\App\Services\ProfileLifecycleService::isEditable($profile)) {
+        return response()->json([
+            'success' => false,
+            'message' => 'Your profile cannot be edited in its current state.',
+        ], 403);
+    }
+
     // Day-6.4: Detect only ACTUALLY CHANGED core fields for lock check
     $coreFields = ['full_name', 'date_of_birth', 'caste', 'education', 'location'];
     $changedFields = [];
@@ -192,8 +200,10 @@ public function update(Request $request)
     {
         $query = MatrimonyProfile::with('user')->latest();
 
-        // Exclude suspended and soft-deleted profiles
-        $query->where('is_suspended', false);
+        // Day 7: Only Active profiles searchable; NULL treated as Active (backward compat)
+        $query->where(function ($q) {
+            $q->where('lifecycle_state', 'Active')->orWhereNull('lifecycle_state');
+        })->where('is_suspended', false);
         // Soft deletes are automatically excluded by Laravel's SoftDeletes trait
 
         // Caste filter
