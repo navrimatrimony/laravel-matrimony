@@ -1450,3 +1450,54 @@ Locked CORE fields वर overwrite block करून user feedback (error / wa
 Phase-2 behavior intact ठेवून CORE height_cm field end-to-end stable केला.
 
 -----------------------------
+Date      : 2026-02-04
+Day       : Day 9
+Status    : ☑️ Completed
+------------------------------------------------------------
+आज काय शिकलो:
+
+1) EXTENDED fields साठी `display_order` वापरून
+   category-wise rendering order governance कशी implement करायची
+   ते SSOT-safe पद्धतीने शिकलो.
+
+2) EXTENDED fields साठी `is_enabled` visibility control add करून
+   field UI मधून hide करता येतो,
+   पण data delete न करता retain कसा ठेवायचा ते शिकलो.
+
+3) `field_key` immutability, CORE vs EXTENDED separation,
+   आणि Phase-2 behavior untouched ठेवणे
+   हे governance design मध्ये किती critical आहे ते practically समजले.
+
+4) Archive (Day-8) आणि Enable/Disable (Day-9)
+   हे दोन वेगवेगळे governance concepts आहेत
+   आणि UI semantics मध्ये ते clear ठेवणे का आवश्यक आहे ते शिकलो.
+
+आज अडचण काय आली (असल्यास):
+• Git मध्ये commit न करता tag दिल्यामुळे
+  tag जुन्या (Day-8) commit वर point झाला —
+  त्यामुळे commit → push → tag हा exact क्रम का non-negotiable आहे
+  हे practically शिकायला मिळालं.
+
+Decision / Note (important):
+• Admin UI मध्ये internal phase labels (उदा. “Day 8”)
+  दाखवायचे नाहीत — feature semantics (“Actions”) वापरणे SSOT-compliant आहे.
+• EXTENDED field visibility बदल ही UI-governance आहे;
+  search, completeness, किंवा business logic ला touch करायचा नाही.
+
+Next Day Prerequisite (जर काही लागणार असेल तर):
+• Day-10 साठी EXTENDED Field Dependency (parent–child, display-only)
+  design आणि admin UI changes करण्यासाठी
+  existing field_registry + display_order fully stable असणे.
+------------------------------------------------------------
+Date      : 2026-02-05
+Day       : Day 10
+Status    : ☑️ Completed
+------------------------------------------------------------
+आज काय शिकलो:
+1) EXTENDED fields साठी simple parent–child visibility dependency कशी define करायची.
+2) Equality/Persistence rules strictly UI-only ठेवून data safety कशी राखायची.
+3) CORE / nested / circular dependencies hard-reject करून governance boundary enforce कशी करायची.
+4) Manual UI verification करून Phase-2 behavior unchanged असल्याची खात्री कशी करायची.
+------------------------------------------------------------
+
+=============================

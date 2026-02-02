@@ -101,6 +101,34 @@
             <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">Optional. Defaults to 0. Lower numbers appear first.</p>
         </div>
 
+        <div class="p-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg text-amber-800 dark:text-amber-200 text-sm">
+            <p class="font-semibold mb-2">Visibility dependency (optional)</p>
+            <p class="mb-3">Show this field only when another EXTENDED field meets a condition. Display/visibility only; does not affect validation or storage.</p>
+            <div class="space-y-4">
+                <div>
+                    <label for="parent_field_key" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Parent EXTENDED field</label>
+                    <select id="parent_field_key" name="parent_field_key" class="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100">
+                        <option value="">— None —</option>
+                        @foreach ($extendedFields ?? [] as $opt)
+                            <option value="{{ $opt->field_key }}" {{ old('parent_field_key') === $opt->field_key ? 'selected' : '' }}>{{ $opt->field_key }}</option>
+                        @endforeach
+                    </select>
+                </div>
+                <div>
+                    <label for="dependency_type" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Condition type</label>
+                    <select id="dependency_type" name="dependency_type" class="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100">
+                        <option value="">—</option>
+                        <option value="present" {{ old('dependency_type') === 'present' ? 'selected' : '' }}>present (parent has any value)</option>
+                        <option value="equals" {{ old('dependency_type') === 'equals' ? 'selected' : '' }}>equals (parent equals value below)</option>
+                    </select>
+                </div>
+                <div>
+                    <label for="dependency_value" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Condition value (for equals)</label>
+                    <input type="text" id="dependency_value" name="dependency_value" value="{{ old('dependency_value') }}" maxlength="255" placeholder="Value to match" class="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100">
+                </div>
+            </div>
+        </div>
+
         <div class="pt-4 border-t border-gray-200 dark:border-gray-700">
             <button type="submit" style="background-color: #4f46e5; color: white; padding: 12px 24px; border-radius: 6px; font-weight: 600; font-size: 16px; border: none; cursor: pointer; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);">
                 Create EXTENDED Field

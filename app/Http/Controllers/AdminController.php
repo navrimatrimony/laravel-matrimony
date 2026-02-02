@@ -18,6 +18,7 @@ use App\Notifications\ProfileSuspendedNotification;
 use App\Notifications\ProfileUnsuspendedNotification;
 use App\Services\AuditLogService;
 use App\Services\ConflictResolutionService;
+use App\Services\ExtendedFieldDependencyService;
 use App\Services\ExtendedFieldService;
 use App\Services\ProfileCompletenessService;
 use App\Services\ProfileFieldLockService;
@@ -430,7 +431,10 @@ class AdminController extends Controller
      */
     public function extendedFieldsCreate()
     {
-        return view('admin.field-registry.extended.create');
+        $extendedFields = FieldRegistry::where('field_type', 'EXTENDED')
+            ->orderBy('field_key')
+            ->get();
+        return view('admin.field-registry.extended.create', ['extendedFields' => $extendedFields]);
     }
 
     /**
@@ -444,11 +448,32 @@ class AdminController extends Controller
             'display_label' => ['required', 'string', 'max:128'],
             'category' => ['nullable', 'string', 'max:64'],
             'display_order' => ['nullable', 'integer', 'min:0'],
+            'parent_field_key' => ['nullable', 'string', 'max:64'],
+            'dependency_type' => ['nullable', 'in:equals,present'],
+            'dependency_value' => ['nullable', 'string', 'max:255'],
         ], [
             'field_key.regex' => 'Field key must contain only lowercase letters, numbers, and underscores.',
             'field_key.unique' => 'This field key already exists.',
             'data_type.in' => 'Data type must be one of: text, number, date, boolean, select.',
         ]);
+
+        $parentKey = isset($validated['parent_field_key']) && $validated['parent_field_key'] !== '' ? trim($validated['parent_field_key']) : null;
+        $depType = $validated['dependency_type'] ?? null;
+        $depValue = $validated['dependency_value'] ?? null;
+        if ($parentKey !== null) {
+            $tempField = new FieldRegistry();
+            $tempField->field_key = $validated['field_key'];
+            $tempField->field_type = 'EXTENDED';
+            ExtendedFieldDependencyService::validateDependency(
+                $tempField,
+                $parentKey,
+                ExtendedFieldDependencyService::buildCondition($depType ?? 'present', $depValue),
+                'Dependency '
+            );
+        }
+        $condition = $parentKey !== null
+            ? ExtendedFieldDependencyService::buildCondition($depType ?? 'present', $depType === 'equals' ? $depValue : null)
+            : null;
 
         FieldRegistry::create([
             'field_key' => $validated['field_key'],
@@ -464,6 +489,8 @@ class AdminController extends Controller
             'is_system_overwritable' => true,
             'lock_after_user_edit' => true,
             'is_archived' => false,
+            'parent_field_key' => $parentKey,
+            'dependency_condition' => $condition,
         ]);
 
         return redirect()->route('admin.field-registry.extended.index')
@@ -495,7 +522,7 @@ class AdminController extends Controller
     }
 
     /**
-     * Day 9: Bulk update EXTENDED fields — display_order and is_enabled only. field_key not modified.
+     * Day 9/10: Bulk update EXTENDED fields — display_order, is_enabled, dependency (Day 10). field_key not modified.
      */
     public function extendedFieldsUpdateBulk(Request $request): \Illuminate\Http\RedirectResponse
     {
@@ -504,6 +531,9 @@ class AdminController extends Controller
             'fields.*.id' => 'required|integer|exists:field_registry,id',
             'fields.*.display_order' => 'required|integer|min:0',
             'fields.*.is_enabled' => 'sometimes|in:0,1',
+            'fields.*.parent_field_key' => 'nullable|string|max:64',
+            'fields.*.dependency_type' => 'nullable|in:equals,present',
+            'fields.*.dependency_value' => 'nullable|string|max:255',
         ]);
 
         foreach ($request->input('fields', []) as $row) {
@@ -513,9 +543,25 @@ class AdminController extends Controller
             }
             $displayOrder = (int) $row['display_order'];
             $isEnabled = isset($row['is_enabled']) && $row['is_enabled'] === '1';
+            $parentKey = isset($row['parent_field_key']) && $row['parent_field_key'] !== '' ? trim($row['parent_field_key']) : null;
+            $depType = $row['dependency_type'] ?? null;
+            $depValue = $row['dependency_value'] ?? null;
+            if ($parentKey !== null) {
+                ExtendedFieldDependencyService::validateDependency(
+                    $field,
+                    $parentKey,
+                    ExtendedFieldDependencyService::buildCondition($depType ?? 'present', $depValue),
+                    'Dependency '
+                );
+            }
+            $condition = $parentKey !== null
+                ? ExtendedFieldDependencyService::buildCondition($depType ?? 'present', $depType === 'equals' ? $depValue : null)
+                : null;
             $field->update([
                 'display_order' => $displayOrder,
                 'is_enabled' => $isEnabled,
+                'parent_field_key' => $parentKey,
+                'dependency_condition' => $condition,
             ]);
         }
 

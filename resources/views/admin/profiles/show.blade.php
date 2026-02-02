@@ -250,6 +250,7 @@
                         ->orderBy('display_order')
                         ->get();
                     $extendedValues = \App\Services\ExtendedFieldService::getValuesForProfile($matrimonyProfile);
+                    $extendedFields = \App\Services\ExtendedFieldDependencyService::filterVisibleForDisplay($extendedFields, $extendedValues);
                 @endphp
                 @if ($extendedFields->count() > 0)
                 <div class="mb-4 pt-4 border-t border-gray-200 dark:border-gray-700">
@@ -457,6 +458,7 @@
                 ->orderBy('display_order')
                 ->get();
             $extendedValuesDisplay = \App\Services\ExtendedFieldService::getValuesForProfile($matrimonyProfile);
+            $extendedFieldsDisplay = \App\Services\ExtendedFieldDependencyService::filterVisibleForDisplay($extendedFieldsDisplay, $extendedValuesDisplay);
         @endphp
         @if ($extendedFieldsDisplay->count() > 0)
         <div class="mt-6 pt-6 border-t border-gray-200 dark:border-gray-600">

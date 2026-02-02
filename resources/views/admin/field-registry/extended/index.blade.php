@@ -29,8 +29,11 @@
                             <th class="text-left py-3 px-4 font-semibold text-gray-700 dark:text-gray-300">data_type</th>
                             <th class="text-left py-3 px-4 font-semibold text-gray-700 dark:text-gray-300">display_label</th>
                             <th class="text-left py-3 px-4 font-semibold text-gray-700 dark:text-gray-300">category</th>
-                            <th class="text-left py-3 px-4 font-semibold text-gray-700 dark:text-gray-300">display_order (Day 9)</th>
+                            <th class="text-left py-3 px-4 font-semibold text-gray-700 dark:text-gray-300">display_order</th>
                             <th class="text-left py-3 px-4 font-semibold text-gray-700 dark:text-gray-300">enabled</th>
+                            <th class="text-left py-3 px-4 font-semibold text-gray-700 dark:text-gray-300">parent (visibility)</th>
+                            <th class="text-left py-3 px-4 font-semibold text-gray-700 dark:text-gray-300">dep. type</th>
+                            <th class="text-left py-3 px-4 font-semibold text-gray-700 dark:text-gray-300">dep. value</th>
                             <th class="text-left py-3 px-4 font-semibold text-gray-700 dark:text-gray-300">is_archived</th>
                             <th class="text-left py-3 px-4 font-semibold text-gray-700 dark:text-gray-300">Actions</th>
                         </tr>
@@ -53,6 +56,24 @@
                                         <span class="text-sm text-gray-700 dark:text-gray-300">On</span>
                                     </label>
                                 </td>
+                                <td class="py-3 px-4">
+                                    <select name="fields[{{ $loop->index }}][parent_field_key]" class="w-full max-w-[140px] border border-gray-300 dark:border-gray-600 rounded px-2 py-1 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 text-sm">
+                                        <option value="">— None —</option>
+                                        @foreach ($fields->where('field_key', '!=', $field->field_key) as $opt)
+                                            <option value="{{ $opt->field_key }}" {{ old("fields.{$loop->index}.parent_field_key", $field->parent_field_key ?? '') === $opt->field_key ? 'selected' : '' }}>{{ $opt->field_key }}</option>
+                                        @endforeach
+                                    </select>
+                                </td>
+                                <td class="py-3 px-4">
+                                    <select name="fields[{{ $loop->index }}][dependency_type]" class="w-full max-w-[100px] border border-gray-300 dark:border-gray-600 rounded px-2 py-1 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 text-sm">
+                                        <option value="">—</option>
+                                        <option value="present" {{ old("fields.{$loop->index}.dependency_type", ($field->dependency_condition ?? [])['type'] ?? '') === 'present' ? 'selected' : '' }}>present</option>
+                                        <option value="equals" {{ old("fields.{$loop->index}.dependency_type", ($field->dependency_condition ?? [])['type'] ?? '') === 'equals' ? 'selected' : '' }}>equals</option>
+                                    </select>
+                                </td>
+                                <td class="py-3 px-4">
+                                    <input type="text" name="fields[{{ $loop->index }}][dependency_value]" value="{{ old("fields.{$loop->index}.dependency_value", ($field->dependency_condition ?? [])['value'] ?? '') }}" placeholder="if equals" maxlength="255" class="w-full max-w-[120px] border border-gray-300 dark:border-gray-600 rounded px-2 py-1 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 text-sm">
+                                </td>
                                 <td class="py-3 px-4 text-gray-700 dark:text-gray-300">{{ $field->is_archived ? 'Yes' : 'No' }}</td>
                                 <td class="py-3 px-4">
                                     @if ($field->is_archived)
@@ -70,7 +91,7 @@
                             </tr>
                         @empty
                             <tr>
-                                <td colspan="9" class="py-8 px-4 text-center text-gray-500">No EXTENDED fields defined yet. <a href="{{ route('admin.field-registry.extended.create') }}" class="text-indigo-600 hover:underline">Create one</a></td>
+                                <td colspan="12" class="py-8 px-4 text-center text-gray-500">No EXTENDED fields defined yet. <a href="{{ route('admin.field-registry.extended.create') }}" class="text-indigo-600 hover:underline">Create one</a></td>
                             </tr>
                         @endforelse
                     </tbody>
