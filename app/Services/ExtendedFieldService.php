@@ -62,6 +62,11 @@ class ExtendedFieldService
                 ]);
             }
 
+            // Day 9: Disabled fields hidden from form; do not overwrite (data retained)
+            if (($registry->is_enabled ?? true) === false) {
+                continue;
+            }
+
             // Day 8: Archived fields hidden from new entry; existing profile values allowed
             $row = ProfileExtendedField::firstOrNew([
                 'profile_id' => $profile->id,

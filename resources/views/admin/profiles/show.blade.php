@@ -245,6 +245,7 @@
                 @php
                     $extendedFields = \App\Models\FieldRegistry::where('field_type', 'EXTENDED')
                         ->where('is_archived', false)
+                        ->where(function ($q) { $q->where('is_enabled', true)->orWhereNull('is_enabled'); })
                         ->orderBy('category')
                         ->orderBy('display_order')
                         ->get();
@@ -451,6 +452,7 @@
         @php
             $extendedFieldsDisplay = \App\Models\FieldRegistry::where('field_type', 'EXTENDED')
                 ->where('is_archived', false)
+                ->where(function ($q) { $q->where('is_enabled', true)->orWhereNull('is_enabled'); })
                 ->orderBy('category')
                 ->orderBy('display_order')
                 ->get();

@@ -457,6 +457,7 @@ class AdminController extends Controller
             'display_label' => $validated['display_label'],
             'category' => $validated['category'] ?? 'basic',
             'display_order' => $validated['display_order'] ?? 0,
+            'is_enabled' => true,
             'is_mandatory' => false,
             'is_searchable' => false,
             'is_user_editable' => true,
@@ -491,6 +492,35 @@ class AdminController extends Controller
         }
         $field->update(['is_archived' => false]);
         return redirect()->back()->with('success', 'Field unarchived.');
+    }
+
+    /**
+     * Day 9: Bulk update EXTENDED fields — display_order and is_enabled only. field_key not modified.
+     */
+    public function extendedFieldsUpdateBulk(Request $request): \Illuminate\Http\RedirectResponse
+    {
+        $request->validate([
+            'fields' => 'required|array',
+            'fields.*.id' => 'required|integer|exists:field_registry,id',
+            'fields.*.display_order' => 'required|integer|min:0',
+            'fields.*.is_enabled' => 'sometimes|in:0,1',
+        ]);
+
+        foreach ($request->input('fields', []) as $row) {
+            $field = FieldRegistry::find($row['id']);
+            if (!$field || $field->field_type !== 'EXTENDED') {
+                continue;
+            }
+            $displayOrder = (int) $row['display_order'];
+            $isEnabled = isset($row['is_enabled']) && $row['is_enabled'] === '1';
+            $field->update([
+                'display_order' => $displayOrder,
+                'is_enabled' => $isEnabled,
+            ]);
+        }
+
+        return redirect()->route('admin.field-registry.extended.index')
+            ->with('success', 'EXTENDED field order and visibility updated.');
     }
 
     /**

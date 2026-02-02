@@ -18,52 +18,70 @@
             <div class="mb-4 px-4 py-3 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-800">{{ session('success') }}</div>
         @endif
 
-        <div class="overflow-x-auto">
-            <table class="w-full border-collapse">
-                <thead>
-                    <tr class="border-b border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-700/50">
-                        <th class="text-left py-3 px-4 font-semibold text-gray-700 dark:text-gray-300">field_key</th>
-                        <th class="text-left py-3 px-4 font-semibold text-gray-700 dark:text-gray-300">field_type</th>
-                        <th class="text-left py-3 px-4 font-semibold text-gray-700 dark:text-gray-300">data_type</th>
-                        <th class="text-left py-3 px-4 font-semibold text-gray-700 dark:text-gray-300">display_label</th>
-                        <th class="text-left py-3 px-4 font-semibold text-gray-700 dark:text-gray-300">category</th>
-                        <th class="text-left py-3 px-4 font-semibold text-gray-700 dark:text-gray-300">display_order</th>
-                        <th class="text-left py-3 px-4 font-semibold text-gray-700 dark:text-gray-300">is_archived</th>
-                        <th class="text-left py-3 px-4 font-semibold text-gray-700 dark:text-gray-300">Day 8</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @forelse ($fields as $field)
-                        <tr class="border-b border-gray-100 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700/30">
-                            <td class="py-3 px-4 text-gray-800 dark:text-gray-200 font-mono text-sm">{{ $field->field_key }}</td>
-                            <td class="py-3 px-4 text-gray-700 dark:text-gray-300">{{ $field->field_type }}</td>
-                            <td class="py-3 px-4 text-gray-700 dark:text-gray-300">{{ $field->data_type }}</td>
-                            <td class="py-3 px-4 text-gray-700 dark:text-gray-300">{{ $field->display_label }}</td>
-                            <td class="py-3 px-4 text-gray-700 dark:text-gray-300">{{ $field->category }}</td>
-                            <td class="py-3 px-4 text-gray-700 dark:text-gray-300">{{ $field->display_order }}</td>
-                            <td class="py-3 px-4 text-gray-700 dark:text-gray-300">{{ $field->is_archived ? 'Yes' : 'No' }}</td>
-                            <td class="py-3 px-4">
-                                @if ($field->is_archived)
-                                    <form method="POST" action="{{ route('admin.field-registry.unarchive', $field) }}" class="inline">
-                                        @csrf
-                                        <button type="submit" class="text-xs px-2 py-1 rounded bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-200 dark:hover:bg-emerald-800/50">Unarchive</button>
-                                    </form>
-                                @else
-                                    <form method="POST" action="{{ route('admin.field-registry.archive', $field) }}" class="inline">
-                                        @csrf
-                                        <button type="submit" class="text-xs px-2 py-1 rounded bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300 hover:bg-amber-200 dark:hover:bg-amber-800/50">Archive</button>
-                                    </form>
-                                @endif
-                            </td>
+        <form method="POST" action="{{ route('admin.field-registry.extended.update-bulk') }}">
+            @csrf
+            <div class="overflow-x-auto">
+                <table class="w-full border-collapse">
+                    <thead>
+                        <tr class="border-b border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-700/50">
+                            <th class="text-left py-3 px-4 font-semibold text-gray-700 dark:text-gray-300">field_key <span class="text-xs font-normal">(read-only)</span></th>
+                            <th class="text-left py-3 px-4 font-semibold text-gray-700 dark:text-gray-300">field_type</th>
+                            <th class="text-left py-3 px-4 font-semibold text-gray-700 dark:text-gray-300">data_type</th>
+                            <th class="text-left py-3 px-4 font-semibold text-gray-700 dark:text-gray-300">display_label</th>
+                            <th class="text-left py-3 px-4 font-semibold text-gray-700 dark:text-gray-300">category</th>
+                            <th class="text-left py-3 px-4 font-semibold text-gray-700 dark:text-gray-300">display_order (Day 9)</th>
+                            <th class="text-left py-3 px-4 font-semibold text-gray-700 dark:text-gray-300">enabled</th>
+                            <th class="text-left py-3 px-4 font-semibold text-gray-700 dark:text-gray-300">is_archived</th>
+                            <th class="text-left py-3 px-4 font-semibold text-gray-700 dark:text-gray-300">Actions</th>
                         </tr>
-                    @empty
-                        <tr>
-                            <td colspan="8" class="py-8 px-4 text-center text-gray-500">No EXTENDED fields defined yet. <a href="{{ route('admin.field-registry.extended.create') }}" class="text-indigo-600 hover:underline">Create one</a></td>
-                        </tr>
-                    @endforelse
-                </tbody>
-            </table>
-        </div>
+                    </thead>
+                    <tbody>
+                        @forelse ($fields as $field)
+                            <tr class="border-b border-gray-100 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700/30">
+                                <td class="py-3 px-4 text-gray-800 dark:text-gray-200 font-mono text-sm">{{ $field->field_key }}</td>
+                                <td class="py-3 px-4 text-gray-700 dark:text-gray-300">{{ $field->field_type }}</td>
+                                <td class="py-3 px-4 text-gray-700 dark:text-gray-300">{{ $field->data_type }}</td>
+                                <td class="py-3 px-4 text-gray-700 dark:text-gray-300">{{ $field->display_label }}</td>
+                                <td class="py-3 px-4 text-gray-700 dark:text-gray-300">{{ $field->category }}</td>
+                                <td class="py-3 px-4">
+                                    <input type="hidden" name="fields[{{ $loop->index }}][id]" value="{{ $field->id }}">
+                                    <input type="number" name="fields[{{ $loop->index }}][display_order]" value="{{ old("fields.{$loop->index}.display_order", $field->display_order) }}" min="0" class="w-20 border border-gray-300 dark:border-gray-600 rounded px-2 py-1 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 text-sm">
+                                </td>
+                                <td class="py-3 px-4">
+                                    <label class="inline-flex items-center gap-1">
+                                        <input type="checkbox" name="fields[{{ $loop->index }}][is_enabled]" value="1" {{ old("fields.{$loop->index}.is_enabled", $field->is_enabled ?? true) ? 'checked' : '' }} class="rounded border-gray-300 dark:border-gray-600">
+                                        <span class="text-sm text-gray-700 dark:text-gray-300">On</span>
+                                    </label>
+                                </td>
+                                <td class="py-3 px-4 text-gray-700 dark:text-gray-300">{{ $field->is_archived ? 'Yes' : 'No' }}</td>
+                                <td class="py-3 px-4">
+                                    @if ($field->is_archived)
+                                        <form method="POST" action="{{ route('admin.field-registry.unarchive', $field) }}" class="inline">
+                                            @csrf
+                                            <button type="submit" class="text-xs px-2 py-1 rounded bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-200 dark:hover:bg-emerald-800/50">Unarchive</button>
+                                        </form>
+                                    @else
+                                        <form method="POST" action="{{ route('admin.field-registry.archive', $field) }}" class="inline">
+                                            @csrf
+                                            <button type="submit" class="text-xs px-2 py-1 rounded bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300 hover:bg-amber-200 dark:hover:bg-amber-800/50">Archive</button>
+                                        </form>
+                                    @endif
+                                </td>
+                            </tr>
+                        @empty
+                            <tr>
+                                <td colspan="9" class="py-8 px-4 text-center text-gray-500">No EXTENDED fields defined yet. <a href="{{ route('admin.field-registry.extended.create') }}" class="text-indigo-600 hover:underline">Create one</a></td>
+                            </tr>
+                        @endforelse
+                    </tbody>
+                </table>
+            </div>
+            @if ($fields->isNotEmpty())
+                <div class="mt-4">
+                    <button type="submit" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-md font-medium text-sm">Save order and visibility</button>
+                </div>
+            @endif
+        </form>
     </div>
 </div>
 @endsection
