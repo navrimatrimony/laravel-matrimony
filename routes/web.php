@@ -190,7 +190,13 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
 
     Route::post('/profiles/{profile}/lifecycle-state', [AdminController::class, 'updateLifecycleState'])
         ->name('profiles.lifecycle-state');
-    
+
+    /*
+    | Day-13: Manual conflict detection (no profile mutation)
+    */
+    Route::post('/profiles/{profile}/detect-conflicts', [AdminController::class, 'detectConflicts'])
+        ->name('profiles.detect-conflicts');
+
     /*
     | Abuse Reports
     */

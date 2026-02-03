@@ -70,6 +70,28 @@
     </div>
     @endif
 
+    {{-- Day-13: Manual conflict detection (no profile mutation) --}}
+    <div class="mb-4 p-4 rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50/50 dark:bg-amber-900/20">
+        <h3 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Conflict detection (Day-13)</h3>
+        <p class="text-xs text-gray-500 dark:text-gray-400 mb-3">Compare current profile vs proposed values. Mismatches create Conflict Records (locked fields skipped). Profile data is not changed.</p>
+        <form method="POST" action="{{ route('admin.profiles.detect-conflicts', $matrimonyProfile) }}" class="space-y-2">
+            @csrf
+            <div class="flex flex-wrap gap-4 items-end">
+                <div>
+                    <label class="block text-xs text-gray-500 dark:text-gray-400 mb-1">Proposed caste</label>
+                    <input type="text" name="proposed_core[caste]" value="{{ old('proposed_core.caste') }}" placeholder="(optional)" class="border border-gray-300 dark:border-gray-600 rounded px-2 py-1.5 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 w-40">
+                </div>
+                <div>
+                    <label class="block text-xs text-gray-500 dark:text-gray-400 mb-1">Proposed education</label>
+                    <input type="text" name="proposed_core[education]" value="{{ old('proposed_core.education') }}" placeholder="(optional)" class="border border-gray-300 dark:border-gray-600 rounded px-2 py-1.5 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 w-40">
+                </div>
+                <div>
+                    <button type="submit" class="px-3 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded text-sm font-medium">Run conflict detection</button>
+                </div>
+            </div>
+        </form>
+    </div>
+
     <div class="mb-6">
         <button type="button" @click="adminEditMode = !adminEditMode" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-md font-medium text-sm transition-colors">
             <span x-text="adminEditMode ? 'Cancel Edit' : 'Edit Profile'"></span>

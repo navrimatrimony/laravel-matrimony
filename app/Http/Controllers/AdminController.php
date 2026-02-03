@@ -17,6 +17,7 @@ use App\Notifications\ProfileSoftDeletedNotification;
 use App\Notifications\ProfileSuspendedNotification;
 use App\Notifications\ProfileUnsuspendedNotification;
 use App\Services\AuditLogService;
+use App\Services\ConflictDetectionService;
 use App\Services\ConflictResolutionService;
 use App\Services\ExtendedFieldDependencyService;
 use App\Services\ExtendedFieldService;
@@ -838,6 +839,33 @@ class AdminController extends Controller
         return redirect()
             ->route('admin.profiles.show', $profile)
             ->with('success', $message);
+    }
+
+    /**
+     * Phase-3 Day-13: Manual conflict detection. Compares profile vs proposed data; creates ConflictRecords for mismatches.
+     * Skips locked fields. Does NOT mutate profile.
+     */
+    public function detectConflicts(Request $request, MatrimonyProfile $profile)
+    {
+        if (!auth()->check() || !auth()->user()->is_admin) {
+            abort(403, 'Admin access required');
+        }
+
+        $proposedCore = $request->input('proposed_core', []);
+        $proposedExtended = $request->input('proposed_extended', []);
+        if (!is_array($proposedCore)) {
+            $proposedCore = [];
+        }
+        if (!is_array($proposedExtended)) {
+            $proposedExtended = [];
+        }
+
+        $created = ConflictDetectionService::detect($profile, $proposedCore, $proposedExtended);
+        $count = count($created);
+
+        return redirect()
+            ->route('admin.profiles.show', $profile->id)
+            ->with('success', "Conflict detection complete. {$count} conflict(s) created (locked fields skipped).");
     }
 
     /**
