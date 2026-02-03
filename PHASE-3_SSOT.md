@@ -400,6 +400,82 @@ Mandatory workflow:
 - Any planning or teaching without prior Cursor verification is a SSOT violation.
 
 ============================================================
+TESTING AUTHORITY & EXECUTION PROTOCOL (NEW — LOCKED)
+============================================================
+
+RULE T1️⃣ : CURSOR-FIRST TESTING (MANDATORY)
+
+• कोणतेही testing (unit / integration / governance / regression)
+  USER ने manually करण्याआधी
+  CURSOR AI ने आधी करणे MANDATORY आहे.
+
+• Cursor AI = Primary Test Executor
+• User = Secondary Manual Verifier (ONLY after Cursor PASS)
+
+------------------------------------------------------------
+
+RULE T2️⃣ : CURSOR AS TEST EXECUTION ENGINE
+
+Testing दरम्यान Cursor AI ची भूमिका खालीलप्रमाणे FIXED आहे:
+
+• Actual code paths trace करणे
+• Database state verify करणे
+• Mode / condition detection verify करणे
+• Realistic test scenarios simulate करणे
+• PASS / FAIL factual report देणे
+• FAIL असल्यास exact root cause explain करणे
+
+❌ Cursor ने fix सुचवायचा नाही
+❌ Cursor ने scope बदलायचा नाही
+❌ Cursor ने architecture ठरवायची नाही
+
+------------------------------------------------------------
+
+RULE T3️⃣ : USER MANUAL TESTING — CONDITIONED
+
+• User ने manually testing करण्याची परवानगी
+  फक्त तेव्हाच आहे जेव्हा:
+
+  A) Cursor AI ने सर्व defined tests PASS केलेले असतील
+  B) Cursor AI ने explicit "ALL TESTS PASSED" report दिलेला असेल
+
+• Cursor PASS शिवाय User manual testing = NOT ALLOWED
+
+------------------------------------------------------------
+
+RULE T4️⃣ : SINGLE SOURCE OF TEST TRUTH
+
+• Testing result साठी primary authority:
+  → Cursor AI factual execution report
+
+• User manual testing:
+  → Sanity / confirmation purpose ONLY
+
+• Cursor report शिवाय
+  User ने testing वर अंतिम निर्णय घेणे
+  = SSOT VIOLATION
+
+------------------------------------------------------------
+
+RULE T5️⃣ : NO MANUAL REMINDERS POLICY
+
+• ChatGPT ला User ला manually
+  "आधी Cursor कडून test करून घे"
+  असे सांगण्याची गरज पडू नये.
+
+• Testing flow हा SSOT मध्ये
+  PERMANENTLY DEFINED असल्यामुळे
+  तो AUTOMATICALLY follow झाला पाहिजे.
+
+------------------------------------------------------------
+
+LOCK STATEMENT:
+
+• Cursor-first testing protocol is FINAL.
+• Any testing bypassing Cursor AI is INVALID.
+• This rule applies to ALL phases (Phase-2, Phase-3, Phase-4+).
+
+============================================================
 DAY-WISE IMPLEMENTATION PLAN
 ============================================================
 
@@ -1524,3 +1600,10 @@ Admin-only manual trigger provided to generate ConflictRecords for mismatched va
 Locked fields are skipped during detection; overwrite protection preserved.
 No automatic detection, no OCR integration, and Phase-2 behavior remains untouched.
 --------------------
+PHASE-3 — DAY 14: OCR GOVERNANCE FOUNDATION (CLOSED)
+
+• OCR mode-based governance (MODE-1 / MODE-2 / MODE-3) structure implemented and verified.
+• Authority order enforced using field locks; no OCR engine, no data mutation.
+• Conflict creation, skip logic, and allow logic validated via Cursor-executed tests.
+• Cursor-first testing protocol enforced; Day-14 marked COMPLETE and LOCKED.
+---------------------
