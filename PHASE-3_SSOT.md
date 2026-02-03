@@ -1511,5 +1511,16 @@ Reason :
 - Enabled + mandatory metadata aligned
 - Runtime proof confirms % changes on caste add/remove
 - No formula / threshold / Phase-2 regression
-
 =============================
+Day-12 Summary (SSOT):
+CORE vs EXTENDED fields साठी API safety boundaries स्पष्टपणे document केल्या.
+EXTENDED fields optional व dynamic असल्यामुळे apps ने missing/empty स्थितीतही gracefully काम करणे अनिवार्य असल्याचे lock केले.
+CORE fields schema-bound व fixed असल्याचे स्पष्ट करून EXTENDED वर hard dependency forbidden ठरवली.
+कोणताही API/Flutter parity बदल न करता backward compatibility (additive-only) नियम enforce करून Day-12 formally COMPLETE केला.
+=============================
+Day 13 — Conflict Detection Framework completed.
+Field-by-field CORE + EXTENDED comparison implemented via ConflictDetectionService.
+Admin-only manual trigger provided to generate ConflictRecords for mismatched values.
+Locked fields are skipped during detection; overwrite protection preserved.
+No automatic detection, no OCR integration, and Phase-2 behavior remains untouched.
+--------------------
