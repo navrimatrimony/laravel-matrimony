@@ -2,6 +2,11 @@
 PHASE-3 SINGLE SOURCE OF TRUTH (SSOT)
 ============================================================
 
+SSOT Name   : Phase-3 Single Source of Truth
+Version     : v1.1
+Last Change : Added 'caste' as mandatory Phase-2 CORE field (Day-11 alignment fix)
+Locked On   : 2026-02-03
+
 This document IS the definitive authority for Phase-3 implementation.
 No Phase-3 implementation SHALL occur outside this document.
 Blueprints are reference-only and SHALL NOT override this SSOT.
@@ -1015,7 +1020,7 @@ Connect Phase-3 field_registry metadata to existing Phase-2 completeness logic (
 - Day 11 SHALL NOT modify:
   - Completeness formula (filled mandatory / total mandatory × 100)
   - Completeness threshold (70%)
-  - Mandatory field definitions (Gender, DOB, Marital Status, Education, Location, Photo)
+  - Mandatory field definitions (Gender, DOB, Marital Status, Education, Location, Caste, Photo)
   - Completeness calculation logic
 - Day 11 ONLY connects Phase-3 metadata to existing Phase-2 completeness logic
 - Day 11 SHALL ensure field_registry is_mandatory flag aligns with Phase-2 mandatory fields
