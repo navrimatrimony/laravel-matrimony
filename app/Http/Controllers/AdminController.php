@@ -83,6 +83,23 @@ class AdminController extends Controller
             ViewTrackingService::maybeTriggerViewBack($user->matrimonyProfile, $profile);
         }
 
+        // STEP A: BASELINE - BEFORE any edit
+        \Log::info('A_BASELINE', [
+            'profile_id' => $profile->id,
+            'db_caste' => $profile->caste,
+            'pct' => \App\Services\ProfileCompletenessService::percentage($profile),
+        ]);
+        
+        // STEP D: INTERNAL CHECK - Log enabled & mandatory inputs
+        \Log::info('D_INPUTS', [
+            'mandatory' => \App\Models\FieldRegistry::where('field_type', 'CORE')->where('is_mandatory', true)->pluck('field_key')->values(),
+            'enabled' => \App\Services\ProfileFieldConfigurationService::getEnabledFieldKeys(),
+            'used' => array_values(array_intersect(
+                \App\Models\FieldRegistry::where('field_type', 'CORE')->where('is_mandatory', true)->pluck('field_key')->toArray(),
+                \App\Services\ProfileFieldConfigurationService::getEnabledFieldKeys()
+            )),
+        ]);
+        
         // Profile completeness (from service, passed to view)
         $completenessPct = ProfileCompletenessService::percentage($profile);
 
@@ -663,7 +680,7 @@ class AdminController extends Controller
         // Validate edit reason (mandatory)
         $request->validate([
             'edit_reason' => self::REASON_RULES,
-            'full_name' => 'nullable|string|max:255',
+            'full_name' => 'required|string|max:255',
             'date_of_birth' => 'nullable|date',
             'marital_status' => 'nullable|in:single,divorced,widowed',
             'education' => 'nullable|string|max:255',
@@ -680,13 +697,23 @@ class AdminController extends Controller
         $updateData = [];
         $editableFields = ['full_name', 'date_of_birth', 'marital_status', 'education', 'location', 'caste', 'height_cm'];
         
+        // STEP 1: REQUEST PAYLOAD (SINGLE RUN) - BEFORE any logic
+        \Log::info('STEP1_REQUEST', [
+            'has' => request()->has('caste'),
+            'exists' => request()->exists('caste'),
+            'value' => request()->input('caste'),
+            'all' => request()->all(),
+        ]);
+        
         foreach ($editableFields as $field) {
-            if ($request->has($field)) {
+            if ($request->exists($field)) {
                 $newValue = $request->input($field);
                 $oldValue = $originalData[$field] ?? null;
                 
-                // Normalize for comparison
+                // Normalize for comparison (trim whitespace, treat empty as null)
+                $newValue = is_string($newValue) ? trim($newValue) : $newValue;
                 $newValue = $newValue === '' ? null : $newValue;
+                $oldValue = is_string($oldValue) ? trim($oldValue) : $oldValue;
                 $oldValue = $oldValue === '' ? null : $oldValue;
                 
                 if ($newValue != $oldValue) {
@@ -742,7 +769,38 @@ class AdminController extends Controller
                 );
             }
 
+            // STEP 2: UPDATE DATA (SAME REQUEST) - Immediately BEFORE $profile->update($updateData)
+            \Log::info('STEP2_UPDATE_DATA', [
+                'updateData' => $updateData,
+                'old_db' => $profile->getOriginal('caste'),
+            ]);
+
             $profile->update($updateData);
+            
+            // STEP 3: DB AFTER SAVE - Immediately AFTER update + refresh
+            $profile->refresh();
+            \Log::info('STEP3_DB_AFTER', [
+                'db_value' => $profile->caste,
+            ]);
+            
+            // STEP B/C: AFTER ADD/REMOVE - Log based on caste edit
+            if (in_array('caste', $editedFields)) {
+                $casteValue = $updateData['caste'] ?? null;
+                if ($casteValue !== null && trim($casteValue) !== '') {
+                    // STEP B: ADD CASTE
+                    \Log::info('B_AFTER_ADD', [
+                        'db_caste' => $profile->caste,
+                        'pct' => \App\Services\ProfileCompletenessService::percentage($profile),
+                    ]);
+                } else {
+                    // STEP C: REMOVE CASTE
+                    \Log::info('C_AFTER_REMOVE', [
+                        'db_caste' => $profile->caste,
+                        'pct' => \App\Services\ProfileCompletenessService::percentage($profile),
+                    ]);
+                }
+            }
+            
             // Day-6: Apply lock to edited CORE fields after successful update
             ProfileFieldLockService::applyLocks($profile, $editedFields, 'CORE', $admin);
         } elseif (!empty($changedExtendedKeys)) {

@@ -2,15 +2,17 @@
 
 namespace App\Services;
 
+use App\Models\FieldRegistry;
 use App\Models\MatrimonyProfile;
 
 /*
 |--------------------------------------------------------------------------
-| ProfileCompletenessService (SSOT Day-7 — Recovery-Day-R3, Day-16)
+| ProfileCompletenessService (SSOT Day-7 — Recovery-Day-R3, Day-16, Day-11)
 |--------------------------------------------------------------------------
 |
 | Centralized completeness: (filled mandatory / total mandatory) × 100.
-| Mandatory fields are read dynamically from ProfileFieldConfigurationService.
+| Day-11: Mandatory fields read from field_registry.is_mandatory (CORE only).
+| Enabled fields still from ProfileFieldConfigurationService (Day-18).
 | Same logic for demo and real profiles.
 |
 */
@@ -19,13 +21,25 @@ class ProfileCompletenessService
     public const THRESHOLD = 70;
 
     /**
+     * Get mandatory field keys from field_registry (Day-11: source of truth).
+     * Returns CORE fields where is_mandatory = true.
+     */
+    private static function getMandatoryFieldKeysFromRegistry(): array
+    {
+        return FieldRegistry::where('field_type', 'CORE')
+            ->where('is_mandatory', true)
+            ->pluck('field_key')
+            ->toArray();
+    }
+
+    /**
      * Compute completeness percentage (0–100) for a profile.
-     * Uses database-driven mandatory field configuration.
+     * Day-11: Uses field_registry for mandatory fields; ProfileFieldConfigurationService for enabled.
      * Only considers enabled mandatory fields (Day-18 enforcement).
      */
     public static function percentage(MatrimonyProfile $profile): int
     {
-        $mandatoryFields = ProfileFieldConfigurationService::getMandatoryFieldKeys();
+        $mandatoryFields = self::getMandatoryFieldKeysFromRegistry();
         $enabledFields = ProfileFieldConfigurationService::getEnabledFieldKeys();
         
         // Only consider mandatory fields that are also enabled
@@ -78,7 +92,14 @@ class ProfileCompletenessService
                     && $profile->photo_approved !== false;
 
             case 'caste':
-                return $profile->caste !== null && $profile->caste !== '';
+                // STEP 5: COMPLETENESS DECISION - Inside isFieldFilled for caste
+                $result = ($profile->caste !== null && trim($profile->caste ?? '') !== '');
+                \Log::info('STEP5_IS_FILLED', [
+                    'received' => $profile->caste,
+                    'trimmed' => is_string($profile->caste) ? trim($profile->caste) : $profile->caste,
+                    'returns' => $result,
+                ]);
+                return $result;
 
             default:
                 // For any other field, check if it's not null and not empty string
@@ -98,11 +119,11 @@ class ProfileCompletenessService
     /**
      * Raw SQL condition for "meets 70% OR visibility_override".
      * Uses MatrimonyProfile fields only. Table alias optional.
-     * Dynamically builds SQL based on enabled mandatory fields from database (Day-18 enforcement).
+     * Day-11: Uses field_registry for mandatory; ProfileFieldConfigurationService for enabled (Day-18 enforcement).
      */
     public static function sqlSearchVisible(string $table = 'matrimony_profiles'): string
     {
-        $mandatoryFields = ProfileFieldConfigurationService::getMandatoryFieldKeys();
+        $mandatoryFields = self::getMandatoryFieldKeysFromRegistry();
         $enabledFields = ProfileFieldConfigurationService::getEnabledFieldKeys();
         
         // Only consider mandatory fields that are also enabled
