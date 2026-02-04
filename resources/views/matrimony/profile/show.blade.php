@@ -143,7 +143,7 @@
     if ($viewerProfile && $viewerProfile->profile_photo && $viewerProfile->photo_approved !== false) {
         $viewerPhotoSrc = asset('uploads/matrimony_photos/'.$viewerProfile->profile_photo);
     } else {
-        $viewerGender = $viewerProfile->gender ?? auth()->user()->gender ?? null;
+        $viewerGender = $viewerProfile ? ($viewerProfile->gender ?? auth()->user()->gender ?? null) : (auth()->user()->gender ?? null);
         if ($viewerGender === 'male') {
             $viewerPhotoSrc = asset('images/placeholders/male-profile.svg');
         } elseif ($viewerGender === 'female') {

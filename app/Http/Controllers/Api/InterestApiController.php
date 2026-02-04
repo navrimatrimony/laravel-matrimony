@@ -192,6 +192,15 @@ class InterestApiController extends Controller
             ], 403);
         }
 
+        // Day 7: Receiver lifecycle — accept only if receiver can receive interest
+        $receiverProfile = $interest->receiverProfile;
+        if (!$receiverProfile || !ProfileLifecycleService::canReceiveInterest($receiverProfile)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Interest cannot be processed due to profile lifecycle state.',
+            ], 422);
+        }
+
         $interest->update([
             'status' => 'accepted',
         ]);
@@ -240,6 +249,15 @@ class InterestApiController extends Controller
                 'success' => false,
                 'message' => 'This interest is already processed.',
             ], 403);
+        }
+
+        // Day 7: Receiver lifecycle — reject only if receiver can receive interest
+        $receiverProfile = $interest->receiverProfile;
+        if (!$receiverProfile || !ProfileLifecycleService::canReceiveInterest($receiverProfile)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Interest cannot be processed due to profile lifecycle state.',
+            ], 422);
         }
 
         $interest->update([

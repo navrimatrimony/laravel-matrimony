@@ -476,6 +476,129 @@ LOCK STATEMENT:
 • This rule applies to ALL phases (Phase-2, Phase-3, Phase-4+).
 
 ============================================================
+PERMANENT TESTING & VERIFICATION DOCTRINE (LOCKED)
+============================================================
+
+This doctrine applies to ALL phases (past, current, and future).
+This doctrine is NON-NEGOTIABLE and PHASE-INDEPENDENT.
+This doctrine has HIGHER PRIORITY than feature-level instructions.
+
+--------------------------------------------------
+1) CURSOR ROLE DEFINITION (LOCKED)
+--------------------------------------------------
+
+Cursor AI is NOT a happy-path tester.
+
+Cursor AI is defined as:
+- Human Error Simulator
+- Assumption Breaker
+- Data Loss Guard
+- Edge-Case & Misuse Tester
+
+Cursor MUST simulate every realistic way a human can:
+- make mistakes
+- misuse a feature
+- partially complete an action
+- repeat an action unintentionally
+- bypass UI assumptions
+
+--------------------------------------------------
+2) FIELD-LEVEL TESTING (MANDATORY)
+--------------------------------------------------
+
+For ANY field that can be created, updated, approved, or resolved,
+Cursor MUST test ALL of the following:
+
+- valid value
+- invalid value
+- empty value
+- null value
+- whitespace-only value
+- wrong data type
+- boundary values (min / max / length)
+- same value re-submission (no-op)
+- direct request bypass (UI ignored)
+
+Feature testing is INCOMPLETE if any of the above are not tested.
+
+--------------------------------------------------
+3) DATA MUTATION ZERO-TOLERANCE RULE
+--------------------------------------------------
+
+Any operation that mutates data (save, update, approve, override):
+
+Cursor MUST verify:
+- existing valid data is never deleted silently
+- unrelated fields remain unchanged
+- history/audit remains intact
+- no duplicate history entries created
+- no partial updates occur
+
+Silent data loss is classified as a CRITICAL FAILURE.
+
+--------------------------------------------------
+4) NEGATIVE & MISUSE TESTING (MANDATORY)
+--------------------------------------------------
+
+Cursor MUST test:
+
+- wrong action order (approve before detect, reject then approve)
+- double clicks / repeated submissions
+- refresh during action
+- back-button interruptions
+- half-filled forms
+- stale forms after state change
+- unauthorized access attempts
+- invalid enum/state injection
+
+Assumptions such as "this won't happen" are INVALID.
+
+--------------------------------------------------
+5) NO-OP & REPEAT ACTION TESTING
+--------------------------------------------------
+
+Cursor MUST test scenarios where:
+- no actual data change occurs
+- same value is submitted again
+- same conflict is resolved twice
+- action is retried after success/failure
+
+System must remain stable and idempotent.
+
+--------------------------------------------------
+6) TESTING ORDER ENFORCEMENT
+--------------------------------------------------
+
+Mandatory order:
+1) Cursor exhaustive testing (including negative cases)
+2) Bug fixing (if any)
+3) Cursor re-verification
+4) User manual testing (confirmation only)
+
+If a user discovers a bug:
+- it is classified as a PROCESS FAILURE
+- SSOT testing rules must be updated to prevent recurrence
+
+--------------------------------------------------
+7) PERMANENCE CLAUSE
+--------------------------------------------------
+
+This doctrine:
+- applies to ALL phases
+- applies to ALL features
+- cannot be overridden by speed, deadlines, or convenience
+- remains valid even if tools, frameworks, or team members change
+
+--------------------------------------------------
+
+LOCK STATEMENT:
+
+• This testing doctrine is PERMANENT and FINAL.
+• Partial adoption is NOT ALLOWED.
+• These are RULES, not guidelines or suggestions.
+• Violation of this doctrine is a SSOT VIOLATION.
+
+============================================================
 DAY-WISE IMPLEMENTATION PLAN
 ============================================================
 
@@ -1607,3 +1730,12 @@ PHASE-3 — DAY 14: OCR GOVERNANCE FOUNDATION (CLOSED)
 • Conflict creation, skip logic, and allow logic validated via Cursor-executed tests.
 • Cursor-first testing protocol enforced; Day-14 marked COMPLETE and LOCKED.
 ---------------------
+Phase-3 — Day-15 (SSOT Summary)
+
+Phase-3 मधील सर्व governance systems (Field Registry, Dependency, Completeness, Locking, Conflict, Resolution, Lifecycle, OCR) end-to-end verify करून SSOT-compliant ठरवले.
+
+Conflict Resolution मध्ये NULL / empty new_value मुळे होणारा silent data loss bug ओळखून fix केला व data deletion permanently बंद केली.
+
+Interest feature मध्ये lifecycle guard gap (accept/reject वेळी) सापडून receiver lifecycle validation add करून interaction rules SSOT-correct केले.
+
+Permanent Testing & Verification Doctrine SSOT मध्ये add करून freeze केली — Cursor AI ला exhaustive human-error simulation tester म्हणून अनिवार्य केले.

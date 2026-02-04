@@ -5,6 +5,8 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use App\Models\MatrimonyProfile;
+use App\Services\ProfileLifecycleService;
+use App\Services\ViewTrackingService;
 
 class MatrimonyProfileApiController extends Controller
 {
@@ -94,14 +96,20 @@ public function update(Request $request)
         ], 403);
     }
 
-    // Day-6.4: Detect only ACTUALLY CHANGED core fields for lock check
+    // PIR-007: Only update fields PRESENT in request; do not overwrite others with null/empty
     $coreFields = ['full_name', 'date_of_birth', 'caste', 'education', 'location'];
-    $changedFields = [];
+    $updateData = [];
     foreach ($coreFields as $field) {
         if (!$request->has($field)) {
             continue;
         }
-        $newVal = $request->input($field) === '' ? null : $request->input($field);
+        $updateData[$field] = $request->input($field) === '' ? null : $request->input($field);
+    }
+
+    // Day-6.4: Detect only ACTUALLY CHANGED core fields for lock check (among those being updated)
+    $changedFields = [];
+    foreach (array_keys($updateData) as $field) {
+        $newVal = $updateData[$field];
         $oldVal = $profile->$field === '' ? null : $profile->$field;
         if ((string) $newVal !== (string) $oldVal) {
             $changedFields[] = $field;
@@ -112,13 +120,9 @@ public function update(Request $request)
         \App\Services\ProfileFieldLockService::assertNotLocked($profile, $changedFields, $user);
     }
 
-    $profile->update([
-        'full_name'     => $request->full_name,
-        'date_of_birth' => $request->date_of_birth,
-        'caste'         => $request->caste,
-        'education'     => $request->education,
-        'location'      => $request->location,
-    ]);
+    if (!empty($updateData)) {
+        $profile->update($updateData);
+    }
 
     if (!empty($changedFields)) {
         \App\Services\ProfileFieldLockService::applyLocks($profile, $changedFields, 'CORE', $user);
@@ -234,12 +238,13 @@ public function update(Request $request)
         $profiles = $query->get();
 
         // Transform to include gender from user relationship (SSOT-approved fields only)
+        // PIR-006: Null-safe when profile's user is missing (orphaned profile)
         $profiles = $profiles->map(function ($profile) {
             return [
                 'id' => $profile->id,
                 'user_id' => $profile->user_id,
                 'full_name' => $profile->full_name,
-                'gender' => $profile->user->gender ?? null,
+                'gender' => $profile->user ? ($profile->user->gender ?? null) : null,
                 'date_of_birth' => $profile->date_of_birth,
                 'caste' => $profile->caste,
                 'education' => $profile->education,
@@ -258,6 +263,8 @@ public function update(Request $request)
 
     /**
      * Get matrimony profile by ID
+     * PIR-005: Visibility parity with Web — 404 when not visible to others or blocked.
+     * PIR-006: Null-safe gender when profile's user is missing.
      */
     public function showById($id)
     {
@@ -270,12 +277,32 @@ public function update(Request $request)
             ], 404);
         }
 
+        $user = request()->user();
+        $viewerProfile = $user ? $user->matrimonyProfile : null;
+        $isOwnProfile = $viewerProfile && (int) $viewerProfile->id === (int) $profile->id;
+
+        if (!$isOwnProfile) {
+            if (!ProfileLifecycleService::isVisibleToOthers($profile)) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Profile not found',
+                ], 404);
+            }
+            if ($viewerProfile && ViewTrackingService::isBlocked($viewerProfile->id, $profile->id)) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Profile not found',
+                ], 404);
+            }
+        }
+
         // Transform to include gender from user relationship (SSOT-approved field)
+        // PIR-006: Null-safe when user relation is missing
         $profileData = [
             'id' => $profile->id,
             'user_id' => $profile->user_id,
             'full_name' => $profile->full_name,
-            'gender' => $profile->user->gender ?? null,
+            'gender' => $profile->user ? ($profile->user->gender ?? null) : null,
             'date_of_birth' => $profile->date_of_birth,
             'caste' => $profile->caste,
             'education' => $profile->education,

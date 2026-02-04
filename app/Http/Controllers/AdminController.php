@@ -19,6 +19,9 @@ use App\Notifications\ProfileUnsuspendedNotification;
 use App\Services\AuditLogService;
 use App\Services\ConflictDetectionService;
 use App\Services\ConflictResolutionService;
+use App\Services\OcrMode;
+use App\Services\OcrModeDetectionService;
+use App\Services\OcrGovernanceService;
 use App\Services\ExtendedFieldDependencyService;
 use App\Services\ExtendedFieldService;
 use App\Services\ProfileCompletenessService;
@@ -678,18 +681,6 @@ class AdminController extends Controller
             abort(403, 'Admin access required');
         }
 
-        // Validate edit reason (mandatory)
-        $request->validate([
-            'edit_reason' => self::REASON_RULES,
-            'full_name' => 'required|string|max:255',
-            'date_of_birth' => 'nullable|date',
-            'marital_status' => 'nullable|in:single,divorced,widowed',
-            'education' => 'nullable|string|max:255',
-            'location' => 'nullable|string|max:255',
-            'caste' => 'nullable|string|max:255',
-            'height_cm' => 'nullable|integer|min:50|max:250',
-        ]);
-
         $admin = auth()->user();
         $originalData = $profile->only(['full_name', 'date_of_birth', 'marital_status', 'education', 'location', 'caste', 'height_cm']);
         $editedFields = [];
@@ -697,6 +688,43 @@ class AdminController extends Controller
         // Track which fields were actually changed
         $updateData = [];
         $editableFields = ['full_name', 'date_of_birth', 'marital_status', 'education', 'location', 'caste', 'height_cm'];
+        
+        // Check if any CORE fields are being edited (before validation)
+        $hasCoreFieldChanges = false;
+        foreach ($editableFields as $field) {
+            if ($request->exists($field)) {
+                $newValue = $request->input($field);
+                $oldValue = $originalData[$field] ?? null;
+                $newValue = is_string($newValue) ? trim($newValue) : $newValue;
+                $newValue = $newValue === '' ? null : $newValue;
+                $oldValue = is_string($oldValue) ? trim($oldValue) : $oldValue;
+                $oldValue = $oldValue === '' ? null : $oldValue;
+                if ((string) $newValue !== (string) $oldValue) {
+                    $hasCoreFieldChanges = true;
+                    break;
+                }
+            }
+        }
+
+        // Validate edit reason (mandatory for all updates)
+        $validationRules = [
+            'edit_reason' => self::REASON_RULES,
+        ];
+
+        // Only validate CORE fields if they're being edited
+        // This allows EXTENDED-only updates without requiring CORE field validation
+        // SSOT: CORE vs EXTENDED separation - EXTENDED saves don't require CORE validation
+        if ($hasCoreFieldChanges) {
+            $validationRules['full_name'] = 'required|string|max:255';
+            $validationRules['date_of_birth'] = 'nullable|date';
+            $validationRules['marital_status'] = 'nullable|in:single,divorced,widowed';
+            $validationRules['education'] = 'nullable|string|max:255';
+            $validationRules['location'] = 'nullable|string|max:255';
+            $validationRules['caste'] = 'nullable|string|max:255';
+            $validationRules['height_cm'] = 'nullable|integer|min:50|max:250';
+        }
+
+        $request->validate($validationRules);
         
         // STEP 1: REQUEST PAYLOAD (SINGLE RUN) - BEFORE any logic
         \Log::info('STEP1_REQUEST', [
@@ -942,5 +970,86 @@ class AdminController extends Controller
         $request->validate(['resolution_reason' => ['required', 'string', 'min:10']]);
         ConflictResolutionService::overrideConflict($record, $request->user(), $request->resolution_reason);
         return redirect()->route('admin.conflict-records.index')->with('success', 'Conflict overridden.');
+    }
+
+    /**
+     * Phase-3 Day-14: OCR mode simulation UI (admin-only, testing governance).
+     * Shows form to manually select OCR mode and input dummy proposed data.
+     */
+    public function ocrSimulation()
+    {
+        if (!auth()->check() || !auth()->user()->is_admin) {
+            abort(403, 'Admin access required');
+        }
+
+        $profiles = MatrimonyProfile::orderBy('id')->get(['id', 'full_name']);
+        $modes = OcrMode::all();
+
+        return view('admin.ocr-simulation.index', compact('profiles', 'modes'));
+    }
+
+    /**
+     * Phase-3 Day-14: Execute OCR governance simulation (no persistence).
+     * Processes dummy proposed data through governance logic only.
+     * Returns decisions (ALLOW/SKIP/CREATE_CONFLICT) — does NOT mutate profile.
+     */
+    public function ocrSimulationExecute(Request $request)
+    {
+        if (!auth()->check() || !auth()->user()->is_admin) {
+            abort(403, 'Admin access required');
+        }
+
+        $request->validate([
+            'ocr_mode' => ['required', 'string', 'in:' . implode(',', OcrMode::all())],
+            'profile_id' => ['nullable', 'exists:matrimony_profiles,id'],
+            'proposed_core' => ['nullable', 'array'],
+            'proposed_extended' => ['nullable', 'array'],
+        ]);
+
+        $mode = $request->input('ocr_mode');
+        $profileId = $request->input('profile_id');
+        $proposedCoreRaw = $request->input('proposed_core', []);
+        $proposedExtendedRaw = $request->input('proposed_extended', []);
+
+        // Filter out empty/null values from proposed data
+        // SSOT: Only process fields that are explicitly provided with non-empty values
+        // Empty form fields should not trigger conflict detection
+        $proposedCore = [];
+        foreach ($proposedCoreRaw as $key => $value) {
+            if ($value !== null && $value !== '' && trim((string) $value) !== '') {
+                $proposedCore[$key] = $value;
+            }
+        }
+        $proposedExtended = [];
+        foreach ($proposedExtendedRaw as $key => $value) {
+            if ($value !== null && $value !== '' && trim((string) $value) !== '') {
+                $proposedExtended[$key] = $value;
+            }
+        }
+
+        $profile = $profileId ? MatrimonyProfile::find($profileId) : null;
+
+        // Get governance decisions (no persistence)
+        $decisions = OcrGovernanceService::decideBulk($profile, $proposedCore, $proposedExtended);
+
+        // Get mode per field (for display)
+        $fieldModes = [];
+        foreach (array_merge(array_keys($proposedCore), array_keys($proposedExtended)) as $fieldKey) {
+            $fieldModes[$fieldKey] = OcrModeDetectionService::detect($profile, $fieldKey);
+        }
+
+        // Execute decisions (create conflicts only, no profile mutation)
+        $createdConflicts = OcrGovernanceService::executeDecisions($profile, $proposedCore, $proposedExtended);
+
+        return redirect()
+            ->route('admin.ocr-simulation.index')
+            ->with('simulation_result', [
+                'mode' => $mode,
+                'profile_id' => $profileId,
+                'decisions' => $decisions,
+                'field_modes' => $fieldModes,
+                'conflicts_created' => count($createdConflicts),
+            ])
+            ->with('success', 'OCR governance simulation complete. ' . count($createdConflicts) . ' conflict(s) created (if any).');
     }
 }

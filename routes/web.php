@@ -198,6 +198,14 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
         ->name('profiles.detect-conflicts');
 
     /*
+    | Day-14: OCR mode simulation (governance testing only, no OCR engine)
+    */
+    Route::get('/ocr-simulation', [AdminController::class, 'ocrSimulation'])
+        ->name('ocr-simulation.index');
+    Route::post('/ocr-simulation/execute', [AdminController::class, 'ocrSimulationExecute'])
+        ->name('ocr-simulation.execute');
+
+    /*
     | Abuse Reports
     */
     Route::get('/abuse-reports', [AbuseReportController::class, 'index'])

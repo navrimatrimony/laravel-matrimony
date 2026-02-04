@@ -44,7 +44,7 @@
                         <div>
                             {{-- Receiver Name --}}
                             <p class="text-lg font-semibold">
-                                To: {{ $interest->receiverProfile->full_name ?? 'Profile Deleted' }}
+                                To: {{ optional($interest->receiverProfile)->full_name ?? 'Profile Deleted' }}
                             </p>
 
                             {{-- Profile Link --}}
@@ -93,7 +93,8 @@
                                     class="w-14 h-14 rounded-full object-cover border">
                             @else
                                 @php
-                                    $recGender = $interest->receiverProfile->gender ?? null;
+                                    $receiverProfile = $interest->receiverProfile;
+                                    $recGender = $receiverProfile ? ($receiverProfile->gender ?? null) : null;
                                     if ($recGender === 'male') {
                                         $recPlaceholder = asset('images/placeholders/male-profile.svg');
                                     } elseif ($recGender === 'female') {
