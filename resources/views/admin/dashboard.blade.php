@@ -27,6 +27,11 @@
             <p class="text-2xl font-bold text-gray-800 dark:text-gray-100 mt-1">{{ $pendingAbuseReports }}</p>
             <a href="{{ route('admin.abuse-reports.index') }}" class="inline-block mt-3 text-sm font-medium text-indigo-600 hover:text-indigo-800 dark:text-indigo-400">View reports →</a>
         </div>
+        <div class="bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600 p-5">
+            <p class="text-sm font-medium text-gray-500 uppercase tracking-wider">Biodata Intakes</p>
+            <p class="text-2xl font-bold text-gray-800 dark:text-gray-100 mt-1">{{ $totalBiodataIntakes ?? 0 }}</p>
+            <a href="{{ route('admin.biodata-intakes.index') }}" class="inline-block mt-3 text-sm font-medium text-indigo-600 hover:text-indigo-800 dark:text-indigo-400">View intakes →</a>
+        </div>
     </div>
 </div>
 @endsection

@@ -144,7 +144,8 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
         $suspendedProfiles = \App\Models\MatrimonyProfile::where('is_suspended', true)->count();
         $demoProfiles = \App\Models\MatrimonyProfile::where('is_demo', true)->count();
         $pendingAbuseReports = \App\Models\AbuseReport::where('status', 'open')->count();
-        return view('admin.dashboard', compact('totalProfiles', 'activeProfiles', 'suspendedProfiles', 'demoProfiles', 'pendingAbuseReports'));
+        $totalBiodataIntakes = \App\Models\BiodataIntake::count();
+        return view('admin.dashboard', compact('totalProfiles', 'activeProfiles', 'suspendedProfiles', 'demoProfiles', 'pendingAbuseReports', 'totalBiodataIntakes'));
     })->name('dashboard');
 
     /*
@@ -239,6 +240,13 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
 
     Route::get('/notifications', [AdminController::class, 'userNotificationsIndex'])->name('notifications.index');
     Route::get('/notifications/user', [AdminController::class, 'userNotificationsShow'])->name('notifications.user.show');
+
+    /*
+    | Phase-4 Day-4: Biodata Intake Sandbox & Attach (admin only)
+    */
+    Route::get('/biodata-intakes', [AdminController::class, 'biodataIntakesIndex'])->name('biodata-intakes.index');
+    Route::get('/biodata-intakes/{intake}', [AdminController::class, 'showBiodataIntake'])->name('biodata-intakes.show');
+    Route::patch('/biodata-intakes/{intake}/attach', [AdminController::class, 'attachBiodataIntake'])->name('biodata-intakes.attach');
 
     /*
     | Conflict Records (Phase-3 Day-4/5 — list, create, resolve)
