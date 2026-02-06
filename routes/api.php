@@ -4,6 +4,10 @@ use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\MatrimonyProfileApiController;
 use App\Http\Controllers\Api\InterestApiController;
+use App\Http\Controllers\Api\FieldRegistryApiController;
+use App\Http\Controllers\Api\ExtendedFieldApiController;
+use App\Http\Controllers\Api\ProfileFieldLockApiController;
+use App\Http\Controllers\Api\BiodataIntakeApiController;
 use App\Http\Controllers\AdminController;
 use App\Http\Controllers\AbuseReportController;
 
@@ -51,6 +55,27 @@ Route::prefix('v1')->group(function () {
         Route::post('/interests/{id}/reject', [InterestApiController::class, 'reject']); // REJECT INTEREST
         Route::post('/interests/{id}/withdraw', [InterestApiController::class, 'withdraw']); // WITHDRAW INTEREST
         Route::post('/logout', [AuthController::class, 'logout']); // LOGOUT
+        
+        /*
+        | Phase-4: Field Registry (read-only)
+        */
+        Route::get('/field-registry', [FieldRegistryApiController::class, 'index']); // LIST FIELD REGISTRY
+        
+        /*
+        | Phase-4: Extended Fields (definition read-only)
+        */
+        Route::get('/extended-fields', [ExtendedFieldApiController::class, 'index']); // LIST EXTENDED FIELD DEFINITIONS
+        
+        /*
+        | Phase-4: Field Locks (view-only)
+        */
+        Route::get('/matrimony-profile/field-locks', [ProfileFieldLockApiController::class, 'index']); // LIST FIELD LOCKS FOR OWN PROFILE
+        
+        /*
+        | Phase-4: Biodata Intakes (list + show only)
+        */
+        Route::get('/biodata-intakes', [BiodataIntakeApiController::class, 'index']); // LIST BIODATA INTAKES
+        Route::get('/biodata-intakes/{id}', [BiodataIntakeApiController::class, 'show']); // SHOW BIODATA INTAKE
         
         /*
         | Abuse Reports (User action)

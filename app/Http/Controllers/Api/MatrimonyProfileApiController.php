@@ -17,6 +17,14 @@ class MatrimonyProfileApiController extends Controller
      */
     public function store(Request $request)
     {
+        $request->validate([
+            'full_name' => ['required', 'string', 'max:255'],
+            'date_of_birth' => ['required', 'date'],
+            'caste' => ['required', 'string', 'max:255'],
+            'education' => ['required', 'string', 'max:255'],
+            'location' => ['required', 'string', 'max:255'],
+        ]);
+
         $user = $request->user(); // sanctum authenticated user
 
         // Check if profile already exists
@@ -77,6 +85,14 @@ public function show(Request $request)
  */
 public function update(Request $request)
 {
+    $request->validate([
+        'full_name' => ['sometimes', 'required', 'string', 'max:255'],
+        'date_of_birth' => ['sometimes', 'required', 'date'],
+        'caste' => ['sometimes', 'required', 'string', 'max:255'],
+        'education' => ['sometimes', 'required', 'string', 'max:255'],
+        'location' => ['sometimes', 'required', 'string', 'max:255'],
+    ]);
+
     $user = $request->user();
 
     $profile = MatrimonyProfile::where('user_id', $user->id)->first();
