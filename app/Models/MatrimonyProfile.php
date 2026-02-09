@@ -2,7 +2,6 @@
 
 namespace App\Models;
 
-use App\Services\ExtendedFieldService;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
@@ -36,14 +35,6 @@ class MatrimonyProfile extends Model
     |
     */
     protected $table = 'matrimony_profiles';
-
-    /** Phase-3 Day 7: Canonical lifecycle states (SSOT) */
-    public const LIFECYCLE_DRAFT = 'Draft';
-    public const LIFECYCLE_ACTIVE = 'Active';
-    public const LIFECYCLE_SEARCH_HIDDEN = 'Search-Hidden';
-    public const LIFECYCLE_SUSPENDED = 'Suspended';
-    public const LIFECYCLE_ARCHIVED = 'Archived';
-    public const LIFECYCLE_OWNER_HIDDEN = 'Owner-Hidden';
 
     /*
     |--------------------------------------------------------------------------
@@ -109,57 +100,6 @@ class MatrimonyProfile extends Model
     {
         return $this->belongsTo(User::class);
     }
-
-    /*
-    |--------------------------------------------------------------------------
-    | EXTENDED Field Values Accessor
-    |--------------------------------------------------------------------------
-    |
-    | Returns array of EXTENDED field values for this profile.
-    | Format: [field_key => field_value]
-    |
-    | Uses ExtendedFieldService internally to maintain single source of logic.
-    |
-    | Usage:
-    | $profile->getExtendedFieldValues()
-    |
-    */
-    public function getExtendedFieldValues(): array
-    {
-        return ExtendedFieldService::getValuesForProfile($this);
-    }
-
-    /** Phase-3 Day 7: Lifecycle state helpers */
-    public function isDraft(): bool
-    {
-        return ($this->lifecycle_state ?? '') === self::LIFECYCLE_DRAFT;
-    }
-
-    public function isActive(): bool
-    {
-        return ($this->lifecycle_state ?? '') === self::LIFECYCLE_ACTIVE;
-    }
-
-    public function isSearchHidden(): bool
-    {
-        return ($this->lifecycle_state ?? '') === self::LIFECYCLE_SEARCH_HIDDEN;
-    }
-
-    public function isSuspended(): bool
-    {
-        return ($this->lifecycle_state ?? '') === self::LIFECYCLE_SUSPENDED;
-    }
-
-    public function isArchived(): bool
-    {
-        return ($this->lifecycle_state ?? '') === self::LIFECYCLE_ARCHIVED;
-    }
-
-    public function isOwnerHidden(): bool
-    {
-        return ($this->lifecycle_state ?? '') === self::LIFECYCLE_OWNER_HIDDEN;
-    }
-
 	public $timestamps = true;
 
 }

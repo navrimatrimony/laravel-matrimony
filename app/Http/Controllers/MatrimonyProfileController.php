@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\MatrimonyProfile;
 use App\Models\ProfileFieldConfig;
 use App\Models\Shortlist;
+use App\Services\FieldValueHistoryService;
 use App\Services\ProfileCompletenessService;
 use App\Services\ProfileFieldConfigurationService;
 use App\Services\ProfileFieldLockService;
@@ -110,11 +111,37 @@ public function store(Request $request)
         $profileData['caste'] = $request->caste;
     }
 
-    MatrimonyProfile::updateOrCreate(
-        ['user_id' => $user->id],
-        $profileData
-    );
-
+    $existingProfile = MatrimonyProfile::where('user_id', $user->id)->first();
+    if (!$existingProfile) {
+        $profile = MatrimonyProfile::create(array_merge(['user_id' => $user->id], $profileData));
+        foreach (['full_name', 'gender', 'date_of_birth', 'marital_status', 'education', 'location', 'caste', 'is_suspended'] as $fieldKey) {
+            if (!array_key_exists($fieldKey, $profileData)) {
+                continue;
+            }
+            $newVal = $profileData[$fieldKey];
+            if ($newVal instanceof \Carbon\Carbon) {
+                $newVal = $newVal->format('Y-m-d');
+            }
+            $newVal = $newVal === '' || $newVal === null ? null : (string) $newVal;
+            FieldValueHistoryService::record($profile->id, $fieldKey, 'CORE', null, $newVal, FieldValueHistoryService::CHANGED_BY_USER);
+        }
+    } else {
+        foreach (['full_name', 'gender', 'date_of_birth', 'marital_status', 'education', 'location', 'caste', 'is_suspended'] as $fieldKey) {
+            if (!array_key_exists($fieldKey, $profileData)) {
+                continue;
+            }
+            $oldVal = $existingProfile->$fieldKey === '' ? null : $existingProfile->$fieldKey;
+            $newVal = $profileData[$fieldKey];
+            if ($newVal instanceof \Carbon\Carbon) {
+                $newVal = $newVal->format('Y-m-d');
+            }
+            $newVal = $newVal === '' || $newVal === null ? null : (string) $newVal;
+            if ((string) $oldVal !== (string) $newVal) {
+                FieldValueHistoryService::record($existingProfile->id, $fieldKey, 'CORE', $oldVal, $newVal, FieldValueHistoryService::CHANGED_BY_USER);
+            }
+        }
+        $existingProfile->update($profileData);
+    }
 
     return redirect()
         ->route('matrimony.profile.upload-photo')
@@ -142,10 +169,10 @@ public function store(Request $request)
             ->with('error', 'Please create your matrimony profile first.');
     }
 
-    // Day 7: Archived/Suspended → edit blocked (redirect to show to avoid loop)
+    // Day 7: Archived/Suspended → edit blocked
     if (!\App\Services\ProfileLifecycleService::isEditable($user->matrimonyProfile)) {
         return redirect()
-            ->route('matrimony.profile.show', $user->matrimonyProfile)
+            ->route('matrimony.profile.edit')
             ->with('error', 'Your profile cannot be edited in its current state.');
     }
 
@@ -176,7 +203,6 @@ public function store(Request $request)
 {
     $request->validate([
         'marital_status' => 'required|in:single,divorced,widowed',
-        'height_cm' => 'nullable|integer|min:50|max:250',
     ]);
 
     $user = auth()->user();
@@ -292,18 +318,21 @@ if ($request->hasFile('profile_photo')) {
     // Day-6: Overwrite protection - authority-aware, only on changed fields
     ProfileFieldLockService::assertNotLocked($existingProfile, $changedCoreFields, $user);
 
-    // Day 8: Record CORE field value history before overwrite (updates only)
-    foreach ($changedCoreFields as $fieldKey) {
-        $oldVal = $existingProfile->$fieldKey === '' ? null : (string) $existingProfile->$fieldKey;
-        $newVal = isset($updateData[$fieldKey]) ? ($updateData[$fieldKey] === '' ? null : (string) $updateData[$fieldKey]) : null;
-        \App\Services\FieldValueHistoryService::record(
-            $existingProfile->id,
-            $fieldKey,
-            'CORE',
-            $oldVal,
-            $newVal,
-            \App\Services\FieldValueHistoryService::CHANGED_BY_USER
-        );
+    // Day-6: Record history for ALL fields in $updateData before update (old !== new only)
+    $historyFields = ['full_name', 'date_of_birth', 'marital_status', 'education', 'location', 'caste', 'height_cm', 'profile_photo', 'photo_approved', 'photo_rejected_at', 'photo_rejection_reason', 'is_suspended'];
+    foreach ($historyFields as $fieldKey) {
+        if (!array_key_exists($fieldKey, $updateData)) {
+            continue;
+        }
+        $oldVal = $existingProfile->$fieldKey === '' ? null : $existingProfile->$fieldKey;
+        $newVal = $updateData[$fieldKey] ?? null;
+        if ($newVal instanceof \Carbon\Carbon) {
+            $newVal = $newVal->format('Y-m-d');
+        }
+        $newVal = $newVal === '' ? null : $newVal;
+        if ((string) $oldVal !== (string) $newVal) {
+            FieldValueHistoryService::record($existingProfile->id, $fieldKey, 'CORE', $oldVal, $newVal, FieldValueHistoryService::CHANGED_BY_USER);
+        }
     }
 
     $user->matrimonyProfile->update($updateData);
@@ -387,14 +416,27 @@ if ($photoApprovalRequired) {
     $photoApproved = true;
 }
 
+// Day-6: Record history for photo fields before update
+$profile = $user->matrimonyProfile;
+if ((string) ($profile->profile_photo ?? '') !== (string) $filename) {
+    FieldValueHistoryService::record($profile->id, 'profile_photo', 'CORE', $profile->profile_photo, $filename, FieldValueHistoryService::CHANGED_BY_USER);
+}
+if ((string) ($profile->photo_approved ?? '') !== (string) $photoApproved) {
+    FieldValueHistoryService::record($profile->id, 'photo_approved', 'CORE', $profile->photo_approved ? '1' : '0', $photoApproved ? '1' : '0', FieldValueHistoryService::CHANGED_BY_USER);
+}
+if ($profile->photo_rejected_at !== null) {
+    FieldValueHistoryService::record($profile->id, 'photo_rejected_at', 'CORE', $profile->photo_rejected_at?->format('Y-m-d H:i:s'), null, FieldValueHistoryService::CHANGED_BY_USER);
+}
+if (!empty($profile->photo_rejection_reason)) {
+    FieldValueHistoryService::record($profile->id, 'photo_rejection_reason', 'CORE', $profile->photo_rejection_reason, null, FieldValueHistoryService::CHANGED_BY_USER);
+}
+
 $user->matrimonyProfile->update([
     'profile_photo' => $filename,
     'photo_approved' => $photoApproved,
     'photo_rejected_at' => null,
     'photo_rejection_reason' => null,
 ]);
-
-
 
     return redirect()
         ->route('matrimony.profiles.index')

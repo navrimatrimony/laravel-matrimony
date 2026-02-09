@@ -3,6 +3,7 @@
 namespace App\Console\Commands;
 
 use App\Models\MatrimonyProfile;
+use App\Services\FieldValueHistoryService;
 use App\Services\ProfileCompletenessService;
 use Illuminate\Console\Command;
 
@@ -51,6 +52,8 @@ class Day11CompletenessProof extends Command
         $this->line('[BASELINE] ' . json_encode(['pct' => $pctBaseline, 'caste' => $casteBaseline]));
 
         // ADD CASTE
+        $oldCaste = $profile->caste === '' ? null : $profile->caste;
+        FieldValueHistoryService::record($profile->id, 'caste', 'CORE', $oldCaste, 'TestCaste', FieldValueHistoryService::CHANGED_BY_SYSTEM);
         $profile->caste = 'TestCaste';
         $profile->save();
         $profile->refresh();
@@ -60,6 +63,8 @@ class Day11CompletenessProof extends Command
         $this->line('[AFTER_ADD] ' . json_encode(['pct' => $pctAfterAdd, 'caste' => $casteAfterAdd]));
 
         // REMOVE CASTE
+        $oldCaste = $profile->caste === '' ? null : $profile->caste;
+        FieldValueHistoryService::record($profile->id, 'caste', 'CORE', $oldCaste, null, FieldValueHistoryService::CHANGED_BY_SYSTEM);
         $profile->caste = null;
         $profile->save();
         $profile->refresh();

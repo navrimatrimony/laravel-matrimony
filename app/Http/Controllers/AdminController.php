@@ -137,6 +137,9 @@ class AdminController extends Controller
     {
         $request->validate(['reason' => self::REASON_RULES]);
 
+        if ((string) ($profile->is_suspended ?? false) !== '1') {
+            FieldValueHistoryService::record($profile->id, 'is_suspended', 'CORE', $profile->is_suspended ? '1' : '0', '1', FieldValueHistoryService::CHANGED_BY_ADMIN);
+        }
         $profile->update(['is_suspended' => true]);
 
         AuditLogService::log(
@@ -163,6 +166,9 @@ class AdminController extends Controller
     {
         $request->validate(['reason' => self::REASON_RULES]);
 
+        if ((string) ($profile->is_suspended ?? false) !== '0') {
+            FieldValueHistoryService::record($profile->id, 'is_suspended', 'CORE', $profile->is_suspended ? '1' : '0', '0', FieldValueHistoryService::CHANGED_BY_ADMIN);
+        }
         $profile->update(['is_suspended' => false]);
 
         AuditLogService::log(
@@ -218,6 +224,15 @@ class AdminController extends Controller
     {
         $request->validate(['reason' => self::REASON_RULES]);
 
+        if (!$profile->photo_approved) {
+            FieldValueHistoryService::record($profile->id, 'photo_approved', 'CORE', '0', '1', FieldValueHistoryService::CHANGED_BY_ADMIN);
+        }
+        if ($profile->photo_rejected_at !== null) {
+            FieldValueHistoryService::record($profile->id, 'photo_rejected_at', 'CORE', $profile->photo_rejected_at?->format('Y-m-d H:i:s'), null, FieldValueHistoryService::CHANGED_BY_ADMIN);
+        }
+        if (!empty($profile->photo_rejection_reason)) {
+            FieldValueHistoryService::record($profile->id, 'photo_rejection_reason', 'CORE', $profile->photo_rejection_reason, null, FieldValueHistoryService::CHANGED_BY_ADMIN);
+        }
         $profile->update([
             'photo_approved' => true,
             'photo_rejected_at' => null,
@@ -243,6 +258,11 @@ class AdminController extends Controller
     {
         $request->validate(['reason' => self::REASON_RULES]);
 
+        if ($profile->photo_approved) {
+            FieldValueHistoryService::record($profile->id, 'photo_approved', 'CORE', '1', '0', FieldValueHistoryService::CHANGED_BY_ADMIN);
+        }
+        FieldValueHistoryService::record($profile->id, 'photo_rejected_at', 'CORE', $profile->photo_rejected_at?->format('Y-m-d H:i:s'), now()->format('Y-m-d H:i:s'), FieldValueHistoryService::CHANGED_BY_ADMIN);
+        FieldValueHistoryService::record($profile->id, 'photo_rejection_reason', 'CORE', $profile->photo_rejection_reason, $request->reason, FieldValueHistoryService::CHANGED_BY_ADMIN);
         $profile->update([
             'photo_approved' => false,
             'photo_rejected_at' => now(),
@@ -274,6 +294,12 @@ class AdminController extends Controller
     {
         $request->validate(['reason' => self::REASON_RULES]);
 
+        if (!($profile->visibility_override ?? false)) {
+            FieldValueHistoryService::record($profile->id, 'visibility_override', 'CORE', $profile->visibility_override ? '1' : '0', '1', FieldValueHistoryService::CHANGED_BY_ADMIN);
+        }
+        if ((string) ($profile->visibility_override_reason ?? '') !== (string) $request->reason) {
+            FieldValueHistoryService::record($profile->id, 'visibility_override_reason', 'CORE', $profile->visibility_override_reason, $request->reason, FieldValueHistoryService::CHANGED_BY_ADMIN);
+        }
         $profile->update([
             'visibility_override' => true,
             'visibility_override_reason' => $request->reason,

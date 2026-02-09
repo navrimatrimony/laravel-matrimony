@@ -4,29 +4,39 @@ namespace App\Services;
 
 use App\Models\FieldValueHistory;
 use App\Models\MatrimonyProfile;
+use Carbon\Carbon;
+use Illuminate\Support\Collection;
 
 /**
- * Phase-3 Day 8: Record field value changes for historical data protection.
- * Call only on UPDATE (not on create). No delete of history records.
+ * Day-6 / Law 9: Field value history recording and read access.
+ * Append-only; immutability enforced by FieldValueHistory model.
  */
 class FieldValueHistoryService
 {
     public const CHANGED_BY_USER = 'USER';
     public const CHANGED_BY_ADMIN = 'ADMIN';
+    public const CHANGED_BY_API = 'API';
     public const CHANGED_BY_MATCHMAKER = 'MATCHMAKER';
     public const CHANGED_BY_SYSTEM = 'SYSTEM';
 
     /**
-     * Record one field value change. Call before overwriting the current value.
+     * Record a field value change (append-only). No-op if old and new are equal.
      */
     public static function record(
         int $profileId,
         string $fieldKey,
         string $fieldType,
-        ?string $oldValue,
-        ?string $newValue,
+        $oldValue,
+        $newValue,
         string $changedBy
     ): void {
+        $oldValue = static::normalizeValue($oldValue);
+        $newValue = static::normalizeValue($newValue);
+
+        if ((string) $oldValue === (string) $newValue) {
+            return;
+        }
+
         FieldValueHistory::create([
             'profile_id' => $profileId,
             'field_key' => $fieldKey,
@@ -39,13 +49,31 @@ class FieldValueHistoryService
     }
 
     /**
-     * Get history for a profile (read-only). Ordered by changed_at desc.
+     * Normalize value for storage: empty string → null, Carbon → formatted string.
      */
-    public static function getHistoryForProfile(MatrimonyProfile $profile, int $limit = 100): \Illuminate\Database\Eloquent\Collection
+    protected static function normalizeValue($value)
     {
-        return FieldValueHistory::where('profile_id', $profile->id)
+        if ($value === '' || $value === null) {
+            return null;
+        }
+        if ($value instanceof Carbon) {
+            return $value->format('Y-m-d H:i:s');
+        }
+        if ($value instanceof \DateTimeInterface) {
+            return $value->format('Y-m-d H:i:s');
+        }
+        return $value;
+    }
+
+    /**
+     * Return last 100 history rows for the profile, newest first.
+     */
+    public static function getHistoryForProfile(MatrimonyProfile $profile): Collection
+    {
+        return FieldValueHistory::query()
+            ->where('profile_id', $profile->id)
             ->orderByDesc('changed_at')
-            ->limit($limit)
+            ->limit(100)
             ->get();
     }
 }

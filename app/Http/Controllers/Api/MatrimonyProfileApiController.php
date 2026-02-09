@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use App\Models\MatrimonyProfile;
+use App\Services\FieldValueHistoryService;
 use App\Services\ProfileLifecycleService;
 use App\Services\ViewTrackingService;
 
@@ -46,6 +47,24 @@ class MatrimonyProfileApiController extends Controller
             'education'     => $request->education,
             'location'      => $request->location,
         ]);
+
+        // Day-6 BUGFIX-B FINAL: API create initial history (Law 9) — प्रत्येक initial field साठी एक row
+        $initialFields = ['full_name', 'date_of_birth', 'caste', 'education', 'location'];
+        foreach ($initialFields as $fieldKey) {
+            $newVal = $profile->$fieldKey;
+            if ($newVal instanceof \Carbon\Carbon) {
+                $newVal = $newVal->format('Y-m-d');
+            }
+            $newVal = $newVal === '' || $newVal === null ? null : (string) $newVal;
+            FieldValueHistoryService::record(
+                $profile->id,
+                $fieldKey,
+                'CORE',
+                null,
+                $newVal,
+                'API'
+            );
+        }
 
         return response()->json([
             'success' => true,
@@ -136,6 +155,17 @@ public function update(Request $request)
         \App\Services\ProfileFieldLockService::assertNotLocked($profile, $changedFields, $user);
     }
 
+    // Day-6: Record history for every changed CORE field before update
+    foreach ($changedFields as $fieldKey) {
+        $oldVal = $profile->$fieldKey === '' ? null : $profile->$fieldKey;
+        $newVal = $updateData[$fieldKey] ?? null;
+        $newVal = $newVal === '' ? null : $newVal;
+        if ($newVal instanceof \Carbon\Carbon) {
+            $newVal = $newVal->format('Y-m-d');
+        }
+        FieldValueHistoryService::record($profile->id, $fieldKey, 'CORE', $oldVal, $newVal, FieldValueHistoryService::CHANGED_BY_API);
+    }
+
     if (!empty($updateData)) {
         $profile->update($updateData);
     }
@@ -195,7 +225,21 @@ public function update(Request $request)
             // Policy: No approval required - photo visible immediately
             $photoApproved = true;
         }
-        
+
+        // Day-6: Record history for photo fields before update
+        if ((string) ($profile->profile_photo ?? '') !== (string) $filename) {
+            FieldValueHistoryService::record($profile->id, 'profile_photo', 'CORE', $profile->profile_photo, $filename, FieldValueHistoryService::CHANGED_BY_API);
+        }
+        if ((string) ($profile->photo_approved ?? '') !== (string) $photoApproved) {
+            FieldValueHistoryService::record($profile->id, 'photo_approved', 'CORE', $profile->photo_approved ? '1' : '0', $photoApproved ? '1' : '0', FieldValueHistoryService::CHANGED_BY_API);
+        }
+        if ($profile->photo_rejected_at !== null) {
+            FieldValueHistoryService::record($profile->id, 'photo_rejected_at', 'CORE', $profile->photo_rejected_at?->format('Y-m-d H:i:s'), null, FieldValueHistoryService::CHANGED_BY_API);
+        }
+        if (!empty($profile->photo_rejection_reason)) {
+            FieldValueHistoryService::record($profile->id, 'photo_rejection_reason', 'CORE', $profile->photo_rejection_reason, null, FieldValueHistoryService::CHANGED_BY_API);
+        }
+
         $profile->update([
             'profile_photo' => $filename,
             'photo_approved' => $photoApproved,

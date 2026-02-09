@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\MatrimonyProfile;
 use App\Models\User;
 use App\Services\DemoProfileDefaultsService;
+use App\Services\FieldValueHistoryService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 
@@ -55,6 +56,18 @@ class DemoProfileController extends Controller
             'is_suspended' => false,
         ]);
 
+        foreach (['full_name', 'gender', 'date_of_birth', 'marital_status', 'education', 'location', 'caste', 'profile_photo', 'photo_approved', 'is_demo', 'is_suspended'] as $fieldKey) {
+            $newVal = $profile->$fieldKey;
+            if ($newVal instanceof \Carbon\Carbon) {
+                $newVal = $newVal->format('Y-m-d');
+            }
+            $newVal = $newVal === '' || $newVal === null ? null : (string) $newVal;
+            if ($fieldKey === 'photo_approved' || $fieldKey === 'is_demo' || $fieldKey === 'is_suspended') {
+                $newVal = $newVal === null ? null : ($newVal ? '1' : '0');
+            }
+            FieldValueHistoryService::record($profile->id, $fieldKey, 'CORE', null, $newVal, FieldValueHistoryService::CHANGED_BY_SYSTEM);
+        }
+
         return redirect()
             ->route('matrimony.profile.show', $profile->id)
             ->with('success', 'Demo profile created successfully.');
@@ -91,7 +104,7 @@ class DemoProfileController extends Controller
                 continue;
             }
             $defaults = DemoProfileDefaultsService::defaults($i, $genderOverride);
-            MatrimonyProfile::create([
+            $profile = MatrimonyProfile::create([
                 'user_id' => $user->id,
                 'full_name' => $defaults['full_name'],
                 'gender' => $defaults['gender'],
@@ -105,6 +118,17 @@ class DemoProfileController extends Controller
                 'is_demo' => true,
                 'is_suspended' => false,
             ]);
+            foreach (['full_name', 'gender', 'date_of_birth', 'marital_status', 'education', 'location', 'caste', 'profile_photo', 'photo_approved', 'is_demo', 'is_suspended'] as $fieldKey) {
+                $newVal = $profile->$fieldKey;
+                if ($newVal instanceof \Carbon\Carbon) {
+                    $newVal = $newVal->format('Y-m-d');
+                }
+                $newVal = $newVal === '' || $newVal === null ? null : (string) $newVal;
+                if ($fieldKey === 'photo_approved' || $fieldKey === 'is_demo' || $fieldKey === 'is_suspended') {
+                    $newVal = $newVal === null ? null : ($newVal ? '1' : '0');
+                }
+                FieldValueHistoryService::record($profile->id, $fieldKey, 'CORE', null, $newVal, FieldValueHistoryService::CHANGED_BY_SYSTEM);
+            }
         }
 
         return redirect()

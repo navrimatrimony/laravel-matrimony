@@ -46,8 +46,8 @@
             </p>
 
             @php
-                $profile = auth()->user()->matrimonyProfile ?? null;
-                $gender = $profile ? ($profile->gender ?? null) : null;
+                $profile = auth()->user()->matrimonyProfile;
+                $gender = $profile->gender ?? null;
                 if ($gender === 'male') {
                     $placeholderImage = asset('images/placeholders/male-profile.svg');
                     $borderColor = '#0ea5e9';
@@ -104,13 +104,11 @@
             </form>
 
             {{-- Secondary action --}}
-            @if (auth()->user()->matrimonyProfile)
             <div style="margin-top: 20px; padding-top: 20px; border-top: 1px solid #f3f4f6;">
                 <a href="{{ route('matrimony.profile.show', auth()->user()->matrimonyProfile->id) }}" style="font-size: 13px; color: #9ca3af; text-decoration: none;">
                     Skip for now →
                 </a>
             </div>
-            @endif
         </div>
 
         {{-- Footer note --}}

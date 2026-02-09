@@ -38,60 +38,6 @@
     </div>
     @endif
 
-    {{-- Day 8: Field value history (read-only) --}}
-    @if (!empty($fieldHistory ?? []) && $fieldHistory->isNotEmpty())
-    <div class="mb-4 p-4 rounded-lg border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-700/30">
-        <h3 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Field Value History (Day 8)</h3>
-        <p class="text-xs text-gray-500 dark:text-gray-400 mb-3">Read-only. Last 100 changes. No edit/delete.</p>
-        <div class="overflow-x-auto max-h-64 overflow-y-auto">
-            <table class="w-full border-collapse text-xs">
-                <thead class="sticky top-0 bg-gray-100 dark:bg-gray-700">
-                    <tr class="border-b border-gray-200 dark:border-gray-600">
-                        <th class="text-left py-2 px-2 font-semibold text-gray-700 dark:text-gray-300">field_key</th>
-                        <th class="text-left py-2 px-2 font-semibold text-gray-700 dark:text-gray-300">field_type</th>
-                        <th class="text-left py-2 px-2 font-semibold text-gray-700 dark:text-gray-300">old → new</th>
-                        <th class="text-left py-2 px-2 font-semibold text-gray-700 dark:text-gray-300">changed_by</th>
-                        <th class="text-left py-2 px-2 font-semibold text-gray-700 dark:text-gray-300">changed_at</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @foreach ($fieldHistory as $h)
-                    <tr class="border-b border-gray-100 dark:border-gray-600">
-                        <td class="py-2 px-2 font-mono text-gray-800 dark:text-gray-200">{{ $h->field_key }}</td>
-                        <td class="py-2 px-2 text-gray-700 dark:text-gray-300">{{ $h->field_type }}</td>
-                        <td class="py-2 px-2 text-gray-700 dark:text-gray-300">{{ Str::limit($h->old_value ?? '—', 20) }} → {{ Str::limit($h->new_value ?? '—', 20) }}</td>
-                        <td class="py-2 px-2 text-gray-700 dark:text-gray-300">{{ $h->changed_by }}</td>
-                        <td class="py-2 px-2 text-gray-600 dark:text-gray-400">{{ $h->changed_at?->format('Y-m-d H:i') ?? '—' }}</td>
-                    </tr>
-                    @endforeach
-                </tbody>
-            </table>
-        </div>
-    </div>
-    @endif
-
-    {{-- Day-13: Manual conflict detection (no profile mutation) --}}
-    <div class="mb-4 p-4 rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50/50 dark:bg-amber-900/20">
-        <h3 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Conflict detection (Day-13)</h3>
-        <p class="text-xs text-gray-500 dark:text-gray-400 mb-3">Compare current profile vs proposed values. Mismatches create Conflict Records (locked fields skipped). Profile data is not changed.</p>
-        <form method="POST" action="{{ route('admin.profiles.detect-conflicts', $matrimonyProfile) }}" class="space-y-2">
-            @csrf
-            <div class="flex flex-wrap gap-4 items-end">
-                <div>
-                    <label class="block text-xs text-gray-500 dark:text-gray-400 mb-1">Proposed caste</label>
-                    <input type="text" name="proposed_core[caste]" value="{{ old('proposed_core.caste') }}" placeholder="(optional)" class="border border-gray-300 dark:border-gray-600 rounded px-2 py-1.5 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 w-40">
-                </div>
-                <div>
-                    <label class="block text-xs text-gray-500 dark:text-gray-400 mb-1">Proposed education</label>
-                    <input type="text" name="proposed_core[education]" value="{{ old('proposed_core.education') }}" placeholder="(optional)" class="border border-gray-300 dark:border-gray-600 rounded px-2 py-1.5 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 w-40">
-                </div>
-                <div>
-                    <button type="submit" class="px-3 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded text-sm font-medium">Run conflict detection</button>
-                </div>
-            </div>
-        </form>
-    </div>
-
     <div class="mb-6">
         <button type="button" @click="adminEditMode = !adminEditMode" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-md font-medium text-sm transition-colors">
             <span x-text="adminEditMode ? 'Cancel Edit' : 'Edit Profile'"></span>
@@ -267,12 +213,10 @@
                 @php
                     $extendedFields = \App\Models\FieldRegistry::where('field_type', 'EXTENDED')
                         ->where('is_archived', false)
-                        ->where(function ($q) { $q->where('is_enabled', true)->orWhereNull('is_enabled'); })
                         ->orderBy('category')
                         ->orderBy('display_order')
                         ->get();
                     $extendedValues = \App\Services\ExtendedFieldService::getValuesForProfile($matrimonyProfile);
-                    $extendedFields = \App\Services\ExtendedFieldDependencyService::filterVisibleForDisplay($extendedFields, $extendedValues);
                 @endphp
                 @if ($extendedFields->count() > 0)
                 <div class="mb-4 pt-4 border-t border-gray-200 dark:border-gray-700">
@@ -396,24 +340,25 @@
             @endphp
             <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2 text-xs">
                 @foreach ($coreFieldKeys as $fk)
+                    @php $lock = isset($fieldLocks) ? $fieldLocks->firstWhere('field_key', $fk) : null; @endphp
                     <div class="px-3 py-2 rounded bg-gray-50 dark:bg-gray-700/50">
                         <span class="font-medium">{{ $fk }}:</span>
-                        @if (isset($fieldLocks[$fk]))
+                        @if ($lock)
                             <span class="text-amber-600 dark:text-amber-400">Locked</span>
-                            <span class="block text-gray-500">{{ $fieldLocks[$fk]['locked_by_name'] ?? '—' }}</span>
-                            <span class="block text-gray-500">{{ $fieldLocks[$fk]['locked_at'] ?? '—' }}</span>
+                            <span class="block text-gray-500">{{ $lock->locked_by ?? '—' }}</span>
+                            <span class="block text-gray-500">{{ $lock->locked_at ? \Carbon\Carbon::parse($lock->locked_at)->format('Y-m-d H:i') : '—' }}</span>
                         @else
                             <span class="text-gray-500">No</span>
                         @endif
                     </div>
                 @endforeach
-                @foreach ($fieldLocks ?? [] as $fk => $lock)
-                    @if (!in_array($fk, $coreFieldKeys, true))
+                @foreach ($fieldLocks ?? [] as $lock)
+                    @if (!in_array($lock->field_key, $coreFieldKeys, true))
                         <div class="px-3 py-2 rounded bg-gray-50 dark:bg-gray-700/50">
-                            <span class="font-medium">{{ $fk }} (EXT):</span>
+                            <span class="font-medium">{{ $lock->field_key }} (EXT):</span>
                             <span class="text-amber-600 dark:text-amber-400">Locked</span>
-                            <span class="block text-gray-500">{{ $lock['locked_by_name'] ?? '—' }}</span>
-                            <span class="block text-gray-500">{{ $lock['locked_at'] ?? '—' }}</span>
+                            <span class="block text-gray-500">{{ $lock->locked_by ?? '—' }}</span>
+                            <span class="block text-gray-500">{{ $lock->locked_at ? \Carbon\Carbon::parse($lock->locked_at)->format('Y-m-d H:i') : '—' }}</span>
                         </div>
                     @endif
                 @endforeach
@@ -475,12 +420,10 @@
         @php
             $extendedFieldsDisplay = \App\Models\FieldRegistry::where('field_type', 'EXTENDED')
                 ->where('is_archived', false)
-                ->where(function ($q) { $q->where('is_enabled', true)->orWhereNull('is_enabled'); })
                 ->orderBy('category')
                 ->orderBy('display_order')
                 ->get();
             $extendedValuesDisplay = \App\Services\ExtendedFieldService::getValuesForProfile($matrimonyProfile);
-            $extendedFieldsDisplay = \App\Services\ExtendedFieldDependencyService::filterVisibleForDisplay($extendedFieldsDisplay, $extendedValuesDisplay);
         @endphp
         @if ($extendedFieldsDisplay->count() > 0)
         <div class="mt-6 pt-6 border-t border-gray-200 dark:border-gray-600">
@@ -519,5 +462,40 @@
         </div>
         @endif
     </div>
+
+    {{-- Field Value History (Day 6) — read-only, no edit/delete --}}
+    <section class="mt-8" aria-label="Field value history">
+        <h2 class="text-lg font-semibold text-gray-800 dark:text-gray-100 mb-4">Field Value History (Day 6)</h2>
+        @if (isset($fieldHistory) && $fieldHistory->isNotEmpty())
+            <div class="overflow-x-auto">
+                <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                    <thead class="bg-gray-50 dark:bg-gray-700">
+                        <tr>
+                            <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Field</th>
+                            <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Change</th>
+                            <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Changed by</th>
+                            <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">When</th>
+                        </tr>
+                    </thead>
+                    <tbody class="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                        @foreach ($fieldHistory as $row)
+                            <tr>
+                                <td class="px-4 py-2 text-sm text-gray-900 dark:text-gray-100">{{ $row->field_key }}</td>
+                                <td class="px-4 py-2 text-sm text-gray-600 dark:text-gray-400">
+                                    <span class="text-gray-500 dark:text-gray-500">{{ $row->old_value ?? '—' }}</span>
+                                    <span class="mx-1">→</span>
+                                    <span class="text-gray-900 dark:text-gray-100">{{ $row->new_value ?? '—' }}</span>
+                                </td>
+                                <td class="px-4 py-2 text-sm text-gray-600 dark:text-gray-400">{{ $row->changed_by }}</td>
+                                <td class="px-4 py-2 text-sm text-gray-600 dark:text-gray-400">{{ $row->changed_at?->format('Y-m-d H:i') ?? '—' }}</td>
+                            </tr>
+                        @endforeach
+                    </tbody>
+                </table>
+            </div>
+        @else
+            <p class="text-sm text-gray-500 dark:text-gray-400">No history recorded yet.</p>
+        @endif
+    </section>
 </div>
 @endsection

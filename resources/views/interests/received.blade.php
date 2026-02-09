@@ -12,7 +12,7 @@
 
                 {{-- Sender Name --}}
                 <p class="text-lg font-semibold">
-                    From: {{ optional($interest->senderProfile)->full_name ?? 'Profile Deleted' }}
+                    From: {{ $interest->senderProfile->full_name ?? 'Profile Deleted' }}
                 </p>
 
                 {{-- View Profile --}}
@@ -44,8 +44,7 @@
         >
     @else
         @php
-            $senderProfile = $interest->senderProfile;
-            $senderGender = $senderProfile ? ($senderProfile->gender ?? null) : null;
+            $senderGender = $interest->senderProfile->gender ?? null;
             if ($senderGender === 'male') {
                 $senderPlaceholder = asset('images/placeholders/male-profile.svg');
             } elseif ($senderGender === 'female') {

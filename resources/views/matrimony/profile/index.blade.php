@@ -119,7 +119,7 @@
     <p class="text-sm text-gray-600">
     <span class="text-sm text-gray-600">
         {{-- Gender --}}
-        {{ ucfirst($matrimonyProfile->gender ?? '') }}
+        {{ ucfirst($matrimonyProfile->gender) }}
 
         {{-- Age (calculated from DOB) --}}
         @if ($matrimonyProfile->date_of_birth)

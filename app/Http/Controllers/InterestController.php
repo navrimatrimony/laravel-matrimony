@@ -75,7 +75,7 @@ public function store(MatrimonyProfile $matrimony_profile_id)
         abort(403, 'Matrimony profile missing');
     }
 
-    // Day 7: Sender lifecycle — Archived/Suspended/Owner-Hidden cannot send interest
+    // Day 7: Sender lifecycle — Archived/Suspended/Demo-Hidden cannot send interest
     if (!ProfileLifecycleService::canInitiateInteraction($senderProfile)) {
         return back()->with('error', 'Your profile cannot send interest in its current state.');
     }
@@ -88,7 +88,7 @@ public function store(MatrimonyProfile $matrimony_profile_id)
         return back()->with('error', 'You cannot send interest to this profile.');
     }
 
-    // Day 7: Archived/Suspended/Owner-Hidden → interest blocked
+    // Day 7: Archived/Suspended/Demo-Hidden → interest blocked
     if (!ProfileLifecycleService::canReceiveInterest($receiverProfile)) {
         return back()->with('error', 'You cannot send interest to this profile.');
     }
@@ -207,11 +207,6 @@ public function accept(\App\Models\Interest $interest)
         return back()->with('error', 'Your profile must be at least 70% complete to accept interest.');
     }
 
-    // Day 7: Receiver lifecycle — accept only if receiver can receive interest
-    if (!ProfileLifecycleService::canReceiveInterest($receiverProfile)) {
-        return back()->with('error', 'Interest cannot be processed due to profile lifecycle state.');
-    }
-
     // ✅ Accept
     $interest->update([
         'status' => 'accepted',
@@ -251,12 +246,6 @@ public function reject(\App\Models\Interest $interest)
     // 🔒 Guard: फक्त pending interest reject करता येईल
     if ($interest->status !== 'pending') {
         return back()->with('error', 'This interest is already processed.');
-    }
-
-    // Day 7: Receiver lifecycle — reject only if receiver can receive interest
-    $receiverProfile = $interest->receiverProfile;
-    if (!$receiverProfile || !ProfileLifecycleService::canReceiveInterest($receiverProfile)) {
-        return back()->with('error', 'Interest cannot be processed due to profile lifecycle state.');
     }
 
     // ✅ Reject

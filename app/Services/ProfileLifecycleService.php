@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\MatrimonyProfile;
 use App\Models\User;
+use App\Services\FieldValueHistoryService;
 use Illuminate\Validation\ValidationException;
 
 /**
@@ -49,17 +50,19 @@ class ProfileLifecycleService
                 'lifecycle_state' => ["Cannot transition from {$current} to {$targetState}. Allowed: " . implode(', ', self::getAllowedTargets($current))],
             ]);
         }
+        $changedBy = ($actor->is_admin ?? false) ? FieldValueHistoryService::CHANGED_BY_ADMIN : FieldValueHistoryService::CHANGED_BY_USER;
+        FieldValueHistoryService::record($profile->id, 'lifecycle_state', 'CORE', $current, $targetState, $changedBy);
         $profile->update(['lifecycle_state' => $targetState]);
     }
 
-    /** Visibility: Archived/Suspended/Owner-Hidden (lifecycle_state) → not visible to others. Backward compat: is_suspended, trashed() */
+    /** Visibility: Archived/Suspended/Demo-Hidden (lifecycle_state) → not visible to others. Backward compat: is_suspended, trashed() */
     public static function isVisibleToOthers(MatrimonyProfile $profile): bool
     {
         if ($profile->trashed()) {
             return false;
         }
         $state = $profile->lifecycle_state ?? 'Active';
-        if (in_array($state, ['Archived', 'Suspended', 'Owner-Hidden'], true)) {
+        if (in_array($state, ['Archived', 'Suspended', 'Demo-Hidden'], true)) {
             return false;
         }
         if ($profile->is_suspended ?? false) {
@@ -84,14 +87,14 @@ class ProfileLifecycleService
         return true;
     }
 
-    /** Sender: Draft/Archived/Suspended/Owner-Hidden → cannot initiate (send interest, shortlist). Backward compat: is_suspended, trashed() */
+    /** Sender: Draft/Archived/Suspended/Demo-Hidden → cannot initiate (send interest, shortlist). Backward compat: is_suspended, trashed() */
     public static function canInitiateInteraction(MatrimonyProfile $profile): bool
     {
         if ($profile->trashed()) {
             return false;
         }
         $state = $profile->lifecycle_state ?? 'Active';
-        if (in_array($state, ['Draft', 'Archived', 'Suspended', 'Owner-Hidden'], true)) {
+        if (in_array($state, ['Draft', 'Archived', 'Suspended', 'Demo-Hidden'], true)) {
             return false;
         }
         if ($profile->is_suspended ?? false) {
@@ -100,14 +103,14 @@ class ProfileLifecycleService
         return true;
     }
 
-    /** Interest: Draft/Archived/Suspended/Owner-Hidden → blocked. Backward compat: is_suspended, trashed() */
+    /** Interest: Draft/Archived/Suspended/Demo-Hidden → blocked. Backward compat: is_suspended, trashed() */
     public static function canReceiveInterest(MatrimonyProfile $profile): bool
     {
         if ($profile->trashed()) {
             return false;
         }
         $state = $profile->lifecycle_state ?? 'Active';
-        if (in_array($state, ['Draft', 'Archived', 'Suspended', 'Owner-Hidden'], true)) {
+        if (in_array($state, ['Draft', 'Archived', 'Suspended', 'Demo-Hidden'], true)) {
             return false;
         }
         if ($profile->is_suspended ?? false) {

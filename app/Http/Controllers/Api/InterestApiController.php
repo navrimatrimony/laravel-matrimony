@@ -49,7 +49,7 @@ class InterestApiController extends Controller
             ], 403);
         }
 
-        // Day 7: Sender lifecycle — Archived/Suspended/Owner-Hidden cannot send interest
+        // Day 7: Sender lifecycle — Archived/Suspended/Demo-Hidden cannot send interest
         if (!ProfileLifecycleService::canInitiateInteraction($senderProfile)) {
             return response()->json([
                 'success' => false,
@@ -57,7 +57,7 @@ class InterestApiController extends Controller
             ], 403);
         }
 
-        // Day 7: Archived/Suspended/Owner-Hidden → interest blocked (receiver)
+        // Day 7: Archived/Suspended/Demo-Hidden → interest blocked (receiver)
         if (!ProfileLifecycleService::canReceiveInterest($receiverProfile)) {
             return response()->json([
                 'success' => false,
@@ -192,15 +192,6 @@ class InterestApiController extends Controller
             ], 403);
         }
 
-        // Day 7: Receiver lifecycle — accept only if receiver can receive interest
-        $receiverProfile = $interest->receiverProfile;
-        if (!$receiverProfile || !ProfileLifecycleService::canReceiveInterest($receiverProfile)) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Interest cannot be processed due to profile lifecycle state.',
-            ], 422);
-        }
-
         $interest->update([
             'status' => 'accepted',
         ]);
@@ -249,15 +240,6 @@ class InterestApiController extends Controller
                 'success' => false,
                 'message' => 'This interest is already processed.',
             ], 403);
-        }
-
-        // Day 7: Receiver lifecycle — reject only if receiver can receive interest
-        $receiverProfile = $interest->receiverProfile;
-        if (!$receiverProfile || !ProfileLifecycleService::canReceiveInterest($receiverProfile)) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Interest cannot be processed due to profile lifecycle state.',
-            ], 422);
         }
 
         $interest->update([
