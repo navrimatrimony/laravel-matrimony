@@ -24,6 +24,7 @@ class DatabaseSeeder extends Seeder
         FieldRegistryCoreSeeder::class,
         TestAdminRolesSeeder::class,
         MinimalLocationSeeder::class,
+        LocationEnrichmentSeeder::class,
     ]);
 }
 
