@@ -12,11 +12,11 @@
     @if (!empty($lifecycleAllowedTargets ?? []))
     <div class="mb-4 p-4 rounded-lg border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-700/30">
         <h3 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Change Lifecycle State (Day 7)</h3>
-        <form method="POST" action="{{ route('admin.profiles.lifecycle-state', $matrimonyProfile) }}" class="flex items-end gap-2">
+        <form method="POST" action="{{ route('admin.profiles.lifecycle-state', $matrimonyProfile) }}" class="space-y-3">
             @csrf
             <div>
                 <label class="block text-xs text-gray-500 dark:text-gray-400 mb-1">Target state</label>
-                <select name="lifecycle_state" class="border border-gray-300 dark:border-gray-600 rounded px-3 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 text-sm">
+                <select name="lifecycle_state" class="w-full border border-gray-300 dark:border-gray-600 rounded px-3 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 text-sm">
                     @foreach ($lifecycleAllowedTargets as $target)
                         @php
                             $tooltip = match($target) {
@@ -33,7 +33,23 @@
                     @endforeach
                 </select>
             </div>
-            <button type="submit" class="px-3 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded text-sm font-medium">Apply</button>
+            <div>
+                <label class="block text-xs text-gray-700 dark:text-gray-300 mb-1 font-medium">
+                    Reason <span class="text-red-600">*</span> (required, minimum 10 characters)
+                </label>
+                <textarea 
+                    name="reason" 
+                    required 
+                    minlength="10"
+                    rows="2"
+                    placeholder="Explain why this lifecycle change is necessary..."
+                    class="w-full border border-gray-300 dark:border-gray-600 rounded px-3 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 text-sm"
+                ></textarea>
+                @error('reason')
+                    <p class="text-red-600 text-xs mt-1">{{ $message }}</p>
+                @enderror
+            </div>
+            <button type="submit" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded text-sm font-medium">Apply Lifecycle Change</button>
         </form>
     </div>
     @endif

@@ -64,4 +64,15 @@ class ProfileFieldLockService
             ]);
         }
     }
+
+    /**
+     * Day-7: Remove lock from a specific field (admin override with reason).
+     */
+    public static function removeLock(MatrimonyProfile $profile, string $fieldKey): bool
+    {
+        return DB::table('profile_field_locks')
+            ->where('profile_id', $profile->id)
+            ->where('field_key', $fieldKey)
+            ->delete() > 0;
+    }
 }

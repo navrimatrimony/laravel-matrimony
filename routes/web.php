@@ -192,6 +192,9 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
     Route::post('/profiles/{profile}/lifecycle-state', [AdminController::class, 'updateLifecycleState'])
         ->name('profiles.lifecycle-state');
 
+    Route::post('/profiles/{profile}/unlock-field', [AdminController::class, 'unlockProfileField'])
+        ->name('profiles.unlock-field');
+
     /*
     | Day-13: Manual conflict detection (no profile mutation)
     */

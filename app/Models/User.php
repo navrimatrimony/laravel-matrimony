@@ -90,4 +90,55 @@ class User extends Authenticatable
         return $this->hasOne(\App\Models\MatrimonyProfile::class);
     }
 
+    /*
+    |--------------------------------------------------------------------------
+    | Admin Role Helper Methods (Day-7)
+    |--------------------------------------------------------------------------
+    */
+
+    /**
+     * Check if user has any admin role or is legacy admin.
+     */
+    public function isAnyAdmin(): bool
+    {
+        return !is_null($this->admin_role) || $this->is_admin === true;
+    }
+
+    /**
+     * Check if user is super admin (includes legacy is_admin).
+     */
+    public function isSuperAdmin(): bool
+    {
+        return $this->admin_role === 'super_admin' || $this->is_admin === true;
+    }
+
+    /**
+     * Check if user is data admin.
+     */
+    public function isDataAdmin(): bool
+    {
+        return $this->admin_role === 'data_admin';
+    }
+
+    /**
+     * Check if user is auditor.
+     */
+    public function isAuditor(): bool
+    {
+        return $this->admin_role === 'auditor';
+    }
+
+    /**
+     * Check if user has one of the specified admin roles.
+     * Includes legacy is_admin as super_admin.
+     */
+    public function hasAdminRole(array $roles): bool
+    {
+        if ($this->is_admin === true && in_array('super_admin', $roles, true)) {
+            return true;
+        }
+
+        return in_array($this->admin_role, $roles, true);
+    }
+
 }

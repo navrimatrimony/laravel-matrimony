@@ -32,8 +32,13 @@
                             <input type="text" name="caste" value="{{ request('caste') }}" class="w-full border rounded px-3 py-2" placeholder="Caste">
                         </div>
                         <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-1">Location</label>
-                            <input type="text" name="location" value="{{ request('location') }}" class="w-full border rounded px-3 py-2" placeholder="City">
+                            <label class="block text-sm font-medium text-gray-700 mb-1">City</label>
+                            <select name="city_id" class="w-full border rounded px-3 py-2">
+                                <option value="">— Select City —</option>
+                                @foreach($cities ?? [] as $city)
+                                    <option value="{{ $city->id }}" {{ request('city_id') == $city->id ? 'selected' : '' }}>{{ $city->name }}</option>
+                                @endforeach
+                            </select>
                         </div>
                         <div>
                             <label class="block text-sm font-medium text-gray-700 mb-1">Height From (cm)</label>

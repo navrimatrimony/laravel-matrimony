@@ -100,6 +100,38 @@ class MatrimonyProfile extends Model
     {
         return $this->belongsTo(User::class);
     }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Location Hierarchy Relationships (Phase-4 Day-8)
+    |--------------------------------------------------------------------------
+    */
+
+    public function country()
+    {
+        return $this->belongsTo(Country::class);
+    }
+
+    public function state()
+    {
+        return $this->belongsTo(State::class);
+    }
+
+    public function district()
+    {
+        return $this->belongsTo(District::class);
+    }
+
+    public function taluka()
+    {
+        return $this->belongsTo(Taluka::class);
+    }
+
+    public function city()
+    {
+        return $this->belongsTo(City::class);
+    }
+
 	public $timestamps = true;
 
 }

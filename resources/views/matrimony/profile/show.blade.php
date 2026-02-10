@@ -207,9 +207,52 @@
             @endif
             
             @if ($locationVisible)
-            <div>
-                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Location</label>
-                <input type="text" name="location" value="{{ old('location', $matrimonyProfile->location) }}" class="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100">
+            <div class="space-y-3 md:col-span-2">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Country *</label>
+                    <select name="country_id" id="admin_country_id" required class="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100">
+                        <option value="">Select Country</option>
+                        @foreach($countries ?? [] as $country)
+                            <option value="{{ $country->id }}" {{ old('country_id', $matrimonyProfile->country_id) == $country->id ? 'selected' : '' }}>{{ $country->name }}</option>
+                        @endforeach
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">State *</label>
+                    <select name="state_id" id="admin_state_id" required class="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100">
+                        <option value="">Select State</option>
+                        @foreach($states ?? [] as $state)
+                            <option value="{{ $state->id }}" {{ old('state_id', $matrimonyProfile->state_id) == $state->id ? 'selected' : '' }}>{{ $state->name }}</option>
+                        @endforeach
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">District</label>
+                    <select name="district_id" id="admin_district_id" class="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100">
+                        <option value="">Select District</option>
+                        @foreach($districts ?? [] as $district)
+                            <option value="{{ $district->id }}" {{ old('district_id', $matrimonyProfile->district_id) == $district->id ? 'selected' : '' }}>{{ $district->name }}</option>
+                        @endforeach
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Taluka</label>
+                    <select name="taluka_id" id="admin_taluka_id" class="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100">
+                        <option value="">Select Taluka</option>
+                        @foreach($talukas ?? [] as $taluka)
+                            <option value="{{ $taluka->id }}" {{ old('taluka_id', $matrimonyProfile->taluka_id) == $taluka->id ? 'selected' : '' }}>{{ $taluka->name }}</option>
+                        @endforeach
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">City *</label>
+                    <select name="city_id" id="admin_city_id" required class="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100">
+                        <option value="">Select City</option>
+                        @foreach($cities ?? [] as $city)
+                            <option value="{{ $city->id }}" {{ old('city_id', $matrimonyProfile->city_id) == $city->id ? 'selected' : '' }}>{{ $city->name }}</option>
+                        @endforeach
+                    </select>
+                </div>
             </div>
             @endif
             

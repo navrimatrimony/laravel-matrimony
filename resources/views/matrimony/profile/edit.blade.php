@@ -63,8 +63,55 @@
                     <br>
 
                     @if ($isEnabled('location') && $isVisible('location'))
-                    <label>Location</label><br>
-                    <input type="text" name="location" value="{{ $matrimonyProfile->location }}"><br><br>
+                    <div style="margin-bottom: 20px;">
+                        <label>Country *</label><br>
+                        <select name="country_id" id="country_id" required style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px;">
+                            <option value="">Select Country</option>
+                            @foreach($countries ?? [] as $country)
+                                <option value="{{ $country->id }}" {{ old('country_id', $matrimonyProfile->country_id) == $country->id ? 'selected' : '' }}>{{ $country->name }}</option>
+                            @endforeach
+                        </select>
+                    </div>
+
+                    <div style="margin-bottom: 20px;">
+                        <label>State *</label><br>
+                        <select name="state_id" id="state_id" required style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px;">
+                            <option value="">Select State</option>
+                            @foreach($states ?? [] as $state)
+                                <option value="{{ $state->id }}" data-country_id="{{ $state->country_id }}" {{ old('state_id', $matrimonyProfile->state_id) == $state->id ? 'selected' : '' }}>{{ $state->name }}</option>
+                            @endforeach
+                        </select>
+                    </div>
+
+                    <div style="margin-bottom: 20px;">
+                        <label>District</label><br>
+                        <select name="district_id" id="district_id" style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px;">
+                            <option value="">Select District</option>
+                            @foreach($districts ?? [] as $district)
+                                <option value="{{ $district->id }}" data-state_id="{{ $district->state_id }}" {{ old('district_id', $matrimonyProfile->district_id) == $district->id ? 'selected' : '' }}>{{ $district->name }}</option>
+                            @endforeach
+                        </select>
+                    </div>
+
+                    <div style="margin-bottom: 20px;">
+                        <label>Taluka</label><br>
+                        <select name="taluka_id" id="taluka_id" style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px;">
+                            <option value="">Select Taluka</option>
+                            @foreach($talukas ?? [] as $taluka)
+                                <option value="{{ $taluka->id }}" data-district_id="{{ $taluka->district_id }}" {{ old('taluka_id', $matrimonyProfile->taluka_id) == $taluka->id ? 'selected' : '' }}>{{ $taluka->name }}</option>
+                            @endforeach
+                        </select>
+                    </div>
+
+                    <div style="margin-bottom: 20px;">
+                        <label>City *</label><br>
+                        <select name="city_id" id="city_id" required style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px;">
+                            <option value="">Select City</option>
+                            @foreach($cities ?? [] as $city)
+                                <option value="{{ $city->id }}" data-taluka_id="{{ $city->taluka_id }}" {{ old('city_id', $matrimonyProfile->city_id) == $city->id ? 'selected' : '' }}>{{ $city->name }}</option>
+                            @endforeach
+                        </select>
+                    </div>
                     @endif
 
                     @if ($isEnabled('profile_photo') && $isVisible('profile_photo'))
@@ -95,3 +142,109 @@
 </div>
 
 @endsection
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const countrySelect = document.getElementById('country_id');
+    const stateSelect = document.getElementById('state_id');
+    const districtSelect = document.getElementById('district_id');
+    const talukaSelect = document.getElementById('taluka_id');
+    const citySelect = document.getElementById('city_id');
+
+    function filterStates() {
+        const countryId = countrySelect.value;
+        Array.from(stateSelect.options).forEach(option => {
+            if (option.value === '') {
+                option.style.display = 'block';
+            } else {
+                option.style.display = option.dataset.country_id === countryId ? 'block' : 'none';
+            }
+        });
+    }
+
+    function filterDistricts() {
+        const stateId = stateSelect.value;
+        Array.from(districtSelect.options).forEach(option => {
+            if (option.value === '') {
+                option.style.display = 'block';
+            } else {
+                option.style.display = option.dataset.state_id === stateId ? 'block' : 'none';
+            }
+        });
+    }
+
+    function filterTalukas() {
+        const districtId = districtSelect.value;
+        Array.from(talukaSelect.options).forEach(option => {
+            if (option.value === '') {
+                option.style.display = 'block';
+            } else {
+                option.style.display = option.dataset.district_id === districtId ? 'block' : 'none';
+            }
+        });
+    }
+
+    function filterCities() {
+        const talukaId = talukaSelect.value;
+        Array.from(citySelect.options).forEach(option => {
+            if (option.value === '') {
+                option.style.display = 'block';
+            } else {
+                option.style.display = option.dataset.taluka_id === talukaId ? 'block' : 'none';
+            }
+        });
+    }
+
+    // Country change
+    if (countrySelect) {
+        countrySelect.addEventListener('change', function() {
+            stateSelect.value = '';
+            districtSelect.value = '';
+            talukaSelect.value = '';
+            citySelect.value = '';
+            filterStates();
+        });
+    }
+
+    // State change
+    if (stateSelect) {
+        stateSelect.addEventListener('change', function() {
+            districtSelect.value = '';
+            talukaSelect.value = '';
+            citySelect.value = '';
+            filterDistricts();
+        });
+    }
+
+    // District change
+    if (districtSelect) {
+        districtSelect.addEventListener('change', function() {
+            talukaSelect.value = '';
+            citySelect.value = '';
+            filterTalukas();
+        });
+    }
+
+    // Taluka change
+    if (talukaSelect) {
+        talukaSelect.addEventListener('change', function() {
+            citySelect.value = '';
+            filterCities();
+        });
+    }
+
+    // On page load, filter based on existing selections
+    if (countrySelect && countrySelect.value) {
+        filterStates();
+    }
+    if (stateSelect && stateSelect.value) {
+        filterDistricts();
+    }
+    if (districtSelect && districtSelect.value) {
+        filterTalukas();
+    }
+    if (talukaSelect && talukaSelect.value) {
+        filterCities();
+    }
+});
+</script>

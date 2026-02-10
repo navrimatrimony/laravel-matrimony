@@ -18,13 +18,21 @@ class MatrimonyProfileApiController extends Controller
      */
     public function store(Request $request)
     {
+        // Phase-4 Day-8: Location hierarchy validation
         $request->validate([
             'full_name' => ['required', 'string', 'max:255'],
             'date_of_birth' => ['required', 'date'],
             'caste' => ['required', 'string', 'max:255'],
             'education' => ['required', 'string', 'max:255'],
-            'location' => ['required', 'string', 'max:255'],
+            'country_id' => ['required', 'exists:countries,id'],
+            'state_id' => ['required', 'exists:states,id'],
+            'district_id' => ['nullable', 'exists:districts,id'],
+            'taluka_id' => ['nullable', 'exists:talukas,id'],
+            'city_id' => ['required', 'exists:cities,id'],
         ]);
+
+        // Phase-4 Day-8: Validate location hierarchy integrity
+        $this->validateLocationHierarchy($request);
 
         $user = $request->user(); // sanctum authenticated user
 
@@ -45,11 +53,15 @@ class MatrimonyProfileApiController extends Controller
             'date_of_birth' => $request->date_of_birth,
             'caste'         => $request->caste,
             'education'     => $request->education,
-            'location'      => $request->location,
+            'country_id'    => $request->country_id,
+            'state_id'      => $request->state_id,
+            'district_id'   => $request->district_id,
+            'taluka_id'     => $request->taluka_id,
+            'city_id'       => $request->city_id,
         ]);
 
         // Day-6 BUGFIX-B FINAL: API create initial history (Law 9) — प्रत्येक initial field साठी एक row
-        $initialFields = ['full_name', 'date_of_birth', 'caste', 'education', 'location'];
+        $initialFields = ['full_name', 'date_of_birth', 'caste', 'education', 'country_id', 'state_id', 'district_id', 'taluka_id', 'city_id'];
         foreach ($initialFields as $fieldKey) {
             $newVal = $profile->$fieldKey;
             if ($newVal instanceof \Carbon\Carbon) {
@@ -104,13 +116,23 @@ public function show(Request $request)
  */
 public function update(Request $request)
 {
+    // Phase-4 Day-8: Location hierarchy validation
     $request->validate([
         'full_name' => ['sometimes', 'required', 'string', 'max:255'],
         'date_of_birth' => ['sometimes', 'required', 'date'],
         'caste' => ['sometimes', 'required', 'string', 'max:255'],
         'education' => ['sometimes', 'required', 'string', 'max:255'],
-        'location' => ['sometimes', 'required', 'string', 'max:255'],
+        'country_id' => ['sometimes', 'required', 'exists:countries,id'],
+        'state_id' => ['sometimes', 'required', 'exists:states,id'],
+        'district_id' => ['nullable', 'exists:districts,id'],
+        'taluka_id' => ['nullable', 'exists:talukas,id'],
+        'city_id' => ['sometimes', 'required', 'exists:cities,id'],
     ]);
+
+    // Phase-4 Day-8: Validate location hierarchy integrity if any location field provided
+    if ($request->hasAny(['country_id', 'state_id', 'district_id', 'taluka_id', 'city_id'])) {
+        $this->validateLocationHierarchy($request);
+    }
 
     $user = $request->user();
 
@@ -132,13 +154,22 @@ public function update(Request $request)
     }
 
     // PIR-007: Only update fields PRESENT in request; do not overwrite others with null/empty
-    $coreFields = ['full_name', 'date_of_birth', 'caste', 'education', 'location'];
+    $coreFields = ['full_name', 'date_of_birth', 'caste', 'education'];
+    $locationFields = ['country_id', 'state_id', 'district_id', 'taluka_id', 'city_id'];
     $updateData = [];
     foreach ($coreFields as $field) {
         if (!$request->has($field)) {
             continue;
         }
         $updateData[$field] = $request->input($field) === '' ? null : $request->input($field);
+    }
+
+    // Phase-4 Day-8: Process location hierarchy fields
+    foreach ($locationFields as $field) {
+        if (!$request->has($field)) {
+            continue;
+        }
+        $updateData[$field] = $request->input($field);
     }
 
     // Day-6.4: Detect only ACTUALLY CHANGED core fields for lock check (among those being updated)
@@ -275,9 +306,21 @@ public function update(Request $request)
             $query->where('caste', $request->caste);
         }
 
-        // Location filter
-        if ($request->filled('location')) {
-            $query->where('location', $request->location);
+        // Phase-4 Day-8: Location hierarchy filters
+        if ($request->filled('country_id')) {
+            $query->where('country_id', $request->country_id);
+        }
+        if ($request->filled('state_id')) {
+            $query->where('state_id', $request->state_id);
+        }
+        if ($request->filled('district_id')) {
+            $query->where('district_id', $request->district_id);
+        }
+        if ($request->filled('taluka_id')) {
+            $query->where('taluka_id', $request->taluka_id);
+        }
+        if ($request->filled('city_id')) {
+            $query->where('city_id', $request->city_id);
         }
 
         // Age filter (from date_of_birth)
@@ -299,6 +342,7 @@ public function update(Request $request)
 
         // Transform to include gender from user relationship (SSOT-approved fields only)
         // PIR-006: Null-safe when profile's user is missing (orphaned profile)
+        // Phase-4 Day-8: Use hierarchical location fields
         $profiles = $profiles->map(function ($profile) {
             return [
                 'id' => $profile->id,
@@ -308,7 +352,11 @@ public function update(Request $request)
                 'date_of_birth' => $profile->date_of_birth,
                 'caste' => $profile->caste,
                 'education' => $profile->education,
-                'location' => $profile->location,
+                'country_id' => $profile->country_id,
+                'state_id' => $profile->state_id,
+                'district_id' => $profile->district_id,
+                'taluka_id' => $profile->taluka_id,
+                'city_id' => $profile->city_id,
                 'profile_photo' => ($profile->profile_photo && $profile->photo_approved !== false) ? $profile->profile_photo : null,
                 'created_at' => $profile->created_at,
                 'updated_at' => $profile->updated_at,
@@ -358,6 +406,7 @@ public function update(Request $request)
 
         // Transform to include gender from user relationship (SSOT-approved field)
         // PIR-006: Null-safe when user relation is missing
+        // Phase-4 Day-8: Use hierarchical location fields
         $profileData = [
             'id' => $profile->id,
             'user_id' => $profile->user_id,
@@ -366,7 +415,11 @@ public function update(Request $request)
             'date_of_birth' => $profile->date_of_birth,
             'caste' => $profile->caste,
             'education' => $profile->education,
-            'location' => $profile->location,
+            'country_id' => $profile->country_id,
+            'state_id' => $profile->state_id,
+            'district_id' => $profile->district_id,
+            'taluka_id' => $profile->taluka_id,
+            'city_id' => $profile->city_id,
             'profile_photo' => ($profile->profile_photo && $profile->photo_approved !== false) ? $profile->profile_photo : null,
             'created_at' => $profile->created_at,
             'updated_at' => $profile->updated_at,
@@ -376,6 +429,52 @@ public function update(Request $request)
             'success' => true,
             'profile' => $profileData,
         ]);
+    }
+
+    /**
+     * Phase-4 Day-8: Validate location hierarchy integrity
+     */
+    private function validateLocationHierarchy(Request $request): void
+    {
+        // If city provided, validate it belongs to the selected taluka (if provided)
+        if ($request->filled('city_id') && $request->filled('taluka_id')) {
+            $city = \App\Models\City::find($request->city_id);
+            if ($city && $city->taluka_id != $request->taluka_id) {
+                throw \Illuminate\Validation\ValidationException::withMessages([
+                    'city_id' => 'Selected city does not belong to the selected taluka.'
+                ]);
+            }
+        }
+
+        // If taluka provided, validate it belongs to the selected district (if provided)
+        if ($request->filled('taluka_id') && $request->filled('district_id')) {
+            $taluka = \App\Models\Taluka::find($request->taluka_id);
+            if ($taluka && $taluka->district_id != $request->district_id) {
+                throw \Illuminate\Validation\ValidationException::withMessages([
+                    'taluka_id' => 'Selected taluka does not belong to the selected district.'
+                ]);
+            }
+        }
+
+        // If district provided, validate it belongs to the selected state
+        if ($request->filled('district_id') && $request->filled('state_id')) {
+            $district = \App\Models\District::find($request->district_id);
+            if ($district && $district->state_id != $request->state_id) {
+                throw \Illuminate\Validation\ValidationException::withMessages([
+                    'district_id' => 'Selected district does not belong to the selected state.'
+                ]);
+            }
+        }
+
+        // State must belong to the selected country
+        if ($request->filled('state_id') && $request->filled('country_id')) {
+            $state = \App\Models\State::find($request->state_id);
+            if ($state && $state->country_id != $request->country_id) {
+                throw \Illuminate\Validation\ValidationException::withMessages([
+                    'state_id' => 'Selected state does not belong to the selected country.'
+                ]);
+            }
+        }
     }
 
 }

@@ -319,18 +319,32 @@ class AdminController extends Controller
 
     /**
      * Day 7: Change profile lifecycle_state. Validates transitions via ProfileLifecycleService.
+     * Day-7 Enhancement: Role guard (super_admin only) + mandatory reason enforcement.
      */
     public function updateLifecycleState(Request $request, MatrimonyProfile $profile): \Illuminate\Http\RedirectResponse
     {
-        if (!auth()->check() || !auth()->user()->is_admin) {
-            abort(403, 'Admin access required');
+        // Day-7: super_admin only
+        if (!$request->user()->hasAdminRole(['super_admin'])) {
+            abort(403, 'This action requires super_admin role');
         }
 
+        // Day-7: Reason is mandatory
         $request->validate([
             'lifecycle_state' => ['required', 'string', 'in:' . implode(',', ProfileLifecycleService::getStates())],
+            'reason' => ['required', 'string', 'min:10'],
         ]);
 
         ProfileLifecycleService::transitionTo($profile, $request->lifecycle_state, $request->user());
+
+        // Day-7: Record audit log for lifecycle state change
+        AuditLogService::log(
+            $request->user(),
+            'lifecycle_state_changed',
+            'matrimony_profile',
+            $profile->id,
+            $request->reason,
+            false
+        );
 
         return redirect()->route('admin.profiles.show', $profile->id)->with('success', 'Lifecycle state updated to ' . $request->lifecycle_state);
     }
@@ -971,9 +985,14 @@ class AdminController extends Controller
 
     /**
      * Phase-3 Day-5: Approve conflict (service handles authority + validation).
+     * Day-7: Role guard — super_admin, data_admin only.
      */
     public function conflictRecordApprove(Request $request, ConflictRecord $record)
     {
+        if (!$request->user()->hasAdminRole(['super_admin', 'data_admin'])) {
+            abort(403, 'This action requires super_admin or data_admin role');
+        }
+
         $request->validate(['resolution_reason' => ['required', 'string', 'min:10']]);
         ConflictResolutionService::approveConflict($record, $request->user(), $request->resolution_reason);
         return redirect()->route('admin.conflict-records.index')->with('success', 'Conflict approved.');
@@ -981,9 +1000,14 @@ class AdminController extends Controller
 
     /**
      * Phase-3 Day-5: Reject conflict (service handles authority + validation).
+     * Day-7: Role guard — super_admin, data_admin only.
      */
     public function conflictRecordReject(Request $request, ConflictRecord $record)
     {
+        if (!$request->user()->hasAdminRole(['super_admin', 'data_admin'])) {
+            abort(403, 'This action requires super_admin or data_admin role');
+        }
+
         $request->validate(['resolution_reason' => ['required', 'string', 'min:10']]);
         ConflictResolutionService::rejectConflict($record, $request->user(), $request->resolution_reason);
         return redirect()->route('admin.conflict-records.index')->with('success', 'Conflict rejected.');
@@ -991,9 +1015,14 @@ class AdminController extends Controller
 
     /**
      * Phase-3 Day-5: Override conflict (service handles authority + validation).
+     * Day-7: Role guard — super_admin, data_admin only.
      */
     public function conflictRecordOverride(Request $request, ConflictRecord $record)
     {
+        if (!$request->user()->hasAdminRole(['super_admin', 'data_admin'])) {
+            abort(403, 'This action requires super_admin or data_admin role');
+        }
+
         $request->validate(['resolution_reason' => ['required', 'string', 'min:10']]);
         ConflictResolutionService::overrideConflict($record, $request->user(), $request->resolution_reason);
         return redirect()->route('admin.conflict-records.index')->with('success', 'Conflict overridden.');
@@ -1137,5 +1166,42 @@ class AdminController extends Controller
         return redirect()
             ->route('admin.biodata-intakes.show', $intake)
             ->with('success', 'Intake attached to profile. No profile data was modified.');
+    }
+
+    /**
+     * Day-7: Unlock a locked field (super_admin only, mandatory reason + audit).
+     */
+    public function unlockProfileField(Request $request, MatrimonyProfile $profile)
+    {
+        // Day-7: super_admin only
+        if (!$request->user()->hasAdminRole(['super_admin'])) {
+            abort(403, 'This action requires super_admin role');
+        }
+
+        // Day-7: Reason is mandatory
+        $request->validate([
+            'field_key' => ['required', 'string'],
+            'reason' => ['required', 'string', 'min:10'],
+        ]);
+
+        $unlocked = ProfileFieldLockService::removeLock($profile, $request->field_key);
+
+        if ($unlocked) {
+            // Day-7: Record audit log for field unlock
+            AuditLogService::log(
+                $request->user(),
+                'field_unlocked',
+                'matrimony_profile',
+                $profile->id,
+                $request->reason,
+                false
+            );
+
+            return redirect()->route('admin.profiles.show', $profile->id)
+                ->with('success', "Field \"{$request->field_key}\" has been unlocked.");
+        }
+
+        return redirect()->route('admin.profiles.show', $profile->id)
+            ->withErrors(['field_key' => 'Field is not locked or does not exist.']);
     }
 }

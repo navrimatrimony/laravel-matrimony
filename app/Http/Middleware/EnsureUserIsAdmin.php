@@ -35,8 +35,8 @@ class EnsureUserIsAdmin
             abort(403);
         }
 
-        // Check if user has admin privileges
-        if (!$request->user()->is_admin) {
+        // Check if user has admin privileges (Day-7: supports role-based admin)
+        if (!$request->user()->isAnyAdmin()) {
             if ($request->expectsJson()) {
                 return response()->json([
                     'success' => false,

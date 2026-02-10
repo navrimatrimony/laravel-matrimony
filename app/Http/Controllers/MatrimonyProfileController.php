@@ -54,10 +54,22 @@ class MatrimonyProfileController extends Controller
         $visibleFields = ProfileFieldConfigurationService::getVisibleFieldKeys();
         $enabledFields = ProfileFieldConfigurationService::getEnabledFieldKeys();
         
+        // Phase-4 Day-8: Pass location data for dropdowns
+        $countries = \App\Models\Country::all();
+        $states = \App\Models\State::all();
+        $districts = \App\Models\District::all();
+        $talukas = \App\Models\Taluka::all();
+        $cities = \App\Models\City::all();
+        
         // Profile नाही → create form
         return view('matrimony.profile.create', [
             'visibleFields' => $visibleFields,
             'enabledFields' => $enabledFields,
+            'countries' => $countries,
+            'states' => $states,
+            'districts' => $districts,
+            'talukas' => $talukas,
+            'cities' => $cities,
         ]);
     }
     
@@ -74,9 +86,18 @@ class MatrimonyProfileController extends Controller
 */
 public function store(Request $request)
 {
+    // Phase-4 Day-8: Location hierarchy validation
     $request->validate([
         'marital_status' => 'required|in:single,divorced,widowed',
+        'country_id' => 'required|exists:countries,id',
+        'state_id' => 'required|exists:states,id',
+        'district_id' => 'nullable|exists:districts,id',
+        'taluka_id' => 'nullable|exists:talukas,id',
+        'city_id' => 'required|exists:cities,id',
     ]);
+
+    // Phase-4 Day-8: Validate location hierarchy integrity
+    $this->validateLocationHierarchy($request);
 
     $user = auth()->user();
 
@@ -104,8 +125,12 @@ public function store(Request $request)
     if (isset($enabledFieldsMap['education']) && $request->has('education')) {
         $profileData['education'] = $request->education;
     }
-    if (isset($enabledFieldsMap['location']) && $request->has('location')) {
-        $profileData['location'] = $request->location;
+    if (isset($enabledFieldsMap['location'])) {
+        $profileData['country_id'] = $request->country_id;
+        $profileData['state_id'] = $request->state_id;
+        $profileData['district_id'] = $request->district_id;
+        $profileData['taluka_id'] = $request->taluka_id;
+        $profileData['city_id'] = $request->city_id;
     }
     if (isset($enabledFieldsMap['caste']) && $request->has('caste')) {
         $profileData['caste'] = $request->caste;
@@ -114,7 +139,7 @@ public function store(Request $request)
     $existingProfile = MatrimonyProfile::where('user_id', $user->id)->first();
     if (!$existingProfile) {
         $profile = MatrimonyProfile::create(array_merge(['user_id' => $user->id], $profileData));
-        foreach (['full_name', 'gender', 'date_of_birth', 'marital_status', 'education', 'location', 'caste', 'is_suspended'] as $fieldKey) {
+        foreach (['full_name', 'gender', 'date_of_birth', 'marital_status', 'education', 'country_id', 'state_id', 'district_id', 'taluka_id', 'city_id', 'caste', 'is_suspended'] as $fieldKey) {
             if (!array_key_exists($fieldKey, $profileData)) {
                 continue;
             }
@@ -180,11 +205,23 @@ public function store(Request $request)
     $visibleFields = ProfileFieldConfigurationService::getVisibleFieldKeys();
     $enabledFields = ProfileFieldConfigurationService::getEnabledFieldKeys();
     
+    // Phase-4 Day-8: Pass location data for dropdowns
+    $countries = \App\Models\Country::all();
+    $states = \App\Models\State::all();
+    $districts = \App\Models\District::all();
+    $talukas = \App\Models\Taluka::all();
+    $cities = \App\Models\City::all();
+    
     // ✅ Profile exists → edit page
     return view('matrimony.profile.edit', [
         'matrimonyProfile' => $user->matrimonyProfile,
         'visibleFields' => $visibleFields,
         'enabledFields' => $enabledFields,
+        'countries' => $countries,
+        'states' => $states,
+        'districts' => $districts,
+        'talukas' => $talukas,
+        'cities' => $cities,
     ]);
 }
 
@@ -201,9 +238,18 @@ public function store(Request $request)
     */
     public function update(Request $request)
 {
+    // Phase-4 Day-8: Location hierarchy validation
     $request->validate([
         'marital_status' => 'required|in:single,divorced,widowed',
+        'country_id' => 'required|exists:countries,id',
+        'state_id' => 'required|exists:states,id',
+        'district_id' => 'nullable|exists:districts,id',
+        'taluka_id' => 'nullable|exists:talukas,id',
+        'city_id' => 'required|exists:cities,id',
     ]);
+
+    // Phase-4 Day-8: Validate location hierarchy integrity
+    $this->validateLocationHierarchy($request);
 
     $user = auth()->user();
 
@@ -259,8 +305,12 @@ if ($request->hasFile('profile_photo')) {
     if (isset($enabledFieldsMap['education']) && $request->has('education')) {
         $updateData['education'] = $request->education;
     }
-    if (isset($enabledFieldsMap['location']) && $request->has('location')) {
-        $updateData['location'] = $request->location;
+    if (isset($enabledFieldsMap['location'])) {
+        $updateData['country_id'] = $request->country_id;
+        $updateData['state_id'] = $request->state_id;
+        $updateData['district_id'] = $request->district_id;
+        $updateData['taluka_id'] = $request->taluka_id;
+        $updateData['city_id'] = $request->city_id;
     }
     if (isset($enabledFieldsMap['caste']) && $request->has('caste')) {
         $updateData['caste'] = $request->caste;
@@ -668,7 +718,10 @@ public function show(MatrimonyProfile $matrimony_profile_id)
         $perPage = $perPage >= 1 && $perPage <= 100 ? $perPage : 15;
         $profiles = $query->paginate($perPage)->withQueryString();
 
-        return view('matrimony.profile.index', compact('profiles'));
+        // Phase-4 Day-8: Pass location data for search filters
+        $cities = \App\Models\City::all();
+
+        return view('matrimony.profile.index', compact('profiles', 'cities'));
 
     }
 
@@ -775,5 +828,52 @@ public function show(MatrimonyProfile $matrimony_profile_id)
             'summaryText' => $summaryText,
             'celebrationText' => $celebrationText,
         ];
+    }
+
+    /**
+     * Phase-4 Day-8: Validate location hierarchy integrity
+     * Ensures child location references correct parent in hierarchy
+     */
+    private function validateLocationHierarchy(Request $request): void
+    {
+        // If city provided, validate it belongs to the selected taluka (if provided)
+        if ($request->filled('city_id') && $request->filled('taluka_id')) {
+            $city = \App\Models\City::find($request->city_id);
+            if ($city && $city->taluka_id != $request->taluka_id) {
+                throw \Illuminate\Validation\ValidationException::withMessages([
+                    'city_id' => 'Selected city does not belong to the selected taluka.'
+                ]);
+            }
+        }
+
+        // If taluka provided, validate it belongs to the selected district (if provided)
+        if ($request->filled('taluka_id') && $request->filled('district_id')) {
+            $taluka = \App\Models\Taluka::find($request->taluka_id);
+            if ($taluka && $taluka->district_id != $request->district_id) {
+                throw \Illuminate\Validation\ValidationException::withMessages([
+                    'taluka_id' => 'Selected taluka does not belong to the selected district.'
+                ]);
+            }
+        }
+
+        // If district provided, validate it belongs to the selected state
+        if ($request->filled('district_id') && $request->filled('state_id')) {
+            $district = \App\Models\District::find($request->district_id);
+            if ($district && $district->state_id != $request->state_id) {
+                throw \Illuminate\Validation\ValidationException::withMessages([
+                    'district_id' => 'Selected district does not belong to the selected state.'
+                ]);
+            }
+        }
+
+        // State must belong to the selected country
+        if ($request->filled('state_id') && $request->filled('country_id')) {
+            $state = \App\Models\State::find($request->state_id);
+            if ($state && $state->country_id != $request->country_id) {
+                throw \Illuminate\Validation\ValidationException::withMessages([
+                    'state_id' => 'Selected state does not belong to the selected country.'
+                ]);
+            }
+        }
     }
 }
