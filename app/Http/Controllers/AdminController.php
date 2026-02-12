@@ -12,6 +12,7 @@ use App\Models\User;
 use App\Models\AdminSetting;
 use App\Models\ProfileFieldConfig;
 use App\Models\FieldRegistry;
+use App\Models\VerificationTag;
 use App\Notifications\ImageRejectedNotification;
 use App\Services\ViewTrackingService;
 use App\Notifications\ProfileSoftDeletedNotification;
@@ -51,7 +52,7 @@ class AdminController extends Controller
     {
         $perPage = (int) $request->input('per_page', 15);
         $perPage = $perPage >= 1 && $perPage <= 100 ? $perPage : 15;
-        $profiles = MatrimonyProfile::withTrashed()->latest()->paginate($perPage)->withQueryString();
+        $profiles = MatrimonyProfile::withTrashed()->with(['country', 'state', 'district', 'taluka', 'city'])->latest()->paginate($perPage)->withQueryString();
         return view('admin.profiles.index', compact('profiles'));
     }
 
@@ -61,6 +62,7 @@ class AdminController extends Controller
     public function showProfile(string $id)
     {
         $profile = MatrimonyProfile::withTrashed()->findOrFail($id);
+        $profile->load(['country', 'state', 'district', 'taluka', 'city']);
         $user = auth()->user();
         $isOwnProfile = $user->matrimonyProfile && $user->matrimonyProfile->id === (int) $id;
 
@@ -117,6 +119,20 @@ class AdminController extends Controller
         // Day 8: Field value history (read-only)
         $fieldHistory = FieldValueHistoryService::getHistoryForProfile($profile);
 
+        $assignedTags = VerificationTag::query()
+            ->select('verification_tags.*')
+            ->join('profile_verification_tag', 'verification_tags.id', '=', 'profile_verification_tag.verification_tag_id')
+            ->where('profile_verification_tag.matrimony_profile_id', $profile->id)
+            ->whereNull('profile_verification_tag.deleted_at')
+            ->whereNull('verification_tags.deleted_at')
+            ->orderBy('verification_tags.name')
+            ->get();
+
+        $activeVerificationTags = VerificationTag::query()
+            ->whereNull('deleted_at')
+            ->orderBy('name')
+            ->get();
+
         return view('admin.profiles.show', [
             'matrimonyProfile' => $profile,
             'isOwnProfile' => $isOwnProfile,
@@ -127,6 +143,8 @@ class AdminController extends Controller
             'fieldLocks' => $fieldLocks,
             'lifecycleAllowedTargets' => $lifecycleAllowedTargets,
             'fieldHistory' => $fieldHistory,
+            'assignedTags' => $assignedTags,
+            'activeVerificationTags' => $activeVerificationTags,
         ]);
     }
 

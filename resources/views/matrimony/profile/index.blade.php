@@ -32,13 +32,8 @@
                             <input type="text" name="caste" value="{{ request('caste') }}" class="w-full border rounded px-3 py-2" placeholder="Caste">
                         </div>
                         <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-1">City</label>
-                            <select name="city_id" class="w-full border rounded px-3 py-2">
-                                <option value="">— Select City —</option>
-                                @foreach($cities ?? [] as $city)
-                                    <option value="{{ $city->id }}" {{ request('city_id') == $city->id ? 'selected' : '' }}>{{ $city->name }}</option>
-                                @endforeach
-                            </select>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Location</label>
+                            <input type="text" name="location" value="{{ request('location') }}" class="w-full border rounded px-3 py-2" placeholder="City">
                         </div>
                         <div>
                             <label class="block text-sm font-medium text-gray-700 mb-1">Height From (cm)</label>
@@ -131,9 +126,15 @@
             | {{ \Carbon\Carbon::parse($matrimonyProfile->date_of_birth)->age }} yrs
         @endif
 
-        {{-- Location --}}
-        @if ($matrimonyProfile->location)
-            | {{ ucfirst($matrimonyProfile->location) }}
+        {{-- Location (hierarchy) --}}
+        @php
+            $locLine1 = trim(implode(', ', array_filter([$matrimonyProfile->city?->name ?? null, $matrimonyProfile->taluka?->name ?? null])));
+            $locLine2 = trim(implode(', ', array_filter([$matrimonyProfile->district?->name ?? null, $matrimonyProfile->state?->name ?? null])));
+            $locLine3 = $matrimonyProfile->country?->name ?? '';
+            $locDisplay = $locLine1 ?: ($locLine2 ?: ($locLine3 ?: null));
+        @endphp
+        @if ($locDisplay)
+            | {{ $locDisplay }}
         @endif
     </span>
 </p>

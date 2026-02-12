@@ -48,8 +48,11 @@ class ExtendedFieldService
     public static function saveValuesForProfile(MatrimonyProfile $profile, array $input, ?\App\Models\User $actor = null): void
     {
         $changedKeys = static::getChangedExtendedFieldKeys($profile, $input);
-        // Day-6: Overwrite protection - authority-aware (equal/higher can edit locked)
-        ProfileFieldLockService::assertNotLocked($profile, $changedKeys, $actor);
+        // Day-6: Overwrite protection - skip for profile owner (Phase-4: extended fields user-editable)
+        $isProfileOwner = $actor && $profile->user_id === ($actor->id ?? null);
+        if (!$isProfileOwner) {
+            ProfileFieldLockService::assertNotLocked($profile, $changedKeys, $actor);
+        }
 
         foreach ($input as $field_key => $value) {
             $registry = FieldRegistry::where('field_key', $field_key)

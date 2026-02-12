@@ -184,6 +184,62 @@
         </div>
     </div>
 
+    <div class="mb-6 bg-white dark:bg-gray-800 shadow rounded-lg p-6">
+        <h3 class="text-lg font-semibold text-gray-800 dark:text-gray-100 mb-4">Verification Tags</h3>
+
+        <div class="mb-5">
+            <p class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Assigned active tags</p>
+            @if ($assignedTags->isEmpty())
+                <p class="text-sm text-gray-500 dark:text-gray-400">No active tags assigned.</p>
+            @else
+                <div class="space-y-2">
+                    @foreach ($assignedTags as $tag)
+                        <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-2 border border-gray-200 dark:border-gray-700 rounded p-3">
+                            <span class="font-medium text-gray-900 dark:text-gray-100">{{ $tag->name }}</span>
+                            <form method="POST" action="{{ route('admin.profiles.tags.remove', ['profile' => $matrimonyProfile->id, 'tag' => $tag->id]) }}" class="flex items-center gap-2">
+                                @csrf
+                                @method('DELETE')
+                                <input
+                                    type="text"
+                                    name="reason"
+                                    required
+                                    placeholder="Reason"
+                                    class="border border-gray-300 dark:border-gray-600 rounded px-2 py-1 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                                >
+                                <button type="submit" class="px-3 py-1 bg-red-600 hover:bg-red-700 text-white rounded text-sm">Remove</button>
+                            </form>
+                        </div>
+                    @endforeach
+                </div>
+            @endif
+        </div>
+
+        <div class="pt-4 border-t border-gray-200 dark:border-gray-700">
+            <p class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Assign tag</p>
+            <form method="POST" action="{{ route('admin.profiles.tags.assign', ['profile' => $matrimonyProfile->id]) }}" class="flex flex-col md:flex-row md:items-center gap-2">
+                @csrf
+                <select
+                    name="tag_id"
+                    required
+                    class="border border-gray-300 dark:border-gray-600 rounded px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                >
+                    <option value="">Select tag</option>
+                    @foreach ($activeVerificationTags as $tag)
+                        <option value="{{ $tag->id }}">{{ $tag->name }}</option>
+                    @endforeach
+                </select>
+                <input
+                    type="text"
+                    name="reason"
+                    required
+                    placeholder="Reason"
+                    class="border border-gray-300 dark:border-gray-600 rounded px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                >
+                <button type="submit" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded text-sm">Assign</button>
+            </form>
+        </div>
+    </div>
+
     <div class="bg-white shadow rounded-lg p-6">
         <div x-show="adminEditMode" x-transition class="mb-6 p-6 bg-yellow-50 dark:bg-yellow-900/20 border-2 border-yellow-300 dark:border-yellow-700 rounded-lg">
             <h3 class="text-lg font-bold text-gray-800 dark:text-gray-100 mb-4">Admin Profile Edit Mode</h3>
@@ -212,9 +268,9 @@
                         <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Education</label>
                         <input type="text" name="education" value="{{ old('education', $matrimonyProfile->education) }}" class="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100">
                     </div>
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Location</label>
-                        <input type="text" name="location" value="{{ old('location', $matrimonyProfile->location) }}" class="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100">
+                    <div class="md:col-span-2">
+                        <p class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Location</p>
+                        <p class="text-sm text-gray-600 dark:text-gray-400">Managed via hierarchy (country, state, district, taluka, city).</p>
                     </div>
                     <div>
                         <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Caste</label>
@@ -411,8 +467,14 @@
             </div>
             <div>
                 <p class="text-gray-500 text-sm">Location</p>
-                <p class="font-medium text-base">
-                    {{ $matrimonyProfile->location ?? '—' }}
+                <p class="font-medium text-base whitespace-pre-line">
+                    @php
+                        $line1 = trim(implode(', ', array_filter([$matrimonyProfile->city?->name, $matrimonyProfile->taluka?->name])));
+                        $line2 = trim(implode(', ', array_filter([$matrimonyProfile->district?->name, $matrimonyProfile->state?->name])));
+                        $line3 = $matrimonyProfile->country?->name ? trim($matrimonyProfile->country->name) : '';
+                        $locationText = ($line1 || $line2 || $line3) ? implode("\n", array_filter([$line1, $line2, $line3])) : '—';
+                    @endphp
+                    {{ $locationText }}
                     @if ($matrimonyProfile->admin_edited_fields && in_array('location', $matrimonyProfile->admin_edited_fields ?? []))
                         <span class="ml-2 text-xs text-amber-600 dark:text-amber-400" title="This field was corrected by admin">(Admin corrected)</span>
                     @endif

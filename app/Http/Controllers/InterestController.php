@@ -212,6 +212,19 @@ public function accept(\App\Models\Interest $interest)
         'status' => 'accepted',
     ]);
 
+    // Phase-4 Day-10: Women-First Safety — Add sender to contact whitelist (if policy allows)
+    $senderProfile = $interest->senderProfile;
+    if ($senderProfile && $receiverProfile->contact_unlock_mode === 'after_interest_accepted') {
+        $whitelist = $receiverProfile->contact_visible_to ?? [];
+        if (!is_array($whitelist)) {
+            $whitelist = [];
+        }
+        if (!in_array($senderProfile->id, $whitelist, true)) {
+            $whitelist[] = $senderProfile->id;
+            $receiverProfile->update(['contact_visible_to' => $whitelist]);
+        }
+    }
+
     $senderOwner = $interest->senderProfile?->user;
     if ($senderOwner) {
         $senderOwner->notify(new InterestAcceptedNotification($receiverProfile));

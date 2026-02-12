@@ -9,6 +9,10 @@ use App\Http\Controllers\AbuseReportController;
 use App\Http\Controllers\BlockController;
 use App\Http\Controllers\ShortlistController;
 use App\Http\Controllers\Admin\DemoProfileController;
+use App\Http\Controllers\Admin\AdminCapabilityController;
+use App\Http\Controllers\Admin\AdminVerificationTagController;
+use App\Http\Controllers\Admin\AdminSeriousIntentController;
+use App\Http\Controllers\Admin\AdminProfileTagController;
 use App\Http\Controllers\DashboardController;
 
 /*
@@ -153,6 +157,11 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
     */
     Route::get('/profiles', [AdminController::class, 'profilesIndex'])->name('profiles.index');
 
+    Route::post('/profiles/{profile}/tags/assign', [AdminProfileTagController::class, 'assign'])
+        ->name('profiles.tags.assign');
+    Route::delete('/profiles/{profile}/tags/{tag}/remove', [AdminProfileTagController::class, 'remove'])
+        ->name('profiles.tags.remove');
+
     /*
     | Profile View (Admin - bypasses suspension checks)
     */
@@ -176,7 +185,7 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
     
     Route::post('/profiles/{profile}/soft-delete', [AdminController::class, 'softDeleteProfile'])
         ->name('profiles.soft-delete');
-    
+
     /*
     | Image Moderation
     */
@@ -191,9 +200,6 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
 
     Route::post('/profiles/{profile}/lifecycle-state', [AdminController::class, 'updateLifecycleState'])
         ->name('profiles.lifecycle-state');
-
-    Route::post('/profiles/{profile}/unlock-field', [AdminController::class, 'unlockProfileField'])
-        ->name('profiles.unlock-field');
 
     /*
     | Day-13: Manual conflict detection (no profile mutation)
@@ -222,6 +228,32 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
     Route::post('/demo-profile', [DemoProfileController::class, 'store'])->name('demo-profile.store');
     Route::get('/demo-profile/bulk-create', [DemoProfileController::class, 'bulkCreate'])->name('demo-profile.bulk-create');
     Route::post('/demo-profiles/bulk', [DemoProfileController::class, 'bulkStore'])->name('demo-profile.bulk-store');
+
+    /*
+    | Verification Tags
+    */
+    Route::get('/verification-tags', [AdminVerificationTagController::class, 'index'])->name('verification-tags.index');
+    Route::post('/verification-tags', [AdminVerificationTagController::class, 'store'])->name('verification-tags.store');
+    Route::put('/verification-tags/{id}', [AdminVerificationTagController::class, 'update'])->name('verification-tags.update');
+    Route::delete('/verification-tags/{id}', [AdminVerificationTagController::class, 'destroy'])->name('verification-tags.destroy');
+    Route::get('/verification-tags/{id}/restore-confirm', [AdminVerificationTagController::class, 'restoreConfirm'])->name('verification-tags.restore-confirm');
+    Route::post('/verification-tags/{id}/restore', [AdminVerificationTagController::class, 'restore'])->name('verification-tags.restore');
+
+    /*
+    | Serious Intents
+    */
+    Route::get('/serious-intents', [AdminSeriousIntentController::class, 'index'])->name('serious-intents.index');
+    Route::post('/serious-intents', [AdminSeriousIntentController::class, 'store'])->name('serious-intents.store');
+    Route::put('/serious-intents/{id}', [AdminSeriousIntentController::class, 'update'])->name('serious-intents.update');
+    Route::delete('/serious-intents/{id}', [AdminSeriousIntentController::class, 'destroy'])->name('serious-intents.destroy');
+    Route::get('/serious-intents/{id}/restore-confirm', [AdminSeriousIntentController::class, 'restoreConfirm'])->name('serious-intents.restore-confirm');
+    Route::post('/serious-intents/{id}/restore', [AdminSeriousIntentController::class, 'restore'])->name('serious-intents.restore');
+
+    /*
+    | Admin Capabilities
+    */
+    Route::get('/admin-capabilities', [AdminCapabilityController::class, 'index'])->name('admin-capabilities.index');
+    Route::post('/admin-capabilities/{admin}/update', [AdminCapabilityController::class, 'update'])->name('admin-capabilities.update');
 
     Route::get('/view-back-settings', [AdminController::class, 'viewBackSettings'])->name('view-back-settings.index');
     Route::post('/view-back-settings', [AdminController::class, 'updateViewBackSettings'])->name('view-back-settings.update');

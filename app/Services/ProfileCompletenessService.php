@@ -150,7 +150,7 @@ class ProfileCompletenessService
                 return "(CASE WHEN COALESCE(TRIM({$table}.education),'') != '' THEN 1 ELSE 0 END)";
 
             case 'location':
-                return "(CASE WHEN COALESCE(TRIM({$table}.location),'') != '' THEN 1 ELSE 0 END)";
+                return "(CASE WHEN ({$table}.city_id IS NOT NULL OR {$table}.taluka_id IS NOT NULL OR {$table}.district_id IS NOT NULL OR {$table}.state_id IS NOT NULL OR {$table}.country_id IS NOT NULL) THEN 1 ELSE 0 END)";
 
             case 'profile_photo':
                 return "(CASE WHEN COALESCE(TRIM({$table}.profile_photo),'') != '' AND ({$table}.photo_approved = 1 OR {$table}.photo_approved IS TRUE) THEN 1 ELSE 0 END)";

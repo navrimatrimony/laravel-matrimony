@@ -2,7 +2,13 @@
 
 namespace App\Services;
 
+use App\Models\City;
+use App\Models\Country;
+use App\Models\District;
+use App\Models\FieldRegistry;
 use App\Models\MatrimonyProfile;
+use App\Models\State;
+use App\Models\Taluka;
 
 /*
 |--------------------------------------------------------------------------
@@ -145,6 +151,100 @@ class DemoProfileDefaultsService
             'photo_approved' => true,
             'full_name' => $fullName,
         ];
+    }
+
+    /**
+     * Phase-4: Defaults for demo profile autofill. Only fill if null; do not override.
+     * Uses: realistic name, gender, age 23–35, Never Married (single), Graduate,
+     * caste, height_cm 150–180, location hierarchy (valid country/state/district/city).
+     */
+    public static function defaultsForDemo(int $index = 0, ?string $genderOverride = null): array
+    {
+        $gender = self::resolveGender($genderOverride);
+        $dob = self::randomDobDemo();
+        $caste = self::randomCaste();
+        $profilePhoto = self::randomDemoPhoto($gender);
+        $fullName = self::generateFullName($gender, $caste, $index);
+        $heightCm = random_int(150, 180);
+        $hierarchy = self::locationHierarchyForDemo();
+
+        return array_merge([
+            'full_name' => $fullName,
+            'gender' => $gender,
+            'date_of_birth' => $dob,
+            'marital_status' => 'single',
+            'education' => 'Graduate',
+            'caste' => $caste,
+            'height_cm' => $heightCm,
+            'profile_photo' => $profilePhoto,
+            'photo_approved' => true,
+        ], $hierarchy);
+    }
+
+    /** Age 23–35 for demo. */
+    private static function randomDobDemo(): string
+    {
+        $age = random_int(23, 35);
+        return now()->subYears($age)->subDays(random_int(0, 364))->format('Y-m-d');
+    }
+
+    /** Valid country/state/district/taluka/city IDs; nulls if any level missing. */
+    private static function locationHierarchyForDemo(): array
+    {
+        $country = Country::query()->inRandomOrder()->first();
+        if (!$country) {
+            return ['country_id' => null, 'state_id' => null, 'district_id' => null, 'taluka_id' => null, 'city_id' => null];
+        }
+        $state = State::where('country_id', $country->id)->inRandomOrder()->first();
+        if (!$state) {
+            return ['country_id' => $country->id, 'state_id' => null, 'district_id' => null, 'taluka_id' => null, 'city_id' => null];
+        }
+        $district = District::where('state_id', $state->id)->inRandomOrder()->first();
+        if (!$district) {
+            return ['country_id' => $country->id, 'state_id' => $state->id, 'district_id' => null, 'taluka_id' => null, 'city_id' => null];
+        }
+        $taluka = Taluka::where('district_id', $district->id)->inRandomOrder()->first();
+        if (!$taluka) {
+            return ['country_id' => $country->id, 'state_id' => $state->id, 'district_id' => $district->id, 'taluka_id' => null, 'city_id' => null];
+        }
+        $city = City::where('taluka_id', $taluka->id)->inRandomOrder()->first();
+        return [
+            'country_id' => $country->id,
+            'state_id' => $state->id,
+            'district_id' => $district->id,
+            'taluka_id' => $taluka->id,
+            'city_id' => $city?->id,
+        ];
+    }
+
+    /**
+     * Phase-4: Generate dummy extended field values for demo profile.
+     * Loads EXTENDED + is_enabled from field_registry; returns [field_key => value] by data_type.
+     */
+    public static function extendedDefaultsForProfile(): array
+    {
+        $fields = FieldRegistry::where('field_type', 'EXTENDED')
+            ->where(function ($q) {
+                $q->where('is_enabled', true)->orWhereNull('is_enabled');
+            })
+            ->get();
+        $out = [];
+        foreach ($fields as $field) {
+            $out[$field->field_key] = self::dummyValueForDataType($field->data_type);
+        }
+        return $out;
+    }
+
+    private static function dummyValueForDataType(string $dataType): string|int
+    {
+        return match ($dataType) {
+            'text' => 'Reading, Traveling',
+            'number' => (string) random_int(1, 99),
+            'date' => now()->subYears(random_int(1, 10))->format('Y-m-d'),
+            'boolean' => random_int(0, 1) === 1 ? '1' : '0',
+            'select' => '1',
+            default => '—',
+        };
     }
 
     /**

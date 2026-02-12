@@ -8,6 +8,7 @@ use App\Models\MatrimonyProfile;
 use App\Services\FieldValueHistoryService;
 use App\Services\ProfileLifecycleService;
 use App\Services\ViewTrackingService;
+use App\Services\ProfileVisibilityPolicyService;
 
 class MatrimonyProfileApiController extends Controller
 {
@@ -397,6 +398,12 @@ public function update(Request $request)
                 ], 404);
             }
             if ($viewerProfile && ViewTrackingService::isBlocked($viewerProfile->id, $profile->id)) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Profile not found',
+                ], 404);
+            }
+            if (!ProfileVisibilityPolicyService::canViewProfile($profile, $user)) {
                 return response()->json([
                     'success' => false,
                     'message' => 'Profile not found',

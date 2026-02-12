@@ -60,6 +60,9 @@ class MatrimonyProfileController extends Controller
         $districts = \App\Models\District::all();
         $talukas = \App\Models\Taluka::all();
         $cities = \App\Models\City::all();
+        $seriousIntents = \App\Models\SeriousIntent::whereNull('deleted_at')
+            ->orderBy('name')
+            ->get();
         
         // Profile नाही → create form
         return view('matrimony.profile.create', [
@@ -70,6 +73,7 @@ class MatrimonyProfileController extends Controller
             'districts' => $districts,
             'talukas' => $talukas,
             'cities' => $cities,
+            'seriousIntents' => $seriousIntents,
         ]);
     }
     
@@ -94,6 +98,7 @@ public function store(Request $request)
         'district_id' => 'nullable|exists:districts,id',
         'taluka_id' => 'nullable|exists:talukas,id',
         'city_id' => 'required|exists:cities,id',
+        'serious_intent_id' => ['nullable', \Illuminate\Validation\Rule::exists('serious_intents', 'id')->whereNull('deleted_at')],
     ]);
 
     // Phase-4 Day-8: Validate location hierarchy integrity
@@ -134,6 +139,9 @@ public function store(Request $request)
     }
     if (isset($enabledFieldsMap['caste']) && $request->has('caste')) {
         $profileData['caste'] = $request->caste;
+    }
+    if ($request->has('serious_intent_id')) {
+        $profileData['serious_intent_id'] = $request->serious_intent_id ?: null;
     }
 
     $existingProfile = MatrimonyProfile::where('user_id', $user->id)->first();
@@ -211,6 +219,19 @@ public function store(Request $request)
     $districts = \App\Models\District::all();
     $talukas = \App\Models\Taluka::all();
     $cities = \App\Models\City::all();
+    $seriousIntents = \App\Models\SeriousIntent::whereNull('deleted_at')
+            ->orderBy('name')
+            ->get();
+
+    // Phase-4: Extended fields (user-editable, no lock for owner)
+    $extendedFields = \App\Models\FieldRegistry::where('field_type', 'EXTENDED')
+        ->where('is_archived', false)
+        ->where(function ($q) {
+            $q->where('is_enabled', true)->orWhereNull('is_enabled');
+        })
+        ->orderBy('display_order')
+        ->get();
+    $extendedValues = \App\Services\ExtendedFieldService::getValuesForProfile($user->matrimonyProfile);
     
     // ✅ Profile exists → edit page
     return view('matrimony.profile.edit', [
@@ -222,6 +243,9 @@ public function store(Request $request)
         'districts' => $districts,
         'talukas' => $talukas,
         'cities' => $cities,
+        'seriousIntents' => $seriousIntents,
+        'extendedFields' => $extendedFields,
+        'extendedValues' => $extendedValues,
     ]);
 }
 
@@ -237,7 +261,7 @@ public function store(Request $request)
     |
     */
     public function update(Request $request)
-{
+    {
     // Phase-4 Day-8: Location hierarchy validation
     $request->validate([
         'marital_status' => 'required|in:single,divorced,widowed',
@@ -246,6 +270,9 @@ public function store(Request $request)
         'district_id' => 'nullable|exists:districts,id',
         'taluka_id' => 'nullable|exists:talukas,id',
         'city_id' => 'required|exists:cities,id',
+        'contact_number' => 'nullable|string|max:20',
+        'height_cm' => 'nullable|integer|min:50|max:250',
+        'serious_intent_id' => ['nullable', \Illuminate\Validation\Rule::exists('serious_intents', 'id')->whereNull('deleted_at')],
     ]);
 
     // Phase-4 Day-8: Validate location hierarchy integrity
@@ -317,6 +344,12 @@ if ($request->hasFile('profile_photo')) {
     }
     if (isset($enabledFieldsMap['height_cm']) && $request->has('height_cm')) {
         $updateData['height_cm'] = $request->height_cm;
+    }
+    if ($request->has('contact_number')) {
+        $updateData['contact_number'] = $request->contact_number ?: null;
+    }
+    if ($request->has('serious_intent_id')) {
+        $updateData['serious_intent_id'] = $request->serious_intent_id ?: null;
     }
 
     // If new photo uploaded, apply policy-based approval status
@@ -390,6 +423,15 @@ if ($request->hasFile('profile_photo')) {
     // Day-6: Apply lock to ONLY actually changed CORE fields after successful update
     if (!empty($changedCoreFields)) {
         ProfileFieldLockService::applyLocks($existingProfile, $changedCoreFields, 'CORE', $user);
+    }
+
+    // Phase-4: Save extended fields (user-editable; lock skipped for profile owner in ExtendedFieldService)
+    if ($request->has('extended_fields') && is_array($request->extended_fields)) {
+        try {
+            \App\Services\ExtendedFieldService::saveValuesForProfile($existingProfile, $request->extended_fields, $user);
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return redirect()->back()->withErrors($e->errors())->withInput();
+        }
     }
 
     return redirect()
@@ -516,6 +558,9 @@ public function show(MatrimonyProfile $matrimony_profile_id)
     // 🔁 clarity alias (SSOT variable rule)
     $matrimonyProfile = $matrimony_profile_id;
 
+    // Eager-load location hierarchy and serious intent for UI display
+    $matrimonyProfile->load(['country', 'state', 'district', 'taluka', 'city', 'seriousIntent']);
+
 
     // 🔒 GUARD: Guest users are NOT allowed to view single profiles
     if (!auth()->check()) {
@@ -548,6 +593,11 @@ public function show(MatrimonyProfile $matrimony_profile_id)
         if (ViewTrackingService::isBlocked($viewer->matrimonyProfile->id, $matrimonyProfile->id)) {
             abort(404, 'Profile not found.');
         }
+    }
+
+    // 🔒 GUARD: Phase-4 Day-10 — Women-First Safety visibility policy
+    if (!$isOwnProfile && !\App\Services\ProfileVisibilityPolicyService::canViewProfile($matrimonyProfile, $viewer)) {
+        abort(404, 'Profile not found.');
     }
 
     $interestAlreadySent = false;
@@ -600,6 +650,28 @@ public function show(MatrimonyProfile $matrimony_profile_id)
         $matchData = self::calculateMatchExplanation($viewer->matrimonyProfile, $matrimonyProfile);
     }
 
+    $canViewContact = \App\Services\ContactVisibilityPolicyService::canViewContact(
+        $matrimonyProfile,
+        $viewer->matrimonyProfile ?? null
+    );
+
+    $extendedValues = \App\Services\ExtendedFieldService::getValuesForProfile($matrimonyProfile);
+    // Phase-4: Only show extended fields that are enabled in registry (visibility)
+    $visibleExtendedKeys = \App\Models\FieldRegistry::where('field_type', 'EXTENDED')
+        ->where(function ($q) {
+            $q->where('is_enabled', true)->orWhereNull('is_enabled');
+        })
+        ->pluck('field_key')
+        ->flip()
+        ->all();
+    $extendedValues = array_intersect_key($extendedValues, $visibleExtendedKeys);
+    $extendedMeta = \App\Models\FieldRegistry::where('field_type', 'EXTENDED')
+        ->where(function ($q) {
+            $q->where('is_enabled', true)->orWhereNull('is_enabled');
+        })
+        ->pluck('display_label', 'field_key')
+        ->toArray();
+
     return view(
         'matrimony.profile.show',
         [
@@ -608,6 +680,8 @@ public function show(MatrimonyProfile $matrimony_profile_id)
             'interestAlreadySent'  => $interestAlreadySent,
             'hasAlreadyReported'   => $hasAlreadyReported,
             'inShortlist'          => $inShortlist,
+            'extendedValues'       => $extendedValues,
+            'extendedMeta'         => $extendedMeta,
             'completenessPct'      => $completenessPct,
             'profilePhotoVisible' => $profilePhotoVisible,
             'dateOfBirthVisible'  => $dateOfBirthVisible,
@@ -616,6 +690,7 @@ public function show(MatrimonyProfile $matrimony_profile_id)
             'locationVisible'      => $locationVisible,
             'casteVisible'         => $casteVisible,
             'matchData'            => $matchData,
+            'canViewContact'       => $canViewContact,
         ]
     );
 }
@@ -656,9 +731,11 @@ public function show(MatrimonyProfile $matrimony_profile_id)
             $query->where('caste', $request->caste);
         }
 
-        // Location filter (only if searchable)
-        if ($isSearchable('location') && $request->filled('location')) {
-            $query->where('location', $request->location);
+        // Phase-4 Day-8: Location hierarchy filters (only if searchable)
+        if ($isSearchable('location')) {
+            if ($request->filled('city_id')) {
+                $query->where('city_id', $request->city_id);
+            }
         }
 
         // Age filter from date_of_birth (only if searchable)
@@ -695,7 +772,7 @@ public function show(MatrimonyProfile $matrimony_profile_id)
         }
 
         // 70% completeness or admin override (search visibility only)
-        $query->whereRaw(ProfileCompletenessService::sqlSearchVisible());
+        $query->whereRaw(ProfileCompletenessService::sqlSearchVisible('matrimony_profiles'));
 
         // Admin global toggle: hide demo profiles from search when OFF (Day-8)
         $demoVisible = \App\Models\AdminSetting::getBool('demo_profiles_visible_in_search', true);
@@ -716,7 +793,7 @@ public function show(MatrimonyProfile $matrimony_profile_id)
 
         $perPage = (int) $request->input('per_page', 15);
         $perPage = $perPage >= 1 && $perPage <= 100 ? $perPage : 15;
-        $profiles = $query->paginate($perPage)->withQueryString();
+        $profiles = $query->with(['country', 'state', 'district', 'taluka', 'city'])->paginate($perPage)->withQueryString();
 
         // Phase-4 Day-8: Pass location data for search filters
         $cities = \App\Models\City::all();
@@ -738,13 +815,40 @@ public function show(MatrimonyProfile $matrimony_profile_id)
         $matches = [];
         $commonGround = [];
 
-        // Define comparison fields (preferences to check)
+        // Define comparison fields (preferences to check) — location handled separately via hierarchy
         $preferenceFields = [
             'education' => ['label' => 'शिक्षण', 'icon' => '🎓'],
-            'location' => ['label' => 'शहर', 'icon' => '📍'],
             'caste' => ['label' => 'जात', 'icon' => '🗣️'],
             'marital_status' => ['label' => 'वैवाहिक स्थिती', 'icon' => '💑'],
         ];
+
+        // Location comparison (hierarchy: city_id = exact match, state_id = partial)
+        $viewerCityId = $viewerProfile->city_id;
+        $viewedCityId = $viewedProfile->city_id;
+        $viewerStateId = $viewerProfile->state_id;
+        $viewedStateId = $viewedProfile->state_id;
+        if ($viewerCityId || $viewedCityId || $viewerStateId || $viewedStateId) {
+            $locationMatched = false;
+            if ($viewerCityId && $viewedCityId && (int) $viewerCityId === (int) $viewedCityId) {
+                $locationMatched = true;
+            } elseif ($viewerStateId && $viewedStateId && (int) $viewerStateId === (int) $viewedStateId) {
+                $locationMatched = true; // partial (same state)
+            }
+            $matches[] = [
+                'field' => 'location',
+                'label' => 'Location',
+                'icon' => '📍',
+                'matched' => $locationMatched,
+            ];
+            if ($locationMatched) {
+                $commonGround[] = [
+                    'field' => 'location',
+                    'label' => 'Location',
+                    'icon' => '📍',
+                    'value' => $viewedProfile->city_id ? ($viewedProfile->city?->name ?? '—') : ($viewedProfile->state?->name ?? '—'),
+                ];
+            }
+        }
 
         // Age comparison (from date_of_birth)
         if ($viewerProfile->date_of_birth && $viewedProfile->date_of_birth) {

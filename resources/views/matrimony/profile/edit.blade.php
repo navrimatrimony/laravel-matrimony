@@ -62,6 +62,11 @@
                     @error('height_cm') <div class="text-danger">{{ $message }}</div> @enderror
                     <br>
 
+                    <label>Contact Number</label><br>
+                    <input type="text" name="contact_number" value="{{ old('contact_number', $matrimonyProfile->contact_number ?? '') }}" placeholder="+91 9876543210" maxlength="20"><br>
+                    @error('contact_number') <div class="text-danger">{{ $message }}</div> @enderror
+                    <br>
+
                     @if ($isEnabled('location') && $isVisible('location'))
                     <div style="margin-bottom: 20px;">
                         <label>Country *</label><br>
@@ -130,6 +135,54 @@
 
                     <input type="file" name="profile_photo"><br><br>
                     @endif
+
+                    {{-- Phase-4: Extended fields (user-editable, no lock for owner) --}}
+                    @php
+                        $extendedFields = $extendedFields ?? collect();
+                        $extendedValues = $extendedValues ?? [];
+                    @endphp
+                    @if ($extendedFields->count() > 0)
+                    <div class="mt-6 pt-6 border-t border-gray-200 dark:border-gray-600">
+                        <h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">Additional details</h3>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                            @foreach ($extendedFields as $field)
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{{ $field->display_label ?? $field->field_key }}</label>
+                                @if ($field->data_type === 'text')
+                                    <input type="text" name="extended_fields[{{ $field->field_key }}]" value="{{ old("extended_fields.{$field->field_key}", $extendedValues[$field->field_key] ?? '') }}" class="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100">
+                                @elseif ($field->data_type === 'number')
+                                    <input type="number" name="extended_fields[{{ $field->field_key }}]" value="{{ old("extended_fields.{$field->field_key}", $extendedValues[$field->field_key] ?? '') }}" class="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100">
+                                @elseif ($field->data_type === 'date')
+                                    <input type="date" name="extended_fields[{{ $field->field_key }}]" value="{{ old("extended_fields.{$field->field_key}", $extendedValues[$field->field_key] ?? '') }}" class="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100">
+                                @elseif ($field->data_type === 'boolean')
+                                    <select name="extended_fields[{{ $field->field_key }}]" class="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100">
+                                        <option value="">—</option>
+                                        <option value="1" {{ old("extended_fields.{$field->field_key}", $extendedValues[$field->field_key] ?? '') == '1' ? 'selected' : '' }}>Yes</option>
+                                        <option value="0" {{ old("extended_fields.{$field->field_key}", $extendedValues[$field->field_key] ?? '') == '0' ? 'selected' : '' }}>No</option>
+                                    </select>
+                                @else
+                                    <input type="text" name="extended_fields[{{ $field->field_key }}]" value="{{ old("extended_fields.{$field->field_key}", $extendedValues[$field->field_key] ?? '') }}" class="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100">
+                                @endif
+                                @error("extended_fields.{$field->field_key}") <div class="text-danger text-sm mt-1">{{ $message }}</div> @enderror
+                            </div>
+                            @endforeach
+                        </div>
+                    </div>
+                    @endif
+
+                    <div class="mt-6 pt-6 border-t border-gray-200 dark:border-gray-600">
+                        <h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2">Marriage Timeline</h3>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">When do you plan to get married?</label>
+                        <p class="text-sm text-gray-500 dark:text-gray-400 mb-3">This is optional and only shown on your profile.</p>
+                        <select name="serious_intent_id" class="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100">
+                            <option value="">Not specified</option>
+                            @foreach($seriousIntents as $intent)
+                                <option value="{{ $intent->id }}" {{ old('serious_intent_id', $matrimonyProfile->serious_intent_id) == $intent->id ? 'selected' : '' }}>
+                                    {{ $intent->name }}
+                                </option>
+                            @endforeach
+                        </select>
+                    </div>
 
 <button type="submit" class="inline-flex items-center px-4 py-2 bg-indigo-600 border border-transparent rounded-md font-semibold text-sm text-white tracking-wide hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition disabled:opacity-50 disabled:cursor-not-allowed mt-4">
                         Update Profile

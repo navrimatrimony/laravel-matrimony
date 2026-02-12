@@ -207,52 +207,10 @@
             @endif
             
             @if ($locationVisible)
-            <div class="space-y-3 md:col-span-2">
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Country *</label>
-                    <select name="country_id" id="admin_country_id" required class="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100">
-                        <option value="">Select Country</option>
-                        @foreach($countries ?? [] as $country)
-                            <option value="{{ $country->id }}" {{ old('country_id', $matrimonyProfile->country_id) == $country->id ? 'selected' : '' }}>{{ $country->name }}</option>
-                        @endforeach
-                    </select>
-                </div>
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">State *</label>
-                    <select name="state_id" id="admin_state_id" required class="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100">
-                        <option value="">Select State</option>
-                        @foreach($states ?? [] as $state)
-                            <option value="{{ $state->id }}" {{ old('state_id', $matrimonyProfile->state_id) == $state->id ? 'selected' : '' }}>{{ $state->name }}</option>
-                        @endforeach
-                    </select>
-                </div>
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">District</label>
-                    <select name="district_id" id="admin_district_id" class="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100">
-                        <option value="">Select District</option>
-                        @foreach($districts ?? [] as $district)
-                            <option value="{{ $district->id }}" {{ old('district_id', $matrimonyProfile->district_id) == $district->id ? 'selected' : '' }}>{{ $district->name }}</option>
-                        @endforeach
-                    </select>
-                </div>
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Taluka</label>
-                    <select name="taluka_id" id="admin_taluka_id" class="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100">
-                        <option value="">Select Taluka</option>
-                        @foreach($talukas ?? [] as $taluka)
-                            <option value="{{ $taluka->id }}" {{ old('taluka_id', $matrimonyProfile->taluka_id) == $taluka->id ? 'selected' : '' }}>{{ $taluka->name }}</option>
-                        @endforeach
-                    </select>
-                </div>
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">City *</label>
-                    <select name="city_id" id="admin_city_id" required class="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100">
-                        <option value="">Select City</option>
-                        @foreach($cities ?? [] as $city)
-                            <option value="{{ $city->id }}" {{ old('city_id', $matrimonyProfile->city_id) == $city->id ? 'selected' : '' }}>{{ $city->name }}</option>
-                        @endforeach
-                    </select>
-                </div>
+            <div>
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Location</label>
+                <p class="font-medium text-base text-gray-900 dark:text-gray-100">{{ implode(', ', array_filter([$matrimonyProfile->city?->name, $matrimonyProfile->taluka?->name, $matrimonyProfile->district?->name, $matrimonyProfile->state?->name, $matrimonyProfile->country?->name])) ?: '—' }}</p>
+                <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">Edit location via profile hierarchy (country/state/city) in full edit.</p>
             </div>
             @endif
             
@@ -348,11 +306,11 @@
 {{-- Biodata Grid --}}
 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
 
-    @if ($dateOfBirthVisible)
+    @if ($dateOfBirthVisible && $matrimonyProfile->date_of_birth !== null && $matrimonyProfile->date_of_birth !== '')
     <div>
         <p class="text-gray-500 text-sm">Date of Birth</p>
         <p class="font-medium text-base">
-            {{ $matrimonyProfile->date_of_birth ?? '—' }}
+            {{ $matrimonyProfile->date_of_birth }}
             @if ($isOwnProfile && $matrimonyProfile->admin_edited_fields && in_array('date_of_birth', $matrimonyProfile->admin_edited_fields ?? []))
                 <span class="ml-2 text-xs text-amber-600 dark:text-amber-400" title="This field was corrected by admin">(Admin corrected)</span>
             @endif
@@ -360,11 +318,11 @@
     </div>
     @endif
 
-    @if ($maritalStatusVisible)
+    @if ($maritalStatusVisible && $matrimonyProfile->marital_status !== null && $matrimonyProfile->marital_status !== '')
     <div>
         <p class="text-gray-500 text-sm">Marital Status</p>
         <p class="font-medium text-base">
-            {{ ($matrimonyProfile->marital_status ?? '') ? ucfirst($matrimonyProfile->marital_status) : '—' }}
+            {{ ucfirst($matrimonyProfile->marital_status) }}
             @if ($isOwnProfile && $matrimonyProfile->admin_edited_fields && in_array('marital_status', $matrimonyProfile->admin_edited_fields ?? []))
                 <span class="ml-2 text-xs text-amber-600 dark:text-amber-400" title="This field was corrected by admin">(Admin corrected)</span>
             @endif
@@ -372,11 +330,11 @@
     </div>
     @endif
 
-    @if ($educationVisible)
+    @if ($educationVisible && $matrimonyProfile->education !== null && $matrimonyProfile->education !== '')
     <div>
         <p class="text-gray-500 text-sm">Education</p>
         <p class="font-medium text-base">
-            {{ $matrimonyProfile->education ?? '—' }}
+            {{ $matrimonyProfile->education }}
             @if ($isOwnProfile && $matrimonyProfile->admin_edited_fields && in_array('education', $matrimonyProfile->admin_edited_fields ?? []))
                 <span class="ml-2 text-xs text-amber-600 dark:text-amber-400" title="This field was corrected by admin">(Admin corrected)</span>
             @endif
@@ -384,11 +342,21 @@
     </div>
     @endif
 
-    @if ($locationVisible)
+    @php
+        $locationParts = array_filter([
+            $matrimonyProfile->city?->name,
+            $matrimonyProfile->taluka?->name,
+            $matrimonyProfile->district?->name,
+            $matrimonyProfile->state?->name,
+            $matrimonyProfile->country?->name,
+        ]);
+        $locationLine = implode(', ', $locationParts);
+    @endphp
+    @if ($locationVisible && $locationLine !== '')
     <div>
         <p class="text-gray-500 text-sm">Location</p>
         <p class="font-medium text-base">
-            {{ $matrimonyProfile->location ?? '—' }}
+            {{ $locationLine }}
             @if ($isOwnProfile && $matrimonyProfile->admin_edited_fields && in_array('location', $matrimonyProfile->admin_edited_fields ?? []))
                 <span class="ml-2 text-xs text-amber-600 dark:text-amber-400" title="This field was corrected by admin">(Admin corrected)</span>
             @endif
@@ -408,7 +376,64 @@
     </div>
     @endif
 
+    @if ($matrimonyProfile->height_cm !== null && $matrimonyProfile->height_cm !== '')
+    <div>
+        <p class="text-gray-500 text-sm">Height</p>
+        <p class="font-medium text-base">
+            {{ $matrimonyProfile->height_cm }} cm
+            @if ($isOwnProfile && $matrimonyProfile->admin_edited_fields && in_array('height_cm', $matrimonyProfile->admin_edited_fields ?? []))
+                <span class="ml-2 text-xs text-amber-600 dark:text-amber-400" title="This field was corrected by admin">(Admin corrected)</span>
+            @endif
+        </p>
+    </div>
+    @endif
+
 </div>
+
+@if ($matrimonyProfile->seriousIntent)
+<div class="mt-6 pt-6 border-t border-gray-200 dark:border-gray-600">
+    <p class="text-gray-500 text-sm">Marriage Timeline</p>
+    <p class="font-medium text-base">→ {{ $matrimonyProfile->seriousIntent->name }}</p>
+</div>
+@endif
+
+<div class="mt-6">
+    <p class="text-gray-500 text-sm">Contact Information</p>
+    <p class="font-medium text-base">
+        @if ($isOwnProfile)
+            @if ($matrimonyProfile->contact_number)
+                {{ $matrimonyProfile->contact_number }}
+            @else
+                No contact number added.
+            @endif
+        @elseif ($canViewContact)
+            {{ $matrimonyProfile->contact_number }}
+        @else
+            Contact details will be available after interest acceptance.
+        @endif
+    </p>
+</div>
+
+@if(!empty($extendedValues))
+    @php
+        $filteredExtended = array_filter($extendedValues, function($v) {
+            return $v !== null && $v !== '';
+        });
+    @endphp
+
+    @if(!empty($filteredExtended))
+        <div class="mt-8">
+            <h3 class="text-lg font-semibold mb-4">Additional Details</h3>
+
+            @foreach($filteredExtended as $label => $value)
+                <div class="mb-2">
+                    <p class="text-gray-500 text-sm">{{ $extendedMeta[$label] ?? $label }}</p>
+                    <p class="font-medium text-base">{{ $value }}</p>
+                </div>
+            @endforeach
+        </div>
+    @endif
+@endif
 
 {{-- Visual Divider --}}
 @if (!$isOwnProfile)

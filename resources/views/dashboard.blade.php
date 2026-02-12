@@ -83,8 +83,11 @@
                             @if ($profile->date_of_birth)
                                 <span class="bg-red-50 text-red-700 px-3 py-1 rounded-full">{{ \Carbon\Carbon::parse($profile->date_of_birth)->age }} yrs</span>
                             @endif
-                            @if ($profile->location)
-                                <span class="bg-red-50 text-red-700 px-3 py-1 rounded-full">{{ ucfirst($profile->location) }}</span>
+                            @php
+                                $loc = $profile->city?->name ?? $profile->state?->name ?? $profile->country?->name ?? null;
+                            @endphp
+                            @if ($loc)
+                                <span class="bg-red-50 text-red-700 px-3 py-1 rounded-full">{{ $loc }}</span>
                             @endif
                             @if ($profile->education)
                                 <span class="bg-red-50 text-red-700 px-3 py-1 rounded-full">{{ ucfirst($profile->education) }}</span>

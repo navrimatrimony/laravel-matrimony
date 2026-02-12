@@ -56,7 +56,11 @@ class MatrimonyProfile extends Model
         'marital_status',
         'caste',
         'education',
-        'location',
+        'country_id',
+        'state_id',
+        'district_id',
+        'taluka_id',
+        'city_id',
         'height_cm',
         'profile_photo',
         'is_suspended',
@@ -72,6 +76,12 @@ class MatrimonyProfile extends Model
         'edited_source',
         'admin_edited_fields',
         'lifecycle_state',
+        'profile_visibility_mode',
+        'contact_number',
+        'contact_visible_to',
+        'contact_unlock_mode',
+        'safety_defaults_applied',
+        'serious_intent_id',
     ];
 
     protected $casts = [
@@ -82,6 +92,8 @@ class MatrimonyProfile extends Model
         'visibility_override' => 'boolean',
         'edited_at' => 'datetime',
         'admin_edited_fields' => 'array',
+        'contact_visible_to' => 'array',
+        'safety_defaults_applied' => 'boolean',
     ];
     
 
@@ -130,6 +142,11 @@ class MatrimonyProfile extends Model
     public function city()
     {
         return $this->belongsTo(City::class);
+    }
+
+    public function seriousIntent()
+    {
+        return $this->belongsTo(SeriousIntent::class);
     }
 
 	public $timestamps = true;

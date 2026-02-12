@@ -6,7 +6,9 @@ use App\Http\Controllers\Controller;
 use App\Models\MatrimonyProfile;
 use App\Models\User;
 use App\Services\DemoProfileDefaultsService;
+use App\Services\ExtendedFieldService;
 use App\Services\FieldValueHistoryService;
+use App\Services\ProfileCompletenessService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 
@@ -40,7 +42,7 @@ class DemoProfileController extends Controller
         );
 
         $genderOverride = $request->filled('gender') ? $request->gender : null;
-        $defaults = DemoProfileDefaultsService::defaults(0, $genderOverride);
+        $defaults = DemoProfileDefaultsService::defaultsForDemo(0, $genderOverride);
         $profile = MatrimonyProfile::create([
             'user_id' => $demoUser->id,
             'full_name' => $defaults['full_name'],
@@ -48,15 +50,22 @@ class DemoProfileController extends Controller
             'date_of_birth' => $defaults['date_of_birth'],
             'marital_status' => $defaults['marital_status'],
             'education' => $defaults['education'],
-            'location' => $defaults['location'],
             'caste' => $defaults['caste'],
+            'height_cm' => $defaults['height_cm'] ?? null,
+            'country_id' => $defaults['country_id'] ?? null,
+            'state_id' => $defaults['state_id'] ?? null,
+            'district_id' => $defaults['district_id'] ?? null,
+            'taluka_id' => $defaults['taluka_id'] ?? null,
+            'city_id' => $defaults['city_id'] ?? null,
             'profile_photo' => $defaults['profile_photo'],
             'photo_approved' => $defaults['photo_approved'],
             'is_demo' => true,
             'is_suspended' => false,
         ]);
 
-        foreach (['full_name', 'gender', 'date_of_birth', 'marital_status', 'education', 'location', 'caste', 'profile_photo', 'photo_approved', 'is_demo', 'is_suspended'] as $fieldKey) {
+        self::autofillExtendedAndHistory($profile);
+
+        foreach (['full_name', 'gender', 'date_of_birth', 'marital_status', 'education', 'caste', 'profile_photo', 'photo_approved', 'is_demo', 'is_suspended'] as $fieldKey) {
             $newVal = $profile->$fieldKey;
             if ($newVal instanceof \Carbon\Carbon) {
                 $newVal = $newVal->format('Y-m-d');
@@ -103,7 +112,7 @@ class DemoProfileController extends Controller
             if ($user->matrimonyProfile) {
                 continue;
             }
-            $defaults = DemoProfileDefaultsService::defaults($i, $genderOverride);
+            $defaults = DemoProfileDefaultsService::defaultsForDemo($i, $genderOverride);
             $profile = MatrimonyProfile::create([
                 'user_id' => $user->id,
                 'full_name' => $defaults['full_name'],
@@ -111,14 +120,20 @@ class DemoProfileController extends Controller
                 'date_of_birth' => $defaults['date_of_birth'],
                 'marital_status' => $defaults['marital_status'],
                 'education' => $defaults['education'],
-                'location' => $defaults['location'],
                 'caste' => $defaults['caste'],
+                'height_cm' => $defaults['height_cm'] ?? null,
+                'country_id' => $defaults['country_id'] ?? null,
+                'state_id' => $defaults['state_id'] ?? null,
+                'district_id' => $defaults['district_id'] ?? null,
+                'taluka_id' => $defaults['taluka_id'] ?? null,
+                'city_id' => $defaults['city_id'] ?? null,
                 'profile_photo' => $defaults['profile_photo'],
                 'photo_approved' => $defaults['photo_approved'],
                 'is_demo' => true,
                 'is_suspended' => false,
             ]);
-            foreach (['full_name', 'gender', 'date_of_birth', 'marital_status', 'education', 'location', 'caste', 'profile_photo', 'photo_approved', 'is_demo', 'is_suspended'] as $fieldKey) {
+            self::autofillExtendedAndHistory($profile);
+            foreach (['full_name', 'gender', 'date_of_birth', 'marital_status', 'education', 'caste', 'profile_photo', 'photo_approved', 'is_demo', 'is_suspended'] as $fieldKey) {
                 $newVal = $profile->$fieldKey;
                 if ($newVal instanceof \Carbon\Carbon) {
                     $newVal = $newVal->format('Y-m-d');
@@ -134,5 +149,21 @@ class DemoProfileController extends Controller
         return redirect()
             ->route('admin.demo-profile.bulk-create')
             ->with('success', "Created {$count} demo profile(s).");
+    }
+
+    /**
+     * Phase-4: After demo profile create – fill extended fields from registry, then ensure completeness.
+     * Uses ExtendedFieldService::saveValuesForProfile (actor null = system). No lock conflict on new profile.
+     */
+    private static function autofillExtendedAndHistory(MatrimonyProfile $profile): void
+    {
+        $extended = DemoProfileDefaultsService::extendedDefaultsForProfile();
+        if (!empty($extended)) {
+            ExtendedFieldService::saveValuesForProfile($profile, $extended, null);
+        }
+        $pct = ProfileCompletenessService::percentage($profile);
+        if ($pct < 80) {
+            \Log::info('Demo profile autofill: completeness ' . $pct . '% for profile ' . $profile->id . ' (target ≥80%).');
+        }
     }
 }
