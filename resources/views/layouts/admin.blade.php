@@ -29,14 +29,6 @@
                 @php
                     $moderationOpen = request()->routeIs('admin.abuse-reports.*') || request()->routeIs('admin.conflict-records.*') || request()->routeIs('admin.biodata-intakes.*');
                     $settingsOpen = request()->routeIs('admin.demo-search-settings.*') || request()->routeIs('admin.view-back-settings.*') || request()->routeIs('admin.notifications.*') || request()->routeIs('admin.profile-field-config.*') || request()->routeIs('admin.field-registry.*') || request()->routeIs('admin.verification-tags.*') || request()->routeIs('admin.serious-intents.*') || request()->routeIs('admin.admin-capabilities.*');
-                    $adminUser = auth()->user();
-                    $isAdminUser = $adminUser && (method_exists($adminUser, 'isAnyAdmin') ? $adminUser->isAnyAdmin() : $adminUser->is_admin === true);
-                    $isSuperAdmin = $isAdminUser && method_exists($adminUser, 'isSuperAdmin') && $adminUser->isSuperAdmin();
-                    $adminCapabilities = (!$isSuperAdmin && $isAdminUser)
-                        ? \Illuminate\Support\Facades\DB::table('admin_capabilities')->where('admin_id', $adminUser->id)->first()
-                        : null;
-                    $canManageVerificationTags = $isAdminUser && ($isSuperAdmin || ($adminCapabilities && $adminCapabilities->can_manage_verification_tags));
-                    $canManageSeriousIntents = $isAdminUser && ($isSuperAdmin || ($adminCapabilities && $adminCapabilities->can_manage_serious_intents));
                 @endphp
 
                 {{-- 1) Dashboard — default expanded --}}
