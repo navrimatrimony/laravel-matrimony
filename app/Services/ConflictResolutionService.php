@@ -111,9 +111,14 @@ class ConflictResolutionService
                 $newValue,
                 $changedBy
             );
-            
+
             $updateData = [$fieldKey => $newValue];
-            $profile->update($updateData);
+            MatrimonyProfile::$bypassGovernanceEnforcement = true;
+            try {
+                $profile->update($updateData);
+            } finally {
+                MatrimonyProfile::$bypassGovernanceEnforcement = false;
+            }
         } else {
             // EXTENDED field: use ExtendedFieldService (handles history internally)
             ExtendedFieldService::saveValuesForProfile(

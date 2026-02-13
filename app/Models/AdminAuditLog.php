@@ -15,6 +15,8 @@ use Illuminate\Database\Eloquent\Model;
 */
 class AdminAuditLog extends Model
 {
+    protected $table = 'admin_audit_logs';
+
     /*
     |--------------------------------------------------------------------------
     | Mass Assignable Fields

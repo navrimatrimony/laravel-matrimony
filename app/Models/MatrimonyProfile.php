@@ -2,9 +2,12 @@
 
 namespace App\Models;
 
+use App\Services\ConflictDetectionService;
+use App\Services\ProfileFieldLockService;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Validation\ValidationException;
 
 /*
 |--------------------------------------------------------------------------
@@ -35,6 +38,19 @@ class MatrimonyProfile extends Model
     |
     */
     protected $table = 'matrimony_profiles';
+
+    /** Core field keys subject to lock + conflict governance (must match ConflictDetectionService). */
+    private const GOVERNED_CORE_KEYS = [
+        'full_name',
+        'gender',
+        'date_of_birth',
+        'marital_status',
+        'education',
+        'location',
+        'caste',
+        'height_cm',
+        'profile_photo',
+    ];
 
     /*
     |--------------------------------------------------------------------------
@@ -150,5 +166,68 @@ class MatrimonyProfile extends Model
     }
 
 	public $timestamps = true;
+
+    /**
+     * Model-level governance seal: prevent update/save from bypassing locks and conflict detection.
+     */
+    protected static function booted(): void
+    {
+        static::updating(function (MatrimonyProfile $model) {
+            self::enforceGovernanceOnUpdate($model);
+        });
+
+        static::saving(function (MatrimonyProfile $model) {
+            if ($model->exists) {
+                self::enforceGovernanceOnUpdate($model);
+            }
+        });
+    }
+
+    /** Bypass model-level governance (e.g. ConflictResolutionService applying resolution). */
+    public static bool $bypassGovernanceEnforcement = false;
+
+    /**
+     * Enforce lock check and conflict detection on dirty governed fields. Throws on violation.
+     */
+    private static function enforceGovernanceOnUpdate(MatrimonyProfile $model): void
+    {
+        if (self::$bypassGovernanceEnforcement) {
+            return;
+        }
+
+        $dirty = $model->getDirty();
+        if (empty($dirty)) {
+            return;
+        }
+
+        $governedDirty = array_intersect_key($dirty, array_flip(self::GOVERNED_CORE_KEYS));
+        if (empty($governedDirty)) {
+            return;
+        }
+
+        foreach (array_keys($governedDirty) as $fieldKey) {
+            if (ProfileFieldLockService::isLocked($model, $fieldKey)) {
+                throw ValidationException::withMessages([
+                    $fieldKey => ["Field \"{$fieldKey}\" is locked and cannot be modified."],
+                ]);
+            }
+        }
+
+        $clone = new self();
+        $clone->setRawAttributes($model->getOriginal());
+        $clone->id = $model->id;
+        $clone->exists = true;
+
+        $proposedCore = array_intersect_key($dirty, array_flip(self::GOVERNED_CORE_KEYS));
+        $created = ConflictDetectionService::detect($clone, $proposedCore, []);
+
+        if (count($created) > 0) {
+            throw ValidationException::withMessages([
+                'lifecycle_state' => [
+                    'Governance: conflicting change detected. ' . count($created) . ' conflict(s) created. Direct overwrite is not allowed.',
+                ],
+            ]);
+        }
+    }
 
 }
