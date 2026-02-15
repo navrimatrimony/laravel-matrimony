@@ -128,6 +128,10 @@ Matchmaker is a separate, independent system and project.
   - Historical values are not re-evaluated
 - Field evolution possible only by adding new fields
 - Existing fields cannot be redefined
+-Intake records are immutable.
+-AI parsed JSON must be stored separately.
+-Original raw upload must never be altered.
+
 
 **Law 11: Governance ≠ UX ≠ Logic Separation**
 - Governance, UX, and Logic strictly separated
@@ -320,10 +324,26 @@ Future renaming prohibited.
 - Sets biodata_intakes.matrimony_profile_id
 - Sets intake_status = ATTACHED
 - This is ONLY a reference link
-- NO data transfer
-- NO field mapping
+- NO direct or automatic data transfer.
+-Field mapping allowed ONLY under Phase-5 Biodata Ingestion Amendment,and only through governed services.
 - NO overwrite
 - NO profile data modification
+PHASE-5 BIODATA INGESTION AMENDMENT
+
+Phase-5 may introduce AI-assisted structured extraction
+from raw biodata intake (image/pdf/text).
+
+However:
+
+1. AI output MUST NOT directly mutate MatrimonyProfile.
+2. AI output MUST pass through:
+   - FieldLockService
+   - ConflictDetectionService
+   - Lifecycle rules
+3. No silent overwrite allowed.
+4. All parsed data must require explicit user approval.
+5. Conflict records must be created for existing profiles.
+6. Intake record must remain immutable.
 
 **3.5.5 Intake Status:**
 - DRAFT: Created but not linked to profile
@@ -537,6 +557,10 @@ Future renaming prohibited.
 - Implement field locking mechanism
 - Implement lock-before-write discipline
 - Establish conflict resolution per Authority Order
+AI-suggested updates must generate conflict records
+if target profile lifecycle is Active.
+No direct update permitted.
+
 
 **Day-2: Biodata Intake Foundation**
 - Create biodata_intakes table
@@ -587,6 +611,9 @@ Phase-4 is COMPLETE when all of the following conditions are met:
 - [ ] Lifecycle transitions validated
 - [ ] Lifecycle blocks edit when Suspended/Archived
 - [ ] Visibility dashboard explains blocked actions
+AI ingestion cannot create or update profile
+if lifecycle = Suspended or Archived.
+
 
 **Field History & Audit:**
 - [ ] Profile version awareness implemented
@@ -603,6 +630,24 @@ Phase-4 is COMPLETE when all of the following conditions are met:
 - [ ] NO OCR parsing from intake
 - [ ] NO profile update from intake
 - [ ] NO conflict creation from intake
+
+PHASE-5 BIODATA INGESTION AMENDMENT
+
+Phase-5 may introduce AI-assisted structured extraction
+from raw biodata intake (image/pdf/text).
+
+However:
+
+1. AI output MUST NOT directly mutate MatrimonyProfile.
+2. AI output MUST pass through:
+   - FieldLockService
+   - ConflictDetectionService
+   - Lifecycle rules
+3. No silent overwrite allowed.
+4. All parsed data must require explicit user approval.
+5. Conflict records must be created for existing profiles.
+6. Intake record must remain immutable.
+
 
 **OCR Governance:**
 - [ ] OCR parsing foundation complete (production-ready)
@@ -630,7 +675,8 @@ Phase-4 is COMPLETE when all of the following conditions are met:
 
 **Search & Discovery:**
 - [ ] Neutral ordering implemented
-- [ ] No paid ranking or boosts
+- [ ] No hidden paid ranking or boosts. No hidden paid ranking.
+Transparent Sponsored Slots allowed.
 - [ ] Deterministic results
 
 **Monetization Structure:**
@@ -2284,7 +2330,8 @@ Verification Scope (NO NEW FEATURES):
 - Run end-to-end regression tests
 - Verify no Phase-5 features exist (via code search)
 - Verify no SSOT violations exist
-- Create completion checklist verification report
+- Create co
+mpletion checklist verification report
 - Implements SSOT Section 2 (Law 21: Hygiene & Verification Day Rule), Section 6 (Completion Checklist)
 
 Explicitly Forbidden Today:

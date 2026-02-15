@@ -1,22 +1,21 @@
 <?php
 
 use Illuminate\Database\Migrations\Migration;
-use Illuminate\Database\Schema\Blueprint;
-use Illuminate\Support\Facades\Schema;
 
+/**
+ * Unique (matrimony_profile_id, verification_tag_id) is already defined
+ * in 2026_02_12_000004_create_profile_verification_tag_table.
+ * This migration is a no-op to avoid duplicate key on migrate:fresh.
+ */
 return new class extends Migration
 {
     public function up(): void
     {
-        Schema::table('profile_verification_tag', function (Blueprint $table) {
-            $table->unique(['matrimony_profile_id', 'verification_tag_id'], 'pvt_profile_tag_unique');
-        });
+        // No-op: unique constraint already exists in create migration (000004).
     }
 
     public function down(): void
     {
-        Schema::table('profile_verification_tag', function (Blueprint $table) {
-            $table->dropUnique('pvt_profile_tag_unique');
-        });
+        // No-op: do not drop unique; it belongs to create migration (000004).
     }
 };
