@@ -26,11 +26,43 @@ class BiodataIntake extends Model
         'ocr_mode',
         'matrimony_profile_id',
         'intake_status',
+        'parse_status',
+        'parsed_json',
+        'approved_by_user',
+        'approved_at',
+        'approval_snapshot_json',
+        'snapshot_schema_version',
+        'intake_locked',
     ];
 
     protected $casts = [
-        //
+        'approved_by_user' => 'boolean',
+        'intake_locked' => 'boolean',
+        'parsed_json' => 'array',
+        'approval_snapshot_json' => 'array',
     ];
+
+    protected static function booted(): void
+    {
+        static::deleting(function (BiodataIntake $model): void {
+            throw new \RuntimeException('Biodata intake records are immutable and cannot be deleted.');
+        });
+
+        static::updating(function (BiodataIntake $model): void {
+            if ($model->isDirty('raw_ocr_text')) {
+                throw new \RuntimeException('raw_ocr_text is immutable and cannot be changed.');
+            }
+            if (
+                $model->getOriginal('intake_locked') === true
+                && ! $model->isDirty('intake_locked')
+            ) {
+                throw new \RuntimeException('Locked biodata intake cannot be updated.');
+            }
+            if ($model->approved_by_user && $model->isDirty('approval_snapshot_json')) {
+                throw new \RuntimeException('approval_snapshot_json cannot be changed after approval.');
+            }
+        });
+    }
 
     public function uploadedByUser()
     {
