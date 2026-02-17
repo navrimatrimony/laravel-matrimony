@@ -13,7 +13,9 @@ use App\Http\Controllers\Admin\AdminCapabilityController;
 use App\Http\Controllers\Admin\AdminVerificationTagController;
 use App\Http\Controllers\Admin\AdminSeriousIntentController;
 use App\Http\Controllers\Admin\AdminProfileTagController;
+use App\Http\Controllers\Admin\AdminIntakeController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\IntakeController;
 
 /*
 |--------------------------------------------------------------------------
@@ -41,7 +43,14 @@ Route::get('/dashboard', [DashboardController::class, 'index'])
 */
 Route::middleware('auth')->group(function () {
 
-        
+    /*
+    | Phase-5: User-side Intake UI
+    */
+    Route::get('/intake/upload', [IntakeController::class, 'uploadForm'])->name('intake.upload');
+    Route::post('/intake/upload', [IntakeController::class, 'store'])->name('intake.store');
+    Route::get('/intake/preview', [IntakeController::class, 'preview'])->name('intake.preview');
+    Route::get('/intake/approval', [IntakeController::class, 'approval'])->name('intake.approval');
+    Route::get('/intake/status', [IntakeController::class, 'status'])->name('intake.status');
 
     /*
     | Matrimony Profile
@@ -279,9 +288,9 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
     /*
     | Phase-4 Day-4: Biodata Intake Sandbox & Attach (admin only)
     */
-    Route::get('/biodata-intakes', [AdminController::class, 'biodataIntakesIndex'])->name('biodata-intakes.index');
-    Route::get('/biodata-intakes/{intake}', [AdminController::class, 'showBiodataIntake'])->name('biodata-intakes.show');
-    Route::patch('/biodata-intakes/{intake}/attach', [AdminController::class, 'attachBiodataIntake'])->name('biodata-intakes.attach');
+    Route::get('/biodata-intakes', [AdminIntakeController::class, 'biodataIntakesIndex'])->name('biodata-intakes.index');
+    Route::get('/biodata-intakes/{intake}', [AdminIntakeController::class, 'showBiodataIntake'])->name('biodata-intakes.show');
+    Route::patch('/biodata-intakes/{intake}/attach', [AdminIntakeController::class, 'attachBiodataIntake'])->name('biodata-intakes.attach');
 
     /*
     | Conflict Records (Phase-3 Day-4/5 — list, create, resolve)
