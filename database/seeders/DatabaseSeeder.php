@@ -22,9 +22,13 @@ class DatabaseSeeder extends Seeder
 
     $this->call([
         FieldRegistryCoreSeeder::class,
+        ReligionCasteSubCasteSeeder::class,
+        MasterLookupSeeder::class,
         TestAdminRolesSeeder::class,
         MinimalLocationSeeder::class,
         LocationEnrichmentSeeder::class,
+        LocationSeeder::class,
+        LocationStressTestSeeder::class,
     ]);
 }
 

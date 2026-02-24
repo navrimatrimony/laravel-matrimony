@@ -1,0 +1,32 @@
+---
+alwaysApply: true
+---
+
+PHASE-5 PROTECTION DIRECTIVE
+
+1. Existing database columns MUST NOT be:
+   - deleted
+   - renamed
+   - repurposed
+   - type-changed
+
+2. Existing tables MUST NOT be:
+   - dropped
+   - structurally modified (unless explicitly mentioned)
+
+3. Existing services MUST NOT be altered:
+   - MutationService
+   - ConflictDetectionService
+   - Lifecycle logic
+   - ProfileCompletionService (except adding new section weight=0)
+
+4. Any new feature must:
+   - use NEW tables
+   - use NEW snapshot keys
+   - use additive migrations only
+   - NOT remove or modify existing wizard sections
+
+5. Old data must remain valid after new migrations.
+
+6. If any change risks existing flow:
+   STOP and report instead of auto-refactoring.

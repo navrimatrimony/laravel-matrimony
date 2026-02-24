@@ -54,7 +54,7 @@ public function store(MatrimonyProfile $matrimony_profile_id)
     // 🔒 GUARD: MatrimonyProfile must exist
     if (!$authUser || !$authUser->matrimonyProfile) {
         return redirect()
-            ->route('matrimony.profile.create')
+            ->route('matrimony.profile.wizard.section', ['section' => 'basic-info'])
             ->with('error', 'Please create your matrimony profile first.');
     }
 
@@ -130,7 +130,7 @@ public function store(MatrimonyProfile $matrimony_profile_id)
 
 if (!$authUser->matrimonyProfile) {
     return redirect()
-        ->route('matrimony.profile.create')
+        ->route('matrimony.profile.wizard.section', ['section' => 'basic-info'])
         ->with('error', 'Please create your matrimony profile first.');
 }
 
@@ -159,7 +159,7 @@ if (!$authUser->matrimonyProfile) {
 
 if (!$authUser->matrimonyProfile) {
     return redirect()
-        ->route('matrimony.profile.create')
+        ->route('matrimony.profile.wizard.section', ['section' => 'basic-info'])
         ->with('error', 'Please create your matrimony profile first.');
 }
 
@@ -212,17 +212,26 @@ public function accept(\App\Models\Interest $interest)
         'status' => 'accepted',
     ]);
 
-    // Phase-4 Day-10: Women-First Safety — Add sender to contact whitelist (if policy allows)
+    // Phase-5: Grant contact visibility via normalized table (replaces contact_visible_to JSON)
     $senderProfile = $interest->senderProfile;
     if ($senderProfile && $receiverProfile->contact_unlock_mode === 'after_interest_accepted') {
-        $whitelist = $receiverProfile->contact_visible_to ?? [];
-        if (!is_array($whitelist)) {
-            $whitelist = [];
-        }
-        if (!in_array($senderProfile->id, $whitelist, true)) {
-            $whitelist[] = $senderProfile->id;
-            $receiverProfile->update(['contact_visible_to' => $whitelist]);
-        }
+        \Illuminate\Support\Facades\DB::table('profile_contact_visibility')->insertOrIgnore([
+            'owner_profile_id' => $receiverProfile->id,
+            'viewer_profile_id' => $senderProfile->id,
+            'granted_via' => 'interest_accept',
+            'granted_at' => now(),
+            'revoked_at' => null,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        \Illuminate\Support\Facades\DB::table('contact_access_log')->insert([
+            'owner_profile_id' => $receiverProfile->id,
+            'viewer_profile_id' => $senderProfile->id,
+            'source' => 'interest',
+            'unlocked_at' => now(),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
     }
 
     $senderOwner = $interest->senderProfile?->user;

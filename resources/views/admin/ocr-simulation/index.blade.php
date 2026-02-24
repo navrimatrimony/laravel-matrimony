@@ -86,8 +86,8 @@
                         <input type="text" name="proposed_core[caste]" value="{{ old('proposed_core.caste') }}" placeholder="(optional)" class="w-full border border-gray-300 dark:border-gray-600 rounded px-2 py-1.5 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100">
                     </div>
                     <div>
-                        <label class="block text-xs text-gray-500 dark:text-gray-400 mb-1">education</label>
-                        <input type="text" name="proposed_core[education]" value="{{ old('proposed_core.education') }}" placeholder="(optional)" class="w-full border border-gray-300 dark:border-gray-600 rounded px-2 py-1.5 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100">
+                        <label class="block text-xs text-gray-500 dark:text-gray-400 mb-1">highest_education</label>
+                        <input type="text" name="proposed_core[highest_education]" value="{{ old('proposed_core.highest_education') }}" placeholder="(optional)" class="w-full border border-gray-300 dark:border-gray-600 rounded px-2 py-1.5 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100">
                     </div>
                     <div>
                         <label class="block text-xs text-gray-500 dark:text-gray-400 mb-1">location</label>

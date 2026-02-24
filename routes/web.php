@@ -2,6 +2,7 @@
 
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\MatrimonyProfileController;
+use App\Http\Controllers\ProfileWizardController;
 use App\Http\Controllers\InterestController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\AdminController;
@@ -14,6 +15,13 @@ use App\Http\Controllers\Admin\AdminVerificationTagController;
 use App\Http\Controllers\Admin\AdminSeriousIntentController;
 use App\Http\Controllers\Admin\AdminProfileTagController;
 use App\Http\Controllers\Admin\AdminIntakeController;
+use App\Http\Controllers\Admin\LocationSuggestionWebController;
+use App\Http\Controllers\Admin\GovernanceDashboardController;
+use App\Http\Controllers\Admin\AdminCasteController;
+use App\Http\Controllers\Admin\AdminReligionController;
+use App\Http\Controllers\Admin\SubCasteAdminController;
+use App\Http\Controllers\Internal\Admin\LocationSuggestionAdminController;
+use App\Http\Controllers\Internal\Admin\CityAliasAdminController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\IntakeController;
 
@@ -24,6 +32,11 @@ use App\Http\Controllers\IntakeController;
 */
 Route::get('/', function () {
     return view('welcome');
+});
+
+// Phase-5 Day-20: Temporary test route — remove before production
+Route::get('/phase5-test', function () {
+    return 'Phase5 test ready';
 });
 
 /*
@@ -44,29 +57,32 @@ Route::get('/dashboard', [DashboardController::class, 'index'])
 Route::middleware('auth')->group(function () {
 
     /*
-    | Phase-5: User-side Intake UI
+    | Phase-5: User-side Intake UI (user-access path /intake/...)
     */
     Route::get('/intake/upload', [IntakeController::class, 'uploadForm'])->name('intake.upload');
     Route::post('/intake/upload', [IntakeController::class, 'store'])->name('intake.store');
-    Route::get('/intake/preview', [IntakeController::class, 'preview'])->name('intake.preview');
+    Route::get('/intake/preview/{intake}', [IntakeController::class, 'preview'])->name('intake.preview');
+    Route::post('/intake/approve/{intake}', [IntakeController::class, 'approve'])->name('intake.approve');
     Route::get('/intake/approval', [IntakeController::class, 'approval'])->name('intake.approval');
     Route::get('/intake/status', [IntakeController::class, 'status'])->name('intake.status');
 
     /*
-    | Matrimony Profile
+    | Matrimony Profile (Phase-5B: wizard-only create/edit — architectural freeze)
     */
-    Route::get('/matrimony/profile/create', [MatrimonyProfileController::class, 'create'])
-        ->name('matrimony.profile.create');
+    Route::get('/matrimony/profile/wizard', function () {
+        return redirect()->route('matrimony.profile.wizard.section', ['section' => 'basic-info']);
+    })->name('matrimony.profile.wizard');
+    Route::get('/matrimony/profile/wizard/{section}', [ProfileWizardController::class, 'show'])
+        ->name('matrimony.profile.wizard.section')
+        ->where('section', 'basic-info|personal-family|location|property|horoscope|legal|about-preferences|contacts|photo|full');
+    Route::post('/matrimony/profile/wizard/{section}', [ProfileWizardController::class, 'store'])
+        ->name('matrimony.profile.wizard.store')
+        ->where('section', 'basic-info|personal-family|location|property|horoscope|legal|about-preferences|contacts|photo|full');
 
-    Route::post('/matrimony/profile/store', [MatrimonyProfileController::class, 'store'])
-        ->name('matrimony.profile.store');
+    Route::get('/matrimony/profile/edit', function () {
+        return redirect()->route('matrimony.profile.wizard.section', ['section' => 'full']);
+    })->name('matrimony.profile.edit');
 
-    Route::get('/matrimony/profile/edit', [MatrimonyProfileController::class, 'edit'])
-        ->name('matrimony.profile.edit');
-
-    Route::post('/matrimony/profile/update', [MatrimonyProfileController::class, 'update'])
-        ->name('matrimony.profile.update');
-		
 	Route::get('/matrimony/profile/upload-photo', [MatrimonyProfileController::class, 'uploadPhoto'])
     ->name('matrimony.profile.upload-photo');
 
@@ -196,6 +212,30 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
         ->name('profiles.soft-delete');
 
     /*
+    | Sub-caste approval (Phase-5)
+    */
+    Route::get('/sub-castes/pending', [SubCasteAdminController::class, 'pending'])->name('sub-castes.pending');
+    Route::post('/sub-castes/{id}/approve', [SubCasteAdminController::class, 'approve'])->name('sub-castes.approve');
+
+    /*
+    | Master Data: Religion, Caste, SubCaste (Phase-5)
+    */
+    Route::prefix('master')->name('master.')->group(function () {
+        Route::resource('religions', AdminReligionController::class)->except(['show', 'destroy']);
+        Route::post('religions/{religion}/disable', [AdminReligionController::class, 'disable'])->name('religions.disable');
+        Route::post('religions/{religion}/enable', [AdminReligionController::class, 'enable'])->name('religions.enable');
+
+        Route::resource('castes', AdminCasteController::class)->except(['show', 'destroy']);
+        Route::post('castes/{caste}/disable', [AdminCasteController::class, 'disable'])->name('castes.disable');
+        Route::post('castes/{caste}/enable', [AdminCasteController::class, 'enable'])->name('castes.enable');
+
+        Route::resource('sub-castes', SubCasteAdminController::class)->only(['index', 'edit', 'update']);
+        Route::post('sub-castes/{subCaste}/merge', [SubCasteAdminController::class, 'merge'])->name('sub-castes.merge');
+        Route::post('sub-castes/{subCaste}/disable', [SubCasteAdminController::class, 'disable'])->name('sub-castes.disable');
+        Route::post('sub-castes/{subCaste}/enable', [SubCasteAdminController::class, 'enable'])->name('sub-castes.enable');
+    });
+
+    /*
     | Image Moderation
     */
     Route::post('/profiles/{profile}/approve-image', [AdminController::class, 'approveImage'])
@@ -232,6 +272,19 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
     
     Route::post('/abuse-reports/{report}/resolve', [AbuseReportController::class, 'resolve'])
         ->name('abuse-reports.resolve');
+
+    Route::get('/location-suggestions', [LocationSuggestionWebController::class, 'index'])
+        ->name('location-suggestions.index');
+
+    Route::get('/governance-dashboard', [GovernanceDashboardController::class, 'index'])
+        ->name('governance-dashboard');
+
+    Route::prefix('internal')->group(function () {
+        Route::get('/location-suggestions', [LocationSuggestionAdminController::class, 'index']);
+        Route::post('/location-suggestions/{id}/approve', [LocationSuggestionAdminController::class, 'approve']);
+        Route::post('/location-suggestions/{id}/reject', [LocationSuggestionAdminController::class, 'reject']);
+        Route::post('/cities/{cityId}/aliases', [CityAliasAdminController::class, 'store']);
+    });
 
     Route::get('/demo-profile/create', [DemoProfileController::class, 'create'])->name('demo-profile.create');
     Route::post('/demo-profile', [DemoProfileController::class, 'store'])->name('demo-profile.store');
@@ -297,6 +350,7 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
     */
     Route::get('/conflict-records', [AdminController::class, 'conflictRecordsIndex'])->name('conflict-records.index');
     Route::get('/conflict-records/create', [AdminController::class, 'conflictRecordsCreate'])->name('conflict-records.create');
+    Route::get('/conflict-records/{record}', [AdminController::class, 'conflictRecordShow'])->name('conflict-records.show');
     Route::post('/conflict-records', [AdminController::class, 'conflictRecordsStore'])->name('conflict-records.store');
     Route::post('/conflict-records/{record}/approve', [AdminController::class, 'conflictRecordApprove'])->name('conflict-records.approve');
     Route::post('/conflict-records/{record}/reject', [AdminController::class, 'conflictRecordReject'])->name('conflict-records.reject');
@@ -305,4 +359,12 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
 
 require __DIR__.'/auth.php';
 
+// Temporary debug route — Phase-5 Day-12 verification. Remove before production.
 
+use App\Http\Controllers\Api\CasteLookupController;
+
+Route::middleware('auth')->group(function () {
+    Route::get('/api/castes/{religionId}', [CasteLookupController::class, 'getCastes'])->where('religionId', '[0-9]+');
+    Route::get('/api/subcastes/{casteId}', [CasteLookupController::class, 'getSubCastes'])->where('casteId', '[0-9]+');
+    Route::post('/api/sub-castes', [CasteLookupController::class, 'createSubCaste']);
+});

@@ -5,9 +5,14 @@
     @if ($errors->any())
         <div class="mb-4 px-4 py-3 rounded-lg bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 text-red-800 dark:text-red-200 text-sm">{{ $errors->first() }}</div>
     @endif
+    @if (($matrimonyProfile->lifecycle_state ?? null) === 'conflict_pending')
+        <div class="mb-4 px-4 py-3 rounded-lg bg-red-100 dark:bg-red-900/50 border-2 border-red-600 dark:border-red-500 text-red-900 dark:text-red-100 font-semibold">
+            ⚠️ This profile has unresolved conflicts. Resolve conflict records before editing identity-critical fields.
+        </div>
+    @endif
     <h1 class="text-2xl font-bold text-gray-800 dark:text-gray-100 mb-1">Admin — Profile #{{ $matrimonyProfile->id }}</h1>
     <p class="text-sm text-gray-500 dark:text-gray-400 mb-2">{{ $matrimonyProfile->full_name ?? '—' }}@if (!empty($matrimonyProfile->is_demo)) <span class="inline-block ml-2 px-2 py-0.5 text-xs font-semibold bg-sky-100 dark:bg-sky-900/40 text-sky-700 dark:text-sky-300 rounded">Demo</span>@endif</p>
-    <p class="text-xs text-gray-500 dark:text-gray-400 mb-4">Lifecycle: <strong>{{ $matrimonyProfile->lifecycle_state ?? 'Active' }}</strong></p>
+    <p class="text-xs text-gray-500 dark:text-gray-400 mb-4">Lifecycle: <strong>{{ $matrimonyProfile->lifecycle_state ?? 'active' }}</strong></p>
 
     @if (!empty($lifecycleAllowedTargets ?? []))
     <div class="mb-4 p-4 rounded-lg border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-700/30">
@@ -20,7 +25,7 @@
                     @foreach ($lifecycleAllowedTargets as $target)
                         @php
                             $tooltip = match($target) {
-                                'Active' => 'Profile is fully active. Visible in search, accessible via direct link, and interest / shortlist are allowed.',
+                                'active' => 'Profile is fully active. Visible in search, accessible via direct link, and interest / shortlist are allowed.',
                                 'Search-Hidden' => 'Profile is hidden from search results. Still accessible via direct link and interactions are allowed. Owner can edit the profile.',
                                 'Owner-Hidden' => 'Profile is visible only to the owner. Hidden from search and direct access by others. Interest and shortlist are blocked. Owner can still edit the profile.',
                                 'Draft' => 'Profile is incomplete. Not visible in search and interactions are disabled. Owner can edit the profile.',
@@ -54,11 +59,13 @@
     </div>
     @endif
 
+    @if (($matrimonyProfile->lifecycle_state ?? null) !== 'conflict_pending')
     <div class="mb-6">
         <button type="button" @click="adminEditMode = !adminEditMode" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-md font-medium text-sm transition-colors">
             <span x-text="adminEditMode ? 'Cancel Edit' : 'Edit Profile'"></span>
         </button>
     </div>
+    @endif
 
     <div x-data="{ activeAction: null }" class="mb-6 p-6 rounded-lg border-2 border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-700/50">
         <div class="flex justify-between items-center mb-4">
@@ -66,12 +73,14 @@
                 <h3 class="text-sm font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400 mb-1">Moderation</h3>
                 <p class="text-xs text-gray-500 dark:text-gray-400">Profile suspend, unsuspend, soft delete, image approve/reject, visibility override. All actions require a reason.</p>
             </div>
+            @if (($matrimonyProfile->lifecycle_state ?? null) !== 'conflict_pending')
             <button 
                 type="button"
                 @click="$parent.adminEditMode = !$parent.adminEditMode"
                 class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-md font-medium text-sm transition-colors">
                 <span x-text="$parent.adminEditMode ? 'Cancel Edit' : 'Edit Profile (Admin)'"></span>
             </button>
+            @endif
         </div>
         <div class="flex flex-wrap gap-2 mb-4">
             <button 
@@ -266,15 +275,49 @@
                     </div>
                     <div>
                         <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Education</label>
-                        <input type="text" name="education" value="{{ old('education', $matrimonyProfile->education) }}" class="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100">
+                        <input type="text" name="highest_education" value="{{ old('highest_education', $matrimonyProfile->highest_education) }}" class="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100">
                     </div>
                     <div class="md:col-span-2">
                         <p class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Location</p>
                         <p class="text-sm text-gray-600 dark:text-gray-400">Managed via hierarchy (country, state, district, taluka, city).</p>
                     </div>
                     <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Religion</label>
+                        <select name="religion_id" id="religion_id" class="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100">
+                            <option value="">— Select Religion —</option>
+                            @foreach($religions as $religion)
+                                <option value="{{ $religion->id }}"
+                                    {{ old('religion_id', $matrimonyProfile->religion_id) == $religion->id ? 'selected' : '' }}>
+                                    {{ $religion->label }}
+                                </option>
+                            @endforeach
+                        </select>
+                    </div>
+                    <div>
                         <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Caste</label>
-                        <input type="text" name="caste" value="{{ old('caste', $matrimonyProfile->caste) }}" class="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100">
+                        <select name="caste_id" id="caste_id" class="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100">
+                            <option value="">— Select Caste —</option>
+                            @foreach($castes as $caste)
+                                <option value="{{ $caste->id }}"
+                                    data-religion="{{ $caste->religion_id }}"
+                                    {{ old('caste_id', $matrimonyProfile->caste_id) == $caste->id ? 'selected' : '' }}>
+                                    {{ $caste->label }}
+                                </option>
+                            @endforeach
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">SubCaste</label>
+                        <select name="sub_caste_id" id="sub_caste_id" class="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100">
+                            <option value="">— Select SubCaste —</option>
+                            @foreach($subCastes as $sub)
+                                <option value="{{ $sub->id }}"
+                                    data-caste="{{ $sub->caste_id }}"
+                                    {{ old('sub_caste_id', $matrimonyProfile->sub_caste_id) == $sub->id ? 'selected' : '' }}>
+                                    {{ $sub->label }}
+                                </option>
+                            @endforeach
+                        </select>
                     </div>
                     <div>
                         <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Height (cm)</label>
@@ -408,7 +451,7 @@
         <div class="mb-6">
             <h3 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2 uppercase">Field Lock Status (Day-6, read-only)</h3>
             @php
-                $coreFieldKeys = ['full_name', 'date_of_birth', 'marital_status', 'education', 'location', 'caste', 'height_cm'];
+                $coreFieldKeys = ['full_name', 'date_of_birth', 'marital_status', 'highest_education', 'location', 'caste', 'height_cm'];
             @endphp
             <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2 text-xs">
                 @foreach ($coreFieldKeys as $fk)
@@ -459,8 +502,8 @@
             <div>
                 <p class="text-gray-500 text-sm">Education</p>
                 <p class="font-medium text-base">
-                    {{ $matrimonyProfile->education ?? '—' }}
-                    @if ($matrimonyProfile->admin_edited_fields && in_array('education', $matrimonyProfile->admin_edited_fields ?? []))
+                    {{ $matrimonyProfile->highest_education ?? '—' }}
+                    @if ($matrimonyProfile->admin_edited_fields && in_array('highest_education', $matrimonyProfile->admin_edited_fields ?? []))
                         <span class="ml-2 text-xs text-amber-600 dark:text-amber-400" title="This field was corrected by admin">(Admin corrected)</span>
                     @endif
                 </p>
@@ -576,4 +619,37 @@
         @endif
     </section>
 </div>
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const religionSelect = document.getElementById('religion_id');
+    const casteSelect = document.getElementById('caste_id');
+    const subSelect = document.getElementById('sub_caste_id');
+    if (!religionSelect || !casteSelect || !subSelect) return;
+
+    function filterCastes(clearValues) {
+        if (clearValues === undefined) clearValues = true;
+        const religionId = religionSelect.value;
+        Array.from(casteSelect.options).forEach(opt => {
+            if (!opt.value) return;
+            opt.hidden = religionId && opt.dataset.religion !== religionId;
+        });
+        if (clearValues) { casteSelect.value = ''; }
+        filterSubCastes(clearValues);
+    }
+
+    function filterSubCastes(clearValues) {
+        if (clearValues === undefined) clearValues = true;
+        const casteId = casteSelect.value;
+        Array.from(subSelect.options).forEach(opt => {
+            if (!opt.value) return;
+            opt.hidden = casteId && opt.dataset.caste !== casteId;
+        });
+        if (clearValues) { subSelect.value = ''; }
+    }
+
+    religionSelect.addEventListener('change', function () { filterCastes(true); });
+    casteSelect.addEventListener('change', function () { filterSubCastes(true); });
+    filterCastes(false);
+});
+</script>
 @endsection

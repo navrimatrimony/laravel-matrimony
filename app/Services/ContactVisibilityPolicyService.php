@@ -3,6 +3,8 @@
 namespace App\Services;
 
 use App\Models\MatrimonyProfile;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 class ContactVisibilityPolicyService
 {
@@ -13,6 +15,9 @@ class ContactVisibilityPolicyService
         }
         if ($viewerProfile->id === $targetProfile->id) {
             return true;
+        }
+        if ($targetProfile->lifecycle_state !== 'active') {
+            return false;
         }
         if ($targetProfile->visibility_override === true) {
             return true;
@@ -25,11 +30,14 @@ class ContactVisibilityPolicyService
             return false;
         }
         if ($mode === 'after_interest_accepted') {
-            $whitelist = $targetProfile->contact_visible_to ?? [];
-            if (!is_array($whitelist)) {
-                $whitelist = [];
+            if (!Schema::hasTable('profile_contact_visibility')) {
+                return false;
             }
-            return in_array($viewerProfile->id, $whitelist, true);
+            return DB::table('profile_contact_visibility')
+                ->where('owner_profile_id', $targetProfile->id)
+                ->where('viewer_profile_id', $viewerProfile->id)
+                ->whereNull('revoked_at')
+                ->exists();
         }
         return false;
     }

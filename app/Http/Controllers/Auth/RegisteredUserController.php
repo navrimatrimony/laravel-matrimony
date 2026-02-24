@@ -23,19 +23,18 @@ class RegisteredUserController extends Controller
 
     public function store(Request $request): RedirectResponse
     {
-        // 1️⃣ आधी नियम तपासा (validation)
         $request->validate([
             'name' => ['required', 'string', 'max:255'],
-            'gender' => ['required', 'in:male,female'],
             'email' => ['required', 'string', 'lowercase', 'email', 'max:255', 'unique:'.User::class],
+            'mobile' => ['nullable', 'string', 'max:20'],
             'password' => ['required', 'confirmed', Rules\Password::defaults()],
         ]);
 
-        // 2️⃣ User database मध्ये save करा
         $user = User::create([
             'name' => $request->name,
-            'gender' => $request->gender,
             'email' => $request->email,
+            'mobile' => $request->mobile ?: null,
+            'gender' => $request->gender ?? null,
             'password' => Hash::make($request->password),
         ]);
 
@@ -56,11 +55,10 @@ class RegisteredUserController extends Controller
         |
         */
 
-        if (!$user->matrimonyProfile) {
-            return redirect()->route('matrimony.profile.create');
+        if (! $user->matrimonyProfile) {
+            return redirect()->route('matrimony.profile.wizard');
         }
 
-        // (Future use) profile असल्यास dashboard
         return redirect('/dashboard');
 
 

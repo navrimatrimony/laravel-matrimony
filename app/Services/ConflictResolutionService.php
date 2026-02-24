@@ -5,10 +5,12 @@ namespace App\Services;
 use App\Models\ConflictRecord;
 use App\Models\MatrimonyProfile;
 use App\Models\User;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
 /**
  * Phase-3 Day-5: Authority-based conflict resolution.
+ * Phase-5 Day-20: Writes profile_change_history on apply; all inside DB::transaction.
  * Authority order (locked): Admin > User > Matchmaker > OCR/System
  * OCR/System never resolve. Resolved conflicts are immutable.
  */
@@ -56,27 +58,33 @@ class ConflictResolutionService
             ]);
         }
 
-        // Guard: Prevent data deletion - APPROVED/OVERRIDDEN cannot have NULL/empty new_value
-        if ($newStatus === 'APPROVED' || $newStatus === 'OVERRIDDEN') {
-            if (!static::isValidNewValue($record->new_value)) {
-                throw ValidationException::withMessages([
-                    'conflict' => ['Cannot approve or override conflict with empty value. Data deletion is not allowed. Please reject this conflict instead.'],
-                ]);
+        DB::transaction(function () use ($record, $resolver, $reason, $newStatus): void {
+            if ($newStatus === 'APPROVED' || $newStatus === 'OVERRIDDEN') {
+                if (!static::isValidNewValue($record->new_value)) {
+                    throw ValidationException::withMessages([
+                        'conflict' => ['Cannot approve or override conflict with empty value. Data deletion is not allowed. Please reject this conflict instead.'],
+                    ]);
+                }
+                static::applyResolutionToProfile($record, $resolver);
             }
-            static::applyResolutionToProfile($record, $resolver);
-        }
 
-        $record->update([
-            'resolution_status' => $newStatus,
-            'resolved_by' => $resolver->id,
-            'resolved_at' => now(),
-            'resolution_reason' => $reason,
-        ]);
+            $record->update([
+                'resolution_status' => $newStatus,
+                'resolved_by' => $resolver->id,
+                'resolved_at' => now(),
+                'resolution_reason' => $reason,
+            ]);
+
+            // Centralized lifecycle sync: conflict_records is the only source of truth. Sync after every resolve.
+            $profile = MatrimonyProfile::find($record->profile_id);
+            if ($profile) {
+                ProfileLifecycleService::syncLifecycleFromPendingConflicts($profile);
+            }
+        });
     }
 
     /**
-     * Apply conflict resolution to profile: update field with new_value.
-     * Respects locks, records history, and handles CORE vs EXTENDED fields.
+     * Phase-5B: Apply conflict resolution via MutationService (source=admin). Single mutation authority.
      */
     private static function applyResolutionToProfile(ConflictRecord $record, User $resolver): void
     {
@@ -91,41 +99,15 @@ class ConflictResolutionService
         $fieldType = $record->field_type;
         $newValue = $record->new_value;
 
-        // Check field locks (authority-aware)
-        ProfileFieldLockService::assertNotLocked($profile, [$fieldKey], $resolver);
-
-        // Apply update based on field type
         if ($fieldType === 'CORE') {
-            // CORE field: update profile directly
-            // Record history before update
-            $oldValue = static::getCurrentFieldValue($profile, $fieldKey, $fieldType);
-            $changedBy = ($resolver->is_admin ?? false)
-                ? FieldValueHistoryService::CHANGED_BY_ADMIN
-                : FieldValueHistoryService::CHANGED_BY_USER;
-            
-            FieldValueHistoryService::record(
-                $profile->id,
-                $fieldKey,
-                'CORE',
-                $oldValue,
-                $newValue,
-                $changedBy
-            );
-
-            $updateData = [$fieldKey => $newValue];
-            MatrimonyProfile::$bypassGovernanceEnforcement = true;
-            try {
-                $profile->update($updateData);
-            } finally {
-                MatrimonyProfile::$bypassGovernanceEnforcement = false;
-            }
+            $snapshot = ['core' => [$fieldKey => $newValue]];
+            app(MutationService::class)->applyManualSnapshot($profile, $snapshot, (int) $resolver->id, 'admin');
         } else {
-            // EXTENDED field: use ExtendedFieldService (handles history internally)
-            ExtendedFieldService::saveValuesForProfile(
-                $profile,
-                [$fieldKey => $newValue],
-                $resolver
-            );
+            $snapshot = [
+                'core' => [],
+                'extended_fields' => [$fieldKey => $newValue],
+            ];
+            app(MutationService::class)->applyManualSnapshot($profile, $snapshot, (int) $resolver->id, 'admin');
         }
     }
 
@@ -144,26 +126,6 @@ class ConflictResolutionService
         }
         // Empty string or whitespace-only strings are invalid
         return trim($newValue) !== '';
-    }
-
-    /**
-     * Get current value of a field (CORE or EXTENDED) for history recording.
-     */
-    private static function getCurrentFieldValue(MatrimonyProfile $profile, string $fieldKey, string $fieldType): ?string
-    {
-        if ($fieldType === 'CORE') {
-            if ($fieldKey === 'gender') {
-                $value = $profile->getAttribute('gender') ?? $profile->user?->gender ?? null;
-            } else {
-                $value = $profile->getAttribute($fieldKey);
-            }
-            return $value === null || $value === '' ? null : (string) $value;
-        }
-
-        // EXTENDED
-        $extendedValues = ExtendedFieldService::getValuesForProfile($profile);
-        $value = $extendedValues[$fieldKey] ?? null;
-        return $value === null || $value === '' ? null : (string) $value;
     }
 
     /**

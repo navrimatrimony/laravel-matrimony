@@ -35,8 +35,8 @@
 
 @auth
     @if (!auth()->user()->matrimonyProfile)
-        <x-nav-link :href="route('matrimony.profile.create')" 
-                    :active="request()->routeIs('matrimony.profile.create')">
+        <x-nav-link :href="route('matrimony.profile.wizard.section', ['section' => 'basic-info'])" 
+                    :active="request()->routeIs('matrimony.profile.wizard*')">
             {{ __('Create Profile') }}
         </x-nav-link>
     @else
@@ -80,6 +80,11 @@
     <x-nav-link :href="route('shortlist.index')" 
                 :active="request()->routeIs('shortlist.index')">
         {{ __('Shortlist') }}
+    </x-nav-link>
+
+    <x-nav-link :href="route('intake.upload')" 
+                :active="request()->routeIs('intake.upload')">
+        {{ __('Upload Biodata') }}
     </x-nav-link>
 
     <x-nav-link :href="route('blocks.index')" 
@@ -162,7 +167,7 @@
             
         @auth
     @if (!auth()->user()->matrimonyProfile)
-        <x-responsive-nav-link :href="route('matrimony.profile.create')">
+        <x-responsive-nav-link :href="route('matrimony.profile.wizard.section', ['section' => 'basic-info'])">
             Create Profile
         </x-responsive-nav-link>
     @else
@@ -196,6 +201,10 @@
 
     <x-responsive-nav-link :href="route('shortlist.index')">
         Shortlist
+    </x-responsive-nav-link>
+
+    <x-responsive-nav-link :href="route('intake.upload')">
+        Upload Biodata
     </x-responsive-nav-link>
 
     <x-responsive-nav-link :href="route('blocks.index')">

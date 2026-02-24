@@ -25,7 +25,7 @@ class ShortlistController extends Controller
     {
         $user = $request->user();
         if (!$user->matrimonyProfile) {
-            return redirect()->route('matrimony.profile.create')
+            return redirect()->route('matrimony.profile.wizard.section', ['section' => 'basic-info'])
                 ->with('error', 'Create your profile first.');
         }
 
@@ -44,7 +44,7 @@ class ShortlistController extends Controller
     {
         $owner = $request->user()->matrimonyProfile;
         if (!$owner) {
-            return redirect()->route('matrimony.profile.create')
+            return redirect()->route('matrimony.profile.wizard.section', ['section' => 'basic-info'])
                 ->with('error', 'Create your profile first.');
         }
 
@@ -87,7 +87,7 @@ class ShortlistController extends Controller
     {
         $owner = $request->user()->matrimonyProfile;
         if (!$owner) {
-            return redirect()->route('matrimony.profile.create')
+            return redirect()->route('matrimony.profile.wizard.section', ['section' => 'basic-info'])
                 ->with('error', 'Create your profile first.');
         }
 

@@ -3096,6 +3096,457 @@ Checklist:
 • Duplicate detection verified
 • Conflict escalation verified
 • Unlock restrictions verified
+============================================================
+PHASE-5 – AI INTAKE COMPLETION PLAN
+Day-18 to Day-21 (SSOT Extension Block)
+============================================================
+
+GOAL:
+Convert Intake Skeleton → Fully SSOT-Compliant AI Intake Engine
+
+Must implement:
+
+Upload
+→ OCR (Image/PDF → Text)
+→ AI Structured Parsing (Text → Structured JSON)
+→ confidence_map generation
+→ Structured Preview UI
+→ Explicit User Approval
+→ Conflict-Safe Mutation
+→ Intake Lock
+
+No SSOT deviation allowed.
+
+============================================================
+DAY-18 – OCR + AI PARSING ENGINE INTEGRATION
+============================================================
+
+OBJECTIVE:
+Implement real OCR + AI structured parsing pipeline.
+
+TASKS:
+
+1. OCR Layer
+   - Integrate OCR extraction for:
+       • Image (JPG, PNG)
+       • PDF
+   - Extract text → store in raw_ocr_text
+   - Remove placeholder 'FILE_UPLOADED'
+   - Fail-safe handling if OCR fails.
+
+2. AI Parsing Layer
+   - Create AIParsingService
+   - Input: raw_ocr_text
+   - Output JSON structure:
+
+     {
+       core: {...},
+       contacts: [...],
+       children: [...],
+       education: [...],
+       career: [...],
+       confidence_map: {
+         field_name: score (0.0 - 1.0)
+       }
+     }
+
+   - Ensure schema versioning (snapshot_schema_version)
+
+3. Modify ParseIntakeJob
+   - Call OCR (if file)
+   - Call AIParsingService
+   - Update:
+       parsed_json
+       parse_status = 'parsed'
+       intake_status = 'parsed'
+
+4. Queue validation
+   - Confirm queue worker required
+   - Fail-safe if queue not running (fallback sync mode allowed)
+
+DELIVERABLE:
+Upload → parsed_json populated with structured AI output.
+
+============================================================
+DAY-19 – STRUCTURED PREVIEW + CONFIDENCE UI
+============================================================
+
+OBJECTIVE:
+Implement SSOT-compliant Preview screen.
+
+TASKS:
+
+1. Intake Preview Page Upgrade
+   - Display:
+       core fields
+       children
+       contacts
+       education
+       career
+
+2. Highlight low-confidence fields
+   - confidence_map < 0.75 → warning indicator
+   - confidence_map < 0.50 → require manual correction
+
+3. Allow user edits BEFORE approval
+   - Editable preview fields
+   - Store corrected snapshot in approval_snapshot_json
+
+4. Enforce Explicit Approval Rule
+   - Approval button disabled unless:
+       • User scroll confirmed
+       • Mandatory fields reviewed
+
+5. Lifecycle transition:
+   parsed → awaiting_user_approval
+
+DELIVERABLE:
+Fully functional AI Preview with editable structured data.
+
+============================================================
+DAY-20 – APPROVAL → MUTATION → CONFLICT ENGINE
+============================================================
+
+OBJECTIVE:
+Make Approval trigger real profile mutation.
+
+TASKS:
+
+1. Approval Flow:
+   - On approve:
+       approved_by_user = true
+       approved_at = timestamp
+       intake_status = 'approved'
+
+2. MutationService Integration
+   - Apply approval_snapshot_json
+   - Compare with existing profile
+   - Detect conflicts using ConflictDetectionService
+   - If conflict:
+         lifecycle_state = 'conflict_pending'
+     Else:
+         lifecycle_state = 'active'
+
+3. Lock intake:
+   - intake_locked = true
+   - Prevent re-edit
+
+4. Conflict UI:
+   - Display diff view
+   - Allow resolution by user/admin
+
+DELIVERABLE:
+Approval → Conflict-Safe Mutation fully working.
+
+============================================================
+DAY-21 – STABILITY, VALIDATION & SSOT HARDENING
+============================================================
+
+OBJECTIVE:
+Production-stable AI Intake Engine.
+
+TASKS:
+
+1. Full End-to-End Test:
+   - New user
+   - Upload biodata
+   - OCR extract
+   - AI parse
+   - Preview
+   - Approve
+   - Profile created/updated
+
+2. Edge Case Testing:
+   - Blank file
+   - Corrupt file
+   - Low confidence fields
+   - Conflict scenario
+
+3. Security & Governance Validation:
+   - Ensure:
+       No direct profile overwrite
+       MutationService only entry point
+       Approval mandatory
+       No bypass route
+
+4. Performance Check:
+   - Queue performance
+   - AI latency handling
+   - Timeout fallback
+
+5. SSOT Compliance Audit:
+   - Verify:
+       AI Structured Parsing implemented
+       confidence_map present
+       Explicit Approval enforced
+       Conflict-Safe Mutation active
+       Intake Lock enforced
+
+DELIVERABLE:
+Phase-5 officially AI-enabled and SSOT-complete.
+
+############################################################
+PHASE-5B — CORE ALIGNMENT & FULL PROFILE COVERAGE BLOCK
+(STRUCTURAL COMPLETION EXTENSION)
+############################################################
+
+Purpose:
+Complete Phase-5 structural + functional alignment.
+
+Goal:
+Backend SSOT model + User/Admin manual profile UI
+must be fully consistent and governance-safe.
+
+No partial structure allowed.
+No hidden fields.
+No mismatch between SSOT and database.
+
+############################################################
+DAY-22 — CORE TABLE ALIGNMENT (MATRIMONY_PROFILES)
+############################################################
+
+Objective:
+Align matrimony_profiles table with SSOT Core Field Registry.
+
+Tasks:
+
+1) Add missing SSOT core fields:
+
+PERSONAL:
+- religion
+- sub_caste
+- weight_kg
+- complexion
+- physical_build
+- blood_group
+
+EDUCATION & CAREER SNAPSHOT:
+- highest_education
+- specialization
+- occupation_title
+- company_name
+- annual_income
+- income_currency (default INR)
+- family_income
+
+FAMILY CORE:
+- father_name
+- father_occupation
+- mother_name
+- mother_occupation
+- brothers_count
+- sisters_count
+- family_type
+
+LOCATION (WORK):
+- work_city_id
+- work_state_id
+
+2) Migration discipline:
+- No dropping existing columns.
+- No renaming silently.
+- Add indexes where required.
+- No age column.
+
+3) Update MatrimonyProfile model:
+- $fillable update
+- casts update
+- lifecycle validation intact
+
+Completion Criteria:
+
+✔ All SSOT core fields exist in matrimony_profiles
+✔ No duplicate meaning fields
+✔ No JSON blob columns
+✔ migrate:status clean
+✔ Schema::getColumnListing matches SSOT
+
+
+############################################################
+DAY-23 — MODEL GOVERNANCE ALIGNMENT
+############################################################
+
+Objective:
+Ensure all core fields respect governance rules.
+
+Tasks:
+
+1) ConflictDetectionService update:
+   - Ensure new core fields included.
+   - Critical vs dynamic classification applied.
+
+2) FieldLockService alignment:
+   - Core fields lockable.
+   - Respect lifecycle rules.
+
+3) profile_change_history coverage:
+   - Ensure new fields generate history entries.
+   - No silent overwrite.
+
+4) MutationService verification:
+   - Core diff comparison includes all new fields.
+   - Transaction boundary intact.
+
+Completion Criteria:
+
+✔ All new fields pass through MutationService
+✔ Conflict created when required
+✔ Dynamic fields update without escalation
+✔ History entries verified
+✔ No direct update() bypass
+
+
+############################################################
+DAY-24 — FULL MANUAL PROFILE EDIT UI EXPANSION
+############################################################
+
+Objective:
+Manual profile edit screen must expose ALL SSOT fields.
+
+Scope:
+
+1) Core Profile Edit Form:
+   - All personal fields
+   - All family fields
+   - Income fields
+   - Work location fields
+   - Snapshot education/career fields
+
+2) Nested Entities CRUD Sections:
+
+   CHILDREN:
+   - Add child
+   - Edit child
+   - Delete child
+
+   EDUCATION:
+   - Add multiple rows
+   - Edit rows
+   - Delete rows
+
+   CAREER:
+   - Timeline add/edit
+   - is_current validation
+
+   PROPERTY:
+   - Summary edit
+   - Asset rows add/remove
+
+   HOROSCOPE:
+   - Structured edit
+
+   PREFERENCES:
+   - Structured edit
+
+   EXTENDED:
+   - Narrative fields edit
+
+3) UI Rules:
+
+- No raw JSON visible.
+- No hidden backend-only fields.
+- Respect lifecycle restrictions.
+- Disable edit when:
+    lifecycle_state in:
+    intake_uploaded
+    awaiting_user_approval
+    approved_pending_mutation
+    conflict_pending
+
+Completion Criteria:
+
+✔ User can manually fill all SSOT fields
+✔ Nested entity CRUD functional
+✔ No bypass of governance
+✔ Clean Blade layout
+✔ No console errors
+
+
+############################################################
+DAY-25 — ADMIN COVERAGE + FULL SYSTEM TEST
+############################################################
+
+Objective:
+Admin + User + Intake full alignment test.
+
+Tasks:
+
+1) Admin Profile View:
+   - All core fields visible.
+   - Nested entities visible.
+   - Change history visible.
+
+2) Admin Conflict Resolution:
+   - Works with new fields.
+   - Writes audit log.
+   - Lifecycle restored properly.
+
+3) Full Integration Test:
+
+Manual Create →
+Manual Edit →
+AI Intake →
+Conflict →
+Resolution →
+Unlock →
+Lifecycle transitions.
+
+4) Terminal Validation:
+
+- php artisan migrate:status
+- route:list
+- Schema checks
+- No direct update() for core fields outside MutationService
+  (except documented legacy paths if retained)
+
+Completion Criteria:
+
+✔ No missing fields
+✔ No structural mismatch
+✔ No lifecycle violation
+✔ No conflict skip
+✔ No history skip
+✔ No JSON blob storage
+
+
+############################################################
+FINAL DECLARATION CONDITION
+############################################################
+
+Phase-5B complete ONLY if:
+
+✔ Core table matches SSOT
+✔ Model governance aligned
+✔ Manual CRUD complete
+✔ Intake pipeline stable
+✔ Admin resolution stable
+✔ Lifecycle state machine respected
+✔ No field invisible in UI but present in DB
+✔ No DB column unused
+✔ No structural ambiguity remains
+
+After this:
+Phase-5 officially declared:
+STRUCTURALLY + FUNCTIONALLY COMPLETE.
+############################################################
+END OF PHASE-5B EXTENSION
+############################################################
+
+============================================================
+FINAL PHASE-5 STATE
+============================================================
+
+✔ OCR active
+✔ AI Structured Parsing active
+✔ confidence_map enforced
+✔ Editable Preview active
+✔ Explicit Approval required
+✔ Conflict-Safe Mutation enforced
+✔ Intake Lock after approval
+✔ Lifecycle transitions correct
+✔ Fully SSOT compliant
+
+============================================================
 
 ------------------------------------------------------------
 Only after this:
@@ -3105,6 +3556,102 @@ Phase-5 SSOT declared LOCKED.
 END OF ATOMIC DAY PLAN
 ============================================================
 
-Next:
-We start with DAY-1 — DATABASE FOUNDATION.
-Run PowerShell status now.
+# PROFILE EDITING ARCHITECTURE – FINAL (LOCKED)
+
+## 1. Single Editing System
+
+Profile creation and editing is wizard-driven only.
+
+Registration must redirect to:
+`/matrimony/profile/wizard/basic-info`
+
+The following routes are permanently disallowed:
+- matrimony.profile.create
+- matrimony.profile.store
+- Any alternate edit blade
+
+No duplicate UI for profile editing is allowed.
+
+---
+
+## 2. Religion / Caste / Subcaste – Normalized Model
+
+### Database
+
+matrimony_profiles:
+- religion_id (FK)
+- caste_id (FK)
+- sub_caste_id (FK)
+
+No raw string caste, religion, or subcaste columns allowed.
+
+---
+
+### UI Component
+
+Religion/Caste/Subcaste selector must:
+
+- Use hidden ID inputs
+- Use search-based dropdown UI
+- Load castes dynamically by religion
+- Load subcastes dynamically by caste
+- Require minimum 2 characters for subcaste search
+- Show "Add new subcaste" only if:
+  - No results
+  - No exact match
+  - Input length ≥ 2
+
+---
+
+### Add New Subcaste Rules
+
+POST /api/v1/sub-castes
+
+Creates:
+- status = pending
+- is_active = 0
+- created_by_user_id = auth user
+
+Admin approval required before activation.
+
+---
+
+## 3. Component Governance
+
+Religion/Caste/Subcaste must exist as a single reusable Blade component.
+
+- No inline duplication
+- No separate implementation for create/edit
+- Must not depend on sibling stacking order
+- JS must be centralized
+
+---
+
+## 4. Admin Master Data Rules
+
+Admin may:
+- Create religion
+- Create caste (unique per religion)
+- Create subcaste
+- Merge subcastes
+- Approve pending subcastes
+- Soft disable records
+
+Hard delete is not allowed.
+
+---
+
+## 5. Mutation Discipline
+
+All profile updates must pass through MutationService.
+
+Direct DB::table writes for profile data are disallowed.
+
+---
+
+## 6. Freeze Clause
+
+Any future modification to religion/caste/subcaste system
+requires SSOT update before implementation.
+
+Violation of this rule is considered architectural breach.

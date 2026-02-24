@@ -49,7 +49,7 @@ class DemoProfileController extends Controller
             'gender' => $defaults['gender'],
             'date_of_birth' => $defaults['date_of_birth'],
             'marital_status' => $defaults['marital_status'],
-            'education' => $defaults['education'],
+            'highest_education' => $defaults['highest_education'],
             'caste' => $defaults['caste'],
             'height_cm' => $defaults['height_cm'] ?? null,
             'country_id' => $defaults['country_id'] ?? null,
@@ -65,7 +65,7 @@ class DemoProfileController extends Controller
 
         self::autofillExtendedAndHistory($profile);
 
-        foreach (['full_name', 'gender', 'date_of_birth', 'marital_status', 'education', 'caste', 'profile_photo', 'photo_approved', 'is_demo', 'is_suspended'] as $fieldKey) {
+        foreach (['full_name', 'gender', 'date_of_birth', 'marital_status', 'highest_education', 'caste', 'profile_photo', 'photo_approved', 'is_demo', 'is_suspended'] as $fieldKey) {
             $newVal = $profile->$fieldKey;
             if ($newVal instanceof \Carbon\Carbon) {
                 $newVal = $newVal->format('Y-m-d');
@@ -119,7 +119,7 @@ class DemoProfileController extends Controller
                 'gender' => $defaults['gender'],
                 'date_of_birth' => $defaults['date_of_birth'],
                 'marital_status' => $defaults['marital_status'],
-                'education' => $defaults['education'],
+                'highest_education' => $defaults['highest_education'],
                 'caste' => $defaults['caste'],
                 'height_cm' => $defaults['height_cm'] ?? null,
                 'country_id' => $defaults['country_id'] ?? null,
@@ -133,7 +133,7 @@ class DemoProfileController extends Controller
                 'is_suspended' => false,
             ]);
             self::autofillExtendedAndHistory($profile);
-            foreach (['full_name', 'gender', 'date_of_birth', 'marital_status', 'education', 'caste', 'profile_photo', 'photo_approved', 'is_demo', 'is_suspended'] as $fieldKey) {
+            foreach (['full_name', 'gender', 'date_of_birth', 'marital_status', 'highest_education', 'caste', 'profile_photo', 'photo_approved', 'is_demo', 'is_suspended'] as $fieldKey) {
                 $newVal = $profile->$fieldKey;
                 if ($newVal instanceof \Carbon\Carbon) {
                     $newVal = $newVal->format('Y-m-d');

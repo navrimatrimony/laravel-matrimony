@@ -14,7 +14,7 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('matrimony_profiles', function (Blueprint $table) {
-            $table->string('lifecycle_state', 32)->default('Active')->after('visibility_override_reason');
+            $table->string('lifecycle_state', 32)->default('active')->after('visibility_override_reason');
         });
     }
 

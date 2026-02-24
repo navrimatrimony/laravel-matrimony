@@ -18,7 +18,7 @@
 
                 {{-- Search / Filter Form --}}
                 <form method="GET" action="{{ route('matrimony.profiles.index') }}">
-                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
                         <div>
                             <label class="block text-sm font-medium text-gray-700 mb-1">Age From</label>
                             <input type="number" name="age_from" value="{{ request('age_from') }}" class="w-full border rounded px-3 py-2" placeholder="Min age">
@@ -126,15 +126,9 @@
             | {{ \Carbon\Carbon::parse($matrimonyProfile->date_of_birth)->age }} yrs
         @endif
 
-        {{-- Location (hierarchy) --}}
-        @php
-            $locLine1 = trim(implode(', ', array_filter([$matrimonyProfile->city?->name ?? null, $matrimonyProfile->taluka?->name ?? null])));
-            $locLine2 = trim(implode(', ', array_filter([$matrimonyProfile->district?->name ?? null, $matrimonyProfile->state?->name ?? null])));
-            $locLine3 = $matrimonyProfile->country?->name ?? '';
-            $locDisplay = $locLine1 ?: ($locLine2 ?: ($locLine3 ?: null));
-        @endphp
-        @if ($locDisplay)
-            | {{ $locDisplay }}
+        {{-- Location --}}
+        @if ($matrimonyProfile->location)
+            | {{ ucfirst($matrimonyProfile->location) }}
         @endif
     </span>
 </p>

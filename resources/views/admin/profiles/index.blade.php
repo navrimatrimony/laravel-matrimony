@@ -44,7 +44,7 @@
                                 @elseif ($profile->is_suspended ?? false)
                                     <span class="text-amber-600 dark:text-amber-400">Suspended</span>
                                 @else
-                                    <span class="text-emerald-600 dark:text-emerald-400">Active</span>
+                                    <span class="text-emerald-600 dark:text-emerald-400">active</span>
                                 @endif
                             </td>
                             <td class="px-4 py-2">

@@ -34,13 +34,12 @@ class EnsureMatrimonyProfileExists
 
             // Infinite loop टाळण्यासाठी:
             // जर user आधीच profile create page वर असेल तर allow करा
-            if ($request->routeIs('matrimony.profile.create')
-                || $request->routeIs('matrimony.profile.store')) {
+            if ($request->routeIs('matrimony.profile.wizard*')) {
                 return $next($request);
             }
 
             // बाकी सर्व routes साठी force redirect
-            return redirect()->route('matrimony.profile.create');
+            return redirect()->route('matrimony.profile.wizard.section', ['section' => 'basic-info']);
         }
 
         return $next($request);

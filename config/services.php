@@ -35,4 +35,9 @@ return [
         ],
     ],
 
+
+    'tesseract' => [
+        'path' => env('TESSERACT_PATH'),
+    ],
+
 ];

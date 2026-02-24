@@ -20,7 +20,7 @@
             @forelse ($reports as $report)
                 @php
                     // Determine profile status using existing fields
-                    $profileStatus = 'Active';
+                    $profileStatus = 'active';
                     $profileStatusColor = '#059669'; // green
                     
                     if ($report->reportedProfile) {

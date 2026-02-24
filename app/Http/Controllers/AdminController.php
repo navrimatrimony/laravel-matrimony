@@ -3,7 +3,6 @@
 namespace App\Http\Controllers;
 
 use App\Models\AbuseReport;
-use App\Models\BiodataIntake;
 use App\Models\ConflictRecord;
 use App\Models\Interest;
 use App\Models\MatrimonyProfile;
@@ -31,6 +30,7 @@ use App\Services\ProfileFieldLockService;
 use App\Services\ProfileLifecycleService;
 use App\Services\FieldValueHistoryService;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 
 /*
 |--------------------------------------------------------------------------
@@ -44,6 +44,21 @@ use Illuminate\Http\Request;
 class AdminController extends Controller
 {
     private const REASON_RULES = ['required', 'string', 'min:10'];
+
+    /**
+     * Phase-5B: Build admin snapshot (same structure as manual). Only include changed core + optional extended.
+     * No DB write. Used with MutationService::applyManualSnapshot(..., 'admin').
+     */
+    private function buildAdminSnapshot(MatrimonyProfile $profile, array $coreOverrides, array $extendedFields = []): array
+    {
+        $snapshot = [
+            'core' => $coreOverrides,
+        ];
+        if ($extendedFields !== []) {
+            $snapshot['extended_fields'] = $extendedFields;
+        }
+        return $snapshot;
+    }
 
     /**
      * Admin profiles list (all profiles, includes suspended/trashed).
@@ -62,7 +77,18 @@ class AdminController extends Controller
     public function showProfile(string $id)
     {
         $profile = MatrimonyProfile::withTrashed()->findOrFail($id);
-        $profile->load(['country', 'state', 'district', 'taluka', 'city']);
+        $profile->load(['country', 'state', 'district', 'taluka', 'city', 'religion', 'caste', 'subCaste']);
+
+        $religions = \App\Models\Religion::where('is_active', true)
+            ->orderBy('label')
+            ->get();
+        $castes = \App\Models\Caste::where('is_active', true)
+            ->orderBy('label')
+            ->get();
+        $subCastes = \App\Models\SubCaste::where('is_active', true)
+            ->orderBy('label')
+            ->get();
+
         $user = auth()->user();
         $isOwnProfile = $user->matrimonyProfile && $user->matrimonyProfile->id === (int) $id;
 
@@ -114,7 +140,7 @@ class AdminController extends Controller
         $fieldLocks = ProfileFieldLockService::getLocksForProfile($profile);
 
         // Day 7: Lifecycle state — allowed transition targets
-        $lifecycleAllowedTargets = ProfileLifecycleService::getAllowedTargets($profile->lifecycle_state ?? 'Active');
+        $lifecycleAllowedTargets = ProfileLifecycleService::getAllowedTargets($profile->lifecycle_state ?? 'active');
 
         // Day 8: Field value history (read-only)
         $fieldHistory = FieldValueHistoryService::getHistoryForProfile($profile);
@@ -145,6 +171,9 @@ class AdminController extends Controller
             'fieldHistory' => $fieldHistory,
             'assignedTags' => $assignedTags,
             'activeVerificationTags' => $activeVerificationTags,
+            'religions' => $religions,
+            'castes' => $castes,
+            'subCastes' => $subCastes,
         ]);
     }
 
@@ -155,10 +184,8 @@ class AdminController extends Controller
     {
         $request->validate(['reason' => self::REASON_RULES]);
 
-        if ((string) ($profile->is_suspended ?? false) !== '1') {
-            FieldValueHistoryService::record($profile->id, 'is_suspended', 'CORE', $profile->is_suspended ? '1' : '0', '1', FieldValueHistoryService::CHANGED_BY_ADMIN);
-        }
-        $profile->update(['is_suspended' => true]);
+        $snapshot = $this->buildAdminSnapshot($profile, ['is_suspended' => true]);
+        app(\App\Services\MutationService::class)->applyManualSnapshot($profile, $snapshot, (int) $request->user()->id, 'admin');
 
         AuditLogService::log(
             $request->user(),
@@ -184,10 +211,8 @@ class AdminController extends Controller
     {
         $request->validate(['reason' => self::REASON_RULES]);
 
-        if ((string) ($profile->is_suspended ?? false) !== '0') {
-            FieldValueHistoryService::record($profile->id, 'is_suspended', 'CORE', $profile->is_suspended ? '1' : '0', '0', FieldValueHistoryService::CHANGED_BY_ADMIN);
-        }
-        $profile->update(['is_suspended' => false]);
+        $snapshot = $this->buildAdminSnapshot($profile, ['is_suspended' => false]);
+        app(\App\Services\MutationService::class)->applyManualSnapshot($profile, $snapshot, (int) $request->user()->id, 'admin');
 
         AuditLogService::log(
             $request->user(),
@@ -242,20 +267,12 @@ class AdminController extends Controller
     {
         $request->validate(['reason' => self::REASON_RULES]);
 
-        if (!$profile->photo_approved) {
-            FieldValueHistoryService::record($profile->id, 'photo_approved', 'CORE', '0', '1', FieldValueHistoryService::CHANGED_BY_ADMIN);
-        }
-        if ($profile->photo_rejected_at !== null) {
-            FieldValueHistoryService::record($profile->id, 'photo_rejected_at', 'CORE', $profile->photo_rejected_at?->format('Y-m-d H:i:s'), null, FieldValueHistoryService::CHANGED_BY_ADMIN);
-        }
-        if (!empty($profile->photo_rejection_reason)) {
-            FieldValueHistoryService::record($profile->id, 'photo_rejection_reason', 'CORE', $profile->photo_rejection_reason, null, FieldValueHistoryService::CHANGED_BY_ADMIN);
-        }
-        $profile->update([
+        $snapshot = $this->buildAdminSnapshot($profile, [
             'photo_approved' => true,
             'photo_rejected_at' => null,
             'photo_rejection_reason' => null,
         ]);
+        app(\App\Services\MutationService::class)->applyManualSnapshot($profile, $snapshot, (int) $request->user()->id, 'admin');
 
         AuditLogService::log(
             $request->user(),
@@ -276,16 +293,12 @@ class AdminController extends Controller
     {
         $request->validate(['reason' => self::REASON_RULES]);
 
-        if ($profile->photo_approved) {
-            FieldValueHistoryService::record($profile->id, 'photo_approved', 'CORE', '1', '0', FieldValueHistoryService::CHANGED_BY_ADMIN);
-        }
-        FieldValueHistoryService::record($profile->id, 'photo_rejected_at', 'CORE', $profile->photo_rejected_at?->format('Y-m-d H:i:s'), now()->format('Y-m-d H:i:s'), FieldValueHistoryService::CHANGED_BY_ADMIN);
-        FieldValueHistoryService::record($profile->id, 'photo_rejection_reason', 'CORE', $profile->photo_rejection_reason, $request->reason, FieldValueHistoryService::CHANGED_BY_ADMIN);
-        $profile->update([
+        $snapshot = $this->buildAdminSnapshot($profile, [
             'photo_approved' => false,
             'photo_rejected_at' => now(),
             'photo_rejection_reason' => $request->reason,
         ]);
+        app(\App\Services\MutationService::class)->applyManualSnapshot($profile, $snapshot, (int) $request->user()->id, 'admin');
 
         AuditLogService::log(
             $request->user(),
@@ -312,16 +325,11 @@ class AdminController extends Controller
     {
         $request->validate(['reason' => self::REASON_RULES]);
 
-        if (!($profile->visibility_override ?? false)) {
-            FieldValueHistoryService::record($profile->id, 'visibility_override', 'CORE', $profile->visibility_override ? '1' : '0', '1', FieldValueHistoryService::CHANGED_BY_ADMIN);
-        }
-        if ((string) ($profile->visibility_override_reason ?? '') !== (string) $request->reason) {
-            FieldValueHistoryService::record($profile->id, 'visibility_override_reason', 'CORE', $profile->visibility_override_reason, $request->reason, FieldValueHistoryService::CHANGED_BY_ADMIN);
-        }
-        $profile->update([
+        $snapshot = $this->buildAdminSnapshot($profile, [
             'visibility_override' => true,
             'visibility_override_reason' => $request->reason,
         ]);
+        app(\App\Services\MutationService::class)->applyManualSnapshot($profile, $snapshot, (int) $request->user()->id, 'admin');
 
         AuditLogService::log(
             $request->user(),
@@ -741,13 +749,21 @@ class AdminController extends Controller
         }
 
         $admin = auth()->user();
-        $originalData = $profile->only(['full_name', 'date_of_birth', 'marital_status', 'education', 'location', 'caste', 'height_cm']);
+        // Phase-5: Resolve string lookups to *_id when form sends key (e.g. marital_status => single)
+        if ($request->has('marital_status') && ! $request->has('marital_status_id')) {
+            $key = $request->input('marital_status') === 'single' ? 'never_married' : $request->input('marital_status');
+            $id = \App\Models\MasterMaritalStatus::where('key', $key)->value('id');
+            if ($id) {
+                $request->merge(['marital_status_id' => $id]);
+            }
+        }
+        $originalData = $profile->only(['full_name', 'date_of_birth', 'marital_status_id', 'highest_education', 'location', 'religion_id', 'caste_id', 'sub_caste_id', 'height_cm']);
         $editedFields = [];
 
-        // Track which fields were actually changed
+        // Track which fields were actually changed (Phase-5: *_id for master lookups)
         $updateData = [];
-        $editableFields = ['full_name', 'date_of_birth', 'marital_status', 'education', 'location', 'caste', 'height_cm'];
-        
+        $editableFields = ['full_name', 'date_of_birth', 'marital_status_id', 'highest_education', 'location', 'religion_id', 'caste_id', 'sub_caste_id', 'height_cm'];
+
         // Check if any CORE fields are being edited (before validation)
         $hasCoreFieldChanges = false;
         foreach ($editableFields as $field) {
@@ -776,10 +792,26 @@ class AdminController extends Controller
         if ($hasCoreFieldChanges) {
             $validationRules['full_name'] = 'required|string|max:255';
             $validationRules['date_of_birth'] = 'nullable|date';
-            $validationRules['marital_status'] = 'nullable|in:single,divorced,widowed';
-            $validationRules['education'] = 'nullable|string|max:255';
+            $validationRules['marital_status_id'] = ['nullable', \Illuminate\Validation\Rule::exists('master_marital_statuses', 'id')];
+            $validationRules['highest_education'] = 'nullable|string|max:255';
             $validationRules['location'] = 'nullable|string|max:255';
-            $validationRules['caste'] = 'nullable|string|max:255';
+            $validationRules['religion_id'] = ['nullable', 'exists:religions,id'];
+            $validationRules['caste_id'] = [
+                'nullable',
+                Rule::exists('castes', 'id')->where(function ($query) use ($request) {
+                    if ($request->filled('religion_id')) {
+                        $query->where('religion_id', $request->input('religion_id'));
+                    }
+                }),
+            ];
+            $validationRules['sub_caste_id'] = [
+                'nullable',
+                Rule::exists('sub_castes', 'id')->where(function ($query) use ($request) {
+                    if ($request->filled('caste_id')) {
+                        $query->where('caste_id', $request->input('caste_id'));
+                    }
+                }),
+            ];
             $validationRules['height_cm'] = 'nullable|integer|min:50|max:250';
         }
 
@@ -843,61 +875,73 @@ class AdminController extends Controller
             $updateData['edited_source'] = 'admin';
             $updateData['admin_edited_fields'] = $mergedAdminEditedFields;
 
-            // Day 8: Record CORE field value history before overwrite (updates only)
-            foreach ($editedFields as $fieldKey) {
-                $oldVal = ($originalData[$fieldKey] ?? '') === '' ? null : (string) ($originalData[$fieldKey] ?? null);
-                $newVal = isset($updateData[$fieldKey]) ? ($updateData[$fieldKey] === '' ? null : (string) $updateData[$fieldKey]) : null;
-                \App\Services\FieldValueHistoryService::record(
-                    $profile->id,
-                    $fieldKey,
-                    'CORE',
-                    $oldVal,
-                    $newVal,
-                    \App\Services\FieldValueHistoryService::CHANGED_BY_ADMIN
-                );
+            // Manual-edit escalation: serious_intent + identity-critical field change → conflict, no update (Phase-5: *_id)
+            $identityCriticalFields = [
+                'full_name',
+                'date_of_birth',
+                'gender_id',
+                'religion_id',
+                'caste_id',
+                'sub_caste_id',
+                'marital_status_id',
+                'primary_contact_number',
+            ];
+            $editedCritical = array_intersect($editedFields, $identityCriticalFields);
+            if ($profile->serious_intent_id !== null && !empty($editedCritical)) {
+                foreach ($editedCritical as $fieldKey) {
+                    if (ConflictRecord::where('profile_id', $profile->id)->where('field_name', $fieldKey)->where('resolution_status', 'PENDING')->exists()) {
+                        continue;
+                    }
+                    $oldVal = ($originalData[$fieldKey] ?? $profile->$fieldKey) === '' ? null : (string) ($originalData[$fieldKey] ?? $profile->$fieldKey ?? null);
+                    $newVal = isset($updateData[$fieldKey]) ? ($updateData[$fieldKey] === '' ? null : (string) $updateData[$fieldKey]) : null;
+                    ConflictRecord::create([
+                        'profile_id' => $profile->id,
+                        'field_name' => $fieldKey,
+                        'field_type' => 'CORE',
+                        'old_value' => $oldVal,
+                        'new_value' => $newVal,
+                        'source' => 'ADMIN',
+                        'detected_at' => now(),
+                        'resolution_status' => 'PENDING',
+                    ]);
+                }
+                ProfileLifecycleService::syncLifecycleFromPendingConflicts($profile);
+                return redirect()
+                    ->route('admin.profiles.show', $profile)
+                    ->with('warning', 'Identity-critical field(s) changed under serious intent. Conflict(s) created; profile not updated. Resolve via Conflict Records.');
             }
 
-            // STEP 2: UPDATE DATA (SAME REQUEST) - Immediately BEFORE $profile->update($updateData)
-            \Log::info('STEP2_UPDATE_DATA', [
-                'updateData' => $updateData,
-                'old_db' => $profile->getOriginal('caste'),
-            ]);
+            // Phase-5B: All core updates via MutationService (source=admin, profile_change_history)
+            $extendedInput = $hasExtendedFields ? $request->input('extended_fields') : [];
+            $snapshot = $this->buildAdminSnapshot($profile, $updateData, is_array($extendedInput) ? $extendedInput : []);
+            app(\App\Services\MutationService::class)->applyManualSnapshot($profile, $snapshot, (int) $admin->id, 'admin');
 
-            $profile->update($updateData);
-            
-            // STEP 3: DB AFTER SAVE - Immediately AFTER update + refresh
             $profile->refresh();
-            \Log::info('STEP3_DB_AFTER', [
-                'db_value' => $profile->caste,
-            ]);
-            
-            // STEP B/C: AFTER ADD/REMOVE - Log based on caste edit
-            if (in_array('caste', $editedFields)) {
-                $casteValue = $updateData['caste'] ?? null;
-                if ($casteValue !== null && trim($casteValue) !== '') {
-                    // STEP B: ADD CASTE
+
+            if (in_array('caste_id', $editedFields) || in_array('caste', $editedFields)) {
+                $casteValue = $updateData['caste_id'] ?? $updateData['caste'] ?? null;
+                if ($casteValue !== null && (is_string($casteValue) ? trim($casteValue) !== '' : true)) {
                     \Log::info('B_AFTER_ADD', [
                         'db_caste' => $profile->caste,
                         'pct' => \App\Services\ProfileCompletenessService::percentage($profile),
                     ]);
                 } else {
-                    // STEP C: REMOVE CASTE
                     \Log::info('C_AFTER_REMOVE', [
                         'db_caste' => $profile->caste,
                         'pct' => \App\Services\ProfileCompletenessService::percentage($profile),
                     ]);
                 }
             }
-            
-            // Day-6: Apply lock to edited CORE fields after successful update
+
             ProfileFieldLockService::applyLocks($profile, $editedFields, 'CORE', $admin);
         } elseif (!empty($changedExtendedKeys)) {
-            $profile->update([
+            $snapshot = $this->buildAdminSnapshot($profile, [
                 'edited_by' => $admin->id,
                 'edited_at' => now(),
                 'edit_reason' => $request->input('edit_reason'),
                 'edited_source' => 'admin',
-            ]);
+            ], $request->input('extended_fields'));
+            app(\App\Services\MutationService::class)->applyManualSnapshot($profile, $snapshot, (int) $admin->id, 'admin');
         }
 
         // Create audit log entry
@@ -910,13 +954,9 @@ class AdminController extends Controller
             $profile->is_demo ?? false
         );
 
-        // Persist EXTENDED field values (service-first; throws ValidationException on invalid)
-        if ($hasExtendedFields) {
-            ExtendedFieldService::saveValuesForProfile($profile, $request->input('extended_fields'), $admin);
-            // Day-6: Apply lock only to EXTENDED fields that were actually edited
-            if (!empty($changedExtendedKeys)) {
-                ProfileFieldLockService::applyLocks($profile, $changedExtendedKeys, 'EXTENDED', $admin);
-            }
+        // Phase-5B: Extended fields applied inside MutationService::applyManualSnapshot (same transaction)
+        if (!empty($changedExtendedKeys)) {
+            ProfileFieldLockService::applyLocks($profile, $changedExtendedKeys, 'EXTENDED', $admin);
         }
 
         $message = !empty($editedFields)
@@ -960,8 +1000,21 @@ class AdminController extends Controller
      */
     public function conflictRecordsIndex()
     {
-        $records = ConflictRecord::with('profile')->latest('detected_at')->paginate(20);
+        $records = ConflictRecord::with('profile')
+            ->where('resolution_status', 'PENDING')
+            ->orderByDesc('detected_at')
+            ->paginate(50);
         return view('admin.conflict-records.index', compact('records'));
+    }
+
+    /**
+     * Phase-5 Day-20: Conflict record show — detailed diff, profile context, resolution form.
+     */
+    public function conflictRecordShow(ConflictRecord $record)
+    {
+        $profile = MatrimonyProfile::find($record->profile_id);
+        $canResolve = $record->resolution_status === 'PENDING' && auth()->user()?->hasAdminRole(['super_admin', 'data_admin']);
+        return view('admin.conflict-records.show', compact('record', 'profile', 'canResolve'));
     }
 
     /**
@@ -987,16 +1040,18 @@ class AdminController extends Controller
             'source' => ['required', 'in:OCR,USER,ADMIN,MATCHMAKER,SYSTEM'],
         ]);
 
-        ConflictRecord::create([
-            'profile_id' => $request->profile_id,
-            'field_name' => $request->field_name,
-            'field_type' => $request->field_type,
-            'old_value' => $request->old_value,
-            'new_value' => $request->new_value,
-            'source' => $request->source,
-            'detected_at' => now(),
-            'resolution_status' => 'PENDING',
-        ]);
+        if (!ConflictRecord::where('profile_id', $request->profile_id)->where('field_name', $request->field_name)->where('resolution_status', 'PENDING')->exists()) {
+            ConflictRecord::create([
+                'profile_id' => $request->profile_id,
+                'field_name' => $request->field_name,
+                'field_type' => $request->field_type,
+                'old_value' => $request->old_value,
+                'new_value' => $request->new_value,
+                'source' => $request->source,
+                'detected_at' => now(),
+                'resolution_status' => 'PENDING',
+            ]);
+        }
 
         return redirect()->route('admin.conflict-records.index')->with('success', 'Conflict record created (testing).');
     }
@@ -1013,7 +1068,7 @@ class AdminController extends Controller
 
         $request->validate(['resolution_reason' => ['required', 'string', 'min:10']]);
         ConflictResolutionService::approveConflict($record, $request->user(), $request->resolution_reason);
-        return redirect()->route('admin.conflict-records.index')->with('success', 'Conflict approved.');
+        return redirect()->route('admin.conflict-records.show', $record)->with('success', 'Conflict approved.');
     }
 
     /**
@@ -1028,7 +1083,7 @@ class AdminController extends Controller
 
         $request->validate(['resolution_reason' => ['required', 'string', 'min:10']]);
         ConflictResolutionService::rejectConflict($record, $request->user(), $request->resolution_reason);
-        return redirect()->route('admin.conflict-records.index')->with('success', 'Conflict rejected.');
+        return redirect()->route('admin.conflict-records.show', $record)->with('success', 'Conflict rejected.');
     }
 
     /**
@@ -1043,7 +1098,7 @@ class AdminController extends Controller
 
         $request->validate(['resolution_reason' => ['required', 'string', 'min:10']]);
         ConflictResolutionService::overrideConflict($record, $request->user(), $request->resolution_reason);
-        return redirect()->route('admin.conflict-records.index')->with('success', 'Conflict overridden.');
+        return redirect()->route('admin.conflict-records.show', $record)->with('success', 'Conflict overridden.');
     }
 
     /**
@@ -1125,65 +1180,6 @@ class AdminController extends Controller
                 'conflicts_created' => count($createdConflicts),
             ])
             ->with('success', 'OCR governance simulation complete. ' . count($createdConflicts) . ' conflict(s) created (if any).');
-    }
-
-    /**
-     * Phase-4 Day-4: List biodata intakes (admin only).
-     * Read-only list view.
-     */
-    public function biodataIntakesIndex(Request $request)
-    {
-        $perPage = (int) $request->input('per_page', 15);
-        $perPage = $perPage >= 1 && $perPage <= 100 ? $perPage : 15;
-        $intakes = BiodataIntake::with(['uploadedByUser:id,name,email', 'profile:id,full_name'])
-            ->latest()
-            ->paginate($perPage)
-            ->withQueryString();
-        return view('admin.biodata-intakes.index', compact('intakes'));
-    }
-
-    /**
-     * Phase-4 Day-4: Show biodata intake sandbox (admin only).
-     * Read-only view. NO parsing. NO profile mutation.
-     */
-    public function showBiodataIntake(BiodataIntake $intake)
-    {
-        $intake->load(['uploadedByUser:id,name,email', 'profile:id,full_name']);
-        return view('admin.biodata-intakes.show', compact('intake'));
-    }
-
-    /**
-     * Phase-4 Day-4: Attach intake to profile (reference-only).
-     * Updates ONLY intake.matrimony_profile_id and intake.intake_status.
-     * MUST NOT modify matrimony_profiles table or any profile field.
-     */
-    public function attachBiodataIntake(Request $request, BiodataIntake $intake)
-    {
-        // Guard: Only DRAFT intakes can be attached
-        if ($intake->intake_status !== BiodataIntake::STATUS_DRAFT) {
-            return redirect()
-                ->route('admin.biodata-intakes.show', $intake)
-                ->withErrors(['attach' => 'Only DRAFT intakes can be attached to a profile.']);
-        }
-
-        $request->validate([
-            'matrimony_profile_id' => ['required', 'integer', 'exists:matrimony_profiles,id'],
-        ]);
-
-        // Update ONLY intake fields
-        $intake->update([
-            'matrimony_profile_id' => (int) $request->matrimony_profile_id,
-            'intake_status' => BiodataIntake::STATUS_ATTACHED,
-        ]);
-
-        // Explicitly verify: NO profile mutation
-        // No MatrimonyProfile::update() calls
-        // No field mapping
-        // No data transfer
-
-        return redirect()
-            ->route('admin.biodata-intakes.show', $intake)
-            ->with('success', 'Intake attached to profile. No profile data was modified.');
     }
 
     /**

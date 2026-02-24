@@ -240,8 +240,8 @@ class OcrGovernanceService
     private static function getCurrentValue(MatrimonyProfile $profile, string $fieldKey, string $fieldType): mixed
     {
         if ($fieldType === 'CORE') {
-            if ($fieldKey === 'gender') {
-                return $profile->getAttribute('gender') ?? $profile->user?->gender ?? null;
+            if ($fieldKey === 'gender_id') {
+                return $profile->getAttribute('gender_id');
             }
             return $profile->getAttribute($fieldKey);
         }

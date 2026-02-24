@@ -3,18 +3,24 @@
 @section('content')
 <div class="{{ request()->routeIs('admin.*') ? 'bg-white dark:bg-gray-800 shadow rounded-lg p-6' : 'max-w-3xl mx-auto py-8' }}" x-data="{ adminEditMode: @js(auth()->check() && auth()->user()->is_admin === true && request()->has('admin_edit')) }">
     @if (request()->routeIs('admin.*'))
-        <h1 class="text-2xl font-bold text-gray-800 dark:text-gray-100 mb-1">Admin — Profile #{{ $matrimonyProfile->id }}</h1>
-        <p class="text-sm text-gray-500 dark:text-gray-400 mb-6">{{ $matrimonyProfile->full_name ?? '—' }}@if (!empty($matrimonyProfile->is_demo)) <span class="inline-block ml-2 px-2 py-0.5 text-xs font-semibold bg-sky-100 dark:bg-sky-900/40 text-sky-700 dark:text-sky-300 rounded">Demo</span>@endif</p>
+        <h1 class="text-2xl font-bold text-gray-800 dark:text-gray-100 mb-1">Admin — Profile #{{ $profile->id }}</h1>
+        <p class="text-sm text-gray-500 dark:text-gray-400 mb-6">{{ $profile->full_name ?? '—' }}@if (!empty($profile->is_demo)) <span class="inline-block ml-2 px-2 py-0.5 text-xs font-semibold bg-sky-100 dark:bg-sky-900/40 text-sky-700 dark:text-sky-300 rounded">Demo</span>@endif</p>
     @else
         <h1 class="text-2xl font-bold mb-6">
             Matrimony Profile
-            @if (!empty($matrimonyProfile->is_demo))
+            @if (!empty($profile->is_demo))
                 <span class="inline-block ml-2 px-2 py-0.5 text-xs font-semibold bg-sky-100 text-sky-700 rounded">Demo Profile</span>
             @endif
         </h1>
     @endif
 
-@if ($isOwnProfile && $matrimonyProfile->is_suspended)
+@if (($profile->lifecycle_state ?? null) === 'conflict_pending' && ($hasBlockingConflicts ?? false))
+    <div class="mb-4 px-4 py-3 rounded-lg bg-red-100 dark:bg-red-900/50 border-2 border-red-600 dark:border-red-500 text-red-900 dark:text-red-100 font-semibold">
+        ⚠️ Your profile has unresolved conflicts. Please contact support or wait for admin resolution.
+    </div>
+@endif
+
+@if ($isOwnProfile && $profile->is_suspended)
     <div style="margin-bottom:1.5rem; padding:1.25rem; background:#fef3c7; border:2px solid #fbbf24; border-radius:8px; color:#92400e;">
         <p style="font-weight:700; margin:0; font-size:1.1rem;">⚠️ Your profile is currently suspended by admin.</p>
     </div>
@@ -57,7 +63,7 @@
                 Soft Delete
             </button>
 
-            @if ($matrimonyProfile->profile_photo)
+            @if ($profile->profile_photo)
             <button 
                 type="button"
                 @click="activeAction = activeAction === 'approve-image' ? null : 'approve-image'"
@@ -83,7 +89,7 @@
 
         {{-- Suspend Form --}}
         <div x-show="activeAction === 'suspend'" x-transition style="border:1px solid #ccc; padding:1rem; border-radius:4px; margin-bottom:1rem; background:#fff;">
-            <form method="POST" action="{{ route('admin.profiles.suspend', $matrimonyProfile) }}">
+            <form method="POST" action="{{ route('admin.profiles.suspend', $profile) }}">
                 @csrf
                 <p style="font-weight:600; margin-bottom:8px;">Suspend Profile</p>
                 <textarea name="reason" rows="3" required minlength="10" placeholder="Reason (minimum 10 characters)" style="width:100%; margin-bottom:8px; padding:8px; border:1px solid #ddd; border-radius:4px;"></textarea>
@@ -96,7 +102,7 @@
 
         {{-- Unsuspend Form --}}
         <div x-show="activeAction === 'unsuspend'" x-transition style="border:1px solid #ccc; padding:1rem; border-radius:4px; margin-bottom:1rem; background:#fff;">
-            <form method="POST" action="{{ route('admin.profiles.unsuspend', $matrimonyProfile) }}">
+            <form method="POST" action="{{ route('admin.profiles.unsuspend', $profile) }}">
                 @csrf
                 <p style="font-weight:600; margin-bottom:8px;">Unsuspend Profile</p>
                 <textarea name="reason" rows="3" required minlength="10" placeholder="Reason (minimum 10 characters)" style="width:100%; margin-bottom:8px; padding:8px; border:1px solid #ddd; border-radius:4px;"></textarea>
@@ -109,7 +115,7 @@
 
         {{-- Soft Delete Form --}}
         <div x-show="activeAction === 'soft-delete'" x-transition style="border:1px solid #ccc; padding:1rem; border-radius:4px; margin-bottom:1rem; background:#fff;">
-            <form method="POST" action="{{ route('admin.profiles.soft-delete', $matrimonyProfile) }}">
+            <form method="POST" action="{{ route('admin.profiles.soft-delete', $profile) }}">
                 @csrf
                 <p style="font-weight:600; margin-bottom:8px;">Soft Delete Profile</p>
                 <textarea name="reason" rows="3" required minlength="10" placeholder="Reason (minimum 10 characters)" style="width:100%; margin-bottom:8px; padding:8px; border:1px solid #ddd; border-radius:4px;"></textarea>
@@ -120,10 +126,10 @@
             </form>
         </div>
 
-        @if ($matrimonyProfile->profile_photo)
+        @if ($profile->profile_photo)
         {{-- Approve Image Form --}}
         <div x-show="activeAction === 'approve-image'" x-transition style="border:1px solid #ccc; padding:1rem; border-radius:4px; margin-bottom:1rem; background:#fff;">
-            <form method="POST" action="{{ route('admin.profiles.approve-image', $matrimonyProfile) }}">
+            <form method="POST" action="{{ route('admin.profiles.approve-image', $profile) }}">
                 @csrf
                 <p style="font-weight:600; margin-bottom:8px;">Approve Image</p>
                 <textarea name="reason" rows="3" required minlength="10" placeholder="Reason (minimum 10 characters)" style="width:100%; margin-bottom:8px; padding:8px; border:1px solid #ddd; border-radius:4px;"></textarea>
@@ -136,7 +142,7 @@
 
         {{-- Reject Image Form --}}
         <div x-show="activeAction === 'reject-image'" x-transition style="border:1px solid #ccc; padding:1rem; border-radius:4px; margin-bottom:1rem; background:#fff;">
-            <form method="POST" action="{{ route('admin.profiles.reject-image', $matrimonyProfile) }}">
+            <form method="POST" action="{{ route('admin.profiles.reject-image', $profile) }}">
                 @csrf
                 <p style="font-weight:600; margin-bottom:8px;">Reject Image</p>
                 <textarea name="reason" rows="3" required minlength="10" placeholder="Reason (minimum 10 characters)" style="width:100%; margin-bottom:8px; padding:8px; border:1px solid #ddd; border-radius:4px;"></textarea>
@@ -150,7 +156,7 @@
 
         {{-- Override Visibility Form --}}
         <div x-show="activeAction === 'override-visibility'" x-transition style="border:1px solid #ccc; padding:1rem; border-radius:4px; margin-bottom:1rem; background:#fff;">
-            <form method="POST" action="{{ route('admin.profiles.override-visibility', $matrimonyProfile) }}">
+            <form method="POST" action="{{ route('admin.profiles.override-visibility', $profile) }}">
                 @csrf
                 <p style="font-weight:600; margin-bottom:8px;">Override visibility (force search visible even if &lt;70% complete)</p>
                 <textarea name="reason" rows="3" required minlength="10" placeholder="Reason (minimum 10 characters)" style="width:100%; margin-bottom:8px; padding:8px; border:1px solid #ddd; border-radius:4px;"></textarea>
@@ -170,20 +176,20 @@
 @if (auth()->check() && auth()->user()->is_admin === true)
 <div x-show="adminEditMode" x-transition class="mb-6 p-6 bg-yellow-50 dark:bg-yellow-900/20 border-2 border-yellow-300 dark:border-yellow-700 rounded-lg">
     <h3 class="text-lg font-bold text-gray-800 dark:text-gray-100 mb-4">Admin Profile Edit Mode</h3>
-    <form method="POST" action="{{ route('admin.profiles.update', $matrimonyProfile) }}" id="admin-profile-edit-form">
+    <form method="POST" action="{{ route('admin.profiles.update', $profile) }}" id="admin-profile-edit-form">
         @csrf
         @method('PUT')
         
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
             <div>
                 <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Full Name</label>
-                <input type="text" name="full_name" value="{{ old('full_name', $matrimonyProfile->full_name) }}" class="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100">
+                <input type="text" name="full_name" value="{{ old('full_name', $profile->full_name) }}" class="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100">
             </div>
             
             @if ($dateOfBirthVisible)
             <div>
                 <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Date of Birth</label>
-                <input type="date" name="date_of_birth" value="{{ old('date_of_birth', $matrimonyProfile->date_of_birth) }}" class="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100">
+                <input type="date" name="date_of_birth" value="{{ old('date_of_birth', $profile->date_of_birth) }}" class="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100">
             </div>
             @endif
             
@@ -192,9 +198,9 @@
                 <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Marital Status</label>
                 <select name="marital_status" class="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100">
                     <option value="">—</option>
-                    <option value="single" {{ old('marital_status', $matrimonyProfile->marital_status) === 'single' ? 'selected' : '' }}>Single</option>
-                    <option value="divorced" {{ old('marital_status', $matrimonyProfile->marital_status) === 'divorced' ? 'selected' : '' }}>Divorced</option>
-                    <option value="widowed" {{ old('marital_status', $matrimonyProfile->marital_status) === 'widowed' ? 'selected' : '' }}>Widowed</option>
+                    <option value="single" {{ old('marital_status', $profile->marital_status) === 'single' ? 'selected' : '' }}>Single</option>
+                    <option value="divorced" {{ old('marital_status', $profile->marital_status) === 'divorced' ? 'selected' : '' }}>Divorced</option>
+                    <option value="widowed" {{ old('marital_status', $profile->marital_status) === 'widowed' ? 'selected' : '' }}>Widowed</option>
                 </select>
             </div>
             @endif
@@ -202,24 +208,18 @@
             @if ($educationVisible)
             <div>
                 <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Education</label>
-                <input type="text" name="education" value="{{ old('education', $matrimonyProfile->education) }}" class="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100">
+                <input type="text" name="highest_education" value="{{ old('highest_education', $profile->highest_education) }}" class="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100">
             </div>
             @endif
             
             @if ($locationVisible)
             <div>
                 <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Location</label>
-                <p class="font-medium text-base text-gray-900 dark:text-gray-100">{{ implode(', ', array_filter([$matrimonyProfile->city?->name, $matrimonyProfile->taluka?->name, $matrimonyProfile->district?->name, $matrimonyProfile->state?->name, $matrimonyProfile->country?->name])) ?: '—' }}</p>
+                <p class="font-medium text-base text-gray-900 dark:text-gray-100">{{ implode(', ', array_filter([$profile->city?->name, $profile->taluka?->name, $profile->district?->name, $profile->state?->name, $profile->country?->name])) ?: '—' }}</p>
                 <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">Edit location via profile hierarchy (country/state/city) in full edit.</p>
             </div>
             @endif
             
-            @if ($casteVisible)
-            <div>
-                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Caste</label>
-                <input type="text" name="caste" value="{{ old('caste', $matrimonyProfile->caste) }}" class="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100">
-            </div>
-            @endif
         </div>
         
         <div class="mb-4">
@@ -252,20 +252,20 @@
 {{-- Profile Photo with Gender-based Fallback --}}
 @if ($profilePhotoVisible)
 <div class="mb-6 flex flex-col items-center">
-    @if ($matrimonyProfile->profile_photo && $matrimonyProfile->photo_approved !== false)
+    @if ($profile->profile_photo)
         {{-- Real uploaded photo --}}
         <img
-            src="{{ asset('uploads/matrimony_photos/'.$matrimonyProfile->profile_photo) }}"
+            src="{{ asset('uploads/matrimony_photos/'.$profile->profile_photo) }}"
             alt="Profile Photo"
             class="w-40 h-40 rounded-full object-cover border"
         />
     @else
         {{-- Gender-based placeholder fallback (UI only) --}}
         @php
-            $gender = $matrimonyProfile->gender ?? null;
-            if ($gender === 'male') {
+            $genderKey = $profile->gender?->key ?? $profile->gender;
+            if ($genderKey === 'male') {
                 $placeholderSrc = asset('images/placeholders/male-profile.svg');
-            } elseif ($gender === 'female') {
+            } elseif ($genderKey === 'female') {
                 $placeholderSrc = asset('images/placeholders/female-profile.svg');
             } else {
                 $placeholderSrc = asset('images/placeholders/default-profile.svg');
@@ -276,7 +276,7 @@
             alt="Profile Placeholder"
             class="w-40 h-40 rounded-full object-cover border"
         />
-        @if (!empty($matrimonyProfile->is_demo))
+        @if (!empty($profile->is_demo))
             <span class="text-xs text-gray-500 mt-1">Demo profile</span>
         @endif
     @endif
@@ -286,114 +286,413 @@
 {{-- Name & Gender --}}
 <div class="text-center mb-6">
     <h2 class="text-2xl font-semibold">
-        {{ $matrimonyProfile->full_name }}
-        @if ($isOwnProfile && $matrimonyProfile->admin_edited_fields && in_array('full_name', $matrimonyProfile->admin_edited_fields ?? []))
+        {{ $profile->full_name }}
+        @if ($isOwnProfile && $profile->admin_edited_fields && in_array('full_name', $profile->admin_edited_fields ?? []))
             <span class="ml-2 text-xs text-amber-600 dark:text-amber-400" title="This field was corrected by admin">(Admin corrected)</span>
         @endif
     </h2>
     <p class="text-gray-500">
-        {{ ($matrimonyProfile->gender ?? $matrimonyProfile->user?->gender) ? ucfirst($matrimonyProfile->gender ?? $matrimonyProfile->user?->gender) : '—' }}
+        {{ $profile->gender?->label ?? $profile->user?->gender ?? '—' }}
     </p>
 </div>
 
-@if ($isOwnProfile && $matrimonyProfile->photo_rejection_reason)
+@if ($isOwnProfile && $profile->photo_rejection_reason)
     <div style="margin-bottom:1.5rem; padding:1rem; background:#fee2e2; border:1px solid #fca5a5; border-radius:8px; color:#991b1b;">
         <p style="font-weight:600; margin-bottom:0.5rem;">Your profile photo was removed by admin.</p>
-        <p style="margin:0;"><strong>Reason:</strong> {{ $matrimonyProfile->photo_rejection_reason }}</p>
+        <p style="margin:0;"><strong>Reason:</strong> {{ $profile->photo_rejection_reason }}</p>
     </div>
 @endif
 
-{{-- Biodata Grid --}}
+{{-- Basic: DOB, Marital, Religion, Caste, Subcaste, Location --}}
 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-
-    @if ($dateOfBirthVisible && $matrimonyProfile->date_of_birth !== null && $matrimonyProfile->date_of_birth !== '')
+    @if ($dateOfBirthVisible && ($profile->date_of_birth ?? '') !== '')
     <div>
         <p class="text-gray-500 text-sm">Date of Birth</p>
-        <p class="font-medium text-base">
-            {{ $matrimonyProfile->date_of_birth }}
-            @if ($isOwnProfile && $matrimonyProfile->admin_edited_fields && in_array('date_of_birth', $matrimonyProfile->admin_edited_fields ?? []))
-                <span class="ml-2 text-xs text-amber-600 dark:text-amber-400" title="This field was corrected by admin">(Admin corrected)</span>
-            @endif
-        </p>
+        <p class="font-medium text-base">{{ $profile->date_of_birth }}</p>
     </div>
     @endif
-
-    @if ($maritalStatusVisible && $matrimonyProfile->marital_status !== null && $matrimonyProfile->marital_status !== '')
+    @if (($profile->birth_time ?? '') !== '')
+    <div>
+        <p class="text-gray-500 text-sm">Birth time</p>
+        <p class="font-medium text-base">{{ $profile->birth_time }}</p>
+    </div>
+    @endif
+    @if ($maritalStatusVisible && $profile->maritalStatus)
     <div>
         <p class="text-gray-500 text-sm">Marital Status</p>
-        <p class="font-medium text-base">
-            {{ ucfirst($matrimonyProfile->marital_status) }}
-            @if ($isOwnProfile && $matrimonyProfile->admin_edited_fields && in_array('marital_status', $matrimonyProfile->admin_edited_fields ?? []))
-                <span class="ml-2 text-xs text-amber-600 dark:text-amber-400" title="This field was corrected by admin">(Admin corrected)</span>
-            @endif
-        </p>
+        <p class="font-medium text-base">{{ $profile->maritalStatus->label ?? '—' }}</p>
     </div>
     @endif
-
-    @if ($educationVisible && $matrimonyProfile->education !== null && $matrimonyProfile->education !== '')
+    @if ($profile->religion)
     <div>
-        <p class="text-gray-500 text-sm">Education</p>
-        <p class="font-medium text-base">
-            {{ $matrimonyProfile->education }}
-            @if ($isOwnProfile && $matrimonyProfile->admin_edited_fields && in_array('education', $matrimonyProfile->admin_edited_fields ?? []))
-                <span class="ml-2 text-xs text-amber-600 dark:text-amber-400" title="This field was corrected by admin">(Admin corrected)</span>
-            @endif
-        </p>
+        <p class="text-gray-500 text-sm">Religion</p>
+        <p class="font-medium text-base">{{ $profile->religion->label ?? '—' }}</p>
     </div>
     @endif
-
+    @if ($profile->caste)
+    <div>
+        <p class="text-gray-500 text-sm">Caste</p>
+        <p class="font-medium text-base">{{ $profile->caste->label ?? '—' }}</p>
+    </div>
+    @endif
+    @if ($profile->subCaste)
+    <div>
+        <p class="text-gray-500 text-sm">Sub caste</p>
+        <p class="font-medium text-base">{{ $profile->subCaste->label ?? '—' }}</p>
+    </div>
+    @endif
     @php
         $locationParts = array_filter([
-            $matrimonyProfile->city?->name,
-            $matrimonyProfile->taluka?->name,
-            $matrimonyProfile->district?->name,
-            $matrimonyProfile->state?->name,
-            $matrimonyProfile->country?->name,
+            $profile->city?->name,
+            $profile->taluka?->name,
+            $profile->district?->name,
+            $profile->state?->name,
+            $profile->country?->name,
         ]);
         $locationLine = implode(', ', $locationParts);
     @endphp
-    @if ($locationVisible && $locationLine !== '')
+    @if ($locationVisible && ($locationLine !== '' || ($profile->address_line ?? '') !== ''))
     <div>
         <p class="text-gray-500 text-sm">Location</p>
-        <p class="font-medium text-base">
-            {{ $locationLine }}
-            @if ($isOwnProfile && $matrimonyProfile->admin_edited_fields && in_array('location', $matrimonyProfile->admin_edited_fields ?? []))
-                <span class="ml-2 text-xs text-amber-600 dark:text-amber-400" title="This field was corrected by admin">(Admin corrected)</span>
-            @endif
-        </p>
+        @if (($profile->address_line ?? '') !== '')
+        <p class="font-medium text-base">{{ $profile->address_line }}</p>
+        @endif
+        @if ($locationLine !== '')
+        <p class="font-medium text-base">{{ $locationLine }}</p>
+        @endif
     </div>
     @endif
-
-    @if ($casteVisible && $matrimonyProfile->caste !== null && $matrimonyProfile->caste !== '')
+    @if ($profile->seriousIntent)
     <div>
-        <p class="text-gray-500 text-sm">Caste</p>
-        <p class="font-medium text-base">
-            {{ $matrimonyProfile->caste }}
-            @if ($isOwnProfile && $matrimonyProfile->admin_edited_fields && in_array('caste', $matrimonyProfile->admin_edited_fields ?? []))
-                <span class="ml-2 text-xs text-amber-600 dark:text-amber-400" title="This field was corrected by admin">(Admin corrected)</span>
-            @endif
-        </p>
+        <p class="text-gray-500 text-sm">Marriage timeline</p>
+        <p class="font-medium text-base">{{ $profile->seriousIntent->name ?? '—' }}</p>
     </div>
     @endif
-
-    @if ($matrimonyProfile->height_cm !== null && $matrimonyProfile->height_cm !== '')
-    <div>
-        <p class="text-gray-500 text-sm">Height</p>
-        <p class="font-medium text-base">
-            {{ $matrimonyProfile->height_cm }} cm
-            @if ($isOwnProfile && $matrimonyProfile->admin_edited_fields && in_array('height_cm', $matrimonyProfile->admin_edited_fields ?? []))
-                <span class="ml-2 text-xs text-amber-600 dark:text-amber-400" title="This field was corrected by admin">(Admin corrected)</span>
-            @endif
-        </p>
-    </div>
-    @endif
-
 </div>
 
-@if ($matrimonyProfile->seriousIntent)
-<div class="mt-6 pt-6 border-t border-gray-200 dark:border-gray-600">
-    <p class="text-gray-500 text-sm">Marriage Timeline</p>
-    <p class="font-medium text-base">→ {{ $matrimonyProfile->seriousIntent->name }}</p>
+@php
+    $hasPhysical = ($heightVisible && ($profile->height_cm ?? '') !== '') || ($profile->weight_kg ?? null) !== null || $profile->complexion || $profile->physicalBuild || $profile->bloodGroup;
+@endphp
+@if ($hasPhysical)
+<div class="mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
+    <h3 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Physical</h3>
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        @if ($heightVisible && ($profile->height_cm ?? '') !== '')
+        <div>
+            <p class="text-gray-500 text-sm">Height</p>
+            <p class="font-medium text-base">{{ $profile->height_cm }} cm</p>
+        </div>
+        @endif
+        @if (($profile->weight_kg ?? null) !== null && $profile->weight_kg !== '')
+        <div>
+            <p class="text-gray-500 text-sm">Weight</p>
+            <p class="font-medium text-base">{{ $profile->weight_kg }} kg</p>
+        </div>
+        @endif
+        @if ($profile->complexion)
+        <div>
+            <p class="text-gray-500 text-sm">Complexion</p>
+            <p class="font-medium text-base">{{ $profile->complexion->label ?? '—' }}</p>
+        </div>
+        @endif
+        @if ($profile->physicalBuild)
+        <div>
+            <p class="text-gray-500 text-sm">Physical Build</p>
+            <p class="font-medium text-base">{{ $profile->physicalBuild->label ?? '—' }}</p>
+        </div>
+        @endif
+        @if ($profile->bloodGroup)
+        <div>
+            <p class="text-gray-500 text-sm">Blood Group</p>
+            <p class="font-medium text-base">{{ $profile->bloodGroup->label ?? '—' }}</p>
+        </div>
+        @endif
+    </div>
+</div>
+@endif
+
+@php
+    $hasEduCareer = ($educationVisible && ($profile->highest_education ?? '') !== '') || ($profile->specialization ?? '') !== '' || ($profile->occupation_title ?? '') !== '' || ($profile->company_name ?? '') !== '' || ($profile->annual_income ?? null) !== null || ($profile->family_income ?? null) !== null || $profile->incomeCurrency;
+@endphp
+@if ($hasEduCareer)
+<div class="mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
+    <h3 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Education & Career</h3>
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        @if ($educationVisible && ($profile->highest_education ?? '') !== '')
+        <div>
+            <p class="text-gray-500 text-sm">Education</p>
+            <p class="font-medium text-base">{{ $profile->highest_education }}</p>
+        </div>
+        @endif
+        @if (($profile->specialization ?? '') !== '')
+        <div>
+            <p class="text-gray-500 text-sm">Specialization</p>
+            <p class="font-medium text-base">{{ $profile->specialization }}</p>
+        </div>
+        @endif
+        @if (($profile->occupation_title ?? '') !== '')
+        <div>
+            <p class="text-gray-500 text-sm">Occupation</p>
+            <p class="font-medium text-base">{{ $profile->occupation_title }}</p>
+        </div>
+        @endif
+        @if (($profile->company_name ?? '') !== '')
+        <div>
+            <p class="text-gray-500 text-sm">Company</p>
+            <p class="font-medium text-base">{{ $profile->company_name }}</p>
+        </div>
+        @endif
+        @if (($profile->annual_income ?? null) !== null && $profile->annual_income !== '')
+        <div>
+            <p class="text-gray-500 text-sm">Annual Income</p>
+            <p class="font-medium text-base">{{ $profile->annual_income }}{{ $profile->incomeCurrency ? ' ' . ($profile->incomeCurrency->symbol ?? $profile->incomeCurrency->code ?? '') : '' }}</p>
+        </div>
+        @endif
+        @if (($profile->family_income ?? null) !== null && $profile->family_income !== '')
+        <div>
+            <p class="text-gray-500 text-sm">Family Income</p>
+            <p class="font-medium text-base">{{ $profile->family_income }}{{ $profile->incomeCurrency ? ' ' . ($profile->incomeCurrency->symbol ?? $profile->incomeCurrency->code ?? '') : '' }}</p>
+        </div>
+        @endif
+        @if ($profile->incomeCurrency && ($profile->annual_income ?? null) === null && ($profile->family_income ?? null) === null)
+        <div>
+            <p class="text-gray-500 text-sm">Income Currency</p>
+            <p class="font-medium text-base">{{ trim($profile->incomeCurrency->symbol ?? '') }} {{ $profile->incomeCurrency->code ?? '—' }}</p>
+        </div>
+        @endif
+    </div>
+</div>
+@endif
+
+@php
+    $hasFamily = ($profile->father_name ?? '') !== '' || ($profile->father_occupation ?? '') !== '' || ($profile->mother_name ?? '') !== '' || ($profile->mother_occupation ?? '') !== '' || ($profile->brothers_count ?? null) !== null || ($profile->sisters_count ?? null) !== null || $profile->familyType;
+@endphp
+@if ($hasFamily)
+<div class="mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
+    <h3 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Family</h3>
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        @if (($profile->father_name ?? '') !== '')
+        <div>
+            <p class="text-gray-500 text-sm">Father</p>
+            <p class="font-medium text-base">{{ $profile->father_name }}{{ ($profile->father_occupation ?? '') !== '' ? ' · ' . $profile->father_occupation : '' }}</p>
+        </div>
+        @endif
+        @if (($profile->mother_name ?? '') !== '')
+        <div>
+            <p class="text-gray-500 text-sm">Mother</p>
+            <p class="font-medium text-base">{{ $profile->mother_name }}{{ ($profile->mother_occupation ?? '') !== '' ? ' · ' . $profile->mother_occupation : '' }}</p>
+        </div>
+        @endif
+        @if (($profile->brothers_count ?? null) !== null && $profile->brothers_count !== '')
+        <div>
+            <p class="text-gray-500 text-sm">Brothers</p>
+            <p class="font-medium text-base">{{ $profile->brothers_count }}</p>
+        </div>
+        @endif
+        @if (($profile->sisters_count ?? null) !== null && $profile->sisters_count !== '')
+        <div>
+            <p class="text-gray-500 text-sm">Sisters</p>
+            <p class="font-medium text-base">{{ $profile->sisters_count }}</p>
+        </div>
+        @endif
+        @if ($profile->familyType)
+        <div>
+            <p class="text-gray-500 text-sm">Family Type</p>
+            <p class="font-medium text-base">{{ $profile->familyType->label ?? '—' }}</p>
+        </div>
+        @endif
+    </div>
+</div>
+@endif
+
+@php
+    $workCityName = $profile->work_city_id ? \App\Models\City::where('id', $profile->work_city_id)->value('name') : null;
+    $workStateName = $profile->work_state_id ? \App\Models\State::where('id', $profile->work_state_id)->value('name') : null;
+    $hasWorkLocation = $workCityName || $workStateName;
+@endphp
+@if ($hasWorkLocation)
+<div class="mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
+    <h3 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Work Location</h3>
+    <p class="font-medium text-base">{{ implode(', ', array_filter([$workCityName, $workStateName])) }}</p>
+</div>
+@endif
+
+@if (($profilePropertySummary ?? null) && ($profilePropertySummary->owns_agriculture ?? false) && (($profilePropertySummary->agriculture_type ?? '') !== ''))
+<div class="mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
+    <h3 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Property</h3>
+    <div>
+        <p class="text-gray-500 text-sm">Agriculture type</p>
+        <p class="font-medium text-base">{{ $profilePropertySummary->agriculture_type }}</p>
+    </div>
+</div>
+@endif
+
+@php
+    $hasBirthPlace = $profile->birth_city_id || $profile->birth_taluka_id || $profile->birth_district_id || $profile->birth_state_id;
+@endphp
+@if ($hasBirthPlace)
+<div class="mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
+    <h3 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Birth Place</h3>
+    <p class="font-medium text-base">{{ implode(', ', array_filter([$profile->birthCity?->name, $profile->birthTaluka?->name, $profile->birthDistrict?->name, $profile->birthState?->name])) }}</p>
+</div>
+@endif
+
+@php
+    $hasNativePlace = $profile->native_city_id || $profile->native_taluka_id || $profile->native_district_id || $profile->native_state_id;
+@endphp
+@if ($hasNativePlace)
+<div class="mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
+    <h3 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Native Place</h3>
+    <p class="font-medium text-base">{{ implode(', ', array_filter([$profile->nativeCity?->name, $profile->nativeTaluka?->name, $profile->nativeDistrict?->name, $profile->nativeState?->name])) }}</p>
+</div>
+@endif
+
+@if ($profile->siblings?->isNotEmpty())
+@php
+    $siblingsByGender = $profile->siblings->groupBy(function ($s) { return ($s->gender ?? 'other') ?: 'other'; });
+@endphp
+<div class="mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
+    <h3 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Siblings</h3>
+    @foreach($siblingsByGender as $gender => $items)
+        <div class="mb-3">
+            <p class="text-gray-500 text-sm font-medium mb-1">{{ ucfirst($gender) }}</p>
+            @foreach($items as $sib)
+                <p class="font-medium text-base ml-2">
+                    {{ $sib->occupation ?: '—' }}{{ $sib->marital_status ? ' · ' . ucfirst($sib->marital_status) : '' }}{{ $sib->city?->name ? ' · ' . $sib->city->name : '' }}{{ $sib->notes ? ' · ' . \Illuminate\Support\Str::limit($sib->notes, 50) : '' }}
+                </p>
+            @endforeach
+        </div>
+    @endforeach
+</div>
+@endif
+
+@if ($profile->children?->isNotEmpty())
+<div class="mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
+    <p class="text-gray-500 text-sm mb-2">Children</p>
+    @foreach($profile->children as $child)
+        <p class="font-medium text-base">{{ $child->child_name ?: '—' }}{{ $child->age ? ', ' . $child->age . ' yrs' : '' }}{{ $child->gender ? ' (' . $child->gender . ')' : '' }}</p>
+    @endforeach
+</div>
+@endif
+
+@if ($profile->educationHistory && $profile->educationHistory->isNotEmpty())
+<div class="mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
+    <p class="text-gray-500 text-sm mb-2">Education History</p>
+    @foreach($profile->educationHistory as $edu)
+        <p class="font-medium text-base">{{ $edu->degree ?: '—' }}{{ $edu->specialization ? ' – ' . $edu->specialization : '' }}{{ $edu->university ? ' (' . $edu->university . ')' : '' }}{{ $edu->year_completed ? ', ' . $edu->year_completed : '' }}</p>
+    @endforeach
+</div>
+@endif
+
+@if ($profile->career?->isNotEmpty())
+<div class="mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
+    <p class="text-gray-500 text-sm mb-2">Career History</p>
+    @foreach($profile->career as $job)
+        <p class="font-medium text-base">{{ $job->designation ?: '—' }}{{ $job->company ? ' at ' . $job->company : '' }}{{ $job->start_year || $job->end_year ? ' (' . ($job->start_year ?? '') . '–' . ($job->end_year ?? '') . ')' : '' }}</p>
+    @endforeach
+</div>
+@endif
+
+@if ($profile->addresses?->isNotEmpty())
+<div class="mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
+    <p class="text-gray-500 text-sm mb-2">Address</p>
+    @foreach($profile->addresses as $addr)
+        <p class="font-medium text-base">
+            {{ implode(', ', array_filter([
+                trim($addr->village?->name ?? ''),
+                $addr->city?->name,
+                $addr->taluka?->name,
+                $addr->district?->name,
+                $addr->state?->name,
+                $addr->country?->name,
+            ])) ?: '—' }}{{ trim($addr->postal_code ?? '') ? ' – ' . $addr->postal_code : '' }}
+        </p>
+    @endforeach
+</div>
+@endif
+
+@if (!empty($enableRelativesSection) && $profile->relatives?->isNotEmpty())
+@php
+    $relativesByType = $profile->relatives->groupBy(function ($r) { return $r->relation_type ?: 'Other'; });
+@endphp
+<div class="mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
+    <h3 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Relatives & Family Network</h3>
+    @foreach($relativesByType as $relationType => $relatives)
+        <div class="mb-3">
+            <p class="text-gray-500 text-sm font-medium mb-1">{{ $relationType }}</p>
+            @foreach($relatives as $rel)
+                <p class="font-medium text-base ml-2">
+                    {{ $rel->name ?: '—' }}{{ $rel->occupation ? ' · ' . $rel->occupation : '' }}{{ ($rel->city?->name || $rel->state?->name) ? ' (' . trim(implode(', ', array_filter([$rel->city?->name, $rel->state?->name]))) . ')' : '' }}{{ $rel->contact_number ? ' · ' . $rel->contact_number : '' }}{{ $rel->notes ? ' · ' . \Illuminate\Support\Str::limit($rel->notes, 60) : '' }}
+                </p>
+            @endforeach
+        </div>
+    @endforeach
+</div>
+@endif
+
+@if ($profile->allianceNetworks?->isNotEmpty())
+@php
+    $allianceByLocation = $profile->allianceNetworks->groupBy(function ($a) {
+        $parts = array_filter([$a->city?->name, $a->taluka?->name, $a->district?->name, $a->state?->name]);
+        return implode(', ', $parts) ?: 'Other';
+    });
+@endphp
+<div class="mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
+    <h3 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Alliance & Native Network</h3>
+    @foreach($allianceByLocation as $locationLabel => $items)
+        <div class="mb-3">
+            <p class="text-gray-500 text-sm font-medium mb-1">{{ $locationLabel }}</p>
+            @foreach($items as $a)
+                <p class="font-medium text-base ml-2">
+                    {{ $a->surname ?: '—' }}{{ $a->notes ? ' · ' . \Illuminate\Support\Str::limit($a->notes, 60) : '' }}
+                </p>
+            @endforeach
+        </div>
+    @endforeach
+</div>
+@endif
+
+@if (isset($preferences) && (trim($preferences->preferred_city ?? '') !== '' || trim($preferences->preferred_education ?? '') !== '' || ($preferences->preferred_age_min ?? null) !== null || ($preferences->preferred_age_max ?? null) !== null))
+<div class="mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
+    <h3 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Partner preferences</h3>
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm">
+        @if (($preferences->preferred_city ?? '') !== '')<p><span class="text-gray-500">City:</span> {{ $preferences->preferred_city }}</p>@endif
+        @if (($preferences->preferred_caste ?? '') !== '')<p><span class="text-gray-500">Caste:</span> {{ $preferences->preferred_caste }}</p>@endif
+        @if (($preferences->preferred_age_min ?? '') !== '' || ($preferences->preferred_age_max ?? '') !== '')<p><span class="text-gray-500">Age:</span> {{ $preferences->preferred_age_min ?? '—' }}–{{ $preferences->preferred_age_max ?? '—' }}</p>@endif
+        @if (($preferences->preferred_education ?? '') !== '')<p><span class="text-gray-500">Education:</span> {{ $preferences->preferred_education }}</p>@endif
+    </div>
+</div>
+@endif
+
+@if (isset($extendedAttributes) && (trim($extendedAttributes->narrative_about_me ?? '') !== '' || trim($extendedAttributes->narrative_expectations ?? '') !== ''))
+<div class="mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
+    <h3 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">About & expectations</h3>
+    @if (trim($extendedAttributes->narrative_about_me ?? '') !== '')
+        <p class="text-gray-500 text-sm">About me</p>
+        <p class="font-medium text-base whitespace-pre-wrap">{{ $extendedAttributes->narrative_about_me }}</p>
+    @endif
+    @if (trim($extendedAttributes->narrative_expectations ?? '') !== '')
+        <p class="text-gray-500 text-sm mt-2">Expectations</p>
+        <p class="font-medium text-base whitespace-pre-wrap">{{ $extendedAttributes->narrative_expectations }}</p>
+    @endif
+</div>
+@endif
+
+@if ($profile->horoscope && ($profile->horoscope->rashi_id || $profile->horoscope->nakshatra_id || $profile->horoscope->gan_id || $profile->horoscope->nadi_id || $profile->horoscope->mangal_dosh_type_id || $profile->horoscope->yoni_id || $profile->horoscope->charan || $profile->horoscope->devak || $profile->horoscope->kul || $profile->horoscope->gotra))
+<div class="mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
+    <h3 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Horoscope</h3>
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm">
+        @if ($profile->horoscope->rashi)<p><span class="text-gray-500">Rashi:</span> {{ $profile->horoscope->rashi->label ?? '—' }}</p>@endif
+        @if ($profile->horoscope->nakshatra)<p><span class="text-gray-500">Nakshatra:</span> {{ $profile->horoscope->nakshatra->label ?? '—' }}</p>@endif
+        @if ($profile->horoscope->gan)<p><span class="text-gray-500">Gan:</span> {{ $profile->horoscope->gan->label ?? '—' }}</p>@endif
+        @if ($profile->horoscope->nadi)<p><span class="text-gray-500">Nadi:</span> {{ $profile->horoscope->nadi->label ?? '—' }}</p>@endif
+        @if ($profile->horoscope->mangalDoshType)<p><span class="text-gray-500">Mangal Dosh:</span> {{ $profile->horoscope->mangalDoshType->label ?? '—' }}</p>@endif
+        @if ($profile->horoscope->yoni)<p><span class="text-gray-500">Yoni:</span> {{ $profile->horoscope->yoni->label ?? '—' }}</p>@endif
+        @if ($profile->horoscope->charan)<p><span class="text-gray-500">Charan:</span> {{ $profile->horoscope->charan }}</p>@endif
+        @if ($profile->horoscope->devak)<p><span class="text-gray-500">Devak:</span> {{ $profile->horoscope->devak }}</p>@endif
+        @if ($profile->horoscope->kul)<p><span class="text-gray-500">Kul:</span> {{ $profile->horoscope->kul }}</p>@endif
+        @if ($profile->horoscope->gotra)<p><span class="text-gray-500">Gotra:</span> {{ $profile->horoscope->gotra }}</p>@endif
+    </div>
 </div>
 @endif
 
@@ -401,13 +700,13 @@
     <p class="text-gray-500 text-sm">Contact Information</p>
     <p class="font-medium text-base">
         @if ($isOwnProfile)
-            @if ($matrimonyProfile->contact_number)
-                {{ $matrimonyProfile->contact_number }}
+            @if ($primaryContactPhone)
+                {{ $primaryContactPhone }}
             @else
                 No contact number added.
             @endif
         @elseif ($canViewContact)
-            {{ $matrimonyProfile->contact_number }}
+            {{ $primaryContactPhone }}
         @else
             Contact details will be available after interest acceptance.
         @endif
@@ -472,10 +771,10 @@
     }
     // Get viewed profile photo for comparison
     $viewedPhotoSrc = null;
-    if ($matrimonyProfile->profile_photo && $matrimonyProfile->photo_approved !== false) {
-        $viewedPhotoSrc = asset('uploads/matrimony_photos/'.$matrimonyProfile->profile_photo);
+    if ($profile->profile_photo && $profile->photo_approved !== false) {
+        $viewedPhotoSrc = asset('uploads/matrimony_photos/'.$profile->profile_photo);
     } else {
-        $viewedGender = $matrimonyProfile->gender ?? null;
+        $viewedGender = $profile->gender?->key ?? $profile->gender;
         if ($viewedGender === 'male') {
             $viewedPhotoSrc = asset('images/placeholders/male-profile.svg');
         } elseif ($viewedGender === 'female') {
@@ -494,7 +793,7 @@
                 alt="Viewed Profile"
                 class="w-16 h-16 rounded-full object-cover border-2 border-indigo-300 dark:border-indigo-600"
             />
-            <span class="text-xs text-gray-600 dark:text-gray-400 mt-1">{{ $matrimonyProfile->full_name }}</span>
+            <span class="text-xs text-gray-600 dark:text-gray-400 mt-1">{{ $profile->full_name }}</span>
         </div>
         <div class="text-2xl">❤️</div>
         <div class="flex flex-col items-center">
@@ -614,7 +913,7 @@
                     Interest Sent
                 </button>
             @else
-                <form method="POST" action="{{ route('interests.send', $matrimonyProfile) }}" style="display: inline;">
+                <form method="POST" action="{{ route('interests.send', $profile) }}" style="display: inline;">
                     @csrf
                     <button type="submit" style="background-color: #ec4899; color: white; padding: 12px 24px; border-radius: 6px; font-weight: 600; font-size: 16px; border: none; cursor: pointer; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);">
                         Send Interest
@@ -623,20 +922,20 @@
             @endif
 
             {{-- Block --}}
-            <form method="POST" action="{{ route('blocks.store', $matrimonyProfile) }}" style="display: inline;">
+            <form method="POST" action="{{ route('blocks.store', $profile) }}" style="display: inline;">
                 @csrf
                 <button type="submit" style="background-color: #6b7280; color: white; padding: 12px 24px; border-radius: 6px; font-weight: 600; font-size: 16px; border: none; cursor: pointer;">Block</button>
             </form>
 
             {{-- Shortlist add / remove --}}
             @if ($inShortlist)
-                <form method="POST" action="{{ route('shortlist.destroy', $matrimonyProfile) }}" style="display: inline;">
+                <form method="POST" action="{{ route('shortlist.destroy', $profile) }}" style="display: inline;">
                     @csrf
                     @method('DELETE')
                     <button type="submit" style="background-color: #9ca3af; color: white; padding: 12px 24px; border-radius: 6px; font-weight: 600; font-size: 16px; border: none; cursor: pointer;">Remove from shortlist</button>
                 </form>
             @else
-                <form method="POST" action="{{ route('shortlist.store', $matrimonyProfile) }}" style="display: inline;">
+                <form method="POST" action="{{ route('shortlist.store', $profile) }}" style="display: inline;">
                     @csrf
                     <button type="submit" style="background-color: #3b82f6; color: white; padding: 12px 24px; border-radius: 6px; font-weight: 600; font-size: 16px; border: none; cursor: pointer;">Add to shortlist</button>
                 </form>
@@ -682,7 +981,7 @@
             </a>
 
             <div x-show="showReportForm" x-transition style="margin-top:1rem; max-width:500px;">
-                <form method="POST" action="{{ route('abuse-reports.store', $matrimonyProfile) }}" style="border:1px solid #ccc; padding:1rem;">
+                <form method="POST" action="{{ route('abuse-reports.store', $profile) }}" style="border:1px solid #ccc; padding:1rem;">
                     @csrf
                     <p style="font-weight:600; margin-bottom:8px;">Report this profile for abuse</p>
                     <textarea name="reason" rows="4" required minlength="10" placeholder="Please provide a reason for reporting this profile (minimum 10 characters)" style="width:100%; margin-bottom:10px; padding:8px; border:1px solid #ddd; border-radius:4px;"></textarea>

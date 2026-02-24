@@ -25,23 +25,29 @@
             <x-text-input id="email" class="block mt-1 w-full" type="email" name="email" :value="old('email')" required autocomplete="username" />
             <x-input-error :messages="$errors->get('email')" class="mt-2" />
         </div>
-<div class="mt-4">
-    <x-input-label for="gender" value="Gender" />
 
-    <div class="mt-2 flex gap-4">
-        <label class="flex items-center">
-            <input type="radio" name="gender" value="male" required>
-            <span class="ml-2">Male</span>
-        </label>
+        <!-- Mobile (optional) -->
+        <div class="mt-4">
+            <x-input-label for="mobile" value="Mobile" />
+            <x-text-input id="mobile" class="block mt-1 w-full" type="text" name="mobile" :value="old('mobile')" autocomplete="tel" />
+            <x-input-error :messages="$errors->get('mobile')" class="mt-2" />
+        </div>
 
-        <label class="flex items-center">
-            <input type="radio" name="gender" value="female" required>
-            <span class="ml-2">Female</span>
-        </label>
-    </div>
-
-    <x-input-error :messages="$errors->get('gender')" class="mt-2" />
-</div>
+        <!-- Gender (optional; can set in profile wizard) -->
+        <div class="mt-4">
+            <x-input-label for="gender" value="Gender" />
+            <div class="mt-2 flex gap-4">
+                <label class="flex items-center">
+                    <input type="radio" name="gender" value="male" {{ old('gender') === 'male' ? 'checked' : '' }}>
+                    <span class="ml-2">Male</span>
+                </label>
+                <label class="flex items-center">
+                    <input type="radio" name="gender" value="female" {{ old('gender') === 'female' ? 'checked' : '' }}>
+                    <span class="ml-2">Female</span>
+                </label>
+            </div>
+            <x-input-error :messages="$errors->get('gender')" class="mt-2" />
+        </div>
 
         <!-- Password -->
         <div class="mt-4">

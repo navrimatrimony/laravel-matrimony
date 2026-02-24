@@ -5,13 +5,31 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use App\Models\MatrimonyProfile;
-use App\Services\FieldValueHistoryService;
 use App\Services\ProfileLifecycleService;
 use App\Services\ViewTrackingService;
 use App\Services\ProfileVisibilityPolicyService;
 
 class MatrimonyProfileApiController extends Controller
 {
+    /**
+     * Phase-5B: Build snapshot from API request (same structure as manual). Only keys present in request.
+     */
+    private function buildManualSnapshotFromApi(Request $request, MatrimonyProfile $profile): array
+    {
+        $core = [];
+        $coreFields = ['full_name', 'date_of_birth', 'caste', 'highest_education', 'country_id', 'state_id', 'district_id', 'taluka_id', 'city_id'];
+        foreach ($coreFields as $key) {
+            if (!$request->has($key)) {
+                continue;
+            }
+            $val = $request->input($key);
+            if ($val instanceof \Carbon\Carbon) {
+                $val = $val->format('Y-m-d');
+            }
+            $core[$key] = $val === '' ? null : $val;
+        }
+        return ['core' => $core];
+    }
     /**
      * Store matrimony profile for logged-in user
      * SSOT: User ≠ MatrimonyProfile
@@ -24,7 +42,7 @@ class MatrimonyProfileApiController extends Controller
             'full_name' => ['required', 'string', 'max:255'],
             'date_of_birth' => ['required', 'date'],
             'caste' => ['required', 'string', 'max:255'],
-            'education' => ['required', 'string', 'max:255'],
+            'highest_education' => ['required', 'string', 'max:255'],
             'country_id' => ['required', 'exists:countries,id'],
             'state_id' => ['required', 'exists:states,id'],
             'district_id' => ['nullable', 'exists:districts,id'],
@@ -53,7 +71,7 @@ class MatrimonyProfileApiController extends Controller
             'full_name'     => $request->full_name,
             'date_of_birth' => $request->date_of_birth,
             'caste'         => $request->caste,
-            'education'     => $request->education,
+            'highest_education' => $request->highest_education,
             'country_id'    => $request->country_id,
             'state_id'      => $request->state_id,
             'district_id'   => $request->district_id,
@@ -62,7 +80,7 @@ class MatrimonyProfileApiController extends Controller
         ]);
 
         // Day-6 BUGFIX-B FINAL: API create initial history (Law 9) — प्रत्येक initial field साठी एक row
-        $initialFields = ['full_name', 'date_of_birth', 'caste', 'education', 'country_id', 'state_id', 'district_id', 'taluka_id', 'city_id'];
+        $initialFields = ['full_name', 'date_of_birth', 'caste', 'highest_education', 'country_id', 'state_id', 'district_id', 'taluka_id', 'city_id'];
         foreach ($initialFields as $fieldKey) {
             $newVal = $profile->$fieldKey;
             if ($newVal instanceof \Carbon\Carbon) {
@@ -122,7 +140,7 @@ public function update(Request $request)
         'full_name' => ['sometimes', 'required', 'string', 'max:255'],
         'date_of_birth' => ['sometimes', 'required', 'date'],
         'caste' => ['sometimes', 'required', 'string', 'max:255'],
-        'education' => ['sometimes', 'required', 'string', 'max:255'],
+        'highest_education' => ['sometimes', 'required', 'string', 'max:255'],
         'country_id' => ['sometimes', 'required', 'exists:countries,id'],
         'state_id' => ['sometimes', 'required', 'exists:states,id'],
         'district_id' => ['nullable', 'exists:districts,id'],
@@ -154,56 +172,14 @@ public function update(Request $request)
         ], 403);
     }
 
-    // PIR-007: Only update fields PRESENT in request; do not overwrite others with null/empty
-    $coreFields = ['full_name', 'date_of_birth', 'caste', 'education'];
-    $locationFields = ['country_id', 'state_id', 'district_id', 'taluka_id', 'city_id'];
-    $updateData = [];
-    foreach ($coreFields as $field) {
-        if (!$request->has($field)) {
-            continue;
+    // Phase-5B: All updates via MutationService (source=manual, profile_change_history)
+    $snapshot = $this->buildManualSnapshotFromApi($request, $profile);
+    if (!empty($snapshot['core'])) {
+        $result = app(\App\Services\MutationService::class)->applyManualSnapshot($profile, $snapshot, (int) $user->id, 'manual');
+        $changedFields = array_keys($snapshot['core']);
+        if (!empty($changedFields)) {
+            \App\Services\ProfileFieldLockService::applyLocks($profile, $changedFields, 'CORE', $user);
         }
-        $updateData[$field] = $request->input($field) === '' ? null : $request->input($field);
-    }
-
-    // Phase-4 Day-8: Process location hierarchy fields
-    foreach ($locationFields as $field) {
-        if (!$request->has($field)) {
-            continue;
-        }
-        $updateData[$field] = $request->input($field);
-    }
-
-    // Day-6.4: Detect only ACTUALLY CHANGED core fields for lock check (among those being updated)
-    $changedFields = [];
-    foreach (array_keys($updateData) as $field) {
-        $newVal = $updateData[$field];
-        $oldVal = $profile->$field === '' ? null : $profile->$field;
-        if ((string) $newVal !== (string) $oldVal) {
-            $changedFields[] = $field;
-        }
-    }
-
-    if (!empty($changedFields)) {
-        \App\Services\ProfileFieldLockService::assertNotLocked($profile, $changedFields, $user);
-    }
-
-    // Day-6: Record history for every changed CORE field before update
-    foreach ($changedFields as $fieldKey) {
-        $oldVal = $profile->$fieldKey === '' ? null : $profile->$fieldKey;
-        $newVal = $updateData[$fieldKey] ?? null;
-        $newVal = $newVal === '' ? null : $newVal;
-        if ($newVal instanceof \Carbon\Carbon) {
-            $newVal = $newVal->format('Y-m-d');
-        }
-        FieldValueHistoryService::record($profile->id, $fieldKey, 'CORE', $oldVal, $newVal, FieldValueHistoryService::CHANGED_BY_API);
-    }
-
-    if (!empty($updateData)) {
-        $profile->update($updateData);
-    }
-
-    if (!empty($changedFields)) {
-        \App\Services\ProfileFieldLockService::applyLocks($profile, $changedFields, 'CORE', $user);
     }
 
     // Hide rejected images - return null for profile_photo if explicitly rejected
@@ -247,37 +223,18 @@ public function update(Request $request)
             $filename
         );
 
-        // Apply policy-based approval status
         $photoApprovalRequired = \App\Services\AdminSettingService::isPhotoApprovalRequired();
-        
-        if ($photoApprovalRequired) {
-            // Policy: Approval required - photo hidden until admin approves
-            $photoApproved = false;
-        } else {
-            // Policy: No approval required - photo visible immediately
-            $photoApproved = true;
-        }
+        $photoApproved = !$photoApprovalRequired;
 
-        // Day-6: Record history for photo fields before update
-        if ((string) ($profile->profile_photo ?? '') !== (string) $filename) {
-            FieldValueHistoryService::record($profile->id, 'profile_photo', 'CORE', $profile->profile_photo, $filename, FieldValueHistoryService::CHANGED_BY_API);
-        }
-        if ((string) ($profile->photo_approved ?? '') !== (string) $photoApproved) {
-            FieldValueHistoryService::record($profile->id, 'photo_approved', 'CORE', $profile->photo_approved ? '1' : '0', $photoApproved ? '1' : '0', FieldValueHistoryService::CHANGED_BY_API);
-        }
-        if ($profile->photo_rejected_at !== null) {
-            FieldValueHistoryService::record($profile->id, 'photo_rejected_at', 'CORE', $profile->photo_rejected_at?->format('Y-m-d H:i:s'), null, FieldValueHistoryService::CHANGED_BY_API);
-        }
-        if (!empty($profile->photo_rejection_reason)) {
-            FieldValueHistoryService::record($profile->id, 'photo_rejection_reason', 'CORE', $profile->photo_rejection_reason, null, FieldValueHistoryService::CHANGED_BY_API);
-        }
-
-        $profile->update([
-            'profile_photo' => $filename,
-            'photo_approved' => $photoApproved,
-            'photo_rejected_at' => null,
-            'photo_rejection_reason' => null,
-        ]);
+        $snapshot = [
+            'core' => [
+                'profile_photo' => $filename,
+                'photo_approved' => $photoApproved,
+                'photo_rejected_at' => null,
+                'photo_rejection_reason' => null,
+            ],
+        ];
+        app(\App\Services\MutationService::class)->applyManualSnapshot($profile, $snapshot, (int) $user->id, 'manual');
 
         return response()->json([
             'success' => true,
@@ -296,9 +253,9 @@ public function update(Request $request)
     {
         $query = MatrimonyProfile::with('user')->latest();
 
-        // Day 7: Only Active profiles searchable; NULL treated as Active (backward compat)
+        // Day 7: Only active profiles searchable; NULL treated as active (backward compat)
         $query->where(function ($q) {
-            $q->where('lifecycle_state', 'Active')->orWhereNull('lifecycle_state');
+            $q->where('lifecycle_state', 'active')->orWhereNull('lifecycle_state');
         })->where('is_suspended', false);
         // Soft deletes are automatically excluded by Laravel's SoftDeletes trait
 
@@ -352,7 +309,7 @@ public function update(Request $request)
                 'gender' => $profile->user ? ($profile->user->gender ?? null) : null,
                 'date_of_birth' => $profile->date_of_birth,
                 'caste' => $profile->caste,
-                'education' => $profile->education,
+                'highest_education' => $profile->highest_education,
                 'country_id' => $profile->country_id,
                 'state_id' => $profile->state_id,
                 'district_id' => $profile->district_id,
@@ -421,7 +378,7 @@ public function update(Request $request)
             'gender' => $profile->user ? ($profile->user->gender ?? null) : null,
             'date_of_birth' => $profile->date_of_birth,
             'caste' => $profile->caste,
-            'education' => $profile->education,
+            'highest_education' => $profile->highest_education,
             'country_id' => $profile->country_id,
             'state_id' => $profile->state_id,
             'district_id' => $profile->district_id,

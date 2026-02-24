@@ -1,6 +1,8 @@
 <?php
 
 use Illuminate\Support\Facades\Route;
+use App\Http\Controllers\Internal\LocationSearchController;
+use App\Http\Controllers\Internal\LocationSuggestionController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\MatrimonyProfileApiController;
 use App\Http\Controllers\Api\InterestApiController;
@@ -8,8 +10,13 @@ use App\Http\Controllers\Api\FieldRegistryApiController;
 use App\Http\Controllers\Api\ExtendedFieldApiController;
 use App\Http\Controllers\Api\ProfileFieldLockApiController;
 use App\Http\Controllers\Api\BiodataIntakeApiController;
+use App\Http\Controllers\Api\CasteLookupController;
+use App\Http\Controllers\Api\V1\LocationController;
 use App\Http\Controllers\AdminController;
 use App\Http\Controllers\AbuseReportController;
+
+Route::get('/internal/location/search', [LocationSearchController::class, 'search']);
+Route::middleware(['auth'])->post('/internal/location/suggest', [LocationSuggestionController::class, 'store']);
 
 Route::prefix('v1')->group(function () {
 
@@ -34,6 +41,8 @@ Route::prefix('v1')->group(function () {
             'status' => 'api alive'
         ]);
     });
+
+    Route::get('/locations/cities', [LocationController::class, 'cities']);
 
     /*
     |--------------------------------------------------------------------------
@@ -81,6 +90,13 @@ Route::prefix('v1')->group(function () {
         | Abuse Reports (User action)
         */
         Route::post('/abuse-reports/{profile}', [AbuseReportController::class, 'store']); // SUBMIT ABUSE REPORT
+
+        /*
+        | Religion → Caste → SubCaste lookup (Phase-5)
+        */
+        Route::get('/castes', [CasteLookupController::class, 'getCastes']); // GET ?religion_id=
+        Route::get('/sub-castes', [CasteLookupController::class, 'getSubCastes']); // GET ?caste_id=&q=
+        Route::post('/sub-castes', [CasteLookupController::class, 'createSubCaste']);
     });
 
     /*

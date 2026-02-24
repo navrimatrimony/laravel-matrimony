@@ -58,27 +58,29 @@ class ProfileCompletenessService
     {
         switch ($fieldKey) {
             case 'gender':
-                $gender = $profile->gender ?? $profile->user?->gender ?? null;
-                return $gender !== null && $gender !== '';
+            case 'gender_id':
+                return $profile->gender_id !== null;
 
             case 'date_of_birth':
                 return $profile->date_of_birth !== null && $profile->date_of_birth !== '';
 
             case 'marital_status':
-                return $profile->marital_status !== null && $profile->marital_status !== '';
+            case 'marital_status_id':
+                return $profile->marital_status_id !== null;
 
             case 'education':
-                return $profile->education !== null && $profile->education !== '';
+            case 'highest_education':
+                return $profile->highest_education !== null && $profile->highest_education !== '';
 
             case 'location':
-                return $profile->location !== null && $profile->location !== '';
+                return $profile->city_id !== null;
 
             case 'profile_photo':
                 return $profile->profile_photo !== null && $profile->profile_photo !== ''
                     && $profile->photo_approved !== false;
 
             case 'caste':
-                return $profile->caste !== null && $profile->caste !== '';
+                return $profile->caste_id !== null;
 
             default:
                 // For any other field, check if it's not null and not empty string
@@ -136,27 +138,28 @@ class ProfileCompletenessService
     {
         switch ($fieldKey) {
             case 'gender':
-                // Gender can come from profile or user table, but in SQL we only check profile
-                // Note: This assumes gender is stored in matrimony_profiles table
-                return "(CASE WHEN COALESCE(TRIM({$table}.gender),'') != '' THEN 1 ELSE 0 END)";
+            case 'gender_id':
+                return "(CASE WHEN {$table}.gender_id IS NOT NULL THEN 1 ELSE 0 END)";
 
             case 'date_of_birth':
                 return "(CASE WHEN {$table}.date_of_birth IS NOT NULL AND {$table}.date_of_birth != '' THEN 1 ELSE 0 END)";
 
             case 'marital_status':
-                return "(CASE WHEN COALESCE(TRIM({$table}.marital_status),'') != '' THEN 1 ELSE 0 END)";
+            case 'marital_status_id':
+                return "(CASE WHEN {$table}.marital_status_id IS NOT NULL THEN 1 ELSE 0 END)";
 
             case 'education':
-                return "(CASE WHEN COALESCE(TRIM({$table}.education),'') != '' THEN 1 ELSE 0 END)";
+            case 'highest_education':
+                return "(CASE WHEN COALESCE(TRIM({$table}.highest_education),'') != '' THEN 1 ELSE 0 END)";
 
             case 'location':
-                return "(CASE WHEN ({$table}.city_id IS NOT NULL OR {$table}.taluka_id IS NOT NULL OR {$table}.district_id IS NOT NULL OR {$table}.state_id IS NOT NULL OR {$table}.country_id IS NOT NULL) THEN 1 ELSE 0 END)";
+                return "(CASE WHEN {$table}.city_id IS NOT NULL THEN 1 ELSE 0 END)";
 
             case 'profile_photo':
                 return "(CASE WHEN COALESCE(TRIM({$table}.profile_photo),'') != '' AND ({$table}.photo_approved = 1 OR {$table}.photo_approved IS TRUE) THEN 1 ELSE 0 END)";
 
             case 'caste':
-                return "(CASE WHEN COALESCE(TRIM({$table}.caste),'') != '' THEN 1 ELSE 0 END)";
+                return "(CASE WHEN {$table}.caste_id IS NOT NULL THEN 1 ELSE 0 END)";
 
             default:
                 // Generic check for any other field

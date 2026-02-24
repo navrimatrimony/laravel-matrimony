@@ -27,7 +27,7 @@ class BlockController extends Controller
     {
         $user = $request->user();
         if (!$user->matrimonyProfile) {
-            return redirect()->route('matrimony.profile.create')
+            return redirect()->route('matrimony.profile.wizard.section', ['section' => 'basic-info'])
                 ->with('error', 'Create your profile first.');
         }
 
@@ -47,7 +47,7 @@ class BlockController extends Controller
     {
         $blocker = $request->user()->matrimonyProfile;
         if (!$blocker) {
-            return redirect()->route('matrimony.profile.create')
+            return redirect()->route('matrimony.profile.wizard.section', ['section' => 'basic-info'])
                 ->with('error', 'Create your profile first.');
         }
 
@@ -88,7 +88,7 @@ class BlockController extends Controller
     {
         $blocker = $request->user()->matrimonyProfile;
         if (!$blocker) {
-            return redirect()->route('matrimony.profile.create')
+            return redirect()->route('matrimony.profile.wizard.section', ['section' => 'basic-info'])
                 ->with('error', 'Create your profile first.');
         }
 

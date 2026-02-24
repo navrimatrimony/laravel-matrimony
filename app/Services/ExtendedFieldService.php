@@ -110,6 +110,12 @@ class ExtendedFieldService
         }
     }
 
+    /** Public wrapper for MutationService (PART-2); same as internal normalizeValue. */
+    public static function normalizeValueForMutation(FieldRegistry $field, $value): ?string
+    {
+        return static::normalizeValue($field, $value);
+    }
+
     public static function validateValue(FieldRegistry $field, $value): bool
     {
         if ($value === null || $value === '') {

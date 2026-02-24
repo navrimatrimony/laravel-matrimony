@@ -17,7 +17,7 @@
                     You haven't created your matrimony profile yet.
                 </p>
 
-                <a href="{{ route('matrimony.profile.create') }}"
+                <a href="{{ route('matrimony.profile.wizard', 'basic-info') }}"
                    class="inline-block px-6 py-3 bg-red-600 text-white rounded hover:bg-red-700 transition">
                     Create Matrimony Profile
                 </a>
@@ -83,14 +83,11 @@
                             @if ($profile->date_of_birth)
                                 <span class="bg-red-50 text-red-700 px-3 py-1 rounded-full">{{ \Carbon\Carbon::parse($profile->date_of_birth)->age }} yrs</span>
                             @endif
-                            @php
-                                $loc = $profile->city?->name ?? $profile->state?->name ?? $profile->country?->name ?? null;
-                            @endphp
-                            @if ($loc)
-                                <span class="bg-red-50 text-red-700 px-3 py-1 rounded-full">{{ $loc }}</span>
+                            @if ($profile->location)
+                                <span class="bg-red-50 text-red-700 px-3 py-1 rounded-full">{{ ucfirst($profile->location) }}</span>
                             @endif
-                            @if ($profile->education)
-                                <span class="bg-red-50 text-red-700 px-3 py-1 rounded-full">{{ ucfirst($profile->education) }}</span>
+                            @if ($profile->highest_education)
+                                <span class="bg-red-50 text-red-700 px-3 py-1 rounded-full">{{ ucfirst($profile->highest_education) }}</span>
                             @endif
                         </div>
 
@@ -117,7 +114,7 @@
                                class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition text-sm font-medium">
                                 View My Profile
                             </a>
-                            <a href="{{ route('matrimony.profile.edit') }}"
+                            <a href="{{ route('matrimony.profile.wizard.section', ['section' => 'full']) }}"
                                class="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition text-sm font-medium">
                                 Edit Profile
                             </a>

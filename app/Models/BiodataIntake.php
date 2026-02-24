@@ -49,6 +49,7 @@ class BiodataIntake extends Model
         });
 
         static::updating(function (BiodataIntake $model): void {
+            // Phase-5 Day-18 SSOT: raw_ocr_text MUST NEVER be modified after intake creation.
             if ($model->isDirty('raw_ocr_text')) {
                 throw new \RuntimeException('raw_ocr_text is immutable and cannot be changed.');
             }
@@ -58,7 +59,7 @@ class BiodataIntake extends Model
             ) {
                 throw new \RuntimeException('Locked biodata intake cannot be updated.');
             }
-            if ($model->approved_by_user && $model->isDirty('approval_snapshot_json')) {
+            if ($model->getOriginal('approved_by_user') && $model->isDirty('approval_snapshot_json')) {
                 throw new \RuntimeException('approval_snapshot_json cannot be changed after approval.');
             }
         });

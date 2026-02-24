@@ -10,7 +10,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  */
 class City extends Model
 {
-    protected $fillable = ['taluka_id', 'name'];
+    protected $fillable = ['taluka_id', 'name', 'pincode'];
 
     public function taluka(): BelongsTo
     {
