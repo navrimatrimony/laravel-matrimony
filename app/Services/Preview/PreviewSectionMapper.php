@@ -48,12 +48,17 @@ class PreviewSectionMapper
         'narrative' => 'extended_narrative',
     ];
 
+    /** Section keys that store a single value (string/null) rather than array. */
+    private const SCALAR_SECTIONS = ['property_summary', 'horoscope', 'narrative'];
+
     public function map(array $parsedJson): array
     {
         $out = [];
         foreach (self::SOURCE_KEYS as $sectionKey => $sourceKey) {
-            $data = $parsedJson[$sourceKey] ?? [];
-            if (!is_array($data)) {
+            $data = $parsedJson[$sourceKey] ?? null;
+            if (in_array($sectionKey, self::SCALAR_SECTIONS, true)) {
+                $data = is_scalar($data) || $data === null ? $data : (string) $data;
+            } elseif (!is_array($data)) {
                 $data = [];
             }
             $out[$sectionKey] = [

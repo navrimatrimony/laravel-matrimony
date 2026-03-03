@@ -1,3 +1,4 @@
+{{-- Shaadi.com-aligned Step 2: Education, profession, income, height/weight/body type, family. --}}
 <div class="space-y-6">
     <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100 border-b border-gray-200 dark:border-gray-700 pb-2">Personal and family</h2>
     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -67,6 +68,21 @@
                 @endforeach
             </select>
         </div>
+        <div>
+            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Weight (kg)</label>
+            <input type="number" name="weight_kg" value="{{ old('weight_kg', $profile->weight_kg) }}" step="0.1" min="0" class="w-full rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-3 py-2">
+        </div>
+        <div>
+            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Body type</label>
+            <select name="physical_build_id" class="form-select w-full rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-3 py-2">
+                <option value="">Select Body type</option>
+                @foreach($physicalBuilds ?? [] as $pb)
+                    <option value="{{ $pb->id }}" {{ old('physical_build_id', $profile->physical_build_id) == $pb->id ? 'selected' : '' }}>{{ $pb->label }}</option>
+                @endforeach
+            </select>
+        </div>
     </div>
-    <p class="text-sm text-gray-500 dark:text-gray-400">Add children, education and career history from Full Edit after completing the wizard.</p>
+    <div id="children-section">
+        <p class="text-sm text-gray-500 dark:text-gray-400">Add children, education and career history from Full Edit after completing the wizard.</p>
+    </div>
 </div>

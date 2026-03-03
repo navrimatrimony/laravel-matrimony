@@ -60,6 +60,19 @@ class ManualSnapshotBuilderService
         ];
         $core = array_map(fn ($v) => $v === '' ? null : $v, $core);
 
+        // Phase-5 Point 7: optional photo in full edit — same handling as wizard photo step
+        if ($request->hasFile('profile_photo')) {
+            $request->validate(['profile_photo' => ['image', 'max:2048']]);
+            $file = $request->file('profile_photo');
+            $filename = time() . '_' . basename($file->getClientOriginalName());
+            $file->move(public_path('uploads/matrimony_photos'), $filename);
+            $photoApprovalRequired = \App\Services\AdminSettingService::isPhotoApprovalRequired();
+            $core['profile_photo'] = $filename;
+            $core['photo_approved'] = ! $photoApprovalRequired;
+            $core['photo_rejected_at'] = null;
+            $core['photo_rejection_reason'] = null;
+        }
+
         $contacts = [];
         $phone = trim((string) $request->input('primary_contact_number', ''));
         if ($phone !== '') {
@@ -266,6 +279,23 @@ class ManualSnapshotBuilderService
             ]];
         }
 
+        $marriages = [];
+        if ($request->has('marriages')) {
+            foreach ($request->input('marriages', []) as $row) {
+                $marriages[] = [
+                    'id' => $row['id'] ?? null,
+                    'marital_status_id' => $row['marital_status_id'] ?? null,
+                    'marriage_year' => $row['marriage_year'] ?? null,
+                    'separation_year' => $row['separation_year'] ?? null,
+                    'divorce_year' => $row['divorce_year'] ?? null,
+                    'spouse_death_year' => $row['spouse_death_year'] ?? null,
+                    'divorce_status' => $row['divorce_status'] ?? null,
+                    'remarriage_reason' => $row['remarriage_reason'] ?? null,
+                    'notes' => $row['notes'] ?? null,
+                ];
+            }
+        }
+
         return [
             'core' => $core,
             'contacts' => $contacts,
@@ -284,6 +314,7 @@ class ManualSnapshotBuilderService
             'legal_cases' => $legal_cases,
             'preferences' => $preferences,
             'extended_narrative' => $extended_narrative,
+            'marriages' => $marriages,
         ];
     }
 

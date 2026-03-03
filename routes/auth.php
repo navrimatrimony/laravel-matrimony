@@ -36,6 +36,11 @@ Route::middleware('guest')->group(function () {
 });
 
 Route::middleware('auth')->group(function () {
+    Route::get('mobile-verify', [\App\Http\Controllers\Auth\MobileOtpController::class, 'show'])->name('mobile.verify');
+    Route::get('mobile-verify/skip', [\App\Http\Controllers\Auth\MobileOtpController::class, 'skip'])->name('mobile.verify.skip');
+    Route::post('mobile-verify/send', [\App\Http\Controllers\Auth\MobileOtpController::class, 'sendOtp'])->name('mobile.verify.send');
+    Route::post('mobile-verify/verify', [\App\Http\Controllers\Auth\MobileOtpController::class, 'verifyOtp'])->name('mobile.verify.submit');
+
     Route::get('verify-email', EmailVerificationPromptController::class)
         ->name('verification.notice');
 

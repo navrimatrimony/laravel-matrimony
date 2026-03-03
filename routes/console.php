@@ -9,3 +9,4 @@ Artisan::command('inspire', function () {
 })->purpose('Display an inspiring quote');
 
 Schedule::command('notifications:cleanup')->daily();
+Schedule::job(new \App\Jobs\NightlyOcrLearningJob)->dailyAt('02:00');

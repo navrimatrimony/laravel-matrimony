@@ -1,6 +1,8 @@
 <?php
 
 use Illuminate\Support\Facades\Route;
+use App\Models\Caste;
+use App\Models\SubCaste;
 use App\Http\Controllers\MatrimonyProfileController;
 use App\Http\Controllers\ProfileWizardController;
 use App\Http\Controllers\InterestController;
@@ -17,14 +19,15 @@ use App\Http\Controllers\Admin\AdminProfileTagController;
 use App\Http\Controllers\Admin\AdminIntakeController;
 use App\Http\Controllers\Admin\LocationSuggestionWebController;
 use App\Http\Controllers\Admin\GovernanceDashboardController;
-use App\Http\Controllers\Admin\AdminCasteController;
+use App\Http\Controllers\Admin\OcrPatternController;
 use App\Http\Controllers\Admin\AdminReligionController;
+use App\Http\Controllers\Admin\AdminCasteController;
 use App\Http\Controllers\Admin\SubCasteAdminController;
 use App\Http\Controllers\Internal\Admin\LocationSuggestionAdminController;
 use App\Http\Controllers\Internal\Admin\CityAliasAdminController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\IntakeController;
-
+use App\Models\BiodataIntake;
 /*
 |--------------------------------------------------------------------------
 | Public Routes
@@ -59,30 +62,56 @@ Route::middleware('auth')->group(function () {
     /*
     | Phase-5: User-side Intake UI (user-access path /intake/...)
     */
+    Route::get('/intake', [IntakeController::class, 'index'])->name('intake.index');
     Route::get('/intake/upload', [IntakeController::class, 'uploadForm'])->name('intake.upload');
     Route::post('/intake/upload', [IntakeController::class, 'store'])->name('intake.store');
     Route::get('/intake/preview/{intake}', [IntakeController::class, 'preview'])->name('intake.preview');
     Route::post('/intake/approve/{intake}', [IntakeController::class, 'approve'])->name('intake.approve');
     Route::get('/intake/approval', [IntakeController::class, 'approval'])->name('intake.approval');
-    Route::get('/intake/status', [IntakeController::class, 'status'])->name('intake.status');
+    Route::get('/intake/status/{intake}', [IntakeController::class, 'status'])
+    ->name('intake.status');
+	
+    Route::get('/api/intake-status/{intake}', function (BiodataIntake $intake) {
+    return response()->json([
+        'parse_status'     => $intake->parse_status,
+        'approved_by_user' => (bool) $intake->approved_by_user,
+        'intake_status'    => $intake->intake_status,
+    ]);
+});
 
     /*
-    | Matrimony Profile (Phase-5B: wizard-only create/edit — architectural freeze)
+    | Matrimony Profile (Phase-5B: wizard is the only create path; create/store disallowed — Point 5)
     */
-    Route::get('/matrimony/profile/wizard', function () {
+    Route::get('/matrimony/profile/create', function () {
         return redirect()->route('matrimony.profile.wizard.section', ['section' => 'basic-info']);
-    })->name('matrimony.profile.wizard');
+    })->name('matrimony.profile.create');
+
+    Route::post('/matrimony/profile/store', function () {
+        return redirect()->route('matrimony.profile.wizard.section', ['section' => 'basic-info'])
+            ->with('info', 'Please use the profile wizard to create or update your profile.');
+    })->name('matrimony.profile.store');
+
+    Route::get('/matrimony/profile/wizard', [ProfileWizardController::class, 'index'])
+        ->name('matrimony.profile.wizard');
     Route::get('/matrimony/profile/wizard/{section}', [ProfileWizardController::class, 'show'])
         ->name('matrimony.profile.wizard.section')
-        ->where('section', 'basic-info|personal-family|location|property|horoscope|legal|about-preferences|contacts|photo|full');
+        ->where('section', 'basic-info|marriages|personal-family|siblings|relatives|alliance|location|property|horoscope|legal|about-preferences|contacts|photo|full');
     Route::post('/matrimony/profile/wizard/{section}', [ProfileWizardController::class, 'store'])
         ->name('matrimony.profile.wizard.store')
-        ->where('section', 'basic-info|personal-family|location|property|horoscope|legal|about-preferences|contacts|photo|full');
+        ->where('section', 'basic-info|marriages|personal-family|siblings|relatives|alliance|location|property|horoscope|legal|about-preferences|contacts|photo|full');
 
-    Route::get('/matrimony/profile/edit', function () {
-        return redirect()->route('matrimony.profile.wizard.section', ['section' => 'full']);
-    })->name('matrimony.profile.edit');
+    Route::get('/matrimony/profile/wizard/marriage-fields', [ProfileWizardController::class, 'marriageFields'])
+        ->name('matrimony.profile.wizard.marriage-fields');
 
+    Route::get('/matrimony/profile/edit', [MatrimonyProfileController::class, 'edit'])
+        ->name('matrimony.profile.edit');
+
+    Route::get('/matrimony/profile/edit-full', [MatrimonyProfileController::class, 'editFull'])
+        ->name('matrimony.profile.edit-full');
+
+    Route::post('/matrimony/profile/update-full', [MatrimonyProfileController::class, 'updateFull'])
+        ->name('matrimony.profile.update-full');
+		
 	Route::get('/matrimony/profile/upload-photo', [MatrimonyProfileController::class, 'uploadPhoto'])
     ->name('matrimony.profile.upload-photo');
 
@@ -212,30 +241,6 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
         ->name('profiles.soft-delete');
 
     /*
-    | Sub-caste approval (Phase-5)
-    */
-    Route::get('/sub-castes/pending', [SubCasteAdminController::class, 'pending'])->name('sub-castes.pending');
-    Route::post('/sub-castes/{id}/approve', [SubCasteAdminController::class, 'approve'])->name('sub-castes.approve');
-
-    /*
-    | Master Data: Religion, Caste, SubCaste (Phase-5)
-    */
-    Route::prefix('master')->name('master.')->group(function () {
-        Route::resource('religions', AdminReligionController::class)->except(['show', 'destroy']);
-        Route::post('religions/{religion}/disable', [AdminReligionController::class, 'disable'])->name('religions.disable');
-        Route::post('religions/{religion}/enable', [AdminReligionController::class, 'enable'])->name('religions.enable');
-
-        Route::resource('castes', AdminCasteController::class)->except(['show', 'destroy']);
-        Route::post('castes/{caste}/disable', [AdminCasteController::class, 'disable'])->name('castes.disable');
-        Route::post('castes/{caste}/enable', [AdminCasteController::class, 'enable'])->name('castes.enable');
-
-        Route::resource('sub-castes', SubCasteAdminController::class)->only(['index', 'edit', 'update']);
-        Route::post('sub-castes/{subCaste}/merge', [SubCasteAdminController::class, 'merge'])->name('sub-castes.merge');
-        Route::post('sub-castes/{subCaste}/disable', [SubCasteAdminController::class, 'disable'])->name('sub-castes.disable');
-        Route::post('sub-castes/{subCaste}/enable', [SubCasteAdminController::class, 'enable'])->name('sub-castes.enable');
-    });
-
-    /*
     | Image Moderation
     */
     Route::post('/profiles/{profile}/approve-image', [AdminController::class, 'approveImage'])
@@ -265,6 +270,12 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
         ->name('ocr-simulation.execute');
 
     /*
+    | Day-30: OCR Patterns Governance (view, filter, toggle is_active)
+    */
+    Route::get('/ocr-patterns', [OcrPatternController::class, 'index'])->name('ocr-patterns.index');
+    Route::post('/ocr-patterns/{pattern}/toggle-active', [OcrPatternController::class, 'toggleActive'])->name('ocr-patterns.toggle-active');
+
+    /*
     | Abuse Reports
     */
     Route::get('/abuse-reports', [AbuseReportController::class, 'index'])
@@ -278,6 +289,13 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
 
     Route::get('/governance-dashboard', [GovernanceDashboardController::class, 'index'])
         ->name('governance-dashboard');
+
+    /*
+    | Master Data (Religions, Castes, Sub-castes) — layout expects admin.master.*.index
+    */
+    Route::get('/master/religions', [AdminReligionController::class, 'index'])->name('master.religions.index');
+    Route::get('/master/castes', [AdminCasteController::class, 'index'])->name('master.castes.index');
+    Route::get('/master/sub-castes', [SubCasteAdminController::class, 'index'])->name('master.sub-castes.index');
 
     Route::prefix('internal')->group(function () {
         Route::get('/location-suggestions', [LocationSuggestionAdminController::class, 'index']);
@@ -323,6 +341,12 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
     Route::get('/demo-search-settings', [AdminController::class, 'demoSearchSettings'])->name('demo-search-settings.index');
     Route::post('/demo-search-settings', [AdminController::class, 'updateDemoSearchSettings'])->name('demo-search-settings.update');
 
+    Route::get('/photo-approval-settings', [AdminController::class, 'photoApprovalSettings'])->name('photo-approval-settings.index');
+    Route::post('/photo-approval-settings', [AdminController::class, 'updatePhotoApprovalSettings'])->name('photo-approval-settings.update');
+
+    Route::get('/mobile-verification-settings', [AdminController::class, 'mobileVerificationSettings'])->name('mobile-verification-settings.index');
+    Route::post('/mobile-verification-settings', [AdminController::class, 'updateMobileVerificationSettings'])->name('mobile-verification-settings.update');
+
     Route::get('/profile-field-config', [AdminController::class, 'profileFieldConfigIndex'])->name('profile-field-config.index');
     Route::post('/profile-field-config', [AdminController::class, 'profileFieldConfigUpdate'])->name('profile-field-config.update');
 
@@ -361,10 +385,17 @@ require __DIR__.'/auth.php';
 
 // Temporary debug route — Phase-5 Day-12 verification. Remove before production.
 
-use App\Http\Controllers\Api\CasteLookupController;
 
-Route::middleware('auth')->group(function () {
-    Route::get('/api/castes/{religionId}', [CasteLookupController::class, 'getCastes'])->where('religionId', '[0-9]+');
-    Route::get('/api/subcastes/{casteId}', [CasteLookupController::class, 'getSubCastes'])->where('casteId', '[0-9]+');
-    Route::post('/api/sub-castes', [CasteLookupController::class, 'createSubCaste']);
+Route::get('/api/castes/{religionId}', function ($religionId) {
+    return Caste::where('religion_id', $religionId)
+        ->where('is_active', true)
+        ->orderBy('label')
+        ->get(['id','label']);
+});
+
+Route::get('/api/subcastes/{casteId}', function ($casteId) {
+    return SubCaste::where('caste_id', $casteId)
+        ->where('is_active', true)
+        ->orderBy('label')
+        ->get(['id','label']);
 });

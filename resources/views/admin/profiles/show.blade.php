@@ -401,12 +401,15 @@
         </div>
 
         <div class="mb-6 flex flex-col items-center">
-            @if ($matrimonyProfile->profile_photo && $matrimonyProfile->photo_approved !== false)
+            @if ($matrimonyProfile->profile_photo)
                 <img
                     src="{{ asset('uploads/matrimony_photos/'.$matrimonyProfile->profile_photo) }}"
                     alt="Profile Photo"
                     class="w-40 h-40 rounded-full object-cover border"
                 />
+                @if ($matrimonyProfile->photo_approved === false && empty($matrimonyProfile->photo_rejected_at))
+                    <span class="mt-2 inline-block px-3 py-1 text-xs font-semibold bg-amber-100 text-amber-800 dark:bg-amber-900/50 dark:text-amber-200 rounded">Photo pending review</span>
+                @endif
             @else
                 @php
                     $gender = $matrimonyProfile->gender ?? null;

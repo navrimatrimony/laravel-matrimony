@@ -36,7 +36,7 @@
                 <div class="mb-4 px-4 py-3 rounded-lg bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 text-red-800 dark:text-red-200 text-sm">{{ $errors->first() }}</div>
             @endif
 
-            <form method="POST" action="{{ route('matrimony.profile.wizard.store', ['section' => $currentSection]) }}" enctype="{{ ($currentSection ?? '') === 'photo' ? 'multipart/form-data' : 'application/x-www-form-urlencoded' }}">
+            <form method="POST" action="{{ route('matrimony.profile.wizard.store', ['section' => $currentSection]) }}" enctype="{{ in_array($currentSection ?? '', ['photo', 'full'], true) ? 'multipart/form-data' : 'application/x-www-form-urlencoded' }}">
                 @csrf
 
                 @include('matrimony.profile.wizard.sections.' . str_replace('-', '_', $currentSection ?? 'basic_info'))

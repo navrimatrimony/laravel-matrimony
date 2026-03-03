@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Block;
 use App\Models\Interest;
 use App\Models\MatrimonyProfile;
 use App\Notifications\InterestAcceptedNotification;
@@ -70,6 +71,16 @@ public function store(MatrimonyProfile $matrimony_profile_id)
         );
     }
 
+    // 🔒 GUARD: Receiver has blocked sender → do not reveal
+    if (Block::where('blocker_profile_id', $receiverProfile->id)->where('blocked_profile_id', $senderProfile->id)->exists()) {
+        return back()->with('error', 'You cannot send interest to this profile.');
+    }
+
+    // 🔒 GUARD: Sender has blocked receiver
+    if (Block::where('blocker_profile_id', $senderProfile->id)->where('blocked_profile_id', $receiverProfile->id)->exists()) {
+        return back()->with('error', 'You have blocked this profile. Unblock to send interest.');
+    }
+
     // 🔒 Safety check (defensive)
     if (!$senderProfile || !$receiverProfile) {
         abort(403, 'Matrimony profile missing');
@@ -136,7 +147,7 @@ if (!$authUser->matrimonyProfile) {
 
         $myProfileId = auth()->user()->matrimonyProfile->id;
 
-        $sentInterests = Interest::with('receiverProfile')
+        $sentInterests = Interest::with('receiverProfile.gender')
             ->where('sender_profile_id', $myProfileId)
             ->latest()
             ->get();
@@ -165,7 +176,7 @@ if (!$authUser->matrimonyProfile) {
 
         $myProfileId = auth()->user()->matrimonyProfile->id;
 
-        $receivedInterests = Interest::with('senderProfile')
+        $receivedInterests = Interest::with('senderProfile.gender')
             ->where('receiver_profile_id', $myProfileId)
             ->latest()
             ->get();

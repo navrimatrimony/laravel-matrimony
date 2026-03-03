@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Caste;
 use App\Models\MatrimonyProfile;
 use App\Models\SubCaste;
+use App\Services\MutationService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
@@ -54,7 +55,8 @@ class SubCasteAdminController extends Controller
     }
 
     /**
-     * Merge this sub-caste into another: reassign profiles to merge_into_id, then soft disable this one.
+     * Merge this sub-caste into another: reassign profiles via MutationService (Phase-5 Point 6 governance).
+     * Then soft disable this sub-caste.
      */
     public function merge(Request $request, SubCaste $subCaste): RedirectResponse
     {
@@ -63,7 +65,18 @@ class SubCasteAdminController extends Controller
         if ($mergeIntoId === $subCaste->id) {
             return redirect()->back()->with('error', 'Cannot merge into itself.');
         }
-        MatrimonyProfile::where('sub_caste_id', $subCaste->id)->update(['sub_caste_id' => $mergeIntoId]);
+        $actorId = (int) auth()->id();
+        $profiles = MatrimonyProfile::where('sub_caste_id', $subCaste->id)->get();
+        $mutation = app(MutationService::class);
+        $snapshot = ['core' => ['sub_caste_id' => $mergeIntoId]];
+        foreach ($profiles as $profile) {
+            try {
+                $mutation->applyManualSnapshot($profile, $snapshot, $actorId, 'admin');
+            } catch (\Throwable $e) {
+                report($e);
+                return redirect()->back()->with('error', 'Merge failed for one or more profiles: ' . $e->getMessage());
+            }
+        }
         $subCaste->update(['is_active' => false]);
         return redirect()->route('admin.master.sub-castes.index')->with('success', 'Sub-caste merged and disabled.');
     }

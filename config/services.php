@@ -40,4 +40,19 @@ return [
         'path' => env('TESSERACT_PATH'),
     ],
 
+    /*
+    | Vision API (image-to-text, e.g. Google Cloud Vision).
+    | Use config('services.vision.key') and config('services.vision.url') in code.
+    */
+    'vision' => [
+        'key' => env('VISION_API_KEY'),
+        'url' => env('VISION_API_URL', 'https://vision.googleapis.com/v1/images:annotate'),
+    ],
+
+    'openai' => [
+        'key' => env('OPENAI_API_KEY'),
+        'url' => env('OPENAI_API_URL', 'https://api.openai.com/v1/chat/completions'),
+        'model' => env('OPENAI_MODEL', 'gpt-4o-mini'),
+    ],
+
 ];

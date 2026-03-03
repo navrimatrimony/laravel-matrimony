@@ -30,6 +30,11 @@ return new class extends Migration
         $this->migrateByKey($t, 'ownership_type', 'ownership_type_id', 'master_ownership_types');
 
         Schema::table($t, function (Blueprint $schema) use ($t) {
+            foreach (['asset_type' => 'profile_property_assets_asset_type_index', 'ownership_type' => 'profile_property_assets_ownership_type_index'] as $col => $idx) {
+                if (Schema::hasColumn($t, $col) && $this->indexExists($t, $idx)) {
+                    $schema->dropIndex($idx);
+                }
+            }
             $drops = [];
             if (Schema::hasColumn($t, 'asset_type')) {
                 $drops[] = 'asset_type';
@@ -110,10 +115,30 @@ return new class extends Migration
     private function fkExists(string $table, string $name): bool
     {
         $conn = Schema::getConnection();
+        if ($conn->getDriverName() === 'sqlite') {
+            $r = $conn->select("SELECT sql FROM sqlite_master WHERE type = 'table' AND tbl_name = ?", [$table]);
+            $sql = $r[0]->sql ?? '';
+            return str_contains($sql, 'REFERENCES') && str_contains($sql, $name);
+        }
         $db = $conn->getDatabaseName();
         $result = $conn->select(
             "SELECT CONSTRAINT_NAME FROM information_schema.TABLE_CONSTRAINTS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? AND CONSTRAINT_TYPE = 'FOREIGN KEY' AND CONSTRAINT_NAME = ?",
             [$db, $table, $name]
+        );
+        return count($result) > 0;
+    }
+
+    private function indexExists(string $table, string $indexName): bool
+    {
+        $conn = Schema::getConnection();
+        if ($conn->getDriverName() === 'sqlite') {
+            $result = $conn->select("SELECT name FROM sqlite_master WHERE type = 'index' AND tbl_name = ? AND name = ?", [$table, $indexName]);
+            return count($result) > 0;
+        }
+        $db = $conn->getDatabaseName();
+        $result = $conn->select(
+            "SELECT INDEX_NAME FROM information_schema.STATISTICS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? AND INDEX_NAME = ? LIMIT 1",
+            [$db, $table, $indexName]
         );
         return count($result) > 0;
     }

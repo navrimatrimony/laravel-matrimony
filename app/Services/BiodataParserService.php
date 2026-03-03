@@ -21,7 +21,7 @@ class BiodataParserService
     private const CONF_THRESHOLD_NO_OVERWRITE = 0.8;
 
     /** Keywords to trigger optional entity extraction */
-    private const PROPERTY_TRIGGER = ['शेती', 'एकर', 'प्लॉट', 'फ्लॅट', 'स्थावर', 'गुऱ्हे'];
+    private const PROPERTY_TRIGGER = ['शेती', 'एकर', 'प्लॉट', 'फ्लॅट', 'स्थावर', 'गुऱ्हे', 'स्थायिक', 'मालमत्ता'];
     private const LEGAL_TRIGGER = ['केस', 'कोर्ट', 'प्रकरण', 'maintenance', 'divorce case'];
     private const HOROSCOPE_TRIGGER = ['राशी', 'नक्षत्र', 'गण', 'नाडी', 'लग्नराशी'];
     private const PREFERENCES_TRIGGER = ['अपेक्षा', 'Looking for', 'Bride should'];
@@ -40,14 +40,25 @@ class BiodataParserService
     private const DEGREE_KEYWORDS = ['B.A', 'B.Com', 'B.Sc', 'M.Sc', 'MSC', 'BE', 'BAMS', 'MBBS', 'B.E', 'B.Tech', 'M.Com', 'BA', 'BCom', 'BSc'];
 
     /** Occupation keywords for career validation. */
-    private const OCCUPATION_KEYWORDS = ['नोकरी', 'व्यवसाय', 'वेतन', 'engineer', 'software', 'teacher', 'doctor', 'clerk', 'business', 'सरकारी', 'खाजगी'];
+    private const OCCUPATION_KEYWORDS = ['नोकरी', 'व्यवसाय', 'वेतन', 'शेती', 'engineer', 'software', 'teacher', 'doctor', 'clerk', 'business', 'सरकारी', 'खाजगी', 'Limited', 'BPO', 'operator', 'Field', 'Home', 'I.T', 'Co ', 'Forge'];
 
     /** Caste dictionary (exact match). */
-    private const CASTE_DICTIONARY = ['मराठा', 'ब्राह्मण', 'वैश्य', 'धनगर', 'माळी', 'जैन', 'मुस्लिम'];
+    private const CASTE_DICTIONARY = [
+    'मराठा',
+    'ब्राह्मण',
+    'देशस्थ',
+    'लिंगायत',
+    'धनगर',
+    'माळी',
+    'जैन',
+    'मुस्लिम'
+];
 
     public function parse(string $rawText): array
     {
-        $text = $this->normalizeText($rawText);
+        // SSOT Day-27: Apply baseline normalization (Devanagari digits + noise removal)
+        $text = \App\Services\Ocr\OcrNormalize::normalizeRawText($rawText);
+        $text = $this->normalizeText($text);
         $text = $this->removeWatermarkNoise($text);
         $text = $this->sanitizeDocument($text);
         $lines = array_map('trim', explode("\n", $text));
@@ -58,35 +69,69 @@ class BiodataParserService
         $contactText = implode("\n", $sections['CONTACT'] ?? []);
         $confidence = [];
 
+        // ——— Romanized/garbled OCR fallback (e.g. PDF font exports मुलीचे नाव as eqykps ukao) ———
+        $romanized = $this->extractFromRomanizedLabels($text);
+
         // ——— CORE: section-aware → label → regex → dictionary (order per PART 4) ———
-        $fullName = $this->extractFieldAfterLabels($personalText, ['नाव', 'मुलाचे नाव', 'मुलीचे नाव', 'Name']);
-        $fullName = $fullName ?? $this->extractFieldAfterLabels($text, ['नाव', 'मुलाचे नाव', 'मुलीचे नाव', 'Name']);
+        // Prefer name from line that STARTS with नाव/मुलाचे नाव/मुलीचे नाव so we don't take नांवटस नाव (nakshatra) as full name
+        $fullName = $this->extractFullNameFromLineStart($text);
+        $fullName = $fullName ?? $this->extractAfterLabelNextLine($text, 'मुलीचे नाव') ?? $this->extractAfterLabelNextLine($text, 'मुलाचे नाव');
+        $fullName = $fullName ?? $this->extractFieldAfterLabels($personalText, ['मुलाचे नाव', 'मुलीचे नाव', 'नाव', 'Name', 'Full name', 'Full Name']);
+        $fullName = $fullName ?? $this->extractFieldAfterLabels($text, ['मुलाचे नाव', 'मुलीचे नाव', 'नाव', 'Name', 'Full name', 'Full Name']);
+        $fullName = $fullName ?? (isset($romanized['full_name']) ? $this->validateFullName($this->cleanRomanizedName($romanized['full_name'])) : null);
         $fullName = $this->validateFullName($fullName);
         $confidence['full_name'] = $fullName !== null ? self::CONF_DIRECT : self::CONF_MISSING;
 
-        $birthDateRaw = $this->extractFieldAfterLabels($personalText, ['जन्मतारीख', 'जन्म दिनांक', 'DOB']);
-        $birthDateRaw = $birthDateRaw ?? $this->extractFieldAfterLabels($text, ['जन्मतारीख', 'जन्म दिनांक', 'DOB']);
-        $dateOfBirth = $this->normalizeDate($birthDateRaw);
-        if ($dateOfBirth === null && preg_match('/\b(\d{1,2}\/\d{1,2}\/\d{4})\b/', $text, $dateMatch)) {
-            $dateOfBirth = $this->normalizeDate($dateMatch[1]);
+        $birthDateRaw = $this->extractFieldAfterLabels($personalText, ['जन्मतारीख', 'जन्म दिनांक', 'DOB', 'Date of Birth', 'Birth Date', 'Date of birth']);
+        $birthDateRaw = $birthDateRaw ?? $this->extractFieldAfterLabels($text, ['जन्मतारीख', 'जन्म दिनांक', 'DOB', 'Date of Birth', 'Birth Date', 'Date of birth']);
+        $birthDateRaw = $birthDateRaw ?? $romanized['date_of_birth_raw'] ?? null;
+        // SSOT Day-27: Apply baseline normalization + patterns
+        $dateOfBirth = \App\Services\Ocr\OcrNormalize::normalizeDate($birthDateRaw);
+        if ($dateOfBirth) {
+            $dateOfBirth = \App\Services\Ocr\OcrNormalize::applyBaselinePatterns('date_of_birth', $dateOfBirth);
         }
+        // Fallback to existing normalizeDate if OcrNormalize returns original value
+        if ($dateOfBirth === $birthDateRaw) {
+            $dateOfBirth = $this->normalizeDate($birthDateRaw);
+        }
+        if ($dateOfBirth === null &&
+    preg_match('/\b(\d{1,2}[\/\.\-@]\d{1,2}[\/\.\-@]\d{2,4})\b/u', $text, $dateMatch)) {
+    $dateOfBirth = $this->normalizeDate(str_replace('@', '-', $dateMatch[1]));
+}
         $confidence['date_of_birth'] = $dateOfBirth !== null ? self::CONF_DIRECT : self::CONF_MISSING;
 
         $heightRaw = $this->extractFieldAfterLabels($personalText, ['उंची', 'Height']);
         $heightRaw = $heightRaw ?? $this->extractFieldAfterLabels($text, ['उंची', 'Height']);
-        $heightCm = $this->normalizeHeight($heightRaw);
+        // SSOT Day-27: Apply baseline normalization + patterns
+        $heightNormalized = \App\Services\Ocr\OcrNormalize::normalizeHeight($heightRaw);
+        if ($heightNormalized && $heightNormalized !== $heightRaw) {
+            $heightNormalized = \App\Services\Ocr\OcrNormalize::applyBaselinePatterns('height', $heightNormalized);
+        }
+        // Convert normalized height string to cm for storage (existing logic)
+        $heightCm = $this->normalizeHeight($heightNormalized ?? $heightRaw);
         if ($heightCm === null) {
             $heightCm = $this->extractHeightFromText($personalText) ?? $this->extractHeightFromText($text);
         }
+        if ($heightCm === null && isset($romanized['height_cm'])) {
+            $heightCm = $romanized['height_cm'];
+        }
         $confidence['height'] = $heightCm !== null || $heightRaw !== null ? self::CONF_DIRECT : self::CONF_MISSING;
 
-        $education = $this->extractFieldAfterLabels($personalText, ['शिक्षण', 'Education']);
-        $education = $education ?? $this->extractFieldAfterLabels($text, ['शिक्षण', 'Education']);
-        $education = $this->validateEducation($education);
+        $educationRaw = $this->extractAfterLabelMultiline($personalText, 'शिक्षण') ?? $this->extractAfterLabelMultiline($text, 'शिक्षण');
+        $educationRaw = $educationRaw ?? $this->extractFieldAfterLabels($personalText, ['शिक्षण', 'Education']);
+        $educationRaw = $educationRaw ?? $this->extractFieldAfterLabels($text, ['शिक्षण', 'Education']);
+        $educationRaw = $educationRaw ?? $romanized['highest_education'] ?? null;
+        $education = $this->validateEducation($educationRaw);
+        if ($education === null && $educationRaw !== null && mb_strlen(trim($educationRaw)) >= 5) {
+            $education = trim($educationRaw);
+        }
         $confidence['highest_education'] = $education !== null ? self::CONF_DIRECT : self::CONF_MISSING;
 
         $fatherName = $this->extractFieldAfterLabels($familyText, ['वडिलांचे नाव', 'पिता', 'Father']);
         $fatherName = $fatherName ?? $this->extractFieldAfterLabels($text, ['वडिलांचे नाव', 'पिता', 'Father']);
+        $fatherName = $fatherName ?? $this->extractAfterLabelNextLine($text, 'वडिलांचे नाव');
+        $fatherName = $fatherName ?? (isset($romanized['father_name']) ? $this->validateFatherName($this->cleanRomanizedName($romanized['father_name'])) : null);
+        $fatherName = $this->rejectIfLabelNoise($fatherName);
         if ($fatherName !== null) {
             $fatherName = trim(preg_replace('/\(.+\)/', '', $fatherName));
             $fatherName = $fatherName === '' ? null : $fatherName;
@@ -94,22 +139,62 @@ class BiodataParserService
         $fatherName = $this->validateFatherName($fatherName);
         $motherName = $this->extractFieldAfterLabels($familyText, ['आईचे नाव', 'माता', 'Mother']);
         $motherName = $motherName ?? $this->extractFieldAfterLabels($text, ['आईचे नाव', 'माता', 'Mother']);
+        $motherName = $motherName ?? $this->extractAfterLabelNextLine($text, 'आईचे नाव');
+        $motherName = $motherName ?? (isset($romanized['mother_name']) ? $this->validateMotherName($this->cleanRomanizedName($romanized['mother_name'])) : null);
+        $motherName = $this->rejectIfLabelNoise($motherName);
         $motherName = $this->validateMotherName($motherName);
         $confidence['father_name'] = $fatherName !== null ? self::CONF_DIRECT : self::CONF_MISSING;
         $confidence['mother_name'] = $motherName !== null ? self::CONF_DIRECT : self::CONF_MISSING;
 
         $brotherCount = $this->extractCount($familyText, ['भाऊ', 'बंधू', 'Brother']) ?? $this->extractCount($text, ['भाऊ', 'बंधू', 'Brother']);
-        $sisterCount = $this->extractCount($familyText, ['बहिण', 'Sister']) ?? $this->extractCount($text, ['बहिण', 'Sister']);
+        $sisterCount = $this->extractCount($familyText, ['बहिण', 'बहीण', 'Sister']) ?? $this->extractCount($text, ['बहिण', 'बहीण', 'Sister']);
         $confidence['brother_count'] = $brotherCount !== null ? self::CONF_REGEX : self::CONF_MISSING;
         $confidence['sister_count'] = $sisterCount !== null ? self::CONF_REGEX : self::CONF_MISSING;
 
+        // SSOT Day-30: extended biodata fields (additive); reject values that are known labels (wrong assignment)
+        $birthTime = $this->rejectIfLabelNoise($this->extractField($personalText, ['जन्म वेळ', 'Birth time']) ?? $this->extractField($text, ['जन्म वेळ', 'Birth time']));
+        $birthPlace = $this->rejectIfLabelNoise($this->extractField($personalText, ['जन्म स्थळ', 'Birth place']) ?? $this->extractField($text, ['जन्म स्थळ', 'Birth place']));
+        $gotra = $this->rejectIfLabelNoise($this->extractField($personalText, ['गोत्र']) ?? $this->extractField($text, ['गोत्र']));
+        $kuldaivat = $this->rejectIfLabelNoise($this->extractField($personalText, ['कुल दैवत', 'कुलदैवत']) ?? $this->extractField($text, ['कुल दैवत', 'कुलदैवत']));
+        $rashi = $this->rejectIfLabelNoise($this->extractField($horoscopeText, ['रास', 'टाशी', 'राशी']) ?? $this->extractField($text, ['रास', 'टाशी', 'राशी']));
+        $nadi = $this->rejectIfLabelNoise($this->extractField($horoscopeText, ['नाडी']) ?? $this->extractField($text, ['नाडी']));
+        // Prefer label-style "गण :- value" so we don't capture text after "गण" in "गणपती" (मामा line)
+        $gan = $this->rejectIfLabelNoise($this->extractFieldAfterLabels($horoscopeText, ['गण']) ?? $this->extractFieldAfterLabels($text, ['गण']) ?? $this->extractField($horoscopeText, ['गण']) ?? $this->extractField($text, ['गण']));
+        $mangalik = $this->rejectIfLabelNoise($this->extractField($text, ['मांगलिक']));
+        $varna = $this->extractField($personalText, ['वर्ण']) ?? $this->extractField($text, ['वर्ण']);
+        $varna = $this->validateVarna($varna);
+        $motherOccupation = $this->extractField($familyText, ['आईचा व्यवसाय', 'माता व्यवसाय']) ?? $this->extractField($text, ['आईचा व्यवसाय']);
+        $fatherOccupation = $this->extractField($familyText, ['वडिलांचे व्यवसाय', 'पिता व्यवसाय']) ?? $this->extractField($text, ['वडिलांचे व्यवसाय']);
+        $mama = $this->rejectIfLabelNoise($this->extractField($familyText, ['मामा']) ?? $this->extractField($text, ['मामा']));
+        $relatives = $this->rejectIfLabelNoise($this->extractField($familyText, ['इतर पाहुणे', 'नातेसंबंध']) ?? $this->extractField($text, ['इतर पाहुणे', 'नातेसंबंध']));
+
         $gender = $this->inferGender($text);
+        $gender = $gender ?? $romanized['gender'] ?? null;
         $religion = $this->extractField($text, ['धर्म', 'Religion']);
-        $caste = $this->extractFieldAfterLabels($horoscopeText, ['वर्ण', 'जात', 'Caste']);
+        $religion = $religion ?? $romanized['religion'] ?? null;
+        if ($religion === null) {
+            if (preg_match('/जात\s*[:\-]?\s*हिंदु/u', $text) || preg_match('/जात\s*[:\-]?\s*हिंदू/u', $text)) {
+                $religion = 'हिंदू';
+            } elseif (preg_match('/हिंदू\s*[-]?\s*मराठा|हिंदूमटाठा|हिंदु\s*[-]?\s*मराठा/u', $text)) {
+                $religion = 'हिंदू';
+            } elseif (preg_match('/जात\s*[:\-]?\s*मुस्लिम/u', $text)) {
+                $religion = 'Muslim';
+            } elseif (preg_match('/जात\s*[:\-]?\s*जैन/u', $text)) {
+                $religion = 'Jain';
+            }
+        }
+        $caste = $this->extractFieldAfterLabels($text, ['जात', 'Caste', 'Community']);
+        $caste = $caste ?? $romanized['caste'] ?? null;
         if ($caste === null) {
-            $caste = $this->extractCasteByDictionary($horoscopeText);
+            $caste = $this->extractCasteByDictionary($text);
         }
         $caste = $this->normalizeCasteValue($caste);
+        if ($caste !== null && preg_match('/^हिंदू\s*[-]?\s*(.+)$/u', $caste, $m)) {
+            $caste = trim($m[1]);
+        }
+        if ($caste !== null && preg_match('/^हिंदूमटाठा$/u', $caste)) {
+            $caste = 'मराठा';
+        }
         $caste = $this->validateCaste($caste);
         $subCaste = $this->extractField($text, ['उपजात', 'Sub caste']);
         $maritalRaw = $this->extractField($text, ['वैवाहिक स्थिती', 'Marital status']);
@@ -121,10 +206,12 @@ class BiodataParserService
             $confidence['marital_status'] = $maritalStatus !== null ? self::CONF_DIRECT : self::CONF_MISSING;
         }
 
-        $salaryRaw = $this->extractField($text, ['पगार', 'वेतन', 'Package', 'वार्षिक उत्पन्न']);
+        $salaryRaw = $this->extractField($text, ['मासिक वेतन', 'पगार', 'वेतन', 'वेतन/उत्पन्न', 'Package', 'वार्षिक उत्पन्न']);
         $salary = $this->normalizeSalary($salaryRaw);
         $annualIncome = null;
-        if (! empty($salary['annual_lakh'])) {
+        if (isset($salary['annual_lakh_float']) && $salary['annual_lakh_float'] > 0) {
+            $annualIncome = (int) round($salary['annual_lakh_float'] * 100000);
+        } elseif (! empty($salary['annual_lakh'])) {
             $annualIncome = (int) $salary['annual_lakh'] * 100000;
         } elseif (! empty($salary['annual_raw'])) {
             $annualIncome = (int) $salary['annual_raw'];
@@ -135,10 +222,24 @@ class BiodataParserService
         }
         $confidence['annual_income'] = $annualIncome !== null ? self::CONF_DIRECT : self::CONF_MISSING;
 
-        $primaryContact = $this->extractPrimaryContactNumber($contactText) ?? $this->extractPrimaryContactNumber($text);
+        $primaryContactRaw = $this->extractPrimaryContactNumber($contactText) ?? $this->extractPrimaryContactNumber($text);
+        // SSOT Day-27: Apply baseline normalization + patterns
+        $primaryContact = \App\Services\Ocr\OcrNormalize::normalizePhone($primaryContactRaw);
+        if ($primaryContact && $primaryContact !== $primaryContactRaw) {
+            $primaryContact = \App\Services\Ocr\OcrNormalize::applyBaselinePatterns('primary_contact_number', $primaryContact);
+        }
         $confidence['primary_contact_number'] = $primaryContact !== null ? self::CONF_DIRECT : self::CONF_MISSING;
 
-        $bloodGroup = $this->normalizeBloodGroup($this->extractField($text, ['रक्तगट', 'Blood group']));
+        $bloodGroupRaw = $this->extractField($text, ['रक्तगट', 'Blood group']);
+        // SSOT Day-27: Apply baseline normalization + patterns
+        $bloodGroup = \App\Services\Ocr\OcrNormalize::normalizeBloodGroup($bloodGroupRaw);
+        if ($bloodGroup) {
+            $bloodGroup = \App\Services\Ocr\OcrNormalize::applyBaselinePatterns('blood_group', $bloodGroup);
+        }
+        // Fallback to existing normalizeBloodGroup if OcrNormalize returns original value
+        if ($bloodGroup === $bloodGroupRaw) {
+            $bloodGroup = $this->normalizeBloodGroup($bloodGroupRaw);
+        }
         $confidence['blood_group'] = $bloodGroup !== null ? self::CONF_DIRECT : self::CONF_MISSING;
 
         $addressBlock = $this->extractAddressBlock($contactText) ?? $this->extractAddressBlock($text);
@@ -162,6 +263,19 @@ class BiodataParserService
             'sister_count' => $sisterCount,
             'height_cm' => $heightCm,
             'highest_education' => $education,
+            'birth_time' => $birthTime,
+            'birth_place' => $birthPlace,
+            'gotra' => $gotra,
+            'kuldaivat' => $kuldaivat,
+            'rashi' => $rashi,
+            'nadi' => $nadi,
+            'gan' => $gan,
+            'mangalik' => $mangalik,
+            'varna' => $varna,
+            'mother_occupation' => $motherOccupation,
+            'father_occupation' => $fatherOccupation,
+            'mama' => $mama,
+            'relatives' => $relatives,
         ];
 
         // ——— RELATIONS (with confidence) ———
@@ -185,7 +299,8 @@ class BiodataParserService
         }
 
         // ——— CAREER (gender-sensitive) ———
-        $profession = $this->extractField($text, ['नोकरी', 'व्यवसाय', 'Profession', 'Occupation']);
+        $profession = $this->extractField($text, ['नोकरी/व्यवसाय', 'नोकटी/व्यवसाय', 'नोकरी', 'व्यवसाय', 'Profession', 'Occupation']);
+        $profession = $profession ?? $romanized['career'] ?? null;
         $profession = $this->validateCareer($profession);
         $careerHistory = [];
         if ($profession !== null) {
@@ -204,17 +319,33 @@ class BiodataParserService
             $educationHistory = [['degree' => $education, 'institution' => null, 'year' => null]];
         }
 
-        // ——— CONTACTS ———
+        // ——— CONTACTS (primary first, then all 10-digit numbers from text) ———
         $contacts = [];
         if ($primaryContact !== null) {
             $contacts[] = ['number' => $primaryContact, 'type' => 'primary'];
+        }
+        if (preg_match_all('/\b([6-9]\d{9})\b/', $text, $allMatches)) {
+            $seen = array_fill_keys(array_column($contacts, 'number'), true);
+            foreach (array_unique($allMatches[1]) as $num) {
+                $normalized = \App\Services\Ocr\OcrNormalize::normalizePhone($num);
+                if ($normalized !== null && ! isset($seen[$normalized])) {
+                    $seen[$normalized] = true;
+                    $contacts[] = ['number' => $normalized, 'type' => count($contacts) === 0 ? 'primary' : 'alternate'];
+                }
+            }
+            if ($primaryContact !== null && ! empty($contacts)) {
+                foreach ($contacts as $i => $c) {
+                    $contacts[$i]['type'] = $c['number'] === $primaryContact ? 'primary' : 'alternate';
+                }
+            }
         }
 
         // ——— OPTIONAL: Property ———
         $propertySummary = null;
         $propertyAssets = [];
         if ($this->hasAnyKeyword($text, self::PROPERTY_TRIGGER)) {
-            $propertySummary = $this->extractField($text, ['शेती', 'जमीन', 'Property']);
+            $propertySummary = $this->extractPropertySummaryBlock($text);
+            $propertySummary = $propertySummary ?? $this->extractField($text, ['स्थायिक मालमत्ता', 'शेती', 'जमीन', 'Property']);
             $propertyAssets = [];
             $confidence['property'] = $propertySummary !== null ? self::CONF_REGEX : self::CONF_AI;
         } else {
@@ -247,7 +378,16 @@ class BiodataParserService
             if ($prefBlock !== null && $prefBlock !== '') {
                 $aiResult = $this->aiParseFragment($prefBlock);
                 $preferences = $aiResult['preferences'] ?? null;
-                $confidence['preferences'] = $preferences !== null ? self::CONF_AI : self::CONF_MISSING;
+                if ($preferences === null || (is_array($preferences) && empty($preferences))) {
+                    $prefRaw = $this->extractField($text, ['अपेक्षा']) ?? $prefBlock;
+                    if ($prefRaw !== null && trim($prefRaw) !== '') {
+                        $preferences = is_array($prefRaw) ? $prefRaw : [['text' => trim($prefRaw)]];
+                        if (isset($preferences[0]) && ! is_array($preferences[0])) {
+                            $preferences = [['text' => (string) $preferences[0]]];
+                        }
+                    }
+                }
+                $confidence['preferences'] = $preferences !== null && ! (is_array($preferences) && empty($preferences)) ? self::CONF_REGEX : self::CONF_MISSING;
             } else {
                 $confidence['preferences'] = self::CONF_MISSING;
             }
@@ -256,7 +396,20 @@ class BiodataParserService
         }
 
         // ——— AI FALLBACK for low-confidence or ambiguous ———
-        $coreKeys = ['full_name', 'date_of_birth', 'gender', 'religion', 'caste', 'sub_caste', 'marital_status', 'annual_income', 'family_income', 'primary_contact_number', 'serious_intent_id', 'father_name', 'mother_name', 'brother_count', 'sister_count', 'height_cm', 'highest_education'];
+$coreKeys = [
+    'sub_caste',
+    'marital_status',
+    'annual_income',
+    'family_income',
+    'primary_contact_number',
+    'serious_intent_id',
+    'father_name',
+    'mother_name',
+    'brother_count',
+    'sister_count',
+    'height_cm',
+    'highest_education'
+];
         foreach ($coreKeys as $k) {
             if (! array_key_exists($k, $confidence)) {
                 $confidence[$k] = isset($core[$k]) && $core[$k] !== null && $core[$k] !== '' ? self::CONF_REGEX : self::CONF_MISSING;
@@ -369,7 +522,11 @@ class BiodataParserService
                 $filtered[] = $line;
                 continue;
             }
-            if (mb_strpos($line, 'प्रसन्न') !== false || mb_strpos($line, 'शुभ') !== false || mb_strpos($line, 'भवतु') !== false) {
+            // Skip decorative headers/footers; do NOT skip lines where शुभ is part of a name (e.g. शुभम)
+            if (mb_strpos($line, 'प्रसन्न') !== false || mb_strpos($line, 'भवतु') !== false) {
+                continue;
+            }
+            if (preg_match('/शुभ\s*भवतु/u', $line)) {
                 continue;
             }
             if (preg_match('/^[\s\|।]*$/u', $line) || $line === '||' || $line === '।।') {
@@ -402,13 +559,13 @@ class BiodataParserService
             if ($line === '') {
                 continue;
             }
-            if (mb_strpos($line, 'वडील') !== false || mb_strpos($line, 'आई') !== false || mb_strpos($line, 'भाऊ') !== false || mb_strpos($line, 'बहिण') !== false) {
+            if (mb_strpos($line, 'वडील') !== false || mb_strpos($line, 'आई') !== false || mb_strpos($line, 'भाऊ') !== false || mb_strpos($line, 'बहिण') !== false || mb_strpos($line, 'बहीण') !== false) {
                 $sections['FAMILY'][] = $line;
-            } elseif (mb_strpos($line, 'राशी') !== false || mb_strpos($line, 'नक्षत्र') !== false || mb_strpos($line, 'नाडी') !== false || mb_strpos($line, 'कुलस्वामी') !== false) {
+            } elseif (mb_strpos($line, 'रास') !== false || mb_strpos($line, 'राशी') !== false || mb_strpos($line, 'टाशी') !== false || mb_strpos($line, 'नक्षत्र') !== false || mb_strpos($line, 'नाडी') !== false || mb_strpos($line, 'गण') !== false || mb_strpos($line, 'कुलस्वामी') !== false || mb_strpos($line, 'मांगलिक') !== false) {
                 $sections['HOROSCOPE'][] = $line;
             } elseif (mb_strpos($line, 'मु.पो.') !== false || mb_strpos($line, 'ता.') !== false || mb_strpos($line, 'जि.') !== false || mb_strpos($line, 'संपर्क') !== false) {
                 $sections['CONTACT'][] = $line;
-            } elseif (mb_strpos($line, 'जन्म') !== false || mb_strpos($line, 'उंची') !== false || mb_strpos($line, 'शिक्षण') !== false) {
+            } elseif (mb_strpos($line, 'जन्म') !== false || mb_strpos($line, 'उंची') !== false || mb_strpos($line, 'शिक्षण') !== false || mb_strpos($line, 'गोत्र') !== false || mb_strpos($line, 'कुलदैवत') !== false || mb_strpos($line, 'वर्ण') !== false) {
                 $sections['PERSONAL'][] = $line;
             } else {
                 $sections['OTHER'][] = $line;
@@ -458,20 +615,42 @@ class BiodataParserService
                 $grouped['CAREER'][] = $line;
             } elseif (mb_strpos($line, 'शिक्षण') !== false || preg_match($degreePattern, $line)) {
                 $grouped['EDUCATION'][] = $line;
-            } elseif (mb_strpos($line, 'राशी') !== false || mb_strpos($line, 'नक्षत्र') !== false || mb_strpos($line, 'नाडी') !== false) {
+            } elseif (mb_strpos($line, 'रास') !== false || mb_strpos($line, 'राशी') !== false || mb_strpos($line, 'नक्षत्र') !== false || mb_strpos($line, 'नाडी') !== false) {
                 $grouped['HOROSCOPE'][] = $line;
             }
         }
         return $grouped;
     }
 
-    /** full_name: 2–4 Marathi words; reject प्रसन्न, कुळी, >4 words, punctuation-heavy. */
+    /** full_name: 2–4 Marathi words; reject प्रसन्न, कुळी, नावरस नाव, >5 words, punctuation-heavy. */
     private function validateFullName(?string $value): ?string
     {
         if ($value === null || $value === '') {
             return null;
         }
-        if (mb_strpos($value, 'प्रसन्न') !== false || mb_strpos($value, 'कुळी') !== false) {
+        $value = trim($value);
+        if ($value === '' || $value === 'नावरस नाव' || $value === 'नांवटस नाव') {
+            return null;
+        }
+        $words = preg_split('/\s+/u', $value, -1, PREG_SPLIT_NO_EMPTY);
+        if (count($words) < 2) {
+            return null;
+        }
+        if (count($words) > 5) {
+            return null;
+        }
+        if (preg_match('/^कु+\.|^चि\./u', $value) && count($words) >= 2) {
+            if (mb_strpos($value, 'प्रसन्न') === false && mb_strpos($value, 'जन्म') === false && mb_strpos($value, 'उंची') === false) {
+                return $value;
+            }
+        }
+        if (mb_strpos($value, 'प्रसन्न') !== false) {
+            return null;
+        }
+        if (mb_strpos($value, 'कुळी') !== false) {
+            if (preg_match('/^कु+\.|^चि\./u', $value)) {
+                return $value;
+            }
             return null;
         }
         foreach (self::NAME_NOISE as $noise) {
@@ -485,22 +664,14 @@ class BiodataParserService
             }
         }
         $words = preg_split('/\s+/u', $value, -1, PREG_SPLIT_NO_EMPTY);
-        if (count($words) > 4) {
+        if (count($words) > 5) {
             return null;
         }
         $punctOnly = preg_replace('/[\p{L}\p{N}\s]/u', '', $value);
         if ($punctOnly !== '' && mb_strlen($punctOnly) >= 3) {
             return null;
         }
-        $marathiCount = 0;
-        foreach ($words as $w) {
-            if (preg_match('/[\x{0900}-\x{097F}]/u', $w)) {
-                $marathiCount++;
-            }
-        }
-        if (preg_match('/[\x{0900}-\x{097F}]/u', $value) && ($marathiCount < 2 || $marathiCount > 4)) {
-            return null;
-        }
+       
         if (count($words) < 2) {
             return null;
         }
@@ -514,6 +685,10 @@ class BiodataParserService
             return null;
         }
         $v = trim($value);
+        // OCR variant: मटाठा -> मराठा
+        if (mb_strpos($v, 'मटाठा') !== false) {
+            $v = str_replace('मटाठा', 'मराठा', $v);
+        }
         if (preg_match('/[-:\d]/u', $v)) {
             $tokens = preg_split('/[\s\-:,\d]+/u', $v, -1, PREG_SPLIT_NO_EMPTY);
             foreach ($tokens as $token) {
@@ -636,10 +811,44 @@ class BiodataParserService
 
     /**
      * Extract value after label only. Stops at newline. Returns null if no match or value equals label.
+     * When label is "नाव", reject match if it is part of "नावरस नाव" or "नांवटस नाव" (nakshatra label).
      */
     private function extractAfterLabel(string $text, string $label): ?string
     {
-        $pattern = '/' . preg_quote($label, '/') . '\s*[:\-]?\s*([^\n]+)/u';
+        $pattern = '/' . preg_quote($label, '/') . '\s*[:\-]{0,5}\s*([^\n]+)/u';
+        if (preg_match($pattern, $text, $match) && isset($match[1])) {
+            $value = trim($match[1]);
+            if ($value === '' || $value === trim($label)) {
+                return null;
+            }
+            if (($label === 'नाव' || $label === 'मुलाचे नाव' || $label === 'मुलीचे नाव') && (mb_strpos($match[0], 'नावरस') !== false || mb_strpos($match[0], 'नांवटस') !== false)) {
+                return null;
+            }
+            $cleaned = $this->cleanValue($value);
+            return $cleaned === '' ? null : $cleaned;
+        }
+        return null;
+    }
+
+    /** Extract value when it appears on the next line after label (e.g. "मुलीचे नाव\nकु. प्राजक्ता..."). */
+    private function extractAfterLabelNextLine(string $text, string $label): ?string
+    {
+        $pattern = '/' . preg_quote($label, '/') . '\s*[:\-]?\s*\n\s*[:\-]?\s*([^\n]+)/u';
+        if (preg_match($pattern, $text, $match) && isset($match[1])) {
+            $value = trim($match[1]);
+            if ($value === '' || $value === trim($label)) {
+                return null;
+            }
+            $cleaned = $this->cleanValue($value);
+            return $cleaned === '' ? null : $cleaned;
+        }
+        return null;
+    }
+
+    /** Extract value after label, allowing value to span until next double newline OR next label line (for शिक्षण). */
+    private function extractAfterLabelMultiline(string $text, string $label): ?string
+    {
+        $pattern = '/' . preg_quote($label, '/') . '\s*[:\->\s]{0,5}\s*(.+?)(?=\n\s*\n|\n\s*(?:वर्ण|रास\s|कुलदैवत|उंची|गोत्र|नाडी|गण\s*[:\-]|जात\s|नोकरी|वेतन|पत्ता|मुलाचे|मुलीचे|जन्म\s|रक्त|कौटुंबिक|वडिलांचे|आईचे|चुलते|भाऊ|बहिण|बहीण|मामा|नातेसंबंध|संपर्क|अपेक्षा)|$)/us';
         if (preg_match($pattern, $text, $match) && isset($match[1])) {
             $value = trim($match[1]);
             if ($value === '' || $value === trim($label)) {
@@ -654,16 +863,116 @@ class BiodataParserService
     private function cleanValue(string $value): string
     {
         $value = trim($value);
-        $value = preg_replace('/^[\-\sx>:\.,]+/u', '', $value);
+        $value = preg_replace('/^[\-\sx>:\.,_]+/u', '', $value);
         $value = preg_replace('/\s*x\s*$/u', '', $value);
         foreach (self::OCR_BLACKLIST_WORDS as $word) {
             $value = preg_replace('/\b' . preg_quote($word, '/') . '\b/iu', ' ', $value);
         }
         $value = preg_replace('/\s+/u', ' ', trim($value));
         if (mb_strlen($value) < 3) {
+            // Allow short degree codes (BA, B.A, M.Sc, etc.)
+            if (preg_match('/^[A-Za-z\.]+$/u', $value) && mb_strlen($value) >= 2) {
+                return $value;
+            }
             return '';
         }
         return $value;
+    }
+
+    /**
+     * Extract full name from a line that STARTS with नाव / मुलाचे नाव / मुलीचे नाव.
+     * Avoids matching नांवटस नाव or नावरस नाव (nakshatra name) which appears later in the doc.
+     * Old rules kept: still falls back to extractFieldAfterLabels if this returns null.
+     */
+    private function extractFullNameFromLineStart(string $text): ?string
+    {
+        $lines = explode("\n", $text);
+        // 1) First line that starts with "नाव" (not नांवटस/नावरस) and has ": value" — use regex for robustness.
+        //    Allow optional leading digits + space (e.g. "4 नाव :- ...") so OCR line numbers don't break extraction.
+        foreach ($lines as $line) {
+            $t = trim($line);
+            if ($t === '' || mb_strpos($t, 'नांवटस') !== false || mb_strpos($t, 'नावरस') !== false) {
+                continue;
+            }
+            if (preg_match('/^\s*नाव\s*[:\-：]\s*(.+)$/u', $t, $mm)) {
+                $val = $this->cleanValue(trim($mm[1]));
+                if ($val !== '') {
+                    $valid = $this->validateFullName($val);
+                    if ($valid !== null) {
+                        return $valid;
+                    }
+                }
+            } elseif (preg_match('/^\s*[0-9]+\s*नाव\s*[:\-：]\s*(.+)$/u', $t, $mm)) {
+                $val = $this->cleanValue(trim($mm[1]));
+                if ($val !== '') {
+                    $valid = $this->validateFullName($val);
+                    if ($valid !== null) {
+                        return $valid;
+                    }
+                }
+            }
+        }
+        // 2) Same for मुलाचे नाव / मुलीचे नाव (old rule)
+        foreach ($lines as $line) {
+            $t = trim($line);
+            if ($t === '') {
+                continue;
+            }
+            if (mb_strpos($t, 'नावरस') !== false || mb_strpos($t, 'नांवटस') !== false) {
+                continue;
+            }
+            foreach (['मुलाचे नाव', 'मुलीचे नाव'] as $label) {
+                $len = mb_strlen($label);
+                if (mb_strlen($t) >= $len + 2 && mb_substr($t, 0, $len) === $label) {
+                    $after = mb_substr($t, $len);
+                    if (preg_match('/^\s*[:\-]\s*(.+)$/u', $after, $mm)) {
+                        $val = $this->cleanValue(trim($mm[1]));
+                        if ($val !== '') {
+                            $valid = $this->validateFullName($val);
+                            if ($valid !== null) {
+                                return $valid;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        // 3) Regex fallback (old rule)
+        $lineStartPatterns = [
+            '/^(?:[^\n]*\n)*\s*मुलाचे\s+नाव\s*[:\-]\s*([^\n]+)/u',
+            '/^(?:[^\n]*\n)*\s*मुलीचे\s+नाव\s*[:\-]\s*([^\n]+)/u',
+            '/^(?:[^\n]*\n)*\s*नाव\s*[:\-]\s*([^\n]+)/u',
+        ];
+        foreach ($lineStartPatterns as $pattern) {
+            if (preg_match($pattern, $text, $m)) {
+                $candidate = trim($m[1]);
+                if (mb_strpos($candidate, 'नावरस') !== false || mb_strpos($candidate, 'नांवटस') !== false) {
+                    continue;
+                }
+                $value = $this->cleanValue($candidate);
+                if ($value !== '' && $this->validateFullName($value) !== null) {
+                    return $this->validateFullName($value);
+                }
+            }
+        }
+        // 4) Line-by-line regex (old rule)
+        $nameLabels = ['मुलाचे नाव', 'मुलीचे नाव', 'नाव'];
+        foreach ($lines as $line) {
+            $line = trim($line);
+            if ($line === '' || mb_strpos($line, 'नावरस') !== false || mb_strpos($line, 'नांवटस') !== false) {
+                continue;
+            }
+            foreach ($nameLabels as $label) {
+                $pattern = '/^\s*' . preg_quote($label, '/') . '\s*[:\-]{0,5}\s*(.+)$/u';
+                if (preg_match($pattern, $line, $m)) {
+                    $value = $this->cleanValue(trim($m[1]));
+                    if ($value !== '' && $this->validateFullName($value) !== null) {
+                        return $this->validateFullName($value);
+                    }
+                }
+            }
+        }
+        return null;
     }
 
     private function extractFieldAfterLabels(string $text, array $labels): ?string
@@ -679,11 +988,27 @@ class BiodataParserService
 
     private function extractPrimaryContactNumber(string $text): ?string
     {
-        $contactStr = $this->extractFieldAfterLabels($text, ['संपर्क क्रमांक', 'Contact']);
-        if ($contactStr !== null && preg_match('/\b([6-9]\d{9})\b/', $contactStr, $m)) {
+        $contactStr = $this->extractFieldAfterLabels($text, ['संपर्क क्रमांक', 'मोबाईल नं', 'मोबाईल नंबर', 'Contact', 'Mobile']);
+        if ($contactStr !== null) {
+            $normalized = \App\Services\Ocr\OcrNormalize::normalizePhone(preg_replace('/\s+/', '', $contactStr));
+            if ($normalized !== null) {
+                return $normalized;
+            }
+            if (preg_match('/\b([6-9]\d{9})\b/', $contactStr, $m)) {
+                return $m[1];
+            }
+        }
+        if (preg_match('/\b([6-9]\d{9})\b/', $text, $m)) {
             return $m[1];
         }
-        return $this->extractFieldRegex($text, '/\b([6-9]\d{9})\b/');
+        // 5+5 digits with space/slash (e.g. 73509 53384, 96733 50078)
+        if (preg_match('/\b([6-9]\d{4})\s*\/?\s*(\d{5})\b/', $text, $m)) {
+            $combined = $m[1] . $m[2];
+            if (preg_match('/^[6-9]\d{9}$/', $combined)) {
+                return $combined;
+            }
+        }
+        return null;
     }
 
     private function extractField(string $text, array $labels): ?string
@@ -705,11 +1030,53 @@ class BiodataParserService
         return null;
     }
 
+    /** Reject varna if it looks like another field (contains नोकरी, phone, or too long). */
+    private function validateVarna(?string $value): ?string
+    {
+        if ($value === null || trim($value) === '') {
+            return null;
+        }
+        $v = trim($value);
+        if (mb_strlen($v) > 40 || mb_strpos($v, 'नोकरी') !== false || preg_match('/\d{10}/', $v)) {
+            return null;
+        }
+        return $v;
+    }
+
+    /** Known labels that must not be captured as field values (wrong assignment). */
+    private const LABEL_NOISE = [
+        'जन्म वेळ', 'जन्म स्थळ', 'वर्ण', 'शिक्षण', 'शिक्षिण', 'आईचे नाव', 'वडिलांचे नाव',
+        'नावरस नाव', 'नांवटस नाव', 'जात', 'धर्म', 'उंची', 'गोत्र', 'कुलदैवत', 'नाडी', 'गण',
+        'सध्याचा पत्ता', 'मोबाईल नं', 'कौटुंबिक माहिती', 'संपर्क',
+    ];
+
+    private function rejectIfLabelNoise(?string $value): ?string
+    {
+        if ($value === null || trim($value) === '') {
+            return null;
+        }
+        $v = trim($value);
+        foreach (self::LABEL_NOISE as $label) {
+            if ($v === $label || $v === trim($label)) {
+                return null;
+            }
+        }
+        return $v;
+    }
+
     private function extractCount(string $text, array $labels): ?int
     {
         foreach ($labels as $label) {
             if (preg_match('/' . preg_quote($label, '/') . '\s*[:\-]?\s*(\d+)/u', $text, $m)) {
                 return (int) $m[1];
+            }
+            // एक / १ → 1 (e.g. "भाऊ :- एक अविवाहित")
+            if (preg_match('/' . preg_quote($label, '/') . '\s*[:\s_\-]*(एक|१)\b/um', $text, $m)) {
+                return 1;
+            }
+            // नाही / None / No → 0 (allow optional : _ - and spaces; don't require end-of-line)
+            if (preg_match('/' . preg_quote($label, '/') . '\s*[:\s_\-]*(नाही|None|No\b|०|0)\b/um', $text, $m)) {
+                return 0;
             }
         }
         return null;
@@ -721,7 +1088,7 @@ class BiodataParserService
             return null;
         }
         $value = preg_replace('/\s+/', '', $value);
-        $value = str_replace('/', '-', $value);
+        $value = str_replace(['/', '@'], '-', $value);
         $parts = array_values(array_filter(explode('-', $value)));
         if (count($parts) !== 3) {
             return null;
@@ -757,7 +1124,8 @@ class BiodataParserService
         if ($value === null || $value === '') {
             return null;
         }
-        if (preg_match('/(\d+)\s*फूट\s*(\d+)/u', $value, $m)) {
+        // फूट or फुट, optional space after digit (५फुट ६इंच)
+        if (preg_match('/(\d+)\s*फ[ुू]ट\s*(\d+)/u', $value, $m)) {
             return round((float) $m[1] * 30.48 + (float) $m[2] * 2.54, 2);
         }
         if (preg_match('/(\d+)\'(\d+)/', $value, $m)) {
@@ -772,15 +1140,102 @@ class BiodataParserService
     /** Fallback: search full text for feet/inches patterns and return height in cm. */
     private function extractHeightFromText(string $text): ?float
     {
-        if (preg_match('/(\d)\s*फूट\s*(\d)/u', $text, $m)) {
+        if (preg_match('/(\d{1,2})\s*फ[ुू]ट\s*(\d{1,2})/u', $text, $m)) {
             $totalInches = (int) $m[1] * 12 + (int) $m[2];
             return round($totalInches * 2.54, 2);
         }
-        if (preg_match("/(\d)'\s*(\d)/", $text, $m)) {
+        if (preg_match("/(\d{1,2})'\s*(\d{1,2})/", $text, $m)) {
+            $totalInches = (int) $m[1] * 12 + (int) $m[2];
+            return round($totalInches * 2.54, 2);
+        }
+        // Romanized/garbled: "5 QqV 8 bap" (feet/inch)
+        if (preg_match('/(\d{1,2})\s*QqV\s*(\d{1,2})\s*bap/i', $text, $m)) {
+            $totalInches = (int) $m[1] * 12 + (int) $m[2];
+            return round($totalInches * 2.54, 2);
+        }
+        if (preg_match('/(\d{1,2})\s+\S+\s+(\d{1,2})\s+(?:bap|inch)/i', $text, $m)) {
             $totalInches = (int) $m[1] * 12 + (int) $m[2];
             return round($totalInches * 2.54, 2);
         }
         return null;
+    }
+
+    /**
+     * Extract from romanized/garbled OCR (e.g. PDF font exports Devanagari as Latin: eqykps ukao = मुलीचे नाव).
+     * Returns array with keys: full_name, date_of_birth_raw, gender, height_cm, father_name, mother_name, religion, caste, highest_education, career.
+     */
+    private function extractFromRomanizedLabels(string $text): array
+    {
+        $out = [];
+        // Name: eqykps ukao %& ... (girl) or eqykaps ukao %& ... (boy)
+        if (preg_match('/(?:eqykps|eqykaps)\s+ukao\s*%&\s*([^\n\r]+)/u', $text, $m)) {
+            $out['full_name'] = trim($m[1]);
+            $out['gender'] = strpos($m[0], 'eqykps') !== false ? 'female' : 'male';
+        }
+        // DOB: tUefnukad %& 11@04@1998
+        if (preg_match('/tUefnukad\s*%&\s*([^\n\r]+)/u', $text, $m)) {
+            $out['date_of_birth_raw'] = trim($m[1]);
+        }
+        // Height: maph %& 5 QqV 8 bap
+        if (preg_match('/maph\s*%&\s*(\d{1,2})\s*QqV\s*(\d{1,2})\s*bap/i', $text, $m)) {
+            $totalInches = (int) $m[1] * 12 + (int) $m[2];
+            $out['height_cm'] = round($totalInches * 2.54, 2);
+        }
+        // Caste/Religion: tkr %& fganq&ejkBk (Hindu&Maratha)
+        if (preg_match('/tkr\s*%&\s*([^\n\r]+)/u', $text, $m)) {
+            $val = trim($m[1]);
+            $parts = preg_split('/[&\-\/]/u', $val, 2);
+            $part0 = isset($parts[0]) ? trim($parts[0]) : '';
+            $part1 = isset($parts[1]) ? trim($parts[1]) : '';
+            $romReligion = ['fganq' => 'Hindu', 'eq[kk' => 'Muslim', 'tkfj' => 'Jain', 'Hindu' => 'Hindu', 'Muslim' => 'Muslim', 'Jain' => 'Jain'];
+            $romCaste = ['ejkBk' => 'Maratha', 'Maratha' => 'Maratha', 'xzkg' => 'Brahmin', 'Brahmin' => 'Brahmin'];
+            foreach ($romReligion as $key => $rel) {
+                if (stripos($part0, $key) !== false || stripos($val, $key) !== false) {
+                    $out['religion'] = $rel;
+                    break;
+                }
+            }
+            if ($part0 !== '' && ! isset($out['religion'])) {
+                $out['religion'] = $part0;
+            }
+            foreach ($romCaste as $key => $cst) {
+                if (stripos($part1, $key) !== false || stripos($val, $key) !== false) {
+                    $out['caste'] = $cst;
+                    break;
+                }
+            }
+            if ($part1 !== '' && ! isset($out['caste'])) {
+                $out['caste'] = $part1;
+            }
+        }
+        // Father: ofMykaps ukao %&
+        if (preg_match('/ofMykaps\s+ukao\s*%&\s*([^\n\r]+)/u', $text, $m)) {
+            $out['father_name'] = trim($m[1]);
+        }
+        // Mother: vkbZps ukao %&
+        if (preg_match('/vkbZps\s+ukao\s*%&\s*([^\n\r]+)/u', $text, $m)) {
+            $out['mother_name'] = trim($m[1]);
+        }
+        // Education: f'k{k.k %& B.Com (allow font variants of the middle chars)
+        if (preg_match("/f'k\{k\.k\s*%&\s*([^\n\r]+)/u", $text, $m)) {
+            $out['highest_education'] = trim($m[1]);
+        } elseif (preg_match("/f'k.?k.?k\s*%&\s*([^\n\r]+)/u", $text, $m)) {
+            $out['highest_education'] = trim($m[1]);
+        }
+        // Career: O;olk; %&
+        if (preg_match('/O;olk;\s*%&\s*([^\n\r]+)/u', $text, $m)) {
+            $out['career'] = trim($m[1]);
+        }
+        return $out;
+    }
+
+    /** Clean name from romanized OCR (remove leading fp-/Jh- type prefixes, normalize spaces). */
+    private function cleanRomanizedName(string $value): string
+    {
+        $value = trim($value);
+        $value = preg_replace('/^[fp\-Jh\-lkS\-]+/u', '', $value);
+        $value = preg_replace('/\s+/u', ' ', trim($value));
+        return $value;
     }
 
     /** Fallback: assign caste if dictionary word appears in text. */
@@ -799,13 +1254,22 @@ class BiodataParserService
         if ($value === null || $value === '') {
             return [];
         }
+        // 3.25 Lac / 3.25 Lac. / 2 LAC / 3.25 Lakh / 3.25 लाख -> annual in lakh (float); allow newline between number and LAC
+        if (preg_match('/(\d+(?:\.\d+)?)\s*(?:\n\s*)?(?:Lac\.?|LAC|Lakh|लाख)/ui', $value, $m)) {
+            return ['annual_lakh_float' => (float) $m[1]];
+        }
         if (preg_match('/(\d+)\s*लाख/u', $value, $m)) {
             return ['annual_lakh' => (int) $m[1]];
+        }
+        if (preg_match('/वार्षिक\s*उत्पन्न\s*(\d+(?:\.\d+)?)\s*LAC/ui', $value, $m)) {
+            return ['annual_lakh_float' => (float) $m[1]];
         }
         if (preg_match('/(\d+)[,\s]*वार्षिक/u', $value, $m)) {
             return ['annual_raw' => (int) $m[1]];
         }
-        if (preg_match('/(\d+)/', $value, $m)) {
+        // Only treat as monthly if no "Lac/Lakh/lakh/per year" etc. Strip commas so "35,000" -> 35000.
+        $valueNoComma = str_replace(',', '', $value);
+        if (!preg_match('/Lac|Lakh|लाख|per\s*year|वार्षिक/ui', $value) && preg_match('/(\d+)/', $valueNoComma, $m)) {
             return ['monthly' => (int) $m[1]];
         }
         return [];
@@ -842,12 +1306,55 @@ class BiodataParserService
 
     private function inferGender(string $text): ?string
     {
-        if (preg_match('/मुलीचे\s*नाव|बायकी|Bride|Female/u', $text)) {
+        if (preg_match('/मुलीचे\s*नाव/u', $text)) {
             return 'female';
         }
-        if (preg_match('/मुलाचे\s*नाव|पुरुष|Groom|Male/u', $text)) {
+
+        if (preg_match('/मुलाचे\s*नाव/u', $text)) {
             return 'male';
         }
+
+        // मुलाचे बालपण / मुलाचे चुलते etc. -> boy's biodata
+        if (preg_match('/मुलाचे\s*(बालपण|चुलते|मामा|भाऊ)/u', $text)) {
+            return 'male';
+        }
+        if (preg_match('/मुलीचे\s*(बालपण|चुलते|मामा|भाऊ)/u', $text)) {
+            return 'female';
+        }
+
+        if (preg_match('/\bकु\./u', $text)) {
+            return 'female';
+        }
+
+        if (preg_match('/\bचि\./u', $text)) {
+            return 'male';
+        }
+
+        // English label: Gender: Female / Sex: Male
+        if (preg_match('/(?:Gender|Sex)\s*[:\-]*\s*(\w+)/ui', $text, $m)) {
+            $g = trim($m[1] ?? '');
+            if (stripos($g, 'female') !== false || $g === 'F') {
+                return 'female';
+            }
+            if (stripos($g, 'male') !== false || $g === 'M') {
+                return 'male';
+            }
+        }
+
+        // Standalone English / Marathi words (case-insensitive for English)
+        if (preg_match('/\bfemale\b/ui', $text)) {
+            return 'female';
+        }
+        if (preg_match('/\bmale\b/ui', $text)) {
+            return 'male';
+        }
+        if (preg_match('/\bस्त्री\b/u', $text)) {
+            return 'female';
+        }
+        if (preg_match('/\bपुरुष\b/u', $text)) {
+            return 'male';
+        }
+
         return null;
     }
 
@@ -858,6 +1365,37 @@ class BiodataParserService
         }
         if (preg_match('/Address[:\-]?\s*(.+?)(?=\n\n|\n[अ-हA-Z]|$)/us', $text, $m)) {
             return trim($m[1]);
+        }
+        // संपर्क पत्ता / संपर्क seal (OCR) — require पत्ता|seal so we don't capture "seal" as address; capture until मोबाईल so multiline address included
+        if (preg_match('/(?:संपर्क\s*(?:पत्ता|seal)\s*[:\-]?\s*|oa\s*[:\-]?\s*)(.+?)(?=मोबाईल|\d{10}|$)/us', $text, $m)) {
+            $addr = trim(preg_replace('/\s+/', ' ', $m[1]));
+            if ($addr !== '' && $addr !== 'seal') {
+                return $addr;
+            }
+        }
+        // Lines containing address markers (वॉर्ड, गल्ली, पेठ, बाजार) — join consecutive such lines
+        $lines = explode("\n", $text);
+        $collect = [];
+        foreach ($lines as $line) {
+            $line = trim($line);
+            if ($line === '') {
+                continue;
+            }
+            if (preg_match('/वॉर्ड|गल्ली|पेठ|बाजार|बाजाटगेट|हाऊस|House|Ward|nagar/u', $line)) {
+                $collect[] = $line;
+            }
+        }
+        if (! empty($collect)) {
+            return trim(implode(', ', $collect));
+        }
+        return null;
+    }
+
+    /** Extract multi-line block after "स्थायिक मालमत्ता" (or similar) until next section. */
+    private function extractPropertySummaryBlock(string $text): ?string
+    {
+        if (preg_match('/स्थायिक\s*मालमत्ता\s*[:\-]?\s*(.+?)(?=\n\s*\n|\nकौटुंबिक|\nअपेक्षा|\nसंपर्क|$)/us', $text, $m)) {
+            return trim(preg_replace('/\s+/', ' ', $m[1]));
         }
         return null;
     }
@@ -925,59 +1463,54 @@ class BiodataParserService
      * Confidence: explicit label 0.9, heuristic 0.7.
      */
     private function resolveRelations(string $text): array
-    {
-        $data = [
-            'kaka' => [],
-            'chulate' => [],
-            'mama' => [],
-            'mavshi' => [],
-            'mavshicha_navra' => [],
-        ];
-        $confidence = [];
+{
+    $data = [
+        'kaka' => [],
+        'chulate' => [],
+        'mama' => [],
+        'mavshi' => [],
+        'mavshicha_navra' => [],
+    ];
 
-        $chulatePresent = preg_match('/चुलते\s*[:\-]?\s*(.+)/u', $text, $mChulate);
-        if ($chulatePresent) {
-            $data['chulate'][] = trim($mChulate[1]);
-            $confidence['chulate'] = self::CONF_DIRECT;
-        } else {
-            $confidence['chulate'] = self::CONF_MISSING;
-        }
+    $confidence = [];
 
-        if (preg_match('/मामा\s*[:\-]?\s*(.+)/u', $text, $m)) {
-            $data['mama'][] = trim($m[1]);
-            $confidence['mama'] = self::CONF_DIRECT;
-        } else {
-            $confidence['mama'] = self::CONF_MISSING;
-        }
-
-        if (preg_match('/मावशी\s*[:\-]?\s*(.+)/u', $text, $m)) {
-            $data['mavshi'][] = trim($m[1]);
-            $confidence['mavshi'] = self::CONF_DIRECT;
-        } else {
-            $confidence['mavshi'] = self::CONF_MISSING;
-        }
-
-        if (preg_match('/काका\s*[:\-]?\s*(.+)/u', $text, $m)) {
-            $kakaValue = trim($m[1]);
-            if ($chulatePresent && ! empty($data['chulate'])) {
-                $data['mavshicha_navra'][] = $kakaValue;
-                $confidence['mavshicha_navra'] = self::CONF_HEURISTIC;
-                $confidence['kaka'] = self::CONF_MISSING;
-            } else {
-                $data['kaka'][] = $kakaValue;
-                $confidence['kaka'] = self::CONF_DIRECT;
-                $confidence['mavshicha_navra'] = self::CONF_MISSING;
-            }
-        } else {
-            $confidence['kaka'] = self::CONF_MISSING;
-            if (! isset($confidence['mavshicha_navra'])) {
-                $confidence['mavshicha_navra'] = self::CONF_MISSING;
-            }
-        }
-
-        return [
-            'data' => $data,
-            'confidence' => array_map(fn ($v) => (float) $v, $confidence),
-        ];
+    // चुलते
+    if (preg_match('/चुलते\s*[:\-]?\s*(.+)/u', $text, $m)) {
+        $data['chulate'][] = trim($m[1]);
+        $confidence['chulate'] = self::CONF_DIRECT;
+    } else {
+        $confidence['chulate'] = self::CONF_MISSING;
     }
+
+    // मामा
+    if (preg_match('/मामा\s*[:\-]?\s*(.+)/u', $text, $m)) {
+        $data['mama'][] = trim($m[1]);
+        $confidence['mama'] = self::CONF_DIRECT;
+    } else {
+        $confidence['mama'] = self::CONF_MISSING;
+    }
+
+    // मावशी
+    if (preg_match('/मावशी\s*[:\-]?\s*(.+)/u', $text, $m)) {
+        $data['mavshi'][] = trim($m[1]);
+        $confidence['mavshi'] = self::CONF_DIRECT;
+    } else {
+        $confidence['mavshi'] = self::CONF_MISSING;
+    }
+
+    // काका (direct only — no heuristic)
+    if (preg_match('/काका\s*[:\-]?\s*(.+)/u', $text, $m)) {
+        $data['kaka'][] = trim($m[1]);
+        $confidence['kaka'] = self::CONF_DIRECT;
+    } else {
+        $confidence['kaka'] = self::CONF_MISSING;
+    }
+
+    $confidence['mavshicha_navra'] = self::CONF_MISSING;
+
+    return [
+        'data' => $data,
+        'confidence' => array_map(fn($v) => (float)$v, $confidence),
+    ];
+}
 }

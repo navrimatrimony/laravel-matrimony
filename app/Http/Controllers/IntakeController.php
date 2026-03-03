@@ -22,6 +22,18 @@ use Illuminate\Support\Facades\DB;
 class IntakeController extends Controller
 {
     /**
+     * List current user's biodata intakes (Point 2: User intake history page).
+     */
+    public function index()
+    {
+        $intakes = BiodataIntake::where('uploaded_by', auth()->id())
+            ->orderByDesc('created_at')
+            ->get();
+
+        return view('intake.index', compact('intakes'));
+    }
+
+    /**
      * Show upload form.
      */
     public function uploadForm()
@@ -75,7 +87,8 @@ class IntakeController extends Controller
 
         ParseIntakeJob::dispatch($intake->id);
 
-        return redirect()->route('intake.status')->with('success', 'Intake uploaded successfully.');
+        return redirect()->route('intake.status', $intake->id)
+    ->with('success', 'Intake uploaded successfully.');
     }
 
     /**
@@ -83,8 +96,15 @@ class IntakeController extends Controller
      * When parse_status = 'parsed' and intake has linked profile: transition profile to awaiting_user_approval.
      * No profile mutation in preview; only biodata_intakes may be modified later on approve.
      */
+	 
     public function preview(BiodataIntake $intake)
     {
+        if ((int) $intake->uploaded_by !== (int) auth()->id()) {
+            abort(403, 'You can only preview your own biodata uploads.');
+        }
+        if ($intake->approved_by_user) {
+            return redirect()->route('intake.status', $intake->id);
+        }
         if ($intake->parse_status !== 'parsed') {
             abort(403);
         }
@@ -97,44 +117,83 @@ class IntakeController extends Controller
         $mapper = new PreviewSectionMapper();
         $sections = $mapper->map($data);
 
+        // Display: use approval_snapshot_json['core'] for form values when present, else parsed_json (already in sections).
+        if (! empty($intake->approval_snapshot_json) && is_array($intake->approval_snapshot_json)
+            && isset($intake->approval_snapshot_json['core']) && is_array($intake->approval_snapshot_json['core'])) {
+            $sections['core'] = $sections['core'] ?? [];
+            $sections['core']['data'] = $intake->approval_snapshot_json['core'];
+        }
+
         $confidenceMap = $data['confidence_map'] ?? [];
         if (!is_array($confidenceMap)) {
             $confidenceMap = [];
         }
 
+        // Phase-5C minimal: only these six are required for preview gating (asterisk + सुधारणा आवश्यक).
         $criticalFields = [
             'full_name',
-            'date_of_birth',
             'gender',
+            'date_of_birth',
             'religion',
             'caste',
             'sub_caste',
-            'marital_status',
-            'annual_income',
-            'family_income',
-            'primary_contact_number',
-            'serious_intent_id',
         ];
 
-        $requiredCorrectionFields = []; // confidence < 0.50
-        $warningFields = []; // confidence < 0.75
-        foreach ($confidenceMap as $field => $conf) {
-            $c = (float) $conf;
-            if ($c < 0.50) {
+        // Core source for required-correction check: approval_snapshot_json first, else parsed_json. Not $sections.
+        $approvalCore = null;
+        if (! empty($intake->approval_snapshot_json) && is_array($intake->approval_snapshot_json)
+            && isset($intake->approval_snapshot_json['core']) && is_array($intake->approval_snapshot_json['core'])) {
+            $approvalCore = $intake->approval_snapshot_json['core'];
+        }
+        $coreForRequiredCheck = $approvalCore ?? ($data['core'] ?? []);
+        if (! is_array($coreForRequiredCheck)) {
+            $coreForRequiredCheck = [];
+        }
+
+        // Required correction = Phase-5C fields empty after trim(). confidence_map does NOT affect this.
+        // Religion/Caste/Subcaste: consider filled if either label (religion/caste/sub_caste) or ID (religion_id/caste_id/sub_caste_id) is set.
+        $requiredCorrectionFields = [];
+        foreach ($criticalFields as $field) {
+            $val = $coreForRequiredCheck[$field] ?? null;
+            $trimmed = ($val !== null && $val !== '') ? trim((string) $val) : '';
+            if ($trimmed === '—' || $trimmed === '-') {
+                $trimmed = '';
+            }
+            if ($field === 'religion' && $trimmed === '' && ! empty($coreForRequiredCheck['religion_id'])) {
+                $trimmed = 'set';
+            }
+            if ($field === 'caste' && $trimmed === '' && ! empty($coreForRequiredCheck['caste_id'])) {
+                $trimmed = 'set';
+            }
+            if ($field === 'sub_caste' && $trimmed === '' && ! empty($coreForRequiredCheck['sub_caste_id'])) {
+                $trimmed = 'set';
+            }
+            if ($trimmed === '') {
                 $requiredCorrectionFields[] = $field;
-            } elseif ($c < 0.75) {
+            }
+        }
+
+        // Warning styling only (confidence < 0.75); does not block Approve.
+        $warningFields = [];
+        foreach ($confidenceMap as $field => $conf) {
+            if ((float) $conf < 0.75) {
                 $warningFields[] = $field;
             }
         }
 
-        $coreData = $sections['core']['data'] ?? [];
         $missingCriticalFields = [];
         foreach ($criticalFields as $field) {
-            $val = $coreData[$field] ?? null;
-            if ($val === null || $val === '') {
-                $missingCriticalFields[] = $field;
-            }
-        }
+    $val = $coreForRequiredCheck[$field] ?? null;
+    $trimmed = ($val !== null && $val !== '') ? trim((string) $val) : '';
+
+    if ($trimmed === '—' || $trimmed === '-') {
+        $trimmed = '';
+    }
+
+    if ($trimmed === '') {
+        $missingCriticalFields[] = $field;
+    }
+}
 
         // Day-19: When preview loaded and intake has linked profile with state 'parsed' → awaiting_user_approval
         if ($intake->matrimony_profile_id) {
@@ -166,6 +225,205 @@ class IntakeController extends Controller
             'narrative' => 'extended_narrative',
         ];
 
+        // === No-Empty Required Fields: candidates + best prefill or placeholder ===
+        $requiredCoreFields = [
+            'full_name', 'date_of_birth', 'gender', 'religion', 'caste', 'sub_caste', 'primary_contact_number',
+        ];
+        $suggestionEnabledFields = [
+            'full_name', 'date_of_birth', 'gender', 'religion', 'caste', 'sub_caste',
+            'marital_status', 'primary_contact_number',
+        ];
+        $suggestionMap = [];
+        $coreDataForSuggestion = $sections['core']['data'] ?? [];
+        $rawOcrText = $intake->raw_ocr_text ?? '';
+        $suggestionEngine = app(\App\Services\Ocr\OcrSuggestionEngine::class);
+        $placeholderNotFound = \App\Services\Ocr\OcrSuggestionEngine::PLACEHOLDER_NOT_FOUND;
+        $placeholderSelectRequired = \App\Services\Ocr\OcrSuggestionEngine::PLACEHOLDER_SELECT_REQUIRED;
+        $dropdownRequiredFields = ['religion'];
+        $confThreshold = (float) config('intake.suggestion_autofill_confidence', 0.70);
+        $usageThreshold = (int) config('intake.suggestion_autofill_usage_count', 25);
+
+        foreach ($suggestionEnabledFields as $fieldKey) {
+            $value = $coreDataForSuggestion[$fieldKey] ?? null;
+            $currentValue = $value !== null && $value !== '' ? (is_scalar($value) ? trim((string) $value) : $value) : '';
+            if (is_array($currentValue)) {
+                $currentValue = '';
+            }
+            if ($currentValue === '—' || $currentValue === '-' || $currentValue === '–') {
+                $currentValue = '';
+            }
+
+            $candidates = $suggestionEngine->getCandidates($fieldKey, $currentValue, $rawOcrText);
+            $best = $candidates[0] ?? null;
+            $isRequired = in_array($fieldKey, $requiredCoreFields, true);
+            $currentEmpty = $currentValue === '' || $currentValue === null;
+
+            $casteOriginalOcr = null;
+
+            if ($currentEmpty && $best && $best['value'] !== '' && $best['value'] !== $placeholderNotFound && $best['value'] !== $placeholderSelectRequired) {
+                $selectedValue = $best['value'];
+                $prefillConf = (float) ($best['confidence'] ?? 0);
+                $prefillSource = (string) ($best['source'] ?? 'raw_text');
+                $requiredMissing = false;
+            } elseif ($currentEmpty && $isRequired) {
+                $selectedValue = in_array($fieldKey, $dropdownRequiredFields, true)
+                    ? $placeholderSelectRequired
+                    : $placeholderNotFound;
+                $prefillConf = 0.0;
+                $prefillSource = 'none';
+                $requiredMissing = true;
+            } else {
+                $selectedValue = $currentValue;
+                $prefillConf = $best ? (float) ($best['confidence'] ?? 0) : 0.0;
+                $prefillSource = $best ? (string) ($best['source'] ?? 'none') : 'none';
+                $requiredMissing = false;
+                if ($fieldKey === 'caste' && $currentValue !== '' && $best && (float) ($best['confidence'] ?? 0) >= 0.75) {
+                    $resolved = $suggestionEngine->resolveCasteToCanonical($currentValue);
+                    if ($resolved !== null && $resolved === (string) ($best['value'] ?? '')) {
+                        $selectedValue = $resolved;
+                        $casteOriginalOcr = $currentValue;
+                    }
+                }
+            }
+
+            $needsReview = $prefillConf < 0.85;
+            $mode = ($prefillConf >= $confThreshold && ! $requiredMissing) ? 'auto_prefill' : 'manual_apply';
+
+            $suggestionMap[$fieldKey] = [
+                'field_key' => $fieldKey,
+                'current_value' => $currentValue,
+                'selected_value' => $selectedValue,
+                'suggested_value' => $best['value'] ?? null,
+                'corrected_value' => $best['value'] ?? null,
+                'candidates' => $candidates,
+                'original_value_snapshot' => $currentValue,
+                'original_ocr_value' => $fieldKey === 'caste' ? $casteOriginalOcr : null,
+                'prefill_confidence' => $prefillConf,
+                'prefill_source' => $prefillSource,
+                'prefill_reason' => $currentEmpty && $best ? 'best_candidate' : ($requiredMissing ? 'placeholder' : 'existing'),
+                'needs_review' => $needsReview,
+                'required_missing' => $requiredMissing,
+                'suggestion_source' => $prefillSource,
+                'pattern_confidence' => $prefillConf,
+                'usage_count' => 0,
+                'mode' => $mode,
+                'can_revert' => true,
+            ];
+
+            if ($currentEmpty && ($selectedValue !== $currentValue || $requiredMissing)) {
+                $sections['core']['data'][$fieldKey] = $selectedValue;
+            }
+            if ($fieldKey === 'caste' && $casteOriginalOcr !== null && $selectedValue !== $currentValue) {
+                $sections['core']['data'][$fieldKey] = $selectedValue;
+            }
+        }
+
+        // Caste → Religion fallback: when religion is placeholder and caste has a canonical (current or best candidate), infer religion from DB.
+        $religionEntry = $suggestionMap['religion'] ?? null;
+        $casteEntry = $suggestionMap['caste'] ?? null;
+        if ($religionEntry && $casteEntry) {
+            $relSelected = $religionEntry['selected_value'] ?? '';
+            $casteSelected = $casteEntry['selected_value'] ?? '';
+            $relIsPlaceholder = $relSelected === $placeholderNotFound || $relSelected === $placeholderSelectRequired;
+            $canonicalCaste = null;
+            if ($casteSelected !== '' && $casteSelected !== $placeholderNotFound && $casteSelected !== $placeholderSelectRequired) {
+                $canonicalCaste = $suggestionEngine->resolveCasteToCanonical($casteSelected);
+            }
+            if ($canonicalCaste === null) {
+                $bestCaste = $casteEntry['candidates'][0] ?? null;
+                if ($bestCaste && ($bestCaste['value'] ?? '') !== '' && (float) ($bestCaste['confidence'] ?? 0) >= 0.70) {
+                    $canonicalCaste = $suggestionEngine->resolveCasteToCanonical((string) $bestCaste['value']) === (string) $bestCaste['value']
+                        ? (string) $bestCaste['value']
+                        : null;
+                }
+            }
+            if ($relIsPlaceholder && $canonicalCaste !== null) {
+                $dep = $suggestionEngine->getReligionFromCasteDependency($canonicalCaste);
+                if (! empty($dep['religions'])) {
+                    if ($dep['single']) {
+                        $relLabel = $dep['religions'][0];
+                        $suggestionMap['religion']['selected_value'] = $relLabel;
+                        $suggestionMap['religion']['prefill_confidence'] = 0.75;
+                        $suggestionMap['religion']['prefill_source'] = 'dependency_infer';
+                        $suggestionMap['religion']['suggestion_source'] = 'dependency_infer';
+                        $suggestionMap['religion']['needs_review'] = true;
+                        $suggestionMap['religion']['inferred_from_caste'] = true;
+                        $candidates = $suggestionMap['religion']['candidates'];
+                        $hasDep = false;
+                        foreach ($candidates as $c) {
+                            if (($c['value'] ?? '') === $relLabel && ($c['source'] ?? '') === 'dependency_infer') {
+                                $hasDep = true;
+                                break;
+                            }
+                        }
+                        if (! $hasDep) {
+                            array_unshift($candidates, ['value' => $relLabel, 'confidence' => 0.75, 'source' => 'dependency_infer']);
+                            $suggestionMap['religion']['candidates'] = array_slice($candidates, 0, 3);
+                        }
+                        $suggestionMap['religion']['suggested_value'] = $relLabel;
+                        $suggestionMap['religion']['corrected_value'] = $relLabel;
+                        $sections['core']['data']['religion'] = $relLabel;
+                    } else {
+                        foreach ($dep['religions'] as $r) {
+                            $suggestionMap['religion']['candidates'][] = ['value' => $r, 'confidence' => 0.70, 'source' => 'dependency_infer'];
+                        }
+                        $suggestionMap['religion']['selected_value'] = $placeholderSelectRequired;
+                        $sections['core']['data']['religion'] = $placeholderSelectRequired;
+                    }
+                }
+            }
+        }
+
+        // Build profile-like object for religion-caste-selector (resolve labels to IDs when possible).
+        $coreData = $sections['core']['data'] ?? [];
+        $intakeProfile = (object) [
+            'religion_id' => $coreData['religion_id'] ?? '',
+            'caste_id' => $coreData['caste_id'] ?? '',
+            'sub_caste_id' => $coreData['sub_caste_id'] ?? '',
+            'religion_label' => '',
+            'caste_label' => '',
+            'subcaste_label' => '',
+        ];
+        $relLabel = is_scalar($coreData['religion'] ?? null) ? trim((string) $coreData['religion']) : '';
+        $casteLabel = is_scalar($coreData['caste'] ?? null) ? trim((string) $coreData['caste']) : '';
+        $subLabel = is_scalar($coreData['sub_caste'] ?? null) ? trim((string) $coreData['sub_caste']) : '';
+        if ($relLabel !== '' && $relLabel !== \App\Services\Ocr\OcrSuggestionEngine::PLACEHOLDER_NOT_FOUND && $relLabel !== \App\Services\Ocr\OcrSuggestionEngine::PLACEHOLDER_SELECT_REQUIRED) {
+            $rel = \App\Models\Religion::where('is_active', true)->where('label', $relLabel)->first();
+            if ($rel) {
+                $intakeProfile->religion_id = $rel->id;
+                $intakeProfile->religion_label = $rel->label;
+            } else {
+                $intakeProfile->religion_label = $relLabel;
+            }
+        }
+        if ($intakeProfile->religion_id && $casteLabel !== '' && $casteLabel !== \App\Services\Ocr\OcrSuggestionEngine::PLACEHOLDER_NOT_FOUND && $casteLabel !== \App\Services\Ocr\OcrSuggestionEngine::PLACEHOLDER_SELECT_REQUIRED) {
+            $c = \App\Models\Caste::where('religion_id', $intakeProfile->religion_id)->where('label', $casteLabel)->first();
+            if ($c) {
+                $intakeProfile->caste_id = $c->id;
+                $intakeProfile->caste_label = $c->label;
+            } else {
+                $intakeProfile->caste_label = $casteLabel;
+            }
+        }
+        if ($intakeProfile->caste_id && $subLabel !== '' && $subLabel !== \App\Services\Ocr\OcrSuggestionEngine::PLACEHOLDER_NOT_FOUND && $subLabel !== \App\Services\Ocr\OcrSuggestionEngine::PLACEHOLDER_SELECT_REQUIRED) {
+            $s = \App\Models\SubCaste::where('caste_id', $intakeProfile->caste_id)->where('label', $subLabel)->first();
+            if ($s) {
+                $intakeProfile->sub_caste_id = $s->id;
+                $intakeProfile->subcaste_label = $s->label;
+            } else {
+                $intakeProfile->subcaste_label = $subLabel;
+            }
+        }
+        if ($intakeProfile->religion_label === '' && $relLabel !== '') {
+            $intakeProfile->religion_label = $relLabel;
+        }
+        if ($intakeProfile->caste_label === '' && $casteLabel !== '') {
+            $intakeProfile->caste_label = $casteLabel;
+        }
+        if ($intakeProfile->subcaste_label === '' && $subLabel !== '') {
+            $intakeProfile->subcaste_label = $subLabel;
+        }
+
         return view('intake.preview', compact(
             'intake',
             'sections',
@@ -175,7 +433,11 @@ class IntakeController extends Controller
             'requiredCorrectionFields',
             'warningFields',
             'data',
-            'sectionSourceKeys'
+            'sectionSourceKeys',
+            'suggestionMap',
+            'placeholderNotFound',
+            'placeholderSelectRequired',
+            'intakeProfile'
         ));
     }
 
@@ -185,7 +447,10 @@ class IntakeController extends Controller
      */
     public function approve(Request $request, BiodataIntake $intake)
     {
-        if (!session('preview_seen_' . $intake->id)) {
+        if ((int) $intake->uploaded_by !== (int) auth()->id()) {
+            abort(403, 'You can only approve your own biodata uploads.');
+        }
+        if (! session('preview_seen_' . $intake->id)) {
             abort(403);
         }
 
@@ -198,13 +463,14 @@ class IntakeController extends Controller
         }
 
         $result = app(IntakeApprovalService::class)->approve($intake, (int) auth()->id(), $snapshot);
-        return redirect()->route('intake.status')
-            ->with('success', 'Intake approved successfully.')
-            ->with('mutation_result', $result);
+        return redirect()->route('intake.status', $intake->id)
+    ->with('success', 'Intake approved successfully.')
+    ->with('mutation_result', $result);
     }
 
     /**
      * Ensure snapshot has SSOT top-level keys (all present, empty array when missing).
+     * Scalar keys (horoscope, property_summary, extended_narrative) preserve string/null.
      */
     private function normalizeApprovalSnapshot(array $snapshot): array
     {
@@ -213,9 +479,14 @@ class IntakeController extends Controller
             'addresses', 'property_summary', 'property_assets', 'horoscope',
             'legal_cases', 'preferences', 'extended_narrative', 'confidence_map',
         ];
+        $scalarKeys = ['property_summary', 'horoscope', 'extended_narrative'];
         $out = [];
         foreach ($keys as $k) {
-            $out[$k] = isset($snapshot[$k]) && is_array($snapshot[$k]) ? $snapshot[$k] : [];
+            if (in_array($k, $scalarKeys, true)) {
+                $out[$k] = array_key_exists($k, $snapshot) ? $snapshot[$k] : null;
+            } else {
+                $out[$k] = isset($snapshot[$k]) && is_array($snapshot[$k]) ? $snapshot[$k] : [];
+            }
         }
         return $out;
     }
@@ -231,8 +502,12 @@ class IntakeController extends Controller
     /**
      * Show status.
      */
-    public function status()
+    public function status(BiodataIntake $intake)
     {
-        return view('intake.status');
+        if ((int) $intake->uploaded_by !== (int) auth()->id()) {
+            abort(403, 'You can only view status of your own biodata uploads.');
+        }
+
+        return view('intake.status', compact('intake'));
     }
 }

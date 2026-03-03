@@ -148,6 +148,21 @@ class MatrimonyProfile extends Model
         'contact_unlock_mode',
         'safety_defaults_applied',
         'serious_intent_id',
+
+        // Day 31 Part 2: Education/Career + Family (DB columns exist; was missing from fillable)
+        'specialization',
+        'occupation_title',
+        'company_name',
+        'annual_income',
+        'family_income',
+        'father_name',
+        'father_occupation',
+        'mother_name',
+        'mother_occupation',
+        'brothers_count',
+        'sisters_count',
+        'work_city_id',
+        'work_state_id',
     ];
 
     protected $casts = [
@@ -459,5 +474,8 @@ public function subCaste()
             ]);
         }
     }
-
+	public function marriages()
+{
+    return $this->hasMany(ProfileMarriage::class, 'profile_id');
+}
 }

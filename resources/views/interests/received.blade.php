@@ -44,7 +44,7 @@
         >
     @else
         @php
-            $senderGender = $interest->senderProfile->gender ?? null;
+            $senderGender = $interest->senderProfile->gender?->key ?? null;
             if ($senderGender === 'male') {
                 $senderPlaceholder = asset('images/placeholders/male-profile.svg');
             } elseif ($senderGender === 'female') {

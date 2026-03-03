@@ -93,7 +93,7 @@
                                     class="w-14 h-14 rounded-full object-cover border">
                             @else
                                 @php
-                                    $recGender = $interest->receiverProfile->gender ?? null;
+                                    $recGender = $interest->receiverProfile->gender?->key ?? null;
                                     if ($recGender === 'male') {
                                         $recPlaceholder = asset('images/placeholders/male-profile.svg');
                                     } elseif ($recGender === 'female') {

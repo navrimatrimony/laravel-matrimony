@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\BiodataIntake;
+use Smalot\PdfParser\Parser as PdfParser;
 use thiagoalessio\TesseractOCR\TesseractOCR;
 
 class OcrService
@@ -31,7 +32,7 @@ class OcrService
 
         if ($isImage || $isPdf) {
             if ($isPdf) {
-                return '';
+                return $this->extractTextFromPdf($fullPath);
             }
             return $this->runTesseract($fullPath);
         }
@@ -66,7 +67,7 @@ class OcrService
 
         if ($isImage || $isPdf) {
             if ($isPdf) {
-                return '';
+                return $this->extractTextFromPdf($fullPath);
             }
             return $this->runTesseract($fullPath);
         }
@@ -77,6 +78,21 @@ class OcrService
         }
 
         return $contents;
+    }
+
+    /**
+     * Extract text from a PDF (text-based PDFs). Returns empty string for scanned/image-only PDFs or on failure.
+     */
+    private function extractTextFromPdf(string $fullPath): string
+    {
+        try {
+            $parser = new PdfParser;
+            $pdf = $parser->parseFile($fullPath);
+            $text = $pdf->getText();
+            return is_string($text) ? trim($text) : '';
+        } catch (\Throwable $e) {
+            return '';
+        }
     }
 
     /**

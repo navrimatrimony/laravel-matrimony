@@ -15,8 +15,33 @@
     @endif
 
 @if (($profile->lifecycle_state ?? null) === 'conflict_pending' && ($hasBlockingConflicts ?? false))
-    <div class="mb-4 px-4 py-3 rounded-lg bg-red-100 dark:bg-red-900/50 border-2 border-red-600 dark:border-red-500 text-red-900 dark:text-red-100 font-semibold">
-        ⚠️ Your profile has unresolved conflicts. Please contact support or wait for admin resolution.
+    <div class="mb-4 rounded-lg border-2 border-red-600 dark:border-red-500 overflow-hidden">
+        <div class="px-4 py-3 bg-red-100 dark:bg-red-900/50 text-red-900 dark:text-red-100 font-semibold">
+            ⚠️ Your profile has unresolved conflicts. Below is what changed (current vs proposed). Admin will resolve; you can contact support if needed.
+        </div>
+        @if (($conflictRecords ?? collect())->isNotEmpty())
+            <div class="px-4 py-4 bg-white dark:bg-gray-800 border-t border-red-200 dark:border-red-800 space-y-4">
+                <h2 class="text-sm font-semibold text-gray-700 dark:text-gray-300">What changed</h2>
+                @foreach($conflictRecords as $record)
+                    <div class="rounded-lg border border-gray-200 dark:border-gray-600 overflow-hidden">
+                        <p class="px-3 py-2 text-xs font-medium text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-700/50 border-b border-gray-200 dark:border-gray-600">
+                            {{ str_replace('_', ' ', ucfirst($record->field_name)) }}
+                            @if(!empty($record->field_type)) <span class="text-gray-400">({{ $record->field_type }})</span> @endif
+                        </p>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-0">
+                            <div class="p-3 border-r border-gray-200 dark:border-gray-600 bg-red-50 dark:bg-red-900/20">
+                                <p class="text-xs font-medium text-red-700 dark:text-red-300 uppercase mb-1">Current value</p>
+                                <p class="text-sm text-gray-900 dark:text-gray-100 break-words whitespace-pre-wrap">{{ $record->old_value ?? '—' }}</p>
+                            </div>
+                            <div class="p-3 bg-emerald-50 dark:bg-emerald-900/20">
+                                <p class="text-xs font-medium text-emerald-700 dark:text-emerald-300 uppercase mb-1">Proposed value</p>
+                                <p class="text-sm text-gray-900 dark:text-gray-100 break-words whitespace-pre-wrap">{{ $record->new_value ?? '—' }}</p>
+                            </div>
+                        </div>
+                    </div>
+                @endforeach
+            </div>
+        @endif
     </div>
 @endif
 
@@ -279,6 +304,9 @@
         @if (!empty($profile->is_demo))
             <span class="text-xs text-gray-500 mt-1">Demo profile</span>
         @endif
+    @endif
+    @if ($isOwnProfile && $profile->profile_photo && $profile->photo_approved === false && empty($profile->photo_rejected_at))
+        <p class="mt-2 text-sm text-amber-700 bg-amber-50 dark:bg-amber-900/30 dark:text-amber-200 px-3 py-2 rounded">Your photo is under review. It is not visible to others until approved.</p>
     @endif
 </div>
 @endif
@@ -711,6 +739,11 @@
             Contact details will be available after interest acceptance.
         @endif
     </p>
+    @if (!$isOwnProfile && !$canViewContact)
+        <div class="mt-3 px-3 py-2 rounded-lg bg-gray-100 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 text-sm text-gray-600 dark:text-gray-400">
+            <strong>Contact policy:</strong> Contact number is shared only after the other person accepts your interest. We do not reveal contact without mutual interest.
+        </div>
+    @endif
 </div>
 
 @if(!empty($extendedValues))

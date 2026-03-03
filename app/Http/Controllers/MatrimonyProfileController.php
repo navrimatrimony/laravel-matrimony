@@ -202,6 +202,61 @@ class MatrimonyProfileController extends Controller
 }
 
     /**
+     * Phase-5 Point 6: edit-full shows same form as wizard section=full. Redirect to wizard.
+     */
+    public function editFull()
+    {
+        $user = auth()->user();
+        if (! $user->matrimonyProfile) {
+            return redirect()
+                ->route('matrimony.profile.wizard.section', ['section' => 'basic-info'])
+                ->with('error', 'Please create your profile first.');
+        }
+        return redirect()->route('matrimony.profile.wizard.section', ['section' => 'full']);
+    }
+
+    /**
+     * Phase-5 Point 6: update-full persists via MutationService only (no direct profile->update).
+     * Builds full snapshot via ManualSnapshotBuilderService, then applyManualSnapshot.
+     */
+    public function updateFull(Request $request)
+    {
+        $user = auth()->user();
+        if (! $user->matrimonyProfile) {
+            return redirect()
+                ->route('matrimony.profile.wizard.section', ['section' => 'basic-info'])
+                ->with('error', 'Please create your profile first.');
+        }
+        $profile = $user->matrimonyProfile;
+        if (! \App\Services\ProfileLifecycleService::isEditableForManual($profile)) {
+            return redirect()->route('matrimony.profile.show', $profile->id)->with('error', 'Profile cannot be edited in its current state.');
+        }
+        $snapshot = app(\App\Services\ManualSnapshotBuilderService::class)->buildFullManualSnapshot($request, $profile);
+        if (empty($snapshot['core'] ?? null) && empty($snapshot['contacts'] ?? null)) {
+            return redirect()->route('matrimony.profile.wizard.section', ['section' => 'full'])
+                ->with('error', 'No valid data to save.')
+                ->withInput();
+        }
+        try {
+            $result = app(\App\Services\MutationService::class)->applyManualSnapshot($profile, $snapshot, (int) $user->id, 'manual');
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return redirect()->route('matrimony.profile.wizard.section', ['section' => 'full'])
+                ->withErrors($e->errors())
+                ->withInput();
+        } catch (\RuntimeException $e) {
+            return redirect()->route('matrimony.profile.wizard.section', ['section' => 'full'])
+                ->with('error', $e->getMessage())
+                ->withInput();
+        }
+        if ($result['conflict_detected'] ?? false) {
+            return redirect()->route('matrimony.profile.wizard.section', ['section' => 'full'])
+                ->with('warning', 'Some changes could not be applied due to conflicts.')
+                ->withInput();
+        }
+        return redirect()->route('matrimony.profiles.index')->with('success', 'Profile updated.');
+    }
+
+    /**
      * Phase-5B: Legacy update route removed. Use wizard only.
      */
     public function update(Request $request)
@@ -464,6 +519,14 @@ public function show($matrimony_profile_id)
 
     $hasBlockingConflicts = \App\Services\ProfileLifecycleService::hasBlockingUnresolvedConflicts($profile);
 
+    $conflictRecords = collect();
+    if ($isOwnProfile && ($profile->lifecycle_state ?? null) === 'conflict_pending') {
+        $conflictRecords = \App\Models\ConflictRecord::where('profile_id', $profile->id)
+            ->where('resolution_status', 'PENDING')
+            ->orderBy('field_name')
+            ->get();
+    }
+
     $visibilitySettings = \Illuminate\Support\Facades\DB::table('profile_visibility_settings')
         ->where('profile_id', $profile->id)
         ->first();
@@ -499,6 +562,7 @@ public function show($matrimony_profile_id)
             'canViewContact'       => $canViewContact,
             'primaryContactPhone'  => $primaryContactPhone,
             'hasBlockingConflicts'  => $hasBlockingConflicts,
+            'conflictRecords'       => $conflictRecords,
         ]
     );
 }

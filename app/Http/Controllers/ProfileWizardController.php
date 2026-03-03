@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\MatrimonyProfile;
 use App\Models\SeriousIntent;
+use App\Services\FieldCatalogService;
 use App\Services\ProfileCompletionService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -15,8 +16,10 @@ use Illuminate\Validation\Rule;
  */
 class ProfileWizardController extends Controller
 {
+    /** @deprecated Use FieldCatalogService::getSectionKeys() for canonical list. Kept for allowed list fallback. */
     private const SECTIONS = [
         'basic-info',
+        'marriages',
         'personal-family',
         'siblings',
         'relatives',
@@ -30,6 +33,19 @@ class ProfileWizardController extends Controller
         'photo',
     ];
 
+    private function isMinimalWizard(): bool
+    {
+        return (bool) session('wizard_minimal', false);
+    }
+
+    private function getAllowedSectionKeys(): array
+    {
+        $minimal = $this->isMinimalWizard();
+        $keys = $minimal ? FieldCatalogService::getSectionKeys(true) : FieldCatalogService::getSectionKeys(false);
+
+        return array_merge($keys, ['full']);
+    }
+
     public function index()
     {
         $user = auth()->user();
@@ -38,9 +54,11 @@ class ProfileWizardController extends Controller
             return redirect()->route('login');
         }
 
-        $first = ProfileCompletionService::firstSection();
+        $minimal = $this->isMinimalWizard();
+        $first = $minimal ? FieldCatalogService::getFirstSection(true) : ProfileCompletionService::firstSection();
         $pct = ProfileCompletionService::calculateCompletionPercentage($profile);
         if ($pct >= 100) {
+            session()->forget('wizard_minimal');
             return redirect()->route('matrimony.profiles.index')->with('info', 'Your profile is complete.');
         }
 
@@ -52,9 +70,12 @@ class ProfileWizardController extends Controller
      */
     public function show(string $section)
     {
-        $allowed = array_merge(self::SECTIONS, ['full']);
+        $allowed = $this->getAllowedSectionKeys();
         if (! in_array($section, $allowed, true)) {
-            return redirect()->route('matrimony.profile.wizard')->with('error', 'Invalid section.');
+            $minimal = $this->isMinimalWizard();
+            $first = $minimal ? FieldCatalogService::getFirstSection(true) : ProfileCompletionService::firstSection();
+            return redirect()->route('matrimony.profile.wizard.section', ['section' => $first])
+                ->with('error', $minimal ? 'Complete the short onboarding first.' : 'Invalid section.');
         }
 
         $user = auth()->user();
@@ -67,15 +88,52 @@ class ProfileWizardController extends Controller
             return redirect()->route('matrimony.profile.show', $profile->id)->with('error', 'Profile cannot be edited in its current state.');
         }
 
+        $minimal = $this->isMinimalWizard();
+        if ($section === 'full') {
+            session()->forget('wizard_minimal');
+            $minimal = false;
+        }
+        $sections = $minimal ? FieldCatalogService::getSectionKeys(true) : FieldCatalogService::getSectionKeys(false);
+        $nextSection = $minimal ? FieldCatalogService::getNextSection($section, true) : ProfileCompletionService::nextSection($section);
+        if ($nextSection === null && $minimal) {
+            $nextSection = 'full';
+        }
+
         $completionPct = ProfileCompletionService::calculateCompletionPercentage($profile);
         $viewData = $this->getSectionViewData($section, $profile);
         $viewData['profile'] = $profile;
         $viewData['currentSection'] = $section;
-        $viewData['sections'] = self::SECTIONS;
+        $viewData['sections'] = $sections;
         $viewData['completionPct'] = $completionPct;
-        $viewData['nextSection'] = ProfileCompletionService::nextSection($section);
+        $viewData['nextSection'] = $nextSection;
+        $viewData['wizardMinimal'] = $minimal;
 
         return view('matrimony.profile.wizard.section', $viewData);
+    }
+
+    /**
+     * Return marriage-fields partial HTML for given status (Point 4: server-side partials).
+     * GET ?status=divorced|widowed|separated|married. Dropdown change fetches this and replaces inner HTML.
+     */
+    public function marriageFields(Request $request)
+    {
+        $profile = $this->ensureProfile(auth()->user());
+        if (! $profile) {
+            return response('', 403);
+        }
+
+        $allowed = ['divorced', 'widowed', 'separated', 'married'];
+        $status = $request->query('status');
+        if (! in_array($status, $allowed, true)) {
+            return response('', 400);
+        }
+
+        $marriage = \App\Models\ProfileMarriage::where('profile_id', $profile->id)->orderBy('id')->first();
+        $view = 'matrimony.profile.wizard.sections.marriage_partials.marriages_' . $status;
+
+        return response()->view($view, ['marriage' => $marriage], 200, [
+            'Content-Type' => 'text/html; charset=UTF-8',
+        ]);
     }
 
     /**
@@ -83,9 +141,14 @@ class ProfileWizardController extends Controller
      */
     public function store(Request $request, string $section)
     {
-        $allowed = array_merge(self::SECTIONS, ['full']);
+        \Log::info('DEBUG SECTION PARAM', ['section' => $section]);
+
+        $allowed = $this->getAllowedSectionKeys();
         if (! in_array($section, $allowed, true)) {
-            return redirect()->route('matrimony.profile.wizard')->with('error', 'Invalid section.');
+            $minimal = $this->isMinimalWizard();
+            $first = $minimal ? FieldCatalogService::getFirstSection(true) : ProfileCompletionService::firstSection();
+            return redirect()->route('matrimony.profile.wizard.section', ['section' => $first])
+                ->with('error', 'Invalid section.');
         }
 
         $user = auth()->user();
@@ -99,6 +162,9 @@ class ProfileWizardController extends Controller
         }
 
         $snapshot = $this->buildSectionSnapshot($section, $request, $profile);
+        \Log::info('DEBUG SNAPSHOT', $snapshot ?? []);
+        \Log::info('DEBUG SNAPSHOT FULL', $snapshot ?? []);
+
         if ($snapshot === null) {
             return redirect()->route('matrimony.profile.wizard.section', ['section' => $section])
                 ->with('error', 'Invalid section or no data.')
@@ -131,10 +197,16 @@ class ProfileWizardController extends Controller
                 ->withInput();
         }
 
-        $next = ProfileCompletionService::nextSection($section);
+        $minimal = $this->isMinimalWizard();
+        $next = $minimal ? FieldCatalogService::getNextSection($section, true) : ProfileCompletionService::nextSection($section);
         if ($next) {
             return redirect()->route('matrimony.profile.wizard.section', ['section' => $next])
                 ->with('success', 'Saved. Continue to next section.');
+        }
+        if ($minimal) {
+            session()->forget('wizard_minimal');
+            return redirect()->route('matrimony.profiles.index')
+                ->with('success', 'Profile saved. You can complete the rest of your profile anytime from your profile page.');
         }
 
         return redirect()->route('matrimony.profiles.index')->with('success', 'Profile completed.');
@@ -173,6 +245,7 @@ class ProfileWizardController extends Controller
         $data = [];
         switch ($section) {
             case 'basic-info':
+                $data['profileMarriages'] = \App\Models\ProfileMarriage::where('profile_id', $profile->id)->orderBy('id')->get();
                 $data['seriousIntents'] = SeriousIntent::whereNull('deleted_at')->orderBy('name')->get();
                 $data['primaryContactPhone'] = DB::table('profile_contacts')->where('profile_id', $profile->id)->where('is_primary', true)->value('phone_number');
                 $data['talukasByDistrict'] = \App\Models\Taluka::all()->groupBy('district_id')->map(fn ($col) => $col->map(fn ($t) => ['id' => $t->id, 'name' => $t->name])->values()->toArray())->toArray();
@@ -185,12 +258,17 @@ class ProfileWizardController extends Controller
                 $data['bloodGroups'] = \App\Models\MasterBloodGroup::where('is_active', true)->get();
                 $data['birthPlaceDisplay'] = $profile->birth_city_id ? \App\Models\City::where('id', $profile->birth_city_id)->value('name') : '';
                 break;
+            case 'marriages':
+                $data['profileMarriages'] = \App\Models\ProfileMarriage::where('profile_id', $profile->id)->orderBy('id')->get();
+                $data['maritalStatuses'] = \App\Models\MasterMaritalStatus::where('is_active', true)->get();
+                break;
             case 'personal-family':
                 $data['profileChildren'] = DB::table('profile_children')->where('profile_id', $profile->id)->orderBy('id')->get();
                 $data['profileEducation'] = DB::table('profile_education')->where('profile_id', $profile->id)->orderBy('id')->get();
                 $data['profileCareer'] = DB::table('profile_career')->where('profile_id', $profile->id)->orderBy('id')->get();
                 $data['currencies'] = \App\Models\MasterIncomeCurrency::where('is_active', true)->get();
                 $data['familyTypes'] = \App\Models\MasterFamilyType::where('is_active', true)->get();
+                $data['physicalBuilds'] = \App\Models\MasterPhysicalBuild::where('is_active', true)->get();
                 break;
             case 'siblings':
                 $data['profileSiblings'] = DB::table('profile_siblings')->where('profile_id', $profile->id)->orderBy('id')->get();
@@ -272,6 +350,7 @@ class ProfileWizardController extends Controller
             case 'full':
                 $data = array_merge(
                     $this->getSectionViewData('basic-info', $profile),
+                    $this->getSectionViewData('marriages', $profile),
                     $this->getSectionViewData('personal-family', $profile),
                     $this->getSectionViewData('siblings', $profile),
                     $this->getSectionViewData('relatives', $profile),
@@ -294,9 +373,19 @@ class ProfileWizardController extends Controller
      */
     private function buildSectionSnapshot(string $section, Request $request, MatrimonyProfile $profile): ?array
     {
+        \Log::info('DEBUG BUILD SECTION', [
+            'section' => $section,
+            'has_marriages_key_in_request' => $request->has('marriages'),
+            'marriages_payload' => $request->input('marriages', null),
+        ]);
+
         switch ($section) {
             case 'basic-info':
                 return $this->buildBasicInfoSnapshot($request, $profile);
+            case 'marriages':
+                return $this->buildMarriagesSnapshot($request);
+            case 'children':
+                return $this->buildChildrenSnapshot($request);
             case 'personal-family':
                 return $this->buildPersonalFamilySnapshot($request, $profile);
             case 'siblings':
@@ -328,39 +417,35 @@ class ProfileWizardController extends Controller
 
     private function buildBasicInfoSnapshot(Request $request, MatrimonyProfile $profile): array
     {
-        $this->resolveMasterLookupIds($request, ['gender' => 'gender_id', 'marital_status' => 'marital_status_id', 'complexion' => 'complexion_id', 'physical_build' => 'physical_build_id', 'blood_group' => 'blood_group_id']);
+        $this->resolveMasterLookupIds($request, ['gender' => 'gender_id', 'marital_status' => 'marital_status_id']);
         $request->validate([
             'full_name' => ['required', 'string', 'max:255'],
             'gender_id' => ['required', Rule::exists('master_genders', 'id')],
             'date_of_birth' => ['nullable', 'date'],
-            'birth_time' => ['nullable', 'string', 'max:20'],
             'religion_id' => ['nullable', 'exists:religions,id'],
-'caste_id' => ['nullable', 'exists:castes,id'],
-'sub_caste_id' => ['nullable', 'exists:sub_castes,id'],
+            'caste_id' => ['nullable', 'exists:castes,id'],
+            'sub_caste_id' => ['nullable', 'exists:sub_castes,id'],
             'marital_status_id' => ['required', Rule::exists('master_marital_statuses', 'id')],
             'height_cm' => ['nullable', 'integer', 'min:50', 'max:250'],
-            'serious_intent_id' => ['nullable', Rule::exists('serious_intents', 'id')->whereNull('deleted_at')],
-            'weight_kg' => ['nullable', 'numeric', 'min:0'],
-            'complexion_id' => ['nullable', Rule::exists('master_complexions', 'id')],
-            'physical_build_id' => ['nullable', Rule::exists('master_physical_builds', 'id')],
-            'blood_group_id' => ['nullable', Rule::exists('master_blood_groups', 'id')],
+            'primary_contact_number' => ['required', 'string', 'max:20'],
         ]);
 
+        // Shaadi Step 1 fields from form; fields removed from UI preserved from profile
         $core = [
             'full_name' => $request->input('full_name'),
             'gender_id' => $request->input('gender_id') ? (int) $request->input('gender_id') : null,
             'date_of_birth' => $request->input('date_of_birth') ?: null,
-            'birth_time' => $request->filled('birth_time') ? trim($request->input('birth_time')) : null,
+            'birth_time' => $profile->birth_time,
             'religion_id' => $request->input('religion_id') ? (int) $request->input('religion_id') : null,
             'caste_id' => $request->input('caste_id') ? (int) $request->input('caste_id') : null,
             'sub_caste_id' => $request->input('sub_caste_id') ? (int) $request->input('sub_caste_id') : null,
             'marital_status_id' => $request->input('marital_status_id') ? (int) $request->input('marital_status_id') : null,
             'height_cm' => $request->filled('height_cm') ? (int) $request->input('height_cm') : null,
-            'serious_intent_id' => $request->input('serious_intent_id') ?: null,
-            'weight_kg' => $request->filled('weight_kg') ? (float) $request->input('weight_kg') : null,
-            'complexion_id' => $request->input('complexion_id') ? (int) $request->input('complexion_id') : null,
-            'physical_build_id' => $request->input('physical_build_id') ? (int) $request->input('physical_build_id') : null,
-            'blood_group_id' => $request->input('blood_group_id') ? (int) $request->input('blood_group_id') : null,
+            'serious_intent_id' => $profile->serious_intent_id,
+            'weight_kg' => $profile->weight_kg,
+            'complexion_id' => $profile->complexion_id,
+            'physical_build_id' => $profile->physical_build_id,
+            'blood_group_id' => $profile->blood_group_id,
         ];
         $core = array_map(fn ($v) => $v === '' ? null : $v, $core);
 
@@ -370,13 +455,14 @@ class ProfileWizardController extends Controller
             $contacts[] = ['relation_type' => 'self', 'contact_name' => 'Primary', 'phone_number' => $phone, 'is_primary' => true];
         }
 
+        // Birth place not in shaadi Step 1 UI; preserve existing
         $birth_place = null;
-        if ($request->has('birth_city_id') || $request->has('birth_state_id')) {
+        if ($profile->birth_city_id || $profile->birth_state_id) {
             $birth_place = [
-                'city_id' => $request->input('birth_city_id') ? (int) $request->input('birth_city_id') : null,
-                'taluka_id' => $request->input('birth_taluka_id') ? (int) $request->input('birth_taluka_id') : null,
-                'district_id' => $request->input('birth_district_id') ? (int) $request->input('birth_district_id') : null,
-                'state_id' => $request->input('birth_state_id') ? (int) $request->input('birth_state_id') : null,
+                'city_id' => $profile->birth_city_id,
+                'taluka_id' => $profile->birth_taluka_id,
+                'district_id' => $profile->birth_district_id,
+                'state_id' => $profile->birth_state_id,
             ];
         }
 
@@ -402,6 +488,7 @@ class ProfileWizardController extends Controller
         $this->resolveMasterLookupIds($request, [
             'income_currency' => 'income_currency_id',
             'family_type' => 'family_type_id',
+            'physical_build' => 'physical_build_id',
         ]);
         $core = [
             'highest_education' => $request->input('highest_education') ?: null,
@@ -418,6 +505,8 @@ class ProfileWizardController extends Controller
             'brothers_count' => $request->filled('brothers_count') ? (int) $request->input('brothers_count') : null,
             'sisters_count' => $request->filled('sisters_count') ? (int) $request->input('sisters_count') : null,
             'family_type_id' => $request->input('family_type_id') ? (int) $request->input('family_type_id') : null,
+            'weight_kg' => $request->filled('weight_kg') ? (float) $request->input('weight_kg') : $profile->weight_kg,
+            'physical_build_id' => $request->input('physical_build_id') ? (int) $request->input('physical_build_id') : $profile->physical_build_id,
         ];
         if ($request->filled('highest_education')) {
             $core['highest_education'] = $request->input('highest_education');
@@ -807,5 +896,54 @@ class ProfileWizardController extends Controller
                 }
             }
         }
+    }
+	protected function buildMarriagesSnapshot($request): array
+{
+    $rows = [];
+
+    \Log::info('DEBUG MARRIAGES INPUT', $request->input('marriages', []));
+
+    $request->validate([
+        'marriages.*.marriage_year' => ['nullable', 'integer', 'between:1901,2155'],
+        'marriages.*.separation_year' => ['nullable', 'integer', 'between:1901,2155'],
+        'marriages.*.divorce_year' => ['nullable', 'integer', 'between:1901,2155'],
+        'marriages.*.spouse_death_year' => ['nullable', 'integer', 'between:1901,2155'],
+    ]);
+
+    foreach ($request->input('marriages', []) as $row) {
+        $rows[] = [
+            'id' => $row['id'] ?? null,
+            'marital_status_id' => $row['marital_status_id'] ?? null,
+            'marriage_year' => ! empty($row['marriage_year']) ? (int) $row['marriage_year'] : null,
+            'separation_year' => ! empty($row['separation_year']) ? (int) $row['separation_year'] : null,
+            'divorce_year' => ! empty($row['divorce_year']) ? (int) $row['divorce_year'] : null,
+            'spouse_death_year' => ! empty($row['spouse_death_year']) ? (int) $row['spouse_death_year'] : null,
+            'divorce_status' => $row['divorce_status'] ?? null,
+            'remarriage_reason' => $row['remarriage_reason'] ?? null,
+            'notes' => $row['notes'] ?? null,
+        ];
+    }
+
+    return ['marriages' => $rows];
+}
+
+    protected function buildChildrenSnapshot(Request $request): array
+    {
+        $rows = [];
+
+        foreach ($request->input('children', []) as $row) {
+            $rows[] = [
+                'id' => ! empty($row['id']) ? (int) $row['id'] : null,
+                'child_name' => trim((string) ($row['child_name'] ?? '')) ?: null,
+                'gender' => trim((string) ($row['gender'] ?? '')) ?: null,
+                'age' => isset($row['age']) && $row['age'] !== '' ? (int) $row['age'] : null,
+                'child_living_with_id' => ! empty($row['child_living_with_id']) ? (int) $row['child_living_with_id'] : null,
+            ];
+        }
+
+        return [
+            'core' => [],
+            'children' => $rows,
+        ];
     }
 }

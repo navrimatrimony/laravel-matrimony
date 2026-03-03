@@ -3655,3 +3655,1495 @@ Any future modification to religion/caste/subcaste system
 requires SSOT update before implementation.
 
 Violation of this rule is considered architectural breach.
+
+
+---
+
+# PHASE-5B ADDENDUM: MARITAL STATUS DOMAIN ENGINE (PRODUCTION-GRADE RULE)
+
+## Governance Seal
+Marital Status is treated as a DOMAIN STATE MACHINE.
+UI must NEVER render all marital timeline fields together.
+Rendering must be STATUS-SPECIFIC and SERVER-DRIVEN.
+
+JS-based field hiding is NOT considered production-grade and must not be used
+as the primary logic layer.
+
+---
+
+## 1. Authoritative Source of Truth
+
+Authoritative Field:
+    matrimony_profiles.marital_status_id
+
+Authoritative Key:
+    $profile->maritalStatus->key
+
+All marital timeline rendering MUST depend on the canonical status key,
+NOT on UI text labels.
+
+---
+
+## 2. Status-Specific Rendering Rule
+
+The marriages section MUST render using status-based partials:
+
+Structure:
+
+resources/views/matrimony/profile/wizard/sections/marriages/
+    index.blade.php
+    married.blade.php
+    divorced.blade.php
+    separated.blade.php
+    widowed.blade.php
+    never_married.blade.php
+
+index.blade.php MUST contain:
+
+    $statusKey = $profile->maritalStatus?->key;
+
+    if ($statusKey === 'divorced') → render divorced.blade.php
+    if ($statusKey === 'separated') → render separated.blade.php
+    if ($statusKey === 'widowed') → render widowed.blade.php
+    if ($statusKey === 'married') → render married.blade.php
+    if ($statusKey === 'never_married' OR 'unmarried') → render nothing
+
+No generic shared template with JS toggling is allowed.
+
+---
+
+## 3. Visibility Matrix (MANDATORY)
+
+### never_married / unmarried
+Render:
+    NOTHING
+Must enforce:
+    profile_marriages table must be empty.
+
+---
+
+### married
+Render:
+    - Marriage Year
+Hide:
+    - Divorce Year
+    - Separation Year
+    - Spouse Death Year
+    - Legal Status
+
+---
+
+### separated
+Render:
+    - Marriage Year
+    - Separation Year
+    - Legal Status
+Hide:
+    - Divorce Year
+    - Spouse Death Year
+
+Children section visible.
+
+---
+
+### divorced
+Render:
+    - Marriage Year
+    - Divorce Year
+    - Divorce Type
+    - Legal Status
+
+Children section visible.
+
+Hide:
+    - Separation Year
+    - Spouse Death Year
+
+---
+
+### widowed
+Render:
+    - Marriage Year
+    - Spouse Death Year
+
+Children section visible.
+
+Hide:
+    - Divorce Year
+    - Legal Status
+    - Separation Year
+
+---
+
+## 4. Backend Enforcement Rules (NON-NEGOTIABLE)
+
+MutationService MUST enforce:
+
+If marital_status = never_married:
+    → profile_marriages rows must be zero.
+
+If marital_status = widowed:
+    → divorce_year must be null.
+
+If marital_status = divorced:
+    → spouse_death_year must be null.
+
+If marital_status changes:
+    → validate existing timeline consistency.
+    → create ConflictRecord if invalid coexistence detected.
+
+UI logic is NOT sufficient.
+Backend validation is mandatory.
+
+---
+
+## 5. UX Rule
+
+Marital status change MUST trigger deterministic re-render.
+
+Recommended Production Approach:
+    Dropdown change → auto-submit → server re-render partial.
+
+Avoid:
+    Complex JS hide/show logic.
+    Mixed-field rendering.
+    Text-based key detection.
+
+---
+
+## 6. Production Standard Reference Alignment
+
+This architecture aligns with industry matrimonial systems:
+    - Status-based profile rendering
+    - Domain-driven conditional sections
+    - Clean separation of marital states
+    - Deterministic governance
+
+This rule supersedes any previous toggle-based implementation.
+
+---
+
+FINAL PRINCIPLE:
+
+Marital timeline is a DOMAIN MODEL,
+not a UI toggle problem.
+
+Any future modification must preserve:
+    - Single Source of Truth
+    - Status-specific rendering
+    - Backend validation supremacy
+    - Logical field coexistence constraints
+
+---
+
+
+############################################################
+PHASE-5C — INTELLIGENT OCR CORRECTION ENGINE (REWRITTEN – GOVERNED VERSION)
+############################################################
+
+Status:
+Extension Layer Above Phase-5 Intake Pipeline
+
+This layer:
+• DOES NOT modify MutationService
+• DOES NOT modify lifecycle engine
+• DOES NOT modify conflict engine
+• DOES NOT modify parsed_json
+• DOES NOT modify raw_ocr_text
+• DOES NOT bypass approval gate
+
+Purpose:
+Reduce OCR + AI parsing error rate over time
+using user-confirmed corrections only.
+
+------------------------------------------------------------
+CORE PRINCIPLE
+------------------------------------------------------------
+
+System learns ONLY from:
+User-approved corrections.
+
+System NEVER learns from:
+• AI guesses
+• Rejected values
+• Unapproved preview edits
+
+Approval is the only truth source.
+
+############################################################
+C1 — CORRECTION LOGGING (STRICTLY PRE-APPROVAL CAPTURE)
+############################################################
+
+New Table:
+ocr_correction_logs
+
+Columns:
+
+- id
+- intake_id (FK → biodata_intakes.id)
+- field_key (indexed)
+- original_value (text)
+- corrected_value (text)
+- ai_confidence_at_parse (decimal 3,2 nullable)
+- snapshot_schema_version
+- created_at
+
+Rules:
+
+• Insert-only table
+• No update allowed
+• No delete allowed
+• No JSON column allowed
+• No profile mutation triggered
+• No lifecycle change triggered
+
+------------------------------------------------------------
+LOGGING TRIGGER POINT
+------------------------------------------------------------
+
+During Approval Click:
+
+Compare:
+approval_snapshot_json value
+VS
+parsed_json value
+
+IF different:
+
+→ Insert correction log row
+
+IMPORTANT:
+
+• parsed_json remains unchanged
+• raw_ocr_text remains unchanged
+• Only correction log inserted
+• Must execute inside DB transaction
+• One log per field per intake
+
+############################################################
+C2 — EXACT MATCH PATTERN FORMATION (NON-AI ENGINE)
+############################################################
+
+New Table:
+ocr_correction_patterns
+
+Columns:
+
+- id
+- field_key (indexed)
+- wrong_pattern (text)
+- corrected_value (text)
+- usage_count (integer)
+- pattern_confidence (decimal 3,2)
+- source (enum: frequency_rule / ai_generalized)
+- is_active (boolean)
+- created_at
+- updated_at
+
+------------------------------------------------------------
+FREQUENCY RULE
+------------------------------------------------------------
+
+Group correction logs by:
+
+field_key + original_value + corrected_value
+
+If usage_count >= 10:
+
+Insert pattern:
+
+wrong_pattern = original_value
+corrected_value = corrected_value
+pattern_confidence = 0.80
+source = frequency_rule
+is_active = true
+
+STRICT RULES:
+
+• Only exact match allowed
+• No regex
+• No normalization
+• No fuzzy matching
+• No auto-rewrite of old intakes
+• No AI involvement here
+
+############################################################
+C3 — PREVIEW SUGGESTION INJECTION LAYER
+############################################################
+
+Trigger:
+Before preview render.
+
+Process:
+
+For each parsed field value:
+
+Check ocr_correction_patterns:
+
+WHERE
+field_key matches
+AND wrong_pattern equals current value
+AND is_active = true
+
+------------------------------------------------------------
+Suggestion Logic
+------------------------------------------------------------
+
+IF pattern_confidence < 0.90:
+
+→ Show suggestion badge:
+   “Suggested Correction Available”
+
+→ Do NOT auto-apply
+→ User must accept manually
+
+------------------------------------------------------------
+
+IF pattern_confidence >= 0.90
+AND usage_count >= 25:
+
+→ Auto-fill preview editable value
+→ Mark visually:
+   “System Suggested (Review Recommended)”
+
+CRITICAL:
+
+• parsed_json NOT modified
+• raw_ocr_text NOT modified
+• approval still mandatory
+• lifecycle unchanged
+• User can revert suggestion
+
+############################################################
+C4 — NIGHTLY AI GENERALIZATION JOB (ISOLATED)
+############################################################
+
+Purpose:
+Convert high-frequency exact patterns into broader normalization rules.
+
+New Job:
+NightlyOcrLearningJob
+
+------------------------------------------------------------
+Execution Rules
+------------------------------------------------------------
+
+• Runs once per day (cron)
+• Batch-based only
+• Never per upload
+• Never blocking intake
+• Token budget capped
+• If AI fails → no impact on intake
+
+------------------------------------------------------------
+Flow
+------------------------------------------------------------
+
+1) Fetch patterns with usage_count >= threshold
+2) Send batch to AI:
+   “Generalize normalization rule safely”
+3) Validate AI output manually in code
+4) Insert new row into ocr_correction_patterns:
+
+   source = ai_generalized
+   pattern_confidence = AI returned value
+   is_active = true
+
+STRICT RULES:
+
+• Must NOT modify existing pattern rows
+• Must NOT auto-disable frequency_rule patterns
+• Must NOT modify any past intake
+• Must NOT modify parsed_json
+
+############################################################
+C5 — ADMIN GOVERNANCE PANEL
+############################################################
+
+Admin Capabilities:
+
+• View patterns
+• Filter by field_key
+• See usage_count
+• See pattern_confidence
+• See source type
+• Disable pattern (is_active = false)
+
+Admin CANNOT:
+
+❌ Edit wrong_pattern
+❌ Edit corrected_value
+❌ Edit usage_count
+❌ Delete correction logs
+❌ Modify parsed_json
+❌ Modify intake
+
+All admin actions must write admin_audit_logs entry.
+
+############################################################
+C6 — ZERO GOVERNANCE INTERFERENCE GUARANTEE
+############################################################
+
+Phase-5C must NOT:
+
+❌ Trigger conflict record
+❌ Modify lifecycle_state
+❌ Modify MutationService
+❌ Modify approval_snapshot_json after lock
+❌ Auto-approve intake
+❌ Modify serious_intent logic
+❌ Modify duplicate detection
+
+It is strictly a suggestion layer.
+
+############################################################
+C7 — DATA IMMUTABILITY GUARANTEE
+############################################################
+
+Immutable Always:
+
+• raw_ocr_text
+• parsed_json (after parse)
+• approval_snapshot_json (after approval)
+• profile_change_history
+• conflict_records
+• ocr_correction_logs
+
+Only:
+
+ocr_correction_patterns.is_active
+may change via admin toggle.
+
+############################################################
+C8 — SUCCESS METRIC
+############################################################
+
+Phase-5C considered effective only if:
+
+• OCR repeat error rate reduces over time
+• Suggestion acceptance rate increases
+• AI parsing cost reduces
+• Zero silent overwrite incidents
+• Zero lifecycle violations
+
+############################################################
+END OF PHASE-5C (REWRITTEN GOVERNED VERSION)
+############################################################
+
+
+############################################################
+PHASE-5C — DAYWISE IMPLEMENTATION PLAN
+STARTING FROM DAY-26
+INTELLIGENT OCR CORRECTION ENGINE
+############################################################
+
+IMPORTANT:
+
+• Phase-5 must already be stable.
+• Intake → Parse → Preview → Approve → Mutation working.
+• No lifecycle bug pending.
+• No conflict bug pending.
+
+Phase-5C must NOT begin on unstable base.
+
+============================================================
+DAY-26 — CORRECTION LOGGING FOUNDATION
+============================================================
+
+GOAL:
+Create ocr_correction_logs table + safe logging trigger.
+
+STEP-1:
+Create migration:
+
+Table: ocr_correction_logs
+
+Columns:
+- id
+- intake_id (FK)
+- field_key (indexed)
+- original_value (text)
+- corrected_value (text)
+- ai_confidence_at_parse (decimal 3,2 nullable)
+- snapshot_schema_version
+- created_at
+
+Rules:
+• No update route
+• No delete route
+• No JSON column
+• Index on field_key
+• FK on intake_id
+• No cascade delete
+
+STEP-2:
+Modify approval flow:
+
+On approval click:
+
+Compare:
+approval_snapshot_json
+vs
+parsed_json
+
+If different:
+Insert ONE correction row per field.
+
+IMPORTANT:
+• Must run inside same DB transaction.
+• parsed_json unchanged.
+• approval_snapshot_json unchanged.
+• lifecycle unchanged.
+
+COMPLETION CHECK:
+✔ Logs inserted only when user changed value.
+✔ No logs when no correction.
+✔ No mutation triggered.
+✔ No lifecycle change.
+
+
+============================================================
+DAY-27 — FREQUENCY PATTERN ENGINE (EXACT MATCH ONLY)
+============================================================
+
+GOAL:
+Create ocr_correction_patterns table + frequency builder.
+
+STEP-1:
+Create migration:
+
+Table: ocr_correction_patterns
+
+Columns:
+- id
+- field_key (indexed)
+- wrong_pattern (text)
+- corrected_value (text)
+- usage_count (integer)
+- pattern_confidence (decimal 3,2)
+- source (frequency_rule / ai_generalized)
+- is_active (boolean)
+- created_at
+- updated_at
+
+No delete route allowed.
+
+STEP-2:
+Create console command:
+
+php artisan ocr:build-frequency-patterns
+
+Logic:
+Group ocr_correction_logs by:
+field_key + original_value + corrected_value
+
+If usage_count >= 10:
+Insert pattern row:
+
+wrong_pattern = original_value
+corrected_value = corrected_value
+pattern_confidence = 0.80
+source = frequency_rule
+is_active = true
+
+STRICT RULES:
+• Exact string match only.
+• No regex.
+• No normalization.
+• No fuzzy match.
+
+COMPLETION CHECK:
+✔ Patterns created after threshold.
+✔ No mutation triggered.
+✔ No lifecycle touched.
+
+
+============================================================
+DAY-28 — PREVIEW SUGGESTION INJECTION LAYER
+============================================================
+
+GOAL:
+Inject correction suggestions during preview render.
+
+STEP-1:
+Before preview blade render:
+
+For each parsed field:
+Check ocr_correction_patterns:
+
+WHERE
+field_key matches
+AND wrong_pattern equals current value
+AND is_active = true
+
+STEP-2:
+Suggestion logic:
+
+IF pattern_confidence < 0.90:
+Show badge:
+"Suggested Correction Available"
+
+User must manually accept.
+
+IF pattern_confidence >= 0.90
+AND usage_count >= 25:
+
+Auto-fill editable preview field.
+Mark visually:
+"System Suggested (Review Recommended)"
+
+STRICT:
+• parsed_json NOT modified.
+• raw_ocr_text NOT modified.
+• approval still mandatory.
+
+COMPLETION CHECK:
+✔ Suggestions visible.
+✔ No auto-approval.
+✔ No lifecycle change.
+✔ User can revert suggestion.
+
+
+============================================================
+DAY-29 — NIGHTLY AI GENERALIZATION JOB
+============================================================
+
+GOAL:
+Implement safe batch AI normalization.
+
+STEP-1:
+Create job:
+NightlyOcrLearningJob
+
+STEP-2:
+Job runs once per day (scheduler).
+
+Flow:
+1) Fetch patterns with usage_count >= threshold
+2) Send batch to AI:
+   "Safely generalize normalization pattern"
+3) Validate output in code
+4) Insert new pattern row:
+
+source = ai_generalized
+pattern_confidence = AI returned value
+is_active = true
+
+STRICT:
+• Must NOT modify existing patterns.
+• Must NOT delete logs.
+• Must NOT modify parsed_json.
+• Must NOT touch intake.
+
+COMPLETION CHECK:
+✔ AI job runs isolated.
+✔ Intake pipeline unaffected.
+✔ No lifecycle interference.
+
+
+============================================================
+DAY-30 — ADMIN GOVERNANCE PANEL
+============================================================
+
+GOAL:
+Admin control over patterns.
+
+Admin can:
+
+• View patterns
+• Filter by field_key
+• See usage_count
+• See pattern_confidence
+• See source type
+• Toggle is_active
+
+Admin cannot:
+
+❌ Edit wrong_pattern
+❌ Edit corrected_value
+❌ Delete correction logs
+❌ Modify intake
+
+All actions must write admin_audit_logs entry.
+
+COMPLETION CHECK:
+✔ Admin toggle works.
+✔ No mutation interference.
+✔ Audit log created.
+
+
+============================================================
+DAY-31 — FULL INTEGRATION & SAFETY AUDIT
+============================================================
+
+GOAL:
+Ensure Phase-5C does NOT break Phase-5.
+
+Test:
+
+Upload →
+Parse →
+Preview →
+Accept suggestion →
+Approve →
+Mutation →
+Lifecycle
+
+Also test:
+
+Conflict scenario
+Duplicate scenario
+Serious intent scenario
+Locked field scenario
+
+Validation checklist:
+
+✔ No silent overwrite
+✔ No lifecycle auto-change
+✔ No conflict auto-resolution
+✔ No parsed_json mutation
+✔ No approval bypass
+✔ No MutationService bypass
+
+If any violation → Phase-5C rollback.
+
+Only after passing:
+Phase-5C declared ACTIVE.
+
+############################################################
+DAY 31 — PART 2 (SSOT ADDENDUM + CURSOR IMPLEMENTATION PROMPT)
+Project: laravel-matrimony (Laravel 12.50.0)
+
+====================================================================
+A) SSOT मध्ये Day 31 Part 2 म्हणून “मस्ट-फॉलो” पॉईंट्स (कॉपी-पेस्ट)
+====================================================================
+
+## Day 31 Part 2 — Profile Forms Canonicalization + Reusable Select Engines (Production Grade)
+
+### 1) Single Source of Truth (SSOT) — Profile Edit/Wizard/Intake Preview
+- “एकच field एका वेळेस एकाच ठिकाणी editable” हा नियम बंधनकारक.
+  - उदाहरण: primary_contact_number / marriage+children सारखी duplication परवानगी नाही.
+  - Duplicate UI असल्यास: एका ठिकाणी editable, दुसरीकडे read-only किंवा पूर्णपणे हटवणे.
+
+### 2) No reload / No auto-submit dependency UX
+- Shaadi.com सारखा अनुभव: dropdown बदलल्यावर page reload/auto-submit/fetch partial करायचे नाही.
+- Dependent fields client-side (Alpine/JS) ने show/hide होतील, पण:
+  - Parent field च्या लगेच खाली (adjacent) grouped block मध्येच child fields रेंडर होतील
+  - Layout break (parent नंतर unrelated fields मध्ये child दिसणे) ही production-grade violation मानली जाईल
+
+### 3) Canonical Field Catalog + Section Layout
+- “Field Catalog” (एकच यादी) ठरवली जाईल:
+  - प्रत्येक field: key, label, input_type, options_source, validation, dependency_rules, section_key, display_order
+- Profile Edit, Wizard, Intake Preview — तिन्ही ठिकाणी हेच catalog/layout वापरायचे.
+- कुठेही “manual one-off field list” ठेवायची नाही (drift टाळण्यासाठी).
+
+### 4) Reusable Select Engines (एकदाच बनवा, सगळीकडे वापरा)
+- Address/Location typeahead engine (काही अक्षरे टाइप → dropdown suggestion):
+  - Profile address, birth place, native place, work location, relatives address — सर्वत्र एकच reusable component/JS.
+- Religion/Caste/Subcaste cascading selects:
+  - Wizard/Edit/Preview सर्वत्र एकच reusable component/JS.
+- या engines चे UI/behavior/labels सर्व views मध्ये consistent असणे बंधनकारक.
+
+### 5) Mass-assignment safety + SSOT Mutation Governance
+- DB मध्ये अस्तित्वात असलेला आणि UI वर edit होणारा कोणताही field “save” न होणे ही production-grade defect मानली जाईल.
+- PHASE-5 नियम:
+  - Profile data वर direct update() कॉल नाही
+  - सर्व mutations MutationService मधूनच
+  - Zero data loss, no silent overwrite, conflict records mandatory (critical changes)
+- म्हणून forms “request → MutationService → governed apply” मार्गानेच persist होतील.
+
+### 6) Full Edit Parity
+- “edit-full” हा screen “no missing field” guarantee देईल:
+  - Photo sectionसह सर्व sections included असतील
+  - Wizard मध्ये जे fields आहेत ते पूर्ण edit मध्येही (same components वापरून) दिसतील
+
+--------------------------------------------------------------------
+B) CURSOR PROMPT (एकाच वेळी सर्व files पाहून deterministic बदल करा)
+--------------------------------------------------------------------
+
+GOAL:
+1) Profile Edit / Wizard / Intake Preview मध्ये fields missing/duplicate/drift शून्य करणे.
+2) Parent-child dependencies adjacent ठेवणे (no reload / no auto-submit).
+3) Address typeahead engine + Religion/Caste/Subcaste engine reuse करून “एकदाच बदल → सगळीकडे लागू” करणे.
+4) PHASE-5 SSOT governance (MutationService only, no direct update()) कायम ठेवणे.
+
+IMPORTANT CONSTRAINTS:
+- कोणताही DB column delete/rename नाही.
+- Structured entities JSON blob मध्ये नाही.
+- Profile writes साठी direct Model::update()/save() वापरू नका; MutationService वापरा.
+- Existing intake raw text immutable.
+
+-------------------------------------------------
+1) DATA CONSISTENCY FIX — Fillable mismatch (HIGH PRIORITY)
+-------------------------------------------------
+OBSERVED:
+matrimony_profiles columns मध्ये आहेत पण MatrimonyProfile::getFillable() मध्ये नाहीत:
+- specialization
+- occupation_title
+- company_name
+- annual_income
+- family_income
+- father_name
+- father_occupation
+- mother_name
+- mother_occupation
+- brothers_count
+- sisters_count
+- work_city_id
+- work_state_id
+(+ weight_kg वगैरे आधीच fillable मध्ये आहेत; ते ठीक)
+
+ACTION:
+- File: app/Models/MatrimonyProfile.php
+- Edit: protected $fillable = [...] मध्ये वरील missing fields add करा.
+- Location reference: $fillable array block शोधा (string: "serious_intent_id" जवळ array end आहे).
+- Before/After snippet (exact add):
+  Before (end portion example):
+    "safety_defaults_applied",
+    "serious_intent_id",
+  ]
+  After:
+    "safety_defaults_applied",
+    "serious_intent_id",
+
+    // Education/Career + Family fields (DB columns exist)
+    "specialization",
+    "occupation_title",
+    "company_name",
+    "annual_income",
+    "family_income",
+    "father_name",
+    "father_occupation",
+    "mother_name",
+    "mother_occupation",
+    "brothers_count",
+    "sisters_count",
+    "work_city_id",
+    "work_state_id",
+  ]
+
+NOTE:
+- हे add केल्याने mass assignment allow होईल; पण writes अजूनही MutationService मधूनच होतात याची खात्री करा.
+- जर कुठे direct update() दिसला तर तो MutationService route मध्ये migrate करा (Step 4).
+
+-------------------------------------------------
+2) CANONICAL UI COMPONENTS — Extract & Reuse (Address + Religion/Caste)
+-------------------------------------------------
+
+2.1 Address/Location Typeahead Engine (Single component)
+TASK:
+- Repo मध्ये जिथे “गाव नाव टाइप केलं की dropdown suggestions” हे आधी implement आहे ते शोधा.
+  Search keywords:
+  - "typeahead"
+  - "location"
+  - "native_city_id"
+  - "birth_city_id"
+  - "district_id" "taluka_id" "city_id"
+  - JS: "fetch(" "/api/" "suggest"
+  - Blade: "@push('scripts')" "Alpine.data" "x-data"
+- त्या existing working logic ला “reusable Blade component + single JS module” मध्ये extract करा.
+
+CREATE/REFactor TARGET (pick best fit based on existing style):
+Option A (Recommended if Alpine already used):
+- resources/views/components/location-typeahead.blade.php
+- resources/js/location-typeahead.js (or existing app.js module)
+- Component props:
+  - name/id (e.g. native_city_id)
+  - initial_value (selected id + label)
+  - context (birth/native/work/relative/address) to drive placeholder/endpoint params
+- Ensure: same component used in:
+  - profile edit (section where current address is)
+  - wizard sections needing place selection
+  - intake preview display (read-only view uses same label resolver helper)
+
+2.2 Religion/Caste/Subcaste Cascading Engine (Single component)
+TASK:
+- Existing dropdowns कुठे आहेत ते शोधा:
+  - religion_id, caste_id, sub_caste_id
+- Create reusable component:
+  - resources/views/components/religion-caste-selector.blade.php
+  - JS module to load dependent options (caste by religion, subcaste by caste)
+- Ensure the same component is used in:
+  - profile edit
+  - wizard
+  - intake preview (read-only uses same resolver/helper)
+
+OUTPUT RULE:
+- “कुठे dropdown आहे, कुठे नाही” drift 0 करा: एकदा component वापरला की तिन्ही ठिकाणी same control.
+
+-------------------------------------------------
+3) DEPENDENCY LAYOUT — Parent-child adjacent grouping (NO reload)
+-------------------------------------------------
+USER REQUIREMENT:
+- Dropdown change → auto-submit/fetch partial NO.
+- पण child fields parent च्या लगेच खाली grouped असावेत.
+
+IMPLEMENTATION:
+- Parent field markup आणि child block markup same partial मध्ये ठेवा.
+- Child blocks hide/show with Alpine:
+  - Example pattern:
+    <div x-data="{ marital_status_id: '{{ old(...) ?? $profile->marital_status_id }}' }">
+      <!-- parent select -->
+      <select x-model="marital_status_id" ...>...</select>
+
+      <!-- child block immediately after -->
+      <div x-show="marital_status_id == SOME_VALUE" x-cloak>
+         <!-- marriage details -->
+      </div>
+
+      <div x-show="marital_status_id == OTHER_VALUE" x-cloak>
+         <!-- children fields -->
+      </div>
+    </div>
+- IMPORTANT: child blocks never placed after unrelated rows/columns.
+
+Apply this specifically to:
+- marital_status_id → marriage/children related fields/sections
+- any other dependencies found in report/config
+
+-------------------------------------------------
+4) DUPLICATION REMOVAL — Decide single editable location
+-------------------------------------------------
+4.1 Primary contact duplication
+- Search in views for "primary_contact" / "contact_number".
+- Choose ONE canonical place:
+  - If Contacts section exists: keep editable there, remove editable control from basic-info (replace with read-only display).
+  - Or vice-versa (but only one editable).
+- Ensure same mapping used in wizard + full edit.
+
+4.2 Marriage/children duplication
+- Remove duplication between basic_info partial and marriages section.
+- Pick one canonical section:
+  - Prefer: keep marriage/children in marriages section.
+  - In basic-info show only marital_status_id (and read-only summary, optional) — BUT no duplicate inputs.
+
+-------------------------------------------------
+5) CANONICAL FIELD CATALOG + LAYOUT — Stop drift across 3 UIs
+-------------------------------------------------
+You already have routes:
+- admin/profile-field-config (index/update)
+Use it as canonical order/visibility store.
+
+TASK:
+- Find existing implementation behind:
+  - route: admin/profile-field-config.index / update
+- Create “FieldCatalog” class (or config) that is the single definition of:
+  - field key
+  - input type
+  - option source
+  - dependencies
+  - section placement
+- Then:
+  - Wizard renders section by catalog
+  - Edit-full renders by same catalog (all sections)
+  - Intake preview renders by same catalog (read-only)
+
+IMPORTANT:
+- Do NOT store structured entities as JSON blob. Catalog is config/metadata only.
+
+-------------------------------------------------
+6) MUTATION GOVERNANCE — Ensure forms persist via MutationService
+-------------------------------------------------
+TASK:
+- Locate POST endpoints:
+  - matrimony.profile.store
+  - matrimony.profile.update-full
+  - matrimony.profile.wizard.save (POST)
+- Verify controller actions:
+  - No direct $profile->update([...]) or save() for profile data fields.
+  - All changes pass through MutationService.
+- If any direct update exists:
+  - Replace with MutationService call.
+  - Ensure conflict handling for critical fields is enforced as per SSOT (no silent overwrite).
+
+-------------------------------------------------
+7) FULL EDIT PARITY — Photo missing fix
+-------------------------------------------------
+OBSERVED:
+- edit-full blade मध्ये photo section include नाही (report).
+
+TASK:
+- Find: resources/views/.../full.blade.php (exact path per repo)
+- Add include for photo component/section in correct order (near end, before submit).
+- Ensure same photo component is used in wizard upload-photo route too (no drift).
+
+-------------------------------------------------
+8) VERIFICATION (MUST RUN)
+-------------------------------------------------
+Run and paste results:
+1) php artisan test (if tests exist)
+2) php artisan route:list | findstr /I "matrimony/profile/wizard matrimony/profile/edit matrimony/profile/edit-full"
+3) Manual smoke checklist:
+   - Edit-full: NO missing field (photo included)
+   - Wizard: religion/caste/subcaste controls appear where expected
+   - Address typeahead works in:
+     a) own address
+     b) birth place
+     c) native place
+     d) work location
+     e) relative address (if UI exists)
+   - Dependent fields: marital_status change shows/hides immediately WITHOUT reload and child fields are adjacent.
+   - Save persists for: specialization, occupation_title, company_name, annual_income, family_income, parents names/occupations, brothers_count, sisters_count, work_city_id, work_state_id.
+
+-------------------------------------------------
+9) ROLLBACK NOTES
+-------------------------------------------------
+- If UI breaks: rollback the new components (location-typeahead, religion-caste-selector) usage and revert to previous inline implementations.
+- If save logic breaks: revert controller mutation wiring to previous stable commit, but keep $fillable additions (safe) only if MutationService controls actual writes.
+
+DELIVERABLES FROM CURSOR:
+- List of modified files with brief reason
+- Confirmation: No direct update() on profile writes (or list where it was fixed)
+- Screenshots (optional): edit-full and wizard showing aligned fields
+
+====================================================================
+END
+====================================================================
+############################################################
+
+
+
+
+============================================================
+PHASE-5 TEMPORARY GOVERNANCE REDUCTION MODE (TGRM)
+============================================================
+
+Effective: Day-28 (Temporary Stabilization Phase Only)
+Status: STRICTLY TEMPORARY
+Expires: End of Phase-5C
+
+Purpose:
+To stabilize Apply Pipeline due to runtime instability,
+the following components are temporarily disabled:
+
+1) ConflictDetectionService execution inside MutationService
+2) Field Lock Enforcement
+3) profile_change_history writes during intake mutation
+
+STRICT LIMITATIONS:
+
+• Duplicate Detection remains ACTIVE.
+• Lifecycle transitions must still use ProfileLifecycleService.
+• No direct controller mutation allowed.
+• No schema changes allowed.
+• No JSON storage allowed.
+• mutation_log must still be written.
+• Intake finalization must still follow approval pipeline.
+
+CRITICAL WARNING:
+
+This mode is temporary stabilization only.
+Before Phase-5C completion:
+
+• ConflictDetectionService must be fully restored.
+• Field Lock enforcement must be restored.
+• profile_change_history must be restored.
+• Full SSOT compliance must be re-validated.
+
+Operating beyond Phase-5C in TGRM mode
+is considered governance violation.
+
+============================================================
+END OF TEMPORARY GOVERNANCE REDUCTION MODE
+============================================================
+
+DAY-32 (SSOT ADD) — Contact Request System (Consent + Privacy + Governance)
+Goal
+
+Interest accept = mutual / messaging allowed only.
+Contact details default hidden.
+Contact reveal only via explicit receiver consent through “Request Contact” flow.
+
+A) Viewer Profile Page (Sender side)
+Button states
+
+No request/grant exists → Request Contact
+
+Existing request = pending → Request Sent (Pending) (+ optional Cancel)
+
+Request/grant = accepted AND grant valid → View Contact
+
+Request = rejected → Request Rejected (Cooling period active) + show cooldown_ends_at
+
+Request = expired → Request Expired (allowed to request again if not blocked by cooldown)
+
+Grant = revoked → Contact no longer available (new request allowed only if cooldown rules allow)
+
+Request Contact modal
+
+Why are you requesting contact? (required dropdown)
+
+Talk to family
+
+Meet
+
+Need more details
+
+Discuss marriage timeline
+
+Other (requires short text)
+
+Requested scopes (checkboxes; sender request)
+
+Email
+
+WhatsApp
+
+Call
+
+B) Receiver Inbox → Requests (Receiver side)
+Tabs
+
+Requests (Pending)
+Card shows: sender snapshot + reason + requested scopes
+Actions: Approve / Reject
+
+Access Granted (Active)
+Shows: who has access + scopes + granted_at + valid_until
+Action: Revoke access
+
+Approve modal (advanced consent)
+
+Receiver chooses:
+
+Approval duration:
+
+Approve once
+
+Approve for 7 days
+
+Approve for 30 days
+
+Approved scopes (receiver may reduce)
+
+Email only / WhatsApp only / Call only / combination
+
+C) Partial Reveal Rules (Scope-based contact visibility)
+
+Sender sees only approved scopes.
+
+UI must display: shared scope + validity (valid_until) + revoke notice.
+
+“Call/WhatsApp only” is policy+UI guidance (cannot technically stop misuse), therefore include “Report abuse” affordance.
+
+D) Revoke Access (Receiver control)
+
+Receiver can revoke any active grant anytime.
+
+After revoke:
+
+Sender UI shows Contact no longer available
+
+Viewing contact must be disabled
+
+Audit event recorded
+
+E) State Machine (Requests + Grants)
+contact_requests.status
+
+pending
+
+accepted
+
+rejected
+
+expired
+
+revoked
+
+cancelled
+
+Allowed transitions
+
+pending → accepted | rejected | expired | cancelled
+
+accepted → revoked | expired (grant validity ends)
+
+rejected → (no new request allowed until cooldown ends)
+
+expired/revoked/cancelled → new request allowed only if policy allows
+
+F) Cooling Period Policy (Reject cooldown)
+Rule
+
+If receiver rejects a contact request, sender cannot submit another request to the same receiver until cooldown_ends_at.
+
+Default
+
+reject_cooldown_days = 90 (3 months)
+
+Enforcement
+
+On request creation:
+
+If now < cooldown_ends_at for that sender→receiver pair → block with clear UI message
+
+UI must show “Cooling period ends on {date}”.
+
+G) Notifications (Required)
+
+Receiver: “New contact request received”
+
+Sender: “Request accepted” (include approved scopes + validity)
+
+Sender: “Request rejected” (include cooldown end date)
+
+Sender: “Access revoked”
+
+Sender: “Request expired”
+
+H) Audit & Transparency (Receiver)
+
+Receiver must have a “Contact Requests & Access” view:
+
+Who requested my contact (history)
+
+Who currently has access (active grants)
+
+When accepted/rejected/revoked/expired
+
+Revoke button from the same screen
+
+I) Admin Policy Settings (Governance-controlled)
+
+Admin can configure (policy-only; must be audited):
+
+reject_cooldown_days (default 90; allowed range 7–365)
+
+pending_expiry_days (default 7)
+
+max_requests_per_day_per_sender (optional anti-spam)
+
+Enable/disable “Approve once / 7 days / 30 days” options (optional)
+All admin changes must write admin_audit_logs with reason.
+
+Non-goals (Day-32 scope boundaries)
+
+No monetization/credits integration unless explicitly planned.
+
+No architecture refactor; implement as minimal additions within SSOT governance.
+
+No silent overwrites; all changes must be auditable.
+--------------------------------------
+# DAY-34 (SSOT ADD) — P3: Who Viewed My Profile (Views Logging + Count/List + Privacy + Governance)
+
+**PROJECT:** Laravel Matrimony  
+**MODE:** PHASE-5 SSOT STRICT  
+**SCOPE:** Spec + Governance + Test Rules (No code here)  
+**GOAL:** Provide production-grade “Who viewed my profile” with correct privacy, abuse safety, and analytics-friendly signals.
+
+---
+
+## 1) Core Outcomes
+1) Log profile views when a logged-in user views another user’s profile (profile show page).
+2) Show:
+   - **View Count** (“X people viewed your profile”)
+   - **Recent Viewers List** (optional but recommended; last N viewers with name/photo + viewed_at)
+3) Enforce privacy + block rules:
+   - Self-view not logged.
+   - Blocked users excluded.
+   - **Admin-originated views MUST never appear to users** (count or list).
+4) Support analytics / AI matching:
+   - If one user views another user’s profile multiple times in a day (e.g., 4 times), that **must be counted for AI matching signals**.
+
+---
+
+## 2) Logged-in Only
+- Only **authenticated viewers** produce view logs.
+- Guest/unregistered visitors are not logged (no stable identity).
+
+---
+
+## 3) Two-Signal Model (Matrimony-specific requirement)
+Matrimony needs **two different view metrics**:
+
+### A) “Who Viewed Me” (User-facing)
+- Purpose: user trust + transparency.
+- Must be **privacy-safe** and not spam-inflated.
+- Uses **deduped unique views** (see Dedup Policy).
+
+### B) “AI View Signals” (Internal analytics / matching)
+- Purpose: ranking/matching signals.
+- Must capture **repeat views** (e.g., 4 views in a day counts as 4).
+- Not shown directly to user (internal counters/aggregates).
+
+> Therefore: **User-facing view count/list ≠ AI view count** by design.
+
+---
+
+## 4) Storage (Additive Only)
+Create a new table (example name) `profile_views` (additive migration; no existing tables altered).
+
+### 4.1) profile_views (raw event log)
+Minimum logical fields:
+- viewer_user_id
+- viewed_user_id
+- viewed_at (timestamp)
+- viewer_type (enum): user | admin | system
+- is_anonymous (boolean) — only if anonymous browsing is supported
+- metadata (optional): source surface (search/profile/dashboard), request_id, etc.
+
+**Rules:**
+- Self-view (viewer_user_id == viewed_user_id) → DO NOT log.
+- viewer_type != user (admin/system) → DO log only if needed for internal audit, BUT MUST be excluded from all user-facing counts/lists.
+
+### 4.2) Optional aggregation tables (recommended for scale)
+If required for performance, introduce additive aggregates:
+- `profile_view_daily_stats`:
+  - viewer_user_id, viewed_user_id, date, view_count (for AI signals)
+- `profile_view_unique_daily` (or a derived index):
+  - viewer_user_id, viewed_user_id, date (unique view marker for user-facing dedupe)
+
+> Aggregates are optional initially, but **policy must define the two-signal model**.
+
+---
+
+## 5) User-Facing “Who Viewed Me” Display Rules
+
+### 5.1) User-facing Unique Count
+- Count should represent **unique viewers** within a defined window (default 30 days).
+- Multiple visits by the same viewer in a day count as **1** for user-facing count/list.
+
+### 5.2) Recent Viewers List
+- Show last N unique viewers (default N=10) with:
+  - viewer name/photo summary
+  - “viewed_at” (latest time within the window)
+- Exclude:
+  - blocked users (either direction)
+  - suspended/deactivated accounts
+  - viewer_type != user (admin/system)
+  - anonymous viewers (if policy excludes them from list)
+
+### 5.3) Where to show
+- Dashboard card: “Recent profile views” (last 5–10)
+- Dedicated page: “Who viewed my profile” (paginated)
+- Both are recommended.
+
+---
+
+## 6) AI Matching / Analytics Signal Rules (Repeat Views)
+- For AI signals, **every view event counts**, including multiple views per day.
+- Example: Same viewer opens the same profile 4 times in one day → AI daily count = 4.
+- This signal is stored/aggregated separately and is not shown directly to end user.
+
+---
+
+## 7) Dedup Policy (User-facing only)
+**User-facing dedupe key:** (viewer_user_id, viewed_user_id, date)
+
+- If a viewer views the same profile multiple times in the same day:
+  - user-facing unique count/list → count as 1
+  - AI view count → count as N (actual number)
+
+---
+
+## 8) Admin/System Views Policy (Hard Rule)
+- Any view performed by:
+  - admin accounts
+  - system/service accounts
+  - moderation review tools
+  MUST **never** appear in:
+  - “Who viewed me” count
+  - “Who viewed me” list
+  - notifications (if any for views)
+- This rule is enforced regardless of reason (support, moderation, testing).
+
+> Demo testing note: demo users should behave like real users. If admin tests flows, those admin views must remain invisible to users.
+
+---
+
+## 9) Block & Privacy Rules (Both Directions)
+### 9.1) Block enforcement
+If A blocks B OR B blocks A:
+- Do not log B→A view events for user-facing features
+- Do not show any historical B views in A’s who-viewed screens
+- Optionally also exclude from AI signals (policy decision):
+  - Recommended: exclude from user-facing; for AI signals, exclude if block is active (to avoid unfair signals)
+
+### 9.2) Anonymous browsing (Optional)
+If supported:
+- Policy toggles:
+  - anonymous_browsing_enabled
+  - include_anonymous_in_count (true/false)
+  - show_anonymous_in_list (always false; list requires identity)
+- Default safe policy:
+  - anonymous views can increase count optionally, but cannot appear in list.
+
+---
+
+## 10) Retention & Purge (Mandatory Governance)
+- retention_days default: 30 (or 90 based on product decision)
+- A scheduled purge job deletes raw view events older than retention_days.
+- Aggregates may retain longer if needed for analytics (policy-defined).
+
+---
+
+## 11) Rate Limits / Abuse Safety
+- Apply rate limiting on view logging writes (per viewer).
+- Prevent automated refresh spamming from overwhelming DB.
+- Dedupe already reduces user-facing inflation; rate limit protects infrastructure.
+
+---
+
+## 12) Performance Requirements (Minimum)
+- Indexes required on:
+  - (viewed_user_id, viewed_at)
+  - (viewer_user_id, viewed_user_id, viewed_at)
+  - (viewer_type)
+- Dashboard card may use caching (5–10 minutes) to avoid heavy counts.
+
+---
+
+## 13) Admin Policy Settings (Configurable, Audited)
+Admin Panel → Settings → “Who Viewed Policy”
+- retention_days (default 30/90)
+- user_facing_unique_window = daily (fixed) OR hours-based (optional; default daily)
+- recent_viewers_limit (default 10)
+- list_enabled (default true)
+- anonymous_browsing_enabled (default false)
+- include_anonymous_in_count (default false)
+- include_blocked_in_ai_signals (default false)
+- exclude_admin_views_always (hard true; not configurable)
+
+**Governance:**
+- Any settings change requires:
+  - admin_audit_logs entry
+  - reason mandatory
+  - old_value → new_value diff
+  - admin_id + timestamp
+
+---
+
+## 14) Acceptance Tests (Demo User Testing Rules)
+
+### T1) Self-view not logged
+- User opens own profile → no record; no count change.
+
+### T2) Unique vs repeat views
+- User A opens User B profile 4 times same day:
+  - Who-viewed (B): A appears once (unique)
+  - AI signal: daily count = 4
+
+### T3) Admin view invisibility
+- Admin opens user profile for any reason:
+  - User-facing who-viewed count/list: NO change; admin never appears
+
+### T4) Block behavior
+- A blocks B:
+  - B viewing A should not appear in A’s list/count
+  - Existing historical B views should disappear from A’s view screens
+  - AI signals: excluded if policy says exclude when blocked
+
+### T5) Retention
+- Views older than retention_days are purged and no longer count.
+
+### T6) Suspended/deactivated viewers
+- If viewer account suspended/deactivated:
+  - Exclude from list and count.
+
+---
+
+## Non-goals (Day-34)
+- No “Who viewed” monetization/credits gating.
+- No new recommendation algorithms; only logging and policy-based display.
+- No architecture refactor; additive tables only; SSOT governance enforced.

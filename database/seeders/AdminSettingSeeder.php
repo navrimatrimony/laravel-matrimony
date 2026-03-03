@@ -19,5 +19,10 @@ class AdminSettingSeeder extends Seeder
         AdminSetting::setValue('manual_profile_activation', '0');
         AdminSetting::setValue('suspend_after_profile_edit', '0');
         AdminSetting::setValue('suspend_mode', 'none');
+
+        // Mobile OTP: off | dev_show (OTP on screen) | live (real SMS later)
+        AdminSetting::setValue('mobile_verification_mode', 'dev_show');
+        // After registration: redirect to OTP step (user can skip and go to wizard)
+        AdminSetting::setValue('redirect_to_mobile_verify_after_registration', '1');
     }
 }

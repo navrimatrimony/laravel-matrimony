@@ -1,8 +1,11 @@
 @extends('layouts.app')
 
 @section('content')
-<div class="container">
-    <h1>Upload Intake</h1>
+<div class="container max-w-2xl mx-auto py-8 px-4">
+    <p class="mb-4 text-sm text-gray-600 dark:text-gray-400">
+        <a href="{{ route('intake.index') }}" class="hover:underline">← My biodata uploads</a>
+    </p>
+    <h1 class="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-2">Upload Biodata</h1>
 
     @if (session('success'))
         <p style="color: green;">{{ session('success') }}</p>

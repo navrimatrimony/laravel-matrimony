@@ -471,6 +471,78 @@ class AdminController extends Controller
     }
 
     /**
+     * Photo approval setting: require admin approval before user photos are visible to others.
+     * Default: approval not required (photos visible immediately).
+     */
+    public function photoApprovalSettings()
+    {
+        $required = AdminSetting::getBool('photo_approval_required', false);
+        return view('admin.photo-approval-settings.index', [
+            'photoApprovalRequired' => $required,
+        ]);
+    }
+
+    /**
+     * Update photo approval setting. Persisted via AdminSetting. Audit logged.
+     */
+    public function updatePhotoApprovalSettings(Request $request): \Illuminate\Http\RedirectResponse
+    {
+        $request->validate([
+            'photo_approval_required' => 'nullable|in:0,1',
+        ]);
+
+        $value = $request->has('photo_approval_required') ? '1' : '0';
+        AdminSetting::setValue('photo_approval_required', $value);
+
+        AuditLogService::log(
+            $request->user(),
+            'update_photo_approval_settings',
+            'AdminSetting',
+            null,
+            "photo_approval_required={$value}",
+            false
+        );
+
+        return redirect()->route('admin.photo-approval-settings.index')
+            ->with('success', 'Photo approval setting updated.');
+    }
+
+    /**
+     * Registration & mobile verification settings (redirect after register, OTP mode).
+     */
+    public function mobileVerificationSettings()
+    {
+        $redirectAfterRegister = AdminSetting::getBool('redirect_to_mobile_verify_after_registration', true);
+        $mode = AdminSetting::getValue('mobile_verification_mode', 'off');
+        return view('admin.mobile-verification-settings.index', [
+            'redirectAfterRegister' => $redirectAfterRegister,
+            'mobileVerificationMode' => $mode,
+        ]);
+    }
+
+    public function updateMobileVerificationSettings(Request $request): \Illuminate\Http\RedirectResponse
+    {
+        $request->validate([
+            'redirect_to_mobile_verify_after_registration' => 'nullable',
+            'mobile_verification_mode' => 'required|in:off,dev_show,live',
+        ]);
+        $redirect = $request->boolean('redirect_to_mobile_verify_after_registration');
+        $mode = $request->input('mobile_verification_mode', 'off');
+        AdminSetting::setValue('redirect_to_mobile_verify_after_registration', $redirect ? '1' : '0');
+        AdminSetting::setValue('mobile_verification_mode', $mode);
+        AuditLogService::log(
+            $request->user(),
+            'update_mobile_verification_settings',
+            'AdminSetting',
+            null,
+            "redirect_after_register={$redirect}, mode={$mode}",
+            false
+        );
+        return redirect()->route('admin.mobile-verification-settings.index')
+            ->with('success', 'Registration & mobile verification settings updated.');
+    }
+
+    /**
      * Admin debug: view notifications for any user (R5).
      * Form to enter user ID, then view that user's notifications (read-only).
      */

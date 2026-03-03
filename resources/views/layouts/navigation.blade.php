@@ -82,6 +82,11 @@
         {{ __('Shortlist') }}
     </x-nav-link>
 
+    <x-nav-link :href="route('intake.index')" 
+                :active="request()->routeIs('intake.index')">
+        {{ __('My biodata uploads') }}
+    </x-nav-link>
+
     <x-nav-link :href="route('intake.upload')" 
                 :active="request()->routeIs('intake.upload')">
         {{ __('Upload Biodata') }}
@@ -201,6 +206,10 @@
 
     <x-responsive-nav-link :href="route('shortlist.index')">
         Shortlist
+    </x-responsive-nav-link>
+
+    <x-responsive-nav-link :href="route('intake.index')">
+        My biodata uploads
     </x-responsive-nav-link>
 
     <x-responsive-nav-link :href="route('intake.upload')">

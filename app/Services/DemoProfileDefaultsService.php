@@ -6,6 +6,7 @@ use App\Models\City;
 use App\Models\Country;
 use App\Models\District;
 use App\Models\FieldRegistry;
+use App\Models\MasterGender;
 use App\Models\MatrimonyProfile;
 use App\Models\State;
 use App\Models\Taluka;
@@ -391,8 +392,13 @@ class DemoProfileDefaultsService
      */
     private static function getUsedDemoPhotoFilenames(string $gender): array
     {
+        $genderId = MasterGender::where('key', $gender)->where('is_active', true)->value('id');
+        if ($genderId === null) {
+            return [];
+        }
+
         $usedPhotos = MatrimonyProfile::where('is_demo', true)
-            ->where('gender', $gender)
+            ->where('gender_id', $genderId)
             ->whereNotNull('profile_photo')
             ->pluck('profile_photo')
             ->toArray();

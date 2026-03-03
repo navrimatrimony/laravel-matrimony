@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Interest;
 use App\Models\MatrimonyProfile;
+use App\Models\Shortlist;
 use App\Services\ProfileCompletenessService;
 use Illuminate\Http\Request;
 
@@ -33,7 +34,7 @@ class DashboardController extends Controller
             ]);
         }
 
-        $profile = $user->matrimonyProfile;
+        $profile = $user->matrimonyProfile->load(['gender', 'city', 'state']);
         $myProfileId = $profile->id;
 
         // Statistics
@@ -48,19 +49,21 @@ class DashboardController extends Controller
             ->where('status', 'rejected')
             ->count();
         $totalProfilesCount = MatrimonyProfile::where('id', '!=', $myProfileId)->count();
+        $shortlistCount = Shortlist::where('owner_profile_id', $myProfileId)->count();
+        $mobileVerified = (bool) $user->mobile_verified_at;
 
         // Profile Completeness Calculation (from service)
         $completenessPercentage = ProfileCompletenessService::percentage($profile);
 
         // Recent Interests (Last 3 received)
-        $recentReceivedInterests = Interest::with('senderProfile')
+        $recentReceivedInterests = Interest::with('senderProfile.gender')
             ->where('receiver_profile_id', $myProfileId)
             ->latest()
             ->limit(3)
             ->get();
 
         // Recent Sent Interests (Last 3)
-        $recentSentInterests = Interest::with('receiverProfile')
+        $recentSentInterests = Interest::with('receiverProfile.gender')
             ->where('sender_profile_id', $myProfileId)
             ->latest()
             ->limit(3)
@@ -75,6 +78,8 @@ class DashboardController extends Controller
             'acceptedInterestsCount' => $acceptedInterestsCount,
             'rejectedInterestsCount' => $rejectedInterestsCount,
             'totalProfilesCount' => $totalProfilesCount,
+            'shortlistCount' => $shortlistCount,
+            'mobileVerified' => $mobileVerified,
             'completenessPercentage' => $completenessPercentage,
             'recentReceivedInterests' => $recentReceivedInterests,
             'recentSentInterests' => $recentSentInterests,

@@ -27,6 +27,10 @@ return new class extends Migration
 
         Schema::table($t, function (Blueprint $schema) use ($t) {
             if (Schema::hasColumn($t, 'address_type')) {
+                $idx = 'profile_addresses_address_type_index';
+                if ($this->indexExists($t, $idx)) {
+                    $schema->dropIndex($idx);
+                }
                 $schema->dropColumn('address_type');
             }
         });
@@ -86,10 +90,29 @@ return new class extends Migration
     private function fkExists(string $table, string $name): bool
     {
         $conn = Schema::getConnection();
+        if ($conn->getDriverName() === 'sqlite') {
+            $result = $conn->select("SELECT name FROM sqlite_master WHERE type = 'index' AND tbl_name = ? AND name = ?", [$table, $name]);
+            return count($result) > 0;
+        }
         $db = $conn->getDatabaseName();
         $result = $conn->select(
             "SELECT CONSTRAINT_NAME FROM information_schema.TABLE_CONSTRAINTS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? AND CONSTRAINT_TYPE = 'FOREIGN KEY' AND CONSTRAINT_NAME = ?",
             [$db, $table, $name]
+        );
+        return count($result) > 0;
+    }
+
+    private function indexExists(string $table, string $indexName): bool
+    {
+        $conn = Schema::getConnection();
+        if ($conn->getDriverName() === 'sqlite') {
+            $result = $conn->select("SELECT name FROM sqlite_master WHERE type = 'index' AND tbl_name = ? AND name = ?", [$table, $indexName]);
+            return count($result) > 0;
+        }
+        $db = $conn->getDatabaseName();
+        $result = $conn->select(
+            "SELECT INDEX_NAME FROM information_schema.STATISTICS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? AND INDEX_NAME = ? LIMIT 1",
+            [$db, $table, $indexName]
         );
         return count($result) > 0;
     }
