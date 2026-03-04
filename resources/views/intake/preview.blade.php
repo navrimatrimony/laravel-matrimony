@@ -25,7 +25,15 @@
                 <div class="md:col-span-2">
                     <x-profile.religion-caste-selector :profile="$intakeProfile ?? new \stdClass()" namePrefix="snapshot[core]" />
                 </div>
-                @foreach(['full_name','date_of_birth','gender','marital_status','annual_income','family_income','primary_contact_number','serious_intent_id','height_cm','highest_education','father_name','mother_name','brother_count','sister_count','birth_time','birth_place','gotra','kuldaivat','rashi','nadi','gan','mangalik','varna','mother_occupation','father_occupation','mama','relatives'] as $coreKey)
+                {{-- Height: centralized picker (ft/in + cm wheels) — same as wizard. --}}
+                <div class="md:col-span-2" data-field-key="core.height_cm">
+                    <x-profile.height-picker
+                        :value="$coreData['height_cm'] ?? null"
+                        namePrefix="snapshot[core]"
+                        label="Height"
+                    />
+                </div>
+                @foreach(['full_name','date_of_birth','gender','annual_income','family_income','primary_contact_number','serious_intent_id','highest_education','father_name','mother_name','brother_count','sister_count','birth_time','birth_place','gotra','kuldaivat','rashi','nadi','gan','mangalik','varna','mother_occupation','father_occupation','mama','relatives'] as $coreKey)
                     @php
                         $val = $coreData[$coreKey] ?? '';
                         $conf = $confidenceMap[$coreKey] ?? null;
@@ -107,34 +115,80 @@
             </div>
         </section>
 
-        {{-- Contacts --}}
+        {{-- Contacts — centralized contact-field (country code + 10-digit + optional WhatsApp). --}}
         <section class="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
             <h2 class="text-lg font-semibold mb-4 border-b pb-2">Contacts</h2>
             <div id="contacts-container">
                 @foreach(($sections['contacts']['data'] ?? []) as $idx => $contact)
+                    @php
+                        $contactPhone = is_array($contact) ? ($contact['phone_number'] ?? $contact['number'] ?? '') : (string) $contact;
+                        $contactType = is_array($contact) ? ($contact['relation_type'] ?? $contact['type'] ?? ($idx === 0 ? 'self' : '')) : '';
+                        $contactName = $idx === 0 ? 'Primary' : (is_array($contact) ? ($contact['contact_name'] ?? 'Alternate') : 'Alternate');
+                    @endphp
                     <div class="flex gap-4 mb-3 items-end contact-row">
-                        <div class="flex-1"><label class="block text-sm font-medium mb-1">Number</label><input type="text" name="snapshot[contacts][{{ $idx }}][number]" value="{{ is_array($contact) ? ($contact['number'] ?? $contact['phone_number'] ?? '') : $contact }}" class="w-full border rounded px-3 py-2 dark:bg-gray-700"></div>
-                        <div class="flex-1"><label class="block text-sm font-medium mb-1">Type</label><input type="text" name="snapshot[contacts][{{ $idx }}][type]" value="{{ is_array($contact) ? ($contact['type'] ?? '') : '' }}" class="w-full border rounded px-3 py-2 dark:bg-gray-700"></div>
-                        <button type="button" class="remove-row px-3 py-2 border border-red-400 text-red-600 rounded hover:bg-red-50">Remove</button>
+                        <div class="flex-1 min-w-0">
+                            <x-profile.contact-field
+                                name="snapshot[contacts][{{ $idx }}][phone_number]"
+                                :value="$contactPhone"
+                                label=""
+                                placeholder="10-digit"
+                                :showCountryCode="true"
+                                :showWhatsapp="true"
+                                nameWhatsapp="snapshot[contacts][{{ $idx }}][is_whatsapp]"
+                                :valueWhatsapp="is_array($contact) && !empty($contact['is_whatsapp'])"
+                                inputClass="flex-1 min-w-0"
+                            />
+                        </div>
+                        <div class="flex-1 min-w-0 max-w-[8rem]">
+                            <label class="block text-sm font-medium mb-1">Type</label>
+                            <input type="text" name="snapshot[contacts][{{ $idx }}][relation_type]" value="{{ $contactType }}" placeholder="self / alternate" class="w-full border rounded px-3 py-2 dark:bg-gray-700 dark:border-gray-600">
+                        </div>
+                        @if($idx === 0)
+                            <input type="hidden" name="snapshot[contacts][0][is_primary]" value="1">
+                            <input type="hidden" name="snapshot[contacts][0][contact_name]" value="Primary">
+                        @else
+                            <input type="hidden" name="snapshot[contacts][{{ $idx }}][contact_name]" value="Alternate">
+                        @endif
+                        <button type="button" class="remove-row px-3 py-2 border border-red-400 text-red-600 rounded hover:bg-red-50 shrink-0">Remove</button>
                     </div>
                 @endforeach
             </div>
+            <template id="contact-row-template">
+                <div class="flex gap-4 mb-3 items-end contact-row">
+                    <div class="flex-1 min-w-0 contact-field-placeholder">
+                        <div class="contact-field-engine">
+                            <div class="flex items-center gap-1.5 flex-nowrap contact-master-field">
+                                <input type="text" inputmode="tel" maxlength="5" value="+91" data-country-code placeholder="+91" title="Country code" class="shrink-0 text-xs border border-gray-300 dark:border-gray-600 rounded py-1.5 bg-gray-50 dark:bg-gray-700 h-9 box-border text-center" style="flex:0 0 10%; min-width:2.75rem; padding-left:0.25rem; padding-right:0.25rem;">
+                                <input type="text" inputmode="numeric" pattern="[0-9]*" maxlength="10" name="snapshot[contacts][__INDEX__][phone_number]" placeholder="10-digit" data-contact-engine class="h-9 rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-2 py-1.5 text-sm min-w-0 flex-1" style="flex:1 1 90%; min-width:0;">
+                                <label class="flex items-center gap-1 shrink-0 cursor-pointer" title="WhatsApp">
+                                    <input type="checkbox" name="snapshot[contacts][__INDEX__][is_whatsapp]" value="1" class="rounded border-gray-300 dark:border-gray-600 w-4 h-4">
+                                    <span class="inline-flex w-5 h-5" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" class="w-5 h-5" fill="#25D366" aria-label="WhatsApp"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg></span>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="flex-1 min-w-0 max-w-[8rem]">
+                        <label class="block text-sm font-medium mb-1">Type</label>
+                        <input type="text" name="snapshot[contacts][__INDEX__][relation_type]" placeholder="alternate" class="w-full border rounded px-3 py-2 dark:bg-gray-700 dark:border-gray-600">
+                    </div>
+                    <input type="hidden" name="snapshot[contacts][__INDEX__][contact_name]" value="Alternate">
+                    <button type="button" class="remove-row px-3 py-2 border border-red-400 text-red-600 rounded hover:bg-red-50 shrink-0">Remove</button>
+                </div>
+            </template>
             <button type="button" id="add-contact" class="mt-2 px-4 py-2 bg-gray-200 dark:bg-gray-600 rounded hover:bg-gray-300">+ Add Contact</button>
         </section>
 
-        {{-- Children --}}
+        {{-- Marital status + Children: same MaritalEngine as wizard (namePrefix=snapshot for intake). --}}
         <section class="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
-            <h2 class="text-lg font-semibold mb-4 border-b pb-2">Children</h2>
-            <div id="children-container">
-                @foreach(($sections['children']['data'] ?? []) as $idx => $child)
-                    <div class="flex gap-4 mb-3 items-end child-row">
-                        <div class="flex-1"><label class="block text-sm font-medium mb-1">Name</label><input type="text" name="snapshot[children][{{ $idx }}][name]" value="{{ is_array($child) ? ($child['name'] ?? '') : $child }}" class="w-full border rounded px-3 py-2 dark:bg-gray-700"></div>
-                        <div class="flex-1"><label class="block text-sm font-medium mb-1">DOB</label><input type="text" name="snapshot[children][{{ $idx }}][dob]" value="{{ is_array($child) ? ($child['dob'] ?? '') : '' }}" class="w-full border rounded px-3 py-2 dark:bg-gray-700"></div>
-                        <button type="button" class="remove-row px-3 py-2 border border-red-400 text-red-600 rounded">Remove</button>
-                    </div>
-                @endforeach
-            </div>
-            <button type="button" id="add-child" class="mt-2 px-4 py-2 bg-gray-200 dark:bg-gray-600 rounded">+ Add Child</button>
+            <h2 class="text-lg font-semibold mb-4 border-b pb-2">Marital status</h2>
+            @include('matrimony.profile.wizard.sections.marital_engine', [
+                'profile' => $intakeProfile,
+                'maritalStatuses' => $maritalStatuses ?? collect(),
+                'profileMarriages' => $profileMarriages ?? collect(),
+                'profileChildren' => $profileChildren ?? collect(),
+                'childLivingWithOptions' => $childLivingWithOptions ?? collect(),
+                'namePrefix' => 'snapshot',
+            ])
         </section>
 
         {{-- Education --}}
@@ -167,18 +221,59 @@
             <button type="button" id="add-career" class="mt-2 px-4 py-2 bg-gray-200 dark:bg-gray-600 rounded">+ Add Career</button>
         </section>
 
-        {{-- Addresses --}}
+        {{-- Relatives — centralized relation-details engine (same as wizard Relatives section). --}}
+        @php
+            $intakeRelativesData = $sections['relatives']['data'] ?? [];
+            if (!is_array($intakeRelativesData)) { $intakeRelativesData = []; }
+            $intakeRelationOptions = [['value'=>'Uncle','label'=>'Uncle'],['value'=>'Aunt','label'=>'Aunt'],['value'=>'Cousin','label'=>'Cousin'],['value'=>'Brother','label'=>'Brother'],['value'=>'Sister','label'=>'Sister'],['value'=>'Father','label'=>'Father'],['value'=>'Mother','label'=>'Mother'],['value'=>'Grandfather','label'=>'Grandfather'],['value'=>'Grandmother','label'=>'Grandmother'],['value'=>'Other','label'=>'Other']];
+        @endphp
+        <section class="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+            <h2 class="text-lg font-semibold mb-4 border-b pb-2">{{ $sections['relatives']['label'] ?? 'Relatives & Family Network' }}</h2>
+            <p class="text-sm text-gray-500 dark:text-gray-400 mb-4">Add extended family members. All fields optional.</p>
+            <x-repeaters.relation-details
+                namePrefix="snapshot[relatives]"
+                :relationOptions="$intakeRelationOptions"
+                :showMarried="false"
+                :items="collect($intakeRelativesData)"
+                :showPrimaryContact="true"
+                addButtonLabel="Add Relative"
+                removeButtonLabel="Remove this relative"
+            />
+        </section>
+
+        {{-- Addresses — centralized address-row component. --}}
         <section class="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
             <h2 class="text-lg font-semibold mb-4 border-b pb-2">Addresses</h2>
             <div id="addresses-container">
                 @foreach(($sections['addresses']['data'] ?? []) as $idx => $addr)
-                    <div class="flex gap-4 mb-3 items-end address-row">
-                        <div class="flex-1"><label class="block text-sm font-medium mb-1">Address</label><input type="text" name="snapshot[addresses][{{ $idx }}][raw]" value="{{ is_array($addr) ? ($addr['raw'] ?? $addr['line1'] ?? '') : $addr }}" class="w-full border rounded px-3 py-2 dark:bg-gray-700" placeholder="Full address"></div>
-                        <div class="w-32"><label class="block text-sm font-medium mb-1">Type</label><input type="text" name="snapshot[addresses][{{ $idx }}][type]" value="{{ is_array($addr) ? ($addr['type'] ?? '') : 'current' }}" class="w-full border rounded px-3 py-2 dark:bg-gray-700" placeholder="current/permanent"></div>
-                        <button type="button" class="remove-row px-3 py-2 border border-red-400 text-red-600 rounded">Remove</button>
-                    </div>
+                    @php
+                        $addrRaw = is_array($addr) ? ($addr['raw'] ?? $addr['line1'] ?? '') : (string) $addr;
+                        $addrType = is_array($addr) ? ($addr['type'] ?? 'current') : 'current';
+                    @endphp
+                    <x-profile.address-row
+                        :namePrefix="'snapshot[addresses]['.$idx.']'"
+                        :valueRaw="$addrRaw"
+                        :valueType="$addrType"
+                        rawPlaceholder="Full address"
+                        typePlaceholder="current/permanent"
+                    >
+                        <button type="button" class="remove-row px-3 py-2 border border-red-400 text-red-600 rounded hover:bg-red-50 shrink-0">Remove</button>
+                    </x-profile.address-row>
                 @endforeach
             </div>
+            <template id="address-row-template">
+                <div class="flex gap-4 mb-3 items-end address-row">
+                    <div class="flex-1 min-w-0">
+                        <label class="block text-sm font-medium mb-1">Address</label>
+                        <input type="text" name="snapshot[addresses][__INDEX__][raw]" class="w-full border rounded px-3 py-2 dark:bg-gray-700 dark:border-gray-600" placeholder="Full address">
+                    </div>
+                    <div class="w-32 shrink-0">
+                        <label class="block text-sm font-medium mb-1">Type</label>
+                        <input type="text" name="snapshot[addresses][__INDEX__][type]" value="current" class="w-full border rounded px-3 py-2 dark:bg-gray-700 dark:border-gray-600" placeholder="current">
+                    </div>
+                    <button type="button" class="remove-row px-3 py-2 border border-red-400 text-red-600 rounded shrink-0">Remove</button>
+                </div>
+            </template>
             <button type="button" id="add-address" class="mt-2 px-4 py-2 bg-gray-200 dark:bg-gray-600 rounded">+ Add Address</button>
         </section>
 
@@ -319,21 +414,33 @@
     }
 
     document.getElementById('add-contact')?.addEventListener('click', function() {
+        var template = document.getElementById('contact-row-template');
+        var container = document.getElementById('contacts-container');
+        if (!template || !container) return;
         var i = nextIndex('contacts-container', '.contact-row');
-        var div = document.createElement('div');
-        div.className = 'flex gap-4 mb-3 items-end contact-row';
-        div.innerHTML = '<div class="flex-1"><label class="block text-sm font-medium mb-1">Number</label><input type="text" name="snapshot[contacts][' + i + '][number]" class="w-full border rounded px-3 py-2 dark:bg-gray-700"></div><div class="flex-1"><label class="block text-sm font-medium mb-1">Type</label><input type="text" name="snapshot[contacts][' + i + '][type]" class="w-full border rounded px-3 py-2 dark:bg-gray-700"></div><button type="button" class="remove-row px-3 py-2 border border-red-400 text-red-600 rounded">Remove</button>';
-        document.getElementById('contacts-container').appendChild(div);
-        div.querySelector('.remove-row').addEventListener('click', function() { div.remove(); });
-    });
-
-    document.getElementById('add-child')?.addEventListener('click', function() {
-        var i = nextIndex('children-container', '.child-row');
-        var div = document.createElement('div');
-        div.className = 'flex gap-4 mb-3 items-end child-row';
-        div.innerHTML = '<div class="flex-1"><label class="block text-sm font-medium mb-1">Name</label><input type="text" name="snapshot[children][' + i + '][name]" class="w-full border rounded px-3 py-2 dark:bg-gray-700"></div><div class="flex-1"><label class="block text-sm font-medium mb-1">DOB</label><input type="text" name="snapshot[children][' + i + '][dob]" class="w-full border rounded px-3 py-2 dark:bg-gray-700"></div><button type="button" class="remove-row px-3 py-2 border border-red-400 text-red-600 rounded">Remove</button>';
-        document.getElementById('children-container').appendChild(div);
-        div.querySelector('.remove-row').addEventListener('click', function() { div.remove(); });
+        var clone = template.content.cloneNode(true);
+        var row = clone.querySelector('.contact-row');
+        if (!row) return;
+        row.querySelectorAll('[name]').forEach(function(el) {
+            if (el.name && el.name.indexOf('__INDEX__') !== -1) el.name = el.name.replace(/__INDEX__/g, i);
+        });
+        row.querySelectorAll('input[type="text"]').forEach(function(inp) {
+            if (inp.name && inp.name.indexOf('phone_number') !== -1) inp.value = '';
+        });
+        if (i === 0) {
+            var hidPrimary = document.createElement('input');
+            hidPrimary.type = 'hidden';
+            hidPrimary.name = 'snapshot[contacts][0][is_primary]';
+            hidPrimary.value = '1';
+            row.insertBefore(hidPrimary, row.firstChild);
+            var hidName = document.createElement('input');
+            hidName.type = 'hidden';
+            hidName.name = 'snapshot[contacts][0][contact_name]';
+            hidName.value = 'Primary';
+            row.insertBefore(hidName, row.firstChild);
+        }
+        row.querySelector('.remove-row')?.addEventListener('click', function() { row.remove(); });
+        container.appendChild(row);
     });
 
     document.getElementById('add-education')?.addEventListener('click', function() {
@@ -355,12 +462,18 @@
     });
 
     document.getElementById('add-address')?.addEventListener('click', function() {
+        var template = document.getElementById('address-row-template');
+        var container = document.getElementById('addresses-container');
+        if (!template || !container) return;
         var i = nextIndex('addresses-container', '.address-row');
-        var div = document.createElement('div');
-        div.className = 'flex gap-4 mb-3 items-end address-row';
-        div.innerHTML = '<div class="flex-1"><label class="block text-sm font-medium mb-1">Address</label><input type="text" name="snapshot[addresses][' + i + '][raw]" class="w-full border rounded px-3 py-2 dark:bg-gray-700" placeholder="Full address"></div><div class="w-32"><label class="block text-sm font-medium mb-1">Type</label><input type="text" name="snapshot[addresses][' + i + '][type]" class="w-full border rounded px-3 py-2 dark:bg-gray-700" placeholder="current"></div><button type="button" class="remove-row px-3 py-2 border border-red-400 text-red-600 rounded">Remove</button>';
-        document.getElementById('addresses-container').appendChild(div);
-        div.querySelector('.remove-row').addEventListener('click', function() { div.remove(); });
+        var clone = template.content.cloneNode(true);
+        var row = clone.querySelector('.address-row');
+        if (!row) return;
+        row.querySelectorAll('[name]').forEach(function(el) {
+            if (el.name && el.name.indexOf('__INDEX__') !== -1) el.name = el.name.replace(/__INDEX__/g, i);
+        });
+        row.querySelector('.remove-row')?.addEventListener('click', function() { row.remove(); });
+        container.appendChild(row);
     });
 
     document.getElementById('add-property-asset')?.addEventListener('click', function() {

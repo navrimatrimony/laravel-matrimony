@@ -20,30 +20,11 @@
             </select>
         </div>
     </div>
-    {{-- Point 4.2: Marital status only here; marriage details + children canonical in Marriages section (see full.blade / marriages.blade). --}}
-    @php
-        $initialMaritalId = old('marital_status_id', $profile->marital_status_id ?? '');
-        $maritalLabel = ($maritalStatuses ?? collect())->firstWhere('id', $initialMaritalId)?->label ?? '';
-        $firstMarriage = ($profileMarriages ?? collect())->first();
-    @endphp
-    <div>
-        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Marital Status <span class="text-red-500">*</span></label>
-        <select id="wizard_marital_status_id" name="marital_status_id"
-            class="form-select w-full rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-3 py-2" required>
-            <option value="">Select Marital Status</option>
-            @foreach($maritalStatuses ?? [] as $status)
-                <option value="{{ $status->id }}" {{ $initialMaritalId == $status->id ? 'selected' : '' }}>💍 {{ $status->label }}</option>
-            @endforeach
-        </select>
-        @if($maritalLabel)
-            <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">Summary: {{ $maritalLabel }}@if($firstMarriage && $firstMarriage->marriage_year) — Marriage year {{ $firstMarriage->marriage_year }}@endif</p>
-        @endif
-    </div>
+    {{-- Marital status is only in Marriages section (MaritalEngine). --}}
     <x-profile.religion-caste-selector :profile="$profile" />
     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
-            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Height (cm)</label>
-            <input type="number" name="height_cm" value="{{ old('height_cm', $profile->height_cm) }}" min="50" max="250" class="w-full rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-3 py-2">
+            <x-profile.height-picker :value="$profile->height_cm ?? null" />
         </div>
         {{-- Point 4.1: Primary contact — canonical editable in Contacts section. On full page show read-only here; on basic-info step show editable. --}}
         <div class="md:col-span-2">
@@ -52,7 +33,16 @@
                 <p class="text-gray-700 dark:text-gray-300 py-2">{{ $primaryContactPhone ? e($primaryContactPhone) : '—' }}</p>
                 <p class="text-xs text-gray-500 dark:text-gray-400">Edit in <strong>Contacts</strong> section below.</p>
             @else
-                <input type="text" name="primary_contact_number" value="{{ old('primary_contact_number', $primaryContactPhone ?? '') }}" placeholder="Mobile number" class="w-full rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-3 py-2" required>
+                <x-profile.contact-field
+                    name="primary_contact_number"
+                    :value="$primaryContactPhone ?? ''"
+                    label=""
+                    placeholder="10-digit number"
+                    :showCountryCode="true"
+                    :showWhatsapp="false"
+                    :required="true"
+                    inputClass="flex-1 min-w-0"
+                />
             @endif
         </div>
     </div>

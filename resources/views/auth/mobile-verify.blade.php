@@ -26,8 +26,15 @@
             @csrf
             @if (!$user->mobile)
                 <div>
-                    <x-input-label for="mobile" value="Mobile number" />
-                    <x-text-input id="mobile" class="block mt-1 w-full" type="text" name="mobile" :value="old('mobile', $user->mobile)" placeholder="10-digit number" required autofocus />
+                    <x-profile.contact-field
+                        name="mobile"
+                        :value="old('mobile', $user->mobile)"
+                        label="Mobile number"
+                        placeholder="10-digit number"
+                        :showCountryCode="true"
+                        :showWhatsapp="false"
+                        :required="true"
+                    />
                     <x-input-error :messages="$errors->get('mobile')" class="mt-2" />
                 </div>
                 <x-primary-button type="submit">Send OTP</x-primary-button>

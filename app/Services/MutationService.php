@@ -366,6 +366,10 @@ class MutationService
                     if (!array_key_exists($snapshotKey, $snapshot) || !is_array($snapshot[$snapshotKey])) {
                         continue;
                     }
+                    if ($snapshotKey === 'siblings' && Schema::hasTable('profile_siblings')) {
+                        $this->syncSiblingsWithSpouses($profile, $snapshot['siblings']);
+                        continue;
+                    }
                     $table = self::SNAPSHOT_KEY_TO_TABLE[$snapshotKey] ?? null;
                     if ($table === null || !Schema::hasTable($table)) {
                         continue;
@@ -959,11 +963,16 @@ class MutationService
         }
         if ($entityType === 'profile_siblings') {
             $mapped = $row;
+            $mapped['relation_type'] = in_array($mapped['relation_type'] ?? null, ['brother', 'sister'], true) ? $mapped['relation_type'] : null;
+            $mapped['name'] = isset($mapped['name']) && trim((string) $mapped['name']) !== '' ? trim((string) $mapped['name']) : null;
             $mapped['gender'] = in_array($mapped['gender'] ?? null, ['male', 'female'], true) ? $mapped['gender'] : null;
             $mapped['marital_status'] = in_array($mapped['marital_status'] ?? null, ['unmarried', 'married'], true) ? $mapped['marital_status'] : null;
             $mapped['occupation'] = isset($mapped['occupation']) && trim((string) $mapped['occupation']) !== '' ? trim((string) $mapped['occupation']) : null;
             $mapped['city_id'] = ! empty($mapped['city_id']) ? (int) $mapped['city_id'] : null;
+            $mapped['contact_number'] = isset($mapped['contact_number']) && trim((string) $mapped['contact_number']) !== '' ? trim((string) $mapped['contact_number']) : null;
             $mapped['notes'] = isset($mapped['notes']) && trim((string) $mapped['notes']) !== '' ? trim((string) $mapped['notes']) : null;
+            $mapped['sort_order'] = isset($mapped['sort_order']) && $mapped['sort_order'] !== '' ? (int) $mapped['sort_order'] : 0;
+            unset($mapped['spouse'], $mapped['is_married']);
             return $mapped;
         }
         if ($entityType === 'profile_marriages') {
@@ -1268,6 +1277,110 @@ class MutationService
             $insertData['updated_at'] = now();
             DB::table($table)->insert($insertData);
             $this->writeProfileChangeHistory($profile->id, $table, null, 'insert', null, json_encode($data));
+        }
+    }
+
+    /**
+     * Day 31 Part 2: Sync siblings + spouse rows. Uses soft deletes; collects sibling ids for spouse upsert.
+     */
+    private function syncSiblingsWithSpouses(MatrimonyProfile $profile, array $proposed): void
+    {
+        $table = 'profile_siblings';
+        $hasDeletedAt = Schema::hasColumn($table, 'deleted_at');
+        $existingQuery = DB::table($table)->where('profile_id', $profile->id);
+        if ($hasDeletedAt) {
+            $existingQuery->whereNull('deleted_at');
+        }
+        $existing = $existingQuery->get()->keyBy('id');
+
+        $siblingIds = [];
+        foreach ($proposed as $idx => $row) {
+            if (! is_array($row)) {
+                continue;
+            }
+            $mapped = $this->mapSnapshotRowToTable($table, $row);
+            $id = isset($mapped['id']) ? (int) $mapped['id'] : null;
+            $existingRow = $id !== null ? $existing->get($id) : null;
+
+            $insertData = array_merge(['profile_id' => $profile->id], $mapped);
+            unset($insertData['id']);
+            if ($hasDeletedAt) {
+                $insertData['deleted_at'] = null;
+            }
+            $insertData['created_at'] = now();
+            $insertData['updated_at'] = now();
+
+            if ($existingRow !== null) {
+                $updateData = collect($insertData)->except(['profile_id', 'created_at'])->all();
+                DB::table($table)->where('id', $id)->update($updateData);
+                $siblingIds[$idx] = $id;
+            } else {
+                $newId = DB::table($table)->insertGetId($insertData);
+                $siblingIds[$idx] = $newId;
+                $this->writeProfileChangeHistory($profile->id, $table, null, 'insert', null, json_encode($mapped));
+            }
+        }
+
+        $proposedIds = array_filter($siblingIds);
+        foreach ($existing as $id => $existingRow) {
+            if (in_array($id, $proposedIds, true)) {
+                continue;
+            }
+            if ($hasDeletedAt) {
+                DB::table($table)->where('id', $id)->update(['deleted_at' => now(), 'updated_at' => now()]);
+            }
+            $this->writeProfileChangeHistory($profile->id, $table, (int) $id, 'delete', json_encode($existingRow), null);
+        }
+
+        if (! Schema::hasTable('profile_sibling_spouses')) {
+            return;
+        }
+        $spouseTable = 'profile_sibling_spouses';
+        $spouseHasDeletedAt = Schema::hasColumn($spouseTable, 'deleted_at');
+        foreach ($proposed as $idx => $row) {
+            if (! is_array($row)) {
+                continue;
+            }
+            $siblingId = $siblingIds[$idx] ?? null;
+            if ($siblingId === null) {
+                continue;
+            }
+            $isMarried = in_array($row['marital_status'] ?? null, ['married'], true) || ! empty($row['is_married']);
+            $spouseData = $row['spouse'] ?? [];
+            $hasSpouseFields = ! empty($spouseData['name']) || ! empty($spouseData['occupation_title']) || ! empty($spouseData['contact_number'])
+                || ! empty($spouseData['address_line']) || ! empty($spouseData['city_id']);
+
+            if ($isMarried && $hasSpouseFields) {
+                $spouseRow = [
+                    'name' => trim((string) ($spouseData['name'] ?? '')) ?: null,
+                    'occupation_title' => trim((string) ($spouseData['occupation_title'] ?? '')) ?: null,
+                    'contact_number' => trim((string) ($spouseData['contact_number'] ?? '')) ?: null,
+                    'address_line' => trim((string) ($spouseData['address_line'] ?? '')) ?: null,
+                    'city_id' => ! empty($spouseData['city_id']) ? (int) $spouseData['city_id'] : null,
+                    'taluka_id' => ! empty($spouseData['taluka_id']) ? (int) $spouseData['taluka_id'] : null,
+                    'district_id' => ! empty($spouseData['district_id']) ? (int) $spouseData['district_id'] : null,
+                    'state_id' => ! empty($spouseData['state_id']) ? (int) $spouseData['state_id'] : null,
+                ];
+                $existingSpouse = DB::table($spouseTable)->where('profile_sibling_id', $siblingId);
+                if ($spouseHasDeletedAt) {
+                    $existingSpouse->whereNull('deleted_at');
+                }
+                $existingSpouse = $existingSpouse->first();
+                $spouseRow['profile_sibling_id'] = $siblingId;
+                $spouseRow['updated_at'] = now();
+                if ($existingSpouse) {
+                    DB::table($spouseTable)->where('id', $existingSpouse->id)->update($spouseRow);
+                } else {
+                    $spouseRow['created_at'] = now();
+                    DB::table($spouseTable)->insert($spouseRow);
+                }
+            } else {
+                $toSoftDelete = DB::table($spouseTable)->where('profile_sibling_id', $siblingId);
+                if ($spouseHasDeletedAt) {
+                    $toSoftDelete->whereNull('deleted_at');
+                }
+                $toSoftDelete->update(['deleted_at' => now(), 'updated_at' => now()]);
+            }
         }
     }
 

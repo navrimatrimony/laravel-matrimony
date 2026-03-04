@@ -106,6 +106,7 @@ class MatrimonyProfile extends Model
         'date_of_birth',
         'birth_time',
         'marital_status_id',
+        'has_children',
         'religion_id',
         'caste_id',
         'sub_caste_id',

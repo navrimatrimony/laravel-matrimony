@@ -26,10 +26,17 @@
             <x-input-error :messages="$errors->get('email')" class="mt-2" />
         </div>
 
-        <!-- Mobile (required for registration) -->
+        <!-- Mobile (required) — centralized contact-field -->
         <div class="mt-4">
-            <x-input-label for="mobile" value="Mobile number (required)" />
-            <x-text-input id="mobile" class="block mt-1 w-full" type="text" name="mobile" :value="old('mobile')" placeholder="10-digit mobile number" required autocomplete="tel" />
+            <x-profile.contact-field
+                name="mobile"
+                :value="old('mobile')"
+                label="Mobile number (required)"
+                placeholder="10-digit mobile number"
+                :showCountryCode="true"
+                :showWhatsapp="false"
+                :required="true"
+            />
             <x-input-error :messages="$errors->get('mobile')" class="mt-2" />
         </div>
 

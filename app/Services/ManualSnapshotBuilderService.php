@@ -28,6 +28,7 @@ class ManualSnapshotBuilderService
             'caste_id' => $request->input('caste_id') ? (int) $request->input('caste_id') : null,
             'sub_caste_id' => $request->input('sub_caste_id') ? (int) $request->input('sub_caste_id') : null,
             'marital_status_id' => $request->input('marital_status_id') ? (int) $request->input('marital_status_id') : null,
+            'has_children' => $request->filled('has_children') ? ($request->input('has_children') === '1' || $request->input('has_children') === 1) : null,
             'height_cm' => $request->has('height_cm') && $request->input('height_cm') !== '' ? (int) $request->input('height_cm') : null,
             'weight_kg' => $request->has('weight_kg') && $request->input('weight_kg') !== '' ? (int) $request->input('weight_kg') : null,
             'complexion_id' => $request->input('complexion_id') ? (int) $request->input('complexion_id') : null,
@@ -80,13 +81,15 @@ class ManualSnapshotBuilderService
         }
 
         $children = [];
-        foreach ($request->input('children', []) as $row) {
+        foreach ($request->input('children', []) as $i => $row) {
+            $age = $row['age'] ?? $row['child_age'] ?? 0;
             $children[] = [
                 'id' => ! empty($row['id']) ? (int) $row['id'] : null,
                 'child_name' => trim((string) ($row['child_name'] ?? '')),
-                'gender' => trim((string) ($row['child_gender'] ?? '')),
-                'age' => ! empty($row['child_age']) ? (int) $row['child_age'] : 0,
+                'gender' => trim((string) ($row['gender'] ?? $row['child_gender'] ?? '')),
+                'age' => $age !== '' && $age !== null ? (int) $age : 0,
                 'child_living_with_id' => ! empty($row['child_living_with_id']) ? (int) $row['child_living_with_id'] : null,
+                'sort_order' => isset($row['sort_order']) ? (int) $row['sort_order'] : $i,
             ];
         }
 
@@ -206,14 +209,34 @@ class ManualSnapshotBuilderService
 
         $siblings = [];
         foreach ($request->input('siblings', []) as $row) {
-            $siblings[] = [
+            $maritalStatus = in_array($row['marital_status'] ?? null, ['unmarried', 'married'], true) ? $row['marital_status'] : null;
+            $isMarried = $maritalStatus === 'married' || ! empty($row['is_married']);
+            $spouseIn = $row['spouse'] ?? [];
+            $siblingRow = [
                 'id' => ! empty($row['id']) ? (int) $row['id'] : null,
+                'relation_type' => in_array($row['relation_type'] ?? null, ['brother', 'sister'], true) ? $row['relation_type'] : null,
+                'name' => trim((string) ($row['name'] ?? '')) ?: null,
                 'gender' => in_array($row['gender'] ?? null, ['male', 'female'], true) ? $row['gender'] : null,
-                'marital_status' => in_array($row['marital_status'] ?? null, ['unmarried', 'married'], true) ? $row['marital_status'] : null,
+                'marital_status' => $maritalStatus,
                 'occupation' => trim((string) ($row['occupation'] ?? '')) ?: null,
                 'city_id' => ! empty($row['city_id']) ? (int) $row['city_id'] : null,
+                'contact_number' => trim((string) ($row['contact_number'] ?? '')) ?: null,
                 'notes' => trim((string) ($row['notes'] ?? '')) ?: null,
+                'sort_order' => isset($row['sort_order']) && $row['sort_order'] !== '' ? (int) $row['sort_order'] : 0,
             ];
+            if ($isMarried && (array_key_exists('name', $spouseIn) || array_key_exists('occupation_title', $spouseIn) || array_key_exists('contact_number', $spouseIn) || array_key_exists('city_id', $spouseIn))) {
+                $siblingRow['spouse'] = [
+                    'name' => trim((string) ($spouseIn['name'] ?? '')) ?: null,
+                    'occupation_title' => trim((string) ($spouseIn['occupation_title'] ?? '')) ?: null,
+                    'contact_number' => trim((string) ($spouseIn['contact_number'] ?? '')) ?: null,
+                    'address_line' => trim((string) ($spouseIn['address_line'] ?? '')) ?: null,
+                    'city_id' => ! empty($spouseIn['city_id']) ? (int) $spouseIn['city_id'] : null,
+                    'taluka_id' => ! empty($spouseIn['taluka_id']) ? (int) $spouseIn['taluka_id'] : null,
+                    'district_id' => ! empty($spouseIn['district_id']) ? (int) $spouseIn['district_id'] : null,
+                    'state_id' => ! empty($spouseIn['state_id']) ? (int) $spouseIn['state_id'] : null,
+                ];
+            }
+            $siblings[] = $siblingRow;
         }
 
         $relatives = [];

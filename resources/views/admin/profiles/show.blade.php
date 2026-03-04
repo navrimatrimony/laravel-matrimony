@@ -320,8 +320,7 @@
                         </select>
                     </div>
                     <div>
-                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Height (cm)</label>
-                        <input type="number" name="height_cm" value="{{ old('height_cm', $matrimonyProfile->height_cm) }}" class="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100" placeholder="—">
+                        <x-profile.height-picker :value="$matrimonyProfile->height_cm ?? null" label="Height" />
                     </div>
                 </div>
 

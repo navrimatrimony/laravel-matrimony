@@ -4742,7 +4742,177 @@ Before Phase-5C completion:
 
 Operating beyond Phase-5C in TGRM mode
 is considered governance violation.
+---------------------------------
+CURSOR PROMPT — Day 31 Part 2 Addendum: Reusable Sibling Details Engine (SSOT-compliant)
 
+GOAL
+Implement a reusable “Sibling Details Engine” for the profile wizard/full edit:
+- User can add optional sibling entries.
+- For each entry:
+  - relation_type: Brother or Sister
+  - sibling_name (required only if the entry is created; otherwise section can be empty)
+  - married_toggle (on/off)
+  - If married_toggle = ON: show spouse sub-form immediately below (optional)
+    - spouse_name, spouse_address (location engine), spouse_contact, spouse_occupation
+  - Sibling extra fields (optional):
+    - sibling_occupation, sibling_city (location engine), sibling_contact, sibling_notes (free text)
+- Everything optional overall; user can skip entire section.
+- Must be reusable: can be reused later for relatives (mama/kaka/etc.) without rewriting UI logic.
+
+NON-NEGOTIABLE CONSTRAINTS (PHASE-5 SSOT)
+- No JSON blob storage for structured entities (siblings/spouse must NOT be stored as JSON).
+- No direct update()/save() on profile data. All mutations must go through MutationService.
+- Zero data loss: do not silently overwrite existing sibling entries; handle create/update/delete explicitly.
+- Intake raw text immutable (not part of this change).
+
+STEP 1 — Confirm existing schema (DO THIS FIRST)
+Search the repo for any existing siblings tables/models:
+- migrations: database/migrations/*sibling*
+- models: app/Models/*Sibling*
+- relationships on MatrimonyProfile model
+If siblings already exist, adapt instead of creating new tables.
+
+If NO siblings schema exists, create normalized tables:
+
+STEP 2 — Create normalized DB tables (NO JSON)
+2.1 Migration: create_matrimony_profile_siblings_table
+Columns (suggested):
+- id (PK)
+- matrimony_profile_id (FK -> matrimony_profiles.id, indexed)
+- relation_type (enum/string: 'brother'|'sister')  [string ok, enforce validation]
+- name (nullable string)
+- is_married (boolean, default null or false)
+- occupation_title (nullable string)
+- city_id (nullable FK to cities or existing location id strategy)
+- contact_number (nullable string)
+- notes (nullable text)
+- sort_order (int, default 0)
+- created_at/updated_at/deleted_at (soft deletes recommended)
+
+2.2 Migration: create_matrimony_profile_sibling_spouses_table
+- id (PK)
+- sibling_id (FK -> matrimony_profile_siblings.id, unique index if 1 spouse per sibling)
+- name (nullable string)
+- occupation_title (nullable string)
+- contact_number (nullable string)
+- address_line (nullable string OR reuse location engine fields if available)
+- city_id/state_id/district_id/taluka_id (ONLY if your location engine uses those)
+- created_at/updated_at/deleted_at
+
+IMPORTANT:
+- Use the same location ID strategy that already exists (you already have a typeahead engine).
+- DO NOT introduce parallel location fields if a standard exists.
+
+STEP 3 — Models + Relationships
+- app/Models/MatrimonyProfileSibling.php (SoftDeletes)
+- app/Models/MatrimonyProfileSiblingSpouse.php (SoftDeletes)
+Relationships:
+- MatrimonyProfile hasMany siblings()
+- MatrimonyProfileSibling belongsTo profile(), hasOne spouse()
+
+STEP 4 — MutationService (SSOT governance)
+Add Mutation(s) for siblings:
+- Create sibling
+- Update sibling
+- Delete sibling (soft delete)
+- Upsert spouse for sibling (create/update/clear)
+Rules:
+- Do not overwrite siblings list blindly.
+- Use stable identifiers per row (id).
+- When UI sends removed rows: mark deleted_at (soft delete).
+- Track edited_source/edited_by consistent with existing profile edit patterns.
+- If your project uses conflict_records for critical changes, apply the same governance rules (at minimum, avoid silent destructive overwrites).
+
+STEP 5 — Reusable UI Component (Blade + JS/Alpine)
+Create a reusable component that can be used in wizard + full edit:
+
+Option A (Recommended): Blade component
+- resources/views/components/repeaters/sibling-details.blade.php
+Inputs:
+- initial siblings array (from DB)
+- location engine config (so it can reuse the same typeahead component you already have)
+Behavior:
+- “Add Sibling” button adds a new row UI.
+- Each row shows:
+  - Relation select (Brother/Sister)
+  - Name input
+  - Married toggle (switch)
+  - If married ON: spouse block appears directly below (no reload)
+  - Sibling extra fields: occupation, city (typeahead), contact, notes
+  - Remove row button (marks for deletion)
+
+IMPORTANT UX RULES
+- The spouse block must be immediately below the married toggle within the same row (adjacent grouping).
+- Everything optional: do not show validation errors unless user entered partial data that violates format.
+- Keep it compact: avoid large vertical spacing.
+
+STEP 6 — Reuse the existing Location Typeahead Engine everywhere
+You said:
+- address, birth place, native place, job location, relatives address — should use the same engine.
+So inside sibling-details component, DO NOT build a new city dropdown.
+Instead:
+- Use the already-existing location-typeahead component/JS module (extract it if it is currently embedded in one page).
+- Same for spouse city/address.
+Outcome: “update one place → works everywhere”.
+
+STEP 7 — Controller wiring (Wizard + Full Edit)
+Find the routes already present:
+- matrimony/profile/wizard/full (or wizard sections)
+- matrimony/profile/update-full
+Integrate:
+- Render siblings component in the “Siblings” section.
+- On submit, map request payload to MutationService calls.
+
+Request payload design (NO JSON storage, but request can send arrays):
+- siblings[0][id]
+- siblings[0][relation_type]
+- siblings[0][name]
+- siblings[0][is_married]
+- siblings[0][occupation_title]
+- siblings[0][city_id]
+- siblings[0][contact_number]
+- siblings[0][notes]
+- siblings[0][spouse][name]
+- siblings[0][spouse][occupation_title]
+- siblings[0][spouse][contact_number]
+- siblings[0][spouse][address_line] / location ids
+
+Server-side validation:
+- relation_type in [brother,sister] if present
+- contact number format if present
+- if spouse fields present but is_married is false: either ignore spouse fields or set is_married true; pick one consistent rule (prefer ignore spouse unless married ON)
+
+STEP 8 — Keep counts separate (brothers_count, sisters_count)
+You already have:
+- brothers_count, sisters_count columns in matrimony_profiles.
+Do NOT auto-derive counts from siblings list unless you explicitly choose to and document it.
+Simplest:
+- Keep counts as separate summary fields (fast for matching).
+- Sibling details list is optional enrichment (can be empty even if counts > 0).
+
+STEP 9 — Verification Checklist
+Run:
+- php artisan migrate
+- php artisan test (if present)
+Manual:
+1) Wizard/full “Siblings” loads with zero entries by default.
+2) Add Sister:
+   - enter name
+   - toggle married ON -> spouse block appears immediately below
+   - fill spouse optional fields
+   - save -> persists -> reload page -> data still shown
+3) Toggle married OFF -> spouse block hides; saving clears spouse OR keeps but not shown (choose one rule; recommended: clear spouse on save if married OFF)
+4) Location typeahead works for sibling city and spouse address/city (reused engine).
+5) Remove sibling entry -> soft deleted (not hard delete), and it disappears on reload.
+6) No direct profile->update() used for this feature; MutationService only.
+
+DELIVERABLES
+- List of files changed (paths)
+- Migration names
+- New models/services
+- Where the reusable component is used (wizard + full edit)
+
+END
 ============================================================
 END OF TEMPORARY GOVERNANCE REDUCTION MODE
 ============================================================

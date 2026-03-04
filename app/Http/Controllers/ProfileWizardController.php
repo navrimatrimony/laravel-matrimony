@@ -112,8 +112,8 @@ class ProfileWizardController extends Controller
     }
 
     /**
-     * Return marriage-fields partial HTML for given status (Point 4: server-side partials).
-     * GET ?status=divorced|widowed|separated|married. Dropdown change fetches this and replaces inner HTML.
+     * Legacy: Return marriage-fields partial HTML for given status (old dropdown partials).
+     * GET ?status=divorced|widowed|separated|married. The MaritalEngine does not use this; it is the single UI for marital+children everywhere (wizard marriages + full).
      */
     public function marriageFields(Request $request)
     {
@@ -174,6 +174,15 @@ class ProfileWizardController extends Controller
         try {
             $result = app(\App\Services\MutationService::class)->applyManualSnapshot($profile, $snapshot, (int) $user->id, 'manual');
             \Illuminate\Support\Facades\Log::info('WIZARD RESULT DEBUG', ['result' => $result, 'keys' => array_keys($result)]);
+            $hasChildrenNo = isset($snapshot['core']['has_children']) && ($snapshot['core']['has_children'] === false || $snapshot['core']['has_children'] === 0 || $snapshot['core']['has_children'] === '0');
+            if (($section === 'marriages' || $section === 'full') && $hasChildrenNo) {
+                DB::table('profile_children')->where('profile_id', $profile->id)->delete();
+            }
+            if ($section === 'alliance' && \Schema::hasColumn('matrimony_profiles', 'other_relatives_text')) {
+                \DB::table('matrimony_profiles')->where('id', $profile->id)->update([
+                    'other_relatives_text' => trim((string) $request->input('other_relatives_text', '')) ?: null,
+                ]);
+            }
         } catch (\Illuminate\Validation\ValidationException $e) {
             return redirect()->route('matrimony.profile.wizard.section', ['section' => $section])
                 ->withErrors($e->errors())
@@ -260,7 +269,29 @@ class ProfileWizardController extends Controller
                 break;
             case 'marriages':
                 $data['profileMarriages'] = \App\Models\ProfileMarriage::where('profile_id', $profile->id)->orderBy('id')->get();
-                $data['maritalStatuses'] = \App\Models\MasterMaritalStatus::where('is_active', true)->get();
+                $maritalKeys = ['never_married', 'divorced', 'separated', 'widowed'];
+                $data['maritalStatuses'] = \App\Models\MasterMaritalStatus::where('is_active', true)
+                    ->whereIn('key', $maritalKeys)
+                    ->get()
+                    ->sortBy(fn ($s) => array_search($s->key, $maritalKeys, true) !== false ? array_search($s->key, $maritalKeys, true) : 999)
+                    ->values();
+                if ($data['maritalStatuses']->isEmpty()) {
+                    $data['maritalStatuses'] = \App\Models\MasterMaritalStatus::where('is_active', true)->get();
+                }
+                $data['profileChildren'] = \Illuminate\Support\Facades\DB::table('profile_children')
+                    ->where('profile_id', $profile->id)
+                    ->orderBy('sort_order')
+                    ->orderBy('id')
+                    ->get();
+                $livingKeys = ['with_parent', 'with_other_parent', 'joint', 'other'];
+                $data['childLivingWithOptions'] = \App\Models\MasterChildLivingWith::where('is_active', true)
+                    ->whereIn('key', $livingKeys)
+                    ->get()
+                    ->sortBy(fn ($o) => array_search($o->key, $livingKeys, true) !== false ? array_search($o->key, $livingKeys, true) : 999)
+                    ->values();
+                if ($data['childLivingWithOptions']->isEmpty()) {
+                    $data['childLivingWithOptions'] = \App\Models\MasterChildLivingWith::where('is_active', true)->get();
+                }
                 break;
             case 'personal-family':
                 $data['profileChildren'] = DB::table('profile_children')->where('profile_id', $profile->id)->orderBy('id')->get();
@@ -271,25 +302,34 @@ class ProfileWizardController extends Controller
                 $data['physicalBuilds'] = \App\Models\MasterPhysicalBuild::where('is_active', true)->get();
                 break;
             case 'siblings':
-                $data['profileSiblings'] = DB::table('profile_siblings')->where('profile_id', $profile->id)->orderBy('id')->get();
-                $data['cities'] = \App\Models\City::all();
+                $siblings = \App\Models\ProfileSibling::where('profile_id', $profile->id)
+                    ->with(['spouse', 'city'])
+                    ->orderBy('sort_order')
+                    ->orderBy('id')
+                    ->get();
+                $data['profileSiblings'] = $siblings->map(function ($s) {
+                    $relationType = $s->relation_type ?? ($s->gender === 'male' ? 'brother' : ($s->gender === 'female' ? 'sister' : null));
+                    $spouse = $s->spouse ? (object) array_merge($s->spouse->toArray(), ['location_display' => $s->spouse->city?->name ?? '']) : null;
+                    return (object) array_merge($s->toArray(), [
+                        'relation_type' => $relationType,
+                        'location_display' => $s->city?->name ?? '',
+                        'spouse' => $spouse,
+                    ]);
+                });
                 break;
             case 'relatives':
-                $data['profileRelatives'] = DB::table('profile_relatives')->where('profile_id', $profile->id)->orderBy('id')->get();
-                $data['relationTypes'] = ['Uncle', 'Aunt', 'Cousin', 'Brother', 'Sister', 'Father', 'Mother', 'Grandfather', 'Grandmother', 'Other'];
-                $data['cities'] = \App\Models\City::all();
-                $data['states'] = \App\Models\State::all();
-                break;
-            case 'alliance':
-                $rows = DB::table('profile_alliance_networks')->where('profile_id', $profile->id)->orderBy('id')->get();
-                $cityIds = $rows->pluck('city_id')->filter()->unique()->values()->all();
+                $relRows = DB::table('profile_relatives')->where('profile_id', $profile->id)->orderBy('id')->get();
+                $cityIds = $relRows->pluck('city_id')->filter()->unique()->values()->all();
                 $cityNames = $cityIds ? \App\Models\City::whereIn('id', $cityIds)->pluck('name', 'id')->toArray() : [];
-                $data['profileAllianceNetworks'] = $rows->map(function ($row) use ($cityNames) {
+                $data['profileRelatives'] = $relRows->map(function ($row) use ($cityNames) {
                     $arr = (array) $row;
                     $arr['location_display'] = ! empty($row->city_id) ? ($cityNames[$row->city_id] ?? '') : '';
-
                     return (object) $arr;
-                })->all();
+                })->values();
+                $data['relationTypes'] = ['Uncle', 'Aunt', 'Cousin', 'Brother', 'Sister', 'Father', 'Mother', 'Grandfather', 'Grandmother', 'Other'];
+                break;
+            case 'alliance':
+                $data['otherRelativesText'] = $profile->getAttribute('other_relatives_text') ?? '';
                 break;
             case 'location':
                 $data['countries'] = \App\Models\Country::all();
@@ -425,12 +465,12 @@ class ProfileWizardController extends Controller
             'religion_id' => ['nullable', 'exists:religions,id'],
             'caste_id' => ['nullable', 'exists:castes,id'],
             'sub_caste_id' => ['nullable', 'exists:sub_castes,id'],
-            'marital_status_id' => ['required', Rule::exists('master_marital_statuses', 'id')],
+            'marital_status_id' => ['nullable', Rule::exists('master_marital_statuses', 'id')],
             'height_cm' => ['nullable', 'integer', 'min:50', 'max:250'],
             'primary_contact_number' => ['required', 'string', 'max:20'],
         ]);
 
-        // Shaadi Step 1 fields from form; fields removed from UI preserved from profile
+        // Shaadi Step 1 fields from form; marital status is in Marriages section only — preserve from profile if not in request
         $core = [
             'full_name' => $request->input('full_name'),
             'gender_id' => $request->input('gender_id') ? (int) $request->input('gender_id') : null,
@@ -439,7 +479,7 @@ class ProfileWizardController extends Controller
             'religion_id' => $request->input('religion_id') ? (int) $request->input('religion_id') : null,
             'caste_id' => $request->input('caste_id') ? (int) $request->input('caste_id') : null,
             'sub_caste_id' => $request->input('sub_caste_id') ? (int) $request->input('sub_caste_id') : null,
-            'marital_status_id' => $request->input('marital_status_id') ? (int) $request->input('marital_status_id') : null,
+            'marital_status_id' => $request->filled('marital_status_id') ? (int) $request->input('marital_status_id') : $profile->marital_status_id,
             'height_cm' => $request->filled('height_cm') ? (int) $request->input('height_cm') : null,
             'serious_intent_id' => $profile->serious_intent_id,
             'weight_kg' => $profile->weight_kg,
@@ -564,14 +604,35 @@ class ProfileWizardController extends Controller
     {
         $siblings = [];
         foreach ($request->input('siblings', []) as $row) {
-            $siblings[] = [
+            $relationType = in_array($row['relation_type'] ?? null, ['brother', 'sister'], true) ? $row['relation_type'] : null;
+            $maritalStatus = in_array($row['marital_status'] ?? null, ['unmarried', 'married'], true) ? $row['marital_status'] : null;
+            $isMarried = $maritalStatus === 'married' || ! empty($row['is_married']);
+            $spouseIn = $row['spouse'] ?? [];
+            $siblingRow = [
                 'id' => ! empty($row['id']) ? (int) $row['id'] : null,
+                'relation_type' => $relationType,
+                'name' => trim((string) ($row['name'] ?? '')) ?: null,
                 'gender' => in_array($row['gender'] ?? null, ['male', 'female'], true) ? $row['gender'] : null,
-                'marital_status' => in_array($row['marital_status'] ?? null, ['unmarried', 'married'], true) ? $row['marital_status'] : null,
+                'marital_status' => $maritalStatus,
                 'occupation' => trim((string) ($row['occupation'] ?? '')) ?: null,
                 'city_id' => ! empty($row['city_id']) ? (int) $row['city_id'] : null,
+                'contact_number' => trim((string) ($row['contact_number'] ?? '')) ?: null,
                 'notes' => trim((string) ($row['notes'] ?? '')) ?: null,
+                'sort_order' => isset($row['sort_order']) && $row['sort_order'] !== '' ? (int) $row['sort_order'] : 0,
             ];
+            if ($isMarried && (array_key_exists('name', $spouseIn) || array_key_exists('occupation_title', $spouseIn) || array_key_exists('contact_number', $spouseIn) || array_key_exists('city_id', $spouseIn))) {
+                $siblingRow['spouse'] = [
+                    'name' => trim((string) ($spouseIn['name'] ?? '')) ?: null,
+                    'occupation_title' => trim((string) ($spouseIn['occupation_title'] ?? '')) ?: null,
+                    'contact_number' => trim((string) ($spouseIn['contact_number'] ?? '')) ?: null,
+                    'address_line' => trim((string) ($spouseIn['address_line'] ?? '')) ?: null,
+                    'city_id' => ! empty($spouseIn['city_id']) ? (int) $spouseIn['city_id'] : null,
+                    'taluka_id' => ! empty($spouseIn['taluka_id']) ? (int) $spouseIn['taluka_id'] : null,
+                    'district_id' => ! empty($spouseIn['district_id']) ? (int) $spouseIn['district_id'] : null,
+                    'state_id' => ! empty($spouseIn['state_id']) ? (int) $spouseIn['state_id'] : null,
+                ];
+            }
+            $siblings[] = $siblingRow;
         }
 
         return [
@@ -843,7 +904,13 @@ class ProfileWizardController extends Controller
         $contacts = [];
         $phone = trim((string) $request->input('primary_contact_number', ''));
         if ($phone !== '') {
-            $contacts[] = ['relation_type' => 'self', 'contact_name' => 'Primary', 'phone_number' => $phone, 'is_primary' => true];
+            $contacts[] = [
+                'relation_type' => 'self',
+                'contact_name' => 'Primary',
+                'phone_number' => $phone,
+                'is_primary' => true,
+                'is_whatsapp' => ! empty($request->input('primary_contact_whatsapp')),
+            ];
         }
         foreach ($request->input('contacts', []) as $row) {
             $contactName = trim((string) ($row['contact_name'] ?? ''));
@@ -855,6 +922,7 @@ class ProfileWizardController extends Controller
                     'contact_name' => $contactName,
                     'phone_number' => $phoneNumber,
                     'is_primary' => ! empty($row['is_primary']),
+                    'is_whatsapp' => ! empty($row['is_whatsapp']),
                 ];
             }
         }
@@ -899,33 +967,103 @@ class ProfileWizardController extends Controller
     }
 	protected function buildMarriagesSnapshot($request): array
 {
-    $rows = [];
+        $maritalStatusId = $request->input('marital_status_id');
+        $statusKey = \App\Models\MasterMaritalStatus::where('id', $maritalStatusId)->value('key');
+        $statusesRequiringChildren = ['divorced', 'separated', 'widowed'];
 
-    \Log::info('DEBUG MARRIAGES INPUT', $request->input('marriages', []));
+        $rules = [
+            'marital_status_id' => ['required', Rule::exists('master_marital_statuses', 'id')],
+            'marriages.*.marriage_year' => ['nullable', 'integer', 'min:1901', 'max:' . (int) date('Y')],
+            'marriages.*.separation_year' => ['nullable', 'integer', 'min:1901', 'max:' . (int) date('Y')],
+            'marriages.*.divorce_year' => ['nullable', 'integer', 'min:1901', 'max:' . (int) date('Y')],
+            'marriages.*.spouse_death_year' => ['nullable', 'integer', 'min:1901', 'max:' . (int) date('Y')],
+        ];
+        if ($statusKey && in_array($statusKey, $statusesRequiringChildren, true)) {
+            $rules['has_children'] = ['required', 'in:0,1'];
+        }
+        $request->validate($rules);
 
-    $request->validate([
-        'marriages.*.marriage_year' => ['nullable', 'integer', 'between:1901,2155'],
-        'marriages.*.separation_year' => ['nullable', 'integer', 'between:1901,2155'],
-        'marriages.*.divorce_year' => ['nullable', 'integer', 'between:1901,2155'],
-        'marriages.*.spouse_death_year' => ['nullable', 'integer', 'between:1901,2155'],
-    ]);
+        if ($statusKey && in_array($statusKey, $statusesRequiringChildren, true)) {
+            $hasChildren = $request->input('has_children');
+            $hasChildrenYes = $hasChildren === '1' || $hasChildren === 1 || $hasChildren === true;
+            if ($hasChildrenYes) {
+                $request->validate([
+                    'children' => ['required', 'array', 'min:1'],
+                    'children.*.gender' => ['required', 'in:male,female,other,prefer_not_say'],
+                    'children.*.age' => ['required', 'integer', 'min:1', 'max:120'],
+                    'children.*.child_living_with_id' => ['required'],
+                ]);
+            }
+        }
 
-    foreach ($request->input('marriages', []) as $row) {
-        $rows[] = [
-            'id' => $row['id'] ?? null,
-            'marital_status_id' => $row['marital_status_id'] ?? null,
-            'marriage_year' => ! empty($row['marriage_year']) ? (int) $row['marriage_year'] : null,
-            'separation_year' => ! empty($row['separation_year']) ? (int) $row['separation_year'] : null,
-            'divorce_year' => ! empty($row['divorce_year']) ? (int) $row['divorce_year'] : null,
-            'spouse_death_year' => ! empty($row['spouse_death_year']) ? (int) $row['spouse_death_year'] : null,
-            'divorce_status' => $row['divorce_status'] ?? null,
-            'remarriage_reason' => $row['remarriage_reason'] ?? null,
-            'notes' => $row['notes'] ?? null,
+        $marriageRows = $request->input('marriages', []);
+        $marriageRow = $marriageRows[0] ?? [];
+        $marriageYear = ! empty($marriageRow['marriage_year']) ? (int) $marriageRow['marriage_year'] : null;
+        $divorceYear = ! empty($marriageRow['divorce_year']) ? (int) $marriageRow['divorce_year'] : null;
+        $separationYear = ! empty($marriageRow['separation_year']) ? (int) $marriageRow['separation_year'] : null;
+        $spouseDeathYear = ! empty($marriageRow['spouse_death_year']) ? (int) $marriageRow['spouse_death_year'] : null;
+        $currentYear = (int) date('Y');
+        if ($marriageYear !== null && $divorceYear !== null && $divorceYear < $marriageYear) {
+            throw \Illuminate\Validation\ValidationException::withMessages(['marriages.0.divorce_year' => ['Divorce year must be greater than or equal to marriage year.']]);
+        }
+        if ($marriageYear !== null && $separationYear !== null && $separationYear < $marriageYear) {
+            throw \Illuminate\Validation\ValidationException::withMessages(['marriages.0.separation_year' => ['Separation year must be greater than or equal to marriage year.']]);
+        }
+        if ($marriageYear !== null && $spouseDeathYear !== null && $spouseDeathYear < $marriageYear) {
+            throw \Illuminate\Validation\ValidationException::withMessages(['marriages.0.spouse_death_year' => ['Spouse death year must be greater than or equal to marriage year.']]);
+        }
+        if ($marriageYear !== null && $marriageYear > $currentYear) {
+            throw \Illuminate\Validation\ValidationException::withMessages(['marriages.0.marriage_year' => ['Marriage year cannot be in the future.']]);
+        }
+        if ($divorceYear !== null && $divorceYear > $currentYear) {
+            throw \Illuminate\Validation\ValidationException::withMessages(['marriages.0.divorce_year' => ['Divorce year cannot be in the future.']]);
+        }
+        if ($separationYear !== null && $separationYear > $currentYear) {
+            throw \Illuminate\Validation\ValidationException::withMessages(['marriages.0.separation_year' => ['Separation year cannot be in the future.']]);
+        }
+        if ($spouseDeathYear !== null && $spouseDeathYear > $currentYear) {
+            throw \Illuminate\Validation\ValidationException::withMessages(['marriages.0.spouse_death_year' => ['Spouse death year cannot be in the future.']]);
+        }
+
+        $marriageId = ! empty($marriageRow['id']) ? (int) $marriageRow['id'] : null;
+        $marriages = [[
+            'id' => $marriageId,
+            'marriage_year' => $marriageYear,
+            'separation_year' => $separationYear,
+            'divorce_year' => $divorceYear,
+            'spouse_death_year' => $spouseDeathYear,
+            'divorce_status' => trim((string) ($marriageRow['divorce_status'] ?? '')) ?: null,
+            'remarriage_reason' => trim((string) ($marriageRow['remarriage_reason'] ?? '')) ?: null,
+            'notes' => trim((string) ($marriageRow['notes'] ?? '')) ?: null,
+        ]];
+
+        $hasChildren = $request->input('has_children');
+        $hasChildrenBool = $hasChildren === '1' || $hasChildren === 1 || $hasChildren === true;
+        $core = [
+            'marital_status_id' => $maritalStatusId ? (int) $maritalStatusId : null,
+            'has_children' => $statusKey && in_array($statusKey, $statusesRequiringChildren, true) ? $hasChildrenBool : null,
+        ];
+
+        $children = [];
+        if ($hasChildrenBool && $statusKey && in_array($statusKey, $statusesRequiringChildren, true)) {
+            foreach ($request->input('children', []) as $i => $row) {
+                $children[] = [
+                    'id' => ! empty($row['id']) ? (int) $row['id'] : null,
+                    'child_name' => null,
+                    'gender' => trim((string) ($row['gender'] ?? '')),
+                    'age' => isset($row['age']) && $row['age'] !== '' ? (int) $row['age'] : null,
+                    'child_living_with_id' => ! empty($row['child_living_with_id']) ? (int) $row['child_living_with_id'] : null,
+                    'sort_order' => $i,
+                ];
+            }
+        }
+
+        return [
+            'core' => $core,
+            'marriages' => $marriages,
+            'children' => $children,
         ];
     }
-
-    return ['marriages' => $rows];
-}
 
     protected function buildChildrenSnapshot(Request $request): array
     {

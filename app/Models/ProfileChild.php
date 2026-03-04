@@ -14,6 +14,7 @@ class ProfileChild extends Model
         'gender',
         'age',
         'child_living_with_id',
+        'sort_order',
     ];
 
     public function profile()

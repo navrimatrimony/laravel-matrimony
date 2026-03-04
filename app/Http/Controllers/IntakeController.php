@@ -424,6 +424,58 @@ class IntakeController extends Controller
             $intakeProfile->subcaste_label = $subLabel;
         }
 
+        // Marital Engine (intake): resolve marital_status text → id; build profile/marriages/children for engine.
+        $maritalKeys = ['never_married', 'divorced', 'separated', 'widowed'];
+        $maritalStatuses = \App\Models\MasterMaritalStatus::where('is_active', true)
+            ->whereIn('key', $maritalKeys)
+            ->get()
+            ->sortBy(fn ($s) => array_search($s->key, $maritalKeys, true) !== false ? array_search($s->key, $maritalKeys, true) : 999)
+            ->values();
+        if ($maritalStatuses->isEmpty()) {
+            $maritalStatuses = \App\Models\MasterMaritalStatus::where('is_active', true)->get();
+        }
+        $approvalCore = $intake->approval_snapshot_json['core'] ?? $coreData;
+        $maritalStatusId = $approvalCore['marital_status_id'] ?? null;
+        if ($maritalStatusId === null || $maritalStatusId === '') {
+            $maritalText = is_scalar($approvalCore['marital_status'] ?? null) ? trim((string) $approvalCore['marital_status']) : '';
+            if ($maritalText !== '' && $maritalText !== \App\Services\Ocr\OcrSuggestionEngine::PLACEHOLDER_NOT_FOUND && $maritalText !== \App\Services\Ocr\OcrSuggestionEngine::PLACEHOLDER_SELECT_REQUIRED) {
+                $ms = $maritalStatuses->first(fn ($s) => strcasecmp($s->label ?? '', $maritalText) === 0 || strcasecmp($s->key ?? '', $maritalText) === 0 || strcasecmp(str_replace(' ', '_', $s->label ?? ''), $maritalText) === 0);
+                if ($ms) {
+                    $maritalStatusId = $ms->id;
+                }
+            }
+        }
+        $intakeProfile->marital_status_id = $maritalStatusId ?? '';
+        $childrenData = $sections['children']['data'] ?? [];
+        $hasChildren = isset($approvalCore['has_children']) ? (int) $approvalCore['has_children'] : (count($childrenData) > 0 ? 1 : null);
+        $intakeProfile->has_children = $hasChildren;
+        $profileMarriages = collect();
+        $marriagesFromSnapshot = $intake->approval_snapshot_json['marriages'] ?? $data['marriages'] ?? [];
+        if (is_array($marriagesFromSnapshot) && isset($marriagesFromSnapshot[0])) {
+            $profileMarriages = collect([(object) $marriagesFromSnapshot[0]]);
+        } elseif (is_array($marriagesFromSnapshot) && ! isset($marriagesFromSnapshot[0])) {
+            $profileMarriages = collect([(object) $marriagesFromSnapshot]);
+        }
+        $profileChildren = collect();
+        foreach ($childrenData as $idx => $ch) {
+            $row = is_array($ch) ? $ch : ['name' => $ch, 'dob' => '', 'gender' => '', 'age' => '', 'child_living_with_id' => ''];
+            $profileChildren->push((object) [
+                'id' => $row['id'] ?? null,
+                'gender' => $row['gender'] ?? $row['child_gender'] ?? '',
+                'age' => $row['age'] ?? $row['child_age'] ?? '',
+                'child_living_with_id' => $row['child_living_with_id'] ?? '',
+            ]);
+        }
+        $livingKeys = ['with_parent', 'with_other_parent', 'joint', 'other'];
+        $childLivingWithOptions = \App\Models\MasterChildLivingWith::where('is_active', true)
+            ->whereIn('key', $livingKeys)
+            ->get()
+            ->sortBy(fn ($o) => array_search($o->key, $livingKeys, true) !== false ? array_search($o->key, $livingKeys, true) : 999)
+            ->values();
+        if ($childLivingWithOptions->isEmpty()) {
+            $childLivingWithOptions = \App\Models\MasterChildLivingWith::where('is_active', true)->get();
+        }
+
         return view('intake.preview', compact(
             'intake',
             'sections',
@@ -437,7 +489,11 @@ class IntakeController extends Controller
             'suggestionMap',
             'placeholderNotFound',
             'placeholderSelectRequired',
-            'intakeProfile'
+            'intakeProfile',
+            'maritalStatuses',
+            'profileMarriages',
+            'profileChildren',
+            'childLivingWithOptions'
         ));
     }
 
@@ -458,6 +514,14 @@ class IntakeController extends Controller
         if (is_array($snapshot)) {
             $base = is_array($intake->parsed_json) ? $intake->parsed_json : [];
             $snapshot = $this->normalizeApprovalSnapshot(array_merge($base, $snapshot));
+            // MutationService expects marital_status_id on each profile_marriages row; inject from core.
+            if (! empty($snapshot['core']['marital_status_id']) && is_array($snapshot['marriages'] ?? null)) {
+                foreach (array_keys($snapshot['marriages']) as $i) {
+                    if (is_array($snapshot['marriages'][$i])) {
+                        $snapshot['marriages'][$i]['marital_status_id'] = $snapshot['core']['marital_status_id'];
+                    }
+                }
+            }
         } else {
             $snapshot = null;
         }
@@ -475,8 +539,8 @@ class IntakeController extends Controller
     private function normalizeApprovalSnapshot(array $snapshot): array
     {
         $keys = [
-            'core', 'contacts', 'children', 'education_history', 'career_history',
-            'addresses', 'property_summary', 'property_assets', 'horoscope',
+            'core', 'contacts', 'children', 'marriages', 'education_history', 'career_history',
+            'addresses', 'relatives', 'property_summary', 'property_assets', 'horoscope',
             'legal_cases', 'preferences', 'extended_narrative', 'confidence_map',
         ];
         $scalarKeys = ['property_summary', 'horoscope', 'extended_narrative'];
@@ -486,6 +550,14 @@ class IntakeController extends Controller
                 $out[$k] = array_key_exists($k, $snapshot) ? $snapshot[$k] : null;
             } else {
                 $out[$k] = isset($snapshot[$k]) && is_array($snapshot[$k]) ? $snapshot[$k] : [];
+            }
+        }
+        // Contacts: ensure phone_number for sync (legacy "number" from parsed/old forms).
+        if (isset($out['contacts']) && is_array($out['contacts'])) {
+            foreach ($out['contacts'] as $i => $row) {
+                if (is_array($row) && isset($row['number']) && empty($row['phone_number'])) {
+                    $out['contacts'][$i]['phone_number'] = $row['number'];
+                }
             }
         }
         return $out;
