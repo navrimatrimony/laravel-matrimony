@@ -23,17 +23,17 @@
         }
     }
 @endphp
-<div class="height-picker" x-data="heightPickerState({{ $selectedCm }})">
+<div class="height-picker w-full" x-data="heightPickerState({{ $selectedCm }})">
     <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{{ $label }} @if($required)<span class="text-red-500">*</span>@endif</label>
 
-    <div class="flex flex-wrap items-center gap-3">
-        <select class="rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-3 py-2 min-w-[9rem]"
+    <div class="flex items-center gap-3 w-full">
+        <select class="flex-1 min-w-0 rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-3 py-2"
                 x-model.number="heightCm">
             @foreach($options as $opt)
                 <option value="{{ $opt['value'] }}" {{ $opt['value'] == $selectedCm ? 'selected' : '' }}>{{ $opt['label'] }}</option>
             @endforeach
         </select>
-        <span class="text-sm text-gray-600 dark:text-gray-400" x-text="formatDisplay()"></span>
+        <span class="text-sm text-gray-600 dark:text-gray-400 shrink-0" x-text="formatDisplay()"></span>
     </div>
     <input type="hidden" name="{{ $inputName }}" :value="heightCm">
 

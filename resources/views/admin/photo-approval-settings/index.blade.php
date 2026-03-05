@@ -15,8 +15,8 @@
 </style>
 
 <div class="bg-white dark:bg-gray-800 shadow rounded-lg p-6">
-    <h1 class="text-2xl font-bold text-gray-800 dark:text-gray-100 mb-2">Photo verification</h1>
-    <p class="text-gray-500 dark:text-gray-400 text-sm mb-6">Control whether profile photos need admin approval before they are visible to others. Default: approval not required (photos visible immediately).</p>
+    <h1 class="text-2xl font-bold text-gray-800 dark:text-gray-100 mb-2">Photo verification & engine</h1>
+    <p class="text-gray-500 dark:text-gray-400 text-sm mb-6">Control whether profile photos need admin approval, and tune basic limits for the photo engine (slots, size, quality).</p>
     @if (session('success'))
         <p class="text-green-600 dark:text-green-400 text-sm mb-4">{{ session('success') }}</p>
     @endif
@@ -42,6 +42,32 @@
                 </span>
             </label>
             <p class="text-xs text-gray-500 dark:text-gray-400 mt-2">When OFF (default), new uploads are visible immediately. When ON, new uploads stay hidden until admin approves from the profile page.</p>
+        </div>
+
+        {{-- Primary photo & slots --}}
+        <div class="p-4 bg-gray-50 dark:bg-gray-700/30 rounded-lg border border-gray-200 dark:border-gray-600 space-y-3">
+            <p class="font-semibold text-sm text-gray-800 dark:text-gray-100">Slots & primary photo</p>
+            <label class="inline-flex items-center gap-2 text-sm text-gray-700 dark:text-gray-200">
+                <input type="checkbox" name="photo_primary_required" value="1" {{ $photoPrimaryRequired ? 'checked' : '' }} class="rounded border-gray-300 dark:border-gray-600">
+                <span>Primary photo required for profile to be considered complete</span>
+            </label>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+                <div>
+                    <label class="block font-medium text-gray-700 dark:text-gray-200 mb-1">Max photos per profile</label>
+                    <input type="number" name="photo_max_per_profile" min="1" max="10" value="{{ $photoMaxPerProfile }}" class="w-24 rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-2 py-1">
+                    <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">Recommended: 5</p>
+                </div>
+                <div>
+                    <label class="block font-medium text-gray-700 dark:text-gray-200 mb-1">Max upload size (MB)</label>
+                    <input type="number" name="photo_max_upload_mb" min="1" max="20" value="{{ $photoMaxUploadMb }}" class="w-24 rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-2 py-1">
+                    <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">Large originals are resized anyway.</p>
+                </div>
+                <div>
+                    <label class="block font-medium text-gray-700 dark:text-gray-200 mb-1">Max longest edge (px)</label>
+                    <input type="number" name="photo_max_edge_px" min="400" max="2400" value="{{ $photoMaxEdgePx }}" class="w-28 rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-2 py-1">
+                    <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">Default: 1200px</p>
+                </div>
+            </div>
         </div>
 
         <div class="pt-2">

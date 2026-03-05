@@ -160,8 +160,7 @@ class MatrimonyProfile extends Model
         'father_occupation',
         'mother_name',
         'mother_occupation',
-        'brothers_count',
-        'sisters_count',
+        // brothers_count, sisters_count: deprecated; use Siblings engine (profile_siblings).
         'work_city_id',
         'work_state_id',
     ];

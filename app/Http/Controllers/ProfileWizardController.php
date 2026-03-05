@@ -542,8 +542,7 @@ class ProfileWizardController extends Controller
             'father_occupation' => $request->input('father_occupation') ?: null,
             'mother_name' => $request->input('mother_name') ?: null,
             'mother_occupation' => $request->input('mother_occupation') ?: null,
-            'brothers_count' => $request->filled('brothers_count') ? (int) $request->input('brothers_count') : null,
-            'sisters_count' => $request->filled('sisters_count') ? (int) $request->input('sisters_count') : null,
+            // Brothers/Sisters: use Siblings section (engine), not count fields.
             'family_type_id' => $request->input('family_type_id') ? (int) $request->input('family_type_id') : null,
             'weight_kg' => $request->filled('weight_kg') ? (float) $request->input('weight_kg') : $profile->weight_kg,
             'physical_build_id' => $request->input('physical_build_id') ? (int) $request->input('physical_build_id') : $profile->physical_build_id,
@@ -856,6 +855,12 @@ class ProfileWizardController extends Controller
         $horoscope = [];
         if ($request->has('horoscope')) {
             $h = $request->input('horoscope');
+            if (empty($h['id'] ?? null) && $profile->id) {
+                $existingId = \App\Models\ProfileHoroscopeData::where('profile_id', $profile->id)->value('id');
+                if ($existingId) {
+                    $h['id'] = (int) $existingId;
+                }
+            }
             $horoscope = [[
                 'id' => ! empty($h['id']) ? (int) $h['id'] : null,
                 'rashi_id' => ! empty($h['rashi_id']) ? (int) $h['rashi_id'] : null,

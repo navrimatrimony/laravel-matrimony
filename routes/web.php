@@ -11,6 +11,9 @@ use App\Http\Controllers\AdminController;
 use App\Http\Controllers\AbuseReportController;
 use App\Http\Controllers\BlockController;
 use App\Http\Controllers\ShortlistController;
+use App\Http\Controllers\ContactRequestController;
+use App\Http\Controllers\ContactInboxController;
+use App\Http\Controllers\WhoViewedController;
 use App\Http\Controllers\Admin\DemoProfileController;
 use App\Http\Controllers\Admin\AdminCapabilityController;
 use App\Http\Controllers\Admin\AdminVerificationTagController;
@@ -174,6 +177,21 @@ Route::post('/interests/{interest}/withdraw', [App\Http\Controllers\InterestCont
     Route::delete('/shortlist/{matrimony_profile_id}', [ShortlistController::class, 'destroy'])->name('shortlist.destroy');
 
     /*
+    | Day-33: Who viewed my profile
+    */
+    Route::get('/who-viewed-me', [WhoViewedController::class, 'index'])->name('who-viewed.index');
+
+    /*
+    | Day-32: Contact requests (Request Contact flow)
+    */
+    Route::get('/contact-inbox', [ContactInboxController::class, 'index'])->name('contact-inbox.index');
+    Route::post('/contact-requests/{matrimony_profile}', [ContactRequestController::class, 'store'])->name('contact-requests.store');
+    Route::post('/contact-requests/{contact_request}/cancel', [ContactRequestController::class, 'cancel'])->name('contact-requests.cancel');
+    Route::post('/contact-requests/{contact_request}/approve', [ContactInboxController::class, 'approve'])->name('contact-requests.approve');
+    Route::post('/contact-requests/{contact_request}/reject', [ContactInboxController::class, 'reject'])->name('contact-requests.reject');
+    Route::post('/contact-grants/{contact_grant}/revoke', [ContactInboxController::class, 'revoke'])->name('contact-grants.revoke');
+
+    /*
     | Abuse Reports (User action)
     */
     Route::post('/abuse-reports/{matrimony_profile}', [AbuseReportController::class, 'store'])
@@ -274,6 +292,12 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
     */
     Route::get('/ocr-patterns', [OcrPatternController::class, 'index'])->name('ocr-patterns.index');
     Route::post('/ocr-patterns/{pattern}/toggle-active', [OcrPatternController::class, 'toggleActive'])->name('ocr-patterns.toggle-active');
+
+    /*
+    | Day-32: Communication & Contact Request Policy (admin governance)
+    */
+    Route::get('/communication-policy', [\App\Http\Controllers\Admin\CommunicationPolicyController::class, 'index'])->name('communication-policy.index');
+    Route::put('/communication-policy', [\App\Http\Controllers\Admin\CommunicationPolicyController::class, 'update'])->name('communication-policy.update');
 
     /*
     | Abuse Reports

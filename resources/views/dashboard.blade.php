@@ -139,12 +139,10 @@
                                class="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition text-sm font-medium">
                                 Edit Profile
                             </a>
-                            @if (!$profile->profile_photo)
-                                <a href="{{ route('matrimony.profile.upload-photo') }}"
-                                   class="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition text-sm font-medium">
-                                    Upload Photo
-                                </a>
-                            @endif
+                            <a href="{{ route('matrimony.profile.upload-photo') }}"
+                               class="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition text-sm font-medium">
+                                {{ $profile->profile_photo ? 'Change Photo' : 'Upload Photo' }}
+                            </a>
                         </div>
                     </div>
                 </div>

@@ -539,7 +539,7 @@ class IntakeController extends Controller
     private function normalizeApprovalSnapshot(array $snapshot): array
     {
         $keys = [
-            'core', 'contacts', 'children', 'marriages', 'education_history', 'career_history',
+            'core', 'contacts', 'children', 'marriages', 'siblings', 'education_history', 'career_history',
             'addresses', 'relatives', 'property_summary', 'property_assets', 'horoscope',
             'legal_cases', 'preferences', 'extended_narrative', 'confidence_map',
         ];

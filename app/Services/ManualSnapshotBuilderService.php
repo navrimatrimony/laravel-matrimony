@@ -45,8 +45,7 @@ class ManualSnapshotBuilderService
             'father_occupation' => $request->input('father_occupation'),
             'mother_name' => $request->input('mother_name'),
             'mother_occupation' => $request->input('mother_occupation'),
-            'brothers_count' => $request->has('brothers_count') && $request->input('brothers_count') !== '' ? (int) $request->input('brothers_count') : null,
-            'sisters_count' => $request->has('sisters_count') && $request->input('sisters_count') !== '' ? (int) $request->input('sisters_count') : null,
+            // Brothers/Sisters: use Siblings engine, not count fields.
             'family_type_id' => $request->input('family_type_id') ? (int) $request->input('family_type_id') : null,
             'country_id' => $request->input('country_id') ?: null,
             'state_id' => $request->input('state_id') ?: null,
@@ -158,6 +157,12 @@ class ManualSnapshotBuilderService
         $horoscope = [];
         if ($request->has('horoscope')) {
             $h = $request->input('horoscope');
+            if (empty($h['id'] ?? null) && $profile->id) {
+                $existingId = \App\Models\ProfileHoroscopeData::where('profile_id', $profile->id)->value('id');
+                if ($existingId) {
+                    $h['id'] = (int) $existingId;
+                }
+            }
             $horoscope = [[
                 'id' => ! empty($h['id']) ? (int) $h['id'] : null,
                 'rashi_id' => ! empty($h['rashi_id']) ? (int) $h['rashi_id'] : null,

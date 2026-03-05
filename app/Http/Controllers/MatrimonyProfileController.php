@@ -23,6 +23,7 @@ use App\Models\MasterRashi;
 use App\Models\MasterYoni;
 use App\Models\MatrimonyProfile;
 use App\Models\ProfileFieldConfig;
+use App\Models\ProfilePhoto;
 use App\Models\Shortlist;
 use App\Services\ProfileCompletenessService;
 use App\Services\ProfileFieldConfigurationService;
@@ -305,11 +306,57 @@ if (!$user->matrimonyProfile) {
     }
 
     $file = $request->file('profile_photo');
-    $filename = time() . '_' . basename($file->getClientOriginalName());
-    $file->move(public_path('uploads/matrimony_photos'), $filename);
+    $originalName = basename($file->getClientOriginalName());
+    $baseName = time() . '_' . pathinfo($originalName, PATHINFO_FILENAME);
+    $targetDir = public_path('uploads/matrimony_photos');
+    if (! is_dir($targetDir)) {
+        mkdir($targetDir, 0755, true);
+    }
+
+    // Prefer WebP + resize when GD/WebP extensions are available; otherwise fall back to original upload.
+    if (function_exists('imagecreatefromstring') && function_exists('imagewebp')) {
+        $imageData = @file_get_contents($file->getRealPath());
+        $image = $imageData !== false ? @imagecreatefromstring($imageData) : false;
+        if ($image === false) {
+            return redirect()->back()->with('error', 'We could not read this image. Please upload a valid JPG or PNG photo.');
+        }
+        $width = imagesx($image);
+        $height = imagesy($image);
+        $maxEdge = 1200;
+        if ($width > $maxEdge || $height > $maxEdge) {
+            $scale = min($maxEdge / $width, $maxEdge / $height);
+            $newWidth = (int) floor($width * $scale);
+            $newHeight = (int) floor($height * $scale);
+            $resized = imagecreatetruecolor($newWidth, $newHeight);
+            imagecopyresampled($resized, $image, 0, 0, 0, 0, $newWidth, $newHeight, $width, $height);
+            imagedestroy($image);
+            $image = $resized;
+        }
+
+        $webpFilename = $baseName . '.webp';
+        $webpPath = $targetDir . DIRECTORY_SEPARATOR . $webpFilename;
+        imagewebp($image, $webpPath, 80);
+        imagedestroy($image);
+
+        // If file is still large, attempt lighter encode
+        if (is_file($webpPath) && filesize($webpPath) > 200 * 1024) {
+            $tmpImage = @imagecreatefromstring(file_get_contents($webpPath));
+            if ($tmpImage !== false) {
+                imagewebp($tmpImage, $webpPath, 70);
+                imagedestroy($tmpImage);
+            }
+        }
+
+        $filename = $webpFilename;
+    } else {
+        // Fallback: store original file without re-encoding (keeps old behaviour on systems without GD/WebP)
+        $extension = $file->getClientOriginalExtension() ?: 'jpg';
+        $filename = $baseName . '.' . $extension;
+        $file->move($targetDir, $filename);
+    }
 
     $photoApprovalRequired = \App\Services\AdminSettingService::isPhotoApprovalRequired();
-    $photoApproved = !$photoApprovalRequired;
+    $photoApproved = ! $photoApprovalRequired;
 
     $snapshot = [
         'core' => [
@@ -336,6 +383,17 @@ if (!$user->matrimonyProfile) {
     } catch (\RuntimeException $e) {
         return redirect()->back()->with('error', $e->getMessage());
     }
+
+    // Store in profile_photos gallery (primary slot)
+    ProfilePhoto::updateOrCreate(
+        ['profile_id' => $profile->id, 'is_primary' => true],
+        [
+            'file_path' => $filename,
+            'uploaded_via' => 'user_web',
+            'approved_status' => $photoApproved ? 'approved' : 'pending',
+            'watermark_detected' => false,
+        ]
+    );
 
     if ($result['conflict_detected']) {
         return redirect()->route('matrimony.profile.wizard.section', ['section' => 'full'])->with('warning', 'Photo uploaded but some conflicts were detected.');
@@ -536,6 +594,37 @@ public function show($matrimony_profile_id)
         ->where('profile_id', $profile->id)
         ->first();
 
+    // Day-32: Contact request state for viewer (sender) vs profile owner (receiver)
+    $contactRequestState = null;
+    $contactRequestDisabled = true;
+    $contactGrantReveal = null; // [ 'email' => ..., 'phone' => ..., 'whatsapp' => ... ] when viewer has valid grant
+    if (auth()->check() && !$isOwnProfile && $viewer && $viewer->matrimonyProfile) {
+        $contactRequestService = app(\App\Services\ContactRequestService::class);
+        $contactRequestDisabled = $contactRequestService->isContactRequestDisabled();
+        $receiver = $profile->user;
+        if ($receiver) {
+            $contactRequestState = $contactRequestService->getSenderState($viewer, $receiver);
+            if (($contactRequestState['state'] ?? '') === 'accepted' && !empty($contactRequestState['grant']) && $contactRequestState['grant']->isValid()) {
+                $grant = $contactRequestState['grant'];
+                $scopes = $grant->granted_scopes ?? [];
+                $contactGrantReveal = [];
+                $primaryContact = \Illuminate\Support\Facades\DB::table('profile_contacts')
+                    ->where('profile_id', $profile->id)->where('is_primary', true)->first();
+                if (in_array('email', $scopes, true) && $receiver->email) {
+                    $contactGrantReveal['email'] = $receiver->email;
+                }
+                if (in_array('phone', $scopes, true)) {
+                    $contactGrantReveal['phone'] = optional($primaryContact)->phone_number ?? $receiver->mobile ?? null;
+                }
+                if (in_array('whatsapp', $scopes, true)) {
+                    $whatsappRow = \Illuminate\Support\Facades\DB::table('profile_contacts')
+                        ->where('profile_id', $profile->id)->where('is_whatsapp', true)->first();
+                    $contactGrantReveal['whatsapp'] = optional($whatsappRow)->phone_number ?? optional($primaryContact)->phone_number ?? $receiver->mobile ?? null;
+                }
+            }
+        }
+    }
+
     return view(
         'matrimony.profile.show',
         [
@@ -563,6 +652,9 @@ public function show($matrimony_profile_id)
             'primaryContactPhone'  => $primaryContactPhone,
             'hasBlockingConflicts'  => $hasBlockingConflicts,
             'conflictRecords'       => $conflictRecords,
+            'contactRequestState'  => $contactRequestState,
+            'contactRequestDisabled' => $contactRequestDisabled,
+            'contactGrantReveal'   => $contactGrantReveal,
         ]
     );
 }

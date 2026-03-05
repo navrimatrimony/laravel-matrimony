@@ -15,6 +15,7 @@ class PreviewSectionMapper
         'career',
         'addresses',
         'relatives',
+        'siblings',
         'property_assets',
         'legal_cases',
     ];
@@ -23,6 +24,7 @@ class PreviewSectionMapper
         'core' => 'Core Details',
         'contacts' => 'Contacts',
         'children' => 'Children',
+        'siblings' => 'Siblings',
         'education' => 'Education',
         'career' => 'Career',
         'addresses' => 'Addresses',
@@ -43,6 +45,7 @@ class PreviewSectionMapper
         'career' => 'career_history',
         'addresses' => 'addresses',
         'relatives' => 'relatives',
+        'siblings' => 'siblings',
         'property_summary' => 'property_summary',
         'property_assets' => 'property_assets',
         'horoscope' => 'horoscope',

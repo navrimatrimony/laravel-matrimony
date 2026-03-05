@@ -2,13 +2,22 @@
 
 namespace App\Services;
 
+use App\Models\Caste;
 use App\Models\City;
 use App\Models\Country;
 use App\Models\District;
 use App\Models\FieldRegistry;
+use App\Models\MasterBloodGroup;
+use App\Models\MasterComplexion;
+use App\Models\MasterFamilyType;
 use App\Models\MasterGender;
+use App\Models\MasterIncomeCurrency;
+use App\Models\MasterMaritalStatus;
+use App\Models\MasterPhysicalBuild;
 use App\Models\MatrimonyProfile;
+use App\Models\Religion;
 use App\Models\State;
+use App\Models\SubCaste;
 use App\Models\Taluka;
 
 /*
@@ -180,6 +189,118 @@ class DemoProfileDefaultsService
             'profile_photo' => $profilePhoto,
             'photo_approved' => true,
         ], $hierarchy);
+    }
+
+    /**
+     * Full attributes for MatrimonyProfile::create() — all fillable fields with realistic data.
+     * Uses master table IDs (gender_id, marital_status_id, religion_id, caste_id, sub_caste_id, etc.).
+     * No "demo" labels; data looks like real users for manual testing.
+     */
+    public static function fullAttributesForDemoProfile(int $index = 0, ?string $genderOverride = null): array
+    {
+        $gender = self::resolveGender($genderOverride);
+        $fullName = self::generateFullName($gender, self::randomCaste(), $index);
+        $dob = self::randomDobDemo();
+        $heightCm = random_int(155, 182);
+        $weightKg = random_int(50, 85);
+        $hierarchy = self::locationHierarchyForDemo();
+        $profilePhoto = self::randomDemoPhoto($gender);
+
+        $genderId = MasterGender::where('key', $gender)->where('is_active', true)->value('id');
+        $maritalId = MasterMaritalStatus::where('key', 'never_married')->where('is_active', true)->value('id')
+            ?? MasterMaritalStatus::where('is_active', true)->inRandomOrder()->value('id');
+
+        $religion = Religion::where('is_active', true)->inRandomOrder()->first();
+        $religionId = $religion?->id;
+        $casteId = null;
+        $subCasteId = null;
+        if ($religion) {
+            $caste = Caste::where('religion_id', $religion->id)->where('is_active', true)->inRandomOrder()->first();
+            $casteId = $caste?->id;
+            if ($caste) {
+                $subCaste = SubCaste::where('caste_id', $caste->id)->inRandomOrder()->first();
+                $subCasteId = $subCaste?->id;
+            }
+        }
+
+        $complexionId = MasterComplexion::where('is_active', true)->inRandomOrder()->value('id');
+        $physicalBuildId = MasterPhysicalBuild::where('is_active', true)->inRandomOrder()->value('id');
+        $bloodGroupId = MasterBloodGroup::where('is_active', true)->inRandomOrder()->value('id');
+        $familyTypeId = MasterFamilyType::where('is_active', true)->inRandomOrder()->value('id');
+        $incomeCurrencyId = MasterIncomeCurrency::where('is_active', true)->inRandomOrder()->value('id');
+
+        $educations = ['B.Com', 'B.E.', 'B.Tech', 'M.Com', 'M.B.A.', 'B.Sc', 'M.Sc', 'B.A.', 'M.A.', 'Graduate', 'Post Graduate', 'Professional'];
+        $occupations = ['Software Engineer', 'Accountant', 'Teacher', 'Doctor', 'Business', 'Bank Officer', 'Government Employee', 'Private Job', 'Consultant'];
+        $companies = ['IT Company', 'Bank', 'School', 'Hospital', 'Private Ltd', 'Self Employed', 'MNC', 'State Govt'];
+        $fatherNames = ['Ramesh', 'Suresh', 'Rajesh', 'Mahesh', 'Vijay', 'Sunil', 'Prakash', 'Anil', 'Dilip', 'Sanjay'];
+        $motherNames = ['Sunita', 'Lata', 'Kavita', 'Anita', 'Meera', 'Poonam', 'Seema', 'Rekha', 'Vandana', 'Priya'];
+
+        $birthTime = sprintf('%02d:%02d', random_int(6, 22), random_int(0, 59));
+        $addressLine = random_int(1, 999) . ', ' . ['MG Road', 'Station Road', 'Gandhi Nagar', 'Shivaji Park', 'Sector 5', 'Main Street'][array_rand(['MG Road', 'Station Road', 'Gandhi Nagar', 'Shivaji Park', 'Sector 5', 'Main Street'])];
+
+        $annualIncome = (string) (random_int(3, 50) * 100000);
+        $familyIncome = (string) (random_int(5, 80) * 100000);
+
+        $workStateId = $hierarchy['state_id'] ?? null;
+        $workCityId = $hierarchy['city_id'] ?? null;
+
+        return array_merge($hierarchy, [
+            'full_name' => $fullName,
+            'gender_id' => $genderId,
+            'date_of_birth' => $dob,
+            'birth_time' => $birthTime,
+            'marital_status_id' => $maritalId,
+            'has_children' => false,
+            'religion_id' => $religionId,
+            'caste_id' => $casteId,
+            'sub_caste_id' => $subCasteId,
+            'highest_education' => $educations[array_rand($educations)],
+            'address_line' => $addressLine,
+            'birth_city_id' => $hierarchy['city_id'] ?? null,
+            'birth_taluka_id' => $hierarchy['taluka_id'] ?? null,
+            'birth_district_id' => $hierarchy['district_id'] ?? null,
+            'birth_state_id' => $hierarchy['state_id'] ?? null,
+            'native_city_id' => $hierarchy['city_id'] ?? null,
+            'native_taluka_id' => $hierarchy['taluka_id'] ?? null,
+            'native_district_id' => $hierarchy['district_id'] ?? null,
+            'native_state_id' => $hierarchy['state_id'] ?? null,
+            'height_cm' => $heightCm,
+            'weight_kg' => $weightKg,
+            'profile_photo' => $profilePhoto,
+            'complexion_id' => $complexionId,
+            'physical_build_id' => $physicalBuildId,
+            'blood_group_id' => $bloodGroupId,
+            'family_type_id' => $familyTypeId,
+            'income_currency_id' => $incomeCurrencyId,
+            'is_suspended' => false,
+            'photo_approved' => true,
+            'is_demo' => true,
+            'specialization' => ['Commerce', 'Computer Science', 'Arts', 'Science', 'Management'][array_rand(['Commerce', 'Computer Science', 'Arts', 'Science', 'Management'])],
+            'occupation_title' => $occupations[array_rand($occupations)],
+            'company_name' => $companies[array_rand($companies)],
+            'annual_income' => $annualIncome,
+            'family_income' => $familyIncome,
+            'father_name' => $fatherNames[array_rand($fatherNames)] . ' ' . explode(' ', $fullName)[0],
+            'father_occupation' => ['Retired', 'Business', 'Government', 'Private Job'][array_rand(['Retired', 'Business', 'Government', 'Private Job'])],
+            'mother_name' => $motherNames[array_rand($motherNames)] . ' ' . explode(' ', $fullName)[0],
+            'mother_occupation' => ['Homemaker', 'Teacher', 'Retired', 'Private Job'][array_rand(['Homemaker', 'Teacher', 'Retired', 'Private Job'])],
+            'work_city_id' => $workCityId,
+            'work_state_id' => $workStateId,
+        ]);
+    }
+
+    /**
+     * Generate a realistic Indian mobile number for demo profile (primary contact).
+     */
+    public static function randomPrimaryPhone(): string
+    {
+        $prefixes = ['9', '8', '7'];
+        $p = $prefixes[array_rand($prefixes)];
+        $rest = '';
+        for ($i = 0; $i < 9; $i++) {
+            $rest .= (string) random_int(0, 9);
+        }
+        return $p . $rest;
     }
 
     /** Age 23–35 for demo. */

@@ -10,13 +10,16 @@ use App\Services\ExtendedFieldService;
 use App\Services\FieldValueHistoryService;
 use App\Services\ProfileCompletenessService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 
 /*
 |--------------------------------------------------------------------------
 | DemoProfileController (SSOT)
 |--------------------------------------------------------------------------
-| Single + bulk demo create. All mandatory fields auto-filled. No NULLs.
+| Single + bulk demo create. All profile fields filled with realistic data.
+| No "demo" labels; data looks like real users for manual testing.
 */
 class DemoProfileController extends Controller
 {
@@ -42,40 +45,16 @@ class DemoProfileController extends Controller
         );
 
         $genderOverride = $request->filled('gender') ? $request->gender : null;
-        $defaults = DemoProfileDefaultsService::defaultsForDemo(0, $genderOverride);
-        $profile = MatrimonyProfile::create([
-            'user_id' => $demoUser->id,
-            'full_name' => $defaults['full_name'],
-            'gender' => $defaults['gender'],
-            'date_of_birth' => $defaults['date_of_birth'],
-            'marital_status' => $defaults['marital_status'],
-            'highest_education' => $defaults['highest_education'],
-            'caste' => $defaults['caste'],
-            'height_cm' => $defaults['height_cm'] ?? null,
-            'country_id' => $defaults['country_id'] ?? null,
-            'state_id' => $defaults['state_id'] ?? null,
-            'district_id' => $defaults['district_id'] ?? null,
-            'taluka_id' => $defaults['taluka_id'] ?? null,
-            'city_id' => $defaults['city_id'] ?? null,
-            'profile_photo' => $defaults['profile_photo'],
-            'photo_approved' => $defaults['photo_approved'],
-            'is_demo' => true,
-            'is_suspended' => false,
-        ]);
+        $attrs = DemoProfileDefaultsService::fullAttributesForDemoProfile(0, $genderOverride);
+        $attrs['user_id'] = $demoUser->id;
+        $attrs['is_demo'] = true;
+        $attrs['is_suspended'] = false;
 
+        $profile = MatrimonyProfile::create($attrs);
+        self::setLifecycleActive($profile);
+        self::addPrimaryContact($profile);
         self::autofillExtendedAndHistory($profile);
-
-        foreach (['full_name', 'gender', 'date_of_birth', 'marital_status', 'highest_education', 'caste', 'profile_photo', 'photo_approved', 'is_demo', 'is_suspended'] as $fieldKey) {
-            $newVal = $profile->$fieldKey;
-            if ($newVal instanceof \Carbon\Carbon) {
-                $newVal = $newVal->format('Y-m-d');
-            }
-            $newVal = $newVal === '' || $newVal === null ? null : (string) $newVal;
-            if ($fieldKey === 'photo_approved' || $fieldKey === 'is_demo' || $fieldKey === 'is_suspended') {
-                $newVal = $newVal === null ? null : ($newVal ? '1' : '0');
-            }
-            FieldValueHistoryService::record($profile->id, $fieldKey, 'CORE', null, $newVal, FieldValueHistoryService::CHANGED_BY_SYSTEM);
-        }
+        self::recordHistoryForDemo($profile);
 
         return redirect()
             ->route('matrimony.profile.show', $profile->id)
@@ -99,6 +78,7 @@ class DemoProfileController extends Controller
             ? $genderChoice
             : null;
 
+        $created = 0;
         for ($i = 0; $i < $count; $i++) {
             $email = 'demo-profile-' . Str::random(8) . '@system.local';
             $user = User::firstOrCreate(
@@ -112,48 +92,90 @@ class DemoProfileController extends Controller
             if ($user->matrimonyProfile) {
                 continue;
             }
-            $defaults = DemoProfileDefaultsService::defaultsForDemo($i, $genderOverride);
-            $profile = MatrimonyProfile::create([
-                'user_id' => $user->id,
-                'full_name' => $defaults['full_name'],
-                'gender' => $defaults['gender'],
-                'date_of_birth' => $defaults['date_of_birth'],
-                'marital_status' => $defaults['marital_status'],
-                'highest_education' => $defaults['highest_education'],
-                'caste' => $defaults['caste'],
-                'height_cm' => $defaults['height_cm'] ?? null,
-                'country_id' => $defaults['country_id'] ?? null,
-                'state_id' => $defaults['state_id'] ?? null,
-                'district_id' => $defaults['district_id'] ?? null,
-                'taluka_id' => $defaults['taluka_id'] ?? null,
-                'city_id' => $defaults['city_id'] ?? null,
-                'profile_photo' => $defaults['profile_photo'],
-                'photo_approved' => $defaults['photo_approved'],
-                'is_demo' => true,
-                'is_suspended' => false,
-            ]);
+            $attrs = DemoProfileDefaultsService::fullAttributesForDemoProfile($i, $genderOverride);
+            $attrs['user_id'] = $user->id;
+            $attrs['is_demo'] = true;
+            $attrs['is_suspended'] = false;
+            $profile = MatrimonyProfile::create($attrs);
+            self::setLifecycleActive($profile);
+            self::addPrimaryContact($profile);
             self::autofillExtendedAndHistory($profile);
-            foreach (['full_name', 'gender', 'date_of_birth', 'marital_status', 'highest_education', 'caste', 'profile_photo', 'photo_approved', 'is_demo', 'is_suspended'] as $fieldKey) {
-                $newVal = $profile->$fieldKey;
-                if ($newVal instanceof \Carbon\Carbon) {
-                    $newVal = $newVal->format('Y-m-d');
-                }
-                $newVal = $newVal === '' || $newVal === null ? null : (string) $newVal;
-                if ($fieldKey === 'photo_approved' || $fieldKey === 'is_demo' || $fieldKey === 'is_suspended') {
-                    $newVal = $newVal === null ? null : ($newVal ? '1' : '0');
-                }
-                FieldValueHistoryService::record($profile->id, $fieldKey, 'CORE', null, $newVal, FieldValueHistoryService::CHANGED_BY_SYSTEM);
-            }
+            self::recordHistoryForDemo($profile);
+            $created++;
         }
 
         return redirect()
             ->route('admin.demo-profile.bulk-create')
-            ->with('success', "Created {$count} demo profile(s).");
+            ->with('success', "Created {$created} demo profile(s).");
+    }
+
+    /**
+     * Set lifecycle_state to active so demo profile is visible (DB update to avoid model mutator).
+     */
+    private static function setLifecycleActive(MatrimonyProfile $profile): void
+    {
+        DB::table('matrimony_profiles')->where('id', $profile->id)->update(['lifecycle_state' => 'active']);
+    }
+
+    /**
+     * Add primary profile_contact (realistic Indian mobile) for the demo profile.
+     * Uses contact_relation_id (master_contact_relations) when relation_type column was replaced.
+     */
+    private static function addPrimaryContact(MatrimonyProfile $profile): void
+    {
+        $phone = DemoProfileDefaultsService::randomPrimaryPhone();
+        $contactRelationId = null;
+        if (Schema::hasColumn('profile_contacts', 'contact_relation_id')) {
+            $contactRelationId = DB::table('master_contact_relations')->where('key', 'self')->value('id');
+        }
+        $row = [
+            'profile_id' => $profile->id,
+            'contact_name' => $profile->full_name,
+            'phone_number' => $phone,
+            'is_primary' => true,
+            'visibility_rule' => 'unlock_only',
+            'verified_status' => false,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ];
+        if ($contactRelationId !== null) {
+            $row['contact_relation_id'] = $contactRelationId;
+        }
+        if (Schema::hasColumn('profile_contacts', 'relation_type')) {
+            $row['relation_type'] = 'self';
+        }
+        DB::table('profile_contacts')->insert($row);
+    }
+
+    /**
+     * Record core field history for demo profile (system change).
+     */
+    private static function recordHistoryForDemo(MatrimonyProfile $profile): void
+    {
+        $coreKeys = [
+            'full_name', 'gender_id', 'date_of_birth', 'marital_status_id', 'highest_education',
+            'religion_id', 'caste_id', 'sub_caste_id', 'height_cm', 'profile_photo', 'photo_approved',
+            'is_demo', 'is_suspended', 'specialization', 'occupation_title', 'company_name',
+            'annual_income', 'family_income', 'father_name', 'mother_name',
+        ];
+        foreach ($coreKeys as $fieldKey) {
+            if (!isset($profile->$fieldKey)) {
+                continue;
+            }
+            $newVal = $profile->$fieldKey;
+            if ($newVal instanceof \Carbon\Carbon) {
+                $newVal = $newVal->format('Y-m-d');
+            }
+            $newVal = $newVal === '' || $newVal === null ? null : (string) $newVal;
+            if (in_array($fieldKey, ['photo_approved', 'is_demo', 'is_suspended'], true)) {
+                $newVal = $newVal === null ? null : ($newVal ? '1' : '0');
+            }
+            FieldValueHistoryService::record($profile->id, $fieldKey, 'CORE', null, $newVal, FieldValueHistoryService::CHANGED_BY_SYSTEM);
+        }
     }
 
     /**
      * Phase-4: After demo profile create – fill extended fields from registry, then ensure completeness.
-     * Uses ExtendedFieldService::saveValuesForProfile (actor null = system). No lock conflict on new profile.
      */
     private static function autofillExtendedAndHistory(MatrimonyProfile $profile): void
     {

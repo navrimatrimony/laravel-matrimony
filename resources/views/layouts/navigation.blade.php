@@ -77,6 +77,16 @@
         {{ __('Interests Received') }}
     </x-nav-link>
 
+    <x-nav-link :href="route('who-viewed.index')" 
+                :active="request()->routeIs('who-viewed.index')">
+        {{ __('Who viewed me') }}
+    </x-nav-link>
+
+    <x-nav-link :href="route('contact-inbox.index')" 
+                :active="request()->routeIs('contact-inbox.index')">
+        {{ __('Contact Requests') }}
+    </x-nav-link>
+
     <x-nav-link :href="route('shortlist.index')" 
                 :active="request()->routeIs('shortlist.index')">
         {{ __('Shortlist') }}
@@ -202,6 +212,13 @@
 
     <x-responsive-nav-link :href="route('interests.received')">
         Received Interests
+    </x-responsive-nav-link>
+
+    <x-responsive-nav-link :href="route('who-viewed.index')">
+        Who viewed me
+    </x-responsive-nav-link>
+    <x-responsive-nav-link :href="route('contact-inbox.index')">
+        Contact Requests
     </x-responsive-nav-link>
 
     <x-responsive-nav-link :href="route('shortlist.index')">

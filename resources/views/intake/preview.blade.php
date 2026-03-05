@@ -33,7 +33,7 @@
                         label="Height"
                     />
                 </div>
-                @foreach(['full_name','date_of_birth','gender','annual_income','family_income','primary_contact_number','serious_intent_id','highest_education','father_name','mother_name','brother_count','sister_count','birth_time','birth_place','gotra','kuldaivat','rashi','nadi','gan','mangalik','varna','mother_occupation','father_occupation','mama','relatives'] as $coreKey)
+                @foreach(['full_name','date_of_birth','gender','annual_income','family_income','primary_contact_number','serious_intent_id','highest_education','specialization','occupation_title','company_name','income_currency_id','father_name','mother_name','father_occupation','mother_occupation','family_type_id','weight_kg','physical_build_id','birth_time','birth_place','gotra','kuldaivat','rashi','nadi','gan','mangalik','varna','mama','relatives','other_relatives_text'] as $coreKey)
                     @php
                         $val = $coreData[$coreKey] ?? '';
                         $conf = $confidenceMap[$coreKey] ?? null;
@@ -241,6 +241,30 @@
             />
         </section>
 
+        {{-- Siblings — same engine as wizard (snapshot[siblings]). --}}
+        @php
+            $intakeSiblingsData = $sections['siblings']['data'] ?? [];
+            if (!is_array($intakeSiblingsData)) { $intakeSiblingsData = []; }
+            $intakeSiblingsItems = collect($intakeSiblingsData);
+            if ($intakeSiblingsItems->isEmpty() && !empty(($intake->approval_snapshot_json ?? [])['siblings'] ?? [])) {
+                $intakeSiblingsItems = collect(($intake->approval_snapshot_json ?? [])['siblings']);
+            }
+            $siblingRelationOptions = [['value'=>'brother','label'=>'Brother'],['value'=>'sister','label'=>'Sister']];
+        @endphp
+        <section class="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+            <h2 class="text-lg font-semibold mb-4 border-b pb-2">{{ $sections['siblings']['label'] ?? 'Siblings' }}</h2>
+            <p class="text-sm text-gray-500 dark:text-gray-400 mb-4">Add sibling details (brothers &amp; sisters). All fields optional.</p>
+            <x-repeaters.relation-details
+                namePrefix="snapshot[siblings]"
+                :relationOptions="$siblingRelationOptions"
+                :showMarried="true"
+                :items="$intakeSiblingsItems"
+                :showPrimaryContact="false"
+                addButtonLabel="Add Sibling"
+                removeButtonLabel="Remove this sibling"
+            />
+        </section>
+
         {{-- Addresses — centralized address-row component. --}}
         <section class="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
             <h2 class="text-lg font-semibold mb-4 border-b pb-2">Addresses</h2>
@@ -317,25 +341,51 @@
             <button type="button" id="add-legal-case" class="mt-2 px-4 py-2 bg-gray-200 dark:bg-gray-600 rounded">+ Add Legal Case</button>
         </section>
 
-        {{-- Preferences --}}
+        {{-- Partner preferences (structured, same as wizard About & preferences) — snapshot[preferences][0][...] --}}
+        @php
+            $prefsData = $sections['preferences']['data'] ?? [];
+            $prefRow = is_array($prefsData) && isset($prefsData[0]) && is_array($prefsData[0]) ? $prefsData[0] : (is_array($prefsData) ? $prefsData : []);
+            $approvalPrefs = ($intake->approval_snapshot_json ?? [])['preferences'] ?? null;
+            if (is_array($approvalPrefs) && isset($approvalPrefs[0]) && is_array($approvalPrefs[0])) {
+                $prefRow = array_merge($prefRow, $approvalPrefs[0]);
+            } elseif (is_array($approvalPrefs) && !isset($approvalPrefs[0])) {
+                $prefRow = array_merge($prefRow, $approvalPrefs);
+            }
+        @endphp
         <section class="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
-            <h2 class="text-lg font-semibold mb-4 border-b pb-2">Preferences (अपेक्षा)</h2>
-            <div id="preferences-container">
-                @php $prefsData = $sections['preferences']['data'] ?? []; $prefsData = is_array($prefsData) ? $prefsData : []; @endphp
-                @foreach($prefsData as $idx => $pref)
-                    <div class="flex gap-4 mb-3 items-end preference-row">
-                        <div class="flex-1"><input type="text" name="snapshot[preferences][{{ $idx }}]" value="{{ is_array($pref) ? ($pref['text'] ?? json_encode($pref)) : $pref }}" class="w-full border rounded px-3 py-2 dark:bg-gray-700" placeholder="Preference"></div>
-                        <button type="button" class="remove-row px-3 py-2 border border-red-400 text-red-600 rounded">Remove</button>
-                    </div>
-                @endforeach
+            <h2 class="text-lg font-semibold mb-4 border-b pb-2">Partner preferences (अपेक्षा)</h2>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div><label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Preferred city</label><input type="text" name="snapshot[preferences][0][preferred_city]" value="{{ e($prefRow['preferred_city'] ?? '') }}" class="w-full border rounded px-3 py-2 dark:bg-gray-700 dark:border-gray-600" placeholder="Preferred city"></div>
+                <div><label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Preferred caste</label><input type="text" name="snapshot[preferences][0][preferred_caste]" value="{{ e($prefRow['preferred_caste'] ?? '') }}" class="w-full border rounded px-3 py-2 dark:bg-gray-700 dark:border-gray-600" placeholder="Preferred caste"></div>
+                <div><label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Age min</label><input type="number" name="snapshot[preferences][0][preferred_age_min]" value="{{ e($prefRow['preferred_age_min'] ?? '') }}" class="w-full border rounded px-3 py-2 dark:bg-gray-700 dark:border-gray-600" placeholder="Min age"></div>
+                <div><label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Age max</label><input type="number" name="snapshot[preferences][0][preferred_age_max]" value="{{ e($prefRow['preferred_age_max'] ?? '') }}" class="w-full border rounded px-3 py-2 dark:bg-gray-700 dark:border-gray-600" placeholder="Max age"></div>
+                <div><label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Income min</label><input type="number" name="snapshot[preferences][0][preferred_income_min]" value="{{ e($prefRow['preferred_income_min'] ?? '') }}" step="0.01" class="w-full border rounded px-3 py-2 dark:bg-gray-700 dark:border-gray-600" placeholder="Min income"></div>
+                <div><label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Income max</label><input type="number" name="snapshot[preferences][0][preferred_income_max]" value="{{ e($prefRow['preferred_income_max'] ?? '') }}" step="0.01" class="w-full border rounded px-3 py-2 dark:bg-gray-700 dark:border-gray-600" placeholder="Max income"></div>
+                <div class="md:col-span-2"><label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Preferred education</label><input type="text" name="snapshot[preferences][0][preferred_education]" value="{{ e($prefRow['preferred_education'] ?? '') }}" class="w-full border rounded px-3 py-2 dark:bg-gray-700 dark:border-gray-600" placeholder="Preferred education"></div>
             </div>
-            <button type="button" id="add-preference" class="mt-2 px-4 py-2 bg-gray-200 dark:bg-gray-600 rounded">+ Add Preference</button>
         </section>
 
-        {{-- Extended Narrative --}}
+        {{-- Extended narrative (About me & expectations — same as wizard) — snapshot[extended_narrative][...] --}}
+        @php
+            $narrData = $sections['narrative']['data'] ?? null;
+            $extRow = ($intake->approval_snapshot_json ?? [])['extended_narrative'] ?? null;
+            if (is_array($extRow)) {
+                $narrativeAboutMe = $extRow['narrative_about_me'] ?? '';
+                $narrativeExpectations = $extRow['narrative_expectations'] ?? '';
+                $additionalNotes = $extRow['additional_notes'] ?? '';
+            } else {
+                $narrativeAboutMe = is_scalar($narrData) ? (string)$narrData : '';
+                $narrativeExpectations = '';
+                $additionalNotes = '';
+            }
+        @endphp
         <section class="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
-            <h2 class="text-lg font-semibold mb-4 border-b pb-2">Additional Notes / Narrative</h2>
-            <textarea name="snapshot[extended_narrative]" rows="3" class="w-full border rounded px-3 py-2 dark:bg-gray-700 dark:border-gray-600" placeholder="Any extra text from biodata">{{ e(is_scalar($sections['narrative']['data'] ?? null) ? $sections['narrative']['data'] : '') }}</textarea>
+            <h2 class="text-lg font-semibold mb-4 border-b pb-2">About me &amp; expectations</h2>
+            <div class="space-y-4">
+                <div><label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">About me</label><textarea name="snapshot[extended_narrative][narrative_about_me]" rows="4" class="w-full border rounded px-3 py-2 dark:bg-gray-700 dark:border-gray-600" placeholder="About me">{{ e($narrativeAboutMe) }}</textarea></div>
+                <div><label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Expectations</label><textarea name="snapshot[extended_narrative][narrative_expectations]" rows="4" class="w-full border rounded px-3 py-2 dark:bg-gray-700 dark:border-gray-600" placeholder="Expectations">{{ e($narrativeExpectations) }}</textarea></div>
+                <div><label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Additional notes</label><textarea name="snapshot[extended_narrative][additional_notes]" rows="2" class="w-full border rounded px-3 py-2 dark:bg-gray-700 dark:border-gray-600" placeholder="Any extra text from biodata">{{ e($additionalNotes) }}</textarea></div>
+            </div>
         </section>
 
         {{-- Scroll anchor at bottom --}}

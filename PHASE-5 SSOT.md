@@ -4920,9 +4920,43 @@ END OF TEMPORARY GOVERNANCE REDUCTION MODE
 DAY-32 (SSOT ADD) — Contact Request System (Consent + Privacy + Governance)
 Goal
 
-Interest accept = mutual / messaging allowed only.
+Interest accept = mutual allowed only.
 Contact details default hidden.
 Contact reveal only via explicit receiver consent through “Request Contact” flow.
+
+---------------------------------------------------------------------
+Day-32 Implementation Order (क्रम — या क्रमाने implement करावे)
+---------------------------------------------------------------------
+
+Step 1 — Policy & schema
+- Add config/settings for communication policy (contact_request_mode, reject_cooldown_days, pending_expiry_days, grant_duration_options). Use config file or dedicated table; default values per SSOT.
+- Migrations: contact_requests table (sender_id, receiver_id, reason, requested_scopes, status, cooldown_ends_at, etc.), contact_grants table (request_id, granted_scopes, valid_until, revoked_at, etc.). Ensure admin_audit_logs exists for policy changes.
+
+Step 2 — Models & state machine
+- Models: ContactRequest, ContactGrant (or equivalent). Relationships to User/MatrimonyProfile.
+- Enforce state machine (pending → accepted|rejected|expired|cancelled; accepted → revoked|expired). Cooldown check on create (reject_cooldown_days). Pending expiry job or check (pending_expiry_days).
+
+Step 3 — Core service layer
+- Service(s): create contact request (validate mutual if policy, cooldown, max per day), approve (create grant, set valid_until from receiver choice), reject (set cooldown_ends_at), cancel, revoke grant, expire. Contact reveal logic: return only approved scopes for a valid grant; default hidden otherwise.
+
+Step 4 — Viewer profile page (Sender) — Section A
+- Profile show (viewer = sender): Button states from request/grant state (Request Contact | Request Sent (Pending) | View Contact | Request Rejected | Request Expired | Contact no longer available). Request Contact modal: reason dropdown (required), requested scopes (Email/WhatsApp/Call). Submit → service create. Cancel request if pending.
+
+Step 5 — Receiver inbox — Section B
+- Receiver UI: Tabs "Requests (Pending)" and "Access Granted (Active)". Pending: cards with sender snapshot, reason, requested scopes; Approve / Reject. Approve modal: duration (once / 7 days / 30 days from policy), approved scopes (receiver may reduce). Active: list who has access + scopes + granted_at + valid_until; Revoke action. All actions via service layer; audit where required.
+
+Step 6 — Partial reveal & revoke — Sections C, D
+- Sender "View Contact": show only approved scopes (email/phone/WhatsApp as per grant), valid_until, revoke notice. Report abuse affordance. After revoke: sender sees "Contact no longer available"; viewing disabled.
+
+Step 7 — Notifications & audit — Sections G, H
+- Notifications: receiver (new request), sender (accepted / rejected / revoked / expired). Optional: in-app first; email later. Receiver "Contact Requests & Access" view: history, active grants, revoke from same screen. All state changes and revokes produce audit records.
+
+Step 8 — Admin policy & governance — Section I + Admin block (A–K)
+- Admin UI: edit communication policy (contact_request_mode, reject_cooldown_days, pending_expiry_days, max_requests_per_day, grant_duration_options, allowed_contact_scopes). Every change → admin_audit_logs (admin_user_id, reason, previous_value, new_value). Optional: user-level restrictions (F), emergency controls (I), investigation tools (H). No silent overwrite of existing grants/requests.
+
+Dependency rule: Step 1 → 2 → 3 must be done before any UI (4–8). Steps 4–6 can be parallel after 3; 7–8 after 4–6 or in parallel where no UI dependency.
+
+---------------------------------------------------------------------
 
 A) Viewer Profile Page (Sender side)
 Button states
@@ -5094,8 +5128,200 @@ No monetization/credits integration unless explicitly planned.
 No architecture refactor; implement as minimal additions within SSOT governance.
 
 No silent overwrites; all changes must be auditable.
+
+DAY-32 (SSOT ADD) — Admin Governance & Policy Control for Communication
+
+Goal
+Provide centralized, auditable admin control over Interest, Messaging, and Contact Request systems
+without violating SSOT principles (no silent overwrite, full auditability, policy-driven behavior).
+
+All communication behavior must be governed by configurable policies rather than hard-coded rules.
+
+---------------------------------------------------------------------
+
+A) Communication Policy Settings (Admin Controlled)
+
+Admin may configure the following platform communication rules.
+
+chat_requires_mutual_interest
+    true  → messaging allowed only after mutual interest
+    false → messaging allowed without mutual interest
+
+contact_request_mode
+    mutual_only     → contact request allowed only after mutual interest
+    direct_allowed  → direct contact request allowed without mutual interest
+    disabled        → contact request system disabled globally
+
+allow_contact_request
+    true / false
+
+allow_messaging
+    true / false
+
+All changes must be recorded in admin_audit_logs with reason.
+
+---------------------------------------------------------------------
+
+B) Contact Request Policy Controls
+
+Admin configurable policies:
+
+reject_cooldown_days
+    default: 90
+    allowed range: 7–365
+
+pending_expiry_days
+    default: 7
+    allowed range: 1–30
+
+max_requests_per_day_per_sender
+    default: system defined
+    purpose: anti-spam protection
+
+allowed_contact_scopes
+    email
+    phone
+    whatsapp
+
+Admin may enable or disable specific scopes.
+
+---------------------------------------------------------------------
+
+C) Contact Grant Duration Options (Admin Configurable)
+
+Admin controls which approval duration options are available to receivers.
+
+grant_duration_options
+
+    approve_once
+    approve_7_days
+    approve_30_days
+
+Admin may enable or disable any option.
+
+Receiver may reduce scope but cannot exceed allowed options.
+
+---------------------------------------------------------------------
+
+D) Messaging Safety Controls
+
+Admin may configure messaging safety limits.
+
+max_messages_per_day_per_sender
+max_conversations_per_day
+message_rate_limit
+
+Optional abuse protection features:
+
+phone_number_detection_warning
+email_detection_warning
+external_contact_warning
+
+These warnings do not block messages but provide safety guidance.
+
+---------------------------------------------------------------------
+
+E) Anti-Spam Controls
+
+Admin may enforce system-wide limits:
+
+max_interest_per_day_per_sender
+max_contact_requests_per_day_per_sender
+max_messages_per_day_per_sender
+
+System must block actions exceeding limits and show clear UI feedback.
+
+---------------------------------------------------------------------
+
+F) Admin Communication Restrictions
+
+Admin may restrict individual users for safety or abuse control.
+
+Possible restrictions:
+
+disable_interest_sending
+disable_contact_requests
+disable_messaging
+rate_limit_messaging
+temporary_communication_ban
+
+All restrictions must be auditable.
+
+---------------------------------------------------------------------
+
+G) Contact Access Administrative Override
+
+Admin may perform controlled overrides:
+
+revoke_contact_access
+extend_contact_access
+expire_contact_access
+
+All overrides must create an audit record and must never silently overwrite existing grants.
+
+---------------------------------------------------------------------
+
+H) Investigation & Transparency Tools (Admin View)
+
+Admin panel must provide visibility into communication events.
+
+Admin must be able to view:
+
+Interest history
+Contact request history
+Contact access grants
+Contact revocations
+Message conversation metadata
+
+Timeline example:
+
+Interest Sent
+Interest Accepted
+Contact Request Created
+Request Approved / Rejected
+Contact Access Granted
+Contact Access Revoked
+Contact Access Expired
+
+---------------------------------------------------------------------
+
+I) Global Emergency Controls
+
+Admin may temporarily enforce system-wide safety measures:
+
+disable_contact_requests_globally
+disable_messaging_globally
+restrict_new_accounts_messaging
+
+All emergency actions must be logged in admin_audit_logs.
+
+---------------------------------------------------------------------
+
+J) Governance Requirements
+
+All admin policy changes must:
+
+1. Write entry to admin_audit_logs
+2. Record admin_user_id
+3. Record change reason
+4. Record previous_value and new_value
+
+No policy change may silently alter existing user grants or requests.
+
+---------------------------------------------------------------------
+
+K) Non-Goals (Admin Governance Scope)
+
+This section does NOT introduce:
+
+Monetization rules
+Credits or paywall logic
+Architecture refactoring
+Untracked policy overrides
+
+All communication features must remain compliant with SSOT mutation governance.
 --------------------------------------
-# DAY-34 (SSOT ADD) — P3: Who Viewed My Profile (Views Logging + Count/List + Privacy + Governance)
+# DAY-33 (SSOT ADD) — P3: Who Viewed My Profile (Views Logging + Count/List + Privacy + Governance)
 
 **PROJECT:** Laravel Matrimony  
 **MODE:** PHASE-5 SSOT STRICT  
@@ -5317,3 +5543,486 @@ Admin Panel → Settings → “Who Viewed Policy”
 - No “Who viewed” monetization/credits gating.
 - No new recommendation algorithms; only logging and policy-based display.
 - No architecture refactor; additive tables only; SSOT governance enforced.
+
+----------------------------------------------------------------------
+
+# DAY-34 (SSOT ADD) — Unified Photo Upload Engine (User + Admin)
+
+**PROJECT:** Laravel Matrimony  
+**MODE:** PHASE-5 SSOT STRICT  
+**SCOPE:** Single reusable photo engine for all profile images (user + admin). Mobile-app-first UX, WebP storage, crop/rotate, multi-slot gallery.
+
+Goal: Avoid fragmented image handling. All profile-related photos (primary photo, extra photos, admin replacements) MUST go through a single, well-governed engine.
+
+----------------------------------------------------------------------
+1) Core Outcomes
+----------------------------------------------------------------------
+
+1) Single engine for ALL profile photos
+   - One backend pipeline + one frontend component used everywhere:
+     - User: profile photo (primary) + extra photos (up to 5 slots total)
+     - Admin: photo moderation, replacement, emergency fixes
+   - No ad-hoc uploads, no custom per-page image logic.
+
+2) Mobile-app-first UX
+   - Majority of users use the website inside a mobile app/webview.
+   - Engine MUST be:
+     - Touch-friendly (large buttons, safe tap targets, no tiny controls)
+     - Performant on mid-range phones and 4G connections
+     - Resilient to unstable networks (retry-friendly, small payloads)
+
+3) Quality vs size target
+   - Stored images in WebP (or equivalent modern format).
+   - Target: typical stored image ≤ 200 KB, but visually high quality on mobile.
+   - Downscale oversized originals; avoid serving multi-MB images.
+
+4) Basic edits built-in
+   - User can:
+     - Crop
+     - Rotate (90° steps)
+     - Zoom/pan inside crop box
+   - Future-safe: engine is extendable to filters/auto-enhance if needed.
+
+5) Multi-photo support with primary slot
+   - Each profile can have up to 5 photos.
+   - Exactly one “primary” photo (used in search cards, profile header).
+   - User can reorder photos (drag-drop or up/down arrows) and reselect primary.
+
+----------------------------------------------------------------------
+2) UX Requirements (User-Side, Mobile-First)
+----------------------------------------------------------------------
+
+2.1) Layout
+-----------
+- Top section:
+  - Primary photo preview (circle mask for profile header, but internal storage keeps square/portrait).
+  - Clear label: “Your primary photo”.
+- Below:
+  - 4 additional slots (thumbnails) with simple labels:
+    - “Add photo”
+    - “Change”
+    - “Remove”
+
+2.2) Actions
+------------
+For each slot:
+- Upload / Replace
+  - Opens system picker (camera/gallery) in mobile webview-friendly way.
+- Edit
+  - Opens crop/rotate modal.
+- Remove
+  - Soft-remove from profile gallery; does not delete original file history (if audit required) but removes link from profile_photos.
+
+2.3) Cropper UX
+----------------
+- Single cropper component (e.g., Cropper.js or equivalent) wrapped in our own thin UI:
+  - Large, edge-to-edge crop area for touch gestures.
+  - Buttons:
+    - “Rotate 90°”
+    - “Reset”
+    - “Save”
+    - “Cancel”
+- Aspect ratios:
+  - Primary photo:
+    - Stored internally as square or portrait (e.g., 4:5).
+    - Displayed as circle in many places, so safe cropping area must account for that.
+  - Extra photos:
+    - Can be same ratio or “free” within min size limits.
+
+2.4) Error feedback (Mobile-friendly)
+-------------------------------------
+- Clear, single-line messages:
+  - “Photo too small. Please upload a clearer photo (at least 800×800).”
+  - “File too large. Please choose a smaller photo or crop before upload.”
+  - “Upload failed. Tap to retry.”
+- Never show raw exception messages; always user-facing translations.
+
+----------------------------------------------------------------------
+3) Backend Storage & Processing (Additive Only)
+----------------------------------------------------------------------
+
+3.1) Existing constraints
+-------------------------
+- PHASE-5 PROTECTION DIRECTIVE:
+  - Existing columns/tables MUST NOT be dropped, repurposed, or type-changed.
+  - New behavior MUST be additive.
+
+3.2) Tables (additive)
+----------------------
+- Existing:
+  - `matrimony_profiles.profile_photo`:
+    - Continues to hold the primary photo filename (backward compatible).
+- New (additive):
+  - `profile_photos`:
+    - id
+    - profile_id (FK → matrimony_profiles)
+    - path_full (string)   — Web-optimized main version (e.g., 1200px longest edge)
+    - path_thumb (string)  — Thumbnail (e.g., 300px)
+    - is_primary (boolean, default false)
+    - sort_order (integer, default 0)
+    - created_at, updated_at
+  - Optional later:
+    - `profile_photo_audit_log` (additive) if high-governance for image changes is required.
+
+3.3) Processing pipeline
+------------------------
+Upload flow:
+- Step 1: Accept original upload (jpeg/png/webp/heic):
+  - Validate mime + size + basic dimension check (e.g., min 800×800).
+- Step 2: Normalize EXIF orientation.
+- Step 3: Apply crop/rotate parameters from client:
+  - Either:
+    - Client sends cropped image (blob) → backend just validates + re-encodes.
+    - OR client sends crop box/rotation metadata → backend performs crop.
+- Step 4: Resize & encode:
+  - Full image:
+    - Max dimension: e.g., 1200 px longest edge.
+    - Encode WebP with quality tuned for ≤ 200 KB typical size.
+  - Thumb:
+    - E.g., 300×300 square WebP.
+- Step 5: Save files to disk/storage and persist `profile_photos` row.
+- Step 6: If `is_primary = true`:
+  - Update `matrimony_profiles.profile_photo` to point to that file’s full version.
+
+3.4) Quality/size tuning
+------------------------
+- Photo-encoding policy:
+  - Prefer **WebP** for all served images (with optional future AVIF).
+  - Quality balancing:
+    - Target ~150 KB median for full-size profile photos.
+    - Hard cap: 200 KB (beyond that, re-attempt encode at lower quality or slightly smaller dimensions).
+- For low-bandwidth users (app webview):
+  - `srcset`/`sizes` can serve smaller variants on mobile widths when needed.
+
+----------------------------------------------------------------------
+4) Governance & Safety
+----------------------------------------------------------------------
+
+4.1) Moderation flags (re-use existing)
+---------------------------------------
+- `matrimony_profiles` existing moderation columns remain source of truth:
+  - `photo_approved` (boolean)
+  - `photo_rejected_at`
+  - `photo_rejection_reason`
+  - `is_suspended`
+- Engine updates these via existing services; engine itself does NOT bypass moderation rules.
+
+4.2) Admin mode
+----------------
+- The same engine MUST support an “admin mode”:
+  - Admin can:
+    - Change primary photo.
+    - Add/remove extra photos.
+    - Crop/rotate before approving.
+  - Admin overrides MUST:
+    - Write to audit logs (e.g., `admin_audit_logs`) with:
+      - admin_id
+      - action_type (photo_replace / crop / remove)
+      - affected profile_id
+      - reason
+      - timestamps
+
+4.3) Suspended / hidden profiles
+--------------------------------
+- When profile is not visible (`ProfileLifecycleService::isVisibleToOthers` = false):
+  - Engine MUST NOT allow new photos to be visible to others until moderation/lifecycle allows.
+  - User MAY still upload/re-crop (subject to product decision), but visibility is governed separately.
+
+----------------------------------------------------------------------
+5) API & Reuse (Engine Integration)
+----------------------------------------------------------------------
+
+5.1) HTTP endpoints (additive)
+------------------------------
+Add new routes (user-authenticated, additive only):
+- `POST   /photos`          — Upload + create new `profile_photos` row.
+- `PUT    /photos/{photo}`  — Re-crop / rotate existing photo.
+- `DELETE /photos/{photo}`  — Remove a photo (soft delete or hide from gallery; actual delete policy per governance).
+- `PUT    /photos/reorder`  — Update `sort_order` + primary flag.
+
+Admin variants:
+- `POST   /admin/photos/{profile}`          — Admin-triggered upload for specific profile.
+- `PUT    /admin/photos/{photo}/moderate`   — Approve/reject/replace actions (always audited).
+
+5.2) Frontend component contract
+--------------------------------
+Single JS/Blade component (`<x-photo-uploader />` or equivalent) config:
+- Inputs:
+  - `maxSlots` (default 5)
+  - `allowMultiple` (true/false)
+  - `initialPhotos` (JSON: id, urls, is_primary, sort_order)
+  - `mode` = user | admin
+  - `aspectRatio` options for primary vs extra photos.
+- Emits:
+  - Events for:
+    - `photoUploaded` (with new photo data)
+    - `photoUpdated`
+    - `photoRemoved`
+    - `orderChanged`
+
+5.3) App/webview usage
+----------------------
+- Engine MUST work well inside an in-app webview:
+  - Avoid complex multi-window flows.
+  - Keep modals simple and single-screen.
+  - Large buttons and obvious calls-to-action (Upload, Crop, Save).
+
+----------------------------------------------------------------------
+6) Non-Goals (Day-34 Photo Engine)
+----------------------------------------------------------------------
+
+- No AI-based beauty filters or auto-face-beautification in Phase-5.
+- No client-side heavy ML models (must remain light enough for mid-range phones).
+- No external CDN vendor lock-in; design must work with local storage first, CDN optional.
+- No new database-level hard constraints that would break existing photos (engine must respect PHASE-5 additive rules).
+
+----------------------------------------------------------------------
+7) Admin Photo Engine Settings (Panel)
+----------------------------------------------------------------------
+
+7.1) Photo verification & visibility policy
+------------------------------------------
+- Setting: `photo_approval_required` (already present)
+  - false (default): User uploads photo → visible immediately after upload.
+  - true: User uploads photo → hidden until admin approves.
+
+- New settings (additive via AdminSetting):
+  - `photo_primary_required` (default true)
+    - true: profile cannot be considered “complete/live” without a primary photo.
+    - false: profiles may be live without a photo (not recommended).
+  - `photo_max_per_profile` (default 5)
+    - Soft enforcement in UI/service; engine disallows more than this slots.
+
+7.2) Size & quality controls
+----------------------------
+- `photo_max_upload_mb` (default 8)
+  - Validation limit for original uploads (e.g., 8 MB).
+- `photo_max_edge_px` (default 1200)
+  - Longest side after resize; preserves enough quality for mobile.
+- `photo_webp_quality_high` (default 80)
+  - Initial WebP encode quality.
+- `photo_target_max_kb` (default 200)
+  - If encoded file > target_max_kb:
+    - Re-encode at slightly lower quality (e.g., 70).
+    - If still larger, accept as-is (do NOT corrupt image).
+
+7.3) Moderation & abuse safety
+------------------------------
+- `photo_auto_suspend_threshold` (optional; default null)
+  - If set to N, and a profile has ≥ N rejected photos within a rolling window (e.g., 30 days), system:
+    - MAY auto-flag or auto-suspend profile (configurable action).
+- `photo_rejection_reasons` (stored as JSON in AdminSetting)
+  - Array of strings used as quick-pick reasons in admin UI:
+    - e.g. “Group photo (no clear face)”, “Not a real person”, “Low resolution / blurry”, “Objectionable content”.
+
+7.4) Admin override permissions (policy, not RBAC implementation)
+-----------------------------------------------------------------
+- Define which admin roles MAY:
+  - a) approve/reject photos.
+  - b) directly replace primary photo (upload on behalf of user).
+  - c) add/remove extra photos.
+- Every override MUST:
+  - Write to `admin_audit_logs` with:
+    - admin_id
+    - action_type (photo_approve, photo_reject, photo_replace, photo_remove)
+    - profile_id
+    - reason
+    - timestamps
+
+7.5) User-facing messaging config
+---------------------------------
+- `photo_guidelines_text` (short text shown below uploader)
+  - e.g. “Clear face, no sunglasses, no group photos, no watermarks.”
+- `photo_reject_default_message`
+  - Default user-visible message if admin does not provide a custom reason.
+- `photo_under_review_text`
+  - Text for “under review” badge in dashboard/profile when approval_required = true.
+
+----------------------------------------------------------------------
+# DAY-35 (SSOT ADD) — Smart Biodata Intake Engine (AI + Rules + Governance)
+----------------------------------------------------------------------
+
+**PROJECT:** Laravel Matrimony  
+**MODE:** PHASE-5 SSOT STRICT  
+**SCOPE:** Unified biodata intake engine for PDF/image/text uploads, AI-assisted parsing, rule-based normalization, and admin-governed limits.
+
+Goal: Make it extremely easy for users to upload any biodata format, while keeping AI costs under control via caching, rules, and versioning.
+
+----------------------------------------------------------------------
+1) Core Outcomes
+----------------------------------------------------------------------
+
+1) Single intake engine entry-point
+   - One upload UI for biodata:
+     - PDF (scanned biodata)
+     - Images (photos/scans of biodata pages)
+     - Direct text (copy-paste or manual typing)
+   - Every upload creates a `biodata_intakes` record (already exists) with clear status transitions:
+     - uploaded → parsed → reviewed → attached_to_profile / discarded.
+
+2) AI + rules two-layer parsing
+   - AI layer:
+     - Extracts structured JSON (name, DOB, gender, religion, caste, education, job, family, expectations, contact hints, etc.) + per-field confidence scores.
+   - Rules layer:
+     - Uses master tables, regexes, and known patterns to normalize and validate:
+       - e.g., map free-text caste to `master_castes`, enforce date formats, validate phone/email patterns.
+   - UI shows:
+     - High-confidence suggestions (green)
+     - Medium (yellow, “please check”)
+     - Missing/low-confidence fields (red, manual input)
+
+3) Feedback loop for continuous improvement
+   - User/Admin actions are interpreted as signals:
+     - Keeping AI suggestion as-is → implicit “correct”.
+     - Editing a suggested value → implicit “correction”.
+     - Adding a value where AI left it empty → “missed field”.
+   - These signals are stored (internally) as training/evaluation data:
+     - “raw_text + final approved JSON + parser_version”.
+   - Over time:
+     - Stable mapping patterns are converted into hard rules.
+     - AI is reserved for ambiguous or narrative sections.
+
+4) Cost-aware design
+   - Avoid re-running AI on the same content:
+     - For identical or near-identical files (hash match), reuse previous parse result (for that parser_version) instead of calling AI again.
+   - As rule coverage increases:
+     - Reduce AI calls to only:
+       - New templates/layouts (no matching hash history)
+       - Fields where rules explicitly mark “AI assist needed” (e.g., narratives).
+
+----------------------------------------------------------------------
+2) Upload UX (User-Side, Mobile-First)
+----------------------------------------------------------------------
+
+2.1) Input types
+----------------
+- PDF:
+  - Single or small multi-page document (max pages configurable).
+- Images:
+  - One or more photos of biodata (front/back, multi-page).
+- Text:
+  - Paste or type biodata text; optional section headers suggested (Name, DOB, Education, Job, Family, Expectations).
+
+2.2) Flow
+---------
+- Step 1: User picks source (PDF / Images / Text).
+- Step 2: Upload/enter content.
+- Step 3: Engine creates intake record and (if auto-parse enabled) schedules parsing job.
+- Step 4: After parsing:
+  - User sees side-by-side:
+    - Original (thumbnail or text)
+    - Parsed fields + confidence chips.
+  - User can accept/edit field-by-field and then “Apply to my profile” (subject to existing governance rules).
+
+----------------------------------------------------------------------
+3) Storage, Versioning & Caching
+----------------------------------------------------------------------
+
+3.1) Versioning
+---------------
+- Every intake parse stores:
+  - `parser_version` (e.g., `ai_v1`, `ai_v2`, `rules_only`).
+  - `parsed_json` (structured fields + confidence map).
+  - `parse_status` (`pending`, `success`, `error`).
+  - `last_error` (short code/message for debugging).
+- When a new parser version is introduced:
+  - Existing intakes are NOT auto-reparsed unless explicitly triggered.
+  - Admin can choose to re-parse individual intakes with the new version.
+
+3.2) Content hashing & AI cache
+-------------------------------
+- For each uploaded intake, compute a stable hash of the canonicalized content:
+  - PDF: per-page text + layout summary or full text concatenation.
+  - Images: OCR text + basic layout fingerprint.
+  - Text: normalized text (trimmed, normalized whitespace).
+- Before calling AI:
+  - Check if there is an existing parse result with:
+    - same `content_hash`
+    - same `parser_version`
+  - If yes:
+    - Reuse that parse result (no AI call, only cheap DB read).
+  - If no:
+    - Call AI and store result with `content_hash` and `parser_version` for future reuse.
+
+3.3) Deduplication across users
+-------------------------------
+- If multiple users upload the exact same biodata file (e.g., same family template):
+  - They will share the same cached parse result.
+  - Profile-specific corrections still stored per-intake; cache only stores “first guess” from AI.
+
+----------------------------------------------------------------------
+4) Admin Controls (Intake Engine Settings)
+----------------------------------------------------------------------
+
+4.1) Upload limits & anti-abuse
+-------------------------------
+- Configurable via AdminSetting + admin panel:
+  - `intake_max_pdf_mb` (default 10–15 MB).
+  - `intake_max_pdf_pages` (default 5–10 pages).
+  - `intake_max_images_per_intake` (default 5–10).
+  - `intake_max_daily_per_user` (default 3–5).
+  - `intake_max_monthly_per_user` (default 10–20).
+  - Optional `intake_global_daily_cap` for infrastructure safety.
+- Behaviour when limit exceeded:
+  - Friendly message to user.
+  - Internal log/flag for admin to review potential abuse.
+
+4.2) AI & OCR configuration
+---------------------------
+- Settings:
+  - `intake_auto_parse_enabled` (bool, default true).
+  - `intake_active_parser` (enum: `rules_only`, `ai_v1`, `ai_v2`, ...).
+  - `intake_ocr_provider` (enum: `tesseract`, `cloud_vision`, `off`).
+  - `intake_ocr_language_hint` (`mr`, `en`, `mixed`).
+  - `intake_parse_retry_limit` (max retries per intake).
+
+4.3) Confidence & auto-apply policy
+-----------------------------------
+- Per-field configuration:
+  - `intake_confidence_high_threshold` (e.g., 0.85).
+  - `intake_auto_apply_fields` (set of fields where high-confidence values can be auto-prefilled on profile).
+- Hard safety:
+  - Contact fields (`phone`, `email`, `address`) never auto-applied; always user-reviewed.
+
+4.4) Review workflow
+--------------------
+- Toggle:
+  - `intake_require_admin_before_attach` (bool).
+    - true: attaching intake to profile always requires admin approval.
+    - false: trusted users may attach directly (still auditable).
+- Admin UI:
+  - See intake list with:
+    - status, parser_version, parse_status, last_error, confidence summary.
+  - Actions:
+    - Parse/re-parse with selected version.
+    - Approve/Reject intake mapping.
+    - Attach to profile / Replace selected fields on a profile.
+
+4.5) Privacy & retention
+------------------------
+- Settings:
+  - `intake_file_retention_days` (e.g., 90).
+  - `intake_keep_parsed_json_after_purge` (bool).
+- Behaviour:
+  - After retention_days, original files (PDF/images) are deleted.
+  - Parsed JSON may be kept longer for audit/training if policy allows.
+  - SSOT must clearly document user-visible consent text about this behaviour.
+
+----------------------------------------------------------------------
+5) Observability & Metrics
+----------------------------------------------------------------------
+
+- For each intake:
+  - Store:
+    - `parse_duration_ms`
+    - `ai_calls_used` (count)
+    - `fields_auto_filled` vs `fields_manually_edited`
+  - Admin dashboard card:
+    - Last 7/30 days:
+      - # of intakes
+      - parse success rate
+      - average AI calls per intake
+      - percentage of fields where AI suggestion was accepted without change.
+- Use these metrics to:
+  - Identify fields where rules can replace AI.
+  - Track reduction in AI calls over time as rules harden.

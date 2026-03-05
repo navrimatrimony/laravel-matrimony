@@ -493,7 +493,10 @@
 @endif
 
 @php
-    $hasFamily = ($profile->father_name ?? '') !== '' || ($profile->father_occupation ?? '') !== '' || ($profile->mother_name ?? '') !== '' || ($profile->mother_occupation ?? '') !== '' || ($profile->brothers_count ?? null) !== null || ($profile->sisters_count ?? null) !== null || $profile->familyType;
+    $siblings = $profile->siblings ?? collect();
+    $brothersFromEngine = $siblings->where('relation_type', 'brother')->count();
+    $sistersFromEngine = $siblings->where('relation_type', 'sister')->count();
+    $hasFamily = ($profile->father_name ?? '') !== '' || ($profile->father_occupation ?? '') !== '' || ($profile->mother_name ?? '') !== '' || ($profile->mother_occupation ?? '') !== '' || $brothersFromEngine > 0 || $sistersFromEngine > 0 || $profile->familyType;
 @endphp
 @if ($hasFamily)
 <div class="mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
@@ -511,16 +514,15 @@
             <p class="font-medium text-base">{{ $profile->mother_name }}{{ ($profile->mother_occupation ?? '') !== '' ? ' · ' . $profile->mother_occupation : '' }}</p>
         </div>
         @endif
-        @if (($profile->brothers_count ?? null) !== null && $profile->brothers_count !== '')
+        @if ($brothersFromEngine > 0 || $sistersFromEngine > 0)
         <div>
-            <p class="text-gray-500 text-sm">Brothers</p>
-            <p class="font-medium text-base">{{ $profile->brothers_count }}</p>
-        </div>
-        @endif
-        @if (($profile->sisters_count ?? null) !== null && $profile->sisters_count !== '')
-        <div>
-            <p class="text-gray-500 text-sm">Sisters</p>
-            <p class="font-medium text-base">{{ $profile->sisters_count }}</p>
+            <p class="text-gray-500 text-sm">Siblings</p>
+            @php
+                $b = $brothersFromEngine > 0 ? $brothersFromEngine . ' brother' . ($brothersFromEngine !== 1 ? 's' : '') : '';
+                $s = $sistersFromEngine > 0 ? $sistersFromEngine . ' sister' . ($sistersFromEngine !== 1 ? 's' : '') : '';
+                $siblingsText = trim($b . ($b && $s ? ', ' : '') . $s);
+            @endphp
+            <p class="font-medium text-base">{{ $siblingsText }}</p>
         </div>
         @endif
         @if ($profile->familyType)
@@ -954,6 +956,79 @@
                 </form>
             @endif
 
+            {{-- Day-32: Request Contact (button states + modal) --}}
+            @if (!$contactRequestDisabled && $contactRequestState !== null)
+                @php
+                    $crState = $contactRequestState['state'] ?? 'none';
+                    $crRequest = $contactRequestState['request'] ?? null;
+                    $crGrant = $contactRequestState['grant'] ?? null;
+                    $cooldownEndsAt = $contactRequestState['cooldown_ends_at'] ?? null;
+                    $reasons = config('communication.request_reasons', []);
+                @endphp
+                <div x-data="{ openRequestModal: false }">
+                    @if ($crState === 'none' || ($crState === 'expired' && !$cooldownEndsAt) || $crState === 'cancelled')
+                        <button type="button" @click="openRequestModal = true" style="background-color: #10b981; color: white; padding: 12px 24px; border-radius: 6px; font-weight: 600; font-size: 16px; border: none; cursor: pointer;">
+                            Request Contact
+                        </button>
+                    @elseif ($crState === 'pending')
+                        <span style="background-color: #f59e0b; color: white; padding: 12px 24px; border-radius: 6px; font-weight: 600; font-size: 16px;">Request Sent (Pending)</span>
+                        @if ($crRequest)
+                        <form method="POST" action="{{ route('contact-requests.cancel', $crRequest) }}" style="display: inline;">
+                            @csrf
+                            <button type="submit" style="background-color: #6b7280; color: white; padding: 12px 20px; border-radius: 6px; font-weight: 500; font-size: 14px; border: none; cursor: pointer;">Cancel request</button>
+                        </form>
+                        @endif
+                    @elseif ($crState === 'accepted' && $crGrant)
+                        <a href="{{ route('matrimony.profile.show', $profile) }}#contact-reveal" style="background-color: #059669; color: white; padding: 12px 24px; border-radius: 6px; font-weight: 600; font-size: 16px; text-decoration: none; display: inline-block;">View Contact</a>
+                    @elseif ($crState === 'rejected')
+                        <span style="background-color: #ef4444; color: white; padding: 12px 24px; border-radius: 6px; font-weight: 600; font-size: 16px;">Request Rejected</span>
+                        @if ($cooldownEndsAt)
+                        <span class="text-sm text-gray-600 dark:text-gray-400">Cooling period ends {{ $cooldownEndsAt->format('M j, Y') }}</span>
+                        @endif
+                    @elseif ($crState === 'expired')
+                        <span style="background-color: #9ca3af; color: white; padding: 12px 24px; border-radius: 6px; font-weight: 600; font-size: 16px;">Request Expired</span>
+                        @if (!$cooldownEndsAt)
+                        <button type="button" @click="openRequestModal = true" style="background-color: #10b981; color: white; padding: 12px 20px; border-radius: 6px; font-weight: 500; font-size: 14px; border: none; cursor: pointer;">Request again</button>
+                        @endif
+                    @elseif ($crState === 'revoked')
+                        <span style="background-color: #6b7280; color: white; padding: 12px 24px; border-radius: 6px; font-weight: 600; font-size: 16px;">Contact no longer available</span>
+                    @endif
+
+                    {{-- Request Contact modal --}}
+                    <div x-show="openRequestModal" x-cloak x-transition class="fixed inset-0 z-50 flex items-center justify-center bg-black/50" style="display: none;" @click.self="openRequestModal = false">
+                        <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-md w-full mx-4 p-6" @click.stop x-data="{ reason: '{{ old('reason', 'talk_to_family') }}' }">
+                            <h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">Request Contact</h3>
+                            <p class="text-sm text-gray-600 dark:text-gray-400 mb-4">They will see your reason and chosen contact methods. They can approve or reject.</p>
+                            <form method="POST" action="{{ route('contact-requests.store', $profile) }}">
+                                @csrf
+                                <div class="mb-4">
+                                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Why are you requesting contact? <span class="text-red-500">*</span></label>
+                                    <select name="reason" required x-model="reason" class="w-full border border-gray-300 dark:border-gray-600 rounded-md shadow-sm dark:bg-gray-700 dark:text-gray-100">
+                                        @foreach($reasons as $key => $label)
+                                        <option value="{{ $key }}" {{ old('reason') === $key ? 'selected' : '' }}>{{ $label }}</option>
+                                        @endforeach
+                                    </select>
+                                </div>
+                                <div class="mb-4" x-show="reason === 'other'" x-cloak>
+                                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Other (please specify)</label>
+                                    <textarea name="other_reason_text" rows="2" class="w-full border border-gray-300 dark:border-gray-600 rounded-md dark:bg-gray-700 dark:text-gray-100" placeholder="Short reason">{{ old('other_reason_text') }}</textarea>
+                                </div>
+                                <div class="mb-4">
+                                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Requested contact methods</label>
+                                    @foreach(['email' => 'Email', 'phone' => 'Phone', 'whatsapp' => 'WhatsApp'] as $scope => $label)
+                                    <label class="inline-flex items-center mr-4"><input type="checkbox" name="requested_scopes[]" value="{{ $scope }}" {{ in_array($scope, old('requested_scopes', [])) ? 'checked' : '' }} class="rounded border-gray-300 dark:border-gray-600"> <span class="ml-1">{{ $label }}</span></label>
+                                    @endforeach
+                                </div>
+                                <div class="flex gap-2">
+                                    <button type="submit" class="px-4 py-2 bg-green-600 text-white rounded-md font-medium">Send request</button>
+                                    <button type="button" @click="openRequestModal = false" class="px-4 py-2 bg-gray-500 text-white rounded-md font-medium">Cancel</button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            @endif
+
             {{-- Block --}}
             <form method="POST" action="{{ route('blocks.store', $profile) }}" style="display: inline;">
                 @csrf
@@ -974,6 +1049,23 @@
                 </form>
             @endif
         </div>
+
+        {{-- Day-32: Contact reveal (only when viewer has active grant) --}}
+        @if (!empty($contactGrantReveal))
+            <div id="contact-reveal" class="mt-4 p-4 rounded-lg border border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-900/20 max-w-xl mx-auto">
+                <p class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Contact (shared with you)</p>
+                @if (!empty($contactGrantReveal['email']))
+                    <p class="text-sm"><span class="text-gray-500">Email:</span> {{ $contactGrantReveal['email'] }}</p>
+                @endif
+                @if (!empty($contactGrantReveal['phone']))
+                    <p class="text-sm"><span class="text-gray-500">Phone:</span> {{ $contactGrantReveal['phone'] }}</p>
+                @endif
+                @if (!empty($contactGrantReveal['whatsapp']))
+                    <p class="text-sm"><span class="text-gray-500">WhatsApp:</span> {{ $contactGrantReveal['whatsapp'] }}</p>
+                @endif
+                <p class="text-xs text-gray-500 dark:text-gray-400 mt-2">Use respectfully. Report abuse if needed.</p>
+            </div>
+        @endif
     @endif
 </div>
 @endif

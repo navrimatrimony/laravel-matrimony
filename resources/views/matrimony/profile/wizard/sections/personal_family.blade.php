@@ -51,14 +51,7 @@
             <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Mother Occupation</label>
             <input type="text" name="mother_occupation" value="{{ old('mother_occupation', $profile->mother_occupation) }}" class="w-full rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-3 py-2">
         </div>
-        <div>
-            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Brothers</label>
-            <input type="number" name="brothers_count" value="{{ old('brothers_count', $profile->brothers_count) }}" min="0" class="w-full rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-3 py-2">
-        </div>
-        <div>
-            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Sisters</label>
-            <input type="number" name="sisters_count" value="{{ old('sisters_count', $profile->sisters_count) }}" min="0" class="w-full rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-3 py-2">
-        </div>
+        {{-- Brothers/Sisters: use Siblings section (centralized engine), not separate count fields. --}}
         <div>
             <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Family Type</label>
             <select name="family_type_id" class="form-select w-full rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-3 py-2">

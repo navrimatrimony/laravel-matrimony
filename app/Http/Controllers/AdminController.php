@@ -477,8 +477,16 @@ class AdminController extends Controller
     public function photoApprovalSettings()
     {
         $required = AdminSetting::getBool('photo_approval_required', false);
+        $primaryRequired = AdminSetting::getBool('photo_primary_required', true);
+        $maxPerProfile = (int) AdminSetting::getValue('photo_max_per_profile', '5');
+        $maxUploadMb = (int) AdminSetting::getValue('photo_max_upload_mb', '8');
+        $maxEdgePx = (int) AdminSetting::getValue('photo_max_edge_px', '1200');
         return view('admin.photo-approval-settings.index', [
             'photoApprovalRequired' => $required,
+            'photoPrimaryRequired' => $primaryRequired,
+            'photoMaxPerProfile' => max(1, $maxPerProfile),
+            'photoMaxUploadMb' => max(1, $maxUploadMb),
+            'photoMaxEdgePx' => max(400, $maxEdgePx),
         ]);
     }
 
@@ -489,17 +497,29 @@ class AdminController extends Controller
     {
         $request->validate([
             'photo_approval_required' => 'nullable|in:0,1',
+            'photo_primary_required' => 'nullable|in:0,1',
+            'photo_max_per_profile' => 'required|integer|min:1|max:10',
+            'photo_max_upload_mb' => 'required|integer|min:1|max:20',
+            'photo_max_edge_px' => 'required|integer|min:400|max:2400',
         ]);
 
         $value = $request->has('photo_approval_required') ? '1' : '0';
+        $primaryRequired = $request->has('photo_primary_required') ? '1' : '0';
+        $maxPerProfile = (string) $request->input('photo_max_per_profile', 5);
+        $maxUploadMb = (string) $request->input('photo_max_upload_mb', 8);
+        $maxEdgePx = (string) $request->input('photo_max_edge_px', 1200);
         AdminSetting::setValue('photo_approval_required', $value);
+        AdminSetting::setValue('photo_primary_required', $primaryRequired);
+        AdminSetting::setValue('photo_max_per_profile', $maxPerProfile);
+        AdminSetting::setValue('photo_max_upload_mb', $maxUploadMb);
+        AdminSetting::setValue('photo_max_edge_px', $maxEdgePx);
 
         AuditLogService::log(
             $request->user(),
             'update_photo_approval_settings',
             'AdminSetting',
             null,
-            "photo_approval_required={$value}",
+            "photo_approval_required={$value}, photo_primary_required={$primaryRequired}, photo_max_per_profile={$maxPerProfile}, photo_max_upload_mb={$maxUploadMb}, photo_max_edge_px={$maxEdgePx}",
             false
         );
 

@@ -22,7 +22,8 @@
     </div>
     {{-- Marital status is only in Marriages section (MaritalEngine). --}}
     <x-profile.religion-caste-selector :profile="$profile" />
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+        {{-- Height: same width as one religion/caste column (1/3). --}}
         <div>
             <x-profile.height-picker :value="$profile->height_cm ?? null" />
         </div>
