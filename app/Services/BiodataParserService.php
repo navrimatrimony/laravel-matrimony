@@ -2,6 +2,8 @@
 
 namespace App\Services;
 
+use App\Models\AdminSetting;
+
 /*
 |--------------------------------------------------------------------------
 | Phase-5 Hybrid Rule + AI Fallback Parser — Maharashtra biodata, SSOT aligned
@@ -56,6 +58,15 @@ class BiodataParserService
 
     public function parse(string $rawText): array
     {
+        // Optional AI-first path when enabled in admin settings.
+        $activeParser = AdminSetting::getValue('intake_active_parser', 'rules_only');
+        if ($activeParser === 'ai_v1') {
+            $aiResult = app(ExternalAiParsingService::class)->parseToSsot($rawText);
+            if (is_array($aiResult) && isset($aiResult['core'], $aiResult['confidence_map'])) {
+                return $aiResult;
+            }
+        }
+
         // SSOT Day-27: Apply baseline normalization (Devanagari digits + noise removal)
         $text = \App\Services\Ocr\OcrNormalize::normalizeRawText($rawText);
         $text = $this->normalizeText($text);

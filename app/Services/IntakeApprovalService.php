@@ -46,47 +46,72 @@ if ($intake->approved_by_user === true) {
         if (!is_array($approvalSnapshot)) {
             $approvalSnapshot = [];
         }
-DB::transaction(function () use ($intake, $approvalSnapshot, $userId): void {
 
-    $parsedCore = $intake->parsed_json['core'] ?? [];
-    $approvedCore = $approvalSnapshot['core'] ?? [];
+        DB::transaction(function () use ($intake, $approvalSnapshot, $userId): void {
+            $parsedCore = $intake->parsed_json['core'] ?? [];
+            $approvedCore = $approvalSnapshot['core'] ?? [];
 
-    foreach ($approvedCore as $field => $newValue) {
+            $manualEdits = 0;
 
-        $oldValue = $parsedCore[$field] ?? null;
+            foreach ($approvedCore as $field => $newValue) {
+                $oldValue = $parsedCore[$field] ?? null;
 
-        $normalizedOld = $this->normalizeForComparison($oldValue);
-$normalizedNew = $this->normalizeForComparison($newValue);
+                $normalizedOld = $this->normalizeForComparison($oldValue);
+                $normalizedNew = $this->normalizeForComparison($newValue);
 
-if ($normalizedOld !== $normalizedNew) {
+                if ($normalizedOld !== $normalizedNew) {
+                    $manualEdits++;
 
-    $log = OcrCorrectionLog::create([
-        'intake_id'     => $intake->id,
-        'field_key'     => $field,
-        'original_value' => $normalizedOld,
-        'corrected_value' => $normalizedNew,
-    ]);
-    DB::table('ocr_correction_logs_actor_archive')->insert([
-        'ocr_correction_log_id' => $log->id,
-        'corrected_by' => $userId,
-        'created_at' => now(),
-    ]);
+                    $log = OcrCorrectionLog::create([
+                        'intake_id'     => $intake->id,
+                        'field_key'     => $field,
+                        'original_value' => $normalizedOld,
+                        'corrected_value' => $normalizedNew,
+                    ]);
+                    DB::table('ocr_correction_logs_actor_archive')->insert([
+                        'ocr_correction_log_id' => $log->id,
+                        'corrected_by' => $userId,
+                        'created_at' => now(),
+                    ]);
 
-    // Learning: after same (field_key, X->Y) observed 5+ times, strengthen pattern for better suggestions/autofill
-    $this->strengthenPatternIfThreshold($field, $normalizedOld, $normalizedNew);
+                    // Learning: after same (field_key, X->Y) observed 5+ times, strengthen pattern for better suggestions/autofill
+                    $this->strengthenPatternIfThreshold($field, $normalizedOld, $normalizedNew);
+                }
+            }
+
+            $intake->approved_by_user = true;
+            $intake->approved_at = now();
+            $intake->approval_snapshot_json = $approvalSnapshot;
+            $intake->snapshot_schema_version = 1;
+            $intake->intake_status = 'approved';
+
+            // Metrics: manual vs auto-filled fields (approximation).
+            $intake->fields_manually_edited_count = $manualEdits;
+            $nonEmptyApproved = 0;
+            foreach ($approvedCore as $value) {
+                $norm = $this->normalizeForComparison($value);
+                if ($norm !== null && $norm !== '') {
+                    $nonEmptyApproved++;
+                }
+            }
+            $autoFilled = max(0, $nonEmptyApproved - $manualEdits);
+            $intake->fields_auto_filled_count = $autoFilled;
+
+            $intake->save();
+        });
+
+// After approval commit → trigger Apply Pipeline based on admin policy.
+$requireAdmin = \App\Models\AdminSetting::getBool('intake_require_admin_before_attach', false);
+if ($requireAdmin) {
+    // Admin must attach/trigger mutation from admin panel.
+    return [
+        'mutation_success' => false,
+        'conflict_detected' => false,
+        'profile_id' => $intake->matrimony_profile_id,
+        'awaiting_admin' => true,
+    ];
 }
-    }
 
-    $intake->approved_by_user = true;
-    $intake->approved_at = now();
-    $intake->approval_snapshot_json = $approvalSnapshot;
-    $intake->snapshot_schema_version = 1;
-    $intake->intake_status = 'approved';
-
-    $intake->save();
-});
-
-// After approval commit → trigger Apply Pipeline
 return app(\App\Services\MutationService::class)
     ->applyApprovedIntake($intake->id);
         

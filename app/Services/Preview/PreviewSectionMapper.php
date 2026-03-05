@@ -63,7 +63,19 @@ class PreviewSectionMapper
         foreach (self::SOURCE_KEYS as $sectionKey => $sourceKey) {
             $data = $parsedJson[$sourceKey] ?? null;
             if (in_array($sectionKey, self::SCALAR_SECTIONS, true)) {
-                $data = is_scalar($data) || $data === null ? $data : (string) $data;
+                if (! (is_scalar($data) || $data === null)) {
+                    // Best-effort: if AI/parser returned an array, take first non-empty scalar value; otherwise null.
+                    $firstScalar = null;
+                    if (is_array($data)) {
+                        foreach ($data as $value) {
+                            if (is_scalar($value) && (string) $value !== '') {
+                                $firstScalar = $value;
+                                break;
+                            }
+                        }
+                    }
+                    $data = $firstScalar;
+                }
             } elseif (!is_array($data)) {
                 $data = [];
             }

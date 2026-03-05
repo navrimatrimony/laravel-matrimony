@@ -491,6 +491,132 @@ class AdminController extends Controller
     }
 
     /**
+     * Intake engine settings: rate limits and basic parsing behaviour (Day-35).
+     */
+    public function intakeSettings()
+    {
+        $daily = (int) AdminSetting::getValue('intake_max_daily_per_user', '5');
+        $monthly = (int) AdminSetting::getValue('intake_max_monthly_per_user', '20');
+        $maxPdfMb = (int) AdminSetting::getValue('intake_max_pdf_mb', '10');
+        $maxPdfPages = (int) AdminSetting::getValue('intake_max_pdf_pages', '8');
+        $maxImagesPerIntake = (int) AdminSetting::getValue('intake_max_images_per_intake', '5');
+        $globalDailyCap = (int) AdminSetting::getValue('intake_global_daily_cap', '0');
+        $autoParse = AdminSetting::getBool('intake_auto_parse_enabled', true);
+        $activeParser = AdminSetting::getValue('intake_active_parser', 'rules_only');
+        $ocrProvider = AdminSetting::getValue('intake_ocr_provider', 'tesseract');
+        $ocrLanguage = AdminSetting::getValue('intake_ocr_language_hint', 'mixed');
+        $retryLimit = (int) AdminSetting::getValue('intake_parse_retry_limit', '3');
+        $highThreshold = (float) AdminSetting::getValue('intake_confidence_high_threshold', '0.85');
+        $autoApplyJson = AdminSetting::getValue('intake_auto_apply_fields', '[]');
+        $autoApplyFields = json_decode($autoApplyJson, true);
+        if (!is_array($autoApplyFields)) {
+            $autoApplyFields = [];
+        }
+        $retentionDays = (int) AdminSetting::getValue('intake_file_retention_days', '90');
+        $keepParsedJson = AdminSetting::getBool('intake_keep_parsed_json_after_purge', true);
+        return view('admin.intake-settings.index', [
+            'dailyLimit' => max(0, $daily),
+            'monthlyLimit' => max(0, $monthly),
+            'maxPdfMb' => max(1, $maxPdfMb),
+            'maxPdfPages' => max(1, $maxPdfPages),
+            'maxImagesPerIntake' => max(1, $maxImagesPerIntake),
+            'globalDailyCap' => max(0, $globalDailyCap),
+            'autoParseEnabled' => $autoParse,
+            'activeParser' => $activeParser,
+            'ocrProvider' => $ocrProvider,
+            'ocrLanguageHint' => $ocrLanguage,
+            'parseRetryLimit' => max(0, $retryLimit),
+            'confidenceHighThreshold' => $highThreshold > 0 && $highThreshold < 1 ? $highThreshold : 0.85,
+            'autoApplyFields' => $autoApplyFields,
+            'requireAdminBeforeAttach' => AdminSetting::getBool('intake_require_admin_before_attach', false),
+            'fileRetentionDays' => max(0, $retentionDays),
+            'keepParsedJsonAfterPurge' => $keepParsedJson,
+        ]);
+    }
+
+    /**
+     * Update intake engine settings.
+     */
+    public function updateIntakeSettings(Request $request): \Illuminate\Http\RedirectResponse
+    {
+        $request->validate([
+            'intake_max_daily_per_user' => 'required|integer|min:0|max:50',
+            'intake_max_monthly_per_user' => 'required|integer|min:0|max:200',
+            'intake_max_pdf_mb' => 'required|integer|min:1|max:20',
+            'intake_max_pdf_pages' => 'required|integer|min:1|max:50',
+            'intake_max_images_per_intake' => 'required|integer|min:1|max:10',
+            'intake_global_daily_cap' => 'required|integer|min:0|max:10000',
+            'intake_auto_parse_enabled' => 'nullable|in:0,1',
+            'intake_active_parser' => 'required|string|in:rules_only,ai_v1',
+            'intake_ocr_provider' => 'required|string|in:tesseract,cloud_vision,off',
+            'intake_ocr_language_hint' => 'required|string|in:mr,en,mixed',
+            'intake_parse_retry_limit' => 'required|integer|min:0|max:5',
+            'intake_confidence_high_threshold' => 'required|numeric|min:0.5|max:0.99',
+            'intake_auto_apply_fields' => 'array',
+            'intake_auto_apply_fields.*' => 'string',
+            'intake_require_admin_before_attach' => 'nullable|in:0,1',
+            'intake_file_retention_days' => 'required|integer|min:0|max:365',
+            'intake_keep_parsed_json_after_purge' => 'nullable|in:0,1',
+        ]);
+
+        $daily = (string) $request->input('intake_max_daily_per_user', 5);
+        $monthly = (string) $request->input('intake_max_monthly_per_user', 20);
+        $maxPdfMb = (string) $request->input('intake_max_pdf_mb', 10);
+        $maxPdfPages = (string) $request->input('intake_max_pdf_pages', 8);
+        $maxImagesPerIntake = (string) $request->input('intake_max_images_per_intake', 5);
+        $globalDailyCap = (string) $request->input('intake_global_daily_cap', 0);
+        $autoParse = $request->has('intake_auto_parse_enabled') ? '1' : '0';
+        $activeParser = (string) $request->input('intake_active_parser', 'rules_only');
+        $ocrProvider = (string) $request->input('intake_ocr_provider', 'tesseract');
+        $ocrLanguage = (string) $request->input('intake_ocr_language_hint', 'mixed');
+        $retryLimit = (string) $request->input('intake_parse_retry_limit', 3);
+        $highThreshold = (string) $request->input('intake_confidence_high_threshold', 0.85);
+        $autoApplyInput = $request->input('intake_auto_apply_fields', []);
+        $allowedAutoApply = ['full_name', 'date_of_birth', 'gender', 'religion', 'caste', 'sub_caste', 'marital_status'];
+        $autoApplyFiltered = [];
+        if (is_array($autoApplyInput)) {
+            foreach ($autoApplyInput as $fieldKey) {
+                if (in_array($fieldKey, $allowedAutoApply, true)) {
+                    $autoApplyFiltered[] = $fieldKey;
+                }
+            }
+        }
+        $autoApplyJson = json_encode(array_values(array_unique($autoApplyFiltered)));
+        $requireAdminBeforeAttach = $request->has('intake_require_admin_before_attach') ? '1' : '0';
+        $fileRetentionDays = (string) $request->input('intake_file_retention_days', 90);
+        $keepParsedJson = $request->has('intake_keep_parsed_json_after_purge') ? '1' : '0';
+
+        AdminSetting::setValue('intake_max_daily_per_user', $daily);
+        AdminSetting::setValue('intake_max_monthly_per_user', $monthly);
+        AdminSetting::setValue('intake_max_pdf_mb', $maxPdfMb);
+        AdminSetting::setValue('intake_max_pdf_pages', $maxPdfPages);
+        AdminSetting::setValue('intake_max_images_per_intake', $maxImagesPerIntake);
+        AdminSetting::setValue('intake_global_daily_cap', $globalDailyCap);
+        AdminSetting::setValue('intake_auto_parse_enabled', $autoParse);
+        AdminSetting::setValue('intake_active_parser', $activeParser);
+        AdminSetting::setValue('intake_ocr_provider', $ocrProvider);
+        AdminSetting::setValue('intake_ocr_language_hint', $ocrLanguage);
+        AdminSetting::setValue('intake_parse_retry_limit', $retryLimit);
+        AdminSetting::setValue('intake_confidence_high_threshold', $highThreshold);
+        AdminSetting::setValue('intake_auto_apply_fields', $autoApplyJson);
+        AdminSetting::setValue('intake_require_admin_before_attach', $requireAdminBeforeAttach);
+        AdminSetting::setValue('intake_file_retention_days', $fileRetentionDays);
+        AdminSetting::setValue('intake_keep_parsed_json_after_purge', $keepParsedJson);
+
+        AuditLogService::log(
+            $request->user(),
+            'update_intake_settings',
+            'AdminSetting',
+            null,
+            "intake_max_daily_per_user={$daily}, intake_max_monthly_per_user={$monthly}, intake_max_pdf_mb={$maxPdfMb}, intake_max_pdf_pages={$maxPdfPages}, intake_max_images_per_intake={$maxImagesPerIntake}, intake_global_daily_cap={$globalDailyCap}, intake_auto_parse_enabled={$autoParse}, intake_active_parser={$activeParser}, intake_ocr_provider={$ocrProvider}, intake_ocr_language_hint={$ocrLanguage}, intake_parse_retry_limit={$retryLimit}, intake_confidence_high_threshold={$highThreshold}, intake_auto_apply_fields=" . implode(',', $autoApplyFiltered) . ", intake_require_admin_before_attach={$requireAdminBeforeAttach}, intake_file_retention_days={$fileRetentionDays}, intake_keep_parsed_json_after_purge={$keepParsedJson}",
+            false
+        );
+
+        return redirect()->route('admin.intake-settings.index')
+            ->with('success', 'Intake settings updated.');
+    }
+
+    /**
      * Update photo approval setting. Persisted via AdminSetting. Audit logged.
      */
     public function updatePhotoApprovalSettings(Request $request): \Illuminate\Http\RedirectResponse

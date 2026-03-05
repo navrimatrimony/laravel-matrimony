@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\BiodataIntake;
+use App\Models\AdminSetting;
 use Smalot\PdfParser\Parser as PdfParser;
 use thiagoalessio\TesseractOCR\TesseractOCR;
 
@@ -101,9 +102,23 @@ class OcrService
     private function runTesseract(string $fullPath): string
     {
         try {
+            $ocrProvider = AdminSetting::getValue('intake_ocr_provider', 'tesseract');
+            if ($ocrProvider === 'off') {
+                return '';
+            }
+
+            // For now we only support local Tesseract; future providers can be plugged in here.
             $ocr = new TesseractOCR($fullPath);
             $ocr->executable(config('services.tesseract.path'));
-            $ocr->lang('mar+eng');
+
+            $langHint = AdminSetting::getValue('intake_ocr_language_hint', 'mixed');
+            if ($langHint === 'mr') {
+                $ocr->lang('mar');
+            } elseif ($langHint === 'en') {
+                $ocr->lang('eng');
+            } else {
+                $ocr->lang('mar+eng');
+            }
             $text = $ocr->run();
             return trim($text);
         } catch (\Throwable $e) {

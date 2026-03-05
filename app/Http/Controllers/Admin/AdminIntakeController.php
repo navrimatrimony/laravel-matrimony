@@ -4,6 +4,9 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\BiodataIntake;
+use App\Models\AdminSetting;
+use App\Jobs\ParseIntakeJob;
+use App\Services\IntakeApprovalService;
 use Illuminate\Http\Request;
 
 /*
@@ -74,5 +77,66 @@ class AdminIntakeController extends Controller
         return redirect()
             ->route('admin.biodata-intakes.show', $intake)
             ->with('success', 'Intake attached to profile. No profile data was modified.');
+    }
+
+    /**
+     * Re-parse a single intake using the current active parser version.
+     * Respects content_hash + parser_version cache via ParseIntakeJob.
+     */
+    public function reparse(BiodataIntake $intake)
+    {
+        if ($intake->raw_ocr_text === null || $intake->raw_ocr_text === '') {
+            return redirect()
+                ->route('admin.biodata-intakes.show', $intake)
+                ->with('error', 'Cannot re-parse: raw OCR text is empty.');
+        }
+
+        $intake->parse_status = 'pending';
+        $intake->save();
+
+        ParseIntakeJob::dispatch($intake->id);
+
+        return redirect()
+            ->route('admin.biodata-intakes.show', $intake)
+            ->with('success', 'Re-parse job dispatched. Refresh after a few seconds.');
+    }
+
+    /**
+     * Apply an already approved intake to its matrimony profile (admin-trigger).
+     * Uses IntakeApprovalService pipeline when approved_by_user=true and snapshot present.
+     */
+    public function applyToProfile(BiodataIntake $intake)
+    {
+        if (! $intake->approved_by_user) {
+            return redirect()
+                ->route('admin.biodata-intakes.show', $intake)
+                ->with('error', 'Cannot apply: intake is not yet approved by the user.');
+        }
+
+        if (! $intake->matrimony_profile_id) {
+            return redirect()
+                ->route('admin.biodata-intakes.show', $intake)
+                ->with('error', 'Cannot apply: intake is not attached to any profile.');
+        }
+
+        $requireAdmin = AdminSetting::getBool('intake_require_admin_before_attach', false);
+        if (! $requireAdmin) {
+            return redirect()
+                ->route('admin.biodata-intakes.show', $intake)
+                ->with('error', 'Admin-triggered apply is only needed when admin approval is required.');
+        }
+
+        if (empty($intake->approval_snapshot_json) || ! is_array($intake->approval_snapshot_json)) {
+            return redirect()
+                ->route('admin.biodata-intakes.show', $intake)
+                ->with('error', 'Cannot apply: approval snapshot is missing.');
+        }
+
+        $result = app(IntakeApprovalService::class)->approve($intake, (int) auth()->id(), $intake->approval_snapshot_json);
+
+        return redirect()
+            ->route('admin.biodata-intakes.show', $intake)
+            ->with('success', 'Intake apply pipeline triggered.')
+            ->with('mutation_result', $result);
     }
 }

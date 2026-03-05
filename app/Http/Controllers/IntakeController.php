@@ -3,12 +3,15 @@
 namespace App\Http\Controllers;
 
 use App\Jobs\ParseIntakeJob;
+use App\Models\AdminSetting;
 use App\Models\BiodataIntake;
 use App\Services\IntakeApprovalService;
 use App\Services\OcrService;
 use App\Services\Preview\PreviewSectionMapper;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
+use Smalot\PdfParser\Parser as PdfParser;
 
 /*
 |--------------------------------------------------------------------------
@@ -49,16 +52,106 @@ class IntakeController extends Controller
     {
         $request->validate([
             'raw_text' => ['nullable', 'string', 'required_without:file'],
-            'file' => ['nullable', 'file', 'max:10240', 'required_without:raw_text'],
+            // Hard safety ceiling (KB); fine-tuned per-type via AdminSetting below.
+            'file' => ['nullable', 'file', 'max:20480', 'required_without:raw_text'],
         ]);
+
+        // Day-35: Per-user intake rate limits (daily/monthly) from admin settings.
+        $userId = auth()->id();
+        $dailyLimit = (int) AdminSetting::getValue('intake_max_daily_per_user', '0');
+        $monthlyLimit = (int) AdminSetting::getValue('intake_max_monthly_per_user', '0');
+        $globalDailyCap = (int) AdminSetting::getValue('intake_global_daily_cap', '0');
+        if ($dailyLimit > 0) {
+            $todayCount = BiodataIntake::where('uploaded_by', $userId)
+                ->whereDate('created_at', today())
+                ->count();
+            if ($todayCount >= $dailyLimit) {
+                return redirect()->back()
+                    ->withErrors(['file' => 'You have reached today\'s biodata upload limit. Please try again tomorrow.'])
+                    ->withInput();
+            }
+        }
+        if ($monthlyLimit > 0) {
+            $monthCount = BiodataIntake::where('uploaded_by', $userId)
+                ->whereYear('created_at', now()->year)
+                ->whereMonth('created_at', now()->month)
+                ->count();
+            if ($monthCount >= $monthlyLimit) {
+                return redirect()->back()
+                    ->withErrors(['file' => 'You have reached this month\'s biodata upload limit.'])
+                    ->withInput();
+            }
+        }
+
+        // Global daily cap across all users (infrastructure safety).
+        if ($globalDailyCap > 0) {
+            $todaysTotal = BiodataIntake::whereDate('created_at', today())->count();
+            if ($todaysTotal >= $globalDailyCap) {
+                Log::warning('Intake global daily cap hit', [
+                    'user_id' => $userId,
+                    'cap' => $globalDailyCap,
+                ]);
+                return redirect()->back()
+                    ->withErrors(['file' => 'System is handling many biodata uploads today. Please try again tomorrow.'])
+                    ->withInput();
+            }
+        }
 
         $path = null;
         $originalName = null;
         $rawText = null;
 
         if ($request->hasFile('file')) {
-            $path = $request->file('file')->store('intakes');
-            $originalName = $request->file('file')->getClientOriginalName();
+            $uploaded = $request->file('file');
+            $originalName = $uploaded->getClientOriginalName();
+            $ext = strtolower($uploaded->getClientOriginalExtension());
+
+            // Type-specific limits: PDF size/pages, images-per-intake placeholder (for future multi-upload).
+            $maxPdfMb = (int) AdminSetting::getValue('intake_max_pdf_mb', '10');
+            $maxPdfPages = (int) AdminSetting::getValue('intake_max_pdf_pages', '8');
+            $maxImagesPerIntake = (int) AdminSetting::getValue('intake_max_images_per_intake', '5');
+
+            if ($ext === 'pdf' && $maxPdfMb > 0) {
+                $sizeBytes = $uploaded->getSize();
+                $limitBytes = $maxPdfMb * 1024 * 1024;
+                if ($sizeBytes !== null && $sizeBytes > $limitBytes) {
+                    return redirect()->back()
+                        ->withErrors(['file' => "PDF is too large. Maximum allowed size is {$maxPdfMb} MB."])
+                        ->withInput();
+                }
+            }
+
+            if ($ext === 'pdf' && $maxPdfPages > 0) {
+                try {
+                    $parser = new PdfParser();
+                    $pdf = $parser->parseFile($uploaded->getRealPath());
+                    $pages = $pdf->getPages();
+                    $pageCount = is_array($pages) ? count($pages) : 0;
+                    if ($pageCount > $maxPdfPages) {
+                        return redirect()->back()
+                            ->withErrors(['file' => "PDF has too many pages. Maximum allowed is {$maxPdfPages} pages."])
+                            ->withInput();
+                    }
+                } catch (\Throwable $e) {
+                    // If page counting fails, do not block upload; size limit above still protects us.
+                    Log::warning('Failed to count PDF pages for intake', [
+                        'user_id' => $userId,
+                        'error' => $e->getMessage(),
+                    ]);
+                }
+            }
+
+            // Single-image upload today; this is a placeholder for future multi-image engine.
+            if (in_array($ext, ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp'], true) && $maxImagesPerIntake > 0) {
+                $imagesInThisIntake = 1;
+                if ($imagesInThisIntake > $maxImagesPerIntake) {
+                    return redirect()->back()
+                        ->withErrors(['file' => 'Too many images in a single biodata intake. Please reduce and try again.'])
+                        ->withInput();
+                }
+            }
+
+            $path = $uploaded->store('intakes');
             try {
                 $rawText = $ocrService->extractTextFromPath($path, $originalName);
             } catch (\Throwable $e) {
@@ -72,6 +165,7 @@ class IntakeController extends Controller
 
         $intake = null;
         DB::transaction(function () use ($path, $originalName, $rawText, &$intake) {
+            $hash = $rawText !== null ? hash('sha256', (string) $rawText) : null;
             $intake = BiodataIntake::create([
                 'uploaded_by' => auth()->id(),
                 'file_path' => $path,
@@ -79,13 +173,19 @@ class IntakeController extends Controller
                 'raw_ocr_text' => $rawText,
                 'intake_status' => 'uploaded',
                 'parse_status' => 'pending',
+                'parser_version' => 'rules_v1',
+                'content_hash' => $hash,
                 'approved_by_user' => false,
                 'intake_locked' => false,
                 'snapshot_schema_version' => 1,
             ]);
         });
 
-        ParseIntakeJob::dispatch($intake->id);
+        // Honour admin toggle for auto-parse.
+        $autoParse = \App\Models\AdminSetting::getBool('intake_auto_parse_enabled', true);
+        if ($autoParse) {
+            ParseIntakeJob::dispatch($intake->id);
+        }
 
         return redirect()->route('intake.status', $intake->id)
     ->with('success', 'Intake uploaded successfully.');
@@ -173,10 +273,14 @@ class IntakeController extends Controller
             }
         }
 
-        // Warning styling only (confidence < 0.75); does not block Approve.
+        // Warning styling only (confidence below high-threshold); does not block Approve.
         $warningFields = [];
+        $highConfThreshold = (float) \App\Models\AdminSetting::getValue('intake_confidence_high_threshold', '0.85');
+        if ($highConfThreshold <= 0 || $highConfThreshold >= 1) {
+            $highConfThreshold = 0.85;
+        }
         foreach ($confidenceMap as $field => $conf) {
-            if ((float) $conf < 0.75) {
+            if ((float) $conf < $highConfThreshold) {
                 $warningFields[] = $field;
             }
         }
@@ -225,6 +329,35 @@ class IntakeController extends Controller
             'narrative' => 'extended_narrative',
         ];
 
+        // Sync primary contact between core and contacts for preview (no new numbers, only reuse).
+        $corePrimary = null;
+        $coreSource = $data['core'] ?? [];
+        if (is_array($coreSource)) {
+            $corePrimary = $coreSource['primary_contact_number'] ?? null;
+        }
+        if ($corePrimary !== null && $corePrimary !== '') {
+            $contacts = $sections['contacts']['data'] ?? [];
+            if (! is_array($contacts)) {
+                $contacts = [];
+            }
+            if (isset($contacts[0]) && is_array($contacts[0])) {
+                $contacts[0]['phone_number'] = $contacts[0]['phone_number'] ?? $contacts[0]['number'] ?? $corePrimary;
+                $contacts[0]['phone_number'] = $corePrimary;
+                $contacts[0]['is_primary'] = $contacts[0]['is_primary'] ?? 1;
+                $contacts[0]['relation_type'] = $contacts[0]['relation_type'] ?? 'self';
+                $contacts[0]['contact_name'] = $contacts[0]['contact_name'] ?? 'Primary';
+            } else {
+                // Create a primary contact row using the same primary number (no new number generation).
+                $contacts[0] = [
+                    'phone_number' => $corePrimary,
+                    'relation_type' => 'self',
+                    'contact_name' => 'Primary',
+                    'is_primary' => 1,
+                ];
+            }
+            $sections['contacts']['data'] = array_values($contacts);
+        }
+
         // === No-Empty Required Fields: candidates + best prefill or placeholder ===
         $requiredCoreFields = [
             'full_name', 'date_of_birth', 'gender', 'religion', 'caste', 'sub_caste', 'primary_contact_number',
@@ -242,6 +375,11 @@ class IntakeController extends Controller
         $dropdownRequiredFields = ['religion'];
         $confThreshold = (float) config('intake.suggestion_autofill_confidence', 0.70);
         $usageThreshold = (int) config('intake.suggestion_autofill_usage_count', 25);
+        $autoApplyJson = \App\Models\AdminSetting::getValue('intake_auto_apply_fields', '[]');
+        $autoApplyFields = json_decode($autoApplyJson, true);
+        if (! is_array($autoApplyFields)) {
+            $autoApplyFields = [];
+        }
 
         foreach ($suggestionEnabledFields as $fieldKey) {
             $value = $coreDataForSuggestion[$fieldKey] ?? null;
@@ -286,8 +424,9 @@ class IntakeController extends Controller
                 }
             }
 
-            $needsReview = $prefillConf < 0.85;
-            $mode = ($prefillConf >= $confThreshold && ! $requiredMissing) ? 'auto_prefill' : 'manual_apply';
+            $needsReview = $prefillConf < $highConfThreshold;
+            $canAutoApply = in_array($fieldKey, $autoApplyFields, true);
+            $mode = ($prefillConf >= $confThreshold && ! $requiredMissing && $canAutoApply) ? 'auto_prefill' : 'manual_apply';
 
             $suggestionMap[$fieldKey] = [
                 'field_key' => $fieldKey,
@@ -387,6 +526,21 @@ class IntakeController extends Controller
         $relLabel = is_scalar($coreData['religion'] ?? null) ? trim((string) $coreData['religion']) : '';
         $casteLabel = is_scalar($coreData['caste'] ?? null) ? trim((string) $coreData['caste']) : '';
         $subLabel = is_scalar($coreData['sub_caste'] ?? null) ? trim((string) $coreData['sub_caste']) : '';
+
+        // Special normalization for common Marathi pattern: "हिंदू- ९६ कूळी मराठा" →
+        // religion = हिंदू, caste = मराठा, sub_caste = 96 कूळी
+        if ($casteLabel !== '') {
+            $hasMaratha = mb_stripos($casteLabel, 'मराठा') !== false;
+            // Extract "96 कूळी" / "९६ कूळी" / "96 kuli" as sub_caste when present.
+            if ($subLabel === '' &&
+                preg_match('/(९६|96)\s*[कक][ुू]ळी|96\s*kuli/iu', $casteLabel, $m)
+            ) {
+                $subLabel = trim((string) $m[0]);
+            }
+            if ($hasMaratha) {
+                $casteLabel = 'मराठा';
+            }
+        }
         if ($relLabel !== '' && $relLabel !== \App\Services\Ocr\OcrSuggestionEngine::PLACEHOLDER_NOT_FOUND && $relLabel !== \App\Services\Ocr\OcrSuggestionEngine::PLACEHOLDER_SELECT_REQUIRED) {
             $rel = \App\Models\Religion::where('is_active', true)->where('label', $relLabel)->first();
             if ($rel) {
@@ -560,6 +714,43 @@ class IntakeController extends Controller
                 }
             }
         }
+
+        // Sync primary contact between core and contacts (no new numbers, only reuse existing).
+        if (is_array($out['core'])) {
+            $corePrimary = $out['core']['primary_contact_number'] ?? null;
+            $contacts = $out['contacts'] ?? [];
+            if (! is_array($contacts)) {
+                $contacts = [];
+            }
+
+            // If core has primary number, ensure contacts[0] uses the same.
+            if ($corePrimary !== null && $corePrimary !== '') {
+                if (isset($contacts[0]) && is_array($contacts[0])) {
+                    $contacts[0]['phone_number'] = $corePrimary;
+                    $contacts[0]['is_primary'] = $contacts[0]['is_primary'] ?? 1;
+                    $contacts[0]['relation_type'] = $contacts[0]['relation_type'] ?? 'self';
+                    $contacts[0]['contact_name'] = $contacts[0]['contact_name'] ?? 'Primary';
+                } else {
+                    $contacts[0] = [
+                        'phone_number' => $corePrimary,
+                        'relation_type' => 'self',
+                        'contact_name' => 'Primary',
+                        'is_primary' => 1,
+                    ];
+                }
+            } else {
+                // If core primary empty but a contact is marked primary, copy that back to core.
+                foreach ($contacts as $row) {
+                    if (is_array($row) && ! empty($row['phone_number']) && ! empty($row['is_primary'])) {
+                        $out['core']['primary_contact_number'] = $row['phone_number'];
+                        break;
+                    }
+                }
+            }
+
+            $out['contacts'] = array_values($contacts);
+        }
+
         return $out;
     }
 

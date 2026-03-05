@@ -4,6 +4,7 @@ namespace App\Jobs;
 
 use App\Models\BiodataIntake;
 use App\Services\BiodataParserService;
+use App\Models\AdminSetting;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -43,13 +44,67 @@ class ParseIntakeJob implements ShouldQueue
             return;
         }
 
+        // Day-35: Smart caching — avoid re-parsing identical content for same parser_version.
+        if ($intake->content_hash && $intake->parser_version) {
+            $cached = BiodataIntake::where('id', '!=', $intake->id)
+                ->where('content_hash', $intake->content_hash)
+                ->where('parser_version', $intake->parser_version)
+                ->where('parse_status', 'parsed')
+                ->first();
+            if ($cached && ! empty($cached->parsed_json)) {
+                $intake->update([
+                    'parsed_json' => $cached->parsed_json,
+                    'parse_status' => 'parsed',
+                ]);
+                return;
+            }
+        }
+
+        $activeParser = AdminSetting::getValue('intake_active_parser', 'rules_only');
+        $retryLimit = (int) AdminSetting::getValue('intake_parse_retry_limit', '3');
+
         $parser = app(BiodataParserService::class);
-        $parsed = $parser->parse($intake->raw_ocr_text ?? '');
+        $raw = $intake->raw_ocr_text ?? '';
+
+        $parsed = null;
+        $attempts = 0;
+        $lastException = null;
+        $aiCalls = 0;
+        $start = microtime(true);
+
+        // Simple retry loop; future versions can branch by $activeParser.
+        while ($attempts === 0 || ($attempts < $retryLimit && $parsed === null && $lastException !== null)) {
+            $attempts++;
+            try {
+                $parsed = $parser->parse($raw);
+                // For now, treat this as rules-only parse; AI calls will be wired later.
+                $aiCalls = 0;
+                $lastException = null;
+                break;
+            } catch (\Throwable $e) {
+                $lastException = $e;
+            }
+        }
+
+        $durationMs = (int) round((microtime(true) - $start) * 1000);
+
+        if ($parsed === null) {
+            $intake->update([
+                'parse_status' => 'error',
+                'last_error' => $lastException ? substr($lastException->getMessage(), 0, 255) : 'parse_failed',
+                'parse_duration_ms' => $durationMs,
+                'ai_calls_used' => $aiCalls,
+            ]);
+            return;
+        }
+
         $ssot = isset($parsed['core'], $parsed['confidence_map']) ? $parsed : $this->wrapToSsot($parsed);
 
         $intake->update([
             'parsed_json' => $ssot,
             'parse_status' => 'parsed',
+            'parse_duration_ms' => $durationMs,
+            'ai_calls_used' => $aiCalls,
         ]);
     }
 

@@ -225,6 +225,38 @@
         @php
             $intakeRelativesData = $sections['relatives']['data'] ?? [];
             if (!is_array($intakeRelativesData)) { $intakeRelativesData = []; }
+
+            // Auto-populate relatives from contacts where relation looks like "चुलता / Uncle" etc.
+            $contactsForRelatives = $sections['contacts']['data'] ?? [];
+            if (is_array($contactsForRelatives)) {
+                foreach ($contactsForRelatives as $c) {
+                    $row = is_array($c) ? $c : [];
+                    $relText = trim((string)($row['relation'] ?? $row['relation_type'] ?? ''));
+                    $nameText = trim((string)($row['name'] ?? $row['contact_name'] ?? ''));
+                    $phoneText = trim((string)($row['contact_number'] ?? $row['phone_number'] ?? $row['number'] ?? ''));
+
+                    if ($relText === '' || $nameText === '') {
+                        continue;
+                    }
+
+                    $isUncle = mb_stripos($relText, 'चुलता') !== false
+                        || mb_stripos($relText, 'चुलते') !== false
+                        || stripos($relText, 'uncle') !== false;
+
+                    if (! $isUncle) {
+                        continue;
+                    }
+
+                    $intakeRelativesData[] = [
+                        'relation_type' => 'Uncle',
+                        'name' => $nameText,
+                        'contact_number' => $phoneText,
+                        'occupation' => $row['occupation'] ?? ($row['note'] ?? ''),
+                        'notes' => '',
+                    ];
+                }
+            }
+
             $intakeRelationOptions = [['value'=>'Uncle','label'=>'Uncle'],['value'=>'Aunt','label'=>'Aunt'],['value'=>'Cousin','label'=>'Cousin'],['value'=>'Brother','label'=>'Brother'],['value'=>'Sister','label'=>'Sister'],['value'=>'Father','label'=>'Father'],['value'=>'Mother','label'=>'Mother'],['value'=>'Grandfather','label'=>'Grandfather'],['value'=>'Grandmother','label'=>'Grandmother'],['value'=>'Other','label'=>'Other']];
         @endphp
         <section class="bg-white dark:bg-gray-800 rounded-lg shadow p-6">

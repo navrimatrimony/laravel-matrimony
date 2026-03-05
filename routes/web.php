@@ -221,7 +221,53 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
         $demoProfiles = \App\Models\MatrimonyProfile::where('is_demo', true)->count();
         $pendingAbuseReports = \App\Models\AbuseReport::where('status', 'open')->count();
         $totalBiodataIntakes = \App\Models\BiodataIntake::count();
-        return view('admin.dashboard', compact('totalProfiles', 'activeProfiles', 'suspendedProfiles', 'demoProfiles', 'pendingAbuseReports', 'totalBiodataIntakes'));
+
+        $intakeQuery = \App\Models\BiodataIntake::query();
+        $last7Start = now()->subDays(7);
+        $last30Start = now()->subDays(30);
+
+        $last7Count = (clone $intakeQuery)->where('created_at', '>=', $last7Start)->count();
+        $last30Count = (clone $intakeQuery)->where('created_at', '>=', $last30Start)->count();
+
+        $last30Parsed = (clone $intakeQuery)
+            ->where('created_at', '>=', $last30Start)
+            ->where('parse_status', 'parsed')
+            ->count();
+        $last30Errors = (clone $intakeQuery)
+            ->where('created_at', '>=', $last30Start)
+            ->where('parse_status', 'error')
+            ->count();
+
+        $avgParseMs = (clone $intakeQuery)
+            ->whereNotNull('parse_duration_ms')
+            ->where('created_at', '>=', $last30Start)
+            ->avg('parse_duration_ms') ?: 0;
+
+        $avgManualEdits = (clone $intakeQuery)
+            ->whereNotNull('fields_manually_edited_count')
+            ->where('created_at', '>=', $last30Start)
+            ->avg('fields_manually_edited_count') ?: 0;
+
+        $avgAutoFilled = (clone $intakeQuery)
+            ->whereNotNull('fields_auto_filled_count')
+            ->where('created_at', '>=', $last30Start)
+            ->avg('fields_auto_filled_count') ?: 0;
+
+        return view('admin.dashboard', [
+            'totalProfiles' => $totalProfiles,
+            'activeProfiles' => $activeProfiles,
+            'suspendedProfiles' => $suspendedProfiles,
+            'demoProfiles' => $demoProfiles,
+            'pendingAbuseReports' => $pendingAbuseReports,
+            'totalBiodataIntakes' => $totalBiodataIntakes,
+            'intakeLast7Count' => $last7Count,
+            'intakeLast30Count' => $last30Count,
+            'intakeLast30Parsed' => $last30Parsed,
+            'intakeLast30Errors' => $last30Errors,
+            'intakeAvgParseMs' => (int) round($avgParseMs),
+            'intakeAvgManualEdits' => (float) $avgManualEdits,
+            'intakeAvgAutoFilled' => (float) $avgAutoFilled,
+        ]);
     })->name('dashboard');
 
     /*
@@ -368,6 +414,9 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
     Route::get('/photo-approval-settings', [AdminController::class, 'photoApprovalSettings'])->name('photo-approval-settings.index');
     Route::post('/photo-approval-settings', [AdminController::class, 'updatePhotoApprovalSettings'])->name('photo-approval-settings.update');
 
+    Route::get('/intake-settings', [AdminController::class, 'intakeSettings'])->name('intake-settings.index');
+    Route::post('/intake-settings', [AdminController::class, 'updateIntakeSettings'])->name('intake-settings.update');
+
     Route::get('/mobile-verification-settings', [AdminController::class, 'mobileVerificationSettings'])->name('mobile-verification-settings.index');
     Route::post('/mobile-verification-settings', [AdminController::class, 'updateMobileVerificationSettings'])->name('mobile-verification-settings.update');
 
@@ -392,6 +441,8 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
     Route::get('/biodata-intakes', [AdminIntakeController::class, 'biodataIntakesIndex'])->name('biodata-intakes.index');
     Route::get('/biodata-intakes/{intake}', [AdminIntakeController::class, 'showBiodataIntake'])->name('biodata-intakes.show');
     Route::patch('/biodata-intakes/{intake}/attach', [AdminIntakeController::class, 'attachBiodataIntake'])->name('biodata-intakes.attach');
+    Route::post('/biodata-intakes/{intake}/reparse', [AdminIntakeController::class, 'reparse'])->name('biodata-intakes.reparse');
+    Route::post('/biodata-intakes/{intake}/apply', [AdminIntakeController::class, 'applyToProfile'])->name('biodata-intakes.apply');
 
     /*
     | Conflict Records (Phase-3 Day-4/5 — list, create, resolve)
