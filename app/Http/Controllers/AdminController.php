@@ -975,12 +975,20 @@ class AdminController extends Controller
                 $request->merge(['marital_status_id' => $id]);
             }
         }
-        $originalData = $profile->only(['full_name', 'date_of_birth', 'marital_status_id', 'highest_education', 'location', 'religion_id', 'caste_id', 'sub_caste_id', 'height_cm']);
+        $originalData = $profile->only([
+            'full_name', 'date_of_birth', 'marital_status_id', 'highest_education', 'location',
+            'religion_id', 'caste_id', 'sub_caste_id', 'height_cm',
+            'complexion_id', 'blood_group_id', 'physical_build_id', 'weight_kg', 'spectacles_lens', 'physical_condition',
+        ]);
         $editedFields = [];
 
         // Track which fields were actually changed (Phase-5: *_id for master lookups)
         $updateData = [];
-        $editableFields = ['full_name', 'date_of_birth', 'marital_status_id', 'highest_education', 'location', 'religion_id', 'caste_id', 'sub_caste_id', 'height_cm'];
+        $editableFields = [
+            'full_name', 'date_of_birth', 'marital_status_id', 'highest_education', 'location',
+            'religion_id', 'caste_id', 'sub_caste_id', 'height_cm',
+            'complexion_id', 'blood_group_id', 'physical_build_id', 'weight_kg', 'spectacles_lens', 'physical_condition',
+        ];
 
         // Check if any CORE fields are being edited (before validation)
         $hasCoreFieldChanges = false;
@@ -1031,6 +1039,12 @@ class AdminController extends Controller
                 }),
             ];
             $validationRules['height_cm'] = 'nullable|integer|min:50|max:250';
+            $validationRules['complexion_id'] = ['nullable', Rule::exists('master_complexions', 'id')];
+            $validationRules['blood_group_id'] = ['nullable', Rule::exists('master_blood_groups', 'id')];
+            $validationRules['physical_build_id'] = ['nullable', Rule::exists('master_physical_builds', 'id')];
+            $validationRules['weight_kg'] = 'nullable|numeric|min:20|max:300';
+            $validationRules['spectacles_lens'] = ['nullable', 'string', 'max:50', Rule::in(['no', 'spectacles', 'contact_lens', 'both'])];
+            $validationRules['physical_condition'] = ['nullable', 'string', 'max:50', Rule::in(['none', 'physically_challenged', 'hearing_condition', 'vision_condition', 'other', 'prefer_not_to_say'])];
         }
 
         $request->validate($validationRules);

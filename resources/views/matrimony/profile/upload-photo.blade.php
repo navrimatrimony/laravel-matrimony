@@ -212,12 +212,12 @@
                 highlight: true,
                 cropBoxMovable: true,
                 cropBoxResizable: true,
+                crop: function() { updateSmallPreview(); },
             });
-            cropper.on('crop', updateSmallPreview);
             updateSmallPreview();
-            if (btnCrop) btnCrop.onclick = function() { if (cropper) { updateSmallPreview(); } };
-            btnRotateLeft.onclick = function() { if (cropper) { cropper.rotate(-90); updateSmallPreview(); } };
-            btnRotateRight.onclick = function() { if (cropper) { cropper.rotate(90); updateSmallPreview(); } };
+            if (btnCrop) btnCrop.onclick = onCropClick;
+            if (btnRotateLeft) btnRotateLeft.onclick = function() { if (cropper) { cropper.rotate(-90); updateSmallPreview(); } };
+            if (btnRotateRight) btnRotateRight.onclick = function() { if (cropper) { cropper.rotate(90); updateSmallPreview(); } };
         }
         if (cropperImage.complete) setTimeout(initCropper, 10);
         else cropperImage.onload = initCropper;
@@ -227,6 +227,48 @@
         if (!cropper) return;
         const canvas = cropper.getCroppedCanvas({ width: 400, height: 400, imageSmoothingEnabled: true });
         if (canvas) smallPreviewImg.src = canvas.toDataURL('image/jpeg', 0.92);
+    }
+
+    /** Apply crop: replace image with cropped result so it's fixed and used on submit */
+    function applyCrop() {
+        if (!cropper) return;
+        const canvas = cropper.getCroppedCanvas({ width: 800, height: 800, imageSmoothingEnabled: true });
+        if (!canvas) return;
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.92);
+        currentDataUrl = dataUrl;
+        updateSmallPreview();
+        smallPreviewImg.src = dataUrl;
+        destroyCropper();
+        cropperImage.onload = null;
+        cropperImage.src = dataUrl;
+        function reinitCropper() {
+            if (typeof Cropper === 'undefined') return;
+            cropperImage.onload = null;
+            destroyCropper();
+            cropper = new Cropper(cropperImage, {
+                aspectRatio: 1,
+                viewMode: 1,
+                dragMode: 'move',
+                autoCropArea: 1,
+                restore: false,
+                guides: true,
+                center: true,
+                highlight: true,
+                cropBoxMovable: true,
+                cropBoxResizable: true,
+                crop: function() { updateSmallPreview(); },
+            });
+            updateSmallPreview();
+            if (btnCrop) btnCrop.onclick = onCropClick;
+            if (btnRotateLeft) btnRotateLeft.onclick = function() { if (cropper) { cropper.rotate(-90); updateSmallPreview(); } };
+            if (btnRotateRight) btnRotateRight.onclick = function() { if (cropper) { cropper.rotate(90); updateSmallPreview(); } };
+        }
+        if (cropperImage.complete) setTimeout(reinitCropper, 10);
+        else cropperImage.onload = reinitCropper;
+    }
+
+    function onCropClick() {
+        if (cropper) applyCrop();
     }
 
     btnChangePhoto.onclick = function() {

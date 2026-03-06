@@ -1,46 +1,177 @@
-{{-- Phase-5 SSOT: Contacts — primary + additional contacts --}}
+{{-- Phase-5 SSOT: Contacts — self (up to 3 numbers, + adds in-context) + additional contacts (other people, no + on number). --}}
+@php
+    $selfContacts = $self_contacts ?? [];
+    $selfCount = count($selfContacts);
+    if ($selfCount === 0) { $selfCount = 1; }
+@endphp
 <div class="space-y-6">
     <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100 border-b border-gray-200 dark:border-gray-700 pb-2">Contacts</h2>
-    @php
-        $primary = collect($profile_contacts ?? [])->firstWhere('is_primary', true);
-        $primaryPhone = old('primary_contact_number', $primary ? (is_object($primary) ? ($primary->phone_number ?? '') : ($primary['phone_number'] ?? '')) : '');
-        $primaryWhatsapp = old('primary_contact_whatsapp', $primary ? (is_object($primary) ? ($primary->is_whatsapp ?? false) : ($primary['is_whatsapp'] ?? false)) : false);
-    @endphp
-    <div>
-        <x-profile.contact-field
-            name="primary_contact_number"
-            :value="$primaryPhone"
-            label="Primary contact number"
-            placeholder="10-digit number"
-            :showCountryCode="true"
-            :showWhatsapp="true"
-            nameWhatsapp="primary_contact_whatsapp"
-            :valueWhatsapp="$primaryWhatsapp"
-            inputClass="flex-1 min-w-0"
-        />
+
+    {{-- Your contact numbers: up to 3 slots in same block; + adds next slot here (max 3). --}}
+    <div class="space-y-2" data-contact-context="self" data-max-slots="3" id="self-contact-slots">
+        <h3 class="text-sm font-medium text-gray-700 dark:text-gray-300">Your contact numbers</h3>
+        <div class="flex flex-wrap items-end gap-3" id="self-contact-slots-inner">
+            @for($i = 0; $i < $selfCount; $i++)
+                @php
+                    $sc = $selfContacts[$i] ?? null;
+                    $phone = old($i === 0 ? 'primary_contact_number' : 'primary_contact_number_' . ($i + 1), $sc ? (is_object($sc) ? ($sc->phone_number ?? '') : ($sc['phone_number'] ?? '')) : '');
+                    $prefDefault = $sc ? (is_object($sc) ? ($sc->contact_preference ?? ($sc->is_whatsapp ? 'whatsapp' : 'call')) : ($sc['contact_preference'] ?? (!empty($sc['is_whatsapp']) ? 'whatsapp' : 'call'))) : 'whatsapp';
+                    $whatsapp = old($i === 0 ? 'primary_contact_whatsapp' : 'primary_contact_whatsapp_' . ($i + 1), $prefDefault);
+                    $nameNum = $i === 0 ? 'primary_contact_number' : 'primary_contact_number_' . ($i + 1);
+                    $nameWa = $i === 0 ? 'primary_contact_whatsapp' : 'primary_contact_whatsapp_' . ($i + 1);
+                    $showAdd = ($i < 2); // slots 0 and 1 show + (to add 2nd and 3rd)
+                @endphp
+                <div class="self-contact-slot flex items-end gap-2 {{ $i === 0 ? 'w-full basis-full' : 'shrink-0' }}" data-slot-index="{{ $i }}">
+                    <x-profile.contact-field
+                        :name="$nameNum"
+                        :value="$phone"
+                        :label="$i === 0 ? 'Primary contact number' : ''"
+                        placeholder="10-digit number"
+                        :showCountryCode="true"
+                        :showWhatsapp="true"
+                        :nameWhatsapp="$nameWa"
+                        :valueWhatsapp="$whatsapp"
+                        inputClass="flex-1 min-w-0"
+                        :showAddButton="$showAdd"
+                    />
+                </div>
+            @endfor
+        </div>
     </div>
+
+    <template id="self-contact-slot-template">
+        <div class="self-contact-slot flex items-end gap-2 shrink-0" data-slot-index="">
+            <x-profile.contact-field
+                name="__NAME__"
+                value=""
+                label=""
+                placeholder="10-digit"
+                :showCountryCode="true"
+                :showWhatsapp="true"
+                nameWhatsapp="__NAME_WHATSAPP__"
+                :valueWhatsapp="false"
+                inputClass="flex-1 min-w-0"
+                :showAddButton="true"
+            />
+        </div>
+    </template>
+
+    {{-- Additional contacts: other people (name, number, relation) — no + on number field. --}}
     <div>
         <h3 class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Additional contacts</h3>
-        @php $contactRows = old('contacts', collect($profile_contacts ?? [])->where('is_primary', false)->values()->all()); @endphp
-        @foreach($contactRows as $idx => $row)
-            @php $r = is_object($row) ? (array) $row : $row; @endphp
-            <div class="flex flex-wrap gap-4 items-end mb-3 p-3 bg-gray-50 dark:bg-gray-700/50 rounded">
-                <input type="hidden" name="contacts[{{ $idx }}][id]" value="{{ $r['id'] ?? '' }}">
-                <input type="text" name="contacts[{{ $idx }}][contact_name]" value="{{ $r['contact_name'] ?? '' }}" placeholder="Name" class="rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-3 py-2">
-                <x-profile.contact-field
-                    name="contacts[{{ $idx }}][phone_number]"
-                    :value="$r['phone_number'] ?? ''"
-                    label=""
-                    placeholder="10-digit"
-                    :showCountryCode="true"
-                    :showWhatsapp="true"
-                    nameWhatsapp="contacts[{{ $idx }}][is_whatsapp]"
-                    :valueWhatsapp="!empty($r['is_whatsapp'])"
-                    inputClass="flex-1 min-w-0 max-w-[10rem]"
-                />
-                <input type="text" name="contacts[{{ $idx }}][relation_type]" value="{{ $r['relation_type'] ?? $r['contact_relation_id'] ?? '' }}" placeholder="Relation" class="rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-3 py-2">
-                <label class="flex items-center gap-2"><input type="checkbox" name="contacts[{{ $idx }}][is_primary]" value="1" {{ !empty($r['is_primary']) ? 'checked' : '' }}> Primary</label>
+        <div id="wizard-additional-contacts-container">
+            @php $contactRows = old('contacts', $profile_contacts ?? []); $contactRows = is_array($contactRows) ? $contactRows : collect($contactRows)->all(); @endphp
+            @foreach($contactRows as $idx => $row)
+                @php $r = is_object($row) ? (array) $row : $row; @endphp
+                <div class="wizard-contact-row flex flex-wrap gap-4 items-end mb-3 p-3 bg-gray-50 dark:bg-gray-700/50 rounded border-2 border-rose-500/30 dark:border-rose-400/30 rounded-lg">
+                    <input type="hidden" name="contacts[{{ $idx }}][id]" value="{{ $r['id'] ?? '' }}">
+                    <input type="text" name="contacts[{{ $idx }}][contact_name]" value="{{ $r['contact_name'] ?? '' }}" placeholder="Name" class="rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-3 py-2">
+                    <x-profile.contact-field
+                        name="contacts[{{ $idx }}][phone_number]"
+                        :value="$r['phone_number'] ?? ''"
+                        label=""
+                        placeholder="10-digit"
+                        :showCountryCode="true"
+                        :showWhatsapp="true"
+                        nameWhatsapp="contacts[{{ $idx }}][is_whatsapp]"
+                        :valueWhatsapp="in_array($r['contact_preference'] ?? null, ['whatsapp','call','message'], true) ? ($r['contact_preference']) : (!empty($r['is_whatsapp']) ? 'whatsapp' : 'call')"
+                        inputClass="flex-1 min-w-0 max-w-[10rem]"
+                    />
+                    <input type="text" name="contacts[{{ $idx }}][relation_type]" value="{{ $r['relation_type'] ?? $r['contact_relation_id'] ?? '' }}" placeholder="Relation" class="rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-3 py-2">
+                    <label class="flex items-center gap-2"><input type="checkbox" name="contacts[{{ $idx }}][is_primary]" value="1" {{ !empty($r['is_primary']) ? 'checked' : '' }}> Primary</label>
+                    <button type="button" class="wizard-remove-contact px-3 py-2 border border-red-400 text-red-600 rounded hover:bg-red-50 dark:hover:bg-red-900/20 shrink-0 text-sm">Remove</button>
+                </div>
+            @endforeach
+        </div>
+        <template id="wizard-contact-row-template">
+            <div class="wizard-contact-row flex flex-wrap gap-4 items-end mb-3 p-3 bg-gray-50 dark:bg-gray-700/50 rounded border-2 border-rose-500/30 dark:border-rose-400/30 rounded-lg">
+                <input type="hidden" name="contacts[__INDEX__][id]" value="">
+                <input type="text" name="contacts[__INDEX__][contact_name]" value="" placeholder="Name" class="rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-3 py-2">
+                <div class="contact-field-engine border-2 border-rose-500 dark:border-rose-400 rounded-lg p-3 flex-1 min-w-0 max-w-[14rem]">
+                    <div class="flex items-center gap-1.5 flex-nowrap contact-master-field">
+                        <input type="text" inputmode="tel" maxlength="5" value="+91" placeholder="+91" title="Country code" class="text-xs text-gray-600 dark:text-gray-400 border border-gray-300 dark:border-gray-600 rounded py-1.5 bg-gray-50 dark:bg-gray-700 h-9 box-border text-center shrink-0 contact-cc-input" style="flex:0 0 2.25rem; width:2.25rem; min-width:2.25rem; max-width:2.25rem; padding-left:0.2rem; padding-right:0.2rem;">
+                        <input type="text" inputmode="numeric" pattern="[0-9]*" maxlength="10" name="contacts[__INDEX__][phone_number]" placeholder="10-digit" data-contact-engine class="h-9 rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-2 py-1.5 text-sm min-w-0 flex-1" style="min-width:0;">
+                        <input type="hidden" name="contacts[__INDEX__][is_whatsapp]" value="whatsapp" class="contact-preference-input">
+                        <div class="relative shrink-0 contact-preference-single" data-current-pref="whatsapp">
+                            <button type="button" class="contact-pref-trigger rounded p-1.5 ring-2 ring-rose-500 bg-rose-50 dark:bg-rose-900/30 inline-flex items-center justify-center" title="Prefer contact via — click to change" aria-haspopup="true" aria-expanded="false">
+                                <span class="contact-pref-icon contact-pref-icon-whatsapp" data-pref="whatsapp"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" class="w-5 h-5" fill="#25D366"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg></span>
+                                <span class="contact-pref-icon contact-pref-icon-call text-red-500 dark:text-red-400" data-pref="call" style="display:none"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-5 h-5"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 0 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg></span>
+                                <span class="contact-pref-icon contact-pref-icon-message" data-pref="message" style="display:none"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-5 h-5 text-gray-600 dark:text-gray-400"><path fill-rule="evenodd" d="M4.848 2.771A49.144 49.144 0 0112 2.25c2.43 0 4.817.178 7.152.52 1.978.292 3.348 2.024 3.348 3.97v6.02c0 1.946-1.37 3.678-3.348 3.97a48.901 48.901 0 01-3.476.383.39.39 0 00-.27.17l-2.47 2.47a.75.75 0 01-1.06 0l-2.47-2.47a.39.39 0 00-.27-.17 48.9 48.9 0 01-3.476-.384c-1.978-.29-3.348-2.024-3.348-3.97V6.741c0-1.946 1.37-3.68 3.348-3.97z" clip-rule="evenodd"/></svg></span>
+                            </button>
+                            <div class="contact-pref-dropdown hidden absolute right-0 top-full mt-1 z-50 min-w-[8rem] py-1 rounded-lg shadow-lg bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600">
+                                <button type="button" class="contact-pref-option w-full text-left px-3 py-2 text-sm flex items-center gap-2 hover:bg-rose-50 dark:hover:bg-rose-900/30" data-pref="whatsapp"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" class="w-4 h-4" fill="#25D366"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg> WhatsApp</button>
+                                <button type="button" class="contact-pref-option w-full text-left px-3 py-2 text-sm flex items-center gap-2 hover:bg-rose-50 dark:hover:bg-rose-900/30" data-pref="call"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4 text-red-500 dark:text-red-400"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 0 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg> Call</button>
+                                <button type="button" class="contact-pref-option w-full text-left px-3 py-2 text-sm flex items-center gap-2 hover:bg-rose-50 dark:hover:bg-rose-900/30" data-pref="message"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-4 h-4 text-gray-600 dark:text-gray-400"><path fill-rule="evenodd" d="M4.848 2.771A49.144 49.144 0 0112 2.25c2.43 0 4.817.178 7.152.52 1.978.292 3.348 2.024 3.348 3.97v6.02c0 1.946-1.37 3.678-3.348 3.97a48.901 48.901 0 01-3.476.383.39.39 0 00-.27.17l-2.47 2.47a.75.75 0 01-1.06 0l-2.47-2.47a.39.39 0 00-.27-.17 48.9 48.9 0 01-3.476-.384c-1.978-.29-3.348-2.024-3.348-3.97V6.741c0-1.946 1.37-3.68 3.348-3.97z" clip-rule="evenodd"/></svg> Message</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <input type="text" name="contacts[__INDEX__][relation_type]" value="" placeholder="Relation" class="rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-3 py-2">
+                <label class="flex items-center gap-2"><input type="checkbox" name="contacts[__INDEX__][is_primary]" value="1"> Primary</label>
+                <button type="button" class="wizard-remove-contact px-3 py-2 border border-red-400 text-red-600 rounded hover:bg-red-50 dark:hover:bg-red-900/20 shrink-0 text-sm">Remove</button>
             </div>
-        @endforeach
+        </template>
+        <button type="button" id="wizard-add-contact" class="mt-2 inline-flex items-center gap-1.5 px-4 py-2 bg-rose-100 dark:bg-rose-900/30 text-rose-700 dark:text-rose-300 border-2 border-rose-500 dark:border-rose-400 rounded-lg font-medium text-sm hover:bg-rose-200 dark:hover:bg-rose-800/40">
+            <span class="text-lg leading-none" aria-hidden="true">+</span> Add contact
+        </button>
     </div>
 </div>
+<script>
+(function() {
+    var selfContainer = document.querySelector('[data-contact-context="self"]');
+    var selfInner = document.getElementById('self-contact-slots-inner');
+    var selfTemplate = document.getElementById('self-contact-slot-template');
+    var maxSlots = 3;
+
+    if (selfContainer && selfInner && selfTemplate) {
+        selfContainer.addEventListener('click', function(e) {
+            if (!e.target.closest('.contact-engine-add-btn')) return;
+            var slots = selfInner.querySelectorAll('.self-contact-slot');
+            if (slots.length >= maxSlots) return;
+            var nextIndex = slots.length;
+            var name = nextIndex === 0 ? 'primary_contact_number' : 'primary_contact_number_' + (nextIndex + 1);
+            var nameWa = nextIndex === 0 ? 'primary_contact_whatsapp' : 'primary_contact_whatsapp_' + (nextIndex + 1);
+            var html = selfTemplate.innerHTML.replace(/__NAME__/g, name).replace(/__NAME_WHATSAPP__/g, nameWa);
+            var div = document.createElement('div');
+            div.className = 'self-contact-slot flex items-end gap-2 shrink-0';
+            div.setAttribute('data-slot-index', nextIndex);
+            div.innerHTML = html;
+            var newSlot = div.firstChild;
+            selfInner.appendChild(newSlot);
+            if (nextIndex >= 1) {
+                var inp = newSlot.querySelector('.contact-preference-input');
+                var wrap = newSlot.querySelector('.contact-preference-single');
+                if (inp) inp.value = 'call';
+                if (wrap) {
+                    wrap.setAttribute('data-current-pref', 'call');
+                    var icons = wrap.querySelectorAll('.contact-pref-icon');
+                    icons.forEach(function(span) {
+                        span.style.display = (span.getAttribute('data-pref') === 'call') ? '' : 'none';
+                    });
+                }
+            }
+            if (nextIndex === 2) newSlot.querySelector('.contact-engine-add-btn')?.remove();
+        });
+    }
+
+    var container = document.getElementById('wizard-additional-contacts-container');
+    var template = document.getElementById('wizard-contact-row-template');
+    var addBtn = document.getElementById('wizard-add-contact');
+    function addAdditionalContactRow() {
+        if (!container || !template) return;
+        var nextIndex = container.querySelectorAll('.wizard-contact-row').length;
+        var html = template.innerHTML.replace(/__INDEX__/g, nextIndex);
+        var div = document.createElement('div');
+        div.innerHTML = html.trim();
+        container.appendChild(div.firstChild);
+    }
+    if (addBtn) addBtn.addEventListener('click', addAdditionalContactRow);
+    if (container) {
+        container.addEventListener('click', function(e) {
+            if (e.target.classList.contains('wizard-remove-contact')) {
+                e.target.closest('.wizard-contact-row').remove();
+            }
+        });
+    }
+})();
+</script>

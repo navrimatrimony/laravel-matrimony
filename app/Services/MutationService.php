@@ -970,6 +970,8 @@ class MutationService
             $mapped['occupation'] = isset($mapped['occupation']) && trim((string) $mapped['occupation']) !== '' ? trim((string) $mapped['occupation']) : null;
             $mapped['city_id'] = ! empty($mapped['city_id']) ? (int) $mapped['city_id'] : null;
             $mapped['contact_number'] = isset($mapped['contact_number']) && trim((string) $mapped['contact_number']) !== '' ? trim((string) $mapped['contact_number']) : null;
+            $mapped['contact_number_2'] = isset($mapped['contact_number_2']) && trim((string) $mapped['contact_number_2']) !== '' ? trim((string) $mapped['contact_number_2']) : null;
+            $mapped['contact_number_3'] = isset($mapped['contact_number_3']) && trim((string) $mapped['contact_number_3']) !== '' ? trim((string) $mapped['contact_number_3']) : null;
             $mapped['notes'] = isset($mapped['notes']) && trim((string) $mapped['notes']) !== '' ? trim((string) $mapped['notes']) : null;
             $mapped['sort_order'] = isset($mapped['sort_order']) && $mapped['sort_order'] !== '' ? (int) $mapped['sort_order'] : 0;
             unset($mapped['spouse'], $mapped['is_married']);
@@ -1024,6 +1026,15 @@ class MutationService
             $mapped['contact_relation_id'] = (int) $mapped['contact_relation_id'];
         }
         unset($mapped['relation_type']);
+        // Normalize contact preference: intake/wizard may send is_whatsapp as string 'whatsapp'|'call'|'message'
+        $pref = $mapped['contact_preference'] ?? $mapped['is_whatsapp'] ?? null;
+        if (in_array($pref, ['whatsapp', 'call', 'message'], true)) {
+            $mapped['contact_preference'] = $pref;
+            $mapped['is_whatsapp'] = ($pref === 'whatsapp');
+        } elseif ($pref === true || $pref === '1' || $pref === 1) {
+            $mapped['contact_preference'] = 'whatsapp';
+            $mapped['is_whatsapp'] = true;
+        }
         return $mapped;
     }
 

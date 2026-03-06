@@ -199,7 +199,9 @@ class IntakeController extends Controller
 	 
     public function preview(BiodataIntake $intake)
     {
-        if ((int) $intake->uploaded_by !== (int) auth()->id()) {
+        $isOwner = (int) $intake->uploaded_by === (int) auth()->id();
+        $isAdmin = auth()->user()?->isAnyAdmin() ?? false;
+        if (! $isOwner && ! $isAdmin) {
             abort(403, 'You can only preview your own biodata uploads.');
         }
         if ($intake->approved_by_user) {

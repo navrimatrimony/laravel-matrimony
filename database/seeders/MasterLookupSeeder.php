@@ -71,7 +71,9 @@ class MasterLookupSeeder extends Seeder
             ['key' => 'fair', 'label' => 'Fair'],
             ['key' => 'fair_wheatish', 'label' => 'Fair Wheatish'],
             ['key' => 'wheatish', 'label' => 'Wheatish'],
+            ['key' => 'wheatish_medium', 'label' => 'Wheatish Medium'],
             ['key' => 'wheatish_dark', 'label' => 'Wheatish Dark'],
+            ['key' => 'dusky', 'label' => 'Dusky'],
             ['key' => 'dark', 'label' => 'Dark'],
             ['key' => 'very_dark', 'label' => 'Very Dark'],
             ['key' => 'other', 'label' => 'Other'],
@@ -91,6 +93,7 @@ class MasterLookupSeeder extends Seeder
             ['key' => 'lean', 'label' => 'Lean'],
             ['key' => 'athletic', 'label' => 'Athletic'],
             ['key' => 'average', 'label' => 'Average'],
+            ['key' => 'fit', 'label' => 'Fit'],
             ['key' => 'healthy', 'label' => 'Healthy'],
             ['key' => 'heavy', 'label' => 'Heavy'],
             ['key' => 'muscular', 'label' => 'Muscular'],
@@ -114,6 +117,8 @@ class MasterLookupSeeder extends Seeder
             ['key' => 'AB-', 'label' => 'AB-'],
             ['key' => 'O+', 'label' => 'O+'],
             ['key' => 'O-', 'label' => 'O-'],
+            ['key' => 'not_known', 'label' => 'Not Known'],
+            ['key' => 'prefer_not_to_say', 'label' => 'Prefer Not To Say'],
         ];
         foreach ($rows as $row) {
             DB::table('master_blood_groups')->updateOrInsert(

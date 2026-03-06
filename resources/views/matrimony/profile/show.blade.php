@@ -244,7 +244,9 @@
                 <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">Edit location via profile hierarchy (country/state/city) in full edit.</p>
             </div>
             @endif
-            
+            <div class="md:col-span-2">
+                <x-physical-engine :profile="$profile" />
+            </div>
         </div>
         
         <div class="mb-4">

@@ -22,11 +22,8 @@
     </div>
     {{-- Marital status is only in Marriages section (MaritalEngine). --}}
     <x-profile.religion-caste-selector :profile="$profile" />
-    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-        {{-- Height: same width as one religion/caste column (1/3). --}}
-        <div>
-            <x-profile.height-picker :value="$profile->height_cm ?? null" />
-        </div>
+    {{-- Height and other physical fields are in the Physical section. --}}
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
         {{-- Point 4.1: Primary contact — canonical editable in Contacts section. On full page show read-only here; on basic-info step show editable. --}}
         <div class="md:col-span-2">
             <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Primary contact (mobile) @if(($currentSection ?? '') !== 'full')<span class="text-red-500">*</span>@endif</label>
@@ -40,7 +37,9 @@
                     label=""
                     placeholder="10-digit number"
                     :showCountryCode="true"
-                    :showWhatsapp="false"
+                    :showWhatsapp="true"
+                    nameWhatsapp="primary_contact_whatsapp"
+                    :valueWhatsapp="old('primary_contact_whatsapp', 'whatsapp')"
                     :required="true"
                     inputClass="flex-1 min-w-0"
                 />

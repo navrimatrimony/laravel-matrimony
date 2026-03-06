@@ -319,8 +319,8 @@
                             @endforeach
                         </select>
                     </div>
-                    <div>
-                        <x-profile.height-picker :value="$matrimonyProfile->height_cm ?? null" label="Height" />
+                    <div class="md:col-span-2">
+                        <x-physical-engine :profile="$matrimonyProfile" />
                     </div>
                 </div>
 

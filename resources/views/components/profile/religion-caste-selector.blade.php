@@ -8,7 +8,7 @@
     $profile = $profile ?? new \stdClass();
 @endphp
 
-<div class="religion-caste-component grid md:grid-cols-3 gap-4">
+<div class="religion-caste-component grid md:grid-cols-3 gap-4 border-2 border-rose-500 dark:border-rose-400 rounded-lg p-4">
     <div class="religion-wrap">
         <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Religion</label>
         <div class="relative">

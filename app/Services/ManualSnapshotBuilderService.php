@@ -34,6 +34,8 @@ class ManualSnapshotBuilderService
             'complexion_id' => $request->input('complexion_id') ? (int) $request->input('complexion_id') : null,
             'physical_build_id' => $request->input('physical_build_id') ? (int) $request->input('physical_build_id') : null,
             'blood_group_id' => $request->input('blood_group_id') ? (int) $request->input('blood_group_id') : null,
+            'spectacles_lens' => $request->input('spectacles_lens') ?: null,
+            'physical_condition' => $request->input('physical_condition') ?: null,
             'highest_education' => $request->input('highest_education'),
             'specialization' => $request->input('specialization'),
             'occupation_title' => $request->input('occupation_title'),
@@ -43,8 +45,14 @@ class ManualSnapshotBuilderService
             'family_income' => $request->has('family_income') && $request->input('family_income') !== '' ? (float) $request->input('family_income') : null,
             'father_name' => $request->input('father_name'),
             'father_occupation' => $request->input('father_occupation'),
+            'father_contact_1' => trim((string) ($request->input('father_contact_1') ?? '')) ?: null,
+            'father_contact_2' => trim((string) ($request->input('father_contact_2') ?? '')) ?: null,
+            'father_contact_3' => trim((string) ($request->input('father_contact_3') ?? '')) ?: null,
             'mother_name' => $request->input('mother_name'),
             'mother_occupation' => $request->input('mother_occupation'),
+            'mother_contact_1' => trim((string) ($request->input('mother_contact_1') ?? '')) ?: null,
+            'mother_contact_2' => trim((string) ($request->input('mother_contact_2') ?? '')) ?: null,
+            'mother_contact_3' => trim((string) ($request->input('mother_contact_3') ?? '')) ?: null,
             // Brothers/Sisters: use Siblings engine, not count fields.
             'family_type_id' => $request->input('family_type_id') ? (int) $request->input('family_type_id') : null,
             'country_id' => $request->input('country_id') ?: null,
@@ -76,7 +84,16 @@ class ManualSnapshotBuilderService
         $contacts = [];
         $phone = trim((string) $request->input('primary_contact_number', ''));
         if ($phone !== '') {
-            $contacts[] = ['relation_type' => 'self', 'contact_name' => 'Primary', 'phone_number' => $phone, 'is_primary' => true];
+            $pref = $request->input('primary_contact_whatsapp', 'whatsapp');
+            $pref = in_array($pref, ['whatsapp', 'call', 'message'], true) ? $pref : 'whatsapp';
+            $contacts[] = [
+                'relation_type' => 'self',
+                'contact_name' => 'Primary',
+                'phone_number' => $phone,
+                'is_primary' => true,
+                'is_whatsapp' => $pref === 'whatsapp',
+                'contact_preference' => $pref,
+            ];
         }
 
         $children = [];

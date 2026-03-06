@@ -4,26 +4,35 @@
     $inputName = $namePrefix !== '' ? $namePrefix . '[height_cm]' : 'height_cm';
     $heightCm = old($namePrefix !== '' ? str_replace('[', '.', str_replace(']', '', $namePrefix)) . '.height_cm' : 'height_cm', $value);
     $heightCm = $heightCm !== null && $heightCm !== '' ? (int) $heightCm : null;
+
+    // Range: first option "Below 4 feet 6 inch", then 4'6" through 7'0", then "Above 7 feet". No options below 4'6" or above 7'.
     $options = [];
-    foreach ([4, 5, 6, 7] as $feet) {
-        foreach (range(0, 11) as $inches) {
-            $cm = (int) round(($feet * 12 + $inches) * 2.54);
-            $options[] = ['label' => $feet . "' " . $inches . '"', 'value' => $cm];
-        }
+    $options[] = ['label' => 'Below 4 feet 6 inch', 'value' => 136];
+    for ($inches = 54; $inches <= 84; $inches++) {
+        $cm = (int) round($inches * 2.54);
+        $feet = (int) ($inches / 12);
+        $inc = $inches % 12;
+        $options[] = ['label' => $feet . "' " . $inc . '"', 'value' => $cm];
     }
-    if ($heightCm === null || $heightCm < 50 || $heightCm > 250) {
-        $heightCm = 170;
-    }
-    $minDiff = collect($options)->min(fn ($o) => abs($o['value'] - $heightCm));
-    $selectedCm = 170;
-    foreach ($options as $o) {
-        if (abs($o['value'] - $heightCm) === $minDiff) {
-            $selectedCm = $o['value'];
-            break;
+    $options[] = ['label' => 'Above 7 feet', 'value' => 214];
+
+    $selectedCm = 136;
+    if ($heightCm === null || $heightCm === '' || $heightCm < 137) {
+        $selectedCm = 136;
+    } elseif ($heightCm > 213) {
+        $selectedCm = 214;
+    } else {
+        $inRange = array_filter($options, fn ($o) => $o['value'] >= 137 && $o['value'] <= 213);
+        $minDiff = min(array_map(fn ($o) => abs($o['value'] - $heightCm), $inRange));
+        foreach ($inRange as $o) {
+            if (abs($o['value'] - $heightCm) === $minDiff) {
+                $selectedCm = $o['value'];
+                break;
+            }
         }
     }
 @endphp
-<div class="height-picker w-full" x-data="heightPickerState({{ $selectedCm }})">
+<div class="height-picker w-full border-2 border-rose-500 dark:border-rose-400 rounded-lg p-3" x-data="heightPickerState({{ $selectedCm }})">
     <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{{ $label }} @if($required)<span class="text-red-500">*</span>@endif</label>
 
     <div class="flex items-center gap-3 w-full">

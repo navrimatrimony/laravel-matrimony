@@ -17,6 +17,7 @@ return [
     */
     'section_order' => [
         'basic-info',
+        'physical',
         'marriages',
         'personal-family',
         'siblings',
@@ -45,6 +46,7 @@ return [
     */
     'section_labels' => [
         'basic-info' => 'Basic info',
+        'physical' => 'Physical',
         'marriages' => 'Marriages',
         'personal-family' => 'Personal & family',
         'siblings' => 'Siblings',
@@ -71,7 +73,13 @@ return [
         'religion_id' => 'basic-info',
         'caste_id' => 'basic-info',
         'sub_caste_id' => 'basic-info',
-        'height_cm' => 'basic-info',
+        'height_cm' => 'physical',
+        'complexion_id' => 'physical',
+        'blood_group_id' => 'physical',
+        'physical_build_id' => 'physical',
+        'weight_kg' => 'physical',
+        'spectacles_lens' => 'physical',
+        'physical_condition' => 'physical',
         'primary_contact_number' => 'contacts',
         'highest_education' => 'personal-family',
         'specialization' => 'personal-family',
@@ -79,6 +87,10 @@ return [
         'company_name' => 'personal-family',
         'annual_income' => 'personal-family',
         'family_income' => 'personal-family',
+        'family_type_id' => 'personal-family',
+        'family_status' => 'personal-family',
+        'family_values' => 'personal-family',
+        'family_annual_income' => 'personal-family',
         'father_name' => 'personal-family',
         'mother_name' => 'personal-family',
         'brothers_count' => 'personal-family',

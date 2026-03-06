@@ -238,20 +238,24 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
             ->where('parse_status', 'error')
             ->count();
 
-        $avgParseMs = (clone $intakeQuery)
-            ->whereNotNull('parse_duration_ms')
-            ->where('created_at', '>=', $last30Start)
-            ->avg('parse_duration_ms') ?: 0;
-
-        $avgManualEdits = (clone $intakeQuery)
-            ->whereNotNull('fields_manually_edited_count')
-            ->where('created_at', '>=', $last30Start)
-            ->avg('fields_manually_edited_count') ?: 0;
-
-        $avgAutoFilled = (clone $intakeQuery)
-            ->whereNotNull('fields_auto_filled_count')
-            ->where('created_at', '>=', $last30Start)
-            ->avg('fields_auto_filled_count') ?: 0;
+        $hasMetricsColumns = \Illuminate\Support\Facades\Schema::hasColumn('biodata_intakes', 'parse_duration_ms');
+        $avgParseMs = 0;
+        $avgManualEdits = 0.0;
+        $avgAutoFilled = 0.0;
+        if ($hasMetricsColumns) {
+            $avgParseMs = (clone $intakeQuery)
+                ->whereNotNull('parse_duration_ms')
+                ->where('created_at', '>=', $last30Start)
+                ->avg('parse_duration_ms') ?: 0;
+            $avgManualEdits = (clone $intakeQuery)
+                ->whereNotNull('fields_manually_edited_count')
+                ->where('created_at', '>=', $last30Start)
+                ->avg('fields_manually_edited_count') ?: 0;
+            $avgAutoFilled = (clone $intakeQuery)
+                ->whereNotNull('fields_auto_filled_count')
+                ->where('created_at', '>=', $last30Start)
+                ->avg('fields_auto_filled_count') ?: 0;
+        }
 
         return view('admin.dashboard', [
             'totalProfiles' => $totalProfiles,

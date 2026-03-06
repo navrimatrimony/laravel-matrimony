@@ -35,45 +35,15 @@
                 @endforeach
             </select>
         </div>
-        <div>
-            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Father Name</label>
-            <input type="text" name="father_name" value="{{ old('father_name', $profile->father_name) }}" class="w-full rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-3 py-2">
+        {{-- Parent engine: Father + Mother core details, extra info, contact numbers, and parents address. --}}
+        <div class="md:col-span-2">
+            <x-parent-engine :profile="$profile" />
         </div>
-        <div>
-            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Father Occupation</label>
-            <input type="text" name="father_occupation" value="{{ old('father_occupation', $profile->father_occupation) }}" class="w-full rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-3 py-2">
+        {{-- Family Overview engine: border is inside component. --}}
+        <div class="md:col-span-2">
+            <x-family-overview :profile="$profile" />
         </div>
-        <div>
-            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Mother Name</label>
-            <input type="text" name="mother_name" value="{{ old('mother_name', $profile->mother_name) }}" class="w-full rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-3 py-2">
-        </div>
-        <div>
-            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Mother Occupation</label>
-            <input type="text" name="mother_occupation" value="{{ old('mother_occupation', $profile->mother_occupation) }}" class="w-full rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-3 py-2">
-        </div>
-        {{-- Brothers/Sisters: use Siblings section (centralized engine), not separate count fields. --}}
-        <div>
-            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Family Type</label>
-            <select name="family_type_id" class="form-select w-full rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-3 py-2">
-                <option value="">Select Family Type</option>
-                @foreach($familyTypes ?? [] as $ft)
-                    <option value="{{ $ft->id }}" {{ old('family_type_id', $profile->family_type_id ?? '') == $ft->id ? 'selected' : '' }}>{{ $ft->label }}</option>
-                @endforeach
-            </select>
-        </div>
-        <div>
-            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Weight (kg)</label>
-            <input type="number" name="weight_kg" value="{{ old('weight_kg', $profile->weight_kg) }}" step="0.1" min="0" class="w-full rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-3 py-2">
-        </div>
-        <div>
-            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Body type</label>
-            <select name="physical_build_id" class="form-select w-full rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-3 py-2">
-                <option value="">Select Body type</option>
-                @foreach($physicalBuilds ?? [] as $pb)
-                    <option value="{{ $pb->id }}" {{ old('physical_build_id', $profile->physical_build_id) == $pb->id ? 'selected' : '' }}>{{ $pb->label }}</option>
-                @endforeach
-            </select>
-        </div>
+        {{-- Weight and Body type are in the Physical section (Physical Engine). --}}
     </div>
     <div id="children-section">
         <p class="text-sm text-gray-500 dark:text-gray-400">Add children, education and career history from Full Edit after completing the wizard.</p>

@@ -23,12 +23,11 @@
         resultsEl.innerHTML = '';
         data.data.forEach(function (item) {
             var cityId = item.city_id || item.id || '';
-            var cityName = item.city_name || item.label || item.name || '';
             var div = document.createElement('div');
             div.className = 'p-2 border-b border-gray-200 dark:border-gray-600 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700';
             div.textContent = buildLine(item);
             div.addEventListener('click', function () {
-                onSelect(item, cityName);
+                onSelect(item, buildLine(item));
             });
             resultsEl.appendChild(div);
         });
@@ -44,8 +43,8 @@
         if (!input || !resultsEl) return;
         wrapper.dataset.bound = '1';
 
-        function onSelect(item, cityName) {
-            input.value = cityName;
+        function onSelect(item, displayLabel) {
+            input.value = displayLabel;
             resultsEl.classList.add('hidden');
             resultsEl.style.display = 'none';
 

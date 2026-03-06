@@ -19,6 +19,7 @@ class ProfileWizardController extends Controller
     /** @deprecated Use FieldCatalogService::getSectionKeys() for canonical list. Kept for allowed list fallback. */
     private const SECTIONS = [
         'basic-info',
+        'physical',
         'marriages',
         'personal-family',
         'siblings',
@@ -267,6 +268,11 @@ class ProfileWizardController extends Controller
                 $data['bloodGroups'] = \App\Models\MasterBloodGroup::where('is_active', true)->get();
                 $data['birthPlaceDisplay'] = $profile->birth_city_id ? \App\Models\City::where('id', $profile->birth_city_id)->value('name') : '';
                 break;
+            case 'physical':
+                $data['complexions'] = \App\Models\MasterComplexion::where('is_active', true)->orderBy('id')->get();
+                $data['bloodGroups'] = \App\Models\MasterBloodGroup::where('is_active', true)->orderBy('id')->get();
+                $data['physicalBuilds'] = \App\Models\MasterPhysicalBuild::where('is_active', true)->orderBy('id')->get();
+                break;
             case 'marriages':
                 $data['profileMarriages'] = \App\Models\ProfileMarriage::where('profile_id', $profile->id)->orderBy('id')->get();
                 $maritalKeys = ['never_married', 'divorced', 'separated', 'widowed'];
@@ -376,7 +382,11 @@ class ProfileWizardController extends Controller
                 $data['legalCaseTypes'] = $data['legalCaseTypes'] ?? collect();
                 break;
             case 'contacts':
-                $data['profile_contacts'] = DB::table('profile_contacts')->where('profile_id', $profile->id)->orderBy('id')->get();
+                $allContacts = DB::table('profile_contacts')->where('profile_id', $profile->id)->orderBy('id')->get();
+                $selfRelationId = DB::table('master_contact_relations')->where('key', 'self')->value('id');
+                $selfContacts = collect($allContacts)->where('contact_relation_id', $selfRelationId)->sortByDesc('is_primary')->values()->take(3)->all();
+                $data['self_contacts'] = $selfContacts;
+                $data['profile_contacts'] = collect($allContacts)->where('contact_relation_id', '!=', $selfRelationId)->values()->all();
                 $data['contactRelations'] = \App\Models\MasterContactRelation::where('is_active', true)->get();
                 $data['profile_contacts'] = $data['profile_contacts'] ?? collect();
                 $data['contactRelations'] = $data['contactRelations'] ?? collect();
@@ -390,6 +400,7 @@ class ProfileWizardController extends Controller
             case 'full':
                 $data = array_merge(
                     $this->getSectionViewData('basic-info', $profile),
+                    $this->getSectionViewData('physical', $profile),
                     $this->getSectionViewData('marriages', $profile),
                     $this->getSectionViewData('personal-family', $profile),
                     $this->getSectionViewData('siblings', $profile),
@@ -422,6 +433,8 @@ class ProfileWizardController extends Controller
         switch ($section) {
             case 'basic-info':
                 return $this->buildBasicInfoSnapshot($request, $profile);
+            case 'physical':
+                return $this->buildPhysicalSnapshot($request, $profile);
             case 'marriages':
                 return $this->buildMarriagesSnapshot($request);
             case 'children':
@@ -480,7 +493,7 @@ class ProfileWizardController extends Controller
             'caste_id' => $request->input('caste_id') ? (int) $request->input('caste_id') : null,
             'sub_caste_id' => $request->input('sub_caste_id') ? (int) $request->input('sub_caste_id') : null,
             'marital_status_id' => $request->filled('marital_status_id') ? (int) $request->input('marital_status_id') : $profile->marital_status_id,
-            'height_cm' => $request->filled('height_cm') ? (int) $request->input('height_cm') : null,
+            'height_cm' => $request->filled('height_cm') ? (int) $request->input('height_cm') : $profile->height_cm,
             'serious_intent_id' => $profile->serious_intent_id,
             'weight_kg' => $profile->weight_kg,
             'complexion_id' => $profile->complexion_id,
@@ -523,6 +536,43 @@ class ProfileWizardController extends Controller
         ];
     }
 
+    private function buildPhysicalSnapshot(Request $request, MatrimonyProfile $profile): array
+    {
+        $request->validate([
+            'height_cm' => ['nullable', 'integer', 'min:50', 'max:250'],
+            'complexion_id' => ['nullable', Rule::exists('master_complexions', 'id')],
+            'blood_group_id' => ['nullable', Rule::exists('master_blood_groups', 'id')],
+            'physical_build_id' => ['nullable', Rule::exists('master_physical_builds', 'id')],
+            'spectacles_lens' => ['nullable', 'string', 'max:50', Rule::in(['no', 'spectacles', 'contact_lens', 'both'])],
+            'physical_condition' => ['nullable', 'string', 'max:50', Rule::in(['none', 'physically_challenged', 'hearing_condition', 'vision_condition', 'other', 'prefer_not_to_say'])],
+        ]);
+
+        $core = [
+            'height_cm' => $request->filled('height_cm') ? (int) $request->input('height_cm') : null,
+            'complexion_id' => $request->input('complexion_id') ? (int) $request->input('complexion_id') : null,
+            'blood_group_id' => $request->input('blood_group_id') ? (int) $request->input('blood_group_id') : null,
+            'physical_build_id' => $request->input('physical_build_id') ? (int) $request->input('physical_build_id') : null,
+            'spectacles_lens' => $request->input('spectacles_lens') ?: null,
+            'physical_condition' => $request->input('physical_condition') ?: null,
+        ];
+        $core = array_map(fn ($v) => $v === '' ? null : $v, $core);
+
+        return [
+            'core' => $core,
+            'contacts' => [],
+            'children' => [],
+            'education_history' => [],
+            'career_history' => [],
+            'addresses' => [],
+            'property_summary' => [],
+            'property_assets' => [],
+            'horoscope' => [],
+            'legal_cases' => [],
+            'preferences' => [],
+            'extended_narrative' => [],
+        ];
+    }
+
     private function buildPersonalFamilySnapshot(Request $request, MatrimonyProfile $profile): array
     {
         $this->resolveMasterLookupIds($request, [
@@ -540,10 +590,19 @@ class ProfileWizardController extends Controller
             'income_currency_id' => $request->input('income_currency_id') ? (int) $request->input('income_currency_id') : (\App\Models\MasterIncomeCurrency::where('code', 'INR')->value('id')),
             'father_name' => $request->input('father_name') ?: null,
             'father_occupation' => $request->input('father_occupation') ?: null,
+            'father_contact_1' => trim((string) ($request->input('father_contact_1') ?? '')) ?: null,
+            'father_contact_2' => trim((string) ($request->input('father_contact_2') ?? '')) ?: null,
+            'father_contact_3' => trim((string) ($request->input('father_contact_3') ?? '')) ?: null,
             'mother_name' => $request->input('mother_name') ?: null,
             'mother_occupation' => $request->input('mother_occupation') ?: null,
+            'mother_contact_1' => trim((string) ($request->input('mother_contact_1') ?? '')) ?: null,
+            'mother_contact_2' => trim((string) ($request->input('mother_contact_2') ?? '')) ?: null,
+            'mother_contact_3' => trim((string) ($request->input('mother_contact_3') ?? '')) ?: null,
             // Brothers/Sisters: use Siblings section (engine), not count fields.
             'family_type_id' => $request->input('family_type_id') ? (int) $request->input('family_type_id') : null,
+            'family_status' => $request->input('family_status') ?: null,
+            'family_values' => $request->input('family_values') ?: null,
+            'family_annual_income' => $request->input('family_annual_income') ?: null,
             'weight_kg' => $request->filled('weight_kg') ? (float) $request->input('weight_kg') : $profile->weight_kg,
             'physical_build_id' => $request->input('physical_build_id') ? (int) $request->input('physical_build_id') : $profile->physical_build_id,
         ];
@@ -616,6 +675,8 @@ class ProfileWizardController extends Controller
                 'occupation' => trim((string) ($row['occupation'] ?? '')) ?: null,
                 'city_id' => ! empty($row['city_id']) ? (int) $row['city_id'] : null,
                 'contact_number' => trim((string) ($row['contact_number'] ?? '')) ?: null,
+                'contact_number_2' => trim((string) ($row['contact_number_2'] ?? '')) ?: null,
+                'contact_number_3' => trim((string) ($row['contact_number_3'] ?? '')) ?: null,
                 'notes' => trim((string) ($row['notes'] ?? '')) ?: null,
                 'sort_order' => isset($row['sort_order']) && $row['sort_order'] !== '' ? (int) $row['sort_order'] : 0,
             ];
@@ -907,27 +968,38 @@ class ProfileWizardController extends Controller
     private function buildContactsSnapshot(Request $request, MatrimonyProfile $profile): array
     {
         $contacts = [];
-        $phone = trim((string) $request->input('primary_contact_number', ''));
-        if ($phone !== '') {
-            $contacts[] = [
-                'relation_type' => 'self',
-                'contact_name' => 'Primary',
-                'phone_number' => $phone,
-                'is_primary' => true,
-                'is_whatsapp' => ! empty($request->input('primary_contact_whatsapp')),
-            ];
+        $labels = ['Primary', 'Self 2', 'Self 3'];
+        for ($i = 0; $i < 3; $i++) {
+            $key = $i === 0 ? 'primary_contact_number' : 'primary_contact_number_' . ($i + 1);
+            $whatsappKey = $i === 0 ? 'primary_contact_whatsapp' : 'primary_contact_whatsapp_' . ($i + 1);
+            $phone = trim((string) $request->input($key, ''));
+            if ($phone !== '') {
+                $pref = $request->input($whatsappKey);
+                $pref = in_array($pref, ['whatsapp', 'call', 'message'], true) ? $pref : ($pref ? 'whatsapp' : 'call');
+                $contacts[] = [
+                    'relation_type' => 'self',
+                    'contact_name' => $labels[$i],
+                    'phone_number' => $phone,
+                    'is_primary' => $i === 0,
+                    'is_whatsapp' => $pref === 'whatsapp',
+                    'contact_preference' => $pref,
+                ];
+            }
         }
         foreach ($request->input('contacts', []) as $row) {
             $contactName = trim((string) ($row['contact_name'] ?? ''));
             $phoneNumber = trim((string) ($row['phone_number'] ?? ''));
             if ($contactName !== '' || $phoneNumber !== '') {
+                $pref = $row['is_whatsapp'] ?? $row['contact_preference'] ?? null;
+                $pref = in_array($pref, ['whatsapp', 'call', 'message'], true) ? $pref : ($pref ? 'whatsapp' : 'call');
                 $contacts[] = [
                     'id' => ! empty($row['id']) ? (int) $row['id'] : null,
                     'relation_type' => trim((string) ($row['relation_type'] ?? '')),
                     'contact_name' => $contactName,
                     'phone_number' => $phoneNumber,
                     'is_primary' => ! empty($row['is_primary']),
-                    'is_whatsapp' => ! empty($row['is_whatsapp']),
+                    'is_whatsapp' => $pref === 'whatsapp',
+                    'contact_preference' => $pref,
                 ];
             }
         }

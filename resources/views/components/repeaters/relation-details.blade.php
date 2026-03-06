@@ -36,7 +36,7 @@
 .relation-marital-select.marital-yes { background-color: rgb(22 163 74); border-color: rgb(21 128 61); color: white; }
 .dark .relation-marital-select.marital-yes { background-color: rgb(22 163 74); border-color: rgb(21 128 61); color: white; }
 </style>
-<div id="{{ $namePrefix }}-container" class="space-y-4" data-repeater-container data-relation-engine data-name-prefix="{{ $namePrefix }}" data-row-class="{{ $namePrefix }}-row" data-show-married="{{ $showMarried ? '1' : '0' }}" data-min-rows="1">
+<div id="{{ $namePrefix }}-container" class="space-y-4 border-2 border-rose-500 dark:border-rose-400 rounded-lg p-4" data-repeater-container data-relation-engine data-name-prefix="{{ $namePrefix }}" data-row-class="{{ $namePrefix }}-row" data-show-married="{{ $showMarried ? '1' : '0' }}" data-min-rows="1">
     @foreach($rows as $idx => $row)
         @php
             $r = is_object($row) ? (array) $row : (array) $row;
@@ -73,8 +73,34 @@
                         </select>
                     </div>
                 </div>
-                <div class="min-w-0">
-                    <x-profile.contact-field name="{{ $namePrefix }}[{{ $idx }}][contact_number]" :value="$r['contact_number'] ?? ''" label="Mobile" placeholder="10-digit" :showCountryCode="false" :showWhatsapp="false" inputClass="relation-input-h w-full min-w-0 box-border" />
+                <div class="min-w-0" data-contact-context="sibling" data-row-index="{{ $idx }}" data-name-prefix="{{ $namePrefix }}" data-max-slots="3">
+                    <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-0.5">Mobile</label>
+                    <div class="flex flex-wrap items-end gap-1 sibling-contact-slots-inner">
+                        @php
+                            $sbContacts = [$r['contact_number'] ?? '', $r['contact_number_2'] ?? '', $r['contact_number_3'] ?? ''];
+                            $sbCount = max(1, count(array_filter($sbContacts, fn($v) => trim((string)$v) !== '')));
+                        @endphp
+                        @for($si = 0; $si < $sbCount; $si++)
+                            @php
+                                $suffix = $si === 0 ? 'contact_number' : 'contact_number_' . ($si + 1);
+                                $showAdd = $si < 2;
+                            @endphp
+                            <div class="sibling-contact-slot {{ $si === 0 ? 'w-full basis-full' : 'shrink-0' }}">
+                                <x-profile.contact-field
+                                    name="{{ $namePrefix }}[{{ $idx }}][{{ $suffix }}]"
+                                    :value="$sbContacts[$si] ?? ''"
+                                    label=""
+                                    placeholder="10-digit"
+                                    :showCountryCode="true"
+                                    :showWhatsapp="true"
+                                    :nameWhatsapp="$namePrefix . '[' . $idx . '][contact_preference_' . ($si + 1) . ']'"
+                                    :valueWhatsapp="($si === 0) ? 'whatsapp' : 'call'"
+                                    inputClass="relation-input-h w-full min-w-0 box-border"
+                                    :showAddButton="$showAdd"
+                                />
+                            </div>
+                        @endfor
+                    </div>
                 </div>
             </div>
             @else
@@ -94,7 +120,7 @@
                     <input type="text" name="{{ $namePrefix }}[{{ $idx }}][name]" value="{{ $r['name'] ?? '' }}" placeholder="Name" class="relation-input-h w-full h-10 rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-2 py-1.5 text-sm min-w-0">
                 </div>
                 <div class="min-w-0">
-                    <x-profile.contact-field name="{{ $namePrefix }}[{{ $idx }}][contact_number]" :value="$r['contact_number'] ?? ''" label="Mobile" placeholder="10-digit" :showCountryCode="false" :showWhatsapp="false" inputClass="relation-input-h w-full min-w-0 box-border" />
+                    <x-profile.contact-field name="{{ $namePrefix }}[{{ $idx }}][contact_number]" :value="$r['contact_number'] ?? ''" label="Mobile" placeholder="10-digit" :showCountryCode="true" :showWhatsapp="true" :nameWhatsapp="$namePrefix . '[' . $idx . '][contact_preference]'" :valueWhatsapp="'call'" inputClass="relation-input-h w-full min-w-0 box-border" />
                 </div>
                 <div class="min-w-0">
                     <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-0.5">Occupation</label>
@@ -156,7 +182,7 @@
                         <input type="text" name="{{ $namePrefix }}[{{ $idx }}][spouse][name]" value="{{ $spouse['name'] ?? '' }}" placeholder="Name" class="relation-input-h w-full h-10 rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-2 py-1.5 text-sm min-w-0">
                     </div>
                     <div class="min-w-0">
-                        <x-profile.contact-field name="{{ $namePrefix }}[{{ $idx }}][spouse][contact_number]" :value="$spouse['contact_number'] ?? ''" label="Mobile" placeholder="10-digit" :showCountryCode="false" :showWhatsapp="false" inputClass="relation-input-h w-full min-w-0" />
+                        <x-profile.contact-field name="{{ $namePrefix }}[{{ $idx }}][spouse][contact_number]" :value="$spouse['contact_number'] ?? ''" label="Mobile" placeholder="10-digit" :showCountryCode="true" :showWhatsapp="true" :nameWhatsapp="$namePrefix . '[' . $idx . '][spouse][contact_preference]'" :valueWhatsapp="'call'" inputClass="relation-input-h w-full min-w-0" />
                     </div>
                 </div>
                 <div class="grid gap-2 items-end" style="grid-template-columns: 30fr 30fr 40fr;">
@@ -189,6 +215,31 @@
     @endforeach
 </div>
 <button type="button" class="relation-add-btn px-4 py-2 bg-gray-200 dark:bg-gray-600 hover:bg-gray-300 dark:hover:bg-gray-500 text-gray-800 dark:text-gray-200 rounded font-medium text-sm" data-repeater-add data-repeater-for="{{ $namePrefix }}-container">{{ $addButtonLabel }}</button>
+
+<template id="sibling-contact-slot-tpl">
+    <div class="sibling-contact-slot shrink-0">
+    <div class="contact-field-engine border-2 border-rose-500 dark:border-rose-400 rounded-lg p-3">
+        <div class="flex items-center gap-1.5 flex-nowrap contact-master-field">
+            <input type="text" inputmode="tel" maxlength="5" value="+91" placeholder="+91" class="text-xs text-gray-600 dark:text-gray-400 border border-gray-300 dark:border-gray-600 rounded py-1.5 bg-gray-50 dark:bg-gray-700 h-9 box-border text-center shrink-0 contact-cc-input" style="flex:0 0 2.25rem; width:2.25rem; min-width:2.25rem; max-width:2.25rem; padding-left:0.2rem; padding-right:0.2rem;">
+            <input type="text" inputmode="numeric" pattern="[0-9]*" maxlength="10" name="__NAME__" placeholder="10-digit" data-contact-engine class="relation-input-h h-9 rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-2 py-1.5 text-sm min-w-0 flex-1">
+            <input type="hidden" name="__PREF_NAME__" value="call" class="contact-preference-input">
+            <div class="relative shrink-0 contact-preference-single" data-current-pref="call">
+                <button type="button" class="contact-pref-trigger rounded p-1.5 ring-2 ring-rose-500 bg-rose-50 dark:bg-rose-900/30 inline-flex items-center justify-center" title="Prefer contact via — click to change" aria-haspopup="true" aria-expanded="false">
+                    <span class="contact-pref-icon contact-pref-icon-whatsapp" data-pref="whatsapp" style="display:none"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" class="w-5 h-5" fill="#25D366"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg></span>
+                    <span class="contact-pref-icon contact-pref-icon-call text-red-500 dark:text-red-400" data-pref="call"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-5 h-5"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 0 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg></span>
+                    <span class="contact-pref-icon contact-pref-icon-message" data-pref="message" style="display:none"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-5 h-5 text-gray-600 dark:text-gray-400"><path fill-rule="evenodd" d="M4.848 2.771A49.144 49.144 0 0112 2.25c2.43 0 4.817.178 7.152.52 1.978.292 3.348 2.024 3.348 3.97v6.02c0 1.946-1.37 3.678-3.348 3.97a48.901 48.901 0 01-3.476.383.39.39 0 00-.27.17l-2.47 2.47a.75.75 0 01-1.06 0l-2.47-2.47a.39.39 0 00-.27-.17 48.9 48.9 0 01-3.476-.384c-1.978-.29-3.348-2.024-3.348-3.97V6.741c0-1.946 1.37-3.68 3.348-3.97z" clip-rule="evenodd"/></svg></span>
+                </button>
+                <div class="contact-pref-dropdown hidden absolute right-0 top-full mt-1 z-50 min-w-[8rem] py-1 rounded-lg shadow-lg bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600">
+                    <button type="button" class="contact-pref-option w-full text-left px-3 py-2 text-sm flex items-center gap-2 hover:bg-rose-50 dark:hover:bg-rose-900/30" data-pref="whatsapp"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" class="w-4 h-4" fill="#25D366"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg> WhatsApp</button>
+                    <button type="button" class="contact-pref-option w-full text-left px-3 py-2 text-sm flex items-center gap-2 hover:bg-rose-50 dark:hover:bg-rose-900/30" data-pref="call"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4 text-red-500 dark:text-red-400"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 0 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg> Call</button>
+                    <button type="button" class="contact-pref-option w-full text-left px-3 py-2 text-sm flex items-center gap-2 hover:bg-rose-50 dark:hover:bg-rose-900/30" data-pref="message"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-4 h-4 text-gray-600 dark:text-gray-400"><path fill-rule="evenodd" d="M4.848 2.771A49.144 49.144 0 0112 2.25c2.43 0 4.817.178 7.152.52 1.978.292 3.348 2.024 3.348 3.97v6.02c0 1.946-1.37 3.678-3.348 3.97a48.901 48.901 0 01-3.476.383.39.39 0 00-.27.17l-2.47 2.47a.75.75 0 01-1.06 0l-2.47-2.47a.39.39 0 00-.27-.17 48.9 48.9 0 01-3.476-.384c-1.978-.29-3.348-2.024-3.348-3.97V6.741c0-1.946 1.37-3.68 3.348-3.97z" clip-rule="evenodd"/></svg> Message</button>
+                </div>
+            </div>
+            <button type="button" class="contact-engine-add-btn shrink-0 inline-flex items-center justify-center w-9 h-9 rounded border-2 border-rose-500 dark:border-rose-400 bg-rose-50 dark:bg-rose-900/30 text-rose-600 dark:text-rose-300 font-bold text-lg leading-none hover:bg-rose-100 dark:hover:bg-rose-800/50" title="Add another contact" aria-label="Add contact">+</button>
+        </div>
+    </div>
+    </div>
+</template>
 
 <x-repeaters.repeater-script />
 <script>
@@ -238,6 +289,35 @@
             toggleSpouseBlocks();
             if (window.LocationTypeahead && window.LocationTypeahead.init) window.LocationTypeahead.init();
         });
+
+        container.addEventListener('click', function(e) {
+            if (!e.target.closest('.contact-engine-add-btn')) return;
+            var ctx = e.target.closest('[data-contact-context="sibling"]');
+            if (!ctx) return;
+            var inner = ctx.querySelector('.sibling-contact-slots-inner');
+            var maxSlots = parseInt(ctx.getAttribute('data-max-slots'), 10) || 3;
+            var idx = ctx.getAttribute('data-row-index');
+            var namePrefix = ctx.getAttribute('data-name-prefix');
+            if (!inner || idx === null || !namePrefix) return;
+            var slots = inner.querySelectorAll('.sibling-contact-slot');
+            if (slots.length >= maxSlots) return;
+            var nextSlotNum = slots.length + 1;
+            var suffix = nextSlotNum === 2 ? 'contact_number_2' : 'contact_number_3';
+            var name = namePrefix + '[' + idx + '][' + suffix + ']';
+            var prefName = namePrefix + '[' + idx + '][contact_preference_' + nextSlotNum + ']';
+            var tpl = document.getElementById('sibling-contact-slot-tpl');
+            if (!tpl) return;
+            var html = tpl.innerHTML.replace(/__NAME__/g, name).replace(/__PREF_NAME__/g, prefName);
+            var div = document.createElement('div');
+            div.innerHTML = html.trim();
+            var newSlot = div.firstChild;
+            if (newSlot) inner.appendChild(newSlot);
+            if (nextSlotNum === 3) {
+                var all = inner.querySelectorAll('.sibling-contact-slot');
+                if (all[1]) { var btn = all[1].querySelector('.contact-engine-add-btn'); if (btn) btn.remove(); }
+            }
+        });
+
         container.setAttribute('data-relation-inited', '1');
     }
     document.querySelectorAll('[data-relation-engine]').forEach(initRelationEngine);
