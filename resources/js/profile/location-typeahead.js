@@ -79,6 +79,15 @@
                 if (nTaluka) nTaluka.value = talukaId;
                 if (nDistrict) nDistrict.value = districtId;
                 if (nState) nState.value = stateId;
+            } else if (context === 'birth') {
+                var bCity = wrapper.querySelector('.location-hidden-birth-city');
+                var bTaluka = wrapper.querySelector('.location-hidden-birth-taluka');
+                var bDistrict = wrapper.querySelector('.location-hidden-birth-district');
+                var bState = wrapper.querySelector('.location-hidden-birth-state');
+                if (bCity) bCity.value = cityId;
+                if (bTaluka) bTaluka.value = talukaId;
+                if (bDistrict) bDistrict.value = districtId;
+                if (bState) bState.value = stateId;
             } else if (context === 'alliance') {
                 var c = wrapper.querySelector('.location-hidden-city');
                 var t = wrapper.querySelector('.location-hidden-taluka');

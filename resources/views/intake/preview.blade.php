@@ -17,19 +17,32 @@
             $coreData = $sections['core']['data'] ?? $data['core'] ?? [];
         @endphp
 
-        {{-- Core Details (editable) — Religion/Caste/Subcaste use shared component (same as wizard). --}}
+        {{-- Basic Information — same engine as wizard (full_name, gender, DOB, birth time/place, religion/caste, marital). --}}
         <section class="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
-            <h2 class="text-lg font-semibold mb-4 border-b pb-2">Core Details</h2>
+            @include('matrimony.profile.wizard.sections.basic_info', [
+                'namePrefix' => 'snapshot[core]',
+                'profile' => $intakeProfile ?? new \stdClass(),
+                'genders' => $genders ?? collect(),
+                'birthPlaceDisplay' => $intakeProfile->birthPlaceDisplay ?? '',
+                'maritalStatuses' => $maritalStatuses ?? collect(),
+                'profileMarriages' => $profileMarriages ?? collect(),
+                'profileChildren' => $profileChildren ?? collect(),
+                'childLivingWithOptions' => $childLivingWithOptions ?? collect(),
+            ])
+        </section>
+
+        {{-- Physical + other core fields (excludes basic-info keys now in engine above). --}}
+        <section class="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+            <h2 class="text-lg font-semibold mb-4 border-b pb-2">Other core details</h2>
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {{-- Religion / Caste / Sub caste — same component as wizard (consistent behavior). --}}
-                <div class="md:col-span-2">
-                    <x-profile.religion-caste-selector :profile="$intakeProfile ?? new \stdClass()" namePrefix="snapshot[core]" />
-                </div>
-                {{-- Physical Engine: Height, Complexion, Blood Group, Physical Build, Weight, Spectacles/Lens, Physical Condition (reuses wizard component). --}}
                 <div class="md:col-span-2">
                     <x-physical-engine namePrefix="snapshot[core]" :values="$coreData" />
                 </div>
-                @foreach(['full_name','date_of_birth','gender','annual_income','family_income','primary_contact_number','serious_intent_id','highest_education','specialization','occupation_title','company_name','income_currency_id','father_name','mother_name','father_occupation','mother_occupation','family_type_id','birth_time','birth_place','gotra','kuldaivat','rashi','nadi','gan','mangalik','varna','mama','relatives','other_relatives_text'] as $coreKey)
+                @php
+                    $basicInfoKeys = ['full_name', 'date_of_birth', 'gender', 'gender_id', 'birth_time', 'birth_place', 'birth_city_id', 'birth_taluka_id', 'birth_district_id', 'birth_state_id', 'religion', 'religion_id', 'caste', 'caste_id', 'sub_caste', 'sub_caste_id', 'marital_status_id', 'has_children'];
+                    $otherCoreKeys = array_diff(['annual_income','family_income','primary_contact_number','serious_intent_id','highest_education','specialization','occupation_title','company_name','income_currency_id','father_name','mother_name','father_occupation','mother_occupation','family_type_id','gotra','kuldaivat','rashi','nadi','gan','mangalik','varna','mama','relatives','other_relatives_text'], $basicInfoKeys);
+                @endphp
+                @foreach($otherCoreKeys as $coreKey)
                     @php
                         $val = $coreData[$coreKey] ?? '';
                         $conf = $confidenceMap[$coreKey] ?? null;

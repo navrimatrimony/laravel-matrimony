@@ -515,9 +515,17 @@ class IntakeController extends Controller
             }
         }
 
-        // Build profile-like object for religion-caste-selector (resolve labels to IDs when possible).
+        // Build profile-like object for Basic Info engine (wizard same UI in intake).
         $coreData = $sections['core']['data'] ?? [];
         $intakeProfile = (object) [
+            'full_name' => is_scalar($coreData['full_name'] ?? null) ? trim((string) $coreData['full_name']) : '',
+            'date_of_birth' => is_scalar($coreData['date_of_birth'] ?? null) ? trim((string) $coreData['date_of_birth']) : null,
+            'gender_id' => $coreData['gender_id'] ?? null,
+            'birth_time' => is_scalar($coreData['birth_time'] ?? null) ? trim((string) $coreData['birth_time']) : '',
+            'birth_city_id' => $coreData['birth_city_id'] ?? null,
+            'birth_taluka_id' => $coreData['birth_taluka_id'] ?? null,
+            'birth_district_id' => $coreData['birth_district_id'] ?? null,
+            'birth_state_id' => $coreData['birth_state_id'] ?? null,
             'religion_id' => $coreData['religion_id'] ?? '',
             'caste_id' => $coreData['caste_id'] ?? '',
             'sub_caste_id' => $coreData['sub_caste_id'] ?? '',
@@ -525,6 +533,25 @@ class IntakeController extends Controller
             'caste_label' => '',
             'subcaste_label' => '',
         ];
+        // Resolve gender_id from text if needed (OCR often has "Male"/"Female").
+        if (empty($intakeProfile->gender_id) && ! empty($coreData['gender'])) {
+            $genderText = is_scalar($coreData['gender']) ? trim((string) $coreData['gender']) : '';
+            if ($genderText !== '') {
+                $g = \App\Models\MasterGender::where('is_active', true)
+                    ->where(function ($q) use ($genderText) {
+                        $q->where('key', 'like', $genderText)->orWhere('label', 'like', $genderText);
+                    })->first();
+                if ($g) {
+                    $intakeProfile->gender_id = $g->id;
+                }
+            }
+        }
+        $intakeProfile->birthPlaceDisplay = '';
+        if (! empty($intakeProfile->birth_city_id)) {
+            $intakeProfile->birthPlaceDisplay = \App\Models\City::where('id', $intakeProfile->birth_city_id)->value('name') ?? '';
+        }
+        $genders = \App\Models\MasterGender::where('is_active', true)->whereIn('key', ['male', 'female'])
+            ->orderByRaw("CASE WHEN `key` = 'male' THEN 1 ELSE 2 END")->get();
         $relLabel = is_scalar($coreData['religion'] ?? null) ? trim((string) $coreData['religion']) : '';
         $casteLabel = is_scalar($coreData['caste'] ?? null) ? trim((string) $coreData['caste']) : '';
         $subLabel = is_scalar($coreData['sub_caste'] ?? null) ? trim((string) $coreData['sub_caste']) : '';
@@ -646,6 +673,7 @@ class IntakeController extends Controller
             'placeholderNotFound',
             'placeholderSelectRequired',
             'intakeProfile',
+            'genders',
             'maritalStatuses',
             'profileMarriages',
             'profileChildren',
@@ -677,6 +705,16 @@ class IntakeController extends Controller
                         $snapshot['marriages'][$i]['marital_status_id'] = $snapshot['core']['marital_status_id'];
                     }
                 }
+            }
+            // Build birth_place from core for MutationService (same shape as wizard buildBasicInfoSnapshot).
+            $core = $snapshot['core'] ?? [];
+            if (! empty($core['birth_city_id']) || ! empty($core['birth_state_id'])) {
+                $snapshot['birth_place'] = [
+                    'city_id' => isset($core['birth_city_id']) ? (int) $core['birth_city_id'] : null,
+                    'taluka_id' => isset($core['birth_taluka_id']) ? (int) $core['birth_taluka_id'] : null,
+                    'district_id' => isset($core['birth_district_id']) ? (int) $core['birth_district_id'] : null,
+                    'state_id' => isset($core['birth_state_id']) ? (int) $core['birth_state_id'] : null,
+                ];
             }
         } else {
             $snapshot = null;

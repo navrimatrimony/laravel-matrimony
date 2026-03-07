@@ -18,7 +18,7 @@
                 </p>
 
                 <div class="flex flex-wrap gap-3">
-                    <a href="{{ route('matrimony.profile.wizard', 'basic-info') }}"
+                    <a href="{{ route('matrimony.profile.wizard.section', ['section' => 'basic-info']) }}"
                        class="inline-block px-6 py-3 bg-red-600 text-white rounded hover:bg-red-700 transition">
                         Create Matrimony Profile
                     </a>

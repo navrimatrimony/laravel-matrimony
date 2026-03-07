@@ -17,7 +17,7 @@
     $marriagesPrefix = $isSnapshot ? 'snapshot[marriages][0][' : 'marriages[0][';
     $marriagesSuffix = ']';
 @endphp
-<div class="border border-gray-200 dark:border-gray-600 rounded-lg p-4 bg-white dark:bg-gray-800 space-y-6"
+<div class="border border-gray-200 dark:border-gray-600 rounded-lg p-4 bg-white dark:bg-gray-800 space-y-7"
      data-name-prefix="{{ $namePrefix }}"
      x-data="maritalEngineState({{ json_encode($currentStatusId) }}, {{ json_encode($currentKey) }}, {{ $showChildrenQuestion ? 'true' : 'false' }}, {{ $showChildrenDetails ? 'true' : 'false' }}, {{ json_encode($hasChildrenValue) }}, {{ json_encode($profileChildren->map(fn($c) => ['id' => $c->id ?? null, 'gender' => $c->gender ?? '', 'age' => $c->age ?? '', 'child_living_with_id' => $c->child_living_with_id ?? ''])->values()->toArray()) }}, {{ json_encode($childLivingWithOptions->pluck('id')->toArray()) }}, {{ json_encode($namePrefix) }})"
      x-init="init()"
@@ -26,10 +26,10 @@
 
     {{-- Step 1: Marital status (radios) — bold, spaced, card-style options --}}
     <div>
-        <p class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">Marital status <span class="text-red-500">*</span></p>
-        <div class="flex flex-nowrap gap-2 w-full overflow-x-auto">
+        <p class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Marital status <span class="text-red-500">*</span></p>
+        <div class="flex flex-nowrap gap-2 w-full overflow-x-auto items-stretch">
             @foreach($maritalStatuses as $s)
-                <label class="inline-flex items-center cursor-pointer rounded-lg border-2 pl-3 pr-4 py-1.5 transition-all duration-150 flex-1 min-w-0
+                <label class="inline-flex items-center justify-center cursor-pointer rounded-lg border-2 pl-3 pr-4 py-2.5 transition-all duration-150 flex-1 min-w-0 min-h-[42px]
                     hover:border-gray-300 dark:hover:border-gray-500
                     focus-within:ring-2 focus-within:ring-red-500 focus-within:ring-offset-1"
                     :class="maritalStatusId == '{{ $s->id }}' ? 'border-red-600 bg-red-500 dark:bg-red-600 dark:border-red-500 shadow-md' : 'border-gray-200 dark:border-gray-600 bg-gray-50/50 dark:bg-gray-700/30'">
@@ -61,29 +61,29 @@
                 <label class="block text-xs text-gray-600 dark:text-gray-400 mb-0.5">Marriage year</label>
                 <input type="number" name="marriages[0][marriage_year]" min="1901" max="{{ date('Y') }}"
                        value="{{ old('marriages.0.marriage_year', $marriage?->marriage_year ?? '') }}"
-                       class="w-full rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-2 py-1.5 text-sm">
+                       class="w-full rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-3 py-2.5 text-sm h-[42px]">
             </div>
             <div class="flex-shrink-0" x-show="statusKey === 'divorced'" style="min-width: 6rem;">
                 <label class="block text-xs text-gray-600 dark:text-gray-400 mb-0.5">Divorce year</label>
                 <input type="number" name="{{ $marriagesPrefix }}divorce_year{{ $marriagesSuffix }}" min="1901" max="{{ date('Y') }}"
                        value="{{ old('marriages.0.divorce_year', $marriage?->divorce_year ?? '') }}"
-                       class="w-full rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-2 py-1.5 text-sm">
+                       class="w-full rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-3 py-2.5 text-sm h-[42px]">
             </div>
             <div class="flex-shrink-0" x-show="statusKey === 'separated'" style="min-width: 6.5rem;">
                 <label class="block text-xs text-gray-600 dark:text-gray-400 mb-0.5">Separation year</label>
                 <input type="number" name="{{ $marriagesPrefix }}separation_year{{ $marriagesSuffix }}" min="1901" max="{{ date('Y') }}"
                        value="{{ old('marriages.0.separation_year', $marriage?->separation_year ?? '') }}"
-                       class="w-full rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-2 py-1.5 text-sm">
+                       class="w-full rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-3 py-2.5 text-sm h-[42px]">
             </div>
             <div class="flex-shrink-0" x-show="statusKey === 'widowed'" style="min-width: 7rem;">
                 <label class="block text-xs text-gray-600 dark:text-gray-400 mb-0.5">Spouse death year</label>
                 <input type="number" name="{{ $marriagesPrefix }}spouse_death_year{{ $marriagesSuffix }}" min="1901" max="{{ date('Y') }}"
                        value="{{ old('marriages.0.spouse_death_year', $marriage?->spouse_death_year ?? '') }}"
-                       class="w-full rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-2 py-1.5 text-sm">
+                       class="w-full rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-3 py-2.5 text-sm h-[42px]">
             </div>
             <div class="flex-1 min-w-0" x-show="statusKey === 'divorced' || statusKey === 'separated'" style="min-width: 6rem;">
                 <label class="block text-xs text-gray-600 dark:text-gray-400 mb-0.5">Legal status</label>
-                <select name="{{ $marriagesPrefix }}divorce_status{{ $marriagesSuffix }}" class="w-full rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-2 py-1.5 text-sm">
+                <select name="{{ $marriagesPrefix }}divorce_status{{ $marriagesSuffix }}" class="w-full rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-3 py-2.5 text-sm h-[42px]">
                     <option value="">—</option>
                     <option value="pending" {{ old('marriages.0.divorce_status', $marriage?->divorce_status ?? '') == 'pending' ? 'selected' : '' }}>Pending</option>
                     <option value="finalized" {{ old('marriages.0.divorce_status', $marriage?->divorce_status ?? '') == 'finalized' ? 'selected' : '' }}>Finalized</option>
@@ -92,17 +92,17 @@
                 </select>
             </div>
             {{-- Children Yes/No: heading + toggle. Yes selected = green. --}}
-            <div class="flex-shrink-0 flex flex-col pb-0.5">
+            <div class="flex-shrink-0 flex flex-col">
                 <label class="block text-xs text-gray-600 dark:text-gray-400 mb-0.5">Children <span class="text-red-500">*</span></label>
                 <input type="hidden" :name="namePrefix ? 'snapshot[core][has_children]' : 'has_children'" :value="hasChildrenValue">
-                <div class="inline-flex rounded-full border-2 border-gray-300 dark:border-gray-600 bg-gray-100 dark:bg-gray-700 p-0.5" role="group">
+                <div class="inline-flex rounded-full border-2 border-gray-300 dark:border-gray-600 bg-gray-100 dark:bg-gray-700 p-0.5 h-[42px] items-stretch" role="group">
                     <button type="button" @click="hasChildrenValue = '0'; onHasChildrenChange()"
-                            class="px-3 py-1.5 text-sm font-medium rounded-full transition-all min-w-[3.5rem]"
+                            class="px-3 py-2 text-sm font-medium rounded-full transition-all min-w-[3.5rem] flex items-center justify-center"
                             :class="hasChildrenValue == '0' ? 'bg-white dark:bg-gray-600 text-gray-800 dark:text-gray-200 shadow' : 'text-gray-500 dark:text-gray-400'">
                         No
                     </button>
                     <button type="button" @click="hasChildrenValue = '1'; onHasChildrenChange()"
-                            class="px-3 py-1.5 text-sm font-medium rounded-full transition-all min-w-[3.5rem]"
+                            class="px-3 py-2 text-sm font-medium rounded-full transition-all min-w-[3.5rem] flex items-center justify-center"
                             :class="hasChildrenValue == '1' ? 'bg-green-600 text-white shadow' : 'text-gray-500 dark:text-gray-400'">
                         Yes
                     </button>
@@ -126,7 +126,7 @@
                 <div class="flex flex-wrap sm:flex-nowrap gap-2 sm:gap-3 items-end border border-gray-200 dark:border-gray-600 rounded p-2 sm:p-3 bg-gray-50 dark:bg-gray-700/30">
                     <div class="flex-shrink-0" style="min-width: 5.5rem;">
                         <label class="block text-xs text-gray-600 dark:text-gray-400 mb-0.5">Gender</label>
-                        <select :name="(namePrefix ? 'snapshot[children][' : 'children[') + index + '][gender]'" class="w-full rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-2 py-1.5 text-sm" x-model="child.gender">
+                        <select :name="(namePrefix ? 'snapshot[children][' : 'children[') + index + '][gender]'" class="w-full rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-3 py-2.5 text-sm h-[42px]" x-model="child.gender">
                             <option value="">Select</option>
                             <option value="male">Male</option>
                             <option value="female">Female</option>
@@ -136,26 +136,26 @@
                     </div>
                     <div class="flex-shrink-0" style="min-width: 4rem;">
                         <label class="block text-xs text-gray-600 dark:text-gray-400 mb-0.5">Age <span class="text-red-500">*</span></label>
-                        <input type="number" :name="(namePrefix ? 'snapshot[children][' : 'children[') + index + '][age]'" min="1" max="120" class="w-full rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-2 py-1.5 text-sm" x-model.number="child.age" placeholder="Age">
+                        <input type="number" :name="(namePrefix ? 'snapshot[children][' : 'children[') + index + '][age]'" min="1" max="120" class="w-full rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-3 py-2.5 text-sm h-[42px]" x-model.number="child.age" placeholder="Age">
                     </div>
                     <div class="flex-1 min-w-0" style="min-width: 6rem;">
                         <label class="block text-xs text-gray-600 dark:text-gray-400 mb-0.5">Living with</label>
-                        <select :name="(namePrefix ? 'snapshot[children][' : 'children[') + index + '][child_living_with_id]'" class="w-full rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-2 py-1.5 text-sm" x-model="child.child_living_with_id">
+                        <select :name="(namePrefix ? 'snapshot[children][' : 'children[') + index + '][child_living_with_id]'" class="w-full rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-3 py-2.5 text-sm h-[42px]" x-model="child.child_living_with_id">
                             <option value="">Select</option>
                             @foreach($childLivingWithOptions as $opt)
                                 <option value="{{ $opt->id }}">{{ $opt->label }}</option>
                             @endforeach
                         </select>
                     </div>
-                    <div class="flex-shrink-0">
+                    <div class="flex-shrink-0 flex items-end">
                         <input type="hidden" :name="(namePrefix ? 'snapshot[children][' : 'children[') + index + '][id]'" :value="child.id || ''">
                         <input type="hidden" :name="(namePrefix ? 'snapshot[children][' : 'children[') + index + '][sort_order]'" :value="index">
-                        <button type="button" @click="removeChild(index)" class="text-sm text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300 whitespace-nowrap py-1.5">Remove</button>
+                        <button type="button" @click="removeChild(index)" class="text-sm text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300 whitespace-nowrap h-[42px] flex items-center px-2">Remove</button>
                     </div>
                 </div>
             </template>
         </div>
-        <button type="button" @click="addChild()" class="mt-3 px-3 py-2 bg-gray-200 dark:bg-gray-600 rounded text-sm text-gray-800 dark:text-gray-200 hover:bg-gray-300 dark:hover:bg-gray-500">
+        <button type="button" @click="addChild()" class="mt-3 px-3 py-2.5 h-[42px] flex items-center bg-gray-200 dark:bg-gray-600 rounded text-sm text-gray-800 dark:text-gray-200 hover:bg-gray-300 dark:hover:bg-gray-500">
             + Add child
         </button>
     </div>

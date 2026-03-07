@@ -3,7 +3,6 @@
 namespace App\Http\Controllers;
 
 use App\Models\MatrimonyProfile;
-use App\Models\SeriousIntent;
 use App\Services\FieldCatalogService;
 use App\Services\ProfileCompletionService;
 use Illuminate\Http\Request;
@@ -255,18 +254,37 @@ class ProfileWizardController extends Controller
         $data = [];
         switch ($section) {
             case 'basic-info':
-                $data['profileMarriages'] = \App\Models\ProfileMarriage::where('profile_id', $profile->id)->orderBy('id')->get();
-                $data['seriousIntents'] = SeriousIntent::whereNull('deleted_at')->orderBy('name')->get();
-                $data['primaryContactPhone'] = DB::table('profile_contacts')->where('profile_id', $profile->id)->where('is_primary', true)->value('phone_number');
+                // Basic Information Engine: full_name, gender_id, date_of_birth, birth_time, birth_place, religion_id, caste_id, sub_caste_id, marital_status_id
                 $data['talukasByDistrict'] = \App\Models\Taluka::all()->groupBy('district_id')->map(fn ($col) => $col->map(fn ($t) => ['id' => $t->id, 'name' => $t->name])->values()->toArray())->toArray();
                 $data['districtsByState'] = \App\Models\District::all()->groupBy('state_id')->map(fn ($col) => $col->map(fn ($d) => ['id' => $d->id, 'name' => $d->name])->values()->toArray())->toArray();
                 $data['stateIdToCountryId'] = \App\Models\State::all()->pluck('country_id', 'id')->toArray();
-                $data['genders'] = \App\Models\MasterGender::where('is_active', true)->get();
-                $data['maritalStatuses'] = \App\Models\MasterMaritalStatus::where('is_active', true)->get();
-                $data['complexions'] = \App\Models\MasterComplexion::where('is_active', true)->get();
-                $data['physicalBuilds'] = \App\Models\MasterPhysicalBuild::where('is_active', true)->get();
-                $data['bloodGroups'] = \App\Models\MasterBloodGroup::where('is_active', true)->get();
+                $data['genders'] = \App\Models\MasterGender::where('is_active', true)->whereIn('key', ['male', 'female'])->orderByRaw("CASE WHEN `key` = 'male' THEN 1 ELSE 2 END")->get();
                 $data['birthPlaceDisplay'] = $profile->birth_city_id ? \App\Models\City::where('id', $profile->birth_city_id)->value('name') : '';
+                $data['religions'] = \App\Models\Religion::where('is_active', true)->orderBy('label')->get(['id', 'label']);
+                $maritalKeys = ['never_married', 'divorced', 'separated', 'widowed'];
+                $data['maritalStatuses'] = \App\Models\MasterMaritalStatus::where('is_active', true)
+                    ->whereIn('key', $maritalKeys)
+                    ->get()
+                    ->sortBy(fn ($s) => array_search($s->key, $maritalKeys, true) !== false ? array_search($s->key, $maritalKeys, true) : 999)
+                    ->values();
+                if ($data['maritalStatuses']->isEmpty()) {
+                    $data['maritalStatuses'] = \App\Models\MasterMaritalStatus::where('is_active', true)->get();
+                }
+                $data['profileMarriages'] = \App\Models\ProfileMarriage::where('profile_id', $profile->id)->orderBy('id')->get();
+                $data['profileChildren'] = \Illuminate\Support\Facades\DB::table('profile_children')
+                    ->where('profile_id', $profile->id)
+                    ->orderBy('sort_order')
+                    ->orderBy('id')
+                    ->get();
+                $livingKeys = ['with_parent', 'with_other_parent', 'joint', 'other'];
+                $data['childLivingWithOptions'] = \App\Models\MasterChildLivingWith::where('is_active', true)
+                    ->whereIn('key', $livingKeys)
+                    ->get()
+                    ->sortBy(fn ($o) => array_search($o->key, $livingKeys, true) !== false ? array_search($o->key, $livingKeys, true) : 999)
+                    ->values();
+                if (($data['childLivingWithOptions'] ?? collect())->isEmpty()) {
+                    $data['childLivingWithOptions'] = \App\Models\MasterChildLivingWith::where('is_active', true)->get();
+                }
                 break;
             case 'physical':
                 $data['complexions'] = \App\Models\MasterComplexion::where('is_active', true)->orderBy('id')->get();
@@ -424,12 +442,6 @@ class ProfileWizardController extends Controller
      */
     private function buildSectionSnapshot(string $section, Request $request, MatrimonyProfile $profile): ?array
     {
-        \Log::info('DEBUG BUILD SECTION', [
-            'section' => $section,
-            'has_marriages_key_in_request' => $request->has('marriages'),
-            'marriages_payload' => $request->input('marriages', null),
-        ]);
-
         switch ($section) {
             case 'basic-info':
                 return $this->buildBasicInfoSnapshot($request, $profile);
@@ -470,47 +482,47 @@ class ProfileWizardController extends Controller
 
     private function buildBasicInfoSnapshot(Request $request, MatrimonyProfile $profile): array
     {
-        $this->resolveMasterLookupIds($request, ['gender' => 'gender_id', 'marital_status' => 'marital_status_id']);
+        $this->resolveMasterLookupIds($request, ['gender' => 'gender_id']);
         $request->validate([
             'full_name' => ['required', 'string', 'max:255'],
             'gender_id' => ['required', Rule::exists('master_genders', 'id')],
             'date_of_birth' => ['nullable', 'date'],
+            'birth_time' => ['nullable', 'string', 'max:20'],
             'religion_id' => ['nullable', 'exists:religions,id'],
             'caste_id' => ['nullable', 'exists:castes,id'],
             'sub_caste_id' => ['nullable', 'exists:sub_castes,id'],
-            'marital_status_id' => ['nullable', Rule::exists('master_marital_statuses', 'id')],
-            'height_cm' => ['nullable', 'integer', 'min:50', 'max:250'],
-            'primary_contact_number' => ['required', 'string', 'max:20'],
         ]);
 
-        // Shaadi Step 1 fields from form; marital status is in Marriages section only — preserve from profile if not in request
+        $birthTimeValue = $request->filled('birth_time') ? trim($request->input('birth_time')) : null;
+        if ($birthTimeValue === '') {
+            $birthTimeValue = null;
+        }
+
         $core = [
             'full_name' => $request->input('full_name'),
             'gender_id' => $request->input('gender_id') ? (int) $request->input('gender_id') : null,
             'date_of_birth' => $request->input('date_of_birth') ?: null,
-            'birth_time' => $profile->birth_time,
+            'birth_time' => $birthTimeValue,
             'religion_id' => $request->input('religion_id') ? (int) $request->input('religion_id') : null,
             'caste_id' => $request->input('caste_id') ? (int) $request->input('caste_id') : null,
             'sub_caste_id' => $request->input('sub_caste_id') ? (int) $request->input('sub_caste_id') : null,
-            'marital_status_id' => $request->filled('marital_status_id') ? (int) $request->input('marital_status_id') : $profile->marital_status_id,
-            'height_cm' => $request->filled('height_cm') ? (int) $request->input('height_cm') : $profile->height_cm,
-            'serious_intent_id' => $profile->serious_intent_id,
-            'weight_kg' => $profile->weight_kg,
-            'complexion_id' => $profile->complexion_id,
-            'physical_build_id' => $profile->physical_build_id,
-            'blood_group_id' => $profile->blood_group_id,
         ];
         $core = array_map(fn ($v) => $v === '' ? null : $v, $core);
 
-        $contacts = [];
-        $phone = trim((string) $request->input('primary_contact_number', ''));
-        if ($phone !== '') {
-            $contacts[] = ['relation_type' => 'self', 'contact_name' => 'Primary', 'phone_number' => $phone, 'is_primary' => true];
-        }
+        // Merge full marital engine snapshot (marital_status_id, has_children, marriages, children)
+        $marriagesSnapshot = $this->buildMarriagesSnapshot($request);
+        $core['marital_status_id'] = $marriagesSnapshot['core']['marital_status_id'] ?? null;
+        $core['has_children'] = $marriagesSnapshot['core']['has_children'] ?? null;
 
-        // Birth place not in shaadi Step 1 UI; preserve existing
         $birth_place = null;
-        if ($profile->birth_city_id || $profile->birth_state_id) {
+        if ($request->filled('birth_state_id') || $request->filled('birth_city_id')) {
+            $birth_place = [
+                'city_id' => $request->input('birth_city_id') ? (int) $request->input('birth_city_id') : null,
+                'taluka_id' => $request->input('birth_taluka_id') ? (int) $request->input('birth_taluka_id') : null,
+                'district_id' => $request->input('birth_district_id') ? (int) $request->input('birth_district_id') : null,
+                'state_id' => $request->input('birth_state_id') ? (int) $request->input('birth_state_id') : null,
+            ];
+        } elseif ($profile->birth_city_id || $profile->birth_state_id) {
             $birth_place = [
                 'city_id' => $profile->birth_city_id,
                 'taluka_id' => $profile->birth_taluka_id,
@@ -521,18 +533,9 @@ class ProfileWizardController extends Controller
 
         return [
             'core' => $core,
-            'contacts' => $contacts,
             'birth_place' => $birth_place,
-            'children' => [],
-            'education_history' => [],
-            'career_history' => [],
-            'addresses' => [],
-            'property_summary' => [],
-            'property_assets' => [],
-            'horoscope' => [],
-            'legal_cases' => [],
-            'preferences' => [],
-            'extended_narrative' => [],
+            'marriages' => $marriagesSnapshot['marriages'] ?? [],
+            'children' => $marriagesSnapshot['children'] ?? [],
         ];
     }
 
