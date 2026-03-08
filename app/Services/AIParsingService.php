@@ -25,7 +25,6 @@ class AIParsingService
         'property_summary',
         'property_assets',
         'horoscope',
-        'legal_cases',
         'preferences',
         'extended_narrative',
         'confidence_map',
@@ -89,7 +88,7 @@ class AIParsingService
      * Parse raw text into exact Phase-5 SSOT structure (deterministic regex only).
      * No DB write. No OpenAI. All keys present; confidence_map 0.9 if matched, 0 else.
      *
-     * @return array{core: array, contacts: array, children: array, education_history: array, career_history: array, addresses: array, property_summary: array, property_assets: array, horoscope: array, legal_cases: array, preferences: array, extended_narrative: array, confidence_map: array<string, float>}
+     * @return array{core: array, contacts: array, children: array, education_history: array, career_history: array, addresses: array, property_summary: array, property_assets: array, horoscope: array, preferences: array, extended_narrative: array, confidence_map: array<string, float>}
      */
     public function parse(string $text): array
     {
@@ -160,7 +159,6 @@ class AIParsingService
             'property_summary' => [],
             'property_assets' => [],
             'horoscope' => [],
-            'legal_cases' => [],
             'preferences' => [],
             'extended_narrative' => [],
             'confidence_map' => $confidenceMap,

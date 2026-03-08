@@ -1,7 +1,8 @@
-{{-- MaritalEngine: single canonical UI for marital status + children. Used in wizard (marriages/full) and intake preview. Pass namePrefix='snapshot' for intake so names become snapshot[core][...], snapshot[marriages][...], snapshot[children][...]. --}}
+{{-- MaritalEngine: single canonical UI for marital status + children. Used in wizard (marriages/full) and intake preview. Pass namePrefix='snapshot' for intake so names become snapshot[core][...], snapshot[marriages][...], snapshot[children][...]. Pass showMaritalStatus=false when used in marriages step only (status already in basic info). --}}
 @php
     $namePrefix = $namePrefix ?? '';
     $isSnapshot = $namePrefix === 'snapshot';
+    $showMaritalStatus = $showMaritalStatus ?? true;
     $maritalStatuses = $maritalStatuses ?? collect();
     $marriage = ($profileMarriages ?? collect())->first();
     $profileChildren = $profileChildren ?? collect();
@@ -22,31 +23,35 @@
      x-data="maritalEngineState({{ json_encode($currentStatusId) }}, {{ json_encode($currentKey) }}, {{ $showChildrenQuestion ? 'true' : 'false' }}, {{ $showChildrenDetails ? 'true' : 'false' }}, {{ json_encode($hasChildrenValue) }}, {{ json_encode($profileChildren->map(fn($c) => ['id' => $c->id ?? null, 'gender' => $c->gender ?? '', 'age' => $c->age ?? '', 'child_living_with_id' => $c->child_living_with_id ?? ''])->values()->toArray()) }}, {{ json_encode($childLivingWithOptions->pluck('id')->toArray()) }}, {{ json_encode($namePrefix) }})"
      x-init="init()"
      @marital-status-change.window="onStatusChange($event.detail)">
-    <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100 border-b border-gray-200 dark:border-gray-700 pb-2">Marital status</h2>
-
-    {{-- Step 1: Marital status (radios) — bold, spaced, card-style options --}}
-    <div>
-        <p class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Marital status <span class="text-red-500">*</span></p>
-        <div class="flex flex-nowrap gap-2 w-full overflow-x-auto items-stretch">
-            @foreach($maritalStatuses as $s)
-                <label class="inline-flex items-center justify-center cursor-pointer rounded-lg border-2 pl-3 pr-4 py-2.5 transition-all duration-150 flex-1 min-w-0 min-h-[42px]
-                    hover:border-gray-300 dark:hover:border-gray-500
-                    focus-within:ring-2 focus-within:ring-red-500 focus-within:ring-offset-1"
-                    :class="maritalStatusId == '{{ $s->id }}' ? 'border-red-600 bg-red-500 dark:bg-red-600 dark:border-red-500 shadow-md' : 'border-gray-200 dark:border-gray-600 bg-gray-50/50 dark:bg-gray-700/30'">
-                    <input type="radio" name="{{ $coreName }}marital_status_id{{ $coreNameSuffix }}" value="{{ $s->id }}"
-                           {{ (string) $currentStatusId === (string) $s->id ? 'checked' : '' }}
-                           class="rounded-full border-2 border-gray-400 flex-shrink-0 w-3.5 h-3.5 accent-white"
-                           x-model="maritalStatusId"
-                           @change="onMaritalChange()">
-                    <span class="ml-2 text-xs font-semibold break-words"
-                          :class="maritalStatusId == '{{ $s->id }}' ? 'text-white' : 'text-gray-800 dark:text-gray-200'">{{ $s->label }}</span>
-                </label>
-            @endforeach
+    @if($showMaritalStatus)
+        <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100 border-b border-gray-200 dark:border-gray-700 pb-2">Marital status</h2>
+        {{-- Step 1: Marital status (radios) — bold, spaced, card-style options --}}
+        <div>
+            <p class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Marital status <span class="text-red-500">*</span></p>
+            <div class="flex flex-nowrap gap-2 w-full overflow-x-auto items-stretch">
+                @foreach($maritalStatuses as $s)
+                    <label class="inline-flex items-center justify-center cursor-pointer rounded-lg border-2 pl-3 pr-4 py-2.5 transition-all duration-150 flex-1 min-w-0 min-h-[42px]
+                        hover:border-gray-300 dark:hover:border-gray-500
+                        focus-within:ring-2 focus-within:ring-red-500 focus-within:ring-offset-1"
+                        :class="maritalStatusId == '{{ $s->id }}' ? 'border-red-600 bg-red-500 dark:bg-red-600 dark:border-red-500 shadow-md' : 'border-gray-200 dark:border-gray-600 bg-gray-50/50 dark:bg-gray-700/30'">
+                        <input type="radio" name="{{ $coreName }}marital_status_id{{ $coreNameSuffix }}" value="{{ $s->id }}"
+                               {{ (string) $currentStatusId === (string) $s->id ? 'checked' : '' }}
+                               class="rounded-full border-2 border-gray-400 flex-shrink-0 w-3.5 h-3.5 accent-white"
+                               x-model="maritalStatusId"
+                               @change="onMaritalChange()">
+                        <span class="ml-2 text-xs font-semibold break-words"
+                              :class="maritalStatusId == '{{ $s->id }}' ? 'text-white' : 'text-gray-800 dark:text-gray-200'">{{ $s->label }}</span>
+                    </label>
+                @endforeach
+            </div>
+            @error($isSnapshot ? 'snapshot.core.marital_status_id' : 'marital_status_id')
+                <p class="mt-2 text-sm text-red-600 dark:text-red-400">{{ $message }}</p>
+            @enderror
         </div>
-        @error($isSnapshot ? 'snapshot.core.marital_status_id' : 'marital_status_id')
-            <p class="mt-2 text-sm text-red-600 dark:text-red-400">{{ $message }}</p>
-        @enderror
-    </div>
+    @else
+        {{-- Marriages step only: marital status already set in basic info; submit current value via hidden --}}
+        <input type="hidden" :name="namePrefix ? 'snapshot[core][marital_status_id]' : 'marital_status_id'" :value="maritalStatusId">
+    @endif
 
     {{-- Step 2: Status details (optional) + Children — heading line then inputs; Yes/No as on-off toggle --}}
     <div class="marital-details-block" x-show="statusKey === 'divorced' || statusKey === 'separated' || statusKey === 'widowed'" x-cloak style="display: none;">

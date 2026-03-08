@@ -17,7 +17,6 @@ class PreviewSectionMapper
         'relatives',
         'siblings',
         'property_assets',
-        'legal_cases',
     ];
 
     private const SECTION_LABELS = [
@@ -32,7 +31,6 @@ class PreviewSectionMapper
         'property_summary' => 'Property Summary',
         'property_assets' => 'Property Assets',
         'horoscope' => 'Horoscope',
-        'legal_cases' => 'Legal Cases',
         'preferences' => 'Preferences',
         'narrative' => 'Narrative',
     ];
@@ -49,7 +47,6 @@ class PreviewSectionMapper
         'property_summary' => 'property_summary',
         'property_assets' => 'property_assets',
         'horoscope' => 'horoscope',
-        'legal_cases' => 'legal_cases',
         'preferences' => 'preferences',
         'narrative' => 'extended_narrative',
     ];

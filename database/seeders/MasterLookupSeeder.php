@@ -251,23 +251,24 @@ class MasterLookupSeeder extends Seeder
         ]);
     }
 
+    /** Plain yoni names only (profile entry scope). No male/female variants, no duplicates. */
     private function seedYonis(): void
     {
         $rows = [
-            ['key' => 'ashwa', 'label' => 'Ashwa'],
-            ['key' => 'gaja', 'label' => 'Gaja'],
-            ['key' => 'mesha', 'label' => 'Mesha'],
-            ['key' => 'sarpa', 'label' => 'Sarpa'],
-            ['key' => 'shwan', 'label' => 'Shwan'],
-            ['key' => 'marjar', 'label' => 'Marjar'],
-            ['key' => 'mushak', 'label' => 'Mushak'],
-            ['key' => 'gau', 'label' => 'Gau'],
-            ['key' => 'mahish', 'label' => 'Mahish'],
-            ['key' => 'vyaghra', 'label' => 'Vyaghra'],
-            ['key' => 'mrga', 'label' => 'Mrga'],
-            ['key' => 'vanar', 'label' => 'Vanar'],
-            ['key' => 'nakul', 'label' => 'Nakul'],
-            ['key' => 'singh', 'label' => 'Singh'],
+            ['key' => 'horse', 'label' => 'Horse'],
+            ['key' => 'elephant', 'label' => 'Elephant'],
+            ['key' => 'sheep', 'label' => 'Sheep'],
+            ['key' => 'serpent', 'label' => 'Serpent'],
+            ['key' => 'dog', 'label' => 'Dog'],
+            ['key' => 'cat', 'label' => 'Cat'],
+            ['key' => 'rat', 'label' => 'Rat'],
+            ['key' => 'cow', 'label' => 'Cow'],
+            ['key' => 'buffalo', 'label' => 'Buffalo'],
+            ['key' => 'tiger', 'label' => 'Tiger'],
+            ['key' => 'deer', 'label' => 'Deer'],
+            ['key' => 'monkey', 'label' => 'Monkey'],
+            ['key' => 'lion', 'label' => 'Lion'],
+            ['key' => 'mongoose', 'label' => 'Mongoose'],
             ['key' => 'other', 'label' => 'Other'],
         ];
         $this->seedKeyLabel('master_yonis', $rows);

@@ -16,6 +16,8 @@
     'detailedValue' => '',
     // Keep existing field naming by default; override per usage when needed.
     'detailedName' => 'address_line',
+    // Optional: when set, onSelect will set form input with this name to display label (e.g. preferences[preferred_city])
+    'displaySyncName' => null,
 ])
 @php
     $inputId = $attributes->get('id') ?? 'location-typeahead-' . $context . '-' . (\Illuminate\Support\Str::random(4));
@@ -24,13 +26,23 @@
     $isFullMode = ($mode ?? 'simple') === 'full';
     $resolvedDetailedName = $namePrefix !== '' ? ($namePrefix . '[' . $detailedName . ']') : $detailedName;
 @endphp
-<div class="{{ $wrapperClass }} space-y-0 rounded-lg {{ $noBorder ? 'pt-0 px-3 pb-3' : 'p-3' }} {{ $noBorder ? '' : 'border-2 border-rose-500 dark:border-rose-400' }}" data-location-context="{{ $context }}" data-name-prefix="{{ $namePrefix }}">
+<style>
+.location-typeahead-wrapper { position: relative; }
+.location-typeahead-results {
+    position: absolute; left: 0; right: 0; top: 100%; width: 100%; z-index: 50; box-sizing: border-box;
+    background-color: #fff;
+}
+.dark .location-typeahead-results {
+    background-color: rgb(55 65 81);
+}
+</style>
+<div class="{{ $wrapperClass }} space-y-0 rounded-lg {{ $noBorder ? 'pt-0 px-3 pb-3' : 'p-3' }} {{ $noBorder ? '' : 'border-2 border-rose-500 dark:border-rose-400' }}" data-location-context="{{ $context }}" data-name-prefix="{{ $namePrefix }}" @if(!empty($displaySyncName)) data-display-sync-name="{{ $displaySyncName }}" @endif>
     @if ($context === 'residence')
-        <input type="hidden" name="country_id" class="location-hidden-country" value="{{ $attributes->get('data-country-id', '') }}">
-        <input type="hidden" name="state_id" class="location-hidden-state" value="{{ $attributes->get('data-state-id', '') }}">
-        <input type="hidden" name="district_id" class="location-hidden-district" value="{{ $attributes->get('data-district-id', '') }}">
-        <input type="hidden" name="taluka_id" class="location-hidden-taluka" value="{{ $attributes->get('data-taluka-id', '') }}">
-        <input type="hidden" name="city_id" class="location-hidden-city" value="{{ $attributes->get('data-city-id', '') }}">
+        <input type="hidden" name="{{ $namePrefix !== '' ? $namePrefix . '[country_id]' : 'country_id' }}" class="location-hidden-country" value="{{ $attributes->get('data-country-id', '') }}">
+        <input type="hidden" name="{{ $namePrefix !== '' ? $namePrefix . '[state_id]' : 'state_id' }}" class="location-hidden-state" value="{{ $attributes->get('data-state-id', '') }}">
+        <input type="hidden" name="{{ $namePrefix !== '' ? $namePrefix . '[district_id]' : 'district_id' }}" class="location-hidden-district" value="{{ $attributes->get('data-district-id', '') }}">
+        <input type="hidden" name="{{ $namePrefix !== '' ? $namePrefix . '[taluka_id]' : 'taluka_id' }}" class="location-hidden-taluka" value="{{ $attributes->get('data-taluka-id', '') }}">
+        <input type="hidden" name="{{ $namePrefix !== '' ? $namePrefix . '[city_id]' : 'city_id' }}" class="location-hidden-city" value="{{ $attributes->get('data-city-id', '') }}">
     @elseif ($context === 'work')
         <input type="hidden" name="work_city_id" class="location-hidden-work-city" value="{{ $attributes->get('data-work-city-id', '') }}">
         <input type="hidden" name="work_state_id" class="location-hidden-work-state" value="{{ $attributes->get('data-work-state-id', '') }}">

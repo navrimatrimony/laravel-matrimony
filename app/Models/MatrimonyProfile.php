@@ -107,6 +107,7 @@ class MatrimonyProfile extends Model
         'birth_time',
         'marital_status_id',
         'has_children',
+        'has_siblings',
         'religion_id',
         'caste_id',
         'sub_caste_id',
@@ -158,7 +159,26 @@ class MatrimonyProfile extends Model
         'occupation_title',
         'company_name',
         'annual_income',
+        'working_with_type_id',
+        'profession_id',
+        'income_range_id',
+        'college_id',
+        'income_private',
+        'income_period',
+        'income_value_type',
+        'income_amount',
+        'income_min_amount',
+        'income_max_amount',
+        'income_normalized_annual_amount',
         'family_income',
+        'family_income_period',
+        'family_income_value_type',
+        'family_income_amount',
+        'family_income_min_amount',
+        'family_income_max_amount',
+        'family_income_currency_id',
+        'family_income_private',
+        'family_income_normalized_annual_amount',
         'father_name',
         'father_occupation',
         'father_contact_1',
@@ -183,6 +203,8 @@ class MatrimonyProfile extends Model
         'edited_at' => 'datetime',
         'admin_edited_fields' => 'array',
         'safety_defaults_applied' => 'boolean',
+        'income_private' => 'boolean',
+        'family_income_private' => 'boolean',
     ];
 
     /**
@@ -372,6 +394,31 @@ public function subCaste()
     public function incomeCurrency()
     {
         return $this->belongsTo(MasterIncomeCurrency::class, 'income_currency_id');
+    }
+
+    public function familyIncomeCurrency()
+    {
+        return $this->belongsTo(MasterIncomeCurrency::class, 'family_income_currency_id');
+    }
+
+    public function workingWithType()
+    {
+        return $this->belongsTo(WorkingWithType::class, 'working_with_type_id');
+    }
+
+    public function profession()
+    {
+        return $this->belongsTo(Profession::class, 'profession_id');
+    }
+
+    public function incomeRange()
+    {
+        return $this->belongsTo(IncomeRange::class, 'income_range_id');
+    }
+
+    public function college()
+    {
+        return $this->belongsTo(College::class, 'college_id');
     }
 
     public function extendedValues()

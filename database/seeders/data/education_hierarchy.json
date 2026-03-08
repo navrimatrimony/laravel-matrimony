@@ -1,0 +1,1040 @@
+{
+  "data": {
+    "education": [
+      {
+        "Engineering": [
+          {
+            "id": "B.E / B.Tech",
+            "text": "B.E / B.Tech",
+            "fullform": "Bachelor of Engineering / Bachelor of Technology"
+          },
+          {
+            "id": "M.E / M.Tech",
+            "text": "M.E / M.Tech",
+            "fullform": "Master of Engineering / Master of Technology"
+          },
+          {
+            "id": "M.S Engineering",
+            "text": "M.S Engineering",
+            "fullform": "Master of Science in Engineering"
+          },
+          {
+            "id": "B.Eng (Hons)",
+            "text": "B.Eng (Hons)",
+            "fullform": "Bachelor of Engineering (Honours)"
+          },
+          {
+            "id": "M.Eng (Hons)",
+            "text": "M.Eng (Hons)",
+            "fullform": "Master of Engineering (Honours)"
+          },
+          {
+            "id": "Engineering Diploma",
+            "text": "Engineering Diploma",
+            "fullform": "Diploma in Engineering"
+          },
+          {
+            "id": "AE",
+            "text": "AE",
+            "fullform": "Associate of Engineering"
+          },
+          {
+            "id": "AET",
+            "text": "AET",
+            "fullform": "Associate of Engineering Technology"
+          },
+          {
+            "id": "A.M.E.",
+            "text": "A.M.E.",
+            "fullform": "Aircraft Maintenance Engineering"
+          },
+          {
+            "id": "B.Plan",
+            "text": "B.Plan",
+            "fullform": "Bachelor of Planning"
+          },
+          {
+            "id": "B.Tech LL.B.",
+            "text": "B.Tech LL.B.",
+            "fullform": "Bachelor of Technology and Bachelor of Laws"
+          },
+          {
+            "id": "CISE",
+            "text": "CISE",
+            "fullform": "Certified Information Systems Engineer"
+          },
+          {
+            "id": "ITIL",
+            "text": "ITIL",
+            "fullform": "Information Technology Infrastructure Library"
+          },
+          {
+            "id": "M.Plan",
+            "text": "M.Plan",
+            "fullform": "Master of Planning"
+          }
+        ]
+      },
+      {
+        "Arts / Design": [
+          {
+            "id": "B.A",
+            "text": "B.A",
+            "fullform": "Bachelor of Arts"
+          },
+          {
+            "id": "B.Ed",
+            "text": "B.Ed",
+            "fullform": "Bachelor of Education"
+          },
+          {
+            "id": "BJMC",
+            "text": "BJMC",
+            "fullform": "Bachelor of Journalism and Mass Communication"
+          },
+          {
+            "id": "BFA",
+            "text": "BFA",
+            "fullform": "Bachelor of Fine Arts"
+          },
+          {
+            "id": "B.Arch",
+            "text": "B.Arch",
+            "fullform": "Bachelor of Architecture"
+          },
+          {
+            "id": "B.Des",
+            "text": "B.Des",
+            "fullform": "Bachelor of Design"
+          },
+          {
+            "id": "BMM",
+            "text": "BMM",
+            "fullform": "Bachelor of Mass Media"
+          },
+          {
+            "id": "MFA",
+            "text": "MFA",
+            "fullform": "Master of Fine Arts"
+          },
+          {
+            "id": "M.Ed",
+            "text": "M.Ed",
+            "fullform": "Master of Education"
+          },
+          {
+            "id": "M.A",
+            "text": "M.A",
+            "fullform": "Master of Arts"
+          },
+          {
+            "id": "MSW",
+            "text": "MSW",
+            "fullform": "Master of Social Work"
+          },
+          {
+            "id": "MJMC",
+            "text": "MJMC",
+            "fullform": "Master of Journalism and Mass Communication"
+          },
+          {
+            "id": "M.Arch",
+            "text": "M.Arch",
+            "fullform": "Master of Architecture"
+          },
+          {
+            "id": "M.Des",
+            "text": "M.Des",
+            "fullform": "Master of Design"
+          },
+          {
+            "id": "BA (Hons)",
+            "text": "BA (Hons)",
+            "fullform": "Bachelor of Arts (Honours)"
+          },
+          {
+            "id": "B.Arch (Hons)",
+            "text": "B.Arch (Hons)",
+            "fullform": "Bachelor of Architecture (Honours)"
+          },
+          {
+            "id": "DFA",
+            "text": "DFA",
+            "fullform": "Diploma in Fine Arts"
+          },
+          {
+            "id": "D.Ed",
+            "text": "D.Ed",
+            "fullform": "Diploma in Education"
+          },
+          {
+            "id": "D.Arch",
+            "text": "D.Arch",
+            "fullform": "Diploma in Architecture"
+          },
+          {
+            "id": "AA",
+            "text": "AA",
+            "fullform": "Associate of Arts"
+          },
+          {
+            "id": "AFA",
+            "text": "AFA",
+            "fullform": "Associate of Fine Arts"
+          },
+          {
+            "id": "B.El.Ed",
+            "text": "B.El.Ed",
+            "fullform": "Bachelor of Elementary Education"
+          },
+          {
+            "id": "B.F.Sc.",
+            "text": "B.F.Sc.",
+            "fullform": "Bachelor of Fisheries Science"
+          },
+          {
+            "id": "B.FAD",
+            "text": "B.FAD",
+            "fullform": "Bachelor of Fashion and Apparel Design"
+          },
+          {
+            "id": "B.FTech",
+            "text": "B.FTech",
+            "fullform": "Bachelor of Fashion Technology"
+          },
+          {
+            "id": "B.J.",
+            "text": "B.J.",
+            "fullform": "Bachelor of Journalism"
+          },
+          {
+            "id": "B.Lib.I.Sc.",
+            "text": "B.Lib.I.Sc.",
+            "fullform": "Bachelor of Library and Information Science"
+          },
+          {
+            "id": "B.Lib.Sc.",
+            "text": "B.Lib.Sc.",
+            "fullform": "Bachelor of Library Science"
+          },
+          {
+            "id": "B.Litt",
+            "text": "B.Litt",
+            "fullform": "Bachelor of Literature"
+          },
+          {
+            "id": "B.M.C.",
+            "text": "B.M.C.",
+            "fullform": "Bachelor of Mass Communication"
+          },
+          {
+            "id": "B.M.M.M.C.",
+            "text": "B.M.M.M.C.",
+            "fullform": "Bachelor of Mass Media and Mass Communication"
+          },
+          {
+            "id": "B.Mus.",
+            "text": "B.Mus.",
+            "fullform": "Bachelor of Music"
+          },
+          {
+            "id": "BCT & CA",
+            "text": "BCT & CA",
+            "fullform": "Bachelor of Catering Technology and Culinary Arts"
+          },
+          {
+            "id": "BID",
+            "text": "BID",
+            "fullform": "Bachelor of Interior Design"
+          },
+          {
+            "id": "BPA",
+            "text": "BPA",
+            "fullform": "Bachelor of Performing Arts"
+          },
+          {
+            "id": "BSW",
+            "text": "BSW",
+            "fullform": "Bachelor of Social Work"
+          },
+          {
+            "id": "BVA",
+            "text": "BVA",
+            "fullform": "Bachelor of Visual Arts"
+          },
+          {
+            "id": "D.El.Ed",
+            "text": "D.El.Ed",
+            "fullform": "Diploma in Elementary Education"
+          },
+          {
+            "id": "D.Voc",
+            "text": "D.Voc",
+            "fullform": "Diploma in Vocation"
+          },
+          {
+            "id": "ETT",
+            "text": "ETT",
+            "fullform": "Elementary Teacher Training"
+          },
+          {
+            "id": "M.F.Sc.",
+            "text": "M.F.Sc.",
+            "fullform": "Master of Fisheries Science"
+          },
+          {
+            "id": "M.FTech",
+            "text": "M.FTech",
+            "fullform": "Master of Fashion Technology"
+          },
+          {
+            "id": "M.H.Sc.",
+            "text": "M.H.Sc.",
+            "fullform": "Master of Home Science"
+          },
+          {
+            "id": "M.Lib.I.Sc.",
+            "text": "M.Lib.I.Sc.",
+            "fullform": "Master of Library and Information Science"
+          },
+          {
+            "id": "M.Lib.Sc.",
+            "text": "M.Lib.Sc.",
+            "fullform": "Master of Library Science"
+          },
+          {
+            "id": "M.M.C.",
+            "text": "M.M.C.",
+            "fullform": "Master of Mass Communication"
+          },
+          {
+            "id": "M.O.L.",
+            "text": "M.O.L.",
+            "fullform": "Master of Oriental Learning"
+          },
+          {
+            "id": "M.P.Ed",
+            "text": "M.P.Ed",
+            "fullform": "Master of Physical Education"
+          },
+          {
+            "id": "MID",
+            "text": "MID",
+            "fullform": "Master of Interior Design"
+          },
+          {
+            "id": "MPA",
+            "text": "MPA",
+            "fullform": "Master of Performing Arts"
+          },
+          {
+            "id": "MVA",
+            "text": "MVA",
+            "fullform": "Master of Visual Arts"
+          },
+          {
+            "id": "P.P.T.T.C",
+            "text": "P.P.T.T.C",
+            "fullform": "Pre-Primary Teacher Training Certificate"
+          },
+          {
+            "id": "TTC",
+            "text": "TTC",
+            "fullform": "Teacher Training Certificate"
+          }
+        ]
+      },
+      {
+        "Finance / Commerce": [
+          {
+            "id": "B.Com",
+            "text": "B.Com",
+            "fullform": "Bachelor of Commerce"
+          },
+          {
+            "id": "CA / CPA",
+            "text": "CA / CPA",
+            "fullform": "Chartered Accountant / Chartered Public Accountant"
+          },
+          {
+            "id": "CFA",
+            "text": "CFA",
+            "fullform": "Chartered Financial Analyst"
+          },
+          {
+            "id": "CS",
+            "text": "CS",
+            "fullform": "Company Secretary-ship"
+          },
+          {
+            "id": "BSc / BFin",
+            "text": "BSc / BFin",
+            "fullform": "Bachelor of Science in Finance / Bachelor of Finance"
+          },
+          {
+            "id": "M.Com",
+            "text": "M.Com",
+            "fullform": "Master of Commerce"
+          },
+          {
+            "id": "MSc / MFin / MS",
+            "text": "MSc / MFin / MS",
+            "fullform": "Master of Science in Finance / Master of Finance"
+          },
+          {
+            "id": "BCom (Hons)",
+            "text": "BCom (Hons)",
+            "fullform": "Bachelor of Commerce (Honours)"
+          },
+          {
+            "id": "PGD Finance",
+            "text": "PGD Finance",
+            "fullform": "Post Graduate Diploma Financial Management"
+          },
+          {
+            "id": "BBE",
+            "text": "BBE",
+            "fullform": "Bachelor of Business Economics"
+          },
+          {
+            "id": "BBI",
+            "text": "BBI",
+            "fullform": "Bachelor of Banking and Insurance"
+          },
+          {
+            "id": "CFP",
+            "text": "CFP",
+            "fullform": "Certified Financial Planner"
+          },
+          {
+            "id": "CIA",
+            "text": "CIA",
+            "fullform": "Certified Internal Auditor"
+          },
+          {
+            "id": "ICWA",
+            "text": "ICWA",
+            "fullform": "Institute of Cost and Works Accountants"
+          },
+          {
+            "id": "MBE",
+            "text": "MBE",
+            "fullform": "Master of Business Economics"
+          },
+          {
+            "id": "MBF",
+            "text": "MBF",
+            "fullform": "Master of Business Finance"
+          },
+          {
+            "id": "MFC",
+            "text": "MFC",
+            "fullform": "Master of Finance and Control"
+          },
+          {
+            "id": "MFM",
+            "text": "MFM",
+            "fullform": "Master of Financial Management"
+          }
+        ]
+      },
+      {
+        "Management": [
+          {
+            "id": "BBA",
+            "text": "BBA",
+            "fullform": "Bachelor of Business Admininstration"
+          },
+          {
+            "id": "BHM",
+            "text": "BHM",
+            "fullform": "Bachelor of Hotel Management"
+          },
+          {
+            "id": "BBM",
+            "text": "BBM",
+            "fullform": "Bachelor of Business Management "
+          },
+          {
+            "id": "MBA",
+            "text": "MBA",
+            "fullform": "Master of Business Administration"
+          },
+          {
+            "id": "PGDM",
+            "text": "PGDM",
+            "fullform": "Post Graduate Diploma in Management"
+          },
+          {
+            "id": "ABA",
+            "text": "ABA",
+            "fullform": "Associate of Business Administration"
+          },
+          {
+            "id": "ADBus",
+            "text": "ADBus",
+            "fullform": "Associate Degree of Business"
+          },
+          {
+            "id": "B.H.A.",
+            "text": "B.H.A.",
+            "fullform": "Bachelor of Hotel Administration"
+          },
+          {
+            "id": "BAM",
+            "text": "BAM",
+            "fullform": "Bachelor of Applied Management"
+          },
+          {
+            "id": "BFM",
+            "text": "BFM",
+            "fullform": "Bachelor of Financial Markets"
+          },
+          {
+            "id": "BFT",
+            "text": "BFT",
+            "fullform": "Bachelor of Foreign Trade"
+          },
+          {
+            "id": "BHMCT",
+            "text": "BHMCT",
+            "fullform": "Bachelor of Hotel Management and Catering Technology"
+          },
+          {
+            "id": "BHMTT",
+            "text": "BHMTT",
+            "fullform": "Bachelor of Hospitality and Tourism Technology"
+          },
+          {
+            "id": "BMS",
+            "text": "BMS",
+            "fullform": "Bachelor of Management Studies"
+          },
+          {
+            "id": "CWM",
+            "text": "CWM",
+            "fullform": "Chartered Wealth Manager"
+          },
+          {
+            "id": "Executive MBA",
+            "text": "Executive MBA",
+            "fullform": "Executive Master of Business Administration"
+          },
+          {
+            "id": "FPM",
+            "text": "FPM",
+            "fullform": "Fellow Program in Management"
+          },
+          {
+            "id": "MAM",
+            "text": "MAM",
+            "fullform": "Master of Applied Management"
+          },
+          {
+            "id": "MBM",
+            "text": "MBM",
+            "fullform": "Master of Business Management"
+          },
+          {
+            "id": "MHA",
+            "text": "MHA",
+            "fullform": "Master of Hospital Administration"
+          },
+          {
+            "id": "MHRM",
+            "text": "MHRM",
+            "fullform": "Master of Human Resource Management"
+          },
+          {
+            "id": "MIB",
+            "text": "MIB",
+            "fullform": "Master of International Business"
+          },
+          {
+            "id": "MMM",
+            "text": "MMM",
+            "fullform": "Master of Marketing Management"
+          },
+          {
+            "id": "MMS",
+            "text": "MMS",
+            "fullform": "Master of Management Studies"
+          },
+          {
+            "id": "MTA",
+            "text": "MTA",
+            "fullform": "Master of Tourism Administration"
+          },
+          {
+            "id": "MTM",
+            "text": "MTM",
+            "fullform": "Master of Tourism Management"
+          }
+        ]
+      },
+      {
+        "Science": [
+          {
+            "id": "B.Sc",
+            "text": "B.Sc",
+            "fullform": "Bachelor of Science"
+          },
+          {
+            "id": "M.Sc",
+            "text": "M.Sc",
+            "fullform": "Master of Science"
+          },
+          {
+            "id": "BSc (Hons)",
+            "text": "BSc (Hons)",
+            "fullform": "Bachelor of Science (Honours)"
+          },
+          {
+            "id": "DipSc",
+            "text": "DipSc",
+            "fullform": "Diploma in Science"
+          },
+          {
+            "id": "AS",
+            "text": "AS",
+            "fullform": "Associate of Science"
+          },
+          {
+            "id": "AAS",
+            "text": "AAS",
+            "fullform": "Associate of Applied Science"
+          },
+          {
+            "id": "B.Agri.",
+            "text": "B.Agri.",
+            "fullform": "Bachelor of Agriculture"
+          },
+          {
+            "id": "B.Sc. (Post Basic)",
+            "text": "B.Sc. (Post Basic)",
+            "fullform": "Post Basic Bachelor of Science"
+          },
+          {
+            "id": "B.Voc",
+            "text": "B.Voc",
+            "fullform": "Bachelor of Vocation"
+          },
+          {
+            "id": "M.Voc",
+            "text": "M.Voc",
+            "fullform": "Master of Vocation"
+          }
+        ]
+      },
+      {
+        "Computers / IT": [
+          {
+            "id": "BCA",
+            "text": "BCA",
+            "fullform": "Bachelor of Computer Application"
+          },
+          {
+            "id": "B.IT",
+            "text": "B.IT",
+            "fullform": "Bachelor of Information Technology"
+          },
+          {
+            "id": "BCS",
+            "text": "BCS",
+            "fullform": "Bachelor of Computer Science"
+          },
+          {
+            "id": "BA Computer Science",
+            "text": "BA Computer Science",
+            "fullform": "Bachelor of Arts in Computer Science"
+          },
+          {
+            "id": "MCA",
+            "text": "MCA",
+            "fullform": "Master of Computer Application"
+          },
+          {
+            "id": "PGDCA",
+            "text": "PGDCA",
+            "fullform": "Post Graduate Diploma in Computer Application"
+          },
+          {
+            "id": "IT Diploma",
+            "text": "IT Diploma",
+            "fullform": "Diploma in Information Technology"
+          },
+          {
+            "id": "ADIT",
+            "text": "ADIT",
+            "fullform": "Associate Degree of Information Technology"
+          },
+          {
+            "id": "ADCA",
+            "text": "ADCA",
+            "fullform": "Advanced Diploma in Computer Applications"
+          },
+          {
+            "id": "DCA",
+            "text": "DCA",
+            "fullform": "Diploma in Computer Applications"
+          },
+          {
+            "id": "MCM",
+            "text": "MCM",
+            "fullform": "Master of Computer Management"
+          }
+        ]
+      },
+      {
+        "Medicine": [
+          {
+            "id": "MBBS",
+            "text": "MBBS",
+            "fullform": "Bachelor of Medicine and Bachelor of Surgery"
+          },
+          {
+            "id": "BDS",
+            "text": "BDS",
+            "fullform": "Bachelor of Dental Surgery"
+          },
+          {
+            "id": "BPT",
+            "text": "BPT",
+            "fullform": "Bachelor of Physiotherapy"
+          },
+          {
+            "id": "BAMS",
+            "text": "BAMS",
+            "fullform": "Bachelor of Ayurvedic Medicine and Surgery"
+          },
+          {
+            "id": "BHMS",
+            "text": "BHMS",
+            "fullform": "Bachelor of Homeopathic Medicine and Surgery"
+          },
+          {
+            "id": "B.Pharma",
+            "text": "B.Pharma",
+            "fullform": "Bachelor of Pharmacy"
+          },
+          {
+            "id": "BVSc",
+            "text": "BVSc",
+            "fullform": "Bachelor of Veterinary Science"
+          },
+          {
+            "id": "BSN / BScN",
+            "text": "BSN / BScN",
+            "fullform": "Bachelor of Science in Nursing"
+          },
+          {
+            "id": "MDS",
+            "text": "MDS",
+            "fullform": "Master of Dental Surgery"
+          },
+          {
+            "id": "MCh",
+            "text": "MCh",
+            "fullform": "Master of Surgery"
+          },
+          {
+            "id": "M.D",
+            "text": "M.D",
+            "fullform": "Doctor of Medicine"
+          },
+          {
+            "id": "M.S Medicine",
+            "text": "M.S Medicine",
+            "fullform": "Master of Science in Medicine"
+          },
+          {
+            "id": "MPT",
+            "text": "MPT",
+            "fullform": "Master of Physical Therapy"
+          },
+          {
+            "id": "DM",
+            "text": "DM",
+            "fullform": "Doctorate of Medicine"
+          },
+          {
+            "id": "M.Pharma",
+            "text": "M.Pharma",
+            "fullform": "Master of Pharmacy"
+          },
+          {
+            "id": "MVSc",
+            "text": "MVSc",
+            "fullform": "Master of Veterinary Science"
+          },
+          {
+            "id": "MMed",
+            "text": "MMed",
+            "fullform": "Master of Medicine"
+          },
+          {
+            "id": "PGD Medicine",
+            "text": "PGD Medicine",
+            "fullform": "Post Graduate Diploma in Medicine"
+          },
+          {
+            "id": "ADN",
+            "text": "ADN",
+            "fullform": "Associate Degree in Nursing"
+          },
+          {
+            "id": "ANM",
+            "text": "ANM",
+            "fullform": "Auxiliary Nurse Midwifery"
+          },
+          {
+            "id": "B.O.Th",
+            "text": "B.O.Th",
+            "fullform": "Bachelor of Occupational Therapy"
+          },
+          {
+            "id": "B.P.E.S",
+            "text": "B.P.E.S",
+            "fullform": "Bachelor of Physical Education and Sports"
+          },
+          {
+            "id": "B.P.Ed",
+            "text": "B.P.Ed",
+            "fullform": "Bachelor of Physical Education"
+          },
+          {
+            "id": "BCVT",
+            "text": "BCVT",
+            "fullform": "Bachelor of Cardio Vascular Technology"
+          },
+          {
+            "id": "BMLT",
+            "text": "BMLT",
+            "fullform": "Bachelor of Medical Laboratory Technology"
+          },
+          {
+            "id": "BMRIT",
+            "text": "BMRIT",
+            "fullform": "Bachelor of Medical Radiology and Imaging Technology"
+          },
+          {
+            "id": "BMRT",
+            "text": "BMRT",
+            "fullform": "Bachelor of Medical Record Technology"
+          },
+          {
+            "id": "BNYS",
+            "text": "BNYS",
+            "fullform": "Bachelor of Naturopathy and Yoga Sciences"
+          },
+          {
+            "id": "BOPTM",
+            "text": "BOPTM",
+            "fullform": "Bachelor of Optometry"
+          },
+          {
+            "id": "BOT",
+            "text": "BOT",
+            "fullform": "Bachelor of Occupational Therapy"
+          },
+          {
+            "id": "BPH",
+            "text": "BPH",
+            "fullform": "Bachelor of Public Health"
+          },
+          {
+            "id": "BPMT",
+            "text": "BPMT",
+            "fullform": "Bachelor of Paramedical Technology"
+          },
+          {
+            "id": "BPO",
+            "text": "BPO",
+            "fullform": "Bachelor of Prosthetics and Orthotics"
+          },
+          {
+            "id": "BRDIT",
+            "text": "BRDIT",
+            "fullform": "Bachelor of Radio Diagnosis and Imaging Technology"
+          },
+          {
+            "id": "BUMS",
+            "text": "BUMS",
+            "fullform": "Bachelor of Unani Medicine and Surgery"
+          },
+          {
+            "id": "D.P.Ed",
+            "text": "D.P.Ed",
+            "fullform": "Diploma in Physical Education"
+          },
+          {
+            "id": "D.Pharm",
+            "text": "D.Pharm",
+            "fullform": "Diploma in Pharmacy"
+          },
+          {
+            "id": "DMLT",
+            "text": "DMLT",
+            "fullform": "Diploma in Medical Laboratory Technology"
+          },
+          {
+            "id": "GNM",
+            "text": "GNM",
+            "fullform": "General Nursing and Midwifery"
+          },
+          {
+            "id": "M.Optom.",
+            "text": "M.Optom.",
+            "fullform": "Master of Optometry"
+          },
+          {
+            "id": "MPH",
+            "text": "MPH",
+            "fullform": "Master of Public Health"
+          }
+        ]
+      },
+      {
+        "Law": [
+          {
+            "id": "BL / LLB",
+            "text": "BL / LLB",
+            "fullform": "Bachelor of Law"
+          },
+          {
+            "id": "ML / LLM",
+            "text": "ML / LLM",
+            "fullform": "Master of Law"
+          },
+          {
+            "id": "LLB (Hons)",
+            "text": "LLB (Hons)",
+            "fullform": "Bachelor of Law (Honours)"
+          },
+          {
+            "id": "ALA",
+            "text": "ALA",
+            "fullform": "Associate of Legal Administration"
+          },
+          {
+            "id": "B.A. LL.B.",
+            "text": "B.A. LL.B.",
+            "fullform": "Bachelor of Arts and Bachelor of Laws"
+          },
+          {
+            "id": "B.A. LL.B. (Hons)",
+            "text": "B.A. LL.B. (Hons)",
+            "fullform": "Bachelor of Arts and Bachelor of Laws (Honors)"
+          },
+          {
+            "id": "B.Com LL.B",
+            "text": "B.Com LL.B",
+            "fullform": "Bachelor of Commerce and Bachelor of Laws"
+          },
+          {
+            "id": "B.L.S. LL.B.",
+            "text": "B.L.S. LL.B.",
+            "fullform": "Bachelor of Legal Science and Bachelor of Laws"
+          },
+          {
+            "id": "BBA LL.B.",
+            "text": "BBA LL.B.",
+            "fullform": "Bachelor of Business Administration and Bachelor of Laws"
+          },
+          {
+            "id": "BBA LL.B. (Hons)",
+            "text": "BBA LL.B. (Hons)",
+            "fullform": "Bachelor of Business Administration and Bachelor of Laws (Honors)"
+          },
+          {
+            "id": "M.B.L",
+            "text": "M.B.L",
+            "fullform": "Master of Business Law"
+          }
+        ]
+      },
+      {
+        "Doctorate": [
+          {
+            "id": "Ph.D",
+            "text": "Ph.D",
+            "fullform": "Doctor of Philosophy"
+          },
+          {
+            "id": "M.Phil",
+            "text": "M.Phil",
+            "fullform": "Master of Philosophy"
+          },
+          {
+            "id": "D.Litt",
+            "text": "D.Litt",
+            "fullform": "Doctor of Literature"
+          },
+          {
+            "id": "LL.D.",
+            "text": "LL.D.",
+            "fullform": "Doctor of Laws"
+          },
+          {
+            "id": "Pharm.D",
+            "text": "Pharm.D",
+            "fullform": "Doctor of Pharmacy"
+          }
+        ]
+      },
+      {
+        "Others": [
+          {
+            "id": "Bachelor",
+            "text": "Bachelor",
+            "fullform": ""
+          },
+          {
+            "id": "Master",
+            "text": "Master",
+            "fullform": ""
+          },
+          {
+            "id": "Diploma",
+            "text": "Diploma",
+            "fullform": ""
+          },
+          {
+            "id": "Honours",
+            "text": "Honours",
+            "fullform": ""
+          },
+          {
+            "id": "Doctorate",
+            "text": "Doctorate",
+            "fullform": ""
+          },
+          {
+            "id": "Associate",
+            "text": "Associate",
+            "fullform": ""
+          }
+        ]
+      },
+      {
+        "Non-Graduate": [
+          {
+            "id": "High school",
+            "text": "High school",
+            "fullform": ""
+          },
+          {
+            "id": "Less than high school",
+            "text": "Less than high school",
+            "fullform": ""
+          },
+          {
+            "id": "Diploma in Trade School",
+            "text": "Diploma in Trade School",
+            "fullform": "Vocational Training School"
+          }
+        ]
+      }
+    ]
+  }
+}

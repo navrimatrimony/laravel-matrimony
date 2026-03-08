@@ -7,7 +7,21 @@
         @php $pr = old('preferences', $preferences ?? new \stdClass()); @endphp
         @if(is_object($pr) && isset($pr->id))<input type="hidden" name="preferences[id]" value="{{ $pr->id }}">@endif
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <input type="text" name="preferences[preferred_city]" value="{{ is_object($pr) ? ($pr->preferred_city ?? '') : ($pr['preferred_city'] ?? '') }}" placeholder="Preferred city" class="rounded border px-3 py-2 w-full">
+            <div>
+                <input type="hidden" name="preferences[preferred_city]" value="{{ is_object($pr) ? ($pr->preferred_city ?? '') : ($pr['preferred_city'] ?? '') }}">
+                <x-profile.location-typeahead
+                    context="alliance"
+                    namePrefix="preferences"
+                    :value="is_object($pr) ? ($pr->preferred_city ?? '') : ($pr['preferred_city'] ?? '')"
+                    placeholder="Preferred city"
+                    label="Preferred city"
+                    displaySyncName="preferences[preferred_city]"
+                    :data-city-id="is_object($pr) ? ($pr->preferred_city_id ?? '') : ($pr['preferred_city_id'] ?? '')"
+                    :data-taluka-id="is_object($pr) ? ($pr->preferred_taluka_id ?? '') : ($pr['preferred_taluka_id'] ?? '')"
+                    :data-district-id="is_object($pr) ? ($pr->preferred_district_id ?? '') : ($pr['preferred_district_id'] ?? '')"
+                    :data-state-id="is_object($pr) ? ($pr->preferred_state_id ?? '') : ($pr['preferred_state_id'] ?? '')"
+                />
+            </div>
             <input type="text" name="preferences[preferred_caste]" value="{{ is_object($pr) ? ($pr->preferred_caste ?? '') : ($pr['preferred_caste'] ?? '') }}" placeholder="Preferred caste" class="rounded border px-3 py-2 w-full">
             <input type="number" name="preferences[preferred_age_min]" value="{{ is_object($pr) ? ($pr->preferred_age_min ?? '') : ($pr['preferred_age_min'] ?? '') }}" placeholder="Age min" class="rounded border px-3 py-2 w-full">
             <input type="number" name="preferences[preferred_age_max]" value="{{ is_object($pr) ? ($pr->preferred_age_max ?? '') : ($pr['preferred_age_max'] ?? '') }}" placeholder="Age max" class="rounded border px-3 py-2 w-full">

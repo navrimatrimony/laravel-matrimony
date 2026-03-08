@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\MatrimonyProfile;
+use App\Services\IncomeEngineService;
 use Illuminate\Http\Request;
 
 /**
@@ -14,7 +15,7 @@ class ManualSnapshotBuilderService
 {
     /**
      * Build full SSOT snapshot (core + contacts + children + education_history + career_history
-     * + addresses + property_summary + property_assets + horoscope + legal_cases + preferences + extended_narrative).
+     * + addresses + property_summary + property_assets + horoscope + preferences + extended_narrative).
      */
     public function buildFullManualSnapshot(Request $request, MatrimonyProfile $profile): array
     {
@@ -37,35 +38,43 @@ class ManualSnapshotBuilderService
             'spectacles_lens' => $request->input('spectacles_lens') ?: null,
             'physical_condition' => $request->input('physical_condition') ?: null,
             'highest_education' => $request->input('highest_education'),
+            'highest_education_other' => $request->filled('highest_education_other') ? trim((string) $request->input('highest_education_other')) : null,
             'specialization' => $request->input('specialization'),
+            'college_id' => $request->filled('college_id') ? (int) $request->input('college_id') : null,
+            'working_with_type_id' => $workingWithTypeId = $request->filled('working_with_type_id') ? (int) $request->input('working_with_type_id') : null,
+            'profession_id' => $this->resolveProfessionIdForWorkingWith($request->input('profession_id'), $workingWithTypeId),
+            'occupation_type' => $request->input('occupation_type') ?: null,
             'occupation_title' => $request->input('occupation_title'),
             'company_name' => $request->input('company_name'),
             'annual_income' => $request->has('annual_income') && $request->input('annual_income') !== '' ? (float) $request->input('annual_income') : null,
+            'income_range_id' => $request->filled('income_range_id') ? (int) $request->input('income_range_id') : null,
+            'income_private' => $request->boolean('income_private'),
             'income_currency_id' => $request->input('income_currency_id') ? (int) $request->input('income_currency_id') : (\App\Models\MasterIncomeCurrency::where('code', 'INR')->value('id')),
             'family_income' => $request->has('family_income') && $request->input('family_income') !== '' ? (float) $request->input('family_income') : null,
-            'father_name' => $request->input('father_name'),
-            'father_occupation' => $request->input('father_occupation'),
-            'father_contact_1' => trim((string) ($request->input('father_contact_1') ?? '')) ?: null,
-            'father_contact_2' => trim((string) ($request->input('father_contact_2') ?? '')) ?: null,
-            'father_contact_3' => trim((string) ($request->input('father_contact_3') ?? '')) ?: null,
-            'mother_name' => $request->input('mother_name'),
-            'mother_occupation' => $request->input('mother_occupation'),
-            'mother_contact_1' => trim((string) ($request->input('mother_contact_1') ?? '')) ?: null,
-            'mother_contact_2' => trim((string) ($request->input('mother_contact_2') ?? '')) ?: null,
-            'mother_contact_3' => trim((string) ($request->input('mother_contact_3') ?? '')) ?: null,
-            // Brothers/Sisters: use Siblings engine, not count fields.
-            'family_type_id' => $request->input('family_type_id') ? (int) $request->input('family_type_id') : null,
-            'country_id' => $request->input('country_id') ?: null,
-            'state_id' => $request->input('state_id') ?: null,
-            'district_id' => $request->input('district_id') ?: null,
-            'taluka_id' => $request->input('taluka_id') ?: null,
-            'city_id' => $request->input('city_id') ?: null,
-            'address_line' => $request->filled('address_line') ? trim($request->input('address_line')) : null,
-            'work_city_id' => $request->input('work_city_id') ?: null,
-            'work_state_id' => $request->input('work_state_id') ?: null,
-            'highest_education' => $request->input('highest_education') ?: $profile->highest_education,
-            'serious_intent_id' => $request->input('serious_intent_id') ?: null,
         ];
+        $core = array_merge($core, $this->buildIncomeEngineCoreForSnapshot($request, 'income'));
+        $core = array_merge($core, $this->buildIncomeEngineCoreForSnapshot($request, 'family_income'));
+        $core['father_name'] = $request->input('father_name');
+        $core['father_occupation'] = $request->input('father_occupation');
+        $core['father_contact_1'] = trim((string) ($request->input('father_contact_1') ?? '')) ?: null;
+        $core['father_contact_2'] = trim((string) ($request->input('father_contact_2') ?? '')) ?: null;
+        $core['father_contact_3'] = trim((string) ($request->input('father_contact_3') ?? '')) ?: null;
+        $core['mother_name'] = $request->input('mother_name');
+        $core['mother_occupation'] = $request->input('mother_occupation');
+        $core['mother_contact_1'] = trim((string) ($request->input('mother_contact_1') ?? '')) ?: null;
+        $core['mother_contact_2'] = trim((string) ($request->input('mother_contact_2') ?? '')) ?: null;
+        $core['mother_contact_3'] = trim((string) ($request->input('mother_contact_3') ?? '')) ?: null;
+        $core['family_type_id'] = $request->input('family_type_id') ? (int) $request->input('family_type_id') : null;
+        $core['country_id'] = $request->input('country_id') ?: null;
+        $core['state_id'] = $request->input('state_id') ?: null;
+        $core['district_id'] = $request->input('district_id') ?: null;
+        $core['taluka_id'] = $request->input('taluka_id') ?: null;
+        $core['city_id'] = $request->input('city_id') ?: null;
+        $core['address_line'] = $request->filled('address_line') ? trim($request->input('address_line')) : null;
+        $core['work_city_id'] = $request->input('work_city_id') ?: null;
+        $core['work_state_id'] = $request->input('work_state_id') ?: null;
+        $core['serious_intent_id'] = $request->input('serious_intent_id') ?: null;
+        $core['has_siblings'] = $request->has('has_siblings') ? ($request->input('has_siblings') === '1' || $request->input('has_siblings') === 1) : null;
         $core = array_map(fn ($v) => $v === '' ? null : $v, $core);
 
         // Phase-5 Point 7: optional photo in full edit — same handling as wizard photo step
@@ -126,8 +135,10 @@ class ManualSnapshotBuilderService
                 'id' => ! empty($row['id']) ? (int) $row['id'] : null,
                 'designation' => trim((string) ($row['designation'] ?? '')),
                 'company' => trim((string) ($row['company'] ?? '')),
+                'location' => trim((string) ($row['location'] ?? '')) ?: null,
                 'start_year' => ! empty($row['start_year']) ? (int) $row['start_year'] : null,
                 'end_year' => ! empty($row['end_year']) ? (int) $row['end_year'] : null,
+                'is_current' => isset($row['is_current']) && (string) $row['is_current'] === '1',
             ];
         }
 
@@ -168,6 +179,10 @@ class ManualSnapshotBuilderService
                 'location' => trim((string) ($row['location'] ?? '')),
                 'estimated_value' => isset($row['estimated_value']) && $row['estimated_value'] !== '' ? (float) $row['estimated_value'] : null,
                 'ownership_type_id' => ! empty($row['ownership_type_id']) ? (int) $row['ownership_type_id'] : null,
+                'city_id' => ! empty($row['city_id']) ? (int) $row['city_id'] : null,
+                'taluka_id' => ! empty($row['taluka_id']) ? (int) $row['taluka_id'] : null,
+                'district_id' => ! empty($row['district_id']) ? (int) $row['district_id'] : null,
+                'state_id' => ! empty($row['state_id']) ? (int) $row['state_id'] : null,
             ];
         }
 
@@ -193,20 +208,6 @@ class ManualSnapshotBuilderService
                 'kul' => trim((string) ($h['kul'] ?? '')),
                 'gotra' => trim((string) ($h['gotra'] ?? '')),
             ]];
-        }
-
-        $legal_cases = [];
-        foreach ($request->input('legal_cases', []) as $row) {
-            $legal_cases[] = [
-                'id' => ! empty($row['id']) ? (int) $row['id'] : null,
-                'legal_case_type_id' => ! empty($row['legal_case_type_id']) ? (int) $row['legal_case_type_id'] : null,
-                'court_name' => trim((string) ($row['court_name'] ?? '')),
-                'case_number' => trim((string) ($row['case_number'] ?? '')),
-                'case_stage' => trim((string) ($row['case_stage'] ?? '')),
-                'next_hearing_date' => ! empty($row['next_hearing_date']) ? $row['next_hearing_date'] : null,
-                'active_status' => ! empty($row['active_status']),
-                'notes' => trim((string) ($row['notes'] ?? '')),
-            ];
         }
 
         $birth_place = null;
@@ -261,25 +262,7 @@ class ManualSnapshotBuilderService
             $siblings[] = $siblingRow;
         }
 
-        $relatives = [];
-        foreach ($request->input('relatives', []) as $row) {
-            $name = trim((string) ($row['name'] ?? ''));
-            $relationType = trim((string) ($row['relation_type'] ?? ''));
-            if ($name === '' && $relationType === '') {
-                continue;
-            }
-            $relatives[] = [
-                'id' => ! empty($row['id']) ? (int) $row['id'] : null,
-                'relation_type' => $relationType ?: '',
-                'name' => $name ?: '',
-                'occupation' => trim((string) ($row['occupation'] ?? '')) ?: null,
-                'city_id' => ! empty($row['city_id']) ? (int) $row['city_id'] : null,
-                'state_id' => ! empty($row['state_id']) ? (int) $row['state_id'] : null,
-                'contact_number' => trim((string) ($row['contact_number'] ?? '')) ?: null,
-                'notes' => trim((string) ($row['notes'] ?? '')) ?: null,
-                'is_primary_contact' => ! empty($row['is_primary_contact']),
-            ];
-        }
+        $relatives = app(\App\Http\Controllers\ProfileWizardController::class)->collectRelativesFromRequest($request);
 
         $alliance_networks = [];
         foreach ($request->input('alliance_networks', []) as $row) {
@@ -356,7 +339,7 @@ class ManualSnapshotBuilderService
             'property_summary' => $property_summary,
             'property_assets' => $property_assets,
             'horoscope' => $horoscope,
-            'legal_cases' => $legal_cases,
+            'legal_cases' => [],
             'preferences' => $preferences,
             'extended_narrative' => $extended_narrative,
             'marriages' => $marriages,
@@ -405,5 +388,51 @@ class ManualSnapshotBuilderService
                 }
             }
         }
+    }
+
+    /**
+     * Career dependency: profession_id must belong to working_with_type_id; otherwise clear.
+     */
+    private function resolveProfessionIdForWorkingWith(mixed $professionId, ?int $workingWithTypeId): ?int
+    {
+        $pid = $professionId !== null && $professionId !== '' ? (int) $professionId : null;
+        if (! $pid || ! $workingWithTypeId) {
+            return $pid;
+        }
+        $prof = \App\Models\Profession::find($pid);
+
+        return $prof && (string) $prof->working_with_type_id === (string) $workingWithTypeId ? $pid : null;
+    }
+
+    /**
+     * Build income engine core keys for full manual snapshot (income or family_income).
+     */
+    private function buildIncomeEngineCoreForSnapshot(Request $request, string $prefix): array
+    {
+        $service = app(IncomeEngineService::class);
+        $period = $request->input($prefix . '_period') ?: 'annual';
+        $valueType = $request->input($prefix . '_value_type');
+        $amount = $request->filled($prefix . '_amount') ? (float) $request->input($prefix . '_amount') : null;
+        $minAmount = $request->filled($prefix . '_min_amount') ? (float) $request->input($prefix . '_min_amount') : null;
+        $maxAmount = $request->filled($prefix . '_max_amount') ? (float) $request->input($prefix . '_max_amount') : null;
+        $normalized = $service->normalizeToAnnual($valueType, $period, $amount, $minAmount, $maxAmount);
+        $defaultInr = \App\Models\MasterIncomeCurrency::where('code', 'INR')->value('id');
+
+        $out = [
+            $prefix . '_period' => $period,
+            $prefix . '_value_type' => $valueType,
+            $prefix . '_amount' => $amount,
+            $prefix . '_min_amount' => $minAmount,
+            $prefix . '_max_amount' => $maxAmount,
+            $prefix . '_normalized_annual_amount' => $normalized,
+        ];
+        if ($prefix === 'income') {
+            $out['income_private'] = $request->boolean('income_private');
+            $out['income_currency_id'] = $request->input('income_currency_id') ? (int) $request->input('income_currency_id') : $defaultInr;
+        } else {
+            $out[$prefix . '_currency_id'] = $request->input($prefix . '_currency_id') ? (int) $request->input($prefix . '_currency_id') : $defaultInr;
+            $out[$prefix . '_private'] = $request->boolean($prefix . '_private');
+        }
+        return $out;
     }
 }

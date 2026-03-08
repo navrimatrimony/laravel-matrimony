@@ -7,10 +7,9 @@
 @include('matrimony.profile.wizard.sections.siblings')
 @include('matrimony.profile.wizard.sections.relatives')
 @include('matrimony.profile.wizard.sections.alliance')
-@include('matrimony.profile.wizard.sections.location')
+{{-- Location: address captured in Extended Family (Native Place, Maternal Ajol) and relative rows; no duplicate section in full form. --}}
 @include('matrimony.profile.wizard.sections.property')
 @include('matrimony.profile.wizard.sections.horoscope')
-@include('matrimony.profile.wizard.sections.legal')
 @include('matrimony.profile.wizard.sections.contacts')
 @include('matrimony.profile.wizard.sections.about_preferences')
 @include('matrimony.profile.wizard.sections.photo')

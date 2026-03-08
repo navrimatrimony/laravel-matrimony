@@ -7,6 +7,9 @@
     'showPrimaryContact' => false,
     'addButtonLabel' => 'Add',
     'removeButtonLabel' => 'Remove',
+    'contentShowBinding' => null,
+    'contentShowInitial' => true,
+    'addressOnlyRelationValue' => null, // e.g. 'maternal_address_ajol' — when selected, only Relation + Address shown
 ])
 @php
     $opts = collect($relationOptions)->map(function ($o) {
@@ -35,8 +38,17 @@
 .dark .relation-marital-select.marital-no { background-color: rgb(59 130 246); border-color: rgb(37 99 235); color: white; }
 .relation-marital-select.marital-yes { background-color: rgb(22 163 74); border-color: rgb(21 128 61); color: white; }
 .dark .relation-marital-select.marital-yes { background-color: rgb(22 163 74); border-color: rgb(21 128 61); color: white; }
+/* Add control only in last row; same line as Remove on the right */
+[data-relation-engine] .relation-engine-row:not(:last-child) .relation-add-wrap { display: none; }
 </style>
-<div id="{{ $namePrefix }}-container" class="space-y-4 border-2 border-rose-500 dark:border-rose-400 rounded-lg p-4" data-repeater-container data-relation-engine data-name-prefix="{{ $namePrefix }}" data-row-class="{{ $namePrefix }}-row" data-show-married="{{ $showMarried ? '1' : '0' }}" data-min-rows="1">
+<div class="space-y-4 border-2 border-rose-500 dark:border-rose-400 rounded-lg p-4" data-relation-engine data-show-married="{{ $showMarried ? '1' : '0' }}" data-address-only-relation="{{ $addressOnlyRelationValue ?? '' }}"
+    @if($contentShowBinding) x-data="{ {{ $contentShowBinding }}: {{ $contentShowInitial ? 'true' : 'false' }} }" @else id="{{ $namePrefix }}-container" data-repeater-container data-name-prefix="{{ $namePrefix }}" data-row-class="{{ $namePrefix }}-row" data-min-rows="1" @endif>
+    @if(isset($header))
+    <div class="pb-2">{{ $header }}</div>
+    @endif
+    @if($contentShowBinding)
+    <div id="{{ $namePrefix }}-container" data-repeater-container data-name-prefix="{{ $namePrefix }}" data-row-class="{{ $namePrefix }}-row" data-min-rows="1" x-show="{{ $contentShowBinding }}" x-cloak x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0" x-transition:enter-end="opacity-100" x-transition:leave="transition ease-in duration-150" x-transition:leave-start="opacity-100" x-transition:leave-end="opacity-0" class="space-y-4">
+    @endif
     @foreach($rows as $idx => $row)
         @php
             $r = is_object($row) ? (array) $row : (array) $row;
@@ -73,7 +85,7 @@
                         </select>
                     </div>
                 </div>
-                <div class="min-w-0" data-contact-context="sibling" data-row-index="{{ $idx }}" data-name-prefix="{{ $namePrefix }}" data-max-slots="3">
+                <div class="min-w-0" data-contact-context="sibling" data-row-index="{{ $idx }}" data-name-prefix="{{ $namePrefix }}">
                     <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-0.5">Mobile</label>
                     <div class="flex flex-wrap items-end gap-1 sibling-contact-slots-inner">
                         @php
@@ -104,7 +116,75 @@
                 </div>
             </div>
             @else
-            {{-- Relatives: 2 lines × 3 fields in one grid so each column same width (Relation↔Occupation, Name↔Address, Mobile↔Additional) --}}
+            {{-- Relatives --}}
+            @if($addressOnlyRelationValue)
+            @php $isAddressOnly = ($r['relation_type'] ?? '') === $addressOnlyRelationValue; @endphp
+            {{-- When Ajol: one row, 2 fields (Relation | Address). When not Ajol: 2 rows × 3 fields. --}}
+            <div class="relation-address-only-wrap grid items-end" style="grid-template-columns: 1fr 1fr; gap: 0.75rem; display:{{ $isAddressOnly ? 'grid' : 'none' }};">
+                <div class="min-w-0">
+                    <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-0.5">Relation</label>
+                    <select name="{{ $namePrefix }}[{{ $idx }}][relation_type]" class="relation-type-select relation-input-h form-select w-full h-10 rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-2 py-1.5 text-sm min-w-0">
+                        <option value="">—</option>
+                        @foreach($opts as $opt)
+                            <option value="{{ $opt['value'] }}" {{ ($r['relation_type'] ?? '') == $opt['value'] ? 'selected' : '' }}>{{ $opt['label'] }}</option>
+                        @endforeach
+                    </select>
+                </div>
+                <div class="min-w-0 relation-address-cell">
+                    <x-profile.location-typeahead
+                        context="alliance"
+                        namePrefix="{{ $namePrefix }}[{{ $idx }}]"
+                        :value="$r['location_display'] ?? ''"
+                        placeholder="Address / city"
+                        label="Address"
+                        :data-city-id="$r['city_id'] ?? ''"
+                        :data-taluka-id="$r['taluka_id'] ?? ''"
+                        :data-district-id="$r['district_id'] ?? ''"
+                        :data-state-id="$r['state_id'] ?? ''"
+                    />
+                </div>
+            </div>
+            <div class="relation-fields-wrap relation-two-line-grid grid items-end" style="grid-template-columns: 1fr 1fr 1fr; display:{{ $isAddressOnly ? 'none' : 'grid' }}; gap: 0.75rem;">
+                <div class="min-w-0">
+                    <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-0.5">Relation</label>
+                    <select name="{{ $namePrefix }}[{{ $idx }}][relation_type]" class="relation-type-select relation-input-h form-select w-full h-10 rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-2 py-1.5 text-sm min-w-0">
+                        <option value="">—</option>
+                        @foreach($opts as $opt)
+                            <option value="{{ $opt['value'] }}" {{ ($r['relation_type'] ?? '') == $opt['value'] ? 'selected' : '' }}>{{ $opt['label'] }}</option>
+                        @endforeach
+                    </select>
+                </div>
+                <div class="min-w-0">
+                    <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-0.5">Name</label>
+                    <input type="text" name="{{ $namePrefix }}[{{ $idx }}][name]" value="{{ $r['name'] ?? '' }}" placeholder="Name" class="relation-input-h w-full h-10 rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-2 py-1.5 text-sm min-w-0">
+                </div>
+                <div class="min-w-0">
+                    <x-profile.contact-field name="{{ $namePrefix }}[{{ $idx }}][contact_number]" :value="$r['contact_number'] ?? ''" label="Mobile" placeholder="10-digit" :showCountryCode="true" :showWhatsapp="true" :nameWhatsapp="$namePrefix . '[' . $idx . '][contact_preference]'" :valueWhatsapp="'call'" inputClass="relation-input-h w-full min-w-0 box-border" />
+                </div>
+                <div class="min-w-0">
+                    <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-0.5">Occupation</label>
+                    <input type="text" name="{{ $namePrefix }}[{{ $idx }}][occupation]" value="{{ $r['occupation'] ?? '' }}" placeholder="Occupation" class="relation-input-h w-full h-10 rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-2 py-1.5 text-sm min-w-0">
+                </div>
+                <div class="min-w-0 relation-address-cell">
+                    <x-profile.location-typeahead
+                        context="alliance"
+                        namePrefix="{{ $namePrefix }}[{{ $idx }}]"
+                        :value="$r['location_display'] ?? ''"
+                        placeholder="Address / city"
+                        label="Address"
+                        :data-city-id="$r['city_id'] ?? ''"
+                        :data-taluka-id="$r['taluka_id'] ?? ''"
+                        :data-district-id="$r['district_id'] ?? ''"
+                        :data-state-id="$r['state_id'] ?? ''"
+                    />
+                </div>
+                <div class="min-w-0">
+                    <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-0.5">Additional info</label>
+                    <input type="text" name="{{ $namePrefix }}[{{ $idx }}][notes]" value="{{ $r['notes'] ?? '' }}" placeholder="Notes" class="relation-input-h w-full h-10 rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-2 py-1.5 text-sm min-w-0">
+                </div>
+            </div>
+            @else
+            {{-- Default relatives: 2 lines × 3 fields (Relation↔Occupation, Name↔Address, Mobile↔Additional) --}}
             <div class="grid items-end relation-two-line-grid" style="grid-template-columns: 1fr 1fr 1fr;">
                 <div class="min-w-0">
                     <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-0.5">Relation</label>
@@ -144,6 +224,7 @@
                     <input type="text" name="{{ $namePrefix }}[{{ $idx }}][notes]" value="{{ $r['notes'] ?? '' }}" placeholder="Notes" class="relation-input-h w-full h-10 rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-2 py-1.5 text-sm min-w-0">
                 </div>
             </div>
+            @endif
             @endif
 
             @if($showMarried)
@@ -202,19 +283,29 @@
             @endif
 
             @if($showPrimaryContact)
-            <label class="flex items-center gap-2 text-sm">
-                <input type="checkbox" name="{{ $namePrefix }}[{{ $idx }}][is_primary_contact]" value="1" {{ !empty($r['is_primary_contact']) ? 'checked' : '' }}>
-                Primary contact
-            </label>
+            @php $hidePrimaryForAddressOnly = isset($addressOnlyRelationValue) && (($r['relation_type'] ?? '') === $addressOnlyRelationValue); @endphp
+            <div class="relation-primary-contact-wrap" @if($hidePrimaryForAddressOnly) style="display:none" @endif>
+                <label class="flex items-center gap-2 text-sm">
+                    <input type="checkbox" name="{{ $namePrefix }}[{{ $idx }}][is_primary_contact]" value="1" {{ !empty($r['is_primary_contact']) ? 'checked' : '' }}>
+                    Primary contact
+                </label>
+            </div>
             @endif
 
-            <div>
-                <button type="button" class="relation-remove-btn text-sm text-red-600 dark:text-red-400 hover:underline" data-repeater-remove>{{ $removeButtonLabel }}</button>
+            <div class="flex justify-between items-center">
+                <div class="relation-add-wrap">
+                    <span role="button" tabindex="0" class="relation-add-btn inline-flex items-center gap-1 text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 cursor-pointer font-medium text-sm" data-repeater-add data-repeater-for="{{ $namePrefix }}-container"><span aria-hidden="true">+</span> {{ $addButtonLabel }}</span>
+                </div>
+                <div>
+                    <button type="button" class="relation-remove-btn text-sm text-red-600 dark:text-red-400 hover:underline" data-repeater-remove>{{ $removeButtonLabel }}</button>
+                </div>
             </div>
         </div>
     @endforeach
+    @if($contentShowBinding)
+    </div>
+    @endif
 </div>
-<button type="button" class="relation-add-btn px-4 py-2 bg-gray-200 dark:bg-gray-600 hover:bg-gray-300 dark:hover:bg-gray-500 text-gray-800 dark:text-gray-200 rounded font-medium text-sm" data-repeater-add data-repeater-for="{{ $namePrefix }}-container">{{ $addButtonLabel }}</button>
 
 <template id="sibling-contact-slot-tpl">
     <div class="sibling-contact-slot shrink-0">
@@ -269,11 +360,56 @@
         });
         if (showMarried) { updateMaritalStyles(); toggleSpouseBlocks(); }
 
+        var addressOnlyRelation = container.getAttribute('data-address-only-relation') || '';
+        function setDisabledInEl(el, disabled) {
+            if (!el) return;
+            el.querySelectorAll('input, select, textarea').forEach(function(inp) { inp.disabled = disabled; });
+        }
+        function toggleAddressOnlyRow(row, changedSelect) {
+            if (!addressOnlyRelation) return;
+            var addrOnlyWrap = row.querySelector('.relation-address-only-wrap');
+            var fieldsWrap = row.querySelector('.relation-fields-wrap');
+            var selAddr = addrOnlyWrap ? addrOnlyWrap.querySelector('.relation-type-select') : null;
+            var selFields = fieldsWrap ? fieldsWrap.querySelector('.relation-type-select') : null;
+            if (!addrOnlyWrap || !fieldsWrap) return;
+            var val = changedSelect ? changedSelect.value : (selAddr ? selAddr.value : (selFields ? selFields.value : ''));
+            if (selAddr && selFields) { selAddr.value = val; selFields.value = val; }
+            var isAddrOnly = val === addressOnlyRelation;
+            addrOnlyWrap.style.display = isAddrOnly ? 'grid' : 'none';
+            fieldsWrap.style.display = isAddrOnly ? 'none' : 'grid';
+            setDisabledInEl(addrOnlyWrap, !isAddrOnly);
+            setDisabledInEl(fieldsWrap, isAddrOnly);
+            var primaryWrap = row.querySelector('.relation-primary-contact-wrap');
+            if (primaryWrap) primaryWrap.style.display = isAddrOnly ? 'none' : '';
+        }
+        function initAddressOnlyToggles() {
+            if (!addressOnlyRelation) return;
+            container.querySelectorAll('.relation-engine-row').forEach(function(row) {
+                var addrOnlyWrap = row.querySelector('.relation-address-only-wrap');
+                var fieldsWrap = row.querySelector('.relation-fields-wrap');
+                var selAddr = addrOnlyWrap ? addrOnlyWrap.querySelector('.relation-type-select') : null;
+                var selFields = fieldsWrap ? fieldsWrap.querySelector('.relation-type-select') : null;
+                function onRelationChange(e) { toggleAddressOnlyRow(row, e.target); }
+                [selAddr, selFields].forEach(function(sel) {
+                    if (!sel) return;
+                    sel.removeEventListener('change', row._addrOnlyChange);
+                    row._addrOnlyChange = onRelationChange;
+                    sel.addEventListener('change', onRelationChange);
+                });
+                toggleAddressOnlyRow(row, selAddr || selFields);
+            });
+        }
+        if (addressOnlyRelation) initAddressOnlyToggles();
         container.addEventListener('repeater:row-added', function(e) {
             var detail = e.detail || {};
             var row = detail.row;
             var newIdx = detail.index;
-            if (!row || showMarried !== true) { if (window.LocationTypeahead && window.LocationTypeahead.init) window.LocationTypeahead.init(); return; }
+            if (!row) return;
+            if (showMarried !== true) {
+                if (addressOnlyRelation) initAddressOnlyToggles();
+                if (window.LocationTypeahead && window.LocationTypeahead.init) window.LocationTypeahead.init();
+                return;
+            }
             var ms = row.querySelector('.relation-marital-select');
             if (ms) { ms.value = 'unmarried'; ms.classList.remove('marital-yes'); ms.classList.add('marital-no'); }
             var spouseBlock = row.querySelector('.relation-spouse-block');
@@ -287,6 +423,7 @@
             row.querySelectorAll('.location-typeahead-input').forEach(function(i) { i.value = ''; });
             row.querySelectorAll('.location-hidden-city, .location-hidden-taluka, .location-hidden-district, .location-hidden-state').forEach(function(h) { h.value = ''; });
             toggleSpouseBlocks();
+            if (addressOnlyRelation) initAddressOnlyToggles();
             if (window.LocationTypeahead && window.LocationTypeahead.init) window.LocationTypeahead.init();
         });
 
@@ -295,14 +432,14 @@
             var ctx = e.target.closest('[data-contact-context="sibling"]');
             if (!ctx) return;
             var inner = ctx.querySelector('.sibling-contact-slots-inner');
-            var maxSlots = parseInt(ctx.getAttribute('data-max-slots'), 10) || 3;
+            var maxSlots = parseInt(ctx.getAttribute('data-max-slots'), 10) || 999;
             var idx = ctx.getAttribute('data-row-index');
             var namePrefix = ctx.getAttribute('data-name-prefix');
             if (!inner || idx === null || !namePrefix) return;
             var slots = inner.querySelectorAll('.sibling-contact-slot');
             if (slots.length >= maxSlots) return;
             var nextSlotNum = slots.length + 1;
-            var suffix = nextSlotNum === 2 ? 'contact_number_2' : 'contact_number_3';
+            var suffix = nextSlotNum === 2 ? 'contact_number_2' : (nextSlotNum === 3 ? 'contact_number_3' : 'contact_number_' + nextSlotNum);
             var name = namePrefix + '[' + idx + '][' + suffix + ']';
             var prefName = namePrefix + '[' + idx + '][contact_preference_' + nextSlotNum + ']';
             var tpl = document.getElementById('sibling-contact-slot-tpl');
@@ -312,10 +449,6 @@
             div.innerHTML = html.trim();
             var newSlot = div.firstChild;
             if (newSlot) inner.appendChild(newSlot);
-            if (nextSlotNum === 3) {
-                var all = inner.querySelectorAll('.sibling-contact-slot');
-                if (all[1]) { var btn = all[1].querySelector('.contact-engine-add-btn'); if (btn) btn.remove(); }
-            }
         });
 
         container.setAttribute('data-relation-inited', '1');

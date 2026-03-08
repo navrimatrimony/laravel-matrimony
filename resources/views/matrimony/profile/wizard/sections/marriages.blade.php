@@ -7,6 +7,7 @@
 @endphp
 <div class="space-y-4">
     @include('matrimony.profile.wizard.sections.marital_engine', [
+        'showMaritalStatus' => false,
         'maritalStatuses' => $maritalStatuses,
         'profileMarriages' => $profileMarriages,
         'profileChildren' => $profileChildren,

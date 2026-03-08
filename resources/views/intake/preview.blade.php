@@ -38,9 +38,17 @@
                 <div class="md:col-span-2">
                     <x-physical-engine namePrefix="snapshot[core]" :values="$coreData" />
                 </div>
+                <div class="md:col-span-2">
+                    <x-education-occupation-income-engine
+                        :values="$coreData"
+                        :currencies="$currencies ?? []"
+                        namePrefix="snapshot[core]"
+                    />
+                </div>
                 @php
                     $basicInfoKeys = ['full_name', 'date_of_birth', 'gender', 'gender_id', 'birth_time', 'birth_place', 'birth_city_id', 'birth_taluka_id', 'birth_district_id', 'birth_state_id', 'religion', 'religion_id', 'caste', 'caste_id', 'sub_caste', 'sub_caste_id', 'marital_status_id', 'has_children'];
-                    $otherCoreKeys = array_diff(['annual_income','family_income','primary_contact_number','serious_intent_id','highest_education','specialization','occupation_title','company_name','income_currency_id','father_name','mother_name','father_occupation','mother_occupation','family_type_id','gotra','kuldaivat','rashi','nadi','gan','mangalik','varna','mama','relatives','other_relatives_text'], $basicInfoKeys);
+                    $educationOccupationIncomeKeys = ['highest_education', 'specialization', 'occupation_title', 'company_name', 'annual_income', 'family_income', 'income_currency_id', 'college_id', 'working_with_type_id', 'profession_id', 'income_range_id', 'income_private', 'income_period', 'income_value_type', 'income_amount', 'income_min_amount', 'income_max_amount', 'income_normalized_annual_amount', 'family_income_period', 'family_income_value_type', 'family_income_amount', 'family_income_min_amount', 'family_income_max_amount', 'family_income_currency_id', 'family_income_private', 'family_income_normalized_annual_amount'];
+                    $otherCoreKeys = array_diff(['annual_income','family_income','primary_contact_number','serious_intent_id','highest_education','specialization','occupation_title','company_name','income_currency_id','father_name','mother_name','father_occupation','mother_occupation','family_type_id','gotra','kuldaivat','rashi','nadi','gan','mangalik','varna','mama','relatives','other_relatives_text'], array_merge($basicInfoKeys, $educationOccupationIncomeKeys));
                 @endphp
                 @foreach($otherCoreKeys as $coreKey)
                     @php
@@ -277,7 +285,23 @@
                 }
             }
 
-            $intakeRelationOptions = [['value'=>'Uncle','label'=>'Uncle'],['value'=>'Aunt','label'=>'Aunt'],['value'=>'Cousin','label'=>'Cousin'],['value'=>'Brother','label'=>'Brother'],['value'=>'Sister','label'=>'Sister'],['value'=>'Father','label'=>'Father'],['value'=>'Mother','label'=>'Mother'],['value'=>'Grandfather','label'=>'Grandfather'],['value'=>'Grandmother','label'=>'Grandmother'],['value'=>'Other','label'=>'Other']];
+            // Extended family: distinct terms (Paternal/Maternal Uncle/Aunt + spouse)
+            $intakeRelationOptions = [
+                ['value'=>'paternal_uncle','label'=>'Paternal Uncle'],
+                ['value'=>'wife_paternal_uncle','label'=>'Wife of Paternal Uncle'],
+                ['value'=>'paternal_aunt','label'=>'Paternal Aunt'],
+                ['value'=>'husband_paternal_aunt','label'=>'Husband of Paternal Aunt'],
+                ['value'=>'maternal_uncle','label'=>'Maternal Uncle'],
+                ['value'=>'wife_maternal_uncle','label'=>'Wife of Maternal Uncle'],
+                ['value'=>'maternal_aunt','label'=>'Maternal Aunt'],
+                ['value'=>'husband_maternal_aunt','label'=>'Husband of Maternal Aunt'],
+                ['value'=>'Cousin','label'=>'Cousin'],
+                ['value'=>'paternal_grandfather','label'=>'Paternal Grandfather'],
+                ['value'=>'paternal_grandmother','label'=>'Paternal Grandmother'],
+                ['value'=>'maternal_grandfather','label'=>'Maternal Grandfather'],
+                ['value'=>'maternal_grandmother','label'=>'Maternal Grandmother'],
+                ['value'=>'Other','label'=>'Other'],
+            ];
         @endphp
         <section class="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
             <h2 class="text-lg font-semibold mb-4 border-b pb-2">{{ $sections['relatives']['label'] ?? 'Relatives & Family Network' }}</h2>
@@ -353,44 +377,69 @@
             <button type="button" id="add-address" class="mt-2 px-4 py-2 bg-gray-200 dark:bg-gray-600 rounded">+ Add Address</button>
         </section>
 
-        {{-- Property Summary --}}
-        <section class="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
-            <h2 class="text-lg font-semibold mb-4 border-b pb-2">Property Summary</h2>
-            <textarea name="snapshot[property_summary]" rows="3" class="w-full border rounded px-3 py-2 dark:bg-gray-700 dark:border-gray-600" placeholder="स्थायिक मालमत्ता / property details">{{ e(is_scalar($sections['property_summary']['data'] ?? null) ? $sections['property_summary']['data'] : '') }}</textarea>
-        </section>
-
-        {{-- Property Assets (list) --}}
-        <section class="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
-            <h2 class="text-lg font-semibold mb-4 border-b pb-2">Property Assets</h2>
-            <div id="property-assets-container">
-                @foreach(($sections['property_assets']['data'] ?? []) as $idx => $asset)
-                    <div class="flex gap-4 mb-3 items-end property-asset-row">
-                        <div class="flex-1"><label class="block text-sm font-medium mb-1">Description</label><input type="text" name="snapshot[property_assets][{{ $idx }}][description]" value="{{ is_array($asset) ? ($asset['description'] ?? json_encode($asset)) : $asset }}" class="w-full border rounded px-3 py-2 dark:bg-gray-700"></div>
-                        <button type="button" class="remove-row px-3 py-2 border border-red-400 text-red-600 rounded">Remove</button>
-                    </div>
-                @endforeach
+        {{-- Property: Location (residence) + reusable property engine. --}}
+        @php
+            $propSummary = $sections['property_summary']['data'] ?? ($intake->approval_snapshot_json['property_summary'] ?? []);
+            if (is_scalar($propSummary)) { $propSummary = ['summary_notes' => $propSummary]; }
+            if (is_object($propSummary)) { $propSummary = (array) $propSummary; }
+            $propAssets = $sections['property_assets']['data'] ?? ($intake->approval_snapshot_json['property_assets'] ?? []);
+            if (is_object($propAssets)) { $propAssets = (array) $propAssets; }
+            if (!is_array($propAssets)) { $propAssets = []; }
+            $assetTypes = $assetTypes ?? \App\Models\MasterAssetType::where('is_active', true)->get();
+            $ownershipTypes = $ownershipTypes ?? \App\Models\MasterOwnershipType::where('is_active', true)->get();
+            $coreForLocation = $sections['core']['data'] ?? ($intake->approval_snapshot_json['core'] ?? []);
+            if (is_object($coreForLocation)) { $coreForLocation = (array) $coreForLocation; }
+            $cityIdForLocation = $coreForLocation['city_id'] ?? null;
+            $cityDisplayForLocation = $cityIdForLocation ? (\App\Models\City::find($cityIdForLocation)?->name ?? '') : '';
+        @endphp
+        <section class="bg-white dark:bg-gray-800 rounded-lg shadow p-6 space-y-6">
+            <div class="border-2 border-rose-500 dark:border-rose-400 rounded-lg p-4">
+                <h3 class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Residence (village / city)</h3>
+                <x-profile.location-typeahead
+                    context="residence"
+                    namePrefix="snapshot[core]"
+                    :value="$cityDisplayForLocation"
+                    placeholder="Type village / city / pincode"
+                    label="Search village or city (residence)"
+                    :data-country-id="$coreForLocation['country_id'] ?? ''"
+                    :data-state-id="$coreForLocation['state_id'] ?? ''"
+                    :data-district-id="$coreForLocation['district_id'] ?? ''"
+                    :data-taluka-id="$coreForLocation['taluka_id'] ?? ''"
+                    :data-city-id="$coreForLocation['city_id'] ?? ''"
+                />
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mt-2 mb-1">Address line (optional)</label>
+                <input type="text" name="snapshot[core][address_line]" value="{{ $coreForLocation['address_line'] ?? '' }}" maxlength="255" placeholder="e.g. Building, area, landmark" class="w-full rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-3 py-2">
             </div>
-            <button type="button" id="add-property-asset" class="mt-2 px-4 py-2 bg-gray-200 dark:bg-gray-600 rounded">+ Add Property Asset</button>
+            <x-profile.property-engine
+                :summary="$propSummary"
+                :assets="$propAssets"
+                :assetTypes="$assetTypes"
+                :ownershipTypes="$ownershipTypes"
+                namePrefix="snapshot"
+            />
         </section>
 
-        {{-- Horoscope --}}
+        {{-- Horoscope: shared engine, snapshot[horoscope][0] for single row array shape --}}
+        @php
+            $horoscopeSource = $sections['horoscope']['data'] ?? ($intake->approval_snapshot_json['horoscope'] ?? []);
+            $horoscopeRow = is_array($horoscopeSource) && isset($horoscopeSource[0]) ? $horoscopeSource[0] : (is_array($horoscopeSource) ? $horoscopeSource : []);
+        @endphp
         <section class="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
             <h2 class="text-lg font-semibold mb-4 border-b pb-2">Horoscope (राशी / नक्षत्र)</h2>
-            <input type="text" name="snapshot[horoscope]" value="{{ e(is_scalar($sections['horoscope']['data'] ?? null) ? $sections['horoscope']['data'] : '') }}" class="w-full border rounded px-3 py-2 dark:bg-gray-700 dark:border-gray-600" placeholder="e.g. पूर्वा फाल्गुनी">
-        </section>
-
-        {{-- Legal Cases --}}
-        <section class="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
-            <h2 class="text-lg font-semibold mb-4 border-b pb-2">Legal Cases</h2>
-            <div id="legal-cases-container">
-                @foreach(($sections['legal_cases']['data'] ?? []) as $idx => $legal)
-                    <div class="flex gap-4 mb-3 items-end legal-case-row">
-                        <div class="flex-1"><label class="block text-sm font-medium mb-1">Details</label><input type="text" name="snapshot[legal_cases][{{ $idx }}][details]" value="{{ is_array($legal) ? ($legal['details'] ?? json_encode($legal)) : $legal }}" class="w-full border rounded px-3 py-2 dark:bg-gray-700"></div>
-                        <button type="button" class="remove-row px-3 py-2 border border-red-400 text-red-600 rounded">Remove</button>
-                    </div>
-                @endforeach
-            </div>
-            <button type="button" id="add-legal-case" class="mt-2 px-4 py-2 bg-gray-200 dark:bg-gray-600 rounded">+ Add Legal Case</button>
+            <x-profile.horoscope-engine
+                :row="$horoscopeRow"
+                :rashis="$rashis ?? collect()"
+                :nakshatras="$nakshatras ?? collect()"
+                :gans="$gans ?? collect()"
+                :nadis="$nadis ?? collect()"
+                :yonis="$yonis ?? collect()"
+                :mangalDoshTypes="$mangalDoshTypes ?? collect()"
+                :horoscope-rules-json="$horoscopeRulesJson ?? ['rashi_rules' => [], 'nakshatra_attributes' => []]"
+                name-prefix="snapshot[horoscope][0]"
+                mode="preview"
+                :dependencyExpected="[]"
+                :dependencyWarnings="$horoscopeDependencyWarnings ?? []"
+            />
         </section>
 
         {{-- Partner preferences (structured, same as wizard About & preferences) — snapshot[preferences][0][...] --}}
@@ -407,7 +456,21 @@
         <section class="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
             <h2 class="text-lg font-semibold mb-4 border-b pb-2">Partner preferences (अपेक्षा)</h2>
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div><label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Preferred city</label><input type="text" name="snapshot[preferences][0][preferred_city]" value="{{ e($prefRow['preferred_city'] ?? '') }}" class="w-full border rounded px-3 py-2 dark:bg-gray-700 dark:border-gray-600" placeholder="Preferred city"></div>
+                <div>
+                    <input type="hidden" name="snapshot[preferences][0][preferred_city]" value="{{ e($prefRow['preferred_city'] ?? '') }}">
+                    <x-profile.location-typeahead
+                        context="alliance"
+                        namePrefix="snapshot[preferences][0]"
+                        :value="e($prefRow['preferred_city'] ?? '')"
+                        placeholder="Preferred city"
+                        label="Preferred city"
+                        displaySyncName="snapshot[preferences][0][preferred_city]"
+                        :data-city-id="$prefRow['preferred_city_id'] ?? ''"
+                        :data-taluka-id="$prefRow['preferred_taluka_id'] ?? ''"
+                        :data-district-id="$prefRow['preferred_district_id'] ?? ''"
+                        :data-state-id="$prefRow['preferred_state_id'] ?? ''"
+                    />
+                </div>
                 <div><label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Preferred caste</label><input type="text" name="snapshot[preferences][0][preferred_caste]" value="{{ e($prefRow['preferred_caste'] ?? '') }}" class="w-full border rounded px-3 py-2 dark:bg-gray-700 dark:border-gray-600" placeholder="Preferred caste"></div>
                 <div><label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Age min</label><input type="number" name="snapshot[preferences][0][preferred_age_min]" value="{{ e($prefRow['preferred_age_min'] ?? '') }}" class="w-full border rounded px-3 py-2 dark:bg-gray-700 dark:border-gray-600" placeholder="Min age"></div>
                 <div><label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Age max</label><input type="number" name="snapshot[preferences][0][preferred_age_max]" value="{{ e($prefRow['preferred_age_max'] ?? '') }}" class="w-full border rounded px-3 py-2 dark:bg-gray-700 dark:border-gray-600" placeholder="Max age"></div>
@@ -579,24 +642,6 @@
         container.appendChild(row);
     });
 
-    document.getElementById('add-property-asset')?.addEventListener('click', function() {
-        var i = nextIndex('property-assets-container', '.property-asset-row');
-        var div = document.createElement('div');
-        div.className = 'flex gap-4 mb-3 items-end property-asset-row';
-        div.innerHTML = '<div class="flex-1"><label class="block text-sm font-medium mb-1">Description</label><input type="text" name="snapshot[property_assets][' + i + '][description]" class="w-full border rounded px-3 py-2 dark:bg-gray-700"></div><button type="button" class="remove-row px-3 py-2 border border-red-400 text-red-600 rounded">Remove</button>';
-        document.getElementById('property-assets-container').appendChild(div);
-        div.querySelector('.remove-row').addEventListener('click', function() { div.remove(); });
-    });
-
-    document.getElementById('add-legal-case')?.addEventListener('click', function() {
-        var i = nextIndex('legal-cases-container', '.legal-case-row');
-        var div = document.createElement('div');
-        div.className = 'flex gap-4 mb-3 items-end legal-case-row';
-        div.innerHTML = '<div class="flex-1"><label class="block text-sm font-medium mb-1">Details</label><input type="text" name="snapshot[legal_cases][' + i + '][details]" class="w-full border rounded px-3 py-2 dark:bg-gray-700"></div><button type="button" class="remove-row px-3 py-2 border border-red-400 text-red-600 rounded">Remove</button>';
-        document.getElementById('legal-cases-container').appendChild(div);
-        div.querySelector('.remove-row').addEventListener('click', function() { div.remove(); });
-    });
-
     document.getElementById('add-preference')?.addEventListener('click', function() {
         var i = nextIndex('preferences-container', '.preference-row');
         var div = document.createElement('div');
@@ -632,7 +677,7 @@ document.querySelectorAll('.use-candidate-btn').forEach(function(btn) {
     });
 });
     form.querySelectorAll('.remove-row').forEach(function(btn) {
-        btn.addEventListener('click', function() { btn.closest('.contact-row, .child-row, .education-row, .career-row, .address-row, .property-asset-row, .legal-case-row, .preference-row')?.remove(); });
+        btn.addEventListener('click', function() { btn.closest('.contact-row, .child-row, .education-row, .career-row, .address-row, .preference-row')?.remove(); });
     });
 })();
 </script>

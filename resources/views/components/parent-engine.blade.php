@@ -1,5 +1,8 @@
 @props([
     'profile' => null,
+    'currencies' => [],
+    'errors' => [],
+    'readOnly' => false,
 ])
 @php
     $profile = $profile ?? new \stdClass();
@@ -129,6 +132,7 @@
             :data-city-id="old('city_id', $profile->city_id ?? null)"
         />
     </div>
+
 </div>
 
 <template id="parent-father-slot-tpl">

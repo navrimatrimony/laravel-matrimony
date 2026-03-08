@@ -442,7 +442,13 @@
 @endif
 
 @php
-    $hasEduCareer = ($educationVisible && ($profile->highest_education ?? '') !== '') || ($profile->specialization ?? '') !== '' || ($profile->occupation_title ?? '') !== '' || ($profile->company_name ?? '') !== '' || ($profile->annual_income ?? null) !== null || ($profile->family_income ?? null) !== null || $profile->incomeCurrency;
+    $incomeService = app(\App\Services\IncomeEngineService::class);
+    $profileArr = $profile->toArray();
+    $personalIncomeDisplay = $incomeService->formatForDisplay($profileArr, 'income', $profile->incomeCurrency);
+    $familyIncomeDisplay = $incomeService->formatForDisplay($profileArr, 'family_income', $profile->familyIncomeCurrency ?? $profile->incomeCurrency);
+    $hasPersonalIncome = ($profile->income_value_type ?? null) !== null || ($profile->income_amount ?? null) !== null || ($profile->income_min_amount ?? null) !== null || ($profile->annual_income ?? null) !== null;
+    $hasFamilyIncome = ($profile->family_income_value_type ?? null) !== null || ($profile->family_income_amount ?? null) !== null || ($profile->family_income_min_amount ?? null) !== null || ($profile->family_income ?? null) !== null;
+    $hasEduCareer = ($educationVisible && ($profile->highest_education ?? '') !== '') || ($profile->specialization ?? '') !== '' || ($profile->occupation_title ?? '') !== '' || ($profile->company_name ?? '') !== '' || $hasPersonalIncome || $hasFamilyIncome || ($profile->annual_income ?? null) !== null || ($profile->family_income ?? null) !== null || $profile->incomeCurrency;
 @endphp
 @if ($hasEduCareer)
 <div class="mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
@@ -472,19 +478,19 @@
             <p class="font-medium text-base">{{ $profile->company_name }}</p>
         </div>
         @endif
-        @if (($profile->annual_income ?? null) !== null && $profile->annual_income !== '')
+        @if ($hasPersonalIncome)
         <div>
-            <p class="text-gray-500 text-sm">Annual Income</p>
-            <p class="font-medium text-base">{{ $profile->annual_income }}{{ $profile->incomeCurrency ? ' ' . ($profile->incomeCurrency->symbol ?? $profile->incomeCurrency->code ?? '') : '' }}</p>
+            <p class="text-gray-500 text-sm">Income</p>
+            <p class="font-medium text-base">{{ $personalIncomeDisplay }}</p>
         </div>
         @endif
-        @if (($profile->family_income ?? null) !== null && $profile->family_income !== '')
+        @if ($hasFamilyIncome)
         <div>
             <p class="text-gray-500 text-sm">Family Income</p>
-            <p class="font-medium text-base">{{ $profile->family_income }}{{ $profile->incomeCurrency ? ' ' . ($profile->incomeCurrency->symbol ?? $profile->incomeCurrency->code ?? '') : '' }}</p>
+            <p class="font-medium text-base">{{ $familyIncomeDisplay }}</p>
         </div>
         @endif
-        @if ($profile->incomeCurrency && ($profile->annual_income ?? null) === null && ($profile->family_income ?? null) === null)
+        @if ($profile->incomeCurrency && ! $hasPersonalIncome && ! $hasFamilyIncome)
         <div>
             <p class="text-gray-500 text-sm">Income Currency</p>
             <p class="font-medium text-base">{{ trim($profile->incomeCurrency->symbol ?? '') }} {{ $profile->incomeCurrency->code ?? '—' }}</p>
@@ -646,12 +652,24 @@
 @if (!empty($enableRelativesSection) && $profile->relatives?->isNotEmpty())
 @php
     $relativesByType = $profile->relatives->groupBy(function ($r) { return $r->relation_type ?: 'Other'; });
+    $relativeRelationLabels = [
+        'paternal_uncle' => 'Paternal Uncle', 'wife_paternal_uncle' => 'Wife of Paternal Uncle',
+        'paternal_aunt' => 'Paternal Aunt', 'husband_paternal_aunt' => 'Husband of Paternal Aunt',
+        'maternal_uncle' => 'Maternal Uncle', 'wife_maternal_uncle' => 'Wife of Maternal Uncle',
+        'maternal_aunt' => 'Maternal Aunt', 'husband_maternal_aunt' => 'Husband of Maternal Aunt',
+        'Cousin' => 'Cousin',
+        'paternal_grandfather' => 'Paternal Grandfather', 'paternal_grandmother' => 'Paternal Grandmother',
+        'maternal_grandfather' => 'Maternal Grandfather', 'maternal_grandmother' => 'Maternal Grandmother',
+        'great_uncle' => 'Great Uncle', 'great_aunt' => 'Great Aunt', 'other_grandparents_family' => 'Other (Grandparents\' family)',
+        'maternal_cousin' => 'Cousin (maternal)', 'other_maternal' => 'Other (maternal)',
+        'Uncle' => 'Uncle', 'Aunt' => 'Aunt', 'Grandfather' => 'Grandfather', 'Grandmother' => 'Grandmother', 'Other' => 'Other',
+    ];
 @endphp
 <div class="mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
     <h3 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Relatives & Family Network</h3>
     @foreach($relativesByType as $relationType => $relatives)
         <div class="mb-3">
-            <p class="text-gray-500 text-sm font-medium mb-1">{{ $relationType }}</p>
+            <p class="text-gray-500 text-sm font-medium mb-1">{{ $relativeRelationLabels[$relationType] ?? \Illuminate\Support\Str::title(str_replace('_', ' ', $relationType)) }}</p>
             @foreach($relatives as $rel)
                 <p class="font-medium text-base ml-2">
                     {{ $rel->name ?: '—' }}{{ $rel->occupation ? ' · ' . $rel->occupation : '' }}{{ ($rel->city?->name || $rel->state?->name) ? ' (' . trim(implode(', ', array_filter([$rel->city?->name, $rel->state?->name]))) . ')' : '' }}{{ $rel->contact_number ? ' · ' . $rel->contact_number : '' }}{{ $rel->notes ? ' · ' . \Illuminate\Support\Str::limit($rel->notes, 60) : '' }}

@@ -68,7 +68,7 @@ class MutationService
 
     /** Fallback CORE keys when registry has no CORE rows. Phase-5: *_id for master lookups. */
     private const FALLBACK_CORE_KEYS = [
-        'full_name', 'gender_id', 'date_of_birth', 'marital_status_id', 'highest_education',
+        'full_name', 'gender_id', 'date_of_birth', 'marital_status_id', 'has_children', 'has_siblings', 'highest_education',
         'location', 'religion_id', 'caste_id', 'sub_caste_id', 'height_cm', 'profile_photo',
         'complexion_id', 'physical_build_id', 'blood_group_id', 'family_type_id', 'income_currency_id',
         'photo_approved', 'photo_rejected_at', 'photo_rejection_reason', 'is_suspended',
@@ -1072,6 +1072,10 @@ class MutationService
             $mapped['ownership_type_id'] = (int) $mapped['ownership_type_id'];
         }
         unset($mapped['ownership_type']);
+        $mapped['city_id'] = ! empty($mapped['city_id']) ? (int) $mapped['city_id'] : null;
+        $mapped['taluka_id'] = ! empty($mapped['taluka_id']) ? (int) $mapped['taluka_id'] : null;
+        $mapped['district_id'] = ! empty($mapped['district_id']) ? (int) $mapped['district_id'] : null;
+        $mapped['state_id'] = ! empty($mapped['state_id']) ? (int) $mapped['state_id'] : null;
         return $mapped;
     }
 

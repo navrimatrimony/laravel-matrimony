@@ -11,7 +11,7 @@ use Illuminate\Validation\Rule;
 
 /**
  * Phase-5B: Section-based profile wizard. MutationService-only save path.
- * Full SSOT coverage: basic-info, personal-family, location, property, horoscope, legal, about-preferences, contacts, photo.
+ * Full SSOT coverage: basic-info, personal-family, location, property, horoscope, about-preferences, contacts, photo.
  */
 class ProfileWizardController extends Controller
 {
@@ -27,7 +27,6 @@ class ProfileWizardController extends Controller
         'location',
         'property',
         'horoscope',
-        'legal',
         'about-preferences',
         'contacts',
         'photo',
@@ -159,6 +158,16 @@ class ProfileWizardController extends Controller
 
         if (! \App\Services\ProfileLifecycleService::isEditableForManual($profile)) {
             return redirect()->route('matrimony.profile.show', $profile->id)->with('error', 'Profile cannot be edited in its current state.');
+        }
+
+        if ($section === 'location') {
+            $minimal = $this->isMinimalWizard();
+            $next = $minimal ? FieldCatalogService::getNextSection($section, true) : ProfileCompletionService::nextSection($section);
+            if ($next) {
+                return redirect()->route('matrimony.profile.wizard.section', ['section' => $next])
+                    ->with('success', 'Saved. Continue to next section.');
+            }
+            return redirect()->route('matrimony.profiles.index')->with('success', 'Profile updated.');
         }
 
         $snapshot = $this->buildSectionSnapshot($section, $request, $profile);
@@ -340,17 +349,44 @@ class ProfileWizardController extends Controller
                         'spouse' => $spouse,
                     ]);
                 });
+                // For "Siblings?" Yes/No: when No, sibling form is hidden
+                $data['hasSiblings'] = $profile->has_siblings;
                 break;
             case 'relatives':
                 $relRows = DB::table('profile_relatives')->where('profile_id', $profile->id)->orderBy('id')->get();
                 $cityIds = $relRows->pluck('city_id')->filter()->unique()->values()->all();
                 $cityNames = $cityIds ? \App\Models\City::whereIn('id', $cityIds)->pluck('name', 'id')->toArray() : [];
-                $data['profileRelatives'] = $relRows->map(function ($row) use ($cityNames) {
+                $mapRow = function ($row) use ($cityNames) {
                     $arr = (array) $row;
                     $arr['location_display'] = ! empty($row->city_id) ? ($cityNames[$row->city_id] ?? '') : '';
                     return (object) $arr;
-                })->values();
-                $data['relationTypes'] = ['Uncle', 'Aunt', 'Cousin', 'Brother', 'Sister', 'Father', 'Mother', 'Grandfather', 'Grandmother', 'Other'];
+                };
+                $parentsFamilyTypes = ['native_place', 'paternal_grandfather', 'paternal_grandmother', 'paternal_uncle', 'wife_paternal_uncle', 'paternal_aunt', 'husband_paternal_aunt', 'Cousin', 'Other'];
+                $maternalFamilyTypes = ['maternal_address_ajol', 'maternal_grandfather', 'maternal_grandmother', 'maternal_uncle', 'wife_maternal_uncle', 'maternal_aunt', 'husband_maternal_aunt', 'maternal_cousin', 'other_maternal'];
+                $data['profileRelativesParentsFamily'] = $relRows->filter(fn ($r) => in_array($r->relation_type ?? '', $parentsFamilyTypes, true))->map($mapRow)->values();
+                $data['profileRelativesMaternalFamily'] = $relRows->filter(fn ($r) => in_array($r->relation_type ?? '', $maternalFamilyTypes, true))->map($mapRow)->values();
+                $data['relationTypesParentsFamily'] = [
+                    ['value' => 'native_place', 'label' => 'Native Place'],
+                    ['value' => 'paternal_grandfather', 'label' => 'Paternal Grandfather'],
+                    ['value' => 'paternal_grandmother', 'label' => 'Paternal Grandmother'],
+                    ['value' => 'paternal_uncle', 'label' => 'Paternal Uncle (chulte)'],
+                    ['value' => 'wife_paternal_uncle', 'label' => 'Wife of Paternal Uncle (chulti)'],
+                    ['value' => 'paternal_aunt', 'label' => 'Paternal Aunt (atya)'],
+                    ['value' => 'husband_paternal_aunt', 'label' => 'Husband of Paternal Aunt'],
+                    ['value' => 'Cousin', 'label' => 'Cousin'],
+                    ['value' => 'Other', 'label' => 'Other'],
+                ];
+                $data['relationTypesMaternalFamily'] = [
+                    ['value' => 'maternal_address_ajol', 'label' => 'Maternal address (Ajol)'],
+                    ['value' => 'maternal_grandfather', 'label' => 'Maternal Grandfather'],
+                    ['value' => 'maternal_grandmother', 'label' => 'Maternal Grandmother'],
+                    ['value' => 'maternal_uncle', 'label' => 'Maternal Uncle (mama)'],
+                    ['value' => 'wife_maternal_uncle', 'label' => 'Maternal Uncle\'s wife (mami)'],
+                    ['value' => 'maternal_aunt', 'label' => 'Maternal Aunt (mavshi)'],
+                    ['value' => 'husband_maternal_aunt', 'label' => 'Husband of Maternal Aunt'],
+                    ['value' => 'maternal_cousin', 'label' => 'Cousin'],
+                    ['value' => 'other_maternal', 'label' => 'Other'],
+                ];
                 break;
             case 'alliance':
                 $data['otherRelativesText'] = $profile->getAttribute('other_relatives_text') ?? '';
@@ -377,6 +413,7 @@ class ProfileWizardController extends Controller
                 $data['profile_property_assets'] = $data['profile_property_assets'] ?? collect();
                 $data['assetTypes'] = $data['assetTypes'] ?? collect();
                 $data['ownershipTypes'] = $data['ownershipTypes'] ?? collect();
+                $data['profile'] = $profile;
                 break;
             case 'horoscope':
                 $data['profile_horoscope_data'] = DB::table('profile_horoscope_data')->where('profile_id', $profile->id)->first();
@@ -392,12 +429,12 @@ class ProfileWizardController extends Controller
                 $data['nadis'] = $data['nadis'] ?? collect();
                 $data['yonis'] = $data['yonis'] ?? collect();
                 $data['mangalDoshTypes'] = $data['mangalDoshTypes'] ?? collect();
-                break;
-            case 'legal':
-                $data['profile_legal_cases'] = DB::table('profile_legal_cases')->where('profile_id', $profile->id)->orderBy('id')->get();
-                $data['legalCaseTypes'] = \App\Models\MasterLegalCaseType::where('is_active', true)->get();
-                $data['profile_legal_cases'] = $data['profile_legal_cases'] ?? collect();
-                $data['legalCaseTypes'] = $data['legalCaseTypes'] ?? collect();
+                $hRow = $data['profile_horoscope_data'] ? (array) $data['profile_horoscope_data'] : [];
+                $horoscopeRuleService = app(\App\Services\HoroscopeRuleService::class);
+                $data['dependencyWarnings'] = $horoscopeRuleService->getValidationWarningsForUI($hRow)['warnings'];
+                $data['dependencyExpected'] = [];
+                $data['horoscopeRulesJson'] = $horoscopeRuleService->getRulesForFrontend();
+                $data['rashiAshtakootaJson'] = $horoscopeRuleService->getRashiAshtakootaForFrontend();
                 break;
             case 'contacts':
                 $allContacts = DB::table('profile_contacts')->where('profile_id', $profile->id)->orderBy('id')->get();
@@ -427,7 +464,6 @@ class ProfileWizardController extends Controller
                     $this->getSectionViewData('location', $profile),
                     $this->getSectionViewData('property', $profile),
                     $this->getSectionViewData('horoscope', $profile),
-                    $this->getSectionViewData('legal', $profile),
                     $this->getSectionViewData('contacts', $profile),
                     $this->getSectionViewData('about-preferences', $profile)
                 );
@@ -465,8 +501,6 @@ class ProfileWizardController extends Controller
                 return $this->buildPropertySnapshot($request, $profile);
             case 'horoscope':
                 return $this->buildHoroscopeSnapshot($request, $profile);
-            case 'legal':
-                return $this->buildLegalSnapshot($request, $profile);
             case 'contacts':
                 return $this->buildContactsSnapshot($request, $profile);
             case 'about-preferences':
@@ -583,32 +617,69 @@ class ProfileWizardController extends Controller
             'family_type' => 'family_type_id',
             'physical_build' => 'physical_build_id',
         ]);
+        $incomeEngineRules = $this->incomeEngineValidationRules($request, 'income');
+        $familyIncomeEngineRules = $this->incomeEngineValidationRules($request, 'family_income');
+        $request->validate(array_merge([
+            'annual_income' => 'nullable|numeric',
+            'family_income' => 'nullable|numeric',
+            'income_currency_id' => 'nullable|exists:master_income_currencies,id',
+            'working_with_type_id' => 'nullable|exists:working_with_types,id',
+            'profession_id' => 'nullable|exists:professions,id',
+            'income_range_id' => 'nullable|exists:income_ranges,id',
+            'college_id' => 'nullable|exists:colleges,id',
+            'company_name' => 'nullable|string|max:255',
+            'income_private' => 'nullable|boolean',
+        ], $incomeEngineRules, $familyIncomeEngineRules));
+        if ($request->filled('profession_id') && $request->filled('working_with_type_id')) {
+            $prof = \App\Models\Profession::find($request->input('profession_id'));
+            if ($prof && (string) $prof->working_with_type_id !== (string) $request->input('working_with_type_id')) {
+                throw \Illuminate\Validation\ValidationException::withMessages([
+                    'profession_id' => ['The selected profession does not belong to the selected Working With.'],
+                ]);
+            }
+        }
+        $workingWithTypeId = $request->filled('working_with_type_id') ? (int) $request->input('working_with_type_id') : null;
+        $professionId = $request->filled('profession_id') ? (int) $request->input('profession_id') : null;
+        if ($professionId && $workingWithTypeId) {
+            $prof = \App\Models\Profession::find($professionId);
+            if (! $prof || (string) $prof->working_with_type_id !== (string) $workingWithTypeId) {
+                $professionId = null;
+            }
+        }
+        $incomeEngineService = app(\App\Services\IncomeEngineService::class);
+        $incomeCore = $this->buildIncomeEngineCore($request, 'income', $incomeEngineService);
+        $familyIncomeCore = $this->buildIncomeEngineCore($request, 'family_income', $incomeEngineService);
+
         $core = [
             'highest_education' => $request->input('highest_education') ?: null,
+            'highest_education_other' => $request->input('highest_education_other') ? trim((string) $request->input('highest_education_other')) ?: null : null,
             'specialization' => $request->input('specialization') ?: null,
-            'occupation_title' => $request->input('occupation_title') ?: null,
+            'college_id' => $request->filled('college_id') ? (int) $request->input('college_id') : null,
+            'working_with_type_id' => $workingWithTypeId,
+            'profession_id' => $professionId,
             'company_name' => $request->input('company_name') ?: null,
             'annual_income' => $request->filled('annual_income') ? (float) $request->input('annual_income') : null,
+            'income_range_id' => $request->filled('income_range_id') ? (int) $request->input('income_range_id') : null,
+            'income_private' => $request->boolean('income_private'),
             'family_income' => $request->filled('family_income') ? (float) $request->input('family_income') : null,
             'income_currency_id' => $request->input('income_currency_id') ? (int) $request->input('income_currency_id') : (\App\Models\MasterIncomeCurrency::where('code', 'INR')->value('id')),
-            'father_name' => $request->input('father_name') ?: null,
-            'father_occupation' => $request->input('father_occupation') ?: null,
-            'father_contact_1' => trim((string) ($request->input('father_contact_1') ?? '')) ?: null,
-            'father_contact_2' => trim((string) ($request->input('father_contact_2') ?? '')) ?: null,
-            'father_contact_3' => trim((string) ($request->input('father_contact_3') ?? '')) ?: null,
-            'mother_name' => $request->input('mother_name') ?: null,
-            'mother_occupation' => $request->input('mother_occupation') ?: null,
-            'mother_contact_1' => trim((string) ($request->input('mother_contact_1') ?? '')) ?: null,
-            'mother_contact_2' => trim((string) ($request->input('mother_contact_2') ?? '')) ?: null,
-            'mother_contact_3' => trim((string) ($request->input('mother_contact_3') ?? '')) ?: null,
-            // Brothers/Sisters: use Siblings section (engine), not count fields.
-            'family_type_id' => $request->input('family_type_id') ? (int) $request->input('family_type_id') : null,
-            'family_status' => $request->input('family_status') ?: null,
-            'family_values' => $request->input('family_values') ?: null,
-            'family_annual_income' => $request->input('family_annual_income') ?: null,
-            'weight_kg' => $request->filled('weight_kg') ? (float) $request->input('weight_kg') : $profile->weight_kg,
-            'physical_build_id' => $request->input('physical_build_id') ? (int) $request->input('physical_build_id') : $profile->physical_build_id,
         ];
+        $core = array_merge($core, $incomeCore, $familyIncomeCore);
+        $core['father_name'] = $request->input('father_name') ?: null;
+        $core['father_occupation'] = $request->input('father_occupation') ?: null;
+        $core['father_contact_1'] = trim((string) ($request->input('father_contact_1') ?? '')) ?: null;
+        $core['father_contact_2'] = trim((string) ($request->input('father_contact_2') ?? '')) ?: null;
+        $core['father_contact_3'] = trim((string) ($request->input('father_contact_3') ?? '')) ?: null;
+        $core['mother_name'] = $request->input('mother_name') ?: null;
+        $core['mother_occupation'] = $request->input('mother_occupation') ?: null;
+        $core['mother_contact_1'] = trim((string) ($request->input('mother_contact_1') ?? '')) ?: null;
+        $core['mother_contact_2'] = trim((string) ($request->input('mother_contact_2') ?? '')) ?: null;
+        $core['mother_contact_3'] = trim((string) ($request->input('mother_contact_3') ?? '')) ?: null;
+        $core['family_type_id'] = $request->input('family_type_id') ? (int) $request->input('family_type_id') : null;
+        $core['family_status'] = $request->input('family_status') ?: null;
+        $core['family_values'] = $request->input('family_values') ?: null;
+        $core['weight_kg'] = $request->filled('weight_kg') ? (float) $request->input('weight_kg') : $profile->weight_kg;
+        $core['physical_build_id'] = $request->input('physical_build_id') ? (int) $request->input('physical_build_id') : $profile->physical_build_id;
         if ($request->filled('highest_education')) {
             $core['highest_education'] = $request->input('highest_education');
         }
@@ -642,8 +713,10 @@ class ProfileWizardController extends Controller
                 'id' => ! empty($row['id']) ? (int) $row['id'] : null,
                 'designation' => trim((string) ($row['designation'] ?? '')),
                 'company' => trim((string) ($row['company'] ?? '')),
+                'location' => trim((string) ($row['location'] ?? '')) ?: null,
                 'start_year' => ! empty($row['start_year']) ? (int) $row['start_year'] : null,
                 'end_year' => ! empty($row['end_year']) ? (int) $row['end_year'] : null,
+                'is_current' => isset($row['is_current']) && (string) $row['is_current'] === '1',
             ];
         }
 
@@ -663,7 +736,11 @@ class ProfileWizardController extends Controller
 
     private function buildSiblingsSnapshot(Request $request, MatrimonyProfile $profile): array
     {
+        $hasSiblings = $request->has('has_siblings') ? ($request->input('has_siblings') === '1' || $request->input('has_siblings') === 1) : null;
         $siblings = [];
+        if ($hasSiblings === false) {
+            // User chose "No" — do not persist sibling rows
+        } else {
         foreach ($request->input('siblings', []) as $row) {
             $relationType = in_array($row['relation_type'] ?? null, ['brother', 'sister'], true) ? $row['relation_type'] : null;
             $maritalStatus = in_array($row['marital_status'] ?? null, ['unmarried', 'married'], true) ? $row['marital_status'] : null;
@@ -697,39 +774,64 @@ class ProfileWizardController extends Controller
             }
             $siblings[] = $siblingRow;
         }
+        }
 
+        $core = [];
+        if ($request->has('has_siblings')) {
+            $core['has_siblings'] = $hasSiblings;
+        }
         return [
-            'core' => [],
+            'core' => $core,
             'siblings' => $siblings,
         ];
     }
 
     private function buildRelativesSnapshot(Request $request, MatrimonyProfile $profile): array
     {
-        $relatives = [];
-        foreach ($request->input('relatives', []) as $row) {
-            $name = trim((string) ($row['name'] ?? ''));
-            $relationType = trim((string) ($row['relation_type'] ?? ''));
-            if ($name === '' && $relationType === '') {
-                continue;
-            }
-            $relatives[] = [
-                'id' => ! empty($row['id']) ? (int) $row['id'] : null,
-                'relation_type' => $relationType ?: '',
-                'name' => $name ?: '',
-                'occupation' => trim((string) ($row['occupation'] ?? '')) ?: null,
-                'city_id' => ! empty($row['city_id']) ? (int) $row['city_id'] : null,
-                'state_id' => ! empty($row['state_id']) ? (int) $row['state_id'] : null,
-                'contact_number' => trim((string) ($row['contact_number'] ?? '')) ?: null,
-                'notes' => trim((string) ($row['notes'] ?? '')) ?: null,
-                'is_primary_contact' => ! empty($row['is_primary_contact']),
-            ];
-        }
+        $relatives = $this->collectRelativesFromRequest($request);
 
         return [
             'core' => [],
             'relatives' => $relatives,
         ];
+    }
+
+    /**
+     * Collect relatives from the three engines (parents' family, grandparents, grandparents' family).
+     * Used by buildRelativesSnapshot (wizard step) and called from ManualSnapshotBuilderService for full form.
+     */
+    public function collectRelativesFromRequest(\Illuminate\Http\Request $request): array
+    {
+        $relatives = [];
+        $sources = [
+            $request->input('relatives_parents_family', []),
+            $request->input('relatives_maternal_family', []),
+        ];
+        foreach ($sources as $rows) {
+            foreach ($rows as $row) {
+                $name = trim((string) ($row['name'] ?? ''));
+                $relationType = trim((string) ($row['relation_type'] ?? ''));
+                if ($name === '' && $relationType === '') {
+                    continue;
+                }
+                if (in_array($relationType, ['maternal_address_ajol', 'native_place'], true)) {
+                    $name = ''; // address-only row: no name
+                }
+                $relatives[] = [
+                    'id' => ! empty($row['id']) ? (int) $row['id'] : null,
+                    'relation_type' => $relationType ?: '',
+                    'name' => $name ?: '',
+                    'occupation' => trim((string) ($row['occupation'] ?? '')) ?: null,
+                    'city_id' => ! empty($row['city_id']) ? (int) $row['city_id'] : null,
+                    'state_id' => ! empty($row['state_id']) ? (int) $row['state_id'] : null,
+                    'contact_number' => trim((string) ($row['contact_number'] ?? '')) ?: null,
+                    'notes' => trim((string) ($row['notes'] ?? '')) ?: null,
+                    'is_primary_contact' => ! empty($row['is_primary_contact']),
+                ];
+            }
+        }
+
+        return $relatives;
     }
 
     private function buildAllianceSnapshot(Request $request, MatrimonyProfile $profile): array
@@ -902,13 +1004,25 @@ class ProfileWizardController extends Controller
                 'id' => ! empty($row['id']) ? (int) $row['id'] : null,
                 'asset_type_id' => ! empty($row['asset_type_id']) ? (int) $row['asset_type_id'] : null,
                 'location' => trim((string) ($row['location'] ?? '')),
-                'estimated_value' => isset($row['estimated_value']) && $row['estimated_value'] !== '' ? (float) $row['estimated_value'] : null,
                 'ownership_type_id' => ! empty($row['ownership_type_id']) ? (int) $row['ownership_type_id'] : null,
             ];
         }
 
+        $core = [];
+        if ($request->has('city_id') || $request->has('address_line') || $request->has('state_id')) {
+            $core = [
+                'country_id' => $request->input('country_id') ?: null,
+                'state_id' => $request->input('state_id') ?: null,
+                'district_id' => $request->input('district_id') ?: null,
+                'taluka_id' => $request->input('taluka_id') ?: null,
+                'city_id' => $request->input('city_id') ?: null,
+                'address_line' => $request->filled('address_line') ? trim($request->input('address_line')) : null,
+            ];
+            $core = array_map(fn ($v) => $v === '' ? null : $v, $core);
+        }
+
         return [
-            'core' => [],
+            'core' => $core,
             'property_summary' => $property_summary,
             'property_assets' => $property_assets,
         ];
@@ -925,7 +1039,7 @@ class ProfileWizardController extends Controller
                     $h['id'] = (int) $existingId;
                 }
             }
-            $horoscope = [[
+            $payload = [
                 'id' => ! empty($h['id']) ? (int) $h['id'] : null,
                 'rashi_id' => ! empty($h['rashi_id']) ? (int) $h['rashi_id'] : null,
                 'nakshatra_id' => ! empty($h['nakshatra_id']) ? (int) $h['nakshatra_id'] : null,
@@ -937,6 +1051,25 @@ class ProfileWizardController extends Controller
                 'devak' => trim((string) ($h['devak'] ?? '')),
                 'kul' => trim((string) ($h['kul'] ?? '')),
                 'gotra' => trim((string) ($h['gotra'] ?? '')),
+            ];
+            if ($payload['charan'] !== null && ($payload['charan'] < 1 || $payload['charan'] > 4)) {
+                $payload['charan'] = null;
+            }
+            $ruleService = app(\App\Services\HoroscopeRuleService::class);
+            $payload = $ruleService->applyAutofillToPayload($payload);
+            $this->validateHoroscopeStructural($payload);
+            $horoscope = [[
+                'id' => $payload['id'],
+                'rashi_id' => $payload['rashi_id'],
+                'nakshatra_id' => $payload['nakshatra_id'],
+                'charan' => $payload['charan'],
+                'gan_id' => $payload['gan_id'],
+                'nadi_id' => $payload['nadi_id'],
+                'yoni_id' => $payload['yoni_id'],
+                'mangal_dosh_type_id' => $payload['mangal_dosh_type_id'],
+                'devak' => $payload['devak'],
+                'kul' => $payload['kul'],
+                'gotra' => $payload['gotra'],
             ]];
         }
 
@@ -946,26 +1079,22 @@ class ProfileWizardController extends Controller
         ];
     }
 
-    private function buildLegalSnapshot(Request $request, MatrimonyProfile $profile): array
+    /** Validate horoscope payload for structural issues only (invalid FK, charan). Does not block on dependency mismatch. */
+    private function validateHoroscopeStructural(array $payload): void
     {
-        $legal_cases = [];
-        foreach ($request->input('legal_cases', []) as $row) {
-            $legal_cases[] = [
-                'id' => ! empty($row['id']) ? (int) $row['id'] : null,
-                'legal_case_type_id' => ! empty($row['legal_case_type_id']) ? (int) $row['legal_case_type_id'] : null,
-                'court_name' => trim((string) ($row['court_name'] ?? '')),
-                'case_number' => trim((string) ($row['case_number'] ?? '')),
-                'case_stage' => trim((string) ($row['case_stage'] ?? '')),
-                'next_hearing_date' => ! empty($row['next_hearing_date']) ? $row['next_hearing_date'] : null,
-                'active_status' => ! empty($row['active_status']),
-                'notes' => trim((string) ($row['notes'] ?? '')),
-            ];
-        }
-
-        return [
-            'core' => [],
-            'legal_cases' => $legal_cases,
+        $rules = [
+            'nakshatra_id' => ['nullable', Rule::exists('master_nakshatras', 'id')],
+            'rashi_id' => ['nullable', Rule::exists('master_rashis', 'id')],
+            'gan_id' => ['nullable', Rule::exists('master_gans', 'id')],
+            'nadi_id' => ['nullable', Rule::exists('master_nadis', 'id')],
+            'yoni_id' => ['nullable', Rule::exists('master_yonis', 'id')],
+            'mangal_dosh_type_id' => ['nullable', Rule::exists('master_mangal_dosh_types', 'id')],
+            'charan' => ['nullable', 'integer', 'min:1', 'max:4'],
         ];
+        $validator = \Illuminate\Support\Facades\Validator::make($payload, $rules);
+        if ($validator->fails()) {
+            throw new \Illuminate\Validation\ValidationException($validator);
+        }
     }
 
     private function buildContactsSnapshot(Request $request, MatrimonyProfile $profile): array
@@ -1163,5 +1292,66 @@ class ProfileWizardController extends Controller
             'core' => [],
             'children' => $rows,
         ];
+    }
+
+    /**
+     * Dynamic validation rules for the centralized Income Engine (personal or family).
+     */
+    private function incomeEngineValidationRules(Request $request, string $prefix): array
+    {
+        $vt = $request->input($prefix . '_value_type');
+        $rules = [
+            $prefix . '_period' => 'nullable|in:annual,monthly,weekly,daily',
+            $prefix . '_value_type' => 'nullable|in:exact,approximate,range,undisclosed',
+            $prefix . '_currency_id' => 'nullable|exists:master_income_currencies,id',
+            $prefix . '_private' => 'nullable|boolean',
+        ];
+        if ($prefix === 'family_income') {
+            $rules[$prefix . '_currency_id'] = 'nullable|exists:master_income_currencies,id';
+        }
+        if (in_array($vt, ['exact', 'approximate'], true)) {
+            $rules[$prefix . '_amount'] = 'required|numeric|min:0';
+        }
+        if ($vt === 'range') {
+            $rules[$prefix . '_min_amount'] = 'required|numeric|min:0';
+            $rules[$prefix . '_max_amount'] = 'required|numeric|min:0|gte:' . $prefix . '_min_amount';
+        }
+        return $rules;
+    }
+
+    /**
+     * Build core snapshot keys for one Income Engine (income or family_income).
+     */
+    private function buildIncomeEngineCore(Request $request, string $prefix, \App\Services\IncomeEngineService $service): array
+    {
+        $period = $request->input($prefix . '_period') ?: 'annual';
+        $valueType = $request->input($prefix . '_value_type');
+        $amount = $request->filled($prefix . '_amount') ? (float) $request->input($prefix . '_amount') : null;
+        $minAmount = $request->filled($prefix . '_min_amount') ? (float) $request->input($prefix . '_min_amount') : null;
+        $maxAmount = $request->filled($prefix . '_max_amount') ? (float) $request->input($prefix . '_max_amount') : null;
+        $currencyIdKey = $prefix . '_currency_id';
+        $defaultInr = \App\Models\MasterIncomeCurrency::where('code', 'INR')->value('id');
+        $currencyId = $request->input($currencyIdKey) ? (int) $request->input($currencyIdKey) : ($prefix === 'income' ? $defaultInr : null);
+        if ($prefix === 'family_income' && ! $currencyId) {
+            $currencyId = $defaultInr;
+        }
+        $normalized = $service->normalizeToAnnual($valueType, $period, $amount, $minAmount, $maxAmount);
+
+        $out = [
+            $prefix . '_period' => $period,
+            $prefix . '_value_type' => $valueType,
+            $prefix . '_amount' => $amount,
+            $prefix . '_min_amount' => $minAmount,
+            $prefix . '_max_amount' => $maxAmount,
+            $prefix . '_normalized_annual_amount' => $normalized,
+        ];
+        if ($prefix === 'income') {
+            $out['income_private'] = $request->boolean('income_private');
+            $out['income_currency_id'] = $currencyId ?: $defaultInr;
+        } else {
+            $out[$prefix . '_currency_id'] = $currencyId;
+            $out[$prefix . '_private'] = $request->boolean($prefix . '_private');
+        }
+        return $out;
     }
 }

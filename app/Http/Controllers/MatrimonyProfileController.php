@@ -12,7 +12,6 @@ use App\Models\MasterFamilyType;
 use App\Models\MasterGender;
 use App\Models\MasterGan;
 use App\Models\MasterIncomeCurrency;
-use App\Models\MasterLegalCaseType;
 use App\Models\MasterMangalDoshType;
 use App\Models\MasterMaritalStatus;
 use App\Models\MasterNadi;

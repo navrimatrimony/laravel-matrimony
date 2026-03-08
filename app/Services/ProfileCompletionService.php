@@ -7,7 +7,7 @@ use Illuminate\Support\Facades\DB;
 
 /**
  * Phase-5B: Section-based completion percentage for profile wizard.
- * Full SSOT section order: basic-info, personal-family, location, property, horoscope, legal, about-preferences, contacts, photo.
+ * Full SSOT section order: basic-info, personal-family, location, property, horoscope, about-preferences, contacts, photo.
  * Completion % uses original 5 sections (20% each); new sections have 0 weight for backward compatibility.
  */
 class ProfileCompletionService
@@ -21,7 +21,6 @@ class ProfileCompletionService
         'location' => 20,
         'property' => 0,
         'horoscope' => 0,
-        'legal' => 0,
         'about-preferences' => 20,
         'contacts' => 0,
         'photo' => 20,

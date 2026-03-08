@@ -1,0 +1,141 @@
+{{-- Reusable Property Engine: summary + repeatable assets. Used in wizard (namePrefix empty) and intake preview (namePrefix snapshot). --}}
+@props([
+    'summary' => [],
+    'assets' => [],
+    'assetTypes' => [],
+    'ownershipTypes' => [],
+    'namePrefix' => '',
+])
+@php
+    $sum = is_object($summary) ? (array) $summary : (array) $summary;
+    $assetList = $assets;
+    if (is_object($assetList)) { $assetList = $assetList->all(); }
+    if (!is_array($assetList)) { $assetList = []; }
+    if (count($assetList) === 0) { $assetList = [[]]; }
+    $prefix = $namePrefix !== '' ? $namePrefix : '';
+    $sumName = function($key) use ($prefix) { return $prefix !== '' ? $prefix . '[property_summary][' . $key . ']' : 'property_summary[' . $key . ']'; };
+    $assetName = function($idx, $key) use ($prefix) { return $prefix !== '' ? $prefix . '[property_assets][' . $idx . '][' . $key . ']' : 'property_assets[' . $idx . '][' . $key . ']'; };
+    $agricultureOptions = ['बागायत', 'जिरायत', 'विहीर', 'कालवा', 'इतर'];
+    $assetsContainerId = $prefix !== '' ? str_replace('[', '-', str_replace(']', '', $prefix)) . '-property-assets' : 'property-assets-container';
+    $assetsNamePrefix = $prefix !== '' ? $prefix . '[property_assets]' : 'property_assets';
+@endphp
+<div class="space-y-6 property-engine" data-property-engine data-name-prefix="{{ $prefix }}">
+    <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100 border-b border-gray-200 dark:border-gray-700 pb-2">Property</h2>
+
+    {{-- Property Summary --}}
+    <div>
+        <h3 class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Property summary</h3>
+        <input type="hidden" name="{{ $sumName('id') }}" value="{{ $sum['id'] ?? '' }}">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <label class="flex items-center gap-2"><input type="checkbox" name="{{ $sumName('owns_house') }}" value="1" {{ !empty($sum['owns_house']) ? 'checked' : '' }}> Own House</label>
+            <label class="flex items-center gap-2"><input type="checkbox" name="{{ $sumName('owns_flat') }}" value="1" {{ !empty($sum['owns_flat']) ? 'checked' : '' }}> Own Flat</label>
+            <label class="flex items-center gap-2"><input type="checkbox" name="{{ $sumName('owns_agriculture') }}" value="1" {{ !empty($sum['owns_agriculture']) ? 'checked' : '' }}> Own Agriculture</label>
+            <div>
+                <label class="block text-sm mb-1">Agriculture Type</label>
+                <select name="{{ $sumName('agriculture_type') }}" class="form-select w-full rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-3 py-2">
+                    <option value="">—</option>
+                    @foreach($agricultureOptions as $opt)
+                        <option value="{{ $opt }}" {{ ($sum['agriculture_type'] ?? '') === $opt ? 'selected' : '' }}>{{ $opt }}</option>
+                    @endforeach
+                </select>
+            </div>
+            <div>
+                <label class="block text-sm mb-1">Total Land (acres)</label>
+                <input type="number" name="{{ $sumName('total_land_acres') }}" value="{{ $sum['total_land_acres'] ?? '' }}" step="0.01" class="rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-3 py-2 w-32">
+            </div>
+            <div>
+                <label class="block text-sm mb-1">Annual Agriculture Income</label>
+                <input type="number" name="{{ $sumName('annual_agri_income') }}" value="{{ $sum['annual_agri_income'] ?? '' }}" step="0.01" class="rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-3 py-2 w-40">
+            </div>
+            <div class="md:col-span-2">
+                <label class="block text-sm mb-1">Notes</label>
+                <textarea name="{{ $sumName('summary_notes') }}" rows="2" class="w-full rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-3 py-2">{{ $sum['summary_notes'] ?? '' }}</textarea>
+            </div>
+        </div>
+    </div>
+
+    {{-- Property Assets (repeatable) — same Add / Remove this entry pattern as relation-details --}}
+    <div class="border-2 border-rose-500 dark:border-rose-400 rounded-lg p-4">
+        <h3 class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Property assets</h3>
+        <style>
+        .property-engine .property-asset-row:not(:last-child) .property-asset-add-wrap { display: none; }
+        .property-engine .property-asset-location-cell .location-typeahead-wrapper { padding: 0; border: none; }
+        .property-engine .property-asset-location-cell .location-typeahead-input { min-height: 2.25rem; font-size: 0.875rem; }
+        </style>
+        <div id="{{ $assetsContainerId }}" class="property-assets-container space-y-3" data-repeater-container data-name-prefix="{{ $assetsNamePrefix }}" data-row-class="property-asset-row" data-min-rows="1">
+            @foreach($assetList as $idx => $row)
+                @php $r = is_object($row) ? (array) $row : (array) $row; @endphp
+                <div class="property-asset-row p-3 bg-gray-50 dark:bg-gray-700/50 rounded space-y-2">
+                    <input type="hidden" name="{{ $assetName($idx, 'id') }}" value="{{ $r['id'] ?? '' }}">
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-3 items-end">
+                        <div class="min-w-0">
+                            <label class="block text-sm text-gray-600 dark:text-gray-400 mb-0.5">Asset Type</label>
+                            <select name="{{ $assetName($idx, 'asset_type_id') }}" class="form-select w-full rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-3 py-2">
+                                <option value="">Select</option>
+                                @foreach($assetTypes ?? [] as $item)
+                                    @php $label = $item->label ?? $item->key ?? $item->id; @endphp
+                                    <option value="{{ $item->id }}" {{ (string)($r['asset_type_id'] ?? '') === (string)$item->id ? 'selected' : '' }}>{{ $label }}</option>
+                                @endforeach
+                            </select>
+                        </div>
+                        <div class="min-w-0 property-asset-location-cell">
+                            <input type="hidden" name="{{ $assetName($idx, 'location') }}" class="location-display-sync" value="{{ $r['location'] ?? '' }}">
+                            <x-profile.location-typeahead
+                                context="alliance"
+                                :namePrefix="($prefix !== '' ? $prefix . '[property_assets][' . $idx . ']' : 'property_assets[' . $idx . ']')"
+                                :value="$r['location'] ?? ''"
+                                placeholder="Type village / city / pincode"
+                                label="Location"
+                                :data-city-id="$r['city_id'] ?? ''"
+                                :data-taluka-id="$r['taluka_id'] ?? ''"
+                                :data-district-id="$r['district_id'] ?? ''"
+                                :data-state-id="$r['state_id'] ?? ''"
+                            />
+                        </div>
+                        <div class="min-w-0">
+                            <label class="block text-sm text-gray-600 dark:text-gray-400 mb-0.5">Ownership Type</label>
+                            <select name="{{ $assetName($idx, 'ownership_type_id') }}" class="form-select w-full rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-3 py-2">
+                                <option value="">Select</option>
+                                @foreach($ownershipTypes ?? [] as $item)
+                                    @php $label = $item->label ?? $item->key ?? $item->id; @endphp
+                                    <option value="{{ $item->id }}" {{ (string)($r['ownership_type_id'] ?? '') === (string)$item->id ? 'selected' : '' }}>{{ $label }}</option>
+                                @endforeach
+                            </select>
+                        </div>
+                    </div>
+                    <div class="flex justify-between items-center">
+                        <div class="property-asset-add-wrap">
+                            <span role="button" tabindex="0" class="inline-flex items-center gap-1 text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 cursor-pointer font-medium text-sm" data-repeater-add data-repeater-for="{{ $assetsContainerId }}"><span aria-hidden="true">+</span> Add</span>
+                        </div>
+                        <div>
+                            <button type="button" class="text-sm text-red-600 dark:text-red-400 hover:underline" data-repeater-remove>Remove this entry</button>
+                        </div>
+                    </div>
+                </div>
+            @endforeach
+        </div>
+    </div>
+</div>
+
+<x-repeaters.repeater-script />
+<script>
+(function() {
+    document.querySelectorAll('[data-property-engine]').forEach(function(engine) {
+        var container = engine.querySelector('[data-repeater-container]');
+        if (!container) return;
+        container.addEventListener('repeater:row-added', function(e) {
+            var row = e.detail && e.detail.row;
+            if (!row) return;
+            row.querySelectorAll('.location-typeahead-wrapper').forEach(function(w) {
+                w.removeAttribute('data-bound');
+                var inp = w.querySelector('.location-typeahead-input');
+                if (inp) inp.value = '';
+                w.querySelectorAll('.location-hidden-city, .location-hidden-taluka, .location-hidden-district, .location-hidden-state').forEach(function(h) { h.value = ''; });
+            });
+            var sync = row.querySelector('.location-display-sync');
+            if (sync) sync.value = '';
+            if (window.LocationTypeahead && window.LocationTypeahead.init) window.LocationTypeahead.init();
+        });
+    });
+})();
+</script>

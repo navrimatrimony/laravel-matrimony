@@ -11,11 +11,17 @@ use App\Http\Controllers\Api\ExtendedFieldApiController;
 use App\Http\Controllers\Api\ProfileFieldLockApiController;
 use App\Http\Controllers\Api\BiodataIntakeApiController;
 use App\Http\Controllers\Api\CasteLookupController;
+use App\Http\Controllers\Api\MasterEducationController;
 use App\Http\Controllers\Api\V1\LocationController;
 use App\Http\Controllers\AdminController;
 use App\Http\Controllers\AbuseReportController;
 
 Route::get('/internal/location/search', [LocationSearchController::class, 'search']);
+
+/*
+| Master education hierarchy (Shaadi.com-style). Public read-only.
+*/
+Route::get('/master/education', [MasterEducationController::class, 'index']);
 Route::middleware(['auth'])->post('/internal/location/suggest', [LocationSuggestionController::class, 'store']);
 
 Route::prefix('v1')->group(function () {

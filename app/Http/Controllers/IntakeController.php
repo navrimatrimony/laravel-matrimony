@@ -326,7 +326,6 @@ class IntakeController extends Controller
             'property_summary' => 'property_summary',
             'property_assets' => 'property_assets',
             'horoscope' => 'horoscope',
-            'legal_cases' => 'legal_cases',
             'preferences' => 'preferences',
             'narrative' => 'extended_narrative',
         ];
@@ -659,6 +658,18 @@ class IntakeController extends Controller
             $childLivingWithOptions = \App\Models\MasterChildLivingWith::where('is_active', true)->get();
         }
 
+        $rashis = \App\Models\MasterRashi::where('is_active', true)->get();
+        $nakshatras = \App\Models\MasterNakshatra::where('is_active', true)->get();
+        $gans = \App\Models\MasterGan::where('is_active', true)->get();
+        $nadis = \App\Models\MasterNadi::where('is_active', true)->get();
+        $yonis = \App\Models\MasterYoni::where('is_active', true)->get();
+        $mangalDoshTypes = \App\Models\MasterMangalDoshType::where('is_active', true)->get();
+        $horoscopeRulesJson = app(\App\Services\HoroscopeRuleService::class)->getRulesForFrontend();
+        $horoscopeSource = $sections['horoscope']['data'] ?? ($intake->approval_snapshot_json['horoscope'] ?? []);
+        $horoscopeRow = is_array($horoscopeSource) && isset($horoscopeSource[0]) ? $horoscopeSource[0] : (is_array($horoscopeSource) ? $horoscopeSource : []);
+        $horoscopeRow = is_object($horoscopeRow) ? (array) $horoscopeRow : $horoscopeRow;
+        $horoscopeDependencyWarnings = app(\App\Services\HoroscopeRuleService::class)->getValidationWarningsForUI($horoscopeRow)['warnings'];
+
         return view('intake.preview', compact(
             'intake',
             'sections',
@@ -677,7 +688,15 @@ class IntakeController extends Controller
             'maritalStatuses',
             'profileMarriages',
             'profileChildren',
-            'childLivingWithOptions'
+            'childLivingWithOptions',
+            'rashis',
+            'nakshatras',
+            'gans',
+            'nadis',
+            'yonis',
+            'mangalDoshTypes',
+            'horoscopeRulesJson',
+            'horoscopeDependencyWarnings'
         ));
     }
 
@@ -728,20 +747,23 @@ class IntakeController extends Controller
 
     /**
      * Ensure snapshot has SSOT top-level keys (all present, empty array when missing).
-     * Scalar keys (horoscope, property_summary, extended_narrative) preserve string/null.
+     * Horoscope: array of rows for MutationService; if submitted as array use it, else [].
+     * property_summary, extended_narrative remain scalar.
      */
     private function normalizeApprovalSnapshot(array $snapshot): array
     {
         $keys = [
             'core', 'contacts', 'children', 'marriages', 'siblings', 'education_history', 'career_history',
             'addresses', 'relatives', 'property_summary', 'property_assets', 'horoscope',
-            'legal_cases', 'preferences', 'extended_narrative', 'confidence_map',
+            'preferences', 'extended_narrative', 'confidence_map',
         ];
-        $scalarKeys = ['property_summary', 'horoscope', 'extended_narrative'];
+        $scalarKeys = ['property_summary', 'extended_narrative'];
         $out = [];
         foreach ($keys as $k) {
             if (in_array($k, $scalarKeys, true)) {
                 $out[$k] = array_key_exists($k, $snapshot) ? $snapshot[$k] : null;
+            } elseif ($k === 'horoscope') {
+                $out[$k] = isset($snapshot[$k]) && is_array($snapshot[$k]) ? $snapshot[$k] : [];
             } else {
                 $out[$k] = isset($snapshot[$k]) && is_array($snapshot[$k]) ? $snapshot[$k] : [];
             }

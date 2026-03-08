@@ -97,6 +97,22 @@
                 if (t) t.value = talukaId;
                 if (d) d.value = districtId;
                 if (s) s.value = stateId;
+                var row = wrapper.closest('.property-asset-row');
+                if (row) {
+                    var sync = row.querySelector('.location-display-sync');
+                    if (sync) sync.value = displayLabel;
+                }
+            }
+            var displaySyncName = wrapper.getAttribute('data-display-sync-name');
+            if (displaySyncName) {
+                var form = wrapper.closest('form');
+                if (form) {
+                    var found = null;
+                    form.querySelectorAll('input[name]').forEach(function(inp) {
+                        if (inp.getAttribute('name') === displaySyncName) found = inp;
+                    });
+                    if (found) found.value = displayLabel;
+                }
             }
         }
 

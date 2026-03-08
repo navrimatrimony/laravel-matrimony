@@ -68,7 +68,6 @@ class ExternalAiParsingService
                 . "  \"property_summary\": [],\n"
                 . "  \"property_assets\": [],\n"
                 . "  \"horoscope\": [],\n"
-                . "  \"legal_cases\": [],\n"
                 . "  \"preferences\": [],\n"
                 . "  \"extended_narrative\": [],\n"
                 . "  \"confidence_map\": { \"field_name\": number between 0 and 1 }\n"
@@ -127,7 +126,6 @@ class ExternalAiParsingService
                 'property_summary',
                 'property_assets',
                 'horoscope',
-                'legal_cases',
                 'preferences',
                 'extended_narrative',
                 'confidence_map',
