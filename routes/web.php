@@ -98,10 +98,10 @@ Route::middleware('auth')->group(function () {
         ->name('matrimony.profile.wizard');
     Route::get('/matrimony/profile/wizard/{section}', [ProfileWizardController::class, 'show'])
         ->name('matrimony.profile.wizard.section')
-        ->where('section', 'basic-info|marriages|personal-family|siblings|relatives|alliance|location|property|horoscope|about-preferences|contacts|photo|full');
+        ->where('section', 'basic-info|physical|marriages|location|personal-family|education-career|family-details|siblings|relatives|alliance|property|horoscope|about-preferences|contacts|photo|full');
     Route::post('/matrimony/profile/wizard/{section}', [ProfileWizardController::class, 'store'])
         ->name('matrimony.profile.wizard.store')
-        ->where('section', 'basic-info|marriages|personal-family|siblings|relatives|alliance|location|property|horoscope|about-preferences|contacts|photo|full');
+        ->where('section', 'basic-info|physical|marriages|location|personal-family|education-career|family-details|siblings|relatives|alliance|property|horoscope|about-preferences|contacts|photo|full');
 
     Route::get('/matrimony/profile/wizard/marriage-fields', [ProfileWizardController::class, 'marriageFields'])
         ->name('matrimony.profile.wizard.marriage-fields');

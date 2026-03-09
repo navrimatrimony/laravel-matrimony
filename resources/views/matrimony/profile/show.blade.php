@@ -688,7 +688,7 @@
     });
 @endphp
 <div class="mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
-    <h3 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Alliance & Native Network</h3>
+    <h3 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Relatives & Native Network</h3>
     @foreach($allianceByLocation as $locationLabel => $items)
         <div class="mb-3">
             <p class="text-gray-500 text-sm font-medium mb-1">{{ $locationLabel }}</p>

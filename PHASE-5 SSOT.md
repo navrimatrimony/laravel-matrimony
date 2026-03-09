@@ -6026,3 +6026,411 @@ Goal: Make it extremely easy for users to upload any biodata format, while keepi
 - Use these metrics to:
   - Identify fields where rules can replace AI.
   - Track reduction in AI calls over time as rules harden.
+
+APPEND THE FOLLOWING BLOCK AT THE VERY END OF "PHASE-5 SSOT.md" WITHOUT MODIFYING OR REINTERPRETING ANY EARLIER SSOT RULES.
+
+############################################################
+PHASE-5 SSOT ADD — PARTNER PREFERENCES ENGINE (RICH STRUCTURED MODEL)
+############################################################
+
+Purpose:
+Partner Preferences must move from a minimal flat form to a fully structured, smart, guided, SSOT-governed engine.
+This engine is part of Phase-5 manual profile editing / wizard editing scope.
+This engine does NOT implement AI matching, ranking, scoring, or recommendation ordering.
+It only captures, validates, governs, and stores structured partner preference data.
+
+============================================================
+1️⃣ GOVERNANCE STATUS
+============================================================
+
+Partner Preferences are a STRUCTURED relational entity.
+They MUST NOT be stored in JSON blobs.
+They MUST NOT be stored inside profile_extended_attributes.
+They MUST NOT be silently inferred and persisted without explicit user save.
+All mutations MUST pass through MutationService.
+No direct update() calls allowed on preference data.
+No silent overwrite allowed.
+Where applicable, preference changes must write profile_change_history entries.
+
+This SSOT addendum extends the existing "profile_preferences" entity only.
+It does not weaken or override:
+- Zero Data Loss
+- No Silent Overwrite
+- No JSON Blob Storage
+- Intake Immutable
+- Conflict-Safe Mutation
+- MutationService-only discipline
+- Age never stored on profile core table
+
+============================================================
+2️⃣ ENGINE GOAL
+============================================================
+
+The Partner Preferences engine must be:
+- Structured
+- Smartly auto-suggested
+- Fully editable by user
+- Non-destructive
+- Wizard-compatible
+- Manual edit compatible
+- Future-ready for matching systems
+- Fully normalized
+- Fully auditable
+
+Important distinction:
+AUTO-SUGGESTION is allowed.
+AUTO-SAVE is NOT allowed.
+
+Meaning:
+The system may compute recommended default preferences from the user's own filled profile data,
+but those values become persistent only after explicit user save.
+
+============================================================
+3️⃣ AUTO-SUGGESTION / AUTOFILL LAW
+============================================================
+
+The engine may generate suggestion values based on current profile data, such as:
+- date_of_birth derived age band logic
+- height_cm based range suggestion
+- religion / caste / sub_caste suggestion modes
+- current country/state/district/city based location suggestions
+- education snapshot based education preference suggestions
+- annual_income / family_income based income preference suggestions
+- marital_status based openness suggestions
+
+However:
+- Suggested values are UI defaults only until saved.
+- Suggested values must not mutate DB on page load.
+- Suggested values must not overwrite existing saved preferences unless user explicitly saves.
+- Existing saved preferences always take priority over generated suggestions.
+- If saved preferences exist, UI must load saved values first.
+- If saved preferences do not exist, UI may load computed suggestions as unsaved defaults.
+
+Transparency rule:
+UI should clearly communicate that some values are "Suggested from your profile".
+
+============================================================
+4️⃣ STRUCTURE MODEL — PROFILE_PREFERENCES (EXPANDED)
+============================================================
+
+"profile_preferences" remains a one-to-one profile entity.
+
+It must support rich structured fields for partner preferences.
+
+A. AGE / HEIGHT
+- preferred_age_min
+- preferred_age_max
+- preferred_height_min_cm
+- preferred_height_max_cm
+
+B. COMMUNITY / IDENTITY
+- preferred_religion
+- preferred_caste
+- preferred_sub_caste
+- preferred_mother_tongue
+
+C. LOCATION
+- preferred_country_id
+- preferred_state_id
+- preferred_district_id
+- preferred_city_id
+
+D. EDUCATION & CAREER
+- preferred_education_min
+- preferred_education
+- preferred_working_with
+- preferred_profession_area
+- preferred_occupation_title
+- preferred_income_min
+- preferred_income_max
+- preferred_income_currency
+
+E. MARITAL / FAMILY / LIFESTYLE
+- preferred_marital_status
+- preferred_profile_managed_by
+- preferred_diet
+
+F. OPENNESS / STRICTNESS FLAGS
+For each major filter, structured strictness must be supported.
+Allowed values:
+- must_match
+- preferred
+- open
+
+At minimum strictness columns must exist for:
+- religion_strictness
+- caste_strictness
+- location_strictness
+- education_strictness
+- income_strictness
+- marital_status_strictness
+- diet_strictness
+
+G. QUICK TOGGLES
+Structured boolean flags allowed:
+- prefer_same_city
+- prefer_same_district
+- prefer_same_state
+- open_to_relocation
+- income_not_important
+
+H. PRESET MODE
+A structured preset field is allowed:
+- preference_preset
+
+Allowed preset values:
+- traditional
+- balanced
+- broad
+- custom
+
+No JSON arrays.
+No JSON rule bundles.
+No mixed serialized structures.
+
+If in future multi-select support is required for categories like caste / mother tongue / profession,
+that must be implemented through normalized relational design, NOT JSON blobs.
+
+============================================================
+5️⃣ NORMALIZATION RULE
+============================================================
+
+If any preference requires multiple selectable values, SSOT law is:
+
+Single-value preference:
+- store directly in profile_preferences
+
+Multi-value preference:
+- create a dedicated normalized child table
+- one row per selected option
+- no CSV strings
+- no JSON arrays
+
+Examples of future-valid normalized child tables if needed:
+- profile_preference_mother_tongues
+- profile_preference_castes
+- profile_preference_professions
+- profile_preference_locations
+
+Do NOT prematurely add child tables unless actual UI / business need exists.
+But under no condition may multi-value data be stored as JSON blob.
+
+============================================================
+6️⃣ AGE LAW
+============================================================
+
+Profile core age must never be stored.
+Age continues to be derived from date_of_birth only.
+
+Partner preference age range IS allowed as explicit structured preference:
+- preferred_age_min
+- preferred_age_max
+
+These are preference values, not stored profile age.
+This does NOT violate "Age Never Stored" because the prohibition applies to profile core age as a stored attribute.
+
+============================================================
+7️⃣ UI / UX REQUIREMENTS
+============================================================
+
+Partner Preferences engine must be upgraded from a flat form into sectioned smart UI.
+
+Required sections:
+
+1. Basic Preferences
+- Age range
+- Height range
+- Marital status preference
+
+2. Community Preferences
+- Religion
+- Caste
+- Sub-caste
+- Mother tongue
+
+3. Location Preferences
+- Country
+- State
+- District / City
+- Same city / district / state shortcuts
+- Relocation openness
+
+4. Education & Career Preferences
+- Minimum education
+- Education preference
+- Profession area
+- Working with
+- Occupation
+- Income range
+- Income not important toggle
+
+5. Lifestyle / Other Preferences
+- Diet
+- Profile managed by
+
+6. Flexibility / Strictness
+- Must Match
+- Preferred
+- Open
+
+The UI must support:
+- smart suggested defaults
+- editable controls
+- section-wise open behavior
+- preset-based quick fill
+- explicit save only
+
+The UI must not:
+- show raw JSON
+- auto-save on page load
+- silently replace saved user values
+- hide important filters inside opaque structures
+
+============================================================
+8️⃣ PRESET LAW
+============================================================
+
+The engine may provide quick presets:
+
+- traditional
+- balanced
+- broad
+- custom
+
+Preset behavior:
+- Preset may fill or suggest multiple structured fields at once in UI
+- Preset must remain fully editable
+- Preset application must not persist until save
+- If user manually changes fields after preset, preset may become "custom"
+
+Preset definitions must remain deterministic and code-driven.
+No AI-generated hidden preset logic.
+No non-auditable black-box preset mutation.
+
+============================================================
+9️⃣ VALIDATION LAW
+============================================================
+
+Validation examples:
+- preferred_age_min <= preferred_age_max
+- preferred_height_min_cm <= preferred_height_max_cm
+- preferred_income_min <= preferred_income_max
+- strictness values limited to:
+  must_match / preferred / open
+- preset limited to:
+  traditional / balanced / broad / custom
+- foreign keys must be valid where IDs are used
+- nullable fields allowed where "open" behavior applies
+
+Open behavior law:
+If a field strictness is "open", its exact value may be null.
+If a field strictness is "must_match" or "preferred", the corresponding structured value should be present where logically required.
+
+============================================================
+🔟 MUTATION SERVICE LAW
+============================================================
+
+All partner preference persistence must flow through MutationService.
+
+MutationService responsibilities:
+- load current saved preference state
+- compare incoming structured preference payload
+- persist only approved changes
+- write history entries
+- preserve transactional integrity
+- prevent silent overwrite
+- remain compatible with lifecycle rules
+
+Direct model save/update bypass is prohibited for preference mutations.
+
+If preference editing is treated as dynamic/non-critical in conflict policy,
+that classification must be explicit and documented in code.
+If any preference field is classified as conflict-sensitive in future,
+that classification must be added consciously, not implicitly.
+
+============================================================
+1️⃣1️⃣ INTAKE / OCR / AI BOUNDARY
+============================================================
+
+This preference engine does NOT require OCR extraction.
+It does NOT require AI parsing.
+It does NOT require AI-generated partner recommendations.
+
+If in future biodata or user text is used to suggest preferences,
+that suggestion must still respect:
+- explicit user review
+- explicit user save
+- no auto-persist
+- no JSON blobs
+- MutationService-only mutation
+
+============================================================
+1️⃣2️⃣ WIZARD + MANUAL EDIT PARITY
+============================================================
+
+The same structured preference model must be used in:
+- profile wizard partner preferences tab
+- full manual profile edit UI
+- admin read visibility (as applicable)
+
+No structural mismatch allowed between:
+- DB schema
+- Model
+- Validation rules
+- Mutation payload
+- Blade/UI fields
+- Admin/user displays
+
+============================================================
+1️⃣3️⃣ ADMIN / AUDIT VISIBILITY
+============================================================
+
+Admin should be able to view structured partner preferences clearly.
+Admin UI must not depend on raw JSON inspection.
+Preference changes should remain auditable through standard governance layers.
+
+============================================================
+1️⃣4️⃣ PHASE-5 IMPLEMENTATION SCOPE FOR THIS ENGINE
+============================================================
+
+This addendum authorizes and requires:
+- schema expansion of profile_preferences
+- model alignment
+- structured validation
+- MutationService integration
+- smart autofill/suggestion logic
+- sectioned wizard UI
+- manual edit UI parity
+- history-safe persistence
+- terminal/schema verification
+
+This addendum does NOT authorize:
+- AI matching
+- ranking
+- recommendation scoring
+- automated partner selection
+- JSON fallback storage
+
+============================================================
+1️⃣5️⃣ COMPLETION CRITERIA
+============================================================
+
+Partner Preferences Engine is complete only if:
+
+✔ profile_preferences schema matches SSOT structured model
+✔ No JSON blob storage used
+✔ Smart suggestions appear without auto-saving
+✔ Saved preferences always override fresh suggestions
+✔ Wizard UI supports all structured fields
+✔ Manual edit UI supports all structured fields
+✔ MutationService is the only write path
+✔ Validation covers ranges / strictness / enums / FK integrity
+✔ profile_change_history coverage verified
+✔ No direct update() bypass
+✔ No lifecycle violation introduced
+✔ No structural mismatch between UI and DB
+✔ No hidden uneditable structured preference field remains
+
+############################################################
+END OF SSOT ADD — PARTNER PREFERENCES ENGINE
+############################################################

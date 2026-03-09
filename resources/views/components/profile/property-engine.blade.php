@@ -15,44 +15,11 @@
     $prefix = $namePrefix !== '' ? $namePrefix : '';
     $sumName = function($key) use ($prefix) { return $prefix !== '' ? $prefix . '[property_summary][' . $key . ']' : 'property_summary[' . $key . ']'; };
     $assetName = function($idx, $key) use ($prefix) { return $prefix !== '' ? $prefix . '[property_assets][' . $idx . '][' . $key . ']' : 'property_assets[' . $idx . '][' . $key . ']'; };
-    $agricultureOptions = ['बागायत', 'जिरायत', 'विहीर', 'कालवा', 'इतर'];
     $assetsContainerId = $prefix !== '' ? str_replace('[', '-', str_replace(']', '', $prefix)) . '-property-assets' : 'property-assets-container';
     $assetsNamePrefix = $prefix !== '' ? $prefix . '[property_assets]' : 'property_assets';
 @endphp
 <div class="space-y-6 property-engine" data-property-engine data-name-prefix="{{ $prefix }}">
     <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100 border-b border-gray-200 dark:border-gray-700 pb-2">Property</h2>
-
-    {{-- Property Summary --}}
-    <div>
-        <h3 class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Property summary</h3>
-        <input type="hidden" name="{{ $sumName('id') }}" value="{{ $sum['id'] ?? '' }}">
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <label class="flex items-center gap-2"><input type="checkbox" name="{{ $sumName('owns_house') }}" value="1" {{ !empty($sum['owns_house']) ? 'checked' : '' }}> Own House</label>
-            <label class="flex items-center gap-2"><input type="checkbox" name="{{ $sumName('owns_flat') }}" value="1" {{ !empty($sum['owns_flat']) ? 'checked' : '' }}> Own Flat</label>
-            <label class="flex items-center gap-2"><input type="checkbox" name="{{ $sumName('owns_agriculture') }}" value="1" {{ !empty($sum['owns_agriculture']) ? 'checked' : '' }}> Own Agriculture</label>
-            <div>
-                <label class="block text-sm mb-1">Agriculture Type</label>
-                <select name="{{ $sumName('agriculture_type') }}" class="form-select w-full rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-3 py-2">
-                    <option value="">—</option>
-                    @foreach($agricultureOptions as $opt)
-                        <option value="{{ $opt }}" {{ ($sum['agriculture_type'] ?? '') === $opt ? 'selected' : '' }}>{{ $opt }}</option>
-                    @endforeach
-                </select>
-            </div>
-            <div>
-                <label class="block text-sm mb-1">Total Land (acres)</label>
-                <input type="number" name="{{ $sumName('total_land_acres') }}" value="{{ $sum['total_land_acres'] ?? '' }}" step="0.01" class="rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-3 py-2 w-32">
-            </div>
-            <div>
-                <label class="block text-sm mb-1">Annual Agriculture Income</label>
-                <input type="number" name="{{ $sumName('annual_agri_income') }}" value="{{ $sum['annual_agri_income'] ?? '' }}" step="0.01" class="rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-3 py-2 w-40">
-            </div>
-            <div class="md:col-span-2">
-                <label class="block text-sm mb-1">Notes</label>
-                <textarea name="{{ $sumName('summary_notes') }}" rows="2" class="w-full rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-3 py-2">{{ $sum['summary_notes'] ?? '' }}</textarea>
-            </div>
-        </div>
-    </div>
 
     {{-- Property Assets (repeatable) — same Add / Remove this entry pattern as relation-details --}}
     <div class="border-2 border-rose-500 dark:border-rose-400 rounded-lg p-4">
@@ -114,6 +81,13 @@
                 </div>
             @endforeach
         </div>
+    </div>
+
+    {{-- Notes only (summary section reduced to just notes) --}}
+    <div>
+        <input type="hidden" name="{{ $sumName('id') }}" value="{{ $sum['id'] ?? '' }}">
+        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Notes</label>
+        <textarea name="{{ $sumName('summary_notes') }}" rows="2" class="w-full rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-3 py-2" placeholder="Optional notes about property">{{ $sum['summary_notes'] ?? '' }}</textarea>
     </div>
 </div>
 

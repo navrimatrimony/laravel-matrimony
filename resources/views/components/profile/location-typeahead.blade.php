@@ -5,6 +5,7 @@
     'placeholder' => 'Type village / city / pincode',
     'label' => null,
     'noBorder' => false,      // when true, wrapper has no border (e.g. basic info birth place)
+    'compactRow' => false,    // when true, no vertical padding (for single-line row layout)
     /**
      * Mode support (Phase-5): simple (default) vs full (adds detailed address text field).
      * Backward compatible: when not provided, component behaves exactly as before.
@@ -36,7 +37,11 @@
     background-color: rgb(55 65 81);
 }
 </style>
-<div class="{{ $wrapperClass }} space-y-0 rounded-lg {{ $noBorder ? 'pt-0 px-3 pb-3' : 'p-3' }} {{ $noBorder ? '' : 'border-2 border-rose-500 dark:border-rose-400' }}" data-location-context="{{ $context }}" data-name-prefix="{{ $namePrefix }}" @if(!empty($displaySyncName)) data-display-sync-name="{{ $displaySyncName }}" @endif>
+@php
+    $paddingClass = $compactRow ? 'px-2 py-0' : ($noBorder ? 'pt-0 px-3 pb-3' : 'p-3');
+    $borderClass = $noBorder ? '' : 'border-2 border-rose-500 dark:border-rose-400';
+@endphp
+<div class="{{ $wrapperClass }} space-y-0 rounded-lg {{ $paddingClass }} {{ $borderClass }}" data-location-context="{{ $context }}" data-name-prefix="{{ $namePrefix }}" @if(!empty($displaySyncName)) data-display-sync-name="{{ $displaySyncName }}" @endif>
     @if ($context === 'residence')
         <input type="hidden" name="{{ $namePrefix !== '' ? $namePrefix . '[country_id]' : 'country_id' }}" class="location-hidden-country" value="{{ $attributes->get('data-country-id', '') }}">
         <input type="hidden" name="{{ $namePrefix !== '' ? $namePrefix . '[state_id]' : 'state_id' }}" class="location-hidden-state" value="{{ $attributes->get('data-state-id', '') }}">

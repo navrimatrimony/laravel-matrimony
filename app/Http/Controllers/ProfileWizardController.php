@@ -20,13 +20,15 @@ class ProfileWizardController extends Controller
         'basic-info',
         'physical',
         'marriages',
-        'personal-family',
+        'education-career',
+        'family-details',
         'siblings',
         'relatives',
         'alliance',
         'location',
         'property',
         'horoscope',
+        'about-me',
         'about-preferences',
         'contacts',
         'photo',
@@ -53,8 +55,14 @@ class ProfileWizardController extends Controller
             return redirect()->route('login');
         }
 
+        // Feature removal: Marriages + Location tabs removed. Purge their stored data once per session.
+        if (! session()->has('purged_marriages_location')) {
+            $this->purgeMarriagesAndLocationData($profile);
+            session(['purged_marriages_location' => true]);
+        }
+
         $minimal = $this->isMinimalWizard();
-        $first = $minimal ? FieldCatalogService::getFirstSection(true) : ProfileCompletionService::firstSection();
+        $first = $minimal ? FieldCatalogService::getFirstSection(true) : FieldCatalogService::getFirstSection(false);
         $pct = ProfileCompletionService::calculateCompletionPercentage($profile);
         if ($pct >= 100) {
             session()->forget('wizard_minimal');
@@ -69,10 +77,24 @@ class ProfileWizardController extends Controller
      */
     public function show(string $section)
     {
+        // Legacy: personal-family was split into education-career + family-details; redirect old links
+        if ($section === 'personal-family') {
+            return redirect()->route('matrimony.profile.wizard.section', ['section' => 'education-career'], 301);
+        }
+        // Legacy: marriages/location tabs removed; purge and redirect
+        if ($section === 'marriages' || $section === 'location') {
+            $profile = $this->ensureProfile(auth()->user());
+            if ($profile) {
+                $this->purgeMarriagesAndLocationData($profile);
+            }
+            return redirect()->route('matrimony.profile.wizard.section', ['section' => FieldCatalogService::getFirstSection($this->isMinimalWizard() ? true : false)], 301)
+                ->with('info', 'Marriages and Location sections were removed.');
+        }
+
         $allowed = $this->getAllowedSectionKeys();
         if (! in_array($section, $allowed, true)) {
             $minimal = $this->isMinimalWizard();
-            $first = $minimal ? FieldCatalogService::getFirstSection(true) : ProfileCompletionService::firstSection();
+            $first = $minimal ? FieldCatalogService::getFirstSection(true) : FieldCatalogService::getFirstSection(false);
             return redirect()->route('matrimony.profile.wizard.section', ['section' => $first])
                 ->with('error', $minimal ? 'Complete the short onboarding first.' : 'Invalid section.');
         }
@@ -93,18 +115,23 @@ class ProfileWizardController extends Controller
             $minimal = false;
         }
         $sections = $minimal ? FieldCatalogService::getSectionKeys(true) : FieldCatalogService::getSectionKeys(false);
-        $nextSection = $minimal ? FieldCatalogService::getNextSection($section, true) : ProfileCompletionService::nextSection($section);
+        $nextSection = $minimal ? FieldCatalogService::getNextSection($section, true) : FieldCatalogService::getNextSection($section, false);
         if ($nextSection === null && $minimal) {
             $nextSection = 'full';
         }
+        $previousSection = $minimal ? FieldCatalogService::getPreviousSection($section, true) : FieldCatalogService::getPreviousSection($section, false);
 
         $completionPct = ProfileCompletionService::calculateCompletionPercentage($profile);
+        $sectionStatuses = ProfileCompletionService::getSectionStatuses($profile, $sections);
         $viewData = $this->getSectionViewData($section, $profile);
         $viewData['profile'] = $profile;
         $viewData['currentSection'] = $section;
         $viewData['sections'] = $sections;
+        $viewData['sectionLabels'] = FieldCatalogService::getSectionsForDisplay($minimal);
         $viewData['completionPct'] = $completionPct;
         $viewData['nextSection'] = $nextSection;
+        $viewData['previousSection'] = $previousSection;
+        $viewData['sectionStatuses'] = $sectionStatuses;
         $viewData['wizardMinimal'] = $minimal;
 
         return view('matrimony.profile.wizard.section', $viewData);
@@ -142,10 +169,25 @@ class ProfileWizardController extends Controller
     {
         \Log::info('DEBUG SECTION PARAM', ['section' => $section]);
 
+        // Legacy: redirect POST for personal-family to education-career (section no longer in nav)
+        if ($section === 'personal-family') {
+            return redirect()->route('matrimony.profile.wizard.section', ['section' => 'education-career'])
+                ->with('info', 'This section is now split into Education & Career and Family details.');
+        }
+        // Legacy: marriages/location tabs removed; purge and redirect
+        if ($section === 'marriages' || $section === 'location') {
+            $profile = $this->ensureProfile(auth()->user());
+            if ($profile) {
+                $this->purgeMarriagesAndLocationData($profile);
+            }
+            return redirect()->route('matrimony.profile.wizard.section', ['section' => FieldCatalogService::getFirstSection($this->isMinimalWizard() ? true : false)])
+                ->with('success', 'Removed marriages and location data.');
+        }
+
         $allowed = $this->getAllowedSectionKeys();
         if (! in_array($section, $allowed, true)) {
             $minimal = $this->isMinimalWizard();
-            $first = $minimal ? FieldCatalogService::getFirstSection(true) : ProfileCompletionService::firstSection();
+            $first = $minimal ? FieldCatalogService::getFirstSection(true) : FieldCatalogService::getFirstSection(false);
             return redirect()->route('matrimony.profile.wizard.section', ['section' => $first])
                 ->with('error', 'Invalid section.');
         }
@@ -162,12 +204,23 @@ class ProfileWizardController extends Controller
 
         if ($section === 'location') {
             $minimal = $this->isMinimalWizard();
-            $next = $minimal ? FieldCatalogService::getNextSection($section, true) : ProfileCompletionService::nextSection($section);
+            $next = $minimal ? FieldCatalogService::getNextSection($section, true) : FieldCatalogService::getNextSection($section, false);
             if ($next) {
                 return redirect()->route('matrimony.profile.wizard.section', ['section' => $next])
                     ->with('success', 'Saved. Continue to next section.');
             }
             return redirect()->route('matrimony.profiles.index')->with('success', 'Profile updated.');
+        }
+
+        // Photo section: no direct upload in wizard; user uses centralized upload engine. Save & Next without file = skip to next.
+        if ($section === 'photo' && ! $request->hasFile('profile_photo')) {
+            $minimal = $this->isMinimalWizard();
+            $next = $minimal ? FieldCatalogService::getNextSection($section, true) : FieldCatalogService::getNextSection($section, false);
+            if ($next) {
+                return redirect()->route('matrimony.profile.wizard.section', ['section' => $next])
+                    ->with('info', 'Use the photo upload engine above to add or change your photo.');
+            }
+            return redirect()->route('matrimony.profiles.index')->with('info', 'You can add a photo anytime from the photo section.');
         }
 
         $snapshot = $this->buildSectionSnapshot($section, $request, $profile);
@@ -215,8 +268,13 @@ class ProfileWizardController extends Controller
                 ->withInput();
         }
 
+        if ($request->boolean('save_only')) {
+            return redirect()->route('matrimony.profile.wizard.section', ['section' => $section])
+                ->with('success', 'Saved.');
+        }
+
         $minimal = $this->isMinimalWizard();
-        $next = $minimal ? FieldCatalogService::getNextSection($section, true) : ProfileCompletionService::nextSection($section);
+        $next = $minimal ? FieldCatalogService::getNextSection($section, true) : FieldCatalogService::getNextSection($section, false);
         if ($next) {
             return redirect()->route('matrimony.profile.wizard.section', ['section' => $next])
                 ->with('success', 'Saved. Continue to next section.');
@@ -256,6 +314,45 @@ class ProfileWizardController extends Controller
         ]);
 
         return $profile;
+    }
+
+    /**
+     * Purge Marriages + Location data for this profile (feature removed).
+     * No schema changes; only clears existing rows/columns for the current profile.
+     */
+    private function purgeMarriagesAndLocationData(MatrimonyProfile $profile): void
+    {
+        // Marriages + children (entity tables)
+        if (\Schema::hasTable('profile_marriages')) {
+            DB::table('profile_marriages')->where('profile_id', $profile->id)->delete();
+        }
+        if (\Schema::hasTable('profile_children')) {
+            DB::table('profile_children')->where('profile_id', $profile->id)->delete();
+        }
+
+        // Core marital fields
+        $coreUpdates = [];
+        if (\Schema::hasColumn('matrimony_profiles', 'marital_status_id')) {
+            $coreUpdates['marital_status_id'] = null;
+        }
+        if (\Schema::hasColumn('matrimony_profiles', 'has_children')) {
+            $coreUpdates['has_children'] = null;
+        }
+
+        // Location hierarchy + address_line + work/native place
+        foreach (['country_id', 'state_id', 'district_id', 'taluka_id', 'city_id', 'address_line', 'work_city_id', 'work_state_id', 'native_city_id', 'native_taluka_id', 'native_district_id', 'native_state_id'] as $col) {
+            if (\Schema::hasColumn('matrimony_profiles', $col)) {
+                $coreUpdates[$col] = null;
+            }
+        }
+        if ($coreUpdates !== []) {
+            DB::table('matrimony_profiles')->where('id', $profile->id)->update($coreUpdates);
+        }
+
+        // Normalized address rows
+        if (\Schema::hasTable('profile_addresses')) {
+            DB::table('profile_addresses')->where('profile_id', $profile->id)->delete();
+        }
     }
 
     private function getSectionViewData(string $section, MatrimonyProfile $profile): array
@@ -326,6 +423,16 @@ class ProfileWizardController extends Controller
                     $data['childLivingWithOptions'] = \App\Models\MasterChildLivingWith::where('is_active', true)->get();
                 }
                 break;
+            case 'education-career':
+                $data['profileEducation'] = DB::table('profile_education')->where('profile_id', $profile->id)->orderBy('id')->get();
+                $data['profileCareer'] = DB::table('profile_career')->where('profile_id', $profile->id)->orderBy('id')->get();
+                $data['currencies'] = \App\Models\MasterIncomeCurrency::where('is_active', true)->get();
+                break;
+            case 'family-details':
+                $data['currencies'] = \App\Models\MasterIncomeCurrency::where('is_active', true)->get();
+                $data['familyTypes'] = \App\Models\MasterFamilyType::where('is_active', true)->get();
+                $data['physicalBuilds'] = \App\Models\MasterPhysicalBuild::where('is_active', true)->get();
+                break;
             case 'personal-family':
                 $data['profileChildren'] = DB::table('profile_children')->where('profile_id', $profile->id)->orderBy('id')->get();
                 $data['profileEducation'] = DB::table('profile_education')->where('profile_id', $profile->id)->orderBy('id')->get();
@@ -390,6 +497,28 @@ class ProfileWizardController extends Controller
                 break;
             case 'alliance':
                 $data['otherRelativesText'] = $profile->getAttribute('other_relatives_text') ?? '';
+                $relRows = DB::table('profile_relatives')->where('profile_id', $profile->id)->orderBy('id')->get();
+                $cityIds = $relRows->pluck('city_id')->filter()->unique()->values()->all();
+                $cityNames = $cityIds ? \App\Models\City::whereIn('id', $cityIds)->pluck('name', 'id')->toArray() : [];
+                $mapRow = function ($row) use ($cityNames) {
+                    $arr = (array) $row;
+                    $arr['location_display'] = ! empty($row->city_id) ? ($cityNames[$row->city_id] ?? '') : '';
+
+                    return (object) $arr;
+                };
+                $maternalFamilyTypes = ['maternal_address_ajol', 'maternal_grandfather', 'maternal_grandmother', 'maternal_uncle', 'wife_maternal_uncle', 'maternal_aunt', 'husband_maternal_aunt', 'maternal_cousin', 'other_maternal'];
+                $data['profileRelativesMaternalFamily'] = $relRows->filter(fn ($r) => in_array($r->relation_type ?? '', $maternalFamilyTypes, true))->map($mapRow)->values();
+                $data['relationTypesMaternalFamily'] = [
+                    ['value' => 'maternal_address_ajol', 'label' => 'Maternal address (Ajol)'],
+                    ['value' => 'maternal_grandfather', 'label' => 'Maternal Grandfather'],
+                    ['value' => 'maternal_grandmother', 'label' => 'Maternal Grandmother'],
+                    ['value' => 'maternal_uncle', 'label' => 'Maternal Uncle (mama)'],
+                    ['value' => 'wife_maternal_uncle', 'label' => 'Maternal Uncle\'s wife (mami)'],
+                    ['value' => 'maternal_aunt', 'label' => 'Maternal Aunt (mavshi)'],
+                    ['value' => 'husband_maternal_aunt', 'label' => 'Husband of Maternal Aunt'],
+                    ['value' => 'maternal_cousin', 'label' => 'Cousin'],
+                    ['value' => 'other_maternal', 'label' => 'Other'],
+                ];
                 break;
             case 'location':
                 $data['countries'] = \App\Models\Country::all();
@@ -446,9 +575,11 @@ class ProfileWizardController extends Controller
                 $data['profile_contacts'] = $data['profile_contacts'] ?? collect();
                 $data['contactRelations'] = $data['contactRelations'] ?? collect();
                 break;
+            case 'about-me':
+                $data['extendedAttrs'] = DB::table('profile_extended_attributes')->where('profile_id', $profile->id)->first();
+                break;
             case 'about-preferences':
                 $data['preferences'] = DB::table('profile_preferences')->where('profile_id', $profile->id)->first();
-                $data['extendedAttrs'] = DB::table('profile_extended_attributes')->where('profile_id', $profile->id)->first();
                 break;
             case 'photo':
                 break;
@@ -457,7 +588,8 @@ class ProfileWizardController extends Controller
                     $this->getSectionViewData('basic-info', $profile),
                     $this->getSectionViewData('physical', $profile),
                     $this->getSectionViewData('marriages', $profile),
-                    $this->getSectionViewData('personal-family', $profile),
+                    $this->getSectionViewData('education-career', $profile),
+                    $this->getSectionViewData('family-details', $profile),
                     $this->getSectionViewData('siblings', $profile),
                     $this->getSectionViewData('relatives', $profile),
                     $this->getSectionViewData('alliance', $profile),
@@ -487,6 +619,10 @@ class ProfileWizardController extends Controller
                 return $this->buildMarriagesSnapshot($request);
             case 'children':
                 return $this->buildChildrenSnapshot($request);
+            case 'education-career':
+                return $this->buildEducationCareerSnapshot($request, $profile);
+            case 'family-details':
+                return $this->buildFamilyDetailsSnapshot($request, $profile);
             case 'personal-family':
                 return $this->buildPersonalFamilySnapshot($request, $profile);
             case 'siblings':
@@ -503,6 +639,8 @@ class ProfileWizardController extends Controller
                 return $this->buildHoroscopeSnapshot($request, $profile);
             case 'contacts':
                 return $this->buildContactsSnapshot($request, $profile);
+            case 'about-me':
+                return $this->buildAboutMeSnapshot($request, $profile);
             case 'about-preferences':
                 return $this->buildAboutPreferencesSnapshot($request, $profile);
             case 'photo':
@@ -607,6 +745,123 @@ class ProfileWizardController extends Controller
             'legal_cases' => [],
             'preferences' => [],
             'extended_narrative' => [],
+        ];
+    }
+
+    private function buildEducationCareerSnapshot(Request $request, MatrimonyProfile $profile): array
+    {
+        $this->resolveMasterLookupIds($request, ['income_currency' => 'income_currency_id']);
+        $incomeEngineRules = $this->incomeEngineValidationRules($request, 'income');
+        $request->validate(array_merge([
+            'annual_income' => 'nullable|numeric',
+            'income_currency_id' => 'nullable|exists:master_income_currencies,id',
+            'working_with_type_id' => 'nullable|exists:working_with_types,id',
+            'profession_id' => 'nullable|exists:professions,id',
+            'income_range_id' => 'nullable|exists:income_ranges,id',
+            'college_id' => 'nullable|exists:colleges,id',
+            'company_name' => 'nullable|string|max:255',
+            'income_private' => 'nullable|boolean',
+        ], $incomeEngineRules));
+        if ($request->filled('profession_id') && $request->filled('working_with_type_id')) {
+            $prof = \App\Models\Profession::find($request->input('profession_id'));
+            if ($prof && (string) $prof->working_with_type_id !== (string) $request->input('working_with_type_id')) {
+                throw \Illuminate\Validation\ValidationException::withMessages([
+                    'profession_id' => ['The selected profession does not belong to the selected Working With.'],
+                ]);
+            }
+        }
+        $workingWithTypeId = $request->filled('working_with_type_id') ? (int) $request->input('working_with_type_id') : null;
+        $professionId = $request->filled('profession_id') ? (int) $request->input('profession_id') : null;
+        if ($professionId && $workingWithTypeId) {
+            $prof = \App\Models\Profession::find($professionId);
+            if (! $prof || (string) $prof->working_with_type_id !== (string) $workingWithTypeId) {
+                $professionId = null;
+            }
+        }
+        $incomeEngineService = app(\App\Services\IncomeEngineService::class);
+        $incomeCore = $this->buildIncomeEngineCore($request, 'income', $incomeEngineService);
+        $defaultInr = \App\Models\MasterIncomeCurrency::where('code', 'INR')->value('id');
+        $core = [
+            'highest_education' => $request->input('highest_education') ?: null,
+            'highest_education_other' => $request->input('highest_education_other') ? trim((string) $request->input('highest_education_other')) ?: null : null,
+            'specialization' => $request->input('specialization') ?: null,
+            'college_id' => $request->filled('college_id') ? (int) $request->input('college_id') : null,
+            'working_with_type_id' => $workingWithTypeId,
+            'profession_id' => $professionId,
+            'company_name' => $request->input('company_name') ?: null,
+            'annual_income' => $request->filled('annual_income') ? (float) $request->input('annual_income') : null,
+            'income_range_id' => $request->filled('income_range_id') ? (int) $request->input('income_range_id') : null,
+            'income_private' => $request->boolean('income_private'),
+            'income_currency_id' => $request->input('income_currency_id') ? (int) $request->input('income_currency_id') : $defaultInr,
+        ];
+        $core = array_merge($core, $incomeCore);
+        $core = array_map(fn ($v) => $v === '' ? null : $v, $core);
+
+        $education_history = [];
+        foreach ($request->input('education_history', []) as $row) {
+            $education_history[] = [
+                'id' => ! empty($row['id']) ? (int) $row['id'] : null,
+                'degree' => trim((string) ($row['degree'] ?? '')),
+                'specialization' => trim((string) ($row['specialization'] ?? '')),
+                'university' => trim((string) ($row['university'] ?? '')),
+                'year_completed' => ! empty($row['year_completed']) ? (int) $row['year_completed'] : 0,
+            ];
+        }
+        $career_history = [];
+        foreach ($request->input('career_history', []) as $row) {
+            $career_history[] = [
+                'id' => ! empty($row['id']) ? (int) $row['id'] : null,
+                'designation' => trim((string) ($row['designation'] ?? '')),
+                'company' => trim((string) ($row['company'] ?? '')),
+                'location' => trim((string) ($row['location'] ?? '')) ?: null,
+                'start_year' => ! empty($row['start_year']) ? (int) $row['start_year'] : null,
+                'end_year' => ! empty($row['end_year']) ? (int) $row['end_year'] : null,
+                'is_current' => isset($row['is_current']) && (string) $row['is_current'] === '1',
+            ];
+        }
+
+        return [
+            'core' => $core,
+            'education_history' => $education_history,
+            'career_history' => $career_history,
+        ];
+    }
+
+    private function buildFamilyDetailsSnapshot(Request $request, MatrimonyProfile $profile): array
+    {
+        $this->resolveMasterLookupIds($request, [
+            'family_type' => 'family_type_id',
+            'physical_build' => 'physical_build_id',
+        ]);
+        $familyIncomeEngineRules = $this->incomeEngineValidationRules($request, 'family_income');
+        $request->validate(array_merge([
+            'family_income' => 'nullable|numeric',
+        ], $familyIncomeEngineRules));
+        $incomeEngineService = app(\App\Services\IncomeEngineService::class);
+        $familyIncomeCore = $this->buildIncomeEngineCore($request, 'family_income', $incomeEngineService);
+        $core = [
+            'father_name' => $request->input('father_name') ?: null,
+            'father_occupation' => $request->input('father_occupation') ?: null,
+            'father_contact_1' => trim((string) ($request->input('father_contact_1') ?? '')) ?: null,
+            'father_contact_2' => trim((string) ($request->input('father_contact_2') ?? '')) ?: null,
+            'father_contact_3' => trim((string) ($request->input('father_contact_3') ?? '')) ?: null,
+            'mother_name' => $request->input('mother_name') ?: null,
+            'mother_occupation' => $request->input('mother_occupation') ?: null,
+            'mother_contact_1' => trim((string) ($request->input('mother_contact_1') ?? '')) ?: null,
+            'mother_contact_2' => trim((string) ($request->input('mother_contact_2') ?? '')) ?: null,
+            'mother_contact_3' => trim((string) ($request->input('mother_contact_3') ?? '')) ?: null,
+            'family_type_id' => $request->input('family_type_id') ? (int) $request->input('family_type_id') : null,
+            'family_status' => $request->input('family_status') ?: null,
+            'family_values' => $request->input('family_values') ?: null,
+            'family_income' => $request->filled('family_income') ? (float) $request->input('family_income') : null,
+            'weight_kg' => $request->filled('weight_kg') ? (float) $request->input('weight_kg') : $profile->weight_kg,
+            'physical_build_id' => $request->input('physical_build_id') ? (int) $request->input('physical_build_id') : $profile->physical_build_id,
+        ];
+        $core = array_merge($core, $familyIncomeCore);
+        $core = array_map(fn ($v) => $v === '' ? null : $v, $core);
+
+        return [
+            'core' => $core,
         ];
     }
 
@@ -788,7 +1043,11 @@ class ProfileWizardController extends Controller
 
     private function buildRelativesSnapshot(Request $request, MatrimonyProfile $profile): array
     {
-        $relatives = $this->collectRelativesFromRequest($request);
+        // Extended family tab: only paternal from form; keep existing maternal from DB
+        $paternal = $this->collectRelativesFromRequestSource($request->input('relatives_parents_family', []));
+        $maternalFamilyTypes = ['maternal_address_ajol', 'maternal_grandfather', 'maternal_grandmother', 'maternal_uncle', 'wife_maternal_uncle', 'maternal_aunt', 'husband_maternal_aunt', 'maternal_cousin', 'other_maternal'];
+        $maternalFromDb = $this->loadRelativesFromDb($profile->id, $maternalFamilyTypes);
+        $relatives = array_merge($paternal, $maternalFromDb);
 
         return [
             'core' => [],
@@ -797,47 +1056,89 @@ class ProfileWizardController extends Controller
     }
 
     /**
-     * Collect relatives from the three engines (parents' family, grandparents, grandparents' family).
-     * Used by buildRelativesSnapshot (wizard step) and called from ManualSnapshotBuilderService for full form.
+     * Collect relatives from one request source (parents_family or maternal_family) into snapshot format.
      */
-    public function collectRelativesFromRequest(\Illuminate\Http\Request $request): array
+    private function collectRelativesFromRequestSource(array $rows): array
     {
         $relatives = [];
-        $sources = [
-            $request->input('relatives_parents_family', []),
-            $request->input('relatives_maternal_family', []),
-        ];
-        foreach ($sources as $rows) {
-            foreach ($rows as $row) {
-                $name = trim((string) ($row['name'] ?? ''));
-                $relationType = trim((string) ($row['relation_type'] ?? ''));
-                if ($name === '' && $relationType === '') {
-                    continue;
-                }
-                if (in_array($relationType, ['maternal_address_ajol', 'native_place'], true)) {
-                    $name = ''; // address-only row: no name
-                }
-                $relatives[] = [
-                    'id' => ! empty($row['id']) ? (int) $row['id'] : null,
-                    'relation_type' => $relationType ?: '',
-                    'name' => $name ?: '',
-                    'occupation' => trim((string) ($row['occupation'] ?? '')) ?: null,
-                    'city_id' => ! empty($row['city_id']) ? (int) $row['city_id'] : null,
-                    'state_id' => ! empty($row['state_id']) ? (int) $row['state_id'] : null,
-                    'contact_number' => trim((string) ($row['contact_number'] ?? '')) ?: null,
-                    'notes' => trim((string) ($row['notes'] ?? '')) ?: null,
-                    'is_primary_contact' => ! empty($row['is_primary_contact']),
-                ];
+        foreach ($rows as $row) {
+            $name = trim((string) ($row['name'] ?? ''));
+            $relationType = trim((string) ($row['relation_type'] ?? ''));
+            if ($name === '' && $relationType === '') {
+                continue;
             }
+            if (in_array($relationType, ['maternal_address_ajol', 'native_place'], true)) {
+                $name = '';
+            }
+            $relatives[] = [
+                'id' => ! empty($row['id']) ? (int) $row['id'] : null,
+                'relation_type' => $relationType ?: '',
+                'name' => $name ?: '',
+                'occupation' => trim((string) ($row['occupation'] ?? '')) ?: null,
+                'city_id' => ! empty($row['city_id']) ? (int) $row['city_id'] : null,
+                'state_id' => ! empty($row['state_id']) ? (int) $row['state_id'] : null,
+                'contact_number' => trim((string) ($row['contact_number'] ?? '')) ?: null,
+                'notes' => trim((string) ($row['notes'] ?? '')) ?: null,
+                'is_primary_contact' => ! empty($row['is_primary_contact']),
+            ];
         }
 
         return $relatives;
     }
 
+    /**
+     * Load existing relatives from DB (by relation_type) in snapshot format.
+     */
+    private function loadRelativesFromDb(int $profileId, array $relationTypes): array
+    {
+        $rows = DB::table('profile_relatives')->where('profile_id', $profileId)->whereIn('relation_type', $relationTypes)->orderBy('id')->get();
+        return $rows->map(fn ($r) => [
+            'id' => $r->id,
+            'relation_type' => $r->relation_type ?? '',
+            'name' => $r->name ?? '',
+            'occupation' => $r->occupation ?? null,
+            'city_id' => $r->city_id ?? null,
+            'state_id' => $r->state_id ?? null,
+            'contact_number' => $r->contact_number ?? null,
+            'notes' => $r->notes ?? null,
+            'is_primary_contact' => ! empty($r->is_primary_contact),
+        ])->values()->all();
+    }
+
+    /**
+     * Load existing alliance networks from DB (when Relatives tab form does not include the repeater).
+     */
+    private function loadAllianceNetworksFromDb(int $profileId): array
+    {
+        $rows = DB::table('profile_alliance_networks')->where('profile_id', $profileId)->orderBy('id')->get();
+        return $rows->map(fn ($r) => [
+            'id' => $r->id,
+            'surname' => $r->surname ?? '',
+            'city_id' => $r->city_id ?? null,
+            'taluka_id' => $r->taluka_id ?? null,
+            'district_id' => $r->district_id ?? null,
+            'state_id' => $r->state_id ?? null,
+            'notes' => $r->notes ?? null,
+        ])->values()->all();
+    }
+
+    /**
+     * Collect relatives from both engines (parents' family + maternal family).
+     * Used by ManualSnapshotBuilderService for full form.
+     */
+    public function collectRelativesFromRequest(\Illuminate\Http\Request $request): array
+    {
+        $paternal = $this->collectRelativesFromRequestSource($request->input('relatives_parents_family', []));
+        $maternal = $this->collectRelativesFromRequestSource($request->input('relatives_maternal_family', []));
+
+        return array_merge($paternal, $maternal);
+    }
+
     private function buildAllianceSnapshot(Request $request, MatrimonyProfile $profile): array
     {
+        $allianceInput = $request->input('alliance_networks', []);
         $alliance = [];
-        foreach ($request->input('alliance_networks', []) as $row) {
+        foreach ($allianceInput as $row) {
             $surname = trim((string) ($row['surname'] ?? ''));
             if ($surname === '') {
                 continue;
@@ -852,10 +1153,21 @@ class ProfileWizardController extends Controller
                 'notes' => trim((string) ($row['notes'] ?? '')) ?: null,
             ];
         }
+        // Relatives tab form does not include alliance_networks repeater; preserve existing when empty
+        if (empty($alliance)) {
+            $alliance = $this->loadAllianceNetworksFromDb($profile->id);
+        }
+
+        // Relatives tab: maternal from form; keep existing paternal from DB
+        $maternal = $this->collectRelativesFromRequestSource($request->input('relatives_maternal_family', []));
+        $parentsFamilyTypes = ['native_place', 'paternal_grandfather', 'paternal_grandmother', 'paternal_uncle', 'wife_paternal_uncle', 'paternal_aunt', 'husband_paternal_aunt', 'Cousin', 'Other'];
+        $paternalFromDb = $this->loadRelativesFromDb($profile->id, $parentsFamilyTypes);
+        $relatives = array_merge($paternalFromDb, $maternal);
 
         return [
             'core' => [],
             'alliance_networks' => $alliance,
+            'relatives' => $relatives,
         ];
     }
 
@@ -930,6 +1242,19 @@ class ProfileWizardController extends Controller
             ]];
         }
 
+        $snapshot = [];
+        if ($preferences !== []) {
+            $snapshot['preferences'] = $preferences;
+        }
+        if ($snapshot === []) {
+            $snapshot = ['core' => []];
+        }
+
+        return $snapshot;
+    }
+
+    private function buildAboutMeSnapshot(Request $request, MatrimonyProfile $profile): array
+    {
         $extended_narrative = [];
         if ($request->has('extended_narrative')) {
             $en = $request->input('extended_narrative');
@@ -937,14 +1262,10 @@ class ProfileWizardController extends Controller
                 'id' => ! empty($en['id']) ? (int) $en['id'] : null,
                 'narrative_about_me' => trim((string) ($en['narrative_about_me'] ?? '')),
                 'narrative_expectations' => trim((string) ($en['narrative_expectations'] ?? '')),
-                'additional_notes' => trim((string) ($en['additional_notes'] ?? '')),
             ]];
         }
 
         $snapshot = [];
-        if ($preferences !== []) {
-            $snapshot['preferences'] = $preferences;
-        }
         if ($extended_narrative !== []) {
             $snapshot['extended_narrative'] = $extended_narrative;
         }

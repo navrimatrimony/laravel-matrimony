@@ -17,25 +17,31 @@
 <div class="border border-gray-200 dark:border-gray-600 rounded-lg p-4 bg-white dark:bg-gray-800 space-y-7" x-data="basicInfoForm()">
     <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100 border-b border-gray-200 dark:border-gray-700 pb-2 mb-6">Basic Information</h2>
 
-    {{-- 1. Full name (full width) --}}
-    <div>
-        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Full Name <span class="text-red-500">*</span></label>
-        <input type="text" name="{{ $nameFullName }}" value="{{ old($oldPrefix.'full_name', $profile->full_name ?? '') }}" required
-            class="w-full rounded-lg border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-3 py-2.5 h-[42px] focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
-        @error($oldPrefix.'full_name')<p class="mt-1 text-sm text-red-600 dark:text-red-400">{{ $message }}</p>@enderror
-    </div>
-
-    {{-- 2. Gender + Date of birth --}}
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-7">
-        <div>
+    {{-- 1. Full name + Gender (one horizontal line) — flex-row so both always on same line --}}
+    <div class="flex flex-row flex-nowrap gap-2 items-end">
+        <div class="flex-1 min-w-0">
+            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Full Name <span class="text-red-500">*</span></label>
+            <input type="text" name="{{ $nameFullName }}" value="{{ old($oldPrefix.'full_name', $profile->full_name ?? '') }}" required
+                class="w-full rounded-lg border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-3 py-2.5 h-[42px] focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+            @error($oldPrefix.'full_name')<p class="mt-1 text-sm text-red-600 dark:text-red-400">{{ $message }}</p>@enderror
+        </div>
+        <div class="shrink-0 w-36">
             <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Gender <span class="text-red-500">*</span></label>
             <input type="hidden" name="{{ $nameGenderId }}" :value="genderId">
-            <div class="flex rounded-lg border border-gray-300 dark:border-gray-600 overflow-hidden bg-gray-50 dark:bg-gray-700/50 min-h-[42px]">
+            {{-- Safelist so Tailwind keeps these when Alpine toggles :class --}}
+            <span class="hidden bg-blue-600 bg-pink-500" aria-hidden="true"></span>
+            <div class="flex rounded-full border border-gray-300 dark:border-gray-600 overflow-hidden bg-gray-100 dark:bg-gray-700/60 min-h-[42px]">
                 @php $gendersList = $genders ?? collect(); @endphp
                 @foreach($gendersList as $g)
+                    @php
+                        $isFirst = $loop->first;
+                        $isLast = $loop->last;
+                        $selectedBg = $g->key === 'male' ? 'bg-blue-600' : 'bg-pink-500';
+                    @endphp
+                    @if(!$isFirst)<span class="w-px shrink-0 bg-gray-300 dark:bg-gray-500 self-stretch" aria-hidden="true"></span>@endif
                     <button type="button"
-                        class="flex-1 py-2.5 px-3 cursor-pointer transition-colors select-none text-sm font-medium border-none outline-none focus:ring-0"
-                        :class="genderId == {{ $g->id }} ? 'bg-indigo-600 text-white' : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-600 bg-transparent'"
+                        class="flex-1 py-2.5 px-3 cursor-pointer transition-all duration-200 select-none text-sm font-medium border-none outline-none focus:ring-0 {{ $isFirst ? 'rounded-l-full' : '' }} {{ $isLast ? 'rounded-r-full' : '' }} text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200"
+                        :class="genderId == {{ $g->id }} ? '{{ $selectedBg }} !text-white' : ''"
                         @click="genderId = {{ $g->id }}">
                         {{ $g->key === 'male' ? 'Male' : 'Female' }}
                     </button>
@@ -43,7 +49,11 @@
             </div>
             @error($oldPrefix.'gender_id')<p class="mt-1 text-sm text-red-600 dark:text-red-400">{{ $message }}</p>@enderror
         </div>
-        <div>
+    </div>
+
+    {{-- 2. Date of birth (narrower), Birth time, Birth place — DOB ~30% less width so other two don't crowd --}}
+    <div class="grid grid-cols-1 md:grid-cols-[0.7fr_1fr_1fr] gap-2 items-start">
+        <div class="min-w-0">
             <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Date of Birth</label>
             @php
                 $yMin = now()->subYears(60)->format('Y');
@@ -57,11 +67,7 @@
                 class="w-full rounded-lg border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-3 py-2.5 h-[42px] focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
             @error($oldPrefix.'date_of_birth')<p class="mt-1 text-sm text-red-600 dark:text-red-400">{{ $message }}</p>@enderror
         </div>
-    </div>
-
-    {{-- 3. Birth time + Birth place --}}
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-7">
-        <div>
+        <div class="min-w-0">
             <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Birth Time (optional)</label>
             @php
                 $bt = old($oldPrefix.'birth_time', $profile->birth_time ?? '');
@@ -89,26 +95,26 @@
                     }
                 }
             @endphp
-            <div class="flex flex-nowrap items-center gap-1.5 rounded-lg border border-gray-300 dark:border-gray-600 dark:bg-gray-700 pl-2 pr-2 w-full mr-0 min-h-[42px]">
-                <select name="{{ $nameBirthTimeHour }}" x-model="birthHour" class="rounded border border-gray-300 dark:border-gray-500 dark:bg-gray-700 dark:text-gray-100 text-sm w-20 h-[42px] focus:ring-1 focus:ring-indigo-500">
+            <div class="flex flex-nowrap items-center gap-1 rounded-lg border border-gray-300 dark:border-gray-600 dark:bg-gray-700 pl-1.5 pr-1.5 w-max max-w-full min-h-[42px]">
+                <select name="{{ $nameBirthTimeHour }}" x-model="birthHour" class="rounded border border-gray-300 dark:border-gray-500 dark:bg-gray-700 dark:text-gray-100 text-sm w-14 h-[42px] focus:ring-1 focus:ring-indigo-500">
                     <option value="">—</option>
                     @for($i = 1; $i <= 12; $i++)<option value="{{ $i }}">{{ $i }}</option>@endfor
                 </select>
                 <span class="text-gray-500 dark:text-gray-400 font-medium">:</span>
-                <select name="{{ $nameBirthTimeMinute }}" x-model="birthMinute" class="rounded border border-gray-300 dark:border-gray-500 dark:bg-gray-700 dark:text-gray-100 text-sm w-20 h-[42px] focus:ring-1 focus:ring-indigo-500">
+                <select name="{{ $nameBirthTimeMinute }}" x-model="birthMinute" class="rounded border border-gray-300 dark:border-gray-500 dark:bg-gray-700 dark:text-gray-100 text-sm w-14 h-[42px] focus:ring-1 focus:ring-indigo-500">
                     <option value="">—</option>
                     @for($i = 0; $i <= 59; $i++)<option value="{{ str_pad($i, 2, '0', STR_PAD_LEFT) }}">{{ str_pad($i, 2, '0', STR_PAD_LEFT) }}</option>@endfor
                 </select>
                 <div class="flex rounded overflow-hidden border border-gray-300 dark:border-gray-500 shrink-0 h-[42px]">
-                    <button type="button" @click="birthAmPm = 'AM'" :class="birthAmPm === 'AM' ? 'bg-indigo-600 text-white' : 'bg-gray-100 dark:bg-gray-600 text-gray-700 dark:text-gray-300'" class="px-2 h-[42px] flex items-center text-sm font-medium">AM</button>
-                    <button type="button" @click="birthAmPm = 'PM'" :class="birthAmPm === 'PM' ? 'bg-indigo-600 text-white' : 'bg-gray-100 dark:bg-gray-600 text-gray-700 dark:text-gray-300'" class="px-2 h-[42px] flex items-center text-sm font-medium">PM</button>
+                    <button type="button" @click="birthAmPm = 'AM'" :class="birthAmPm === 'AM' ? 'bg-indigo-600 text-white' : 'bg-gray-100 dark:bg-gray-600 text-gray-700 dark:text-gray-300'" class="px-1.5 h-[42px] flex items-center text-sm font-medium">AM</button>
+                    <button type="button" @click="birthAmPm = 'PM'" :class="birthAmPm === 'PM' ? 'bg-indigo-600 text-white' : 'bg-gray-100 dark:bg-gray-600 text-gray-700 dark:text-gray-300'" class="px-1.5 h-[42px] flex items-center text-sm font-medium">PM</button>
                 </div>
                 <span x-show="birthHour && birthMinute" x-cloak x-text="birthTimeDisplay" class="ml-0.5 text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap shrink-0"></span>
                 <input type="hidden" name="{{ $nameBirthTime }}" :value="birthTimeValue">
             </div>
             @error($oldPrefix.'birth_time')<p class="mt-1 text-sm text-red-600 dark:text-red-400">{{ $message }}</p>@enderror
         </div>
-        <div>
+        <div class="min-w-0">
             <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Birth Place (optional)</label>
             <x-profile.location-typeahead
                 context="birth"
@@ -117,6 +123,7 @@
                 placeholder="Type city / area"
                 label=""
                 :noBorder="true"
+                :compactRow="true"
                 :data-birth-city-id="old($oldPrefix.'birth_city_id', $profile->birth_city_id ?? '')"
                 :data-birth-taluka-id="old($oldPrefix.'birth_taluka_id', $profile->birth_taluka_id ?? '')"
                 :data-birth-district-id="old($oldPrefix.'birth_district_id', $profile->birth_district_id ?? '')"
