@@ -7,21 +7,21 @@
 <div class="space-y-6">
     <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100 border-b border-gray-200 dark:border-gray-700 pb-2">Contacts</h2>
 
-    {{-- Your contact numbers: up to 3 slots in same block; + adds next slot here (max 3). --}}
-    <div class="space-y-2" data-contact-context="self" data-max-slots="3" id="self-contact-slots">
+    {{-- Your contact numbers: centralized engine + "+ Add / Remove this entry" pattern (max 3 self numbers). --}}
+    <div class="space-y-2" data-self-contact-engine="1">
         <h3 class="text-sm font-medium text-gray-700 dark:text-gray-300">Your contact numbers</h3>
-        <div class="flex flex-wrap items-end gap-3" id="self-contact-slots-inner">
+        {{-- When 2 numbers: show them side-by-side (approx 50/50) on wider screens. --}}
+        <div class="grid gap-2 sm:grid-cols-2" id="self-contact-slots-inner">
             @for($i = 0; $i < $selfCount; $i++)
                 @php
                     $sc = $selfContacts[$i] ?? null;
-                    $phone = old($i === 0 ? 'primary_contact_number' : 'primary_contact_number_' . ($i + 1), $sc ? (is_object($sc) ? ($sc->phone_number ?? '') : ($sc['phone_number'] ?? '')) : '');
-                    $prefDefault = $sc ? (is_object($sc) ? ($sc->contact_preference ?? ($sc->is_whatsapp ? 'whatsapp' : 'call')) : ($sc['contact_preference'] ?? (!empty($sc['is_whatsapp']) ? 'whatsapp' : 'call'))) : 'whatsapp';
-                    $whatsapp = old($i === 0 ? 'primary_contact_whatsapp' : 'primary_contact_whatsapp_' . ($i + 1), $prefDefault);
                     $nameNum = $i === 0 ? 'primary_contact_number' : 'primary_contact_number_' . ($i + 1);
-                    $nameWa = $i === 0 ? 'primary_contact_whatsapp' : 'primary_contact_whatsapp_' . ($i + 1);
-                    $showAdd = ($i < 2); // slots 0 and 1 show + (to add 2nd and 3rd)
+                    $nameWa  = $i === 0 ? 'primary_contact_whatsapp' : 'primary_contact_whatsapp_' . ($i + 1);
+                    $phone = old($nameNum, $sc ? (is_object($sc) ? ($sc->phone_number ?? '') : ($sc['phone_number'] ?? '')) : '');
+                    $prefDefault = $sc ? (is_object($sc) ? ($sc->contact_preference ?? ($sc->is_whatsapp ? 'whatsapp' : 'call')) : ($sc['contact_preference'] ?? (!empty($sc['is_whatsapp']) ? 'whatsapp' : 'call'))) : 'whatsapp';
+                    $whatsapp = old($nameWa, $prefDefault);
                 @endphp
-                <div class="self-contact-slot flex items-end gap-2 {{ $i === 0 ? 'w-full basis-full' : 'shrink-0' }}" data-slot-index="{{ $i }}">
+                <div class="self-contact-slot border border-gray-200 dark:border-gray-600 rounded-lg p-3 space-y-2" data-slot-index="{{ $i }}">
                     <x-profile.contact-field
                         :name="$nameNum"
                         :value="$phone"
@@ -32,35 +32,57 @@
                         :nameWhatsapp="$nameWa"
                         :valueWhatsapp="$whatsapp"
                         inputClass="flex-1 min-w-0"
-                        :showAddButton="$showAdd"
+                        :showAddButton="false"
                     />
+                    <div class="flex justify-between items-center">
+                        <span role="button" tabindex="0" class="text-xs font-medium text-blue-600 dark:text-blue-400 cursor-pointer self-contact-add">
+                            + Add
+                        </span>
+                        <button type="button" class="text-xs text-red-600 dark:text-red-400 hover:underline self-contact-remove">
+                            Remove this entry
+                        </button>
+                    </div>
                 </div>
             @endfor
         </div>
+        {{-- Hidden template for new self-contact slots --}}
+        <template id="self-contact-slot-template">
+            <div class="self-contact-slot border border-gray-200 dark:border-gray-600 rounded-lg p-3 space-y-2" data-slot-index="__INDEX__">
+                <x-profile.contact-field
+                    name="__NAME__"
+                    value=""
+                    label=""
+                    placeholder="10-digit number"
+                    :showCountryCode="true"
+                    :showWhatsapp="true"
+                    nameWhatsapp="__NAME_WHATSAPP__"
+                    :valueWhatsapp="false"
+                    inputClass="flex-1 min-w-0"
+                    :showAddButton="false"
+                />
+                <div class="flex justify-between items-center">
+                    <span role="button" tabindex="0" class="text-xs font-medium text-blue-600 dark:text-blue-400 cursor-pointer self-contact-add">
+                        + Add
+                    </span>
+                    <button type="button" class="text-xs text-red-600 dark:text-red-400 hover:underline self-contact-remove">
+                        Remove this entry
+                    </button>
+                </div>
+            </div>
+        </template>
     </div>
-
-    <template id="self-contact-slot-template">
-        <div class="self-contact-slot flex items-end gap-2 shrink-0" data-slot-index="">
-            <x-profile.contact-field
-                name="__NAME__"
-                value=""
-                label=""
-                placeholder="10-digit"
-                :showCountryCode="true"
-                :showWhatsapp="true"
-                nameWhatsapp="__NAME_WHATSAPP__"
-                :valueWhatsapp="false"
-                inputClass="flex-1 min-w-0"
-                :showAddButton="true"
-            />
-        </div>
-    </template>
 
     {{-- Additional contacts: other people (name, number, relation) — no + on number field. --}}
     <div>
         <h3 class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Additional contacts</h3>
         <div id="wizard-additional-contacts-container">
-            @php $contactRows = old('contacts', $profile_contacts ?? []); $contactRows = is_array($contactRows) ? $contactRows : collect($contactRows)->all(); @endphp
+            @php
+                $contactRows = old('contacts', $profile_contacts ?? []);
+                $contactRows = is_array($contactRows) ? $contactRows : collect($contactRows)->all();
+                if (count($contactRows) === 0) {
+                    $contactRows = [[]]; // default one empty engine box visible
+                }
+            @endphp
             @foreach($contactRows as $idx => $row)
                 @php $r = is_object($row) ? (array) $row : $row; @endphp
                 <div class="wizard-contact-row flex flex-wrap gap-4 items-end mb-3 p-3 bg-gray-50 dark:bg-gray-700/50 rounded border-2 border-rose-500/30 dark:border-rose-400/30 rounded-lg">
@@ -79,7 +101,9 @@
                     />
                     <input type="text" name="contacts[{{ $idx }}][relation_type]" value="{{ $r['relation_type'] ?? $r['contact_relation_id'] ?? '' }}" placeholder="Relation" class="rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-3 py-2">
                     <label class="flex items-center gap-2"><input type="checkbox" name="contacts[{{ $idx }}][is_primary]" value="1" {{ !empty($r['is_primary']) ? 'checked' : '' }}> Primary</label>
-                    <button type="button" class="wizard-remove-contact px-3 py-2 border border-red-400 text-red-600 rounded hover:bg-red-50 dark:hover:bg-red-900/20 shrink-0 text-sm">Remove</button>
+                    <div class="flex-1 flex justify-end">
+                        <button type="button" class="wizard-remove-contact text-xs text-red-600 dark:text-red-400 hover:underline">Remove this entry</button>
+                    </div>
                 </div>
             @endforeach
         </div>
@@ -108,49 +132,79 @@
                 </div>
                 <input type="text" name="contacts[__INDEX__][relation_type]" value="" placeholder="Relation" class="rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-3 py-2">
                 <label class="flex items-center gap-2"><input type="checkbox" name="contacts[__INDEX__][is_primary]" value="1"> Primary</label>
-                <button type="button" class="wizard-remove-contact px-3 py-2 border border-red-400 text-red-600 rounded hover:bg-red-50 dark:hover:bg-red-900/20 shrink-0 text-sm">Remove</button>
+                <div class="flex-1 flex justify-end">
+                    <button type="button" class="wizard-remove-contact text-xs text-red-600 dark:text-red-400 hover:underline">Remove this entry</button>
+                </div>
             </div>
         </template>
-        <button type="button" id="wizard-add-contact" class="mt-2 inline-flex items-center gap-1.5 px-4 py-2 bg-rose-100 dark:bg-rose-900/30 text-rose-700 dark:text-rose-300 border-2 border-rose-500 dark:border-rose-400 rounded-lg font-medium text-sm hover:bg-rose-200 dark:hover:bg-rose-800/40">
-            <span class="text-lg leading-none" aria-hidden="true">+</span> Add contact
+        <button type="button" id="wizard-add-contact" class="mt-2 inline-flex items-center gap-1.5 px-3 py-2 bg-rose-100 dark:bg-rose-900/30 text-rose-700 dark:text-rose-300 border-2 border-rose-500 dark:border-rose-400 rounded-lg font-medium text-xs hover:bg-rose-200 dark:hover:bg-rose-800/40">
+            <span class="text-base leading-none" aria-hidden="true">+</span> Add
         </button>
     </div>
 </div>
 <script>
 (function() {
-    var selfContainer = document.querySelector('[data-contact-context="self"]');
+    // Self contact engine: + Add / Remove this entry (max 3 slots)
     var selfInner = document.getElementById('self-contact-slots-inner');
     var selfTemplate = document.getElementById('self-contact-slot-template');
-    var maxSlots = 3;
+    var maxSelfSlots = 3;
 
-    if (selfContainer && selfInner && selfTemplate) {
-        selfContainer.addEventListener('click', function(e) {
-            if (!e.target.closest('.contact-engine-add-btn')) return;
+    function renumberSelfSlots() {
+        if (!selfInner) return;
+        var slots = selfInner.querySelectorAll('.self-contact-slot');
+        slots.forEach(function(slot, index) {
+            slot.setAttribute('data-slot-index', index);
+            var isPrimary = index === 0;
+            slot.querySelectorAll('input[name], input[data-contact-engine], input.contact-preference-input').forEach(function(inp) {
+                var n = inp.getAttribute('name') || '';
+                n = n.replace(/primary_contact_number(_\d+)?/, isPrimary ? 'primary_contact_number' : ('primary_contact_number_' + (index + 1)));
+                n = n.replace(/primary_contact_whatsapp(_\d+)?/, isPrimary ? 'primary_contact_whatsapp' : ('primary_contact_whatsapp_' + (index + 1)));
+                inp.setAttribute('name', n);
+            });
+            var labelEl = slot.querySelector('label');
+            if (labelEl && labelEl.textContent.includes('Primary contact number')) {
+                if (!isPrimary) labelEl.textContent = '';
+            }
+        });
+    }
+
+    if (selfInner && selfTemplate) {
+        selfInner.addEventListener('click', function(e) {
+            var addBtn = e.target.closest('.self-contact-add');
+            var removeBtn = e.target.closest('.self-contact-remove');
             var slots = selfInner.querySelectorAll('.self-contact-slot');
-            if (slots.length >= maxSlots) return;
-            var nextIndex = slots.length;
-            var name = nextIndex === 0 ? 'primary_contact_number' : 'primary_contact_number_' + (nextIndex + 1);
-            var nameWa = nextIndex === 0 ? 'primary_contact_whatsapp' : 'primary_contact_whatsapp_' + (nextIndex + 1);
-            var html = selfTemplate.innerHTML.replace(/__NAME__/g, name).replace(/__NAME_WHATSAPP__/g, nameWa);
-            var div = document.createElement('div');
-            div.className = 'self-contact-slot flex items-end gap-2 shrink-0';
-            div.setAttribute('data-slot-index', nextIndex);
-            div.innerHTML = html;
-            var newSlot = div.firstChild;
-            selfInner.appendChild(newSlot);
-            if (nextIndex >= 1) {
-                var inp = newSlot.querySelector('.contact-preference-input');
-                var wrap = newSlot.querySelector('.contact-preference-single');
-                if (inp) inp.value = 'call';
-                if (wrap) {
-                    wrap.setAttribute('data-current-pref', 'call');
-                    var icons = wrap.querySelectorAll('.contact-pref-icon');
-                    icons.forEach(function(span) {
-                        span.style.display = (span.getAttribute('data-pref') === 'call') ? '' : 'none';
-                    });
+
+            if (addBtn) {
+                if (slots.length >= maxSelfSlots) return;
+                var nextIndex = slots.length;
+                var html = selfTemplate.innerHTML
+                    .replace(/__INDEX__/g, String(nextIndex))
+                    .replace(/__NAME__/g, nextIndex === 0 ? 'primary_contact_number' : 'primary_contact_number_' + (nextIndex + 1))
+                    .replace(/__NAME_WHATSAPP__/g, nextIndex === 0 ? 'primary_contact_whatsapp' : 'primary_contact_whatsapp_' + (nextIndex + 1));
+                var div = document.createElement('div');
+                div.innerHTML = html.trim();
+                selfInner.appendChild(div.firstChild);
+                renumberSelfSlots();
+                return;
+            }
+
+            if (removeBtn) {
+                if (slots.length <= 1) {
+                    // Last slot: just clear values instead of removing block
+                    var last = slots[0];
+                    if (last) {
+                        last.querySelectorAll('input[type="text"], input[data-contact-engine]').forEach(function(inp) {
+                            inp.value = '';
+                        });
+                    }
+                    return;
+                }
+                var row = removeBtn.closest('.self-contact-slot');
+                if (row) {
+                    row.remove();
+                    renumberSelfSlots();
                 }
             }
-            if (nextIndex === 2) newSlot.querySelector('.contact-engine-add-btn')?.remove();
         });
     }
 

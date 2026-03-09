@@ -702,14 +702,46 @@
 </div>
 @endif
 
-@if (isset($preferences) && (trim($preferences->preferred_city ?? '') !== '' || trim($preferences->preferred_education ?? '') !== '' || ($preferences->preferred_age_min ?? null) !== null || ($preferences->preferred_age_max ?? null) !== null))
+@php
+    $hasPrefCriteria = isset($preferenceCriteria) && $preferenceCriteria;
+    $hasAnyPrefs = false;
+    if ($hasPrefCriteria) {
+        $hasAnyPrefs = ($preferenceCriteria->preferred_city_id ?? null) !== null
+            || ($preferenceCriteria->preferred_education ?? '') !== ''
+            || ($preferenceCriteria->preferred_age_min ?? null) !== null
+            || ($preferenceCriteria->preferred_age_max ?? null) !== null;
+    }
+    $hasAnyPrefs = $hasAnyPrefs
+        || !empty($preferredReligionIds ?? [])
+        || !empty($preferredCasteIds ?? [])
+        || !empty($preferredDistrictIds ?? []);
+@endphp
+@if ($hasAnyPrefs)
 <div class="mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
     <h3 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Partner preferences</h3>
     <div class="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm">
-        @if (($preferences->preferred_city ?? '') !== '')<p><span class="text-gray-500">City:</span> {{ $preferences->preferred_city }}</p>@endif
-        @if (($preferences->preferred_caste ?? '') !== '')<p><span class="text-gray-500">Caste:</span> {{ $preferences->preferred_caste }}</p>@endif
-        @if (($preferences->preferred_age_min ?? '') !== '' || ($preferences->preferred_age_max ?? '') !== '')<p><span class="text-gray-500">Age:</span> {{ $preferences->preferred_age_min ?? '—' }}–{{ $preferences->preferred_age_max ?? '—' }}</p>@endif
-        @if (($preferences->preferred_education ?? '') !== '')<p><span class="text-gray-500">Education:</span> {{ $preferences->preferred_education }}</p>@endif
+        @if($hasPrefCriteria && ($preferenceCriteria->preferred_age_min ?? null) !== null || ($preferenceCriteria->preferred_age_max ?? null) !== null)
+            <p><span class="text-gray-500">Age:</span> {{ $preferenceCriteria->preferred_age_min ?? '—' }}–{{ $preferenceCriteria->preferred_age_max ?? '—' }}</p>
+        @endif
+        @if($hasPrefCriteria && ($preferenceCriteria->preferred_education ?? '') !== '')
+            <p><span class="text-gray-500">Education:</span> {{ $preferenceCriteria->preferred_education }}</p>
+        @endif
+        @if($hasPrefCriteria && ($preferenceCriteria->preferred_city_id ?? null))
+            @php $prefCityName = \App\Models\City::where('id', $preferenceCriteria->preferred_city_id)->value('name'); @endphp
+            @if($prefCityName)<p><span class="text-gray-500">City:</span> {{ $prefCityName }}</p>@endif
+        @endif
+        @if(!empty($preferredReligionIds ?? []))
+            @php $prefReligions = \App\Models\Religion::whereIn('id', $preferredReligionIds)->pluck('label')->all(); @endphp
+            @if($prefReligions)<p><span class="text-gray-500">Religions:</span> {{ implode(', ', $prefReligions) }}</p>@endif
+        @endif
+        @if(!empty($preferredCasteIds ?? []))
+            @php $prefCastes = \App\Models\Caste::whereIn('id', $preferredCasteIds)->pluck('label')->all(); @endphp
+            @if($prefCastes)<p><span class="text-gray-500">Castes:</span> {{ implode(', ', $prefCastes) }}</p>@endif
+        @endif
+        @if(!empty($preferredDistrictIds ?? []))
+            @php $prefDistricts = \App\Models\District::whereIn('id', $preferredDistrictIds)->pluck('name')->all(); @endphp
+            @if($prefDistricts)<p><span class="text-gray-500">Districts:</span> {{ implode(', ', $prefDistricts) }}</p>@endif
+        @endif
     </div>
 </div>
 @endif
@@ -728,7 +760,7 @@
 </div>
 @endif
 
-@if ($profile->horoscope && ($profile->horoscope->rashi_id || $profile->horoscope->nakshatra_id || $profile->horoscope->gan_id || $profile->horoscope->nadi_id || $profile->horoscope->mangal_dosh_type_id || $profile->horoscope->yoni_id || $profile->horoscope->charan || $profile->horoscope->devak || $profile->horoscope->kul || $profile->horoscope->gotra))
+@if ($profile->horoscope && ($profile->horoscope->rashi_id || $profile->horoscope->nakshatra_id || $profile->horoscope->gan_id || $profile->horoscope->nadi_id || $profile->horoscope->mangal_dosh_type_id || $profile->horoscope->yoni_id || $profile->horoscope->charan || $profile->horoscope->devak || $profile->horoscope->kul || $profile->horoscope->gotra || $profile->horoscope->navras_name || $profile->horoscope->birth_weekday))
 <div class="mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
     <h3 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Horoscope</h3>
     <div class="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm">
@@ -742,6 +774,8 @@
         @if ($profile->horoscope->devak)<p><span class="text-gray-500">Devak:</span> {{ $profile->horoscope->devak }}</p>@endif
         @if ($profile->horoscope->kul)<p><span class="text-gray-500">Kul:</span> {{ $profile->horoscope->kul }}</p>@endif
         @if ($profile->horoscope->gotra)<p><span class="text-gray-500">Gotra:</span> {{ $profile->horoscope->gotra }}</p>@endif
+        @if ($profile->horoscope->navras_name)<p><span class="text-gray-500">Navras नाव:</span> {{ $profile->horoscope->navras_name }}</p>@endif
+        @if ($profile->horoscope->birth_weekday)<p><span class="text-gray-500">जन्मवार:</span> {{ $profile->horoscope->birth_weekday }}</p>@endif
     </div>
 </div>
 @endif

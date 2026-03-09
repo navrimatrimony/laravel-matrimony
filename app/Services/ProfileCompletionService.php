@@ -103,11 +103,22 @@ class ProfileCompletionService
 
     private static function sectionAboutPreferencesFilled(MatrimonyProfile $profile): bool
     {
-        $pref = DB::table('profile_preferences')->where('profile_id', $profile->id)->first();
-        if ($pref && (
-            ($pref->preferred_city ?? '') !== '' || ($pref->preferred_age_min ?? null) !== null
-            || ($pref->preferred_education ?? '') !== ''
+        $criteria = DB::table('profile_preference_criteria')->where('profile_id', $profile->id)->first();
+        if ($criteria && (
+            ($criteria->preferred_city_id ?? null) !== null
+            || ($criteria->preferred_age_min ?? null) !== null
+            || ($criteria->preferred_age_max ?? null) !== null
+            || ($criteria->preferred_education ?? '') !== ''
         )) {
+            return true;
+        }
+        if (DB::table('profile_preferred_religions')->where('profile_id', $profile->id)->exists()) {
+            return true;
+        }
+        if (DB::table('profile_preferred_castes')->where('profile_id', $profile->id)->exists()) {
+            return true;
+        }
+        if (DB::table('profile_preferred_districts')->where('profile_id', $profile->id)->exists()) {
             return true;
         }
         $ext = DB::table('profile_extended_attributes')->where('profile_id', $profile->id)->first();

@@ -173,6 +173,25 @@ class BiodataParserService
         $gan = $this->rejectIfLabelNoise($this->extractFieldAfterLabels($horoscopeText, ['गण']) ?? $this->extractFieldAfterLabels($text, ['गण']) ?? $this->extractField($horoscopeText, ['गण']) ?? $this->extractField($text, ['गण']));
         $mangalik = $this->rejectIfLabelNoise($this->extractField($text, ['मांगलिक']));
         $varna = $this->extractField($personalText, ['वर्ण']) ?? $this->extractField($text, ['वर्ण']);
+        // New structured fields for Phase-5: Kul / Devak / Navras / Birth weekday.
+        $kulName = $this->rejectIfLabelNoise(
+            $this->extractField($familyText, ['कुळ', 'कुल']) ?? $this->extractField($text, ['कुळ', 'कुल'])
+        );
+        $devak = $this->rejectIfLabelNoise(
+            $this->extractField($familyText, ['देवक', 'कुल देवता', 'कुलदेवता']) ??
+            $this->extractField($text, ['देवक', 'कुल देवता', 'कुलदेवता'])
+        );
+        if ($devak === null) {
+            $devak = $kuldaivat;
+        }
+        $navrasName = $this->rejectIfLabelNoise(
+            $this->extractField($horoscopeText, ['नावरस नाव', 'नवरस नाव', 'Navras']) ??
+            $this->extractField($text, ['नावरस नाव', 'नवरस नाव', 'Navras'])
+        );
+        $birthWeekday = $this->rejectIfLabelNoise(
+            $this->extractField($horoscopeText, ['जन्मवार', 'जन्म वार', 'Birth day']) ??
+            $this->extractField($text, ['जन्मवार', 'जन्म वार', 'Birth day'])
+        );
         $varna = $this->validateVarna($varna);
         $motherOccupation = $this->extractField($familyText, ['आईचा व्यवसाय', 'माता व्यवसाय']) ?? $this->extractField($text, ['आईचा व्यवसाय']);
         $fatherOccupation = $this->extractField($familyText, ['वडिलांचे व्यवसाय', 'पिता व्यवसाय']) ?? $this->extractField($text, ['वडिलांचे व्यवसाय']);
@@ -374,13 +393,46 @@ class BiodataParserService
         }
 
         // ——— OPTIONAL: Horoscope ———
-        $horoscope = null;
-        if ($this->hasAnyKeyword($text, self::HOROSCOPE_TRIGGER)) {
-            $horoscope = $this->extractField($horoscopeText, ['राशी', 'नक्षत्र', 'लग्नराशी']) ?? $this->extractField($text, ['राशी', 'नक्षत्र', 'लग्नराशी']);
-            $confidence['horoscope'] = $horoscope !== null ? self::CONF_REGEX : self::CONF_AI;
+        // Phase-5: structured array-of-rows, aligned with ProfileHoroscopeData / horoscope-engine.
+        $horoscopeRows = [];
+        $hasAnyHoroscopeText = $rashi !== null
+            || $nadi !== null
+            || $gan !== null
+            || $mangalik !== null
+            || $varna !== null
+            || $gotra !== null
+            || $kuldaivat !== null
+            || $kulName !== null
+            || $navrasName !== null
+            || $birthWeekday !== null;
+        if ($hasAnyHoroscopeText) {
+            $row = [
+                'rashi_id' => null,
+                'nakshatra_id' => null,
+                'charan' => null,
+                'gan_id' => null,
+                'nadi_id' => null,
+                'yoni_id' => null,
+                'mangal_dosh_type_id' => null,
+                // Textual attributes — user will map to master lists in UI.
+                'devak' => $devak ?? $kuldaivat,
+                'kul' => $kulName,
+                'gotra' => $gotra,
+                'navras_name' => $navrasName,
+                'birth_weekday' => $birthWeekday,
+            ];
+            // Only push if at least one non-null/non-empty textual field is present.
+            $nonNull = array_filter($row, fn ($v) => $v !== null && $v !== '');
+            if (! empty($nonNull)) {
+                $horoscopeRows[] = $row;
+                $confidence['horoscope'] = self::CONF_REGEX;
+            } else {
+                $confidence['horoscope'] = self::CONF_MISSING;
+            }
         } else {
             $confidence['horoscope'] = self::CONF_MISSING;
         }
+        $horoscope = $horoscopeRows;
 
         // ——— OPTIONAL: Preferences ———
         $preferences = null;

@@ -17,6 +17,10 @@ class PreviewSectionMapper
         'relatives',
         'siblings',
         'property_assets',
+        // Phase-5: horoscope is array-of-rows (for shared engine), not scalar.
+        'horoscope',
+        // Phase-5: legal_cases is list of rows (type, court, notes, etc.).
+        'legal',
     ];
 
     private const SECTION_LABELS = [
@@ -31,6 +35,7 @@ class PreviewSectionMapper
         'property_summary' => 'Property Summary',
         'property_assets' => 'Property Assets',
         'horoscope' => 'Horoscope',
+        'legal' => 'Legal cases',
         'preferences' => 'Preferences',
         'narrative' => 'Narrative',
     ];
@@ -47,12 +52,13 @@ class PreviewSectionMapper
         'property_summary' => 'property_summary',
         'property_assets' => 'property_assets',
         'horoscope' => 'horoscope',
+        'legal' => 'legal_cases',
         'preferences' => 'preferences',
         'narrative' => 'extended_narrative',
     ];
 
     /** Section keys that store a single value (string/null) rather than array. */
-    private const SCALAR_SECTIONS = ['property_summary', 'horoscope', 'narrative'];
+    private const SCALAR_SECTIONS = ['property_summary', 'narrative'];
 
     public function map(array $parsedJson): array
     {

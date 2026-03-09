@@ -48,7 +48,12 @@
                 @php
                     $basicInfoKeys = ['full_name', 'date_of_birth', 'gender', 'gender_id', 'birth_time', 'birth_place', 'birth_city_id', 'birth_taluka_id', 'birth_district_id', 'birth_state_id', 'religion', 'religion_id', 'caste', 'caste_id', 'sub_caste', 'sub_caste_id', 'marital_status_id', 'has_children'];
                     $educationOccupationIncomeKeys = ['highest_education', 'specialization', 'occupation_title', 'company_name', 'annual_income', 'family_income', 'income_currency_id', 'college_id', 'working_with_type_id', 'profession_id', 'income_range_id', 'income_private', 'income_period', 'income_value_type', 'income_amount', 'income_min_amount', 'income_max_amount', 'income_normalized_annual_amount', 'family_income_period', 'family_income_value_type', 'family_income_amount', 'family_income_min_amount', 'family_income_max_amount', 'family_income_currency_id', 'family_income_private', 'family_income_normalized_annual_amount'];
-                    $otherCoreKeys = array_diff(['annual_income','family_income','primary_contact_number','serious_intent_id','highest_education','specialization','occupation_title','company_name','income_currency_id','father_name','mother_name','father_occupation','mother_occupation','family_type_id','gotra','kuldaivat','rashi','nadi','gan','mangalik','varna','mama','relatives','other_relatives_text'], array_merge($basicInfoKeys, $educationOccupationIncomeKeys));
+                    // Phase-5: Horoscope & relatives आता dedicated engines मधून हाताळले जातात (horoscope-engine, relation-details),
+                    // त्यामुळे इथे फक्त core / meta fields ठेवा.
+                    $otherCoreKeys = array_diff(
+                        ['annual_income','family_income','primary_contact_number','serious_intent_id','highest_education','specialization','occupation_title','company_name','income_currency_id','father_name','mother_name','father_occupation','mother_occupation','family_type_id'],
+                        array_merge($basicInfoKeys, $educationOccupationIncomeKeys)
+                    );
                 @endphp
                 @foreach($otherCoreKeys as $coreKey)
                     @php
@@ -206,19 +211,6 @@
             <button type="button" id="add-contact" class="mt-2 px-4 py-2 bg-gray-200 dark:bg-gray-600 rounded hover:bg-gray-300">+ Add Contact</button>
         </section>
 
-        {{-- Marital status + Children: same MaritalEngine as wizard (namePrefix=snapshot for intake). --}}
-        <section class="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
-            <h2 class="text-lg font-semibold mb-4 border-b pb-2">Marital status</h2>
-            @include('matrimony.profile.wizard.sections.marital_engine', [
-                'profile' => $intakeProfile,
-                'maritalStatuses' => $maritalStatuses ?? collect(),
-                'profileMarriages' => $profileMarriages ?? collect(),
-                'profileChildren' => $profileChildren ?? collect(),
-                'childLivingWithOptions' => $childLivingWithOptions ?? collect(),
-                'namePrefix' => 'snapshot',
-            ])
-        </section>
-
         {{-- Education --}}
         <section class="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
             <h2 class="text-lg font-semibold mb-4 border-b pb-2">Education</h2>
@@ -239,9 +231,20 @@
             <h2 class="text-lg font-semibold mb-4 border-b pb-2">Career</h2>
             <div id="career-container">
                 @foreach(($sections['career']['data'] ?? []) as $idx => $career)
+                    @php
+                        // Accept both {title,company} आणि जुने keys {job_title,employer}
+                        $careerTitle = is_array($career) ? ($career['title'] ?? $career['role'] ?? $career['job_title'] ?? '') : $career;
+                        $careerCompany = is_array($career) ? ($career['company'] ?? $career['employer'] ?? '') : '';
+                    @endphp
                     <div class="flex gap-4 mb-3 items-end career-row">
-                        <div class="flex-1"><label class="block text-sm font-medium mb-1">Title / Role</label><input type="text" name="snapshot[career_history][{{ $idx }}][title]" value="{{ is_array($career) ? ($career['title'] ?? $career['role'] ?? '') : $career }}" class="w-full border rounded px-3 py-2 dark:bg-gray-700"></div>
-                        <div class="flex-1"><label class="block text-sm font-medium mb-1">Company / Employer</label><input type="text" name="snapshot[career_history][{{ $idx }}][company]" value="{{ is_array($career) ? ($career['company'] ?? $career['employer'] ?? '') : '' }}" class="w-full border rounded px-3 py-2 dark:bg-gray-700"></div>
+                        <div class="flex-1">
+                            <label class="block text-sm font-medium mb-1">Title / Role</label>
+                            <input type="text" name="snapshot[career_history][{{ $idx }}][title]" value="{{ $careerTitle }}" class="w-full border rounded px-3 py-2 dark:bg-gray-700">
+                        </div>
+                        <div class="flex-1">
+                            <label class="block text-sm font-medium mb-1">Company / Employer</label>
+                            <input type="text" name="snapshot[career_history][{{ $idx }}][company]" value="{{ $careerCompany }}" class="w-full border rounded px-3 py-2 dark:bg-gray-700">
+                        </div>
                         <button type="button" class="remove-row px-3 py-2 border border-red-400 text-red-600 rounded">Remove</button>
                     </div>
                 @endforeach
@@ -347,8 +350,18 @@
             <div id="addresses-container">
                 @foreach(($sections['addresses']['data'] ?? []) as $idx => $addr)
                     @php
-                        $addrRaw = is_array($addr) ? ($addr['raw'] ?? $addr['line1'] ?? '') : (string) $addr;
-                        $addrType = is_array($addr) ? ($addr['type'] ?? 'current') : 'current';
+                        // Accept both new SSOT shape {raw,type} आणि जुने parser output {address_line,city,...}
+                        if (is_array($addr)) {
+                            $line = trim((string) ($addr['address_line'] ?? ''));
+                            $city = trim((string) ($addr['city'] ?? ''));
+                            $addrRaw = $addr['raw']
+                                ?? $addr['line1']
+                                ?? trim($line . ($city !== '' ? ' ' . $city : ''));
+                            $addrType = $addr['type'] ?? 'current';
+                        } else {
+                            $addrRaw = (string) $addr;
+                            $addrType = 'current';
+                        }
                     @endphp
                     <x-profile.address-row
                         :namePrefix="'snapshot[addresses]['.$idx.']'"
@@ -440,6 +453,66 @@
                 :dependencyExpected="[]"
                 :dependencyWarnings="$horoscopeDependencyWarnings ?? []"
             />
+            @php
+                $zodiacSign = is_array($horoscopeRow) ? ($horoscopeRow['zodiac_sign'] ?? null) : null;
+            @endphp
+            @if(!empty($zodiacSign))
+                <p class="mt-3 text-sm text-gray-600 dark:text-gray-400">
+                    Parsed zodiac sign (from biodata): <span class="font-medium">{{ $zodiacSign }}</span>
+                </p>
+            @endif
+        </section>
+
+        {{-- Legal cases (optional) — snapshot[legal_cases][...] --}}
+        @php
+            $legalItems = $sections['legal']['data'] ?? [];
+            if (!is_array($legalItems)) { $legalItems = []; }
+        @endphp
+        <section class="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+            <h2 class="text-lg font-semibold mb-4 border-b pb-2">{{ $sections['legal']['label'] ?? 'Legal cases' }}</h2>
+            <p class="text-sm text-gray-500 dark:text-gray-400 mb-4">
+                कोर्ट / कायदेशीर प्रकरणांची माहिती इथे ठेवा. सिस्टिम default ने काहीही गृहीत धरत नाही; फक्त तुम्ही जे लिहाल तेवढेच save होईल.
+            </p>
+            <div class="space-y-4" id="legal-cases-container">
+                @forelse($legalItems as $idx => $case)
+                    @php
+                        $text = is_array($case) ? ($case['description'] ?? $case['text'] ?? $case['note'] ?? '') : (string) $case;
+                        $type = is_array($case) ? ($case['type'] ?? '') : '';
+                    @endphp
+                    <div class="border border-gray-200 dark:border-gray-700 rounded-lg p-4 legal-case-row">
+                        <div class="grid grid-cols-1 md:grid-cols-4 gap-4 items-start">
+                            <div class="md:col-span-1">
+                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Type / tag</label>
+                                <input type="text" name="snapshot[legal_cases][{{ $idx }}][type]" value="{{ $type }}" class="w-full border rounded px-3 py-2 dark:bg-gray-700 dark:border-gray-600" placeholder="e.g. divorce case, property dispute">
+                            </div>
+                            <div class="md:col-span-3">
+                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Details</label>
+                                <textarea name="snapshot[legal_cases][{{ $idx }}][description]" rows="2" class="w-full border rounded px-3 py-2 dark:bg-gray-700 dark:border-gray-600" placeholder="Short description">{{ $text }}</textarea>
+                            </div>
+                        </div>
+                    </div>
+                @empty
+                    <p class="text-sm text-gray-500 dark:text-gray-400">सध्या कोणत्याही कायदेशीर प्रकरणाची नोंद नाही. गरज असल्यास खाली नवीन नोंद जोडा.</p>
+                @endforelse
+            </div>
+            {{-- Simple template for adding new legal case rows (JS hooks can reuse this) --}}
+            <template id="legal-case-template">
+                <div class="border border-gray-200 dark:border-gray-700 rounded-lg p-4 legal-case-row">
+                    <div class="grid grid-cols-1 md:grid-cols-4 gap-4 items-start">
+                        <div class="md:col-span-1">
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Type / tag</label>
+                            <input type="text" name="__REPLACE_NAME__[type]" class="w-full border rounded px-3 py-2 dark:bg-gray-700 dark:border-gray-600" placeholder="e.g. divorce case, property dispute">
+                        </div>
+                        <div class="md:col-span-3">
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Details</label>
+                            <textarea name="__REPLACE_NAME__[description]" rows="2" class="w-full border rounded px-3 py-2 dark:bg-gray-700 dark:border-gray-600" placeholder="Short description"></textarea>
+                        </div>
+                    </div>
+                </div>
+            </template>
+            <button type="button" id="add-legal-case" class="mt-3 px-4 py-2 bg-gray-200 dark:bg-gray-600 rounded text-sm">
+                + Add legal case
+            </button>
         </section>
 
         {{-- Partner preferences (structured, same as wizard About & preferences) — snapshot[preferences][0][...] --}}

@@ -33,6 +33,12 @@ class BiodataIntake extends Model
         'approval_snapshot_json',
         'snapshot_schema_version',
         'intake_locked',
+        'parser_version',
+        'content_hash',
+        'parse_duration_ms',
+        'ai_calls_used',
+        'fields_auto_filled_count',
+        'fields_manually_edited_count',
     ];
 
     protected $casts = [

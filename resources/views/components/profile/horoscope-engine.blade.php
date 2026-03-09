@@ -1,6 +1,6 @@
 {{--
   Shared Horoscope Dependency Engine. Works in wizard (namePrefix=horoscope) and intake preview (namePrefix=snapshot[horoscope]).
-  Renders: nakshatra_id, charan, rashi_id, gan_id, nadi_id, yoni_id, mangal_dosh_type_id, devak, kul, gotra.
+  Renders: nakshatra_id, charan, rashi_id, gan_id, nadi_id, yoni_id, mangal_dosh_type_id, devak, kul, gotra, navras_name, birth_weekday.
   Option 2: Save allowed with persistent mismatch warning. All fields editable. dependencyWarnings format: { field => { message, expected: [{id, label}] } }.
 --}}
 @props([
@@ -17,6 +17,7 @@
     'mode' => 'wizard',
     'dependencyExpected' => [],
     'dependencyWarnings' => [],
+    'birthWeekdayExpected' => null,
 ])
 @php
     $row = $row ?? [];
@@ -51,6 +52,9 @@
         'yonis' => $yonis->filter($filterOther)->map(fn($r) => ['id' => (int)$r->id, 'label' => $yoniDisplayLabel($r)])->values()->all(),
     ];
     $warn = fn($field) => $dependencyWarnings[$field] ?? null;
+    $birthWeekdayExpected = $birthWeekdayExpected ?? null;
+    $birthWeekdayValue = $val('birth_weekday');
+    $birthWeekdayMismatch = $birthWeekdayExpected && $birthWeekdayValue && $birthWeekdayValue !== $birthWeekdayExpected;
     $mangalNone = $mangalDoshTypes->firstWhere('key', 'none');
     $mangalYesDefault = $mangalDoshTypes->firstWhere('key', 'bhumangal') ?? $mangalDoshTypes->whereNotIn('key', ['none', 'other'])->first();
     $mangalNoneId = $mangalNone ? (int) $mangalNone->id : '';
@@ -195,6 +199,83 @@
                 <button type="button" class="horoscope-mangal-toggle px-4 py-2 text-sm font-medium {{ $isMangalYes ? 'bg-red-600 text-white border-red-600' : 'bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-red-50 dark:hover:bg-gray-600' }}" data-mangal-value="{{ $mangalYesId }}">Yes</button>
             </div>
         </div>
+    </div>
+
+    {{-- Row 4: Navras name + Devak --}}
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+            <label for="horoscope-navras_name" class="{{ $labelCls }}">Navras नाव</label>
+            <input
+                type="text"
+                name="{{ $n('navras_name') }}"
+                id="horoscope-navras_name"
+                class="{{ $cls }}"
+                value="{{ $val('navras_name') }}"
+                autocomplete="off"
+            >
+        </div>
+        <div>
+            <label for="horoscope-devak" class="{{ $labelCls }}">Devak / कुलदेवता</label>
+            <input
+                type="text"
+                name="{{ $n('devak') }}"
+                id="horoscope-devak"
+                class="{{ $cls }}"
+                value="{{ $val('devak') }}"
+                autocomplete="off"
+            >
+        </div>
+    </div>
+
+    {{-- Row 5: Kul + Gotra --}}
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+            <label for="horoscope-kul" class="{{ $labelCls }}">Kul (कुळ नाव)</label>
+            <input
+                type="text"
+                name="{{ $n('kul') }}"
+                id="horoscope-kul"
+                class="{{ $cls }}"
+                value="{{ $val('kul') }}"
+                autocomplete="off"
+            >
+        </div>
+        <div>
+            <label for="horoscope-gotra" class="{{ $labelCls }}">Gotra</label>
+            <input
+                type="text"
+                name="{{ $n('gotra') }}"
+                id="horoscope-gotra"
+                class="{{ $cls }}"
+                value="{{ $val('gotra') }}"
+                autocomplete="off"
+            >
+        </div>
+    </div>
+
+    {{-- Row 6: Janma-waar (day of week from DOB, editable with mismatch warning) --}}
+    <div class="mt-2">
+        <label for="horoscope-birth_weekday" class="{{ $labelCls }}">जन्मवार (Day of week)</label>
+        <select
+            name="{{ $n('birth_weekday') }}"
+            id="horoscope-birth_weekday"
+            class="{{ $cls }} @if($birthWeekdayMismatch) border-red-600 dark:border-red-500 @endif"
+        >
+            <option value="">— Select —</option>
+            @php
+                $days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+            @endphp
+            @foreach($days as $day)
+                <option value="{{ $day }}" {{ (string)($birthWeekdayValue ?? '') === $day ? 'selected' : '' }}>
+                    {{ $day }}
+                </option>
+            @endforeach
+        </select>
+        @if($birthWeekdayMismatch)
+            <p class="mt-1 text-sm text-red-600 dark:text-red-400">
+                निवडलेला जन्मवार ({{ $birthWeekdayValue }}) हा जन्मतारखेनुसार अपेक्षित दिवसाशी ({{ $birthWeekdayExpected }}) जुळत नाही. कृपया खात्री करूनच पुढे जा.
+            </p>
+        @endif
     </div>
 
     <script>

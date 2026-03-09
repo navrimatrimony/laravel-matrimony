@@ -455,7 +455,10 @@ public function show($matrimony_profile_id)
     ])->findOrFail($matrimony_profile_id);
 
     $extendedAttributes = \Illuminate\Support\Facades\DB::table('profile_extended_attributes')->where('profile_id', $profile->id)->first();
-    $preferences = \Illuminate\Support\Facades\DB::table('profile_preferences')->where('profile_id', $profile->id)->first();
+    $preferenceCriteria = \Illuminate\Support\Facades\DB::table('profile_preference_criteria')->where('profile_id', $profile->id)->first();
+    $preferredReligionIds = \Illuminate\Support\Facades\DB::table('profile_preferred_religions')->where('profile_id', $profile->id)->pluck('religion_id')->all();
+    $preferredCasteIds = \Illuminate\Support\Facades\DB::table('profile_preferred_castes')->where('profile_id', $profile->id)->pluck('caste_id')->all();
+    $preferredDistrictIds = \Illuminate\Support\Facades\DB::table('profile_preferred_districts')->where('profile_id', $profile->id)->pluck('district_id')->all();
 
 
     // 🔒 GUARD: Guest users are NOT allowed to view single profiles

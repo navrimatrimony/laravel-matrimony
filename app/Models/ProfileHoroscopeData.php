@@ -20,6 +20,8 @@ class ProfileHoroscopeData extends Model
         'devak',
         'kul',
         'gotra',
+        'navras_name',
+        'birth_weekday',
     ];
 
     public function profile()

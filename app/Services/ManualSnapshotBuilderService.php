@@ -207,6 +207,8 @@ class ManualSnapshotBuilderService
                 'devak' => trim((string) ($h['devak'] ?? '')),
                 'kul' => trim((string) ($h['kul'] ?? '')),
                 'gotra' => trim((string) ($h['gotra'] ?? '')),
+                'navras_name' => trim((string) ($h['navras_name'] ?? '')),
+                'birth_weekday' => trim((string) ($h['birth_weekday'] ?? '')),
             ]];
         }
 

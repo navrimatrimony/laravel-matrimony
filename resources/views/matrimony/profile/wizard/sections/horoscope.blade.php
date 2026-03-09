@@ -5,6 +5,10 @@
         $h = old('horoscope', $profile_horoscope_data ?? new \stdClass());
         $hRow = is_object($h) ? (array) $h : $h;
         $dependencyWarnings = $dependencyWarnings ?? [];
+        $birthWeekdayExpected = $birthWeekdayExpected ?? null;
+        if (empty($hRow['birth_weekday']) && !empty($birthWeekdayExpected)) {
+            $hRow['birth_weekday'] = $birthWeekdayExpected;
+        }
     @endphp
     <x-profile.horoscope-engine
         :row="$hRow"
@@ -19,5 +23,6 @@
         name-prefix="horoscope"
         mode="wizard"
         :dependencyWarnings="$dependencyWarnings"
+        :birth-weekday-expected="$birthWeekdayExpected"
     />
 </div>

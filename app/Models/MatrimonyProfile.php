@@ -181,11 +181,13 @@ class MatrimonyProfile extends Model
         'family_income_normalized_annual_amount',
         'father_name',
         'father_occupation',
+        'father_extra_info',
         'father_contact_1',
         'father_contact_2',
         'father_contact_3',
         'mother_name',
         'mother_occupation',
+        'mother_extra_info',
         'mother_contact_1',
         'mother_contact_2',
         'mother_contact_3',
@@ -252,6 +254,38 @@ class MatrimonyProfile extends Model
         }
 
         $this->lifecycle_state = $newState;
+    }
+
+    /**
+     * Partner preference criteria (one row per profile).
+     */
+    public function preferenceCriteria()
+    {
+        return $this->hasOne(ProfilePreferenceCriteria::class, 'profile_id');
+    }
+
+    /**
+     * Preferred religions for this profile (pivot).
+     */
+    public function preferredReligions()
+    {
+        return $this->belongsToMany(Religion::class, 'profile_preferred_religions', 'profile_id', 'religion_id');
+    }
+
+    /**
+     * Preferred castes for this profile (pivot).
+     */
+    public function preferredCastes()
+    {
+        return $this->belongsToMany(Caste::class, 'profile_preferred_castes', 'profile_id', 'caste_id');
+    }
+
+    /**
+     * Preferred districts for this profile (pivot).
+     */
+    public function preferredDistricts()
+    {
+        return $this->belongsToMany(District::class, 'profile_preferred_districts', 'profile_id', 'district_id');
     }
 
     /*

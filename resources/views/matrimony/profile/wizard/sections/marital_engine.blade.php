@@ -4,7 +4,8 @@
     $isSnapshot = $namePrefix === 'snapshot';
     $showMaritalStatus = $showMaritalStatus ?? true;
     $maritalStatuses = $maritalStatuses ?? collect();
-    $marriage = ($profileMarriages ?? collect())->first();
+    // Use the latest marriage row (highest id) so UI reflects the most recent saved legal status.
+    $marriage = ($profileMarriages ?? collect())->sortByDesc('id')->first();
     $profileChildren = $profileChildren ?? collect();
     $childLivingWithOptions = $childLivingWithOptions ?? collect();
     $oldCore = $isSnapshot ? 'snapshot.core' : null;
@@ -153,16 +154,26 @@
                         </select>
                     </div>
                     <div class="flex-shrink-0 flex items-end">
-                        <input type="hidden" :name="(namePrefix ? 'snapshot[children][' : 'children[') + index + '][id]'" :value="child.id || ''">
-                        <input type="hidden" :name="(namePrefix ? 'snapshot[children][' : 'children[') + index + '][sort_order]'" :value="index">
-                        <button type="button" @click="removeChild(index)" class="text-sm text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300 whitespace-nowrap h-[42px] flex items-center px-2">Remove</button>
+                        <div class="flex flex-col items-end space-y-1">
+                            <input type="hidden" :name="(namePrefix ? 'snapshot[children][' : 'children[') + index + '][id]'" :value="child.id || ''">
+                            <input type="hidden" :name="(namePrefix ? 'snapshot[children][' : 'children[') + index + '][sort_order]'" :value="index">
+                            <div class="flex items-center gap-3 h-[42px]">
+                                <button type="button"
+                                        @click="addChild()"
+                                        class="text-xs text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300">
+                                    + Add
+                                </button>
+                                <button type="button"
+                                        @click="removeChild(index)"
+                                        class="text-xs text-red-600 dark:text-red-400 hover:text-red-800 dark:hover:text-red-300 whitespace-nowrap">
+                                    Remove this entry
+                                </button>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </template>
         </div>
-        <button type="button" @click="addChild()" class="mt-3 px-3 py-2.5 h-[42px] flex items-center bg-gray-200 dark:bg-gray-600 rounded text-sm text-gray-800 dark:text-gray-200 hover:bg-gray-300 dark:hover:bg-gray-500">
-            + Add child
-        </button>
     </div>
 </div>
 

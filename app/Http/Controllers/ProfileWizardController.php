@@ -470,7 +470,22 @@ class ProfileWizardController extends Controller
                 };
                 $parentsFamilyTypes = ['native_place', 'paternal_grandfather', 'paternal_grandmother', 'paternal_uncle', 'wife_paternal_uncle', 'paternal_aunt', 'husband_paternal_aunt', 'Cousin', 'Other'];
                 $maternalFamilyTypes = ['maternal_address_ajol', 'maternal_grandfather', 'maternal_grandmother', 'maternal_uncle', 'wife_maternal_uncle', 'maternal_aunt', 'husband_maternal_aunt', 'maternal_cousin', 'other_maternal'];
-                $data['profileRelativesParentsFamily'] = $relRows->filter(fn ($r) => in_array($r->relation_type ?? '', $parentsFamilyTypes, true))->map($mapRow)->values();
+                $parents = $relRows
+                    ->filter(fn ($r) => in_array($r->relation_type ?? '', $parentsFamilyTypes, true))
+                    ->map($mapRow);
+                // Avoid showing visually duplicated rows (same relation, name, location, contact, notes).
+                $data['profileRelativesParentsFamily'] = $parents
+                    ->unique(function ($row) {
+                        return implode('|', [
+                            $row->relation_type ?? '',
+                            $row->name ?? '',
+                            $row->city_id ?? '',
+                            $row->state_id ?? '',
+                            $row->contact_number ?? '',
+                            $row->notes ?? '',
+                        ]);
+                    })
+                    ->values();
                 $data['profileRelativesMaternalFamily'] = $relRows->filter(fn ($r) => in_array($r->relation_type ?? '', $maternalFamilyTypes, true))->map($mapRow)->values();
                 $data['relationTypesParentsFamily'] = [
                     ['value' => 'native_place', 'label' => 'Native Place'],
@@ -564,6 +579,19 @@ class ProfileWizardController extends Controller
                 $data['dependencyExpected'] = [];
                 $data['horoscopeRulesJson'] = $horoscopeRuleService->getRulesForFrontend();
                 $data['rashiAshtakootaJson'] = $horoscopeRuleService->getRashiAshtakootaForFrontend();
+                // Compute birth weekday from profile DOB for default + mismatch warning in UI.
+                $birthWeekdayExpected = null;
+                if (! empty($profile->date_of_birth)) {
+                    try {
+                        $dob = $profile->date_of_birth instanceof \Carbon\CarbonInterface
+                            ? $profile->date_of_birth
+                            : \Carbon\Carbon::parse($profile->date_of_birth);
+                        $birthWeekdayExpected = $dob->englishDayOfWeek;
+                    } catch (\Throwable $e) {
+                        $birthWeekdayExpected = null;
+                    }
+                }
+                $data['birthWeekdayExpected'] = $birthWeekdayExpected;
                 break;
             case 'contacts':
                 $allContacts = DB::table('profile_contacts')->where('profile_id', $profile->id)->orderBy('id')->get();
@@ -579,7 +607,48 @@ class ProfileWizardController extends Controller
                 $data['extendedAttrs'] = DB::table('profile_extended_attributes')->where('profile_id', $profile->id)->first();
                 break;
             case 'about-preferences':
-                $data['preferences'] = DB::table('profile_preferences')->where('profile_id', $profile->id)->first();
+                $criteria = DB::table('profile_preference_criteria')->where('profile_id', $profile->id)->first();
+                $preferredReligionIds = DB::table('profile_preferred_religions')->where('profile_id', $profile->id)->pluck('religion_id')->all();
+                $preferredCasteIds = DB::table('profile_preferred_castes')->where('profile_id', $profile->id)->pluck('caste_id')->all();
+                $preferredDistrictIds = DB::table('profile_preferred_districts')->where('profile_id', $profile->id)->pluck('district_id')->all();
+
+                $suggestions = \App\Services\PartnerPreferenceSuggestionService::suggestForProfile($profile);
+                if (!$criteria && empty($preferredReligionIds) && empty($preferredCasteIds) && empty($preferredDistrictIds)) {
+                    $criteria = (object) [
+                        'preferred_age_min' => $suggestions['preferred_age_min'],
+                        'preferred_age_max' => $suggestions['preferred_age_max'],
+                        'preferred_income_min' => $suggestions['preferred_income_min'],
+                        'preferred_income_max' => $suggestions['preferred_income_max'],
+                        'preferred_education' => $suggestions['preferred_education'],
+                        'preferred_city_id' => $suggestions['preferred_city_id'],
+                    ];
+                    $preferredReligionIds = $suggestions['preferred_religion_ids'] ?? [];
+                    $preferredCasteIds = $suggestions['preferred_caste_ids'] ?? [];
+                    $preferredDistrictIds = $suggestions['preferred_district_ids'] ?? [];
+                    $data['preferencePreset'] = $suggestions['preference_preset'] ?? 'balanced';
+                } else {
+                    $data['preferencePreset'] = 'custom';
+                }
+                $base = $suggestions;
+                if (!empty($base['preferred_city_id'])) {
+                    $cityName = \App\Models\City::where('id', $base['preferred_city_id'])->value('name');
+                    if ($cityName) {
+                        $base['preferred_city_name'] = $cityName;
+                    }
+                }
+                $data['preferencePresetDefaults'] = [
+                    'traditional' => \App\Services\PartnerPreferencePresetService::applyPreset('traditional', $base),
+                    'balanced' => \App\Services\PartnerPreferencePresetService::applyPreset('balanced', $base),
+                    'broad' => \App\Services\PartnerPreferencePresetService::applyPreset('broad', $base),
+                ];
+                $data['preferenceCriteria'] = $criteria;
+                $data['preferredReligionIds'] = $preferredReligionIds;
+                $data['preferredCasteIds'] = $preferredCasteIds;
+                $data['preferredDistrictIds'] = $preferredDistrictIds;
+
+                $data['allReligions'] = \App\Models\Religion::where('is_active', true)->orderBy('label')->get();
+                $data['allCastes'] = \App\Models\Caste::where('is_active', true)->orderBy('label')->get();
+                $data['allDistricts'] = \App\Models\District::orderBy('name')->get();
                 break;
             case 'photo':
                 break;
@@ -781,6 +850,8 @@ class ProfileWizardController extends Controller
         $incomeEngineService = app(\App\Services\IncomeEngineService::class);
         $incomeCore = $this->buildIncomeEngineCore($request, 'income', $incomeEngineService);
         $defaultInr = \App\Models\MasterIncomeCurrency::where('code', 'INR')->value('id');
+        $workCityId = $request->filled('work_city_id') ? (int) $request->input('work_city_id') : null;
+        $workStateId = $request->filled('work_state_id') ? (int) $request->input('work_state_id') : null;
         $core = [
             'highest_education' => $request->input('highest_education') ?: null,
             'highest_education_other' => $request->input('highest_education_other') ? trim((string) $request->input('highest_education_other')) ?: null : null,
@@ -793,6 +864,8 @@ class ProfileWizardController extends Controller
             'income_range_id' => $request->filled('income_range_id') ? (int) $request->input('income_range_id') : null,
             'income_private' => $request->boolean('income_private'),
             'income_currency_id' => $request->input('income_currency_id') ? (int) $request->input('income_currency_id') : $defaultInr,
+            'work_city_id' => $workCityId,
+            'work_state_id' => $workStateId,
         ];
         $core = array_merge($core, $incomeCore);
         $core = array_map(fn ($v) => $v === '' ? null : $v, $core);
@@ -839,14 +912,18 @@ class ProfileWizardController extends Controller
         ], $familyIncomeEngineRules));
         $incomeEngineService = app(\App\Services\IncomeEngineService::class);
         $familyIncomeCore = $this->buildIncomeEngineCore($request, 'family_income', $incomeEngineService);
+        $parentsAddressLine = $request->filled('parents_address_line') ? trim((string) $request->input('parents_address_line')) : null;
+
         $core = [
             'father_name' => $request->input('father_name') ?: null,
             'father_occupation' => $request->input('father_occupation') ?: null,
+            'father_extra_info' => $request->filled('father_extra_info') ? trim((string) $request->input('father_extra_info')) : null,
             'father_contact_1' => trim((string) ($request->input('father_contact_1') ?? '')) ?: null,
             'father_contact_2' => trim((string) ($request->input('father_contact_2') ?? '')) ?: null,
             'father_contact_3' => trim((string) ($request->input('father_contact_3') ?? '')) ?: null,
             'mother_name' => $request->input('mother_name') ?: null,
             'mother_occupation' => $request->input('mother_occupation') ?: null,
+            'mother_extra_info' => $request->filled('mother_extra_info') ? trim((string) $request->input('mother_extra_info')) : null,
             'mother_contact_1' => trim((string) ($request->input('mother_contact_1') ?? '')) ?: null,
             'mother_contact_2' => trim((string) ($request->input('mother_contact_2') ?? '')) ?: null,
             'mother_contact_3' => trim((string) ($request->input('mother_contact_3') ?? '')) ?: null,
@@ -857,6 +934,15 @@ class ProfileWizardController extends Controller
             'weight_kg' => $request->filled('weight_kg') ? (float) $request->input('weight_kg') : $profile->weight_kg,
             'physical_build_id' => $request->input('physical_build_id') ? (int) $request->input('physical_build_id') : $profile->physical_build_id,
         ];
+        // Parents home address uses the same core address fields; allow editing from Family details too.
+        if ($request->has('city_id') || $request->has('state_id') || $request->has('parents_address_line')) {
+            $core['country_id'] = $request->input('country_id') ?: null;
+            $core['state_id'] = $request->input('state_id') ?: null;
+            $core['district_id'] = $request->input('district_id') ?: null;
+            $core['taluka_id'] = $request->input('taluka_id') ?: null;
+            $core['city_id'] = $request->input('city_id') ?: null;
+            $core['address_line'] = $parentsAddressLine !== null ? $parentsAddressLine : ($profile->address_line ?? null);
+        }
         $core = array_merge($core, $familyIncomeCore);
         $core = array_map(fn ($v) => $v === '' ? null : $v, $core);
 
@@ -1227,30 +1313,88 @@ class ProfileWizardController extends Controller
 
     private function buildAboutPreferencesSnapshot(Request $request, MatrimonyProfile $profile): array
     {
-        $preferences = [];
-        if ($request->has('preferences')) {
-            $pr = $request->input('preferences');
-            $preferences = [[
-                'id' => ! empty($pr['id']) ? (int) $pr['id'] : null,
-                'preferred_city' => trim((string) ($pr['preferred_city'] ?? '')),
-                'preferred_caste' => trim((string) ($pr['preferred_caste'] ?? '')),
-                'preferred_age_min' => isset($pr['preferred_age_min']) && $pr['preferred_age_min'] !== '' ? (int) $pr['preferred_age_min'] : null,
-                'preferred_age_max' => isset($pr['preferred_age_max']) && $pr['preferred_age_max'] !== '' ? (int) $pr['preferred_age_max'] : null,
-                'preferred_income_min' => isset($pr['preferred_income_min']) && $pr['preferred_income_min'] !== '' ? (float) $pr['preferred_income_min'] : null,
-                'preferred_income_max' => isset($pr['preferred_income_max']) && $pr['preferred_income_max'] !== '' ? (float) $pr['preferred_income_max'] : null,
-                'preferred_education' => trim((string) ($pr['preferred_education'] ?? '')),
-            ]];
+        $validated = $request->validate([
+            'preferred_age_min' => ['nullable', 'integer', 'min:18', 'max:80'],
+            'preferred_age_max' => ['nullable', 'integer', 'min:18', 'max:80'],
+            'preferred_income_min' => ['nullable', 'numeric', 'min:0'],
+            'preferred_income_max' => ['nullable', 'numeric', 'min:0'],
+            'preferred_education' => ['nullable', 'string', 'max:255'],
+            'preferred_city_id' => ['nullable', 'integer', 'exists:cities,id'],
+            'preferred_religion_ids' => ['nullable', 'array'],
+            'preferred_religion_ids.*' => ['integer', 'exists:religions,id'],
+            'preferred_caste_ids' => ['nullable', 'array'],
+            'preferred_caste_ids.*' => ['integer', 'exists:castes,id'],
+            'preferred_district_ids' => ['nullable', 'array'],
+            'preferred_district_ids.*' => ['integer', 'exists:districts,id'],
+        ]);
+
+        $preferredCitiesInput = $request->input('preferred_cities', []);
+        $cityIdsFromPreferred = [];
+        if (is_array($preferredCitiesInput)) {
+            foreach ($preferredCitiesInput as $row) {
+                if (!is_array($row)) {
+                    continue;
+                }
+                $cid = $row['city_id'] ?? $row['preferred_city_id'] ?? null;
+                if ($cid !== null && $cid !== '') {
+                    $cityIdsFromPreferred[] = (int) $cid;
+                }
+            }
+        }
+        $cityIdsFromPreferred = array_values(array_unique($cityIdsFromPreferred));
+
+        if (
+            isset($validated['preferred_age_min'], $validated['preferred_age_max']) &&
+            $validated['preferred_age_min'] !== null &&
+            $validated['preferred_age_max'] !== null &&
+            $validated['preferred_age_min'] > $validated['preferred_age_max']
+        ) {
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'preferred_age_min' => ['Minimum age must be less than or equal to maximum age.'],
+            ]);
+        }
+        if (
+            isset($validated['preferred_income_min'], $validated['preferred_income_max']) &&
+            $validated['preferred_income_min'] !== null &&
+            $validated['preferred_income_max'] !== null &&
+            (float) $validated['preferred_income_min'] > (float) $validated['preferred_income_max']
+        ) {
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'preferred_income_min' => ['Minimum income must be less than or equal to maximum income.'],
+            ]);
         }
 
-        $snapshot = [];
-        if ($preferences !== []) {
-            $snapshot['preferences'] = $preferences;
-        }
-        if ($snapshot === []) {
-            $snapshot = ['core' => []];
+        $preferredCityId = $validated['preferred_city_id'] ?? null;
+        if ($preferredCityId === null && !empty($cityIdsFromPreferred)) {
+            $preferredCityId = $cityIdsFromPreferred[0];
         }
 
-        return $snapshot;
+        $districtIds = $validated['preferred_district_ids'] ?? [];
+        if (!empty($cityIdsFromPreferred)) {
+            $talukaIds = DB::table('cities')->whereIn('id', $cityIdsFromPreferred)->pluck('taluka_id')->filter()->all();
+            if (!empty($talukaIds)) {
+                $districtsFromCities = DB::table('talukas')->whereIn('id', $talukaIds)->pluck('district_id')->filter()->map(fn ($id) => (int) $id)->all();
+                if (!empty($districtsFromCities)) {
+                    $districtIds = array_values(array_unique(array_merge($districtIds, $districtsFromCities)));
+                }
+            }
+        }
+
+        $snapshotPreferences = [
+            'preferred_age_min' => $validated['preferred_age_min'] ?? null,
+            'preferred_age_max' => $validated['preferred_age_max'] ?? null,
+            'preferred_income_min' => $validated['preferred_income_min'] ?? null,
+            'preferred_income_max' => $validated['preferred_income_max'] ?? null,
+            'preferred_education' => $validated['preferred_education'] ?? null,
+            'preferred_city_id' => $preferredCityId,
+            'preferred_religion_ids' => $validated['preferred_religion_ids'] ?? [],
+            'preferred_caste_ids' => $validated['preferred_caste_ids'] ?? [],
+            'preferred_district_ids' => $districtIds,
+        ];
+
+        return [
+            'preferences' => $snapshotPreferences,
+        ];
     }
 
     private function buildAboutMeSnapshot(Request $request, MatrimonyProfile $profile): array
@@ -1372,6 +1516,8 @@ class ProfileWizardController extends Controller
                 'devak' => trim((string) ($h['devak'] ?? '')),
                 'kul' => trim((string) ($h['kul'] ?? '')),
                 'gotra' => trim((string) ($h['gotra'] ?? '')),
+                'navras_name' => trim((string) ($h['navras_name'] ?? '')),
+                'birth_weekday' => trim((string) ($h['birth_weekday'] ?? '')),
             ];
             if ($payload['charan'] !== null && ($payload['charan'] < 1 || $payload['charan'] > 4)) {
                 $payload['charan'] = null;
@@ -1391,6 +1537,8 @@ class ProfileWizardController extends Controller
                 'devak' => $payload['devak'],
                 'kul' => $payload['kul'],
                 'gotra' => $payload['gotra'],
+                'navras_name' => $payload['navras_name'],
+                'birth_weekday' => $payload['birth_weekday'],
             ]];
         }
 

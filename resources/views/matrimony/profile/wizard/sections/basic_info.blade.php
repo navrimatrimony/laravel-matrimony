@@ -59,7 +59,16 @@
                 $yMin = now()->subYears(60)->format('Y');
                 $yMax = now()->subYears(18)->format('Y');
                 $dobRaw = $profile->date_of_birth ?? null;
-                $dobValue = $dobRaw ? \Carbon\Carbon::parse($dobRaw)->format('Y-m-d') : '';
+                $dobValue = '';
+                if ($dobRaw instanceof \Carbon\CarbonInterface) {
+                    $dobValue = $dobRaw->format('Y-m-d');
+                } elseif (is_string($dobRaw) && trim($dobRaw) !== '') {
+                    try {
+                        $dobValue = \Carbon\Carbon::parse($dobRaw)->format('Y-m-d');
+                    } catch (\Throwable $e) {
+                        $dobValue = '';
+                    }
+                }
                 $dobValue = old($oldPrefix.'date_of_birth', $dobValue);
             @endphp
             <input type="date" name="{{ $nameDob }}" value="{{ $dobValue }}"
@@ -95,13 +104,13 @@
                     }
                 }
             @endphp
-            <div class="flex flex-nowrap items-center gap-1 rounded-lg border border-gray-300 dark:border-gray-600 dark:bg-gray-700 pl-1.5 pr-1.5 w-max max-w-full min-h-[42px]">
-                <select name="{{ $nameBirthTimeHour }}" x-model="birthHour" class="rounded border border-gray-300 dark:border-gray-500 dark:bg-gray-700 dark:text-gray-100 text-sm w-14 h-[42px] focus:ring-1 focus:ring-indigo-500">
+            <div class="flex flex-nowrap items-center gap-1 rounded-lg border border-gray-300 dark:border-gray-600 dark:bg-gray-700 pl-1.5 pr-1.5 w-max max-w-full min-h-[42px] min-w-[220px]">
+                <select name="{{ $nameBirthTimeHour }}" x-model="birthHour" class="rounded border border-gray-300 dark:border-gray-500 dark:bg-gray-700 dark:text-gray-100 text-sm w-20 h-[42px] text-center focus:ring-1 focus:ring-indigo-500">
                     <option value="">—</option>
                     @for($i = 1; $i <= 12; $i++)<option value="{{ $i }}">{{ $i }}</option>@endfor
                 </select>
                 <span class="text-gray-500 dark:text-gray-400 font-medium">:</span>
-                <select name="{{ $nameBirthTimeMinute }}" x-model="birthMinute" class="rounded border border-gray-300 dark:border-gray-500 dark:bg-gray-700 dark:text-gray-100 text-sm w-14 h-[42px] focus:ring-1 focus:ring-indigo-500">
+                <select name="{{ $nameBirthTimeMinute }}" x-model="birthMinute" class="rounded border border-gray-300 dark:border-gray-500 dark:bg-gray-700 dark:text-gray-100 text-sm w-20 h-[42px] text-center focus:ring-1 focus:ring-indigo-500">
                     <option value="">—</option>
                     @for($i = 0; $i <= 59; $i++)<option value="{{ str_pad($i, 2, '0', STR_PAD_LEFT) }}">{{ str_pad($i, 2, '0', STR_PAD_LEFT) }}</option>@endfor
                 </select>
@@ -109,7 +118,6 @@
                     <button type="button" @click="birthAmPm = 'AM'" :class="birthAmPm === 'AM' ? 'bg-indigo-600 text-white' : 'bg-gray-100 dark:bg-gray-600 text-gray-700 dark:text-gray-300'" class="px-1.5 h-[42px] flex items-center text-sm font-medium">AM</button>
                     <button type="button" @click="birthAmPm = 'PM'" :class="birthAmPm === 'PM' ? 'bg-indigo-600 text-white' : 'bg-gray-100 dark:bg-gray-600 text-gray-700 dark:text-gray-300'" class="px-1.5 h-[42px] flex items-center text-sm font-medium">PM</button>
                 </div>
-                <span x-show="birthHour && birthMinute" x-cloak x-text="birthTimeDisplay" class="ml-0.5 text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap shrink-0"></span>
                 <input type="hidden" name="{{ $nameBirthTime }}" :value="birthTimeValue">
             </div>
             @error($oldPrefix.'birth_time')<p class="mt-1 text-sm text-red-600 dark:text-red-400">{{ $message }}</p>@enderror

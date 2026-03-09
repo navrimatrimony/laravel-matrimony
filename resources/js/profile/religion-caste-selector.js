@@ -277,6 +277,15 @@
                         }
                     }
                 });
+        } else {
+            // Intake preview case: OCR ने label भरले आहे पण master id नाही.
+            // अशा वेळी caste / subcaste plain-editable ठेवू, म्हणजे user manually सुधारू शकेल.
+            if (casteInput && casteInput.value && !casteHidden.value) {
+                casteInput.disabled = false;
+            }
+            if (subInput && subInput.value && !subHidden.value) {
+                subInput.disabled = false;
+            }
         }
     }
 

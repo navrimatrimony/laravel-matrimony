@@ -1459,7 +1459,7 @@ class MutationService
             }
         }
 
-        // Log deletion intent for existing rows not present in proposed snapshot (no hard delete).
+        // Log deletion intent for existing rows not present in proposed snapshot.
         $proposedIds = [];
         foreach ($proposed as $row) {
             if (is_array($row) && isset($row['id'])) {
@@ -1478,6 +1478,22 @@ class MutationService
                 json_encode($existingRow),
                 null
             );
+        }
+
+        // For profile_relatives and profile_contacts: actually hard-delete rows that user removed from the wizard.
+        if (in_array($entityType, ['profile_relatives', 'profile_contacts'], true)) {
+            $deleteIds = [];
+            foreach ($existing as $id => $existingRow) {
+                if (! isset($proposedIds[$id])) {
+                    $deleteIds[] = (int) $id;
+                }
+            }
+            if (! empty($deleteIds)) {
+                DB::table($entityType)
+                    ->where('profile_id', $profile->id)
+                    ->whereIn('id', $deleteIds)
+                    ->delete();
+            }
         }
     }
 
