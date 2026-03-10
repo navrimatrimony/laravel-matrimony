@@ -6,12 +6,7 @@
         <h1 class="text-2xl font-bold text-gray-800 dark:text-gray-100 mb-1">Admin — Profile #{{ $profile->id }}</h1>
         <p class="text-sm text-gray-500 dark:text-gray-400 mb-6">{{ $profile->full_name ?? '—' }}@if (!empty($profile->is_demo)) <span class="inline-block ml-2 px-2 py-0.5 text-xs font-semibold bg-sky-100 dark:bg-sky-900/40 text-sky-700 dark:text-sky-300 rounded">Demo</span>@endif</p>
     @else
-        <h1 class="text-2xl font-bold mb-6">
-            Matrimony Profile
-            @if (!empty($profile->is_demo))
-                <span class="inline-block ml-2 px-2 py-0.5 text-xs font-semibold bg-sky-100 text-sky-700 rounded">Demo Profile</span>
-            @endif
-        </h1>
+        <h1 class="text-2xl font-bold mb-6">Matrimony Profile</h1>
     @endif
 
 @if (($profile->lifecycle_state ?? null) === 'conflict_pending' && ($hasBlockingConflicts ?? false))
@@ -47,7 +42,7 @@
 
 @if ($isOwnProfile && $profile->is_suspended)
     <div style="margin-bottom:1.5rem; padding:1.25rem; background:#fef3c7; border:2px solid #fbbf24; border-radius:8px; color:#92400e;">
-        <p style="font-weight:700; margin:0; font-size:1.1rem;">⚠️ Your profile is currently suspended by admin.</p>
+        <p style="font-weight:700; margin:0; font-size:1.1rem;">⚠️ {{ __('admin.suspended') }}</p>
     </div>
 @endif
 
@@ -56,14 +51,14 @@
     <div x-data="{ activeAction: null }" class="mb-6 p-6 rounded-lg border-2 border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-700/50">
         <div class="flex justify-between items-center mb-4">
             <div>
-                <h3 class="text-sm font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400 mb-1">Moderation</h3>
-                <p class="text-xs text-gray-500 dark:text-gray-400">Profile suspend, unsuspend, soft delete, image approve/reject, visibility override. All actions require a reason.</p>
+                <h3 class="text-sm font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400 mb-1">{{ __('admin.moderation') }}</h3>
+                <p class="text-xs text-gray-500 dark:text-gray-400">{{ __('admin.moderation_help') }}</p>
             </div>
             <button 
                 type="button"
                 @click="$parent.adminEditMode = !$parent.adminEditMode"
                 class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-md font-medium text-sm transition-colors">
-                <span x-text="$parent.adminEditMode ? 'Cancel Edit' : 'Edit Profile (Admin)'"></span>
+                <span x-text="$parent.adminEditMode ? @js(__('admin.cancel_edit')) : @js(__('admin.edit_profile_admin'))"></span>
             </button>
         </div>
         <div class="flex flex-wrap gap-2 mb-4">
@@ -71,21 +66,21 @@
                 type="button"
                 @click="activeAction = activeAction === 'suspend' ? null : 'suspend'"
                 style="padding:8px 16px; background:#f59e0b; color:white; border:none; border-radius:4px; cursor:pointer; font-weight:500;">
-                Suspend
+                {{ __('admin.suspend') }}
             </button>
 
             <button 
                 type="button"
                 @click="activeAction = activeAction === 'unsuspend' ? null : 'unsuspend'"
                 style="padding:8px 16px; background:#10b981; color:white; border:none; border-radius:4px; cursor:pointer; font-weight:500;">
-                Unsuspend
+                {{ __('admin.unsuspend') }}
             </button>
 
             <button 
                 type="button"
                 @click="activeAction = activeAction === 'soft-delete' ? null : 'soft-delete'"
                 style="padding:8px 16px; background:#ef4444; color:white; border:none; border-radius:4px; cursor:pointer; font-weight:500;">
-                Soft Delete
+                {{ __('admin.soft_delete') }}
             </button>
 
             @if ($profile->profile_photo)
@@ -93,14 +88,14 @@
                 type="button"
                 @click="activeAction = activeAction === 'approve-image' ? null : 'approve-image'"
                 style="padding:8px 16px; background:#3b82f6; color:white; border:none; border-radius:4px; cursor:pointer; font-weight:500;">
-                Approve Image
+                {{ __('admin.approve_image') }}
             </button>
 
             <button 
                 type="button"
                 @click="activeAction = activeAction === 'reject-image' ? null : 'reject-image'"
                 style="padding:8px 16px; background:#dc2626; color:white; border:none; border-radius:4px; cursor:pointer; font-weight:500;">
-                Reject Image
+                {{ __('admin.reject_image') }}
             </button>
             @endif
 
@@ -108,7 +103,7 @@
                 type="button"
                 @click="activeAction = activeAction === 'override-visibility' ? null : 'override-visibility'"
                 style="padding:8px 16px; background:#8b5cf6; color:white; border:none; border-radius:4px; cursor:pointer; font-weight:500;">
-                Override Visibility
+                {{ __('admin.override_visibility') }}
             </button>
         </div>
 
@@ -116,11 +111,11 @@
         <div x-show="activeAction === 'suspend'" x-transition style="border:1px solid #ccc; padding:1rem; border-radius:4px; margin-bottom:1rem; background:#fff;">
             <form method="POST" action="{{ route('admin.profiles.suspend', $profile) }}">
                 @csrf
-                <p style="font-weight:600; margin-bottom:8px;">Suspend Profile</p>
-                <textarea name="reason" rows="3" required minlength="10" placeholder="Reason (minimum 10 characters)" style="width:100%; margin-bottom:8px; padding:8px; border:1px solid #ddd; border-radius:4px;"></textarea>
+                <p style="font-weight:600; margin-bottom:8px;">{{ __('admin.suspend_profile') }}</p>
+                <textarea name="reason" rows="3" required minlength="10" placeholder="{{ __('admin.reason_min_10') }}" style="width:100%; margin-bottom:8px; padding:8px; border:1px solid #ddd; border-radius:4px;"></textarea>
                 <div style="display:flex; gap:8px;">
-                    <button type="submit" style="padding:8px 16px; background:#f59e0b; color:white; border:none; border-radius:4px; cursor:pointer;">Submit</button>
-                    <button type="button" @click="activeAction = null" style="padding:8px 16px; background:#6b7280; color:white; border:none; border-radius:4px; cursor:pointer;">Cancel</button>
+                    <button type="submit" style="padding:8px 16px; background:#f59e0b; color:white; border:none; border-radius:4px; cursor:pointer;">{{ __('common.submit') }}</button>
+                    <button type="button" @click="activeAction = null" style="padding:8px 16px; background:#6b7280; color:white; border:none; border-radius:4px; cursor:pointer;">{{ __('common.cancel') }}</button>
                 </div>
             </form>
         </div>
@@ -129,11 +124,11 @@
         <div x-show="activeAction === 'unsuspend'" x-transition style="border:1px solid #ccc; padding:1rem; border-radius:4px; margin-bottom:1rem; background:#fff;">
             <form method="POST" action="{{ route('admin.profiles.unsuspend', $profile) }}">
                 @csrf
-                <p style="font-weight:600; margin-bottom:8px;">Unsuspend Profile</p>
-                <textarea name="reason" rows="3" required minlength="10" placeholder="Reason (minimum 10 characters)" style="width:100%; margin-bottom:8px; padding:8px; border:1px solid #ddd; border-radius:4px;"></textarea>
+                <p style="font-weight:600; margin-bottom:8px;">{{ __('admin.unsuspend_profile') }}</p>
+                <textarea name="reason" rows="3" required minlength="10" placeholder="{{ __('admin.reason_min_10') }}" style="width:100%; margin-bottom:8px; padding:8px; border:1px solid #ddd; border-radius:4px;"></textarea>
                 <div style="display:flex; gap:8px;">
-                    <button type="submit" style="padding:8px 16px; background:#10b981; color:white; border:none; border-radius:4px; cursor:pointer;">Submit</button>
-                    <button type="button" @click="activeAction = null" style="padding:8px 16px; background:#6b7280; color:white; border:none; border-radius:4px; cursor:pointer;">Cancel</button>
+                    <button type="submit" style="padding:8px 16px; background:#10b981; color:white; border:none; border-radius:4px; cursor:pointer;">{{ __('common.submit') }}</button>
+                    <button type="button" @click="activeAction = null" style="padding:8px 16px; background:#6b7280; color:white; border:none; border-radius:4px; cursor:pointer;">{{ __('common.cancel') }}</button>
                 </div>
             </form>
         </div>
@@ -142,11 +137,11 @@
         <div x-show="activeAction === 'soft-delete'" x-transition style="border:1px solid #ccc; padding:1rem; border-radius:4px; margin-bottom:1rem; background:#fff;">
             <form method="POST" action="{{ route('admin.profiles.soft-delete', $profile) }}">
                 @csrf
-                <p style="font-weight:600; margin-bottom:8px;">Soft Delete Profile</p>
-                <textarea name="reason" rows="3" required minlength="10" placeholder="Reason (minimum 10 characters)" style="width:100%; margin-bottom:8px; padding:8px; border:1px solid #ddd; border-radius:4px;"></textarea>
+                <p style="font-weight:600; margin-bottom:8px;">{{ __('admin.soft_delete_profile') }}</p>
+                <textarea name="reason" rows="3" required minlength="10" placeholder="{{ __('admin.reason_min_10') }}" style="width:100%; margin-bottom:8px; padding:8px; border:1px solid #ddd; border-radius:4px;"></textarea>
                 <div style="display:flex; gap:8px;">
-                    <button type="submit" style="padding:8px 16px; background:#ef4444; color:white; border:none; border-radius:4px; cursor:pointer;">Submit</button>
-                    <button type="button" @click="activeAction = null" style="padding:8px 16px; background:#6b7280; color:white; border:none; border-radius:4px; cursor:pointer;">Cancel</button>
+                    <button type="submit" style="padding:8px 16px; background:#ef4444; color:white; border:none; border-radius:4px; cursor:pointer;">{{ __('common.submit') }}</button>
+                    <button type="button" @click="activeAction = null" style="padding:8px 16px; background:#6b7280; color:white; border:none; border-radius:4px; cursor:pointer;">{{ __('common.cancel') }}</button>
                 </div>
             </form>
         </div>
@@ -156,11 +151,11 @@
         <div x-show="activeAction === 'approve-image'" x-transition style="border:1px solid #ccc; padding:1rem; border-radius:4px; margin-bottom:1rem; background:#fff;">
             <form method="POST" action="{{ route('admin.profiles.approve-image', $profile) }}">
                 @csrf
-                <p style="font-weight:600; margin-bottom:8px;">Approve Image</p>
-                <textarea name="reason" rows="3" required minlength="10" placeholder="Reason (minimum 10 characters)" style="width:100%; margin-bottom:8px; padding:8px; border:1px solid #ddd; border-radius:4px;"></textarea>
+                <p style="font-weight:600; margin-bottom:8px;">{{ __('admin.approve_image') }}</p>
+                <textarea name="reason" rows="3" required minlength="10" placeholder="{{ __('admin.reason_min_10') }}" style="width:100%; margin-bottom:8px; padding:8px; border:1px solid #ddd; border-radius:4px;"></textarea>
                 <div style="display:flex; gap:8px;">
-                    <button type="submit" style="padding:8px 16px; background:#3b82f6; color:white; border:none; border-radius:4px; cursor:pointer;">Submit</button>
-                    <button type="button" @click="activeAction = null" style="padding:8px 16px; background:#6b7280; color:white; border:none; border-radius:4px; cursor:pointer;">Cancel</button>
+                    <button type="submit" style="padding:8px 16px; background:#3b82f6; color:white; border:none; border-radius:4px; cursor:pointer;">{{ __('common.submit') }}</button>
+                    <button type="button" @click="activeAction = null" style="padding:8px 16px; background:#6b7280; color:white; border:none; border-radius:4px; cursor:pointer;">{{ __('common.cancel') }}</button>
                 </div>
             </form>
         </div>
@@ -169,11 +164,11 @@
         <div x-show="activeAction === 'reject-image'" x-transition style="border:1px solid #ccc; padding:1rem; border-radius:4px; margin-bottom:1rem; background:#fff;">
             <form method="POST" action="{{ route('admin.profiles.reject-image', $profile) }}">
                 @csrf
-                <p style="font-weight:600; margin-bottom:8px;">Reject Image</p>
-                <textarea name="reason" rows="3" required minlength="10" placeholder="Reason (minimum 10 characters)" style="width:100%; margin-bottom:8px; padding:8px; border:1px solid #ddd; border-radius:4px;"></textarea>
+                <p style="font-weight:600; margin-bottom:8px;">{{ __('admin.reject_image') }}</p>
+                <textarea name="reason" rows="3" required minlength="10" placeholder="{{ __('admin.reason_min_10') }}" style="width:100%; margin-bottom:8px; padding:8px; border:1px solid #ddd; border-radius:4px;"></textarea>
                 <div style="display:flex; gap:8px;">
-                    <button type="submit" style="padding:8px 16px; background:#dc2626; color:white; border:none; border-radius:4px; cursor:pointer;">Submit</button>
-                    <button type="button" @click="activeAction = null" style="padding:8px 16px; background:#6b7280; color:white; border:none; border-radius:4px; cursor:pointer;">Cancel</button>
+                    <button type="submit" style="padding:8px 16px; background:#dc2626; color:white; border:none; border-radius:4px; cursor:pointer;">{{ __('common.submit') }}</button>
+                    <button type="button" @click="activeAction = null" style="padding:8px 16px; background:#6b7280; color:white; border:none; border-radius:4px; cursor:pointer;">{{ __('common.cancel') }}</button>
                 </div>
             </form>
         </div>
@@ -183,11 +178,11 @@
         <div x-show="activeAction === 'override-visibility'" x-transition style="border:1px solid #ccc; padding:1rem; border-radius:4px; margin-bottom:1rem; background:#fff;">
             <form method="POST" action="{{ route('admin.profiles.override-visibility', $profile) }}">
                 @csrf
-                <p style="font-weight:600; margin-bottom:8px;">Override visibility (force search visible even if &lt;70% complete)</p>
-                <textarea name="reason" rows="3" required minlength="10" placeholder="Reason (minimum 10 characters)" style="width:100%; margin-bottom:8px; padding:8px; border:1px solid #ddd; border-radius:4px;"></textarea>
+                <p style="font-weight:600; margin-bottom:8px;">{{ __('admin.override_visibility_help') }}</p>
+                <textarea name="reason" rows="3" required minlength="10" placeholder="{{ __('admin.reason_min_10') }}" style="width:100%; margin-bottom:8px; padding:8px; border:1px solid #ddd; border-radius:4px;"></textarea>
                 <div style="display:flex; gap:8px;">
-                    <button type="submit" style="padding:8px 16px; background:#8b5cf6; color:white; border:none; border-radius:4px; cursor:pointer;">Submit</button>
-                    <button type="button" @click="activeAction = null" style="padding:8px 16px; background:#6b7280; color:white; border:none; border-radius:4px; cursor:pointer;">Cancel</button>
+                    <button type="submit" style="padding:8px 16px; background:#8b5cf6; color:white; border:none; border-radius:4px; cursor:pointer;">{{ __('common.submit') }}</button>
+                    <button type="button" @click="activeAction = null" style="padding:8px 16px; background:#6b7280; color:white; border:none; border-radius:4px; cursor:pointer;">{{ __('common.cancel') }}</button>
                 </div>
             </form>
         </div>
@@ -213,14 +208,14 @@
             
             @if ($dateOfBirthVisible)
             <div>
-                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Date of Birth</label>
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{{ __('Date of Birth') }}</label>
                 <input type="date" name="date_of_birth" value="{{ old('date_of_birth', $profile->date_of_birth) }}" class="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100">
             </div>
             @endif
             
             @if ($maritalStatusVisible)
             <div>
-                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Marital Status</label>
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{{ __('Marital Status') }}</label>
                 <select name="marital_status" class="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100">
                     <option value="">—</option>
                     <option value="single" {{ old('marital_status', $profile->marital_status) === 'single' ? 'selected' : '' }}>Single</option>
@@ -232,14 +227,14 @@
             
             @if ($educationVisible)
             <div>
-                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Education</label>
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{{ __('Education') }}</label>
                 <input type="text" name="highest_education" value="{{ old('highest_education', $profile->highest_education) }}" class="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100">
             </div>
             @endif
             
             @if ($locationVisible)
             <div>
-                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Location</label>
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{{ __('Location') }}</label>
                 <p class="font-medium text-base text-gray-900 dark:text-gray-100">{{ implode(', ', array_filter([$profile->city?->name, $profile->taluka?->name, $profile->district?->name, $profile->state?->name, $profile->country?->name])) ?: '—' }}</p>
                 <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">Edit location via profile hierarchy (country/state/city) in full edit.</p>
             </div>
@@ -268,7 +263,7 @@
 {{-- Profile Completeness --}}
 <div class="mb-6">
     <div class="flex justify-between items-center mb-1">
-        <span class="text-sm font-medium text-gray-700">Profile Completeness</span>
+        <span class="text-sm font-medium text-gray-700">{{ __('profile.profile_completeness') }}</span>
         <span class="text-sm font-bold text-gray-900">{{ $completenessPct }}%</span>
     </div>
     <div class="w-full bg-gray-200 rounded-full h-2.5">
@@ -283,7 +278,7 @@
         {{-- Real uploaded photo --}}
         <img
             src="{{ asset('uploads/matrimony_photos/'.$profile->profile_photo) }}"
-            alt="Profile Photo"
+            alt="{{ __('profile.profile_photo') }}"
             class="w-40 h-40 rounded-full object-cover border"
         />
     @else
@@ -300,12 +295,9 @@
         @endphp
         <img
             src="{{ $placeholderSrc }}"
-            alt="Profile Placeholder"
+            alt="{{ __('dashboard.profile_placeholder') }}"
             class="w-40 h-40 rounded-full object-cover border"
         />
-        @if (!empty($profile->is_demo))
-            <span class="text-xs text-gray-500 mt-1">Demo profile</span>
-        @endif
     @endif
     @if ($isOwnProfile && $profile->profile_photo && $profile->photo_approved === false && empty($profile->photo_rejected_at))
         <p class="mt-2 text-sm text-amber-700 bg-amber-50 dark:bg-amber-900/30 dark:text-amber-200 px-3 py-2 rounded">Your photo is under review. It is not visible to others until approved.</p>
@@ -337,37 +329,37 @@
 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
     @if ($dateOfBirthVisible && ($profile->date_of_birth ?? '') !== '')
     <div>
-        <p class="text-gray-500 text-sm">Date of Birth</p>
+        <p class="text-gray-500 text-sm">{{ __('Date of Birth') }}</p>
         <p class="font-medium text-base">{{ $profile->date_of_birth }}</p>
     </div>
     @endif
     @if (($profile->birth_time ?? '') !== '')
     <div>
-        <p class="text-gray-500 text-sm">Birth time</p>
+        <p class="text-gray-500 text-sm">{{ __('Birth time') }}</p>
         <p class="font-medium text-base">{{ $profile->birth_time }}</p>
     </div>
     @endif
     @if ($maritalStatusVisible && $profile->maritalStatus)
     <div>
-        <p class="text-gray-500 text-sm">Marital Status</p>
+        <p class="text-gray-500 text-sm">{{ __('Marital Status') }}</p>
         <p class="font-medium text-base">{{ $profile->maritalStatus->label ?? '—' }}</p>
     </div>
     @endif
     @if ($profile->religion)
     <div>
-        <p class="text-gray-500 text-sm">Religion</p>
+        <p class="text-gray-500 text-sm">{{ __('Religion') }}</p>
         <p class="font-medium text-base">{{ $profile->religion->label ?? '—' }}</p>
     </div>
     @endif
     @if ($profile->caste)
     <div>
-        <p class="text-gray-500 text-sm">Caste</p>
+        <p class="text-gray-500 text-sm">{{ __('Caste') }}</p>
         <p class="font-medium text-base">{{ $profile->caste->label ?? '—' }}</p>
     </div>
     @endif
     @if ($profile->subCaste)
     <div>
-        <p class="text-gray-500 text-sm">Sub caste</p>
+        <p class="text-gray-500 text-sm">{{ __('Sub caste') }}</p>
         <p class="font-medium text-base">{{ $profile->subCaste->label ?? '—' }}</p>
     </div>
     @endif
@@ -383,7 +375,7 @@
     @endphp
     @if ($locationVisible && ($locationLine !== '' || ($profile->address_line ?? '') !== ''))
     <div>
-        <p class="text-gray-500 text-sm">Location</p>
+        <p class="text-gray-500 text-sm">{{ __('Location') }}</p>
         @if (($profile->address_line ?? '') !== '')
         <p class="font-medium text-base">{{ $profile->address_line }}</p>
         @endif
@@ -394,7 +386,7 @@
     @endif
     @if ($profile->seriousIntent)
     <div>
-        <p class="text-gray-500 text-sm">Marriage timeline</p>
+        <p class="text-gray-500 text-sm">{{ __('Marriage timeline') }}</p>
         <p class="font-medium text-base">{{ $profile->seriousIntent->name ?? '—' }}</p>
     </div>
     @endif
@@ -405,35 +397,35 @@
 @endphp
 @if ($hasPhysical)
 <div class="mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
-    <h3 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Physical</h3>
+    <h3 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">{{ __('Physical') }}</h3>
     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
         @if ($heightVisible && ($profile->height_cm ?? '') !== '')
         <div>
-            <p class="text-gray-500 text-sm">Height</p>
+            <p class="text-gray-500 text-sm">{{ __('Height') }}</p>
             <p class="font-medium text-base">{{ $profile->height_cm }} cm</p>
         </div>
         @endif
         @if (($profile->weight_kg ?? null) !== null && $profile->weight_kg !== '')
         <div>
-            <p class="text-gray-500 text-sm">Weight</p>
+            <p class="text-gray-500 text-sm">{{ __('Weight') }}</p>
             <p class="font-medium text-base">{{ $profile->weight_kg }} kg</p>
         </div>
         @endif
         @if ($profile->complexion)
         <div>
-            <p class="text-gray-500 text-sm">Complexion</p>
+            <p class="text-gray-500 text-sm">{{ __('Complexion') }}</p>
             <p class="font-medium text-base">{{ $profile->complexion->label ?? '—' }}</p>
         </div>
         @endif
         @if ($profile->physicalBuild)
         <div>
-            <p class="text-gray-500 text-sm">Physical Build</p>
+            <p class="text-gray-500 text-sm">{{ __('Physical Build') }}</p>
             <p class="font-medium text-base">{{ $profile->physicalBuild->label ?? '—' }}</p>
         </div>
         @endif
         @if ($profile->bloodGroup)
         <div>
-            <p class="text-gray-500 text-sm">Blood Group</p>
+            <p class="text-gray-500 text-sm">{{ __('Blood Group') }}</p>
             <p class="font-medium text-base">{{ $profile->bloodGroup->label ?? '—' }}</p>
         </div>
         @endif
@@ -452,47 +444,47 @@
 @endphp
 @if ($hasEduCareer)
 <div class="mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
-    <h3 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Education & Career</h3>
+    <h3 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">{{ __('Education & Career') }}</h3>
     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
         @if ($educationVisible && ($profile->highest_education ?? '') !== '')
         <div>
-            <p class="text-gray-500 text-sm">Education</p>
+            <p class="text-gray-500 text-sm">{{ __('Education') }}</p>
             <p class="font-medium text-base">{{ $profile->highest_education }}</p>
         </div>
         @endif
         @if (($profile->specialization ?? '') !== '')
         <div>
-            <p class="text-gray-500 text-sm">Specialization</p>
+            <p class="text-gray-500 text-sm">{{ __('Specialization') }}</p>
             <p class="font-medium text-base">{{ $profile->specialization }}</p>
         </div>
         @endif
         @if (($profile->occupation_title ?? '') !== '')
         <div>
-            <p class="text-gray-500 text-sm">Occupation</p>
+            <p class="text-gray-500 text-sm">{{ __('Occupation') }}</p>
             <p class="font-medium text-base">{{ $profile->occupation_title }}</p>
         </div>
         @endif
         @if (($profile->company_name ?? '') !== '')
         <div>
-            <p class="text-gray-500 text-sm">Company</p>
+            <p class="text-gray-500 text-sm">{{ __('Company') }}</p>
             <p class="font-medium text-base">{{ $profile->company_name }}</p>
         </div>
         @endif
         @if ($hasPersonalIncome)
         <div>
-            <p class="text-gray-500 text-sm">Income</p>
+            <p class="text-gray-500 text-sm">{{ __('Income') }}</p>
             <p class="font-medium text-base">{{ $personalIncomeDisplay }}</p>
         </div>
         @endif
         @if ($hasFamilyIncome)
         <div>
-            <p class="text-gray-500 text-sm">Family Income</p>
+            <p class="text-gray-500 text-sm">{{ __('Family Income') }}</p>
             <p class="font-medium text-base">{{ $familyIncomeDisplay }}</p>
         </div>
         @endif
         @if ($profile->incomeCurrency && ! $hasPersonalIncome && ! $hasFamilyIncome)
         <div>
-            <p class="text-gray-500 text-sm">Income Currency</p>
+            <p class="text-gray-500 text-sm">{{ __('Income Currency') }}</p>
             <p class="font-medium text-base">{{ trim($profile->incomeCurrency->symbol ?? '') }} {{ $profile->incomeCurrency->code ?? '—' }}</p>
         </div>
         @endif
@@ -508,23 +500,23 @@
 @endphp
 @if ($hasFamily)
 <div class="mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
-    <h3 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Family</h3>
+    <h3 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">{{ __('Family') }}</h3>
     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
         @if (($profile->father_name ?? '') !== '')
         <div>
-            <p class="text-gray-500 text-sm">Father</p>
+            <p class="text-gray-500 text-sm">{{ __('Father') }}</p>
             <p class="font-medium text-base">{{ $profile->father_name }}{{ ($profile->father_occupation ?? '') !== '' ? ' · ' . $profile->father_occupation : '' }}</p>
         </div>
         @endif
         @if (($profile->mother_name ?? '') !== '')
         <div>
-            <p class="text-gray-500 text-sm">Mother</p>
+            <p class="text-gray-500 text-sm">{{ __('Mother') }}</p>
             <p class="font-medium text-base">{{ $profile->mother_name }}{{ ($profile->mother_occupation ?? '') !== '' ? ' · ' . $profile->mother_occupation : '' }}</p>
         </div>
         @endif
         @if ($brothersFromEngine > 0 || $sistersFromEngine > 0)
         <div>
-            <p class="text-gray-500 text-sm">Siblings</p>
+            <p class="text-gray-500 text-sm">{{ __('Siblings') }}</p>
             @php
                 $b = $brothersFromEngine > 0 ? $brothersFromEngine . ' brother' . ($brothersFromEngine !== 1 ? 's' : '') : '';
                 $s = $sistersFromEngine > 0 ? $sistersFromEngine . ' sister' . ($sistersFromEngine !== 1 ? 's' : '') : '';
@@ -535,7 +527,7 @@
         @endif
         @if ($profile->familyType)
         <div>
-            <p class="text-gray-500 text-sm">Family Type</p>
+            <p class="text-gray-500 text-sm">{{ __('Family Type') }}</p>
             <p class="font-medium text-base">{{ $profile->familyType->label ?? '—' }}</p>
         </div>
         @endif
@@ -550,16 +542,16 @@
 @endphp
 @if ($hasWorkLocation)
 <div class="mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
-    <h3 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Work Location</h3>
+    <h3 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">{{ __('Work Location') }}</h3>
     <p class="font-medium text-base">{{ implode(', ', array_filter([$workCityName, $workStateName])) }}</p>
 </div>
 @endif
 
 @if (($profilePropertySummary ?? null) && ($profilePropertySummary->owns_agriculture ?? false) && (($profilePropertySummary->agriculture_type ?? '') !== ''))
 <div class="mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
-    <h3 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Property</h3>
+    <h3 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">{{ __('Property') }}</h3>
     <div>
-        <p class="text-gray-500 text-sm">Agriculture type</p>
+        <p class="text-gray-500 text-sm">{{ __('Agriculture type') }}</p>
         <p class="font-medium text-base">{{ $profilePropertySummary->agriculture_type }}</p>
     </div>
 </div>
@@ -570,7 +562,7 @@
 @endphp
 @if ($hasBirthPlace)
 <div class="mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
-    <h3 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Birth Place</h3>
+    <h3 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">{{ __('Birth Place') }}</h3>
     <p class="font-medium text-base">{{ implode(', ', array_filter([$profile->birthCity?->name, $profile->birthTaluka?->name, $profile->birthDistrict?->name, $profile->birthState?->name])) }}</p>
 </div>
 @endif
@@ -580,7 +572,7 @@
 @endphp
 @if ($hasNativePlace)
 <div class="mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
-    <h3 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Native Place</h3>
+    <h3 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">{{ __('Native Place') }}</h3>
     <p class="font-medium text-base">{{ implode(', ', array_filter([$profile->nativeCity?->name, $profile->nativeTaluka?->name, $profile->nativeDistrict?->name, $profile->nativeState?->name])) }}</p>
 </div>
 @endif
@@ -590,7 +582,7 @@
     $siblingsByGender = $profile->siblings->groupBy(function ($s) { return ($s->gender ?? 'other') ?: 'other'; });
 @endphp
 <div class="mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
-    <h3 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Siblings</h3>
+    <h3 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">{{ __('Siblings') }}</h3>
     @foreach($siblingsByGender as $gender => $items)
         <div class="mb-3">
             <p class="text-gray-500 text-sm font-medium mb-1">{{ ucfirst($gender) }}</p>
@@ -606,7 +598,7 @@
 
 @if ($profile->children?->isNotEmpty())
 <div class="mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
-    <p class="text-gray-500 text-sm mb-2">Children</p>
+    <p class="text-gray-500 text-sm mb-2">{{ __('Children') }}</p>
     @foreach($profile->children as $child)
         <p class="font-medium text-base">{{ $child->child_name ?: '—' }}{{ $child->age ? ', ' . $child->age . ' yrs' : '' }}{{ $child->gender ? ' (' . $child->gender . ')' : '' }}</p>
     @endforeach
@@ -615,7 +607,7 @@
 
 @if ($profile->educationHistory && $profile->educationHistory->isNotEmpty())
 <div class="mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
-    <p class="text-gray-500 text-sm mb-2">Education History</p>
+    <p class="text-gray-500 text-sm mb-2">{{ __('Education History') }}</p>
     @foreach($profile->educationHistory as $edu)
         <p class="font-medium text-base">{{ $edu->degree ?: '—' }}{{ $edu->specialization ? ' – ' . $edu->specialization : '' }}{{ $edu->university ? ' (' . $edu->university . ')' : '' }}{{ $edu->year_completed ? ', ' . $edu->year_completed : '' }}</p>
     @endforeach
@@ -624,7 +616,7 @@
 
 @if ($profile->career?->isNotEmpty())
 <div class="mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
-    <p class="text-gray-500 text-sm mb-2">Career History</p>
+    <p class="text-gray-500 text-sm mb-2">{{ __('Career History') }}</p>
     @foreach($profile->career as $job)
         <p class="font-medium text-base">{{ $job->designation ?: '—' }}{{ $job->company ? ' at ' . $job->company : '' }}{{ $job->start_year || $job->end_year ? ' (' . ($job->start_year ?? '') . '–' . ($job->end_year ?? '') . ')' : '' }}</p>
     @endforeach
@@ -633,7 +625,7 @@
 
 @if ($profile->addresses?->isNotEmpty())
 <div class="mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
-    <p class="text-gray-500 text-sm mb-2">Address</p>
+    <p class="text-gray-500 text-sm mb-2">{{ __('Address') }}</p>
     @foreach($profile->addresses as $addr)
         <p class="font-medium text-base">
             {{ implode(', ', array_filter([
@@ -666,7 +658,7 @@
     ];
 @endphp
 <div class="mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
-    <h3 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Relatives & Family Network</h3>
+    <h3 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">{{ __('Relatives & Family Network') }}</h3>
     @foreach($relativesByType as $relationType => $relatives)
         <div class="mb-3">
             <p class="text-gray-500 text-sm font-medium mb-1">{{ $relativeRelationLabels[$relationType] ?? \Illuminate\Support\Str::title(str_replace('_', ' ', $relationType)) }}</p>
@@ -688,7 +680,7 @@
     });
 @endphp
 <div class="mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
-    <h3 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Relatives & Native Network</h3>
+    <h3 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">{{ __('Relatives & Native Network') }}</h3>
     @foreach($allianceByLocation as $locationLabel => $items)
         <div class="mb-3">
             <p class="text-gray-500 text-sm font-medium mb-1">{{ $locationLabel }}</p>
@@ -718,29 +710,29 @@
 @endphp
 @if ($hasAnyPrefs)
 <div class="mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
-    <h3 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Partner preferences</h3>
+    <h3 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">{{ __('Partner preferences') }}</h3>
     <div class="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm">
         @if($hasPrefCriteria && ($preferenceCriteria->preferred_age_min ?? null) !== null || ($preferenceCriteria->preferred_age_max ?? null) !== null)
-            <p><span class="text-gray-500">Age:</span> {{ $preferenceCriteria->preferred_age_min ?? '—' }}–{{ $preferenceCriteria->preferred_age_max ?? '—' }}</p>
+            <p><span class="text-gray-500">{{ __('Age:') }}</span> {{ $preferenceCriteria->preferred_age_min ?? '—' }}–{{ $preferenceCriteria->preferred_age_max ?? '—' }}</p>
         @endif
         @if($hasPrefCriteria && ($preferenceCriteria->preferred_education ?? '') !== '')
-            <p><span class="text-gray-500">Education:</span> {{ $preferenceCriteria->preferred_education }}</p>
+            <p><span class="text-gray-500">{{ __('Education:') }}</span> {{ $preferenceCriteria->preferred_education }}</p>
         @endif
         @if($hasPrefCriteria && ($preferenceCriteria->preferred_city_id ?? null))
             @php $prefCityName = \App\Models\City::where('id', $preferenceCriteria->preferred_city_id)->value('name'); @endphp
-            @if($prefCityName)<p><span class="text-gray-500">City:</span> {{ $prefCityName }}</p>@endif
+            @if($prefCityName)<p><span class="text-gray-500">{{ __('City:') }}</span> {{ $prefCityName }}</p>@endif
         @endif
         @if(!empty($preferredReligionIds ?? []))
             @php $prefReligions = \App\Models\Religion::whereIn('id', $preferredReligionIds)->pluck('label')->all(); @endphp
-            @if($prefReligions)<p><span class="text-gray-500">Religions:</span> {{ implode(', ', $prefReligions) }}</p>@endif
+            @if($prefReligions)<p><span class="text-gray-500">{{ __('Religions:') }}</span> {{ implode(', ', $prefReligions) }}</p>@endif
         @endif
         @if(!empty($preferredCasteIds ?? []))
             @php $prefCastes = \App\Models\Caste::whereIn('id', $preferredCasteIds)->pluck('label')->all(); @endphp
-            @if($prefCastes)<p><span class="text-gray-500">Castes:</span> {{ implode(', ', $prefCastes) }}</p>@endif
+            @if($prefCastes)<p><span class="text-gray-500">{{ __('Castes:') }}</span> {{ implode(', ', $prefCastes) }}</p>@endif
         @endif
         @if(!empty($preferredDistrictIds ?? []))
             @php $prefDistricts = \App\Models\District::whereIn('id', $preferredDistrictIds)->pluck('name')->all(); @endphp
-            @if($prefDistricts)<p><span class="text-gray-500">Districts:</span> {{ implode(', ', $prefDistricts) }}</p>@endif
+            @if($prefDistricts)<p><span class="text-gray-500">{{ __('Districts:') }}</span> {{ implode(', ', $prefDistricts) }}</p>@endif
         @endif
     </div>
 </div>
@@ -748,13 +740,13 @@
 
 @if (isset($extendedAttributes) && (trim($extendedAttributes->narrative_about_me ?? '') !== '' || trim($extendedAttributes->narrative_expectations ?? '') !== ''))
 <div class="mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
-    <h3 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">About & expectations</h3>
+    <h3 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">{{ __('About & expectations') }}</h3>
     @if (trim($extendedAttributes->narrative_about_me ?? '') !== '')
-        <p class="text-gray-500 text-sm">About me</p>
+        <p class="text-gray-500 text-sm">{{ __('About me') }}</p>
         <p class="font-medium text-base whitespace-pre-wrap">{{ $extendedAttributes->narrative_about_me }}</p>
     @endif
     @if (trim($extendedAttributes->narrative_expectations ?? '') !== '')
-        <p class="text-gray-500 text-sm mt-2">Expectations</p>
+        <p class="text-gray-500 text-sm mt-2">{{ __('Expectations') }}</p>
         <p class="font-medium text-base whitespace-pre-wrap">{{ $extendedAttributes->narrative_expectations }}</p>
     @endif
 </div>
@@ -762,7 +754,7 @@
 
 @if ($profile->horoscope && ($profile->horoscope->rashi_id || $profile->horoscope->nakshatra_id || $profile->horoscope->gan_id || $profile->horoscope->nadi_id || $profile->horoscope->mangal_dosh_type_id || $profile->horoscope->yoni_id || $profile->horoscope->charan || $profile->horoscope->devak || $profile->horoscope->kul || $profile->horoscope->gotra || $profile->horoscope->navras_name || $profile->horoscope->birth_weekday))
 <div class="mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
-    <h3 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Horoscope</h3>
+    <h3 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">{{ __('Horoscope') }}</h3>
     <div class="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm">
         @if ($profile->horoscope->rashi)<p><span class="text-gray-500">Rashi:</span> {{ $profile->horoscope->rashi->label ?? '—' }}</p>@endif
         @if ($profile->horoscope->nakshatra)<p><span class="text-gray-500">Nakshatra:</span> {{ $profile->horoscope->nakshatra->label ?? '—' }}</p>@endif
@@ -781,23 +773,23 @@
 @endif
 
 <div class="mt-6">
-    <p class="text-gray-500 text-sm">Contact Information</p>
+    <p class="text-gray-500 text-sm">{{ __('Contact Information') }}</p>
     <p class="font-medium text-base">
         @if ($isOwnProfile)
             @if ($primaryContactPhone)
                 {{ $primaryContactPhone }}
             @else
-                No contact number added.
+                {{ __('No contact number added.') }}
             @endif
         @elseif ($canViewContact)
             {{ $primaryContactPhone }}
         @else
-            Contact details will be available after interest acceptance.
+            {{ __('Contact details will be available after interest acceptance.') }}
         @endif
     </p>
     @if (!$isOwnProfile && !$canViewContact)
         <div class="mt-3 px-3 py-2 rounded-lg bg-gray-100 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 text-sm text-gray-600 dark:text-gray-400">
-            <strong>Contact policy:</strong> Contact number is shared only after the other person accepts your interest. We do not reveal contact without mutual interest.
+            <strong>{{ __('Contact policy:') }}</strong> {{ __('Contact number is shared only after the other person accepts your interest. We do not reveal contact without mutual interest.') }}
         </div>
     @endif
 </div>
@@ -811,7 +803,7 @@
 
     @if(!empty($filteredExtended))
         <div class="mt-8">
-            <h3 class="text-lg font-semibold mb-4">Additional Details</h3>
+            <h3 class="text-lg font-semibold mb-4">{{ __('Additional Details') }}</h3>
 
             @foreach($filteredExtended as $label => $value)
                 <div class="mb-2">
@@ -879,7 +871,7 @@
         <div class="flex flex-col items-center">
             <img
                 src="{{ $viewedPhotoSrc }}"
-                alt="Viewed Profile"
+                alt="{{ __('Viewed Profile') }}"
                 class="w-16 h-16 rounded-full object-cover border-2 border-indigo-300 dark:border-indigo-600"
             />
             <span class="text-xs text-gray-600 dark:text-gray-400 mt-1">{{ $profile->full_name }}</span>
@@ -888,17 +880,17 @@
         <div class="flex flex-col items-center">
             <img
                 src="{{ $viewerPhotoSrc }}"
-                alt="Your Profile"
+                alt="{{ __('Your Profile') }}"
                 class="w-16 h-16 rounded-full object-cover border-2 border-purple-300 dark:border-purple-600"
             />
-            <span class="text-xs text-gray-600 dark:text-gray-400 mt-1">तुमची प्रोफाइल</span>
+            <span class="text-xs text-gray-600 dark:text-gray-400 mt-1">{{ __('Your Profile') }}</span>
         </div>
     </div>
 
     {{-- Section Heading --}}
     <div class="text-center mb-6">
-        <h3 class="text-xl font-bold text-gray-800 dark:text-gray-100 mb-1">तुमची प्रोफाइल त्यांच्याशी कशी जुळते?</h3>
-        <p class="text-sm text-gray-600 dark:text-gray-400">अपेक्षा आणि माहितीवर आधारित तुलना</p>
+        <h3 class="text-xl font-bold text-gray-800 dark:text-gray-100 mb-1">{{ __('How does your profile match with theirs?') }}</h3>
+        <p class="text-sm text-gray-600 dark:text-gray-400">{{ __('Comparison based on preferences and information.') }}</p>
     </div>
 
     {{-- Match Summary Line --}}
@@ -973,8 +965,8 @@
         <button 
             @click="expanded = !expanded"
             class="mt-3 text-sm text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-300 font-medium">
-            <span x-show="!expanded">सर्व अपेक्षा पाहा</span>
-            <span x-show="expanded">कमी दाखवा</span>
+            <span x-show="!expanded">{{ __('Show all expectations') }}</span>
+            <span x-show="expanded">{{ __('Show less') }}</span>
         </button>
         @endif
     </div>
@@ -983,7 +975,7 @@
     {{-- Flexibility Message --}}
     <div class="pt-4 border-t border-gray-200 dark:border-gray-700 mb-6">
         <p class="text-sm text-gray-600 dark:text-gray-400 italic">
-            काही गोष्टी चर्चा करून ठरवता येऊ शकतात.
+            {{ __('Some things can be decided through discussion.') }}
         </p>
     </div>
 
@@ -999,13 +991,13 @@
         <div class="flex flex-wrap gap-3 justify-center">
             @if ($interestAlreadySent)
                 <button disabled style="background-color: #9ca3af; color: white; padding: 12px 24px; border-radius: 6px; font-weight: 600; font-size: 16px; border: none; cursor: not-allowed;">
-                    Interest Sent
+                    {{ __('Interest Sent') }}
                 </button>
             @else
                 <form method="POST" action="{{ route('interests.send', $profile) }}" style="display: inline;">
                     @csrf
                     <button type="submit" style="background-color: #ec4899; color: white; padding: 12px 24px; border-radius: 6px; font-weight: 600; font-size: 16px; border: none; cursor: pointer; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);">
-                        Send Interest
+                        {{ __('Send Interest') }}
                     </button>
                 </form>
             @endif
@@ -1022,36 +1014,36 @@
                 <div x-data="{ openRequestModal: false }">
                     @if ($crState === 'none' || ($crState === 'expired' && !$cooldownEndsAt) || $crState === 'cancelled')
                         <button type="button" @click="openRequestModal = true" style="background-color: #10b981; color: white; padding: 12px 24px; border-radius: 6px; font-weight: 600; font-size: 16px; border: none; cursor: pointer;">
-                            Request Contact
+                            {{ __('Request Contact') }}
                         </button>
                     @elseif ($crState === 'pending')
-                        <span style="background-color: #f59e0b; color: white; padding: 12px 24px; border-radius: 6px; font-weight: 600; font-size: 16px;">Request Sent (Pending)</span>
+                        <span style="background-color: #f59e0b; color: white; padding: 12px 24px; border-radius: 6px; font-weight: 600; font-size: 16px;">{{ __('Request Sent (Pending)') }}</span>
                         @if ($crRequest)
                         <form method="POST" action="{{ route('contact-requests.cancel', $crRequest) }}" style="display: inline;">
                             @csrf
-                            <button type="submit" style="background-color: #6b7280; color: white; padding: 12px 20px; border-radius: 6px; font-weight: 500; font-size: 14px; border: none; cursor: pointer;">Cancel request</button>
+                            <button type="submit" style="background-color: #6b7280; color: white; padding: 12px 20px; border-radius: 6px; font-weight: 500; font-size: 14px; border: none; cursor: pointer;">{{ __('Cancel request') }}</button>
                         </form>
                         @endif
                     @elseif ($crState === 'accepted' && $crGrant)
-                        <a href="{{ route('matrimony.profile.show', $profile) }}#contact-reveal" style="background-color: #059669; color: white; padding: 12px 24px; border-radius: 6px; font-weight: 600; font-size: 16px; text-decoration: none; display: inline-block;">View Contact</a>
+                        <a href="{{ route('matrimony.profile.show', $profile) }}#contact-reveal" style="background-color: #059669; color: white; padding: 12px 24px; border-radius: 6px; font-weight: 600; font-size: 16px; text-decoration: none; display: inline-block;">{{ __('View Contact') }}</a>
                     @elseif ($crState === 'rejected')
-                        <span style="background-color: #ef4444; color: white; padding: 12px 24px; border-radius: 6px; font-weight: 600; font-size: 16px;">Request Rejected</span>
+                        <span style="background-color: #ef4444; color: white; padding: 12px 24px; border-radius: 6px; font-weight: 600; font-size: 16px;">{{ __('Request Rejected') }}</span>
                         @if ($cooldownEndsAt)
-                        <span class="text-sm text-gray-600 dark:text-gray-400">Cooling period ends {{ $cooldownEndsAt->format('M j, Y') }}</span>
+                        <span class="text-sm text-gray-600 dark:text-gray-400">{{ __('Cooling period ends') }} {{ $cooldownEndsAt->format('M j, Y') }}</span>
                         @endif
                     @elseif ($crState === 'expired')
-                        <span style="background-color: #9ca3af; color: white; padding: 12px 24px; border-radius: 6px; font-weight: 600; font-size: 16px;">Request Expired</span>
+                        <span style="background-color: #9ca3af; color: white; padding: 12px 24px; border-radius: 6px; font-weight: 600; font-size: 16px;">{{ __('Request Expired') }}</span>
                         @if (!$cooldownEndsAt)
-                        <button type="button" @click="openRequestModal = true" style="background-color: #10b981; color: white; padding: 12px 20px; border-radius: 6px; font-weight: 500; font-size: 14px; border: none; cursor: pointer;">Request again</button>
+                        <button type="button" @click="openRequestModal = true" style="background-color: #10b981; color: white; padding: 12px 20px; border-radius: 6px; font-weight: 500; font-size: 14px; border: none; cursor: pointer;">{{ __('Request again') }}</button>
                         @endif
                     @elseif ($crState === 'revoked')
-                        <span style="background-color: #6b7280; color: white; padding: 12px 24px; border-radius: 6px; font-weight: 600; font-size: 16px;">Contact no longer available</span>
+                        <span style="background-color: #6b7280; color: white; padding: 12px 24px; border-radius: 6px; font-weight: 600; font-size: 16px;">{{ __('Contact no longer available') }}</span>
                     @endif
 
                     {{-- Request Contact modal --}}
                     <div x-show="openRequestModal" x-cloak x-transition class="fixed inset-0 z-50 flex items-center justify-center bg-black/50" style="display: none;" @click.self="openRequestModal = false">
                         <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-md w-full mx-4 p-6" @click.stop x-data="{ reason: '{{ old('reason', 'talk_to_family') }}' }">
-                            <h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">Request Contact</h3>
+                            <h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">{{ __('Request Contact') }}</h3>
                             <p class="text-sm text-gray-600 dark:text-gray-400 mb-4">They will see your reason and chosen contact methods. They can approve or reject.</p>
                             <form method="POST" action="{{ route('contact-requests.store', $profile) }}">
                                 @csrf
@@ -1086,7 +1078,7 @@
             {{-- Block --}}
             <form method="POST" action="{{ route('blocks.store', $profile) }}" style="display: inline;">
                 @csrf
-                <button type="submit" style="background-color: #6b7280; color: white; padding: 12px 24px; border-radius: 6px; font-weight: 600; font-size: 16px; border: none; cursor: pointer;">Block</button>
+                <button type="submit" style="background-color: #6b7280; color: white; padding: 12px 24px; border-radius: 6px; font-weight: 600; font-size: 16px; border: none; cursor: pointer;">{{ __('Block') }}</button>
             </form>
 
             {{-- Shortlist add / remove --}}
@@ -1094,12 +1086,12 @@
                 <form method="POST" action="{{ route('shortlist.destroy', $profile) }}" style="display: inline;">
                     @csrf
                     @method('DELETE')
-                    <button type="submit" style="background-color: #9ca3af; color: white; padding: 12px 24px; border-radius: 6px; font-weight: 600; font-size: 16px; border: none; cursor: pointer;">Remove from shortlist</button>
+                    <button type="submit" style="background-color: #9ca3af; color: white; padding: 12px 24px; border-radius: 6px; font-weight: 600; font-size: 16px; border: none; cursor: pointer;">{{ __('Remove from shortlist') }}</button>
                 </form>
             @else
                 <form method="POST" action="{{ route('shortlist.store', $profile) }}" style="display: inline;">
                     @csrf
-                    <button type="submit" style="background-color: #3b82f6; color: white; padding: 12px 24px; border-radius: 6px; font-weight: 600; font-size: 16px; border: none; cursor: pointer;">Add to shortlist</button>
+                    <button type="submit" style="background-color: #3b82f6; color: white; padding: 12px 24px; border-radius: 6px; font-weight: 600; font-size: 16px; border: none; cursor: pointer;">{{ __('Add to shortlist') }}</button>
                 </form>
             @endif
         </div>
@@ -1107,7 +1099,7 @@
         {{-- Day-32: Contact reveal (only when viewer has active grant) --}}
         @if (!empty($contactGrantReveal))
             <div id="contact-reveal" class="mt-4 p-4 rounded-lg border border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-900/20 max-w-xl mx-auto">
-                <p class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Contact (shared with you)</p>
+                <p class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">{{ __('Contact (shared with you)') }}</p>
                 @if (!empty($contactGrantReveal['email']))
                     <p class="text-sm"><span class="text-gray-500">Email:</span> {{ $contactGrantReveal['email'] }}</p>
                 @endif
@@ -1148,7 +1140,7 @@
         @if ($hasAlreadyReported)
             <div style="border:1px solid #fbbf24; background:#fef3c7; padding:1rem; max-width:500px; border-radius:4px;">
                 <p style="color:#92400e; margin:0; font-weight:500;">
-                    You have already reported this profile. Our team is reviewing it.
+                    {{ __('You have already reported this profile. Our team is reviewing it.') }}
                 </p>
             </div>
         @else
@@ -1156,17 +1148,17 @@
                 href="#"
                 @click.prevent="showReportForm = !showReportForm"
                 style="color:#6b7280; text-decoration:underline; font-size:0.875rem; cursor:pointer;">
-                Report profile for abuse
+                {{ __('Report profile for abuse') }}
             </a>
 
             <div x-show="showReportForm" x-transition style="margin-top:1rem; max-width:500px;">
                 <form method="POST" action="{{ route('abuse-reports.store', $profile) }}" style="border:1px solid #ccc; padding:1rem;">
                     @csrf
-                    <p style="font-weight:600; margin-bottom:8px;">Report this profile for abuse</p>
-                    <textarea name="reason" rows="4" required minlength="10" placeholder="Please provide a reason for reporting this profile (minimum 10 characters)" style="width:100%; margin-bottom:10px; padding:8px; border:1px solid #ddd; border-radius:4px;"></textarea>
+                    <p style="font-weight:600; margin-bottom:8px;">{{ __('Report this profile for abuse') }}</p>
+                    <textarea name="reason" rows="4" required minlength="10" placeholder="{{ __('Please provide a reason for reporting this profile (minimum 10 characters)') }}" style="width:100%; margin-bottom:10px; padding:8px; border:1px solid #ddd; border-radius:4px;"></textarea>
                     <div class="flex gap-2">
-                        <button type="submit" class="inline-flex items-center px-4 py-2 bg-red-600 border border-transparent rounded-md font-semibold text-sm text-white tracking-wide hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 transition disabled:opacity-50 disabled:cursor-not-allowed">Submit Report</button>
-                        <button type="button" @click="showReportForm = false" class="inline-flex items-center px-4 py-2 bg-gray-500 border border-transparent rounded-md font-semibold text-sm text-white tracking-wide hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 transition">Cancel</button>
+                        <button type="submit" class="inline-flex items-center px-4 py-2 bg-red-600 border border-transparent rounded-md font-semibold text-sm text-white tracking-wide hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 transition disabled:opacity-50 disabled:cursor-not-allowed">{{ __('Submit Report') }}</button>
+                        <button type="button" @click="showReportForm = false" class="inline-flex items-center px-4 py-2 bg-gray-500 border border-transparent rounded-md font-semibold text-sm text-white tracking-wide hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 transition">{{ __('Cancel') }}</button>
                     </div>
                 </form>
             </div>

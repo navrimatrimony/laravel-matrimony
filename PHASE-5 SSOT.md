@@ -6434,3 +6434,269 @@ Partner Preferences Engine is complete only if:
 ############################################################
 END OF SSOT ADD — PARTNER PREFERENCES ENGINE
 ############################################################
+/*
+|--------------------------------------------------------------------------
+| config/app.php – उपलब्ध भाषा जाहीर करा
+|--------------------------------------------------------------------------
+*/
+'locale' => env('APP_LOCALE', 'en'),
+'fallback_locale' => env('APP_FALLBACK_LOCALE', 'en'),
+'available_locales' => [
+    'en' => 'English',
+    'mr' => 'मराठी',
+],
+
+/*
+|--------------------------------------------------------------------------
+| app/Http/Middleware/LocaleMiddleware.php – वापरकर्त्याची भाषा session वरून सेट करा
+|--------------------------------------------------------------------------
+*/
+<?php
+namespace App\Http\Middleware;
+use Closure;
+use Illuminate\Support\Facades\App;
+
+class LocaleMiddleware
+{
+    public function handle($request, Closure $next)
+    {
+        $locale = session('locale', config('app.locale'));
+        App::setLocale($locale);
+        return $next($request);
+    }
+}
+
+/*
+|--------------------------------------------------------------------------
+| app/Http/Kernel.php – web middleware group मध्ये LocaleMiddleware नोंदवा
+|--------------------------------------------------------------------------
+*/
+protected $middlewareGroups = [
+    'web' => [
+        // इतर middleware…
+        \App\Http\Middleware\LocaleMiddleware::class,
+    ],
+];
+
+/*
+|--------------------------------------------------------------------------
+| app/Http/Controllers/LocaleController.php – भाषा बदलणारा नियंत्रक
+|--------------------------------------------------------------------------
+*/
+<?php
+namespace App\Http\Controllers;
+use Illuminate\Http\Request;
+
+class LocaleController extends Controller
+{
+    public function switch(Request $request)
+    {
+        $locale = $request->input('locale');
+        if (array_key_exists($locale, config('app.available_locales'))) {
+            session(['locale' => $locale]);
+        }
+        return back();
+    }
+}
+
+/*
+|--------------------------------------------------------------------------
+| routes/web.php – भाषा बदलण्यासाठी POST route
+|--------------------------------------------------------------------------
+*/
+use App\Http\Controllers\LocaleController;
+Route::post('/locale', [LocaleController::class, 'switch'])->name('locale.switch');
+
+/*
+|--------------------------------------------------------------------------
+| resources/views/layouts/navigation.blade.php – Navigation मध्ये language switcher
+|--------------------------------------------------------------------------
+| खालील dropdown component user dropdown जवळ ठेवावा. Tailwind classes आणि
+| Blade components विद्यमान UI प्रमाणे वापरले आहेत.
+*/
+<x-dropdown align="left" width="36" class="ml-3">
+    <x-slot name="trigger">
+        <button class="inline-flex items-center px-3 py-2 border border-transparent text-sm font-medium
+                      rounded-md text-gray-500 dark:text-gray-400 bg-white dark:bg-gray-800 hover:text-gray-700
+                      dark:hover:text-gray-300 focus:outline-none transition">
+            {{ strtoupper(app()->getLocale()) }}
+            <svg class="ms-1 h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
+                <path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clip-rule="evenodd" />
+            </svg>
+        </button>
+    </x-slot>
+    <x-slot name="content">
+        <form method="POST" action="{{ route('locale.switch') }}">
+            @csrf
+            @foreach(config('app.available_locales') as $code => $label)
+                <button type="submit" name="locale" value="{{ $code }}"
+                    class="w-full text-left px-4 py-2 text-sm
+                           {{ app()->getLocale() === $code ? 'bg-gray-100 dark:bg-gray-700 font-semibold' : '' }}">
+                    {{ $label }}
+                </button>
+            @endforeach
+        </form>
+    </x-slot>
+</x-dropdown>
+
+/*
+|--------------------------------------------------------------------------
+| Resources/lang फोल्डर्स – अनुवाद strings
+|--------------------------------------------------------------------------
+| resources/lang/en आणि resources/lang/mr directories तयार करा.
+| प्रत्येकात messages.php सारखे PHP array फाइल्स ठेवा. उदा.:
+| <?php
+| return [
+|     'welcome' => 'Welcome',
+|     'logout' => 'Log Out',
+| ];
+| मराठी फाईलमध्ये:
+| <?php
+| return [
+|     'welcome' => 'आपले स्वागत आहे',
+|     'logout' => 'बाहेर पडा',
+| ];
+|
+*/
+DAY-NEXT (SSOT ADD) — Multilanguage UI Stabilization + Centralized Translation Direction
+
+Goal
+Website ची primary/base language English राहील.
+User ने एकदा language निवडली (English / Marathi) की तो website मधे कुठल्याही page, section, wizard, component, modal, dropdown, card, dashboard, profile view, search result, action button, alert, auth page, admin-facing user UI preview, mobile nav, desktop nav, pagination, validation message, CTA, badge, empty state, comparison block, match block, notification UI, contact flow, shortlist flow, who-viewed flow, biodata upload flow, profile wizard flow, profile show flow, interest flow — कुठेही असला तरी त्याला निवडलेल्या language मधेच UI दिसली पाहिजे.
+
+This day is ONLY about UI language consistency, translation architecture direction, and centralized control direction.
+This day does NOT mean full content translation of user-entered data.
+User-entered values (names, addresses, caste values, free text, company names, occupations entered as data, etc.) should remain as stored data unless separately designed.
+Only system/UI labels, headings, buttons, helper text, alerts, messages, statuses, menus, and framework-facing interface text are in scope here.
+
+A) Core Product Rule — Language persistence everywhere
+1. Language selection once made must persist across the full website experience.
+2. Selected language must apply consistently on:
+   - guest pages
+   - authenticated pages
+   - profile wizard
+   - profile show pages
+   - search/listing pages
+   - all reusable Blade components
+   - all dropdowns/modals
+   - auth screens
+   - contact request flows
+   - shortlist / block / who-viewed / interest flows
+   - notification UI
+   - intake / biodata upload flows
+   - desktop navigation and mobile navigation
+3. User should never see mixed-language UI because one page/component forgot translation plumbing.
+4. Default language remains English.
+5. Marathi is a selectable UI language layer, not a separate product branch.
+
+B) Current Reality Acknowledgement
+1. Locale selection and persistence may be centralized via locale middleware / session handling.
+2. Translation storage may be centralized in lang files.
+3. But translation usage is still incomplete if UI strings are not consistently key-driven.
+4. Therefore this SSOT day formalizes the move from scattered translation usage to disciplined centralized translation usage.
+
+C) Frozen Direction — Key-based translation architecture
+1. UI translation system must move toward key-based translation usage.
+2. Raw hardcoded UI strings should be progressively reduced.
+3. Preferred direction:
+   - use structured translation keys
+   - example pattern:
+     - nav.search_profiles
+     - profile.full_name
+     - wizard.save_next
+     - actions.send_interest
+     - contact.request_contact
+     - match.location
+4. Translation files are the central store for UI labels/messages.
+5. New UI work should prefer key-based translation instead of adding new hardcoded English strings directly in views.
+6. Existing raw strings may be migrated incrementally, but direction is frozen toward centralized key usage.
+
+D) Non-negotiable UX rule
+1. User language selection must be respected across full navigation.
+2. If a user changes language on one page, the next pages they visit must also reflect the same selected language.
+3. No page should silently fall back to English unless:
+   - the translation truly does not exist yet, or
+   - the text is user-entered data, or
+   - the text is intentionally excluded from UI translation scope.
+4. “Works on some pages only” is not acceptable as final behavior.
+
+E) Scope definition — What MUST be translatable
+System/UI text includes, but is not limited to:
+- menu items
+- headings
+- labels
+- section titles
+- helper text
+- placeholder text
+- CTA buttons
+- status pills
+- flash messages
+- empty states
+- comparison text
+- action confirmations
+- privacy/contact policy text
+- authentication prompts
+- validation-facing UI copy
+- wizard step names
+- pagination labels
+- shortlist/block/report/contact/interest labels
+- notifications UI labels
+
+F) Scope definition — What is NOT automatically translated by this day
+The following are not automatically translated just because locale changed:
+- names
+- addresses
+- profile-entered free text
+- company names
+- custom biodata content
+- imported OCR content
+- values stored as user data unless mapped separately
+This day is about system UI language, not automatic semantic translation of stored profile data.
+
+G) Centralized control direction (Frozen)
+1. Translation behavior must remain compatible with future centralized admin control.
+2. Future admin control direction is frozen as an important design consideration.
+3. Any multilanguage implementation done now must NOT block future admin-managed control for:
+   - translation text management
+   - language enable/disable control
+   - translation quality review
+   - fallback control
+   - controlled rollout of translated UI sections
+4. Do not hard-design today’s implementation in a way that makes future admin control difficult.
+5. Frozen direction: centralized governance/admin control remains an intended evolution path.
+
+H) Registry / governance direction
+1. Translation should move toward a governed key registry mindset.
+2. Teams/developers should be able to know:
+   - which keys exist
+   - which areas use which keys
+   - which Marathi translations are missing
+   - which UI still has raw strings
+3. Exact tooling can be decided later, but this governance direction is frozen.
+
+I) Quality rules
+1. Marathi UI should sound natural for matrimony context, not robotic literal translation.
+2. English remains source/base language unless changed later.
+3. Terminology should stay consistent across pages.
+4. Same concept must not appear with multiple conflicting Marathi labels in different screens unless intentionally approved.
+5. User should feel the site is one coherent bilingual product, not partially translated screens.
+
+J) Implementation discipline
+1. Do not treat locale switching alone as “multilanguage complete”.
+2. Locale persistence + translation coverage + consistent key usage together are required.
+3. Any new page/component added in future should follow the same language system from the beginning.
+4. Avoid one-off page-specific hacks.
+
+K) Acceptance intent for this SSOT day
+This day will be considered aligned only when:
+1. Default language is English.
+2. User can switch to Marathi.
+3. Selected language persists across the site.
+4. Major UI areas do not randomly revert to English.
+5. Translation architecture direction is clearly centralized and key-based.
+6. Future admin control direction remains preserved and unblocked.
+
+L) Frozen statement
+For this product, multilanguage UI is not “page-by-page optional decoration”.
+It is a whole-site behavior.
+Once a user selects a language, the product must consistently behave in that language across the full website UI surface, while remaining compatible with future centralized admin control and governance.

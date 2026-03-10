@@ -122,16 +122,17 @@
 @if (auth()->check() && auth()->user()->is_admin === true)
     <x-nav-link :href="route('admin.dashboard')" 
                 :active="request()->routeIs('admin.*')">
-        Admin
+        {{ __('common.admin') }}
     </x-nav-link>
 @endif
 
                 </div>
             </div>
 
-            <!-- Settings Dropdown -->
-            @auth
-            <div class="hidden md:flex md:items-center md:ms-6">
+            <!-- Language switcher + Settings Dropdown -->
+            <div class="hidden md:flex md:items-center md:ms-6 md:gap-2">
+                <x-language-switcher />
+                @auth
                 <x-dropdown align="right" width="48">
                     <x-slot name="trigger">
                         <button class="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md text-gray-500 dark:text-gray-400 bg-white dark:bg-gray-800 hover:text-gray-700 dark:hover:text-gray-300 focus:outline-none transition ease-in-out duration-150">
@@ -158,8 +159,8 @@
                         </form>
                     </x-slot>
                 </x-dropdown>
+                @endauth
             </div>
-            @endauth
 
             <!-- Hamburger -->
             <div class="-me-2 flex items-center md:hidden">
@@ -183,7 +184,7 @@
         @auth
     @if (!auth()->user()->matrimonyProfile)
         <x-responsive-nav-link :href="route('matrimony.profile.wizard.section', ['section' => 'basic-info'])">
-            Create Profile
+            {{ __('Create Profile') }}
         </x-responsive-nav-link>
     @else
         <x-responsive-nav-link 
@@ -194,52 +195,52 @@
         </x-responsive-nav-link>
 
         <x-responsive-nav-link :href="route('matrimony.profile.edit')">
-            Edit Profile
+            {{ __('Edit Profile') }}
         </x-responsive-nav-link>
     @endif
 @endauth
 
 
     <x-responsive-nav-link :href="route('matrimony.profiles.index')">
-        Search Profiles
+        {{ __('Search Profiles') }}
     </x-responsive-nav-link>
 
 
 @auth
     <x-responsive-nav-link :href="route('interests.sent')">
-        Sent Interests
+        {{ __('Interests Sent') }}
     </x-responsive-nav-link>
 
     <x-responsive-nav-link :href="route('interests.received')">
-        Received Interests
+        {{ __('Interests Received') }}
     </x-responsive-nav-link>
 
     <x-responsive-nav-link :href="route('who-viewed.index')">
-        Who viewed me
+        {{ __('Who viewed me') }}
     </x-responsive-nav-link>
     <x-responsive-nav-link :href="route('contact-inbox.index')">
-        Contact Requests
+        {{ __('Contact Requests') }}
     </x-responsive-nav-link>
 
     <x-responsive-nav-link :href="route('shortlist.index')">
-        Shortlist
+        {{ __('Shortlist') }}
     </x-responsive-nav-link>
 
     <x-responsive-nav-link :href="route('intake.index')">
-        My biodata uploads
+        {{ __('My biodata uploads') }}
     </x-responsive-nav-link>
 
     <x-responsive-nav-link :href="route('intake.upload')">
-        Upload Biodata
+        {{ __('Upload Biodata') }}
     </x-responsive-nav-link>
 
     <x-responsive-nav-link :href="route('blocks.index')">
-        Blocked
+        {{ __('Blocked') }}
     </x-responsive-nav-link>
 
     {{-- Notifications with unread badge (mobile) --}}
     <x-responsive-nav-link :href="route('notifications.index')" class="relative inline-flex items-center">
-        Notifications
+        {{ __('Notifications') }}
         @if($unreadNotificationCount > 0)
             <span 
                 id="notification-badge-mobile" 
@@ -251,10 +252,15 @@
 
 @if (auth()->check() && auth()->user()->is_admin === true)
     <x-responsive-nav-link :href="route('admin.dashboard')">
-        Admin
+        {{ __('common.admin') }}
     </x-responsive-nav-link>
 @endif
 
+        </div>
+
+        <!-- Language switcher (mobile) -->
+        <div class="px-4 pt-2 pb-2 border-t border-gray-200 dark:border-gray-600">
+            <x-language-switcher />
         </div>
 
         <!-- Responsive Settings Options -->

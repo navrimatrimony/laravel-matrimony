@@ -21,7 +21,7 @@
         @if (session('success'))
         <div style="background: linear-gradient(90deg, #d1fae5, #a7f3d0); border: 1px solid #6ee7b7; border-radius: 12px; padding: 16px 20px; margin-bottom: 24px; text-align: center;">
             <p style="margin: 0; color: #065f46; font-size: 16px; font-weight: 600;">
-                🎉 Your profile is live! Add a photo to get 3× more responses.
+                {{ __('photo.profile_live_add_photo_more_responses') }}
             </p>
         </div>
         @endif
@@ -30,12 +30,12 @@
         <div style="display: flex; justify-content: center; align-items: center; gap: 12px; margin-bottom: 32px;">
             <div style="display: flex; align-items: center; gap: 8px;">
                 <div style="width: 32px; height: 32px; background: #10b981; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: white; font-weight: 700; font-size: 14px;">✓</div>
-                <span style="font-size: 14px; color: #059669; font-weight: 500;">Profile Details</span>
+                <span style="font-size: 14px; color: #059669; font-weight: 500;">{{ __('photo.profile_details') }}</span>
             </div>
             <div style="width: 40px; height: 2px; background: #d1d5db;"></div>
             <div style="display: flex; align-items: center; gap: 8px;">
                 <div style="width: 32px; height: 32px; background: #4f46e5; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: white; font-weight: 700; font-size: 14px;">2</div>
-                <span style="font-size: 14px; color: #4f46e5; font-weight: 600;">Upload Photo</span>
+                <span style="font-size: 14px; color: #4f46e5; font-weight: 600;">{{ __('photo.upload_photo') }}</span>
             </div>
         </div>
 
@@ -45,17 +45,17 @@
             {{-- Photo rejection warning --}}
             @if (auth()->check() && auth()->user()->matrimonyProfile && auth()->user()->matrimonyProfile->photo_rejection_reason)
                 <div style="margin-bottom: 24px; padding: 16px; background: #fef2f2; border: 1px solid #fecaca; border-radius: 12px; text-align: left;">
-                    <p style="font-weight: 600; margin: 0 0 8px 0; color: #991b1b; font-size: 14px;">⚠️ Your previous photo was removed</p>
-                    <p style="margin: 0; color: #7f1d1d; font-size: 13px;"><strong>Reason:</strong> {{ auth()->user()->matrimonyProfile->photo_rejection_reason }}</p>
+                    <p style="font-weight: 600; margin: 0 0 8px 0; color: #991b1b; font-size: 14px;">{{ __('photo.previous_photo_removed') }}</p>
+                    <p style="margin: 0; color: #7f1d1d; font-size: 13px;"><strong>{{ __('common.reason') }}:</strong> {{ auth()->user()->matrimonyProfile->photo_rejection_reason }}</p>
                 </div>
             @endif
 
             {{-- Title --}}
             <h1 style="font-size: 24px; font-weight: 700; color: #1f2937; margin: 0 0 8px 0;">
-                Upload Your Photo
+                {{ __('photo.upload_your_photo') }}
             </h1>
             <p style="font-size: 14px; color: #6b7280; margin: 0 0 28px 0;">
-                A good photo helps you find better matches
+                {{ __('photo.good_photo_better_matches') }}
             </p>
 
             @php
@@ -80,8 +80,8 @@
                 <div id="stepChoose" style="display: block;">
                     <label for="profile_photo_input" style="display: block; cursor: pointer;">
                         <div style="width: 160px; height: 160px; margin: 0 auto 16px auto; border-radius: 50%; border: 3px solid {{ $borderColor }}; overflow: hidden; position: relative; transition: all 0.2s; box-shadow: 0 4px 12px rgba(0,0,0,0.1);" id="uploadPlaceholder">
-                            <img src="{{ $placeholderImage }}" alt="Upload photo" style="width: 100%; height: 100%; object-fit: cover;" id="placeholderImg">
-                            <img src="" alt="Preview" style="width: 100%; height: 100%; object-fit: cover; display: none; position: absolute; top: 0; left: 0;" id="previewImg">
+                            <img src="{{ $placeholderImage }}" alt="{{ __('photo.upload_photo') }}" style="width: 100%; height: 100%; object-fit: cover;" id="placeholderImg">
+                            <img src="" alt="{{ __('photo.preview') }}" style="width: 100%; height: 100%; object-fit: cover; display: none; position: absolute; top: 0; left: 0;" id="previewImg">
                             <div style="position: absolute; bottom: 0; left: 0; right: 0; background: rgba(0,0,0,0.5); padding: 8px 0; display: flex; align-items: center; justify-content: center;" id="cameraOverlay">
                                 <svg style="width: 20px; height: 20px; color: white;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"></path>
@@ -90,59 +90,59 @@
                             </div>
                         </div>
                     </label>
-                    <p style="font-size: 13px; color: #6b7280; font-weight: 500; margin: 0 0 8px 0;">Click to upload your photo</p>
+                    <p style="font-size: 13px; color: #6b7280; font-weight: 500; margin: 0 0 8px 0;">{{ __('photo.click_to_upload') }}</p>
                     <input type="file" name="profile_photo" id="profile_photo_input" required accept="image/jpeg,image/png" style="display: none;">
                     <p id="selectedFileName" style="font-size: 14px; color: #059669; font-weight: 500; margin: 0 0 8px 0; display: none;"></p>
                 </div>
 
                 {{-- Step 2: Preview + Crop/Rotate (optional) — shown after file select --}}
                 <div id="stepPreview" style="display: none;">
-                    <p style="font-size: 14px; font-weight: 600; color: #374151; margin: 0 0 12px 0;">Preview</p>
+                    <p style="font-size: 14px; font-weight: 600; color: #374151; margin: 0 0 12px 0;">{{ __('photo.preview') }}</p>
                     <div style="width: 200px; height: 200px; margin: 0 auto 8px auto; border-radius: 50%; border: 3px solid #10b981; overflow: hidden; background: #f3f4f6;">
-                        <img id="smallPreviewImg" src="" alt="Preview" style="width: 100%; height: 100%; object-fit: cover;">
+                        <img id="smallPreviewImg" src="" alt="{{ __('photo.preview') }}" style="width: 100%; height: 100%; object-fit: cover;">
                     </div>
-                    <p style="font-size: 13px; color: #6b7280; margin: 0 0 8px 0;">Adjust crop: drag the <strong>square’s corners or edges</strong> to resize; drag <strong>inside the square</strong> to move. Or use the <strong>Crop</strong> button to apply.</p>
+                    <p style="font-size: 13px; color: #6b7280; margin: 0 0 8px 0;">{!! __('photo.adjust_crop_help_html') !!}</p>
                     <div id="cropperWrap" style="width: 320px; height: 320px; margin: 0 auto 16px auto; background: #1f2937; border-radius: 12px; overflow: hidden;">
                         <div id="cropperContainer" style="width: 320px; height: 320px;">
                             <img id="cropperImage" src="" alt="Crop" style="display: block; max-width: none;">
                         </div>
                     </div>
                     <div style="display: flex; justify-content: center; gap: 12px; margin-bottom: 16px; flex-wrap: wrap;">
-                        <button type="button" id="btnCrop" style="padding: 10px 18px; background: #10b981; color: white; border: none; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer;">✂ Crop</button>
-                        <button type="button" id="btnRotateLeft" style="padding: 10px 18px; background: #f3f4f6; border: 1px solid #d1d5db; border-radius: 8px; font-size: 14px; font-weight: 500; color: #374151; cursor: pointer;">↺ Rotate left</button>
-                        <button type="button" id="btnRotateRight" style="padding: 10px 18px; background: #f3f4f6; border: 1px solid #d1d5db; border-radius: 8px; font-size: 14px; font-weight: 500; color: #374151; cursor: pointer;">↻ Rotate right</button>
-                        <button type="button" id="btnChangePhoto" style="padding: 10px 18px; background: #fff; border: 1px solid #9ca3af; border-radius: 8px; font-size: 14px; color: #6b7280; cursor: pointer;">Change photo</button>
+                        <button type="button" id="btnCrop" style="padding: 10px 18px; background: #10b981; color: white; border: none; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer;">✂ {{ __('photo.crop') }}</button>
+                        <button type="button" id="btnRotateLeft" style="padding: 10px 18px; background: #f3f4f6; border: 1px solid #d1d5db; border-radius: 8px; font-size: 14px; font-weight: 500; color: #374151; cursor: pointer;">↺ {{ __('photo.rotate_left') }}</button>
+                        <button type="button" id="btnRotateRight" style="padding: 10px 18px; background: #f3f4f6; border: 1px solid #d1d5db; border-radius: 8px; font-size: 14px; font-weight: 500; color: #374151; cursor: pointer;">↻ {{ __('photo.rotate_right') }}</button>
+                        <button type="button" id="btnChangePhoto" style="padding: 10px 18px; background: #fff; border: 1px solid #9ca3af; border-radius: 8px; font-size: 14px; color: #6b7280; cursor: pointer;">{{ __('photo.change_photo') }}</button>
                     </div>
                 </div>
 
                 <p style="font-size: 13px; color: #9ca3af; margin: 0 0 24px 0;">
-                    Clear face photo • JPG or PNG • Max 2MB
+                    {{ __('photo.clear_face_jpg_png_max_2mb') }}
                 </p>
 
                 {{-- Trust indicator --}}
                 <div style="background: #fef3c7; border-radius: 8px; padding: 12px 16px; margin-bottom: 24px;">
                     <p style="margin: 0; font-size: 13px; color: #92400e;">
-                        📸 <strong>Profiles with photos get 3× more interests</strong>
+                        {!! __('photo.profiles_with_photos_get_more_interests_html') !!}
                     </p>
                 </div>
 
                 {{-- Primary CTA --}}
                 <button type="submit" id="btnSubmit" style="width: 100%; background: linear-gradient(90deg, #059669, #10b981); color: white; padding: 16px 24px; border-radius: 10px; font-weight: 700; font-size: 16px; border: none; cursor: pointer; box-shadow: 0 4px 14px rgba(16, 185, 129, 0.4); transition: transform 0.2s, box-shadow 0.2s;">
-                    Upload Photo & Complete Profile ✓
+                    {{ __('photo.upload_photo_complete_profile') }} ✓
                 </button>
             </form>
 
             {{-- Secondary action --}}
             <div style="margin-top: 20px; padding-top: 20px; border-top: 1px solid #f3f4f6;">
                 <a href="{{ route('matrimony.profile.show', auth()->user()->matrimonyProfile->id) }}" style="font-size: 13px; color: #9ca3af; text-decoration: none;">
-                    Skip for now →
+                    {{ __('wizard.skip_for_now') }} →
                 </a>
             </div>
         </div>
 
         {{-- Footer note --}}
         <p style="text-align: center; font-size: 12px; color: #9ca3af; margin-top: 24px;">
-            🔒 Your photo is secure and only visible to registered members
+            {{ __('photo.secure_visible_to_registered_members') }}
         </p>
 
     </div>

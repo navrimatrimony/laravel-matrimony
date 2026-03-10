@@ -25,7 +25,7 @@ class MobileOtpController extends Controller
         if ($mode === 'off') {
             $redirectTo = $intendedAfterVerify ?: route('dashboard');
             $request->session()->forget(['intended_after_verify', 'from_registration']);
-            return redirect($redirectTo)->with('info', 'Mobile verification is currently disabled.');
+            return redirect($redirectTo)->with('info', __('otp.mobile_verification_disabled'));
         }
 
         $otpDisplay = $request->session()->pull('otp_display');
@@ -46,7 +46,7 @@ class MobileOtpController extends Controller
         $intended = $request->session()->pull('intended_after_verify');
         $request->session()->forget('from_registration');
         $redirectTo = $intended ?: route('matrimony.profile.wizard.section', ['section' => 'basic-info']);
-        return redirect($redirectTo)->with('info', 'You can verify your mobile later from the dashboard.');
+        return redirect($redirectTo)->with('info', __('otp.can_verify_later_from_dashboard'));
     }
 
     public function sendOtp(Request $request): RedirectResponse
@@ -63,7 +63,7 @@ class MobileOtpController extends Controller
         $user = $request->user();
         $mobile = preg_replace('/\D/', '', $request->input('mobile'));
         if (strlen($mobile) < 10) {
-            throw ValidationException::withMessages(['mobile' => 'Enter a valid 10-digit mobile number.']);
+            throw ValidationException::withMessages(['mobile' => __('otp.enter_valid_10_digit_mobile')]);
         }
 
         $user->update(['mobile' => $request->input('mobile')]);
@@ -74,11 +74,11 @@ class MobileOtpController extends Controller
         if ($mode === 'dev_show') {
             // Store OTP in session so it reliably shows on next page load (flash can be lost on redirect in some setups)
             $request->session()->put('otp_display', $otp);
-            return redirect()->route('mobile.verify')->with('status', 'OTP generated. Enter it below.');
+            return redirect()->route('mobile.verify')->with('status', __('otp.otp_generated_enter_below'));
         }
 
         // Future: send real SMS when mode === 'live'
-        return redirect()->route('mobile.verify')->with('status', 'OTP sent to your mobile.');
+        return redirect()->route('mobile.verify')->with('status', __('otp.otp_sent_to_mobile'));
     }
 
     public function verifyOtp(Request $request): RedirectResponse
@@ -92,7 +92,7 @@ class MobileOtpController extends Controller
         $cached = Cache::get($key);
 
         if ($cached === null || $cached !== $request->input('otp')) {
-            throw ValidationException::withMessages(['otp' => 'Invalid or expired OTP. Request a new one.']);
+            throw ValidationException::withMessages(['otp' => __('otp.invalid_or_expired_request_new')]);
         }
 
         Cache::forget($key);
@@ -102,6 +102,6 @@ class MobileOtpController extends Controller
         $request->session()->forget('from_registration');
         $redirectTo = $intended ?: route('dashboard');
 
-        return redirect($redirectTo)->with('status', 'Mobile number verified successfully.');
+        return redirect($redirectTo)->with('status', __('otp.mobile_verified_successfully'));
     }
 }

@@ -32,7 +32,7 @@ class RegisteredUserController extends Controller
         ]);
         $mobileDigits = preg_replace('/\D/', '', $request->mobile);
         if (strlen($mobileDigits) !== 10) {
-            return redirect()->back()->withInput()->withErrors(['mobile' => 'Enter a valid 10-digit mobile number.']);
+            return redirect()->back()->withInput()->withErrors(['mobile' => __('otp.enter_valid_10_digit_mobile')]);
         }
 
         $user = User::create([

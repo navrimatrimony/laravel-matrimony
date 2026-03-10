@@ -1,0 +1,37 @@
+<?php
+
+/**
+ * Admin-facing UI strings (Marathi).
+ */
+return [
+    'moderation' => 'मॉडरेशन',
+    'moderation_settings' => 'मॉडरेशन व सेटिंग्स',
+    'coming_soon' => 'लवकरच येत आहे',
+    'suspended' => 'निलंबित',
+    'edit_profile_admin' => 'प्रोफाइल संपादन (अ‍ॅडमिन)',
+    'cancel_edit' => 'संपादन रद्द',
+    'suspend' => 'निलंबित करा',
+    'unsuspend' => 'निलंबन काढा',
+    'soft_delete' => 'सॉफ्ट डिलीट',
+    'approve_image' => 'प्रतिमा मंजूर करा',
+    'reject_image' => 'प्रतिमा नाका',
+    'suspend_profile' => 'प्रोफाइल निलंबित करा',
+    'unsuspend_profile' => 'प्रोफाइल निलंबन काढा',
+    'soft_delete_profile' => 'प्रोफाइल सॉफ्ट डिलीट',
+    'reason_min_10' => 'कारण (किमान 10 अक्षरे)',
+    'moderation_help' => 'प्रोफाइल निलंबित/अननिलंबित, सॉफ्ट डिलीट, प्रतिमा मंजूर/नकार, दृश्यमानता override. सर्व कृतींसाठी कारण आवश्यक आहे.',
+    'override_visibility' => 'दृश्यमानता Override',
+    'override_visibility_help' => 'दृश्यमानता override (70% पेक्षा कमी पूर्ण असले तरी शोधात दिसेल)',
+    'admin_profile_edit_mode' => 'अ‍ॅडमिन प्रोफाइल संपादन मोड',
+    'full_name' => 'पूर्ण नाव',
+    'edit_location_note' => 'पूर्ण संपादनात profile hierarchy (country/state/city) वापरून स्थान बदला.',
+    'edit_reason' => 'संपादन कारण',
+    'explain_edit_reason_min_10' => 'हे प्रोफाइल का संपादित करत आहात ते लिहा (किमान 10 अक्षरे)',
+    'audit_log_note' => 'हे कारण ऑडिट लॉगमध्ये नोंदवले जाईल.',
+    'save_changes' => 'बदल जतन करा',
+    'edit_profile' => 'प्रोफाइल संपादन',
+    'verification_tags' => 'सत्यापन टॅग',
+    'assigned_active_tags' => 'नियुक्त सक्रिय टॅग',
+    'no_active_tags_assigned' => 'कोणतेही सक्रिय टॅग नाहीत.',
+];
+

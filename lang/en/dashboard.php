@@ -1,0 +1,48 @@
+<?php
+
+/**
+ * Dashboard UI strings.
+ */
+return [
+    'welcome_create_profile_title' => "Welcome! Let's create your Matrimony Profile",
+    'no_profile_message' => "You haven't created your matrimony profile yet.",
+    'create_matrimony_profile' => 'Create Matrimony Profile',
+    'welcome_back' => 'Welcome back, :name!',
+    'overview_line' => "Here's your matrimony dashboard overview.",
+    'photo_removed_by_admin' => 'Your profile photo was removed by admin.',
+    'upload_new_photo_guidelines' => 'Please upload a new photo that meets our guidelines.',
+    'complete_profile_to_go_live' => 'Complete your profile so it can go live.',
+    'edit_profile_arrow' => 'Edit profile →',
+    'pending_changes_admin_resolve' => 'Your profile has pending changes. Admin will resolve shortly.',
+    'view_profile_arrow' => 'View profile →',
+    'profile_placeholder' => 'Profile Placeholder',
+    'photo_under_review' => 'Your photo is under review.',
+    'complete_your_profile' => 'Complete your profile',
+    'to_get_better_matches' => 'to get better matches.',
+    'view_my_profile' => 'View My Profile',
+    'change_photo' => 'Change Photo',
+    'upload_photo' => 'Upload Photo',
+    'pending_interests' => 'Pending Interests',
+    'accepted' => 'Accepted',
+    'total_profiles' => 'Total Profiles',
+    'search_profiles_arrow' => 'Search profiles →',
+    'view_shortlist_arrow' => 'View shortlist →',
+    'recent_received_interests' => 'Recent Received Interests',
+    'no_received_interests_yet' => 'No received interests yet.',
+    'complete_profile_and_search_visibility' => 'Complete your profile and search to get more visibility.',
+    'recent_sent_interests' => 'Recent Sent Interests',
+    'no_sent_interests_yet' => 'No sent interests yet.',
+    'search_profiles_to_send_interest' => 'Search profiles to send interest.',
+    'quick_actions' => 'Quick Actions',
+    'intake_history_status' => 'Intake history & status',
+    'find_your_perfect_match' => 'Find your perfect match',
+    'pending_count' => ':count pending',
+    'no_pending_interests' => 'No pending interests',
+    'total_sent' => ':count total sent',
+    'shortlist_profiles_count' => '{1} :count profile|[2,*] :count profiles',
+    'mobile_verified' => 'Mobile verified',
+    'verified' => 'Verified',
+    'verify_mobile' => 'Verify mobile',
+    'otp_verification' => 'OTP verification',
+];
+

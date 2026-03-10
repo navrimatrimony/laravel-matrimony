@@ -1,0 +1,48 @@
+<?php
+
+/**
+ * Dashboard UI strings (Marathi).
+ */
+return [
+    'welcome_create_profile_title' => 'स्वागत आहे! तुमची विवाह-प्रोफाइल तयार करूया',
+    'no_profile_message' => 'तुम्ही अजून तुमची विवाह-प्रोफाइल तयार केलेली नाही.',
+    'create_matrimony_profile' => 'विवाह प्रोफाइल तयार करा',
+    'welcome_back' => 'पुन्हा स्वागत, :name!',
+    'overview_line' => 'ही तुमच्या डॅशबोर्डची झलक आहे.',
+    'photo_removed_by_admin' => 'तुमचा प्रोफाइल फोटो अ‍ॅडमिनने काढून टाकला आहे.',
+    'upload_new_photo_guidelines' => 'कृपया मार्गदर्शक तत्त्वांनुसार नवीन फोटो अपलोड करा.',
+    'complete_profile_to_go_live' => 'प्रोफाइल पूर्ण करा, म्हणजे ती लाईव्ह होऊ शकेल.',
+    'edit_profile_arrow' => 'प्रोफाइल संपादन →',
+    'pending_changes_admin_resolve' => 'तुमच्या प्रोफाइलमध्ये प्रलंबित बदल आहेत. अ‍ॅडमिन लवकरच निराकरण करेल.',
+    'view_profile_arrow' => 'प्रोफाइल पहा →',
+    'profile_placeholder' => 'प्रोफाइल प्लेसहोल्डर',
+    'photo_under_review' => 'तुमचा फोटो तपासणीअंतर्गत आहे.',
+    'complete_your_profile' => 'प्रोफाइल पूर्ण करा',
+    'to_get_better_matches' => 'अधिक चांगले जुळणारे प्रोफाइल मिळवण्यासाठी.',
+    'view_my_profile' => 'माझी प्रोफाइल पहा',
+    'change_photo' => 'फोटो बदला',
+    'upload_photo' => 'फोटो अपलोड करा',
+    'pending_interests' => 'प्रलंबित इच्छा',
+    'accepted' => 'मान्य',
+    'total_profiles' => 'एकूण प्रोफाइल',
+    'search_profiles_arrow' => 'प्रोफाइल शोधा →',
+    'view_shortlist_arrow' => 'शॉर्टलिस्ट पहा →',
+    'recent_received_interests' => 'अलीकडे आलेल्या इच्छा',
+    'no_received_interests_yet' => 'अजून कोणतीही मिळालेली इच्छा नाही.',
+    'complete_profile_and_search_visibility' => 'जास्त दृश्यमानतेसाठी प्रोफाइल पूर्ण करा आणि शोधा.',
+    'recent_sent_interests' => 'अलीकडे पाठवलेल्या इच्छा',
+    'no_sent_interests_yet' => 'अजून कोणतीही पाठवलेली इच्छा नाही.',
+    'search_profiles_to_send_interest' => 'इच्छा पाठवण्यासाठी प्रोफाइल शोधा.',
+    'quick_actions' => 'त्वरित कृती',
+    'intake_history_status' => 'इंटेक इतिहास व स्थिती',
+    'find_your_perfect_match' => 'तुमच्यासाठी योग्य जोडी शोधा',
+    'pending_count' => ':count प्रलंबित',
+    'no_pending_interests' => 'प्रलंबित इच्छा नाहीत',
+    'total_sent' => 'एकूण पाठवले: :count',
+    'shortlist_profiles_count' => '{1} :count प्रोफाइल|[2,*] :count प्रोफाइल',
+    'mobile_verified' => 'मोबाईल सत्यापित',
+    'verified' => 'सत्यापित',
+    'verify_mobile' => 'मोबाईल सत्यापन',
+    'otp_verification' => 'OTP सत्यापन',
+];
+

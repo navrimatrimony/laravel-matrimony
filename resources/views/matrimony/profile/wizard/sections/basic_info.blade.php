@@ -15,18 +15,18 @@
     $maritalNamePrefix = ($corePrefix === 'snapshot[core]') ? 'snapshot' : '';
 @endphp
 <div class="border border-gray-200 dark:border-gray-600 rounded-lg p-4 bg-white dark:bg-gray-800 space-y-7" x-data="basicInfoForm()">
-    <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100 border-b border-gray-200 dark:border-gray-700 pb-2 mb-6">Basic Information</h2>
+    <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100 border-b border-gray-200 dark:border-gray-700 pb-2 mb-6">{{ __('Basic Information') }}</h2>
 
     {{-- 1. Full name + Gender (one horizontal line) — flex-row so both always on same line --}}
     <div class="flex flex-row flex-nowrap gap-2 items-end">
         <div class="flex-1 min-w-0">
-            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Full Name <span class="text-red-500">*</span></label>
+            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">{{ __('Full Name') }} <span class="text-red-500">*</span></label>
             <input type="text" name="{{ $nameFullName }}" value="{{ old($oldPrefix.'full_name', $profile->full_name ?? '') }}" required
                 class="w-full rounded-lg border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-3 py-2.5 h-[42px] focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
             @error($oldPrefix.'full_name')<p class="mt-1 text-sm text-red-600 dark:text-red-400">{{ $message }}</p>@enderror
         </div>
         <div class="shrink-0 w-36">
-            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Gender <span class="text-red-500">*</span></label>
+            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">{{ __('Gender') }} <span class="text-red-500">*</span></label>
             <input type="hidden" name="{{ $nameGenderId }}" :value="genderId">
             {{-- Safelist so Tailwind keeps these when Alpine toggles :class --}}
             <span class="hidden bg-blue-600 bg-pink-500" aria-hidden="true"></span>
@@ -43,7 +43,7 @@
                         class="flex-1 py-2.5 px-3 cursor-pointer transition-all duration-200 select-none text-sm font-medium border-none outline-none focus:ring-0 {{ $isFirst ? 'rounded-l-full' : '' }} {{ $isLast ? 'rounded-r-full' : '' }} text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200"
                         :class="genderId == {{ $g->id }} ? '{{ $selectedBg }} !text-white' : ''"
                         @click="genderId = {{ $g->id }}">
-                        {{ $g->key === 'male' ? 'Male' : 'Female' }}
+                        {{ $g->key === 'male' ? __('Male') : __('Female') }}
                     </button>
                 @endforeach
             </div>
@@ -54,7 +54,7 @@
     {{-- 2. Date of birth (narrower), Birth time, Birth place — DOB ~30% less width so other two don't crowd --}}
     <div class="grid grid-cols-1 md:grid-cols-[0.7fr_1fr_1fr] gap-2 items-start">
         <div class="min-w-0">
-            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Date of Birth</label>
+            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">{{ __('Date of Birth') }}</label>
             @php
                 $yMin = now()->subYears(60)->format('Y');
                 $yMax = now()->subYears(18)->format('Y');
@@ -77,7 +77,7 @@
             @error($oldPrefix.'date_of_birth')<p class="mt-1 text-sm text-red-600 dark:text-red-400">{{ $message }}</p>@enderror
         </div>
         <div class="min-w-0">
-            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Birth Time (optional)</label>
+            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">{{ __('Birth Time (optional)') }}</label>
             @php
                 $bt = old($oldPrefix.'birth_time', $profile->birth_time ?? '');
                 $bt = $bt !== '' ? trim($bt) : '';
@@ -123,12 +123,12 @@
             @error($oldPrefix.'birth_time')<p class="mt-1 text-sm text-red-600 dark:text-red-400">{{ $message }}</p>@enderror
         </div>
         <div class="min-w-0">
-            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Birth Place (optional)</label>
+            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">{{ __('Birth Place (optional)') }}</label>
             <x-profile.location-typeahead
                 context="birth"
                 :namePrefix="$corePrefix"
                 :value="old($oldPrefix.'wizard_birth_place_display', $birthPlaceDisplay ?? '')"
-                placeholder="Type city / area"
+                :placeholder="__('Type city / area')"
                 label=""
                 :noBorder="true"
                 :compactRow="true"

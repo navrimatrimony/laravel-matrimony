@@ -28,7 +28,7 @@ class BlockController extends Controller
         $user = $request->user();
         if (!$user->matrimonyProfile) {
             return redirect()->route('matrimony.profile.wizard.section', ['section' => 'basic-info'])
-                ->with('error', 'Create your profile first.');
+                ->with('error', __('profile_actions.create_profile_first'));
         }
 
         $entries = Block::with('blockedProfile')
@@ -48,17 +48,17 @@ class BlockController extends Controller
         $blocker = $request->user()->matrimonyProfile;
         if (!$blocker) {
             return redirect()->route('matrimony.profile.wizard.section', ['section' => 'basic-info'])
-                ->with('error', 'Create your profile first.');
+                ->with('error', __('profile_actions.create_profile_first'));
         }
 
         $blocked = $matrimony_profile_id;
 
         if ($blocker->id === $blocked->id) {
-            return back()->with('error', 'You cannot block yourself.');
+            return back()->with('error', __('profile_actions.cannot_block_yourself'));
         }
 
         if (Block::where('blocker_profile_id', $blocker->id)->where('blocked_profile_id', $blocked->id)->exists()) {
-            return back()->with('error', 'Already blocked.');
+            return back()->with('error', __('profile_actions.already_blocked'));
         }
 
         Interest::where(function ($q) use ($blocker, $blocked) {
@@ -78,7 +78,7 @@ class BlockController extends Controller
             'blocked_profile_id' => $blocked->id,
         ]);
 
-        return redirect()->route('blocks.index')->with('success', 'Profile blocked.');
+        return redirect()->route('blocks.index')->with('success', __('profile_actions.profile_blocked'));
     }
 
     /**
@@ -89,7 +89,7 @@ class BlockController extends Controller
         $blocker = $request->user()->matrimonyProfile;
         if (!$blocker) {
             return redirect()->route('matrimony.profile.wizard.section', ['section' => 'basic-info'])
-                ->with('error', 'Create your profile first.');
+                ->with('error', __('profile_actions.create_profile_first'));
         }
 
         $block = Block::where('blocker_profile_id', $blocker->id)
@@ -100,6 +100,6 @@ class BlockController extends Controller
             $block->delete();
         }
 
-        return back()->with('success', 'Profile unblocked.');
+        return back()->with('success', __('profile_actions.profile_unblocked'));
     }
 }

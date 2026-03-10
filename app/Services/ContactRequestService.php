@@ -91,7 +91,7 @@ class ContactRequestService
     public function createRequest(User $sender, User $receiver, string $reason, array $requested_scopes, ?string $otherReasonText = null): ContactRequest
     {
         if ($this->isContactRequestDisabled()) {
-            throw ValidationException::withMessages(['contact_request' => 'Contact request is currently disabled.']);
+            throw ValidationException::withMessages(['contact_request' => __('notifications.contact_request_disabled')]);
         }
 
         // Prevent duplicate *outgoing* pending request from same sender→receiver.
@@ -103,20 +103,20 @@ class ContactRequestService
             })
             ->first();
         if ($openPending) {
-            throw ValidationException::withMessages(['contact_request' => 'You already have a pending contact request with this member.']);
+            throw ValidationException::withMessages(['contact_request' => __('notifications.pending_request_exists')]);
         }
 
         // If there is an active grant for this sender→receiver, avoid duplicate requests.
         $existingGrant = $this->getEffectiveGrant($sender, $receiver);
         if ($existingGrant) {
-            throw ValidationException::withMessages(['contact_request' => 'Contact details are already shared for this member.']);
+            throw ValidationException::withMessages(['contact_request' => __('notifications.contact_already_shared')]);
         }
 
         if ($this->isMutualOnly() && ! $this->hasMutualInterest($sender, $receiver)) {
             $receiverProfile = $receiver->matrimonyProfile;
             $isDemoReceiver = $receiverProfile && ($receiverProfile->is_demo ?? false);
             if (! $isDemoReceiver) {
-                throw ValidationException::withMessages(['contact_request' => 'Contact request is allowed only after mutual interest.']);
+                    throw ValidationException::withMessages(['contact_request' => __('notifications.mutual_only')]);
             }
             // For demo profiles, allow contact request even without mutual interest (testing flow).
         }
@@ -124,20 +124,20 @@ class ContactRequestService
         $cooldownEnds = $this->getCooldownEndsAt($sender, $receiver);
         if ($cooldownEnds) {
             throw ValidationException::withMessages([
-                'contact_request' => 'You cannot send another request until the cooling period ends.',
+                'contact_request' => __('notifications.cooldown_not_ended'),
                 'cooldown_ends_at' => $cooldownEnds->format('Y-m-d H:i:s'),
             ]);
         }
 
         $maxPerDay = $this->config['max_requests_per_day_per_sender'] ?? null;
         if ($maxPerDay !== null && $this->countRequestsTodayBySender($sender) >= $maxPerDay) {
-            throw ValidationException::withMessages(['contact_request' => 'Daily limit for contact requests reached. Try again tomorrow.']);
+            throw ValidationException::withMessages(['contact_request' => __('notifications.daily_limit_reached')]);
         }
 
         $allowed = array_keys(array_filter($this->config['allowed_contact_scopes'] ?? ['email' => true, 'phone' => true, 'whatsapp' => true]));
         $requested_scopes = array_values(array_intersect($requested_scopes, $allowed));
         if (empty($requested_scopes)) {
-            throw ValidationException::withMessages(['requested_scopes' => 'Select at least one contact method.']);
+            throw ValidationException::withMessages(['requested_scopes' => __('notifications.select_at_least_one_contact_method')]);
         }
 
         $pendingExpiryDays = (int) ($this->config['pending_expiry_days'] ?? 7);
@@ -162,26 +162,26 @@ class ContactRequestService
     public function approve(ContactRequest $request, User $receiver, array $grantedScopes, string $durationKey): ContactGrant
     {
         if ($request->receiver_id !== $receiver->id) {
-            throw ValidationException::withMessages(['request' => 'Only the receiver can approve this request.']);
+            throw ValidationException::withMessages(['request' => __('notifications.only_receiver_can_approve')]);
         }
         if ($request->status !== ContactRequest::STATUS_PENDING) {
-            throw ValidationException::withMessages(['request' => 'Request is no longer pending.']);
+            throw ValidationException::withMessages(['request' => __('notifications.request_no_longer_pending')]);
         }
         if ($request->expires_at && $request->expires_at->isPast()) {
             $request->update(['status' => ContactRequest::STATUS_EXPIRED]);
-            throw ValidationException::withMessages(['request' => 'Request has expired.']);
+            throw ValidationException::withMessages(['request' => __('notifications.request_expired')]);
         }
 
         $allowed = array_keys(array_filter($this->config['allowed_contact_scopes'] ?? []));
         $grantedScopes = array_values(array_intersect($grantedScopes, $request->requested_scopes));
         $grantedScopes = array_values(array_intersect($grantedScopes, $allowed));
         if (empty($grantedScopes)) {
-            throw ValidationException::withMessages(['granted_scopes' => 'Select at least one scope to grant.']);
+            throw ValidationException::withMessages(['granted_scopes' => __('notifications.select_at_least_one_scope_to_grant')]);
         }
 
         $options = $this->config['grant_duration_options'] ?? ['approve_once' => true, 'approve_7_days' => true, 'approve_30_days' => true];
         if (empty($options[$durationKey])) {
-            throw ValidationException::withMessages(['duration' => 'Invalid duration option.']);
+            throw ValidationException::withMessages(['duration' => __('notifications.invalid_duration_option')]);
         }
 
         $validUntil = match ($durationKey) {
@@ -210,10 +210,10 @@ class ContactRequestService
     public function reject(ContactRequest $request, User $receiver): void
     {
         if ($request->receiver_id !== $receiver->id) {
-            throw ValidationException::withMessages(['request' => 'Only the receiver can reject this request.']);
+            throw ValidationException::withMessages(['request' => __('notifications.only_receiver_can_reject')]);
         }
         if ($request->status !== ContactRequest::STATUS_PENDING) {
-            throw ValidationException::withMessages(['request' => 'Request is no longer pending.']);
+            throw ValidationException::withMessages(['request' => __('notifications.request_no_longer_pending')]);
         }
 
         $cooldownDays = (int) ($this->config['reject_cooldown_days'] ?? 90);
@@ -233,10 +233,10 @@ class ContactRequestService
     public function cancel(ContactRequest $request, User $sender): void
     {
         if ($request->sender_id !== $sender->id) {
-            throw ValidationException::withMessages(['request' => 'Only the sender can cancel this request.']);
+            throw ValidationException::withMessages(['request' => __('notifications.only_sender_can_cancel')]);
         }
         if ($request->status !== ContactRequest::STATUS_PENDING) {
-            throw ValidationException::withMessages(['request' => 'Only pending requests can be cancelled.']);
+            throw ValidationException::withMessages(['request' => __('notifications.only_pending_can_be_cancelled')]);
         }
         $request->update(['status' => ContactRequest::STATUS_CANCELLED]);
     }
@@ -248,10 +248,10 @@ class ContactRequestService
     {
         $request = $grant->contactRequest;
         if ($request->receiver_id !== $receiver->id) {
-            throw ValidationException::withMessages(['grant' => 'Only the receiver can revoke access.']);
+            throw ValidationException::withMessages(['grant' => __('notifications.only_receiver_can_revoke')]);
         }
         if ($grant->revoked_at) {
-            throw ValidationException::withMessages(['grant' => 'Access is already revoked.']);
+            throw ValidationException::withMessages(['grant' => __('notifications.access_already_revoked')]);
         }
         $grant->update([
             'revoked_at' => now(),

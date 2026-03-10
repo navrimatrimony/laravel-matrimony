@@ -172,7 +172,7 @@
         <details class="mt-4 pt-4 border-t border-gray-200 dark:border-gray-600 group" id="education-history-details">
             <summary class="cursor-pointer list-none flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:text-indigo-600 dark:hover:text-indigo-400 [&::-webkit-details-marker]:hidden">
                 <span aria-hidden="true">🎓</span>
-                <span>Add education history</span>
+                <span>{{ __('components.education.add_education_history') }}</span>
             </summary>
             <div class="mt-3 pl-6" id="education-history-block">
             <div class="space-y-4" id="education-history-rows">
@@ -184,7 +184,7 @@
                         <div class="flex-1 min-w-[120px]"><label class="text-xs text-gray-600 dark:text-gray-400">Specialization</label><input type="text" name="{{ $hnE($idx, 'specialization') }}" value="{{ $row['specialization'] ?? '' }}" class="{{ $inputCls }} text-sm"></div>
                         <div class="flex-1 min-w-[120px]"><label class="text-xs text-gray-600 dark:text-gray-400">University / Institute</label><input type="text" name="{{ $hnE($idx, 'university') }}" value="{{ $row['university'] ?? '' }}" class="{{ $inputCls }} text-sm"></div>
                         <div class="w-24"><label class="text-xs text-gray-600 dark:text-gray-400">Year</label><input type="number" name="{{ $hnE($idx, 'year_completed') }}" value="{{ $row['year_completed'] ?? '' }}" min="1900" max="2100" class="{{ $inputCls }} text-sm"></div>
-                        @if(!$readOnly)<div class="education-row-actions flex items-center gap-1 shrink-0"><button type="button" class="remove-education-row flex items-center justify-center w-8 h-8 rounded text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 cursor-pointer shrink-0" title="Remove this entry" aria-label="Remove this entry"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 12H4"/></svg></button></div>@endif
+                        @if(!$readOnly)<div class="education-row-actions flex items-center gap-1 shrink-0"><button type="button" class="remove-education-row flex items-center justify-center w-8 h-8 rounded text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 cursor-pointer shrink-0" title="{{ __('common.remove_this_entry') }}" aria-label="{{ __('common.remove_this_entry') }}"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 12H4"/></svg></button></div>@endif
                     </div>
                 @endforeach
             </div>
@@ -195,16 +195,16 @@
 
     {{-- Career engine: snapshot + history एकत्र --}}
     <div class="{{ $cardCls }} career-dependent-block">
-        <h3 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">Career</h3>
+        <h3 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">{{ __('components.education.career') }}</h3>
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-                <label class="{{ $labelCls }}">Working With</label>
+                <label class="{{ $labelCls }}">{{ __('components.education.working_with') }}</label>
                 @if($readOnly)
                     @php $ww = $workingWithIdRaw ? (WorkingWithType::find($workingWithIdRaw)?->name ?? '—') : '—'; @endphp
                     <p class="py-2 text-gray-900 dark:text-gray-100">{{ $ww }}</p>
                 @else
                     <select name="{{ $n('working_with_type_id') }}" class="{{ $inputCls }} career-parent-select">
-                        <option value="">Select</option>
+                        <option value="">{{ __('common.select') }}</option>
                         @foreach($workingWithTypes as $ww)
                             <option value="{{ $ww->id }}" {{ (string)$workingWithIdRaw === (string)$ww->id ? 'selected' : '' }}>{{ $ww->name }}</option>
                         @endforeach
@@ -213,13 +213,13 @@
                 @endif
             </div>
             <div>
-                <label class="{{ $labelCls }}">Working As</label>
+                <label class="{{ $labelCls }}">{{ __('components.education.working_as') }}</label>
                 @if($readOnly)
                     @php $prof = $professionIdRaw ? (Profession::find($professionIdRaw)?->name ?? '—') : '—'; @endphp
                     <p class="py-2 text-gray-900 dark:text-gray-100">{{ $prof }}</p>
                 @else
                     <select name="{{ $n('profession_id') }}" class="{{ $inputCls }} career-child-select">
-                        <option value="">Select Working With first</option>
+                        <option value="">{{ __('components.education.select_working_with_first') }}</option>
                         @foreach($professions as $pr)
                             <option value="{{ $pr->id }}" data-working-with-type-id="{{ $pr->working_with_type_id ?? '' }}" {{ (string)$professionIdRaw === (string)$pr->id ? 'selected' : '' }}>{{ $pr->name }}</option>
                         @endforeach
@@ -229,23 +229,23 @@
             </div>
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4 w-full md:col-span-2">
                 <div class="min-w-0">
-                    <label class="{{ $labelCls }}">Employer Name</label>
+                    <label class="{{ $labelCls }}">{{ __('components.education.employer_name') }}</label>
                     @if($readOnly)
                         <p class="py-2 text-gray-900 dark:text-gray-100">{{ $v('company_name') ?: '—' }}</p>
                     @else
-                        <input type="text" name="{{ $n('company_name') }}" value="{{ old($oldKey('company_name'), $v('company_name')) }}" class="{{ $inputCls }}" placeholder="Company / Organisation">
+                        <input type="text" name="{{ $n('company_name') }}" value="{{ old($oldKey('company_name'), $v('company_name')) }}" class="{{ $inputCls }}" placeholder="{{ __('components.education.company_org') }}">
                         @if($err('company_name'))<p class="text-red-600 text-xs mt-1">{{ $err('company_name') }}</p>@endif
                     @endif
                 </div>
                 <div class="min-w-0">
-                    <label class="{{ $labelCls }}">Work location</label>
+                    <label class="{{ $labelCls }}">{{ __('components.education.work_location') }}</label>
                     @if($readOnly)
                         <p class="py-2 text-gray-900 dark:text-gray-100">{{ $workLocationDisplay ?: '—' }}</p>
                     @else
                         <x-profile.location-typeahead
                             context="work"
                             :value="$workLocationDisplay"
-                            placeholder="City / area"
+                            placeholder="{{ __('components.education.city_area') }}"
                             label=""
                             :noBorder="true"
                             :data-work-city-id="$workCityId ?? ''"
@@ -259,7 +259,7 @@
         <details class="mt-4 pt-4 border-t border-gray-200 dark:border-gray-600 group" id="career-history-details">
             <summary class="cursor-pointer list-none flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:text-indigo-600 dark:hover:text-indigo-400 [&::-webkit-details-marker]:hidden">
                 <span aria-hidden="true">💼</span>
-                <span>Add career history</span>
+                <span>{{ __('components.education.add_career_history') }}</span>
             </summary>
             <div class="mt-3 pl-6" id="career-history-block">
             <div class="space-y-4" id="career-history-rows">
@@ -279,7 +279,7 @@
                         <div class="w-20"><label class="text-xs text-gray-600 dark:text-gray-400">Start</label><input type="number" name="{{ $hnC($idx, 'start_year') }}" value="{{ $row['start_year'] ?? '' }}" min="1900" max="2100" class="{{ $inputCls }} text-sm"></div>
                         <div class="w-20"><label class="text-xs text-gray-600 dark:text-gray-400">End</label><input type="number" name="{{ $hnC($idx, 'end_year') }}" value="{{ $row['end_year'] ?? '' }}" min="1900" max="2100" class="{{ $inputCls }} text-sm"></div>
                         <div class="flex items-center gap-1"><label class="text-xs text-gray-600 dark:text-gray-400">Current</label><input type="checkbox" name="{{ $hnC($idx, 'is_current') }}" value="1" {{ !empty($row['is_current']) ? 'checked' : '' }} class="rounded"></div>
-                        @if(!$readOnly)<div class="career-row-actions flex items-center gap-1 shrink-0"><button type="button" class="remove-career-row flex items-center justify-center w-8 h-8 rounded text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 cursor-pointer shrink-0" title="Remove this entry" aria-label="Remove this entry"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 12H4"/></svg></button></div>@endif
+                        @if(!$readOnly)<div class="career-row-actions flex items-center gap-1 shrink-0"><button type="button" class="remove-career-row flex items-center justify-center w-8 h-8 rounded text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 cursor-pointer shrink-0" title="{{ __('common.remove_this_entry') }}" aria-label="{{ __('common.remove_this_entry') }}"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 12H4"/></svg></button></div>@endif
                     </div>
                 @endforeach
             </div>
@@ -309,10 +309,10 @@
                 if (parentVal === '') {
                     childSelect.value = '';
                     childSelect.disabled = true;
-                    if (placeholderOption) placeholderOption.textContent = 'Select Working With first';
+                    if (placeholderOption) placeholderOption.textContent = @json(__('components.education.select_working_with_first'));
                 } else {
                     childSelect.disabled = false;
-                    if (placeholderOption) placeholderOption.textContent = 'Select';
+                    if (placeholderOption) placeholderOption.textContent = @json(__('common.select'));
                     var selectedOption = childSelect.options[childSelect.selectedIndex];
                     var selectedParent = selectedOption && selectedOption.value ? (selectedOption.getAttribute('data-working-with-type-id') || '') : '';
                     if (currentVal && selectedParent !== '' && String(selectedParent) !== String(parentVal)) childSelect.value = '';
@@ -327,7 +327,7 @@
 
     {{-- Income engine --}}
     <x-income-engine
-        label="Income"
+        :label="__('components.education.income')"
         namePrefix="income"
         :values="$values"
         :profile="$profile"
@@ -357,7 +357,17 @@
             const i = eduRows.querySelectorAll('.education-history-row').length;
             const div = document.createElement('div');
             div.className = 'flex flex-wrap items-end gap-2 border border-gray-200 dark:border-gray-600 rounded p-2 education-history-row';
-            div.innerHTML = '<div class="flex-1 min-w-[120px]"><label class="text-xs text-gray-600 dark:text-gray-400">Degree</label><input type="text" name="' + eduPrefix + '[' + i + '][degree]" class="{{ $inputCls }} text-sm"></div><div class="flex-1 min-w-[120px]"><label class="text-xs text-gray-600 dark:text-gray-400">Specialization</label><input type="text" name="' + eduPrefix + '[' + i + '][specialization]" class="{{ $inputCls }} text-sm"></div><div class="flex-1 min-w-[120px]"><label class="text-xs text-gray-600 dark:text-gray-400">University / Institute</label><input type="text" name="' + eduPrefix + '[' + i + '][university]" class="{{ $inputCls }} text-sm"></div><div class="w-24"><label class="text-xs text-gray-600 dark:text-gray-400">Year</label><input type="number" name="' + eduPrefix + '[' + i + '][year_completed]" min="1900" max="2100" class="{{ $inputCls }} text-sm"></div><div class="education-row-actions flex items-center gap-1 shrink-0"><button type="button" class="remove-education-row flex items-center justify-center w-8 h-8 rounded text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 cursor-pointer shrink-0" title="Remove this entry" aria-label="Remove this entry"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 12H4"/></svg></button></div>';
+            const tDegree = @json(__('components.education.degree'));
+            const tSpec = @json(__('components.education.specialization'));
+            const tUniv = @json(__('components.education.university_institute'));
+            const tYear = @json(__('components.education.year'));
+            const tRemove = @json(__('common.remove_this_entry'));
+            div.innerHTML =
+                '<div class="flex-1 min-w-[120px]"><label class="text-xs text-gray-600 dark:text-gray-400">' + tDegree + '</label><input type="text" name="' + eduPrefix + '[' + i + '][degree]" class="{{ $inputCls }} text-sm"></div>' +
+                '<div class="flex-1 min-w-[120px]"><label class="text-xs text-gray-600 dark:text-gray-400">' + tSpec + '</label><input type="text" name="' + eduPrefix + '[' + i + '][specialization]" class="{{ $inputCls }} text-sm"></div>' +
+                '<div class="flex-1 min-w-[120px]"><label class="text-xs text-gray-600 dark:text-gray-400">' + tUniv + '</label><input type="text" name="' + eduPrefix + '[' + i + '][university]" class="{{ $inputCls }} text-sm"></div>' +
+                '<div class="w-24"><label class="text-xs text-gray-600 dark:text-gray-400">' + tYear + '</label><input type="number" name="' + eduPrefix + '[' + i + '][year_completed]" min="1900" max="2100" class="{{ $inputCls }} text-sm"></div>' +
+                '<div class="education-row-actions flex items-center gap-1 shrink-0"><button type="button" class="remove-education-row flex items-center justify-center w-8 h-8 rounded text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 cursor-pointer shrink-0" title="' + tRemove + '" aria-label="' + tRemove + '"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 12H4"/></svg></button></div>';
             eduRows.appendChild(div);
             refreshSummaryEdu();
             refreshEduRowAddButtons();
@@ -382,8 +392,8 @@
                     var plusBtn = document.createElement('button');
                     plusBtn.type = 'button';
                     plusBtn.className = 'add-education-row-after flex items-center justify-center w-8 h-8 rounded text-green-600 hover:bg-green-50 dark:hover:bg-green-900/20 cursor-pointer shrink-0';
-                    plusBtn.title = 'Add another entry';
-                    plusBtn.setAttribute('aria-label', 'Add another entry');
+                    plusBtn.title = @json(__('components.education.add_another_entry'));
+                    plusBtn.setAttribute('aria-label', @json(__('components.education.add_another_entry')));
                     plusBtn.innerHTML = '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>';
                     actions.appendChild(plusBtn);
                 }

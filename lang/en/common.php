@@ -1,0 +1,45 @@
+<?php
+
+/**
+ * Common UI labels reused across pages.
+ */
+return [
+    'reason' => 'Reason',
+    'profile' => 'Profile',
+    'view_all_arrow' => 'View all →',
+    'view_arrow' => 'View →',
+    'select' => 'Select',
+    'select_placeholder' => '— Select —',
+    'add' => 'Add',
+    'remove' => 'Remove',
+    'remove_this_entry' => 'Remove this entry',
+    'notes' => 'Notes',
+    'optional' => 'Optional',
+    'yes' => 'Yes',
+    'no' => 'No',
+    'pending' => 'Pending',
+    'accepted' => 'Accepted',
+    'rejected' => 'Rejected',
+    'parsed' => 'Parsed',
+    'failed' => 'Failed',
+    'status' => 'Status',
+    'actions' => 'Actions',
+    'uploaded' => 'Uploaded',
+    'approved' => 'Approved',
+    'submit' => 'Submit',
+    'cancel' => 'Cancel',
+    'save' => 'Save',
+    'reset' => 'Reset',
+    'admin' => 'Admin',
+    'english' => 'English',
+    'marathi' => 'Marathi',
+    'no_valid_data_to_save' => 'No valid data to save.',
+    'profile_updated' => 'Profile updated.',
+    'some_changes_conflict' => 'Some changes could not be applied due to conflicts.',
+    'unauthorized_photo_update' => 'Unauthorized profile photo update attempt.',
+    'profile_edit_blocked_intake_conflict' => 'Profile cannot be edited while intake or conflict is pending.',
+    'invalid_photo_upload_jpg_png' => 'We could not read this image. Please upload a valid JPG or PNG photo.',
+    'login_required_to_view_matrimony_profiles' => 'Please login to view matrimony profiles.',
+    'profile_not_found' => 'Profile not found.',
+];
+

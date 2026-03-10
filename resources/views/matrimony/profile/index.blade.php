@@ -11,7 +11,7 @@
 
                 {{-- Page Heading --}}
                 <h1 class="text-2xl font-bold mb-6">
-                    Matrimony Profiles
+                    {{ __('search.matrimony_profiles') }}
                 </h1>
 
                 <hr class="mb-4 border-gray-300">
@@ -20,44 +20,44 @@
                 <form method="GET" action="{{ route('matrimony.profiles.index') }}">
                     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
                         <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-1">Age From</label>
-                            <input type="number" name="age_from" value="{{ request('age_from') }}" class="w-full border rounded px-3 py-2" placeholder="Min age">
+                            <label class="block text-sm font-medium text-gray-700 mb-1">{{ __('search.age_from') }}</label>
+                            <input type="number" name="age_from" value="{{ request('age_from') }}" class="w-full border rounded px-3 py-2" placeholder="{{ __('search.min_age') }}">
                         </div>
                         <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-1">Age To</label>
-                            <input type="number" name="age_to" value="{{ request('age_to') }}" class="w-full border rounded px-3 py-2" placeholder="Max age">
+                            <label class="block text-sm font-medium text-gray-700 mb-1">{{ __('search.age_to') }}</label>
+                            <input type="number" name="age_to" value="{{ request('age_to') }}" class="w-full border rounded px-3 py-2" placeholder="{{ __('search.max_age') }}">
                         </div>
                         <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-1">Caste</label>
-                            <input type="text" name="caste" value="{{ request('caste') }}" class="w-full border rounded px-3 py-2" placeholder="Caste">
+                            <label class="block text-sm font-medium text-gray-700 mb-1">{{ __('Caste') }}</label>
+                            <input type="text" name="caste" value="{{ request('caste') }}" class="w-full border rounded px-3 py-2" placeholder="{{ __('Caste') }}">
                         </div>
                         <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-1">Location</label>
-                            <input type="text" name="location" value="{{ request('location') }}" class="w-full border rounded px-3 py-2" placeholder="City">
+                            <label class="block text-sm font-medium text-gray-700 mb-1">{{ __('Location') }}</label>
+                            <input type="text" name="location" value="{{ request('location') }}" class="w-full border rounded px-3 py-2" placeholder="{{ __('search.city') }}">
                         </div>
                         <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-1">Height From (cm)</label>
-                            <input type="number" name="height_from" value="{{ request('height_from') }}" class="w-full border rounded px-3 py-2" placeholder="Min cm">
+                            <label class="block text-sm font-medium text-gray-700 mb-1">{{ __('search.height_from_cm') }}</label>
+                            <input type="number" name="height_from" value="{{ request('height_from') }}" class="w-full border rounded px-3 py-2" placeholder="{{ __('search.min_cm') }}">
                         </div>
                         <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-1">Height To (cm)</label>
-                            <input type="number" name="height_to" value="{{ request('height_to') }}" class="w-full border rounded px-3 py-2" placeholder="Max cm">
+                            <label class="block text-sm font-medium text-gray-700 mb-1">{{ __('search.height_to_cm') }}</label>
+                            <input type="number" name="height_to" value="{{ request('height_to') }}" class="w-full border rounded px-3 py-2" placeholder="{{ __('search.max_cm') }}">
                         </div>
                         <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-1">Marital Status</label>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">{{ __('Marital Status') }}</label>
                             <select name="marital_status" class="w-full border rounded px-3 py-2">
                                 <option value="">—</option>
-                                <option value="single" {{ request('marital_status') === 'single' ? 'selected' : '' }}>Single</option>
-                                <option value="divorced" {{ request('marital_status') === 'divorced' ? 'selected' : '' }}>Divorced</option>
-                                <option value="widowed" {{ request('marital_status') === 'widowed' ? 'selected' : '' }}>Widowed</option>
+                                <option value="single" {{ request('marital_status') === 'single' ? 'selected' : '' }}>{{ __('search.single') }}</option>
+                                <option value="divorced" {{ request('marital_status') === 'divorced' ? 'selected' : '' }}>{{ __('search.divorced') }}</option>
+                                <option value="widowed" {{ request('marital_status') === 'widowed' ? 'selected' : '' }}>{{ __('search.widowed') }}</option>
                             </select>
                         </div>
                         <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-1">Education</label>
-                            <input type="text" name="education" value="{{ request('education') }}" class="w-full border rounded px-3 py-2" placeholder="Education">
+                            <label class="block text-sm font-medium text-gray-700 mb-1">{{ __('Education') }}</label>
+                            <input type="text" name="education" value="{{ request('education') }}" class="w-full border rounded px-3 py-2" placeholder="{{ __('Education') }}">
                         </div>
                         <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-1">Per page</label>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">{{ __('search.per_page') }}</label>
                             <select name="per_page" class="w-full border rounded px-3 py-2">
                                 @foreach ([15, 25, 50] as $n)
                                     <option value="{{ $n }}" {{ (int) request('per_page', 15) === $n ? 'selected' : '' }}>{{ $n }}</option>
@@ -66,14 +66,14 @@
                         </div>
                     </div>
                     <div class="flex gap-4 mb-8">
-                        <button type="submit" class="bg-blue-600 text-white px-5 py-2 rounded">Search</button>
-                        <a href="{{ route('matrimony.profiles.index') }}" class="text-gray-600 underline pt-2">Reset</a>
+                        <button type="submit" class="bg-blue-600 text-white px-5 py-2 rounded">{{ __('search.search') }}</button>
+                        <a href="{{ route('matrimony.profiles.index') }}" class="text-gray-600 underline pt-2">{{ __('search.reset') }}</a>
                     </div>
                 </form>
 
                 {{-- Profiles List --}}
                 @if ($profiles->isEmpty())
-                    <p class="text-gray-600">No profiles found.</p>
+                    <p class="text-gray-600">{{ __('search.no_profiles_found') }}</p>
                 @else
                     @foreach ($profiles as $matrimonyProfile)
                         <div class="bg-white text-gray-900 border border-gray-200 rounded-lg p-4 mb-4 flex justify-between items-center">
@@ -88,7 +88,7 @@
         {{-- Real uploaded photo --}}
         <img
             src="{{ asset('uploads/matrimony_photos/'.$matrimonyProfile->profile_photo) }}"
-            alt="Profile Photo"
+            alt="{{ __('Profile Photo') }}"
             class="w-24 h-24 rounded-full object-cover border"
         />
     @else
@@ -105,7 +105,7 @@
         @endphp
         <img
             src="{{ $placeholderSrc }}"
-            alt="Profile Placeholder"
+            alt="{{ __('dashboard.profile_placeholder') }}"
             class="w-24 h-24 rounded-full object-cover border"
         />
     @endif
@@ -123,7 +123,7 @@
 
         {{-- Age (calculated from DOB) --}}
         @if ($matrimonyProfile->date_of_birth)
-            | {{ \Carbon\Carbon::parse($matrimonyProfile->date_of_birth)->age }} yrs
+            | {{ \Carbon\Carbon::parse($matrimonyProfile->date_of_birth)->age }} {{ __('search.years_short') }}
         @endif
 
         {{-- Location --}}
@@ -144,15 +144,15 @@
             href="{{ route('matrimony.profile.show', $matrimonyProfile->id) }}"
             class="text-blue-600 hover:underline font-medium"
         >
-            View Profile
+            {{ __('search.view_profile') }}
         </a>
     @else
         <a
             href="{{ route('login') }}"
             class="text-gray-500 hover:underline font-medium"
-            title="Login required to view full profile"
+            title="{{ __('search.login_required_to_view_full_profile') }}"
         >
-            Login to View Profile
+            {{ __('search.login_to_view_profile') }}
         </a>
     @endauth
 </div>

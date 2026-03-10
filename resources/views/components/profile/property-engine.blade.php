@@ -19,11 +19,11 @@
     $assetsNamePrefix = $prefix !== '' ? $prefix . '[property_assets]' : 'property_assets';
 @endphp
 <div class="space-y-6 property-engine" data-property-engine data-name-prefix="{{ $prefix }}">
-    <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100 border-b border-gray-200 dark:border-gray-700 pb-2">Property</h2>
+    <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100 border-b border-gray-200 dark:border-gray-700 pb-2">{{ __('components.property.property') }}</h2>
 
     {{-- Property Assets (repeatable) — same Add / Remove this entry pattern as relation-details --}}
     <div class="border-2 border-rose-500 dark:border-rose-400 rounded-lg p-4">
-        <h3 class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Property assets</h3>
+        <h3 class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">{{ __('components.property.property_assets') }}</h3>
         <style>
         .property-engine .property-asset-row:not(:last-child) .property-asset-add-wrap { display: none; }
         .property-engine .property-asset-location-cell .location-typeahead-wrapper { padding: 0; border: none; }
@@ -36,9 +36,9 @@
                     <input type="hidden" name="{{ $assetName($idx, 'id') }}" value="{{ $r['id'] ?? '' }}">
                     <div class="grid grid-cols-1 md:grid-cols-3 gap-3 items-end">
                         <div class="min-w-0">
-                            <label class="block text-sm text-gray-600 dark:text-gray-400 mb-0.5">Asset Type</label>
+                            <label class="block text-sm text-gray-600 dark:text-gray-400 mb-0.5">{{ __('components.property.asset_type') }}</label>
                             <select name="{{ $assetName($idx, 'asset_type_id') }}" class="form-select w-full rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-3 py-2">
-                                <option value="">Select</option>
+                                <option value="">{{ __('common.select') }}</option>
                                 @foreach($assetTypes ?? [] as $item)
                                     @php $label = $item->label ?? $item->key ?? $item->id; @endphp
                                     <option value="{{ $item->id }}" {{ (string)($r['asset_type_id'] ?? '') === (string)$item->id ? 'selected' : '' }}>{{ $label }}</option>
@@ -51,8 +51,8 @@
                                 context="alliance"
                                 :namePrefix="($prefix !== '' ? $prefix . '[property_assets][' . $idx . ']' : 'property_assets[' . $idx . ']')"
                                 :value="$r['location'] ?? ''"
-                                placeholder="Type village / city / pincode"
-                                label="Location"
+                                placeholder="{{ __('components.property.type_village_city_pincode') }}"
+                                label="{{ __('components.property.location') }}"
                                 :data-city-id="$r['city_id'] ?? ''"
                                 :data-taluka-id="$r['taluka_id'] ?? ''"
                                 :data-district-id="$r['district_id'] ?? ''"
@@ -60,9 +60,9 @@
                             />
                         </div>
                         <div class="min-w-0">
-                            <label class="block text-sm text-gray-600 dark:text-gray-400 mb-0.5">Ownership Type</label>
+                            <label class="block text-sm text-gray-600 dark:text-gray-400 mb-0.5">{{ __('components.property.ownership_type') }}</label>
                             <select name="{{ $assetName($idx, 'ownership_type_id') }}" class="form-select w-full rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-3 py-2">
-                                <option value="">Select</option>
+                                <option value="">{{ __('common.select') }}</option>
                                 @foreach($ownershipTypes ?? [] as $item)
                                     @php $label = $item->label ?? $item->key ?? $item->id; @endphp
                                     <option value="{{ $item->id }}" {{ (string)($r['ownership_type_id'] ?? '') === (string)$item->id ? 'selected' : '' }}>{{ $label }}</option>
@@ -72,10 +72,10 @@
                     </div>
                     <div class="flex justify-between items-center">
                         <div class="property-asset-add-wrap">
-                            <span role="button" tabindex="0" class="inline-flex items-center gap-1 text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 cursor-pointer font-medium text-sm" data-repeater-add data-repeater-for="{{ $assetsContainerId }}"><span aria-hidden="true">+</span> Add</span>
+                            <span role="button" tabindex="0" class="inline-flex items-center gap-1 text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 cursor-pointer font-medium text-sm" data-repeater-add data-repeater-for="{{ $assetsContainerId }}"><span aria-hidden="true">+</span> {{ __('common.add') }}</span>
                         </div>
                         <div>
-                            <button type="button" class="text-sm text-red-600 dark:text-red-400 hover:underline" data-repeater-remove>Remove this entry</button>
+                            <button type="button" class="text-sm text-red-600 dark:text-red-400 hover:underline" data-repeater-remove>{{ __('common.remove_this_entry') }}</button>
                         </div>
                     </div>
                 </div>
@@ -86,8 +86,8 @@
     {{-- Notes only (summary section reduced to just notes) --}}
     <div>
         <input type="hidden" name="{{ $sumName('id') }}" value="{{ $sum['id'] ?? '' }}">
-        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Notes</label>
-        <textarea name="{{ $sumName('summary_notes') }}" rows="2" class="w-full rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-3 py-2" placeholder="Optional notes about property">{{ $sum['summary_notes'] ?? '' }}</textarea>
+        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{{ __('common.notes') }}</label>
+        <textarea name="{{ $sumName('summary_notes') }}" rows="2" class="w-full rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-3 py-2" placeholder="{{ __('components.property.optional_notes_about_property') }}">{{ $sum['summary_notes'] ?? '' }}</textarea>
     </div>
 </div>
 

@@ -56,7 +56,7 @@ public function store(MatrimonyProfile $matrimony_profile_id)
     if (!$authUser || !$authUser->matrimonyProfile) {
         return redirect()
             ->route('matrimony.profile.wizard.section', ['section' => 'basic-info'])
-            ->with('error', 'Please create your matrimony profile first.');
+            ->with('error', __('interest.create_profile_first'));
     }
 
     // 🔒 Sender & Receiver Profiles (SSOT)
@@ -67,41 +67,41 @@ public function store(MatrimonyProfile $matrimony_profile_id)
     if ($senderProfile->id === $receiverProfile->id) {
         return back()->with(
             'error',
-            'You cannot send interest to your own profile.'
+            __('interest.cannot_send_to_self')
         );
     }
 
     // 🔒 GUARD: Receiver has blocked sender → do not reveal
     if (Block::where('blocker_profile_id', $receiverProfile->id)->where('blocked_profile_id', $senderProfile->id)->exists()) {
-        return back()->with('error', 'You cannot send interest to this profile.');
+        return back()->with('error', __('interest.cannot_send_to_profile'));
     }
 
     // 🔒 GUARD: Sender has blocked receiver
     if (Block::where('blocker_profile_id', $senderProfile->id)->where('blocked_profile_id', $receiverProfile->id)->exists()) {
-        return back()->with('error', 'You have blocked this profile. Unblock to send interest.');
+        return back()->with('error', __('interest.blocked_unblock_to_send'));
     }
 
     // 🔒 Safety check (defensive)
     if (!$senderProfile || !$receiverProfile) {
-        abort(403, 'Matrimony profile missing');
+        abort(403, __('interest.create_profile_first'));
     }
 
     // Day 7: Sender lifecycle — Archived/Suspended/Demo-Hidden cannot send interest
     if (!ProfileLifecycleService::canInitiateInteraction($senderProfile)) {
-        return back()->with('error', 'Your profile cannot send interest in its current state.');
+        return back()->with('error', __('interest.sender_cannot_send_current_state'));
     }
 
     // 🔒 70% completeness required for send and receive
     if (!ProfileCompletenessService::meetsThreshold($senderProfile)) {
-        return back()->with('error', 'Your profile must be at least 70% complete to send interest.');
+        return back()->with('error', __('interest.sender_must_be_70_complete'));
     }
     if (!ProfileCompletenessService::meetsThreshold($receiverProfile)) {
-        return back()->with('error', 'You cannot send interest to this profile.');
+        return back()->with('error', __('interest.cannot_send_to_profile'));
     }
 
     // Day 7: Archived/Suspended/Demo-Hidden → interest blocked
     if (!ProfileLifecycleService::canReceiveInterest($receiverProfile)) {
-        return back()->with('error', 'You cannot send interest to this profile.');
+        return back()->with('error', __('interest.cannot_send_to_profile'));
     }
 
     // 🔁 Duplicate interest protection
@@ -122,7 +122,7 @@ public function store(MatrimonyProfile $matrimony_profile_id)
         }
     }
 
-    return back()->with('success', 'Interest sent successfully.');
+    return back()->with('success', __('interest.interest_sent_successfully'));
 }
 
 
@@ -142,7 +142,7 @@ public function store(MatrimonyProfile $matrimony_profile_id)
 if (!$authUser->matrimonyProfile) {
     return redirect()
         ->route('matrimony.profile.wizard.section', ['section' => 'basic-info'])
-        ->with('error', 'Please create your matrimony profile first.');
+        ->with('error', __('interest.create_profile_first'));
 }
 
         $myProfileId = auth()->user()->matrimonyProfile->id;
@@ -171,7 +171,7 @@ if (!$authUser->matrimonyProfile) {
 if (!$authUser->matrimonyProfile) {
     return redirect()
         ->route('matrimony.profile.wizard.section', ['section' => 'basic-info'])
-        ->with('error', 'Please create your matrimony profile first.');
+        ->with('error', __('interest.create_profile_first'));
 }
 
         $myProfileId = auth()->user()->matrimonyProfile->id;
@@ -209,13 +209,13 @@ public function accept(\App\Models\Interest $interest)
 
     // 🔒 Guard: फक्त pending interest accept करता येईल
     if ($interest->status !== 'pending') {
-        return back()->with('error', 'This interest is already processed.');
+        return back()->with('error', __('interest.interest_already_processed'));
     }
 
     // 🔒 70% completeness required to receive (accept) interest
     $receiverProfile = $interest->receiverProfile;
     if (!$receiverProfile || !ProfileCompletenessService::meetsThreshold($receiverProfile)) {
-        return back()->with('error', 'Your profile must be at least 70% complete to accept interest.');
+        return back()->with('error', __('interest.receiver_must_be_70_complete_accept'));
     }
 
     // ✅ Accept
@@ -250,7 +250,7 @@ public function accept(\App\Models\Interest $interest)
         $senderOwner->notify(new InterestAcceptedNotification($receiverProfile));
     }
 
-    return back()->with('success', 'Interest accepted.');
+    return back()->with('success', __('interest.interest_accepted'));
 }
 
 
@@ -278,7 +278,7 @@ public function reject(\App\Models\Interest $interest)
 
     // 🔒 Guard: फक्त pending interest reject करता येईल
     if ($interest->status !== 'pending') {
-        return back()->with('error', 'This interest is already processed.');
+        return back()->with('error', __('interest.interest_already_processed'));
     }
 
     // ✅ Reject
@@ -291,7 +291,7 @@ public function reject(\App\Models\Interest $interest)
         $senderOwner->notify(new InterestRejectedNotification($user->matrimonyProfile));
     }
 
-    return back()->with('success', 'Interest rejected.');
+    return back()->with('success', __('interest.interest_rejected'));
 }
 /*
 |--------------------------------------------------------------------------
@@ -317,13 +317,13 @@ public function withdraw(\App\Models\Interest $interest)
 
     // 🔒 Guard: फक्त pending interest withdraw करता येईल
     if ($interest->status !== 'pending') {
-        return back()->with('error', 'Only pending interests can be withdrawn.');
+        return back()->with('error', __('interest.only_pending_withdraw'));
     }
 
     // ✅ Withdraw = delete record
     $interest->delete();
 
-    return back()->with('success', 'Interest withdrawn successfully.');
+    return back()->with('success', __('interest.interest_withdrawn_successfully'));
 }
 
 

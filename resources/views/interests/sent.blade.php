@@ -27,13 +27,13 @@
             <div class="p-6 text-gray-900 dark:text-gray-100">
 
                 <h2 class="text-xl font-bold mb-4">
-                    Sent Interests
+                    {{ __('interests.sent_interests') }}
                 </h2>
 
                 {{-- No interests case --}}
                 @if ($sentInterests->count() === 0)
                     <p class="text-gray-600 dark:text-gray-400">
-                        You have not sent any interests yet.
+                        {{ __('interests.no_sent_interests') }}
                     </p>
                 @else
 
@@ -44,7 +44,7 @@
                         <div>
                             {{-- Receiver Name --}}
                             <p class="text-lg font-semibold">
-                                To: {{ $interest->receiverProfile->full_name ?? 'Profile Deleted' }}
+                                {{ __('interests.to') }}: {{ $interest->receiverProfile->full_name ?? __('interests.profile_deleted') }}
                             </p>
 
                             {{-- Profile Link --}}
@@ -52,20 +52,20 @@
                                 <p class="mt-1">
                                     <a href="{{ route('matrimony.profile.show', $interest->receiverProfile->id) }}"
                                        class="text-blue-600 hover:underline">
-                                        View Matrimony Profile
+                                        {{ __('interests.view_matrimony_profile') }}
                                     </a>
                                 </p>
                             @endif
 
                             {{-- Status --}}
                             <p class="mt-1">
-                                <span class="text-gray-500">Status:</span>
+                                <span class="text-gray-500">{{ __('interests.status') }}:</span>
                                 @if ($interest->status === 'pending')
-                                    <span class="text-yellow-600 font-semibold">Pending</span>
+                                    <span class="text-yellow-600 font-semibold">{{ __('interests.pending') }}</span>
                                 @elseif ($interest->status === 'accepted')
-                                    <span class="text-green-600 font-semibold">Accepted</span>
+                                    <span class="text-green-600 font-semibold">{{ __('interests.accepted') }}</span>
                                 @elseif ($interest->status === 'rejected')
-                                    <span class="text-red-600 font-semibold">Rejected</span>
+                                    <span class="text-red-600 font-semibold">{{ __('interests.rejected') }}</span>
                                 @endif
                             </p>
 
@@ -77,8 +77,8 @@
                                     @csrf
                                     <button type="submit"
                                         class="text-sm text-red-600 hover:underline"
-                                        onclick="return confirm('Are you sure you want to withdraw this interest?')">
-                                        Withdraw Interest
+                                        onclick="return confirm('{{ __('interests.confirm_withdraw_interest') }}')">
+                                        {{ __('interests.withdraw_interest') }}
                                     </button>
                                 </form>
                             @endif
@@ -89,7 +89,7 @@
                             @if ($interest->receiverProfile && $interest->receiverProfile->profile_photo && $interest->receiverProfile->photo_approved !== false)
                                 <img
                                     src="{{ asset('uploads/matrimony_photos/'.$interest->receiverProfile->profile_photo) }}"
-                                    alt="Profile Photo"
+                                    alt="{{ __('Profile Photo') }}"
                                     class="w-14 h-14 rounded-full object-cover border">
                             @else
                                 @php
@@ -104,7 +104,7 @@
                                 @endphp
                                 <img
                                     src="{{ $recPlaceholder }}"
-                                    alt="Profile Placeholder"
+                                    alt="{{ __('dashboard.profile_placeholder') }}"
                                     class="w-14 h-14 rounded-full object-cover border">
                             @endif
                         </div>

@@ -66,7 +66,7 @@ class ProfileWizardController extends Controller
         $pct = ProfileCompletionService::calculateCompletionPercentage($profile);
         if ($pct >= 100) {
             session()->forget('wizard_minimal');
-            return redirect()->route('matrimony.profiles.index')->with('info', 'Your profile is complete.');
+            return redirect()->route('matrimony.profiles.index')->with('info', __('wizard.profile_complete'));
         }
 
         return redirect()->route('matrimony.profile.wizard.section', ['section' => $first]);
@@ -88,7 +88,7 @@ class ProfileWizardController extends Controller
                 $this->purgeMarriagesAndLocationData($profile);
             }
             return redirect()->route('matrimony.profile.wizard.section', ['section' => FieldCatalogService::getFirstSection($this->isMinimalWizard() ? true : false)], 301)
-                ->with('info', 'Marriages and Location sections were removed.');
+                ->with('info', __('wizard.marriages_location_removed'));
         }
 
         $allowed = $this->getAllowedSectionKeys();
@@ -96,7 +96,7 @@ class ProfileWizardController extends Controller
             $minimal = $this->isMinimalWizard();
             $first = $minimal ? FieldCatalogService::getFirstSection(true) : FieldCatalogService::getFirstSection(false);
             return redirect()->route('matrimony.profile.wizard.section', ['section' => $first])
-                ->with('error', $minimal ? 'Complete the short onboarding first.' : 'Invalid section.');
+                ->with('error', $minimal ? __('wizard.complete_short_onboarding_first') : __('wizard.invalid_section'));
         }
 
         $user = auth()->user();
@@ -106,7 +106,7 @@ class ProfileWizardController extends Controller
         }
 
         if (! \App\Services\ProfileLifecycleService::isEditableForManual($profile)) {
-            return redirect()->route('matrimony.profile.show', $profile->id)->with('error', 'Profile cannot be edited in its current state.');
+            return redirect()->route('matrimony.profile.show', $profile->id)->with('error', __('wizard.profile_not_editable_current_state'));
         }
 
         $minimal = $this->isMinimalWizard();
@@ -189,7 +189,7 @@ class ProfileWizardController extends Controller
             $minimal = $this->isMinimalWizard();
             $first = $minimal ? FieldCatalogService::getFirstSection(true) : FieldCatalogService::getFirstSection(false);
             return redirect()->route('matrimony.profile.wizard.section', ['section' => $first])
-                ->with('error', 'Invalid section.');
+                ->with('error', __('wizard.invalid_section'));
         }
 
         $user = auth()->user();
@@ -199,7 +199,7 @@ class ProfileWizardController extends Controller
         }
 
         if (! \App\Services\ProfileLifecycleService::isEditableForManual($profile)) {
-            return redirect()->route('matrimony.profile.show', $profile->id)->with('error', 'Profile cannot be edited in its current state.');
+            return redirect()->route('matrimony.profile.show', $profile->id)->with('error', __('wizard.profile_not_editable_current_state'));
         }
 
         if ($section === 'location') {
@@ -207,7 +207,7 @@ class ProfileWizardController extends Controller
             $next = $minimal ? FieldCatalogService::getNextSection($section, true) : FieldCatalogService::getNextSection($section, false);
             if ($next) {
                 return redirect()->route('matrimony.profile.wizard.section', ['section' => $next])
-                    ->with('success', 'Saved. Continue to next section.');
+                    ->with('success', __('wizard.saved_continue_next'));
             }
             return redirect()->route('matrimony.profiles.index')->with('success', 'Profile updated.');
         }
@@ -270,14 +270,14 @@ class ProfileWizardController extends Controller
 
         if ($request->boolean('save_only')) {
             return redirect()->route('matrimony.profile.wizard.section', ['section' => $section])
-                ->with('success', 'Saved.');
+                ->with('success', __('wizard.saved'));
         }
 
         $minimal = $this->isMinimalWizard();
         $next = $minimal ? FieldCatalogService::getNextSection($section, true) : FieldCatalogService::getNextSection($section, false);
         if ($next) {
             return redirect()->route('matrimony.profile.wizard.section', ['section' => $next])
-                ->with('success', 'Saved. Continue to next section.');
+                ->with('success', __('wizard.saved_continue_next'));
         }
         if ($minimal) {
             session()->forget('wizard_minimal');
@@ -285,7 +285,7 @@ class ProfileWizardController extends Controller
                 ->with('success', 'Profile saved. You can complete the rest of your profile anytime from your profile page.');
         }
 
-        return redirect()->route('matrimony.profiles.index')->with('success', 'Profile completed.');
+        return redirect()->route('matrimony.profiles.index')->with('success', __('wizard.profile_completed'));
     }
 
     /**

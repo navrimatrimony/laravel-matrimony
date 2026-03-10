@@ -1,0 +1,45 @@
+<?php
+
+/**
+ * Common UI labels reused across pages (Marathi).
+ */
+return [
+    'reason' => 'कारण',
+    'profile' => 'प्रोफाइल',
+    'view_all_arrow' => 'सर्व पहा →',
+    'view_arrow' => 'पहा →',
+    'select' => 'निवडा',
+    'select_placeholder' => '— निवडा —',
+    'add' => 'जोडा',
+    'remove' => 'काढा',
+    'remove_this_entry' => 'ही नोंद काढा',
+    'notes' => 'नोंदी',
+    'optional' => 'पर्यायी',
+    'yes' => 'होय',
+    'no' => 'नाही',
+    'pending' => 'प्रलंबित',
+    'accepted' => 'मान्य',
+    'rejected' => 'नाकारले',
+    'parsed' => 'पार्स झाले',
+    'failed' => 'अयशस्वी',
+    'status' => 'स्थिती',
+    'actions' => 'कृती',
+    'uploaded' => 'अपलोड केले',
+    'approved' => 'अप्रूव्ह',
+    'submit' => 'सादर करा',
+    'cancel' => 'रद्द करा',
+    'save' => 'जतन करा',
+    'reset' => 'रीसेट',
+    'admin' => 'अ‍ॅडमिन',
+    'english' => 'English',
+    'marathi' => 'मराठी',
+    'no_valid_data_to_save' => 'जतन करण्यासाठी वैध माहिती नाही.',
+    'profile_updated' => 'प्रोफाइल अद्ययावत झाले.',
+    'some_changes_conflict' => 'काही बदल संघर्षामुळे लागू झाले नाहीत.',
+    'unauthorized_photo_update' => 'अनधिकृत प्रोफाइल फोटो अपडेट प्रयत्न.',
+    'profile_edit_blocked_intake_conflict' => 'इंटेक किंवा संघर्ष प्रलंबित असताना प्रोफाइल संपादित करता येत नाही.',
+    'invalid_photo_upload_jpg_png' => 'हा फोटो वाचता आला नाही. कृपया वैध JPG किंवा PNG फोटो अपलोड करा.',
+    'login_required_to_view_matrimony_profiles' => 'विवाह प्रोफाइल पाहण्यासाठी कृपया लॉगिन करा.',
+    'profile_not_found' => 'प्रोफाइल सापडली नाही.',
+];
+

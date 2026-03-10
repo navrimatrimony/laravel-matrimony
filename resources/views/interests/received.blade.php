@@ -4,7 +4,7 @@
 <div class="py-12">
     <div class="max-w-5xl mx-auto sm:px-6 lg:px-8">
 
-        <h2 class="text-xl font-semibold mb-4">Received Interests</h2>
+        <h2 class="text-xl font-semibold mb-4">{{ __('interests.received_interests') }}</h2>
 
         @forelse ($receivedInterests as $interest)
 
@@ -12,7 +12,7 @@
 
                 {{-- Sender Name --}}
                 <p class="text-lg font-semibold">
-                    From: {{ $interest->senderProfile->full_name ?? 'Profile Deleted' }}
+                    {{ __('interests.from') }}: {{ $interest->senderProfile->full_name ?? __('interests.profile_deleted') }}
                 </p>
 
                 {{-- View Profile --}}
@@ -20,20 +20,20 @@
                     <p class="mt-1">
                         <a href="{{ route('matrimony.profile.show', $interest->senderProfile->id) }}"
                            class="text-blue-600 hover:underline">
-                            View Matrimony Profile
+                            {{ __('interests.view_matrimony_profile') }}
                         </a>
                     </p>
                 @endif
 
                 {{-- Status --}}
                 <p class="mt-1">
-                    <span class="text-gray-500">Status:</span>
+                    <span class="text-gray-500">{{ __('interests.status') }}:</span>
                     @if ($interest->status === 'pending')
-                        <span class="text-yellow-600 font-semibold">Pending</span>
+                        <span class="text-yellow-600 font-semibold">{{ __('interests.pending') }}</span>
                     @elseif ($interest->status === 'accepted')
-                        <span class="text-green-600 font-semibold">Accepted</span>
+                        <span class="text-green-600 font-semibold">{{ __('interests.accepted') }}</span>
                     @elseif ($interest->status === 'rejected')
-                        <span class="text-red-600 font-semibold">Rejected</span>
+                        <span class="text-red-600 font-semibold">{{ __('interests.rejected') }}</span>
                     @endif
                 </p>
 <div class="flex items-center gap-4">
@@ -71,7 +71,7 @@
                         <form method="POST" action="{{ route('interests.accept', $interest) }}">
                             @csrf
                             <button type="submit" class="inline-flex items-center px-4 py-2 bg-green-600 border border-transparent rounded-md font-semibold text-sm text-white tracking-wide hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 transition disabled:opacity-50 disabled:cursor-not-allowed shadow-sm w-full sm:w-auto">
-                                Accept
+                                {{ __('interests.accept') }}
                             </button>
                         </form>
 
@@ -79,7 +79,7 @@
                         <form method="POST" action="{{ route('interests.reject', $interest) }}">
                             @csrf
                             <button type="submit" class="inline-flex items-center px-4 py-2 bg-white border-2 border-red-600 rounded-md font-semibold text-sm text-red-600 tracking-wide hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 transition w-full sm:w-auto">
-                                Reject
+                                {{ __('interests.reject') }}
                             </button>
                         </form>
 
@@ -90,7 +90,7 @@
 
         @empty
             <p class="text-gray-600">
-                No received interests.
+                {{ __('interests.no_received_interests') }}
             </p>
         @endforelse
 

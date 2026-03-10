@@ -3,9 +3,9 @@
 @section('content')
 <div class="container max-w-4xl mx-auto py-8 px-4">
     <p class="mb-4 text-sm text-gray-600 dark:text-gray-400">
-        <a href="{{ route('intake.index') }}" class="hover:underline">← My biodata uploads</a>
+        <a href="{{ route('intake.index') }}" class="hover:underline">← {{ __('intake.my_biodata_uploads') }}</a>
     </p>
-    <h1 class="text-2xl font-bold mb-2">Intake Preview</h1>
+    <h1 class="text-2xl font-bold mb-2">{{ __('intake.intake_preview') }}</h1>
     <p class="text-gray-600 dark:text-gray-400 text-sm mb-6">तुमची माहिती तपासा आणि आवश्यक ते सुधारा. खाली स्क्रोल करून सर्व तपासल्यानंतरच अप्रूव्ह करा.</p>
     <p class="text-gray-500 dark:text-gray-500 text-xs mb-4">इथे बायोडाटा मधून काढलेली सर्व फील्ड्स दिसतात. अप्रूव्ह नंतर प्रोफाइल विझार्डमध्ये आणखी विभाग (जसे की स्थान, फोटो, विवाह इतिहास) भरता येतील.</p>
 
@@ -33,7 +33,7 @@
 
         {{-- Physical + other core fields (excludes basic-info keys now in engine above). --}}
         <section class="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
-            <h2 class="text-lg font-semibold mb-4 border-b pb-2">Other core details</h2>
+            <h2 class="text-lg font-semibold mb-4 border-b pb-2">{{ __('intake.other_core_details') }}</h2>
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div class="md:col-span-2">
                     <x-physical-engine namePrefix="snapshot[core]" :values="$coreData" />
@@ -106,17 +106,17 @@
                             data-is-placeholder="{{ $isPlaceholder ? '1' : '0' }}"
                             placeholder="—">
                         @if($isPlaceholderSelectRequired)
-                            <span class="text-xs text-red-600 dark:text-red-400 font-medium block mt-1">Please select a value (not found in biodata). Approval blocked until selected.</span>
+                            <span class="text-xs text-red-600 dark:text-red-400 font-medium block mt-1">{{ __('intake.please_select_value_approval_blocked') }}</span>
                         @elseif($isPlaceholderNotFound)
-                            <span class="text-xs text-red-600 dark:text-red-400 font-medium block mt-1">Please edit this value — not found in OCR. Approval blocked until changed.</span>
+                            <span class="text-xs text-red-600 dark:text-red-400 font-medium block mt-1">{{ __('intake.please_edit_value_not_found_approval_blocked') }}</span>
                         @endif
                         @if($hasCandidates)
-                            <div class="mt-1 text-xs text-gray-600 dark:text-gray-400">Candidates:</div>
+                            <div class="mt-1 text-xs text-gray-600 dark:text-gray-400">{{ __('intake.candidates') }}</div>
                             @foreach($candidates as $idx => $cand)
                                 <div class="flex items-center gap-2 mt-0.5">
                                     <span class="font-medium text-gray-800 dark:text-gray-200">{{ $cand['value'] ?? '' }}</span>
                                     <span class="text-gray-500">({{ $cand['source'] ?? 'unknown' }}, {{ number_format(($cand['confidence'] ?? 0), 2) }})</span>
-                                    <button type="button" class="use-candidate-btn text-xs text-indigo-700 underline" data-field="{{ $coreKey }}" data-value="{{ e($cand['value'] ?? '') }}">Use this</button>
+                                    <button type="button" class="use-candidate-btn text-xs text-indigo-700 underline" data-field="{{ $coreKey }}" data-value="{{ e($cand['value'] ?? '') }}">{{ __('intake.use_this') }}</button>
                                 </div>
                             @endforeach
                         @endif
@@ -139,7 +139,7 @@
 
         {{-- Contacts — centralized contact-field (country code + 10-digit + optional WhatsApp). --}}
         <section class="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
-            <h2 class="text-lg font-semibold mb-4 border-b pb-2">Contacts</h2>
+            <h2 class="text-lg font-semibold mb-4 border-b pb-2">{{ __('profile.contact_information') }}</h2>
             <div id="contacts-container">
                 @foreach(($sections['contacts']['data'] ?? []) as $idx => $contact)
                     @php
@@ -155,7 +155,7 @@
                                 name="snapshot[contacts][{{ $idx }}][phone_number]"
                                 :value="$contactPhone"
                                 label=""
-                                placeholder="10-digit"
+                                placeholder="{{ __('components.relation.ten_digit') }}"
                                 :showCountryCode="true"
                                 :showWhatsapp="true"
                                 nameWhatsapp="snapshot[contacts][{{ $idx }}][is_whatsapp]"
@@ -164,7 +164,7 @@
                             />
                         </div>
                         <div class="flex-1 min-w-0 max-w-[8rem]">
-                            <label class="block text-sm font-medium mb-1">Type</label>
+                            <label class="block text-sm font-medium mb-1">{{ __('components.relation.relation') }}</label>
                             <input type="text" name="snapshot[contacts][{{ $idx }}][relation_type]" value="{{ $contactType }}" placeholder="self / alternate" class="w-full border rounded px-3 py-2 dark:bg-gray-700 dark:border-gray-600">
                         </div>
                         @if($idx === 0)
@@ -173,7 +173,7 @@
                         @else
                             <input type="hidden" name="snapshot[contacts][{{ $idx }}][contact_name]" value="Alternate">
                         @endif
-                        <button type="button" class="remove-row px-3 py-2 border border-red-400 text-red-600 rounded hover:bg-red-50 shrink-0">Remove</button>
+                        <button type="button" class="remove-row px-3 py-2 border border-red-400 text-red-600 rounded hover:bg-red-50 shrink-0">{{ __('common.remove') }}</button>
                     </div>
                 @endforeach
             </div>
@@ -183,7 +183,7 @@
                         <div class="contact-field-engine border-2 border-rose-500 dark:border-rose-400 rounded-lg p-3">
                             <div class="flex items-center gap-1.5 flex-nowrap contact-master-field">
                                 <input type="text" inputmode="tel" maxlength="5" value="+91" placeholder="+91" title="Country code" class="text-xs text-gray-600 dark:text-gray-400 border border-gray-300 dark:border-gray-600 rounded py-1.5 bg-gray-50 dark:bg-gray-700 h-9 box-border text-center shrink-0 contact-cc-input" style="flex:0 0 2.25rem; width:2.25rem; min-width:2.25rem; max-width:2.25rem; padding-left:0.2rem; padding-right:0.2rem;">
-                                <input type="text" inputmode="numeric" pattern="[0-9]*" maxlength="10" name="snapshot[contacts][__INDEX__][phone_number]" placeholder="10-digit" data-contact-engine class="h-9 rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-2 py-1.5 text-sm min-w-0 flex-1" style="min-width:0;">
+                                <input type="text" inputmode="numeric" pattern="[0-9]*" maxlength="10" name="snapshot[contacts][__INDEX__][phone_number]" placeholder="{{ __('components.relation.ten_digit') }}" data-contact-engine class="h-9 rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-2 py-1.5 text-sm min-w-0 flex-1" style="min-width:0;">
                                 <input type="hidden" name="snapshot[contacts][__INDEX__][is_whatsapp]" value="call" class="contact-preference-input">
                                 <div class="relative shrink-0 contact-preference-single" data-current-pref="call">
                                     <button type="button" class="contact-pref-trigger rounded p-1.5 ring-2 ring-rose-500 bg-rose-50 dark:bg-rose-900/30 inline-flex items-center justify-center" title="Prefer contact via — click to change" aria-haspopup="true" aria-expanded="false">
@@ -192,7 +192,7 @@
                                         <span class="contact-pref-icon contact-pref-icon-message" data-pref="message" style="display:none"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-5 h-5 text-gray-600 dark:text-gray-400"><path fill-rule="evenodd" d="M4.848 2.771A49.144 49.144 0 0112 2.25c2.43 0 4.817.178 7.152.52 1.978.292 3.348 2.024 3.348 3.97v6.02c0 1.946-1.37 3.678-3.348 3.97a48.901 48.901 0 01-3.476.383.39.39 0 00-.27.17l-2.47 2.47a.75.75 0 01-1.06 0l-2.47-2.47a.39.39 0 00-.27-.17 48.9 48.9 0 01-3.476-.384c-1.978-.29-3.348-2.024-3.348-3.97V6.741c0-1.946 1.37-3.68 3.348-3.97z" clip-rule="evenodd"/></svg></span>
                                     </button>
                                     <div class="contact-pref-dropdown hidden absolute right-0 top-full mt-1 z-50 min-w-[8rem] py-1 rounded-lg shadow-lg bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600">
-                                        <button type="button" class="contact-pref-option w-full text-left px-3 py-2 text-sm flex items-center gap-2 hover:bg-rose-50 dark:hover:bg-rose-900/30" data-pref="whatsapp"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" class="w-4 h-4" fill="#25D366"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg> WhatsApp</button>
+                                <button type="button" class="contact-pref-option w-full text-left px-3 py-2 text-sm flex items-center gap-2 hover:bg-rose-50 dark:hover:bg-rose-900/30" data-pref="whatsapp"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" class="w-4 h-4" fill="#25D366"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg> WhatsApp</button>
                                         <button type="button" class="contact-pref-option w-full text-left px-3 py-2 text-sm flex items-center gap-2 hover:bg-rose-50 dark:hover:bg-rose-900/30" data-pref="call"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4 text-red-500 dark:text-red-400"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 0 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg> Call</button>
                                         <button type="button" class="contact-pref-option w-full text-left px-3 py-2 text-sm flex items-center gap-2 hover:bg-rose-50 dark:hover:bg-rose-900/30" data-pref="message"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-4 h-4 text-gray-600 dark:text-gray-400"><path fill-rule="evenodd" d="M4.848 2.771A49.144 49.144 0 0112 2.25c2.43 0 4.817.178 7.152.52 1.978.292 3.348 2.024 3.348 3.97v6.02c0 1.946-1.37 3.678-3.348 3.97a48.901 48.901 0 01-3.476.383.39.39 0 00-.27.17l-2.47 2.47a.75.75 0 01-1.06 0l-2.47-2.47a.39.39 0 00-.27-.17 48.9 48.9 0 01-3.476-.384c-1.978-.29-3.348-2.024-3.348-3.97V6.741c0-1.946 1.37-3.68 3.348-3.97z" clip-rule="evenodd"/></svg> Message</button>
                                     </div>
@@ -208,27 +208,27 @@
                     <button type="button" class="remove-row px-3 py-2 border border-red-400 text-red-600 rounded hover:bg-red-50 shrink-0">Remove</button>
                 </div>
             </template>
-            <button type="button" id="add-contact" class="mt-2 px-4 py-2 bg-gray-200 dark:bg-gray-600 rounded hover:bg-gray-300">+ Add Contact</button>
+            <button type="button" id="add-contact" class="mt-2 px-4 py-2 bg-gray-200 dark:bg-gray-600 rounded hover:bg-gray-300">+ {{ __('intake.add_contact') }}</button>
         </section>
 
         {{-- Education --}}
         <section class="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
-            <h2 class="text-lg font-semibold mb-4 border-b pb-2">Education</h2>
+            <h2 class="text-lg font-semibold mb-4 border-b pb-2">{{ __('profile.education_history') }}</h2>
             <div id="education-container">
                 @foreach(($sections['education']['data'] ?? []) as $idx => $edu)
                     <div class="flex gap-4 mb-3 items-end education-row">
-                        <div class="flex-1"><label class="block text-sm font-medium mb-1">Degree</label><input type="text" name="snapshot[education_history][{{ $idx }}][degree]" value="{{ is_array($edu) ? ($edu['degree'] ?? '') : $edu }}" class="w-full border rounded px-3 py-2 dark:bg-gray-700"></div>
-                        <div class="flex-1"><label class="block text-sm font-medium mb-1">Institution</label><input type="text" name="snapshot[education_history][{{ $idx }}][institution]" value="{{ is_array($edu) ? ($edu['institution'] ?? '') : '' }}" class="w-full border rounded px-3 py-2 dark:bg-gray-700"></div>
-                        <button type="button" class="remove-row px-3 py-2 border border-red-400 text-red-600 rounded">Remove</button>
+                        <div class="flex-1"><label class="block text-sm font-medium mb-1">{{ __('components.education.degree') }}</label><input type="text" name="snapshot[education_history][{{ $idx }}][degree]" value="{{ is_array($edu) ? ($edu['degree'] ?? '') : $edu }}" class="w-full border rounded px-3 py-2 dark:bg-gray-700"></div>
+                        <div class="flex-1"><label class="block text-sm font-medium mb-1">{{ __('components.education.university_institute') }}</label><input type="text" name="snapshot[education_history][{{ $idx }}][institution]" value="{{ is_array($edu) ? ($edu['institution'] ?? '') : '' }}" class="w-full border rounded px-3 py-2 dark:bg-gray-700"></div>
+                        <button type="button" class="remove-row px-3 py-2 border border-red-400 text-red-600 rounded">{{ __('common.remove') }}</button>
                     </div>
                 @endforeach
             </div>
-            <button type="button" id="add-education" class="mt-2 px-4 py-2 bg-gray-200 dark:bg-gray-600 rounded">+ Add Education</button>
+            <button type="button" id="add-education" class="mt-2 px-4 py-2 bg-gray-200 dark:bg-gray-600 rounded">+ {{ __('intake.add_education') }}</button>
         </section>
 
         {{-- Career --}}
         <section class="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
-            <h2 class="text-lg font-semibold mb-4 border-b pb-2">Career</h2>
+            <h2 class="text-lg font-semibold mb-4 border-b pb-2">{{ __('profile.career_history') }}</h2>
             <div id="career-container">
                 @foreach(($sections['career']['data'] ?? []) as $idx => $career)
                     @php
@@ -238,18 +238,18 @@
                     @endphp
                     <div class="flex gap-4 mb-3 items-end career-row">
                         <div class="flex-1">
-                            <label class="block text-sm font-medium mb-1">Title / Role</label>
+                            <label class="block text-sm font-medium mb-1">{{ __('components.education.role_title') }}</label>
                             <input type="text" name="snapshot[career_history][{{ $idx }}][title]" value="{{ $careerTitle }}" class="w-full border rounded px-3 py-2 dark:bg-gray-700">
                         </div>
                         <div class="flex-1">
-                            <label class="block text-sm font-medium mb-1">Company / Employer</label>
+                            <label class="block text-sm font-medium mb-1">{{ __('components.education.company_org') }}</label>
                             <input type="text" name="snapshot[career_history][{{ $idx }}][company]" value="{{ $careerCompany }}" class="w-full border rounded px-3 py-2 dark:bg-gray-700">
                         </div>
-                        <button type="button" class="remove-row px-3 py-2 border border-red-400 text-red-600 rounded">Remove</button>
+                        <button type="button" class="remove-row px-3 py-2 border border-red-400 text-red-600 rounded">{{ __('common.remove') }}</button>
                     </div>
                 @endforeach
             </div>
-            <button type="button" id="add-career" class="mt-2 px-4 py-2 bg-gray-200 dark:bg-gray-600 rounded">+ Add Career</button>
+            <button type="button" id="add-career" class="mt-2 px-4 py-2 bg-gray-200 dark:bg-gray-600 rounded">+ {{ __('intake.add_career') }}</button>
         </section>
 
         {{-- Relatives — centralized relation-details engine (same as wizard Relatives section). --}}
@@ -307,16 +307,16 @@
             ];
         @endphp
         <section class="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
-            <h2 class="text-lg font-semibold mb-4 border-b pb-2">{{ $sections['relatives']['label'] ?? 'Relatives & Family Network' }}</h2>
-            <p class="text-sm text-gray-500 dark:text-gray-400 mb-4">Add extended family members. All fields optional.</p>
+            <h2 class="text-lg font-semibold mb-4 border-b pb-2">{{ $sections['relatives']['label'] ?? __('profile.relatives_family_network') }}</h2>
+            <p class="text-sm text-gray-500 dark:text-gray-400 mb-4">{{ __('intake.relatives_help') }}</p>
             <x-repeaters.relation-details
                 namePrefix="snapshot[relatives]"
                 :relationOptions="$intakeRelationOptions"
                 :showMarried="false"
                 :items="collect($intakeRelativesData)"
                 :showPrimaryContact="true"
-                addButtonLabel="Add Relative"
-                removeButtonLabel="Remove this relative"
+                addButtonLabel="{{ __('common.add') }}"
+                removeButtonLabel="{{ __('common.remove_this_entry') }}"
             />
         </section>
 
@@ -331,22 +331,22 @@
             $siblingRelationOptions = [['value'=>'brother','label'=>'Brother'],['value'=>'sister','label'=>'Sister']];
         @endphp
         <section class="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
-            <h2 class="text-lg font-semibold mb-4 border-b pb-2">{{ $sections['siblings']['label'] ?? 'Siblings' }}</h2>
-            <p class="text-sm text-gray-500 dark:text-gray-400 mb-4">Add sibling details (brothers &amp; sisters). All fields optional.</p>
+            <h2 class="text-lg font-semibold mb-4 border-b pb-2">{{ $sections['siblings']['label'] ?? __('intake.siblings_heading') }}</h2>
+            <p class="text-sm text-gray-500 dark:text-gray-400 mb-4">{{ __('intake.siblings_help') }}</p>
             <x-repeaters.relation-details
                 namePrefix="snapshot[siblings]"
                 :relationOptions="$siblingRelationOptions"
                 :showMarried="true"
                 :items="$intakeSiblingsItems"
                 :showPrimaryContact="false"
-                addButtonLabel="Add Sibling"
-                removeButtonLabel="Remove this sibling"
+                addButtonLabel="{{ __('common.add') }}"
+                removeButtonLabel="{{ __('common.remove_this_entry') }}"
             />
         </section>
 
         {{-- Addresses — centralized address-row component. --}}
         <section class="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
-            <h2 class="text-lg font-semibold mb-4 border-b pb-2">Addresses</h2>
+            <h2 class="text-lg font-semibold mb-4 border-b pb-2">{{ __('intake.addresses_heading') }}</h2>
             <div id="addresses-container">
                 @foreach(($sections['addresses']['data'] ?? []) as $idx => $addr)
                     @php
@@ -367,8 +367,8 @@
                         :namePrefix="'snapshot[addresses]['.$idx.']'"
                         :valueRaw="$addrRaw"
                         :valueType="$addrType"
-                        rawPlaceholder="Full address"
-                        typePlaceholder="current/permanent"
+                        rawPlaceholder="{{ __('intake.addresses_raw_placeholder') }}"
+                        typePlaceholder="{{ __('intake.addresses_type_placeholder') }}"
                     >
                         <button type="button" class="remove-row px-3 py-2 border border-red-400 text-red-600 rounded hover:bg-red-50 shrink-0">Remove</button>
                     </x-profile.address-row>
@@ -377,17 +377,17 @@
             <template id="address-row-template">
                 <div class="flex gap-4 mb-3 items-end address-row">
                     <div class="flex-1 min-w-0">
-                        <label class="block text-sm font-medium mb-1">Address</label>
-                        <input type="text" name="snapshot[addresses][__INDEX__][raw]" class="w-full border rounded px-3 py-2 dark:bg-gray-700 dark:border-gray-600" placeholder="Full address">
+                        <label class="block text-sm font-medium mb-1">{{ __('profile.address') }}</label>
+                        <input type="text" name="snapshot[addresses][__INDEX__][raw]" class="w-full border rounded px-3 py-2 dark:bg-gray-700 dark:border-gray-600" placeholder="{{ __('intake.addresses_raw_placeholder') }}">
                     </div>
                     <div class="w-32 shrink-0">
-                        <label class="block text-sm font-medium mb-1">Type</label>
-                        <input type="text" name="snapshot[addresses][__INDEX__][type]" value="current" class="w-full border rounded px-3 py-2 dark:bg-gray-700 dark:border-gray-600" placeholder="current">
+                        <label class="block text-sm font-medium mb-1">{{ __('intake.addresses_type_label') }}</label>
+                        <input type="text" name="snapshot[addresses][__INDEX__][type]" value="current" class="w-full border rounded px-3 py-2 dark:bg-gray-700 dark:border-gray-600" placeholder="{{ __('intake.addresses_type_placeholder') }}">
                     </div>
-                    <button type="button" class="remove-row px-3 py-2 border border-red-400 text-red-600 rounded shrink-0">Remove</button>
+                    <button type="button" class="remove-row px-3 py-2 border border-red-400 text-red-600 rounded shrink-0">{{ __('common.remove') }}</button>
                 </div>
             </template>
-            <button type="button" id="add-address" class="mt-2 px-4 py-2 bg-gray-200 dark:bg-gray-600 rounded">+ Add Address</button>
+            <button type="button" id="add-address" class="mt-2 px-4 py-2 bg-gray-200 dark:bg-gray-600 rounded">+ {{ __('intake.add_address') }}</button>
         </section>
 
         {{-- Property: Location (residence) + reusable property engine. --}}
@@ -407,21 +407,21 @@
         @endphp
         <section class="bg-white dark:bg-gray-800 rounded-lg shadow p-6 space-y-6">
             <div class="border-2 border-rose-500 dark:border-rose-400 rounded-lg p-4">
-                <h3 class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Residence (village / city)</h3>
+                <h3 class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">{{ __('intake.residence_heading') }}</h3>
                 <x-profile.location-typeahead
                     context="residence"
                     namePrefix="snapshot[core]"
                     :value="$cityDisplayForLocation"
-                    placeholder="Type village / city / pincode"
-                    label="Search village or city (residence)"
+                    placeholder="{{ __('intake.residence_placeholder') }}"
+                    label="{{ __('intake.residence_label') }}"
                     :data-country-id="$coreForLocation['country_id'] ?? ''"
                     :data-state-id="$coreForLocation['state_id'] ?? ''"
                     :data-district-id="$coreForLocation['district_id'] ?? ''"
                     :data-taluka-id="$coreForLocation['taluka_id'] ?? ''"
                     :data-city-id="$coreForLocation['city_id'] ?? ''"
                 />
-                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mt-2 mb-1">Address line (optional)</label>
-                <input type="text" name="snapshot[core][address_line]" value="{{ $coreForLocation['address_line'] ?? '' }}" maxlength="255" placeholder="e.g. Building, area, landmark" class="w-full rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-3 py-2">
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mt-2 mb-1">{{ __('intake.residence_address_line_label') }}</label>
+                <input type="text" name="snapshot[core][address_line]" value="{{ $coreForLocation['address_line'] ?? '' }}" maxlength="255" placeholder="{{ __('intake.residence_address_line_placeholder') }}" class="w-full rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-3 py-2">
             </div>
             <x-profile.property-engine
                 :summary="$propSummary"
@@ -463,58 +463,6 @@
             @endif
         </section>
 
-        {{-- Legal cases (optional) — snapshot[legal_cases][...] --}}
-        @php
-            $legalItems = $sections['legal']['data'] ?? [];
-            if (!is_array($legalItems)) { $legalItems = []; }
-        @endphp
-        <section class="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
-            <h2 class="text-lg font-semibold mb-4 border-b pb-2">{{ $sections['legal']['label'] ?? 'Legal cases' }}</h2>
-            <p class="text-sm text-gray-500 dark:text-gray-400 mb-4">
-                कोर्ट / कायदेशीर प्रकरणांची माहिती इथे ठेवा. सिस्टिम default ने काहीही गृहीत धरत नाही; फक्त तुम्ही जे लिहाल तेवढेच save होईल.
-            </p>
-            <div class="space-y-4" id="legal-cases-container">
-                @forelse($legalItems as $idx => $case)
-                    @php
-                        $text = is_array($case) ? ($case['description'] ?? $case['text'] ?? $case['note'] ?? '') : (string) $case;
-                        $type = is_array($case) ? ($case['type'] ?? '') : '';
-                    @endphp
-                    <div class="border border-gray-200 dark:border-gray-700 rounded-lg p-4 legal-case-row">
-                        <div class="grid grid-cols-1 md:grid-cols-4 gap-4 items-start">
-                            <div class="md:col-span-1">
-                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Type / tag</label>
-                                <input type="text" name="snapshot[legal_cases][{{ $idx }}][type]" value="{{ $type }}" class="w-full border rounded px-3 py-2 dark:bg-gray-700 dark:border-gray-600" placeholder="e.g. divorce case, property dispute">
-                            </div>
-                            <div class="md:col-span-3">
-                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Details</label>
-                                <textarea name="snapshot[legal_cases][{{ $idx }}][description]" rows="2" class="w-full border rounded px-3 py-2 dark:bg-gray-700 dark:border-gray-600" placeholder="Short description">{{ $text }}</textarea>
-                            </div>
-                        </div>
-                    </div>
-                @empty
-                    <p class="text-sm text-gray-500 dark:text-gray-400">सध्या कोणत्याही कायदेशीर प्रकरणाची नोंद नाही. गरज असल्यास खाली नवीन नोंद जोडा.</p>
-                @endforelse
-            </div>
-            {{-- Simple template for adding new legal case rows (JS hooks can reuse this) --}}
-            <template id="legal-case-template">
-                <div class="border border-gray-200 dark:border-gray-700 rounded-lg p-4 legal-case-row">
-                    <div class="grid grid-cols-1 md:grid-cols-4 gap-4 items-start">
-                        <div class="md:col-span-1">
-                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Type / tag</label>
-                            <input type="text" name="__REPLACE_NAME__[type]" class="w-full border rounded px-3 py-2 dark:bg-gray-700 dark:border-gray-600" placeholder="e.g. divorce case, property dispute">
-                        </div>
-                        <div class="md:col-span-3">
-                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Details</label>
-                            <textarea name="__REPLACE_NAME__[description]" rows="2" class="w-full border rounded px-3 py-2 dark:bg-gray-700 dark:border-gray-600" placeholder="Short description"></textarea>
-                        </div>
-                    </div>
-                </div>
-            </template>
-            <button type="button" id="add-legal-case" class="mt-3 px-4 py-2 bg-gray-200 dark:bg-gray-600 rounded text-sm">
-                + Add legal case
-            </button>
-        </section>
-
         {{-- Partner preferences (structured, same as wizard About & preferences) — snapshot[preferences][0][...] --}}
         @php
             $prefsData = $sections['preferences']['data'] ?? [];
@@ -527,7 +475,7 @@
             }
         @endphp
         <section class="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
-            <h2 class="text-lg font-semibold mb-4 border-b pb-2">Partner preferences (अपेक्षा)</h2>
+            <h2 class="text-lg font-semibold mb-4 border-b pb-2">{{ __('intake.partner_preferences_heading') }} (अपेक्षा)</h2>
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                     <input type="hidden" name="snapshot[preferences][0][preferred_city]" value="{{ e($prefRow['preferred_city'] ?? '') }}">
@@ -535,8 +483,8 @@
                         context="alliance"
                         namePrefix="snapshot[preferences][0]"
                         :value="e($prefRow['preferred_city'] ?? '')"
-                        placeholder="Preferred city"
-                        label="Preferred city"
+                        placeholder="{{ __('intake.preferred_city_label') }}"
+                        label="{{ __('intake.preferred_city_label') }}"
                         displaySyncName="snapshot[preferences][0][preferred_city]"
                         :data-city-id="$prefRow['preferred_city_id'] ?? ''"
                         :data-taluka-id="$prefRow['preferred_taluka_id'] ?? ''"
@@ -544,12 +492,12 @@
                         :data-state-id="$prefRow['preferred_state_id'] ?? ''"
                     />
                 </div>
-                <div><label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Preferred caste</label><input type="text" name="snapshot[preferences][0][preferred_caste]" value="{{ e($prefRow['preferred_caste'] ?? '') }}" class="w-full border rounded px-3 py-2 dark:bg-gray-700 dark:border-gray-600" placeholder="Preferred caste"></div>
-                <div><label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Age min</label><input type="number" name="snapshot[preferences][0][preferred_age_min]" value="{{ e($prefRow['preferred_age_min'] ?? '') }}" class="w-full border rounded px-3 py-2 dark:bg-gray-700 dark:border-gray-600" placeholder="Min age"></div>
-                <div><label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Age max</label><input type="number" name="snapshot[preferences][0][preferred_age_max]" value="{{ e($prefRow['preferred_age_max'] ?? '') }}" class="w-full border rounded px-3 py-2 dark:bg-gray-700 dark:border-gray-600" placeholder="Max age"></div>
-                <div><label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Income min</label><input type="number" name="snapshot[preferences][0][preferred_income_min]" value="{{ e($prefRow['preferred_income_min'] ?? '') }}" step="0.01" class="w-full border rounded px-3 py-2 dark:bg-gray-700 dark:border-gray-600" placeholder="Min income"></div>
-                <div><label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Income max</label><input type="number" name="snapshot[preferences][0][preferred_income_max]" value="{{ e($prefRow['preferred_income_max'] ?? '') }}" step="0.01" class="w-full border rounded px-3 py-2 dark:bg-gray-700 dark:border-gray-600" placeholder="Max income"></div>
-                <div class="md:col-span-2"><label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Preferred education</label><input type="text" name="snapshot[preferences][0][preferred_education]" value="{{ e($prefRow['preferred_education'] ?? '') }}" class="w-full border rounded px-3 py-2 dark:bg-gray-700 dark:border-gray-600" placeholder="Preferred education"></div>
+                <div><label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{{ __('intake.preferred_caste_label') }}</label><input type="text" name="snapshot[preferences][0][preferred_caste]" value="{{ e($prefRow['preferred_caste'] ?? '') }}" class="w-full border rounded px-3 py-2 dark:bg-gray-700 dark:border-gray-600" placeholder="{{ __('intake.preferred_caste_label') }}"></div>
+                <div><label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{{ __('intake.age_min_label') }}</label><input type="number" name="snapshot[preferences][0][preferred_age_min]" value="{{ e($prefRow['preferred_age_min'] ?? '') }}" class="w-full border rounded px-3 py-2 dark:bg-gray-700 dark:border-gray-600" placeholder="{{ __('intake.min_age_placeholder') }}"></div>
+                <div><label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{{ __('intake.age_max_label') }}</label><input type="number" name="snapshot[preferences][0][preferred_age_max]" value="{{ e($prefRow['preferred_age_max'] ?? '') }}" class="w-full border rounded px-3 py-2 dark:bg-gray-700 dark:border-gray-600" placeholder="{{ __('intake.max_age_placeholder') }}"></div>
+                <div><label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{{ __('intake.income_min_label') }}</label><input type="number" name="snapshot[preferences][0][preferred_income_min]" value="{{ e($prefRow['preferred_income_min'] ?? '') }}" step="0.01" class="w-full border rounded px-3 py-2 dark:bg-gray-700 dark:border-gray-600" placeholder="{{ __('intake.min_income_placeholder') }}"></div>
+                <div><label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{{ __('intake.income_max_label') }}</label><input type="number" name="snapshot[preferences][0][preferred_income_max]" value="{{ e($prefRow['preferred_income_max'] ?? '') }}" step="0.01" class="w-full border rounded px-3 py-2 dark:bg-gray-700 dark:border-gray-600" placeholder="{{ __('intake.max_income_placeholder') }}"></div>
+                <div class="md:col-span-2"><label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{{ __('intake.preferred_education_label') }}</label><input type="text" name="snapshot[preferences][0][preferred_education]" value="{{ e($prefRow['preferred_education'] ?? '') }}" class="w-full border rounded px-3 py-2 dark:bg-gray-700 dark:border-gray-600" placeholder="{{ __('intake.preferred_education_placeholder') }}"></div>
             </div>
         </section>
 
@@ -568,11 +516,11 @@
             }
         @endphp
         <section class="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
-            <h2 class="text-lg font-semibold mb-4 border-b pb-2">About me &amp; expectations</h2>
+            <h2 class="text-lg font-semibold mb-4 border-b pb-2">{{ __('intake.about_expectations_heading') }}</h2>
             <div class="space-y-4">
-                <div><label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">About me</label><textarea name="snapshot[extended_narrative][narrative_about_me]" rows="4" class="w-full border rounded px-3 py-2 dark:bg-gray-700 dark:border-gray-600" placeholder="About me">{{ e($narrativeAboutMe) }}</textarea></div>
-                <div><label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Expectations</label><textarea name="snapshot[extended_narrative][narrative_expectations]" rows="4" class="w-full border rounded px-3 py-2 dark:bg-gray-700 dark:border-gray-600" placeholder="Expectations">{{ e($narrativeExpectations) }}</textarea></div>
-                <div><label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Additional notes</label><textarea name="snapshot[extended_narrative][additional_notes]" rows="2" class="w-full border rounded px-3 py-2 dark:bg-gray-700 dark:border-gray-600" placeholder="Any extra text from biodata">{{ e($additionalNotes) }}</textarea></div>
+                <div><label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{{ __('profile.about_me') }}</label><textarea name="snapshot[extended_narrative][narrative_about_me]" rows="4" class="w-full border rounded px-3 py-2 dark:bg-gray-700 dark:border-gray-600" placeholder="{{ __('profile.about_me') }}">{{ e($narrativeAboutMe) }}</textarea></div>
+                <div><label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{{ __('profile.expectations') }}</label><textarea name="snapshot[extended_narrative][narrative_expectations]" rows="4" class="w-full border rounded px-3 py-2 dark:bg-gray-700 dark:border-gray-600" placeholder="{{ __('profile.expectations') }}">{{ e($narrativeExpectations) }}</textarea></div>
+                <div><label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{{ __('profile.additional_details') }}</label><textarea name="snapshot[extended_narrative][additional_notes]" rows="2" class="w-full border rounded px-3 py-2 dark:bg-gray-700 dark:border-gray-600" placeholder="{{ __('intake.additional_notes_placeholder') }}">{{ e($additionalNotes) }}</textarea></div>
             </div>
         </section>
 
@@ -586,7 +534,7 @@
                 <span class="font-medium text-gray-800 dark:text-gray-200">मी सर्व माहिती तपासली आहे</span>
             </label>
             <button type="submit" id="approve_btn" disabled class="px-6 py-3 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-md font-medium">
-                Approve & Apply to Profile
+                {{ __('intake.approve_apply_button') }}
             </button>
             <p id="gating-message" class="mt-2 text-sm text-amber-600 dark:text-amber-400 hidden">खाली स्क्रोल करा, बॉक्स चेक करा आणि सर्व "सुधारणा आवश्यक" फील्ड भरा.</p>
         </section>

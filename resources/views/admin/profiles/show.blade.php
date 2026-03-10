@@ -62,7 +62,7 @@
     @if (($matrimonyProfile->lifecycle_state ?? null) !== 'conflict_pending')
     <div class="mb-6">
         <button type="button" @click="adminEditMode = !adminEditMode" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-md font-medium text-sm transition-colors">
-            <span x-text="adminEditMode ? 'Cancel Edit' : 'Edit Profile'"></span>
+            <span x-text="adminEditMode ? @js(__('admin.cancel_edit')) : @js(__('admin.edit_profile'))"></span>
         </button>
     </div>
     @endif
@@ -70,15 +70,15 @@
     <div x-data="{ activeAction: null }" class="mb-6 p-6 rounded-lg border-2 border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-700/50">
         <div class="flex justify-between items-center mb-4">
             <div>
-                <h3 class="text-sm font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400 mb-1">Moderation</h3>
-                <p class="text-xs text-gray-500 dark:text-gray-400">Profile suspend, unsuspend, soft delete, image approve/reject, visibility override. All actions require a reason.</p>
+                <h3 class="text-sm font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400 mb-1">{{ __('admin.moderation') }}</h3>
+                <p class="text-xs text-gray-500 dark:text-gray-400">{{ __('admin.moderation_help') }}</p>
             </div>
             @if (($matrimonyProfile->lifecycle_state ?? null) !== 'conflict_pending')
             <button 
                 type="button"
                 @click="$parent.adminEditMode = !$parent.adminEditMode"
                 class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-md font-medium text-sm transition-colors">
-                <span x-text="$parent.adminEditMode ? 'Cancel Edit' : 'Edit Profile (Admin)'"></span>
+                <span x-text="$parent.adminEditMode ? @js(__('admin.cancel_edit')) : @js(__('admin.edit_profile_admin'))"></span>
             </button>
             @endif
         </div>
@@ -87,72 +87,72 @@
                 type="button"
                 @click="activeAction = activeAction === 'suspend' ? null : 'suspend'"
                 style="padding:8px 16px; background:#f59e0b; color:white; border:none; border-radius:4px; cursor:pointer; font-weight:500;">
-                Suspend
+                {{ __('admin.suspend') }}
             </button>
             <button 
                 type="button"
                 @click="activeAction = activeAction === 'unsuspend' ? null : 'unsuspend'"
                 style="padding:8px 16px; background:#10b981; color:white; border:none; border-radius:4px; cursor:pointer; font-weight:500;">
-                Unsuspend
+                {{ __('admin.unsuspend') }}
             </button>
             <button 
                 type="button"
                 @click="activeAction = activeAction === 'soft-delete' ? null : 'soft-delete'"
                 style="padding:8px 16px; background:#ef4444; color:white; border:none; border-radius:4px; cursor:pointer; font-weight:500;">
-                Soft Delete
+                {{ __('admin.soft_delete') }}
             </button>
             @if ($matrimonyProfile->profile_photo)
             <button 
                 type="button"
                 @click="activeAction = activeAction === 'approve-image' ? null : 'approve-image'"
                 style="padding:8px 16px; background:#3b82f6; color:white; border:none; border-radius:4px; cursor:pointer; font-weight:500;">
-                Approve Image
+                {{ __('admin.approve_image') }}
             </button>
             <button 
                 type="button"
                 @click="activeAction = activeAction === 'reject-image' ? null : 'reject-image'"
                 style="padding:8px 16px; background:#dc2626; color:white; border:none; border-radius:4px; cursor:pointer; font-weight:500;">
-                Reject Image
+                {{ __('admin.reject_image') }}
             </button>
             @endif
             <button 
                 type="button"
                 @click="activeAction = activeAction === 'override-visibility' ? null : 'override-visibility'"
                 style="padding:8px 16px; background:#8b5cf6; color:white; border:none; border-radius:4px; cursor:pointer; font-weight:500;">
-                Override Visibility
+                {{ __('admin.override_visibility') }}
             </button>
         </div>
 
         <div x-show="activeAction === 'suspend'" x-transition style="border:1px solid #ccc; padding:1rem; border-radius:4px; margin-bottom:1rem; background:#fff;">
             <form method="POST" action="{{ route('admin.profiles.suspend', $matrimonyProfile) }}">
                 @csrf
-                <p style="font-weight:600; margin-bottom:8px;">Suspend Profile</p>
-                <textarea name="reason" rows="3" required minlength="10" placeholder="Reason (minimum 10 characters)" style="width:100%; margin-bottom:8px; padding:8px; border:1px solid #ddd; border-radius:4px;"></textarea>
+                <p style="font-weight:600; margin-bottom:8px;">{{ __('admin.suspend_profile') }}</p>
+                <textarea name="reason" rows="3" required minlength="10" placeholder="{{ __('admin.reason_min_10') }}" style="width:100%; margin-bottom:8px; padding:8px; border:1px solid #ddd; border-radius:4px;"></textarea>
                 <div style="display:flex; gap:8px;">
-                    <button type="submit" style="padding:8px 16px; background:#f59e0b; color:white; border:none; border-radius:4px; cursor:pointer;">Submit</button>
-                    <button type="button" @click="activeAction = null" style="padding:8px 16px; background:#6b7280; color:white; border:none; border-radius:4px; cursor:pointer;">Cancel</button>
+                    <button type="submit" style="padding:8px 16px; background:#f59e0b; color:white; border:none; border-radius:4px; cursor:pointer;">{{ __('common.submit') }}</button>
+                    <button type="button" @click="activeAction = null" style="padding:8px 16px; background:#6b7280; color:white; border:none; border-radius:4px; cursor:pointer;">{{ __('common.cancel') }}</button>
                 </div>
             </form>
         </div>
         <div x-show="activeAction === 'unsuspend'" x-transition style="border:1px solid #ccc; padding:1rem; border-radius:4px; margin-bottom:1rem; background:#fff;">
             <form method="POST" action="{{ route('admin.profiles.unsuspend', $matrimonyProfile) }}">
                 @csrf
-                <p style="font-weight:600; margin-bottom:8px;">Unsuspend Profile</p>
-                <textarea name="reason" rows="3" required minlength="10" placeholder="Reason (minimum 10 characters)" style="width:100%; margin-bottom:8px; padding:8px; border:1px solid #ddd; border-radius:4px;"></textarea>
+                <p style="font-weight:600; margin-bottom:8px;">{{ __('admin.unsuspend_profile') }}</p>
+                <textarea name="reason" rows="3" required minlength="10" placeholder="{{ __('admin.reason_min_10') }}" style="width:100%; margin-bottom:8px; padding:8px; border:1px solid #ddd; border-radius:4px;"></textarea>
                 <div style="display:flex; gap:8px;">
-                    <button type="submit" style="padding:8px 16px; background:#10b981; color:white; border:none; border-radius:4px; cursor:pointer;">Submit</button>
-                    <button type="button" @click="activeAction = null" style="padding:8px 16px; background:#6b7280; color:white; border:none; border-radius:4px; cursor:pointer;">Cancel</button>
+                    <button type="submit" style="padding:8px 16px; background:#10b981; color:white; border:none; border-radius:4px; cursor:pointer;">{{ __('common.submit') }}</button>
+                    <button type="button" @click="activeAction = null" style="padding:8px 16px; background:#6b7280; color:white; border:none; border-radius:4px; cursor:pointer;">{{ __('common.cancel') }}</button>
                 </div>
             </form>
         </div>
         <div x-show="activeAction === 'soft-delete'" x-transition style="border:1px solid #ccc; padding:1rem; border-radius:4px; margin-bottom:1rem; background:#fff;">
             <form method="POST" action="{{ route('admin.profiles.soft-delete', $matrimonyProfile) }}">
                 @csrf
-                <p style="font-weight:600; margin-bottom:8px;">Soft Delete Profile</p>
-                <textarea name="reason" rows="3" required minlength="10" placeholder="Reason (minimum 10 characters)" style="width:100%; margin-bottom:8px; padding:8px; border:1px solid #ddd; border-radius:4px;"></textarea>
+                <p style="font-weight:600; margin-bottom:8px;">{{ __('admin.soft_delete_profile') }}</p>
+                <textarea name="reason" rows="3" required minlength="10" placeholder="{{ __('admin.reason_min_10') }}" style="width:100%; margin-bottom:8px; padding:8px; border:1px solid #ddd; border-radius:4px;"></textarea>
                 <div style="display:flex; gap:8px;">
-                    <button type="submit" style="padding:8px 16px; background:#ef4444; color:white; border:none; border-radius:4px; cursor:pointer;">Submit</button>
-                    <button type="button" @click="activeAction = null" style="padding:8px 16px; background:#6b7280; color:white; border:none; border-radius:4px; cursor:pointer;">Cancel</button>
+                    <button type="submit" style="padding:8px 16px; background:#ef4444; color:white; border:none; border-radius:4px; cursor:pointer;">{{ __('common.submit') }}</button>
+                    <button type="button" @click="activeAction = null" style="padding:8px 16px; background:#6b7280; color:white; border:none; border-radius:4px; cursor:pointer;">{{ __('common.cancel') }}</button>
                 </div>
             </form>
         </div>
@@ -160,22 +160,22 @@
         <div x-show="activeAction === 'approve-image'" x-transition style="border:1px solid #ccc; padding:1rem; border-radius:4px; margin-bottom:1rem; background:#fff;">
             <form method="POST" action="{{ route('admin.profiles.approve-image', $matrimonyProfile) }}">
                 @csrf
-                <p style="font-weight:600; margin-bottom:8px;">Approve Image</p>
-                <textarea name="reason" rows="3" required minlength="10" placeholder="Reason (minimum 10 characters)" style="width:100%; margin-bottom:8px; padding:8px; border:1px solid #ddd; border-radius:4px;"></textarea>
+                <p style="font-weight:600; margin-bottom:8px;">{{ __('admin.approve_image') }}</p>
+                <textarea name="reason" rows="3" required minlength="10" placeholder="{{ __('admin.reason_min_10') }}" style="width:100%; margin-bottom:8px; padding:8px; border:1px solid #ddd; border-radius:4px;"></textarea>
                 <div style="display:flex; gap:8px;">
-                    <button type="submit" style="padding:8px 16px; background:#3b82f6; color:white; border:none; border-radius:4px; cursor:pointer;">Submit</button>
-                    <button type="button" @click="activeAction = null" style="padding:8px 16px; background:#6b7280; color:white; border:none; border-radius:4px; cursor:pointer;">Cancel</button>
+                    <button type="submit" style="padding:8px 16px; background:#3b82f6; color:white; border:none; border-radius:4px; cursor:pointer;">{{ __('common.submit') }}</button>
+                    <button type="button" @click="activeAction = null" style="padding:8px 16px; background:#6b7280; color:white; border:none; border-radius:4px; cursor:pointer;">{{ __('common.cancel') }}</button>
                 </div>
             </form>
         </div>
         <div x-show="activeAction === 'reject-image'" x-transition style="border:1px solid #ccc; padding:1rem; border-radius:4px; margin-bottom:1rem; background:#fff;">
             <form method="POST" action="{{ route('admin.profiles.reject-image', $matrimonyProfile) }}">
                 @csrf
-                <p style="font-weight:600; margin-bottom:8px;">Reject Image</p>
-                <textarea name="reason" rows="3" required minlength="10" placeholder="Reason (minimum 10 characters)" style="width:100%; margin-bottom:8px; padding:8px; border:1px solid #ddd; border-radius:4px;"></textarea>
+                <p style="font-weight:600; margin-bottom:8px;">{{ __('admin.reject_image') }}</p>
+                <textarea name="reason" rows="3" required minlength="10" placeholder="{{ __('admin.reason_min_10') }}" style="width:100%; margin-bottom:8px; padding:8px; border:1px solid #ddd; border-radius:4px;"></textarea>
                 <div style="display:flex; gap:8px;">
-                    <button type="submit" style="padding:8px 16px; background:#dc2626; color:white; border:none; border-radius:4px; cursor:pointer;">Submit</button>
-                    <button type="button" @click="activeAction = null" style="padding:8px 16px; background:#6b7280; color:white; border:none; border-radius:4px; cursor:pointer;">Cancel</button>
+                    <button type="submit" style="padding:8px 16px; background:#dc2626; color:white; border:none; border-radius:4px; cursor:pointer;">{{ __('common.submit') }}</button>
+                    <button type="button" @click="activeAction = null" style="padding:8px 16px; background:#6b7280; color:white; border:none; border-radius:4px; cursor:pointer;">{{ __('common.cancel') }}</button>
                 </div>
             </form>
         </div>
@@ -183,23 +183,23 @@
         <div x-show="activeAction === 'override-visibility'" x-transition style="border:1px solid #ccc; padding:1rem; border-radius:4px; margin-bottom:1rem; background:#fff;">
             <form method="POST" action="{{ route('admin.profiles.override-visibility', $matrimonyProfile) }}">
                 @csrf
-                <p style="font-weight:600; margin-bottom:8px;">Override visibility (force search visible even if &lt;70% complete)</p>
-                <textarea name="reason" rows="3" required minlength="10" placeholder="Reason (minimum 10 characters)" style="width:100%; margin-bottom:8px; padding:8px; border:1px solid #ddd; border-radius:4px;"></textarea>
+                <p style="font-weight:600; margin-bottom:8px;">{{ __('admin.override_visibility_help') }}</p>
+                <textarea name="reason" rows="3" required minlength="10" placeholder="{{ __('admin.reason_min_10') }}" style="width:100%; margin-bottom:8px; padding:8px; border:1px solid #ddd; border-radius:4px;"></textarea>
                 <div style="display:flex; gap:8px;">
-                    <button type="submit" style="padding:8px 16px; background:#8b5cf6; color:white; border:none; border-radius:4px; cursor:pointer;">Submit</button>
-                    <button type="button" @click="activeAction = null" style="padding:8px 16px; background:#6b7280; color:white; border:none; border-radius:4px; cursor:pointer;">Cancel</button>
+                    <button type="submit" style="padding:8px 16px; background:#8b5cf6; color:white; border:none; border-radius:4px; cursor:pointer;">{{ __('common.submit') }}</button>
+                    <button type="button" @click="activeAction = null" style="padding:8px 16px; background:#6b7280; color:white; border:none; border-radius:4px; cursor:pointer;">{{ __('common.cancel') }}</button>
                 </div>
             </form>
         </div>
     </div>
 
     <div class="mb-6 bg-white dark:bg-gray-800 shadow rounded-lg p-6">
-        <h3 class="text-lg font-semibold text-gray-800 dark:text-gray-100 mb-4">Verification Tags</h3>
+        <h3 class="text-lg font-semibold text-gray-800 dark:text-gray-100 mb-4">{{ __('admin.verification_tags') }}</h3>
 
         <div class="mb-5">
-            <p class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Assigned active tags</p>
+            <p class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">{{ __('admin.assigned_active_tags') }}</p>
             @if ($assignedTags->isEmpty())
-                <p class="text-sm text-gray-500 dark:text-gray-400">No active tags assigned.</p>
+                <p class="text-sm text-gray-500 dark:text-gray-400">{{ __('admin.no_active_tags_assigned') }}</p>
             @else
                 <div class="space-y-2">
                     @foreach ($assignedTags as $tag)
@@ -212,10 +212,10 @@
                                     type="text"
                                     name="reason"
                                     required
-                                    placeholder="Reason"
+                                    placeholder="{{ __('common.reason') }}"
                                     class="border border-gray-300 dark:border-gray-600 rounded px-2 py-1 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
                                 >
-                                <button type="submit" class="px-3 py-1 bg-red-600 hover:bg-red-700 text-white rounded text-sm">Remove</button>
+                                <button type="submit" class="px-3 py-1 bg-red-600 hover:bg-red-700 text-white rounded text-sm">{{ __('common.remove') }}</button>
                             </form>
                         </div>
                     @endforeach
@@ -391,7 +391,7 @@
 
         <div class="mb-6">
             <div class="flex justify-between items-center mb-1">
-                <span class="text-sm font-medium text-gray-700">Profile Completeness</span>
+                <span class="text-sm font-medium text-gray-700">{{ __('profile.profile_completeness') }}</span>
                 <span class="text-sm font-bold text-gray-900">{{ $completenessPct }}%</span>
             </div>
             <div class="w-full bg-gray-200 rounded-full h-2.5">

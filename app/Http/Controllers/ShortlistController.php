@@ -26,7 +26,7 @@ class ShortlistController extends Controller
         $user = $request->user();
         if (!$user->matrimonyProfile) {
             return redirect()->route('matrimony.profile.wizard.section', ['section' => 'basic-info'])
-                ->with('error', 'Create your profile first.');
+                ->with('error', __('profile_actions.create_profile_first'));
         }
 
         $entries = Shortlist::with('shortlistedProfile')
@@ -45,23 +45,23 @@ class ShortlistController extends Controller
         $owner = $request->user()->matrimonyProfile;
         if (!$owner) {
             return redirect()->route('matrimony.profile.wizard.section', ['section' => 'basic-info'])
-                ->with('error', 'Create your profile first.');
+                ->with('error', __('profile_actions.create_profile_first'));
         }
 
         // Day 7: Sender lifecycle — Archived/Suspended/Owner-Hidden cannot add to shortlist
         if (!ProfileLifecycleService::canInitiateInteraction($owner)) {
-            return back()->with('error', 'Your profile cannot add to shortlist in its current state.');
+            return back()->with('error', __('profile_actions.cannot_shortlist_current_state'));
         }
 
         $target = $matrimony_profile_id;
 
         // Day 7: Receiver lifecycle — cannot shortlist profiles that disallow interaction
         if (!ProfileLifecycleService::canReceiveInterest($target)) {
-            return back()->with('error', 'You cannot add this profile to your shortlist.');
+            return back()->with('error', __('profile_actions.cannot_add_to_shortlist'));
         }
 
         if ($owner->id === $target->id) {
-            return back()->with('error', 'You cannot shortlist yourself.');
+            return back()->with('error', __('profile_actions.cannot_shortlist_yourself'));
         }
 
         $exists = Shortlist::where('owner_profile_id', $owner->id)
@@ -69,7 +69,7 @@ class ShortlistController extends Controller
             ->exists();
 
         if ($exists) {
-            return back()->with('error', 'Already in shortlist.');
+            return back()->with('error', __('profile_actions.already_in_shortlist'));
         }
 
         Shortlist::create([
@@ -77,7 +77,7 @@ class ShortlistController extends Controller
             'shortlisted_profile_id' => $target->id,
         ]);
 
-        return back()->with('success', 'Added to shortlist.');
+        return back()->with('success', __('profile_actions.added_to_shortlist'));
     }
 
     /**
@@ -88,13 +88,13 @@ class ShortlistController extends Controller
         $owner = $request->user()->matrimonyProfile;
         if (!$owner) {
             return redirect()->route('matrimony.profile.wizard.section', ['section' => 'basic-info'])
-                ->with('error', 'Create your profile first.');
+                ->with('error', __('profile_actions.create_profile_first'));
         }
 
         Shortlist::where('owner_profile_id', $owner->id)
             ->where('shortlisted_profile_id', $matrimony_profile_id->id)
             ->delete();
 
-        return back()->with('success', 'Removed from shortlist.');
+        return back()->with('success', __('profile_actions.removed_from_shortlist'));
     }
 }

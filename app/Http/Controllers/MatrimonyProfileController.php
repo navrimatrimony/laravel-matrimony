@@ -194,7 +194,7 @@ class MatrimonyProfileController extends Controller
     if (!$user->matrimonyProfile) {
         return redirect()
             ->route('matrimony.profile.wizard.section', ['section' => 'basic-info'])
-            ->with('error', 'Please create your matrimony profile first.');
+            ->with('error', __('interest.create_profile_first'));
     }
 
     // Phase-5B: Single edit path = wizard. Redirect to wizard (full section).
@@ -210,7 +210,7 @@ class MatrimonyProfileController extends Controller
         if (! $user->matrimonyProfile) {
             return redirect()
                 ->route('matrimony.profile.wizard.section', ['section' => 'basic-info'])
-                ->with('error', 'Please create your profile first.');
+                ->with('error', __('profile_actions.create_profile_first'));
         }
         return redirect()->route('matrimony.profile.wizard.section', ['section' => 'full']);
     }
@@ -225,16 +225,16 @@ class MatrimonyProfileController extends Controller
         if (! $user->matrimonyProfile) {
             return redirect()
                 ->route('matrimony.profile.wizard.section', ['section' => 'basic-info'])
-                ->with('error', 'Please create your profile first.');
+                ->with('error', __('profile_actions.create_profile_first'));
         }
         $profile = $user->matrimonyProfile;
         if (! \App\Services\ProfileLifecycleService::isEditableForManual($profile)) {
-            return redirect()->route('matrimony.profile.show', $profile->id)->with('error', 'Profile cannot be edited in its current state.');
+            return redirect()->route('matrimony.profile.show', $profile->id)->with('error', __('wizard.profile_not_editable_current_state'));
         }
         $snapshot = app(\App\Services\ManualSnapshotBuilderService::class)->buildFullManualSnapshot($request, $profile);
         if (empty($snapshot['core'] ?? null) && empty($snapshot['contacts'] ?? null)) {
             return redirect()->route('matrimony.profile.wizard.section', ['section' => 'full'])
-                ->with('error', 'No valid data to save.')
+                ->with('error', __('common.no_valid_data_to_save'))
                 ->withInput();
         }
         try {
@@ -250,10 +250,10 @@ class MatrimonyProfileController extends Controller
         }
         if ($result['conflict_detected'] ?? false) {
             return redirect()->route('matrimony.profile.wizard.section', ['section' => 'full'])
-                ->with('warning', 'Some changes could not be applied due to conflicts.')
+                ->with('warning', __('common.some_changes_conflict'))
                 ->withInput();
         }
-        return redirect()->route('matrimony.profiles.index')->with('success', 'Profile updated.');
+        return redirect()->route('matrimony.profiles.index')->with('success', __('common.profile_updated'));
     }
 
     /**
@@ -271,7 +271,7 @@ public function uploadPhoto()
     if (!$user->matrimonyProfile) {
         return redirect()
             ->route('matrimony.profile.wizard.section', ['section' => 'basic-info'])
-            ->with('error', 'Please create your profile first.');
+            ->with('error', __('profile_actions.create_profile_first'));
     }
 
     return view('matrimony.profile.upload-photo');
@@ -289,19 +289,19 @@ public function storePhoto(Request $request)
 if (!$user->matrimonyProfile) {
     return redirect()
         ->route('matrimony.profile.wizard.section', ['section' => 'basic-info'])
-        ->with('error', 'Please create your profile first.');
+        ->with('error', __('profile_actions.create_profile_first'));
 }
 
     $profile = $user->matrimonyProfile;
     if ($profile->user_id !== $user->id) {
-        abort(403, 'Unauthorized profile photo update attempt.');
+        abort(403, __('common.unauthorized_photo_update'));
     }
 
     // Phase-5 PART-5: Block manual edit when lifecycle blocks it
     if (in_array($profile->lifecycle_state, [
         'intake_uploaded', 'awaiting_user_approval', 'approved_pending_mutation', 'conflict_pending',
     ], true)) {
-        return redirect()->back()->with('error', 'Profile cannot be edited while intake or conflict is pending.');
+        return redirect()->back()->with('error', __('common.profile_edit_blocked_intake_conflict'));
     }
 
     $file = $request->file('profile_photo');
@@ -317,7 +317,7 @@ if (!$user->matrimonyProfile) {
         $imageData = @file_get_contents($file->getRealPath());
         $image = $imageData !== false ? @imagecreatefromstring($imageData) : false;
         if ($image === false) {
-            return redirect()->back()->with('error', 'We could not read this image. Please upload a valid JPG or PNG photo.');
+            return redirect()->back()->with('error', __('common.invalid_photo_upload_jpg_png'));
         }
         $width = imagesx($image);
         $height = imagesy($image);
@@ -465,7 +465,7 @@ public function show($matrimony_profile_id)
     if (!auth()->check()) {
         return redirect()
             ->route('login')
-            ->with('error', 'Please login to view matrimony profiles.');
+            ->with('error', __('common.login_required_to_view_matrimony_profiles'));
     }
 
     $authUser = auth()->user();
@@ -474,7 +474,7 @@ public function show($matrimony_profile_id)
     if (!$authUser->matrimonyProfile) {
         return redirect()
             ->route('matrimony.profile.wizard.section', ['section' => 'basic-info'])
-            ->with('error', 'Please create your matrimony profile first.');
+            ->with('error', __('interest.create_profile_first'));
     }
 
     $viewer = auth()->user(); // logged-in user
@@ -484,19 +484,19 @@ public function show($matrimony_profile_id)
 
     // 🔒 GUARD: Day 7 lifecycle — Archived/Suspended not visible to others (backward compat: is_suspended, trashed)
     if (!$isOwnProfile && !\App\Services\ProfileLifecycleService::isVisibleToOthers($profile)) {
-        abort(404, 'Profile not found.');
+        abort(404, __('common.profile_not_found'));
     }
 
     // 🔒 GUARD: Block excludes profile view (either direction)
     if (!$isOwnProfile && $viewer->matrimonyProfile) {
         if (ViewTrackingService::isBlocked($viewer->matrimonyProfile->id, $profile->id)) {
-            abort(404, 'Profile not found.');
+            abort(404, __('common.profile_not_found'));
         }
     }
 
     // 🔒 GUARD: Phase-4 Day-10 — Women-First Safety visibility policy
     if (!$isOwnProfile && !\App\Services\ProfileVisibilityPolicyService::canViewProfile($profile, $viewer)) {
-        abort(404, 'Profile not found.');
+        abort(404, __('common.profile_not_found'));
     }
 
     $interestAlreadySent = false;
@@ -596,6 +596,9 @@ public function show($matrimony_profile_id)
         ->where('profile_id', $profile->id)
         ->first();
 
+    // Preferences: aggregate for view (view also uses $preferenceCriteria, $preferredReligionIds, $preferredCasteIds, $preferredDistrictIds)
+    $preferences = [];
+
     // Day-32: Contact request state for viewer (sender) vs profile owner (receiver)
     $contactRequestState = null;
     $contactRequestDisabled = true;
@@ -641,6 +644,10 @@ public function show($matrimony_profile_id)
             'extendedMeta'         => $extendedMeta,
             'extendedAttributes'   => $extendedAttributes,
             'preferences'          => $preferences,
+            'preferenceCriteria'   => $preferenceCriteria,
+            'preferredReligionIds' => $preferredReligionIds,
+            'preferredCasteIds'    => $preferredCasteIds,
+            'preferredDistrictIds' => $preferredDistrictIds,
             'completenessPct'      => $completenessPct,
             'profilePhotoVisible' => $profilePhotoVisible,
             'dateOfBirthVisible'  => $dateOfBirthVisible,
@@ -786,11 +793,11 @@ public function show($matrimony_profile_id)
         $matches = [];
         $commonGround = [];
 
-        // Define comparison fields (preferences to check) — location handled separately via hierarchy
+        // Define comparison fields (preferences to check) — location handled separately via hierarchy (labels are translation keys)
         $preferenceFields = [
-            'highest_education' => ['label' => 'शिक्षण', 'icon' => '🎓'],
-            'caste' => ['label' => 'जात', 'icon' => '🗣️'],
-            'marital_status' => ['label' => 'वैवाहिक स्थिती', 'icon' => '💑'],
+            'highest_education' => ['label' => 'Education', 'icon' => '🎓'],
+            'caste' => ['label' => 'Caste', 'icon' => '🗣️'],
+            'marital_status' => ['label' => 'Marital Status', 'icon' => '💑'],
         ];
 
         // Location comparison (hierarchy: city_id = exact match, state_id = partial)
@@ -807,14 +814,14 @@ public function show($matrimony_profile_id)
             }
             $matches[] = [
                 'field' => 'location',
-                'label' => 'Location',
+                'label' => __('Location'),
                 'icon' => '📍',
                 'matched' => $locationMatched,
             ];
             if ($locationMatched) {
                 $commonGround[] = [
                     'field' => 'location',
-                    'label' => 'Location',
+                    'label' => __('Location'),
                     'icon' => '📍',
                     'value' => $viewedProfile->city_id ? ($viewedProfile->city?->name ?? '—') : ($viewedProfile->state?->name ?? '—'),
                 ];
@@ -831,14 +838,14 @@ public function show($matrimony_profile_id)
             if ($ageDiff <= 5) {
                 $matches[] = [
                     'field' => 'age',
-                    'label' => 'वय',
+                    'label' => __('Age'),
                     'icon' => '🎂',
                     'matched' => true,
                 ];
             } else {
                 $matches[] = [
                     'field' => 'age',
-                    'label' => 'वय',
+                    'label' => __('Age'),
                     'icon' => '🎂',
                     'matched' => false,
                 ];
@@ -855,7 +862,7 @@ public function show($matrimony_profile_id)
                 
                 $matches[] = [
                     'field' => $fieldKey,
-                    'label' => $fieldInfo['label'],
+                    'label' => __($fieldInfo['label']),
                     'icon' => $fieldInfo['icon'],
                     'matched' => $isMatch,
                 ];
@@ -864,7 +871,7 @@ public function show($matrimony_profile_id)
                 if ($isMatch) {
                     $commonGround[] = [
                         'field' => $fieldKey,
-                        'label' => $fieldInfo['label'],
+                        'label' => __($fieldInfo['label']),
                         'icon' => $fieldInfo['icon'],
                         'value' => $viewedValue,
                     ];
@@ -876,23 +883,23 @@ public function show($matrimony_profile_id)
         $matchedCount = count(array_filter($matches, fn($m) => $m['matched']));
         $totalCount = count($matches);
 
-        // Generate summary text
+        // Generate summary text (translated)
         if ($totalCount > 0) {
             if ($matchedCount > 0) {
-                $summaryText = "तुमची प्रोफाइल त्यांच्या {$totalCount} पैकी {$matchedCount} अपेक्षांशी जुळते";
+                $summaryText = __('Your profile matches :matched of :total expectations', ['matched' => $matchedCount, 'total' => $totalCount]);
             } else {
-                $summaryText = "या प्रोफाइलशी काही बाबतीत साम्य आहे";
+                $summaryText = __('Some match with this profile.');
             }
         } else {
-            $summaryText = "या प्रोफाइलशी काही बाबतीत साम्य आहे";
+            $summaryText = __('Some match with this profile.');
         }
 
-        // Celebration text
+        // Celebration text (translated)
         $celebrationText = null;
         if ($matchedCount >= 3) {
-            $celebrationText = "बर्‍याच गोष्टी जुळत आहेत";
+            $celebrationText = __('Many things match!');
         } elseif ($matchedCount > 0) {
-            $celebrationText = "चांगली सुरुवात 👍";
+            $celebrationText = __('Good start 👍');
         }
 
         return [

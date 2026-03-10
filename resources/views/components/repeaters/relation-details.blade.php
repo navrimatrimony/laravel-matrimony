@@ -5,13 +5,15 @@
     'showMarried' => false,
     'items' => collect(),
     'showPrimaryContact' => false,
-    'addButtonLabel' => 'Add',
-    'removeButtonLabel' => 'Remove',
+    'addButtonLabel' => null,
+    'removeButtonLabel' => null,
     'contentShowBinding' => null,
     'contentShowInitial' => true,
     'addressOnlyRelationValue' => null, // e.g. 'maternal_address_ajol' — when selected, only Relation + Address shown
 ])
 @php
+    $addButtonLabel = $addButtonLabel ?? __('common.add');
+    $removeButtonLabel = $removeButtonLabel ?? __('common.remove');
     $opts = collect($relationOptions)->map(function ($o) {
         if (is_string($o)) return ['value' => $o, 'label' => $o];
         if (is_array($o)) return ['value' => $o['value'] ?? $o[0] ?? '', 'label' => $o['label'] ?? $o[1] ?? $o['value'] ?? ''];
@@ -64,7 +66,7 @@
             {{-- Line 1 with Married: Relation | [Name+Married] | Mobile --}}
             <div class="grid items-end gap-2" style="grid-template-columns: minmax(4rem, 22fr) minmax(8rem, 38fr) minmax(5rem, 38fr);">
                 <div class="min-w-0">
-                    <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-0.5">Relation</label>
+                    <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-0.5">{{ __('components.relation.relation') }}</label>
                     <select name="{{ $namePrefix }}[{{ $idx }}][relation_type]" class="relation-input-h form-select w-full h-10 rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-2 py-1.5 text-sm min-w-0">
                         <option value="">—</option>
                         @foreach($opts as $opt)
@@ -74,19 +76,19 @@
                 </div>
                 <div class="flex items-end gap-0 min-w-0 overflow-hidden">
                     <div class="min-w-0 flex-1" style="min-width: 0;">
-                        <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-0.5">Name</label>
-                        <input type="text" name="{{ $namePrefix }}[{{ $idx }}][name]" value="{{ $r['name'] ?? '' }}" placeholder="Name" class="relation-input-h w-full h-10 rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-2 py-1.5 text-sm box-border">
+                        <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-0.5">{{ __('components.relation.name') }}</label>
+                        <input type="text" name="{{ $namePrefix }}[{{ $idx }}][name]" value="{{ $r['name'] ?? '' }}" placeholder="{{ __('components.relation.name_placeholder') }}" class="relation-input-h w-full h-10 rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-2 py-1.5 text-sm box-border">
                     </div>
                     <div class="relation-marital-wrap flex-shrink-0" data-spouse-block="{{ $namePrefix }}-spouse-{{ $idx }}" style="width: 4.25rem;">
-                        <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-0.5">Married</label>
+                        <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-0.5">{{ __('components.relation.married') }}</label>
                         <select name="{{ $namePrefix }}[{{ $idx }}][marital_status]" class="relation-marital-select relation-input-h form-select w-full h-10 rounded border px-1 py-1.5 text-sm box-border {{ ($r['marital_status'] ?? '') === 'married' || $isMarried ? 'marital-yes' : 'marital-no' }}">
-                            <option value="unmarried" {{ ($r['marital_status'] ?? '') !== 'married' && !$isMarried ? 'selected' : '' }}>No</option>
-                            <option value="married" {{ ($r['marital_status'] ?? '') === 'married' || $isMarried ? 'selected' : '' }}>Yes</option>
+                            <option value="unmarried" {{ ($r['marital_status'] ?? '') !== 'married' && !$isMarried ? 'selected' : '' }}>{{ __('common.no') }}</option>
+                            <option value="married" {{ ($r['marital_status'] ?? '') === 'married' || $isMarried ? 'selected' : '' }}>{{ __('common.yes') }}</option>
                         </select>
                     </div>
                 </div>
                 <div class="min-w-0" data-contact-context="sibling" data-row-index="{{ $idx }}" data-name-prefix="{{ $namePrefix }}">
-                    <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-0.5">Mobile</label>
+                    <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-0.5">{{ __('components.relation.mobile') }}</label>
                     <div class="flex flex-wrap items-end gap-1 sibling-contact-slots-inner">
                         @php
                             $sbContacts = [$r['contact_number'] ?? '', $r['contact_number_2'] ?? '', $r['contact_number_3'] ?? ''];
@@ -102,7 +104,7 @@
                                     name="{{ $namePrefix }}[{{ $idx }}][{{ $suffix }}]"
                                     :value="$sbContacts[$si] ?? ''"
                                     label=""
-                                    placeholder="10-digit"
+                                    placeholder="{{ __('components.relation.ten_digit') }}"
                                     :showCountryCode="true"
                                     :showWhatsapp="true"
                                     :nameWhatsapp="$namePrefix . '[' . $idx . '][contact_preference_' . ($si + 1) . ']'"
@@ -122,7 +124,7 @@
             {{-- When Ajol: one row, 2 fields (Relation | Address). When not Ajol: 2 rows × 3 fields. --}}
             <div class="relation-address-only-wrap grid items-end" style="grid-template-columns: 1fr 1fr; gap: 0.75rem; display:{{ $isAddressOnly ? 'grid' : 'none' }};">
                 <div class="min-w-0">
-                    <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-0.5">Relation</label>
+                    <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-0.5">{{ __('components.relation.relation') }}</label>
                     <select name="{{ $namePrefix }}[{{ $idx }}][relation_type]" class="relation-type-select relation-input-h form-select w-full h-10 rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-2 py-1.5 text-sm min-w-0">
                         <option value="">—</option>
                         @foreach($opts as $opt)
@@ -135,8 +137,8 @@
                         context="alliance"
                         namePrefix="{{ $namePrefix }}[{{ $idx }}]"
                         :value="$r['location_display'] ?? ''"
-                        placeholder="Address / city"
-                        label="Address"
+                        placeholder="{{ __('components.relation.address_city') }}"
+                        label="{{ __('components.relation.address') }}"
                         :data-city-id="$r['city_id'] ?? ''"
                         :data-taluka-id="$r['taluka_id'] ?? ''"
                         :data-district-id="$r['district_id'] ?? ''"
@@ -146,7 +148,7 @@
             </div>
             <div class="relation-fields-wrap relation-two-line-grid grid items-end" style="grid-template-columns: 1fr 1fr 1fr; display:{{ $isAddressOnly ? 'none' : 'grid' }}; gap: 0.75rem;">
                 <div class="min-w-0">
-                    <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-0.5">Relation</label>
+                    <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-0.5">{{ __('components.relation.relation') }}</label>
                     <select name="{{ $namePrefix }}[{{ $idx }}][relation_type]" class="relation-type-select relation-input-h form-select w-full h-10 rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-2 py-1.5 text-sm min-w-0">
                         <option value="">—</option>
                         @foreach($opts as $opt)
@@ -155,15 +157,15 @@
                     </select>
                 </div>
                 <div class="min-w-0">
-                    <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-0.5">Name</label>
-                    <input type="text" name="{{ $namePrefix }}[{{ $idx }}][name]" value="{{ $r['name'] ?? '' }}" placeholder="Name" class="relation-input-h w-full h-10 rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-2 py-1.5 text-sm min-w-0">
+                    <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-0.5">{{ __('components.relation.name') }}</label>
+                    <input type="text" name="{{ $namePrefix }}[{{ $idx }}][name]" value="{{ $r['name'] ?? '' }}" placeholder="{{ __('components.relation.name_placeholder') }}" class="relation-input-h w-full h-10 rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-2 py-1.5 text-sm min-w-0">
                 </div>
                 <div class="min-w-0">
-                    <x-profile.contact-field name="{{ $namePrefix }}[{{ $idx }}][contact_number]" :value="$r['contact_number'] ?? ''" label="Mobile" placeholder="10-digit" :showCountryCode="true" :showWhatsapp="true" :nameWhatsapp="$namePrefix . '[' . $idx . '][contact_preference]'" :valueWhatsapp="'call'" inputClass="relation-input-h w-full min-w-0 box-border" />
+                    <x-profile.contact-field name="{{ $namePrefix }}[{{ $idx }}][contact_number]" :value="$r['contact_number'] ?? ''" :label="__('components.relation.mobile')" :placeholder="__('components.relation.ten_digit')" :showCountryCode="true" :showWhatsapp="true" :nameWhatsapp="$namePrefix . '[' . $idx . '][contact_preference]'" :valueWhatsapp="'call'" inputClass="relation-input-h w-full min-w-0 box-border" />
                 </div>
                 <div class="min-w-0">
-                    <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-0.5">Occupation</label>
-                    <input type="text" name="{{ $namePrefix }}[{{ $idx }}][occupation]" value="{{ $r['occupation'] ?? '' }}" placeholder="Occupation" class="relation-input-h w-full h-10 rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-2 py-1.5 text-sm min-w-0">
+                    <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-0.5">{{ __('components.relation.occupation') }}</label>
+                    <input type="text" name="{{ $namePrefix }}[{{ $idx }}][occupation]" value="{{ $r['occupation'] ?? '' }}" placeholder="{{ __('components.relation.occupation_placeholder') }}" class="relation-input-h w-full h-10 rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-2 py-1.5 text-sm min-w-0">
                 </div>
                 <div class="min-w-0 relation-address-cell">
                     <x-profile.location-typeahead
@@ -179,15 +181,15 @@
                     />
                 </div>
                 <div class="min-w-0">
-                    <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-0.5">Additional info</label>
-                    <input type="text" name="{{ $namePrefix }}[{{ $idx }}][notes]" value="{{ $r['notes'] ?? '' }}" placeholder="Notes" class="relation-input-h w-full h-10 rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-2 py-1.5 text-sm min-w-0">
+                    <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-0.5">{{ __('components.relation.additional_info') }}</label>
+                    <input type="text" name="{{ $namePrefix }}[{{ $idx }}][notes]" value="{{ $r['notes'] ?? '' }}" placeholder="{{ __('components.relation.notes_placeholder') }}" class="relation-input-h w-full h-10 rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-2 py-1.5 text-sm min-w-0">
                 </div>
             </div>
             @else
             {{-- Default relatives: 2 lines × 3 fields (Relation↔Occupation, Name↔Address, Mobile↔Additional) --}}
             <div class="grid items-end relation-two-line-grid" style="grid-template-columns: 1fr 1fr 1fr;">
                 <div class="min-w-0">
-                    <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-0.5">Relation</label>
+                    <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-0.5">{{ __('components.relation.relation') }}</label>
                     <select name="{{ $namePrefix }}[{{ $idx }}][relation_type]" class="relation-input-h form-select w-full h-10 rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-2 py-1.5 text-sm min-w-0">
                         <option value="">—</option>
                         @foreach($opts as $opt)
@@ -196,23 +198,23 @@
                     </select>
                 </div>
                 <div class="min-w-0">
-                    <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-0.5">Name</label>
-                    <input type="text" name="{{ $namePrefix }}[{{ $idx }}][name]" value="{{ $r['name'] ?? '' }}" placeholder="Name" class="relation-input-h w-full h-10 rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-2 py-1.5 text-sm min-w-0">
+                    <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-0.5">{{ __('components.relation.name') }}</label>
+                    <input type="text" name="{{ $namePrefix }}[{{ $idx }}][name]" value="{{ $r['name'] ?? '' }}" placeholder="{{ __('components.relation.name_placeholder') }}" class="relation-input-h w-full h-10 rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-2 py-1.5 text-sm min-w-0">
                 </div>
                 <div class="min-w-0">
-                    <x-profile.contact-field name="{{ $namePrefix }}[{{ $idx }}][contact_number]" :value="$r['contact_number'] ?? ''" label="Mobile" placeholder="10-digit" :showCountryCode="true" :showWhatsapp="true" :nameWhatsapp="$namePrefix . '[' . $idx . '][contact_preference]'" :valueWhatsapp="'call'" inputClass="relation-input-h w-full min-w-0 box-border" />
+                    <x-profile.contact-field name="{{ $namePrefix }}[{{ $idx }}][contact_number]" :value="$r['contact_number'] ?? ''" :label="__('components.relation.mobile')" :placeholder="__('components.relation.ten_digit')" :showCountryCode="true" :showWhatsapp="true" :nameWhatsapp="$namePrefix . '[' . $idx . '][contact_preference]'" :valueWhatsapp="'call'" inputClass="relation-input-h w-full min-w-0 box-border" />
                 </div>
                 <div class="min-w-0">
-                    <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-0.5">Occupation</label>
-                    <input type="text" name="{{ $namePrefix }}[{{ $idx }}][occupation]" value="{{ $r['occupation'] ?? '' }}" placeholder="Occupation" class="relation-input-h w-full h-10 rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-2 py-1.5 text-sm min-w-0">
+                    <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-0.5">{{ __('components.relation.occupation') }}</label>
+                    <input type="text" name="{{ $namePrefix }}[{{ $idx }}][occupation]" value="{{ $r['occupation'] ?? '' }}" placeholder="{{ __('components.relation.occupation_placeholder') }}" class="relation-input-h w-full h-10 rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-2 py-1.5 text-sm min-w-0">
                 </div>
                 <div class="min-w-0 relation-address-cell">
                     <x-profile.location-typeahead
                         context="alliance"
                         namePrefix="{{ $namePrefix }}[{{ $idx }}]"
                         :value="$r['location_display'] ?? ''"
-                        placeholder="Address / city"
-                        label="Address"
+                        placeholder="{{ __('components.relation.address_city') }}"
+                        label="{{ __('components.relation.address') }}"
                         :data-city-id="$r['city_id'] ?? ''"
                         :data-taluka-id="$r['taluka_id'] ?? ''"
                         :data-district-id="$r['district_id'] ?? ''"
@@ -220,8 +222,8 @@
                     />
                 </div>
                 <div class="min-w-0">
-                    <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-0.5">Additional info</label>
-                    <input type="text" name="{{ $namePrefix }}[{{ $idx }}][notes]" value="{{ $r['notes'] ?? '' }}" placeholder="Notes" class="relation-input-h w-full h-10 rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-2 py-1.5 text-sm min-w-0">
+                    <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-0.5">{{ __('components.relation.additional_info') }}</label>
+                    <input type="text" name="{{ $namePrefix }}[{{ $idx }}][notes]" value="{{ $r['notes'] ?? '' }}" placeholder="{{ __('components.relation.notes_placeholder') }}" class="relation-input-h w-full h-10 rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-2 py-1.5 text-sm min-w-0">
                 </div>
             </div>
             @endif
@@ -231,16 +233,16 @@
             {{-- Line 2 for siblings only: same column widths as Line 1 (Relation | Name+Married | Mobile) --}}
             <div class="grid gap-2 items-end" style="grid-template-columns: minmax(4rem, 22fr) minmax(8rem, 38fr) minmax(5rem, 38fr);">
                 <div class="min-w-0">
-                    <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-0.5">Occupation</label>
-                    <input type="text" name="{{ $namePrefix }}[{{ $idx }}][occupation]" value="{{ $r['occupation'] ?? '' }}" placeholder="Occupation" class="relation-input-h w-full h-10 rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-2 py-1.5 text-sm min-w-0">
+                    <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-0.5">{{ __('components.relation.occupation') }}</label>
+                    <input type="text" name="{{ $namePrefix }}[{{ $idx }}][occupation]" value="{{ $r['occupation'] ?? '' }}" placeholder="{{ __('components.relation.occupation_placeholder') }}" class="relation-input-h w-full h-10 rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-2 py-1.5 text-sm min-w-0">
                 </div>
                 <div class="min-w-0 relation-address-cell">
                     <x-profile.location-typeahead
                         context="alliance"
                         namePrefix="{{ $namePrefix }}[{{ $idx }}]"
                         :value="$r['location_display'] ?? ''"
-                        placeholder="Address / city"
-                        label="Address"
+                        placeholder="{{ __('components.relation.address_city') }}"
+                        label="{{ __('components.relation.address') }}"
                         :data-city-id="$r['city_id'] ?? ''"
                         :data-taluka-id="$r['taluka_id'] ?? ''"
                         :data-district-id="$r['district_id'] ?? ''"
@@ -248,35 +250,35 @@
                     />
                 </div>
                 <div class="min-w-0">
-                    <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-0.5">Additional info</label>
-                    <input type="text" name="{{ $namePrefix }}[{{ $idx }}][notes]" value="{{ $r['notes'] ?? '' }}" placeholder="Notes" class="relation-input-h w-full h-10 rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-2 py-1.5 text-sm min-w-0">
+                    <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-0.5">{{ __('components.relation.additional_info') }}</label>
+                    <input type="text" name="{{ $namePrefix }}[{{ $idx }}][notes]" value="{{ $r['notes'] ?? '' }}" placeholder="{{ __('components.relation.notes_placeholder') }}" class="relation-input-h w-full h-10 rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-2 py-1.5 text-sm min-w-0">
                 </div>
             </div>
             @endif
 
             @if($showMarried)
             <div id="{{ $namePrefix }}-spouse-{{ $idx }}" class="relation-spouse-block mt-3 rounded-lg border border-gray-200 dark:border-gray-600 bg-gray-100 dark:bg-gray-700/60 p-3" style="{{ !$isMarried ? 'display:none;' : '' }}">
-                <p class="text-xs font-medium text-gray-700 dark:text-gray-300 mb-2">Spouse details</p>
+                <p class="text-xs font-medium text-gray-700 dark:text-gray-300 mb-2">{{ __('components.relation.spouse_details') }}</p>
                 <div class="grid gap-2 items-end mb-2" style="grid-template-columns: 1fr 1fr;">
                     <div class="min-w-0">
-                        <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-0.5">Name</label>
-                        <input type="text" name="{{ $namePrefix }}[{{ $idx }}][spouse][name]" value="{{ $spouse['name'] ?? '' }}" placeholder="Name" class="relation-input-h w-full h-10 rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-2 py-1.5 text-sm min-w-0">
+                        <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-0.5">{{ __('components.relation.name') }}</label>
+                        <input type="text" name="{{ $namePrefix }}[{{ $idx }}][spouse][name]" value="{{ $spouse['name'] ?? '' }}" placeholder="{{ __('components.relation.name_placeholder') }}" class="relation-input-h w-full h-10 rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-2 py-1.5 text-sm min-w-0">
                     </div>
                     <div class="min-w-0">
-                        <x-profile.contact-field name="{{ $namePrefix }}[{{ $idx }}][spouse][contact_number]" :value="$spouse['contact_number'] ?? ''" label="Mobile" placeholder="10-digit" :showCountryCode="true" :showWhatsapp="true" :nameWhatsapp="$namePrefix . '[' . $idx . '][spouse][contact_preference]'" :valueWhatsapp="'call'" inputClass="relation-input-h w-full min-w-0" />
+                        <x-profile.contact-field name="{{ $namePrefix }}[{{ $idx }}][spouse][contact_number]" :value="$spouse['contact_number'] ?? ''" :label="__('components.relation.mobile')" :placeholder="__('components.relation.ten_digit')" :showCountryCode="true" :showWhatsapp="true" :nameWhatsapp="$namePrefix . '[' . $idx . '][spouse][contact_preference]'" :valueWhatsapp="'call'" inputClass="relation-input-h w-full min-w-0" />
                     </div>
                 </div>
                 <div class="grid gap-2 items-end" style="grid-template-columns: 30fr 30fr 40fr;">
                     <div class="min-w-0">
-                        <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-0.5">Occupation</label>
-                        <input type="text" name="{{ $namePrefix }}[{{ $idx }}][spouse][occupation_title]" value="{{ $spouse['occupation_title'] ?? '' }}" placeholder="Occupation" class="relation-input-h w-full h-10 rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-2 py-1.5 text-sm min-w-0">
+                        <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-0.5">{{ __('components.relation.occupation') }}</label>
+                        <input type="text" name="{{ $namePrefix }}[{{ $idx }}][spouse][occupation_title]" value="{{ $spouse['occupation_title'] ?? '' }}" placeholder="{{ __('components.relation.occupation_placeholder') }}" class="relation-input-h w-full h-10 rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-2 py-1.5 text-sm min-w-0">
                     </div>
                     <div class="min-w-0 relation-address-cell">
-                        <x-profile.location-typeahead context="alliance" namePrefix="{{ $namePrefix }}[{{ $idx }}][spouse]" :value="$spouse['location_display'] ?? ''" placeholder="Address / city" label="Address" :data-city-id="$spouse['city_id'] ?? ''" :data-taluka-id="$spouse['taluka_id'] ?? ''" :data-district-id="$spouse['district_id'] ?? ''" :data-state-id="$spouse['state_id'] ?? ''" />
+                        <x-profile.location-typeahead context="alliance" namePrefix="{{ $namePrefix }}[{{ $idx }}][spouse]" :value="$spouse['location_display'] ?? ''" placeholder="{{ __('components.relation.address_city') }}" label="{{ __('components.relation.address') }}" :data-city-id="$spouse['city_id'] ?? ''" :data-taluka-id="$spouse['taluka_id'] ?? ''" :data-district-id="$spouse['district_id'] ?? ''" :data-state-id="$spouse['state_id'] ?? ''" />
                     </div>
                     <div class="min-w-0">
-                        <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-0.5">Additional info</label>
-                        <input type="text" name="{{ $namePrefix }}[{{ $idx }}][spouse][address_line]" value="{{ $spouse['address_line'] ?? '' }}" placeholder="Notes" class="relation-input-h w-full h-10 rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-2 py-1.5 text-sm min-w-0">
+                        <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-0.5">{{ __('components.relation.additional_info') }}</label>
+                        <input type="text" name="{{ $namePrefix }}[{{ $idx }}][spouse][address_line]" value="{{ $spouse['address_line'] ?? '' }}" placeholder="{{ __('components.relation.notes_placeholder') }}" class="relation-input-h w-full h-10 rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-2 py-1.5 text-sm min-w-0">
                     </div>
                 </div>
             </div>
@@ -287,7 +289,7 @@
             <div class="relation-primary-contact-wrap" @if($hidePrimaryForAddressOnly) style="display:none" @endif>
                 <label class="flex items-center gap-2 text-sm">
                     <input type="checkbox" name="{{ $namePrefix }}[{{ $idx }}][is_primary_contact]" value="1" {{ !empty($r['is_primary_contact']) ? 'checked' : '' }}>
-                    Primary contact
+                    {{ __('components.relation.primary_contact') }}
                 </label>
             </div>
             @endif
@@ -312,21 +314,21 @@
     <div class="contact-field-engine border-2 border-rose-500 dark:border-rose-400 rounded-lg p-3">
         <div class="flex items-center gap-1.5 flex-nowrap contact-master-field">
             <input type="text" inputmode="tel" maxlength="5" value="+91" placeholder="+91" class="text-xs text-gray-600 dark:text-gray-400 border border-gray-300 dark:border-gray-600 rounded py-1.5 bg-gray-50 dark:bg-gray-700 h-9 box-border text-center shrink-0 contact-cc-input" style="flex:0 0 2.25rem; width:2.25rem; min-width:2.25rem; max-width:2.25rem; padding-left:0.2rem; padding-right:0.2rem;">
-            <input type="text" inputmode="numeric" pattern="[0-9]*" maxlength="10" name="__NAME__" placeholder="10-digit" data-contact-engine class="relation-input-h h-9 rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-2 py-1.5 text-sm min-w-0 flex-1">
+            <input type="text" inputmode="numeric" pattern="[0-9]*" maxlength="10" name="__NAME__" placeholder="{{ __('components.relation.ten_digit') }}" data-contact-engine class="relation-input-h h-9 rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-2 py-1.5 text-sm min-w-0 flex-1">
             <input type="hidden" name="__PREF_NAME__" value="call" class="contact-preference-input">
             <div class="relative shrink-0 contact-preference-single" data-current-pref="call">
-                <button type="button" class="contact-pref-trigger rounded p-1.5 ring-2 ring-rose-500 bg-rose-50 dark:bg-rose-900/30 inline-flex items-center justify-center" title="Prefer contact via — click to change" aria-haspopup="true" aria-expanded="false">
+                <button type="button" class="contact-pref-trigger rounded p-1.5 ring-2 ring-rose-500 bg-rose-50 dark:bg-rose-900/30 inline-flex items-center justify-center" title="{{ __('contact.prefer_contact_via') }}" aria-haspopup="true" aria-expanded="false">
                     <span class="contact-pref-icon contact-pref-icon-whatsapp" data-pref="whatsapp" style="display:none"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" class="w-5 h-5" fill="#25D366"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg></span>
                     <span class="contact-pref-icon contact-pref-icon-call text-red-500 dark:text-red-400" data-pref="call"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-5 h-5"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 0 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg></span>
                     <span class="contact-pref-icon contact-pref-icon-message" data-pref="message" style="display:none"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-5 h-5 text-gray-600 dark:text-gray-400"><path fill-rule="evenodd" d="M4.848 2.771A49.144 49.144 0 0112 2.25c2.43 0 4.817.178 7.152.52 1.978.292 3.348 2.024 3.348 3.97v6.02c0 1.946-1.37 3.678-3.348 3.97a48.901 48.901 0 01-3.476.383.39.39 0 00-.27.17l-2.47 2.47a.75.75 0 01-1.06 0l-2.47-2.47a.39.39 0 00-.27-.17 48.9 48.9 0 01-3.476-.384c-1.978-.29-3.348-2.024-3.348-3.97V6.741c0-1.946 1.37-3.68 3.348-3.97z" clip-rule="evenodd"/></svg></span>
                 </button>
                 <div class="contact-pref-dropdown hidden absolute right-0 top-full mt-1 z-50 min-w-[8rem] py-1 rounded-lg shadow-lg bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600">
-                    <button type="button" class="contact-pref-option w-full text-left px-3 py-2 text-sm flex items-center gap-2 hover:bg-rose-50 dark:hover:bg-rose-900/30" data-pref="whatsapp"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" class="w-4 h-4" fill="#25D366"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg> WhatsApp</button>
-                    <button type="button" class="contact-pref-option w-full text-left px-3 py-2 text-sm flex items-center gap-2 hover:bg-rose-50 dark:hover:bg-rose-900/30" data-pref="call"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4 text-red-500 dark:text-red-400"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 0 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg> Call</button>
-                    <button type="button" class="contact-pref-option w-full text-left px-3 py-2 text-sm flex items-center gap-2 hover:bg-rose-50 dark:hover:bg-rose-900/30" data-pref="message"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-4 h-4 text-gray-600 dark:text-gray-400"><path fill-rule="evenodd" d="M4.848 2.771A49.144 49.144 0 0112 2.25c2.43 0 4.817.178 7.152.52 1.978.292 3.348 2.024 3.348 3.97v6.02c0 1.946-1.37 3.678-3.348 3.97a48.901 48.901 0 01-3.476.383.39.39 0 00-.27.17l-2.47 2.47a.75.75 0 01-1.06 0l-2.47-2.47a.39.39 0 00-.27-.17 48.9 48.9 0 01-3.476-.384c-1.978-.29-3.348-2.024-3.348-3.97V6.741c0-1.946 1.37-3.68 3.348-3.97z" clip-rule="evenodd"/></svg> Message</button>
+                    <button type="button" class="contact-pref-option w-full text-left px-3 py-2 text-sm flex items-center gap-2 hover:bg-rose-50 dark:hover:bg-rose-900/30" data-pref="whatsapp"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" class="w-4 h-4" fill="#25D366"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg> {{ __('contact.whatsapp') }}</button>
+                    <button type="button" class="contact-pref-option w-full text-left px-3 py-2 text-sm flex items-center gap-2 hover:bg-rose-50 dark:hover:bg-rose-900/30" data-pref="call"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4 text-red-500 dark:text-red-400"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 0 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg> {{ __('contact.call') }}</button>
+                    <button type="button" class="contact-pref-option w-full text-left px-3 py-2 text-sm flex items-center gap-2 hover:bg-rose-50 dark:hover:bg-rose-900/30" data-pref="message"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-4 h-4 text-gray-600 dark:text-gray-400"><path fill-rule="evenodd" d="M4.848 2.771A49.144 49.144 0 0112 2.25c2.43 0 4.817.178 7.152.52 1.978.292 3.348 2.024 3.348 3.97v6.02c0 1.946-1.37 3.678-3.348 3.97a48.901 48.901 0 01-3.476.383.39.39 0 00-.27.17l-2.47 2.47a.75.75 0 01-1.06 0l-2.47-2.47a.39.39 0 00-.27-.17 48.9 48.9 0 01-3.476-.384c-1.978-.29-3.348-2.024-3.348-3.97V6.741c0-1.946 1.37-3.68 3.348-3.97z" clip-rule="evenodd"/></svg> {{ __('contact.message') }}</button>
                 </div>
             </div>
-            <button type="button" class="contact-engine-add-btn shrink-0 inline-flex items-center justify-center w-9 h-9 rounded border-2 border-rose-500 dark:border-rose-400 bg-rose-50 dark:bg-rose-900/30 text-rose-600 dark:text-rose-300 font-bold text-lg leading-none hover:bg-rose-100 dark:hover:bg-rose-800/50" title="Add another contact" aria-label="Add contact">+</button>
+            <button type="button" class="contact-engine-add-btn shrink-0 inline-flex items-center justify-center w-9 h-9 rounded border-2 border-rose-500 dark:border-rose-400 bg-rose-50 dark:bg-rose-900/30 text-rose-600 dark:text-rose-300 font-bold text-lg leading-none hover:bg-rose-100 dark:hover:bg-rose-800/50" title="{{ __('contact.add_another_contact') }}" aria-label="{{ __('contact.add_contact') }}">+</button>
         </div>
     </div>
     </div>

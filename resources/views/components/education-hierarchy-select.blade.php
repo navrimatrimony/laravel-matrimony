@@ -26,7 +26,7 @@
             <div>
                 <label class="{{ $labelCls }}">{{ $labelCategory }}</label>
                 <select name="{{ $n($categoryName) }}" class="{{ $inputCls }} education-category-select">
-                    <option value="">Select category</option>
+                    <option value="">{{ __('components.education.select_category') }}</option>
                     @foreach($categories as $cat)
                         <option value="{{ $cat->name }}" {{ (string)$selectedCategory === (string)$cat->name ? 'selected' : '' }}>{{ $cat->name }}</option>
                     @endforeach
@@ -35,7 +35,7 @@
             <div class="education-degree-wrap">
                 <label class="{{ $labelCls }}">{{ $labelDegree }}</label>
                 <select name="{{ $n($degreeName) }}" class="{{ $inputCls }} education-degree-select">
-                    <option value="">Select degree</option>
+                    <option value="">{{ __('components.education.select_degree') }}</option>
                     @foreach($categories as $cat)
                         @foreach($cat->degrees as $deg)
                             <option value="{{ $deg->code }}" data-category="{{ $cat->name }}" data-fullform="{{ e($deg->full_form ?? '') }}" {{ (string)$selectedDegree === (string)$deg->code ? 'selected' : '' }}>{{ $deg->title }}</option>
@@ -52,6 +52,7 @@
             var catSelect = wrap.querySelector('.education-category-select');
             var degSelect = wrap.querySelector('.education-degree-select');
             var fullformP = wrap.querySelector('.education-degree-fullform');
+            var fullFormPrefix = @json(__('components.education.full_form_prefix'));
             var allDegreeOptions = degSelect ? Array.from(degSelect.querySelectorAll('option[data-category]')) : [];
             function filterDegrees(clearSelection) {
                 var cat = catSelect ? catSelect.value : '';
@@ -66,7 +67,7 @@
             function showFullForm() {
                 var sel = degSelect ? degSelect.options[degSelect.selectedIndex] : null;
                 if (fullformP && sel && sel.getAttribute('data-fullform')) {
-                    fullformP.textContent = 'Full form: ' + sel.getAttribute('data-fullform');
+                    fullformP.textContent = fullFormPrefix + ' ' + sel.getAttribute('data-fullform');
                     fullformP.style.display = 'block';
                 } else if (fullformP) fullformP.style.display = 'none';
             }
@@ -80,7 +81,7 @@
         <div>
             <label class="{{ $labelCls }}">{{ $labelDegree }} (grouped)</label>
             <select name="{{ $n($degreeName) }}" class="{{ $inputCls }}">
-                <option value="">Select degree</option>
+                <option value="">{{ __('components.education.select_degree') }}</option>
                 @foreach($categories as $cat)
                     <optgroup label="{{ $cat->name }}">
                         @foreach($cat->degrees as $deg)

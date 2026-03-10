@@ -39,10 +39,10 @@ class AbuseReportController extends Controller
             if ($request->expectsJson()) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'You have already reported this profile. Our team is reviewing it.',
+                    'message' => __('profile_actions.already_reported'),
                 ], 422);
             }
-            return redirect()->back()->with('error', 'You have already reported this profile. Our team is reviewing it.');
+            return redirect()->back()->with('error', __('profile_actions.already_reported'));
         }
 
         // Create report
@@ -56,11 +56,11 @@ class AbuseReportController extends Controller
         if ($request->expectsJson()) {
             return response()->json([
                 'success' => true,
-                'message' => 'Abuse report submitted successfully.',
+                'message' => __('profile_actions.abuse_report_submitted'),
             ]);
         }
 
-        return redirect()->back()->with('success', 'Abuse report submitted successfully.');
+        return redirect()->back()->with('success', __('profile_actions.abuse_report_submitted'));
     }
 
     /**
@@ -114,10 +114,10 @@ class AbuseReportController extends Controller
         if ($request->expectsJson()) {
             return response()->json([
                 'success' => true,
-                'message' => 'Abuse report resolved successfully.',
+                'message' => __('profile_actions.abuse_report_resolved'),
             ]);
         }
 
-        return redirect()->back()->with('success', 'Abuse report resolved successfully.');
+        return redirect()->back()->with('success', __('profile_actions.abuse_report_resolved'));
     }
 }

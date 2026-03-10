@@ -15,7 +15,7 @@
         {{-- Progress bar (top) --}}
         <div class="mb-4 md:mb-6">
             <div class="flex justify-between text-sm text-gray-600 dark:text-gray-400 mb-1">
-                <span>Profile completion</span>
+                <span>{{ __('Profile completion') }}</span>
                 <span>{{ $completionPct }}%</span>
             </div>
             <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2.5">
@@ -43,7 +43,7 @@
             {{-- Desktop: sticky left sidebar nav --}}
             <aside class="hidden lg:block lg:w-56 xl:w-64 shrink-0">
                 <div class="lg:sticky lg:top-4 space-y-0.5 rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 p-2 shadow-sm">
-                    <p class="px-2 py-1.5 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Sections</p>
+                    <p class="px-2 py-1.5 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">{{ __('Sections') }}</p>
                     @foreach ($sections as $s)
                         @php
                             $label = $sectionLabels[$s] ?? str_replace('-', ' ', ucfirst($s));
@@ -57,7 +57,7 @@
                                 @elseif($status === 'warning') bg-amber-500
                                 @else bg-gray-300 dark:bg-gray-500
                                 @endif" aria-hidden="true"></span>
-                            <span class="truncate">{{ $label }}</span>
+                            <span class="truncate">{{ __($label) }}</span>
                         </a>
                     @endforeach
                 </div>
@@ -75,7 +75,7 @@
                         <a href="{{ route('matrimony.profile.wizard.section', ['section' => $s]) }}"
                             class="shrink-0 px-3 py-2 rounded-full text-sm font-medium border transition-colors whitespace-nowrap
                                 {{ $isActive ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-600 hover:border-indigo-400' }}">
-                            {{ $label }}
+                            {{ __($label) }}
                         </a>
                     @endforeach
                 </div>
@@ -86,7 +86,7 @@
                 <div class="bg-white dark:bg-gray-800 shadow rounded-lg border border-gray-200 dark:border-gray-600 overflow-hidden">
                     <div class="px-4 sm:px-6 py-4 border-b border-gray-200 dark:border-gray-600">
                         <h1 class="text-xl font-semibold text-gray-900 dark:text-gray-100">
-                            {{ $sectionLabels[$currentSection] ?? str_replace('-', ' ', ucfirst($currentSection)) }}
+                            {{ __($sectionLabels[$currentSection] ?? str_replace('-', ' ', ucfirst($currentSection))) }}
                         </h1>
                     </div>
                     <form method="POST" action="{{ route('matrimony.profile.wizard.store', ['section' => $currentSection]) }}" enctype="{{ in_array($currentSection, ['photo', 'full'], true) ? 'multipart/form-data' : 'application/x-www-form-urlencoded' }}" class="p-4 sm:p-6">
@@ -97,18 +97,18 @@
                         <div class="flex flex-wrap gap-3 pt-6 mt-6 border-t border-gray-200 dark:border-gray-700">
                             @if ($previousSection)
                                 <a href="{{ route('matrimony.profile.wizard.section', ['section' => $previousSection]) }}" class="px-4 py-2 bg-gray-200 dark:bg-gray-600 text-gray-800 dark:text-gray-200 rounded-lg font-medium hover:bg-gray-300 dark:hover:bg-gray-500 transition-colors">
-                                    Previous
+                                    {{ __('Previous') }}
                                 </a>
                             @endif
                             <button type="submit" name="save_only" value="1" class="px-4 py-2 bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200 rounded-lg font-medium hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors border border-gray-300 dark:border-gray-600">
-                                Save
+                                {{ __('Save') }}
                             </button>
                             <button type="submit" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-medium transition-colors">
-                                {{ $nextSection ? 'Save & Next' : 'Save & Finish' }}
+                                {{ $nextSection ? __('Save & Next') : __('Save & Finish') }}
                             </button>
                             @if ($nextSection)
                                 <a href="{{ route('matrimony.profile.wizard.section', ['section' => $nextSection]) }}" class="px-4 py-2 text-gray-600 dark:text-gray-400 text-sm font-medium hover:text-indigo-600 dark:hover:text-indigo-400">
-                                    Skip for now
+                                    {{ __('Skip for now') }}
                                 </a>
                             @endif
                         </div>

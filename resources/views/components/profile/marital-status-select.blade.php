@@ -25,7 +25,7 @@
             name="{{ $name }}"
             class="form-select w-full rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-3 py-2"
             {{ $required ? 'required' : '' }}>
-        <option value="">Select Marital Status</option>
+        <option value="">{{ __('components.marital.select_marital_status') }}</option>
         @foreach($statuses as $status)
             @php $s = is_object($status) ? $status : (object) $status; @endphp
             <option value="{{ $s->id ?? '' }}" {{ $selected === (string)($s->id ?? '') ? 'selected' : '' }}>💍 {{ $s->label ?? '' }}</option>

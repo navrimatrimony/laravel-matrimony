@@ -67,7 +67,7 @@ class IntakeController extends Controller
                 ->count();
             if ($todayCount >= $dailyLimit) {
                 return redirect()->back()
-                    ->withErrors(['file' => 'You have reached today\'s biodata upload limit. Please try again tomorrow.'])
+                    ->withErrors(['file' => __('intake.daily_limit_reached_try_tomorrow')])
                     ->withInput();
             }
         }
@@ -78,7 +78,7 @@ class IntakeController extends Controller
                 ->count();
             if ($monthCount >= $monthlyLimit) {
                 return redirect()->back()
-                    ->withErrors(['file' => 'You have reached this month\'s biodata upload limit.'])
+                    ->withErrors(['file' => __('intake.monthly_limit_reached')])
                     ->withInput();
             }
         }
@@ -92,7 +92,7 @@ class IntakeController extends Controller
                     'cap' => $globalDailyCap,
                 ]);
                 return redirect()->back()
-                    ->withErrors(['file' => 'System is handling many biodata uploads today. Please try again tomorrow.'])
+                    ->withErrors(['file' => __('intake.global_cap_try_tomorrow')])
                     ->withInput();
             }
         }
@@ -116,7 +116,7 @@ class IntakeController extends Controller
                 $limitBytes = $maxPdfMb * 1024 * 1024;
                 if ($sizeBytes !== null && $sizeBytes > $limitBytes) {
                     return redirect()->back()
-                        ->withErrors(['file' => "PDF is too large. Maximum allowed size is {$maxPdfMb} MB."])
+                        ->withErrors(['file' => __('intake.pdf_too_large', ['max_mb' => $maxPdfMb])])
                         ->withInput();
                 }
             }
@@ -129,7 +129,7 @@ class IntakeController extends Controller
                     $pageCount = is_array($pages) ? count($pages) : 0;
                     if ($pageCount > $maxPdfPages) {
                         return redirect()->back()
-                            ->withErrors(['file' => "PDF has too many pages. Maximum allowed is {$maxPdfPages} pages."])
+                            ->withErrors(['file' => __('intake.pdf_too_many_pages', ['max_pages' => $maxPdfPages])])
                             ->withInput();
                     }
                 } catch (\Throwable $e) {
@@ -146,7 +146,7 @@ class IntakeController extends Controller
                 $imagesInThisIntake = 1;
                 if ($imagesInThisIntake > $maxImagesPerIntake) {
                     return redirect()->back()
-                        ->withErrors(['file' => 'Too many images in a single biodata intake. Please reduce and try again.'])
+                        ->withErrors(['file' => __('intake.too_many_images_reduce')])
                         ->withInput();
                 }
             }
@@ -156,7 +156,7 @@ class IntakeController extends Controller
                 $rawText = $ocrService->extractTextFromPath($path, $originalName);
             } catch (\Throwable $e) {
                 return redirect()->back()
-                    ->withErrors(['file' => 'OCR extraction failed. ' . $e->getMessage()])
+                    ->withErrors(['file' => __('intake.ocr_extraction_failed') . ' ' . $e->getMessage()])
                     ->withInput();
             }
         } else {
@@ -188,7 +188,7 @@ class IntakeController extends Controller
         }
 
         return redirect()->route('intake.status', $intake->id)
-    ->with('success', 'Intake uploaded successfully.');
+    ->with('success', __('intake.uploaded_successfully'));
     }
 
     /**
@@ -202,7 +202,7 @@ class IntakeController extends Controller
         $isOwner = (int) $intake->uploaded_by === (int) auth()->id();
         $isAdmin = auth()->user()?->isAnyAdmin() ?? false;
         if (! $isOwner && ! $isAdmin) {
-            abort(403, 'You can only preview your own biodata uploads.');
+            abort(403, __('intake.only_preview_own'));
         }
         if ($intake->approved_by_user) {
             return redirect()->route('intake.status', $intake->id);
@@ -707,7 +707,7 @@ class IntakeController extends Controller
     public function approve(Request $request, BiodataIntake $intake)
     {
         if ((int) $intake->uploaded_by !== (int) auth()->id()) {
-            abort(403, 'You can only approve your own biodata uploads.');
+            abort(403, __('intake.only_approve_own'));
         }
         if (! session('preview_seen_' . $intake->id)) {
             abort(403);
@@ -741,7 +741,7 @@ class IntakeController extends Controller
 
         $result = app(IntakeApprovalService::class)->approve($intake, (int) auth()->id(), $snapshot);
         return redirect()->route('intake.status', $intake->id)
-    ->with('success', 'Intake approved successfully.')
+    ->with('success', __('intake.approved_successfully'))
     ->with('mutation_result', $result);
     }
 
@@ -843,7 +843,7 @@ class IntakeController extends Controller
     public function status(BiodataIntake $intake)
     {
         if ((int) $intake->uploaded_by !== (int) auth()->id()) {
-            abort(403, 'You can only view status of your own biodata uploads.');
+            abort(403, __('intake.only_view_status_own'));
         }
 
         return view('intake.status', compact('intake'));

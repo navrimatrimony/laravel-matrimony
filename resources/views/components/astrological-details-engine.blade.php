@@ -44,16 +44,16 @@
 @endphp
 <div class="astrological-details-engine space-y-4">
     <div class="{{ $cardCls }}">
-        <h3 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">Rashi, Nakshatra & Charan</h3>
+        <h3 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">{{ __('components.horoscope.rashi_nakshatra_charan') }}</h3>
         <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
-                <label for="astrological-rashi" class="{{ $labelCls }}">Rashi</label>
+                <label for="astrological-rashi" class="{{ $labelCls }}">{{ __('components.horoscope.rashi') }}</label>
                 @if($readOnly)
                     @php $rashiLabel = $rashiIdRaw ? (collect($rashis)->firstWhere('id', $rashiIdRaw)?->label ?? '—') : '—'; @endphp
                     <p class="py-2 text-gray-900 dark:text-gray-100">{{ $rashiLabel }}</p>
                 @else
                     <select name="{{ $n('rashi_id') }}" id="astrological-rashi" class="{{ $inputCls }}">
-                        <option value="">— Select —</option>
+                        <option value="">{{ __('common.select_placeholder') }}</option>
                         @foreach($rashis as $item)
                             <option value="{{ $item->id }}" {{ (string)($rashiIdRaw ?? '') === (string)$item->id ? 'selected' : '' }}>{{ $item->label ?? $item->name ?? '' }}</option>
                         @endforeach
@@ -62,13 +62,13 @@
                 @endif
             </div>
             <div>
-                <label for="astrological-nakshatra" class="{{ $labelCls }}">Nakshatra</label>
+                <label for="astrological-nakshatra" class="{{ $labelCls }}">{{ __('components.horoscope.nakshatra') }}</label>
                 @if($readOnly)
                     @php $nakshatraLabel = $nakshatraIdRaw ? (collect($nakshatras)->firstWhere('id', $nakshatraIdRaw)?->label ?? '—') : '—'; @endphp
                     <p class="py-2 text-gray-900 dark:text-gray-100">{{ $nakshatraLabel }}</p>
                 @else
                     <select name="{{ $n('nakshatra_id') }}" id="astrological-nakshatra" class="{{ $inputCls }}">
-                        <option value="">— Select —</option>
+                        <option value="">{{ __('common.select_placeholder') }}</option>
                         @foreach($nakshatras as $item)
                             <option value="{{ $item->id }}" {{ (string)($nakshatraIdRaw ?? '') === (string)$item->id ? 'selected' : '' }}>{{ $item->label ?? $item->name ?? '' }}</option>
                         @endforeach
@@ -77,12 +77,12 @@
                 @endif
             </div>
             <div>
-                <label for="astrological-charan" class="{{ $labelCls }}">Charan</label>
+                <label for="astrological-charan" class="{{ $labelCls }}">{{ __('components.horoscope.charan') }}</label>
                 @if($readOnly)
                     <p class="py-2 text-gray-900 dark:text-gray-100">{{ $charanRaw !== null && $charanRaw !== '' ? $charanRaw : '—' }}</p>
                 @else
                     <select name="{{ $n('charan') }}" id="astrological-charan" class="{{ $inputCls }}">
-                        <option value="">— Select —</option>
+                        <option value="">{{ __('common.select_placeholder') }}</option>
                         @foreach([1, 2, 3, 4] as $c)
                             <option value="{{ $c }}" {{ (string)($charanRaw ?? '') === (string)$c ? 'selected' : '' }}>{{ $c }}</option>
                         @endforeach

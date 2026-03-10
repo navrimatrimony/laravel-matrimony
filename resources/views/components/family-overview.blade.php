@@ -10,17 +10,8 @@
 ])
 @php
     // Canonical option sets (keys stored in DB, labels shown in UI).
-    $familyStatusOptions = [
-        'simple' => 'Simple',
-        'middle_class' => 'Middle Class',
-        'upper_middle_class' => 'Upper Middle Class',
-        'affluent' => 'Affluent',
-    ];
-    $familyValuesOptions = [
-        'traditional' => 'Traditional',
-        'moderate' => 'Moderate',
-        'modern' => 'Modern',
-    ];
+    $familyStatusOptions = trans('components.family.status_options');
+    $familyValuesOptions = trans('components.family.values_options');
     $hasPrefix = $namePrefix !== '';
 
     // Resolve field names depending on context.
@@ -47,9 +38,9 @@
     {{-- Row 1: Family Type, Status, Values — one line, same width as below --}}
     <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div>
-            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Family Type</label>
+            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{{ __('components.family.family_type') }}</label>
             <select name="{{ $nameFamilyTypeId }}" class="form-select w-full rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-3 py-2">
-                <option value="">Select Family Type</option>
+                <option value="">{{ __('components.family.select_family_type') }}</option>
                 @foreach($familyTypes as $ft)
                     <option value="{{ $ft->id }}" {{ (string) $currentFamilyTypeId === (string) $ft->id ? 'selected' : '' }}>
                         {{ $ft->label }}
@@ -58,9 +49,9 @@
             </select>
         </div>
         <div>
-            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Family Status</label>
+            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{{ __('components.family.family_status') }}</label>
             <select name="{{ $nameFamilyStatus }}" class="form-select w-full rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-3 py-2">
-                <option value="">Select Family Status</option>
+                <option value="">{{ __('components.family.select_family_status') }}</option>
                 @foreach($familyStatusOptions as $key => $label)
                     <option value="{{ $key }}" {{ (string) $currentFamilyStatus === (string) $key ? 'selected' : '' }}>
                         {{ $label }}
@@ -69,9 +60,9 @@
             </select>
         </div>
         <div>
-            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Family Values</label>
+            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{{ __('components.family.family_values') }}</label>
             <select name="{{ $nameFamilyValues }}" class="form-select w-full rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-3 py-2">
-                <option value="">Select Family Values</option>
+                <option value="">{{ __('components.family.select_family_values') }}</option>
                 @foreach($familyValuesOptions as $key => $label)
                     <option value="{{ $key }}" {{ (string) $currentFamilyValues === (string) $key ? 'selected' : '' }}>
                         {{ $label }}
@@ -83,7 +74,7 @@
     {{-- Row 2: Family Income — full width of this box, one line (Annual, Exact, amount, currency) + privacy below --}}
     <div class="pt-4 border-t border-gray-200 dark:border-gray-600 w-full">
         <x-income-engine
-            label="Family Income"
+            :label="__('components.family.family_income')"
             namePrefix="family_income"
             :profile="$profile"
             :currencies="$currencies ?? []"

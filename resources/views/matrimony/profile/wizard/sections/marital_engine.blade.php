@@ -25,10 +25,10 @@
      x-init="init()"
      @marital-status-change.window="onStatusChange($event.detail)">
     @if($showMaritalStatus)
-        <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100 border-b border-gray-200 dark:border-gray-700 pb-2">Marital status</h2>
+        <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100 border-b border-gray-200 dark:border-gray-700 pb-2">{{ __('Marital status') }}</h2>
         {{-- Step 1: Marital status (radios) — bold, spaced, card-style options --}}
         <div>
-            <p class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Marital status <span class="text-red-500">*</span></p>
+            <p class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">{{ __('Marital status') }} <span class="text-red-500">*</span></p>
             <div class="flex flex-nowrap gap-2 w-full overflow-x-auto items-stretch">
                 @foreach($maritalStatuses as $s)
                     <label class="inline-flex items-center justify-center cursor-pointer rounded-lg border-2 pl-3 pr-4 py-2.5 transition-all duration-150 flex-1 min-w-0 min-h-[42px]
@@ -41,7 +41,7 @@
                                x-model="maritalStatusId"
                                @change="onMaritalChange()">
                         <span class="ml-2 text-xs font-semibold break-words"
-                              :class="maritalStatusId == '{{ $s->id }}' ? 'text-white' : 'text-gray-800 dark:text-gray-200'">{{ $s->label }}</span>
+                              :class="maritalStatusId == '{{ $s->id }}' ? 'text-white' : 'text-gray-800 dark:text-gray-200'">{{ __($s->label) }}</span>
                     </label>
                 @endforeach
             </div>
@@ -58,25 +58,25 @@
     <div class="marital-details-block" x-show="statusKey === 'divorced' || statusKey === 'separated' || statusKey === 'widowed'" x-cloak style="display: none;">
         {{-- Heading line: Status details + Children (required) — visible section heading --}}
         <div class="flex flex-wrap items-center gap-4 pb-2 mb-2 border-b border-gray-200 dark:border-gray-600">
-            <h3 class="text-base font-semibold text-gray-800 dark:text-gray-100">Status details (optional)</h3>
+            <h3 class="text-base font-semibold text-gray-800 dark:text-gray-100">{{ __('Status details (optional)') }}</h3>
             <span class="text-gray-400 dark:text-gray-500" aria-hidden="true">|</span>
-            <h3 class="text-base font-semibold text-gray-800 dark:text-gray-100">Children <span class="text-red-500">*</span></h3>
+            <h3 class="text-base font-semibold text-gray-800 dark:text-gray-100">{{ __('Children') }} <span class="text-red-500">*</span></h3>
         </div>
         <div class="flex flex-wrap sm:flex-nowrap gap-2 sm:gap-3 items-end">
             <div class="flex-shrink-0" style="min-width: 6rem;">
-                <label class="block text-xs text-gray-600 dark:text-gray-400 mb-0.5">Marriage year</label>
+                <label class="block text-xs text-gray-600 dark:text-gray-400 mb-0.5">{{ __('Marriage year') }}</label>
                 <input type="number" name="marriages[0][marriage_year]" min="1901" max="{{ date('Y') }}"
                        value="{{ old('marriages.0.marriage_year', $marriage?->marriage_year ?? '') }}"
                        class="w-full rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-3 py-2.5 text-sm h-[42px]">
             </div>
             <div class="flex-shrink-0" x-show="statusKey === 'divorced'" style="min-width: 6rem;">
-                <label class="block text-xs text-gray-600 dark:text-gray-400 mb-0.5">Divorce year</label>
+                <label class="block text-xs text-gray-600 dark:text-gray-400 mb-0.5">{{ __('Divorce year') }}</label>
                 <input type="number" name="{{ $marriagesPrefix }}divorce_year{{ $marriagesSuffix }}" min="1901" max="{{ date('Y') }}"
                        value="{{ old('marriages.0.divorce_year', $marriage?->divorce_year ?? '') }}"
                        class="w-full rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-3 py-2.5 text-sm h-[42px]">
             </div>
             <div class="flex-shrink-0" x-show="statusKey === 'separated'" style="min-width: 6.5rem;">
-                <label class="block text-xs text-gray-600 dark:text-gray-400 mb-0.5">Separation year</label>
+                <label class="block text-xs text-gray-600 dark:text-gray-400 mb-0.5">{{ __('Separation year') }}</label>
                 <input type="number" name="{{ $marriagesPrefix }}separation_year{{ $marriagesSuffix }}" min="1901" max="{{ date('Y') }}"
                        value="{{ old('marriages.0.separation_year', $marriage?->separation_year ?? '') }}"
                        class="w-full rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-3 py-2.5 text-sm h-[42px]">

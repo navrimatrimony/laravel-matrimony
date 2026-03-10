@@ -2,14 +2,14 @@
 
 @section('content')
 <div class="py-8 max-w-4xl mx-auto px-4">
-    <h1 class="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-4">Who viewed my profile</h1>
+    <h1 class="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-4">{{ __('who_viewed.title') }}</h1>
 
     @if ($uniqueCount === 0)
-        <p class="text-gray-600 dark:text-gray-400 mb-6">No one has viewed your profile in the last 30 days.</p>
+        <p class="text-gray-600 dark:text-gray-400 mb-6">{{ __('who_viewed.none_last_30_days') }}</p>
     @else
         <p class="text-gray-700 dark:text-gray-300 mb-6">
             <span class="font-semibold">{{ $uniqueCount }}</span>
-            {{ Str::plural('person', $uniqueCount) }} has viewed your profile in the last 30 days.
+            {{ trans_choice('who_viewed.people_viewed_last_30_days', $uniqueCount, ['count' => $uniqueCount]) }}
         </p>
 
         <div class="space-y-4">
@@ -32,11 +32,11 @@
                         </p>
                         @if ($viewerProfile)
                             <a href="{{ route('matrimony.profile.show', $viewerProfile->id) }}" class="text-sm text-indigo-600 dark:text-indigo-400 hover:underline">
-                                View profile
+                                {{ __('who_viewed.view_profile') }}
                             </a>
                         @endif
                         <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                            Viewed {{ $view->created_at->diffForHumans() }}
+                            {{ __('who_viewed.viewed_at', ['time' => $view->created_at->diffForHumans()]) }}
                         </p>
                     </div>
                 </div>
