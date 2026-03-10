@@ -17,6 +17,38 @@
             $coreData = $sections['core']['data'] ?? $data['core'] ?? [];
         @endphp
 
+        {{-- Raw biodata text — safety net to ensure 100% preview coverage --}}
+        @if(!empty($intake->raw_ocr_text))
+        <section class="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+            <h2 class="text-lg font-semibold mb-2 border-b pb-2">{{ __('intake.raw_text_heading') }}</h2>
+            @if(!empty($missingCriticalFields))
+                <div class="mb-3 text-xs text-red-700 dark:text-red-400">
+                    <p class="font-semibold mb-1">⚠️ खालील महत्वाच्या फील्डमध्ये मूल्य भरलेले नाही:</p>
+                    <ul class="list-disc list-inside space-y-0.5">
+                        @foreach($missingCriticalFields as $fieldKey)
+                            @php
+                                // Normalize keys like "profile.gender" → "gender"
+                                $normalizedKey = \Illuminate\Support\Str::startsWith($fieldKey, 'profile.')
+                                    ? \Illuminate\Support\Str::after($fieldKey, 'profile.')
+                                    : $fieldKey;
+                                $label = __('profile.' . $normalizedKey);
+                                if ($label === 'profile.' . $normalizedKey) {
+                                    // Fallback: show raw key if translation missing
+                                    $label = $fieldKey;
+                                }
+                            @endphp
+                            <li>{{ $label }}</li>
+                        @endforeach
+                    </ul>
+                </div>
+            @endif
+            <p class="text-xs text-gray-600 dark:text-gray-400 mb-3">{{ __('intake.raw_text_help') }}</p>
+            <div class="max-h-64 overflow-y-auto rounded border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-900/40 p-3 text-xs text-gray-800 dark:text-gray-100 whitespace-pre-wrap leading-relaxed">
+                {{ $intake->raw_ocr_text }}
+            </div>
+        </section>
+        @endif
+
         {{-- Basic Information — same engine as wizard (full_name, gender, DOB, birth time/place, religion/caste, marital). --}}
         <section class="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
             @include('matrimony.profile.wizard.sections.basic_info', [

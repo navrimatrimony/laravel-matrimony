@@ -58,15 +58,6 @@ class BiodataParserService
 
     public function parse(string $rawText): array
     {
-        // Optional AI-first path when enabled in admin settings.
-        $activeParser = AdminSetting::getValue('intake_active_parser', 'rules_only');
-        if ($activeParser === 'ai_v1') {
-            $aiResult = app(ExternalAiParsingService::class)->parseToSsot($rawText);
-            if (is_array($aiResult) && isset($aiResult['core'], $aiResult['confidence_map'])) {
-                return $aiResult;
-            }
-        }
-
         // SSOT Day-27: Apply baseline normalization (Devanagari digits + noise removal)
         $text = \App\Services\Ocr\OcrNormalize::normalizeRawText($rawText);
         $text = $this->normalizeText($text);
@@ -162,8 +153,34 @@ class BiodataParserService
         $confidence['brother_count'] = $brotherCount !== null ? self::CONF_REGEX : self::CONF_MISSING;
         $confidence['sister_count'] = $sisterCount !== null ? self::CONF_REGEX : self::CONF_MISSING;
 
+        // Focused Marathi family-core override pass: infer missing father/mother + counts from free-text context.
+        $familyCoreOverride = $this->extractFamilyCore($text);
+        if (($familyCoreOverride['father_name'] ?? null) !== null && $fatherName === null) {
+            $fatherName = $familyCoreOverride['father_name'];
+            $confidence['father_name'] = self::CONF_REGEX;
+        }
+        if (($familyCoreOverride['mother_name'] ?? null) !== null && $motherName === null) {
+            $motherName = $familyCoreOverride['mother_name'];
+            $confidence['mother_name'] = self::CONF_REGEX;
+        }
+        if (($familyCoreOverride['father_occupation'] ?? null) !== null) {
+            $fatherOccupation = $fatherOccupation ?? $familyCoreOverride['father_occupation'];
+        }
+        if (($familyCoreOverride['mother_occupation'] ?? null) !== null) {
+            $motherOccupation = $motherOccupation ?? $familyCoreOverride['mother_occupation'];
+        }
+        if (($familyCoreOverride['brothers_count'] ?? null) !== null && $brotherCount === null) {
+            $brotherCount = $familyCoreOverride['brothers_count'];
+            $confidence['brother_count'] = self::CONF_REGEX;
+        }
+        if (($familyCoreOverride['sisters_count'] ?? null) !== null && $sisterCount === null) {
+            $sisterCount = $familyCoreOverride['sisters_count'];
+            $confidence['sister_count'] = self::CONF_REGEX;
+        }
+
         // SSOT Day-30: extended biodata fields (additive); reject values that are known labels (wrong assignment)
-        $birthTime = $this->rejectIfLabelNoise($this->extractField($personalText, ['जन्म वेळ', 'Birth time']) ?? $this->extractField($text, ['जन्म वेळ', 'Birth time']));
+        $birthTimeRaw = $this->rejectIfLabelNoise($this->extractField($personalText, ['जन्म वेळ', 'Birth time']) ?? $this->extractField($text, ['जन्म वेळ', 'Birth time']));
+        $birthTime = $this->normalizeBirthTime($birthTimeRaw);
         $birthPlace = $this->rejectIfLabelNoise($this->extractField($personalText, ['जन्म स्थळ', 'Birth place']) ?? $this->extractField($text, ['जन्म स्थळ', 'Birth place']));
         $gotra = $this->rejectIfLabelNoise($this->extractField($personalText, ['गोत्र']) ?? $this->extractField($text, ['गोत्र']));
         $kuldaivat = $this->rejectIfLabelNoise($this->extractField($personalText, ['कुल दैवत', 'कुलदैवत']) ?? $this->extractField($text, ['कुल दैवत', 'कुलदैवत']));
@@ -200,8 +217,28 @@ class BiodataParserService
 
         $gender = $this->inferGender($text);
         $gender = $gender ?? $romanized['gender'] ?? null;
+        // Religion / caste / sub-caste: support combined patterns like "जात २- हिंदु- 96 कुळी मराठा"
         $religion = $this->extractField($text, ['धर्म', 'Religion']);
         $religion = $religion ?? $romanized['religion'] ?? null;
+        $casteRaw = $this->extractFieldAfterLabels($text, ['जात', 'Caste', 'Community']);
+        $casteRaw = $casteRaw ?? $romanized['caste'] ?? null;
+
+        if ($casteRaw !== null) {
+            // Pattern: "जात २- हिंदु- 96 कुळी मराठा" or similar.
+            if (preg_match('/हिंद[ुू]\s*-\s*([0-9]+\s*कुळी)\s*(मराठा)?/u', $casteRaw, $m)) {
+                $subCaste = trim($m[1]); // e.g. "96 कुळी"
+                $caste = 'मराठा';
+                $religion = $religion ?? 'हिंदु';
+            } else {
+                $subCaste = $this->extractField($text, ['उपजात', 'Sub caste']);
+                $caste = $this->normalizeCasteValue($casteRaw);
+            }
+        } else {
+            $subCaste = $this->extractField($text, ['उपजात', 'Sub caste']);
+            $caste = $this->extractCasteByDictionary($text);
+            $caste = $this->normalizeCasteValue($caste);
+        }
+
         if ($religion === null) {
             if (preg_match('/जात\s*[:\-]?\s*हिंदु/u', $text) || preg_match('/जात\s*[:\-]?\s*हिंदू/u', $text)) {
                 $religion = 'हिंदू';
@@ -213,12 +250,7 @@ class BiodataParserService
                 $religion = 'Jain';
             }
         }
-        $caste = $this->extractFieldAfterLabels($text, ['जात', 'Caste', 'Community']);
-        $caste = $caste ?? $romanized['caste'] ?? null;
-        if ($caste === null) {
-            $caste = $this->extractCasteByDictionary($text);
-        }
-        $caste = $this->normalizeCasteValue($caste);
+
         if ($caste !== null && preg_match('/^हिंदू\s*[-]?\s*(.+)$/u', $caste, $m)) {
             $caste = trim($m[1]);
         }
@@ -226,7 +258,6 @@ class BiodataParserService
             $caste = 'मराठा';
         }
         $caste = $this->validateCaste($caste);
-        $subCaste = $this->extractField($text, ['उपजात', 'Sub caste']);
         $maritalRaw = $this->extractField($text, ['वैवाहिक स्थिती', 'Marital status']);
         $maritalStatus = $this->normalizeMaritalStatus($maritalRaw);
         if ($maritalStatus === null && ! $this->hasExplicitMaritalLabel($text)) {
@@ -274,6 +305,19 @@ class BiodataParserService
 
         $addressBlock = $this->extractAddressBlock($contactText) ?? $this->extractAddressBlock($text);
         $confidence['address'] = $addressBlock !== null ? self::CONF_REGEX : self::CONF_MISSING;
+
+        // Post-process mother name to split inline occupation like "(गृहिणी)" into a dedicated field.
+        if ($motherName !== null && $motherOccupation === null && preg_match('/\((.+?)\)/u', $motherName, $mOcc)) {
+            $maybeOcc = $this->cleanValue($mOcc[1]);
+            if ($maybeOcc !== '') {
+                $motherOccupation = $maybeOcc;
+            }
+            $motherName = trim(preg_replace('/\(.+?\)/u', '', $motherName));
+        }
+
+        // Strip honorifics from stored parent names for core snapshot.
+        $fatherName = $fatherName !== null ? $this->cleanPersonName($fatherName) : null;
+        $motherName = $motherName !== null ? $this->cleanPersonName($motherName) : null;
 
         $core = [
             'full_name' => $fullName,
@@ -504,7 +548,109 @@ $coreKeys = [
             }
         }
 
+        // ——— FAMILY STRUCTURES: siblings, relatives, and refined career roles ———
+        $familyStructures = $this->extractFamilyStructures($text);
+
+        // Prefer more precise sibling counts derived from structured rows when available.
+        $siblings = $familyStructures['siblings'] ?? [];
+        if (! empty($siblings)) {
+            $brothers = array_filter($siblings, fn ($row) => ($row['relation_type'] ?? null) === 'brother');
+            $sisters  = array_filter($siblings, fn ($row) => ($row['relation_type'] ?? null) === 'sister');
+            $brotherCount = count($brothers);
+            $sisterCount  = count($sisters);
+            $core['brother_count'] = $brotherCount;
+            $core['sister_count']  = $sisterCount;
+        }
+
+        // Father occupation from family structures if not already filled.
+        if (($familyStructures['core_overrides']['father_occupation'] ?? null) !== null && ($core['father_occupation'] ?? null) === null) {
+            $core['father_occupation'] = $familyStructures['core_overrides']['father_occupation'];
+        }
+
+        // Mother occupation/name refined from family structures if provided.
+        if (($familyStructures['core_overrides']['mother_occupation'] ?? null) !== null && ($core['mother_occupation'] ?? null) === null) {
+            $core['mother_occupation'] = $familyStructures['core_overrides']['mother_occupation'];
+        }
+        if (($familyStructures['core_overrides']['mother_name'] ?? null) !== null) {
+            $core['mother_name'] = $familyStructures['core_overrides']['mother_name'];
+        }
+
+        // Career split: if we have a candidate-only career history from familyStructures, prefer it.
+        if (! empty($familyStructures['career_history'] ?? [])) {
+            $careerHistory = $familyStructures['career_history'];
+        }
+
+        $relativesRows = $familyStructures['relatives'] ?? [];
+
+        // Post-fix caste/sub_caste: handle cases like "96 कुळी मराठा"
+        if (($core['sub_caste'] ?? null) === null && isset($core['caste']) && is_string($core['caste'])) {
+            // Look for a "NN कुळी" pattern and the word "मराठा" anywhere in the value.
+            if (preg_match('/([0-9]+\s*कुळी)/u', $core['caste'], $m) && mb_strpos($core['caste'], 'मराठा') !== false) {
+                $core['sub_caste'] = trim($m[1]);   // e.g. "96 कुळी"
+                $core['caste'] = 'मराठा';
+            }
+        }
+
+        // Build simple path-based confidence map for key fields.
+        $confidenceMap = [];
+        $addConf = function (string $path, float $value) use (&$confidenceMap): void {
+            $confidenceMap[$path] = $value;
+        };
+
+        if ($fullName !== null) {
+            $addConf('core.full_name', (float) ($confidence['full_name'] ?? self::CONF_DIRECT));
+        }
+        if ($dateOfBirth !== null) {
+            $addConf('core.date_of_birth', (float) ($confidence['date_of_birth'] ?? self::CONF_DIRECT));
+        }
+        if ($birthTime !== null) {
+            $addConf('core.birth_time', (float) ($confidence['birth_time'] ?? self::CONF_REGEX));
+        }
+        if ($religion !== null) {
+            $addConf('core.religion', (float) ($confidence['religion'] ?? self::CONF_DIRECT));
+        }
+        if ($caste !== null) {
+            $addConf('core.caste', (float) ($confidence['caste'] ?? self::CONF_DIRECT));
+        }
+        if ($subCaste !== null) {
+            $addConf('core.sub_caste', (float) ($confidence['sub_caste'] ?? self::CONF_DIRECT));
+        }
+        if ($fatherName !== null) {
+            $addConf('core.father_name', (float) ($confidence['father_name'] ?? self::CONF_DIRECT));
+        }
+        if ($fatherOccupation !== null) {
+            $addConf('core.father_occupation', (float) ($confidence['father_occupation'] ?? self::CONF_REGEX));
+        }
+        if ($motherName !== null) {
+            $addConf('core.mother_name', (float) ($confidence['mother_name'] ?? self::CONF_DIRECT));
+        }
+        if ($motherOccupation !== null) {
+            $addConf('core.mother_occupation', (float) ($confidence['mother_occupation'] ?? self::CONF_REGEX));
+        }
+        if ($primaryContact !== null && ! empty($contacts)) {
+            $addConf('contacts.0.number', (float) ($confidence['primary_contact_number'] ?? self::CONF_DIRECT));
+        }
+        if (! empty($siblings)) {
+            foreach ($siblings as $idx => $s) {
+                if (! empty($s['name'] ?? null)) {
+                    $addConf("siblings.$idx.name", self::CONF_REGEX);
+                }
+            }
+        }
+        if (! empty($relativesRows)) {
+            foreach ($relativesRows as $idx => $r) {
+                if (! empty($r['relation_type'] ?? null)) {
+                    $addConf("relatives.$idx.relation_type", self::CONF_REGEX);
+                }
+            }
+        }
+        if (! empty($careerHistory)) {
+            $addConf('career_history.0.company', self::CONF_REGEX);
+        }
+
+        // Merge with existing scalar confidence values and relation confidences.
         $confidenceMap = array_merge(
+            $confidenceMap,
             array_map(fn ($v) => (float) $v, $confidence),
             $relationsConfidence
         );
@@ -523,6 +669,8 @@ $coreKeys = [
             'preferences' => $preferences,
             'extended_narrative' => null,
             'confidence_map' => $confidenceMap,
+            'relatives' => $relativesRows,
+            'siblings' => $siblings,
         ];
     }
 
@@ -561,6 +709,54 @@ $coreKeys = [
         $text = preg_replace('/\n\s*\n\s*\n+/', "\n\n", $text);
 
         return trim($text);
+    }
+
+    /**
+     * Normalize Marathi birth time phrases to HH:MM (24-hour).
+     */
+    private function normalizeBirthTime(?string $value): ?string
+    {
+        if ($value === null) {
+            return null;
+        }
+        $v = trim($value);
+        if ($v === '') {
+            return null;
+        }
+
+        $lower = $v;
+        $isNight = mb_strpos($lower, 'रात्री') !== false;
+        $isEvening = mb_strpos($lower, 'संध्याकाळ') !== false;
+        $isAfternoon = mb_strpos($lower, 'दुपारी') !== false;
+        $isMorning = mb_strpos($lower, 'सकाळी') !== false;
+
+        if (!preg_match('/(\d{1,2})\s*वा\.?\s*(\d{1,2})\s*मि/u', $lower, $m)) {
+            return null;
+        }
+
+        $hour = (int) $m[1];
+        $minute = (int) $m[2];
+
+        if ($hour < 0 || $hour > 12 || $minute < 0 || $minute > 59) {
+            return null;
+        }
+
+        // Convert to 24h using rough Marathi period hints.
+        if ($isNight || $isEvening) {
+            if ($hour < 12) {
+                $hour += 12;
+            }
+        } elseif ($isAfternoon) {
+            if ($hour < 12 && $hour >= 1) {
+                $hour += 12;
+            }
+        }
+
+        if ($hour === 24) {
+            $hour = 0;
+        }
+
+        return sprintf('%02d:%02d', $hour, $minute);
     }
 
     private function removeWatermarkNoise(string $text): string
@@ -1051,7 +1247,11 @@ $coreKeys = [
 
     private function extractPrimaryContactNumber(string $text): ?string
     {
-        $contactStr = $this->extractFieldAfterLabels($text, ['संपर्क क्रमांक', 'मोबाईल नं', 'मोबाईल नंबर', 'Contact', 'Mobile']);
+        // Support additional labels like "Contact.No.-" used in many Marathi biodatas.
+        $contactStr = $this->extractFieldAfterLabels(
+            $text,
+            ['संपर्क क्रमांक', 'मोबाईल नं', 'मोबाईल नंबर', 'Contact.No.', 'Contact', 'Mobile']
+        );
         if ($contactStr !== null) {
             $normalized = \App\Services\Ocr\OcrNormalize::normalizePhone(preg_replace('/\s+/', '', $contactStr));
             if ($normalized !== null) {
@@ -1141,8 +1341,333 @@ $coreKeys = [
             if (preg_match('/' . preg_quote($label, '/') . '\s*[:\s_\-]*(नाही|None|No\b|०|0)\b/um', $text, $m)) {
                 return 0;
             }
+            // Fallback: if label appears with some non-empty text (and not "नाही"), treat as at least one.
+            if (preg_match('/' . preg_quote($label, '/') . '.*\S/um', $text, $m) && mb_strpos($m[0], 'नाही') === false) {
+                return 1;
+            }
         }
         return null;
+    }
+
+    /**
+     * Focused helper for Marathi biodata family core:
+     * extracts father/mother names and occupations plus sibling counts from contextual lines.
+     */
+    private function extractFamilyCore(string $text): array
+    {
+        $result = [
+            'father_name' => null,
+            'father_occupation' => null,
+            'mother_name' => null,
+            'mother_occupation' => null,
+            'brothers_count' => null,
+            'sisters_count' => null,
+        ];
+
+        $lines = preg_split('/\R/u', $text) ?: [];
+        $lineCount = count($lines);
+
+        for ($i = 0; $i < $lineCount; $i++) {
+            $line = trim($lines[$i]);
+            if ($line === '') {
+                continue;
+            }
+
+            // Father name + nearby occupation (e.g. वडिलांचे नाव :- श्री. राजेंद्र भाऊराव पाटील ...)
+            if (mb_strpos($line, 'वडिलांचे नाव') !== false && $result['father_name'] === null) {
+                if (preg_match('/वडिलांचे नाव\s*[:\-]?\s*(.+)$/u', $line, $m)) {
+                    $name = $this->cleanPersonName($m[1]);
+                    if ($name !== null) {
+                        $result['father_name'] = $name;
+                    }
+                } elseif ($i + 1 < $lineCount) {
+                    $name = $this->cleanPersonName($lines[$i + 1]);
+                    if ($name !== null) {
+                        $result['father_name'] = $name;
+                    }
+                }
+
+                // Look ahead a few lines for a likely occupation line (नोकरी / फॅक्टरी / कंपनी / काम)
+                if ($result['father_occupation'] === null) {
+                    for ($j = $i + 1; $j < min($i + 5, $lineCount); $j++) {
+                        $candidate = trim($lines[$j]);
+                        if ($candidate === '') {
+                            continue;
+                        }
+                        if (
+                            mb_strpos($candidate, 'नोकरी') !== false ||
+                            mb_strpos($candidate, 'फॅक्टरी') !== false ||
+                            mb_strpos($candidate, 'कंपनी') !== false ||
+                            stripos($candidate, 'Factory') !== false
+                        ) {
+                            $result['father_occupation'] = $this->cleanValue($candidate);
+                            break;
+                        }
+                    }
+                }
+            }
+
+            // Mother name + inline occupation from parentheses (e.g. आईचे नाव :- सौ. अनिता ... (गृहिणी))
+            if (mb_strpos($line, 'आईचे नाव') !== false && $result['mother_name'] === null) {
+                $valueLine = $line;
+                if (!preg_match('/आईचे नाव\s*[:\-]?\s*(.+)$/u', $line, $m) && $i + 1 < $lineCount) {
+                    $valueLine = $lines[$i + 1];
+                } elseif (isset($m[1])) {
+                    $valueLine = $m[1];
+                }
+
+                $valueLine = trim($valueLine);
+                if ($valueLine !== '') {
+                    $occupation = null;
+                    if (preg_match('/\((.+?)\)/u', $valueLine, $occMatch)) {
+                        $occupation = $this->cleanValue($occMatch[1]);
+                        $valueLine = preg_replace('/\(.+?\)/u', '', $valueLine);
+                    }
+                    $name = $this->cleanPersonName($valueLine);
+                    if ($name !== null) {
+                        $result['mother_name'] = $name;
+                    }
+                    if ($occupation !== null) {
+                        $result['mother_occupation'] = $occupation;
+                    }
+                }
+            }
+
+            // Very conservative sibling count fallback:
+            // if a clear "भाऊ" or "बहिण/बहीण" line without नाही appears, treat as at least one.
+            if ($result['brothers_count'] === null && mb_strpos($line, 'भाऊ') !== false && mb_strpos($line, 'नाही') === false) {
+                $result['brothers_count'] = 1;
+            }
+            if ($result['sisters_count'] === null && (mb_strpos($line, 'बहिण') !== false || mb_strpos($line, 'बहीण') !== false) && mb_strpos($line, 'नाही') === false) {
+                $result['sisters_count'] = 1;
+            }
+        }
+
+        return $result;
+    }
+
+    /**
+     * Remove common Marathi honorifics, trailing relation tokens, and extra
+     * punctuation/whitespace from a person name.
+     */
+    private function cleanPersonName(string $value): ?string
+    {
+        $v = trim($value);
+        if ($v === '') {
+            return null;
+        }
+
+        // 1) Stop at the first sentence boundary (dot or Marathi danda).
+        $parts = preg_split('/[\.।]/u', $v);
+        if (! empty($parts)) {
+            $v = trim($parts[0]);
+        }
+
+        // 2) Cut off at the start of any obvious relation token that may have
+        // bled into this line from the next field.
+        $parts = preg_split('/\b(दाजी|चुलते|मामा|काका|मावशी|इतर\s+नातेवाईक|इतर)\b/u', $v);
+        if (! empty($parts)) {
+            $v = trim($parts[0]);
+        }
+
+        // 3) Strip common honorific prefixes (including ch./ku. variants).
+        $v = preg_replace(
+            '/^(कु\.?|कुं\.?|चि\.?|श्री\.?|श्रीमती\.?|श्रीमती|सौ\.?|सौं\.?)\s*/u',
+            '',
+            $v
+        );
+
+        // 4) Normalize whitespace.
+        $v = preg_replace('/\s+/u', ' ', $v);
+
+        $v = trim($v);
+        return $v === '' ? null : $v;
+    }
+
+    /**
+     * Extract structured siblings, relatives, and a cleaner career split from raw text.
+     * This pass is intentionally conservative and tuned for common Marathi biodata
+     * patterns (including intake 191).
+     *
+     * @return array{
+     *   siblings: array<int, array<string, mixed>>,
+     *   relatives: array<int, array<string, mixed>>,
+     *   core_overrides: array<string, mixed>,
+     *   career_history: array<int, array<string, mixed>>,
+     * }
+     */
+    private function extractFamilyStructures(string $text): array
+    {
+        $lines = array_values(array_filter(array_map('trim', explode("\n", $text)), fn ($l) => $l !== ''));
+
+        $siblings = [];
+        $relatives = [];
+        $coreOverrides = [
+            'father_occupation' => null,
+            'mother_name' => null,
+            'mother_occupation' => null,
+        ];
+        $careerHistory = [];
+
+        // --- SIBLINGS ---
+        foreach ($lines as $idx => $line) {
+            // Brother: lines starting with "भाऊ" (e.g. "भाऊ + श्री. समर्थ राजेंद्र पाटील (9145206745)")
+            if (preg_match('/^भाऊ\b/u', $line)) {
+                $name = null;
+                $phone = null;
+
+                // Expect patterns like: "भाऊ + श्री. समर्थ राजेंद्र पाटील (9145206745)"
+                if (preg_match('/^भाऊ[^\p{L}]*(.+?)(\(\s*([6-9]\d{9})\s*\))?$/u', $line, $m)) {
+                    $namePart = trim($m[1]);
+                    $name = $this->cleanPersonName($namePart);
+                    if (isset($m[3]) && preg_match('/^[6-9]\d{9}$/', $m[3])) {
+                        $phone = $m[3];
+                    }
+                }
+
+                if ($name !== null) {
+                    $siblings[] = [
+                        'relation_type' => 'brother',
+                        'name' => $name,
+                        'contact_number' => $phone,
+                        'occupation' => null,
+                    ];
+                }
+            }
+
+            // Sister: lines containing "बहिण/बहीण", possibly split across two OCR lines:
+            // "बहीण २ सौ." / "पुजा नवनाथ कन्हेरे."
+            if (mb_strpos($line, 'बहिण') !== false || mb_strpos($line, 'बहीण') !== false) {
+                $combined = $line;
+                if (isset($lines[$idx + 1])) {
+                    $combined .= ' ' . trim($lines[$idx + 1]);
+                }
+
+                $combined = trim($combined);
+
+                // Remove leading "बहीण NN" with Marathi or Arabic digits.
+                $namePart = preg_replace('/^\s*ब[ही]ण\s*[0-9०-९]*\s*/u', '', $combined);
+
+                // Stop at the start of any new relative heading (दाजी/चुलते/मामा/इतर नातेवाईक)
+                $parts = preg_split('/\s+(दाजी|चुलते|मामा|इतर\s+नातेवाईक)\b/u', $namePart);
+                $namePart = $parts[0] ?? $namePart;
+
+                $name = $this->cleanPersonName($namePart);
+
+                if ($name !== null) {
+                    $siblings[] = [
+                        'relation_type' => 'sister',
+                        'name' => $name,
+                        'contact_number' => null,
+                        'occupation' => null,
+                    ];
+                }
+            }
+        }
+
+        // --- RELATIVES (grouped summary rows) ---
+        $currentType = null;
+        $buffer = [];
+        $flushRelative = function () use (&$relatives, &$currentType, &$buffer) {
+            if ($currentType !== null && ! empty($buffer)) {
+                $relatives[] = [
+                    'relation_type' => $currentType,
+                    'notes' => implode(' ', $buffer),
+                ];
+            }
+            $currentType = null;
+            $buffer = [];
+        };
+
+        foreach ($lines as $line) {
+            if (mb_strpos($line, 'दाजी') !== false) {
+                $flushRelative();
+                $currentType = 'दाजी';
+                $buffer[] = $line;
+            } elseif (mb_strpos($line, 'चुलते') !== false) {
+                $flushRelative();
+                $currentType = 'चुलते';
+                $buffer[] = $line;
+            } elseif (mb_strpos($line, 'मामा') !== false) {
+                $flushRelative();
+                $currentType = 'मामा';
+                $buffer[] = $line;
+            } elseif (mb_strpos($line, 'इतर नातेवाईक') !== false) {
+                $flushRelative();
+                $relatives[] = [
+                    'relation_type' => 'इतर',
+                    'notes' => $line,
+                ];
+            } else {
+                if ($currentType !== null) {
+                    $buffer[] = $line;
+                }
+            }
+        }
+        $flushRelative();
+
+        // --- CAREER SPLIT (candidate vs father vs brother) ---
+        // Use "नोकरी" lines heuristically.
+        $careerLines = [];
+        foreach ($lines as $i => $line) {
+            if (mb_strpos($line, 'नोकरी') !== false) {
+                $careerLines[] = ['idx' => $i, 'line' => $line];
+            }
+        }
+
+        $candidateJob = null;
+        $fatherJob = null;
+        $brotherJob = null;
+
+        foreach ($careerLines as $cl) {
+            $line = $cl['line'];
+
+            // Candidate: often Amdocs / IT company, before siblings section.
+            if ($candidateJob === null && (stripos($line, 'Amdocs') !== false || stripos($line, 'Company') !== false)) {
+                $candidateJob = $this->cleanValue($line);
+                continue;
+            }
+
+            // Father: sugar factory / factory wording.
+            if ($fatherJob === null && (mb_strpos($line, 'शुगर फॅक्टरी') !== false || stripos($line, 'Factory') !== false)) {
+                $fatherJob = $this->cleanValue($line);
+                continue;
+            }
+
+            // Brother: remaining "नोकरी" line (e.g. Bharat Forge)
+            if ($brotherJob === null) {
+                $brotherJob = $this->cleanValue($line);
+            }
+        }
+
+        if ($candidateJob !== null) {
+            $careerHistory[] = [
+                'job_title' => null,
+                'company' => $candidateJob,
+                'location' => null,
+            ];
+        }
+
+        if ($fatherJob !== null) {
+            $coreOverrides['father_occupation'] = $fatherJob;
+        }
+
+        // Attach brother occupation to brother sibling row if both present.
+        if ($brotherJob !== null && ! empty($siblings)) {
+            foreach ($siblings as $i => $s) {
+                if (($s['relation_type'] ?? null) === 'brother') {
+                    $siblings[$i]['occupation'] = $brotherJob;
+                    break;
+                }
+            }
+        }
+
+        return [
+            'siblings' => $siblings,
+            'relatives' => $relatives,
+            'core_overrides' => $coreOverrides,
+            'career_history' => $careerHistory,
+        ];
     }
 
     private function normalizeDate(?string $value): ?string

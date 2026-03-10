@@ -166,6 +166,8 @@ class IntakeController extends Controller
         $intake = null;
         DB::transaction(function () use ($path, $originalName, $rawText, &$intake) {
             $hash = $rawText !== null ? hash('sha256', (string) $rawText) : null;
+            $parserMode = app(\App\Services\Parsing\ParserStrategyResolver::class)->resolveActiveMode();
+
             $intake = BiodataIntake::create([
                 'uploaded_by' => auth()->id(),
                 'file_path' => $path,
@@ -173,7 +175,7 @@ class IntakeController extends Controller
                 'raw_ocr_text' => $rawText,
                 'intake_status' => 'uploaded',
                 'parse_status' => 'pending',
-                'parser_version' => 'rules_v1',
+                'parser_version' => $parserMode,
                 'content_hash' => $hash,
                 'approved_by_user' => false,
                 'intake_locked' => false,

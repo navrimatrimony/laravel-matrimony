@@ -116,9 +116,17 @@
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div>
                         <label class="block font-medium text-gray-700 dark:text-gray-200 mb-1">Active parser</label>
+                        @php
+                            // Normalize legacy values (e.g. ai_v1) for display purposes.
+                            $normalizedActiveParser = str_replace(' ', '_', strtolower($activeParser));
+                            if ($normalizedActiveParser === 'ai_v1') {
+                                $normalizedActiveParser = 'ai_first_v1';
+                            }
+                        @endphp
                         <select name="intake_active_parser" class="w-full rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-2 py-1">
-                            <option value="rules_only" {{ $activeParser === 'rules_only' ? 'selected' : '' }}>Rules only</option>
-                            <option value="ai_v1" {{ $activeParser === 'ai_v1' ? 'selected' : '' }}>AI v1 (hybrid)</option>
+                            <option value="rules_only" {{ $normalizedActiveParser === 'rules_only' ? 'selected' : '' }}>Rules only</option>
+                            <option value="ai_first_v1" {{ $normalizedActiveParser === 'ai_first_v1' ? 'selected' : '' }}>AI first (SSOT)</option>
+                            <option value="hybrid_v1" {{ $normalizedActiveParser === 'hybrid_v1' ? 'selected' : '' }}>Hybrid (rules + AI)</option>
                         </select>
                     </div>
                     <div>

@@ -3,41 +3,39 @@
 namespace App\Services;
 
 use App\Models\BiodataIntake;
+use App\Services\Parsing\ParserStrategyResolver;
 
-/*
-|--------------------------------------------------------------------------
-| ParseService — Phase-5 Step-2 Foundation
-|--------------------------------------------------------------------------
-|
-| This is Phase-5 Step-2 foundation. Parsing returns a structured array
-| from raw_ocr_text only. No AI call yet; no mutation allowed.
-| Does NOT modify the intake, MatrimonyProfile, or lifecycle.
-|
-*/
+/**
+ * Thin facade over the parsing strategy layer.
+ *
+ * Used wherever we want to parse a single intake on-demand (eg. admin tools)
+ * without duplicating strategy selection logic.
+ *
+ * IMPORTANT:
+ * - Reads raw_ocr_text only.
+ * - Does NOT modify the intake itself or any profile/lifecycle state.
+ */
 class ParseService
 {
+    public function __construct(
+        protected ParserStrategyResolver $strategyResolver,
+    ) {
+    }
+
     /**
-     * Parse raw OCR text into a structured array.
-     * Reads intake only; does not modify intake, call external API, or touch profile/lifecycle.
+     * Parse raw OCR text for the given intake into a SSOT-compatible array.
      *
-     * @param  BiodataIntake  $intake
-     * @return array{core: array, contacts: array, children: array, education_history: array, career_history: array, confidence_map: array}
+     * @return array Parsed JSON in final SSOT shape expected by preview.
      */
     public function parse(BiodataIntake $intake): array
     {
-        // Phase-5 Step-2: Read raw text only. No AI call yet. No mutation allowed.
-        $rawText = $intake->raw_ocr_text;
+        $parser = $this->strategyResolver->resolveForIntake($intake);
 
-        return [
-            'core' => [
-                'full_name' => null,
-                'date_of_birth' => null,
-            ],
-            'contacts' => [],
-            'children' => [],
-            'education_history' => [],
-            'career_history' => [],
-            'confidence_map' => [],
-        ];
+        // Context can carry parser_version or other hints if needed later.
+        return $parser->parse($intake->raw_ocr_text ?? '', [
+            'intake_id' => $intake->id,
+            'parser_version' => $intake->parser_version,
+        ]);
     }
 }
+

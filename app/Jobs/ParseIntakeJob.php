@@ -2,14 +2,15 @@
 
 namespace App\Jobs;
 
-use App\Models\BiodataIntake;
-use App\Services\BiodataParserService;
 use App\Models\AdminSetting;
+use App\Models\BiodataIntake;
+use App\Services\Parsing\ParserStrategyResolver;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
+use Illuminate\Support\Facades\Log;
 
 /*
 |--------------------------------------------------------------------------
@@ -40,45 +41,60 @@ class ParseIntakeJob implements ShouldQueue
             return;
         }
 
+        // Do not reparse approved/locked intakes.
+        if ($intake->approved_by_user || $intake->intake_locked) {
+            return;
+        }
+
         if ($intake->parse_status !== 'pending') {
             return;
         }
 
-        // Day-35: Smart caching — avoid re-parsing identical content for same parser_version.
-        if ($intake->content_hash && $intake->parser_version) {
+        $resolver = app(ParserStrategyResolver::class);
+        $mode = $resolver->resolveActiveMode();
+
+        // Smart caching — avoid re-parsing identical content for same parser_version.
+        $canonicalVersion = $resolver->normalizeMode($intake->parser_version ?: $mode);
+        if ($intake->content_hash && $canonicalVersion) {
             $cached = BiodataIntake::where('id', '!=', $intake->id)
                 ->where('content_hash', $intake->content_hash)
-                ->where('parser_version', $intake->parser_version)
+                ->where('parser_version', $canonicalVersion)
                 ->where('parse_status', 'parsed')
                 ->first();
             if ($cached && ! empty($cached->parsed_json)) {
                 $intake->update([
                     'parsed_json' => $cached->parsed_json,
                     'parse_status' => 'parsed',
+                    'parser_version' => $canonicalVersion,
                 ]);
+
+                Log::info('Intake parse reused cached parsed_json', [
+                    'intake_id' => $intake->id,
+                    'parser_version' => $canonicalVersion,
+                ]);
+
                 return;
             }
         }
 
-        $activeParser = AdminSetting::getValue('intake_active_parser', 'rules_only');
         $retryLimit = (int) AdminSetting::getValue('intake_parse_retry_limit', '3');
 
-        $parser = app(BiodataParserService::class);
+        $parser = $resolver->makeParser($mode);
         $raw = $intake->raw_ocr_text ?? '';
 
         $parsed = null;
         $attempts = 0;
         $lastException = null;
-        $aiCalls = 0;
+        $aiCalls = 0; // Reserved for future detailed AI tracking
         $start = microtime(true);
 
-        // Simple retry loop; future versions can branch by $activeParser.
         while ($attempts === 0 || ($attempts < $retryLimit && $parsed === null && $lastException !== null)) {
             $attempts++;
             try {
-                $parsed = $parser->parse($raw);
-                // For now, treat this as rules-only parse; AI calls will be wired later.
-                $aiCalls = 0;
+                $parsed = $parser->parse($raw, [
+                    'intake_id' => $intake->id,
+                    'parser_mode' => $mode,
+                ]);
                 $lastException = null;
                 break;
             } catch (\Throwable $e) {
@@ -95,66 +111,40 @@ class ParseIntakeJob implements ShouldQueue
                 'parse_duration_ms' => $durationMs,
                 'ai_calls_used' => $aiCalls,
             ]);
+
+            Log::error('Intake parse failed', [
+                'intake_id' => $intake->id,
+                'parser_mode' => $mode,
+                'error' => $lastException?->getMessage(),
+            ]);
+
             return;
         }
 
-        $ssot = isset($parsed['core'], $parsed['confidence_map']) ? $parsed : $this->wrapToSsot($parsed);
+        // At this point parsers are already required to return SSOT-compatible shape.
+        $ssot = $parsed;
 
         $intake->update([
             'parsed_json' => $ssot,
             'parse_status' => 'parsed',
+            'parser_version' => $canonicalVersion,
             'parse_duration_ms' => $durationMs,
             'ai_calls_used' => $aiCalls,
         ]);
+
+        Log::info('Intake parsed successfully', [
+            'intake_id' => $intake->id,
+            'parser_mode' => $mode,
+            'parser_version' => $canonicalVersion,
+            'contacts_count' => is_countable($ssot['contacts'] ?? []) ? count($ssot['contacts']) : 0,
+            'education_count' => is_countable($ssot['education_history'] ?? []) ? count($ssot['education_history']) : 0,
+            'career_count' => is_countable($ssot['career_history'] ?? []) ? count($ssot['career_history']) : 0,
+            'relatives_count' => is_countable($ssot['relatives'] ?? []) ? count($ssot['relatives']) : 0,
+            'siblings_count' => is_countable($ssot['siblings'] ?? []) ? count($ssot['siblings']) : 0,
+            'addresses_count' => is_countable($ssot['addresses'] ?? []) ? count($ssot['addresses']) : 0,
+            'duration_ms' => $durationMs,
+        ]);
     }
 
-    /**
-     * Map legacy flat output to Phase-5 SSOT (fallback when parser returns flat).
-     */
-    private function wrapToSsot(array $flat): array
-    {
-        $salary = $flat['salary'] ?? [];
-        $annualIncome = null;
-        if (isset($salary['annual_lakh'])) {
-            $annualIncome = (int) $salary['annual_lakh'] * 100000;
-        } elseif (isset($salary['monthly'])) {
-            $annualIncome = (int) $salary['monthly'] * 12;
-        }
-
-        $core = [
-            'full_name' => $flat['full_name'] ?? null,
-            'date_of_birth' => $flat['birth_date'] ?? null,
-            'gender' => null,
-            'religion' => null,
-            'caste' => null,
-            'sub_caste' => null,
-            'marital_status' => null,
-            'annual_income' => $annualIncome,
-            'family_income' => null,
-            'primary_contact_number' => null,
-            'serious_intent_id' => null,
-        ];
-
-        $confidenceMap = [];
-        $coreKeys = array_keys($core);
-        foreach ($coreKeys as $key) {
-            $confidenceMap[$key] = isset($core[$key]) && $core[$key] !== null && $core[$key] !== '' ? 0.9 : 0.0;
-        }
-
-        return [
-            'core' => $core,
-            'contacts' => [],
-            'children' => [],
-            'education_history' => [],
-            'career_history' => [],
-            'addresses' => [],
-            'property_summary' => [],
-            'property_assets' => [],
-            'horoscope' => [],
-            'legal_cases' => [],
-            'preferences' => [],
-            'extended_narrative' => [],
-            'confidence_map' => $confidenceMap,
-        ];
-    }
 }
+

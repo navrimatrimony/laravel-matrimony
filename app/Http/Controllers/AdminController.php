@@ -547,7 +547,7 @@ class AdminController extends Controller
             'intake_max_images_per_intake' => 'required|integer|min:1|max:10',
             'intake_global_daily_cap' => 'required|integer|min:0|max:10000',
             'intake_auto_parse_enabled' => 'nullable|in:0,1',
-            'intake_active_parser' => 'required|string|in:rules_only,ai_v1',
+            'intake_active_parser' => 'required|string|in:rules_only,ai_first_v1,hybrid_v1',
             'intake_ocr_provider' => 'required|string|in:tesseract,cloud_vision,off',
             'intake_ocr_language_hint' => 'required|string|in:mr,en,mixed',
             'intake_parse_retry_limit' => 'required|integer|min:0|max:5',

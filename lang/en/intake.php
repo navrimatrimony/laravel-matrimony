@@ -34,6 +34,8 @@ return [
     'approved_successfully' => 'Intake approved successfully.',
 
     // Preview screen – structured sections
+    'raw_text_heading' => 'Raw biodata text (full)',
+    'raw_text_help' => 'Below is the full text extracted from your biodata. All structured fields above are derived from this text. Review if anything important is missing from the fields.',
     'relatives_help' => 'Add extended family members. All fields are optional.',
     'siblings_heading' => 'Siblings',
     'siblings_help' => 'Add sibling details (brothers & sisters). All fields are optional.',
