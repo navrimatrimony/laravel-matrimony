@@ -43,6 +43,68 @@ class AIParsingService
     }
 
     /**
+     * Infer gender from Marathi biodata honorifics/titles in full name or text.
+     * Female: कु., कु , चि. सौ. का., सौ.; Male: श्री., चि., चिरंजीव.
+     * Only set when confidence is high; do not overwrite stronger explicit gender.
+     */
+    private function inferGenderFromName(?string $fullName): ?string
+    {
+        if ($fullName === null || trim($fullName) === '') {
+            return null;
+        }
+        $t = trim($fullName);
+        $femaleMarkers = ['कु.', 'कु ', 'चि. सौ. का.', 'चि.सौ.का.', 'सौ.'];
+        foreach ($femaleMarkers as $m) {
+            if (mb_strpos($t, $m) === 0 || preg_match('/\s' . preg_quote($m, '/') . '\s/u', $t)) {
+                return 'female';
+            }
+        }
+        if (preg_match('/\bश्री\./u', $t) || preg_match('/\bचि\./u', $t) || mb_strpos($t, 'चिरंजीव') !== false) {
+            return 'male';
+        }
+        return null;
+    }
+
+    /**
+     * Infer marital status from text when no explicit "वैवाहिक स्थिती" label.
+     * Map only to allowed internal values; if uncertain, leave null.
+     */
+    private function inferMaritalFromText(string $text): ?string
+    {
+        if (preg_match('/\bअविवाहित\b/u', $text)) {
+            return 'unmarried';
+        }
+        if (preg_match('/\bविवाहित\b/u', $text)) {
+            return 'married';
+        }
+        if (preg_match('/\bघटस्फोटित\b/u', $text)) {
+            return 'divorced';
+        }
+        if (preg_match('/\bविधुर\b/u', $text)) {
+            return 'widower';
+        }
+        if (preg_match('/\bविधवा\b/u', $text)) {
+            return 'widow';
+        }
+        return null;
+    }
+
+    /**
+     * Strip occupation/company line label prefixes (नोकरी :, Job :, etc.).
+     * Reusable by rules parser; keeps actual content only.
+     */
+    public static function cleanOccupationLabel(?string $value): ?string
+    {
+        if ($value === null || trim($value) === '') {
+            return null;
+        }
+        $v = trim($value);
+        $v = preg_replace('/^(नोकरी\s*[:\->\s]+|Job\s*[:\-]\s*|Occupation\s*[:\-]\s*)/iu', '', $v);
+        $v = preg_replace('/\s+/u', ' ', trim($v));
+        return $v === '' ? null : $v;
+    }
+
+    /**
      * Normalize date string to Y-m-d. Accepts d-m-y, d/m/y, Y-m-d, etc.
      */
     private function normalizeDate(?string $date): ?string
@@ -98,6 +160,9 @@ class AIParsingService
             ?? $this->extract('/Name[:\-]?\s*(.+)/u', $text);
         $confidenceMap['full_name'] = $fullName !== null ? 0.9 : 0.0;
 
+        $gender = $this->inferGenderFromName($fullName);
+        $confidenceMap['gender'] = $gender !== null ? 0.9 : 0.0;
+
         $dobRaw = $this->extract('/जन्मतारीख[:\-]?\s*([\d\-\/]+)/u', $text)
             ?? $this->extract('/DOB[:\-]?\s*([\d\-\/]+)/u', $text);
         $dateOfBirth = $this->normalizeDate($dobRaw);
@@ -117,9 +182,18 @@ class AIParsingService
                 $maritalStatus = 'unmarried';
             } elseif (str_contains($t, 'विवाहित') || $t === 'married') {
                 $maritalStatus = 'married';
+            } elseif (str_contains($t, 'घटस्फोटित')) {
+                $maritalStatus = 'divorced';
+            } elseif (str_contains($t, 'विधुर')) {
+                $maritalStatus = 'widower';
+            } elseif (str_contains($t, 'विधवा')) {
+                $maritalStatus = 'widow';
             } else {
                 $maritalStatus = $maritalRaw;
             }
+        }
+        if ($maritalStatus === null) {
+            $maritalStatus = $this->inferMaritalFromText($text);
         }
         $confidenceMap['marital_status'] = $maritalStatus !== null ? 0.9 : 0.0;
 
@@ -136,7 +210,7 @@ class AIParsingService
         $core = [
             'full_name' => $fullName,
             'date_of_birth' => $dateOfBirth,
-            'gender' => null,
+            'gender' => $gender,
             'religion' => $religion,
             'caste' => $caste,
             'sub_caste' => null,

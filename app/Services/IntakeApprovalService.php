@@ -190,7 +190,7 @@ return app(\App\Services\MutationService::class)
             'usage_count' => $count,
             'pattern_confidence' => 0.80,
             'is_active' => $isActive,
-            'updated_at' => now(),
+            'authored_by_type' => 'system',
         ]);
     }
 }

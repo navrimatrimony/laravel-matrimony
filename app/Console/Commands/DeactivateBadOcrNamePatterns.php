@@ -30,7 +30,12 @@ class DeactivateBadOcrNamePatterns extends Command
                 continue;
             }
             if (! OcrNormalize::sanityCheckLearnedValue('full_name', $v)) {
-                $p->update(['is_active' => false]);
+                $p->update([
+                    'is_active' => false,
+                    'retired_at' => now(),
+                    'retirement_reason' => 'sanity_check_failed',
+                    'promotion_status' => 'retired',
+                ]);
                 $deactivated++;
                 $this->line("Deactivated pattern id={$p->id} wrong_pattern=" . substr($p->wrong_pattern, 0, 40) . ' corrected_value=' . substr($v, 0, 50));
             }

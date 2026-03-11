@@ -246,6 +246,7 @@ class OcrNormalize
             ->where('wrong_pattern', $value)
             ->where('source', 'frequency_rule')
             ->where('is_active', true)
+            ->orderByDesc('rule_version')
             ->first();
 
         if ($pattern) {

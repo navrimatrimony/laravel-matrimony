@@ -77,6 +77,10 @@
                     <th class="text-left px-2 py-1.5 border-b text-xs font-medium">conf</th>
                     <th class="text-left px-2 py-1.5 border-b text-xs font-medium">source</th>
                     <th class="text-left px-2 py-1.5 border-b text-xs font-medium">is_active</th>
+                    <th class="text-left px-2 py-1.5 border-b text-xs font-medium">family / ver</th>
+                    <th class="text-left px-2 py-1.5 border-b text-xs font-medium">supersedes</th>
+                    <th class="text-left px-2 py-1.5 border-b text-xs font-medium">authored</th>
+                    <th class="text-left px-2 py-1.5 border-b text-xs font-medium">retirement</th>
                     <th class="text-left px-2 py-1.5 border-b text-xs font-medium">created</th>
                     <th class="text-left px-2 py-1.5 border-b text-xs font-medium">updated</th>
                     <th class="text-left px-2 py-1.5 border-b text-xs font-medium whitespace-nowrap">Actions</th>
@@ -98,6 +102,10 @@
                                 <span class="inline-block px-1.5 py-0.5 text-xs rounded bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300">Inactive</span>
                             @endif
                         </td>
+                        <td class="px-2 py-1.5 text-gray-600 dark:text-gray-400 text-xs truncate" title="{{ $pattern->rule_family_key ?? '—' }}">{{ $pattern->rule_family_key ? Str::limit($pattern->rule_family_key, 12) . ($pattern->rule_version ? ' v' . $pattern->rule_version : '') : '—' }}</td>
+                        <td class="px-2 py-1.5 text-gray-600 dark:text-gray-400 text-xs">@if($pattern->supersedes_pattern_id)<a href="{{ route('admin.ocr-patterns.index', ['field_key' => '']) }}" class="underline" title="Pattern #{{ $pattern->supersedes_pattern_id }}">#{{ $pattern->supersedes_pattern_id }}</a>@else—@endif</td>
+                        <td class="px-2 py-1.5 text-gray-600 dark:text-gray-400 text-xs truncate">{{ $pattern->authored_by_type ?? '—' }}</td>
+                        <td class="px-2 py-1.5 text-gray-600 dark:text-gray-400 text-xs truncate" title="{{ $pattern->retirement_reason ?? '' }}">{{ $pattern->retired_at ? ($pattern->retirement_reason ? Str::limit($pattern->retirement_reason, 14) : (optional($pattern->retired_at)->format('m/d') ?? '—')) : '—' }}</td>
                         <td class="px-2 py-1.5 text-gray-600 dark:text-gray-400 text-xs truncate" title="{{ $pattern->created_at?->format('Y-m-d H:i:s') }}">{{ $pattern->created_at?->format('m/d H:i') }}</td>
                         <td class="px-2 py-1.5 text-gray-600 dark:text-gray-400 text-xs truncate" title="{{ $pattern->updated_at?->format('Y-m-d H:i:s') }}">{{ $pattern->updated_at?->format('m/d H:i') }}</td>
                         <td class="px-2 py-1.5 whitespace-nowrap">
@@ -113,7 +121,7 @@
                     </tr>
                 @empty
                     <tr>
-                        <td colspan="10" class="px-4 py-4 text-gray-500 text-sm">No patterns found.</td>
+                        <td colspan="14" class="px-4 py-4 text-gray-500 text-sm">No patterns found.</td>
                     </tr>
                 @endforelse
             </tbody>

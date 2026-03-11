@@ -69,6 +69,7 @@ class BuildOcrFrequencyPatterns extends Command
                         'usage_count' => (int) $group->usage_count,
                         'pattern_confidence' => 0.80,
                         'is_active' => true,
+                        'authored_by_type' => 'system',
                         'updated_at' => now(),
                     ]
                 );

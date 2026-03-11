@@ -205,7 +205,7 @@ class ManualSnapshotBuilderService
                 'yoni_id' => ! empty($h['yoni_id']) ? (int) $h['yoni_id'] : null,
                 'mangal_dosh_type_id' => ! empty($h['mangal_dosh_type_id']) ? (int) $h['mangal_dosh_type_id'] : null,
                 'devak' => trim((string) ($h['devak'] ?? '')),
-                'kul' => trim((string) ($h['kul'] ?? '')),
+                'kul' => trim((string) ($h['kuldaivat'] ?? $h['kul'] ?? '')),
                 'gotra' => trim((string) ($h['gotra'] ?? '')),
                 'navras_name' => trim((string) ($h['navras_name'] ?? '')),
                 'birth_weekday' => trim((string) ($h['birth_weekday'] ?? '')),

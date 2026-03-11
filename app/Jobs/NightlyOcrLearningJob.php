@@ -47,7 +47,7 @@ class NightlyOcrLearningJob implements ShouldQueue
             ->whereIn('source', ['frequency_rule', 'frequency_rule'])
             ->where('usage_count', '>=', $threshold)
             ->orderBy('usage_count', 'desc')
-            ->get(['id', 'field_key', 'wrong_pattern', 'corrected_value', 'usage_count']);
+            ->get(['id', 'field_key', 'wrong_pattern', 'corrected_value', 'usage_count', 'rule_family_key', 'rule_version']);
 
         if ($patterns->isEmpty()) {
             Log::info('NightlyOcrLearningJob: no patterns above threshold.', ['threshold' => $threshold]);
@@ -117,8 +117,9 @@ class NightlyOcrLearningJob implements ShouldQueue
     {
         $url = config('services.openai.url', 'https://api.openai.com/v1/chat/completions');
         $key = config('services.openai.key');
-        if ($key === null || $key === '') {
-            Log::info('NightlyOcrLearningJob: no AI API key configured, skipping.');
+        $key = $key !== null ? trim((string) $key) : '';
+        if ($key === '') {
+            Log::info('NightlyOcrLearningJob: OPENAI_API_KEY missing or empty. Set OPENAI_API_KEY in .env and run: php artisan config:clear');
             return null;
         }
 
@@ -197,6 +198,22 @@ class NightlyOcrLearningJob implements ShouldQueue
             return false;
         }
 
+        $first = $batch[0] ?? null;
+        $ruleFamilyKey = null;
+        $ruleVersion = 1;
+        $supersedesPatternId = null;
+
+        if ($first !== null) {
+            $ruleFamilyKey = $first->rule_family_key ?? $first->field_key;
+            if (count($batch) === 1) {
+                $supersedesPatternId = (int) $first->id;
+                $priorVersion = isset($first->rule_version) ? (int) $first->rule_version : 1;
+                $ruleVersion = $priorVersion + 1;
+            }
+        } else {
+            $ruleFamilyKey = $fieldKey;
+        }
+
         OcrCorrectionPattern::create([
             'field_key' => $fieldKey,
             'wrong_pattern' => $wrong,
@@ -205,7 +222,23 @@ class NightlyOcrLearningJob implements ShouldQueue
             'usage_count' => 0,
             'source' => 'ai_generalized',
             'is_active' => true,
+            'rule_family_key' => $ruleFamilyKey,
+            'rule_version' => $ruleVersion,
+            'supersedes_pattern_id' => $supersedesPatternId,
+            'authored_by_type' => 'ai',
+            'promotion_status' => 'active',
         ]);
+
+        // Retire replaced pattern(s) without deleting: keep history, prefer new rule.
+        $now = now();
+        foreach ($batch as $p) {
+            OcrCorrectionPattern::where('id', $p->id)->update([
+                'is_active' => false,
+                'retired_at' => $now,
+                'retirement_reason' => 'replaced_by_generalization',
+                'promotion_status' => 'retired',
+            ]);
+        }
 
         return true;
     }

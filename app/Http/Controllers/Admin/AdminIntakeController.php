@@ -8,6 +8,7 @@ use App\Models\AdminSetting;
 use App\Jobs\ParseIntakeJob;
 use App\Services\IntakeApprovalService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 
 /*
 |--------------------------------------------------------------------------
@@ -85,7 +86,13 @@ class AdminIntakeController extends Controller
      */
     public function reparse(BiodataIntake $intake)
     {
+        Log::info('AdminIntakeController::reparse() hit', [
+            'intake_id' => $intake->id,
+            'timestamp' => now()->toIso8601String(),
+        ]);
+
         if ($intake->raw_ocr_text === null || $intake->raw_ocr_text === '') {
+            Log::warning('AdminIntakeController::reparse() early return: raw_ocr_text empty', ['intake_id' => $intake->id]);
             return redirect()
                 ->route('admin.biodata-intakes.show', $intake)
                 ->with('error', 'Cannot re-parse: raw OCR text is empty.');
@@ -94,7 +101,8 @@ class AdminIntakeController extends Controller
         $intake->parse_status = 'pending';
         $intake->save();
 
-        ParseIntakeJob::dispatch($intake->id);
+        ParseIntakeJob::dispatch($intake->id, true);
+        Log::info('AdminIntakeController::reparse() dispatch called', ['intake_id' => $intake->id]);
 
         return redirect()
             ->route('admin.biodata-intakes.show', $intake)

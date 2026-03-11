@@ -284,41 +284,10 @@
             <button type="button" id="add-career" class="mt-2 px-4 py-2 bg-gray-200 dark:bg-gray-600 rounded">+ {{ __('intake.add_career') }}</button>
         </section>
 
-        {{-- Relatives — centralized relation-details engine (same as wizard Relatives section). --}}
+        {{-- Relatives — centralized relation-details engine (parsed/approved data only; no injection from contacts). --}}
         @php
             $intakeRelativesData = $sections['relatives']['data'] ?? [];
             if (!is_array($intakeRelativesData)) { $intakeRelativesData = []; }
-
-            // Auto-populate relatives from contacts where relation looks like "चुलता / Uncle" etc.
-            $contactsForRelatives = $sections['contacts']['data'] ?? [];
-            if (is_array($contactsForRelatives)) {
-                foreach ($contactsForRelatives as $c) {
-                    $row = is_array($c) ? $c : [];
-                    $relText = trim((string)($row['relation'] ?? $row['relation_type'] ?? ''));
-                    $nameText = trim((string)($row['name'] ?? $row['contact_name'] ?? ''));
-                    $phoneText = trim((string)($row['contact_number'] ?? $row['phone_number'] ?? $row['number'] ?? ''));
-
-                    if ($relText === '' || $nameText === '') {
-                        continue;
-                    }
-
-                    $isUncle = mb_stripos($relText, 'चुलता') !== false
-                        || mb_stripos($relText, 'चुलते') !== false
-                        || stripos($relText, 'uncle') !== false;
-
-                    if (! $isUncle) {
-                        continue;
-                    }
-
-                    $intakeRelativesData[] = [
-                        'relation_type' => 'Uncle',
-                        'name' => $nameText,
-                        'contact_number' => $phoneText,
-                        'occupation' => $row['occupation'] ?? ($row['note'] ?? ''),
-                        'notes' => '',
-                    ];
-                }
-            }
 
             // Extended family: distinct terms (Paternal/Maternal Uncle/Aunt + spouse)
             $intakeRelationOptions = [

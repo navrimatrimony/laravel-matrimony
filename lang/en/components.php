@@ -18,6 +18,7 @@ return [
         'correct_option' => 'Correct option:',
         'navras_name' => 'Navras name',
         'devak' => 'Devak / Kuldevata',
+        'kul' => 'Kul / Kuldaivat',
         'gotra' => 'Gotra',
         'birth_weekday' => 'Birth weekday',
         'birth_weekday_mismatch' => 'Selected weekday (:selected) does not match expected (:expected) based on date of birth. Please verify before continuing.',

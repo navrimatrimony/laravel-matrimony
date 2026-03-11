@@ -2,6 +2,7 @@
 
 namespace App\Services\Parsing\Parsers;
 
+use App\Services\BiodataParserService;
 use App\Services\ExternalAiParsingService;
 use App\Services\Parsing\Contracts\BiodataParserInterface;
 use Illuminate\Support\Facades\Log;
@@ -46,11 +47,16 @@ class AiFirstBiodataParser implements BiodataParserInterface
                     'mother_occupation',
                     'brother_count',
                     'sister_count',
+                    'gender',
+                    'marital_status',
+                    'full_name',
+                    'primary_contact_number',
                 ];
 
                 foreach ($fieldsToMerge as $field) {
-                    $aiHas = array_key_exists($field, $aiCore) && $aiCore[$field] !== null;
-                    $rulesHas = array_key_exists($field, $rulesCore) && $rulesCore[$field] !== null;
+                    $aiVal = $aiCore[$field] ?? null;
+                    $aiHas = array_key_exists($field, $aiCore) && $aiVal !== null && $aiVal !== '';
+                    $rulesHas = array_key_exists($field, $rulesCore) && $rulesCore[$field] !== null && $rulesCore[$field] !== '';
                     if (! $aiHas && $rulesHas) {
                         $aiCore[$field] = $rulesCore[$field];
                     }
@@ -67,16 +73,29 @@ class AiFirstBiodataParser implements BiodataParserInterface
                     $aiResult['contacts'] = $rulesContacts;
                 }
 
-                // Prefer structured siblings/relatives and cleaned career history
-                // from rules parser when present.
-                if (! empty($rules['siblings'] ?? [])) {
-                    $aiResult['siblings'] = $rules['siblings'];
+                // Section-level fallback: use rules when AI section is empty or low-quality.
+                $aiSiblings = $aiResult['siblings'] ?? null;
+                $aiRelatives = $aiResult['relatives'] ?? null;
+                $aiCareer = $aiResult['career_history'] ?? null;
+                $aiHoroscope = $aiResult['horoscope'] ?? null;
+                $rulesSiblings = $rules['siblings'] ?? [];
+                $rulesRelatives = $rules['relatives'] ?? [];
+                $rulesCareer = $rules['career_history'] ?? [];
+                $rulesHoroscope = $rules['horoscope'] ?? [];
+
+                if (! is_array($aiSiblings) || count($aiSiblings) === 0) {
+                    if (! empty($rulesSiblings)) {
+                        $aiResult['siblings'] = $rulesSiblings;
+                    }
                 }
-                if (! empty($rules['relatives'] ?? [])) {
-                    $aiResult['relatives'] = $rules['relatives'];
+                if (! $this->isUsableRelatives($aiRelatives) && ! empty($rulesRelatives)) {
+                    $aiResult['relatives'] = $rulesRelatives;
                 }
-                if (! empty($rules['career_history'] ?? [])) {
-                    $aiResult['career_history'] = $rules['career_history'];
+                if (! $this->isUsableCareerHistory($aiCareer) && ! empty($rulesCareer)) {
+                    $aiResult['career_history'] = $rulesCareer;
+                }
+                if (! $this->isUsableHoroscope($aiHoroscope) && ! empty($rulesHoroscope)) {
+                    $aiResult['horoscope'] = $rulesHoroscope;
                 }
 
                 // Confidence map: prefer the richer, path-based rules confidence map
@@ -100,6 +119,9 @@ class AiFirstBiodataParser implements BiodataParserInterface
                 }
                 $result['core'] = $core;
 
+                // Final horoscope sanitization: ensure devak/kuldaivat/gotra never contain junk in ai_first output.
+                $result['horoscope'] = $this->sanitizeHoroscopeRows($result['horoscope'] ?? []);
+
                 return $result;
             }
         } catch (\Throwable $e) {
@@ -111,6 +133,90 @@ class AiFirstBiodataParser implements BiodataParserInterface
 
         // Fallback: rules-only parser.
         return $this->rulesParser->parse($rawText, $context);
+    }
+
+    /** Allowed blood group values; rows with invalid blood_group are treated as low-quality. */
+    private const VALID_BLOOD_GROUPS = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'];
+
+    /**
+     * True if career_history has at least one row with a meaningful job_title, company, or location.
+     */
+    private function isUsableCareerHistory(mixed $career): bool
+    {
+        if (! is_array($career) || count($career) === 0) {
+            return false;
+        }
+        foreach ($career as $row) {
+            if (! is_array($row)) {
+                continue;
+            }
+            $job = $row['job_title'] ?? $row['role'] ?? null;
+            $company = $row['company'] ?? $row['employer'] ?? null;
+            $loc = $row['location'] ?? null;
+            if ((is_string($job) && trim($job) !== '') || (is_string($company) && trim($company) !== '') || (is_string($loc) && trim($loc) !== '')) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * True if horoscope has at least one row without invalid blood_group (e.g. numeric garbage).
+     */
+    private function isUsableHoroscope(mixed $horoscope): bool
+    {
+        if (! is_array($horoscope) || count($horoscope) === 0) {
+            return false;
+        }
+        foreach ($horoscope as $row) {
+            if (! is_array($row)) {
+                continue;
+            }
+            $bg = $row['blood_group'] ?? null;
+            if ($bg !== null && $bg !== '') {
+                $norm = strtoupper(trim(str_replace([' ', 'VE', 'POSITIVE', 'NEGATIVE'], '', (string) $bg)));
+                if (! in_array($norm, self::VALID_BLOOD_GROUPS, true)) {
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
+
+    /**
+     * True if relatives is a non-empty array of structured rows (not just note blobs).
+     */
+    private function isUsableRelatives(mixed $relatives): bool
+    {
+        if (! is_array($relatives) || count($relatives) === 0) {
+            return false;
+        }
+        foreach ($relatives as $row) {
+            if (is_array($row) && ! empty($row['relation_type'] ?? null)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Apply horoscope field sanitization to every row so devak/kuldaivat/gotra never contain junk.
+     */
+    private function sanitizeHoroscopeRows(array $rows): array
+    {
+        foreach ($rows as $i => $row) {
+            if (! is_array($row)) {
+                continue;
+            }
+            foreach (['devak', 'kuldaivat', 'gotra'] as $field) {
+                $val = $row[$field] ?? null;
+                if ($val !== null && $val !== '') {
+                    $rows[$i][$field] = BiodataParserService::sanitizeHoroscopeValue(is_string($val) ? $val : (string) $val);
+                }
+            }
+            $rows[$i]['blood_group'] = BiodataParserService::sanitizeBloodGroupValue($row['blood_group'] ?? null);
+        }
+        return $rows;
     }
 
     /**

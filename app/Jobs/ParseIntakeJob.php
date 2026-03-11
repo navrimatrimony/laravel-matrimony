@@ -21,13 +21,18 @@ use Illuminate\Support\Facades\Log;
 | via BiodataParserService. 4) Wrap to SSOT structure. 5) Store parsed_json.
 | Do NOT touch raw_ocr_text. Do NOT recalculate OCR.
 |
+| When forceRecompute is true (e.g. admin reparse), content_hash cache is
+| bypassed so updated parser code runs and parsed_json is recomputed.
+|
 */
 class ParseIntakeJob implements ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
-    public function __construct(public int $intakeId)
-    {
+    public function __construct(
+        public int $intakeId,
+        public bool $forceRecompute = false
+    ) {
     }
 
     /**
@@ -37,16 +42,28 @@ class ParseIntakeJob implements ShouldQueue
     {
         $intake = BiodataIntake::find($this->intakeId);
 
+        Log::info('ParseIntakeJob::handle() started', [
+            'intake_id' => $this->intakeId,
+            'forceRecompute' => $this->forceRecompute,
+            'parse_status_before' => $intake?->parse_status,
+            'intake_found' => $intake !== null,
+        ]);
+
         if ($intake === null) {
             return;
         }
 
         // Do not reparse approved/locked intakes.
         if ($intake->approved_by_user || $intake->intake_locked) {
+            Log::info('ParseIntakeJob::handle() early return: approved or locked', ['intake_id' => $this->intakeId]);
             return;
         }
 
         if ($intake->parse_status !== 'pending') {
+            Log::info('ParseIntakeJob::handle() early return: parse_status not pending', [
+                'intake_id' => $this->intakeId,
+                'parse_status' => $intake->parse_status,
+            ]);
             return;
         }
 
@@ -54,8 +71,9 @@ class ParseIntakeJob implements ShouldQueue
         $mode = $resolver->resolveActiveMode();
 
         // Smart caching — avoid re-parsing identical content for same parser_version.
+        // Bypass cache when forceRecompute is true (e.g. admin reparse) so updated parser runs.
         $canonicalVersion = $resolver->normalizeMode($intake->parser_version ?: $mode);
-        if ($intake->content_hash && $canonicalVersion) {
+        if (!$this->forceRecompute && $intake->content_hash && $canonicalVersion) {
             $cached = BiodataIntake::where('id', '!=', $intake->id)
                 ->where('content_hash', $intake->content_hash)
                 ->where('parser_version', $canonicalVersion)

@@ -56,9 +56,10 @@
         <div class="bg-gray-800/70 border border-gray-700 rounded-lg p-4 space-y-2 md:col-span-2">
             <p class="text-xs font-semibold text-gray-400 uppercase tracking-wide">Admin actions</p>
             <div class="flex flex-wrap gap-2">
-                <form method="POST" action="{{ route('admin.biodata-intakes.reparse', $intake) }}">
+                <form method="POST"
+                      action="{{ route('admin.biodata-intakes.reparse', $intake) }}">
                     @csrf
-                    <button type="submit" class="inline-flex items-center px-3 py-1.5 rounded bg-indigo-600 hover:bg-indigo-700 text-xs font-semibold text-white">
+                    <button type="submit" class="btn btn-warning">
                         Re-parse with current parser
                     </button>
                 </form>

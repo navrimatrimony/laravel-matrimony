@@ -212,6 +212,10 @@ class BiodataParserService
         if ($devak === null) {
             $devak = $kuldaivat;
         }
+        $gotra = $this->rejectHoroscopeJunk($gotra);
+        $kuldaivat = $this->rejectHoroscopeJunk($kuldaivat);
+        $kulName = $this->rejectHoroscopeJunk($kulName);
+        $devak = $this->rejectHoroscopeJunk($devak);
         $navrasName = $this->rejectIfLabelNoise(
             $this->extractField($horoscopeText, ['नावरस नाव', 'नवरस नाव', 'Navras']) ??
             $this->extractField($text, ['नावरस नाव', 'नवरस नाव', 'Navras'])
@@ -312,6 +316,8 @@ class BiodataParserService
         if ($bloodGroup === $bloodGroupRaw) {
             $bloodGroup = $this->normalizeBloodGroup($bloodGroupRaw);
         }
+        // Reject invalid blood_group (e.g. numeric garbage "84४७"); allow only A+, A-, B+, B-, AB+, AB-, O+, O-
+        $bloodGroup = $this->validateBloodGroupStrict($bloodGroup);
         $confidence['blood_group'] = $bloodGroup !== null ? self::CONF_DIRECT : self::CONF_MISSING;
 
         $addressBlock = $this->extractAddressBlock($contactText) ?? $this->extractAddressBlock($text);
@@ -329,6 +335,9 @@ class BiodataParserService
         // Strip honorifics from stored parent names for core snapshot.
         $fatherName = $fatherName !== null ? $this->cleanPersonName($fatherName) : null;
         $motherName = $motherName !== null ? $this->cleanPersonName($motherName) : null;
+
+        // Remove occupation label artifacts (नोकरी :-, नोकरी >, etc.) from father_occupation
+        $fatherOccupation = $fatherOccupation !== null ? \App\Services\AIParsingService::cleanOccupationLabel($fatherOccupation) : null;
 
         $core = [
             'full_name' => $fullName,
@@ -457,7 +466,6 @@ class BiodataParserService
             || $varna !== null
             || $gotra !== null
             || $kuldaivat !== null
-            || $kulName !== null
             || $navrasName !== null
             || $birthWeekday !== null;
         if ($hasAnyHoroscopeText) {
@@ -469,9 +477,9 @@ class BiodataParserService
                 'nadi_id' => null,
                 'yoni_id' => null,
                 'mangal_dosh_type_id' => null,
-                // Textual attributes — user will map to master lists in UI.
+                // Textual attributes — kuldaivat = कुलदैवत / kuldevta / कुलदेवता / कुलस्वामी / कूळस्वामी.
                 'devak' => $devak ?? $kuldaivat,
-                'kul' => $kulName,
+                'kuldaivat' => $kuldaivat,
                 'gotra' => $gotra,
                 'navras_name' => $navrasName,
                 'birth_weekday' => $birthWeekday,
@@ -801,7 +809,7 @@ $coreKeys = [
             if (preg_match('/^[\s\|।]*$/u', $line) || $line === '||' || $line === '।।') {
                 continue;
             }
-            if (mb_substr_count($line, 'श्री') > 2) {
+            if (mb_substr_count($line, 'श्री') > 2 && !$this->isRelativeLine($line)) {
                 continue;
             }
             if (preg_match('/^[\p{P}\s\-*·.—]+$/u', $line)) {
@@ -810,6 +818,24 @@ $coreKeys = [
             $filtered[] = $line;
         }
         return implode("\n", $filtered);
+    }
+
+    /**
+     * Whether the line appears to be a relatives/family line (relation keyword present).
+     * Used to avoid dropping valid relative lines that contain multiple "श्री" during sanitization.
+     */
+    private function isRelativeLine(string $line): bool
+    {
+        $keywords = [
+            'मामा', 'चुलते', 'चुलती', 'काका', 'काकू', 'मावशी', 'आत्या', 'दाजी',
+            'नातेवाईक', 'भाऊ', 'बहीण', 'बहिण',
+        ];
+        foreach ($keywords as $kw) {
+            if (mb_strpos($line, $kw) !== false) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**
@@ -1536,7 +1562,7 @@ $coreKeys = [
                     }
                 }
 
-                if ($name !== null) {
+                if ($name !== null && $this->isMeaningfulSiblingName($name, 'brother')) {
                     $siblings[] = [
                         'relation_type' => 'brother',
                         'name' => $name,
@@ -1565,7 +1591,7 @@ $coreKeys = [
 
                 $name = $this->cleanPersonName($namePart);
 
-                if ($name !== null) {
+                if ($name !== null && $this->isMeaningfulSiblingName($name, 'sister')) {
                     $siblings[] = [
                         'relation_type' => 'sister',
                         'name' => $name,
@@ -1617,6 +1643,12 @@ $coreKeys = [
         }
         $flushRelative();
 
+        $relatives = $this->splitRelativeRowsByShri($relatives);
+        $relatives = array_values(array_filter($relatives, function ($r) {
+            return $this->isMeaningfulRelativeNote((string) ($r['notes'] ?? ''));
+        }));
+        $relatives = $this->structureRelativeRows($relatives);
+
         // --- CAREER SPLIT (candidate vs father vs brother) ---
         // Use "नोकरी" lines heuristically.
         $careerLines = [];
@@ -1635,27 +1667,44 @@ $coreKeys = [
 
             // Candidate: often Amdocs / IT company, before siblings section.
             if ($candidateJob === null && (stripos($line, 'Amdocs') !== false || stripos($line, 'Company') !== false)) {
-                $candidateJob = $this->cleanValue($line);
+                $candidateJob = \App\Services\AIParsingService::cleanOccupationLabel($this->cleanValue($line));
                 continue;
             }
 
             // Father: sugar factory / factory wording.
             if ($fatherJob === null && (mb_strpos($line, 'शुगर फॅक्टरी') !== false || stripos($line, 'Factory') !== false)) {
-                $fatherJob = $this->cleanValue($line);
+                $fatherJob = \App\Services\AIParsingService::cleanOccupationLabel($this->cleanValue($line));
                 continue;
             }
 
             // Brother: remaining "नोकरी" line (e.g. Bharat Forge)
             if ($brotherJob === null) {
-                $brotherJob = $this->cleanValue($line);
+                $brotherJob = \App\Services\AIParsingService::cleanOccupationLabel($this->cleanValue($line));
             }
         }
 
         if ($candidateJob !== null) {
+            $company = $candidateJob;
+            $location = null;
+            if (stripos($candidateJob, 'Amdocs') !== false) {
+                if (preg_match('/^(Amdocs\s+Company)\s+(.+)$/iu', trim($candidateJob), $am)) {
+                    $company = trim($am[1]);
+                    $location = preg_replace('/\s*,\s*/u', ', ', trim(preg_replace('/\s+/u', ' ', $am[2])));
+                } else {
+                    $company = 'Amdocs';
+                    $rest = trim(preg_replace('/^Amdocs\s*(?:Company\s*)?/i', '', $candidateJob));
+                    if ($rest !== '') {
+                        $location = preg_replace('/\s*,\s*/u', ', ', preg_replace('/\s+/u', ' ', $rest));
+                    }
+                }
+            } elseif (preg_match('/^([^,]+)[,\s]\s*(.+)$/u', $candidateJob, $cm)) {
+                $company = trim($cm[1]);
+                $location = preg_replace('/\s*,\s*/u', ', ', trim($cm[2]));
+            }
             $careerHistory[] = [
                 'job_title' => null,
-                'company' => $candidateJob,
-                'location' => null,
+                'company' => $company,
+                'location' => $location,
             ];
         }
 
@@ -1881,6 +1930,234 @@ $coreKeys = [
         }
         $value = strtoupper(str_replace([' ', 'VE', 'POSITIVE'], '', $value));
         return $value;
+    }
+
+    /** Allowed blood group values; invalid/garbage (e.g. "84४७") becomes null. */
+    private const VALID_BLOOD_GROUPS = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'];
+
+    /**
+     * Public blood-group sanitizer. Accepts only A+, A-, B+, B-, AB+, AB-, O+, O-.
+     * Normalizes case and whitespace; returns canonical value or null (e.g. "84४७" => null, "ab +" => "AB+").
+     */
+    public static function sanitizeBloodGroupValue(?string $value): ?string
+    {
+        if ($value === null || trim($value) === '') {
+            return null;
+        }
+        $v = preg_replace('/\s+/u', '', trim($value));
+        $v = strtoupper(str_replace(['VE', 'POSITIVE', 'NEGATIVE', 'NEG'], '', $v));
+        return in_array($v, self::VALID_BLOOD_GROUPS, true) ? $v : null;
+    }
+
+    private function validateBloodGroupStrict(?string $value): ?string
+    {
+        return self::sanitizeBloodGroupValue($value);
+    }
+
+    /**
+     * Split relative rows when one note line contains multiple persons (e.g. "मामा + श्री. A ... श्री. B").
+     * Creates one row per person (split by श्री. or सौ.) with same relation_type; preserves notes per row.
+     */
+    private function splitRelativeRowsByShri(array $relatives): array
+    {
+        $out = [];
+        foreach ($relatives as $row) {
+            $type = $row['relation_type'] ?? null;
+            $notes = $row['notes'] ?? '';
+            if (! is_string($notes) || $notes === '') {
+                $out[] = $row;
+                continue;
+            }
+            $parts = preg_split('/(?=श्री\.|सौ\.)/u', $notes, -1, PREG_SPLIT_NO_EMPTY);
+            $parts = array_map('trim', array_filter($parts, fn ($p) => trim($p) !== ''));
+            if (count($parts) <= 1) {
+                $out[] = $row;
+                continue;
+            }
+            foreach ($parts as $segment) {
+                if ($segment === '') {
+                    continue;
+                }
+                $out[] = [
+                    'relation_type' => $type,
+                    'notes' => $segment,
+                ];
+            }
+        }
+        return $out;
+    }
+
+    /**
+     * Whether a relative row's notes contain meaningful person/address content.
+     * Discard marker-only rows like "मामा +", "चुलते 2-", "दाजी *".
+     */
+    private function isMeaningfulRelativeNote(string $note): bool
+    {
+        $t = trim($note);
+        if ($t === '') {
+            return false;
+        }
+        $keywords = [
+            'मामा', 'चुलते', 'चुलती', 'दाजी', 'काका', 'काकू', 'मावशी', 'आत्या',
+            'मावस भाऊ', 'मावस बहीण',
+        ];
+        $kwPattern = implode('|', array_map('preg_quote', $keywords));
+        if (preg_match('/^\s*(' . $kwPattern . ')\s*[+\-*\.\s०-९0-9]*$/u', $t)) {
+            return false;
+        }
+        return true;
+    }
+
+    /**
+     * Convert relative rows with notes into structured objects: name, location, raw_note.
+     * Extracts name after श्री./सौ. and location from (city) pattern.
+     */
+    private function structureRelativeRows(array $relatives): array
+    {
+        $out = [];
+        foreach ($relatives as $row) {
+            $notes = (string) ($row['notes'] ?? '');
+            $name = null;
+            $location = null;
+            if (preg_match('/श्री\.?\s*([^(]+?)\s*(?:\(([^)]+)\))/u', $notes, $m)) {
+                $name = trim($m[1]);
+                $location = isset($m[2]) ? trim($m[2]) : null;
+            } elseif (preg_match('/सौ\.?\s*([^(]+?)\s*(?:\(([^)]+)\))/u', $notes, $m)) {
+                $name = trim($m[1]);
+                $location = isset($m[2]) ? trim($m[2]) : null;
+            } elseif (preg_match('/श्री\.?\s*(.+)/u', $notes, $m)) {
+                $name = trim($m[1]);
+                if (preg_match('/\(([^)]+)\)/u', $notes, $locM)) {
+                    $location = trim($locM[1]);
+                    $name = trim(preg_replace('/\s*\([^)]+\)\s*$/u', '', $name));
+                }
+            } elseif (preg_match('/सौ\.?\s*(.+)/u', $notes, $m)) {
+                $name = trim($m[1]);
+                if (preg_match('/\(([^)]+)\)/u', $notes, $locM)) {
+                    $location = trim($locM[1]);
+                    $name = trim(preg_replace('/\s*\([^)]+\)\s*$/u', '', $name));
+                }
+            }
+            if ($location === null && preg_match('/\(([^)]+)\)/u', $notes, $locM)) {
+                $location = trim($locM[1]);
+            }
+            $name = $name !== null && $name !== '' ? $this->cleanPersonName($name) : null;
+            $out[] = [
+                'relation_type' => $row['relation_type'] ?? null,
+                'name' => $name,
+                'location' => $location !== null && $location !== '' ? $location : null,
+                'occupation' => null,
+                'contact_number' => null,
+                'raw_note' => $notes,
+            ];
+        }
+        return $out;
+    }
+
+    /**
+     * Whether an extracted sibling name is meaningful (not just relation/count/honorific).
+     */
+    private function isMeaningfulSiblingName(string $name, string $relationType): bool
+    {
+        $t = trim($name);
+        if ($t === '' || mb_strlen($t) < 2) {
+            return false;
+        }
+        $stripped = preg_replace('/^(भाऊ|बहिण|बहीण)\s*[0-9०-९\s]*/u', '', $t);
+        $stripped = preg_replace('/^(कु\.?|चि\.?|श्री\.?|श्रीमती\.?|सौ\.?)\s*/u', '', $stripped);
+        $stripped = trim($stripped);
+        if ($stripped === '' || mb_strlen($stripped) < 2) {
+            return false;
+        }
+        if (preg_match('/^(भाऊ|बहिण|बहीण|सौ|श्री)$/u', $stripped)) {
+            return false;
+        }
+        $noiseWords = ['Contact', 'No', 'Mobile', 'Phone', 'संपर्क', 'नं'];
+        if (in_array($stripped, $noiseWords, true)) {
+            return false;
+        }
+        return (bool) preg_match('/\p{L}/u', $stripped);
+    }
+
+    /**
+     * Public helper for horoscope field sanitization. Used by rules parser and AI-first parser.
+     * Rejects blood/group keywords (including split/ZWJ variants), high digit ratio, leading symbols, label fragments.
+     */
+    public static function sanitizeHoroscopeValue(?string $value): ?string
+    {
+        if ($value === null || trim($value) === '') {
+            return null;
+        }
+        $v = trim($value);
+
+        // Remove common label fragments before validation
+        $v = preg_replace('/^\s*(?:देवक|कुल|गोत्र)\s*[:\-]*\s*/u', '', $v);
+        $v = preg_replace('/\s*[:\-]\s*$/u', '', $v);
+        $v = preg_replace('/^\s*[:\-]+\s*/u', '', $v);
+        $v = trim($v, " \t\n\r\0\x0B.,;:+-*");
+        if ($v === '') {
+            return null;
+        }
+
+        // Normalize internal whitespace and ZWJ so keyword checks catch split/OCR variants
+        $v = preg_replace('/\x{200D}/u', '', $v);
+        $v = preg_replace('/\s+/u', ' ', $v);
+        $v = trim($v);
+
+        // Forbidden blood-group patterns anywhere in value => return null
+        $forbidden = [
+            'रक्त',
+            'रक्तगट',
+            'रक्त गट',
+            'रक्‍त',
+            'रक्‍त गट',
+            'blood',
+            'bloodgroup',
+            'blood group',
+            'group',
+        ];
+        $vLower = mb_strtolower($v);
+        foreach ($forbidden as $pattern) {
+            if ($pattern === 'group' || str_starts_with($pattern, 'blood')) {
+                if (mb_strpos($vLower, mb_strtolower($pattern)) !== false) {
+                    return null;
+                }
+            } else {
+                if (mb_strpos($v, $pattern) !== false) {
+                    return null;
+                }
+            }
+        }
+        // Return null if value starts with symbols or non-letter (e.g. + - * : ; . or stray matra ी)
+        if (preg_match('/^[\+\-\*:;\.]/u', $v) || !preg_match('/^\p{L}/u', $v)) {
+            return null;
+        }
+        // Return null if length < 3 after trimming
+        if (mb_strlen($v) < 3) {
+            return null;
+        }
+        // Return null if more than 40% digits (OCR garbage)
+        $len = mb_strlen($v);
+        $digitCount = preg_match_all('/[0-9\x{0966}-\x{096F}]/u', $v);
+        if ($len > 0 && $digitCount / $len > 0.4) {
+            return null;
+        }
+        // Already-only-digits / pure punctuation
+        if (preg_match('/^[०-९0-9\s\-\.]+$/u', $v) || preg_match('/^[ABO][+-]?$/i', $v)) {
+            return null;
+        }
+        if ($len > 120) {
+            return null;
+        }
+        return $v;
+    }
+
+    /**
+     * Reject values that are clearly not valid horoscope fields (delegates to sanitizeHoroscopeValue).
+     */
+    private function rejectHoroscopeJunk(?string $value): ?string
+    {
+        return self::sanitizeHoroscopeValue($value);
     }
 
     private function normalizeMaritalStatus(?string $value): ?string

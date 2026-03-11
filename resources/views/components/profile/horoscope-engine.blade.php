@@ -230,7 +230,7 @@
     {{-- Row 5: Kul + Gotra --}}
     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
-            <label for="horoscope-kul" class="{{ $labelCls }}">Kul (कुळ नाव)</label>
+            <label for="horoscope-kul" class="{{ $labelCls }}">{{ __('components.horoscope.kul') }}</label>
             <input
                 type="text"
                 name="{{ $n('kul') }}"

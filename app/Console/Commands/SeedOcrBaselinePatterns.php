@@ -59,6 +59,7 @@ class SeedOcrBaselinePatterns extends Command
                         'usage_count' => 0, // Baseline patterns have usage_count = 0
                         'pattern_confidence' => $pattern['pattern_confidence'] ?? 0.70,
                         'is_active' => $pattern['is_active'] ?? true,
+                        'authored_by_type' => 'migration',
                         'updated_at' => now(),
                     ]
                 );

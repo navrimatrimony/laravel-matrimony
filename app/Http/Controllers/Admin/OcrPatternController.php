@@ -53,6 +53,15 @@ class OcrPatternController extends Controller
             $after  = ! $before;
 
             $pattern->is_active = $after;
+            if ($after) {
+                $pattern->retired_at = null;
+                $pattern->retirement_reason = null;
+                $pattern->promotion_status = $pattern->promotion_status === 'retired' ? 'active' : $pattern->promotion_status;
+            } else {
+                $pattern->retired_at = now();
+                $pattern->retirement_reason = 'admin_disabled';
+                $pattern->promotion_status = 'retired';
+            }
             $pattern->save();
 
             $reason = sprintf(
