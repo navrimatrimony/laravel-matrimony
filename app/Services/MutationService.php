@@ -1038,10 +1038,12 @@ class MutationService
     {
         $mapped = $row;
         $val = $mapped['address_type_id'] ?? $mapped['address_type'] ?? $mapped['type'] ?? null;
-        if ($val !== null && !is_numeric($val)) {
-            $mapped['address_type_id'] = $this->resolveMasterKey('master_address_types', $val);
+        $engine = app(\App\Services\ControlledOptions\ControlledOptionEngine::class);
+        if ($val !== null && ! is_numeric($val)) {
+            $res = $engine->resolveKey('entity.address_type', (string) $val);
+            $mapped['address_type_id'] = $res['matched'] ? $res['id'] : null;
         } elseif (isset($mapped['address_type_id']) && is_numeric($mapped['address_type_id'])) {
-            $mapped['address_type_id'] = (int) $mapped['address_type_id'];
+            $mapped['address_type_id'] = $engine->resolveId('entity.address_type', $mapped['address_type_id']);
         }
         unset($mapped['address_type'], $mapped['type']);
         return $mapped;
@@ -1051,10 +1053,12 @@ class MutationService
     {
         $mapped = $row;
         $val = $mapped['contact_relation_id'] ?? $mapped['relation_type'] ?? null;
-        if ($val !== null && !is_numeric($val)) {
-            $mapped['contact_relation_id'] = $this->resolveMasterKey('master_contact_relations', $val);
+        $engine = app(\App\Services\ControlledOptions\ControlledOptionEngine::class);
+        if ($val !== null && ! is_numeric($val)) {
+            $res = $engine->resolveKey('entity.contact_relation', (string) $val);
+            $mapped['contact_relation_id'] = $res['matched'] ? $res['id'] : null;
         } elseif (isset($mapped['contact_relation_id']) && is_numeric($mapped['contact_relation_id'])) {
-            $mapped['contact_relation_id'] = (int) $mapped['contact_relation_id'];
+            $mapped['contact_relation_id'] = $engine->resolveId('entity.contact_relation', $mapped['contact_relation_id']);
         }
         unset($mapped['relation_type']);
         // Normalize contact preference: intake/wizard may send is_whatsapp as string 'whatsapp'|'call'|'message'
@@ -1072,15 +1076,17 @@ class MutationService
     private function resolveChildLivingWithToId(array $row): array
     {
         $mapped = $row;
+        $engine = app(\App\Services\ControlledOptions\ControlledOptionEngine::class);
         if (array_key_exists('child_living_with_id', $mapped) && is_numeric($mapped['child_living_with_id'])) {
-            $mapped['child_living_with_id'] = (int) $mapped['child_living_with_id'];
+            $mapped['child_living_with_id'] = $engine->resolveId('entity.child_living_with', $mapped['child_living_with_id']);
             unset($mapped['lives_with_parent']);
             return $mapped;
         }
         if (array_key_exists('lives_with_parent', $mapped)) {
             $withParent = $mapped['lives_with_parent'];
             $key = ($withParent === true || $withParent === '1' || $withParent === 1) ? 'with_parent' : 'with_other_parent';
-            $mapped['child_living_with_id'] = $this->resolveMasterKey('master_child_living_with', $key);
+            $res = $engine->resolveKey('entity.child_living_with', $key);
+            $mapped['child_living_with_id'] = $res['matched'] ? $res['id'] : null;
         }
         unset($mapped['lives_with_parent']);
         return $mapped;
@@ -1089,18 +1095,21 @@ class MutationService
     private function resolvePropertyAssetLookupsToId(array $row): array
     {
         $mapped = $row;
+        $engine = app(\App\Services\ControlledOptions\ControlledOptionEngine::class);
         $val = $mapped['asset_type_id'] ?? $mapped['asset_type'] ?? null;
-        if ($val !== null && !is_numeric($val)) {
-            $mapped['asset_type_id'] = $this->resolveMasterKey('master_asset_types', $val);
+        if ($val !== null && ! is_numeric($val)) {
+            $res = $engine->resolveKey('entity.asset_type', (string) $val);
+            $mapped['asset_type_id'] = $res['matched'] ? $res['id'] : null;
         } elseif (isset($mapped['asset_type_id']) && is_numeric($mapped['asset_type_id'])) {
-            $mapped['asset_type_id'] = (int) $mapped['asset_type_id'];
+            $mapped['asset_type_id'] = $engine->resolveId('entity.asset_type', $mapped['asset_type_id']);
         }
         unset($mapped['asset_type']);
         $val = $mapped['ownership_type_id'] ?? $mapped['ownership_type'] ?? null;
-        if ($val !== null && !is_numeric($val)) {
-            $mapped['ownership_type_id'] = $this->resolveMasterKey('master_ownership_types', $val);
+        if ($val !== null && ! is_numeric($val)) {
+            $res = $engine->resolveKey('entity.ownership_type', (string) $val);
+            $mapped['ownership_type_id'] = $res['matched'] ? $res['id'] : null;
         } elseif (isset($mapped['ownership_type_id']) && is_numeric($mapped['ownership_type_id'])) {
-            $mapped['ownership_type_id'] = (int) $mapped['ownership_type_id'];
+            $mapped['ownership_type_id'] = $engine->resolveId('entity.ownership_type', $mapped['ownership_type_id']);
         }
         unset($mapped['ownership_type']);
         $mapped['city_id'] = ! empty($mapped['city_id']) ? (int) $mapped['city_id'] : null;
@@ -1114,10 +1123,12 @@ class MutationService
     {
         $mapped = $row;
         $val = $mapped['legal_case_type_id'] ?? $mapped['case_type'] ?? null;
-        if ($val !== null && !is_numeric($val)) {
-            $mapped['legal_case_type_id'] = $this->resolveMasterKey('master_legal_case_types', $val);
+        $engine = app(\App\Services\ControlledOptions\ControlledOptionEngine::class);
+        if ($val !== null && ! is_numeric($val)) {
+            $res = $engine->resolveKey('entity.legal_case_type', (string) $val);
+            $mapped['legal_case_type_id'] = $res['matched'] ? $res['id'] : null;
         } elseif (isset($mapped['legal_case_type_id']) && is_numeric($mapped['legal_case_type_id'])) {
-            $mapped['legal_case_type_id'] = (int) $mapped['legal_case_type_id'];
+            $mapped['legal_case_type_id'] = $engine->resolveId('entity.legal_case_type', $mapped['legal_case_type_id']);
         }
         unset($mapped['case_type']);
         return $mapped;
@@ -1126,37 +1137,26 @@ class MutationService
     private function resolveHoroscopeLookupsToId(array $row): array
     {
         $mapped = $row;
-        $pairs = [
-            'rashi' => ['rashi_id', 'master_rashis'],
-            'nakshatra' => ['nakshatra_id', 'master_nakshatras'],
-            'gan' => ['gan_id', 'master_gans'],
-            'nadi' => ['nadi_id', 'master_nadis'],
-            'mangal_dosh_type' => ['mangal_dosh_type_id', 'master_mangal_dosh_types'],
-            'yoni' => ['yoni_id', 'master_yonis'],
+        $engine = app(\App\Services\ControlledOptions\ControlledOptionEngine::class);
+        $fieldMap = [
+            'rashi' => ['col' => 'rashi_id', 'field_key' => 'horoscope.rashi'],
+            'nakshatra' => ['col' => 'nakshatra_id', 'field_key' => 'horoscope.nakshatra'],
+            'gan' => ['col' => 'gan_id', 'field_key' => 'horoscope.gan'],
+            'nadi' => ['col' => 'nadi_id', 'field_key' => 'horoscope.nadi'],
+            'mangal_dosh_type' => ['col' => 'mangal_dosh_type_id', 'field_key' => 'horoscope.mangal_dosh_type'],
+            'yoni' => ['col' => 'yoni_id', 'field_key' => 'horoscope.yoni'],
         ];
-        foreach ($pairs as $strKey => [$idCol, $masterTable]) {
+        foreach ($fieldMap as $strKey => $meta) {
+            $idCol = $meta['col'];
+            $fieldKey = $meta['field_key'];
             $val = $mapped[$idCol] ?? $mapped[$strKey] ?? null;
             if ($val !== null && ! is_numeric($val)) {
-                $mapped[$idCol] = $this->resolveMasterKey($masterTable, $val);
+                $res = $engine->resolveKey($fieldKey, (string) $val);
+                $mapped[$idCol] = $res['matched'] ? $res['id'] : null;
             } elseif (isset($mapped[$idCol]) && is_numeric($mapped[$idCol])) {
-                // Re-validate that the numeric ID points to an active master row (when supported).
-                $mapped[$idCol] = $this->resolveActiveMasterId($masterTable, $mapped[$idCol]);
+                $mapped[$idCol] = $engine->resolveId($fieldKey, $mapped[$idCol]);
             }
             unset($mapped[$strKey]);
-        }
-        // Field-specific strict allowlists on IDs (e.g. nadi/gan must not resolve to "other").
-        // We derive the canonical key from the master table and null out any disallowed keys.
-        if (!empty($mapped['nadi_id'])) {
-            $key = DB::table('master_nadis')->where('id', $mapped['nadi_id'])->value('key');
-            if (! in_array($key, ['adi', 'madhya', 'antya'], true)) {
-                $mapped['nadi_id'] = null;
-            }
-        }
-        if (!empty($mapped['gan_id'])) {
-            $key = DB::table('master_gans')->where('id', $mapped['gan_id'])->value('key');
-            if (! in_array($key, ['deva', 'manav', 'rakshasa'], true)) {
-                $mapped['gan_id'] = null;
-            }
         }
 
         return $mapped;

@@ -1018,7 +1018,7 @@ class AdminController extends Controller
         if ($hasCoreFieldChanges) {
             $validationRules['full_name'] = 'required|string|max:255';
             $validationRules['date_of_birth'] = 'nullable|date';
-            $validationRules['marital_status_id'] = ['nullable', \Illuminate\Validation\Rule::exists('master_marital_statuses', 'id')];
+            $validationRules['marital_status_id'] = ['nullable', \Illuminate\Validation\Rule::exists('master_marital_statuses', 'id')->where(fn ($q) => $q->where('is_active', true))];
             $validationRules['highest_education'] = 'nullable|string|max:255';
             $validationRules['location'] = 'nullable|string|max:255';
             $validationRules['religion_id'] = ['nullable', 'exists:religions,id'];
@@ -1039,9 +1039,9 @@ class AdminController extends Controller
                 }),
             ];
             $validationRules['height_cm'] = 'nullable|integer|min:50|max:250';
-            $validationRules['complexion_id'] = ['nullable', Rule::exists('master_complexions', 'id')];
-            $validationRules['blood_group_id'] = ['nullable', Rule::exists('master_blood_groups', 'id')];
-            $validationRules['physical_build_id'] = ['nullable', Rule::exists('master_physical_builds', 'id')];
+            $validationRules['complexion_id'] = ['nullable', Rule::exists('master_complexions', 'id')->where(fn ($q) => $q->where('is_active', true))];
+            $validationRules['blood_group_id'] = ['nullable', Rule::exists('master_blood_groups', 'id')->where(fn ($q) => $q->where('is_active', true))];
+            $validationRules['physical_build_id'] = ['nullable', Rule::exists('master_physical_builds', 'id')->where(fn ($q) => $q->where('is_active', true))];
             $validationRules['weight_kg'] = 'nullable|numeric|min:20|max:300';
             $validationRules['spectacles_lens'] = ['nullable', 'string', 'max:50', Rule::in(['no', 'spectacles', 'contact_lens', 'both'])];
             $validationRules['physical_condition'] = ['nullable', 'string', 'max:50', Rule::in(['none', 'physically_challenged', 'hearing_condition', 'vision_condition', 'other', 'prefer_not_to_say'])];

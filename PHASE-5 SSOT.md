@@ -6699,4 +6699,483 @@ This day will be considered aligned only when:
 L) Frozen statement
 For this product, multilanguage UI is not “page-by-page optional decoration”.
 It is a whole-site behavior.
-Once a user selects a language, the product must consistently behave in that language across the full website UI surface, while remaining compatible with future centralized admin control and governance.
+Once a user selects a language, the product must consistently behave in that language across the full website UI surface, while remaining compatible with future centralized admin control and governance.`
+
+-----------------
+
+--------------
+############################################################
+DAY-36 — CENTRALIZED CONTROLLED OPTION ENGINE (FINAL)
+############################################################
+
+Objective:
+Create one centralized, reusable Controlled Option Engine for all master-backed / dropdown-backed profile fields across:
+
+- Wizard manual entry
+- Intake preview / approval
+- OCR / AI normalization
+- Admin edit flows
+- Mutation-time entity sync
+
+This day formalizes the rule:
+
+If a field is governed by allowed options / master data,
+no out-of-list value may ever be saved.
+
+This applies to both:
+- text input that must normalize to a canonical option
+- numeric IDs that must resolve only to valid active rows
+
+------------------------------------------------------------
+WHY THIS DAY IS REQUIRED
+------------------------------------------------------------
+
+Current system already has partial hardening:
+- active-only validation on many controlled fields
+- MutationService active master resolution in key areas
+- horoscope-specific OCR normalization
+- localized EN/MR option rendering
+
+But enforcement is still distributed across:
+- controllers
+- validation rules
+- intake normalization
+- mutation helpers
+- Blade/UI label mapping
+
+This day centralizes that logic into one governed engine so that:
+
+✔ same rule applies everywhere
+✔ OCR and manual input behave consistently
+✔ English/Marathi labels are resolved centrally
+✔ inactive options are rejected uniformly
+✔ new dropdown fields can be added without re-implementing logic
+
+------------------------------------------------------------
+SSOT NON-NEGOTIABLE RULES
+------------------------------------------------------------
+
+This engine must obey all Phase-5 laws:
+
+• No direct DB update bypassing MutationService
+• No silent overwrite
+• No JSON blob storage for structured entities
+• Intake raw text remains immutable
+• approval_snapshot_json remains immutable after approval
+• All profile mutations remain governed
+• Conflict handling and lifecycle rules remain intact
+• No schema drift unless explicitly required and justified
+• No field may save arbitrary text if it is a controlled-option field
+
+------------------------------------------------------------
+ENGINE SCOPE
+------------------------------------------------------------
+
+This engine governs only CONTROLLED OPTION FIELDS.
+
+A controlled-option field means any field whose value must come from:
+
+1) a master table row
+2) a fixed allowlist
+3) a governed dropdown/select/radio option universe
+
+This includes (as applicable in current project):
+
+CORE / SNAPSHOT FIELDS
+- gender_id
+- marital_status_id
+- complexion_id
+- blood_group_id
+- physical_build_id
+- religion_id
+- caste_id
+- sub_caste_id
+- income_currency_id
+- working_with_type_id
+- profession_id
+- income_range_id (if static list only)
+- college_id (if governed)
+- family_type_id (if governed)
+
+HOROSCOPE
+- rashi_id
+- nakshatra_id
+- gan_id
+- nadi_id
+- yoni_id
+- mangal_dosh_type_id
+
+PREFERENCES
+- preferred_religion_ids
+- preferred_caste_ids
+- other master-backed preference IDs
+
+ENTITY TABLE LOOKUPS
+- address_type_id
+- contact_relation_id
+- child_living_with_id
+- asset_type_id
+- ownership_type_id
+- legal_case_type_id
+- any future master-backed nested entity lookup
+
+NOT IN SCOPE:
+- free-text narrative fields
+- devak / kul / gotra / notes / company_name / address_line
+- location tables that are not governed by active/inactive unless explicitly designed so
+- raw OCR text storage
+
+------------------------------------------------------------
+FINAL ENGINE CONTRACT
+------------------------------------------------------------
+
+A single reusable service layer must exist for controlled options.
+
+Preferred implementation shape:
+
+1) ControlledOptionRegistry
+2) ControlledOptionEngine
+3) ControlledOptionLabelResolver
+
+The exact class names may vary,
+but the architectural responsibilities must remain separate and clear.
+
+============================================================
+1️⃣ CONTROLLED OPTION REGISTRY
+============================================================
+
+Goal:
+Declare all controlled-option fields in one place.
+
+For each field, registry must define:
+
+- field key
+- target storage column / id column
+- source type:
+  - master_table
+  - static_allowlist
+- source table name (if master-backed)
+- key column (default: key)
+- label column (default: label)
+- id column (default: id)
+- active column presence (usually is_active)
+- whether numeric posted ids must be active-only
+- whether text normalization is allowed
+- whether OCR synonym mapping is allowed
+- strict allowlist keys (if field must be narrower than DB rows)
+- translation namespace for labels
+- whether field is single-value or multi-value
+
+Examples:
+
+- horoscope.nadi
+  - source: master_nadis
+  - strict keys: [adi, madhya, antya]
+  - translation namespace: components.horoscope.options.nadi
+
+- horoscope.gan
+  - source: master_gans
+  - strict keys: [deva, manav, rakshasa]
+  - translation namespace: components.horoscope.options.gan
+
+- basic.gender
+  - source: master_genders
+  - active-only yes
+
+- education.profession
+  - source: professions
+  - active-only yes
+
+Registry becomes the SSOT inside code for all controlled fields.
+
+============================================================
+2️⃣ CONTROLLED OPTION ENGINE
+============================================================
+
+Goal:
+Centralize normalization + validation + active lookup rules.
+
+Engine must support these inputs:
+
+- raw text
+- canonical key
+- numeric ID
+- array of numeric IDs (multi-select)
+- OCR-derived text
+- preview snapshot values
+- wizard submitted values
+
+Engine must provide these behaviors:
+
+A) TEXT → CANONICAL KEY
+- normalize Marathi/English text
+- collapse punctuation/noise
+- apply field-specific synonym mapping
+- match only within that field’s allowed universe
+- never cross-map values between unrelated fields
+
+B) KEY → ACTIVE MASTER ID
+- resolve canonical key to row id
+- only active rows allowed when source supports is_active
+- if strict allowlist exists, key must belong to it
+
+C) NUMERIC ID → ACTIVE MASTER ID
+- if numeric ID posted directly, revalidate it
+- row must exist
+- row must be active if source supports is_active
+- if strict allowlist exists, row key must satisfy it
+
+D) MULTI-SELECT ARRAYS
+- validate each item individually
+- reject inactive/disallowed IDs
+- preserve only valid values
+- never auto-insert arbitrary values
+
+E) UNMATCHED VALUES
+- must remain unmatched
+- must NOT auto-map to “other”
+- must NOT silently map to nearest guess
+- must remain reviewable in intake preview if applicable
+
+============================================================
+3️⃣ LABEL RESOLUTION (ENGLISH + MARATHI)
+============================================================
+
+Goal:
+All controlled-option labels must resolve centrally.
+
+Rules:
+
+- DB stores canonical IDs / keys only
+- UI label must be resolved from translation key where available
+- DB label may be fallback only
+- English + Marathi labels must be available for all user-visible controlled fields
+- No ad-hoc per-Blade option label logic for governed fields
+
+Preferred pattern:
+
+field registry declares translation namespace
+
+Example:
+- components.horoscope.options.nadi.adi
+- components.horoscope.options.gan.rakshasa
+- profile.options.gender.male
+- profile.options.marital_status.divorced
+
+Engine / label resolver must expose:
+- label(field, key, locale)
+- options(field, locale)
+- optionsWithIds(field, locale)
+
+============================================================
+4️⃣ VALIDATION INTEGRATION RULE
+============================================================
+
+Goal:
+Controllers must stop hand-writing repeated validation logic.
+
+Where possible, validation for controlled fields should be generated from the centralized registry/engine.
+
+Examples:
+- activeExistsRule(fieldKey)
+- multiActiveExistsRule(fieldKey)
+- normalizeAndValidate(fieldKey, input)
+
+Completion target:
+No repeated scattered `Rule::exists(...)->where(is_active, true)` for the same governed field unless temporarily unavoidable.
+
+This must reduce duplication while preserving safety.
+
+============================================================
+5️⃣ MUTATION INTEGRATION RULE
+============================================================
+
+Goal:
+MutationService remains final write guard.
+
+Even if controller validation exists,
+MutationService must still re-check controlled-option values before persistence.
+
+Reason:
+UI validation is not enough.
+Mutation layer must remain source-of-truth guard.
+
+Rules:
+- No controlled FK written without final engine validation
+- Numeric ID direct-post loopholes must remain closed
+- entity sync helpers must reuse centralized controlled-option resolution
+- no arbitrary text written into FK columns
+
+============================================================
+6️⃣ OCR / INTAKE INTEGRATION RULE
+============================================================
+
+Goal:
+Controlled-option normalization must work for intake approval safely.
+
+Rules:
+- raw_ocr_text remains untouched forever
+- parsed_json may carry sanitized free-text
+- approval snapshot may normalize controlled options before mutation
+- normalization must be field-specific
+- no wrong-field leakage allowed
+
+Example:
+Input:
+"नाड २ आध्य गण :- राक्षस"
+
+Expected structured meaning:
+- nadi => adi
+- gan => rakshasa
+
+Forbidden:
+- rakshasa saved into nadi
+- nadi auto-mapped to other
+- arbitrary text saved into FK field
+
+============================================================
+7️⃣ ADMIN CONTROL CONTRACT
+============================================================
+
+Goal:
+Admin must control governed options safely.
+
+Admin must be able to:
+- activate/deactivate master options
+- manage aliases / synonyms where appropriate
+- inspect which fields are governed by which master source
+- see whether an option is user-visible
+- see whether an option is OCR-normalizable
+- preview EN/MR label rendering
+
+Admin must NOT be able to:
+- bypass mutation governance
+- force silent overwrite
+- create uncontrolled field behavior
+
+If synonym editing is exposed,
+it must be logged and deterministic.
+
+============================================================
+8️⃣ IMPLEMENTATION SEQUENCE
+============================================================
+
+This day must be implemented in order:
+
+STEP 1:
+Create centralized registry for controlled-option fields.
+
+STEP 2:
+Create centralized engine for:
+- key resolution
+- numeric active revalidation
+- strict allowlist enforcement
+- multi-select validation
+
+STEP 3:
+Create centralized label resolver for EN/MR.
+
+STEP 4:
+Wire wizard validation to use centralized controlled-option rules where safe.
+
+STEP 5:
+Wire MutationService resolvers to use centralized engine.
+
+STEP 6:
+Wire intake approval normalizer to use same field registry/engine.
+
+STEP 7:
+Update user-visible dropdown rendering to use centralized option provider.
+
+STEP 8:
+Add admin visibility / inspection support if small safe pass allows;
+otherwise schedule as next day.
+
+============================================================
+9️⃣ COMPLETION CRITERIA
+============================================================
+
+This day is complete ONLY if:
+
+✔ All obvious controlled-option fields are declared in one registry
+✔ Same field behaves consistently in wizard, intake, admin, mutation
+✔ Inactive options cannot be saved
+✔ Out-of-list values cannot be saved
+✔ Numeric forged IDs cannot bypass active checks
+✔ OCR normalization is field-specific and deterministic
+✔ No wrong-field leakage
+✔ English + Marathi option labels resolve centrally
+✔ MutationService still owns final write governance
+✔ No direct DB update bypass introduced
+✔ No schema drift unless explicitly approved
+✔ No unrelated tests broken
+
+============================================================
+🔟 VERIFICATION CHECKLIST
+============================================================
+
+Must verify with:
+
+1) php artisan optimize:clear
+2) php artisan test
+
+Manual proofs:
+
+A) Horoscope
+- OCR text with "आध्य"
+- OCR text with "राक्षस"
+- invalid nadi text
+- forged inactive nadi_id
+- forged active but disallowed nadi key
+
+B) Core profile fields
+- inactive gender_id
+- inactive marital_status_id
+- inactive complexion_id
+- inactive profession_id
+- inactive religion/caste/sub_caste IDs
+
+C) Preferences
+- inactive preferred religion/caste IDs
+- invalid multi-select values
+
+D) Nested entities
+- invalid address_type_id
+- invalid contact_relation_id
+- invalid asset_type_id
+- invalid legal_case_type_id
+
+E) Localization
+- same field options visible correctly in EN
+- same field options visible correctly in MR
+
+============================================================
+1️⃣1️⃣ FAILURE CONDITIONS
+============================================================
+
+This day is NOT complete if even one of the following remains:
+
+❌ same controlled field has different rules in wizard vs mutation
+❌ inactive option can still be posted directly as numeric ID
+❌ “other” is used as silent fallback for strict fields
+❌ OCR text still leaks into wrong controlled field
+❌ option labels still depend on scattered Blade-specific logic
+❌ admin change to option status bypasses governance
+❌ direct controller update bypass reappears
+❌ repeated field-specific hacks continue without registry migration path
+
+============================================================
+1️⃣2️⃣ POST-DAY OUTCOME
+============================================================
+
+After this day, controlled-option behavior becomes a platform capability.
+
+Meaning:
+- any future dropdown/master field can be onboarded by registry entry
+- OCR normalization can reuse the same engine
+- EN/MR options remain consistent everywhere
+- SSOT compliance becomes easier to maintain
+
+############################################################
+END OF DAY-36
+############################################################

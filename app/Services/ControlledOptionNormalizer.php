@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Services\ControlledOptions\ControlledOptionEngine;
 use Illuminate\Support\Facades\App;
 use Illuminate\Support\Facades\DB;
 
@@ -130,6 +131,7 @@ class ControlledOptionNormalizer
 
         $rows = $snapshot['horoscope'];
         $locale = App::getLocale() ?: 'en';
+        $engine = app(ControlledOptionEngine::class);
 
         foreach ($rows as $idx => $row) {
             if (! is_array($row)) {
@@ -138,45 +140,43 @@ class ControlledOptionNormalizer
 
             // Nadi (Adi / Madhya / Antya).
             if (empty($row['nadi_id']) && ! empty($row['nadi'])) {
-                $res = $this->normalizeValue('horoscope.nadi', (string) $row['nadi'], 'master_nadis');
+                $res = $engine->resolveKey('horoscope.nadi', (string) $row['nadi']);
                 if ($res['matched']) {
-                    $rows[$idx]['nadi_id'] = $res['matched_master_id'];
+                    $rows[$idx]['nadi_id'] = $res['id'];
                 }
             }
 
             // Gan (Deva / Manav / Rakshasa).
             if (empty($row['gan_id']) && ! empty($row['gan'])) {
-                $res = $this->normalizeValue('horoscope.gan', (string) $row['gan'], 'master_gans');
+                $res = $engine->resolveKey('horoscope.gan', (string) $row['gan']);
                 if ($res['matched']) {
-                    $rows[$idx]['gan_id'] = $res['matched_master_id'];
+                    $rows[$idx]['gan_id'] = $res['id'];
                 }
             }
 
             // Rashi / Nakshatra / Yoni / Mangal Dosh type:
-            // For these we currently only support straightforward key/label mapping —
-            // no aggressive OCR synonym maps yet.
             if (empty($row['rashi_id']) && ! empty($row['rashi'])) {
-                $res = $this->normalizeValue('horoscope.rashi', (string) $row['rashi'], 'master_rashis');
+                $res = $engine->resolveKey('horoscope.rashi', (string) $row['rashi']);
                 if ($res['matched']) {
-                    $rows[$idx]['rashi_id'] = $res['matched_master_id'];
+                    $rows[$idx]['rashi_id'] = $res['id'];
                 }
             }
             if (empty($row['nakshatra_id']) && ! empty($row['nakshatra'])) {
-                $res = $this->normalizeValue('horoscope.nakshatra', (string) $row['nakshatra'], 'master_nakshatras');
+                $res = $engine->resolveKey('horoscope.nakshatra', (string) $row['nakshatra']);
                 if ($res['matched']) {
-                    $rows[$idx]['nakshatra_id'] = $res['matched_master_id'];
+                    $rows[$idx]['nakshatra_id'] = $res['id'];
                 }
             }
             if (empty($row['yoni_id']) && ! empty($row['yoni'])) {
-                $res = $this->normalizeValue('horoscope.yoni', (string) $row['yoni'], 'master_yonis');
+                $res = $engine->resolveKey('horoscope.yoni', (string) $row['yoni']);
                 if ($res['matched']) {
-                    $rows[$idx]['yoni_id'] = $res['matched_master_id'];
+                    $rows[$idx]['yoni_id'] = $res['id'];
                 }
             }
             if (empty($row['mangal_dosh_type_id']) && ! empty($row['mangal_dosh_type'])) {
-                $res = $this->normalizeValue('horoscope.mangal_dosh_type', (string) $row['mangal_dosh_type'], 'master_mangal_dosh_types');
+                $res = $engine->resolveKey('horoscope.mangal_dosh_type', (string) $row['mangal_dosh_type']);
                 if ($res['matched']) {
-                    $rows[$idx]['mangal_dosh_type_id'] = $res['matched_master_id'];
+                    $rows[$idx]['mangal_dosh_type_id'] = $res['id'];
                 }
             }
         }

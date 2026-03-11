@@ -233,17 +233,17 @@ class ProfileWizardController extends Controller
                 ->withInput();
         }
 
+        // Alliance free-text "other_relatives_text" is now governed via snapshot CORE.
+        if ($section === 'alliance' && \Schema::hasColumn('matrimony_profiles', 'other_relatives_text')) {
+            $snapshot['core']['other_relatives_text'] = trim((string) $request->input('other_relatives_text', '')) ?: null;
+        }
+
         try {
             $result = app(\App\Services\MutationService::class)->applyManualSnapshot($profile, $snapshot, (int) $user->id, 'manual');
             \Illuminate\Support\Facades\Log::info('WIZARD RESULT DEBUG', ['result' => $result, 'keys' => array_keys($result)]);
             $hasChildrenNo = isset($snapshot['core']['has_children']) && ($snapshot['core']['has_children'] === false || $snapshot['core']['has_children'] === 0 || $snapshot['core']['has_children'] === '0');
             if (($section === 'marriages' || $section === 'full') && $hasChildrenNo) {
                 DB::table('profile_children')->where('profile_id', $profile->id)->delete();
-            }
-            if ($section === 'alliance' && \Schema::hasColumn('matrimony_profiles', 'other_relatives_text')) {
-                \DB::table('matrimony_profiles')->where('id', $profile->id)->update([
-                    'other_relatives_text' => trim((string) $request->input('other_relatives_text', '')) ?: null,
-                ]);
             }
         } catch (\Illuminate\Validation\ValidationException $e) {
             return redirect()->route('matrimony.profile.wizard.section', ['section' => $section])
@@ -726,12 +726,12 @@ class ProfileWizardController extends Controller
         $this->resolveMasterLookupIds($request, ['gender' => 'gender_id']);
         $request->validate([
             'full_name' => ['required', 'string', 'max:255'],
-            'gender_id' => ['required', Rule::exists('master_genders', 'id')],
+            'gender_id' => ['required', Rule::exists('master_genders', 'id')->where(fn ($q) => $q->where('is_active', true))],
             'date_of_birth' => ['nullable', 'date'],
             'birth_time' => ['nullable', 'string', 'max:20'],
-            'religion_id' => ['nullable', 'exists:religions,id'],
-            'caste_id' => ['nullable', 'exists:castes,id'],
-            'sub_caste_id' => ['nullable', 'exists:sub_castes,id'],
+            'religion_id' => ['nullable', Rule::exists('religions', 'id')->where(fn ($q) => $q->where('is_active', true))],
+            'caste_id' => ['nullable', Rule::exists('castes', 'id')->where(fn ($q) => $q->where('is_active', true))],
+            'sub_caste_id' => ['nullable', Rule::exists('sub_castes', 'id')->where(fn ($q) => $q->where('is_active', true))],
         ]);
 
         $birthTimeValue = $request->filled('birth_time') ? trim($request->input('birth_time')) : null;
@@ -784,9 +784,9 @@ class ProfileWizardController extends Controller
     {
         $request->validate([
             'height_cm' => ['nullable', 'integer', 'min:50', 'max:250'],
-            'complexion_id' => ['nullable', Rule::exists('master_complexions', 'id')],
-            'blood_group_id' => ['nullable', Rule::exists('master_blood_groups', 'id')],
-            'physical_build_id' => ['nullable', Rule::exists('master_physical_builds', 'id')],
+            'complexion_id' => ['nullable', Rule::exists('master_complexions', 'id')->where(fn ($q) => $q->where('is_active', true))],
+            'blood_group_id' => ['nullable', Rule::exists('master_blood_groups', 'id')->where(fn ($q) => $q->where('is_active', true))],
+            'physical_build_id' => ['nullable', Rule::exists('master_physical_builds', 'id')->where(fn ($q) => $q->where('is_active', true))],
             'spectacles_lens' => ['nullable', 'string', 'max:50', Rule::in(['no', 'spectacles', 'contact_lens', 'both'])],
             'physical_condition' => ['nullable', 'string', 'max:50', Rule::in(['none', 'physically_challenged', 'hearing_condition', 'vision_condition', 'other', 'prefer_not_to_say'])],
         ]);
@@ -823,9 +823,9 @@ class ProfileWizardController extends Controller
         $incomeEngineRules = $this->incomeEngineValidationRules($request, 'income');
         $request->validate(array_merge([
             'annual_income' => 'nullable|numeric',
-            'income_currency_id' => 'nullable|exists:master_income_currencies,id',
-            'working_with_type_id' => 'nullable|exists:working_with_types,id',
-            'profession_id' => 'nullable|exists:professions,id',
+            'income_currency_id' => ['nullable', Rule::exists('master_income_currencies', 'id')->where(fn ($q) => $q->where('is_active', true))],
+            'working_with_type_id' => ['nullable', Rule::exists('working_with_types', 'id')->where(fn ($q) => $q->where('is_active', true))],
+            'profession_id' => ['nullable', Rule::exists('professions', 'id')->where(fn ($q) => $q->where('is_active', true))],
             'income_range_id' => 'nullable|exists:income_ranges,id',
             'college_id' => 'nullable|exists:colleges,id',
             'company_name' => 'nullable|string|max:255',
@@ -1321,9 +1321,9 @@ class ProfileWizardController extends Controller
             'preferred_education' => ['nullable', 'string', 'max:255'],
             'preferred_city_id' => ['nullable', 'integer', 'exists:cities,id'],
             'preferred_religion_ids' => ['nullable', 'array'],
-            'preferred_religion_ids.*' => ['integer', 'exists:religions,id'],
+            'preferred_religion_ids.*' => ['integer', Rule::exists('religions', 'id')->where(fn ($q) => $q->where('is_active', true))],
             'preferred_caste_ids' => ['nullable', 'array'],
-            'preferred_caste_ids.*' => ['integer', 'exists:castes,id'],
+            'preferred_caste_ids.*' => ['integer', Rule::exists('castes', 'id')->where(fn ($q) => $q->where('is_active', true))],
             'preferred_district_ids' => ['nullable', 'array'],
             'preferred_district_ids.*' => ['integer', 'exists:districts,id'],
         ]);
@@ -1650,7 +1650,7 @@ class ProfileWizardController extends Controller
         $statusesRequiringChildren = ['divorced', 'separated', 'widowed'];
 
         $rules = [
-            'marital_status_id' => ['required', Rule::exists('master_marital_statuses', 'id')],
+            'marital_status_id' => ['required', Rule::exists('master_marital_statuses', 'id')->where(fn ($q) => $q->where('is_active', true))],
             'marriages.*.marriage_year' => ['nullable', 'integer', 'min:1901', 'max:' . (int) date('Y')],
             'marriages.*.separation_year' => ['nullable', 'integer', 'min:1901', 'max:' . (int) date('Y')],
             'marriages.*.divorce_year' => ['nullable', 'integer', 'min:1901', 'max:' . (int) date('Y')],
