@@ -58,11 +58,15 @@ class BiodataParserService
 
     public function parse(string $rawText): array
     {
+        // Strip BOM if present; rest of the flow expects UTF-8 text and relies on upstream normalization.
+        $rawText = preg_replace('/^\x{FEFF}/u', '', $rawText);
         // SSOT Day-27: Apply baseline normalization (Devanagari digits + noise removal)
         $text = \App\Services\Ocr\OcrNormalize::normalizeRawText($rawText);
         $text = $this->normalizeText($text);
         $text = $this->removeWatermarkNoise($text);
         $text = $this->sanitizeDocument($text);
+        $text = (\function_exists('normalizer_normalize') && normalizer_normalize($text, \Normalizer::FORM_C) !== false)
+            ? normalizer_normalize($text, \Normalizer::FORM_C) : $text;
         $lines = array_map('trim', explode("\n", $text));
         $sections = $this->detectSections($lines);
         $personalText = implode("\n", $sections['PERSONAL'] ?? []);
@@ -129,9 +133,14 @@ class BiodataParserService
         }
         $confidence['highest_education'] = $education !== null ? self::CONF_DIRECT : self::CONF_MISSING;
 
-        $fatherName = $this->extractFieldAfterLabels($familyText, ['वडिलांचे नाव', 'पिता', 'Father']);
-        $fatherName = $fatherName ?? $this->extractFieldAfterLabels($text, ['वडिलांचे नाव', 'पिता', 'Father']);
+        // Parent names: prefer FAMILY section first, then full text; UTF-8 Marathi labels only.
+        $fatherLabels = ['वडिलांचे नाव', 'वडीलांचे नाव', 'पित्याचे नाव', 'पिता', 'Father'];
+        $motherLabels = ['आईचे नाव', 'आईचं नाव', 'मातेचे नाव', 'माता', 'Mother'];
+
+        $fatherName = $this->extractFieldAfterLabels($familyText, $fatherLabels);
+        $fatherName = $fatherName ?? $this->extractFieldAfterLabels($text, $fatherLabels);
         $fatherName = $fatherName ?? $this->extractAfterLabelNextLine($text, 'वडिलांचे नाव');
+        $fatherName = $fatherName ?? $this->extractField($familyText, $fatherLabels);
         $fatherName = $fatherName ?? (isset($romanized['father_name']) ? $this->validateFatherName($this->cleanRomanizedName($romanized['father_name'])) : null);
         $fatherName = $this->rejectIfLabelNoise($fatherName);
         if ($fatherName !== null) {
@@ -139,9 +148,11 @@ class BiodataParserService
             $fatherName = $fatherName === '' ? null : $fatherName;
         }
         $fatherName = $this->validateFatherName($fatherName);
-        $motherName = $this->extractFieldAfterLabels($familyText, ['आईचे नाव', 'माता', 'Mother']);
-        $motherName = $motherName ?? $this->extractFieldAfterLabels($text, ['आईचे नाव', 'माता', 'Mother']);
+
+        $motherName = $this->extractFieldAfterLabels($familyText, $motherLabels);
+        $motherName = $motherName ?? $this->extractFieldAfterLabels($text, $motherLabels);
         $motherName = $motherName ?? $this->extractAfterLabelNextLine($text, 'आईचे नाव');
+        $motherName = $motherName ?? $this->extractField($familyText, $motherLabels);
         $motherName = $motherName ?? (isset($romanized['mother_name']) ? $this->validateMotherName($this->cleanRomanizedName($romanized['mother_name'])) : null);
         $motherName = $this->rejectIfLabelNoise($motherName);
         $motherName = $this->validateMotherName($motherName);
@@ -582,11 +593,10 @@ $coreKeys = [
 
         $relativesRows = $familyStructures['relatives'] ?? [];
 
-        // Post-fix caste/sub_caste: handle cases like "96 कुळी मराठा"
+        // Marathi-safe caste/sub_caste: "NN कुळी मराठा" → sub_caste = "NN कुळी", caste = "मराठा". No mojibake.
         if (($core['sub_caste'] ?? null) === null && isset($core['caste']) && is_string($core['caste'])) {
-            // Look for a "NN कुळी" pattern and the word "मराठा" anywhere in the value.
-            if (preg_match('/([0-9]+\s*कुळी)/u', $core['caste'], $m) && mb_strpos($core['caste'], 'मराठा') !== false) {
-                $core['sub_caste'] = trim($m[1]);   // e.g. "96 कुळी"
+            if (preg_match('/([0-9०-९]+\s*कुळी)/u', $core['caste'], $m) && mb_strpos($core['caste'], 'मराठा') !== false) {
+                $core['sub_caste'] = trim($m[1]);
                 $core['caste'] = 'मराठा';
             }
         }
@@ -818,7 +828,7 @@ $coreKeys = [
             if ($line === '') {
                 continue;
             }
-            if (mb_strpos($line, 'वडील') !== false || mb_strpos($line, 'आई') !== false || mb_strpos($line, 'भाऊ') !== false || mb_strpos($line, 'बहिण') !== false || mb_strpos($line, 'बहीण') !== false) {
+            if (mb_strpos($line, 'वडील') !== false || mb_strpos($line, 'वडिलांचे') !== false || mb_strpos($line, 'आई') !== false || mb_strpos($line, 'भाऊ') !== false || mb_strpos($line, 'बहिण') !== false || mb_strpos($line, 'बहीण') !== false) {
                 $sections['FAMILY'][] = $line;
             } elseif (mb_strpos($line, 'रास') !== false || mb_strpos($line, 'राशी') !== false || mb_strpos($line, 'टाशी') !== false || mb_strpos($line, 'नक्षत्र') !== false || mb_strpos($line, 'नाडी') !== false || mb_strpos($line, 'गण') !== false || mb_strpos($line, 'कुलस्वामी') !== false || mb_strpos($line, 'मांगलिक') !== false) {
                 $sections['HOROSCOPE'][] = $line;
@@ -1074,7 +1084,7 @@ $coreKeys = [
      */
     private function extractAfterLabel(string $text, string $label): ?string
     {
-        $pattern = '/' . preg_quote($label, '/') . '\s*[:\-]{0,5}\s*([^\n]+)/u';
+        $pattern = '/' . preg_quote($label, '/') . '\s*[:\-\s]{0,15}\s*([^\n]+)/u';
         if (preg_match($pattern, $text, $match) && isset($match[1])) {
             $value = trim($match[1]);
             if ($value === '' || $value === trim($label)) {
@@ -1457,25 +1467,26 @@ $coreKeys = [
             return null;
         }
 
-        // 1) Stop at the first sentence boundary (dot or Marathi danda).
-        $parts = preg_split('/[\.।]/u', $v);
-        if (! empty($parts)) {
-            $v = trim($parts[0]);
-        }
-
-        // 2) Cut off at the start of any obvious relation token that may have
-        // bled into this line from the next field.
-        $parts = preg_split('/\b(दाजी|चुलते|मामा|काका|मावशी|इतर\s+नातेवाईक|इतर)\b/u', $v);
-        if (! empty($parts)) {
-            $v = trim($parts[0]);
-        }
-
-        // 3) Strip common honorific prefixes (including ch./ku. variants).
+        // 1) Strip common honorific prefixes (including ch./ku. variants) first so we
+        //    don't lose the actual name when a dot appears immediately after the honorific.
         $v = preg_replace(
             '/^(कु\.?|कुं\.?|चि\.?|श्री\.?|श्रीमती\.?|श्रीमती|सौ\.?|सौं\.?)\s*/u',
             '',
             $v
         );
+
+        // 2) Stop at the first sentence boundary (dot or Marathi danda).
+        $parts = preg_split('/[\.।]/u', $v);
+        if (! empty($parts)) {
+            $v = trim($parts[0]);
+        }
+
+        // 3) Cut off at the start of any obvious relation token that may have
+        //    bled into this line from the next field.
+        $parts = preg_split('/\b(दाजी|चुलते|मामा|काका|मावशी|इतर\s+नातेवाईक|इतर)\b/u', $v);
+        if (! empty($parts)) {
+            $v = trim($parts[0]);
+        }
 
         // 4) Normalize whitespace.
         $v = preg_replace('/\s+/u', ' ', $v);
