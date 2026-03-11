@@ -1552,12 +1552,12 @@ class ProfileWizardController extends Controller
     private function validateHoroscopeStructural(array $payload): void
     {
         $rules = [
-            'nakshatra_id' => ['nullable', Rule::exists('master_nakshatras', 'id')],
-            'rashi_id' => ['nullable', Rule::exists('master_rashis', 'id')],
-            'gan_id' => ['nullable', Rule::exists('master_gans', 'id')],
-            'nadi_id' => ['nullable', Rule::exists('master_nadis', 'id')],
-            'yoni_id' => ['nullable', Rule::exists('master_yonis', 'id')],
-            'mangal_dosh_type_id' => ['nullable', Rule::exists('master_mangal_dosh_types', 'id')],
+            'nakshatra_id' => ['nullable', Rule::exists('master_nakshatras', 'id')->where(fn ($q) => $q->where('is_active', true))],
+            'rashi_id' => ['nullable', Rule::exists('master_rashis', 'id')->where(fn ($q) => $q->where('is_active', true))],
+            'gan_id' => ['nullable', Rule::exists('master_gans', 'id')->where(fn ($q) => $q->where('is_active', true))],
+            'nadi_id' => ['nullable', Rule::exists('master_nadis', 'id')->where(fn ($q) => $q->where('is_active', true))],
+            'yoni_id' => ['nullable', Rule::exists('master_yonis', 'id')->where(fn ($q) => $q->where('is_active', true))],
+            'mangal_dosh_type_id' => ['nullable', Rule::exists('master_mangal_dosh_types', 'id')->where(fn ($q) => $q->where('is_active', true))],
             'charan' => ['nullable', 'integer', 'min:1', 'max:4'],
         ];
         $validator = \Illuminate\Support\Facades\Validator::make($payload, $rules);

@@ -44,11 +44,23 @@
         $l = preg_replace('/\s*\(Female\)\s*$/i', '', $l);
         return trim($l);
     };
+    $optionLabel = function (string $field, $row) {
+        $key = $row->key ?? null;
+        $dbLabel = $row->label ?? $row->name ?? '';
+        if ($key) {
+            $tKey = 'components.horoscope.options.' . $field . '.' . $key;
+            $translated = __($tKey);
+            if ($translated !== $tKey) {
+                return $translated;
+            }
+        }
+        return $dbLabel;
+    };
     $masterListsJson = [
-        'rashis' => $rashis->filter($filterOther)->map(fn($r) => ['id' => (int)$r->id, 'label' => $r->label ?? $r->name ?? ''])->values()->all(),
-        'nakshatras' => $nakshatras->filter($filterOther)->map(fn($r) => ['id' => (int)$r->id, 'label' => $r->label ?? $r->name ?? ''])->values()->all(),
-        'gans' => $gans->filter($filterOther)->map(fn($r) => ['id' => (int)$r->id, 'label' => $r->label ?? $r->name ?? ''])->values()->all(),
-        'nadis' => $nadis->filter($filterOther)->map(fn($r) => ['id' => (int)$r->id, 'label' => $r->label ?? $r->name ?? ''])->values()->all(),
+        'rashis' => $rashis->filter($filterOther)->map(fn($r) => ['id' => (int)$r->id, 'label' => $optionLabel('rashi', $r)])->values()->all(),
+        'nakshatras' => $nakshatras->filter($filterOther)->map(fn($r) => ['id' => (int)$r->id, 'label' => $optionLabel('nakshatra', $r)])->values()->all(),
+        'gans' => $gans->filter($filterOther)->map(fn($r) => ['id' => (int)$r->id, 'label' => $optionLabel('gan', $r)])->values()->all(),
+        'nadis' => $nadis->filter($filterOther)->map(fn($r) => ['id' => (int)$r->id, 'label' => $optionLabel('nadi', $r)])->values()->all(),
         'yonis' => $yonis->filter($filterOther)->map(fn($r) => ['id' => (int)$r->id, 'label' => $yoniDisplayLabel($r)])->values()->all(),
     ];
     $warn = fn($field) => $dependencyWarnings[$field] ?? null;
@@ -120,7 +132,9 @@
                 <option value="">{{ __('common.select_placeholder') }}</option>
                 @foreach($gans as $item)
                     @if(($item->key ?? '') === 'other') @continue @endif
-                    <option value="{{ $item->id }}" {{ (string)($val('gan_id') ?? '') === (string)$item->id ? 'selected' : '' }}>{{ $item->label ?? $item->name ?? '' }}</option>
+                    <option value="{{ $item->id }}" {{ (string)($val('gan_id') ?? '') === (string)$item->id ? 'selected' : '' }}>
+                        {{ $optionLabel('gan', $item) }}
+                    </option>
                 @endforeach
             </select>
             @if($warn('gan_id'))
@@ -142,7 +156,9 @@
                 <option value="">{{ __('common.select_placeholder') }}</option>
                 @foreach($nadis as $item)
                     @if(($item->key ?? '') === 'other') @continue @endif
-                    <option value="{{ $item->id }}" {{ (string)($val('nadi_id') ?? '') === (string)$item->id ? 'selected' : '' }}>{{ $item->label ?? $item->name ?? '' }}</option>
+                    <option value="{{ $item->id }}" {{ (string)($val('nadi_id') ?? '') === (string)$item->id ? 'selected' : '' }}>
+                        {{ $optionLabel('nadi', $item) }}
+                    </option>
                 @endforeach
             </select>
             @if($warn('nadi_id'))

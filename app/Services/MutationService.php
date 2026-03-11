@@ -998,9 +998,40 @@ class MutationService
         if ($key === null || trim((string) $key) === '') {
             return null;
         }
+
         $normalized = str_replace(' ', '_', strtolower(trim($key)));
-        $id = DB::table($table)->where('key', $normalized)->value('id');
+
+        $query = DB::table($table)->where('key', $normalized);
+        // Active-only resolution when table has is_active column.
+        if (Schema::hasTable($table) && Schema::hasColumn($table, 'is_active')) {
+            $query->where('is_active', true);
+        }
+
+        $id = $query->value('id');
+
         return $id !== null ? (int) $id : null;
+    }
+
+    /**
+     * Resolve a numeric master ID to an active row (when table has is_active).
+     * Returns null when the row does not exist or is inactive.
+     */
+    private function resolveActiveMasterId(string $table, int|string|null $id): ?int
+    {
+        if ($id === null || $id === '' || ! is_numeric($id)) {
+            return null;
+        }
+
+        $id = (int) $id;
+
+        $query = DB::table($table)->where('id', $id);
+        if (Schema::hasTable($table) && Schema::hasColumn($table, 'is_active')) {
+            $query->where('is_active', true);
+        }
+
+        $found = $query->value('id');
+
+        return $found !== null ? (int) $found : null;
     }
 
     private function resolveAddressTypeToId(array $row): array
@@ -1105,13 +1136,29 @@ class MutationService
         ];
         foreach ($pairs as $strKey => [$idCol, $masterTable]) {
             $val = $mapped[$idCol] ?? $mapped[$strKey] ?? null;
-            if ($val !== null && !is_numeric($val)) {
+            if ($val !== null && ! is_numeric($val)) {
                 $mapped[$idCol] = $this->resolveMasterKey($masterTable, $val);
             } elseif (isset($mapped[$idCol]) && is_numeric($mapped[$idCol])) {
-                $mapped[$idCol] = (int) $mapped[$idCol];
+                // Re-validate that the numeric ID points to an active master row (when supported).
+                $mapped[$idCol] = $this->resolveActiveMasterId($masterTable, $mapped[$idCol]);
             }
             unset($mapped[$strKey]);
         }
+        // Field-specific strict allowlists on IDs (e.g. nadi/gan must not resolve to "other").
+        // We derive the canonical key from the master table and null out any disallowed keys.
+        if (!empty($mapped['nadi_id'])) {
+            $key = DB::table('master_nadis')->where('id', $mapped['nadi_id'])->value('key');
+            if (! in_array($key, ['adi', 'madhya', 'antya'], true)) {
+                $mapped['nadi_id'] = null;
+            }
+        }
+        if (!empty($mapped['gan_id'])) {
+            $key = DB::table('master_gans')->where('id', $mapped['gan_id'])->value('key');
+            if (! in_array($key, ['deva', 'manav', 'rakshasa'], true)) {
+                $mapped['gan_id'] = null;
+            }
+        }
+
         return $mapped;
     }
 

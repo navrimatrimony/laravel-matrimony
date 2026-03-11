@@ -47,6 +47,12 @@ if ($intake->approved_by_user === true) {
             $approvalSnapshot = [];
         }
 
+        // Phase-5: Normalize controlled-option fields inside snapshot (non-destructive).
+        // This ensures OCR/AI free-text for horoscope-backed masters is mapped to canonical *_id
+        // before the immutable approval_snapshot_json is stored and before MutationService runs.
+        $approvalSnapshot = app(\App\Services\ControlledOptionNormalizer::class)
+            ->normalizeIntakeHoroscopeSnapshot($approvalSnapshot);
+
         DB::transaction(function () use ($intake, $approvalSnapshot, $userId): void {
             $parsedCore = $intake->parsed_json['core'] ?? [];
             $approvedCore = $approvalSnapshot['core'] ?? [];

@@ -468,8 +468,11 @@ class BiodataParserService
             || $kuldaivat !== null
             || $navrasName !== null
             || $birthWeekday !== null;
+
         if ($hasAnyHoroscopeText) {
             $row = [
+                // ID fields are intentionally left null here; ControlledOptionNormalizer +
+                // MutationService will resolve canonical keys / IDs later in the pipeline.
                 'rashi_id' => null,
                 'nakshatra_id' => null,
                 'charan' => null,
@@ -477,6 +480,10 @@ class BiodataParserService
                 'nadi_id' => null,
                 'yoni_id' => null,
                 'mangal_dosh_type_id' => null,
+                // Preserve sanitized free-text so intake snapshot normalizer can map safely.
+                'rashi' => $this->rejectHoroscopeJunk($rashi),
+                'nadi' => $this->rejectHoroscopeJunk($nadi),
+                'gan' => $this->rejectHoroscopeJunk($gan),
                 // Textual attributes — kuldaivat = कुलदैवत / kuldevta / कुलदेवता / कुलस्वामी / कूळस्वामी.
                 'devak' => $devak ?? $kuldaivat,
                 'kuldaivat' => $kuldaivat,
@@ -484,6 +491,7 @@ class BiodataParserService
                 'navras_name' => $navrasName,
                 'birth_weekday' => $birthWeekday,
             ];
+
             // Only push if at least one non-null/non-empty textual field is present.
             $nonNull = array_filter($row, fn ($v) => $v !== null && $v !== '');
             if (! empty($nonNull)) {
@@ -495,6 +503,7 @@ class BiodataParserService
         } else {
             $confidence['horoscope'] = self::CONF_MISSING;
         }
+
         $horoscope = $horoscopeRows;
 
         // ——— OPTIONAL: Preferences ———
