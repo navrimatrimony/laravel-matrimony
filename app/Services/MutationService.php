@@ -38,7 +38,6 @@ class MutationService
         'property_summary' => 'profile_property_summary',
         'property_assets' => 'profile_property_assets',
         'horoscope' => 'profile_horoscope_data',
-        'legal_cases' => 'profile_legal_cases',
         'extended_narrative' => 'profile_extended_attributes',
     ];
 
@@ -55,7 +54,6 @@ class MutationService
         'property_summary',
         'property_assets',
         'horoscope',
-        'legal_cases',
     ];
 
     /** Snapshot keys that are exactly ONE row per profile_id (upsert by profile_id, not by row id). */
@@ -69,8 +67,8 @@ class MutationService
     /** Fallback CORE keys when registry has no CORE rows. Phase-5: *_id for master lookups. */
     private const FALLBACK_CORE_KEYS = [
         'full_name', 'gender_id', 'date_of_birth', 'marital_status_id', 'has_children', 'has_siblings', 'highest_education',
-        'location', 'religion_id', 'caste_id', 'sub_caste_id', 'height_cm', 'profile_photo',
-        'complexion_id', 'physical_build_id', 'blood_group_id', 'family_type_id', 'income_currency_id',
+        'location', 'religion_id', 'caste_id', 'sub_caste_id', 'mother_tongue_id', 'height_cm', 'profile_photo',
+        'complexion_id', 'physical_build_id', 'blood_group_id', 'diet_id', 'smoking_status_id', 'drinking_status_id', 'family_type_id', 'income_currency_id',
         'photo_approved', 'photo_rejected_at', 'photo_rejection_reason', 'is_suspended',
     ];
 
@@ -931,10 +929,6 @@ class MutationService
             $mapped = $this->resolvePropertyAssetLookupsToId($row);
             return $mapped;
         }
-        if ($entityType === 'profile_legal_cases') {
-            $mapped = $this->resolveLegalCaseTypeToId($row);
-            return $mapped;
-        }
         if ($entityType === 'profile_horoscope_data') {
             $mapped = $this->resolveHoroscopeLookupsToId($row);
             return $mapped;
@@ -1119,21 +1113,6 @@ class MutationService
         return $mapped;
     }
 
-    private function resolveLegalCaseTypeToId(array $row): array
-    {
-        $mapped = $row;
-        $val = $mapped['legal_case_type_id'] ?? $mapped['case_type'] ?? null;
-        $engine = app(\App\Services\ControlledOptions\ControlledOptionEngine::class);
-        if ($val !== null && ! is_numeric($val)) {
-            $res = $engine->resolveKey('entity.legal_case_type', (string) $val);
-            $mapped['legal_case_type_id'] = $res['matched'] ? $res['id'] : null;
-        } elseif (isset($mapped['legal_case_type_id']) && is_numeric($mapped['legal_case_type_id'])) {
-            $mapped['legal_case_type_id'] = $engine->resolveId('entity.legal_case_type', $mapped['legal_case_type_id']);
-        }
-        unset($mapped['case_type']);
-        return $mapped;
-    }
-
     private function resolveHoroscopeLookupsToId(array $row): array
     {
         $mapped = $row;
@@ -1214,7 +1193,7 @@ class MutationService
         $profileId = $profile->id;
 
         if (Schema::hasTable('profile_preference_criteria')) {
-            $allowed = ['preferred_age_min', 'preferred_age_max', 'preferred_income_min', 'preferred_income_max', 'preferred_education', 'preferred_city_id'];
+            $allowed = ['preferred_age_min', 'preferred_age_max', 'preferred_income_min', 'preferred_income_max', 'preferred_education', 'preferred_city_id', 'willing_to_relocate', 'settled_city_preference_id', 'marriage_type_preference_id'];
             $data = [];
             foreach ($allowed as $col) {
                 if (array_key_exists($col, $proposed)) {

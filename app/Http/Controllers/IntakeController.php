@@ -666,11 +666,82 @@ class IntakeController extends Controller
         $nadis = \App\Models\MasterNadi::where('is_active', true)->get();
         $yonis = \App\Models\MasterYoni::where('is_active', true)->get();
         $mangalDoshTypes = \App\Models\MasterMangalDoshType::where('is_active', true)->get();
+        $varnas = \Illuminate\Support\Facades\DB::table('master_varnas')->where('is_active', true)->orderBy('label')->get();
+        $vashyas = \Illuminate\Support\Facades\DB::table('master_vashyas')->where('is_active', true)->orderBy('label')->get();
+        $rashiLords = \Illuminate\Support\Facades\DB::table('master_rashi_lords')->where('is_active', true)->orderBy('label')->get();
         $horoscopeRulesJson = app(\App\Services\HoroscopeRuleService::class)->getRulesForFrontend();
         $horoscopeSource = $sections['horoscope']['data'] ?? ($intake->approval_snapshot_json['horoscope'] ?? []);
         $horoscopeRow = is_array($horoscopeSource) && isset($horoscopeSource[0]) ? $horoscopeSource[0] : (is_array($horoscopeSource) ? $horoscopeSource : []);
         $horoscopeRow = is_object($horoscopeRow) ? (array) $horoscopeRow : $horoscopeRow;
         $horoscopeDependencyWarnings = app(\App\Services\HoroscopeRuleService::class)->getValidationWarningsForUI($horoscopeRow)['warnings'];
+
+        // Centralized full form: same sections as wizard full; prefixes so form names are snapshot[...].
+        $snapshot = $intake->approval_snapshot_json ?? $data;
+        $corePrefix = 'snapshot[core]';
+        $horoscopePrefix = 'snapshot[horoscope][0]';
+        $siblingsPrefix = 'snapshot[siblings]';
+        $relativesPaternalPrefix = 'snapshot[relatives_parents_family]';
+        $relativesMaternalPrefix = 'snapshot[relatives_maternal_family]';
+        $propertyPrefix = 'snapshot';
+        $narrativePrefix = 'snapshot[extended_narrative]';
+        $profile = $intakeProfile;
+        $currentSection = 'full';
+        $profileSiblings = collect($snapshot['siblings'] ?? [])->map(fn ($r) => (object) (is_array($r) ? $r : []));
+        $hasSiblings = isset($snapshot['core']['has_siblings']) ? (bool) $snapshot['core']['has_siblings'] : $profileSiblings->isNotEmpty();
+        $profileRelativesParentsFamily = collect($snapshot['relatives_parents_family'] ?? $snapshot['relatives'] ?? [])->map(fn ($r) => (object) (is_array($r) ? $r : []));
+        $profileRelativesMaternalFamily = collect($snapshot['relatives_maternal_family'] ?? [])->map(fn ($r) => (object) (is_array($r) ? $r : []));
+        $profile_property_summary = $snapshot['property_summary'] ?? null;
+        $profile_property_assets = collect($snapshot['property_assets'] ?? []);
+        $profile_horoscope_data = is_array($horoscopeRow) ? (object) $horoscopeRow : $horoscopeRow;
+        $extendedNarrative = $snapshot['extended_narrative'] ?? ($sections['narrative']['data'] ?? null);
+        $extendedAttrs = is_array($extendedNarrative) ? (object) $extendedNarrative : (is_object($extendedNarrative) ? $extendedNarrative : (object) ['narrative_about_me' => '', 'narrative_expectations' => '', 'additional_notes' => '']);
+        $prefs = $snapshot['preferences'] ?? [];
+        $prefRow = is_array($prefs) && isset($prefs[0]) ? $prefs[0] : (is_array($prefs) ? $prefs : []);
+        $preferenceCriteria = (object) $prefRow;
+        $preferredDistrictIds = $prefRow['preferred_district_ids'] ?? [];
+        $preferredReligionIds = $prefRow['preferred_religion_ids'] ?? [];
+        $preferredCasteIds = $prefRow['preferred_caste_ids'] ?? [];
+        $assetTypes = \App\Models\MasterAssetType::where('is_active', true)->get();
+        $ownershipTypes = \App\Models\MasterOwnershipType::where('is_active', true)->get();
+        $relationTypesParentsFamily = [
+            ['value' => 'native_place', 'label' => 'Native Place'],
+            ['value' => 'paternal_grandfather', 'label' => 'Paternal Grandfather'],
+            ['value' => 'paternal_grandmother', 'label' => 'Paternal Grandmother'],
+            ['value' => 'paternal_uncle', 'label' => 'Paternal Uncle (chulte)'],
+            ['value' => 'wife_paternal_uncle', 'label' => 'Wife of Paternal Uncle'],
+            ['value' => 'paternal_aunt', 'label' => 'Paternal Aunt (atya)'],
+            ['value' => 'husband_paternal_aunt', 'label' => 'Husband of Paternal Aunt'],
+            ['value' => 'Cousin', 'label' => 'Cousin'],
+            ['value' => 'Other', 'label' => 'Other'],
+        ];
+        $relationTypesMaternalFamily = [
+            ['value' => 'maternal_address_ajol', 'label' => 'Maternal address (Ajol)'],
+            ['value' => 'maternal_grandfather', 'label' => 'Maternal Grandfather'],
+            ['value' => 'maternal_grandmother', 'label' => 'Maternal Grandmother'],
+            ['value' => 'maternal_uncle', 'label' => 'Maternal Uncle (mama)'],
+            ['value' => 'wife_maternal_uncle', 'label' => 'Wife of Maternal Uncle'],
+            ['value' => 'maternal_aunt', 'label' => 'Maternal Aunt (mavshi)'],
+            ['value' => 'husband_maternal_aunt', 'label' => 'Husband of Maternal Aunt'],
+            ['value' => 'maternal_cousin', 'label' => 'Maternal Cousin'],
+            ['value' => 'other_maternal', 'label' => 'Other'],
+        ];
+        $profileEducation = collect();
+        $profileCareer = collect();
+        $familyTypes = \App\Models\MasterFamilyType::where('is_active', true)->get();
+        $currencies = \App\Models\MasterIncomeCurrency::where('is_active', true)->get();
+        $complexions = \App\Models\MasterComplexion::where('is_active', true)->orderBy('id')->get();
+        $bloodGroups = \App\Models\MasterBloodGroup::where('is_active', true)->orderBy('id')->get();
+        $physicalBuilds = \App\Models\MasterPhysicalBuild::where('is_active', true)->orderBy('id')->get();
+        $diets = \App\Models\MasterDiet::where('is_active', true)->orderBy('sort_order')->get();
+        $smokingStatuses = \App\Models\MasterSmokingStatus::where('is_active', true)->orderBy('sort_order')->get();
+        $drinkingStatuses = \App\Models\MasterDrinkingStatus::where('is_active', true)->orderBy('sort_order')->get();
+        $motherTongues = \App\Models\MasterMotherTongue::where('is_active', true)->orderBy('sort_order')->orderBy('label')->get(['id', 'key', 'label']);
+        $religions = \App\Models\Religion::where('is_active', true)->orderBy('label')->get(['id', 'label']);
+        $rashiAshtakootaJson = [];
+        $talukasByDistrict = \App\Models\Taluka::all()->groupBy('district_id')->map(fn ($col) => $col->map(fn ($t) => ['id' => $t->id, 'name' => $t->name])->values()->toArray())->toArray();
+        $districtsByState = \App\Models\District::all()->groupBy('state_id')->map(fn ($col) => $col->map(fn ($d) => ['id' => $d->id, 'name' => $d->name])->values()->toArray())->toArray();
+        $stateIdToCountryId = \App\Models\State::all()->pluck('country_id', 'id')->toArray();
+        $otherRelativesText = is_scalar($snapshot['other_relatives_text'] ?? null) ? (string) $snapshot['other_relatives_text'] : '';
 
         return view('intake.preview', compact(
             'intake',
@@ -697,8 +768,53 @@ class IntakeController extends Controller
             'nadis',
             'yonis',
             'mangalDoshTypes',
+            'varnas',
+            'vashyas',
+            'rashiLords',
             'horoscopeRulesJson',
-            'horoscopeDependencyWarnings'
+            'horoscopeDependencyWarnings',
+            'corePrefix',
+            'horoscopePrefix',
+            'siblingsPrefix',
+            'relativesPaternalPrefix',
+            'relativesMaternalPrefix',
+            'propertyPrefix',
+            'narrativePrefix',
+            'profile',
+            'currentSection',
+            'profileSiblings',
+            'hasSiblings',
+            'profileRelativesParentsFamily',
+            'profileRelativesMaternalFamily',
+            'profile_property_summary',
+            'profile_property_assets',
+            'profile_horoscope_data',
+            'extendedAttrs',
+            'preferenceCriteria',
+            'preferredDistrictIds',
+            'preferredReligionIds',
+            'preferredCasteIds',
+            'assetTypes',
+            'ownershipTypes',
+            'relationTypesParentsFamily',
+            'relationTypesMaternalFamily',
+            'profileEducation',
+            'profileCareer',
+            'familyTypes',
+            'currencies',
+            'complexions',
+            'bloodGroups',
+            'physicalBuilds',
+            'diets',
+            'smokingStatuses',
+            'drinkingStatuses',
+            'motherTongues',
+            'religions',
+            'rashiAshtakootaJson',
+            'talukasByDistrict',
+            'districtsByState',
+            'stateIdToCountryId',
+            'otherRelativesText'
         ));
     }
 
@@ -767,7 +883,6 @@ class IntakeController extends Controller
             'property_summary',
             'property_assets',
             'horoscope',
-            'legal_cases',
             'preferences',
             'extended_narrative',
             'confidence_map',

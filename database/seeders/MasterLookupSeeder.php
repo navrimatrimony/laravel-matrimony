@@ -243,8 +243,10 @@ class MasterLookupSeeder extends Seeder
     private function seedMangalDoshTypes(): void
     {
         $this->seedKeyLabel('master_mangal_dosh_types', [
-            ['key' => 'none', 'label' => 'None'],
-            ['key' => 'bhumangal', 'label' => 'Bhumangal'],
+            ['key' => 'none', 'label' => 'No / Non-Manglik (नाही)'],
+            ['key' => 'bhumangal', 'label' => 'Yes / Manglik (हो/आहे)'],
+            ['key' => 'anshik_mangal', 'label' => 'Anshik Mangal / Soumya Mangal (सौम्य मंगळ)'],
+            ['key' => 'don_t_know', 'label' => 'Don\'t Know (माहित नाही)'],
             ['key' => 'chovamangal', 'label' => 'Chovamangal'],
             ['key' => 'antya_mangal', 'label' => 'Antya Mangal'],
             ['key' => 'other', 'label' => 'Other'],

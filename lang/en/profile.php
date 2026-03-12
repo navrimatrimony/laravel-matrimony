@@ -52,5 +52,5 @@ return [
     'expectations' => 'Expectations',
     'horoscope' => 'Horoscope',
     'contact_information' => 'Contact Information',
-    'additional_details' => 'Additional Details',
+    'additional_details' => 'Additional Information',
 ];

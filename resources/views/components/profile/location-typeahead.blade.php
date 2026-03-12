@@ -1,3 +1,4 @@
+{{-- Centralized Location Engine — single source for all location inputs (residence, work, birth, native, alliance, preferences). Use this component only; no duplicate location UIs. --}}
 @props([
     'context' => 'residence', // residence | work | native | alliance
     'namePrefix' => '',       // e.g. 'alliance_networks[0]' for alliance rows
@@ -35,6 +36,19 @@
 }
 .dark .location-typeahead-results {
     background-color: rgb(55 65 81);
+}
+
+.location-suggest-modal-backdrop {
+    position: fixed; inset: 0; background-color: rgba(15, 23, 42, 0.55); z-index: 60;
+}
+.location-suggest-modal {
+    position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; z-index: 70;
+}
+.location-suggest-modal-inner {
+    max-width: 26rem; width: 100%; background-color: #fff; border-radius: 0.75rem; box-shadow: 0 20px 45px rgba(15,23,42,0.35);
+}
+.dark .location-suggest-modal-inner {
+    background-color: rgb(30 41 59);
 }
 </style>
 @php
@@ -107,3 +121,47 @@
         <div id="{{ $resultsId }}" class="location-typeahead-results border border-t-0 border-gray-300 dark:border-gray-600 rounded-b max-h-48 overflow-y-auto hidden"></div>
     @endif
 </div>
+
+<template id="location-suggest-modal-template">
+    <div class="location-suggest-modal-backdrop"></div>
+    <div class="location-suggest-modal">
+        <div class="location-suggest-modal-inner border border-rose-200 dark:border-rose-700">
+            <div class="px-4 py-3 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
+                <h3 class="text-sm font-semibold text-gray-800 dark:text-gray-100">Add village / city</h3>
+                <button type="button" class="location-suggest-close text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 text-xl leading-none px-1">&times;</button>
+            </div>
+            <div class="px-4 py-3 space-y-3">
+                <div>
+                    <label class="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-0.5">Name you typed</label>
+                    <div class="text-sm font-medium text-gray-900 dark:text-gray-100 location-suggest-name-display"></div>
+                </div>
+                <div class="grid grid-cols-1 gap-3">
+                    <div>
+                        <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">State</label>
+                        <select class="location-suggest-state w-full rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 px-3 py-2 text-sm">
+                            <option value="">Select state</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">District</label>
+                        <select class="location-suggest-district w-full rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 px-3 py-2 text-sm">
+                            <option value="">Select district</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Taluka</label>
+                        <select class="location-suggest-taluka w-full rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 px-3 py-2 text-sm">
+                            <option value="">Select taluka</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="location-suggest-error text-xs text-red-600 dark:text-red-400 hidden"></div>
+                <div class="location-suggest-success text-xs text-emerald-600 dark:text-emerald-400 hidden"></div>
+            </div>
+            <div class="px-4 py-3 border-t border-gray-200 dark:border-gray-700 flex items-center justify-end gap-2">
+                <button type="button" class="location-suggest-cancel px-3 py-1.5 rounded text-xs font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700">Cancel</button>
+                <button type="button" class="location-suggest-submit px-3 py-1.5 rounded text-xs font-semibold text-white bg-rose-600 hover:bg-rose-700">Submit</button>
+            </div>
+        </div>
+    </div>
+</template>

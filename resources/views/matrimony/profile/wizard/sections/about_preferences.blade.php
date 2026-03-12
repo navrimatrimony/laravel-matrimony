@@ -8,7 +8,14 @@
         'preferred_income_max' => old('preferred_income_max', $criteria->preferred_income_max ?? null),
         'preferred_education' => old('preferred_education', $criteria->preferred_education ?? ''),
         'preferred_city_id' => old('preferred_city_id', $criteria->preferred_city_id ?? null),
+        'willing_to_relocate' => old('willing_to_relocate', $criteria->willing_to_relocate ?? null),
+        'settled_city_preference_id' => old('settled_city_preference_id', $criteria->settled_city_preference_id ?? null),
+        'marriage_type_preference_id' => old('marriage_type_preference_id', $criteria->marriage_type_preference_id ?? null),
     ];
+    $settledCityDisplay = '';
+    if (!empty($oldCriteria['settled_city_preference_id'])) {
+        $settledCityDisplay = \App\Models\City::where('id', $oldCriteria['settled_city_preference_id'])->value('name') ?? '';
+    }
     $selectedReligionIds = collect(old('preferred_religion_ids', $preferredReligionIds ?? []))->map(fn($id) => (int) $id)->all();
     $selectedCasteIds = collect(old('preferred_caste_ids', $preferredCasteIds ?? []))->map(fn($id) => (int) $id)->all();
     $selectedDistrictIds = collect(old('preferred_district_ids', $preferredDistrictIds ?? []))->map(fn($id) => (int) $id)->all();
@@ -16,17 +23,17 @@
 
 <div class="space-y-6">
     <div class="flex items-center justify-between">
-        <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100 border-b border-gray-200 dark:border-gray-700 pb-2 flex-1">Partner preferences</h2>
+        <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100 border-b border-gray-200 dark:border-gray-700 pb-2 flex-1">{{ __('wizard.partner_preferences') }}</h2>
         <div class="ml-4 flex items-center gap-2 text-xs">
-            <span class="text-gray-500 dark:text-gray-400">Preset:</span>
+            <span class="text-gray-500 dark:text-gray-400">{{ __('wizard.preset') }}:</span>
             @php
                 $currentPreset = old('preference_preset', $preferencePreset ?? 'balanced');
             @endphp
             <select id="preference_preset" name="preference_preset" class="rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 text-xs px-2 py-1">
-                <option value="custom" {{ $currentPreset === 'custom' ? 'selected' : '' }}>Custom</option>
-                <option value="traditional" {{ $currentPreset === 'traditional' ? 'selected' : '' }}>Traditional</option>
-                <option value="balanced" {{ $currentPreset === 'balanced' ? 'selected' : '' }}>Balanced</option>
-                <option value="broad" {{ $currentPreset === 'broad' ? 'selected' : '' }}>Broad</option>
+                <option value="custom" {{ $currentPreset === 'custom' ? 'selected' : '' }}>{{ __('wizard.preset_custom') }}</option>
+                <option value="traditional" {{ $currentPreset === 'traditional' ? 'selected' : '' }}>{{ __('wizard.preset_traditional') }}</option>
+                <option value="balanced" {{ $currentPreset === 'balanced' ? 'selected' : '' }}>{{ __('wizard.preset_balanced') }}</option>
+                <option value="broad" {{ $currentPreset === 'broad' ? 'selected' : '' }}>{{ __('wizard.preset_broad') }}</option>
             </select>
         </div>
     </div>
@@ -53,7 +60,7 @@
 
     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div class="space-y-2">
-            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Preferred cities</label>
+            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{{ __('wizard.preferred_cities') }}</label>
             <div id="{{ $preferredCitiesContainerId }}" class="space-y-2" data-repeater-container data-name-prefix="preferred_cities" data-row-class="preferred-city-row" data-min-rows="1">
                 @forelse($preferredCities as $idx => $cityRow)
                     @php
@@ -67,17 +74,17 @@
                             context="alliance"
                             :namePrefix="'preferred_cities['.$idx.']'"
                             :value="$cityName"
-                            placeholder="Preferred city"
+                            placeholder="{{ __('wizard.preferred_city_placeholder') }}"
                             label=""
                             :data-city-id="$cityId ?? ''"
                         />
                         <div class="flex justify-between items-center">
                             <div class="preferred-city-add-wrap">
                                 <span role="button" tabindex="0" class="inline-flex items-center gap-1 text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 cursor-pointer font-medium text-xs" data-repeater-add data-repeater-for="{{ $preferredCitiesContainerId }}">
-                                    <span aria-hidden="true">+</span> Add city
+                                    <span aria-hidden="true">+</span> {{ __('wizard.add_city') }}
                                 </span>
                             </div>
-                            <button type="button" class="text-xs text-red-600 dark:text-red-400 hover:underline" data-repeater-remove>Remove this city</button>
+                            <button type="button" class="text-xs text-red-600 dark:text-red-400 hover:underline" data-repeater-remove>{{ __('wizard.remove_city') }}</button>
                         </div>
                     </div>
                 @empty
@@ -87,17 +94,17 @@
                             context="alliance"
                             :namePrefix="'preferred_cities[0]'"
                             :value="''"
-                            placeholder="Preferred city"
+                            placeholder="{{ __('wizard.preferred_city_placeholder') }}"
                             label=""
                             :data-city-id="''"
                         />
                         <div class="flex justify-between items-center">
                             <div class="preferred-city-add-wrap">
                                 <span role="button" tabindex="0" class="inline-flex items-center gap-1 text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 cursor-pointer font-medium text-xs" data-repeater-add data-repeater-for="{{ $preferredCitiesContainerId }}">
-                                    <span aria-hidden="true">+</span> Add city
+                                    <span aria-hidden="true">+</span> {{ __('wizard.add_city') }}
                                 </span>
                             </div>
-                            <button type="button" class="text-xs text-red-600 dark:text-red-400 hover:underline" data-repeater-remove>Remove this city</button>
+                            <button type="button" class="text-xs text-red-600 dark:text-red-400 hover:underline" data-repeater-remove>{{ __('wizard.remove_city') }}</button>
                         </div>
                     </div>
                 @endforelse
@@ -107,13 +114,13 @@
             </style>
         </div>
         <div class="space-y-2">
-            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Preferred districts</label>
+            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{{ __('wizard.preferred_districts') }}</label>
             <div id="{{ $preferredDistrictContainerId }}" class="space-y-2" data-repeater-container data-name-prefix="preferred_districts" data-row-class="preferred-district-row" data-min-rows="1">
                 @foreach($preferredDistrictRows as $idx => $row)
                     @php $districtId = $row['district_id'] ?? null; @endphp
                     <div class="preferred-district-row p-2 bg-gray-50 dark:bg-gray-800/60 rounded space-y-2">
                         <select name="preferred_district_ids[]" class="w-full rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 px-2 py-1 text-sm h-[42px]">
-                            <option value="">Select district</option>
+                            <option value="">{{ __('wizard.select_district') }}</option>
                             @foreach(($allDistricts ?? collect()) as $district)
                                 <option value="{{ $district->id }}" @if($districtId === $district->id) selected @endif>{{ $district->name }}</option>
                             @endforeach
@@ -121,10 +128,10 @@
                         <div class="flex justify-between items-center">
                             <div class="preferred-district-add-wrap">
                                 <span role="button" tabindex="0" class="inline-flex items-center gap-1 text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 cursor-pointer font-medium text-xs" data-repeater-add data-repeater-for="{{ $preferredDistrictContainerId }}">
-                                    <span aria-hidden="true">+</span> Add district
+                                    <span aria-hidden="true">+</span> {{ __('wizard.add_district') }}
                                 </span>
                             </div>
-                            <button type="button" class="text-xs text-red-600 dark:text-red-400 hover:underline" data-repeater-remove>Remove this district</button>
+                            <button type="button" class="text-xs text-red-600 dark:text-red-400 hover:underline" data-repeater-remove>{{ __('wizard.remove_district') }}</button>
                         </div>
                     </div>
                 @endforeach
@@ -213,53 +220,97 @@
     @endif
 
     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div class="flex items-center gap-2">
+            <label class="inline-flex items-center gap-2 cursor-pointer">
+                <input type="checkbox" name="willing_to_relocate" value="1" class="rounded border-gray-300 dark:border-gray-600"
+                    {{ $oldCriteria['willing_to_relocate'] ? 'checked' : '' }}>
+                <span class="text-sm font-medium text-gray-700 dark:text-gray-300">{{ __('wizard.willing_to_relocate') }}</span>
+            </label>
+        </div>
+        <div>
+            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{{ __('wizard.settled_city_preference') }}</label>
+            <x-profile.location-typeahead
+                context="alliance"
+                namePrefix="settled_preference"
+                :value="$settledCityDisplay"
+                :placeholder="__('wizard.city_to_settle_in')"
+                label=""
+                :data-city-id="$oldCriteria['settled_city_preference_id'] ?? ''"
+            />
+        </div>
+    </div>
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+        @php
+            $optionLabel = function ($row, string $field) {
+                $key = $row->key ?? null;
+                $dbLabel = $row->label ?? '';
+                if ($key) {
+                    $tKey = 'components.options.' . $field . '.' . $key;
+                    $t = __($tKey);
+                    if ($t !== $tKey) return $t;
+                }
+                return $dbLabel;
+            };
+        @endphp
+        <div>
+            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{{ __('wizard.marriage_type_preference') }}</label>
+            <select name="marriage_type_preference_id" class="w-full rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 px-3 py-2">
+                <option value="">{{ __('common.select_placeholder') }}</option>
+                @foreach($marriageTypePreferences ?? [] as $mtp)
+                    <option value="{{ $mtp->id }}" {{ (string)($oldCriteria['marriage_type_preference_id'] ?? '') === (string)$mtp->id ? 'selected' : '' }}>{{ $optionLabel($mtp, 'marriage_type_preference') }}</option>
+                @endforeach
+            </select>
+        </div>
+        <div></div>
+    </div>
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div class="flex gap-2">
             <div class="flex-1">
-                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Age min</label>
-                <input type="number" name="preferred_age_min" value="{{ $oldCriteria['preferred_age_min'] }}" placeholder="Min" class="w-full rounded border px-3 py-2">
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{{ __('wizard.age_min') }}</label>
+                <input type="number" name="preferred_age_min" value="{{ $oldCriteria['preferred_age_min'] }}" placeholder="{{ __('wizard.placeholder_min') }}" class="w-full rounded border px-3 py-2">
             </div>
             <div class="flex-1">
-                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Age max</label>
-                <input type="number" name="preferred_age_max" value="{{ $oldCriteria['preferred_age_max'] }}" placeholder="Max" class="w-full rounded border px-3 py-2">
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{{ __('wizard.age_max') }}</label>
+                <input type="number" name="preferred_age_max" value="{{ $oldCriteria['preferred_age_max'] }}" placeholder="{{ __('wizard.placeholder_max') }}" class="w-full rounded border px-3 py-2">
             </div>
         </div>
         <div class="flex gap-2">
             <div class="flex-1">
-                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Income min</label>
-                <input type="number" step="0.01" name="preferred_income_min" value="{{ $oldCriteria['preferred_income_min'] }}" placeholder="Min" class="w-full rounded border px-3 py-2">
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{{ __('wizard.income_min') }}</label>
+                <input type="number" step="0.01" name="preferred_income_min" value="{{ $oldCriteria['preferred_income_min'] }}" placeholder="{{ __('wizard.placeholder_min') }}" class="w-full rounded border px-3 py-2">
             </div>
             <div class="flex-1">
-                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Income max</label>
-                <input type="number" step="0.01" name="preferred_income_max" value="{{ $oldCriteria['preferred_income_max'] }}" placeholder="Max" class="w-full rounded border px-3 py-2">
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{{ __('wizard.income_max') }}</label>
+                <input type="number" step="0.01" name="preferred_income_max" value="{{ $oldCriteria['preferred_income_max'] }}" placeholder="{{ __('wizard.placeholder_max') }}" class="w-full rounded border px-3 py-2">
             </div>
         </div>
         <div>
-            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Preferred education</label>
-            <input type="text" name="preferred_education" value="{{ $oldCriteria['preferred_education'] }}" placeholder="e.g. BE, MBBS, M.Tech" class="w-full rounded border px-3 py-2">
+            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{{ __('wizard.preferred_education') }}</label>
+            <input type="text" name="preferred_education" value="{{ $oldCriteria['preferred_education'] }}" placeholder="{{ __('wizard.preferred_education_placeholder') }}" class="w-full rounded border px-3 py-2">
         </div>
     </div>
 
     <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div>
-            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Preferred religions</label>
+            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{{ __('wizard.preferred_religions') }}</label>
             <select name="preferred_religion_ids[]" multiple class="w-full rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 px-2 py-1 text-sm">
                 @foreach(($allReligions ?? collect()) as $religion)
-                    <option value="{{ $religion->id }}" @if(in_array($religion->id, $selectedReligionIds, true)) selected @endif>{{ $religion->label }}</option>
+                    <option value="{{ $religion->id }}" @if(in_array($religion->id, $selectedReligionIds, true)) selected @endif>{{ $optionLabel($religion, 'religion') }}</option>
                 @endforeach
             </select>
         </div>
         <div>
-            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Preferred caste</label>
+            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{{ __('wizard.preferred_caste') }}</label>
             <select name="preferred_caste_ids[]" multiple class="w-full rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 px-2 py-1 text-sm">
                 @foreach(($allCastes ?? collect()) as $caste)
-                    <option value="{{ $caste->id }}" @if(in_array($caste->id, $selectedCasteIds, true)) selected @endif>{{ $caste->label }}</option>
+                    <option value="{{ $caste->id }}" @if(in_array($caste->id, $selectedCasteIds, true)) selected @endif>{{ $optionLabel($caste, 'caste') }}</option>
                 @endforeach
             </select>
-            <p class="mt-1 text-[11px] text-gray-500 dark:text-gray-400">Hold Ctrl (Cmd on Mac) to select multiple castes.</p>
+            <p class="mt-1 text-[11px] text-gray-500 dark:text-gray-400">{{ __('wizard.hold_ctrl_multiple') }}</p>
             <label class="mt-2 inline-flex items-center gap-2 text-[11px] text-gray-600 dark:text-gray-300">
                 <input type="checkbox" name="preferred_intercaste" value="1" class="rounded border-gray-300 dark:border-gray-600"
                     {{ old('preferred_intercaste') ? 'checked' : '' }}>
-                <span>Open to intercaste matches</span>
+                <span>{{ __('wizard.open_to_intercaste') }}</span>
             </label>
         </div>
         <div></div>

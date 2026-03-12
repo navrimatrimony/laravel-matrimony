@@ -23,11 +23,28 @@ class ProfilePreferenceCriteria extends Model
         'preferred_income_max',
         'preferred_education',
         'preferred_city_id',
+        'willing_to_relocate',
+        'settled_city_preference_id',
+        'marriage_type_preference_id',
+    ];
+
+    protected $casts = [
+        'willing_to_relocate' => 'boolean',
     ];
 
     public function profile()
     {
         return $this->belongsTo(MatrimonyProfile::class, 'profile_id');
+    }
+
+    public function settledCity()
+    {
+        return $this->belongsTo(\App\Models\City::class, 'settled_city_preference_id');
+    }
+
+    public function marriageTypePreference()
+    {
+        return $this->belongsTo(MasterMarriageTypePreference::class, 'marriage_type_preference_id');
     }
 }
 

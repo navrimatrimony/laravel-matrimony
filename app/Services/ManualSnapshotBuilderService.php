@@ -341,7 +341,6 @@ class ManualSnapshotBuilderService
             'property_summary' => $property_summary,
             'property_assets' => $property_assets,
             'horoscope' => $horoscope,
-            'legal_cases' => [],
             'preferences' => $preferences,
             'extended_narrative' => $extended_narrative,
             'marriages' => $marriages,

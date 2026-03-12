@@ -367,6 +367,7 @@ class ProfileWizardController extends Controller
                 $data['genders'] = \App\Models\MasterGender::where('is_active', true)->whereIn('key', ['male', 'female'])->orderByRaw("CASE WHEN `key` = 'male' THEN 1 ELSE 2 END")->get();
                 $data['birthPlaceDisplay'] = $profile->birth_city_id ? \App\Models\City::where('id', $profile->birth_city_id)->value('name') : '';
                 $data['religions'] = \App\Models\Religion::where('is_active', true)->orderBy('label')->get(['id', 'label']);
+                $data['motherTongues'] = \App\Models\MasterMotherTongue::where('is_active', true)->orderBy('sort_order')->orderBy('label')->get(['id', 'key', 'label']);
                 $maritalKeys = ['never_married', 'divorced', 'separated', 'widowed'];
                 $data['maritalStatuses'] = \App\Models\MasterMaritalStatus::where('is_active', true)
                     ->whereIn('key', $maritalKeys)
@@ -396,6 +397,9 @@ class ProfileWizardController extends Controller
                 $data['complexions'] = \App\Models\MasterComplexion::where('is_active', true)->orderBy('id')->get();
                 $data['bloodGroups'] = \App\Models\MasterBloodGroup::where('is_active', true)->orderBy('id')->get();
                 $data['physicalBuilds'] = \App\Models\MasterPhysicalBuild::where('is_active', true)->orderBy('id')->get();
+                $data['diets'] = \App\Models\MasterDiet::where('is_active', true)->orderBy('sort_order')->get();
+                $data['smokingStatuses'] = \App\Models\MasterSmokingStatus::where('is_active', true)->orderBy('sort_order')->get();
+                $data['drinkingStatuses'] = \App\Models\MasterDrinkingStatus::where('is_active', true)->orderBy('sort_order')->get();
                 break;
             case 'marriages':
                 $data['profileMarriages'] = \App\Models\ProfileMarriage::where('profile_id', $profile->id)->orderBy('id')->get();
@@ -567,6 +571,10 @@ class ProfileWizardController extends Controller
                 $data['nadis'] = \App\Models\MasterNadi::where('is_active', true)->get();
                 $data['yonis'] = \App\Models\MasterYoni::where('is_active', true)->get();
                 $data['mangalDoshTypes'] = \App\Models\MasterMangalDoshType::where('is_active', true)->get();
+                $data['mangalStatuses'] = \App\Models\MasterMangalStatus::where('is_active', true)->orderBy('sort_order')->get();
+                $data['varnas'] = DB::table('master_varnas')->where('is_active', true)->orderBy('label')->get();
+                $data['vashyas'] = DB::table('master_vashyas')->where('is_active', true)->orderBy('label')->get();
+                $data['rashiLords'] = DB::table('master_rashi_lords')->where('is_active', true)->orderBy('label')->get();
                 $data['rashis'] = $data['rashis'] ?? collect();
                 $data['nakshatras'] = $data['nakshatras'] ?? collect();
                 $data['gans'] = $data['gans'] ?? collect();
@@ -649,6 +657,7 @@ class ProfileWizardController extends Controller
                 $data['allReligions'] = \App\Models\Religion::where('is_active', true)->orderBy('label')->get();
                 $data['allCastes'] = \App\Models\Caste::where('is_active', true)->orderBy('label')->get();
                 $data['allDistricts'] = \App\Models\District::orderBy('name')->get();
+                $data['marriageTypePreferences'] = \App\Models\MasterMarriageTypePreference::where('is_active', true)->orderBy('sort_order')->get();
                 break;
             case 'photo':
                 break;
@@ -732,6 +741,7 @@ class ProfileWizardController extends Controller
             'religion_id' => ['nullable', Rule::exists('religions', 'id')->where(fn ($q) => $q->where('is_active', true))],
             'caste_id' => ['nullable', Rule::exists('castes', 'id')->where(fn ($q) => $q->where('is_active', true))],
             'sub_caste_id' => ['nullable', Rule::exists('sub_castes', 'id')->where(fn ($q) => $q->where('is_active', true))],
+            'mother_tongue_id' => ['nullable', Rule::exists('master_mother_tongues', 'id')->where(fn ($q) => $q->where('is_active', true))],
         ]);
 
         $birthTimeValue = $request->filled('birth_time') ? trim($request->input('birth_time')) : null;
@@ -747,6 +757,7 @@ class ProfileWizardController extends Controller
             'religion_id' => $request->input('religion_id') ? (int) $request->input('religion_id') : null,
             'caste_id' => $request->input('caste_id') ? (int) $request->input('caste_id') : null,
             'sub_caste_id' => $request->input('sub_caste_id') ? (int) $request->input('sub_caste_id') : null,
+            'mother_tongue_id' => $request->input('mother_tongue_id') ? (int) $request->input('mother_tongue_id') : null,
         ];
         $core = array_map(fn ($v) => $v === '' ? null : $v, $core);
 
@@ -789,6 +800,9 @@ class ProfileWizardController extends Controller
             'physical_build_id' => ['nullable', Rule::exists('master_physical_builds', 'id')->where(fn ($q) => $q->where('is_active', true))],
             'spectacles_lens' => ['nullable', 'string', 'max:50', Rule::in(['no', 'spectacles', 'contact_lens', 'both'])],
             'physical_condition' => ['nullable', 'string', 'max:50', Rule::in(['none', 'physically_challenged', 'hearing_condition', 'vision_condition', 'other', 'prefer_not_to_say'])],
+            'diet_id' => ['nullable', Rule::exists('master_diets', 'id')->where(fn ($q) => $q->where('is_active', true))],
+            'smoking_status_id' => ['nullable', Rule::exists('master_smoking_statuses', 'id')->where(fn ($q) => $q->where('is_active', true))],
+            'drinking_status_id' => ['nullable', Rule::exists('master_drinking_statuses', 'id')->where(fn ($q) => $q->where('is_active', true))],
         ]);
 
         $core = [
@@ -798,6 +812,9 @@ class ProfileWizardController extends Controller
             'physical_build_id' => $request->input('physical_build_id') ? (int) $request->input('physical_build_id') : null,
             'spectacles_lens' => $request->input('spectacles_lens') ?: null,
             'physical_condition' => $request->input('physical_condition') ?: null,
+            'diet_id' => $request->input('diet_id') ? (int) $request->input('diet_id') : null,
+            'smoking_status_id' => $request->input('smoking_status_id') ? (int) $request->input('smoking_status_id') : null,
+            'drinking_status_id' => $request->input('drinking_status_id') ? (int) $request->input('drinking_status_id') : null,
         ];
         $core = array_map(fn ($v) => $v === '' ? null : $v, $core);
 
@@ -811,7 +828,6 @@ class ProfileWizardController extends Controller
             'property_summary' => [],
             'property_assets' => [],
             'horoscope' => [],
-            'legal_cases' => [],
             'preferences' => [],
             'extended_narrative' => [],
         ];
@@ -1326,6 +1342,11 @@ class ProfileWizardController extends Controller
             'preferred_caste_ids.*' => ['integer', Rule::exists('castes', 'id')->where(fn ($q) => $q->where('is_active', true))],
             'preferred_district_ids' => ['nullable', 'array'],
             'preferred_district_ids.*' => ['integer', 'exists:districts,id'],
+            'willing_to_relocate' => ['nullable', 'boolean'],
+            'settled_city_preference_id' => ['nullable', 'integer', 'exists:cities,id'],
+            'settled_preference' => ['nullable', 'array'],
+            'settled_preference.city_id' => ['nullable', 'integer', 'exists:cities,id'],
+            'marriage_type_preference_id' => ['nullable', 'integer', Rule::exists('master_marriage_type_preferences', 'id')->where(fn ($q) => $q->where('is_active', true))],
         ]);
 
         $preferredCitiesInput = $request->input('preferred_cities', []);
@@ -1387,6 +1408,9 @@ class ProfileWizardController extends Controller
             'preferred_income_max' => $validated['preferred_income_max'] ?? null,
             'preferred_education' => $validated['preferred_education'] ?? null,
             'preferred_city_id' => $preferredCityId,
+            'willing_to_relocate' => $request->boolean('willing_to_relocate') ? true : null,
+            'settled_city_preference_id' => $validated['settled_city_preference_id'] ?? (isset($validated['settled_preference']['city_id']) ? (int) $validated['settled_preference']['city_id'] : null),
+            'marriage_type_preference_id' => $validated['marriage_type_preference_id'] ?? null,
             'preferred_religion_ids' => $validated['preferred_religion_ids'] ?? [],
             'preferred_caste_ids' => $validated['preferred_caste_ids'] ?? [],
             'preferred_district_ids' => $districtIds,
@@ -1512,7 +1536,11 @@ class ProfileWizardController extends Controller
                 'gan_id' => ! empty($h['gan_id']) ? (int) $h['gan_id'] : null,
                 'nadi_id' => ! empty($h['nadi_id']) ? (int) $h['nadi_id'] : null,
                 'yoni_id' => ! empty($h['yoni_id']) ? (int) $h['yoni_id'] : null,
+                'varna_id' => ! empty($h['varna_id']) ? (int) $h['varna_id'] : null,
+                'vashya_id' => ! empty($h['vashya_id']) ? (int) $h['vashya_id'] : null,
+                'rashi_lord_id' => ! empty($h['rashi_lord_id']) ? (int) $h['rashi_lord_id'] : null,
                 'mangal_dosh_type_id' => ! empty($h['mangal_dosh_type_id']) ? (int) $h['mangal_dosh_type_id'] : null,
+                'mangal_status_id' => ! empty($h['mangal_status_id']) ? (int) $h['mangal_status_id'] : null,
                 'devak' => trim((string) ($h['devak'] ?? '')),
                 'kul' => trim((string) ($h['kuldaivat'] ?? $h['kul'] ?? '')),
                 'gotra' => trim((string) ($h['gotra'] ?? '')),
@@ -1533,7 +1561,11 @@ class ProfileWizardController extends Controller
                 'gan_id' => $payload['gan_id'],
                 'nadi_id' => $payload['nadi_id'],
                 'yoni_id' => $payload['yoni_id'],
+                'varna_id' => $payload['varna_id'],
+                'vashya_id' => $payload['vashya_id'],
+                'rashi_lord_id' => $payload['rashi_lord_id'],
                 'mangal_dosh_type_id' => $payload['mangal_dosh_type_id'],
+                'mangal_status_id' => $payload['mangal_status_id'],
                 'devak' => $payload['devak'],
                 'kul' => $payload['kul'],
                 'gotra' => $payload['gotra'],
@@ -1558,6 +1590,10 @@ class ProfileWizardController extends Controller
             'nadi_id' => ['nullable', Rule::exists('master_nadis', 'id')->where(fn ($q) => $q->where('is_active', true))],
             'yoni_id' => ['nullable', Rule::exists('master_yonis', 'id')->where(fn ($q) => $q->where('is_active', true))],
             'mangal_dosh_type_id' => ['nullable', Rule::exists('master_mangal_dosh_types', 'id')->where(fn ($q) => $q->where('is_active', true))],
+            'mangal_status_id' => ['nullable', Rule::exists('master_mangal_statuses', 'id')->where(fn ($q) => $q->where('is_active', true))],
+            'varna_id' => ['nullable', Rule::exists('master_varnas', 'id')->where(fn ($q) => $q->where('is_active', true))],
+            'vashya_id' => ['nullable', Rule::exists('master_vashyas', 'id')->where(fn ($q) => $q->where('is_active', true))],
+            'rashi_lord_id' => ['nullable', Rule::exists('master_rashi_lords', 'id')->where(fn ($q) => $q->where('is_active', true))],
             'charan' => ['nullable', 'integer', 'min:1', 'max:4'],
         ];
         $validator = \Illuminate\Support\Facades\Validator::make($payload, $rules);

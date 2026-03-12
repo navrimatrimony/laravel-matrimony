@@ -3,33 +3,37 @@
     'currencies' => [],
     'errors' => [],
     'readOnly' => false,
+    'namePrefix' => '',
 ])
 @php
     $profile = $profile ?? new \stdClass();
+    $namePrefix = $namePrefix ?? '';
+    $n = fn($k) => $namePrefix !== '' ? $namePrefix . '[' . $k . ']' : $k;
+    $oldK = fn($k) => $namePrefix !== '' ? str_replace(']', '', str_replace('[', '.', $namePrefix . '[' . $k . ']')) : $k;
     $fatherContacts = [
-        old('father_contact_1', $profile->father_contact_1 ?? ''),
-        old('father_contact_2', $profile->father_contact_2 ?? ''),
-        old('father_contact_3', $profile->father_contact_3 ?? ''),
+        old($oldK('father_contact_1'), $profile->father_contact_1 ?? ''),
+        old($oldK('father_contact_2'), $profile->father_contact_2 ?? ''),
+        old($oldK('father_contact_3'), $profile->father_contact_3 ?? ''),
     ];
     $fatherCount = max(1, count(array_filter($fatherContacts, fn($v) => trim((string)$v) !== '')));
     $motherContacts = [
-        old('mother_contact_1', $profile->mother_contact_1 ?? ''),
-        old('mother_contact_2', $profile->mother_contact_2 ?? ''),
-        old('mother_contact_3', $profile->mother_contact_3 ?? ''),
+        old($oldK('mother_contact_1'), $profile->mother_contact_1 ?? ''),
+        old($oldK('mother_contact_2'), $profile->mother_contact_2 ?? ''),
+        old($oldK('mother_contact_3'), $profile->mother_contact_3 ?? ''),
     ];
     $motherCount = max(1, count(array_filter($motherContacts, fn($v) => trim((string)$v) !== '')));
 @endphp
 
-<div class="parent-engine border-2 border-rose-500 dark:border-rose-400 rounded-lg p-4 space-y-5">
+<div class="parent-engine border-2 border-rose-500 dark:border-rose-400 rounded-lg p-4 space-y-5" data-name-prefix="{{ $namePrefix }}">
     {{-- Line 1: Father — name + occupation --}}
     <div class="flex flex-col md:flex-row md:items-end gap-3 md:gap-4">
         <div class="flex-1">
             <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Father Name</label>
-            <input type="text" name="father_name" value="{{ old('father_name', $profile->father_name ?? null) }}" class="w-full rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-3 py-2">
+            <input type="text" name="{{ $n('father_name') }}" value="{{ old($oldK('father_name'), $profile->father_name ?? null) }}" class="w-full rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-3 py-2">
         </div>
         <div class="flex-1">
             <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Father Occupation</label>
-            <input type="text" name="father_occupation" value="{{ old('father_occupation', $profile->father_occupation ?? null) }}" class="w-full rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-3 py-2">
+            <input type="text" name="{{ $n('father_occupation') }}" value="{{ old($oldK('father_occupation'), $profile->father_occupation ?? null) }}" class="w-full rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-3 py-2">
         </div>
     </div>
 
@@ -37,15 +41,15 @@
     <div class="flex flex-col md:flex-row md:items-end gap-3 md:gap-4">
         <div class="flex-1">
             <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Father Extra Information</label>
-            <input type="text" name="father_extra_info" value="{{ old('father_extra_info', $profile->father_extra_info ?? '') }}" maxlength="255" placeholder="e.g. Retired from MSEB, Kolhapur" class="w-full rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-3 py-2">
+            <input type="text" name="{{ $n('father_extra_info') }}" value="{{ old($oldK('father_extra_info'), $profile->father_extra_info ?? '') }}" maxlength="255" placeholder="e.g. Retired from MSEB, Kolhapur" class="w-full rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-3 py-2">
         </div>
         <div class="flex-1 min-w-0" data-contact-context="father" data-max-slots="3">
             <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Father Contact number</label>
             <div class="flex flex-wrap items-end gap-2" id="father-contact-slots-inner">
                 @for($i = 0; $i < $fatherCount; $i++)
                     @php
-                        $nameNum = 'father_contact_' . ($i + 1);
-                        $nameWa = 'father_contact_whatsapp_' . ($i + 1);
+                        $nameNum = $n('father_contact_' . ($i + 1));
+                        $nameWa = $n('father_contact_whatsapp_' . ($i + 1));
                         $showAdd = $i < 2;
                     @endphp
                     <div class="parent-contact-slot {{ $i === 0 ? 'w-full basis-full' : 'shrink-0' }}" data-slot-index="{{ $i }}">
@@ -71,11 +75,11 @@
     <div class="flex flex-col md:flex-row md:items-end gap-3 md:gap-4">
         <div class="flex-1">
             <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Mother Name</label>
-            <input type="text" name="mother_name" value="{{ old('mother_name', $profile->mother_name ?? null) }}" class="w-full rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-3 py-2">
+            <input type="text" name="{{ $n('mother_name') }}" value="{{ old($oldK('mother_name'), $profile->mother_name ?? null) }}" class="w-full rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-3 py-2">
         </div>
         <div class="flex-1">
             <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Mother Occupation</label>
-            <input type="text" name="mother_occupation" value="{{ old('mother_occupation', $profile->mother_occupation ?? null) }}" class="w-full rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-3 py-2">
+            <input type="text" name="{{ $n('mother_occupation') }}" value="{{ old($oldK('mother_occupation'), $profile->mother_occupation ?? null) }}" class="w-full rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-3 py-2">
         </div>
     </div>
 
@@ -83,15 +87,15 @@
     <div class="flex flex-col md:flex-row md:items-end gap-3 md:gap-4">
         <div class="flex-1">
             <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Mother Extra Information</label>
-            <input type="text" name="mother_extra_info" value="{{ old('mother_extra_info', $profile->mother_extra_info ?? '') }}" maxlength="255" placeholder="e.g. Housewife, stays with son in Pune" class="w-full rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-3 py-2">
+            <input type="text" name="{{ $n('mother_extra_info') }}" value="{{ old($oldK('mother_extra_info'), $profile->mother_extra_info ?? '') }}" maxlength="255" placeholder="e.g. Housewife, stays with son in Pune" class="w-full rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-3 py-2">
         </div>
         <div class="flex-1 min-w-0" data-contact-context="mother" data-max-slots="3">
             <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Mother Contact number</label>
             <div class="flex flex-wrap items-end gap-2" id="mother-contact-slots-inner">
                 @for($i = 0; $i < $motherCount; $i++)
                     @php
-                        $nameNum = 'mother_contact_' . ($i + 1);
-                        $nameWa = 'mother_contact_whatsapp_' . ($i + 1);
+                        $nameNum = $n('mother_contact_' . ($i + 1));
+                        $nameWa = $n('mother_contact_whatsapp_' . ($i + 1));
                         $showAdd = $i < 2;
                     @endphp
                     <div class="parent-contact-slot {{ $i === 0 ? 'w-full basis-full' : 'shrink-0' }}" data-slot-index="{{ $i }}">
@@ -118,18 +122,19 @@
         <x-profile.location-typeahead
             context="residence"
             mode="full"
+            :namePrefix="$namePrefix"
             :detailedLabel="__('components.parents.parents_home_address')"
             :detailedPlaceholder="__('components.parents.parents_address_line')"
-            detailedValue="{{ old('parents_address_line', $profile->address_line ?? '') }}"
-            detailedName="parents_address_line"
-            :value="old('wizard_parents_city_display', $profile->city?->name ?? '')"
+            detailedValue="{{ old($oldK('parents_address_line'), $profile->address_line ?? '') }}"
+            :detailedName="$namePrefix !== '' ? $namePrefix . '[parents_address_line]' : 'parents_address_line'"
+            :value="old($oldK('wizard_parents_city_display'), $profile->city?->name ?? '')"
             placeholder="{{ __('components.parents.parents_location_placeholder') }}"
             label="{{ __('components.parents.parents_village_city') }}"
-            :data-country-id="old('country_id', $profile->country_id ?? null)"
-            :data-state-id="old('state_id', $profile->state_id ?? null)"
-            :data-district-id="old('district_id', $profile->district_id ?? null)"
-            :data-taluka-id="old('taluka_id', $profile->taluka_id ?? null)"
-            :data-city-id="old('city_id', $profile->city_id ?? null)"
+            :data-country-id="old($oldK('country_id'), $profile->country_id ?? null)"
+            :data-state-id="old($oldK('state_id'), $profile->state_id ?? null)"
+            :data-district-id="old($oldK('district_id'), $profile->district_id ?? null)"
+            :data-taluka-id="old($oldK('taluka_id'), $profile->taluka_id ?? null)"
+            :data-city-id="old($oldK('city_id'), $profile->city_id ?? null)"
         />
     </div>
 
@@ -187,6 +192,8 @@
 <script>
 (function() {
     var maxSlots = 3;
+    var parentEngine = document.querySelector('.parent-engine[data-name-prefix]');
+    var namePrefix = parentEngine ? (parentEngine.getAttribute('data-name-prefix') || '') : '';
     document.querySelectorAll('[data-contact-context="father"], [data-contact-context="mother"]').forEach(function(ctx) {
         var isFather = ctx.getAttribute('data-contact-context') === 'father';
         var inner = ctx.querySelector(isFather ? '#father-contact-slots-inner' : '#mother-contact-slots-inner');
@@ -199,9 +206,9 @@
             var slots = inner.querySelectorAll('.parent-contact-slot');
             if (slots.length >= maxSlots) return;
             var nextIdx = slots.length;
-            var nameNum = prefix + '_' + (nextIdx + 1);
-            var nameWa = prefix + '_whatsapp_' + (nextIdx + 1);
-            var nameCC = prefix + '_cc_' + (nextIdx + 1);
+            var nameNum = namePrefix ? namePrefix + '[' + prefix + '_' + (nextIdx + 1) + ']' : prefix + '_' + (nextIdx + 1);
+            var nameWa = namePrefix ? namePrefix + '[' + prefix + '_whatsapp_' + (nextIdx + 1) + ']' : prefix + '_whatsapp_' + (nextIdx + 1);
+            var nameCC = namePrefix ? namePrefix + '[' + prefix + '_cc_' + (nextIdx + 1) + ']' : prefix + '_cc_' + (nextIdx + 1);
             var html = tpl.innerHTML
                 .replace(/__FATHER_NAME__|__MOTHER_NAME__/g, nameNum)
                 .replace(/__FATHER_WA__|__MOTHER_WA__/g, nameWa)

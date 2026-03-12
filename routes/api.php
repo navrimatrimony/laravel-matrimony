@@ -2,6 +2,7 @@
 
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Internal\LocationSearchController;
+use App\Http\Controllers\Internal\LocationHierarchyController;
 use App\Http\Controllers\Internal\LocationSuggestionController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\MatrimonyProfileApiController;
@@ -17,12 +18,15 @@ use App\Http\Controllers\AdminController;
 use App\Http\Controllers\AbuseReportController;
 
 Route::get('/internal/location/search', [LocationSearchController::class, 'search']);
+Route::get('/internal/location/states', [LocationHierarchyController::class, 'states']);
+Route::get('/internal/location/districts', [LocationHierarchyController::class, 'districts']);
+Route::get('/internal/location/talukas', [LocationHierarchyController::class, 'talukas']);
+Route::post('/internal/location/suggest', [LocationSuggestionController::class, 'store']);
 
 /*
 | Master education hierarchy (Shaadi.com-style). Public read-only.
 */
 Route::get('/master/education', [MasterEducationController::class, 'index']);
-Route::middleware(['auth'])->post('/internal/location/suggest', [LocationSuggestionController::class, 'store']);
 
 Route::prefix('v1')->group(function () {
 

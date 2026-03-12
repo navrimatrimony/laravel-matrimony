@@ -15,18 +15,18 @@
     $maritalNamePrefix = ($corePrefix === 'snapshot[core]') ? 'snapshot' : '';
 @endphp
 <div class="border border-gray-200 dark:border-gray-600 rounded-lg p-4 bg-white dark:bg-gray-800 space-y-7" x-data="basicInfoForm()">
-    <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100 border-b border-gray-200 dark:border-gray-700 pb-2 mb-6">{{ __('Basic Information') }}</h2>
+    <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100 border-b border-gray-200 dark:border-gray-700 pb-2 mb-6">{{ __('wizard.basic_information') }}</h2>
 
     {{-- 1. Full name + Gender (one horizontal line) — flex-row so both always on same line --}}
     <div class="flex flex-row flex-nowrap gap-2 items-end">
         <div class="flex-1 min-w-0">
-            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">{{ __('Full Name') }} <span class="text-red-500">*</span></label>
+            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">{{ __('wizard.full_name') }} <span class="text-red-500">*</span></label>
             <input type="text" name="{{ $nameFullName }}" value="{{ old($oldPrefix.'full_name', $profile->full_name ?? '') }}" required
                 class="w-full rounded-lg border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-3 py-2.5 h-[42px] focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
             @error($oldPrefix.'full_name')<p class="mt-1 text-sm text-red-600 dark:text-red-400">{{ $message }}</p>@enderror
         </div>
         <div class="shrink-0 w-36">
-            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">{{ __('Gender') }} <span class="text-red-500">*</span></label>
+            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">{{ __('wizard.gender') }} <span class="text-red-500">*</span></label>
             <input type="hidden" name="{{ $nameGenderId }}" :value="genderId">
             {{-- Safelist so Tailwind keeps these when Alpine toggles :class --}}
             <span class="hidden bg-blue-600 bg-pink-500" aria-hidden="true"></span>
@@ -43,7 +43,7 @@
                         class="flex-1 py-2.5 px-3 cursor-pointer transition-all duration-200 select-none text-sm font-medium border-none outline-none focus:ring-0 {{ $isFirst ? 'rounded-l-full' : '' }} {{ $isLast ? 'rounded-r-full' : '' }} text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200"
                         :class="genderId == {{ $g->id }} ? '{{ $selectedBg }} !text-white' : ''"
                         @click="genderId = {{ $g->id }}">
-                        {{ $g->key === 'male' ? __('Male') : __('Female') }}
+                        {{ $g->key === 'male' ? __('wizard.male') : __('wizard.female') }}
                     </button>
                 @endforeach
             </div>
@@ -54,7 +54,7 @@
     {{-- 2. Date of birth (narrower), Birth time, Birth place — DOB ~30% less width so other two don't crowd --}}
     <div class="grid grid-cols-1 md:grid-cols-[0.7fr_1fr_1fr] gap-2 items-start">
         <div class="min-w-0">
-            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">{{ __('Date of Birth') }}</label>
+            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">{{ __('wizard.date_of_birth') }}</label>
             @php
                 $yMin = now()->subYears(60)->format('Y');
                 $yMax = now()->subYears(18)->format('Y');
@@ -77,7 +77,7 @@
             @error($oldPrefix.'date_of_birth')<p class="mt-1 text-sm text-red-600 dark:text-red-400">{{ $message }}</p>@enderror
         </div>
         <div class="min-w-0">
-            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">{{ __('Birth Time (optional)') }}</label>
+            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">{{ __('wizard.birth_time_optional') }}</label>
             @php
                 $bt = old($oldPrefix.'birth_time', $profile->birth_time ?? '');
                 $bt = $bt !== '' ? trim($bt) : '';
@@ -123,12 +123,12 @@
             @error($oldPrefix.'birth_time')<p class="mt-1 text-sm text-red-600 dark:text-red-400">{{ $message }}</p>@enderror
         </div>
         <div class="min-w-0">
-            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">{{ __('Birth Place (optional)') }}</label>
+            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">{{ __('wizard.birth_place_optional') }}</label>
             <x-profile.location-typeahead
                 context="birth"
                 :namePrefix="$corePrefix"
                 :value="old($oldPrefix.'wizard_birth_place_display', $birthPlaceDisplay ?? '')"
-                :placeholder="__('Type city / area')"
+                :placeholder="__('wizard.type_city_area')"
                 label=""
                 :noBorder="true"
                 :compactRow="true"
@@ -143,6 +143,32 @@
     {{-- 4. Religion, Caste, Sub-caste --}}
     <div>
         <x-profile.religion-caste-selector :profile="$profile" :namePrefix="$corePrefix ? $corePrefix : ''" />
+    </div>
+
+    {{-- 4b. Mother tongue — locale-based option labels --}}
+    @php
+        $nameMotherTongue = $corePrefix ? $corePrefix . '[mother_tongue_id]' : 'mother_tongue_id';
+        $valMotherTongue = old($oldPrefix.'mother_tongue_id', $profile->mother_tongue_id ?? '');
+        $optionLabel = function ($row, string $field) {
+            $key = $row->key ?? null;
+            $dbLabel = $row->label ?? '';
+            if ($key) {
+                $tKey = 'components.options.' . $field . '.' . $key;
+                $t = __($tKey);
+                if ($t !== $tKey) return $t;
+            }
+            return $dbLabel;
+        };
+    @endphp
+    <div>
+        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">{{ __('wizard.mother_tongue') }}</label>
+        <select name="{{ $nameMotherTongue }}" class="w-full rounded-lg border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-3 py-2.5 h-[42px] focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+            <option value="">{{ __('common.select_placeholder') }}</option>
+            @foreach($motherTongues ?? [] as $mt)
+                <option value="{{ $mt->id }}" {{ (string)$valMotherTongue === (string)$mt->id ? 'selected' : '' }}>{{ $optionLabel($mt, 'mother_tongue') }}</option>
+            @endforeach
+        </select>
+        @error($oldPrefix.'mother_tongue_id')<p class="mt-1 text-sm text-red-600 dark:text-red-400">{{ $message }}</p>@enderror
     </div>
 
     {{-- 5. Marital status — full engine (status + status details + children) --}}

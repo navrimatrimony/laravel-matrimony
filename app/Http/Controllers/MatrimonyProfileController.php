@@ -52,7 +52,7 @@ class MatrimonyProfileController extends Controller
      * Only includes keys present in request (or in overrides). No DB write.
      *
      * @param  array<string, mixed>  $overrides  e.g. ['profile_photo' => $path, 'photo_approved' => true]
-     * @return array{core: array, contacts: array, children: array, education_history: array, career_history: array, addresses: array, property_summary: array, property_assets: array, horoscope: array, legal_cases: array, preferences: array, extended_narrative: array}
+     * @return array{core: array, contacts: array, children: array, education_history: array, career_history: array, addresses: array, property_summary: array, property_assets: array, horoscope: array, preferences: array, extended_narrative: array}
      */
     private function buildManualSnapshot(Request $request, MatrimonyProfile $profile, array $overrides = []): array
     {
@@ -372,7 +372,6 @@ if (!$user->matrimonyProfile) {
         'property_summary' => [],
         'property_assets' => [],
         'horoscope' => [],
-        'legal_cases' => [],
         'preferences' => [],
         'extended_narrative' => [],
     ];

@@ -56,6 +56,12 @@ class LocationSuggestionController extends Controller
             ]);
         }
 
+        $suggestedBy = auth()->id();
+        if (! $suggestedBy) {
+            $suggestedBy = (int) \App\Models\User::query()->where('is_admin', true)->value('id')
+                ?: (int) \App\Models\User::query()->orderBy('id')->value('id');
+        }
+
         LocationSuggestion::create([
             'suggested_name' => $validated['suggested_name'],
             'normalized_name' => $normalized,
@@ -64,7 +70,7 @@ class LocationSuggestionController extends Controller
             'district_id' => $validated['district_id'],
             'taluka_id' => $validated['taluka_id'],
             'suggestion_type' => $validated['suggestion_type'],
-            'suggested_by' => auth()->id(),
+            'suggested_by' => $suggestedBy,
             'status' => 'pending',
         ]);
 

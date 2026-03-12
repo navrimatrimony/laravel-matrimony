@@ -51,5 +51,5 @@ return [
     'expectations' => 'अपेक्षा',
     'horoscope' => 'जन्मकुंडली',
     'contact_information' => 'संपर्क माहिती',
-    'additional_details' => 'अतिरिक्त तपशील',
+    'additional_details' => 'अतिरिक्त माहिती',
 ];

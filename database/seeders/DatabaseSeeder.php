@@ -24,6 +24,7 @@ class DatabaseSeeder extends Seeder
         FieldRegistryCoreSeeder::class,
         ReligionCasteSubCasteSeeder::class,
         MasterLookupSeeder::class,
+        MasterMotherTongueDietLifestyleSeeder::class,
         NakshatraPadaRashiRuleSeeder::class,
         NakshatraAttributesSeeder::class,
         AshtakootaMasterSeeder::class,
@@ -31,10 +32,7 @@ class DatabaseSeeder extends Seeder
         EducationSeeder::class,
         EducationCareerTemporarySeeder::class,
         TestAdminRolesSeeder::class,
-        MinimalLocationSeeder::class,
-        LocationEnrichmentSeeder::class,
-        LocationSeeder::class,
-        LocationStressTestSeeder::class,
+        GeoSeeder::class,
     ]);
 }
 

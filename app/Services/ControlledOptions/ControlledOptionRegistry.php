@@ -266,15 +266,6 @@ class ControlledOptionRegistry
             'active_column' => 'is_active',
             'multi_select' => false,
         ],
-        'entity.legal_case_type' => [
-            'source_type' => 'master_table',
-            'table' => 'master_legal_case_types',
-            'key_column' => 'key',
-            'id_column' => 'id',
-            'label_column' => 'label',
-            'active_column' => 'is_active',
-            'multi_select' => false,
-        ],
     ];
 
     /**

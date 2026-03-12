@@ -24,7 +24,6 @@ class BiodataParserService
 
     /** Keywords to trigger optional entity extraction */
     private const PROPERTY_TRIGGER = ['शेती', 'एकर', 'प्लॉट', 'फ्लॅट', 'स्थावर', 'गुऱ्हे', 'स्थायिक', 'मालमत्ता'];
-    private const LEGAL_TRIGGER = ['केस', 'कोर्ट', 'प्रकरण', 'maintenance', 'divorce case'];
     private const HOROSCOPE_TRIGGER = ['राशी', 'नक्षत्र', 'गण', 'नाडी', 'लग्नराशी'];
     private const PREFERENCES_TRIGGER = ['अपेक्षा', 'Looking for', 'Bride should'];
     private const CHILDREN_DIVORCE_WIDOW = ['घटस्फोट', 'divorce', 'widow', 'विधवा'];
@@ -446,15 +445,7 @@ class BiodataParserService
             $confidence['property'] = self::CONF_MISSING;
         }
 
-        // ——— OPTIONAL: Legal ———
-        $legalCases = [];
-        if ($this->hasAnyKeyword($text, self::LEGAL_TRIGGER)) {
-            $aiResult = $this->aiParseFragment($text);
-            $legalCases = $aiResult['legal_cases'] ?? [];
-            $confidence['legal_cases'] = ! empty($legalCases) ? self::CONF_AI : self::CONF_MISSING;
-        } else {
-            $confidence['legal_cases'] = self::CONF_MISSING;
-        }
+        // ——— Legal section removed (matrimony: no benefit). No legal_cases in snapshot. ———
 
         // ——— OPTIONAL: Horoscope ———
         // Phase-5: structured array-of-rows, aligned with ProfileHoroscopeData / horoscope-engine.
@@ -692,7 +683,6 @@ $coreKeys = [
             'property_summary' => $propertySummary,
             'property_assets' => $propertyAssets,
             'horoscope' => $horoscope,
-            'legal_cases' => $legalCases,
             'preferences' => $preferences,
             'extended_narrative' => null,
             'confidence_map' => $confidenceMap,
@@ -2336,7 +2326,6 @@ $coreKeys = [
             'property_summary' => null,
             'property_assets' => [],
             'horoscope' => null,
-            'legal_cases' => [],
             'preferences' => null,
             'extended_narrative' => null,
             'confidence_map' => [],

@@ -10,6 +10,9 @@
     'gans' => [],
     'nadis' => [],
     'yonis' => [],
+    'varnas' => [],
+    'vashyas' => [],
+    'rashiLords' => [],
     'mangalDoshTypes' => [],
     'horoscopeRulesJson' => ['rashi_rules' => [], 'nakshatra_attributes' => [], 'distinct_rashi_ids_by_nakshatra' => [], 'nakshatra_ids_by_rashi' => []],
     'rashiAshtakootaJson' => [],
@@ -67,14 +70,8 @@
     $birthWeekdayExpected = $birthWeekdayExpected ?? null;
     $birthWeekdayValue = $val('birth_weekday');
     $birthWeekdayMismatch = $birthWeekdayExpected && $birthWeekdayValue && $birthWeekdayValue !== $birthWeekdayExpected;
-    $mangalNone = $mangalDoshTypes->firstWhere('key', 'none');
-    $mangalYesDefault = $mangalDoshTypes->firstWhere('key', 'bhumangal') ?? $mangalDoshTypes->whereNotIn('key', ['none', 'other'])->first();
-    $mangalNoneId = $mangalNone ? (int) $mangalNone->id : '';
-    $mangalYesId = $mangalYesDefault ? (int) $mangalYesDefault->id : '';
-    $mangalCurrent = $val('mangal_dosh_type_id');
-    $isMangalYes = $mangalCurrent && $mangalCurrent !== '' && (string)$mangalCurrent !== (string)$mangalNoneId;
-@endphp
-<div class="horoscope-engine rounded-lg border border-gray-200 dark:border-gray-700 p-4 space-y-4" data-dependency-warnings="{{ json_encode($dependencyWarnings) }}" data-mangal-none-id="{{ $mangalNoneId }}" data-mangal-yes-id="{{ $mangalYesId }}">
+    @endphp
+<div class="horoscope-engine rounded-lg border-2 border-rose-500 dark:border-rose-400 p-4 space-y-4" data-dependency-warnings="{{ json_encode($dependencyWarnings) }}">
     @if(!empty($row['id']))
         <input type="hidden" name="{{ $n('id') }}" value="{{ $row['id'] }}">
     @endif
@@ -128,15 +125,13 @@
     <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div>
             <label for="horoscope-gan_id" class="{{ $labelCls }}">{{ __('components.horoscope.gan') }}</label>
-            <select name="{{ $n('gan_id') }}" id="horoscope-gan_id" class="{{ $cls }} @if($warn('gan_id')) border-red-600 dark:border-red-500 @endif" data-horoscope-field="gan_id">
-                <option value="">{{ __('common.select_placeholder') }}</option>
-                @foreach($gans as $item)
-                    @if(($item->key ?? '') === 'other') @continue @endif
-                    <option value="{{ $item->id }}" {{ (string)($val('gan_id') ?? '') === (string)$item->id ? 'selected' : '' }}>
-                        {{ $optionLabel('gan', $item) }}
-                    </option>
-                @endforeach
-            </select>
+            <x-forms.controlled-select
+                field="horoscope.gan"
+                name="{{ $n('gan_id') }}"
+                :selected="$val('gan_id')"
+                :id="'horoscope-gan_id'"
+                :placeholder="__('common.select_placeholder')"
+            />
             @if($warn('gan_id'))
                 <div class="horoscope-field-warning mt-1">
                     <p class="text-sm text-red-600 dark:text-red-400">{{ $warn('gan_id')['message'] ?? '' }}</p>
@@ -152,15 +147,13 @@
         </div>
         <div>
             <label for="horoscope-nadi_id" class="{{ $labelCls }}">{{ __('components.horoscope.nadi') }}</label>
-            <select name="{{ $n('nadi_id') }}" id="horoscope-nadi_id" class="{{ $cls }} @if($warn('nadi_id')) border-red-600 dark:border-red-500 @endif" data-horoscope-field="nadi_id">
-                <option value="">{{ __('common.select_placeholder') }}</option>
-                @foreach($nadis as $item)
-                    @if(($item->key ?? '') === 'other') @continue @endif
-                    <option value="{{ $item->id }}" {{ (string)($val('nadi_id') ?? '') === (string)$item->id ? 'selected' : '' }}>
-                        {{ $optionLabel('nadi', $item) }}
-                    </option>
-                @endforeach
-            </select>
+            <x-forms.controlled-select
+                field="horoscope.nadi"
+                name="{{ $n('nadi_id') }}"
+                :selected="$val('nadi_id')"
+                :id="'horoscope-nadi_id'"
+                :placeholder="__('common.select_placeholder')"
+            />
             @if($warn('nadi_id'))
                 <div class="horoscope-field-warning mt-1">
                     <p class="text-sm text-red-600 dark:text-red-400">{{ $warn('nadi_id')['message'] ?? '' }}</p>
@@ -198,22 +191,46 @@
         </div>
     </div>
 
-    {{-- Row 3: Ashta-Koota (text) + Mangal Dosh toggle — single line --}}
+    {{-- Row 3: Varna, Vashya, Rashi Lord (editable dropdowns) + Mangal Dosh toggle + Mangal Status --}}
     <div class="flex flex-wrap items-center gap-4 py-2">
-        <div class="flex items-center gap-2 flex-wrap">
-            <span class="text-sm text-gray-700 dark:text-gray-300">{{ __('components.horoscope.varna') }} <span id="horoscope-ashtakoota-varna" class="font-medium">—</span></span>
-            <span class="text-gray-400">|</span>
-            <span class="text-sm text-gray-700 dark:text-gray-300">{{ __('components.horoscope.vashya') }} <span id="horoscope-ashtakoota-vashya" class="font-medium">—</span></span>
-            <span class="text-gray-400">|</span>
-            <span class="text-sm text-gray-700 dark:text-gray-300">{{ __('components.horoscope.rashi_lord') }} <span id="horoscope-ashtakoota-rashi-lord" class="font-medium">—</span></span>
-        </div>
-        <div class="flex items-center gap-2">
-            <span class="text-sm font-medium text-gray-700 dark:text-gray-300">{{ __('components.horoscope.mangal_dosh') }}</span>
-            <input type="hidden" name="{{ $n('mangal_dosh_type_id') }}" id="horoscope-mangal_dosh_type_id" value="{{ $isMangalYes ? $mangalCurrent : ($mangalNoneId ?: '') }}">
-            <div class="inline-flex rounded-lg border border-gray-300 dark:border-gray-600 overflow-hidden" role="group">
-                <button type="button" class="horoscope-mangal-toggle px-4 py-2 text-sm font-medium border-r border-gray-300 dark:border-gray-600 {{ !$isMangalYes ? 'bg-green-600 text-white border-green-600' : 'bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-green-50 dark:hover:bg-gray-600' }}" data-mangal-value="{{ $mangalNoneId }}">{{ __('common.no') }}</button>
-                <button type="button" class="horoscope-mangal-toggle px-4 py-2 text-sm font-medium {{ $isMangalYes ? 'bg-red-600 text-white border-red-600' : 'bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-red-50 dark:hover:bg-gray-600' }}" data-mangal-value="{{ $mangalYesId }}">{{ __('common.yes') }}</button>
+        <div class="flex flex-wrap items-center gap-3">
+            <div>
+                <label for="horoscope-varna_id" class="text-sm font-medium text-gray-700 dark:text-gray-300">{{ __('components.horoscope.varna') }}</label>
+                <select name="{{ $n('varna_id') }}" id="horoscope-varna_id" class="{{ $cls }} ml-0">
+                    <option value="">{{ __('common.select_placeholder') }}</option>
+                    @foreach($varnas ?? [] as $v)
+                        <option value="{{ $v->id }}" {{ (string)($val('varna_id') ?? '') === (string)$v->id ? 'selected' : '' }}>{{ $optionLabel('varna', $v) }}</option>
+                    @endforeach
+                </select>
             </div>
+            <div>
+                <label for="horoscope-vashya_id" class="text-sm font-medium text-gray-700 dark:text-gray-300">{{ __('components.horoscope.vashya') }}</label>
+                <select name="{{ $n('vashya_id') }}" id="horoscope-vashya_id" class="{{ $cls }} ml-0">
+                    <option value="">{{ __('common.select_placeholder') }}</option>
+                    @foreach($vashyas ?? [] as $v)
+                        <option value="{{ $v->id }}" {{ (string)($val('vashya_id') ?? '') === (string)$v->id ? 'selected' : '' }}>{{ $optionLabel('vashya', $v) }}</option>
+                    @endforeach
+                </select>
+            </div>
+            <div>
+                <label for="horoscope-rashi_lord_id" class="text-sm font-medium text-gray-700 dark:text-gray-300">{{ __('components.horoscope.rashi_lord') }}</label>
+                <select name="{{ $n('rashi_lord_id') }}" id="horoscope-rashi_lord_id" class="{{ $cls }} ml-0">
+                    <option value="">{{ __('common.select_placeholder') }}</option>
+                    @foreach($rashiLords ?? [] as $rl)
+                        <option value="{{ $rl->id }}" {{ (string)($val('rashi_lord_id') ?? '') === (string)$rl->id ? 'selected' : '' }}>{{ $optionLabel('rashi_lord', $rl) }}</option>
+                    @endforeach
+                </select>
+            </div>
+        </div>
+        <div>
+            <label for="horoscope-mangal_dosh_type_id" class="text-sm font-medium text-gray-700 dark:text-gray-300">{{ __('components.horoscope.mangal_dosh') }}</label>
+            <select name="{{ $n('mangal_dosh_type_id') }}" id="horoscope-mangal_dosh_type_id" class="{{ $cls }}">
+                <option value="">{{ __('common.select_placeholder') }}</option>
+                @foreach($mangalDoshTypes ?? [] as $md)
+                    @if(($md->key ?? '') === 'other') @continue @endif
+                    <option value="{{ $md->id }}" {{ (string)($val('mangal_dosh_type_id') ?? '') === (string)$md->id ? 'selected' : '' }}>{{ $optionLabel('mangal_dosh_type', $md) }}</option>
+                @endforeach
+            </select>
         </div>
     </div>
 
@@ -399,17 +416,6 @@
                         nakshatraSelect.value = ''; if (charanSelect) charanSelect.value = ''; if (ganSelect) ganSelect.value = ''; if (nadiSelect) nadiSelect.value = ''; if (yoniSelect) yoniSelect.value = ''; applyDependency(); return;
                     }
                 } else if (!rashiId && nakshatraSelect) setSelectOptions(nakshatraSelect, null, masterLists.nakshatras);
-
-                var rashiIdCur = rashiSelect && rashiSelect.value ? rashiSelect.value : null;
-                var varnaEl = wrapper.querySelector('#horoscope-ashtakoota-varna');
-                var vashyaEl = wrapper.querySelector('#horoscope-ashtakoota-vashya');
-                var lordEl = wrapper.querySelector('#horoscope-ashtakoota-rashi-lord');
-                if (rashiAshtakoota && varnaEl && vashyaEl && lordEl) {
-                    var a = rashiIdCur ? rashiAshtakoota[rashiIdCur] : null;
-                    varnaEl.textContent = a ? a.varna : '—';
-                    vashyaEl.textContent = a ? a.vashya : '—';
-                    lordEl.textContent = a ? a.rashi_lord : '—';
-                }
             }
 
             wrapper.querySelectorAll('.horoscope-hint-chip').forEach(function(btn) {
@@ -434,44 +440,6 @@
             nakshatraSelect.addEventListener('change', function() { applyDependency(); });
             if (charanSelect) charanSelect.addEventListener('change', function() { applyDependency(); });
             if (rashiSelect) rashiSelect.addEventListener('change', function() { applyDependency(); });
-
-            var mangalHidden = document.getElementById('horoscope-mangal_dosh_type_id');
-            var mangalToggles = wrapper.querySelectorAll('.horoscope-mangal-toggle');
-            var mangalNoneId = wrapper.getAttribute('data-mangal-none-id') || '';
-            var mangalYesId = wrapper.getAttribute('data-mangal-yes-id') || '';
-            function updateMangalToggleStyle() {
-                if (!mangalHidden || !mangalToggles.length) return;
-                var v = (mangalHidden.value || '').toString();
-                var isYes = v !== '' && v !== mangalNoneId;
-                mangalToggles.forEach(function(btn) {
-                    var val = btn.getAttribute('data-mangal-value');
-                    var isNo = (val === mangalNoneId || val === '');
-                    if (isNo) {
-                        btn.classList.remove('bg-red-600', 'border-red-600', 'text-white');
-                        btn.classList.add('border-r', 'border-gray-300', 'dark:border-gray-600');
-                        if (!isYes) { btn.classList.add('bg-green-600', 'text-white'); btn.classList.remove('bg-white', 'dark:bg-gray-700', 'text-gray-700', 'dark:text-gray-300'); }
-                        else { btn.classList.add('bg-white', 'dark:bg-gray-700', 'text-gray-700', 'dark:text-gray-300'); btn.classList.remove('bg-green-600', 'text-white'); }
-                    } else {
-                        btn.classList.remove('bg-green-600', 'text-white', 'border-r', 'border-gray-300', 'dark:border-gray-600');
-                        if (isYes) { btn.classList.add('bg-red-600', 'text-white'); btn.classList.remove('bg-white', 'dark:bg-gray-700', 'text-gray-700', 'dark:text-gray-300'); }
-                        else { btn.classList.add('bg-white', 'dark:bg-gray-700', 'text-gray-700', 'dark:text-gray-300'); btn.classList.remove('bg-red-600', 'text-white'); }
-                    }
-                });
-            }
-            mangalToggles.forEach(function(btn) {
-                btn.addEventListener('click', function() {
-                    var val = this.getAttribute('data-mangal-value');
-                    if (!mangalHidden) return;
-                    if (val === mangalNoneId || val === '') {
-                        mangalHidden.value = val || '';
-                    } else {
-                        if (mangalHidden.value === '' || mangalHidden.value === mangalNoneId) mangalHidden.value = mangalYesId || val;
-                        else mangalHidden.value = mangalHidden.value;
-                    }
-                    updateMangalToggleStyle();
-                });
-            });
-            updateMangalToggleStyle();
 
             applyDependency();
         }

@@ -1,14 +1,15 @@
 {{-- Education & Career engine (Shaadi-style) + Parent + Family. Section label: Education, Career & Family. --}}
+@php
+    $namePrefix = $namePrefix ?? '';
+    $isFullSection = ($currentSection ?? '') === 'full';
+    $eduHistory = $isFullSection ? ($profileEducation ?? collect())->map(fn($r) => ['id' => $r->id ?? null, 'degree' => $r->degree ?? '', 'specialization' => $r->specialization ?? '', 'university' => $r->university ?? '', 'year_completed' => $r->year_completed ?? 0])->values()->all() : [];
+    $careerHist = $isFullSection ? ($profileCareer ?? collect())->map(fn($r) => ['id' => $r->id ?? null, 'designation' => $r->designation ?? '', 'company' => $r->company ?? '', 'location' => $r->location ?? '', 'start_year' => $r->start_year ?? null, 'end_year' => $r->end_year ?? null, 'is_current' => !empty($r->is_current)])->values()->all() : [];
+@endphp
 <div class="space-y-6">
     <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100 border-b border-gray-200 dark:border-gray-700 pb-2">Education, Career & Family</h2>
     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div class="md:col-span-2">
             <h3 class="text-base font-semibold text-gray-800 dark:text-gray-200 mb-2">Education and Career</h3>
-            @php
-                $isFullSection = ($currentSection ?? '') === 'full';
-                $eduHistory = $isFullSection ? ($profileEducation ?? collect())->map(fn($r) => ['id' => $r->id ?? null, 'degree' => $r->degree ?? '', 'specialization' => $r->specialization ?? '', 'university' => $r->university ?? '', 'year_completed' => $r->year_completed ?? 0])->values()->all() : [];
-                $careerHist = $isFullSection ? ($profileCareer ?? collect())->map(fn($r) => ['id' => $r->id ?? null, 'designation' => $r->designation ?? '', 'company' => $r->company ?? '', 'location' => $r->location ?? '', 'start_year' => $r->start_year ?? null, 'end_year' => $r->end_year ?? null, 'is_current' => !empty($r->is_current)])->values()->all() : [];
-            @endphp
             <x-education-occupation-income-engine
                 :profile="$profile"
                 :currencies="$currencies ?? []"
@@ -16,25 +17,25 @@
                 :showHistory="$isFullSection"
                 :educationHistory="$eduHistory"
                 :careerHistory="$careerHist"
+                :namePrefix="$namePrefix"
             />
         </div>
-        {{-- Parent engine: Father + Mother + Family Income (शेवटी). --}}
         <div class="md:col-span-2">
             <x-parent-engine
                 :profile="$profile"
                 :currencies="$currencies ?? []"
                 :errors="$errors ?? []"
                 :read-only="false"
+                :namePrefix="$namePrefix"
             />
         </div>
-        {{-- Family Overview engine: Family Type, Status, Values + Family Income. --}}
         <div class="md:col-span-2">
             <x-family-overview
                 :profile="$profile"
                 :currencies="$currencies ?? []"
                 :errors="$errors ?? []"
+                :namePrefix="$namePrefix"
             />
         </div>
-        {{-- Weight and Body type are in the Physical section (Physical Engine). --}}
     </div>
 </div>

@@ -42,21 +42,22 @@ return [
 
     /*
     | Section display labels (for progress bar, headings). Key = section key.
+    | Values are translation keys so locale (en/mr) shows correct language.
     */
     'section_labels' => [
-        'basic-info' => 'Basic info',
-        'physical' => 'Physical',
-        'education-career' => 'Education & Career',
-        'family-details' => 'Family details',
-        'siblings' => 'Siblings',
-        'relatives' => 'Extended family',
-        'alliance' => 'Relatives',
-        'property' => 'Property',
-        'horoscope' => 'Horoscope',
-        'about-me' => 'About me',
-        'about-preferences' => 'Partner preferences',
-        'contacts' => 'Contacts',
-        'photo' => 'Photo',
+        'basic-info' => 'wizard.basic_info',
+        'physical' => 'wizard.physical',
+        'education-career' => 'wizard.education_career',
+        'family-details' => 'wizard.family_details',
+        'siblings' => 'wizard.siblings',
+        'relatives' => 'wizard.extended_family',
+        'alliance' => 'wizard.alliance',
+        'property' => 'wizard.property',
+        'horoscope' => 'wizard.horoscope',
+        'about-me' => 'wizard.about_me',
+        'about-preferences' => 'wizard.partner_preferences',
+        'contacts' => 'wizard.contacts',
+        'photo' => 'wizard.photo',
     ],
 
     /*

@@ -194,6 +194,11 @@ class MatrimonyProfile extends Model
         // brothers_count, sisters_count: deprecated; use Siblings engine (profile_siblings).
         'work_city_id',
         'work_state_id',
+
+        'mother_tongue_id',
+        'diet_id',
+        'smoking_status_id',
+        'drinking_status_id',
     ];
 
     protected $casts = [
@@ -418,6 +423,26 @@ public function subCaste()
     public function bloodGroup()
     {
         return $this->belongsTo(MasterBloodGroup::class, 'blood_group_id');
+    }
+
+    public function motherTongue()
+    {
+        return $this->belongsTo(MasterMotherTongue::class, 'mother_tongue_id');
+    }
+
+    public function diet()
+    {
+        return $this->belongsTo(MasterDiet::class, 'diet_id');
+    }
+
+    public function smokingStatus()
+    {
+        return $this->belongsTo(MasterSmokingStatus::class, 'smoking_status_id');
+    }
+
+    public function drinkingStatus()
+    {
+        return $this->belongsTo(MasterDrinkingStatus::class, 'drinking_status_id');
     }
 
     public function familyType()

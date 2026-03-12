@@ -21,7 +21,7 @@
 
     <div class="flex items-center gap-4">
         <div class="flex-shrink-0">
-            @if ($profile && $profile->profile_photo && $profile->photo_approved !== false)
+            @if ($profile && isset($profile->profile_photo) && $profile->profile_photo !== '' && (!isset($profile->photo_approved) || $profile->photo_approved !== false))
                 <img src="{{ asset('uploads/matrimony_photos/'.$profile->profile_photo) }}"
                      alt="Profile photo"
                      class="w-20 h-20 rounded-full object-cover border-4 border-indigo-200 shadow-sm">

@@ -1,4 +1,5 @@
 {{-- Phase-5 SSOT: Horoscope. Shared horoscope-engine with dependency rules (nakshatra+charan->rashi; nakshatra->gan,nadi,yoni). --}}
+@php $namePrefix = $namePrefix ?? 'horoscope'; @endphp
 <div class="space-y-6">
     <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100 border-b border-gray-200 dark:border-gray-700 pb-2">Horoscope</h2>
     @php
@@ -17,10 +18,13 @@
         :gans="$gans ?? collect()"
         :nadis="$nadis ?? collect()"
         :yonis="$yonis ?? collect()"
+        :varnas="$varnas ?? collect()"
+        :vashyas="$vashyas ?? collect()"
+        :rashiLords="$rashiLords ?? collect()"
         :mangalDoshTypes="$mangalDoshTypes ?? collect()"
         :horoscope-rules-json="$horoscopeRulesJson ?? ['rashi_rules' => [], 'nakshatra_attributes' => []]"
         :rashi-ashtakoota-json="$rashiAshtakootaJson ?? []"
-        name-prefix="horoscope"
+        :name-prefix="$namePrefix ?? 'horoscope'"
         mode="wizard"
         :dependencyWarnings="$dependencyWarnings"
         :birth-weekday-expected="$birthWeekdayExpected"

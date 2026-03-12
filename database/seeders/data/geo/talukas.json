@@ -1,0 +1,2150 @@
+[
+    {
+        "districtcode": "466",
+        "subdistrictcode": "4201",
+        "subdistrictnameenglish": "Akole",
+        "subdistrictlocalname": "\u0905\u0915\u094b\u0932\u0947"
+    },
+    {
+        "districtcode": "466",
+        "subdistrictcode": "4202",
+        "subdistrictnameenglish": "Sangamner",
+        "subdistrictlocalname": "\u0938\u0902\u0917\u092e\u0928\u0947\u0930"
+    },
+    {
+        "districtcode": "466",
+        "subdistrictcode": "4203",
+        "subdistrictnameenglish": "Kopargaon",
+        "subdistrictlocalname": "\u0915\u094b\u092a\u0930\u0917\u093e\u0935"
+    },
+    {
+        "districtcode": "466",
+        "subdistrictcode": "4204",
+        "subdistrictnameenglish": "Rahta",
+        "subdistrictlocalname": "\u0930\u0939\u093e\u0924\u093e"
+    },
+    {
+        "districtcode": "466",
+        "subdistrictcode": "4205",
+        "subdistrictnameenglish": "Shrirampur",
+        "subdistrictlocalname": "\u0936\u094d\u0930\u0940\u0930\u093e\u092e\u092a\u0942\u0930"
+    },
+    {
+        "districtcode": "466",
+        "subdistrictcode": "4206",
+        "subdistrictnameenglish": "Nevasa",
+        "subdistrictlocalname": "\u0928\u0947\u0935\u093e\u0938\u093e"
+    },
+    {
+        "districtcode": "466",
+        "subdistrictcode": "4207",
+        "subdistrictnameenglish": "Shevgaon",
+        "subdistrictlocalname": "\u0936\u0947\u0917\u093e\u0935"
+    },
+    {
+        "districtcode": "466",
+        "subdistrictcode": "4208",
+        "subdistrictnameenglish": "Pathardi",
+        "subdistrictlocalname": "\u092a\u093e\u0925\u0930\u094d\u0921\u0940"
+    },
+    {
+        "districtcode": "466",
+        "subdistrictcode": "4209",
+        "subdistrictnameenglish": "Nagar",
+        "subdistrictlocalname": "\u0928\u0917\u0930"
+    },
+    {
+        "districtcode": "466",
+        "subdistrictcode": "4210",
+        "subdistrictnameenglish": "Rahuri",
+        "subdistrictlocalname": "\u0930\u093e\u0939\u0941\u0930\u0940"
+    },
+    {
+        "districtcode": "466",
+        "subdistrictcode": "4211",
+        "subdistrictnameenglish": "Parner",
+        "subdistrictlocalname": "\u092a\u093e\u0930\u0928\u0947\u0930"
+    },
+    {
+        "districtcode": "466",
+        "subdistrictcode": "4212",
+        "subdistrictnameenglish": "Shrigonda",
+        "subdistrictlocalname": "\u0936\u094d\u0930\u0940\u0917\u094b\u0902\u0926\u093e"
+    },
+    {
+        "districtcode": "466",
+        "subdistrictcode": "4213",
+        "subdistrictnameenglish": "Karjat",
+        "subdistrictlocalname": "\u0915\u0930\u094d\u091c\u0924"
+    },
+    {
+        "districtcode": "466",
+        "subdistrictcode": "4214",
+        "subdistrictnameenglish": "Jamkhed",
+        "subdistrictlocalname": "\u091c\u093e\u092e\u0916\u0947\u0921"
+    },
+    {
+        "districtcode": "467",
+        "subdistrictcode": "3988",
+        "subdistrictnameenglish": "Telhara",
+        "subdistrictlocalname": "\u0924\u0947\u0932\u094d\u0939\u093e\u0930\u093e"
+    },
+    {
+        "districtcode": "467",
+        "subdistrictcode": "3989",
+        "subdistrictnameenglish": "Akot",
+        "subdistrictlocalname": "\u0905\u0915\u094b\u091f"
+    },
+    {
+        "districtcode": "467",
+        "subdistrictcode": "3990",
+        "subdistrictnameenglish": "Balapur",
+        "subdistrictlocalname": "\u092c\u093e\u0933\u093e\u092a\u0942\u0930"
+    },
+    {
+        "districtcode": "467",
+        "subdistrictcode": "3991",
+        "subdistrictnameenglish": "Akola",
+        "subdistrictlocalname": "\u0905\u0915\u094b\u0932\u093e"
+    },
+    {
+        "districtcode": "467",
+        "subdistrictcode": "3992",
+        "subdistrictnameenglish": "Murtijapur",
+        "subdistrictlocalname": "\u092e\u0941\u0930\u094d\u0924\u093f\u091c\u093e\u092a\u0942\u0930"
+    },
+    {
+        "districtcode": "467",
+        "subdistrictcode": "3993",
+        "subdistrictnameenglish": "Patur",
+        "subdistrictlocalname": "\u092a\u093e\u0924\u0942\u0930"
+    },
+    {
+        "districtcode": "467",
+        "subdistrictcode": "3994",
+        "subdistrictnameenglish": "Barshitakli",
+        "subdistrictlocalname": "\u092c\u093e\u0930\u094d\u0936\u0940\u091f\u093e\u0915\u0933\u0940"
+    },
+    {
+        "districtcode": "468",
+        "subdistrictcode": "4001",
+        "subdistrictnameenglish": "Dharni",
+        "subdistrictlocalname": "\u0927\u093e\u0930\u0923\u0940"
+    },
+    {
+        "districtcode": "468",
+        "subdistrictcode": "4002",
+        "subdistrictnameenglish": "Chikhaldara",
+        "subdistrictlocalname": "\u091a\u093f\u0916\u0932\u0926\u0930\u093e"
+    },
+    {
+        "districtcode": "468",
+        "subdistrictcode": "4003",
+        "subdistrictnameenglish": "Anjangaon Surji",
+        "subdistrictlocalname": "\u0905\u0902\u091c\u0928\u0917\u093e\u0935 \u0938\u0941\u0930\u094d\u091c\u0940"
+    },
+    {
+        "districtcode": "468",
+        "subdistrictcode": "4004",
+        "subdistrictnameenglish": "Achalpur",
+        "subdistrictlocalname": "\u0905\u091a\u0932\u092a\u0942\u0930"
+    },
+    {
+        "districtcode": "468",
+        "subdistrictcode": "4005",
+        "subdistrictnameenglish": "Chandurbazar",
+        "subdistrictlocalname": "\u091a\u093e\u0902\u0926\u0942\u0930 \u092c\u093e\u091c\u093e\u0930"
+    },
+    {
+        "districtcode": "468",
+        "subdistrictcode": "4006",
+        "subdistrictnameenglish": "Morshi",
+        "subdistrictlocalname": "\u092e\u094b\u0930\u094d\u0936\u0940"
+    },
+    {
+        "districtcode": "468",
+        "subdistrictcode": "4007",
+        "subdistrictnameenglish": "Warud",
+        "subdistrictlocalname": "\u0935\u0930\u0942\u0921"
+    },
+    {
+        "districtcode": "468",
+        "subdistrictcode": "4008",
+        "subdistrictnameenglish": "Tiosa",
+        "subdistrictlocalname": "\u0924\u093f\u0935\u0938\u093e"
+    },
+    {
+        "districtcode": "468",
+        "subdistrictcode": "4009",
+        "subdistrictnameenglish": "Amravati",
+        "subdistrictlocalname": "\u0905\u092e\u0930\u093e\u0935\u0924\u0940"
+    },
+    {
+        "districtcode": "468",
+        "subdistrictcode": "4010",
+        "subdistrictnameenglish": "Bhatkuli",
+        "subdistrictlocalname": "\u092d\u093e\u0924\u0915\u0941\u0932\u0940"
+    },
+    {
+        "districtcode": "468",
+        "subdistrictcode": "4011",
+        "subdistrictnameenglish": "Daryapur",
+        "subdistrictlocalname": "\u0926\u0930\u094d\u092f\u093e\u092a\u0942\u0930"
+    },
+    {
+        "districtcode": "468",
+        "subdistrictcode": "4012",
+        "subdistrictnameenglish": "Nandgaon-Khandeshwar",
+        "subdistrictlocalname": "\u0928\u093e\u0902\u0926\u0917\u093e\u0935 \u0916\u0902\u0921\u0947\u0936\u094d\u0935\u0930"
+    },
+    {
+        "districtcode": "468",
+        "subdistrictcode": "4013",
+        "subdistrictnameenglish": "Chandur Railway",
+        "subdistrictlocalname": "\u091a\u093e\u0902\u0926\u0942\u0930 \u0930\u0947\u0932\u094d\u0935\u0947"
+    },
+    {
+        "districtcode": "468",
+        "subdistrictcode": "4014",
+        "subdistrictnameenglish": "Dhamangaon Railway",
+        "subdistrictlocalname": "\u0927\u093e\u092e\u0928\u0917\u093e\u0935 \u0930\u0947\u0932\u094d\u0935\u0947"
+    },
+    {
+        "districtcode": "469",
+        "subdistrictcode": "4133",
+        "subdistrictnameenglish": "Kannad",
+        "subdistrictlocalname": "\u0915\u0928\u094d\u0928\u0921"
+    },
+    {
+        "districtcode": "469",
+        "subdistrictcode": "4134",
+        "subdistrictnameenglish": "Soegaon",
+        "subdistrictlocalname": "\u0938\u094b\u092f\u0917\u093e\u0935"
+    },
+    {
+        "districtcode": "469",
+        "subdistrictcode": "4135",
+        "subdistrictnameenglish": "Sillod",
+        "subdistrictlocalname": "\u0938\u093f\u0932\u094d\u0932\u094b\u0921"
+    },
+    {
+        "districtcode": "469",
+        "subdistrictcode": "4136",
+        "subdistrictnameenglish": "Phulambri",
+        "subdistrictlocalname": "\u092b\u0941\u0932\u0902\u092c\u094d\u0930\u0940"
+    },
+    {
+        "districtcode": "469",
+        "subdistrictcode": "4137",
+        "subdistrictnameenglish": "Chhatrapati Sambhajinagar",
+        "subdistrictlocalname": "\u091b\u0924\u094d\u0930\u092a\u0924\u0940 \u0938\u0902\u092d\u093e\u091c\u0940\u0928\u0917\u0930"
+    },
+    {
+        "districtcode": "469",
+        "subdistrictcode": "4138",
+        "subdistrictnameenglish": "Khuldabad",
+        "subdistrictlocalname": "\u0916\u0941\u0932\u0924\u093e\u092c\u093e\u0926"
+    },
+    {
+        "districtcode": "469",
+        "subdistrictcode": "4139",
+        "subdistrictnameenglish": "Vaijapur",
+        "subdistrictlocalname": "\u0935\u0948\u091c\u093e\u092a\u0942\u0930"
+    },
+    {
+        "districtcode": "469",
+        "subdistrictcode": "4140",
+        "subdistrictnameenglish": "Gangapur",
+        "subdistrictlocalname": "\u0917\u0902\u0917\u093e\u092a\u0942\u0930"
+    },
+    {
+        "districtcode": "469",
+        "subdistrictcode": "4141",
+        "subdistrictnameenglish": "Paithan",
+        "subdistrictlocalname": "\u092a\u0948\u0920\u0923"
+    },
+    {
+        "districtcode": "470",
+        "subdistrictcode": "4215",
+        "subdistrictnameenglish": "Ashti",
+        "subdistrictlocalname": "\u0906\u0937\u094d\u091f\u0940"
+    },
+    {
+        "districtcode": "470",
+        "subdistrictcode": "4216",
+        "subdistrictnameenglish": "Patoda",
+        "subdistrictlocalname": "\u092a\u093e\u091f\u094b\u0926\u093e"
+    },
+    {
+        "districtcode": "470",
+        "subdistrictcode": "4217",
+        "subdistrictnameenglish": "Shirur (Kasar)",
+        "subdistrictlocalname": "\u0936\u093f\u0930\u0942\u0930 (\u0915\u093e\u0938\u093e\u0930)"
+    },
+    {
+        "districtcode": "470",
+        "subdistrictcode": "4218",
+        "subdistrictnameenglish": "Georai",
+        "subdistrictlocalname": "\u0917\u0947\u0935\u0930\u093e\u0908"
+    },
+    {
+        "districtcode": "470",
+        "subdistrictcode": "4219",
+        "subdistrictnameenglish": "Majalgaon",
+        "subdistrictlocalname": "\u092e\u093e\u091c\u0932\u0917\u093e\u0935"
+    },
+    {
+        "districtcode": "470",
+        "subdistrictcode": "4220",
+        "subdistrictnameenglish": "Wadwani",
+        "subdistrictlocalname": "\u0935\u0921\u0935\u0923\u0940"
+    },
+    {
+        "districtcode": "470",
+        "subdistrictcode": "4221",
+        "subdistrictnameenglish": "Beed",
+        "subdistrictlocalname": "\u092c\u0940\u0921"
+    },
+    {
+        "districtcode": "470",
+        "subdistrictcode": "4222",
+        "subdistrictnameenglish": "Kaij",
+        "subdistrictlocalname": "\u0915\u0947\u091c"
+    },
+    {
+        "districtcode": "470",
+        "subdistrictcode": "4223",
+        "subdistrictnameenglish": "Dharur",
+        "subdistrictlocalname": "\u0927\u093e\u0930\u0942\u0930"
+    },
+    {
+        "districtcode": "470",
+        "subdistrictcode": "4224",
+        "subdistrictnameenglish": "Parli",
+        "subdistrictlocalname": "\u092a\u0930\u0933\u0940"
+    },
+    {
+        "districtcode": "470",
+        "subdistrictcode": "4225",
+        "subdistrictnameenglish": "Ambejogai",
+        "subdistrictlocalname": "\u0906\u0902\u092c\u0947\u091c\u094b\u0917\u093e\u0908"
+    },
+    {
+        "districtcode": "471",
+        "subdistrictcode": "4037",
+        "subdistrictnameenglish": "Tumsar",
+        "subdistrictlocalname": "\u0924\u0941\u092e\u0938\u0930"
+    },
+    {
+        "districtcode": "471",
+        "subdistrictcode": "4038",
+        "subdistrictnameenglish": "Mohadi",
+        "subdistrictlocalname": "\u092e\u094b\u0939\u093e\u0921\u0940"
+    },
+    {
+        "districtcode": "471",
+        "subdistrictcode": "4039",
+        "subdistrictnameenglish": "Bhandara",
+        "subdistrictlocalname": "\u092d\u0902\u0921\u093e\u0930\u093e"
+    },
+    {
+        "districtcode": "471",
+        "subdistrictcode": "4040",
+        "subdistrictnameenglish": "Sakoli",
+        "subdistrictlocalname": "\u0938\u093e\u0915\u094b\u0932\u0940"
+    },
+    {
+        "districtcode": "471",
+        "subdistrictcode": "4041",
+        "subdistrictnameenglish": "Lakhani",
+        "subdistrictlocalname": "\u0932\u093e\u0916\u0928\u0940"
+    },
+    {
+        "districtcode": "471",
+        "subdistrictcode": "4042",
+        "subdistrictnameenglish": "Pauni",
+        "subdistrictlocalname": "\u092a\u0935\u0928\u0940"
+    },
+    {
+        "districtcode": "471",
+        "subdistrictcode": "4043",
+        "subdistrictnameenglish": "Lakhandur",
+        "subdistrictlocalname": "\u0932\u093e\u0916\u0902\u0926\u0942\u0930"
+    },
+    {
+        "districtcode": "472",
+        "subdistrictcode": "3975",
+        "subdistrictnameenglish": "Jalgaon (Jamod)",
+        "subdistrictlocalname": "\u091c\u0933\u0917\u093e\u0935 (\u091c\u093e\u092e\u094b\u0926)"
+    },
+    {
+        "districtcode": "472",
+        "subdistrictcode": "3976",
+        "subdistrictnameenglish": "Sangrampur",
+        "subdistrictlocalname": "\u0938\u0902\u0917\u094d\u0930\u093e\u092e\u092a\u0942\u0930"
+    },
+    {
+        "districtcode": "472",
+        "subdistrictcode": "3977",
+        "subdistrictnameenglish": "Shegaon",
+        "subdistrictlocalname": "\u0936\u0947\u0917\u093e\u0935"
+    },
+    {
+        "districtcode": "472",
+        "subdistrictcode": "3978",
+        "subdistrictnameenglish": "Nandura",
+        "subdistrictlocalname": "\u0928\u093e\u0902\u0926\u0941\u0930\u093e"
+    },
+    {
+        "districtcode": "472",
+        "subdistrictcode": "3979",
+        "subdistrictnameenglish": "Malkapur",
+        "subdistrictlocalname": "\u092e\u0932\u0915\u093e\u092a\u0942\u0930"
+    },
+    {
+        "districtcode": "472",
+        "subdistrictcode": "3980",
+        "subdistrictnameenglish": "Motala",
+        "subdistrictlocalname": "\u092e\u094b\u0924\u093e\u0933\u093e"
+    },
+    {
+        "districtcode": "472",
+        "subdistrictcode": "3981",
+        "subdistrictnameenglish": "Khamgaon",
+        "subdistrictlocalname": "\u0916\u093e\u092e\u0917\u093e\u0935"
+    },
+    {
+        "districtcode": "472",
+        "subdistrictcode": "3982",
+        "subdistrictnameenglish": "Mehkar",
+        "subdistrictlocalname": "\u092e\u0947\u0939\u0915\u0930"
+    },
+    {
+        "districtcode": "472",
+        "subdistrictcode": "3983",
+        "subdistrictnameenglish": "Chikhli",
+        "subdistrictlocalname": "\u091a\u093f\u0916\u0932\u0940"
+    },
+    {
+        "districtcode": "472",
+        "subdistrictcode": "3984",
+        "subdistrictnameenglish": "Buldana",
+        "subdistrictlocalname": "\u092c\u0941\u0932\u0921\u093e\u0923\u093e"
+    },
+    {
+        "districtcode": "472",
+        "subdistrictcode": "3985",
+        "subdistrictnameenglish": "Deolgaon Raja",
+        "subdistrictlocalname": "\u0926\u0947\u0909\u0933\u0917\u093e\u0935 \u0930\u093e\u091c\u093e"
+    },
+    {
+        "districtcode": "472",
+        "subdistrictcode": "3986",
+        "subdistrictnameenglish": "Sindkhed Raja",
+        "subdistrictlocalname": "\u0938\u093f\u0902\u0926\u0916\u0947\u0921 \u0930\u093e\u091c\u093e"
+    },
+    {
+        "districtcode": "472",
+        "subdistrictcode": "3987",
+        "subdistrictnameenglish": "Lonar",
+        "subdistrictlocalname": "\u0932\u094b\u0923\u093e\u0930"
+    },
+    {
+        "districtcode": "473",
+        "subdistrictcode": "4064",
+        "subdistrictnameenglish": "Warora",
+        "subdistrictlocalname": "\u0935\u0930\u094b\u0930\u093e "
+    },
+    {
+        "districtcode": "473",
+        "subdistrictcode": "4065",
+        "subdistrictnameenglish": "Chimur",
+        "subdistrictlocalname": "\u091a\u093f\u092e\u0942\u0930"
+    },
+    {
+        "districtcode": "473",
+        "subdistrictcode": "4066",
+        "subdistrictnameenglish": "Nagbhid",
+        "subdistrictlocalname": "\u0928\u093e\u0917\u092d\u093f\u0921"
+    },
+    {
+        "districtcode": "473",
+        "subdistrictcode": "4067",
+        "subdistrictnameenglish": "Brahmapuri",
+        "subdistrictlocalname": "\u092c\u094d\u0930\u092e\u094d\u0939\u092a\u0941\u0930\u0940"
+    },
+    {
+        "districtcode": "473",
+        "subdistrictcode": "4068",
+        "subdistrictnameenglish": "Sawali",
+        "subdistrictlocalname": "\u0938\u093e\u0935\u0932\u0940 "
+    },
+    {
+        "districtcode": "473",
+        "subdistrictcode": "4069",
+        "subdistrictnameenglish": "Sindewahi",
+        "subdistrictlocalname": "\u0938\u093f\u0902\u0926\u0947\u0935\u093e\u0939\u0940 "
+    },
+    {
+        "districtcode": "473",
+        "subdistrictcode": "4070",
+        "subdistrictnameenglish": "Bhadravati",
+        "subdistrictlocalname": "\u092d\u0926\u094d\u0930\u093e\u0935\u0924\u0940 "
+    },
+    {
+        "districtcode": "473",
+        "subdistrictcode": "4071",
+        "subdistrictnameenglish": "Chandrapur",
+        "subdistrictlocalname": "\u091a\u0902\u0926\u094d\u0930\u092a\u0942\u0930 "
+    },
+    {
+        "districtcode": "473",
+        "subdistrictcode": "4072",
+        "subdistrictnameenglish": "Mul",
+        "subdistrictlocalname": "\u092e\u0941\u0932"
+    },
+    {
+        "districtcode": "473",
+        "subdistrictcode": "4073",
+        "subdistrictnameenglish": "Pombhurna",
+        "subdistrictlocalname": "\u092a\u094b\u092e\u094d\u092d\u0942\u0930\u094d\u0923\u093e"
+    },
+    {
+        "districtcode": "473",
+        "subdistrictcode": "4074",
+        "subdistrictnameenglish": "Ballarpur",
+        "subdistrictlocalname": "\u092c\u0932\u094d\u0932\u093e\u0930\u092a\u0942\u0930"
+    },
+    {
+        "districtcode": "473",
+        "subdistrictcode": "4075",
+        "subdistrictnameenglish": "Korpana",
+        "subdistrictlocalname": "\u0915\u094b\u0930\u092a\u0928\u093e"
+    },
+    {
+        "districtcode": "473",
+        "subdistrictcode": "4076",
+        "subdistrictnameenglish": "Jiwati",
+        "subdistrictlocalname": "\u091c\u093f\u0935\u0924\u0940"
+    },
+    {
+        "districtcode": "473",
+        "subdistrictcode": "4077",
+        "subdistrictnameenglish": "Rajura",
+        "subdistrictlocalname": "\u0930\u093e\u091c\u0941\u0930\u093e "
+    },
+    {
+        "districtcode": "473",
+        "subdistrictcode": "4078",
+        "subdistrictnameenglish": "Gondpipri",
+        "subdistrictlocalname": "\u0917\u094b\u0902\u0921\u092a\u093f\u092a\u0930\u0940"
+    },
+    {
+        "districtcode": "474",
+        "subdistrictcode": "3956",
+        "subdistrictnameenglish": "Shirpur",
+        "subdistrictlocalname": "\u0936\u093f\u0930\u092a\u0942\u0930"
+    },
+    {
+        "districtcode": "474",
+        "subdistrictcode": "3957",
+        "subdistrictnameenglish": "Sindkhede",
+        "subdistrictlocalname": "\u0938\u093f\u0902\u0926\u0916\u0947\u0921\u0947"
+    },
+    {
+        "districtcode": "474",
+        "subdistrictcode": "3958",
+        "subdistrictnameenglish": "Sakri",
+        "subdistrictlocalname": "\u0938\u093e\u0915\u094d\u0930\u0940"
+    },
+    {
+        "districtcode": "474",
+        "subdistrictcode": "3959",
+        "subdistrictnameenglish": "Dhule",
+        "subdistrictlocalname": "\u0927\u0941\u0933\u0947"
+    },
+    {
+        "districtcode": "475",
+        "subdistrictcode": "4052",
+        "subdistrictnameenglish": "Desaiganj (Vadasa)",
+        "subdistrictlocalname": "\u0926\u0947\u0938\u093e\u0908\u0917\u0902\u091c (\u0935\u0921\u0938\u093e)"
+    },
+    {
+        "districtcode": "475",
+        "subdistrictcode": "4053",
+        "subdistrictnameenglish": "Armori",
+        "subdistrictlocalname": "\u0906\u0930\u092e\u094b\u0930\u0940"
+    },
+    {
+        "districtcode": "475",
+        "subdistrictcode": "4054",
+        "subdistrictnameenglish": "Kurkheda",
+        "subdistrictlocalname": "\u0915\u0941\u0930\u0916\u0947\u0921\u093e "
+    },
+    {
+        "districtcode": "475",
+        "subdistrictcode": "4055",
+        "subdistrictnameenglish": "Korchi",
+        "subdistrictlocalname": "\u0915\u094b\u0930\u091a\u0940"
+    },
+    {
+        "districtcode": "475",
+        "subdistrictcode": "4056",
+        "subdistrictnameenglish": "Dhanora",
+        "subdistrictlocalname": "\u0927\u093e\u0928\u094b\u0930\u093e "
+    },
+    {
+        "districtcode": "475",
+        "subdistrictcode": "4057",
+        "subdistrictnameenglish": "Gadchiroli",
+        "subdistrictlocalname": "\u0917\u0921\u091a\u093f\u0930\u094b\u0932\u0940 "
+    },
+    {
+        "districtcode": "475",
+        "subdistrictcode": "4058",
+        "subdistrictnameenglish": "Chamorshi",
+        "subdistrictlocalname": "\u091a\u093e\u092e\u094b\u0930\u094d\u0936\u0940 "
+    },
+    {
+        "districtcode": "475",
+        "subdistrictcode": "4059",
+        "subdistrictnameenglish": "Mulchera",
+        "subdistrictlocalname": "\u092e\u0941\u0932\u091a\u0947\u0930\u093e "
+    },
+    {
+        "districtcode": "475",
+        "subdistrictcode": "4060",
+        "subdistrictnameenglish": "Etapalli",
+        "subdistrictlocalname": "\u090f\u091f\u093e\u092a\u0932\u094d\u0932\u0940 "
+    },
+    {
+        "districtcode": "475",
+        "subdistrictcode": "4061",
+        "subdistrictnameenglish": "Bhamragad",
+        "subdistrictlocalname": "\u092d\u093e\u092e\u0930\u093e\u0917\u0921 "
+    },
+    {
+        "districtcode": "475",
+        "subdistrictcode": "4062",
+        "subdistrictnameenglish": "Aheri",
+        "subdistrictlocalname": "\u0905\u0939\u0947\u0930\u0940 "
+    },
+    {
+        "districtcode": "475",
+        "subdistrictcode": "4063",
+        "subdistrictnameenglish": "Sironcha",
+        "subdistrictlocalname": "\u0938\u093f\u0930\u094b\u0902\u091a\u093e "
+    },
+    {
+        "districtcode": "476",
+        "subdistrictcode": "4044",
+        "subdistrictnameenglish": "Tirora",
+        "subdistrictlocalname": "\u0924\u093f\u0930\u094b\u0921\u093e"
+    },
+    {
+        "districtcode": "476",
+        "subdistrictcode": "4045",
+        "subdistrictnameenglish": "Goregaon",
+        "subdistrictlocalname": "\u0917\u094b\u0930\u0947\u0917\u093e\u0935"
+    },
+    {
+        "districtcode": "476",
+        "subdistrictcode": "4046",
+        "subdistrictnameenglish": "Gondiya",
+        "subdistrictlocalname": "\u0917\u094b\u0902\u0926\u093f\u092f\u093e"
+    },
+    {
+        "districtcode": "476",
+        "subdistrictcode": "4047",
+        "subdistrictnameenglish": "Amgaon",
+        "subdistrictlocalname": "\u0906\u092e\u0917\u093e\u0935"
+    },
+    {
+        "districtcode": "476",
+        "subdistrictcode": "4048",
+        "subdistrictnameenglish": "Salekasa",
+        "subdistrictlocalname": "\u0938\u093e\u0932\u0947\u0915\u0938\u093e"
+    },
+    {
+        "districtcode": "476",
+        "subdistrictcode": "4049",
+        "subdistrictnameenglish": "Sadak-Arjuni",
+        "subdistrictlocalname": "\u0938\u0921\u0915 \u0905\u0930\u094d\u091c\u0941\u0928\u0940"
+    },
+    {
+        "districtcode": "476",
+        "subdistrictcode": "4050",
+        "subdistrictnameenglish": "Arjuni Morgaon",
+        "subdistrictlocalname": "\u0905\u0930\u094d\u091c\u0941\u0928\u0940 \u092e\u094b\u0930\u0917\u093e\u0935"
+    },
+    {
+        "districtcode": "476",
+        "subdistrictcode": "4051",
+        "subdistrictnameenglish": "Deori",
+        "subdistrictlocalname": "\u0926\u0947\u0935\u0930\u0940"
+    },
+    {
+        "districtcode": "477",
+        "subdistrictcode": "4111",
+        "subdistrictnameenglish": "Sengaon",
+        "subdistrictlocalname": "\u0938\u0947\u0928\u0917\u093e\u0935"
+    },
+    {
+        "districtcode": "477",
+        "subdistrictcode": "4112",
+        "subdistrictnameenglish": "Hingoli",
+        "subdistrictlocalname": "\u0939\u093f\u0902\u0917\u094b\u0932\u0940 "
+    },
+    {
+        "districtcode": "477",
+        "subdistrictcode": "4113",
+        "subdistrictnameenglish": "Aundha (Nagnath)",
+        "subdistrictlocalname": "\u0914\u0902\u0922\u093e (\u0928\u093e\u0917\u0928\u093e\u0925)"
+    },
+    {
+        "districtcode": "477",
+        "subdistrictcode": "4114",
+        "subdistrictnameenglish": "Kalamnuri",
+        "subdistrictlocalname": "\u0915\u0933\u092e\u0928\u0941\u0930\u0940"
+    },
+    {
+        "districtcode": "477",
+        "subdistrictcode": "4115",
+        "subdistrictnameenglish": "Vasmath",
+        "subdistrictlocalname": "\u0935\u0938\u092e\u0924"
+    },
+    {
+        "districtcode": "478",
+        "subdistrictcode": "3960",
+        "subdistrictnameenglish": "Chopda",
+        "subdistrictlocalname": "\u091a\u094b\u092a\u0921\u093e"
+    },
+    {
+        "districtcode": "478",
+        "subdistrictcode": "3961",
+        "subdistrictnameenglish": "Yawal",
+        "subdistrictlocalname": "\u092f\u093e\u0935\u0932"
+    },
+    {
+        "districtcode": "478",
+        "subdistrictcode": "3962",
+        "subdistrictnameenglish": "Raver",
+        "subdistrictlocalname": "\u0930\u093e\u0935\u0947\u0930"
+    },
+    {
+        "districtcode": "478",
+        "subdistrictcode": "3963",
+        "subdistrictnameenglish": "Muktainagar (Edlabad)",
+        "subdistrictlocalname": "\u092e\u0941\u0915\u094d\u0924\u093e\u0908\u0928\u0917\u0930(\u090f\u0926\u0932\u093e\u092c\u093e\u0926)"
+    },
+    {
+        "districtcode": "478",
+        "subdistrictcode": "3964",
+        "subdistrictnameenglish": "Bodvad",
+        "subdistrictlocalname": "\u092c\u094b\u0927\u0935\u0921"
+    },
+    {
+        "districtcode": "478",
+        "subdistrictcode": "3965",
+        "subdistrictnameenglish": "Bhusawal",
+        "subdistrictlocalname": "\u092d\u0941\u0938\u093e\u0935\u0933"
+    },
+    {
+        "districtcode": "478",
+        "subdistrictcode": "3966",
+        "subdistrictnameenglish": "Jalgaon",
+        "subdistrictlocalname": "\u091c\u0933\u0917\u093e\u0935"
+    },
+    {
+        "districtcode": "478",
+        "subdistrictcode": "3967",
+        "subdistrictnameenglish": "Erandol",
+        "subdistrictlocalname": "\u090f\u0930\u0902\u0921\u094b\u0932"
+    },
+    {
+        "districtcode": "478",
+        "subdistrictcode": "3968",
+        "subdistrictnameenglish": "Dharangaon",
+        "subdistrictlocalname": "\u0927\u0930\u0923\u0917\u093e\u0935"
+    },
+    {
+        "districtcode": "478",
+        "subdistrictcode": "3969",
+        "subdistrictnameenglish": "Amalner",
+        "subdistrictlocalname": "\u0905\u092e\u0933\u0928\u0947\u0930"
+    },
+    {
+        "districtcode": "478",
+        "subdistrictcode": "3970",
+        "subdistrictnameenglish": "Parola",
+        "subdistrictlocalname": "\u092a\u093e\u0930\u094b\u0933\u093e"
+    },
+    {
+        "districtcode": "478",
+        "subdistrictcode": "3971",
+        "subdistrictnameenglish": "Bhadgaon",
+        "subdistrictlocalname": "\u092d\u0921\u0917\u093e\u0935"
+    },
+    {
+        "districtcode": "478",
+        "subdistrictcode": "3972",
+        "subdistrictnameenglish": "Chalisgaon",
+        "subdistrictlocalname": "\u091a\u093e\u0933\u0940\u0938\u0917\u093e\u0935"
+    },
+    {
+        "districtcode": "478",
+        "subdistrictcode": "3973",
+        "subdistrictnameenglish": "Pachora",
+        "subdistrictlocalname": "\u092a\u093e\u091a\u094b\u0930\u093e"
+    },
+    {
+        "districtcode": "478",
+        "subdistrictcode": "3974",
+        "subdistrictnameenglish": "Jamner",
+        "subdistrictlocalname": "\u091c\u093e\u092e\u0928\u0947\u0930"
+    },
+    {
+        "districtcode": "479",
+        "subdistrictcode": "4125",
+        "subdistrictnameenglish": "Bhokardan",
+        "subdistrictlocalname": "\u092d\u094b\u0915\u0930\u0926\u0928"
+    },
+    {
+        "districtcode": "479",
+        "subdistrictcode": "4126",
+        "subdistrictnameenglish": "Jafrabad",
+        "subdistrictlocalname": "\u091c\u093e\u092b\u094d\u0930\u093e\u092c\u093e\u0926"
+    },
+    {
+        "districtcode": "479",
+        "subdistrictcode": "4127",
+        "subdistrictnameenglish": "Jalna",
+        "subdistrictlocalname": "\u091c\u093e\u0932\u0928\u093e"
+    },
+    {
+        "districtcode": "479",
+        "subdistrictcode": "4128",
+        "subdistrictnameenglish": "Badnapur",
+        "subdistrictlocalname": "\u092c\u0926\u0928\u093e\u092a\u0942\u0930"
+    },
+    {
+        "districtcode": "479",
+        "subdistrictcode": "4129",
+        "subdistrictnameenglish": "Ambad",
+        "subdistrictlocalname": "\u0905\u0902\u092c\u0921"
+    },
+    {
+        "districtcode": "479",
+        "subdistrictcode": "4130",
+        "subdistrictnameenglish": "Ghansawangi",
+        "subdistrictlocalname": "\u0918\u0928\u0938\u093e\u0935\u0902\u0917\u0940"
+    },
+    {
+        "districtcode": "479",
+        "subdistrictcode": "4131",
+        "subdistrictnameenglish": "Partur",
+        "subdistrictlocalname": "\u092a\u0930\u0924\u0942\u0930"
+    },
+    {
+        "districtcode": "479",
+        "subdistrictcode": "4132",
+        "subdistrictnameenglish": "Mantha",
+        "subdistrictlocalname": "\u092e\u0902\u0920\u093e"
+    },
+    {
+        "districtcode": "480",
+        "subdistrictcode": "4283",
+        "subdistrictnameenglish": "Shahuwadi",
+        "subdistrictlocalname": "\u0936\u093e\u0939\u0942\u0935\u093e\u0921\u0940"
+    },
+    {
+        "districtcode": "480",
+        "subdistrictcode": "4284",
+        "subdistrictnameenglish": "Panhala",
+        "subdistrictlocalname": "\u092a\u0928\u094d\u0939\u093e\u0933\u093e"
+    },
+    {
+        "districtcode": "480",
+        "subdistrictcode": "4285",
+        "subdistrictnameenglish": "Hatkanangle",
+        "subdistrictlocalname": "\u0939\u093e\u0924\u0915\u0923\u0902\u0917\u0932\u0947"
+    },
+    {
+        "districtcode": "480",
+        "subdistrictcode": "4286",
+        "subdistrictnameenglish": "Shirol",
+        "subdistrictlocalname": "\u0936\u093f\u0930\u094b\u0933"
+    },
+    {
+        "districtcode": "480",
+        "subdistrictcode": "4287",
+        "subdistrictnameenglish": "Karvir",
+        "subdistrictlocalname": "\u0915\u0930\u0935\u0940\u0930"
+    },
+    {
+        "districtcode": "480",
+        "subdistrictcode": "4288",
+        "subdistrictnameenglish": "Gaganbawada",
+        "subdistrictlocalname": "\u0917\u0917\u0928\u092c\u093e\u0935\u0921\u093e"
+    },
+    {
+        "districtcode": "480",
+        "subdistrictcode": "4289",
+        "subdistrictnameenglish": "Radhanagari",
+        "subdistrictlocalname": "\u0930\u093e\u0927\u093e\u0928\u0917\u0930\u0940"
+    },
+    {
+        "districtcode": "480",
+        "subdistrictcode": "4290",
+        "subdistrictnameenglish": "Kagal",
+        "subdistrictlocalname": "\u0915\u093e\u0917\u0932"
+    },
+    {
+        "districtcode": "480",
+        "subdistrictcode": "4291",
+        "subdistrictnameenglish": "Bhudargad",
+        "subdistrictlocalname": "\u092d\u0942\u0926\u0930\u0917\u0921"
+    },
+    {
+        "districtcode": "480",
+        "subdistrictcode": "4292",
+        "subdistrictnameenglish": "Ajra",
+        "subdistrictlocalname": "\u0906\u091c\u0930\u093e"
+    },
+    {
+        "districtcode": "480",
+        "subdistrictcode": "4293",
+        "subdistrictnameenglish": "Gadhinglaj",
+        "subdistrictlocalname": "\u0917\u0921\u0939\u093f\u0902\u0917\u094d\u0932\u091c"
+    },
+    {
+        "districtcode": "480",
+        "subdistrictcode": "4294",
+        "subdistrictnameenglish": "Chandgad",
+        "subdistrictlocalname": "\u091a\u0902\u0926\u0917\u0921"
+    },
+    {
+        "districtcode": "481",
+        "subdistrictcode": "4226",
+        "subdistrictnameenglish": "Latur",
+        "subdistrictlocalname": "\u0932\u093e\u0924\u0942\u0930"
+    },
+    {
+        "districtcode": "481",
+        "subdistrictcode": "4227",
+        "subdistrictnameenglish": "Renapur",
+        "subdistrictlocalname": "\u0930\u0947\u0928\u093e\u092a\u0942\u0930"
+    },
+    {
+        "districtcode": "481",
+        "subdistrictcode": "4228",
+        "subdistrictnameenglish": "Ahmadpur",
+        "subdistrictlocalname": "\u0905\u0939\u092e\u0926\u092a\u0942\u0930"
+    },
+    {
+        "districtcode": "481",
+        "subdistrictcode": "4229",
+        "subdistrictnameenglish": "Jalkot",
+        "subdistrictlocalname": "\u091c\u0932\u0915\u094b\u091f"
+    },
+    {
+        "districtcode": "481",
+        "subdistrictcode": "4230",
+        "subdistrictnameenglish": "Chakur",
+        "subdistrictlocalname": "\u091a\u093e\u0915\u0942\u0930"
+    },
+    {
+        "districtcode": "481",
+        "subdistrictcode": "4231",
+        "subdistrictnameenglish": "Shirur Anantpal",
+        "subdistrictlocalname": "\u0936\u093f\u0930\u0942\u0930 \u0905\u0928\u0902\u0924\u092a\u093e\u0933"
+    },
+    {
+        "districtcode": "481",
+        "subdistrictcode": "4232",
+        "subdistrictnameenglish": "Ausa",
+        "subdistrictlocalname": "\u0914\u0938\u093e"
+    },
+    {
+        "districtcode": "481",
+        "subdistrictcode": "4233",
+        "subdistrictnameenglish": "Nilanga",
+        "subdistrictlocalname": "\u0928\u093f\u0932\u0902\u0917\u093e"
+    },
+    {
+        "districtcode": "481",
+        "subdistrictcode": "4234",
+        "subdistrictnameenglish": "Deoni",
+        "subdistrictlocalname": "\u0926\u0947\u0935\u0928\u0940"
+    },
+    {
+        "districtcode": "481",
+        "subdistrictcode": "4235",
+        "subdistrictnameenglish": "Udgir",
+        "subdistrictlocalname": "\u0909\u0926\u0917\u0940\u0930"
+    },
+    {
+        "districtcode": "483",
+        "subdistrictcode": "7179",
+        "subdistrictnameenglish": "Andheri",
+        "subdistrictlocalname": "\u0905\u0902\u0927\u0947\u0930\u0940"
+    },
+    {
+        "districtcode": "483",
+        "subdistrictcode": "7180",
+        "subdistrictnameenglish": "Kurla",
+        "subdistrictlocalname": "\u0915\u0941\u0930\u094d\u0932\u093e"
+    },
+    {
+        "districtcode": "483",
+        "subdistrictcode": "7181",
+        "subdistrictnameenglish": "Borivali",
+        "subdistrictlocalname": "\u092c\u094b\u0930\u0940\u0935\u0932\u0940"
+    },
+    {
+        "districtcode": "484",
+        "subdistrictcode": "4023",
+        "subdistrictnameenglish": "Narkhed",
+        "subdistrictlocalname": "\u0928\u0930\u0916\u0947\u0921"
+    },
+    {
+        "districtcode": "484",
+        "subdistrictcode": "4024",
+        "subdistrictnameenglish": "Katol",
+        "subdistrictlocalname": "\u0915\u093e\u091f\u094b\u0932"
+    },
+    {
+        "districtcode": "484",
+        "subdistrictcode": "4025",
+        "subdistrictnameenglish": "Kalameshwar",
+        "subdistrictlocalname": "\u0915\u0933\u092e\u0947\u0936\u094d\u0935\u0930 "
+    },
+    {
+        "districtcode": "484",
+        "subdistrictcode": "4026",
+        "subdistrictnameenglish": "Savner",
+        "subdistrictlocalname": "\u0938\u093e\u0935\u0928\u0947\u0930"
+    },
+    {
+        "districtcode": "484",
+        "subdistrictcode": "4027",
+        "subdistrictnameenglish": "Parseoni",
+        "subdistrictlocalname": "\u092a\u093e\u0930\u0936\u093f\u0935\u0928\u0940"
+    },
+    {
+        "districtcode": "484",
+        "subdistrictcode": "4028",
+        "subdistrictnameenglish": "Ramtek",
+        "subdistrictlocalname": "\u0930\u093e\u092e\u091f\u0947\u0915"
+    },
+    {
+        "districtcode": "484",
+        "subdistrictcode": "4029",
+        "subdistrictnameenglish": "Mauda",
+        "subdistrictlocalname": "\u092e\u094c\u0926\u093e"
+    },
+    {
+        "districtcode": "484",
+        "subdistrictcode": "4030",
+        "subdistrictnameenglish": "Kamptee",
+        "subdistrictlocalname": "\u0915\u093e\u092e\u0920\u0940"
+    },
+    {
+        "districtcode": "484",
+        "subdistrictcode": "4031",
+        "subdistrictnameenglish": "Nagpur (Rural)",
+        "subdistrictlocalname": "\u0928\u093e\u0917\u092a\u0942\u0930 (\u0917\u094d\u0930\u093e\u092e\u0940\u0923)"
+    },
+    {
+        "districtcode": "484",
+        "subdistrictcode": "4032",
+        "subdistrictnameenglish": "Nagpur (Urban)",
+        "subdistrictlocalname": "\u0928\u093e\u0917\u092a\u0942\u0930 (\u0936\u0939\u0930)"
+    },
+    {
+        "districtcode": "484",
+        "subdistrictcode": "4033",
+        "subdistrictnameenglish": "Hingna",
+        "subdistrictlocalname": "\u0939\u093f\u0902\u0917\u0923\u093e"
+    },
+    {
+        "districtcode": "484",
+        "subdistrictcode": "4034",
+        "subdistrictnameenglish": "Umred",
+        "subdistrictlocalname": "\u0909\u092e\u0930\u0947\u0921"
+    },
+    {
+        "districtcode": "484",
+        "subdistrictcode": "4035",
+        "subdistrictnameenglish": "Kuhi",
+        "subdistrictlocalname": "\u0915\u0941\u0939\u0940"
+    },
+    {
+        "districtcode": "484",
+        "subdistrictcode": "4036",
+        "subdistrictnameenglish": "Bhiwapur",
+        "subdistrictlocalname": "\u092d\u093f\u0935\u093e\u092a\u0942\u0930"
+    },
+    {
+        "districtcode": "485",
+        "subdistrictcode": "4095",
+        "subdistrictnameenglish": "Mahur",
+        "subdistrictlocalname": "\u092e\u093e\u0939\u0942\u0930"
+    },
+    {
+        "districtcode": "485",
+        "subdistrictcode": "4096",
+        "subdistrictnameenglish": "Kinwat",
+        "subdistrictlocalname": "\u0915\u093f\u0928\u0935\u0924"
+    },
+    {
+        "districtcode": "485",
+        "subdistrictcode": "4097",
+        "subdistrictnameenglish": "Himayatnagar",
+        "subdistrictlocalname": "\u0939\u093f\u092e\u093e\u092f\u0924\u0928\u0917\u0930"
+    },
+    {
+        "districtcode": "485",
+        "subdistrictcode": "4098",
+        "subdistrictnameenglish": "Hadgaon",
+        "subdistrictlocalname": "\u0939\u0926\u0917\u093e\u0935"
+    },
+    {
+        "districtcode": "485",
+        "subdistrictcode": "4099",
+        "subdistrictnameenglish": "Ardhapur",
+        "subdistrictlocalname": "\u0905\u0930\u094d\u0927\u093e\u092a\u0942\u0930"
+    },
+    {
+        "districtcode": "485",
+        "subdistrictcode": "4100",
+        "subdistrictnameenglish": "Nanded",
+        "subdistrictlocalname": "\u0928\u093e\u0902\u0926\u0947\u0921"
+    },
+    {
+        "districtcode": "485",
+        "subdistrictcode": "4101",
+        "subdistrictnameenglish": "Mudkhed",
+        "subdistrictlocalname": "\u092e\u0941\u0926\u0916\u0947\u0921"
+    },
+    {
+        "districtcode": "485",
+        "subdistrictcode": "4102",
+        "subdistrictnameenglish": "Bhokar",
+        "subdistrictlocalname": "\u092d\u094b\u0915\u0930"
+    },
+    {
+        "districtcode": "485",
+        "subdistrictcode": "4103",
+        "subdistrictnameenglish": "Umri",
+        "subdistrictlocalname": "\u0909\u092e\u0930\u0940"
+    },
+    {
+        "districtcode": "485",
+        "subdistrictcode": "4104",
+        "subdistrictnameenglish": "Dharmabad",
+        "subdistrictlocalname": "\u0927\u0930\u094d\u092e\u093e\u092c\u093e\u0926"
+    },
+    {
+        "districtcode": "485",
+        "subdistrictcode": "4105",
+        "subdistrictnameenglish": "Biloli",
+        "subdistrictlocalname": "\u092c\u093f\u0932\u094b\u0932\u0940"
+    },
+    {
+        "districtcode": "485",
+        "subdistrictcode": "4106",
+        "subdistrictnameenglish": "Naigaon (Khairgaon)",
+        "subdistrictlocalname": "\u0928\u093e\u092f\u0917\u093e\u0935 (\u0916\u0948\u0930\u0917\u093e\u0935)"
+    },
+    {
+        "districtcode": "485",
+        "subdistrictcode": "4107",
+        "subdistrictnameenglish": "Loha",
+        "subdistrictlocalname": "\u0932\u094b\u0939\u093e"
+    },
+    {
+        "districtcode": "485",
+        "subdistrictcode": "4108",
+        "subdistrictnameenglish": "Kandhar",
+        "subdistrictlocalname": "\u0915\u0902\u0927\u093e\u0930"
+    },
+    {
+        "districtcode": "485",
+        "subdistrictcode": "4109",
+        "subdistrictnameenglish": "Mukhed",
+        "subdistrictlocalname": "\u092e\u0941\u0916\u0947\u0921"
+    },
+    {
+        "districtcode": "485",
+        "subdistrictcode": "4110",
+        "subdistrictnameenglish": "Deglur",
+        "subdistrictlocalname": "\u0926\u0947\u0917\u0932\u0941\u0930"
+    },
+    {
+        "districtcode": "486",
+        "subdistrictcode": "3950",
+        "subdistrictnameenglish": "Akkalkuwa",
+        "subdistrictlocalname": "\u0905\u0915\u094d\u0915\u0932\u0915\u0941\u0935\u093e"
+    },
+    {
+        "districtcode": "486",
+        "subdistrictcode": "3951",
+        "subdistrictnameenglish": "Akrani",
+        "subdistrictlocalname": "\u0905\u0915\u0930\u094d\u0928\u0940"
+    },
+    {
+        "districtcode": "486",
+        "subdistrictcode": "3952",
+        "subdistrictnameenglish": "Talode",
+        "subdistrictlocalname": "\u0924\u0932\u094b\u0926\u093e"
+    },
+    {
+        "districtcode": "486",
+        "subdistrictcode": "3953",
+        "subdistrictnameenglish": "Shahade",
+        "subdistrictlocalname": "\u0936\u0939\u093e\u0926\u093e"
+    },
+    {
+        "districtcode": "486",
+        "subdistrictcode": "3954",
+        "subdistrictnameenglish": "Nandurbar",
+        "subdistrictlocalname": "\u0928\u0902\u0926\u0942\u0930\u092c\u093e\u0930"
+    },
+    {
+        "districtcode": "486",
+        "subdistrictcode": "3955",
+        "subdistrictnameenglish": "Nawapur",
+        "subdistrictlocalname": "\u0928\u0935\u093e\u092a\u0942\u0930"
+    },
+    {
+        "districtcode": "487",
+        "subdistrictcode": "4142",
+        "subdistrictnameenglish": "Surgana",
+        "subdistrictlocalname": "\u0938\u0941\u0930\u0917\u0928\u093e"
+    },
+    {
+        "districtcode": "487",
+        "subdistrictcode": "4143",
+        "subdistrictnameenglish": "Kalwan",
+        "subdistrictlocalname": "\u0915\u093e\u0932\u0935\u0923"
+    },
+    {
+        "districtcode": "487",
+        "subdistrictcode": "4144",
+        "subdistrictnameenglish": "Deola",
+        "subdistrictlocalname": "\u0926\u0947\u0935\u0933\u093e"
+    },
+    {
+        "districtcode": "487",
+        "subdistrictcode": "4145",
+        "subdistrictnameenglish": "Baglan",
+        "subdistrictlocalname": "\u092c\u093e\u0917\u0932\u0923"
+    },
+    {
+        "districtcode": "487",
+        "subdistrictcode": "4146",
+        "subdistrictnameenglish": "Malegaon",
+        "subdistrictlocalname": "\u092e\u093e\u0932\u0947\u0917\u093e\u0935"
+    },
+    {
+        "districtcode": "487",
+        "subdistrictcode": "4147",
+        "subdistrictnameenglish": "Nandgaon",
+        "subdistrictlocalname": "\u0928\u093e\u0902\u0926\u0917\u093e\u0935"
+    },
+    {
+        "districtcode": "487",
+        "subdistrictcode": "4148",
+        "subdistrictnameenglish": "Chandvad",
+        "subdistrictlocalname": "\u091a\u093e\u0902\u0926\u0935\u0921"
+    },
+    {
+        "districtcode": "487",
+        "subdistrictcode": "4149",
+        "subdistrictnameenglish": "Dindori",
+        "subdistrictlocalname": "\u0926\u093f\u0902\u0921\u094b\u0930\u0940"
+    },
+    {
+        "districtcode": "487",
+        "subdistrictcode": "4150",
+        "subdistrictnameenglish": "Peth",
+        "subdistrictlocalname": "\u092a\u0947\u0920"
+    },
+    {
+        "districtcode": "487",
+        "subdistrictcode": "4151",
+        "subdistrictnameenglish": "Trimbakeshwar",
+        "subdistrictlocalname": "\u0924\u094d\u0930\u094d\u092f\u0902\u092c\u0915"
+    },
+    {
+        "districtcode": "487",
+        "subdistrictcode": "4152",
+        "subdistrictnameenglish": "Nashik",
+        "subdistrictlocalname": "\u0928\u093e\u0936\u093f\u0915"
+    },
+    {
+        "districtcode": "487",
+        "subdistrictcode": "4153",
+        "subdistrictnameenglish": "Igatpuri",
+        "subdistrictlocalname": "\u0907\u0917\u0924\u092a\u0942\u0930\u0940"
+    },
+    {
+        "districtcode": "487",
+        "subdistrictcode": "4154",
+        "subdistrictnameenglish": "Sinnar",
+        "subdistrictlocalname": "\u0938\u093f\u0928\u094d\u0928\u0930"
+    },
+    {
+        "districtcode": "487",
+        "subdistrictcode": "4155",
+        "subdistrictnameenglish": "Niphad",
+        "subdistrictlocalname": "\u0928\u093f\u092b\u093e\u0921"
+    },
+    {
+        "districtcode": "487",
+        "subdistrictcode": "4156",
+        "subdistrictnameenglish": "Yevla",
+        "subdistrictlocalname": "\u092f\u0947\u0935\u0932\u093e"
+    },
+    {
+        "districtcode": "488",
+        "subdistrictcode": "4236",
+        "subdistrictnameenglish": "Paranda",
+        "subdistrictlocalname": "\u092a\u0930\u0902\u0921\u093e"
+    },
+    {
+        "districtcode": "488",
+        "subdistrictcode": "4237",
+        "subdistrictnameenglish": "Bhum",
+        "subdistrictlocalname": "\u092d\u0942\u092e"
+    },
+    {
+        "districtcode": "488",
+        "subdistrictcode": "4238",
+        "subdistrictnameenglish": "Washi",
+        "subdistrictlocalname": "\u0935\u093e\u0936\u0940"
+    },
+    {
+        "districtcode": "488",
+        "subdistrictcode": "4239",
+        "subdistrictnameenglish": "Kalamb",
+        "subdistrictlocalname": "\u0915\u0933\u0902\u092c"
+    },
+    {
+        "districtcode": "488",
+        "subdistrictcode": "4240",
+        "subdistrictnameenglish": "Dharashiv",
+        "subdistrictlocalname": "\u0927\u093e\u0930\u093e\u0936\u093f\u0935"
+    },
+    {
+        "districtcode": "488",
+        "subdistrictcode": "4241",
+        "subdistrictnameenglish": "Tuljapur",
+        "subdistrictlocalname": "\u0924\u0941\u0933\u091c\u093e\u092a\u0942\u0930"
+    },
+    {
+        "districtcode": "488",
+        "subdistrictcode": "4242",
+        "subdistrictnameenglish": "Lohara",
+        "subdistrictlocalname": "\u0932\u094b\u0939\u093e\u0930\u093e"
+    },
+    {
+        "districtcode": "488",
+        "subdistrictcode": "4243",
+        "subdistrictnameenglish": "Omarga",
+        "subdistrictlocalname": "\u0909\u092e\u0930\u0917\u093e"
+    },
+    {
+        "districtcode": "489",
+        "subdistrictcode": "4116",
+        "subdistrictnameenglish": "Selu",
+        "subdistrictlocalname": "\u0938\u0947\u0932\u0942"
+    },
+    {
+        "districtcode": "489",
+        "subdistrictcode": "4117",
+        "subdistrictnameenglish": "Jintur",
+        "subdistrictlocalname": "\u091c\u093f\u0902\u0924\u0941\u0930"
+    },
+    {
+        "districtcode": "489",
+        "subdistrictcode": "4118",
+        "subdistrictnameenglish": "Parbhani",
+        "subdistrictlocalname": "\u092a\u0930\u092d\u0923\u0940"
+    },
+    {
+        "districtcode": "489",
+        "subdistrictcode": "4119",
+        "subdistrictnameenglish": "Manwath",
+        "subdistrictlocalname": "\u092e\u093e\u0928\u0935\u0924"
+    },
+    {
+        "districtcode": "489",
+        "subdistrictcode": "4120",
+        "subdistrictnameenglish": "Pathri",
+        "subdistrictlocalname": "\u092a\u093e\u0925\u094d\u0930\u0940"
+    },
+    {
+        "districtcode": "489",
+        "subdistrictcode": "4121",
+        "subdistrictnameenglish": "Sonpeth",
+        "subdistrictlocalname": "\u0938\u094b\u0928\u092a\u0947\u0920"
+    },
+    {
+        "districtcode": "489",
+        "subdistrictcode": "4122",
+        "subdistrictnameenglish": "Gangakhed",
+        "subdistrictlocalname": "\u0917\u0902\u0917\u093e\u0916\u0947\u0921"
+    },
+    {
+        "districtcode": "489",
+        "subdistrictcode": "4123",
+        "subdistrictnameenglish": "Palam",
+        "subdistrictlocalname": "\u092a\u093e\u0932\u092e"
+    },
+    {
+        "districtcode": "489",
+        "subdistrictcode": "4124",
+        "subdistrictnameenglish": "Purna",
+        "subdistrictlocalname": "\u092a\u0941\u0930\u094d\u0923\u093e"
+    },
+    {
+        "districtcode": "490",
+        "subdistrictcode": "4187",
+        "subdistrictnameenglish": "Junnar",
+        "subdistrictlocalname": "\u091c\u0941\u0928\u094d\u0928\u0930"
+    },
+    {
+        "districtcode": "490",
+        "subdistrictcode": "4188",
+        "subdistrictnameenglish": "Ambegaon",
+        "subdistrictlocalname": "\u0906\u0902\u092c\u0947\u0917\u093e\u0935"
+    },
+    {
+        "districtcode": "490",
+        "subdistrictcode": "4189",
+        "subdistrictnameenglish": "Shirur",
+        "subdistrictlocalname": "\u0936\u093f\u0930\u0942\u0930"
+    },
+    {
+        "districtcode": "490",
+        "subdistrictcode": "4190",
+        "subdistrictnameenglish": "Khed",
+        "subdistrictlocalname": "\u0916\u0947\u0921"
+    },
+    {
+        "districtcode": "490",
+        "subdistrictcode": "4191",
+        "subdistrictnameenglish": "Mawal",
+        "subdistrictlocalname": "\u092e\u093e\u0935\u0933"
+    },
+    {
+        "districtcode": "490",
+        "subdistrictcode": "4192",
+        "subdistrictnameenglish": "Mulshi",
+        "subdistrictlocalname": "\u092e\u0941\u0933\u0936\u0940"
+    },
+    {
+        "districtcode": "490",
+        "subdistrictcode": "4193",
+        "subdistrictnameenglish": "Haveli",
+        "subdistrictlocalname": "\u0939\u0935\u0947\u0932\u0940"
+    },
+    {
+        "districtcode": "490",
+        "subdistrictcode": "4194",
+        "subdistrictnameenglish": "Pune City",
+        "subdistrictlocalname": "\u092a\u0941\u0923\u0947 \u0936\u0939\u0930"
+    },
+    {
+        "districtcode": "490",
+        "subdistrictcode": "4195",
+        "subdistrictnameenglish": "Daund",
+        "subdistrictlocalname": "\u0926\u094c\u0902\u0921"
+    },
+    {
+        "districtcode": "490",
+        "subdistrictcode": "4196",
+        "subdistrictnameenglish": "Purandhar",
+        "subdistrictlocalname": "\u092a\u0941\u0930\u0902\u0926\u0930"
+    },
+    {
+        "districtcode": "490",
+        "subdistrictcode": "4197",
+        "subdistrictnameenglish": "Velhe",
+        "subdistrictlocalname": "\u0935\u0947\u0932\u094d\u0939\u0947"
+    },
+    {
+        "districtcode": "490",
+        "subdistrictcode": "4198",
+        "subdistrictnameenglish": "Bhor",
+        "subdistrictlocalname": "\u092d\u094b\u0930"
+    },
+    {
+        "districtcode": "490",
+        "subdistrictcode": "4199",
+        "subdistrictnameenglish": "Baramati",
+        "subdistrictlocalname": "\u092c\u093e\u0930\u093e\u092e\u0924\u0940"
+    },
+    {
+        "districtcode": "490",
+        "subdistrictcode": "4200",
+        "subdistrictnameenglish": "Indapur",
+        "subdistrictlocalname": "\u0907\u0902\u0926\u093e\u092a\u0942\u0930"
+    },
+    {
+        "districtcode": "491",
+        "subdistrictcode": "4172",
+        "subdistrictnameenglish": "Uran",
+        "subdistrictlocalname": "\u0909\u0930\u0923"
+    },
+    {
+        "districtcode": "491",
+        "subdistrictcode": "4173",
+        "subdistrictnameenglish": "Panvel",
+        "subdistrictlocalname": "\u092a\u0928\u0935\u0947\u0932"
+    },
+    {
+        "districtcode": "491",
+        "subdistrictcode": "4174",
+        "subdistrictnameenglish": "Karjat",
+        "subdistrictlocalname": "\u0915\u0930\u094d\u091c\u0924"
+    },
+    {
+        "districtcode": "491",
+        "subdistrictcode": "4175",
+        "subdistrictnameenglish": "Khalapur",
+        "subdistrictlocalname": "\u0916\u093e\u0932\u093e\u092a\u0942\u0930"
+    },
+    {
+        "districtcode": "491",
+        "subdistrictcode": "4176",
+        "subdistrictnameenglish": "Pen",
+        "subdistrictlocalname": "\u092a\u0947\u0923"
+    },
+    {
+        "districtcode": "491",
+        "subdistrictcode": "4177",
+        "subdistrictnameenglish": "Alibag",
+        "subdistrictlocalname": "\u0905\u0932\u093f\u092c\u093e\u0917"
+    },
+    {
+        "districtcode": "491",
+        "subdistrictcode": "4178",
+        "subdistrictnameenglish": "Murud",
+        "subdistrictlocalname": "\u092e\u0941\u0930\u0942\u0921"
+    },
+    {
+        "districtcode": "491",
+        "subdistrictcode": "4179",
+        "subdistrictnameenglish": "Roha",
+        "subdistrictlocalname": "\u0930\u094b\u0939\u093e"
+    },
+    {
+        "districtcode": "491",
+        "subdistrictcode": "4180",
+        "subdistrictnameenglish": "Sudhagad",
+        "subdistrictlocalname": "\u0938\u0941\u0927\u093e\u0917\u0921"
+    },
+    {
+        "districtcode": "491",
+        "subdistrictcode": "4181",
+        "subdistrictnameenglish": "Mangaon",
+        "subdistrictlocalname": "\u092e\u093e\u0928\u0917\u093e\u0935"
+    },
+    {
+        "districtcode": "491",
+        "subdistrictcode": "4182",
+        "subdistrictnameenglish": "Tala",
+        "subdistrictlocalname": "\u0924\u0933\u093e"
+    },
+    {
+        "districtcode": "491",
+        "subdistrictcode": "4183",
+        "subdistrictnameenglish": "Shrivardhan",
+        "subdistrictlocalname": "\u0936\u094d\u0930\u0940\u0935\u0930\u094d\u0927\u0928"
+    },
+    {
+        "districtcode": "491",
+        "subdistrictcode": "4184",
+        "subdistrictnameenglish": "Mhasla",
+        "subdistrictlocalname": "\u092e\u094d\u0939\u093e\u0938\u0933\u093e"
+    },
+    {
+        "districtcode": "491",
+        "subdistrictcode": "4185",
+        "subdistrictnameenglish": "Mahad",
+        "subdistrictlocalname": "\u092e\u0939\u093e\u0921"
+    },
+    {
+        "districtcode": "491",
+        "subdistrictcode": "4186",
+        "subdistrictnameenglish": "Poladpur",
+        "subdistrictlocalname": "\u092a\u094b\u0932\u093e\u0926\u092a\u0942\u0930"
+    },
+    {
+        "districtcode": "492",
+        "subdistrictcode": "4266",
+        "subdistrictnameenglish": "Mandangad",
+        "subdistrictlocalname": "\u092e\u0902\u0921\u0923\u0917\u0921"
+    },
+    {
+        "districtcode": "492",
+        "subdistrictcode": "4267",
+        "subdistrictnameenglish": "Dapoli",
+        "subdistrictlocalname": "\u0926\u093e\u092a\u094b\u0932\u0940"
+    },
+    {
+        "districtcode": "492",
+        "subdistrictcode": "4268",
+        "subdistrictnameenglish": "Khed",
+        "subdistrictlocalname": "\u0916\u0947\u0921"
+    },
+    {
+        "districtcode": "492",
+        "subdistrictcode": "4269",
+        "subdistrictnameenglish": "Chiplun",
+        "subdistrictlocalname": "\u091a\u093f\u092a\u0933\u0942\u0923"
+    },
+    {
+        "districtcode": "492",
+        "subdistrictcode": "4270",
+        "subdistrictnameenglish": "Guhagar",
+        "subdistrictlocalname": "\u0917\u0941\u0939\u093e\u0918\u0930"
+    },
+    {
+        "districtcode": "492",
+        "subdistrictcode": "4271",
+        "subdistrictnameenglish": "Ratnagiri",
+        "subdistrictlocalname": "\u0930\u0924\u094d\u0928\u093e\u0917\u093f\u0930\u0940"
+    },
+    {
+        "districtcode": "492",
+        "subdistrictcode": "4272",
+        "subdistrictnameenglish": "Sangameshwar",
+        "subdistrictlocalname": "\u0938\u0902\u0917\u092e\u0947\u0936\u094d\u0935\u0930"
+    },
+    {
+        "districtcode": "492",
+        "subdistrictcode": "4273",
+        "subdistrictnameenglish": "Lanja",
+        "subdistrictlocalname": "\u0932\u093e\u0902\u091c\u093e"
+    },
+    {
+        "districtcode": "492",
+        "subdistrictcode": "4274",
+        "subdistrictnameenglish": "Rajapur",
+        "subdistrictlocalname": "\u0930\u093e\u091c\u093e\u092a\u0942\u0930"
+    },
+    {
+        "districtcode": "493",
+        "subdistrictcode": "4295",
+        "subdistrictnameenglish": "Shirala",
+        "subdistrictlocalname": "\u0936\u093f\u0930\u093e\u0933\u093e"
+    },
+    {
+        "districtcode": "493",
+        "subdistrictcode": "4296",
+        "subdistrictnameenglish": "Walwa",
+        "subdistrictlocalname": "\u0935\u093e\u0933\u0935\u093e"
+    },
+    {
+        "districtcode": "493",
+        "subdistrictcode": "4297",
+        "subdistrictnameenglish": "Palus",
+        "subdistrictlocalname": "\u092a\u0932\u0941\u0938"
+    },
+    {
+        "districtcode": "493",
+        "subdistrictcode": "4298",
+        "subdistrictnameenglish": "Kadegaon",
+        "subdistrictlocalname": "\u0915\u0921\u0947\u0917\u093e\u0935"
+    },
+    {
+        "districtcode": "493",
+        "subdistrictcode": "4299",
+        "subdistrictnameenglish": "Khanapur",
+        "subdistrictlocalname": "\u0916\u093e\u0928\u093e\u092a\u0942\u0930"
+    },
+    {
+        "districtcode": "493",
+        "subdistrictcode": "4300",
+        "subdistrictnameenglish": "Atpadi",
+        "subdistrictlocalname": "\u0906\u091f\u092a\u093e\u0921\u0940"
+    },
+    {
+        "districtcode": "493",
+        "subdistrictcode": "4301",
+        "subdistrictnameenglish": "Tasgaon",
+        "subdistrictlocalname": "\u0924\u093e\u0938\u0917\u093e\u0935"
+    },
+    {
+        "districtcode": "493",
+        "subdistrictcode": "4302",
+        "subdistrictnameenglish": "Miraj",
+        "subdistrictlocalname": "\u092e\u093f\u0930\u091c"
+    },
+    {
+        "districtcode": "493",
+        "subdistrictcode": "4303",
+        "subdistrictnameenglish": "Kavathemahankal",
+        "subdistrictlocalname": "\u0915\u0935\u0920\u0947\u092e\u0939\u093e\u0902\u0915\u093e\u0933"
+    },
+    {
+        "districtcode": "493",
+        "subdistrictcode": "4304",
+        "subdistrictnameenglish": "Jat",
+        "subdistrictlocalname": "\u091c\u0924"
+    },
+    {
+        "districtcode": "494",
+        "subdistrictcode": "4255",
+        "subdistrictnameenglish": "Mahabaleshwar",
+        "subdistrictlocalname": "\u092e\u0939\u093e\u092c\u0933\u0947\u0936\u094d\u0935\u0930"
+    },
+    {
+        "districtcode": "494",
+        "subdistrictcode": "4256",
+        "subdistrictnameenglish": "Wai",
+        "subdistrictlocalname": "\u0935\u093e\u0908"
+    },
+    {
+        "districtcode": "494",
+        "subdistrictcode": "4257",
+        "subdistrictnameenglish": "Khandala",
+        "subdistrictlocalname": "\u0916\u0902\u0921\u093e\u0933\u093e"
+    },
+    {
+        "districtcode": "494",
+        "subdistrictcode": "4258",
+        "subdistrictnameenglish": "Phaltan",
+        "subdistrictlocalname": "\u092b\u0932\u091f\u0923"
+    },
+    {
+        "districtcode": "494",
+        "subdistrictcode": "4259",
+        "subdistrictnameenglish": "Man",
+        "subdistrictlocalname": "\u092e\u093e\u0923"
+    },
+    {
+        "districtcode": "494",
+        "subdistrictcode": "4260",
+        "subdistrictnameenglish": "Khatav",
+        "subdistrictlocalname": "\u0916\u091f\u093e\u0935"
+    },
+    {
+        "districtcode": "494",
+        "subdistrictcode": "4261",
+        "subdistrictnameenglish": "Koregaon",
+        "subdistrictlocalname": "\u0915\u094b\u0930\u0947\u0917\u093e\u0935"
+    },
+    {
+        "districtcode": "494",
+        "subdistrictcode": "4262",
+        "subdistrictnameenglish": "Satara",
+        "subdistrictlocalname": "\u0938\u093e\u0924\u093e\u0930\u093e"
+    },
+    {
+        "districtcode": "494",
+        "subdistrictcode": "4263",
+        "subdistrictnameenglish": "Jaoli",
+        "subdistrictlocalname": "\u091c\u093e\u0935\u0933\u0940"
+    },
+    {
+        "districtcode": "494",
+        "subdistrictcode": "4264",
+        "subdistrictnameenglish": "Patan",
+        "subdistrictlocalname": "\u092a\u093e\u091f\u0923"
+    },
+    {
+        "districtcode": "494",
+        "subdistrictcode": "4265",
+        "subdistrictnameenglish": "Karad",
+        "subdistrictlocalname": "\u0915\u0930\u093e\u0921"
+    },
+    {
+        "districtcode": "495",
+        "subdistrictcode": "4275",
+        "subdistrictnameenglish": "Devgad",
+        "subdistrictlocalname": "\u0926\u0947\u0935\u0917\u0921"
+    },
+    {
+        "districtcode": "495",
+        "subdistrictcode": "4276",
+        "subdistrictnameenglish": "Vaibhavvadi",
+        "subdistrictlocalname": "\u0935\u0948\u092d\u0935\u0935\u093e\u0921\u0940"
+    },
+    {
+        "districtcode": "495",
+        "subdistrictcode": "4277",
+        "subdistrictnameenglish": "Kankavli",
+        "subdistrictlocalname": "\u0915\u0923\u0915\u0935\u0932\u0940"
+    },
+    {
+        "districtcode": "495",
+        "subdistrictcode": "4278",
+        "subdistrictnameenglish": "Malwan",
+        "subdistrictlocalname": "\u092e\u093e\u0932\u0935\u0923"
+    },
+    {
+        "districtcode": "495",
+        "subdistrictcode": "4279",
+        "subdistrictnameenglish": "Vengurla",
+        "subdistrictlocalname": "\u0935\u0947\u0902\u0917\u0941\u0930\u094d\u0932\u093e"
+    },
+    {
+        "districtcode": "495",
+        "subdistrictcode": "4280",
+        "subdistrictnameenglish": "Kudal",
+        "subdistrictlocalname": "\u0915\u0941\u0921\u093e\u0933"
+    },
+    {
+        "districtcode": "495",
+        "subdistrictcode": "4281",
+        "subdistrictnameenglish": "Sawantwadi",
+        "subdistrictlocalname": "\u0938\u093e\u0935\u0902\u0924\u0935\u093e\u0921\u0940"
+    },
+    {
+        "districtcode": "495",
+        "subdistrictcode": "4282",
+        "subdistrictnameenglish": "Dodamarg",
+        "subdistrictlocalname": "\u0926\u094b\u0921\u093e\u092e\u093e\u0930\u094d\u0917"
+    },
+    {
+        "districtcode": "496",
+        "subdistrictcode": "4244",
+        "subdistrictnameenglish": "Karmala",
+        "subdistrictlocalname": "\u0915\u0930\u092e\u093e\u0933\u093e"
+    },
+    {
+        "districtcode": "496",
+        "subdistrictcode": "4245",
+        "subdistrictnameenglish": "Madha",
+        "subdistrictlocalname": "\u092e\u093e\u0922\u093e"
+    },
+    {
+        "districtcode": "496",
+        "subdistrictcode": "4246",
+        "subdistrictnameenglish": "Barshi",
+        "subdistrictlocalname": "\u092c\u093e\u0930\u094d\u0936\u0940"
+    },
+    {
+        "districtcode": "496",
+        "subdistrictcode": "4247",
+        "subdistrictnameenglish": "Solapur North",
+        "subdistrictlocalname": "\u0909\u0924\u094d\u0924\u0930 \u0938\u094b\u0932\u093e\u092a\u0942\u0930"
+    },
+    {
+        "districtcode": "496",
+        "subdistrictcode": "4248",
+        "subdistrictnameenglish": "Mohol",
+        "subdistrictlocalname": "\u092e\u094b\u0939\u094b\u0933"
+    },
+    {
+        "districtcode": "496",
+        "subdistrictcode": "4249",
+        "subdistrictnameenglish": "Pandharpur",
+        "subdistrictlocalname": "\u092a\u0902\u0922\u0930\u092a\u0942\u0930"
+    },
+    {
+        "districtcode": "496",
+        "subdistrictcode": "4250",
+        "subdistrictnameenglish": "Malshiras",
+        "subdistrictlocalname": "\u092e\u093e\u0933\u0936\u093f\u0930\u0938"
+    },
+    {
+        "districtcode": "496",
+        "subdistrictcode": "4251",
+        "subdistrictnameenglish": "Sangole",
+        "subdistrictlocalname": "\u0938\u093e\u0902\u0917\u094b\u0932\u0947"
+    },
+    {
+        "districtcode": "496",
+        "subdistrictcode": "4252",
+        "subdistrictnameenglish": "Mangalvedhe",
+        "subdistrictlocalname": "\u092e\u0902\u0917\u0933\u0935\u0947\u0922\u0947"
+    },
+    {
+        "districtcode": "496",
+        "subdistrictcode": "4253",
+        "subdistrictnameenglish": "Solapur South",
+        "subdistrictlocalname": "\u0926\u0915\u094d\u0937\u093f\u0923 \u0938\u094b\u0932\u093e\u092a\u0942\u0930"
+    },
+    {
+        "districtcode": "496",
+        "subdistrictcode": "4254",
+        "subdistrictnameenglish": "Akkalkot",
+        "subdistrictlocalname": "\u0905\u0915\u094d\u0915\u0932\u0915\u094b\u091f"
+    },
+    {
+        "districtcode": "497",
+        "subdistrictcode": "4165",
+        "subdistrictnameenglish": "Thane",
+        "subdistrictlocalname": "\u0920\u093e\u0923\u0947"
+    },
+    {
+        "districtcode": "497",
+        "subdistrictcode": "4166",
+        "subdistrictnameenglish": "Bhiwandi",
+        "subdistrictlocalname": "\u092d\u093f\u0935\u0902\u0921\u0940"
+    },
+    {
+        "districtcode": "497",
+        "subdistrictcode": "4167",
+        "subdistrictnameenglish": "Shahapur",
+        "subdistrictlocalname": "\u0936\u0939\u093e\u092a\u0942\u0930"
+    },
+    {
+        "districtcode": "497",
+        "subdistrictcode": "4168",
+        "subdistrictnameenglish": "Kalyan",
+        "subdistrictlocalname": "\u0915\u0932\u094d\u092f\u093e\u0923"
+    },
+    {
+        "districtcode": "497",
+        "subdistrictcode": "4169",
+        "subdistrictnameenglish": "Ulhasnagar",
+        "subdistrictlocalname": "\u0909\u0932\u094d\u0939\u093e\u0938\u0928\u0917\u0930"
+    },
+    {
+        "districtcode": "497",
+        "subdistrictcode": "4170",
+        "subdistrictnameenglish": "Ambarnath",
+        "subdistrictlocalname": "\u0905\u0902\u092c\u0930\u0928\u093e\u0925"
+    },
+    {
+        "districtcode": "497",
+        "subdistrictcode": "4171",
+        "subdistrictnameenglish": "Murbad",
+        "subdistrictlocalname": "\u092e\u0941\u0930\u092c\u093e\u0921"
+    },
+    {
+        "districtcode": "498",
+        "subdistrictcode": "4015",
+        "subdistrictnameenglish": "Ashti",
+        "subdistrictlocalname": "\u0906\u0937\u094d\u091f\u0940"
+    },
+    {
+        "districtcode": "498",
+        "subdistrictcode": "4016",
+        "subdistrictnameenglish": "Karanja",
+        "subdistrictlocalname": "\u0915\u093e\u0930\u0902\u091c\u093e"
+    },
+    {
+        "districtcode": "498",
+        "subdistrictcode": "4017",
+        "subdistrictnameenglish": "Arvi",
+        "subdistrictlocalname": "\u0906\u0930\u094d\u0935\u0940"
+    },
+    {
+        "districtcode": "498",
+        "subdistrictcode": "4018",
+        "subdistrictnameenglish": "Seloo",
+        "subdistrictlocalname": "\u0938\u0947\u0932\u0942"
+    },
+    {
+        "districtcode": "498",
+        "subdistrictcode": "4019",
+        "subdistrictnameenglish": "Wardha",
+        "subdistrictlocalname": "\u0935\u0930\u094d\u0927\u093e"
+    },
+    {
+        "districtcode": "498",
+        "subdistrictcode": "4020",
+        "subdistrictnameenglish": "Deoli",
+        "subdistrictlocalname": "\u0926\u0947\u0935\u0933\u0940"
+    },
+    {
+        "districtcode": "498",
+        "subdistrictcode": "4021",
+        "subdistrictnameenglish": "Hinganghat",
+        "subdistrictlocalname": "\u0939\u093f\u0902\u0917\u0923\u0918\u093e\u091f"
+    },
+    {
+        "districtcode": "498",
+        "subdistrictcode": "4022",
+        "subdistrictnameenglish": "Samudrapur",
+        "subdistrictlocalname": "\u0938\u092e\u0941\u0926\u094d\u0930\u092a\u0942\u0930"
+    },
+    {
+        "districtcode": "499",
+        "subdistrictcode": "3995",
+        "subdistrictnameenglish": "Malegaon",
+        "subdistrictlocalname": "\u092e\u093e\u0932\u0947\u0917\u093e\u0935"
+    },
+    {
+        "districtcode": "499",
+        "subdistrictcode": "3996",
+        "subdistrictnameenglish": "Mangrulpir",
+        "subdistrictlocalname": "\u092e\u0902\u0917\u0930\u0942\u0933\u092a\u0940\u0930"
+    },
+    {
+        "districtcode": "499",
+        "subdistrictcode": "3997",
+        "subdistrictnameenglish": "Karanja",
+        "subdistrictlocalname": "\u0915\u093e\u0930\u0902\u091c\u093e"
+    },
+    {
+        "districtcode": "499",
+        "subdistrictcode": "3998",
+        "subdistrictnameenglish": "Manora",
+        "subdistrictlocalname": "\u092e\u093e\u0928\u094b\u0930\u093e"
+    },
+    {
+        "districtcode": "499",
+        "subdistrictcode": "3999",
+        "subdistrictnameenglish": "Washim",
+        "subdistrictlocalname": "\u0935\u093e\u0936\u093f\u092e"
+    },
+    {
+        "districtcode": "499",
+        "subdistrictcode": "4000",
+        "subdistrictnameenglish": "Risod",
+        "subdistrictlocalname": "\u0930\u093f\u0938\u094b\u0921"
+    },
+    {
+        "districtcode": "500",
+        "subdistrictcode": "4079",
+        "subdistrictnameenglish": "Ner",
+        "subdistrictlocalname": "\u0928\u0947\u0930"
+    },
+    {
+        "districtcode": "500",
+        "subdistrictcode": "4080",
+        "subdistrictnameenglish": "Babulgaon",
+        "subdistrictlocalname": "\u092c\u093e\u092c\u0942\u0932\u0917\u093e\u0935"
+    },
+    {
+        "districtcode": "500",
+        "subdistrictcode": "4081",
+        "subdistrictnameenglish": "Kalamb",
+        "subdistrictlocalname": "\u0915\u0933\u0902\u092c"
+    },
+    {
+        "districtcode": "500",
+        "subdistrictcode": "4082",
+        "subdistrictnameenglish": "Yavatmal",
+        "subdistrictlocalname": "\u092f\u0935\u0924\u092e\u093e\u0933"
+    },
+    {
+        "districtcode": "500",
+        "subdistrictcode": "4083",
+        "subdistrictnameenglish": "Darwha",
+        "subdistrictlocalname": "\u0927\u093e\u0930\u0935\u093e"
+    },
+    {
+        "districtcode": "500",
+        "subdistrictcode": "4084",
+        "subdistrictnameenglish": "Digras",
+        "subdistrictlocalname": "\u0926\u093f\u0917\u094d\u0930\u0938"
+    },
+    {
+        "districtcode": "500",
+        "subdistrictcode": "4085",
+        "subdistrictnameenglish": "Pusad",
+        "subdistrictlocalname": "\u092a\u0942\u0938\u0926"
+    },
+    {
+        "districtcode": "500",
+        "subdistrictcode": "4086",
+        "subdistrictnameenglish": "Umarkhed",
+        "subdistrictlocalname": "\u0909\u092e\u0930\u0916\u0947\u0921"
+    },
+    {
+        "districtcode": "500",
+        "subdistrictcode": "4087",
+        "subdistrictnameenglish": "Mahagaon",
+        "subdistrictlocalname": "\u092e\u0939\u093e\u0917\u093e\u0935"
+    },
+    {
+        "districtcode": "500",
+        "subdistrictcode": "4088",
+        "subdistrictnameenglish": "Arni",
+        "subdistrictlocalname": "\u0905\u0930\u094d\u0928\u0940"
+    },
+    {
+        "districtcode": "500",
+        "subdistrictcode": "4089",
+        "subdistrictnameenglish": "Ghatanji",
+        "subdistrictlocalname": "\u0918\u093e\u091f\u0902\u091c\u0940"
+    },
+    {
+        "districtcode": "500",
+        "subdistrictcode": "4090",
+        "subdistrictnameenglish": "Kelapur",
+        "subdistrictlocalname": "\u0915\u0947\u0932\u093e\u092a\u0942\u0930"
+    },
+    {
+        "districtcode": "500",
+        "subdistrictcode": "4091",
+        "subdistrictnameenglish": "Ralegaon",
+        "subdistrictlocalname": "\u0930\u093e\u0933\u0947\u0917\u093e\u0935"
+    },
+    {
+        "districtcode": "500",
+        "subdistrictcode": "4092",
+        "subdistrictnameenglish": "Maregaon",
+        "subdistrictlocalname": "\u092e\u093e\u0930\u0947\u0917\u093e\u0935"
+    },
+    {
+        "districtcode": "500",
+        "subdistrictcode": "4093",
+        "subdistrictnameenglish": "Zari-Jamani",
+        "subdistrictlocalname": "\u091c\u0930\u0940 \u091c\u093e\u092e\u0928\u0940"
+    },
+    {
+        "districtcode": "500",
+        "subdistrictcode": "4094",
+        "subdistrictnameenglish": "Wani",
+        "subdistrictlocalname": "\u0935\u0928\u0940"
+    },
+    {
+        "districtcode": "665",
+        "subdistrictcode": "4157",
+        "subdistrictnameenglish": "Talasari",
+        "subdistrictlocalname": "\u0924\u0932\u093e\u0938\u0930\u0940"
+    },
+    {
+        "districtcode": "665",
+        "subdistrictcode": "4158",
+        "subdistrictnameenglish": "Dahanu",
+        "subdistrictlocalname": "\u0921\u0939\u093e\u0923\u0942"
+    },
+    {
+        "districtcode": "665",
+        "subdistrictcode": "4159",
+        "subdistrictnameenglish": "Vikramgad",
+        "subdistrictlocalname": "\u0935\u093f\u0915\u094d\u0930\u092e\u0917\u0921"
+    },
+    {
+        "districtcode": "665",
+        "subdistrictcode": "4160",
+        "subdistrictnameenglish": "Jawhar",
+        "subdistrictlocalname": "\u091c\u0935\u094d\u0939\u093e\u0930"
+    },
+    {
+        "districtcode": "665",
+        "subdistrictcode": "4161",
+        "subdistrictnameenglish": "Mokhada",
+        "subdistrictlocalname": "\u092e\u094b\u0916\u093e\u0921\u093e"
+    },
+    {
+        "districtcode": "665",
+        "subdistrictcode": "4162",
+        "subdistrictnameenglish": "Wada",
+        "subdistrictlocalname": "\u0935\u093e\u0921\u093e"
+    },
+    {
+        "districtcode": "665",
+        "subdistrictcode": "4163",
+        "subdistrictnameenglish": "Palghar",
+        "subdistrictlocalname": "\u092a\u093e\u0932\u0918\u0930"
+    },
+    {
+        "districtcode": "665",
+        "subdistrictcode": "4164",
+        "subdistrictnameenglish": "Vasai",
+        "subdistrictlocalname": "\u0935\u0938\u0908"
+    }
+]

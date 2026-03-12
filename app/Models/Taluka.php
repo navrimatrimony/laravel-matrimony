@@ -11,7 +11,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  */
 class Taluka extends Model
 {
-    protected $fillable = ['district_id', 'name'];
+    protected $fillable = ['district_id', 'name', 'name_mr'];
 
     public function district(): BelongsTo
     {

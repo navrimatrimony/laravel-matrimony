@@ -1,0 +1,182 @@
+[
+    {
+        "districtcode": "466",
+        "districtnameenglish": "Ahilyanagar",
+        "districtlocalname": "\u0905\u0939\u093f\u0932\u094d\u092f\u093e\u0928\u0917\u0930"
+    },
+    {
+        "districtcode": "467",
+        "districtnameenglish": "Akola",
+        "districtlocalname": "\u0905\u0915\u094b\u0932\u093e"
+    },
+    {
+        "districtcode": "468",
+        "districtnameenglish": "Amravati",
+        "districtlocalname": "\u0905\u092e\u0930\u093e\u0935\u0924\u0940"
+    },
+    {
+        "districtcode": "470",
+        "districtnameenglish": "Beed",
+        "districtlocalname": "\u092c\u0940\u0921"
+    },
+    {
+        "districtcode": "471",
+        "districtnameenglish": "Bhandara",
+        "districtlocalname": "\u092d\u0902\u0921\u093e\u0930\u093e"
+    },
+    {
+        "districtcode": "472",
+        "districtnameenglish": "Buldhana",
+        "districtlocalname": "\u092c\u0941\u0932\u0922\u093e\u0923\u093e"
+    },
+    {
+        "districtcode": "473",
+        "districtnameenglish": "Chandrapur",
+        "districtlocalname": "\u091a\u0902\u0926\u094d\u0930\u092a\u0942\u0930"
+    },
+    {
+        "districtcode": "469",
+        "districtnameenglish": "Chhatrapati Sambhajinagar",
+        "districtlocalname": "\u091b\u0924\u094d\u0930\u092a\u0924\u0940 \u0938\u0902\u092d\u093e\u091c\u0940\u0928\u0917\u0930"
+    },
+    {
+        "districtcode": "488",
+        "districtnameenglish": "Dharashiv",
+        "districtlocalname": "\u0927\u093e\u0930\u093e\u0936\u093f\u0935"
+    },
+    {
+        "districtcode": "474",
+        "districtnameenglish": "Dhule",
+        "districtlocalname": "\u0927\u0941\u0933\u0947"
+    },
+    {
+        "districtcode": "475",
+        "districtnameenglish": "Gadchiroli",
+        "districtlocalname": "\u0917\u0921\u091a\u093f\u0930\u094b\u0932\u0940"
+    },
+    {
+        "districtcode": "476",
+        "districtnameenglish": "Gondia",
+        "districtlocalname": "\u0917\u094b\u0902\u0926\u0940\u092f\u093e"
+    },
+    {
+        "districtcode": "477",
+        "districtnameenglish": "Hingoli",
+        "districtlocalname": "\u0939\u093f\u0902\u0917\u094b\u0932\u0940"
+    },
+    {
+        "districtcode": "478",
+        "districtnameenglish": "Jalgaon",
+        "districtlocalname": "\u091c\u0933\u0917\u093e\u0935"
+    },
+    {
+        "districtcode": "479",
+        "districtnameenglish": "Jalna",
+        "districtlocalname": "\u091c\u093e\u0932\u0928\u093e"
+    },
+    {
+        "districtcode": "480",
+        "districtnameenglish": "Kolhapur",
+        "districtlocalname": "\u0915\u094b\u0932\u094d\u0939\u093e\u092a\u0942\u0930"
+    },
+    {
+        "districtcode": "481",
+        "districtnameenglish": "Latur",
+        "districtlocalname": "\u0932\u093e\u0924\u0942\u0930"
+    },
+    {
+        "districtcode": "482",
+        "districtnameenglish": "Mumbai",
+        "districtlocalname": "\u092e\u0941\u0902\u092c\u0908"
+    },
+    {
+        "districtcode": "483",
+        "districtnameenglish": "Mumbai Suburban",
+        "districtlocalname": "\u092e\u0941\u0902\u092c\u0908 \u0909\u092a\u0928\u0917\u0930"
+    },
+    {
+        "districtcode": "484",
+        "districtnameenglish": "Nagpur",
+        "districtlocalname": "\u0928\u093e\u0917\u092a\u0942\u0930"
+    },
+    {
+        "districtcode": "485",
+        "districtnameenglish": "Nanded",
+        "districtlocalname": "\u0928\u093e\u0902\u0926\u0947\u0921"
+    },
+    {
+        "districtcode": "486",
+        "districtnameenglish": "Nandurbar",
+        "districtlocalname": "\u0928\u0902\u0926\u0942\u0930\u092c\u093e\u0930"
+    },
+    {
+        "districtcode": "487",
+        "districtnameenglish": "Nashik",
+        "districtlocalname": "\u0928\u093e\u0936\u093f\u0915"
+    },
+    {
+        "districtcode": "665",
+        "districtnameenglish": "Palghar",
+        "districtlocalname": "\u092a\u093e\u0932\u0918\u0930 "
+    },
+    {
+        "districtcode": "489",
+        "districtnameenglish": "Parbhani",
+        "districtlocalname": "\u092a\u0930\u092d\u0923\u0940"
+    },
+    {
+        "districtcode": "490",
+        "districtnameenglish": "Pune",
+        "districtlocalname": "\u092a\u0941\u0923\u0947"
+    },
+    {
+        "districtcode": "491",
+        "districtnameenglish": "Raigad",
+        "districtlocalname": "\u0930\u093e\u092f\u0917\u0921"
+    },
+    {
+        "districtcode": "492",
+        "districtnameenglish": "Ratnagiri",
+        "districtlocalname": "\u0930\u0924\u094d\u0928\u093e\u0917\u093f\u0930\u0940"
+    },
+    {
+        "districtcode": "493",
+        "districtnameenglish": "Sangli",
+        "districtlocalname": "\u0938\u093e\u0902\u0917\u0932\u0940"
+    },
+    {
+        "districtcode": "494",
+        "districtnameenglish": "Satara",
+        "districtlocalname": "\u0938\u093e\u0924\u093e\u0930\u093e"
+    },
+    {
+        "districtcode": "495",
+        "districtnameenglish": "Sindhudurg",
+        "districtlocalname": "\u0938\u093f\u0902\u0927\u0941\u0926\u0941\u0930\u094d\u0917"
+    },
+    {
+        "districtcode": "496",
+        "districtnameenglish": "Solapur",
+        "districtlocalname": "\u0938\u094b\u0932\u093e\u092a\u0942\u0930"
+    },
+    {
+        "districtcode": "497",
+        "districtnameenglish": "Thane",
+        "districtlocalname": "\u0920\u093e\u0923\u0947"
+    },
+    {
+        "districtcode": "498",
+        "districtnameenglish": "Wardha",
+        "districtlocalname": "\u0935\u0930\u094d\u0927\u093e"
+    },
+    {
+        "districtcode": "499",
+        "districtnameenglish": "Washim",
+        "districtlocalname": "\u0935\u093e\u0936\u093f\u092e"
+    },
+    {
+        "districtcode": "500",
+        "districtnameenglish": "Yavatmal",
+        "districtlocalname": "\u092f\u0935\u0924\u092e\u093e\u0933"
+    }
+]

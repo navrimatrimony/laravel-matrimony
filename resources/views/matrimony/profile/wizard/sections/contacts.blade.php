@@ -5,11 +5,11 @@
     if ($selfCount === 0) { $selfCount = 1; }
 @endphp
 <div class="space-y-6">
-    <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100 border-b border-gray-200 dark:border-gray-700 pb-2">Contacts</h2>
+    <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100 border-b border-gray-200 dark:border-gray-700 pb-2">{{ __('wizard.contacts') }}</h2>
 
     {{-- Your contact numbers: centralized engine + "+ Add / Remove this entry" pattern (max 3 self numbers). --}}
     <div class="space-y-2" data-self-contact-engine="1">
-        <h3 class="text-sm font-medium text-gray-700 dark:text-gray-300">Your contact numbers</h3>
+        <h3 class="text-sm font-medium text-gray-700 dark:text-gray-300">{{ __('wizard.your_contact_numbers') }}</h3>
         {{-- When 2 numbers: show them side-by-side (approx 50/50) on wider screens. --}}
         <div class="grid gap-2 sm:grid-cols-2" id="self-contact-slots-inner">
             @for($i = 0; $i < $selfCount; $i++)
@@ -25,8 +25,8 @@
                     <x-profile.contact-field
                         :name="$nameNum"
                         :value="$phone"
-                        :label="$i === 0 ? 'Primary contact number' : ''"
-                        placeholder="10-digit number"
+                        :label="$i === 0 ? __('wizard.primary_contact_number') : ''"
+                        :placeholder="__('wizard.placeholder_10_digit')"
                         :showCountryCode="true"
                         :showWhatsapp="true"
                         :nameWhatsapp="$nameWa"
@@ -36,10 +36,10 @@
                     />
                     <div class="flex justify-between items-center">
                         <span role="button" tabindex="0" class="text-xs font-medium text-blue-600 dark:text-blue-400 cursor-pointer self-contact-add">
-                            + Add
+                            + {{ __('wizard.add') }}
                         </span>
                         <button type="button" class="text-xs text-red-600 dark:text-red-400 hover:underline self-contact-remove">
-                            Remove this entry
+                            {{ __('wizard.remove_entry') }}
                         </button>
                     </div>
                 </div>
@@ -52,7 +52,7 @@
                     name="__NAME__"
                     value=""
                     label=""
-                    placeholder="10-digit number"
+                    :placeholder="__('wizard.placeholder_10_digit')"
                     :showCountryCode="true"
                     :showWhatsapp="true"
                     nameWhatsapp="__NAME_WHATSAPP__"
@@ -74,7 +74,7 @@
 
     {{-- Additional contacts: other people (name, number, relation) — no + on number field. --}}
     <div>
-        <h3 class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Additional contacts</h3>
+        <h3 class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">{{ __('wizard.additional_contacts') }}</h3>
         <div id="wizard-additional-contacts-container">
             @php
                 $contactRows = old('contacts', $profile_contacts ?? []);
@@ -87,22 +87,22 @@
                 @php $r = is_object($row) ? (array) $row : $row; @endphp
                 <div class="wizard-contact-row flex flex-wrap gap-4 items-end mb-3 p-3 bg-gray-50 dark:bg-gray-700/50 rounded border-2 border-rose-500/30 dark:border-rose-400/30 rounded-lg">
                     <input type="hidden" name="contacts[{{ $idx }}][id]" value="{{ $r['id'] ?? '' }}">
-                    <input type="text" name="contacts[{{ $idx }}][contact_name]" value="{{ $r['contact_name'] ?? '' }}" placeholder="Name" class="rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-3 py-2">
+                    <input type="text" name="contacts[{{ $idx }}][contact_name]" value="{{ $r['contact_name'] ?? '' }}" placeholder="{{ __('wizard.placeholder_name') }}" class="rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-3 py-2">
                     <x-profile.contact-field
                         name="contacts[{{ $idx }}][phone_number]"
                         :value="$r['phone_number'] ?? ''"
                         label=""
-                        placeholder="10-digit"
+                        :placeholder="__('wizard.placeholder_10_digit_short')"
                         :showCountryCode="true"
                         :showWhatsapp="true"
                         nameWhatsapp="contacts[{{ $idx }}][is_whatsapp]"
                         :valueWhatsapp="in_array($r['contact_preference'] ?? null, ['whatsapp','call','message'], true) ? ($r['contact_preference']) : (!empty($r['is_whatsapp']) ? 'whatsapp' : 'call')"
                         inputClass="flex-1 min-w-0 max-w-[10rem]"
                     />
-                    <input type="text" name="contacts[{{ $idx }}][relation_type]" value="{{ $r['relation_type'] ?? $r['contact_relation_id'] ?? '' }}" placeholder="Relation" class="rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-3 py-2">
-                    <label class="flex items-center gap-2"><input type="checkbox" name="contacts[{{ $idx }}][is_primary]" value="1" {{ !empty($r['is_primary']) ? 'checked' : '' }}> Primary</label>
+                    <input type="text" name="contacts[{{ $idx }}][relation_type]" value="{{ $r['relation_type'] ?? $r['contact_relation_id'] ?? '' }}" placeholder="{{ __('wizard.placeholder_relation') }}" class="rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-3 py-2">
+                    <label class="flex items-center gap-2"><input type="checkbox" name="contacts[{{ $idx }}][is_primary]" value="1" {{ !empty($r['is_primary']) ? 'checked' : '' }}> {{ __('wizard.primary') }}</label>
                     <div class="flex-1 flex justify-end">
-                        <button type="button" class="wizard-remove-contact text-xs text-red-600 dark:text-red-400 hover:underline">Remove this entry</button>
+                        <button type="button" class="wizard-remove-contact text-xs text-red-600 dark:text-red-400 hover:underline">{{ __('wizard.remove_entry') }}</button>
                     </div>
                 </div>
             @endforeach
@@ -110,11 +110,11 @@
         <template id="wizard-contact-row-template">
             <div class="wizard-contact-row flex flex-wrap gap-4 items-end mb-3 p-3 bg-gray-50 dark:bg-gray-700/50 rounded border-2 border-rose-500/30 dark:border-rose-400/30 rounded-lg">
                 <input type="hidden" name="contacts[__INDEX__][id]" value="">
-                <input type="text" name="contacts[__INDEX__][contact_name]" value="" placeholder="Name" class="rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-3 py-2">
+                <input type="text" name="contacts[__INDEX__][contact_name]" value="" placeholder="{{ __('wizard.placeholder_name') }}" class="rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-3 py-2">
                 <div class="contact-field-engine border-2 border-rose-500 dark:border-rose-400 rounded-lg p-3 flex-1 min-w-0 max-w-[14rem]">
                     <div class="flex items-center gap-1.5 flex-nowrap contact-master-field">
                         <input type="text" inputmode="tel" maxlength="5" value="+91" placeholder="+91" title="Country code" class="text-xs text-gray-600 dark:text-gray-400 border border-gray-300 dark:border-gray-600 rounded py-1.5 bg-gray-50 dark:bg-gray-700 h-9 box-border text-center shrink-0 contact-cc-input" style="flex:0 0 2.25rem; width:2.25rem; min-width:2.25rem; max-width:2.25rem; padding-left:0.2rem; padding-right:0.2rem;">
-                        <input type="text" inputmode="numeric" pattern="[0-9]*" maxlength="10" name="contacts[__INDEX__][phone_number]" placeholder="10-digit" data-contact-engine class="h-9 rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-2 py-1.5 text-sm min-w-0 flex-1" style="min-width:0;">
+                        <input type="text" inputmode="numeric" pattern="[0-9]*" maxlength="10" name="contacts[__INDEX__][phone_number]" placeholder="{{ __('wizard.placeholder_10_digit_short') }}" data-contact-engine class="h-9 rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-2 py-1.5 text-sm min-w-0 flex-1" style="min-width:0;">
                         <input type="hidden" name="contacts[__INDEX__][is_whatsapp]" value="whatsapp" class="contact-preference-input">
                         <div class="relative shrink-0 contact-preference-single" data-current-pref="whatsapp">
                             <button type="button" class="contact-pref-trigger rounded p-1.5 ring-2 ring-rose-500 bg-rose-50 dark:bg-rose-900/30 inline-flex items-center justify-center" title="Prefer contact via — click to change" aria-haspopup="true" aria-expanded="false">
@@ -130,15 +130,15 @@
                         </div>
                     </div>
                 </div>
-                <input type="text" name="contacts[__INDEX__][relation_type]" value="" placeholder="Relation" class="rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-3 py-2">
-                <label class="flex items-center gap-2"><input type="checkbox" name="contacts[__INDEX__][is_primary]" value="1"> Primary</label>
+                <input type="text" name="contacts[__INDEX__][relation_type]" value="" placeholder="{{ __('wizard.placeholder_relation') }}" class="rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-3 py-2">
+                <label class="flex items-center gap-2"><input type="checkbox" name="contacts[__INDEX__][is_primary]" value="1"> {{ __('wizard.primary') }}</label>
                 <div class="flex-1 flex justify-end">
-                    <button type="button" class="wizard-remove-contact text-xs text-red-600 dark:text-red-400 hover:underline">Remove this entry</button>
+                    <button type="button" class="wizard-remove-contact text-xs text-red-600 dark:text-red-400 hover:underline">{{ __('wizard.remove_entry') }}</button>
                 </div>
             </div>
         </template>
         <button type="button" id="wizard-add-contact" class="mt-2 inline-flex items-center gap-1.5 px-3 py-2 bg-rose-100 dark:bg-rose-900/30 text-rose-700 dark:text-rose-300 border-2 border-rose-500 dark:border-rose-400 rounded-lg font-medium text-xs hover:bg-rose-200 dark:hover:bg-rose-800/40">
-            <span class="text-base leading-none" aria-hidden="true">+</span> Add
+            <span class="text-base leading-none" aria-hidden="true">+</span> {{ __('wizard.add') }}
         </button>
     </div>
 </div>
@@ -162,8 +162,8 @@
                 inp.setAttribute('name', n);
             });
             var labelEl = slot.querySelector('label');
-            if (labelEl && labelEl.textContent.includes('Primary contact number')) {
-                if (!isPrimary) labelEl.textContent = '';
+            if (labelEl && !isPrimary) {
+                labelEl.textContent = '';
             }
         });
     }

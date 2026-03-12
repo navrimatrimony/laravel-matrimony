@@ -26,6 +26,8 @@ use App\Http\Controllers\Admin\OcrPatternController;
 use App\Http\Controllers\Admin\AdminReligionController;
 use App\Http\Controllers\Admin\AdminCasteController;
 use App\Http\Controllers\Admin\SubCasteAdminController;
+use App\Http\Controllers\Admin\HomepageImageController;
+use App\Http\Controllers\Admin\TranslationController;
 use App\Http\Controllers\Internal\Admin\LocationSuggestionAdminController;
 use App\Http\Controllers\Internal\Admin\CityAliasAdminController;
 use App\Http\Controllers\DashboardController;
@@ -409,6 +411,15 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
     Route::get('/admin-capabilities', [AdminCapabilityController::class, 'index'])->name('admin-capabilities.index');
     Route::post('/admin-capabilities/{admin}/update', [AdminCapabilityController::class, 'update'])->name('admin-capabilities.update');
 
+    /*
+    | Translations (EN / MR) — admin edits display values only; key is read-only. Add alias = new key.
+    */
+    Route::get('/translations', [TranslationController::class, 'index'])->name('translations.index');
+    Route::get('/translations/edit', [TranslationController::class, 'edit'])->name('translations.edit');
+    Route::put('/translations', [TranslationController::class, 'update'])->name('translations.update');
+    Route::get('/translations/create', [TranslationController::class, 'create'])->name('translations.create');
+    Route::post('/translations', [TranslationController::class, 'store'])->name('translations.store');
+
     Route::get('/view-back-settings', [AdminController::class, 'viewBackSettings'])->name('view-back-settings.index');
     Route::post('/view-back-settings', [AdminController::class, 'updateViewBackSettings'])->name('view-back-settings.update');
 
@@ -438,6 +449,10 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
 
     Route::get('/notifications', [AdminController::class, 'userNotificationsIndex'])->name('notifications.index');
     Route::get('/notifications/user', [AdminController::class, 'userNotificationsShow'])->name('notifications.user.show');
+
+    Route::get('/homepage-images', [HomepageImageController::class, 'index'])->name('homepage-images.index');
+    Route::post('/homepage-images', [HomepageImageController::class, 'store'])->name('homepage-images.store');
+    Route::post('/homepage-images/clear', [HomepageImageController::class, 'clear'])->name('homepage-images.clear');
 
     /*
     | Phase-4 Day-4: Biodata Intake Sandbox & Attach (admin only)

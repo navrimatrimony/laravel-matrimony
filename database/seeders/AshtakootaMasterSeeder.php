@@ -27,10 +27,10 @@ class AshtakootaMasterSeeder extends Seeder
             return;
         }
         $rows = [
-            ['key' => 'brahmin', 'label' => 'Brahmin'],
-            ['key' => 'kshatriya', 'label' => 'Kshatriya'],
-            ['key' => 'vaishya', 'label' => 'Vaishya'],
-            ['key' => 'shudra', 'label' => 'Shudra'],
+            ['key' => 'brahmin', 'label' => 'Brahmin (ब्राह्मण)'],
+            ['key' => 'kshatriya', 'label' => 'Kshatriya (क्षत्रिय)'],
+            ['key' => 'vaishya', 'label' => 'Vaishya (वैश्य)'],
+            ['key' => 'shudra', 'label' => 'Shudra (शूद्र)'],
         ];
         foreach ($rows as $row) {
             DB::table('master_varnas')->updateOrInsert(
@@ -46,11 +46,11 @@ class AshtakootaMasterSeeder extends Seeder
             return;
         }
         $rows = [
-            ['key' => 'chatushpada', 'label' => 'Chatushpada'],
-            ['key' => 'manav', 'label' => 'Manav'],
-            ['key' => 'jalachar', 'label' => 'Jalachar'],
-            ['key' => 'vanchar', 'label' => 'Vanchar'],
-            ['key' => 'keet', 'label' => 'Keet'],
+            ['key' => 'chatushpada', 'label' => 'Chatushpad (चतुष्पाद)'],
+            ['key' => 'manav', 'label' => 'Manav / Nar (मानव/नर)'],
+            ['key' => 'jalachar', 'label' => 'Jalachar (जलचर)'],
+            ['key' => 'vanchar', 'label' => 'Vanchar (वनचर)'],
+            ['key' => 'keet', 'label' => 'Keetak (कीटक)'],
         ];
         foreach ($rows as $row) {
             DB::table('master_vashyas')->updateOrInsert(
@@ -66,13 +66,15 @@ class AshtakootaMasterSeeder extends Seeder
             return;
         }
         $rows = [
-            ['key' => 'sun', 'label' => 'Sun'],
-            ['key' => 'moon', 'label' => 'Moon'],
-            ['key' => 'mars', 'label' => 'Mars'],
-            ['key' => 'mercury', 'label' => 'Mercury'],
-            ['key' => 'venus', 'label' => 'Venus'],
-            ['key' => 'jupiter', 'label' => 'Jupiter'],
-            ['key' => 'saturn', 'label' => 'Saturn'],
+            ['key' => 'sun', 'label' => 'Sun (सूर्य)'],
+            ['key' => 'moon', 'label' => 'Moon (चंद्र)'],
+            ['key' => 'mars', 'label' => 'Mars (मंगळ)'],
+            ['key' => 'mercury', 'label' => 'Mercury (बुध)'],
+            ['key' => 'jupiter', 'label' => 'Jupiter (गुरु)'],
+            ['key' => 'venus', 'label' => 'Venus (शुक्र)'],
+            ['key' => 'saturn', 'label' => 'Saturn (शनी)'],
+            ['key' => 'rahu', 'label' => 'Rahu (राहू)'],
+            ['key' => 'ketu', 'label' => 'Ketu (केतू)'],
         ];
         foreach ($rows as $row) {
             DB::table('master_rashi_lords')->updateOrInsert(

@@ -6,6 +6,7 @@
     'use strict';
 
     var SEARCH_URL = '/api/internal/location/search';
+    var APP_LOCALE = (document.documentElement && document.documentElement.lang) ? document.documentElement.lang.split('-')[0] : 'en';
     var DEBOUNCE_MS = 200;
 
     function buildLine(item) {
@@ -13,11 +14,197 @@
         return cityName + ', ' + (item.taluka_name || '') + ', ' + (item.district_name || '') + ', ' + (item.state_name || '');
     }
 
-    function renderResults(resultsEl, data, onSelect) {
+    function openSuggestModal(wrapper, name) {
+        var tpl = document.getElementById('location-suggest-modal-template');
+        if (!tpl) return;
+        var frag = document.createElement('div');
+        frag.innerHTML = tpl.innerHTML.trim();
+        var backdrop = frag.children[0];
+        var modal = frag.children[1];
+        var inner = modal.querySelector('.location-suggest-modal-inner');
+        var nameDisplay = modal.querySelector('.location-suggest-name-display');
+        var stateSelect = modal.querySelector('.location-suggest-state');
+        var districtSelect = modal.querySelector('.location-suggest-district');
+        var talukaSelect = modal.querySelector('.location-suggest-taluka');
+        var errorEl = modal.querySelector('.location-suggest-error');
+        var successEl = modal.querySelector('.location-suggest-success');
+
+        nameDisplay.textContent = name;
+
+        function close() {
+            backdrop.remove();
+            modal.remove();
+        }
+
+        modal.querySelector('.location-suggest-close').addEventListener('click', close);
+        modal.querySelector('.location-suggest-cancel').addEventListener('click', close);
+        backdrop.addEventListener('click', close);
+
+        function setError(msg) {
+            if (!errorEl) return;
+            errorEl.textContent = msg;
+            errorEl.classList.remove('hidden');
+            if (successEl) successEl.classList.add('hidden');
+        }
+
+        function setSuccess(msg) {
+            if (!successEl) return;
+            successEl.textContent = msg;
+            successEl.classList.remove('hidden');
+            if (errorEl) errorEl.classList.add('hidden');
+        }
+
+        function loadStates(selectedId) {
+            fetch('/api/internal/location/states', { headers: { 'Accept': 'application/json' } })
+                .then(function (r) { return r.json(); })
+                .then(function (data) {
+                    if (!data.success || !Array.isArray(data.data)) return;
+                    stateSelect.innerHTML = '<option value=\"\">Select state</option>';
+                    data.data.forEach(function (row) {
+                        var opt = document.createElement('option');
+                        opt.value = row.id;
+                        opt.textContent = row.name;
+                        stateSelect.appendChild(opt);
+                    });
+                    if (selectedId) {
+                        stateSelect.value = String(selectedId);
+                        stateSelect.dispatchEvent(new Event('change'));
+                    }
+                })
+                .catch(function () {});
+        }
+
+        function loadDistricts(stateId, selectedId) {
+            districtSelect.innerHTML = '<option value=\"\">Select district</option>';
+            talukaSelect.innerHTML = '<option value=\"\">Select taluka</option>';
+            if (!stateId) return;
+            fetch('/api/internal/location/districts?state_id=' + encodeURIComponent(stateId), { headers: { 'Accept': 'application/json' } })
+                .then(function (r) { return r.json(); })
+                .then(function (data) {
+                    if (!data.success || !Array.isArray(data.data)) return;
+                    data.data.forEach(function (row) {
+                        var opt = document.createElement('option');
+                        opt.value = row.id;
+                        opt.textContent = row.name;
+                        districtSelect.appendChild(opt);
+                    });
+                    if (selectedId) {
+                        districtSelect.value = String(selectedId);
+                        districtSelect.dispatchEvent(new Event('change'));
+                    }
+                })
+                .catch(function () {});
+        }
+
+        function loadTalukas(districtId, selectedId) {
+            talukaSelect.innerHTML = '<option value=\"\">Select taluka</option>';
+            if (!districtId) return;
+            fetch('/api/internal/location/talukas?district_id=' + encodeURIComponent(districtId), { headers: { 'Accept': 'application/json' } })
+                .then(function (r) { return r.json(); })
+                .then(function (data) {
+                    if (!data.success || !Array.isArray(data.data)) return;
+                    data.data.forEach(function (row) {
+                        var opt = document.createElement('option');
+                        opt.value = row.id;
+                        opt.textContent = row.name;
+                        talukaSelect.appendChild(opt);
+                    });
+                    if (selectedId) {
+                        talukaSelect.value = String(selectedId);
+                    }
+                })
+                .catch(function () {});
+        }
+
+        stateSelect.addEventListener('change', function () {
+            loadDistricts(stateSelect.value, null);
+        });
+        districtSelect.addEventListener('change', function () {
+            loadTalukas(districtSelect.value, null);
+        });
+
+        // Try to preselect from wrapper hidden fields / profile context if available
+        var stateHidden = (wrapper.querySelector('.location-hidden-state') || {}).value || '';
+        var districtHidden = (wrapper.querySelector('.location-hidden-district') || {}).value || '';
+        var talukaHidden = (wrapper.querySelector('.location-hidden-taluka') || {}).value || '';
+        loadStates(stateHidden || null);
+        if (stateHidden) {
+            loadDistricts(stateHidden, districtHidden || null);
+            if (districtHidden) {
+                loadTalukas(districtHidden, talukaHidden || null);
+            }
+        }
+
+        modal.querySelector('.location-suggest-submit').addEventListener('click', function () {
+            var stateId = stateSelect.value;
+            var districtId = districtSelect.value;
+            var talukaId = talukaSelect.value;
+            if (!stateId || !districtId || !talukaId) {
+                setError('Please select state, district and taluka.');
+                return;
+            }
+
+            var context = wrapper.dataset.locationContext || 'residence';
+            var countryId = (wrapper.querySelector('.location-hidden-country') || {}).value || 1;
+            var payload = {
+                suggested_name: name,
+                country_id: countryId || 1,
+                state_id: stateId,
+                district_id: districtId,
+                taluka_id: talukaId,
+                suggestion_type: 'village',
+            };
+
+            fetch('/api/internal/location/suggest', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'X-CSRF-TOKEN': document.querySelector('meta[name=\"csrf-token\"]') ? document.querySelector('meta[name=\"csrf-token\"]').getAttribute('content') : ''
+                },
+                body: JSON.stringify(payload),
+            }).then(function (r) { return r.json(); })
+                .then(function (data) {
+                    if (data && data.success) {
+                        setSuccess('Thanks! Location submitted for admin approval.');
+                        setTimeout(close, 900);
+                    } else {
+                        var msg = (data && data.message) ? data.message : 'Could not submit suggestion.';
+                        setError(msg);
+                    }
+                })
+                .catch(function () {
+                    setError('Network error while submitting suggestion.');
+                });
+        });
+
+        document.body.appendChild(backdrop);
+        document.body.appendChild(modal);
+        inner.focus();
+    }
+
+    function renderResults(wrapper, resultsEl, data, onSelect) {
         if (!data.success || !data.data || data.data.length === 0) {
-            resultsEl.innerHTML = '<div class="p-2 text-gray-500">No matches</div>';
+            var q = (wrapper.querySelector('.location-typeahead-input').value || '').trim();
+            var html = '<div class="p-2 text-gray-500">No matches</div>';
+            if (q.length >= 3) {
+                html += '' +
+                    '<button type="button" class="w-full text-left px-3 py-2 text-sm bg-rose-50 hover:bg-rose-100 text-rose-700 border-t border-rose-200 location-suggest-btn" data-suggest-name="' + q.replace(/"/g, '&quot;') + '">' +
+                    '➕ Add "' + q.replace(/</g, '&lt;').replace(/>/g, '&gt;') + '" as village / city' +
+                    '</button>' +
+                    '<div class="px-3 py-1 text-xs text-gray-500">We’ll send this to admin for approval.</div>';
+            }
+            resultsEl.innerHTML = html;
             resultsEl.classList.remove('hidden');
             resultsEl.style.display = 'block';
+
+            var suggestBtn = resultsEl.querySelector('.location-suggest-btn');
+            if (suggestBtn) {
+                suggestBtn.addEventListener('click', function () {
+                    openSuggestModal(wrapper, suggestBtn.getAttribute('data-suggest-name') || q);
+                });
+            }
             return;
         }
         resultsEl.innerHTML = '';
@@ -126,12 +313,12 @@
                 return;
             }
             debounce = setTimeout(function () {
-                fetch(SEARCH_URL + '?q=' + encodeURIComponent(q), {
+                fetch(SEARCH_URL + '?q=' + encodeURIComponent(q) + '&locale=' + encodeURIComponent(APP_LOCALE), {
                     headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }
                 })
                     .then(function (r) { return r.json(); })
                     .then(function (data) {
-                        renderResults(resultsEl, data, onSelect);
+                        renderResults(wrapper, resultsEl, data, onSelect);
                     });
             }, DEBOUNCE_MS);
         });

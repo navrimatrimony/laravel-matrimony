@@ -11,7 +11,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  */
 class District extends Model
 {
-    protected $fillable = ['state_id', 'name'];
+    protected $fillable = ['state_id', 'name', 'name_mr'];
 
     public function state(): BelongsTo
     {

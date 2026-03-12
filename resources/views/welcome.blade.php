@@ -4,11 +4,21 @@
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
 
-        <title>{{ config('app.name', 'Laravel') }}</title>
+        <title>नवरी मिळे नवऱ्याला – Navri Mile Navryala | Marathi Matrimony</title>
 
         <!-- Fonts -->
         <link rel="preconnect" href="https://fonts.bunny.net">
         <link href="https://fonts.bunny.net/css?family=instrument-sans:400,500,600" rel="stylesheet" />
+        <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Devanagari:wght@400;500;600;700&display=swap" rel="stylesheet" />
+        <style>
+            :root {
+                --bm-red: #c41e3a;
+                --bm-red-dark: #a01830;
+                --bm-red-darker: #7a1226;
+                --bm-red-darkest: #5c0e1c;
+            }
+            .font-devanagari { font-family: 'Noto Sans Devanagari', 'Instrument Sans', sans-serif; }
+        </style>
 
         <!-- Styles / Scripts -->
         @if (file_exists(public_path('build/manifest.json')) || file_exists(public_path('hot')))
@@ -19,41 +29,77 @@
             </style>
         @endif
     </head>
-    <body class="bg-[#FDFDFC] dark:bg-[#0a0a0a] text-[#1b1b18] flex p-6 lg:p-8 items-center lg:justify-center min-h-screen flex-col">
-        <header class="w-full lg:max-w-4xl max-w-[335px] text-sm mb-6 not-has-[nav]:hidden">
-            @if (Route::has('login'))
-                <nav class="flex items-center justify-end gap-4">
-                    @auth
-                        <a
-                            href="{{ url('/dashboard') }}"
-                            class="inline-block px-5 py-1.5 dark:text-[#EDEDEC] border-[#19140035] hover:border-[#1915014a] border text-[#1b1b18] dark:border-[#3E3E3A] dark:hover:border-[#62605b] rounded-sm text-sm leading-normal"
-                        >
-                            Dashboard
-                        </a>
-                    @else
-                        <a
-                            href="{{ route('login') }}"
-                            class="inline-block px-5 py-1.5 dark:text-[#EDEDEC] text-[#1b1b18] border border-transparent hover:border-[#19140035] dark:hover:border-[#3E3E3A] rounded-sm text-sm leading-normal"
-                        >
-                            Log in
-                        </a>
-
-                        @if (Route::has('register'))
-                            <a
-                                href="{{ route('register') }}"
-                                class="inline-block px-5 py-1.5 dark:text-[#EDEDEC] border-[#19140035] hover:border-[#1915014a] border text-[#1b1b18] dark:border-[#3E3E3A] dark:hover:border-[#62605b] rounded-sm text-sm leading-normal">
-                                Register
-                            </a>
-                        @endif
-                    @endauth
-                </nav>
-            @endif
+    <body class="min-h-screen flex flex-col bg-[#f5f5f5] dark:bg-[#111] text-[#333] dark:text-[#e5e5e5]">
+        {{-- Top bar: BharatMatrimony-style — white bar, red CTA --}}
+        <header class="w-full bg-white dark:bg-[#1a1a1a] border-b border-[#ddd] dark:border-[#333] sticky top-0 z-10">
+            <div class="max-w-6xl mx-auto px-4 sm:px-6 py-3 flex items-center justify-between">
+                <a href="{{ url('/') }}" class="flex items-center gap-2">
+                    <span class="font-devanagari text-xl font-bold text-[var(--bm-red)]">नवरी मिळे नवऱ्याला</span>
+                    <span class="text-sm text-[var(--bm-red-dark)] font-medium hidden sm:inline">Navri Mile Navryala</span>
+                </a>
+                @if (Route::has('login'))
+                    <nav class="flex items-center gap-3">
+                        @auth
+                            <a href="{{ url('/dashboard') }}" class="px-4 py-2 text-sm font-medium text-[var(--bm-red)] hover:underline">Dashboard</a>
+                        @else
+                            <span class="text-sm text-[#666] dark:text-[#999] hidden sm:inline">Already a member?</span>
+                            <a href="{{ route('login') }}" class="px-4 py-2 text-sm font-medium text-[var(--bm-red)] hover:underline">Login</a>
+                            <a href="#" class="px-4 py-2 text-sm text-[#555] dark:text-[#999] hover:text-[var(--bm-red)]">Help</a>
+                            @if (Route::has('register'))
+                                <a href="{{ route('register') }}" class="px-4 py-2 text-sm font-medium bg-[var(--bm-red)] text-white rounded hover:bg-[var(--bm-red-dark)] transition-colors">Register Free</a>
+                            @endif
+                        @endauth
+                    </nav>
+                @endif
+            </div>
         </header>
-        <div class="flex items-center justify-center w-full transition-opacity opacity-100 duration-750 lg:grow starting:opacity-0">
-            <main class="flex max-w-[335px] w-full flex-col-reverse lg:max-w-4xl lg:flex-row">
-                
-            <div class="text-[13px] leading-[20px] flex-1 p-6 pb-12 lg:p-20 bg-white dark:bg-[#161615] dark:text-[#EDEDEC] shadow-[inset_0px_0px_0px_1px_rgba(26,26,0,0.16)] dark:shadow-[inset_0px_0px_0px_1px_#fffaed2d] rounded-bl-lg rounded-br-lg lg:rounded-tl-lg lg:rounded-br-none">
-                    <h1 class="mb-4 font-medium text-lg">Find Your Perfect Match</h1>
+
+        {{-- Trust & Credibility row — exactly like BM: 3 stats with icons, below header --}}
+        <section class="w-full py-4 px-4 sm:px-6 bg-white dark:bg-[#1a1a1a] border-b border-[#eee] dark:border-[#333]">
+            <div class="max-w-5xl mx-auto flex flex-col sm:flex-row items-center justify-center gap-8 sm:gap-12 text-center">
+                <div class="flex items-center gap-3">
+                    <span class="inline-flex w-10 h-10 rounded-full bg-[#fff0f0] dark:bg-[#2a1518] items-center justify-center text-[var(--bm-red)]" aria-hidden="true">✓</span>
+                    <div>
+                        <p class="font-bold text-[var(--bm-red)]">100% Mobile-verified profiles</p>
+                    </div>
+                </div>
+                <div class="flex items-center gap-3">
+                    <span class="inline-flex w-10 h-10 rounded-full bg-[#fff0f0] dark:bg-[#2a1518] items-center justify-center text-[var(--bm-red)]" aria-hidden="true">✓</span>
+                    <div>
+                        <p class="font-bold text-[var(--bm-red)]">4 Crore+ Customers served</p>
+                    </div>
+                </div>
+                <div class="flex items-center gap-3">
+                    <span class="inline-flex w-10 h-10 rounded-full bg-[#fff0f0] dark:bg-[#2a1518] items-center justify-center text-[var(--bm-red)]" aria-hidden="true">✓</span>
+                    <div>
+                        <p class="font-bold text-[var(--bm-red)]">26 Years of successful matchmaking</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        {{-- Lakhs of Happy Marriages — right after trust row, like BM --}}
+        <section class="w-full py-4 px-4 sm:px-6 bg-[#fafafa] dark:bg-[#0f0f0f] border-b border-[#eee] dark:border-[#333]">
+            <div class="max-w-5xl mx-auto text-center">
+                <h2 class="text-lg sm:text-xl font-bold text-[var(--bm-red)] mb-1">Lakhs of Happy Marriages!</h2>
+                <p class="text-sm text-[#555] dark:text-[#aaa]">Featured in the Limca Book of Records for highest number of documented marriages online.</p>
+            </div>
+        </section>
+
+        {{-- Hero: light gray bg, red headline, then form card with colored borders (BM: green top, orange bottom — we use red) --}}
+        <section class="w-full py-6 lg:py-10 px-4 sm:px-6 bg-[#f5f5f5] dark:bg-[#111]">
+            <div class="max-w-5xl mx-auto">
+                <div class="text-center mb-6 lg:mb-8">
+                    <h1 class="text-2xl sm:text-3xl lg:text-4xl font-bold text-[var(--bm-red)] mb-2">The biggest and most trusted matrimony service for Marathis!</h1>
+                    <p class="text-[#555] dark:text-[#aaa] text-base sm:text-lg">Now find matches based on your hobbies &amp; interests</p>
+                </div>
+
+                {{-- Hero card: BM-style green top border + red bottom border (we use red shades) --}}
+                <div class="flex items-center justify-center w-full">
+                    <main class="flex max-w-[335px] w-full flex-col-reverse lg:max-w-4xl lg:flex-row shadow-lg rounded-lg overflow-hidden bg-white dark:bg-[#1a1a1a] border-t-4 border-[#2e7d32] border-b-4 border-[var(--bm-red)] border-x border-[#e0e0e0] dark:border-[#333]">
+                        <div class="text-[13px] leading-[20px] flex-1 p-6 pb-12 lg:p-20 bg-white dark:bg-[#161615] dark:text-[#EDEDEC] shadow-[inset_0px_0px_0px_1px_rgba(26,26,0,0.16)] dark:shadow-[inset_0px_0px_0px_1px_#fffaed2d] rounded-bl-lg rounded-br-lg lg:rounded-tl-lg lg:rounded-br-none">
+                            <p class="text-xs text-[var(--bm-red)] font-semibold mb-1">Create a Matrimony Profile</p>
+                            <h2 class="mb-4 font-medium text-lg text-[#1b1b18] dark:text-[#EDEDEC]">Find your perfect match</h2>
                     
                     <form method="GET" action="{{ route('matrimony.profiles.index') }}" class="space-y-4">
                         {{-- Age Range Field --}}
@@ -66,7 +112,7 @@
                                     min="18"
                                     max="60"
                                     placeholder="From"
-                                    class="flex-1 border border-[#e3e3e0] dark:border-[#3E3E3A] rounded-sm px-3 py-2 bg-white dark:bg-[#161615] text-[#1b1b18] dark:text-[#EDEDEC] focus:outline-none focus:ring-2 focus:ring-[#f53003] dark:focus:ring-[#FF4433]"
+                                    class="flex-1 border border-[#e3e3e0] dark:border-[#3E3E3A] rounded-sm px-3 py-2 bg-white dark:bg-[#161615] text-[#1b1b18] dark:text-[#EDEDEC] focus:outline-none focus:ring-2 focus:ring-[var(--bm-red)]"
                                 >
                                 <span class="text-[#706f6c] dark:text-[#A1A09A]">to</span>
                                 <input
@@ -75,7 +121,7 @@
                                     min="18"
                                     max="60"
                                     placeholder="To"
-                                    class="flex-1 border border-[#e3e3e0] dark:border-[#3E3E3A] rounded-sm px-3 py-2 bg-white dark:bg-[#161615] text-[#1b1b18] dark:text-[#EDEDEC] focus:outline-none focus:ring-2 focus:ring-[#f53003] dark:focus:ring-[#FF4433]"
+                                    class="flex-1 border border-[#e3e3e0] dark:border-[#3E3E3A] rounded-sm px-3 py-2 bg-white dark:bg-[#161615] text-[#1b1b18] dark:text-[#EDEDEC] focus:outline-none focus:ring-2 focus:ring-[var(--bm-red)]"
                                 >
                             </div>
                         </div>
@@ -87,7 +133,7 @@
                                 type="text"
                                 name="caste"
                                 placeholder="Enter caste"
-                                class="w-full border border-[#e3e3e0] dark:border-[#3E3E3A] rounded-sm px-3 py-2 bg-white dark:bg-[#161615] text-[#1b1b18] dark:text-[#EDEDEC] focus:outline-none focus:ring-2 focus:ring-[#f53003] dark:focus:ring-[#FF4433]"
+                                class="w-full border border-[#e3e3e0] dark:border-[#3E3E3A] rounded-sm px-3 py-2 bg-white dark:bg-[#161615] text-[#1b1b18] dark:text-[#EDEDEC] focus:outline-none focus:ring-2 focus:ring-[var(--bm-red)]"
                             >
                         </div>
 
@@ -116,7 +162,7 @@
                         <div class="pt-2">
                             <button
                                 type="submit"
-                                class="w-full dark:bg-[#eeeeec] dark:border-[#eeeeec] dark:text-[#1C1C1A] dark:hover:bg-white dark:hover:border-white hover:bg-black hover:border-black px-5 py-2.5 bg-[#1b1b18] rounded-sm border border-black text-white text-sm leading-normal font-medium transition-colors"
+                                class="w-full px-5 py-2.5 rounded-sm border border-[var(--bm-red)] bg-[var(--bm-red)] text-white text-sm font-medium hover:bg-[var(--bm-red-dark)] hover:border-[var(--bm-red-dark)] transition-colors"
                             >
                                 Search Profiles
                             </button>
@@ -124,7 +170,7 @@
                     </form>
                 </div>
 
-                <div class="bg-[#fff2f2] dark:bg-[#1D0002] relative lg:-ml-px -mb-px lg:mb-0 rounded-t-lg lg:rounded-t-none lg:rounded-r-lg aspect-[335/376] lg:aspect-auto w-full lg:w-[438px] shrink-0 overflow-hidden flex items-center justify-center">
+                <div class="bg-[#eee] dark:bg-[#222] relative lg:-ml-px -mb-px lg:mb-0 rounded-t-lg lg:rounded-t-none lg:rounded-r-lg aspect-[335/376] lg:aspect-auto w-full lg:w-[438px] shrink-0 overflow-hidden flex items-center justify-center">
                     {{-- Matrimonial Image --}}
                     <img src="{{ asset('images/matrimonial-hero.jpg') }}" 
                          alt="Matrimonial Service" 
@@ -273,11 +319,229 @@
                     </svg>
                     <div class="absolute inset-0 rounded-t-lg lg:rounded-t-none lg:rounded-r-lg shadow-[inset_0px_0px_0px_1px_rgba(26,26,0,0.16)] dark:shadow-[inset_0px_0px_0px_1px_#fffaed2d]"></div>
                 </div>
-            </main>
-        </div>
+                    </main>
+                </div>
 
-        @if (Route::has('login'))
-            <div class="h-14.5 hidden lg:block"></div>
-        @endif
+            </div>
+        </section>
+
+        {{-- Assisted Service — BM: light green bg, two columns, "Know More →" --}}
+        <section class="w-full py-12 px-4 sm:px-6 bg-[#e8f5e9] dark:bg-[#1b2e1b]">
+            <div class="max-w-5xl mx-auto flex flex-col lg:flex-row items-center gap-8">
+                <div class="flex-1">
+                    <h2 class="text-xl font-bold text-[#2e7d32] dark:text-[#81c784] mb-1">Assisted Service</h2>
+                    <p class="text-sm text-[#333] dark:text-[#ccc] mb-2">Personalised matchmaking service.</p>
+                    <p class="font-bold text-[#1b5e20] dark:text-[#a5d6a7] mb-3">Find your match 10x faster</p>
+                    <p class="text-sm text-[#333] dark:text-[#ccc] mb-4">Personalized matchmaking service through expert Relationship Manager.</p>
+                    <ul class="text-sm text-[#333] dark:text-[#ccc] space-y-1 mb-4">
+                        <li>Guaranteed matches</li>
+                        <li>Better response</li>
+                        <li>Save time &amp; effort</li>
+                    </ul>
+                    <a href="#" class="inline-block px-4 py-2 bg-[var(--bm-red)] text-white text-sm font-medium rounded hover:bg-[var(--bm-red-dark)]">Know More →</a>
+                </div>
+                @php $homepageImages = $homepageImages ?? []; $assistedImg = $homepageImages['assisted_service'] ?? asset('images/homepage/assisted-service.png'); @endphp
+                <div class="flex-1 max-w-sm rounded-lg overflow-hidden flex items-center justify-center bg-[#c8e6c9] dark:bg-[#2e3d2e]">
+                    @if($assistedImg)
+                        <img src="{{ $assistedImg }}" alt="Assisted Service — Relationship Manager" class="w-full h-48 object-cover object-top" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+                    @endif
+                    <div class="w-full h-48 {{ $assistedImg ? 'hidden' : '' }} flex items-center justify-center text-[#2e7d32] dark:text-[#81c784] text-sm">Image placeholder</div>
+                </div>
+            </div>
+        </section>
+
+        {{-- Service for Elites — BM: dark red/maroon bg, two columns, "Know More →" --}}
+        <section class="w-full py-12 px-4 sm:px-6 bg-[var(--bm-red-darker)] dark:bg-[#3d0a0f]">
+            <div class="max-w-5xl mx-auto flex flex-col lg:flex-row-reverse items-center gap-8">
+                <div class="flex-1 text-white">
+                    <h2 class="text-xl font-bold mb-4">Service for Elites</h2>
+                    <ul class="space-y-4 text-sm">
+                        <li><strong>17+ Years of Elite Matchmaking Experience</strong><br>Over 100,000 Elites served since 2008</li>
+                        <li><strong>Dedicated Relationship Managers</strong><br>Experienced Relationship Managers guide you at every step</li>
+                        <li><strong>100% Confidential Service</strong><br>Strict privacy &amp; confidentiality ensured</li>
+                    </ul>
+                    <a href="#" class="inline-block mt-4 px-4 py-2 bg-white text-[var(--bm-red)] text-sm font-medium rounded hover:bg-[#eee]">Know More →</a>
+                </div>
+                @php $eliteImg = ($homepageImages ?? [])['elite_section'] ?? null; @endphp
+                <div class="flex-1 max-w-sm rounded-lg overflow-hidden flex items-center justify-center bg-[#5c0e1c] min-h-[12rem]">
+                    @if($eliteImg)
+                        <img src="{{ $eliteImg }}" alt="Service for Elites" class="w-full h-48 object-cover" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+                    @endif
+                    <div class="w-full h-48 {{ $eliteImg ? 'hidden' : '' }} flex items-center justify-center text-white/70 text-sm">Image placeholder</div>
+                </div>
+            </div>
+        </section>
+
+        {{-- Retail Outlet — BM: light gray bg, two columns, "Find nearest store →" --}}
+        <section class="w-full py-12 px-4 sm:px-6 bg-[#f0f0f0] dark:bg-[#1a1a1a]">
+            <div class="max-w-5xl mx-auto flex flex-col lg:flex-row items-center gap-8">
+                <div class="flex-1">
+                    <h2 class="text-xl font-bold text-[var(--bm-red)] mb-2">Navri Mile Navryala <span class="text-[var(--bm-red)]">Retail Outlet</span></h2>
+                    <p class="text-sm text-[#555] dark:text-[#aaa] mb-4">Visit your nearest store to get assistance on</p>
+                    <ul class="text-sm text-[#333] dark:text-[#ccc] space-y-2 mb-4">
+                        <li>Registering your profile</li>
+                        <li>Using the service</li>
+                        <li>Enhancing your profile and setting preferences</li>
+                        <li>Making payments</li>
+                    </ul>
+                    <a href="#" class="inline-block px-4 py-2 bg-[var(--bm-red)] text-white text-sm font-medium rounded hover:bg-[var(--bm-red-dark)]">Find nearest store →</a>
+                </div>
+                <div class="flex-1 max-w-sm h-48 bg-[#ddd] dark:bg-[#333] rounded-lg flex items-center justify-center text-[#888] text-sm">Store image placeholder</div>
+            </div>
+        </section>
+
+        {{-- Watch our latest TVC — placeholder --}}
+        <section class="w-full py-10 px-4 sm:px-6 bg-white dark:bg-[#1a1a1a] border-t border-[#e5e5e5] dark:border-[#333]">
+            <div class="max-w-3xl mx-auto text-center">
+                <h2 class="text-xl font-bold text-[var(--bm-red)] mb-4">Watch our latest TVC</h2>
+                <div class="aspect-video bg-[#eee] dark:bg-[#222] rounded-lg flex items-center justify-center text-[#888]">Video placeholder</div>
+            </div>
+        </section>
+
+        {{-- App download — BM: dark purple/red bg, QR + badges + phone mockups --}}
+        <section class="w-full py-12 px-4 sm:px-6 bg-[#331a47] dark:bg-[#1a0a24]">
+            <div class="max-w-5xl mx-auto flex flex-col lg:flex-row items-center justify-between gap-8">
+                <div class="text-white">
+                    <h2 class="text-xl font-bold mb-2">To speed up your partner search, download <strong>Navri Mile Navryala App</strong></h2>
+                    <p class="text-sm text-white/80 mb-4">10M+ Downloads · Rated 4.3 based on Customer Reviews</p>
+                    <p class="text-sm text-white/90 mb-4">Millions have found their life partner at Navri Mile Navryala!</p>
+                    <div class="flex gap-4">
+                        <span class="px-3 py-2 bg-black/30 rounded text-xs">App Store</span>
+                        <span class="px-3 py-2 bg-black/30 rounded text-xs">Google Play</span>
+                    </div>
+                </div>
+                <div class="w-24 h-24 bg-white rounded flex items-center justify-center text-[#333] text-xs">QR</div>
+                <div class="text-white/70 text-sm">Phone mockup placeholder</div>
+            </div>
+        </section>
+
+        {{-- Success stories — BM style --}}
+        <section class="w-full py-10 px-4 sm:px-6 bg-white dark:bg-[#1a1a1a] border-t border-[#e5e5e5] dark:border-[#333]">
+            <div class="max-w-5xl mx-auto">
+                <h2 class="text-xl font-bold text-[var(--bm-red)] text-center mb-6">Millions have found their life partner at Navri Mile Navryala!</h2>
+                <div class="flex flex-col sm:flex-row gap-4 justify-center flex-wrap">
+                    <div class="w-full sm:max-w-[280px] bg-[#f9f9f9] dark:bg-[#222] rounded-lg p-4 border border-[#eee] dark:border-[#333]">
+                        <p class="font-semibold text-[var(--bm-red)]">Success Story 1</p>
+                        <p class="text-sm text-[#555] dark:text-[#aaa] mt-1">Read more</p>
+                    </div>
+                    <div class="w-full sm:max-w-[280px] bg-[#f9f9f9] dark:bg-[#222] rounded-lg p-4 border border-[#eee] dark:border-[#333]">
+                        <p class="font-semibold text-[var(--bm-red)]">Success Story 2</p>
+                        <p class="text-sm text-[#555] dark:text-[#aaa] mt-1">Read more</p>
+                    </div>
+                    <div class="w-full sm:max-w-[280px] bg-[#f9f9f9] dark:bg-[#222] rounded-lg p-4 border border-[#eee] dark:border-[#333]">
+                        <p class="font-semibold text-[var(--bm-red)]">Success Story 3</p>
+                        <p class="text-sm text-[#555] dark:text-[#aaa] mt-1">Read more</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        {{-- Matrimony.com - Other trusted services — BM: cards with "Know More" button --}}
+        <section class="w-full py-10 px-4 sm:px-6 bg-[#f7f7f7] dark:bg-[#111]">
+            <div class="max-w-5xl mx-auto">
+                <h2 class="text-xl font-bold text-[#333] dark:text-[#eee] text-center mb-6">Other trusted services</h2>
+                <div class="flex flex-col md:flex-row gap-6">
+                    <div class="flex-1 bg-white dark:bg-[#1a1a1a] border border-[#e0e0e0] dark:border-[#333] rounded-lg p-6 shadow-sm">
+                        <h3 class="font-bold text-[var(--bm-red)] mb-2">Wedding Planning</h3>
+                        <p class="text-sm text-[#555] dark:text-[#aaa] mb-2">Photographers, Makeup artists, Caterers and more. Hire best vendors!</p>
+                        <p class="text-sm text-[#555] dark:text-[#aaa] mb-4">2.8 Lakh+ trusted vendors across 40+ cities</p>
+                        <a href="#" class="inline-block px-4 py-2 bg-[var(--bm-red)] text-white text-sm font-medium rounded hover:bg-[var(--bm-red-dark)]">Know More</a>
+                    </div>
+                    <div class="flex-1 bg-white dark:bg-[#1a1a1a] border border-[#e0e0e0] dark:border-[#333] rounded-lg p-6 shadow-sm">
+                        <h3 class="font-bold text-[var(--bm-red)] mb-2">Venue Booking</h3>
+                        <p class="text-sm text-[#555] dark:text-[#aaa] mb-2">Free assistance in finding your venue. 100% verified venues.</p>
+                        <p class="text-sm text-[#555] dark:text-[#aaa] mb-4">40,000+ venues · Service available over 20+ cities</p>
+                        <a href="#" class="inline-block px-4 py-2 bg-[var(--bm-red)] text-white text-sm font-medium rounded hover:bg-[var(--bm-red-dark)]">Know More</a>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        {{-- Frequently Asked Questions — BM: light gray bg, white card, accordion with + --}}
+        <section class="w-full py-10 px-4 sm:px-6 bg-[#e8e8e8] dark:bg-[#0a0a0a]">
+            <div class="max-w-3xl mx-auto bg-white dark:bg-[#1a1a1a] rounded-lg shadow p-6 border border-[#eee] dark:border-[#333]">
+                <h2 class="text-xl font-bold text-[#333] dark:text-[#eee] mb-6 flex items-center gap-2">
+                    <span class="w-8 h-8 rounded-full bg-[#e3f2fd] dark:bg-[#1a2a3a] flex items-center justify-center text-[var(--bm-red)] text-sm">?</span>
+                    Frequently Asked Questions
+                </h2>
+                <ul class="space-y-0">
+                    <li class="border-b border-[#eee] dark:border-[#333] py-3 flex items-center justify-between gap-4">
+                        <span class="text-[#333] dark:text-[#eee]">How to register on Navri Mile Navryala?</span>
+                        <span class="text-[var(--bm-red)] font-bold">+</span>
+                    </li>
+                    <li class="border-b border-[#eee] dark:border-[#333] py-3 flex items-center justify-between gap-4">
+                        <span class="text-[#333] dark:text-[#eee]">What are the safety measures?</span>
+                        <span class="text-[var(--bm-red)] font-bold">+</span>
+                    </li>
+                    <li class="border-b border-[#eee] dark:border-[#333] py-3 flex items-center justify-between gap-4">
+                        <span class="text-[#333] dark:text-[#eee]">Why choose Navri Mile Navryala?</span>
+                        <span class="text-[var(--bm-red)] font-bold">+</span>
+                    </li>
+                    <li class="border-b border-[#eee] dark:border-[#333] py-3 flex items-center justify-between gap-4">
+                        <span class="text-[#333] dark:text-[#eee]">How can I verify my profile?</span>
+                        <span class="text-[var(--bm-red)] font-bold">+</span>
+                    </li>
+                    <li class="py-3 flex items-center justify-between gap-4">
+                        <span class="text-[#333] dark:text-[#eee]">What is Assisted Service?</span>
+                        <span class="text-[var(--bm-red)] font-bold">+</span>
+                    </li>
+                </ul>
+                <p class="mt-6 text-sm text-[#555] dark:text-[#aaa]">Looking for something else? Refer to our <a href="#" class="text-[var(--bm-red)] underline">detailed FAQs page</a>.</p>
+            </div>
+        </section>
+
+        {{-- About Navri Mile Navryala — BM About paragraph with icon --}}
+        <section class="w-full py-10 px-4 sm:px-6 bg-[#f7f7f7] dark:bg-[#111]">
+            <div class="max-w-3xl mx-auto">
+                <h2 class="text-xl font-bold text-[#333] dark:text-[#eee] mb-4 flex items-center gap-2">
+                    <span class="w-8 h-8 rounded-full bg-[#e3f2fd] dark:bg-[#1a2a3a] flex items-center justify-center text-[var(--bm-red)] text-xs font-bold">N</span>
+                    About Navri Mile Navryala
+                </h2>
+                <p class="text-[#555] dark:text-[#aaa] text-sm leading-relaxed">
+                    Navri Mile Navryala is the most trusted matrimony service for Marathis worldwide. We have been featured in Limca Book of records for most number of documented marriages online. Our purpose is to build a better Bharat through happy marriages.
+                </p>
+            </div>
+        </section>
+
+        {{-- Full Footer — BM 4 columns + bottom bar with Limca + Follow Us --}}
+        <footer class="w-full bg-[#333] dark:bg-[#0d0d0d] text-white">
+            <div class="max-w-6xl mx-auto px-4 sm:px-6 py-10">
+                <div class="flex flex-col lg:flex-row gap-10 lg:gap-12 flex-wrap">
+                    <div class="min-w-[200px]">
+                        <h4 class="font-semibold mb-3">Regional Matrimony Services</h4>
+                        <p class="text-sm text-white/80">Marathi Matrimony · Navri Mile Navryala</p>
+                    </div>
+                    <div class="min-w-[180px]">
+                        <h4 class="font-semibold mb-3">Help &amp; Support</h4>
+                        <ul class="text-sm text-white/80 space-y-1">
+                            <li><a href="#" class="hover:text-white">Contact us</a></li>
+                            <li><a href="#" class="hover:text-white">Feedback</a></li>
+                            <li><a href="#" class="hover:text-white">FAQs</a></li>
+                        </ul>
+                        <h4 class="font-semibold mt-4 mb-2">Information</h4>
+                        <ul class="text-sm text-white/80 space-y-1">
+                            <li><a href="{{ route('matrimony.profiles.index') }}" class="hover:text-white">Partner Search</a></li>
+                            @if (Route::has('register'))<li><a href="{{ route('register') }}" class="hover:text-white">Register Free</a></li>@endif
+                            @if (Route::has('login'))<li><a href="{{ route('login') }}" class="hover:text-white">Member Login</a></li>@endif
+                            <li>Success stories</li>
+                            <li>Terms &amp; Conditions</li>
+                            <li>Privacy Policy</li>
+                        </ul>
+                    </div>
+                    <div class="min-w-[180px]">
+                        <h4 class="font-semibold mb-3">Related Services</h4>
+                        <ul class="text-sm text-white/80 space-y-1">
+                            <li>Wedding Planning</li>
+                            <li>Venue Booking</li>
+                        </ul>
+                    </div>
+                </div>
+                <div class="border-t border-white/20 mt-8 pt-6 flex flex-col sm:flex-row items-center justify-between gap-4">
+                    <p class="text-xs text-white/70">This website is strictly for matrimonial purpose only and not a dating website. Copyright © {{ date('Y') }}. All rights reserved.</p>
+                    <p class="text-xs text-white/80 font-medium">The Limca Book of records — Highest Number of Marriages</p>
+                    <p class="text-xs text-white/70 flex items-center gap-2">Follow Us on: <a href="#" class="opacity-80 hover:opacity-100" aria-label="Facebook">f</a> <a href="#" class="opacity-80 hover:opacity-100" aria-label="Twitter">𝕏</a> <a href="#" class="opacity-80 hover:opacity-100" aria-label="Instagram">📷</a> <a href="#" class="opacity-80 hover:opacity-100" aria-label="YouTube">▶</a></p>
+                </div>
+            </div>
+        </footer>
     </body>
 </html>

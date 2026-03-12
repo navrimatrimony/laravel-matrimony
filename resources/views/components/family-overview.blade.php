@@ -75,7 +75,7 @@
     <div class="pt-4 border-t border-gray-200 dark:border-gray-600 w-full">
         <x-income-engine
             :label="__('components.family.family_income')"
-            namePrefix="family_income"
+            :namePrefix="$hasPrefix ? $namePrefix . '[family_income]' : 'family_income'"
             :profile="$profile"
             :currencies="$currencies ?? []"
             :privacy-enabled="true"

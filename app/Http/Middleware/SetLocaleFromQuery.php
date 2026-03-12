@@ -39,6 +39,8 @@ class SetLocaleFromQuery
 
         app()->setLocale($locale);
 
+        \App\Models\Translation::loadIntoTranslator($locale);
+
         return $next($request);
     }
 }

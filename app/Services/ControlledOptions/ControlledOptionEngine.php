@@ -206,7 +206,7 @@ class ControlledOptionEngine
             return [
                 'deva' => ['deva', 'dev', 'देव', 'देवगण'],
                 'manav' => ['manav', 'manushya', 'human', 'मनुष्य', 'मानव', 'मनव'],
-                'rakshasa' => ['rakshas', 'rakshasa', 'राक्षस', 'राक्षसगण'],
+                'rakshasa' => ['rakshas', 'rakshasa', 'राक्षस', 'राक्षस गण', 'गण राक्षस', 'राक्षसगण'],
             ];
         }
 
@@ -237,11 +237,12 @@ class ControlledOptionEngine
             return null;
         }
 
-        $tokens = preg_split('/[^\p{L}\p{N}]+/u', $normalized, -1, PREG_SPLIT_NO_EMPTY) ?: [];
+        $tokens = preg_split('/[\s,;:|]+/u', $normalized, -1, PREG_SPLIT_NO_EMPTY) ?: [];
         if ($tokens === []) {
             $tokens = [$normalized];
         }
 
+        $normalizedLower = mb_strtolower($normalized, 'UTF-8');
         $matches = [];
         foreach ($synonymConfig as $canonical => $synonyms) {
             $synTokens = array_map([$this, 'normalizeForTokenMatching'], $synonyms);
@@ -251,11 +252,28 @@ class ControlledOptionEngine
                 if ($token === '') {
                     continue;
                 }
+                $tokenNorm = $this->normalizeForTokenMatching($token);
+                $tokenLower = mb_strtolower($tokenNorm, 'UTF-8');
+
                 foreach ($synTokens as $syn) {
-                    if ($token === $syn) {
+                    if ($syn === '') {
+                        continue;
+                    }
+                    $synLower = mb_strtolower($syn, 'UTF-8');
+                    if ($tokenLower === $synLower) {
                         $matches[] = $canonical;
                         break 2;
                     }
+                }
+            }
+
+            if (in_array($canonical, $matches, true)) {
+                continue;
+            }
+            foreach ($synTokens as $syn) {
+                if ($syn !== '' && mb_strpos($normalizedLower, mb_strtolower($syn, 'UTF-8')) !== false) {
+                    $matches[] = $canonical;
+                    break;
                 }
             }
         }
@@ -300,6 +318,7 @@ class ControlledOptionEngine
 
     /**
      * Normalize for token comparison (safe for Marathi + English).
+     * Uses mb_* and optional Unicode NFC so composed/decomposed forms match.
      */
     private function normalizeForTokenMatching(string $value): string
     {
@@ -310,6 +329,18 @@ class ControlledOptionEngine
 
         $v = preg_replace('/\s+/u', ' ', $v);
         $v = trim($v, " \t\n\r\0\x0B,;:|");
+        if ($v === '') {
+            return '';
+        }
+
+        if (class_exists('Normalizer')) {
+            if (\Normalizer::isNormalized($v, \Normalizer::FORM_C) === false) {
+                $n = \Normalizer::normalize($v, \Normalizer::FORM_C);
+                if ($n !== false) {
+                    $v = $n;
+                }
+            }
+        }
 
         return $v;
     }
