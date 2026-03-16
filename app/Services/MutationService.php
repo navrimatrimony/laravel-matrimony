@@ -289,7 +289,7 @@ class MutationService
                                 continue;
                             }
                         }
-                        $profile->setAttribute($fieldKey, $newVal);
+                        $profile->setAttribute($fieldKey, $norm);
                         $this->writeProfileChangeHistory(
                             $profile->id,
                             'matrimony_profile',

@@ -195,6 +195,9 @@ class MatrimonyProfile extends Model
         'work_city_id',
         'work_state_id',
 
+        // Other Relatives engine (इतर नातेवाईक — आडनाव/गाव)
+        'other_relatives_text',
+
         'mother_tongue_id',
         'diet_id',
         'smoking_status_id',

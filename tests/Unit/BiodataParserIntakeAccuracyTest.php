@@ -200,6 +200,22 @@ TXT;
         }
     }
 
+    public function test_itara_natevaik_goes_to_other_relatives_text_not_relatives(): void
+    {
+        $service = $this->app->make(BiodataParserService::class);
+        $raw = "मुलाचे नाव :- चि. राहुल\nवडिलांचे नाव :- श्री. एक पाटील\nइतर नातेवाईक :- यादव (करमाळा), यादव (सोलापुर), भोसले (मोहोळ), पवार (पिंपळनेर)";
+        $parsed = $service->parse($raw);
+        $core = $parsed['core'] ?? [];
+        $this->assertArrayHasKey('other_relatives_text', $core, 'इतर नातेवाईक block must populate core.other_relatives_text');
+        $text = $core['other_relatives_text'] ?? '';
+        $this->assertStringContainsString('यादव', $text);
+        $this->assertStringContainsString('भोसले', $text);
+        $this->assertStringContainsString('करमाळा', $text);
+        $relatives = $parsed['relatives'] ?? [];
+        $itarRows = array_values(array_filter($relatives, fn ($r) => ($r['relation_type'] ?? '') === 'इतर'));
+        $this->assertCount(0, $itarRows, 'इतर नातेवाईक must not create relative rows; they go to Other Relatives engine only');
+    }
+
     public function test_sanitize_horoscope_value_filters_junk(): void
     {
         $this->assertNull(BiodataParserService::sanitizeHoroscopeValue('+ वासनिचा वेल रक्त गट :- 8447'));

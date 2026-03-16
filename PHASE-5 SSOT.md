@@ -1194,26 +1194,90 @@ If no primary photo:
 ============================================================
 
 Purpose:
-Store non-contact relatives.
+Store extended family (paternal and maternal) — one row per relative.
+UI: two sections — Paternal (relatives_parents_family) and Maternal (relatives_maternal_family).
+MutationService expects a single "relatives" array; wizard/intake merge both sources.
 
 Columns:
 
 - id
 - profile_id
-- relation_type
+- relation_type (string — see dropdowns below)
 - name
-- occupation
-- marital_status
+- occupation (nullable)
+- marital_status (nullable)
+- city_id (nullable, FK cities)
+- state_id (nullable, FK states)
+- contact_number (nullable)
 - notes (nullable)
+- is_primary_contact (boolean, default false — maternal section only in UI)
 - created_at
 - updated_at
 
 Rules:
 
-• No phone numbers here.
-• Contacts must use profile_contacts.
-• Structured multi-row.
+• Structured multi-row; one row per person (e.g. 4 uncles = 4 rows).
 • History required for updates.
+• Primary contact: only one is_primary_contact=true per profile (UI shows checkbox in maternal section).
+
+----------------------------------------
+Paternal dropdown (relatives_parents_family)
+----------------------------------------
+Source: ProfileWizardController relationTypesParentsFamily / IntakeController same list.
+Filter: parentsFamilyTypes — rows with these relation_type go to Paternal section.
+
+| value                    | label                          |
+|--------------------------|--------------------------------|
+| native_place             | Native Place                   |
+| paternal_grandfather     | Paternal Grandfather           |
+| paternal_grandmother     | Paternal Grandmother          |
+| paternal_uncle           | Paternal Uncle (chulte)        |
+| wife_paternal_uncle      | Wife of Paternal Uncle (chulti)|
+| paternal_aunt            | Paternal Aunt (atya)           |
+| husband_paternal_aunt    | Husband of Paternal Aunt      |
+| Cousin                   | Cousin                         |
+
+(No "Other" option — all other relatives go in the separate Other Relatives engine: other_relatives_text, आडनाव/गाव.)
+
+----------------------------------------
+Maternal dropdown (relatives_maternal_family)
+----------------------------------------
+Source: ProfileWizardController relationTypesMaternalFamily / IntakeController same list.
+Filter: maternalFamilyTypes — rows with these relation_type go to Maternal section.
+
+| value                    | label                          |
+|--------------------------|--------------------------------|
+| maternal_address_ajol    | Maternal address (Ajol)       |
+| maternal_grandfather     | Maternal Grandfather           |
+| maternal_grandmother     | Maternal Grandmother           |
+| maternal_uncle           | Maternal Uncle (mama)          |
+| wife_maternal_uncle      | Maternal Uncle's wife (mami)   |
+| maternal_aunt            | Maternal Aunt (mavshi)         |
+| husband_maternal_aunt    | Husband of Maternal Aunt       |
+| maternal_cousin         | Cousin                         |
+
+(No "Other" option — all other relatives go in the separate Other Relatives engine: other_relatives_text, आडनाव/गाव.)
+
+----------------------------------------
+Field mapping (per relative row)
+----------------------------------------
+Same fields for all relation_type values except address-only types.
+
+Standard rows (all types except native_place and maternal_address_ajol):
+- relation_type  → dropdown selection (above)
+- name           → relative's name
+- contact_number → mobile
+- occupation     → job/business
+- address        → location (city_id, state_id; UI: location typeahead, alliance context)
+- notes          → additional info / notes
+- is_primary_contact → checkbox (Maternal section only)
+
+Address-only rows (only these two types show Relation + Address only; name/occupation/contact/notes hidden):
+- native_place        (Paternal): only relation_type + address (वडिलांचे मूळ गाव)
+- maternal_address_ajol (Maternal): only relation_type + address (माहेरचा पत्ता — अजोल)
+
+Component: resources/views/components/repeaters/relation-details.blade.php (showMarried=false, addressOnlyRelationValue set per section).
+Wizard: relatives.blade.php (Paternal, addressOnlyRelationValue=native_place); alliance.blade.php (Maternal, addressOnlyRelationValue=maternal_address_ajol).
 
 ============================================================
 7️⃣ profile_property_summary (ONE-TO-ONE)

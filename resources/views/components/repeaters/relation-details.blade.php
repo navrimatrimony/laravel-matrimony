@@ -10,10 +10,12 @@
     'contentShowBinding' => null,
     'contentShowInitial' => true,
     'addressOnlyRelationValue' => null, // e.g. 'maternal_address_ajol' — when selected, only Relation + Address shown
+    'notesPlaceholder' => null, // when set (e.g. extended family), use instead of notes_placeholder to steer "other relatives" to Other Relatives section
 ])
 @php
     $addButtonLabel = $addButtonLabel ?? __('common.add');
     $removeButtonLabel = $removeButtonLabel ?? __('common.remove');
+    $notesPlaceholder = $notesPlaceholder ?? __('components.relation.notes_placeholder');
     $opts = collect($relationOptions)->map(function ($o) {
         if (is_string($o)) return ['value' => $o, 'label' => $o];
         if (is_array($o)) return ['value' => $o['value'] ?? $o[0] ?? '', 'label' => $o['label'] ?? $o[1] ?? $o['value'] ?? ''];
@@ -182,7 +184,7 @@
                 </div>
                 <div class="min-w-0">
                     <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-0.5">{{ __('components.relation.additional_info') }}</label>
-                    <input type="text" name="{{ $namePrefix }}[{{ $idx }}][notes]" value="{{ $r['notes'] ?? '' }}" placeholder="{{ __('components.relation.notes_placeholder') }}" class="relation-input-h w-full h-10 rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-2 py-1.5 text-sm min-w-0">
+                    <input type="text" name="{{ $namePrefix }}[{{ $idx }}][notes]" value="{{ $r['notes'] ?? '' }}" placeholder="{{ $notesPlaceholder }}" class="relation-input-h w-full h-10 rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-2 py-1.5 text-sm min-w-0">
                 </div>
             </div>
             @else
@@ -223,7 +225,7 @@
                 </div>
                 <div class="min-w-0">
                     <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-0.5">{{ __('components.relation.additional_info') }}</label>
-                    <input type="text" name="{{ $namePrefix }}[{{ $idx }}][notes]" value="{{ $r['notes'] ?? '' }}" placeholder="{{ __('components.relation.notes_placeholder') }}" class="relation-input-h w-full h-10 rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-2 py-1.5 text-sm min-w-0">
+                    <input type="text" name="{{ $namePrefix }}[{{ $idx }}][notes]" value="{{ $r['notes'] ?? '' }}" placeholder="{{ $notesPlaceholder }}" class="relation-input-h w-full h-10 rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-2 py-1.5 text-sm min-w-0">
                 </div>
             </div>
             @endif
@@ -251,7 +253,7 @@
                 </div>
                 <div class="min-w-0">
                     <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-0.5">{{ __('components.relation.additional_info') }}</label>
-                    <input type="text" name="{{ $namePrefix }}[{{ $idx }}][notes]" value="{{ $r['notes'] ?? '' }}" placeholder="{{ __('components.relation.notes_placeholder') }}" class="relation-input-h w-full h-10 rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-2 py-1.5 text-sm min-w-0">
+                    <input type="text" name="{{ $namePrefix }}[{{ $idx }}][notes]" value="{{ $r['notes'] ?? '' }}" placeholder="{{ $notesPlaceholder }}" class="relation-input-h w-full h-10 rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-2 py-1.5 text-sm min-w-0">
                 </div>
             </div>
             @endif
@@ -359,6 +361,17 @@
         }
         container.addEventListener('change', function(e) {
             if (e.target && e.target.classList.contains('relation-marital-select')) toggleSpouseBlocks();
+            if (!showMarried && e.target.matches('select[name*="[relation_type]"]') && e.target.value === '') {
+                var row = e.target.closest('.relation-engine-row');
+                if (row) {
+                    row.querySelectorAll('input[name*="[name]"]').forEach(function(i) { i.value = ''; });
+                    row.querySelectorAll('input[name*="[occupation]"]').forEach(function(i) { i.value = ''; });
+                    row.querySelectorAll('input[name*="[notes]"]').forEach(function(i) { i.value = ''; });
+                    row.querySelectorAll('input[name*="[contact_number]"]').forEach(function(i) { i.value = ''; });
+                    row.querySelectorAll('.location-typeahead-input').forEach(function(i) { i.value = ''; });
+                    row.querySelectorAll('.location-hidden-city, .location-hidden-taluka, .location-hidden-district, .location-hidden-state').forEach(function(h) { h.value = ''; });
+                }
+            }
         });
         if (showMarried) { updateMaritalStyles(); toggleSpouseBlocks(); }
 
@@ -402,6 +415,19 @@
             });
         }
         if (addressOnlyRelation) initAddressOnlyToggles();
+        function clearRowFieldsIfNoRelation(row) {
+            var sel = row.querySelector('select[name*="[relation_type]"]');
+            if (!sel || sel.value !== '') return;
+            row.querySelectorAll('input[name*="[name]"]').forEach(function(i) { i.value = ''; });
+            row.querySelectorAll('input[name*="[occupation]"]').forEach(function(i) { i.value = ''; });
+            row.querySelectorAll('input[name*="[notes]"]').forEach(function(i) { i.value = ''; });
+            row.querySelectorAll('input[name*="[contact_number]"]').forEach(function(i) { i.value = ''; });
+            row.querySelectorAll('.location-typeahead-input').forEach(function(i) { i.value = ''; });
+            row.querySelectorAll('.location-hidden-city, .location-hidden-taluka, .location-hidden-district, .location-hidden-state').forEach(function(h) { h.value = ''; });
+        }
+        if (!showMarried) {
+            container.querySelectorAll('.relation-engine-row').forEach(clearRowFieldsIfNoRelation);
+        }
         container.addEventListener('repeater:row-added', function(e) {
             var detail = e.detail || {};
             var row = detail.row;

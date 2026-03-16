@@ -13,16 +13,28 @@
     $nameBirthTimeMinute = $corePrefix ? $corePrefix . '[birth_time_minute]' : 'birth_time_minute';
     $oldPrefix = $corePrefix ? str_replace('[', '.', str_replace(']', '', $corePrefix)) . '.' : '';
     $maritalNamePrefix = ($corePrefix === 'snapshot[core]') ? 'snapshot' : '';
+    $isIntakePreview = ($corePrefix === 'snapshot[core]');
+    $phNotFound = $placeholderNotFound ?? null;
+    $phSelect = $placeholderSelectRequired ?? null;
+    $isPlaceholder = function($v) use ($phNotFound, $phSelect) {
+        return ($phNotFound !== null && $v === $phNotFound) || ($phSelect !== null && $v === $phSelect);
+    };
 @endphp
 <div class="border border-gray-200 dark:border-gray-600 rounded-lg p-4 bg-white dark:bg-gray-800 space-y-7" x-data="basicInfoForm()">
     <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100 border-b border-gray-200 dark:border-gray-700 pb-2 mb-6">{{ __('wizard.basic_information') }}</h2>
 
     {{-- 1. Full name + Gender (one horizontal line) — flex-row so both always on same line --}}
+    @php
+        $fnVal = old($oldPrefix.'full_name', $profile->full_name ?? '');
+        $fnDisplay = ($isIntakePreview && $isPlaceholder($fnVal)) ? '' : $fnVal;
+        $fnMissing = $isIntakePreview && $fnVal !== '' && $fnDisplay === '';
+    @endphp
     <div class="flex flex-row flex-nowrap gap-2 items-end">
         <div class="flex-1 min-w-0">
             <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">{{ __('wizard.full_name') }} <span class="text-red-500">*</span></label>
-            <input type="text" name="{{ $nameFullName }}" value="{{ old($oldPrefix.'full_name', $profile->full_name ?? '') }}" required
-                class="w-full rounded-lg border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-3 py-2.5 h-[42px] focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+            <input type="text" name="{{ $nameFullName }}" value="{{ $fnDisplay }}" required
+                @if($fnMissing) data-ocr-missing="1" data-placeholder-value="{{ e($phNotFound) }}" @endif
+                class="w-full rounded-lg border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-3 py-2.5 h-[42px] focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 {{ $fnMissing ? 'ocr-field-missing' : '' }}">
             @error($oldPrefix.'full_name')<p class="mt-1 text-sm text-red-600 dark:text-red-400">{{ $message }}</p>@enderror
         </div>
         <div class="shrink-0 w-36">
@@ -63,17 +75,22 @@
                 if ($dobRaw instanceof \Carbon\CarbonInterface) {
                     $dobValue = $dobRaw->format('Y-m-d');
                 } elseif (is_string($dobRaw) && trim($dobRaw) !== '') {
-                    try {
-                        $dobValue = \Carbon\Carbon::parse($dobRaw)->format('Y-m-d');
-                    } catch (\Throwable $e) {
-                        $dobValue = '';
+                    if (!$isIntakePreview || !$isPlaceholder(trim((string)$dobRaw))) {
+                        try {
+                            $dobValue = \Carbon\Carbon::parse($dobRaw)->format('Y-m-d');
+                        } catch (\Throwable $e) {
+                            $dobValue = '';
+                        }
                     }
                 }
                 $dobValue = old($oldPrefix.'date_of_birth', $dobValue);
+                $dobMissing = $isIntakePreview && ($profile->date_of_birth ?? '') !== '' && $isPlaceholder((string)($profile->date_of_birth ?? ''));
+                if ($dobMissing) { $dobValue = ''; }
             @endphp
             <input type="date" name="{{ $nameDob }}" value="{{ $dobValue }}"
                 min="{{ $yMin }}-01-01" max="{{ $yMax }}-12-31"
-                class="w-full rounded-lg border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-3 py-2.5 h-[42px] focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+                @if($dobMissing) data-ocr-missing="1" data-placeholder-value="{{ e($phNotFound) }}" @endif
+                class="w-full rounded-lg border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-3 py-2.5 h-[42px] focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 {{ $dobMissing ? 'ocr-field-missing' : '' }}">
             @error($oldPrefix.'date_of_birth')<p class="mt-1 text-sm text-red-600 dark:text-red-400">{{ $message }}</p>@enderror
         </div>
         <div class="min-w-0">
@@ -142,7 +159,12 @@
 
     {{-- 4. Religion, Caste, Sub-caste --}}
     <div>
-        <x-profile.religion-caste-selector :profile="$profile" :namePrefix="$corePrefix ? $corePrefix : ''" />
+        <x-profile.religion-caste-selector
+            :profile="$profile"
+            :namePrefix="$corePrefix ? $corePrefix : ''"
+            :placeholderNotFound="$phNotFound"
+            :placeholderSelectRequired="$phSelect"
+        />
     </div>
 
     {{-- 4b. Mother tongue — locale-based option labels --}}

@@ -12,7 +12,7 @@
     $currentStatusId = $oldCore ? old($oldCore . '.marital_status_id', $profile->marital_status_id ?? '') : old('marital_status_id', $profile->marital_status_id ?? '');
     $currentKey = $maritalStatuses->firstWhere('id', $currentStatusId)?->key ?? '';
     $hasChildrenValue = $oldCore ? old($oldCore . '.has_children', $profile->has_children) : old('has_children', $profile->has_children);
-    $showChildrenQuestion = in_array($currentKey, ['divorced', 'separated', 'widowed'], true);
+    $showChildrenQuestion = in_array($currentKey, ['divorced', 'annulled', 'separated', 'widowed'], true);
     $showChildrenDetails = $showChildrenQuestion && ($hasChildrenValue === true || $hasChildrenValue === '1' || $hasChildrenValue === 1);
     $coreName = $isSnapshot ? 'snapshot[core][' : '';
     $coreNameSuffix = $isSnapshot ? ']' : '';
@@ -29,9 +29,9 @@
         {{-- Step 1: Marital status (radios) — bold, spaced, card-style options --}}
         <div>
             <p class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">{{ __('Marital status') }} <span class="text-red-500">*</span></p>
-            <div class="flex flex-nowrap gap-2 w-full overflow-x-auto items-stretch">
+            <div class="flex flex-nowrap gap-1.5 sm:gap-2 w-full overflow-x-auto items-stretch shrink-0">
                 @foreach($maritalStatuses as $s)
-                    <label class="inline-flex items-center justify-center cursor-pointer rounded-lg border-2 pl-3 pr-4 py-2.5 transition-all duration-150 flex-1 min-w-0 min-h-[42px]
+                    <label class="inline-flex items-center justify-center cursor-pointer rounded-lg border-2 pl-2 pr-2.5 sm:pl-3 sm:pr-4 py-2 sm:py-2.5 transition-all duration-150 flex-1 min-w-0 shrink-0 min-h-[42px] whitespace-nowrap
                         hover:border-gray-300 dark:hover:border-gray-500
                         focus-within:ring-2 focus-within:ring-red-500 focus-within:ring-offset-1"
                         :class="maritalStatusId == '{{ $s->id }}' ? 'border-red-600 bg-red-500 dark:bg-red-600 dark:border-red-500 shadow-md' : 'border-gray-200 dark:border-gray-600 bg-gray-50/50 dark:bg-gray-700/30'">
@@ -40,7 +40,7 @@
                                class="rounded-full border-2 border-gray-400 flex-shrink-0 w-3.5 h-3.5 accent-white"
                                x-model="maritalStatusId"
                                @change="onMaritalChange()">
-                        <span class="ml-2 text-xs font-semibold break-words"
+                        <span class="ml-1.5 sm:ml-2 text-xs font-semibold whitespace-nowrap"
                               :class="maritalStatusId == '{{ $s->id }}' ? 'text-white' : 'text-gray-800 dark:text-gray-200'">{{ __($s->label) }}</span>
                     </label>
                 @endforeach
@@ -55,7 +55,7 @@
     @endif
 
     {{-- Step 2: Status details (optional) + Children — heading line then inputs; Yes/No as on-off toggle --}}
-    <div class="marital-details-block" x-show="statusKey === 'divorced' || statusKey === 'separated' || statusKey === 'widowed'" x-cloak style="display: none;">
+    <div class="marital-details-block" x-show="statusKey === 'divorced' || statusKey === 'annulled' || statusKey === 'separated' || statusKey === 'widowed'" x-cloak style="display: none;">
         {{-- Heading line: Status details + Children (required) — visible section heading --}}
         <div class="flex flex-wrap items-center gap-4 pb-2 mb-2 border-b border-gray-200 dark:border-gray-600">
             <h3 class="text-base font-semibold text-gray-800 dark:text-gray-100">{{ __('Status details (optional)') }}</h3>
@@ -69,13 +69,16 @@
                        value="{{ old('marriages.0.marriage_year', $marriage?->marriage_year ?? '') }}"
                        class="w-full rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-3 py-2.5 text-sm h-[42px]">
             </div>
-            <div class="flex-shrink-0" x-show="statusKey === 'divorced'" style="min-width: 6rem;">
-                <label class="block text-xs text-gray-600 dark:text-gray-400 mb-0.5">{{ __('Divorce year') }}</label>
+            <div class="flex-shrink-0" x-show="statusKey === 'divorced' || statusKey === 'annulled'" style="min-width: 6rem;">
+                <label class="block text-xs text-gray-600 dark:text-gray-400 mb-0.5">
+                    <span x-show="statusKey === 'divorced'">{{ __('wizard.divorce_year') }}</span>
+                    <span x-show="statusKey === 'annulled'" x-cloak style="display: none;">{{ __('wizard.annulment_year') }}</span>
+                </label>
                 <input type="number" name="{{ $marriagesPrefix }}divorce_year{{ $marriagesSuffix }}" min="1901" max="{{ date('Y') }}"
                        value="{{ old('marriages.0.divorce_year', $marriage?->divorce_year ?? '') }}"
                        class="w-full rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-3 py-2.5 text-sm h-[42px]">
             </div>
-            <div class="flex-shrink-0" x-show="statusKey === 'separated'" style="min-width: 6.5rem;">
+            <div class="flex-shrink-0" x-show="statusKey === 'separated'" style="min-width: 6.5rem;" x-cloak>
                 <label class="block text-xs text-gray-600 dark:text-gray-400 mb-0.5">{{ __('Separation year') }}</label>
                 <input type="number" name="{{ $marriagesPrefix }}separation_year{{ $marriagesSuffix }}" min="1901" max="{{ date('Y') }}"
                        value="{{ old('marriages.0.separation_year', $marriage?->separation_year ?? '') }}"
@@ -87,7 +90,7 @@
                        value="{{ old('marriages.0.spouse_death_year', $marriage?->spouse_death_year ?? '') }}"
                        class="w-full rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-3 py-2.5 text-sm h-[42px]">
             </div>
-            <div class="flex-1 min-w-0" x-show="statusKey === 'divorced' || statusKey === 'separated'" style="min-width: 6rem;">
+            <div class="flex-1 min-w-0" x-show="statusKey === 'divorced' || statusKey === 'annulled' || statusKey === 'separated'" style="min-width: 6rem;">
                 <label class="block text-xs text-gray-600 dark:text-gray-400 mb-0.5">{{ __('wizard.legal_status') }}</label>
                 <select name="{{ $marriagesPrefix }}divorce_status{{ $marriagesSuffix }}" class="w-full rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-3 py-2.5 text-sm h-[42px]">
                     <option value="">—</option>
@@ -180,7 +183,7 @@
 <script>
 document.addEventListener('alpine:init', function() {
     function maritalEngineState(initialStatusId, initialKey, initialShowQuestion, initialShowDetails, initialHasChildren, initialChildren, livingWithIds, namePrefix) {
-        const statusKeysForChildren = ['divorced', 'separated', 'widowed'];
+        const statusKeysForChildren = ['divorced', 'annulled', 'separated', 'widowed'];
         return {
             namePrefix: namePrefix || '',
             maritalStatusId: initialStatusId,

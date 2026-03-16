@@ -5,7 +5,7 @@
     {{-- Maternal Family details (moved from Extended family) --}}
     <div class="space-y-3">
         <h3 class="text-base font-semibold text-gray-800 dark:text-gray-200">{{ __('wizard.maternal_family_details') }}</h3>
-        <p class="text-sm text-gray-500 dark:text-gray-400">Add one row per person. Use "Add" to add more rows — e.g. 4 mamas = 4 rows (each Relation "Maternal Uncle (mama)"), 3 mavshis = 3 rows (each "Maternal Aunt (mavshi)").</p>
+        <p class="text-sm text-gray-500 dark:text-gray-400">Add one row per person. Use "Add" to add more rows — e.g. 4 mamas = 4 rows (each Relation "Maternal Uncle (mama)"), 3 mavshis = 3 rows (each "Maternal Aunt (mavshi)"). Only these relations and Maternal address (Ajol). For all other relatives (आडनाव/गाव) use the "Other Relatives" section below.</p>
         @php $namePrefix = $namePrefix ?? 'relatives_maternal_family'; @endphp
         <x-repeaters.relation-details
             namePrefix="{{ $namePrefix }}"
@@ -14,6 +14,7 @@
             :items="$profileRelativesMaternalFamily ?? collect()"
             :showPrimaryContact="true"
             addressOnlyRelationValue="maternal_address_ajol"
+            :notesPlaceholder="__('components.relation.notes_placeholder_extended_family')"
             addButtonLabel="Add"
             removeButtonLabel="Remove this entry"
         />

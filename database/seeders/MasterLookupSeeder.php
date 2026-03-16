@@ -53,8 +53,9 @@ class MasterLookupSeeder extends Seeder
         $rows = [
             ['key' => 'never_married', 'label' => 'Never Married'],
             ['key' => 'divorced', 'label' => 'Divorced'],
-            ['key' => 'widowed', 'label' => 'Widowed'],
+            ['key' => 'annulled', 'label' => 'Annulled'],
             ['key' => 'separated', 'label' => 'Separated'],
+            ['key' => 'widowed', 'label' => 'Widowed'],
         ];
         foreach ($rows as $row) {
             DB::table('master_marital_statuses')->updateOrInsert(

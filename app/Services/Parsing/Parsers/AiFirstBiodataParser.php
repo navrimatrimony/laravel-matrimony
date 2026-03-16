@@ -51,6 +51,7 @@ class AiFirstBiodataParser implements BiodataParserInterface
                     'marital_status',
                     'full_name',
                     'primary_contact_number',
+                    'other_relatives_text', // इतर नातेवाईक (आडनाव/गाव) from rules extractFamilyStructures
                 ];
 
                 foreach ($fieldsToMerge as $field) {

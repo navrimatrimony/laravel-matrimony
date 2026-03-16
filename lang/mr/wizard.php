@@ -46,6 +46,7 @@ return [
     'full' => 'पूर्ण प्रोफाइल',
     'never_married' => 'अविवाहित',
     'divorced' => 'घटस्फोट',
+    'annulled' => 'नाममात्र घटस्फोटीत',
     'separated' => 'विभक्त',
     'widowed' => 'विधुर/विधवा',
     // Controller messages
@@ -91,6 +92,7 @@ return [
 
     // Marital / children
     'spouse_death_year' => 'पती/पत्नी मृत्यू वर्ष',
+    'annulment_year' => 'नाममात्र घटस्फोट वर्ष',
     'legal_status' => 'कायदेशीर स्थिती',
     'divorce_pending' => 'प्रलंबित',
     'divorce_finalized' => 'अंतिम',

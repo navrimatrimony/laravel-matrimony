@@ -368,7 +368,7 @@ class ProfileWizardController extends Controller
                 $data['birthPlaceDisplay'] = $profile->birth_city_id ? \App\Models\City::where('id', $profile->birth_city_id)->value('name') : '';
                 $data['religions'] = \App\Models\Religion::where('is_active', true)->orderBy('label')->get(['id', 'label']);
                 $data['motherTongues'] = \App\Models\MasterMotherTongue::where('is_active', true)->orderBy('sort_order')->orderBy('label')->get(['id', 'key', 'label']);
-                $maritalKeys = ['never_married', 'divorced', 'separated', 'widowed'];
+                $maritalKeys = ['never_married', 'divorced', 'annulled', 'separated', 'widowed'];
                 $data['maritalStatuses'] = \App\Models\MasterMaritalStatus::where('is_active', true)
                     ->whereIn('key', $maritalKeys)
                     ->get()
@@ -403,7 +403,7 @@ class ProfileWizardController extends Controller
                 break;
             case 'marriages':
                 $data['profileMarriages'] = \App\Models\ProfileMarriage::where('profile_id', $profile->id)->orderBy('id')->get();
-                $maritalKeys = ['never_married', 'divorced', 'separated', 'widowed'];
+                $maritalKeys = ['never_married', 'divorced', 'annulled', 'separated', 'widowed'];
                 $data['maritalStatuses'] = \App\Models\MasterMaritalStatus::where('is_active', true)
                     ->whereIn('key', $maritalKeys)
                     ->get()
@@ -472,8 +472,8 @@ class ProfileWizardController extends Controller
                     $arr['location_display'] = ! empty($row->city_id) ? ($cityNames[$row->city_id] ?? '') : '';
                     return (object) $arr;
                 };
-                $parentsFamilyTypes = ['native_place', 'paternal_grandfather', 'paternal_grandmother', 'paternal_uncle', 'wife_paternal_uncle', 'paternal_aunt', 'husband_paternal_aunt', 'Cousin', 'Other'];
-                $maternalFamilyTypes = ['maternal_address_ajol', 'maternal_grandfather', 'maternal_grandmother', 'maternal_uncle', 'wife_maternal_uncle', 'maternal_aunt', 'husband_maternal_aunt', 'maternal_cousin', 'other_maternal'];
+                $parentsFamilyTypes = ['native_place', 'paternal_grandfather', 'paternal_grandmother', 'paternal_uncle', 'wife_paternal_uncle', 'paternal_aunt', 'husband_paternal_aunt', 'Cousin'];
+                $maternalFamilyTypes = ['maternal_address_ajol', 'maternal_grandfather', 'maternal_grandmother', 'maternal_uncle', 'wife_maternal_uncle', 'maternal_aunt', 'husband_maternal_aunt', 'maternal_cousin'];
                 $parents = $relRows
                     ->filter(fn ($r) => in_array($r->relation_type ?? '', $parentsFamilyTypes, true))
                     ->map($mapRow);
@@ -500,7 +500,6 @@ class ProfileWizardController extends Controller
                     ['value' => 'paternal_aunt', 'label' => 'Paternal Aunt (atya)'],
                     ['value' => 'husband_paternal_aunt', 'label' => 'Husband of Paternal Aunt'],
                     ['value' => 'Cousin', 'label' => 'Cousin'],
-                    ['value' => 'Other', 'label' => 'Other'],
                 ];
                 $data['relationTypesMaternalFamily'] = [
                     ['value' => 'maternal_address_ajol', 'label' => 'Maternal address (Ajol)'],
@@ -511,7 +510,6 @@ class ProfileWizardController extends Controller
                     ['value' => 'maternal_aunt', 'label' => 'Maternal Aunt (mavshi)'],
                     ['value' => 'husband_maternal_aunt', 'label' => 'Husband of Maternal Aunt'],
                     ['value' => 'maternal_cousin', 'label' => 'Cousin'],
-                    ['value' => 'other_maternal', 'label' => 'Other'],
                 ];
                 break;
             case 'alliance':
@@ -525,7 +523,7 @@ class ProfileWizardController extends Controller
 
                     return (object) $arr;
                 };
-                $maternalFamilyTypes = ['maternal_address_ajol', 'maternal_grandfather', 'maternal_grandmother', 'maternal_uncle', 'wife_maternal_uncle', 'maternal_aunt', 'husband_maternal_aunt', 'maternal_cousin', 'other_maternal'];
+                $maternalFamilyTypes = ['maternal_address_ajol', 'maternal_grandfather', 'maternal_grandmother', 'maternal_uncle', 'wife_maternal_uncle', 'maternal_aunt', 'husband_maternal_aunt', 'maternal_cousin'];
                 $data['profileRelativesMaternalFamily'] = $relRows->filter(fn ($r) => in_array($r->relation_type ?? '', $maternalFamilyTypes, true))->map($mapRow)->values();
                 $data['relationTypesMaternalFamily'] = [
                     ['value' => 'maternal_address_ajol', 'label' => 'Maternal address (Ajol)'],
@@ -536,7 +534,6 @@ class ProfileWizardController extends Controller
                     ['value' => 'maternal_aunt', 'label' => 'Maternal Aunt (mavshi)'],
                     ['value' => 'husband_maternal_aunt', 'label' => 'Husband of Maternal Aunt'],
                     ['value' => 'maternal_cousin', 'label' => 'Cousin'],
-                    ['value' => 'other_maternal', 'label' => 'Other'],
                 ];
                 break;
             case 'location':
@@ -1147,7 +1144,7 @@ class ProfileWizardController extends Controller
     {
         // Extended family tab: only paternal from form; keep existing maternal from DB
         $paternal = $this->collectRelativesFromRequestSource($request->input('relatives_parents_family', []));
-        $maternalFamilyTypes = ['maternal_address_ajol', 'maternal_grandfather', 'maternal_grandmother', 'maternal_uncle', 'wife_maternal_uncle', 'maternal_aunt', 'husband_maternal_aunt', 'maternal_cousin', 'other_maternal'];
+        $maternalFamilyTypes = ['maternal_address_ajol', 'maternal_grandfather', 'maternal_grandmother', 'maternal_uncle', 'wife_maternal_uncle', 'maternal_aunt', 'husband_maternal_aunt', 'maternal_cousin'];
         $maternalFromDb = $this->loadRelativesFromDb($profile->id, $maternalFamilyTypes);
         $relatives = array_merge($paternal, $maternalFromDb);
 
@@ -1164,11 +1161,11 @@ class ProfileWizardController extends Controller
     {
         $relatives = [];
         foreach ($rows as $row) {
-            $name = trim((string) ($row['name'] ?? ''));
             $relationType = trim((string) ($row['relation_type'] ?? ''));
-            if ($name === '' && $relationType === '') {
+            if ($relationType === '') {
                 continue;
             }
+            $name = trim((string) ($row['name'] ?? ''));
             if (in_array($relationType, ['maternal_address_ajol', 'native_place'], true)) {
                 $name = '';
             }
@@ -1262,7 +1259,7 @@ class ProfileWizardController extends Controller
 
         // Relatives tab: maternal from form; keep existing paternal from DB
         $maternal = $this->collectRelativesFromRequestSource($request->input('relatives_maternal_family', []));
-        $parentsFamilyTypes = ['native_place', 'paternal_grandfather', 'paternal_grandmother', 'paternal_uncle', 'wife_paternal_uncle', 'paternal_aunt', 'husband_paternal_aunt', 'Cousin', 'Other'];
+        $parentsFamilyTypes = ['native_place', 'paternal_grandfather', 'paternal_grandmother', 'paternal_uncle', 'wife_paternal_uncle', 'paternal_aunt', 'husband_paternal_aunt', 'Cousin'];
         $paternalFromDb = $this->loadRelativesFromDb($profile->id, $parentsFamilyTypes);
         $relatives = array_merge($paternalFromDb, $maternal);
 

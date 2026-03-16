@@ -1,13 +1,13 @@
 @extends('layouts.app')
 
 @section('content')
-<div class="container max-w-4xl mx-auto py-8 px-4">
+<div class="container max-w-6xl mx-auto py-8 px-4">
     <p class="mb-4 text-sm text-gray-600 dark:text-gray-400">
         <a href="{{ route('intake.index') }}" class="hover:underline">← {{ __('intake.my_biodata_uploads') }}</a>
     </p>
     <h1 class="text-2xl font-bold mb-2">{{ __('intake.intake_preview') }}</h1>
-    <p class="text-gray-600 dark:text-gray-400 text-sm mb-6">तुमची माहिती तपासा आणि आवश्यक ते सुधारा. खाली स्क्रोल करून सर्व तपासल्यानंतरच अप्रूव्ह करा.</p>
-    <p class="text-gray-500 dark:text-gray-500 text-xs mb-4">इथे बायोडाटा मधून काढलेली सर्व फील्ड्स दिसतात. अप्रूव्ह नंतर प्रोफाइल विझार्डमध्ये आणखी विभाग (जसे की स्थान, फोटो, विवाह इतिहास) भरता येतील.</p>
+    <p class="text-gray-600 dark:text-gray-400 text-sm mb-2">तुमची माहिती तपासा आणि आवश्यक ते सुधारा. खाली स्क्रोल करून सर्व तपासल्यानंतरच अप्रूव्ह करा.</p>
+    <p class="text-gray-500 dark:text-gray-500 text-xs mb-6">डावीकडे रॉ बायोडाटा, उजवीकडे पार्स केलेला JSON. खाली फॉर्म भरून अप्रूव्ह करा.</p>
 
     <form id="intake-preview-form" method="POST" action="{{ route('intake.approve', $intake) }}" class="space-y-8">
         @csrf
@@ -15,42 +15,92 @@
         @php
             $sectionSourceKeys = $sectionSourceKeys ?? [];
             $coreData = $sections['core']['data'] ?? $data['core'] ?? [];
+            $parsedJsonForDisplay = isset($data) && is_array($data) ? json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) : '';
         @endphp
 
-        {{-- Raw biodata text — safety net to ensure 100% preview coverage --}}
-        @if(!empty($intake->raw_ocr_text))
-        <section class="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
-            <h2 class="text-lg font-semibold mb-2 border-b pb-2">{{ __('intake.raw_text_heading') }}</h2>
-            @if(!empty($missingCriticalFields))
-                <div class="mb-3 text-xs text-red-700 dark:text-red-400">
-                    <p class="font-semibold mb-1">⚠️ खालील महत्वाच्या फील्डमध्ये मूल्य भरलेले नाही:</p>
-                    <ul class="list-disc list-inside space-y-0.5">
-                        @foreach($missingCriticalFields as $fieldKey)
-                            @php
-                                // Normalize keys like "profile.gender" → "gender"
-                                $normalizedKey = \Illuminate\Support\Str::startsWith($fieldKey, 'profile.')
-                                    ? \Illuminate\Support\Str::after($fieldKey, 'profile.')
-                                    : $fieldKey;
-                                $label = __('profile.' . $normalizedKey);
-                                if ($label === 'profile.' . $normalizedKey) {
-                                    // Fallback: show raw key if translation missing
-                                    $label = $fieldKey;
-                                }
-                            @endphp
-                            <li>{{ $label }}</li>
-                        @endforeach
-                    </ul>
+        {{-- One row: Left = Raw biodata text, Right = Parsed JSON — both with scroll (slider) for small windows --}}
+        <style>
+            .intake-preview-scroll-panel {
+                max-height: min(50vh, 20rem);
+                min-height: 10rem;
+                overflow-y: auto;
+                overflow-x: auto;
+                scrollbar-gutter: stable;
+                -webkit-overflow-scrolling: touch;
+            }
+            .intake-preview-scroll-panel::-webkit-scrollbar { width: 10px; height: 10px; }
+            .intake-preview-scroll-panel::-webkit-scrollbar-track { background: rgb(243 244 246); border-radius: 4px; }
+            .dark .intake-preview-scroll-panel::-webkit-scrollbar-track { background: rgb(31 41 55); }
+            .intake-preview-scroll-panel::-webkit-scrollbar-thumb { background: rgb(156 163 175); border-radius: 4px; }
+            .intake-preview-scroll-panel::-webkit-scrollbar-thumb:hover { background: rgb(107 114 128); }
+            .dark .intake-preview-scroll-panel::-webkit-scrollbar-thumb { background: rgb(75 85 99); }
+            .dark .intake-preview-scroll-panel::-webkit-scrollbar-thumb:hover { background: rgb(107 114 128); }
+        </style>
+        <section class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            {{-- Left: Raw biodata text --}}
+            <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-4 lg:p-5 flex flex-col min-w-0">
+                <h2 class="text-base font-semibold mb-2 border-b border-gray-200 dark:border-gray-600 pb-2 shrink-0">{{ __('intake.raw_text_heading') }}</h2>
+                @if(!empty($missingCriticalFields))
+                    <div class="mb-2 text-xs text-red-700 dark:text-red-400 shrink-0">
+                        <p class="font-semibold mb-1">⚠️ खालील महत्वाच्या फील्डमध्ये मूल्य भरलेले नाही:</p>
+                        <ul class="list-disc list-inside space-y-0.5">
+                            @foreach($missingCriticalFields as $fieldKey)
+                                @php
+                                    $normalizedKey = \Illuminate\Support\Str::startsWith($fieldKey, 'profile.') ? \Illuminate\Support\Str::after($fieldKey, 'profile.') : $fieldKey;
+                                    $label = __('profile.' . $normalizedKey);
+                                    if ($label === 'profile.' . $normalizedKey) { $label = $fieldKey; }
+                                @endphp
+                                <li>{{ $label }}</li>
+                            @endforeach
+                        </ul>
+                    </div>
+                @endif
+                <p class="text-xs text-gray-600 dark:text-gray-400 mb-2 shrink-0">{{ __('intake.raw_text_help') }}</p>
+                <div class="intake-preview-scroll-panel rounded border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-900/40 p-3 text-xs text-gray-800 dark:text-gray-100 whitespace-pre-wrap leading-relaxed font-mono">
+                    {{ $intake->raw_ocr_text ?? '' }}
                 </div>
-            @endif
-            <p class="text-xs text-gray-600 dark:text-gray-400 mb-3">{{ __('intake.raw_text_help') }}</p>
-            <div class="max-h-64 overflow-y-auto rounded border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-900/40 p-3 text-xs text-gray-800 dark:text-gray-100 whitespace-pre-wrap leading-relaxed">
-                {{ $intake->raw_ocr_text }}
+            </div>
+            {{-- Right: Parsed JSON --}}
+            <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-4 lg:p-5 flex flex-col min-w-0">
+                <h2 class="text-base font-semibold mb-2 border-b border-gray-200 dark:border-gray-600 pb-2 shrink-0">Parsed JSON</h2>
+                <p class="text-xs text-gray-600 dark:text-gray-400 mb-2 shrink-0">बायोडाटा मधून काढलेला स्ट्रक्चर्ड डेटा. खालील फॉर्म याच्या आधारे भरलेला आहे.</p>
+                <div class="intake-preview-scroll-panel rounded border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-900/40 p-3 text-xs text-gray-800 dark:text-gray-100 leading-relaxed font-mono">
+                    @if($parsedJsonForDisplay !== '')
+                        <pre class="m-0 whitespace-pre-wrap break-words">{{ e($parsedJsonForDisplay) }}</pre>
+                    @else
+                        <span class="text-amber-600 dark:text-amber-400">Parsed JSON उपलब्ध नाही.</span>
+                    @endif
+                </div>
             </div>
         </section>
-        @endif
 
-        {{-- Centralized full form: same sections and order as wizard full (single source full_form.blade.php). --}}
+        {{-- Fields with OCR "not found" show empty and get .ocr-field-missing (no placeholder text); server still expects placeholder value on submit when empty. --}}
+        <style>
+            .ocr-field-missing {
+                border-color: rgb(245 158 11) !important;
+                background-color: rgb(254 243 199) !important;
+            }
+            .dark .ocr-field-missing {
+                border-color: rgb(217 119 6) !important;
+                background-color: rgb(69 26 3) !important;
+            }
+            .ocr-field-missing-wrap .religion-input.ocr-field-missing,
+            .ocr-field-missing-wrap .caste-input.ocr-field-missing,
+            .ocr-field-missing-wrap .subcaste-input.ocr-field-missing {
+                border-color: rgb(245 158 11) !important;
+                background-color: rgb(254 243 199) !important;
+            }
+            .dark .ocr-field-missing-wrap .religion-input.ocr-field-missing,
+            .dark .ocr-field-missing-wrap .caste-input.ocr-field-missing,
+            .dark .ocr-field-missing-wrap .subcaste-input.ocr-field-missing {
+                border-color: rgb(217 119 6) !important;
+                background-color: rgb(69 26 3) !important;
+            }
+        </style>
+
+        {{-- Form: edit parsed data and submit --}}
         <section class="bg-white dark:bg-gray-800 rounded-lg shadow p-6 space-y-8">
+            <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100 border-b border-gray-200 dark:border-gray-600 pb-2">तपासा आणि सुधारा — फॉर्म</h2>
             @include('matrimony.profile.wizard.sections.full_form')
         </section>
 
@@ -121,8 +171,37 @@
     form.querySelectorAll('input').forEach(function(inp) {
         inp.addEventListener('input', updateButton);
         inp.addEventListener('change', updateButton);
+        if (inp.hasAttribute('data-ocr-missing')) {
+            inp.addEventListener('input', function() {
+                if (String(inp.value || '').trim() !== '') {
+                    inp.classList.remove('ocr-field-missing');
+                    inp.removeAttribute('data-ocr-missing');
+                    inp.removeAttribute('data-placeholder-value');
+                    inp.closest('.ocr-field-missing-wrap')?.classList.remove('ocr-field-missing-wrap');
+                }
+            });
+            inp.addEventListener('change', function() {
+                if (String(inp.value || '').trim() !== '') {
+                    inp.classList.remove('ocr-field-missing');
+                    inp.removeAttribute('data-ocr-missing');
+                    inp.removeAttribute('data-placeholder-value');
+                    inp.closest('.ocr-field-missing-wrap')?.classList.remove('ocr-field-missing-wrap');
+                }
+            });
+        }
     });
     updateButton();
+
+    form.addEventListener('submit', function(e) {
+        form.querySelectorAll('input[data-ocr-missing="1"]').forEach(function(el) {
+            if (!el.name || el.name.indexOf('snapshot[core]') !== 0) return;
+            var v = String(el.value || '').trim();
+            if (v === '') {
+                var ph = el.getAttribute('data-placeholder-value');
+                if (ph) el.value = ph;
+            }
+        });
+    });
 
     // Revert / use-candidate (full_form basic_info may render these)
 document.querySelectorAll('.revert-btn').forEach(function(btn) {

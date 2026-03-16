@@ -395,6 +395,23 @@ class OcrSuggestionEngine
     }
 
     /**
+     * Strip trailing phone number from name line (OCR often appends contact on same line).
+     * E.g. "चि. सुशांत शिवाजी पाटील पूजा सावत ९६८९८६८८६९" → "चि. सुशांत शिवाजी पाटील पूजा सावत"
+     */
+    private function stripTrailingPhoneFromName(string $value): string
+    {
+        $value = trim($value);
+        if ($value === '') {
+            return $value;
+        }
+        // Trailing 10+ digits (Devanagari or ASCII) possibly with spaces/dots
+        if (preg_match('/\s+([\d\u0966-\u096F\s\.\-]{10,})$/u', $value, $m)) {
+            $value = trim(mb_substr($value, 0, -mb_strlen($m[0])));
+        }
+        return trim($value);
+    }
+
+    /**
      * Sanity filter for full_name suggestions: block garbage (latin noise, parentheses content).
      * Returns cleaned value or null if should not be suggested.
      */
@@ -470,7 +487,10 @@ private function suggestFromRawText(string $fieldKey, ?string $rawSourceText): a
     switch ($fieldKey) {
         case 'full_name':
             $nameNegativeKeywords = ['à¤¨à¤¾à¤µà¤°à¤¸ à¤¨à¤¾à¤µ', 'à¤¨à¤¾à¤µà¤°à¥‡à¤¸ à¤¨à¤¾à¤µ', 'à¤œà¤¨à¥à¤®', 'à¤‰à¤‚à¤šà¥€', 'à¤¶à¤¿à¤•à¥à¤·à¤£', 'à¤¨à¥‹à¤•à¤°à¥€', 'à¤®à¥.à¤ªà¥‹.', 'à¤µà¤¡à¥€à¤²', 'à¤†à¤ˆ'];
+            // Allow "नांव !-", "नांव :-", "नाव : -" etc. (OCR often adds ! or space before hyphen)
             $patterns = [
+                '/à¤®à¥à¤²à¥€à¤šà¥‡\s*(à¤¨à¤¾à¤‚à¤µ|à¤¨à¤¾à¤µ)\s*[!:\-\s]*[:\-]\s*([^\r\n]+)/u',
+                '/à¤®à¥à¤²à¤¾à¤šà¥‡\s*(à¤¨à¤¾à¤‚à¤µ|à¤¨à¤¾à¤µ)\s*[!:\-\s]*[:\-]\s*([^\r\n]+)/u',
                 '/à¤®à¥à¤²à¥€à¤šà¥‡\s*(à¤¨à¤¾à¤‚à¤µ|à¤¨à¤¾à¤µ)\s*[:\-]*\s*([^\r\n]+)/u',
                 '/à¤®à¥à¤²à¤¾à¤šà¥‡\s*(à¤¨à¤¾à¤‚à¤µ|à¤¨à¤¾à¤µ)\s*[:\-]*\s*([^\r\n]+)/u',
                 '/à¤¨à¤¾à¤µ\s*:\s*-\s*([^\r\n]+)/u',
@@ -488,6 +508,7 @@ private function suggestFromRawText(string $fieldKey, ?string $rawSourceText): a
                     $name = preg_replace('/[_\-:]+/u', ' ', $name);
                     $name = preg_replace('/\s+/u', ' ', $name);
                     $name = trim($name);
+                    $name = $this->stripTrailingPhoneFromName($name);
 
                     $reject = false;
                     foreach ($nameNegativeKeywords as $n) {

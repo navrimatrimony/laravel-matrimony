@@ -517,7 +517,11 @@ class IntakeController extends Controller
         }
 
         // Build profile-like object for Basic Info engine (wizard same UI in intake).
+        // Ensure 100% of parsed core fields appear in the form: set all known keys, then copy any remaining from parser.
         $coreData = $sections['core']['data'] ?? [];
+        if (! is_array($coreData)) {
+            $coreData = [];
+        }
         $intakeProfile = (object) [
             'full_name' => is_scalar($coreData['full_name'] ?? null) ? trim((string) $coreData['full_name']) : '',
             'date_of_birth' => is_scalar($coreData['date_of_birth'] ?? null) ? trim((string) $coreData['date_of_birth']) : null,
@@ -534,6 +538,12 @@ class IntakeController extends Controller
             'caste_label' => '',
             'subcaste_label' => '',
         ];
+        // Copy every other key from parsed core so form/engines see 100% of biodata (e.g. primary_contact_number, father_name, mother_name, height_cm, annual_income, birth_place string).
+        foreach ($coreData as $k => $v) {
+            if (! property_exists($intakeProfile, $k)) {
+                $intakeProfile->{$k} = $v;
+            }
+        }
         // Resolve gender_id from text if needed (OCR often has "Male"/"Female").
         if (empty($intakeProfile->gender_id) && ! empty($coreData['gender'])) {
             $genderText = is_scalar($coreData['gender']) ? trim((string) $coreData['gender']) : '';
@@ -550,6 +560,32 @@ class IntakeController extends Controller
         $intakeProfile->birthPlaceDisplay = '';
         if (! empty($intakeProfile->birth_city_id)) {
             $intakeProfile->birthPlaceDisplay = \App\Models\City::where('id', $intakeProfile->birth_city_id)->value('name') ?? '';
+        }
+        // Resolve birth_place string (from parser) to location IDs so Basic Info birth-place typeahead shows value.
+        if (empty($intakeProfile->birth_city_id) && ! empty($intakeProfile->birth_place) && is_scalar($intakeProfile->birth_place)) {
+            $birthPlaceStr = trim((string) $intakeProfile->birth_place);
+            if ($birthPlaceStr !== '' && $birthPlaceStr !== \App\Services\Ocr\OcrSuggestionEngine::PLACEHOLDER_NOT_FOUND) {
+                $cityQuery = \App\Models\City::where('name', 'like', $birthPlaceStr . '%');
+                if (\Illuminate\Support\Facades\Schema::hasColumn((new \App\Models\City)->getTable(), 'name_mr')) {
+                    $cityQuery->orWhere('name_mr', 'like', $birthPlaceStr . '%');
+                }
+                $city = $cityQuery->first();
+                if ($city) {
+                    $intakeProfile->birth_city_id = $city->id;
+                    $intakeProfile->birth_taluka_id = $city->taluka_id;
+                    $intakeProfile->birthPlaceDisplay = $city->name ?? '';
+                    $taluka = $city->taluka;
+                    if ($taluka) {
+                        $intakeProfile->birth_district_id = $taluka->district_id ?? null;
+                        $district = $taluka->district;
+                        if ($district) {
+                            $intakeProfile->birth_state_id = $district->state_id ?? null;
+                        }
+                    }
+                } else {
+                    $intakeProfile->birthPlaceDisplay = $birthPlaceStr;
+                }
+            }
         }
         $genders = \App\Models\MasterGender::where('is_active', true)->whereIn('key', ['male', 'female'])
             ->orderByRaw("CASE WHEN `key` = 'male' THEN 1 ELSE 2 END")->get();
@@ -609,7 +645,7 @@ class IntakeController extends Controller
         }
 
         // Marital Engine (intake): resolve marital_status text → id; build profile/marriages/children for engine.
-        $maritalKeys = ['never_married', 'divorced', 'separated', 'widowed'];
+        $maritalKeys = ['never_married', 'divorced', 'annulled', 'separated', 'widowed'];
         $maritalStatuses = \App\Models\MasterMaritalStatus::where('is_active', true)
             ->whereIn('key', $maritalKeys)
             ->get()
@@ -623,14 +659,52 @@ class IntakeController extends Controller
         if ($maritalStatusId === null || $maritalStatusId === '') {
             $maritalText = is_scalar($approvalCore['marital_status'] ?? null) ? trim((string) $approvalCore['marital_status']) : '';
             if ($maritalText !== '' && $maritalText !== \App\Services\Ocr\OcrSuggestionEngine::PLACEHOLDER_NOT_FOUND && $maritalText !== \App\Services\Ocr\OcrSuggestionEngine::PLACEHOLDER_SELECT_REQUIRED) {
-                $ms = $maritalStatuses->first(fn ($s) => strcasecmp($s->label ?? '', $maritalText) === 0 || strcasecmp($s->key ?? '', $maritalText) === 0 || strcasecmp(str_replace(' ', '_', $s->label ?? ''), $maritalText) === 0);
+                $maritalTextNorm = str_replace(' ', '_', mb_strtolower($maritalText));
+                if ($maritalTextNorm === 'unmarried') {
+                    $maritalTextNorm = 'never_married';
+                }
+                $ms = $maritalStatuses->first(fn ($s) => strcasecmp($s->label ?? '', $maritalText) === 0 || strcasecmp($s->key ?? '', $maritalText) === 0 || strcasecmp(str_replace(' ', '_', $s->label ?? ''), $maritalText) === 0 || strcasecmp($s->key ?? '', $maritalTextNorm) === 0);
                 if ($ms) {
                     $maritalStatusId = $ms->id;
                 }
             }
         }
-        $intakeProfile->marital_status_id = $maritalStatusId ?? '';
         $childrenData = $sections['children']['data'] ?? [];
+        $hasChildrenData = count($childrenData) > 0;
+        if (($maritalStatusId === null || $maritalStatusId === '') && $hasChildrenData) {
+            $rawText = $intake->raw_ocr_text ?? '';
+            if (preg_match('/घटस्फोट|divorce|divorced|separated/i', $rawText)) {
+                $ms = $maritalStatuses->first(fn ($s) => ($s->key ?? '') === 'divorced');
+                if ($ms) {
+                    $maritalStatusId = $ms->id;
+                }
+            }
+            if (($maritalStatusId === null || $maritalStatusId === '') && (preg_match('/विधवा|विधुर|widow|widowed|widower/i', $rawText))) {
+                $ms = $maritalStatuses->first(fn ($s) => ($s->key ?? '') === 'widowed');
+                if ($ms) {
+                    $maritalStatusId = $ms->id;
+                }
+            }
+            if (($maritalStatusId === null || $maritalStatusId === '') && (preg_match('/नाममात्र\s*घटस्फोट|annulled|annulment/i', $rawText))) {
+                $ms = $maritalStatuses->first(fn ($s) => ($s->key ?? '') === 'annulled');
+                if ($ms) {
+                    $maritalStatusId = $ms->id;
+                }
+            }
+            if (($maritalStatusId === null || $maritalStatusId === '') && preg_match('/separated/i', $rawText)) {
+                $ms = $maritalStatuses->first(fn ($s) => ($s->key ?? '') === 'separated');
+                if ($ms) {
+                    $maritalStatusId = $ms->id;
+                }
+            }
+        }
+        if ($maritalStatusId === null || $maritalStatusId === '') {
+            $ms = $maritalStatuses->first(fn ($s) => ($s->key ?? '') === 'never_married');
+            if ($ms) {
+                $maritalStatusId = $ms->id;
+            }
+        }
+        $intakeProfile->marital_status_id = $maritalStatusId ?? '';
         $hasChildren = isset($approvalCore['has_children']) ? (int) $approvalCore['has_children'] : (count($childrenData) > 0 ? 1 : null);
         $intakeProfile->has_children = $hasChildren;
         $profileMarriages = collect();
@@ -687,9 +761,20 @@ class IntakeController extends Controller
         $profile = $intakeProfile;
         $currentSection = 'full';
         $profileSiblings = collect($snapshot['siblings'] ?? [])->map(fn ($r) => (object) (is_array($r) ? $r : []));
+        $relativesFromSnapshot = $snapshot['relatives'] ?? [];
+        $siblingRowsFromRelatives = $this->extractSiblingRowsFromParsedRelatives($relativesFromSnapshot);
+        $profileSiblings = $this->mergeParsedSiblingsIntoProfileSiblings($profileSiblings, $siblingRowsFromRelatives);
+        $relativesOnly = $this->excludeSiblingRelationsFromRelatives($relativesFromSnapshot);
         $hasSiblings = isset($snapshot['core']['has_siblings']) ? (bool) $snapshot['core']['has_siblings'] : $profileSiblings->isNotEmpty();
-        $profileRelativesParentsFamily = collect($snapshot['relatives_parents_family'] ?? $snapshot['relatives'] ?? [])->map(fn ($r) => (object) (is_array($r) ? $r : []));
-        $profileRelativesMaternalFamily = collect($snapshot['relatives_maternal_family'] ?? [])->map(fn ($r) => (object) (is_array($r) ? $r : []));
+        [$builtPaternal, $builtMaternal, $dajiRows] = $this->partitionAndStructureRelativesForIntake($relativesOnly);
+        $profileRelativesParentsFamily = isset($snapshot['relatives_parents_family']) && is_array($snapshot['relatives_parents_family'])
+            ? collect($snapshot['relatives_parents_family'])->map(fn ($r) => (object) (is_array($r) ? $r : []))
+            : $builtPaternal;
+        $profileRelativesMaternalFamily = isset($snapshot['relatives_maternal_family']) && is_array($snapshot['relatives_maternal_family'])
+            ? collect($snapshot['relatives_maternal_family'])->map(fn ($r) => (object) (is_array($r) ? $r : []))
+            : $builtMaternal;
+        // दाजी = बहिणीचा नवरा: merge into sibling panel (first sister's spouse) so it saves in the same place
+        $profileSiblings = $this->mergeDajiIntoSiblings($profileSiblings, $dajiRows);
         $profile_property_summary = $snapshot['property_summary'] ?? null;
         $profile_property_assets = collect($snapshot['property_assets'] ?? []);
         $profile_horoscope_data = is_array($horoscopeRow) ? (object) $horoscopeRow : $horoscopeRow;
@@ -712,7 +797,6 @@ class IntakeController extends Controller
             ['value' => 'paternal_aunt', 'label' => 'Paternal Aunt (atya)'],
             ['value' => 'husband_paternal_aunt', 'label' => 'Husband of Paternal Aunt'],
             ['value' => 'Cousin', 'label' => 'Cousin'],
-            ['value' => 'Other', 'label' => 'Other'],
         ];
         $relationTypesMaternalFamily = [
             ['value' => 'maternal_address_ajol', 'label' => 'Maternal address (Ajol)'],
@@ -723,7 +807,6 @@ class IntakeController extends Controller
             ['value' => 'maternal_aunt', 'label' => 'Maternal Aunt (mavshi)'],
             ['value' => 'husband_maternal_aunt', 'label' => 'Husband of Maternal Aunt'],
             ['value' => 'maternal_cousin', 'label' => 'Maternal Cousin'],
-            ['value' => 'other_maternal', 'label' => 'Other'],
         ];
         $profileEducation = collect();
         $profileCareer = collect();
@@ -741,7 +824,23 @@ class IntakeController extends Controller
         $talukasByDistrict = \App\Models\Taluka::all()->groupBy('district_id')->map(fn ($col) => $col->map(fn ($t) => ['id' => $t->id, 'name' => $t->name])->values()->toArray())->toArray();
         $districtsByState = \App\Models\District::all()->groupBy('state_id')->map(fn ($col) => $col->map(fn ($d) => ['id' => $d->id, 'name' => $d->name])->values()->toArray())->toArray();
         $stateIdToCountryId = \App\Models\State::all()->pluck('country_id', 'id')->toArray();
-        $otherRelativesText = is_scalar($snapshot['other_relatives_text'] ?? null) ? (string) $snapshot['other_relatives_text'] : '';
+        $otherRelativesText = is_scalar($snapshot['other_relatives_text'] ?? null) ? (string) $snapshot['other_relatives_text'] : (is_scalar($snapshot['core']['other_relatives_text'] ?? null) ? (string) $snapshot['core']['other_relatives_text'] : '');
+        // Fallback: old parsed_json had "इतर नातेवाईक" in relatives[] as relation_type इतर/Other — show that notes in Other Relatives textarea so user sees it and it can be saved.
+        if ($otherRelativesText === '' && ! empty($snapshot['relatives']) && is_array($snapshot['relatives'])) {
+            foreach ($snapshot['relatives'] as $rel) {
+                $r = is_array($rel) ? $rel : (array) $rel;
+                $rt = trim((string) ($r['relation_type'] ?? ''));
+                if ($rt === 'इतर' || $rt === 'Other') {
+                    $notes = trim((string) ($r['notes'] ?? ''));
+                    if ($notes !== '') {
+                        $otherRelativesText = preg_replace('/^.*?इतर\s*नातेवाईक\s*[:-]\s*/u', '', $notes);
+                        $otherRelativesText = trim(preg_replace('/\s+/u', ' ', $otherRelativesText));
+                        break;
+                    }
+                }
+            }
+        }
+        $birthPlaceDisplay = $profile->birthPlaceDisplay ?? '';
 
         return view('intake.preview', compact(
             'intake',
@@ -814,7 +913,8 @@ class IntakeController extends Controller
             'talukasByDistrict',
             'districtsByState',
             'stateIdToCountryId',
-            'otherRelativesText'
+            'otherRelativesText',
+            'birthPlaceDisplay'
         ));
     }
 
@@ -834,6 +934,71 @@ class IntakeController extends Controller
         $snapshot = $request->input('snapshot');
         if (is_array($snapshot)) {
             $base = is_array($intake->parsed_json) ? $intake->parsed_json : [];
+            // Centralized full_form: contacts section and education/career history may submit at top level (no snapshot prefix).
+            if (is_array($request->input('contacts'))) {
+                $snapshot['contacts'] = $request->input('contacts');
+            }
+            if (is_array($request->input('education_history'))) {
+                $snapshot['education_history'] = $request->input('education_history');
+            }
+            if (is_array($request->input('career_history'))) {
+                $snapshot['career_history'] = $request->input('career_history');
+            }
+            $core = $snapshot['core'] ?? [];
+            if (is_array($core)) {
+                if ($request->has('primary_contact_number')) {
+                    $core['primary_contact_number'] = $request->input('primary_contact_number');
+                }
+                if ($request->has('primary_contact_number_2')) {
+                    $core['primary_contact_number_2'] = $request->input('primary_contact_number_2');
+                }
+                if ($request->has('primary_contact_number_3')) {
+                    $core['primary_contact_number_3'] = $request->input('primary_contact_number_3');
+                }
+                if ($request->has('primary_contact_whatsapp')) {
+                    $core['primary_contact_whatsapp'] = $request->input('primary_contact_whatsapp');
+                }
+                if ($request->has('primary_contact_whatsapp_2')) {
+                    $core['primary_contact_whatsapp_2'] = $request->input('primary_contact_whatsapp_2');
+                }
+                if ($request->has('primary_contact_whatsapp_3')) {
+                    $core['primary_contact_whatsapp_3'] = $request->input('primary_contact_whatsapp_3');
+                }
+                $snapshot['core'] = $core;
+            }
+            // Partner preferences: about_preferences section may submit at top level (preferred_*, preferred_cities, etc.).
+            $prefKeys = ['preferred_age_min', 'preferred_age_max', 'preferred_education', 'preferred_city_id', 'preferred_income_min', 'preferred_income_max', 'preferred_caste', 'preferred_city'];
+            $hasPref = false;
+            foreach ($prefKeys as $pk) {
+                if ($request->has($pk)) {
+                    $hasPref = true;
+                    break;
+                }
+            }
+            if ($hasPref || $request->has('preferred_district_ids') || $request->has('preferred_religion_ids') || $request->has('preferred_caste_ids') || $request->has('preferred_cities')) {
+                $prefRow = $snapshot['preferences'][0] ?? [];
+                if (! is_array($prefRow)) {
+                    $prefRow = [];
+                }
+                foreach ($prefKeys as $pk) {
+                    if ($request->has($pk)) {
+                        $prefRow[$pk] = $request->input($pk);
+                    }
+                }
+                if (is_array($request->input('preferred_district_ids'))) {
+                    $prefRow['preferred_district_ids'] = $request->input('preferred_district_ids');
+                }
+                if (is_array($request->input('preferred_religion_ids'))) {
+                    $prefRow['preferred_religion_ids'] = $request->input('preferred_religion_ids');
+                }
+                if (is_array($request->input('preferred_caste_ids'))) {
+                    $prefRow['preferred_caste_ids'] = $request->input('preferred_caste_ids');
+                }
+                if (is_array($request->input('preferred_cities'))) {
+                    $prefRow['preferred_cities'] = $request->input('preferred_cities');
+                }
+                $snapshot['preferences'] = [$prefRow];
+            }
             $snapshot = $this->normalizeApprovalSnapshot(array_merge($base, $snapshot));
             // MutationService expects marital_status_id on each profile_marriages row; inject from core.
             if (! empty($snapshot['core']['marital_status_id']) && is_array($snapshot['marriages'] ?? null)) {
@@ -898,6 +1063,12 @@ class IntakeController extends Controller
                 $out[$k] = isset($snapshot[$k]) && is_array($snapshot[$k]) ? $snapshot[$k] : [];
             }
         }
+        // Centralized full_form (intake) sends relatives_parents_family + relatives_maternal_family; MutationService expects single "relatives" array.
+        $paternal = $this->normalizeRelativesRows(isset($snapshot['relatives_parents_family']) && is_array($snapshot['relatives_parents_family']) ? $snapshot['relatives_parents_family'] : []);
+        $maternal = $this->normalizeRelativesRows(isset($snapshot['relatives_maternal_family']) && is_array($snapshot['relatives_maternal_family']) ? $snapshot['relatives_maternal_family'] : []);
+        if (! empty($paternal) || ! empty($maternal)) {
+            $out['relatives'] = array_merge($paternal, $maternal);
+        }
         // Contacts: ensure phone_number for sync (legacy "number" from parsed/old forms).
         if (isset($out['contacts']) && is_array($out['contacts'])) {
             foreach ($out['contacts'] as $i => $row) {
@@ -944,6 +1115,280 @@ class IntakeController extends Controller
         }
 
         return $out;
+    }
+
+    /**
+     * Extract rows from parsed relatives where relation is बहिण or भाऊ (siblings). AI/parser may put them in "relatives" array.
+     *
+     * @return array<int, array{relation_type: string, name: string, contact_number: string|null, occupation: string|null, ...}>
+     */
+    private function extractSiblingRowsFromParsedRelatives(array $relatives): array
+    {
+        $out = [];
+        foreach ($relatives as $row) {
+            $row = is_array($row) ? $row : (array) $row;
+            $relation = trim((string) ($row['relation_type'] ?? $row['relation'] ?? ''));
+            if ($relation === 'बहिण' || $relation === 'बहीण') {
+                $out[] = [
+                    'relation_type' => 'sister',
+                    'name' => trim((string) ($row['name'] ?? '')),
+                    'contact_number' => trim((string) ($row['contact_number'] ?? '')) ?: null,
+                    'occupation' => trim((string) ($row['occupation'] ?? '')) ?: null,
+                ];
+            } elseif ($relation === 'भाऊ' || $relation === 'बंधू') {
+                $out[] = [
+                    'relation_type' => 'brother',
+                    'name' => trim((string) ($row['name'] ?? '')),
+                    'contact_number' => trim((string) ($row['contact_number'] ?? '')) ?: null,
+                    'occupation' => trim((string) ($row['occupation'] ?? '')) ?: null,
+                ];
+            }
+        }
+        return $out;
+    }
+
+    /**
+     * Merge parsed sibling rows (from relatives array) into profileSiblings collection for the form.
+     */
+    private function mergeParsedSiblingsIntoProfileSiblings(\Illuminate\Support\Collection $profileSiblings, array $siblingRows): \Illuminate\Support\Collection
+    {
+        if (empty($siblingRows)) {
+            return $profileSiblings;
+        }
+        $existing = $profileSiblings->all();
+        foreach ($siblingRows as $r) {
+            $existing[] = (object) array_merge($r, [
+                'id' => null,
+                'marital_status' => '',
+                'spouse' => [],
+                'address_line' => '',
+            ]);
+        }
+        return collect($existing);
+    }
+
+    /**
+     * Exclude बहिण/भाऊ rows from relatives array so they are not passed to partition (they go to siblings).
+     */
+    private function excludeSiblingRelationsFromRelatives(array $relatives): array
+    {
+        $siblingRelations = ['बहिण', 'बहीण', 'भाऊ', 'बंधू'];
+        return array_values(array_filter($relatives, function ($row) use ($siblingRelations) {
+            $row = is_array($row) ? $row : (array) $row;
+            $relation = trim((string) ($row['relation_type'] ?? $row['relation'] ?? ''));
+            return ! in_array($relation, $siblingRelations, true);
+        }));
+    }
+
+    /**
+     * Partition parsed relatives into paternal vs maternal and structure each row: split notes by श्री./सौ., extract name and address.
+     * दाजी = बहिणीचा नवरा (sister's husband) — not shown in Paternal; returned separately to merge into sibling panel sister's spouse.
+     *
+     * @return array{0: \Illuminate\Support\Collection, 1: \Illuminate\Support\Collection, 2: array} [paternal, maternal, dajiRows]
+     */
+    private function partitionAndStructureRelativesForIntake(array $relatives): array
+    {
+        $paternal = [];
+        $maternal = [];
+        $dajiRows = [];
+        $marathiToPaternal = [
+            'दादी' => 'paternal_grandmother',
+            'आजी' => 'paternal_grandmother',
+            'चुलते' => 'paternal_uncle',
+            'काका' => 'paternal_uncle',
+            'आत्या' => 'paternal_aunt',
+            'काकू' => 'paternal_aunt',
+            'Cousin' => 'Cousin',
+            'इतर' => 'Other',
+            'native_place' => 'native_place',
+        ];
+        $marathiToMaternal = [
+            'मामा' => 'maternal_uncle',
+            'मावशी' => 'maternal_aunt',
+            'आजोळ' => 'maternal_address_ajol',
+            'other_maternal' => 'other_maternal',
+        ];
+        $allPaternalKeys = array_keys($marathiToPaternal);
+
+        foreach ($relatives as $row) {
+            $row = is_array($row) ? $row : (array) $row;
+            $relationTypeRaw = trim((string) ($row['relation_type'] ?? $row['relation'] ?? ''));
+            $notes = trim((string) ($row['notes'] ?? ''));
+            $directName = trim((string) ($row['name'] ?? ''));
+            if ($relationTypeRaw === '' && $notes === '' && $directName === '') {
+                continue;
+            }
+            if ($relationTypeRaw === 'वडिल' || $relationTypeRaw === 'वडील') {
+                continue;
+            }
+            if (mb_strpos($relationTypeRaw, 'इतर') !== false || mb_strpos($relationTypeRaw, 'नातेवाईक') !== false) {
+                $relationTypeRaw = 'इतर';
+            }
+            $isMaternal = false;
+            $englishType = null;
+            $isDaji = ($relationTypeRaw === 'दाजी');
+            if ($isDaji) {
+            } elseif (isset($marathiToMaternal[$relationTypeRaw])) {
+                $isMaternal = true;
+                $englishType = $marathiToMaternal[$relationTypeRaw];
+            } elseif (isset($marathiToPaternal[$relationTypeRaw])) {
+                $englishType = $marathiToPaternal[$relationTypeRaw];
+            } else {
+                $englishType = 'Other';
+            }
+            if ($directName !== '') {
+                $structured = [
+                    'relation_type' => $englishType,
+                    'name' => $directName,
+                    'occupation' => $row['occupation'] ?? null,
+                    'contact_number' => $row['contact_number'] ?? null,
+                    'notes' => $notes !== '' ? $notes : '',
+                ];
+                if ($isDaji) {
+                    $dajiRows[] = [
+                        'name' => $directName,
+                        'address_line' => $notes,
+                        'occupation_title' => $row['occupation'] ?? null,
+                        'contact_number' => $row['contact_number'] ?? null,
+                    ];
+                } elseif ($isMaternal) {
+                    $maternal[] = (object) $structured;
+                } else {
+                    $paternal[] = (object) $structured;
+                }
+                continue;
+            }
+            $segments = preg_split('/(?=श्री\.|सौ\.)/u', $notes, -1, PREG_SPLIT_NO_EMPTY);
+            $segments = array_map('trim', array_filter($segments, fn ($p) => trim($p) !== ''));
+            if (count($segments) === 0) {
+                $segments = [$notes];
+            }
+            foreach ($segments as $segment) {
+                $segment = trim($segment);
+                if ($segment === '') {
+                    continue;
+                }
+                if (preg_match('/^\s*(मामा|चुलते|चुलती|दाजी|दादी|आजी|इतर)\s*[+\-*\.\s०-९0-9]*$/u', $segment)) {
+                    continue;
+                }
+                $name = null;
+                $addressOrNotes = $segment;
+                if (preg_match('/श्री\.?\s*([^(]+?)\s*\(([^)]+)\)/u', $segment, $m)) {
+                    $name = trim($m[1]);
+                    $addressOrNotes = trim($m[2]);
+                } elseif (preg_match('/सौ\.?\s*([^(]+?)\s*\(([^)]+)\)/u', $segment, $m)) {
+                    $name = trim($m[1]);
+                    $addressOrNotes = trim($m[2]);
+                } elseif (preg_match('/श्री\.?\s*(.+)/u', $segment, $m)) {
+                    $name = trim($m[1]);
+                    $addressOrNotes = '';
+                } elseif (preg_match('/सौ\.?\s*(.+)/u', $segment, $m)) {
+                    $name = trim($m[1]);
+                    $addressOrNotes = '';
+                }
+                if ($name !== null && $name !== '') {
+                    $name = preg_replace('/^\s*[+\-*\.\s०-९0-9]+\s*/u', '', $name);
+                    $name = trim($name);
+                }
+                if ($name === '' || $name === null) {
+                    $name = '';
+                }
+                if ($isDaji) {
+                    $dajiRows[] = [
+                        'name' => $name ?? '',
+                        'address_line' => $addressOrNotes !== '' ? $addressOrNotes : '',
+                        'occupation_title' => $row['occupation'] ?? null,
+                        'contact_number' => $row['contact_number'] ?? null,
+                    ];
+                } else {
+                    $structured = [
+                        'relation_type' => $englishType,
+                        'name' => $name ?? '',
+                        'occupation' => $row['occupation'] ?? null,
+                        'contact_number' => $row['contact_number'] ?? null,
+                        'notes' => $addressOrNotes !== '' ? $addressOrNotes : (string) $segment,
+                    ];
+                    if ($isMaternal) {
+                        $maternal[] = (object) $structured;
+                    } else {
+                        $paternal[] = (object) $structured;
+                    }
+                }
+            }
+        }
+        return [collect($paternal), collect($maternal), $dajiRows];
+    }
+
+    /**
+     * Merge दाजी (sister's husband) info from parsed relatives into sibling panel: first sister's spouse, or add one sister row with spouse.
+     */
+    private function mergeDajiIntoSiblings(\Illuminate\Support\Collection $siblings, array $dajiRows): \Illuminate\Support\Collection
+    {
+        if (empty($dajiRows)) {
+            return $siblings;
+        }
+        $firstDaji = $dajiRows[0];
+        $siblingsArray = $siblings->all();
+        $sisterIndex = null;
+        foreach ($siblingsArray as $i => $s) {
+            $r = is_object($s) ? (array) $s : $s;
+            if (($r['relation_type'] ?? '') === 'sister') {
+                $sisterIndex = $i;
+                break;
+            }
+        }
+        $spouse = [
+            'name' => $firstDaji['name'] ?? '',
+            'address_line' => $firstDaji['address_line'] ?? '',
+            'occupation_title' => $firstDaji['occupation_title'] ?? null,
+            'contact_number' => $firstDaji['contact_number'] ?? null,
+        ];
+        if ($sisterIndex !== null) {
+            $s = $siblingsArray[$sisterIndex];
+            $r = is_object($s) ? (array) $s : $s;
+            $r['marital_status'] = 'married';
+            $r['spouse'] = array_merge($r['spouse'] ?? [], $spouse);
+            $siblingsArray[$sisterIndex] = (object) $r;
+        } else {
+            $siblingsArray[] = (object) [
+                'relation_type' => 'sister',
+                'name' => '',
+                'marital_status' => 'married',
+                'spouse' => $spouse,
+            ];
+        }
+        return collect($siblingsArray);
+    }
+
+    /**
+     * Normalize one source of relative rows (relatives_parents_family or relatives_maternal_family) to snapshot format.
+     * Same shape as ProfileWizardController::collectRelativesFromRequestSource for MutationService.
+     */
+    private function normalizeRelativesRows(array $rows): array
+    {
+        $relatives = [];
+        foreach ($rows as $row) {
+            $relationType = trim((string) ($row['relation_type'] ?? ''));
+            if ($relationType === '') {
+                continue;
+            }
+            $name = trim((string) ($row['name'] ?? ''));
+            if (in_array($relationType, ['maternal_address_ajol', 'native_place'], true)) {
+                $name = '';
+            }
+            $relatives[] = [
+                'id' => ! empty($row['id']) ? (int) $row['id'] : null,
+                'relation_type' => $relationType ?: '',
+                'name' => $name ?: '',
+                'occupation' => trim((string) ($row['occupation'] ?? '')) ?: null,
+                'city_id' => ! empty($row['city_id']) ? (int) $row['city_id'] : null,
+                'state_id' => ! empty($row['state_id']) ? (int) $row['state_id'] : null,
+                'contact_number' => trim((string) ($row['contact_number'] ?? '')) ?: null,
+                'notes' => trim((string) ($row['notes'] ?? '')) ?: null,
+                'is_primary_contact' => ! empty($row['is_primary_contact']),
+            ];
+        }
+        return $relatives;
     }
 
     /**

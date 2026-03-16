@@ -47,6 +47,7 @@ return [
     'full' => 'Full profile',
     'never_married' => 'Never Married',
     'divorced' => 'Divorced',
+    'annulled' => 'Annulled',
     'separated' => 'Separated',
     'widowed' => 'Widowed',
     // Controller messages
@@ -92,6 +93,7 @@ return [
 
     // Marital / children
     'spouse_death_year' => 'Spouse death year',
+    'annulment_year' => 'Annulment year',
     'legal_status' => 'Legal status',
     'divorce_pending' => 'Pending',
     'divorce_finalized' => 'Finalized',

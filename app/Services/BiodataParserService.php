@@ -195,7 +195,8 @@ class BiodataParserService
         $gotra = $this->rejectIfLabelNoise($this->extractField($personalText, ['गोत्र']) ?? $this->extractField($text, ['गोत्र']));
         $kuldaivat = $this->rejectIfLabelNoise($this->extractField($personalText, ['कुल दैवत', 'कुलदैवत']) ?? $this->extractField($text, ['कुल दैवत', 'कुलदैवत']));
         $rashi = $this->rejectIfLabelNoise($this->extractField($horoscopeText, ['रास', 'टाशी', 'राशी']) ?? $this->extractField($text, ['रास', 'टाशी', 'राशी']));
-        $nadi = $this->rejectIfLabelNoise($this->extractField($horoscopeText, ['नाडी']) ?? $this->extractField($text, ['नाडी']));
+        $nadiRaw = $this->rejectIfLabelNoise($this->extractField($horoscopeText, ['नाडी', 'नाड २', 'नाड']) ?? $this->extractField($text, ['नाडी', 'नाड २', 'नाड']));
+        $nadi = $nadiRaw !== null ? $this->normalizeNadiValue($nadiRaw) : null;
         // Prefer label-style "गण :- value" so we don't capture text after "गण" in "गणपती" (मामा line)
         $gan = $this->rejectIfLabelNoise($this->extractFieldAfterLabels($horoscopeText, ['गण']) ?? $this->extractFieldAfterLabels($text, ['गण']) ?? $this->extractField($horoscopeText, ['गण']) ?? $this->extractField($text, ['गण']));
         $mangalik = $this->rejectIfLabelNoise($this->extractField($text, ['मांगलिक']));
@@ -236,11 +237,17 @@ class BiodataParserService
         $religion = $religion ?? $romanized['religion'] ?? null;
         $casteRaw = $this->extractFieldAfterLabels($text, ['जात', 'Caste', 'Community']);
         $casteRaw = $casteRaw ?? $romanized['caste'] ?? null;
-
         if ($casteRaw !== null) {
-            // Pattern: "जात २- हिंदु- 96 कुळी मराठा" or similar.
-            if (preg_match('/हिंद[ुू]\s*-\s*([0-9]+\s*कुळी)\s*(मराठा)?/u', $casteRaw, $m)) {
-                $subCaste = trim($m[1]); // e.g. "96 कुळी"
+            $casteRaw = $this->cleanOcrNoiseFromFieldValue($casteRaw);
+        }
+        if ($casteRaw !== null && $casteRaw !== '') {
+            // Pattern: "हिंदु- 96 कुळी मराठा" or "हिंदु- ९६ कुळी मराठा" (with/without OCR noise prefix).
+            if (preg_match('/हिंद[ुू]\s*-\s*([0-9०-९]+\s*कुळी)\s*(मराठा)?/u', $casteRaw, $m)) {
+                $subCaste = trim($m[1]); // e.g. "96 कुळी" or "९६ कुळी"
+                $caste = 'मराठा';
+                $religion = $religion ?? 'हिंदु';
+            } elseif (preg_match('/हिंद[ुू]\s*[-]?\s*([0-9०-९]+\s*कुळी)\s*मराठा/u', $casteRaw, $m)) {
+                $subCaste = trim($m[1]);
                 $caste = 'मराठा';
                 $religion = $religion ?? 'हिंदु';
             } else {
@@ -282,6 +289,10 @@ class BiodataParserService
         }
 
         $salaryRaw = $this->extractField($text, ['मासिक वेतन', 'पगार', 'वेतन', 'वेतन/उत्पन्न', 'Package', 'वार्षिक उत्पन्न']);
+        $salaryRaw = $salaryRaw ?? $this->extractFieldAfterLabels($text, ['Annual Package', 'Annual package', 'Package']);
+        if ($salaryRaw === null && preg_match('/Annual\s*Package\s*\(?\s*(\d+(?:\.\d+)?)\s*Lacs?\.?/ui', $text, $m)) {
+            $salaryRaw = $m[1] . ' Lac';
+        }
         $salary = $this->normalizeSalary($salaryRaw);
         $annualIncome = null;
         if (isset($salary['annual_lakh_float']) && $salary['annual_lakh_float'] > 0) {
@@ -600,6 +611,10 @@ $coreKeys = [
         }
 
         $relativesRows = $familyStructures['relatives'] ?? [];
+
+        if (! empty($familyStructures['other_relatives_text'] ?? null) && is_string($familyStructures['other_relatives_text'])) {
+            $core['other_relatives_text'] = $familyStructures['other_relatives_text'];
+        }
 
         // Marathi-safe caste/sub_caste: "NN कुळी मराठा" → sub_caste = "NN कुळी", caste = "मराठा". No mojibake.
         if (($core['sub_caste'] ?? null) === null && isset($core['caste']) && is_string($core['caste'])) {
@@ -1362,6 +1377,26 @@ $coreKeys = [
         return $v;
     }
 
+    /**
+     * Strip OCR noise from start of field value: leading digits (Marathi/English), +, *, २- style prefixes.
+     * E.g. "२- हिंदु- 96 कुळी मराठा" -> "हिंदु- 96 कुळी मराठा", "भाऊ +" -> "भाऊ +" (no change if no leading noise).
+     */
+    private function cleanOcrNoiseFromFieldValue(string $value): string
+    {
+        $v = trim($value);
+        if ($v === '') {
+            return $v;
+        }
+        // Strip one or more blocks: optional spaces + digits (०-९ or 0-9) + optional [+*.\-] + optional spaces
+        $prev = '';
+        while ($prev !== $v) {
+            $prev = $v;
+            $v = preg_replace('/^\s*[०-९0-9]+\s*[+\-*\.]?\s*/u', '', $v);
+            $v = trim($v);
+        }
+        return $v;
+    }
+
     private function extractCount(string $text, array $labels): ?int
     {
         foreach ($labels as $label) {
@@ -1530,6 +1565,7 @@ $coreKeys = [
      *   relatives: array<int, array<string, mixed>>,
      *   core_overrides: array<string, mixed>,
      *   career_history: array<int, array<string, mixed>>,
+     *   other_relatives_text: string|null,
      * }
      */
     private function extractFamilyStructures(string $text): array
@@ -1601,9 +1637,11 @@ $coreKeys = [
             }
         }
 
-        // --- RELATIVES (grouped summary rows) ---
+        // --- RELATIVES (grouped summary rows) + Other Relatives (आडनाव/गाव) → other_relatives_text ---
         $currentType = null;
         $buffer = [];
+        $otherRelativesBuffer = [];
+        $inOtherRelatives = false;
         $flushRelative = function () use (&$relatives, &$currentType, &$buffer) {
             if ($currentType !== null && ! empty($buffer)) {
                 $relatives[] = [
@@ -1617,30 +1655,46 @@ $coreKeys = [
 
         foreach ($lines as $line) {
             if (mb_strpos($line, 'दाजी') !== false) {
+                $inOtherRelatives = false;
                 $flushRelative();
                 $currentType = 'दाजी';
                 $buffer[] = $line;
             } elseif (mb_strpos($line, 'चुलते') !== false) {
+                $inOtherRelatives = false;
                 $flushRelative();
                 $currentType = 'चुलते';
                 $buffer[] = $line;
             } elseif (mb_strpos($line, 'मामा') !== false) {
+                $inOtherRelatives = false;
                 $flushRelative();
                 $currentType = 'मामा';
                 $buffer[] = $line;
             } elseif (mb_strpos($line, 'इतर नातेवाईक') !== false) {
                 $flushRelative();
-                $relatives[] = [
-                    'relation_type' => 'इतर',
-                    'notes' => $line,
-                ];
+                $inOtherRelatives = true;
+                $firstLine = preg_replace('/^.*?इतर\s+नातेवाईक\s*[:-]\s*/u', '', $line);
+                $otherRelativesBuffer = [trim($firstLine)];
+            } elseif ($inOtherRelatives && (preg_match('/^\s*Contact\.?\s*No\.?/ui', $line) || preg_match('/मोबाइल|Mobile\s*[:.-]/ui', $line))) {
+                $inOtherRelatives = false;
             } else {
                 if ($currentType !== null) {
                     $buffer[] = $line;
+                } elseif ($inOtherRelatives) {
+                    $otherRelativesBuffer[] = trim($line);
                 }
             }
         }
         $flushRelative();
+
+        $otherRelativesText = null;
+        if (! empty($otherRelativesBuffer)) {
+            $joined = implode(', ', array_filter(array_map('trim', $otherRelativesBuffer)));
+            $otherRelativesText = preg_replace('/\s*,\s*,/', ',', $joined);
+            $otherRelativesText = trim(preg_replace('/\s+/u', ' ', $otherRelativesText));
+            if ($otherRelativesText === '') {
+                $otherRelativesText = null;
+            }
+        }
 
         $relatives = $this->splitRelativeRowsByShri($relatives);
         $relatives = array_values(array_filter($relatives, function ($r) {
@@ -1726,6 +1780,7 @@ $coreKeys = [
             'relatives' => $relatives,
             'core_overrides' => $coreOverrides,
             'career_history' => $careerHistory,
+            'other_relatives_text' => $otherRelativesText,
         ];
     }
 
@@ -1901,8 +1956,8 @@ $coreKeys = [
         if ($value === null || $value === '') {
             return [];
         }
-        // 3.25 Lac / 3.25 Lac. / 2 LAC / 3.25 Lakh / 3.25 लाख -> annual in lakh (float); allow newline between number and LAC
-        if (preg_match('/(\d+(?:\.\d+)?)\s*(?:\n\s*)?(?:Lac\.?|LAC|Lakh|लाख)/ui', $value, $m)) {
+        // 3.25 Lac / 3.25 Lacs. / 9 Lacs. / 2 LAC / 3.25 Lakh / 3.25 लाख -> annual in lakh (float)
+        if (preg_match('/(\d+(?:\.\d+)?)\s*(?:\n\s*)?(?:Lacs?\.?|Lac\.?|LAC|Lakh|लाख)/ui', $value, $m)) {
             return ['annual_lakh_float' => (float) $m[1]];
         }
         if (preg_match('/(\d+)\s*लाख/u', $value, $m)) {
@@ -1943,7 +1998,12 @@ $coreKeys = [
         if ($value === null || trim($value) === '') {
             return null;
         }
-        $v = preg_replace('/\s+/u', '', trim($value));
+        $v = trim($value);
+        // Reject OCR garbage: "84४७" (B+ve misread as digits), or any value that is only digits/punctuation
+        if (preg_match('/^[0-9०-९\s\-\.]+$/u', $v)) {
+            return null;
+        }
+        $v = preg_replace('/\s+/u', '', $v);
         $v = strtoupper(str_replace(['VE', 'POSITIVE', 'NEGATIVE', 'NEG'], '', $v));
         return in_array($v, self::VALID_BLOOD_GROUPS, true) ? $v : null;
     }
@@ -2152,6 +2212,27 @@ $coreKeys = [
     }
 
     /**
+     * Normalize nadi value: "२ आध्य" -> "आध्य"; "आध्य गण :- राक्षस" -> "आध्य" (first word only when line has गण).
+     */
+    private function normalizeNadiValue(string $value): ?string
+    {
+        $v = trim($value);
+        if ($v === '') {
+            return null;
+        }
+        $v = preg_replace('/^[०-९0-9\s]+/u', '', $v);
+        $v = trim($v);
+        if ($v === '') {
+            return null;
+        }
+        // When value contains "गण" (e.g. "आध्य गण :- राक्षस"), nadi is the first word only
+        if (mb_strpos($v, 'गण') !== false && preg_match('/^([^\s]+)/u', $v, $m)) {
+            return trim($m[1]);
+        }
+        return $v;
+    }
+
+    /**
      * Reject values that are clearly not valid horoscope fields (delegates to sanitizeHoroscopeValue).
      */
     private function rejectHoroscopeJunk(?string $value): ?string
@@ -2197,11 +2278,18 @@ $coreKeys = [
             return 'female';
         }
 
-        if (preg_match('/\bकु\./u', $text)) {
+        // Honorifics: कु. = Kumari (female), चि. = Chiranjeevi (male), कुमारी = female, श्री = male (before name)
+        if (preg_match('/\bकु\./u', $text) || preg_match('/[:\-]\s*कु\./u', $text)) {
             return 'female';
         }
-
-        if (preg_match('/\bचि\./u', $text)) {
+        if (preg_match('/\bकुमारी\b/u', $text)) {
+            return 'female';
+        }
+        if (preg_match('/\bचि\./u', $text) || preg_match('/[:\-]\s*चि\./u', $text)) {
+            return 'male';
+        }
+        // श्री before name (e.g. "नाव :- श्री. राजेंद्र") = male; avoid matching only in female context
+        if (preg_match('/नाव\s*[:\-]\s*श्री\./u', $text) || preg_match('/मुलाचे\s*नाव.*श्री/u', $text)) {
             return 'male';
         }
 
