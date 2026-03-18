@@ -23,9 +23,14 @@ class AiFirstBiodataParser implements BiodataParserInterface
 
     public function parse(string $rawText, array $context = []): array
     {
-        // Attempt AI parse first.
+        $parserMode = $context['parser_mode'] ?? 'ai_first_v1';
+        $useV2 = $parserMode === 'ai_first_v2';
+
+        // Attempt AI parse first (v1 or v2 based on admin setting).
         try {
-            $aiResult = $this->ai->parseToSsot($rawText);
+            $aiResult = $useV2
+                ? $this->ai->parseToSsotV2($rawText)
+                : $this->ai->parseToSsot($rawText);
             if (is_array($aiResult) && isset($aiResult['core'], $aiResult['confidence_map'])) {
                 // Ensure minimal SSOT shape first.
                 $aiResult = $this->ensureSsotShape($aiResult);
@@ -51,6 +56,9 @@ class AiFirstBiodataParser implements BiodataParserInterface
                     'marital_status',
                     'full_name',
                     'primary_contact_number',
+                    // Physical section – pull from high-precision rules parser when AI misses it
+                    'height_cm',
+                    'complexion',
                     'other_relatives_text', // इतर नातेवाईक (आडनाव/गाव) from rules extractFamilyStructures
                 ];
 

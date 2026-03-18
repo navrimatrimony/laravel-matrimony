@@ -22,6 +22,18 @@
         old($oldK('mother_contact_3'), $profile->mother_contact_3 ?? ''),
     ];
     $motherCount = max(1, count(array_filter($motherContacts, fn($v) => trim((string)$v) !== '')));
+
+    // Preview-only tweak: for intake snapshot core, prefix father's occupation with "Job - "
+    // when we have an occupation text but no explicit job/व्यवसाय split.
+    $fatherOccupationValue = old($oldK('father_occupation'), $profile->father_occupation ?? null);
+    if (
+        is_string($fatherOccupationValue)
+        && trim($fatherOccupationValue) !== ''
+        && $namePrefix === 'snapshot[core]'
+        && ! str_starts_with($fatherOccupationValue, 'Job - ')
+    ) {
+        $fatherOccupationValue = 'Job - ' . $fatherOccupationValue;
+    }
 @endphp
 
 <div class="parent-engine border-2 border-rose-500 dark:border-rose-400 rounded-lg p-4 space-y-5" data-name-prefix="{{ $namePrefix }}">
@@ -33,7 +45,7 @@
         </div>
         <div class="flex-1">
             <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Father Occupation</label>
-            <input type="text" name="{{ $n('father_occupation') }}" value="{{ old($oldK('father_occupation'), $profile->father_occupation ?? null) }}" class="w-full rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-3 py-2">
+            <input type="text" name="{{ $n('father_occupation') }}" value="{{ $fatherOccupationValue }}" class="w-full rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-3 py-2">
         </div>
     </div>
 

@@ -156,5 +156,153 @@ class ExternalAiParsingService
             return null;
         }
     }
+
+    /**
+     * Parse raw biodata text using a Marathi-aware prompt and strict schema (v2).
+     * Use when admin selects "AI first (SSOT v2)". Same return shape as parseToSsot() for compatibility.
+     *
+     * @return array<string, mixed>|null SSOT array or null on failure
+     */
+    public function parseToSsotV2(string $rawText): ?array
+    {
+        $key = config('services.openai.key');
+        if ($key === null || $key === '') {
+            return null;
+        }
+
+        $url = config('services.openai.url', 'https://api.openai.com/v1/chat/completions');
+        $model = config('services.openai.model', 'gpt-4o-mini');
+        $maxChars = (int) config('intake.ai_first_v2.max_chars', 12000);
+        $v2Model = config('intake.ai_first_v2.model');
+        if ($v2Model !== null && $v2Model !== '') {
+            $model = $v2Model;
+        }
+
+        if (mb_strlen($rawText) > $maxChars) {
+            $rawText = mb_substr($rawText, 0, $maxChars);
+        }
+
+        $system = 'You are an expert data extraction assistant for a Marathi/Hindi/English marriage biodata (विवाह परिचय पत्र) system. '
+            . 'The text is often in Devanagari (मराठी) or mixed. Extract structured JSON in the EXACT schema given. '
+            . 'Recognise common Marathi labels: नाव, उंची, वर्ण/रंग, रक्त गट, जन्मतारीख, जात, उपजात, धर्म, लग्नस्थिती, '
+            . 'नाडी (आध्य/मध्य/अंत्य), गण (देव/मनुष्य/राक्षस), चरण, रास/राशी, नक्षत्र, देवक, कुलदैवत, गोत्र, '
+            . 'वडील, आई, भाऊ, बहीण, दाजी (sister\'s husband), मामा, आजोळ (maternal), पत्ता, नोकरी, शिक्षण. '
+            . 'Return ONLY valid JSON. No markdown, no code fences, no explanations.';
+
+        $schema = <<<'SCHEMA'
+{
+  "core": {
+    "full_name": "string or null",
+    "date_of_birth": "YYYY-MM-DD or null",
+    "birth_time": "string or null",
+    "birth_place": "string or null",
+    "gender": "male|female or null",
+    "religion": "string or null",
+    "caste": "string or null",
+    "sub_caste": "string or null",
+    "marital_status": "string or null",
+    "height_cm": number or null,
+    "complexion": "string or null (e.g. गोरा, सावळा, निमगोरा)",
+    "annual_income": number or null,
+    "family_income": number or null,
+    "primary_contact_number": "string or null",
+    "father_name": "string or null",
+    "father_occupation": "string or null",
+    "mother_name": "string or null",
+    "mother_occupation": "string or null",
+    "brother_count": number or null,
+    "sister_count": number or null,
+    "other_relatives_text": "string or null (इतर नातेवाईक / आडनाव / गाव etc)"
+  },
+  "contacts": [{"type": "primary|other", "number": "string", "label": "string or null"}],
+  "children": [{"name": "string or null", "birth_year": "number or null", "gender": "string or null"}],
+  "education_history": [{"degree": "string", "institution": "string or null", "year": "number or null"}],
+  "career_history": [{"job_title": "string", "company": "string or null", "location": "string or null"}],
+  "addresses": [{"type": "string or null", "address_line": "string", "city": "string or null", "district": "string or null"}],
+  "siblings": [{"relation_type": "brother|sister", "name": "string or null", "occupation": "string or null", "address_line": "string or null", "contact_number": "string or null", "notes": "string or null", "spouse": {"name": "string or null", "address_line": "string or null", "occupation_title": "string or null", "contact_number": "string or null"}}],
+  "relatives": [{"relation_type": "string (e.g. mama, mami, daji, maternal_uncle)", "name": "string or null", "occupation": "string or null", "address_line": "string or null", "contact_number": "string or null", "notes": "string or null"}],
+  "property_summary": [],
+  "property_assets": [],
+  "horoscope": [{"rashi": "string or null", "nakshatra": "string or null", "nadi": "adi|madhyam|anty or null", "gan": "deva|manushya|rakshasa or null", "charan": number 1-4 or null, "devak": "string or null", "kuldaivat": "string or null", "gotra": "string or null", "blood_group": "A+/A-/B+/B-/AB+/AB-/O+/O- or null"}],
+  "preferences": [],
+  "extended_narrative": {"narrative_about_me": "string or null", "narrative_expectations": "string or null", "additional_notes": "string or null"},
+  "confidence_map": {"field_name": number 0-1}
+}
+SCHEMA;
+
+        $user = 'Extract the following biodata into this EXACT JSON schema. '
+            . "Rules: (1) Marathi dates like १२/०३/१९९६ or 12/03/1996 → YYYY-MM-DD. "
+            . "(2) Height in feet/inch (फूट/इंच) → convert to height_cm (1 ft = 30.48 cm, 1 inch = 2.54 cm). "
+            . "(3) Blood group: accept B+, B+ve, B positive → B+; similar for A, AB, O. "
+            . "(4) नाडी आध्य/आद्य → nadi=adi; मध्य → madhyam; अंत्य → anty. "
+            . "(5) गण देव/मनुष्य/राक्षस → gan=deva/manushya/rakshasa. "
+            . "(6) दाजी = sister\'s husband: put in siblings[].spouse for the matching sister. "
+            . "(7) If unsure, set null and confidence 0.0. Never invent phone numbers or income. "
+            . "(8) Return ONLY JSON, no backticks.\n\nSchema:\n" . $schema . "\n\nBiodata text:\n\n" . $rawText;
+
+        try {
+            $response = Http::withHeaders([
+                'Authorization' => 'Bearer ' . $key,
+                'Content-Type' => 'application/json',
+            ])->timeout(60)->post($url, [
+                'model' => $model,
+                'messages' => [
+                    ['role' => 'system', 'content' => $system],
+                    ['role' => 'user', 'content' => $user],
+                ],
+                'temperature' => 0.1,
+                'max_tokens' => 2500,
+            ]);
+
+            if (! $response->successful()) {
+                Log::warning('ExternalAiParsingService: AI v2 API non-2xx.', ['status' => $response->status()]);
+                return null;
+            }
+
+            $body = $response->json();
+            $content = $body['choices'][0]['message']['content'] ?? null;
+            if (! is_string($content) || $content === '') {
+                return null;
+            }
+
+            $content = trim($content);
+            $content = preg_replace('/^```json\s*|\s*```$/i', '', $content);
+
+            $decoded = json_decode($content, true);
+            if (! is_array($decoded)) {
+                return null;
+            }
+
+            $requiredKeys = [
+                'core', 'contacts', 'children', 'education_history', 'career_history',
+                'addresses', 'siblings', 'relatives', 'property_summary', 'property_assets',
+                'horoscope', 'preferences', 'extended_narrative', 'confidence_map',
+            ];
+            foreach ($requiredKeys as $key) {
+                if (! array_key_exists($key, $decoded)) {
+                    if ($key === 'core') {
+                        $decoded['core'] = [];
+                    } elseif ($key === 'confidence_map') {
+                        $decoded['confidence_map'] = [];
+                    } elseif ($key === 'extended_narrative') {
+                        $decoded['extended_narrative'] = ['narrative_about_me' => null, 'narrative_expectations' => null, 'additional_notes' => null];
+                    } else {
+                        $decoded[$key] = [];
+                    }
+                }
+            }
+            if (! is_array($decoded['core'])) {
+                $decoded['core'] = [];
+            }
+            if (! is_array($decoded['confidence_map'])) {
+                $decoded['confidence_map'] = [];
+            }
+
+            return $decoded;
+        } catch (\Throwable $e) {
+            Log::warning('ExternalAiParsingService: AI v2 request failed.', ['message' => $e->getMessage()]);
+            return null;
+        }
+    }
 }
 

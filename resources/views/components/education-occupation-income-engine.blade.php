@@ -97,6 +97,17 @@
     $inputCls = 'w-full rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-3 py-2';
     $labelCls = 'block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1';
     $cardCls = 'rounded-lg border-2 border-rose-500/30 dark:border-rose-400/30 bg-white dark:bg-gray-800/50 p-4';
+
+    // जर education history row मध्ये degree/specialization/university/year पैकी काहीही भरलेलं असेल,
+    // तर तो section collapsed न ठेवण्यासाठी flag.
+    $hasFilledEducationHistory = collect($educationHistory)->contains(function ($row) {
+        $r = is_array($row) ? $row : (array) $row;
+        $deg = trim((string) ($r['degree'] ?? ''));
+        $spec = trim((string) ($r['specialization'] ?? ''));
+        $uni = trim((string) ($r['university'] ?? ''));
+        $year = trim((string) ($r['year_completed'] ?? ''));
+        return $deg !== '' || $spec !== '' || $uni !== '' || $year !== '';
+    });
 @endphp
 <div class="education-occupation-income-engine space-y-6 border-2 border-rose-500 dark:border-rose-400 rounded-lg p-4">
     {{-- Education engine: snapshot + history एकत्र --}}
@@ -169,7 +180,7 @@
             </div>
         </div>
         @if($showHistory)
-        <details class="mt-4 pt-4 border-t border-gray-200 dark:border-gray-600 group" id="education-history-details">
+        <details class="mt-4 pt-4 border-t border-gray-200 dark:border-gray-600 group" id="education-history-details" {{ $hasFilledEducationHistory ? 'open' : '' }}>
             <summary class="cursor-pointer list-none flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:text-indigo-600 dark:hover:text-indigo-400 [&::-webkit-details-marker]:hidden">
                 <span aria-hidden="true">🎓</span>
                 <span>{{ __('components.education.add_education_history') }}</span>
@@ -183,7 +194,7 @@
                         <div class="flex-1 min-w-[120px]"><label class="text-xs text-gray-600 dark:text-gray-400">Degree</label><input type="text" name="{{ $hnE($idx, 'degree') }}" value="{{ $row['degree'] ?? '' }}" class="{{ $inputCls }} text-sm"></div>
                         <div class="flex-1 min-w-[120px]"><label class="text-xs text-gray-600 dark:text-gray-400">Specialization</label><input type="text" name="{{ $hnE($idx, 'specialization') }}" value="{{ $row['specialization'] ?? '' }}" class="{{ $inputCls }} text-sm"></div>
                         <div class="flex-1 min-w-[120px]"><label class="text-xs text-gray-600 dark:text-gray-400">University / Institute</label><input type="text" name="{{ $hnE($idx, 'university') }}" value="{{ $row['university'] ?? '' }}" class="{{ $inputCls }} text-sm"></div>
-                        <div class="w-24"><label class="text-xs text-gray-600 dark:text-gray-400">Year</label><input type="number" name="{{ $hnE($idx, 'year_completed') }}" value="{{ $row['year_completed'] ?? '' }}" min="1900" max="2100" class="{{ $inputCls }} text-sm"></div>
+                        <div class="w-24"><label class="text-xs text-gray-600 dark:text-gray-400">Year (optional)</label><input type="number" name="{{ $hnE($idx, 'year_completed') }}" value="{{ $row['year_completed'] ?? '' }}" class="{{ $inputCls }} text-sm" placeholder="e.g. 2020"></div>
                         @if(!$readOnly)<div class="education-row-actions flex items-center gap-1 shrink-0"><button type="button" class="remove-education-row flex items-center justify-center w-8 h-8 rounded text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 cursor-pointer shrink-0" title="{{ __('common.remove_this_entry') }}" aria-label="{{ __('common.remove_this_entry') }}"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 12H4"/></svg></button></div>@endif
                     </div>
                 @endforeach
@@ -240,17 +251,13 @@
                 <div class="min-w-0">
                     <label class="{{ $labelCls }}">{{ __('components.education.work_location') }}</label>
                     @if($readOnly)
-                        <p class="py-2 text-gray-900 dark:text-gray-100">{{ $workLocationDisplay ?: '—' }}</p>
+                        <p class="py-2 text-gray-900 dark:text-gray-100">{{ $v('work_location_text') ?: ($workLocationDisplay ?: '—') }}</p>
                     @else
-                        <x-profile.location-typeahead
-                            context="work"
-                            :value="$workLocationDisplay"
-                            placeholder="{{ __('components.education.city_area') }}"
-                            label=""
-                            :noBorder="true"
-                            :data-work-city-id="$workCityId ?? ''"
-                            :data-work-state-id="$workStateId ?? ''"
-                        />
+                        <input type="text"
+                               name="{{ $n('work_location_text') }}"
+                               value="{{ old($oldKey('work_location_text'), $v('work_location_text') ?? $workLocationDisplay) }}"
+                               class="{{ $inputCls }}"
+                               placeholder="{{ __('components.education.city_area') }}">
                     @endif
                 </div>
             </div>
@@ -272,8 +279,11 @@
                             <div class="min-w-0"><label class="text-xs text-gray-600 dark:text-gray-400">Employer name</label><input type="text" name="{{ $hnC($idx, 'company') }}" value="{{ $row['company'] ?? '' }}" class="{{ $inputCls }} text-sm" placeholder="Company / organisation"></div>
                             <div class="min-w-0 career-work-location-cell">
                                 <label class="text-xs text-gray-600 dark:text-gray-400">Work location</label>
-                                <input type="hidden" name="{{ $hnC($idx, 'location') }}" value="{{ $row['location'] ?? '' }}" class="career-location-hidden">
-                                <x-profile.location-typeahead context="alliance" :namePrefix="$careerRowPrefix" :value="$row['location'] ?? ''" placeholder="City / area" label="" :noBorder="true" :data-city-id="$row['city_id'] ?? ''" :data-taluka-id="$row['taluka_id'] ?? ''" :data-district-id="$row['district_id'] ?? ''" :data-state-id="$row['state_id'] ?? ''" />
+                                <input type="text"
+                                       name="{{ $hnC($idx, 'location') }}"
+                                       value="{{ $row['location'] ?? '' }}"
+                                       class="{{ $inputCls }} text-sm"
+                                       placeholder="City / area">
                             </div>
                         </div>
                         <div class="w-20"><label class="text-xs text-gray-600 dark:text-gray-400">Start</label><input type="number" name="{{ $hnC($idx, 'start_year') }}" value="{{ $row['start_year'] ?? '' }}" min="1900" max="2100" class="{{ $inputCls }} text-sm"></div>

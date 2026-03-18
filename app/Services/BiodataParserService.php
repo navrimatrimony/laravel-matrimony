@@ -105,8 +105,8 @@ class BiodataParserService
 }
         $confidence['date_of_birth'] = $dateOfBirth !== null ? self::CONF_DIRECT : self::CONF_MISSING;
 
-        $heightRaw = $this->extractFieldAfterLabels($personalText, ['उंची', 'Height']);
-        $heightRaw = $heightRaw ?? $this->extractFieldAfterLabels($text, ['उंची', 'Height']);
+        $heightRaw = $this->extractFieldAfterLabels($personalText, ['उंची', 'ऊंची', 'Height']);
+        $heightRaw = $heightRaw ?? $this->extractFieldAfterLabels($text, ['उंची', 'ऊंची', 'Height']);
         // SSOT Day-27: Apply baseline normalization + patterns
         $heightNormalized = \App\Services\Ocr\OcrNormalize::normalizeHeight($heightRaw);
         if ($heightNormalized && $heightNormalized !== $heightRaw) {
@@ -200,7 +200,11 @@ class BiodataParserService
         // Prefer label-style "गण :- value" so we don't capture text after "गण" in "गणपती" (मामा line)
         $gan = $this->rejectIfLabelNoise($this->extractFieldAfterLabels($horoscopeText, ['गण']) ?? $this->extractFieldAfterLabels($text, ['गण']) ?? $this->extractField($horoscopeText, ['गण']) ?? $this->extractField($text, ['गण']));
         $mangalik = $this->rejectIfLabelNoise($this->extractField($text, ['मांगलिक']));
-        $varna = $this->extractField($personalText, ['वर्ण']) ?? $this->extractField($text, ['वर्ण']);
+        // "वर्ण" ओळीतला raw value दोन use-cases साठी वापरतो:
+        // 1) Physical complexion (raw 그대로, e.g. "गोरा")
+        // 2) Horoscope varna (canonical keys via validateVarna)
+        $varnaRaw = $this->extractField($personalText, ['वर्ण']) ?? $this->extractField($text, ['वर्ण']);
+        $complexion = $varnaRaw !== null ? trim((string) $varnaRaw) : null;
         // New structured fields for Phase-5: Kul / Devak / Navras / Birth weekday.
         $kulName = $this->rejectIfLabelNoise(
             $this->extractField($familyText, ['कुळ', 'कुल']) ?? $this->extractField($text, ['कुळ', 'कुल'])
@@ -224,7 +228,17 @@ class BiodataParserService
             $this->extractField($horoscopeText, ['जन्मवार', 'जन्म वार', 'Birth day']) ??
             $this->extractField($text, ['जन्मवार', 'जन्म वार', 'Birth day'])
         );
-        $varna = $this->validateVarna($varna);
+        // Horoscope varna साठी फक्त canonical values ठेवतो; physical complexion साठी वरचं $complexion raw जतन केले आहे.
+        $varna = $this->validateVarna($varnaRaw);
+
+        // Additive fallback: parse combined horoscope lines when individual labels missed pieces.
+        $this->applyCombinedHoroscopeFallbacks(
+            $horoscopeText,
+            $text,
+            $rashi,
+            $nadi,
+            $gan
+        );
         $motherOccupation = $this->extractField($familyText, ['आईचा व्यवसाय', 'माता व्यवसाय']) ?? $this->extractField($text, ['आईचा व्यवसाय']);
         $fatherOccupation = $this->extractField($familyText, ['वडिलांचे व्यवसाय', 'पिता व्यवसाय']) ?? $this->extractField($text, ['वडिलांचे व्यवसाय']);
         $mama = $this->rejectIfLabelNoise($this->extractField($familyText, ['मामा']) ?? $this->extractField($text, ['मामा']));
@@ -316,7 +330,7 @@ class BiodataParserService
         }
         $confidence['primary_contact_number'] = $primaryContact !== null ? self::CONF_DIRECT : self::CONF_MISSING;
 
-        $bloodGroupRaw = $this->extractField($text, ['रक्तगट', 'Blood group']);
+        $bloodGroupRaw = $this->extractField($text, ['रक्तगट', 'रक्‍त गट', 'रक्त गट', 'Blood group']);
         // SSOT Day-27: Apply baseline normalization + patterns
         $bloodGroup = \App\Services\Ocr\OcrNormalize::normalizeBloodGroup($bloodGroupRaw);
         if ($bloodGroup) {
@@ -325,6 +339,7 @@ class BiodataParserService
         // Fallback to existing normalizeBloodGroup if OcrNormalize returns original value
         if ($bloodGroup === $bloodGroupRaw) {
             $bloodGroup = $this->normalizeBloodGroup($bloodGroupRaw);
+           $core['blood_group'] = $bloodGroup;
         }
         // Reject invalid blood_group (e.g. numeric garbage "84४७"); allow only A+, A-, B+, B-, AB+, AB-, O+, O-
         $bloodGroup = $this->validateBloodGroupStrict($bloodGroup);
@@ -366,6 +381,8 @@ class BiodataParserService
             'brother_count' => $brotherCount,
             'sister_count' => $sisterCount,
             'height_cm' => $heightCm,
+            // Physical complexion raw text (e.g. "गोरा"); preview/wizard मध्ये MasterComplexion शी map होते.
+            'complexion' => $complexion,
             'highest_education' => $education,
             'birth_time' => $birthTime,
             'birth_place' => $birthPlace,
@@ -1827,7 +1844,7 @@ $coreKeys = [
             return null;
         }
         // फूट or फुट, optional space after digit (५फुट ६इंच)
-        if (preg_match('/(\d+)\s*फ[ुू]ट\s*(\d+)/u', $value, $m)) {
+        if (preg_match('/(\d{1,2})\s*फ[ुू]ट\s*(\d{1,2})\s*(इंच|inch|bap)?/u', $value, $m)) {
             return round((float) $m[1] * 30.48 + (float) $m[2] * 2.54, 2);
         }
         if (preg_match('/(\d+)\'(\d+)/', $value, $m)) {
@@ -1860,6 +1877,49 @@ $coreKeys = [
             return round($totalInches * 2.54, 2);
         }
         return null;
+    }
+
+    /**
+     * Additive extractor for combined horoscope lines like:
+     * - "नाड २ आध्य गण :- राक्षस. चरण :- ४"
+     * - "रास :- वृश्चिक नक्षत्र :- मृग"
+     * - "देवक + ... रक्त गट :- B+ve"
+     *
+     * Never overwrites already extracted values; only fills when target is null.
+     */
+    private function applyCombinedHoroscopeFallbacks(
+        string $horoscopeText,
+        string $fullText,
+        ?string &$rashi,
+        ?string &$nadi,
+        ?string &$gan
+    ): void {
+        $text = $horoscopeText !== '' ? $horoscopeText : $fullText;
+
+        // नाड २ आध्य गण :- राक्षस. चरण :- ४
+        if ($nadi === null || $gan === null) {
+            if (preg_match('/नाड[ी]?\s*[:\-]?\s*([^\.\n]+)\.\s*गण\s*[:\-]?\s*([^\.\n]+)/u', $text, $m)) {
+                $nadiRaw = trim($m[1]);
+                $ganRaw  = trim($m[2]);
+
+                if ($nadi === null) {
+                    $nadi = $this->normalizeNadiValue($nadiRaw);
+                }
+                if ($gan === null) {
+                    $gan = $this->rejectIfLabelNoise($ganRaw);
+                }
+            }
+        }
+
+        // रास :- वृश्चिक नक्षत्र :- मृग
+        if ($rashi === null) {
+            if (preg_match('/रास\s*[:\-]\s*([^\.\n]+?)(?:\s+नक्षत्र\s*[:\-]\s*([^\.\n]+))?/u', $text, $m)) {
+                $rashiRaw = trim($m[1]);
+                if ($rashiRaw !== '') {
+                    $rashi = $this->rejectIfLabelNoise($rashiRaw);
+                }
+            }
+        }
     }
 
     /**

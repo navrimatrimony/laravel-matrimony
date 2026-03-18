@@ -135,17 +135,8 @@
                     </select>
                 </div>
                 <div class="min-w-0 relation-address-cell">
-                    <x-profile.location-typeahead
-                        context="alliance"
-                        namePrefix="{{ $namePrefix }}[{{ $idx }}]"
-                        :value="$r['location_display'] ?? ''"
-                        placeholder="{{ __('components.relation.address_city') }}"
-                        label="{{ __('components.relation.address') }}"
-                        :data-city-id="$r['city_id'] ?? ''"
-                        :data-taluka-id="$r['taluka_id'] ?? ''"
-                        :data-district-id="$r['district_id'] ?? ''"
-                        :data-state-id="$r['state_id'] ?? ''"
-                    />
+                    <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-0.5">{{ __('components.relation.address') }}</label>
+                    <input type="text" name="{{ $namePrefix }}[{{ $idx }}][address_line]" value="{{ $r['address_line'] ?? $r['notes'] ?? '' }}" placeholder="{{ __('components.relation.address_city') }}" class="relation-input-h w-full h-10 rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-2 py-1.5 text-sm min-w-0">
                 </div>
             </div>
             <div class="relation-fields-wrap relation-two-line-grid grid items-end" style="grid-template-columns: 1fr 1fr 1fr; display:{{ $isAddressOnly ? 'none' : 'grid' }}; gap: 0.75rem;">
@@ -170,17 +161,8 @@
                     <input type="text" name="{{ $namePrefix }}[{{ $idx }}][occupation]" value="{{ $r['occupation'] ?? '' }}" placeholder="{{ __('components.relation.occupation_placeholder') }}" class="relation-input-h w-full h-10 rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-2 py-1.5 text-sm min-w-0">
                 </div>
                 <div class="min-w-0 relation-address-cell">
-                    <x-profile.location-typeahead
-                        context="alliance"
-                        namePrefix="{{ $namePrefix }}[{{ $idx }}]"
-                        :value="$r['location_display'] ?? ''"
-                        placeholder="Address / city"
-                        label="Address"
-                        :data-city-id="$r['city_id'] ?? ''"
-                        :data-taluka-id="$r['taluka_id'] ?? ''"
-                        :data-district-id="$r['district_id'] ?? ''"
-                        :data-state-id="$r['state_id'] ?? ''"
-                    />
+                    <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-0.5">{{ __('components.relation.address') }}</label>
+                    <input type="text" name="{{ $namePrefix }}[{{ $idx }}][address_line]" value="{{ $r['address_line'] ?? $r['notes'] ?? '' }}" placeholder="Address / city" class="relation-input-h w-full h-10 rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-2 py-1.5 text-sm min-w-0">
                 </div>
                 <div class="min-w-0">
                     <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-0.5">{{ __('components.relation.additional_info') }}</label>
@@ -211,17 +193,8 @@
                     <input type="text" name="{{ $namePrefix }}[{{ $idx }}][occupation]" value="{{ $r['occupation'] ?? '' }}" placeholder="{{ __('components.relation.occupation_placeholder') }}" class="relation-input-h w-full h-10 rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-2 py-1.5 text-sm min-w-0">
                 </div>
                 <div class="min-w-0 relation-address-cell">
-                    <x-profile.location-typeahead
-                        context="alliance"
-                        namePrefix="{{ $namePrefix }}[{{ $idx }}]"
-                        :value="$r['location_display'] ?? ''"
-                        placeholder="{{ __('components.relation.address_city') }}"
-                        label="{{ __('components.relation.address') }}"
-                        :data-city-id="$r['city_id'] ?? ''"
-                        :data-taluka-id="$r['taluka_id'] ?? ''"
-                        :data-district-id="$r['district_id'] ?? ''"
-                        :data-state-id="$r['state_id'] ?? ''"
-                    />
+                    <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-0.5">{{ __('components.relation.address') }}</label>
+                    <input type="text" name="{{ $namePrefix }}[{{ $idx }}][address_line]" value="{{ $r['address_line'] ?? $r['notes'] ?? '' }}" placeholder="{{ __('components.relation.address_city') }}" class="relation-input-h w-full h-10 rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-2 py-1.5 text-sm min-w-0">
                 </div>
                 <div class="min-w-0">
                     <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-0.5">{{ __('components.relation.additional_info') }}</label>
@@ -242,7 +215,7 @@
                     <x-profile.location-typeahead
                         context="alliance"
                         namePrefix="{{ $namePrefix }}[{{ $idx }}]"
-                        :value="$r['location_display'] ?? ''"
+                        :value="$r['location_display'] ?? $r['notes'] ?? $r['address_line'] ?? ''"
                         placeholder="{{ __('components.relation.address_city') }}"
                         label="{{ __('components.relation.address') }}"
                         :data-city-id="$r['city_id'] ?? ''"

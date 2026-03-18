@@ -113,6 +113,7 @@ class ProfileWizardController extends Controller
         if ($section === 'full') {
             session()->forget('wizard_minimal');
             $minimal = false;
+            $profile->load(['religion', 'caste', 'subCaste']);
         }
         $sections = $minimal ? FieldCatalogService::getSectionKeys(true) : FieldCatalogService::getSectionKeys(false);
         $nextSection = $minimal ? FieldCatalogService::getNextSection($section, true) : FieldCatalogService::getNextSection($section, false);
@@ -365,7 +366,8 @@ class ProfileWizardController extends Controller
                 $data['districtsByState'] = \App\Models\District::all()->groupBy('state_id')->map(fn ($col) => $col->map(fn ($d) => ['id' => $d->id, 'name' => $d->name])->values()->toArray())->toArray();
                 $data['stateIdToCountryId'] = \App\Models\State::all()->pluck('country_id', 'id')->toArray();
                 $data['genders'] = \App\Models\MasterGender::where('is_active', true)->whereIn('key', ['male', 'female'])->orderByRaw("CASE WHEN `key` = 'male' THEN 1 ELSE 2 END")->get();
-                $data['birthPlaceDisplay'] = $profile->birth_city_id ? \App\Models\City::where('id', $profile->birth_city_id)->value('name') : '';
+                // Build full birth place string (city, taluka, district, state) when any ID is set so wizard shows as in intake.
+                $data['birthPlaceDisplay'] = $this->buildBirthPlaceDisplay($profile);
                 $data['religions'] = \App\Models\Religion::where('is_active', true)->orderBy('label')->get(['id', 'label']);
                 $data['motherTongues'] = \App\Models\MasterMotherTongue::where('is_active', true)->orderBy('sort_order')->orderBy('label')->get(['id', 'key', 'label']);
                 $maritalKeys = ['never_married', 'divorced', 'annulled', 'separated', 'widowed'];
@@ -428,8 +430,26 @@ class ProfileWizardController extends Controller
                 }
                 break;
             case 'education-career':
-                $data['profileEducation'] = DB::table('profile_education')->where('profile_id', $profile->id)->orderBy('id')->get();
-                $data['profileCareer'] = DB::table('profile_career')->where('profile_id', $profile->id)->orderBy('id')->get();
+                $profileEducation = DB::table('profile_education')->where('profile_id', $profile->id)->orderBy('id')->get();
+                // Dedupe education rows (same degree/specialization/university/year) so full form does not show duplicate blocks.
+                $seen = [];
+                $data['profileEducation'] = $profileEducation->filter(function ($r) use (&$seen) {
+                    $key = implode('|', [trim((string)($r->degree ?? '')), trim((string)($r->specialization ?? '')), trim((string)($r->university ?? '')), (string)($r->year_completed ?? '')]);
+                    if (isset($seen[$key])) {
+                        return false;
+                    }
+                    $seen[$key] = true;
+                    return true;
+                })->values();
+                $profileCareer = DB::table('profile_career')->where('profile_id', $profile->id)->orderBy('id')->get();
+                // When first career row has no location but profile has work_location_text (e.g. from intake), show it in wizard.
+                if ($profileCareer->isNotEmpty() && \Illuminate\Support\Facades\Schema::hasColumn('matrimony_profiles', 'work_location_text')) {
+                    $first = $profileCareer->first();
+                    if (empty($first->location) && ! empty(trim((string) ($profile->work_location_text ?? '')))) {
+                        $first->location = $profile->work_location_text;
+                    }
+                }
+                $data['profileCareer'] = $profileCareer;
                 $data['currencies'] = \App\Models\MasterIncomeCurrency::where('is_active', true)->get();
                 break;
             case 'family-details':
@@ -453,12 +473,25 @@ class ProfileWizardController extends Controller
                     ->get();
                 $data['profileSiblings'] = $siblings->map(function ($s) {
                     $relationType = $s->relation_type ?? ($s->gender === 'male' ? 'brother' : ($s->gender === 'female' ? 'sister' : null));
-                    $spouse = $s->spouse ? (object) array_merge($s->spouse->toArray(), ['location_display' => $s->spouse->city?->name ?? '']) : null;
-                    return (object) array_merge($s->toArray(), [
+                    $spouse = $s->spouse ? (object) array_merge($s->spouse->toArray(), ['location_display' => $s->spouse->city?->name ?? $s->spouse->address_line ?? '']) : null;
+                    $locationDisplay = $s->city?->name ?? '';
+                    if ($locationDisplay === '' && ! empty(trim((string) ($s->notes ?? '')))) {
+                        $locationDisplay = $s->notes;
+                    }
+                    $arr = array_merge($s->toArray(), [
                         'relation_type' => $relationType,
-                        'location_display' => $s->city?->name ?? '',
+                        'location_display' => $locationDisplay,
                         'spouse' => $spouse,
                     ]);
+                    // profile_siblings has only notes (no address_line); show notes in Address field for display.
+                    if (empty($arr['address_line']) && ! empty(trim((string) ($arr['notes'] ?? '')))) {
+                        $arr['address_line'] = $arr['notes'];
+                    }
+                    // When spouse exists with data, show Married: Yes in wizard even if marital_status was not synced.
+                    if ($spouse && (trim((string) ($spouse->name ?? '')) !== '' || trim((string) ($spouse->address_line ?? '')) !== '' || trim((string) ($spouse->occupation_title ?? '')) !== '')) {
+                        $arr['marital_status'] = 'married';
+                    }
+                    return (object) $arr;
                 });
                 // For "Siblings?" Yes/No: when No, sibling form is hidden
                 $data['hasSiblings'] = $profile->has_siblings;
@@ -470,6 +503,10 @@ class ProfileWizardController extends Controller
                 $mapRow = function ($row) use ($cityNames) {
                     $arr = (array) $row;
                     $arr['location_display'] = ! empty($row->city_id) ? ($cityNames[$row->city_id] ?? '') : '';
+                    // profile_relatives has no address_line column; we store address in notes — show in Address field for display.
+                    if (empty($arr['address_line']) && ! empty(trim((string) ($arr['notes'] ?? '')))) {
+                        $arr['address_line'] = $arr['notes'];
+                    }
                     return (object) $arr;
                 };
                 $parentsFamilyTypes = ['native_place', 'paternal_grandfather', 'paternal_grandmother', 'paternal_uncle', 'wife_paternal_uncle', 'paternal_aunt', 'husband_paternal_aunt', 'Cousin'];
@@ -520,7 +557,9 @@ class ProfileWizardController extends Controller
                 $mapRow = function ($row) use ($cityNames) {
                     $arr = (array) $row;
                     $arr['location_display'] = ! empty($row->city_id) ? ($cityNames[$row->city_id] ?? '') : '';
-
+                    if (empty($arr['address_line']) && ! empty(trim((string) ($arr['notes'] ?? '')))) {
+                        $arr['address_line'] = $arr['notes'];
+                    }
                     return (object) $arr;
                 };
                 $maternalFamilyTypes = ['maternal_address_ajol', 'maternal_grandfather', 'maternal_grandmother', 'maternal_uncle', 'wife_maternal_uncle', 'maternal_aunt', 'husband_maternal_aunt', 'maternal_cousin'];
@@ -552,7 +591,14 @@ class ProfileWizardController extends Controller
                 break;
             case 'property':
                 $data['profile_property_summary'] = DB::table('profile_property_summary')->where('profile_id', $profile->id)->first();
-                $data['profile_property_assets'] = DB::table('profile_property_assets')->where('profile_id', $profile->id)->orderBy('id')->get();
+                $allAssets = DB::table('profile_property_assets')->where('profile_id', $profile->id)->orderBy('id')->get();
+                // Exclude fully empty asset rows so we do not show duplicate empty blocks (engine still adds one empty row if none).
+                $data['profile_property_assets'] = $allAssets->filter(function ($r) {
+                    $hasType = ! empty($r->asset_type_id ?? null);
+                    $hasLoc = trim((string) ($r->location ?? '')) !== '';
+                    $hasOwn = ! empty($r->ownership_type_id ?? null);
+                    return $hasType || $hasLoc || $hasOwn;
+                })->values();
                 $data['assetTypes'] = \App\Models\MasterAssetType::where('is_active', true)->get();
                 $data['ownershipTypes'] = \App\Models\MasterOwnershipType::where('is_active', true)->get();
                 $data['profile_property_assets'] = $data['profile_property_assets'] ?? collect();
@@ -678,6 +724,31 @@ class ProfileWizardController extends Controller
         }
 
         return $data;
+    }
+
+    /**
+     * Build birth place display string from profile IDs (city, taluka, district, state) so wizard shows as in intake.
+     */
+    private function buildBirthPlaceDisplay(MatrimonyProfile $profile): string
+    {
+        if (! $profile->birth_city_id && ! $profile->birth_taluka_id && ! $profile->birth_district_id && ! $profile->birth_state_id) {
+            return trim((string) ($profile->birth_place_text ?? ''));
+        }
+        $parts = [];
+        if ($profile->birth_city_id) {
+            $parts[] = \App\Models\City::where('id', $profile->birth_city_id)->value('name') ?? '';
+        }
+        if ($profile->birth_taluka_id) {
+            $parts[] = \App\Models\Taluka::where('id', $profile->birth_taluka_id)->value('name') ?? '';
+        }
+        if ($profile->birth_district_id) {
+            $parts[] = \App\Models\District::where('id', $profile->birth_district_id)->value('name') ?? '';
+        }
+        if ($profile->birth_state_id) {
+            $parts[] = \App\Models\State::where('id', $profile->birth_state_id)->value('name') ?? '';
+        }
+
+        return implode(', ', array_filter($parts));
     }
 
     /**

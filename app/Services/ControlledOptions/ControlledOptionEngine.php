@@ -3,6 +3,7 @@
 namespace App\Services\ControlledOptions;
 
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Lang;
 use Illuminate\Support\Facades\Schema;
 
 /**
@@ -210,7 +211,128 @@ class ControlledOptionEngine
             ];
         }
 
+        // Rashi: Marathi/English labels from lang so AI-parsed "वृश्चिक" etc. resolve to key.
+        if ($fieldKey === 'horoscope.rashi') {
+            return $this->buildHoroscopeRashiSynonymConfig();
+        }
+
+        // Nakshatra: Marathi/English labels + common short forms (e.g. "मूग" → mrigashira).
+        if ($fieldKey === 'horoscope.nakshatra') {
+            return $this->buildHoroscopeNakshatraSynonymConfig();
+        }
+
+        // core.religion / core.caste / core.sub_caste: Marathi/Devanagari so intake text matches master key.
+        if ($fieldKey === 'core.religion') {
+            return [
+                'hindu' => ['हिंदु', 'Hindu', 'hindu'],
+                'muslim' => ['मुस्लिम', 'Muslim', 'muslim'],
+                'buddhist' => ['बौद्ध', 'Buddhist', 'buddhist'],
+                'jain' => ['जैन', 'Jain', 'jain'],
+                'sikh' => ['शीख', 'Sikh', 'sikh'],
+            ];
+        }
+        if ($fieldKey === 'core.caste') {
+            return [
+                'maratha' => ['मराठा', 'Maratha', 'maratha'],
+                'brahmin' => ['ब्राह्मण', 'Brahmin', 'brahmin'],
+                'mali' => ['माली', 'Mali', 'mali'],
+                'dhangar' => ['धंगर', 'Dhangar', 'dhangar'],
+                'chambhar' => ['चांभार', 'Chambhar', 'chambhar'],
+                'teli' => ['तेली', 'Teli', 'teli'],
+                'lohar' => ['लोहार', 'Lohar', 'lohar'],
+                'kshatriya' => ['क्षत्रिय', 'Kshatriya', 'kshatriya'],
+                'ckp_chandraseniya_kayastha_prabhu_' => ['CKP', 'CKP (Chandraseniya Kayastha Prabhu)', 'ckp'],
+                'bhandari' => ['भांडारी', 'Bhandari', 'bhandari'],
+                'sonar' => ['सोनार', 'Sonar', 'sonar'],
+                'sutar' => ['सुतार', 'Sutar', 'sutar'],
+                'koli' => ['कोली', 'Koli', 'koli'],
+                'lingayat' => ['लिंगायत', 'Lingayat', 'lingayat'],
+                'rajput' => ['राजपूत', 'Rajput', 'rajput'],
+                'agri' => ['आगरी', 'Agri', 'agri'],
+                'gavli' => ['गवळी', 'Gavli', 'gavli'],
+                'gura' => ['गुरा', 'Gura', 'gura'],
+                'sunni' => ['सुन्नी', 'Sunni', 'sunni'],
+                'shia' => ['शिया', 'Shia', 'shia'],
+                'mahar' => ['महार', 'Mahar', 'mahar'],
+                'digambar' => ['दिगंबर', 'Digambar', 'digambar'],
+                'shwetambar' => ['श्वेतांबर', 'Shwetambar', 'shwetambar'],
+                'jat' => ['जाट', 'Jat', 'jat'],
+            ];
+        }
+        if ($fieldKey === 'core.sub_caste') {
+            return [
+                '96_kuli' => ['96 कुळी', '96 कुळी मराठा', '96 Kuli', '96 kuli', '96_kuli'],
+                'kunbi_maratha' => ['कुनबी मराठा', 'Kunbi Maratha', 'kunbi maratha'],
+                'deshmukh' => ['देशमुख', 'Deshmukh', 'deshmukh'],
+            ];
+        }
+        if ($fieldKey === 'physical.complexion') {
+            return [
+                'fair' => ['गोरा', 'Fair', 'fair'],
+                'very_fair' => ['खूप गोरा', 'Very Fair', 'very_fair'],
+                'fair_wheatish' => ['गव्हाळ', 'Fair Wheatish', 'fair_wheatish'],
+                'wheatish' => ['गव्हाळी', 'Wheatish', 'wheatish'],
+                'dark' => ['गडद', 'Dark', 'dark'],
+            ];
+        }
+
         return null;
+    }
+
+    /**
+     * Build synonym config for horoscope.rashi from lang (en + mr) so parsed Marathi text matches.
+     *
+     * @return array<string, string[]>
+     */
+    private function buildHoroscopeRashiSynonymConfig(): array
+    {
+        $keys = ['mesha', 'vrishabha', 'mithuna', 'karka', 'simha', 'kanya', 'tula', 'vrishchika', 'dhanu', 'makara', 'kumbha', 'meena'];
+        $config = [];
+        $base = 'components.horoscope.options.rashi';
+        foreach ($keys as $key) {
+            $synonyms = array_filter([
+                $key,
+                Lang::get("{$base}.{$key}", [], 'en'),
+                Lang::get("{$base}.{$key}", [], 'mr'),
+            ], fn ($s) => $s !== '' && $s !== "{$base}.{$key}");
+            if ($synonyms !== []) {
+                $config[$key] = array_values(array_unique($synonyms));
+            }
+        }
+
+        return $config;
+    }
+
+    /**
+     * Build synonym config for horoscope.nakshatra from lang (en + mr) + common short forms.
+     *
+     * @return array<string, string[]>
+     */
+    private function buildHoroscopeNakshatraSynonymConfig(): array
+    {
+        $keys = [
+            'ashwini', 'bharani', 'krittika', 'rohini', 'mrigashira', 'ardra', 'punarvasu', 'pushya', 'ashlesha',
+            'magha', 'purva_phalguni', 'uttara_phalguni', 'hasta', 'chitra', 'swati', 'vishakha', 'anuradha',
+            'jyeshtha', 'mula', 'purva_ashadha', 'uttara_ashadha', 'shravana', 'dhanishta', 'shatabhisha',
+            'purva_bhadrapada', 'uttara_bhadrapada', 'revati',
+        ];
+        $config = [];
+        $base = 'components.horoscope.options.nakshatra';
+        foreach ($keys as $key) {
+            $synonyms = array_filter([
+                $key,
+                Lang::get("{$base}.{$key}", [], 'en'),
+                Lang::get("{$base}.{$key}", [], 'mr'),
+            ], fn ($s) => $s !== '' && $s !== "{$base}.{$key}");
+            if ($key === 'mrigashira') {
+                $synonyms[] = 'मूग'; // common short form for मृगशीर्ष in biodata
+            }
+            if ($synonyms !== []) {
+                $config[$key] = array_values(array_unique($synonyms));
+            }
+        }
+
+        return $config;
     }
 
     /**
@@ -237,12 +359,21 @@ class ControlledOptionEngine
             return null;
         }
 
+        $normalizedLower = mb_strtolower($normalized, 'UTF-8');
+        foreach ($synonymConfig as $canonical => $synonyms) {
+            foreach ($synonyms as $syn) {
+                $synNorm = $this->normalizeForTokenMatching($syn);
+                if ($synNorm !== '' && $normalizedLower === mb_strtolower($synNorm, 'UTF-8')) {
+                    return $canonical;
+                }
+            }
+        }
+
         $tokens = preg_split('/[\s,;:|]+/u', $normalized, -1, PREG_SPLIT_NO_EMPTY) ?: [];
         if ($tokens === []) {
             $tokens = [$normalized];
         }
 
-        $normalizedLower = mb_strtolower($normalized, 'UTF-8');
         $matches = [];
         foreach ($synonymConfig as $canonical => $synonyms) {
             $synTokens = array_map([$this, 'normalizeForTokenMatching'], $synonyms);
@@ -327,6 +458,8 @@ class ControlledOptionEngine
             return '';
         }
 
+        // Remove zero-width chars so "वृश्‍चिक" (with ZWJ) matches "वृश्चिक"
+        $v = preg_replace('/[\x{200B}\x{200C}\x{200D}\x{FEFF}]/u', '', $v);
         $v = preg_replace('/\s+/u', ' ', $v);
         $v = trim($v, " \t\n\r\0\x0B,;:|");
         if ($v === '') {

@@ -22,6 +22,7 @@ class ParserStrategyResolver
 {
     public const MODE_RULES_ONLY = 'rules_only';
     public const MODE_AI_FIRST_V1 = 'ai_first_v1';
+    public const MODE_AI_FIRST_V2 = 'ai_first_v2';
     public const MODE_HYBRID_V1 = 'hybrid_v1';
 
     /**
@@ -49,6 +50,9 @@ class ParserStrategyResolver
         }
         if ($value === self::MODE_AI_FIRST_V1) {
             return self::MODE_AI_FIRST_V1;
+        }
+        if ($value === self::MODE_AI_FIRST_V2) {
+            return self::MODE_AI_FIRST_V2;
         }
         if ($value === self::MODE_HYBRID_V1) {
             return self::MODE_HYBRID_V1;
@@ -94,7 +98,7 @@ class ParserStrategyResolver
         $mode = $this->normalizeMode($mode);
 
         return match ($mode) {
-            self::MODE_AI_FIRST_V1 => app(AiFirstBiodataParser::class),
+            self::MODE_AI_FIRST_V1, self::MODE_AI_FIRST_V2 => app(AiFirstBiodataParser::class),
             self::MODE_HYBRID_V1 => app(HybridBiodataParser::class),
             default => app(RulesOnlyBiodataParser::class),
         };

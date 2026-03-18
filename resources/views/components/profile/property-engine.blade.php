@@ -46,18 +46,12 @@
                             </select>
                         </div>
                         <div class="min-w-0 property-asset-location-cell">
-                            <input type="hidden" name="{{ $assetName($idx, 'location') }}" class="location-display-sync" value="{{ $r['location'] ?? '' }}">
-                            <x-profile.location-typeahead
-                                context="alliance"
-                                :namePrefix="($prefix !== '' ? $prefix . '[property_assets][' . $idx . ']' : 'property_assets[' . $idx . ']')"
-                                :value="$r['location'] ?? ''"
-                                placeholder="{{ __('components.property.type_village_city_pincode') }}"
-                                label="{{ __('components.property.location') }}"
-                                :data-city-id="$r['city_id'] ?? ''"
-                                :data-taluka-id="$r['taluka_id'] ?? ''"
-                                :data-district-id="$r['district_id'] ?? ''"
-                                :data-state-id="$r['state_id'] ?? ''"
-                            />
+                            <label class="block text-sm text-gray-600 dark:text-gray-400 mb-0.5">{{ __('components.property.location') }}</label>
+                            <input type="text"
+                                   name="{{ $assetName($idx, 'location') }}"
+                                   value="{{ $r['location'] ?? '' }}"
+                                   class="form-input w-full rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-3 py-2"
+                                   placeholder="{{ __('components.property.type_village_city_pincode') }}">
                         </div>
                         <div class="min-w-0">
                             <label class="block text-sm text-gray-600 dark:text-gray-400 mb-0.5">{{ __('components.property.ownership_type') }}</label>

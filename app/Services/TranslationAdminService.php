@@ -24,7 +24,8 @@ class TranslationAdminService
         $out = [];
         foreach ($arr as $k => $v) {
             $key = $prefix === '' ? $k : $prefix . '.' . $k;
-            if (is_array($v) && !$this->isListOfStrings($v)) {
+            // Arrays (including "list of strings" cases) should always be flattened further instead of cast to string.
+            if (is_array($v)) {
                 $out = array_merge($out, $this->flattenLangArray($v, $key));
             } else {
                 $out[$key] = is_string($v) ? $v : (string) $v;

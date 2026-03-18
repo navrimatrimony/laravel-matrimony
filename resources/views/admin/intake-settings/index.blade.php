@@ -126,6 +126,7 @@
                         <select name="intake_active_parser" class="w-full rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-2 py-1">
                             <option value="rules_only" {{ $normalizedActiveParser === 'rules_only' ? 'selected' : '' }}>Rules only</option>
                             <option value="ai_first_v1" {{ $normalizedActiveParser === 'ai_first_v1' ? 'selected' : '' }}>AI first (SSOT)</option>
+                            <option value="ai_first_v2" {{ $normalizedActiveParser === 'ai_first_v2' ? 'selected' : '' }}>AI first (SSOT v2)</option>
                             <option value="hybrid_v1" {{ $normalizedActiveParser === 'hybrid_v1' ? 'selected' : '' }}>Hybrid (rules + AI)</option>
                         </select>
                     </div>

@@ -64,11 +64,16 @@ class MutationService
     /** States that must NOT be auto-activated (contract §6). */
     private const NO_AUTO_ACTIVATE_STATES = ['suspended', 'archived', 'archived_due_to_marriage'];
 
-    /** Fallback CORE keys when registry has no CORE rows. Phase-5: *_id for master lookups. */
+    /** Fallback CORE keys when registry has no CORE rows. Phase-5: *_id for master lookups. address_line so intake address shows in wizard. */
     private const FALLBACK_CORE_KEYS = [
-        'full_name', 'gender_id', 'date_of_birth', 'marital_status_id', 'has_children', 'has_siblings', 'highest_education',
+        'full_name', 'gender_id', 'date_of_birth', 'birth_time', 'marital_status_id', 'has_children', 'has_siblings', 'highest_education',
         'location', 'religion_id', 'caste_id', 'sub_caste_id', 'mother_tongue_id', 'height_cm', 'profile_photo',
         'complexion_id', 'physical_build_id', 'blood_group_id', 'diet_id', 'smoking_status_id', 'drinking_status_id', 'family_type_id', 'income_currency_id',
+        'address_line', 'annual_income', 'family_income', 'income_private', 'family_income_private',
+        'birth_place_text', 'work_location_text',
+        'father_name', 'father_occupation', 'father_extra_info', 'father_contact_1', 'father_contact_2', 'father_contact_3',
+        'mother_name', 'mother_occupation', 'mother_extra_info', 'mother_contact_1', 'mother_contact_2', 'mother_contact_3',
+        'other_relatives_text',
         'photo_approved', 'photo_rejected_at', 'photo_rejection_reason', 'is_suspended',
     ];
 
@@ -368,6 +373,10 @@ class MutationService
                         $this->syncSiblingsWithSpouses($profile, $snapshot['siblings']);
                         continue;
                     }
+                    if ($snapshotKey === 'horoscope' && Schema::hasTable('profile_horoscope_data')) {
+                        $this->syncHoroscopeUpsert($profile, $snapshot['horoscope']);
+                        continue;
+                    }
                     $table = self::SNAPSHOT_KEY_TO_TABLE[$snapshotKey] ?? null;
                     if ($table === null || !Schema::hasTable($table)) {
                         continue;
@@ -512,6 +521,44 @@ class MutationService
 
                 $proposedCore = $snapshot['core'] ?? [];
                 $proposedExtended = $snapshot['extended'] ?? [];
+                if (array_key_exists('other_relatives_text', $snapshot) && ! array_key_exists('other_relatives_text', $proposedCore)) {
+                    $proposedCore['other_relatives_text'] = $snapshot['other_relatives_text'];
+                }
+                // Map income-engine keys to profile columns (intake/full form may send income_amount, nested income.amount, or income_normalized_annual_amount).
+                if (! isset($proposedCore['annual_income']) || $proposedCore['annual_income'] === '' || $proposedCore['annual_income'] === null) {
+                    if (isset($proposedCore['income_normalized_annual_amount']) && is_numeric($proposedCore['income_normalized_annual_amount'])) {
+                        $proposedCore['annual_income'] = (float) $proposedCore['income_normalized_annual_amount'];
+                    } elseif (isset($proposedCore['income_amount']) && is_numeric($proposedCore['income_amount'])) {
+                        $proposedCore['annual_income'] = (float) $proposedCore['income_amount'];
+                    } elseif (isset($proposedCore['income']) && is_array($proposedCore['income']) && isset($proposedCore['income']['amount']) && is_numeric($proposedCore['income']['amount'])) {
+                        $proposedCore['annual_income'] = (float) $proposedCore['income']['amount'];
+                    } elseif (isset($proposedCore['income']) && is_array($proposedCore['income']) && isset($proposedCore['income']['normalized_annual_amount']) && is_numeric($proposedCore['income']['normalized_annual_amount'])) {
+                        $proposedCore['annual_income'] = (float) $proposedCore['income']['normalized_annual_amount'];
+                    }
+                }
+                if (! isset($proposedCore['family_income']) || $proposedCore['family_income'] === '' || $proposedCore['family_income'] === null) {
+                    if (isset($proposedCore['family_income_normalized_annual_amount']) && is_numeric($proposedCore['family_income_normalized_annual_amount'])) {
+                        $proposedCore['family_income'] = (float) $proposedCore['family_income_normalized_annual_amount'];
+                    } elseif (isset($proposedCore['family_income_amount']) && is_numeric($proposedCore['family_income_amount'])) {
+                        $proposedCore['family_income'] = (float) $proposedCore['family_income_amount'];
+                    } elseif (isset($proposedCore['family_income']) && is_array($proposedCore['family_income']) && isset($proposedCore['family_income']['amount']) && is_numeric($proposedCore['family_income']['amount'])) {
+                        $proposedCore['family_income'] = (float) $proposedCore['family_income']['amount'];
+                    }
+                }
+                // Honour nested income.private / family_income.private when present.
+                if (isset($proposedCore['income']) && is_array($proposedCore['income']) && array_key_exists('private', $proposedCore['income'])) {
+                    $proposedCore['income_private'] = (bool) $proposedCore['income']['private'];
+                }
+                if (isset($proposedCore['family_income']) && is_array($proposedCore['family_income']) && array_key_exists('private', $proposedCore['family_income'])) {
+                    $proposedCore['family_income_private'] = (bool) $proposedCore['family_income']['private'];
+                }
+                // When intake has an amount, show it in wizard (do not leave income_private true).
+                if (isset($proposedCore['annual_income']) && is_numeric($proposedCore['annual_income']) && (float) $proposedCore['annual_income'] > 0) {
+                    $proposedCore['income_private'] = false;
+                }
+                if (isset($proposedCore['family_income']) && is_numeric($proposedCore['family_income']) && (float) $proposedCore['family_income'] > 0) {
+                    $proposedCore['family_income_private'] = false;
+                }
 
                 // ——— Step 1: Duplicate detection ———
                 $duplicateResult = app(DuplicateDetectionService::class)->detectFromSnapshot(
@@ -525,38 +572,44 @@ class MutationService
                     'reason' => $duplicateResult->reason,
                 ]);
 
+                $profile = null;
+                $profileCreatedInThisTransaction = false;
+
                 if ($duplicateResult->isDuplicate && $duplicateResult->existingProfileId !== null) {
                     $existingProfileId = $duplicateResult->existingProfileId;
-                    Log::info('MutationService::applyApprovedIntake DUPLICATE PATH — right before return', [
-                        'existingProfileId' => $existingProfileId,
-                    ]);
                     $existingProfile = MatrimonyProfile::where('id', $existingProfileId)->lockForUpdate()->first();
-                    if ($existingProfile && !$this->hasPendingConflictForField($existingProfile->id, 'duplicate_detection')) {
-                        ConflictRecord::create([
-                            'profile_id' => $existingProfile->id,
-                            'field_name' => 'duplicate_detection',
-                            'field_type' => 'CORE',
-                            'old_value' => null,
-                            'new_value' => $duplicateResult->duplicateType . ':' . $duplicateResult->existingProfileId,
-                            'source' => 'SYSTEM',
-                            'detected_at' => now(),
-                            'resolution_status' => 'PENDING',
+                    // SAME_USER: apply intake to this user's existing profile so wizard shows updated data.
+                    if ($existingProfile && $duplicateResult->duplicateType === \App\Services\DuplicateResult::TYPE_SAME_USER) {
+                        $intake->update(['matrimony_profile_id' => $existingProfileId]);
+                        $profile = $existingProfile;
+                        Log::info('MutationService::applyApprovedIntake SAME_USER duplicate — applying to existing profile', ['profileId' => $existingProfileId]);
+                    } else {
+                        if ($existingProfile && !$this->hasPendingConflictForField($existingProfile->id, 'duplicate_detection')) {
+                            ConflictRecord::create([
+                                'profile_id' => $existingProfile->id,
+                                'field_name' => 'duplicate_detection',
+                                'field_type' => 'CORE',
+                                'old_value' => null,
+                                'new_value' => $duplicateResult->duplicateType . ':' . $duplicateResult->existingProfileId,
+                                'source' => 'SYSTEM',
+                                'detected_at' => now(),
+                                'resolution_status' => 'PENDING',
+                            ]);
+                            \App\Services\ProfileLifecycleService::syncLifecycleFromPendingConflicts($existingProfile);
+                        }
+                        $intake->update([
+                            'matrimony_profile_id' => $existingProfileId,
+                            'intake_locked' => true,
                         ]);
-                        \App\Services\ProfileLifecycleService::syncLifecycleFromPendingConflicts($existingProfile);
+                        $profileIdForLog = $existingProfileId;
+                        $duplicateDetected = true;
+                        return;
                     }
-                    $intake->update([
-                        'matrimony_profile_id' => $existingProfileId,
-                        'intake_locked' => true,
-                    ]);
-                    $profileIdForLog = $existingProfileId;
-                    $duplicateDetected = true;
-                    return;
                 }
 
-                Log::info('MutationService::applyApprovedIntake before profile existence step');
+                if ($profile === null) {
+                    Log::info('MutationService::applyApprovedIntake before profile existence step');
             // ——— Step 2: Profile existence ———
-            $profile = null;
-            $profileCreatedInThisTransaction = false;
             if (!empty($intake->matrimony_profile_id)) {
                 $profile = MatrimonyProfile::where('id', $intake->matrimony_profile_id)->lockForUpdate()->first();
                 if (!$profile) {
@@ -573,14 +626,27 @@ class MutationService
                 if (!$actor) {
                     throw new \RuntimeException('Intake uploaded_by user not found.');
                 }
-                $profile = new MatrimonyProfile();
-                $profile->user_id = $intake->uploaded_by;
-                $profile->full_name = $proposedCore['full_name'] ?? 'Draft';
-                $profile->lifecycle_state = 'draft';
-                $profile->save();
-                $intake->update(['matrimony_profile_id' => $profile->id]);
-                $profileCreatedInThisTransaction = true;
+                // Use existing profile for this user so wizard shows the same profile (hasOne); avoid creating a second profile.
+                $profile = MatrimonyProfile::where('user_id', $intake->uploaded_by)->lockForUpdate()->first();
+                if ($profile) {
+                    if (($profile->lifecycle_state ?? '') === 'conflict_pending') {
+                        $profileIdForLog = $profile->id;
+                        $blockedByConflictPending = true;
+                        $intake->update(['matrimony_profile_id' => $profile->id, 'intake_locked' => true]);
+                        return;
+                    }
+                    $intake->update(['matrimony_profile_id' => $profile->id]);
+                } else {
+                    $profile = new MatrimonyProfile();
+                    $profile->user_id = $intake->uploaded_by;
+                    $profile->full_name = $proposedCore['full_name'] ?? 'Draft';
+                    $profile->lifecycle_state = 'draft';
+                    $profile->save();
+                    $intake->update(['matrimony_profile_id' => $profile->id]);
+                    $profileCreatedInThisTransaction = true;
+                }
             }
+                }
 
             // ——— Step 3: Field-level conflict detection (ConflictDetectionService owns escalation) ———
             $conflictResult = ConflictDetectionService::detectResult($profile, $proposedCore, $proposedExtended);
@@ -631,6 +697,9 @@ class MutationService
                 }
             }
 
+            // ——— Step 4.5: Normalize intake core (text → IDs) so wizard shows religion/caste/complexion correctly ———
+            $proposedCore = $this->normalizeIntakeCoreForApply($proposedCore);
+
             // ——— Step 5: CORE field apply (FieldRegistry-driven) ———
             foreach ($coreFieldKeys as $fieldKey) {
                 if (!array_key_exists($fieldKey, $proposedCore)) {
@@ -644,6 +713,10 @@ class MutationService
                 }
                 $oldVal = $this->getCurrentCoreValue($profile, $fieldKey);
                 $newVal = $this->normalizeValue($proposedCore[$fieldKey]);
+                // DB columns income_private / family_income_private are NOT NULL; never persist null.
+                if (in_array($fieldKey, ['income_private', 'family_income_private'], true) && $newVal === null) {
+                    $newVal = false;
+                }
                 $unchanged = (string) ($oldVal ?? '') === (string) ($newVal ?? '');
                 if ($unchanged && !$profileCreatedInThisTransaction) {
                     continue;
@@ -660,6 +733,53 @@ class MutationService
             }
             $profile->save();
 
+            // ——— Step 5.5: Birth place / Native place (snapshot → profile columns; applyApprovedIntake path) ———
+            $tableName = $profile->getTable();
+            $hasAnyPlaceValue = static function (array $place): bool {
+                foreach (['city_id', 'taluka_id', 'district_id', 'state_id'] as $k) {
+                    if (isset($place[$k]) && $place[$k] !== null && $place[$k] !== '') {
+                        return true;
+                    }
+                }
+                return false;
+            };
+            $placeUpdated = false;
+            if (isset($snapshot['birth_place']) && is_array($snapshot['birth_place']) && $hasAnyPlaceValue($snapshot['birth_place'])) {
+                $bp = $snapshot['birth_place'];
+                if (Schema::hasColumn($tableName, 'birth_city_id')) {
+                    $profile->birth_city_id = isset($bp['city_id']) ? (int) $bp['city_id'] : null;
+                }
+                if (Schema::hasColumn($tableName, 'birth_taluka_id')) {
+                    $profile->birth_taluka_id = isset($bp['taluka_id']) ? (int) $bp['taluka_id'] : null;
+                }
+                if (Schema::hasColumn($tableName, 'birth_district_id')) {
+                    $profile->birth_district_id = isset($bp['district_id']) ? (int) $bp['district_id'] : null;
+                }
+                if (Schema::hasColumn($tableName, 'birth_state_id')) {
+                    $profile->birth_state_id = isset($bp['state_id']) ? (int) $bp['state_id'] : null;
+                }
+                $placeUpdated = true;
+            }
+            if (isset($snapshot['native_place']) && is_array($snapshot['native_place']) && $hasAnyPlaceValue($snapshot['native_place'])) {
+                $np = $snapshot['native_place'];
+                if (Schema::hasColumn($tableName, 'native_city_id')) {
+                    $profile->native_city_id = isset($np['city_id']) ? (int) $np['city_id'] : null;
+                }
+                if (Schema::hasColumn($tableName, 'native_taluka_id')) {
+                    $profile->native_taluka_id = isset($np['taluka_id']) ? (int) $np['taluka_id'] : null;
+                }
+                if (Schema::hasColumn($tableName, 'native_district_id')) {
+                    $profile->native_district_id = isset($np['district_id']) ? (int) $np['district_id'] : null;
+                }
+                if (Schema::hasColumn($tableName, 'native_state_id')) {
+                    $profile->native_state_id = isset($np['state_id']) ? (int) $np['state_id'] : null;
+                }
+                $placeUpdated = true;
+            }
+            if ($placeUpdated) {
+                $profile->save();
+            }
+
             // ——— Step 6: Contact sync (snapshot key: contacts → profile_contacts) ———
             $contactConflict = $this->syncContactsFromSnapshot($profile, $snapshot['contacts'] ?? []);
             if ($contactConflict) {
@@ -675,6 +795,14 @@ class MutationService
                 }
                 $proposed = $snapshot[$snapshotKey] ?? [];
                 if (!is_array($proposed)) {
+                    continue;
+                }
+                if ($snapshotKey === 'siblings' && Schema::hasTable('profile_siblings')) {
+                    $this->syncSiblingsWithSpouses($profile, $proposed);
+                    continue;
+                }
+                if ($snapshotKey === 'horoscope' && Schema::hasTable('profile_horoscope_data')) {
+                    $this->syncHoroscopeUpsert($profile, $proposed);
                     continue;
                 }
                 if (in_array($snapshotKey, self::SINGLE_ROW_SNAPSHOT_KEYS, true)) {
@@ -708,10 +836,7 @@ class MutationService
             } else {
                 $current = $profile->lifecycle_state ?? 'active';
                 if (!in_array($current, self::NO_AUTO_ACTIVATE_STATES, true)) {
-                    // Allow activation without photo when profile was just created from intake (intake-first flow).
-                    if (empty($profile->profile_photo) && !$profileCreatedInThisTransaction) {
-                        throw new \RuntimeException('Primary photo required before activation.');
-                    }
+                    // Intake apply: allow activation without photo so applied data is visible in wizard (new or existing profile).
                     $this->setLifecycleState($profile, 'active');
                 }
             }
@@ -902,6 +1027,9 @@ class MutationService
             if (!array_key_exists('year_completed', $mapped)) {
                 $mapped['year_completed'] = 0;
             }
+            // DB: degree NOT NULL
+            $degree = trim((string) ($mapped['degree'] ?? ''));
+            $mapped['degree'] = $degree !== '' ? $degree : '—';
             return $mapped;
         }
         if ($entityType === 'profile_addresses') {
@@ -941,7 +1069,13 @@ class MutationService
             $mapped['city_id'] = ! empty($mapped['city_id']) ? (int) $mapped['city_id'] : null;
             $mapped['state_id'] = ! empty($mapped['state_id']) ? (int) $mapped['state_id'] : null;
             $mapped['contact_number'] = isset($mapped['contact_number']) && trim((string) $mapped['contact_number']) !== '' ? trim((string) $mapped['contact_number']) : null;
-            $mapped['notes'] = isset($mapped['notes']) && trim((string) $mapped['notes']) !== '' ? trim((string) $mapped['notes']) : null;
+            $notes = isset($mapped['notes']) && trim((string) $mapped['notes']) !== '' ? trim((string) $mapped['notes']) : null;
+            $addr = isset($mapped['address_line']) && trim((string) $mapped['address_line']) !== '' ? trim((string) $mapped['address_line']) : null;
+            $addr2 = isset($mapped['address']) && trim((string) $mapped['address']) !== '' ? trim((string) $mapped['address']) : null;
+            $addr3 = isset($mapped['Address']) && trim((string) $mapped['Address']) !== '' ? trim((string) $mapped['Address']) : null;
+            $parts = array_filter([$notes, $addr, $addr2, $addr3]);
+            $mapped['notes'] = $parts !== [] ? implode("\n", array_unique($parts)) : null;
+            unset($mapped['address_line'], $mapped['address'], $mapped['Address']);
             $mapped['is_primary_contact'] = ! empty($mapped['is_primary_contact']);
             return $mapped;
         }
@@ -960,15 +1094,64 @@ class MutationService
             $mapped['relation_type'] = in_array($mapped['relation_type'] ?? null, ['brother', 'sister'], true) ? $mapped['relation_type'] : null;
             $mapped['name'] = isset($mapped['name']) && trim((string) $mapped['name']) !== '' ? trim((string) $mapped['name']) : null;
             $mapped['gender'] = in_array($mapped['gender'] ?? null, ['male', 'female'], true) ? $mapped['gender'] : null;
-            $mapped['marital_status'] = in_array($mapped['marital_status'] ?? null, ['unmarried', 'married'], true) ? $mapped['marital_status'] : null;
+            // Normalize marital_status: intake/form may send "Yes"/"No" or is_married; store as married/unmarried.
+            $maritalRaw = $mapped['marital_status'] ?? ($mapped['is_married'] ?? null);
+            if (in_array($maritalRaw, ['married', 'unmarried'], true)) {
+                $mapped['marital_status'] = $maritalRaw;
+            } elseif ($maritalRaw === true || $maritalRaw === 1 || (is_string($maritalRaw) && strtolower($maritalRaw) === 'yes')) {
+                $mapped['marital_status'] = 'married';
+            } elseif ($maritalRaw === false || $maritalRaw === 0 || (is_string($maritalRaw) && strtolower($maritalRaw) === 'no')) {
+                $mapped['marital_status'] = 'unmarried';
+            } elseif (is_string($maritalRaw) && strtolower(trim($maritalRaw)) === 'married') {
+                $mapped['marital_status'] = 'married';
+            } else {
+                $mapped['marital_status'] = in_array($maritalRaw, ['unmarried', 'married'], true) ? $maritalRaw : null;
+            }
+            // If spouse has name/address, treat as married so Full profile shows spouse (intake form may not send marital_status=Yes).
+            $spouse = isset($mapped['spouse']) && is_array($mapped['spouse']) ? $mapped['spouse'] : [];
+            $spouseHasData = trim((string) ($spouse['name'] ?? '')) !== '' || trim((string) ($spouse['address_line'] ?? $spouse['address'] ?? $spouse['additional_info'] ?? '')) !== '';
+            if ($spouseHasData && strtolower(trim((string) ($mapped['marital_status'] ?? ''))) !== 'married') {
+                $mapped['marital_status'] = 'married';
+            }
             $mapped['occupation'] = isset($mapped['occupation']) && trim((string) $mapped['occupation']) !== '' ? trim((string) $mapped['occupation']) : null;
             $mapped['city_id'] = ! empty($mapped['city_id']) ? (int) $mapped['city_id'] : null;
             $mapped['contact_number'] = isset($mapped['contact_number']) && trim((string) $mapped['contact_number']) !== '' ? trim((string) $mapped['contact_number']) : null;
             $mapped['contact_number_2'] = isset($mapped['contact_number_2']) && trim((string) $mapped['contact_number_2']) !== '' ? trim((string) $mapped['contact_number_2']) : null;
             $mapped['contact_number_3'] = isset($mapped['contact_number_3']) && trim((string) $mapped['contact_number_3']) !== '' ? trim((string) $mapped['contact_number_3']) : null;
-            $mapped['notes'] = isset($mapped['notes']) && trim((string) $mapped['notes']) !== '' ? trim((string) $mapped['notes']) : null;
+            // Merge address + additional_info into notes so intake data shows in wizard (profile_siblings has only notes).
+            $notesParts = array_filter([
+                isset($mapped['notes']) && trim((string) $mapped['notes']) !== '' ? trim((string) $mapped['notes']) : null,
+                isset($mapped['address']) && trim((string) $mapped['address']) !== '' ? trim((string) $mapped['address']) : null,
+                isset($mapped['address_line']) && trim((string) $mapped['address_line']) !== '' ? trim((string) $mapped['address_line']) : null,
+                isset($mapped['Address']) && trim((string) $mapped['Address']) !== '' ? trim((string) $mapped['Address']) : null,
+                isset($mapped['additional_info']) && trim((string) $mapped['additional_info']) !== '' ? trim((string) $mapped['additional_info']) : null,
+            ]);
+            $mapped['notes'] = $notesParts !== [] ? implode("\n", $notesParts) : null;
             $mapped['sort_order'] = isset($mapped['sort_order']) && $mapped['sort_order'] !== '' ? (int) $mapped['sort_order'] : 0;
-            unset($mapped['spouse'], $mapped['is_married']);
+            unset($mapped['spouse'], $mapped['is_married'], $mapped['address'], $mapped['address_line'], $mapped['Address'], $mapped['additional_info']);
+            return $mapped;
+        }
+        if ($entityType === 'profile_career') {
+            $mapped = $row;
+            // DB NOT NULL columns: designation, company, start_year — never send null.
+            $mapped['designation'] = trim((string) ($mapped['designation'] ?? ''));
+            if ($mapped['designation'] === '') {
+                $mapped['designation'] = '—';
+            }
+            $mapped['company'] = trim((string) ($mapped['company'] ?? $mapped['employer_name'] ?? $mapped['company_name'] ?? ''));
+            if ($mapped['company'] === '') {
+                $mapped['company'] = '—';
+            }
+            unset($mapped['employer_name'], $mapped['company_name']);
+            $mapped['start_year'] = isset($mapped['start_year']) && (string) $mapped['start_year'] !== '' && is_numeric($mapped['start_year'])
+                ? (int) $mapped['start_year']
+                : 0;
+            $mapped['end_year'] = isset($mapped['end_year']) && (string) $mapped['end_year'] !== '' && is_numeric($mapped['end_year'])
+                ? (int) $mapped['end_year']
+                : null;
+            $loc = trim((string) ($mapped['location'] ?? $mapped['work_location'] ?? ''));
+            $mapped['location'] = $loc !== '' ? $loc : null;
+            $mapped['is_current'] = ! empty($mapped['is_current']);
             return $mapped;
         }
         if ($entityType === 'profile_marriages') {
@@ -1046,6 +1229,9 @@ class MutationService
     private function resolveContactRelationToId(array $row): array
     {
         $mapped = $row;
+        if (trim((string) ($mapped['phone_number'] ?? '')) === '' && isset($mapped['number']) && trim((string) $mapped['number']) !== '') {
+            $mapped['phone_number'] = trim((string) $mapped['number']);
+        }
         $val = $mapped['contact_relation_id'] ?? $mapped['relation_type'] ?? null;
         $engine = app(\App\Services\ControlledOptions\ControlledOptionEngine::class);
         if ($val !== null && ! is_numeric($val)) {
@@ -1063,6 +1249,11 @@ class MutationService
         } elseif ($pref === true || $pref === '1' || $pref === 1) {
             $mapped['contact_preference'] = 'whatsapp';
             $mapped['is_whatsapp'] = true;
+        }
+        // DB column contact_name is NOT NULL; never send null/empty so intake/wizard don't cause 500.
+        $name = trim((string) ($mapped['contact_name'] ?? ''));
+        if ($name === '') {
+            $mapped['contact_name'] = 'Self';
         }
         return $mapped;
     }
@@ -1386,17 +1577,21 @@ class MutationService
             if ($siblingId === null) {
                 continue;
             }
-            $isMarried = in_array($row['marital_status'] ?? null, ['married'], true) || ! empty($row['is_married']);
+            $maritalVal = $row['marital_status'] ?? $row['is_married'] ?? null;
+            $isMarried = in_array($maritalVal, ['married'], true)
+                || $maritalVal === true || $maritalVal === 1
+                || (is_string($maritalVal) && in_array(strtolower(trim($maritalVal)), ['yes', 'married'], true));
             $spouseData = $row['spouse'] ?? [];
             $hasSpouseFields = ! empty($spouseData['name']) || ! empty($spouseData['occupation_title']) || ! empty($spouseData['contact_number'])
-                || ! empty($spouseData['address_line']) || ! empty($spouseData['city_id']);
+                || ! empty($spouseData['address_line']) || ! empty($spouseData['address']) || ! empty($spouseData['additional_info']) || ! empty($spouseData['city_id']);
 
             if ($isMarried && $hasSpouseFields) {
+                $spouseAddress = trim((string) ($spouseData['address_line'] ?? $spouseData['address'] ?? $spouseData['additional_info'] ?? ''));
                 $spouseRow = [
                     'name' => trim((string) ($spouseData['name'] ?? '')) ?: null,
                     'occupation_title' => trim((string) ($spouseData['occupation_title'] ?? '')) ?: null,
                     'contact_number' => trim((string) ($spouseData['contact_number'] ?? '')) ?: null,
-                    'address_line' => trim((string) ($spouseData['address_line'] ?? '')) ?: null,
+                    'address_line' => $spouseAddress !== '' ? $spouseAddress : null,
                     'city_id' => ! empty($spouseData['city_id']) ? (int) $spouseData['city_id'] : null,
                     'taluka_id' => ! empty($spouseData['taluka_id']) ? (int) $spouseData['taluka_id'] : null,
                     'district_id' => ! empty($spouseData['district_id']) ? (int) $spouseData['district_id'] : null,
@@ -1425,6 +1620,33 @@ class MutationService
         }
     }
 
+    /**
+     * profile_horoscope_data has unique constraint on profile_id (one row per profile). Upsert by profile_id.
+     */
+    private function syncHoroscopeUpsert(MatrimonyProfile $profile, array $proposed): void
+    {
+        $row = is_array($proposed[0] ?? null) ? $proposed[0] : (isset($proposed[0]) && is_object($proposed[0]) ? (array) $proposed[0] : null);
+        if ($row === null) {
+            return;
+        }
+        $mapped = $this->mapSnapshotRowToTable('profile_horoscope_data', $row);
+        $existing = DB::table('profile_horoscope_data')->where('profile_id', $profile->id)->first();
+        $allowedColumns = array_fill_keys(Schema::getColumnListing('profile_horoscope_data'), true);
+        $data = array_intersect_key(array_merge($mapped, ['profile_id' => $profile->id]), $allowedColumns);
+        unset($data['id']);
+        $data['updated_at'] = now();
+
+        if ($existing) {
+            $data = collect($data)->except(['created_at'])->all();
+            DB::table('profile_horoscope_data')->where('id', $existing->id)->update($data);
+            $this->writeProfileChangeHistory($profile->id, 'profile_horoscope_data', (int) $existing->id, 'update', json_encode($existing), json_encode($data));
+        } else {
+            $data['created_at'] = now();
+            DB::table('profile_horoscope_data')->insert($data);
+            $this->writeProfileChangeHistory($profile->id, 'profile_horoscope_data', null, 'insert', null, json_encode($data));
+        }
+    }
+
     private function syncEntityDiff(MatrimonyProfile $profile, string $entityType, array $proposed): void
     {
         if (!Schema::hasTable($entityType)) {
@@ -1439,10 +1661,20 @@ class MutationService
             $id = isset($row['id']) ? (int) $row['id'] : null;
             $existingRow = $id !== null ? $existing->get($id) : null;
             if ($existingRow === null) {
+                // profile_contacts: skip insert when phone_number is empty so we don't insert useless/invalid rows.
+                if ($entityType === 'profile_contacts') {
+                    $phone = trim((string) ($row['phone_number'] ?? ''));
+                    if ($phone === '') {
+                        continue;
+                    }
+                }
                 $insertData = array_merge(['profile_id' => $profile->id], $row);
                 unset($insertData['id']);
                 $insertData['created_at'] = now();
                 $insertData['updated_at'] = now();
+                // Only insert columns that exist on the table (intake/wizard may send extra keys e.g. address_line on profile_siblings).
+                $allowedColumns = array_fill_keys(Schema::getColumnListing($entityType), true);
+                $insertData = array_intersect_key($insertData, $allowedColumns);
                 \Log::info('DEBUG DB OPERATION', [
                     'table' => $entityType,
                     'payload' => $insertData,
@@ -1470,6 +1702,8 @@ class MutationService
                 if (!empty($changes)) {
                     $updateData = collect($row)->except(['id', 'profile_id', 'created_at'])->all();
                     $updateData['updated_at'] = now();
+                    $allowedColumns = array_fill_keys(Schema::getColumnListing($entityType), true);
+                    $updateData = array_intersect_key($updateData, $allowedColumns);
                     DB::table($entityType)->where('id', $id)->update($updateData);
                     foreach ($changes as $fieldName => $vals) {
                         $this->writeProfileChangeHistory(
@@ -1580,7 +1814,9 @@ class MutationService
             });
         }
         $keys = $query->pluck('field_key')->values()->all();
-        return $keys !== [] ? $keys : self::FALLBACK_CORE_KEYS;
+        $merged = array_values(array_unique(array_merge($keys ?: [], self::FALLBACK_CORE_KEYS)));
+
+        return $merged !== [] ? $merged : self::FALLBACK_CORE_KEYS;
     }
 
     private function getCurrentCoreValue(MatrimonyProfile $profile, string $fieldKey): mixed
@@ -1598,6 +1834,52 @@ class MutationService
             return $profile->city_id ?? $profile->state_id ?? $profile->country_id ?? null;
         }
         return $profile->getAttribute($fieldKey);
+    }
+
+    /**
+     * Normalize intake snapshot core: resolve text (religion, caste, sub_caste, complexion, mother_tongue) to *_id
+     * so that wizard dropdowns show the correct selection after apply.
+     */
+    private function normalizeIntakeCoreForApply(array $core): array
+    {
+        $out = $core;
+        $engine = app(\App\Services\ControlledOptions\ControlledOptionEngine::class);
+
+        $resolve = function (string $fieldKey, string $textKey, string $idKey) use ($engine, &$out): void {
+            if (isset($out[$idKey]) && is_numeric($out[$idKey])) {
+                return;
+            }
+            $raw = $out[$textKey] ?? null;
+            if ($raw === null || trim((string) $raw) === '') {
+                return;
+            }
+            $res = $engine->resolveKey($fieldKey, trim((string) $raw));
+            if ($res['matched'] && $res['id'] !== null) {
+                $out[$idKey] = $res['id'];
+            }
+        };
+
+        $resolve('core.religion', 'religion', 'religion_id');
+        $resolve('core.caste', 'caste', 'caste_id');
+        $resolve('core.sub_caste', 'sub_caste', 'sub_caste_id');
+        $resolve('physical.complexion', 'complexion', 'complexion_id');
+
+        if (! isset($out['mother_tongue_id']) || ! is_numeric($out['mother_tongue_id'])) {
+            $raw = $out['mother_tongue'] ?? null;
+            if ($raw !== null && trim((string) $raw) !== '') {
+                $v = trim((string) $raw);
+                $id = DB::table('master_mother_tongues')->where('is_active', true)
+                    ->where(function ($q) use ($v) {
+                        $q->where('label', $v)->orWhere('key', $v);
+                    })
+                    ->value('id');
+                if ($id !== null) {
+                    $out['mother_tongue_id'] = (int) $id;
+                }
+            }
+        }
+
+        return $out;
     }
 
     private function normalizeValue(mixed $value): mixed

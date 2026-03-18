@@ -1,11 +1,11 @@
 {{-- Sibling Details — relation-details engine with Yes/No toggle inside the block. --}}
-@props(['siblings' => collect(), 'hasSiblings' => null])
+@props(['siblings' => collect(), 'hasSiblings' => null, 'namePrefix' => 'siblings'])
 @php
     $siblingRelationOptions = [['value' => 'brother', 'label' => 'Brother'], ['value' => 'sister', 'label' => 'Sister']];
     $showForm = $hasSiblings !== false;
 @endphp
 <x-repeaters.relation-details
-    namePrefix="siblings"
+    namePrefix="{{ $namePrefix }}"
     :relationOptions="$siblingRelationOptions"
     :showMarried="true"
     :items="$siblings"

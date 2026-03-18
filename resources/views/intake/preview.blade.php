@@ -66,7 +66,7 @@
                 <p class="text-xs text-gray-600 dark:text-gray-400 mb-2 shrink-0">बायोडाटा मधून काढलेला स्ट्रक्चर्ड डेटा. खालील फॉर्म याच्या आधारे भरलेला आहे.</p>
                 <div class="intake-preview-scroll-panel rounded border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-900/40 p-3 text-xs text-gray-800 dark:text-gray-100 leading-relaxed font-mono">
                     @if($parsedJsonForDisplay !== '')
-                        <pre class="m-0 whitespace-pre-wrap break-words">{{ e($parsedJsonForDisplay) }}</pre>
+                        <pre class="m-0 whitespace-pre-wrap break-words">{!! $parsedJsonForDisplay !!}</pre>
                     @else
                         <span class="text-amber-600 dark:text-amber-400">Parsed JSON उपलब्ध नाही.</span>
                     @endif
@@ -201,6 +201,18 @@
                 if (ph) el.value = ph;
             }
         });
+        // When birth place is text-only (no city selected), submit it so approve can set birth_place_text.
+        var birthWrap = form.querySelector('[data-location-context="birth"]');
+        var birthCityHidden = form.querySelector('input[name="snapshot[core][birth_city_id]"]');
+        var birthPlaceHidden = document.getElementById('intake_birth_place_text');
+        if (birthWrap && birthCityHidden && birthPlaceHidden) {
+            var displayInput = birthWrap.querySelector('.location-typeahead-input');
+            if ((birthCityHidden.value === '' || birthCityHidden.value === null) && displayInput && String(displayInput.value || '').trim() !== '') {
+                birthPlaceHidden.value = String(displayInput.value).trim();
+            } else if (birthCityHidden.value !== '' && birthCityHidden.value != null) {
+                birthPlaceHidden.value = '';
+            }
+        }
     });
 
     // Revert / use-candidate (full_form basic_info may render these)

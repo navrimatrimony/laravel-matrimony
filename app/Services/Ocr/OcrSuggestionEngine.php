@@ -405,7 +405,7 @@ class OcrSuggestionEngine
             return $value;
         }
         // Trailing 10+ digits (Devanagari or ASCII) possibly with spaces/dots
-        if (preg_match('/\s+([\d\u0966-\u096F\s\.\-]{10,})$/u', $value, $m)) {
+        if (preg_match('/\s+([0-9०-९\s\.\-]{10,})$/u', $value, $m)) {
             $value = trim(mb_substr($value, 0, -mb_strlen($m[0])));
         }
         return trim($value);

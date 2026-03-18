@@ -18,4 +18,16 @@ return [
     | even if usage_count is below this. Env: INTAKE_SUGGESTION_AUTOFILL_USAGE_COUNT.
     */
     'suggestion_autofill_usage_count' => (int) env('INTAKE_SUGGESTION_AUTOFILL_USAGE_COUNT', 25),
+
+    /*
+    |--------------------------------------------------------------------------
+    | AI first v2 parser (Marathi-aware, stricter schema)
+    |--------------------------------------------------------------------------
+    | max_chars: max raw text length sent to API. Env: INTAKE_AI_V2_MAX_CHARS.
+    | model: override OpenAI model for v2 (e.g. gpt-4o). Null = use services.openai.model.
+    */
+    'ai_first_v2' => [
+        'max_chars' => (int) env('INTAKE_AI_V2_MAX_CHARS', 12000),
+        'model' => env('INTAKE_AI_V2_MODEL'),
+    ],
 ];

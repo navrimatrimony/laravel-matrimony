@@ -16,6 +16,7 @@ class Kernel extends ConsoleKernel
         \App\Console\Commands\BuildOcrFrequencyPatterns::class,
         \App\Console\Commands\SeedOcrBaselinePatterns::class,
         \App\Console\Commands\PurgeOldIntakeFiles::class,
+        \App\Console\Commands\IntakeAuditCommand::class,
     ];
 
     /**

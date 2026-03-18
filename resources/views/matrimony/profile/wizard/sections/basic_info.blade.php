@@ -141,6 +141,10 @@
         </div>
         <div class="min-w-0">
             <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">{{ __('wizard.birth_place_optional') }}</label>
+            @if($isIntakePreview ?? false)
+                {{-- Intake: submit birth_place text when user didn't select a city (typeahead display has no name). --}}
+                <input type="hidden" name="{{ $corePrefix }}[birth_place]" id="intake_birth_place_text" value="{{ (empty($profile->birth_city_id) && !empty(trim($birthPlaceDisplay ?? ''))) ? e($birthPlaceDisplay) : '' }}">
+            @endif
             <x-profile.location-typeahead
                 context="birth"
                 :namePrefix="$corePrefix"
@@ -167,7 +171,7 @@
         />
     </div>
 
-    {{-- 4b. Mother tongue — locale-based option labels --}}
+    {{-- 4b. Mother tongue + Current location (text + searchable) — single row with 3 fields --}}
     @php
         $nameMotherTongue = $corePrefix ? $corePrefix . '[mother_tongue_id]' : 'mother_tongue_id';
         $valMotherTongue = old($oldPrefix.'mother_tongue_id', $profile->mother_tongue_id ?? '');
@@ -181,16 +185,54 @@
             }
             return $dbLabel;
         };
+        // Current location: detailed free-text + searchable city/town via typeahead.
+        $nameAddressLine = $corePrefix ? $corePrefix . '[address_line]' : 'address_line';
+        $addressLineVal = old($oldPrefix.'address_line', $profile->address_line ?? ($coreData['address_line'] ?? ''));
+        $residenceDisplay = old($oldPrefix.'wizard_residence_display', $profile->residence_display ?? '');
+        $resCityId = old($oldPrefix.'city_id', $profile->city_id ?? '');
+        $resTalukaId = old($oldPrefix.'taluka_id', $profile->taluka_id ?? '');
+        $resDistrictId = old($oldPrefix.'district_id', $profile->district_id ?? '');
+        $resStateId = old($oldPrefix.'state_id', $profile->state_id ?? '');
     @endphp
-    <div>
-        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">{{ __('wizard.mother_tongue') }}</label>
-        <select name="{{ $nameMotherTongue }}" class="w-full rounded-lg border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-3 py-2.5 h-[42px] focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
-            <option value="">{{ __('common.select_placeholder') }}</option>
-            @foreach($motherTongues ?? [] as $mt)
-                <option value="{{ $mt->id }}" {{ (string)$valMotherTongue === (string)$mt->id ? 'selected' : '' }}>{{ $optionLabel($mt, 'mother_tongue') }}</option>
-            @endforeach
-        </select>
-        @error($oldPrefix.'mother_tongue_id')<p class="mt-1 text-sm text-red-600 dark:text-red-400">{{ $message }}</p>@enderror
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-3 items-start">
+        <div class="min-w-0">
+            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">{{ __('wizard.mother_tongue') }}</label>
+            <select name="{{ $nameMotherTongue }}" class="w-full rounded-lg border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-3 py-2.5 h-[42px] focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+                <option value="">{{ __('common.select_placeholder') }}</option>
+                @foreach($motherTongues ?? [] as $mt)
+                    <option value="{{ $mt->id }}" {{ (string)$valMotherTongue === (string)$mt->id ? 'selected' : '' }}>{{ $optionLabel($mt, 'mother_tongue') }}</option>
+                @endforeach
+            </select>
+            @error($oldPrefix.'mother_tongue_id')<p class="mt-1 text-sm text-red-600 dark:text-red-400">{{ $message }}</p>@enderror
+        </div>
+        <div class="min-w-0">
+            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Current address line</label>
+            <input type="text"
+                   name="{{ $nameAddressLine }}"
+                   value="{{ $addressLineVal }}"
+                   class="w-full rounded-lg border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-3 py-2.5 h-[42px] focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                   placeholder="{{ __('components.parents.parents_address_line') }}">
+        </div>
+        <div class="min-w-0">
+            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Current city / village / district / state</label>
+            <x-profile.location-typeahead
+                context="residence"
+                :namePrefix="$corePrefix"
+                :value="$residenceDisplay"
+                :placeholder="__('components.parents.parents_location_placeholder')"
+                label=""
+                :noBorder="true"
+                :compactRow="true"
+                :data-birth-city-id="null"
+                :data-birth-taluka-id="null"
+                :data-birth-district-id="null"
+                :data-birth-state-id="null"
+                :data-city-id="$resCityId"
+                :data-taluka-id="$resTalukaId"
+                :data-district-id="$resDistrictId"
+                :data-state-id="$resStateId"
+            />
+        </div>
     </div>
 
     {{-- 5. Marital status — full engine (status + status details + children) --}}
