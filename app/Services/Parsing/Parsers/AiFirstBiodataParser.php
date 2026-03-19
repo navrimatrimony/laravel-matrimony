@@ -56,17 +56,31 @@ class AiFirstBiodataParser implements BiodataParserInterface
                     'marital_status',
                     'full_name',
                     'primary_contact_number',
-                    // Physical section – pull from high-precision rules parser when AI misses it
                     'height_cm',
                     'complexion',
-                    'other_relatives_text', // इतर नातेवाईक (आडनाव/गाव) from rules extractFamilyStructures
+                    'religion',
+                    'caste',
+                    'sub_caste',
+                    'other_relatives_text',
                 ];
 
                 foreach ($fieldsToMerge as $field) {
                     $aiVal = $aiCore[$field] ?? null;
                     $aiHas = array_key_exists($field, $aiCore) && $aiVal !== null && $aiVal !== '';
                     $rulesHas = array_key_exists($field, $rulesCore) && $rulesCore[$field] !== null && $rulesCore[$field] !== '';
+                    $useRules = false;
                     if (! $aiHas && $rulesHas) {
+                        $useRules = true;
+                    }
+                    if ($field === 'father_name' && $aiHas && is_string($aiVal)) {
+                        if (mb_strpos($aiVal, 'आईचे') !== false || mb_strpos($aiVal, 'आईचे नांव') !== false || mb_strlen(trim($aiVal)) < 10) {
+                            $useRules = true;
+                        }
+                    }
+                    if ($field === 'height_cm' && $aiHas && is_numeric($aiVal) && (float) $aiVal > 220) {
+                        $useRules = $rulesHas;
+                    }
+                    if ($useRules && $rulesHas) {
                         $aiCore[$field] = $rulesCore[$field];
                     }
                 }
@@ -97,7 +111,8 @@ class AiFirstBiodataParser implements BiodataParserInterface
                         $aiResult['siblings'] = $rulesSiblings;
                     }
                 }
-                if (! $this->isUsableRelatives($aiRelatives) && ! empty($rulesRelatives)) {
+                // Relatives: ALWAYS prefer high-precision rules parser when it produced any rows.
+                if (! empty($rulesRelatives)) {
                     $aiResult['relatives'] = $rulesRelatives;
                 }
                 if (! $this->isUsableCareerHistory($aiCareer) && ! empty($rulesCareer)) {
@@ -115,6 +130,10 @@ class AiFirstBiodataParser implements BiodataParserInterface
 
                 // Final SSOT shape and LAST-MILE caste/sub_caste split.
                 $result = $this->ensureSsotShape($aiResult);
+
+                // Clear education institution / career location when AI mis-parsed horoscope terms (devak/gotra).
+                $result['education_history'] = BiodataParserService::sanitizeEducationInstitutionFromDevakStatic($result['education_history'] ?? []);
+                $result['career_history'] = BiodataParserService::sanitizeCareerLocationFromGotraStatic($result['career_history'] ?? []);
 
                 $core = $result['core'] ?? [];
                 if (
@@ -200,12 +219,42 @@ class AiFirstBiodataParser implements BiodataParserInterface
         if (! is_array($relatives) || count($relatives) === 0) {
             return false;
         }
+        $meaningful = 0;
+        $goodAddress = 0;
         foreach ($relatives as $row) {
-            if (is_array($row) && ! empty($row['relation_type'] ?? null)) {
-                return true;
+            if (! is_array($row)) {
+                continue;
+            }
+            $rel = trim((string) ($row['relation_type'] ?? $row['relation'] ?? ''));
+            if ($rel === '') {
+                continue;
+            }
+            $name = trim((string) ($row['name'] ?? ''));
+            $addr = trim((string) ($row['address_line'] ?? $row['location'] ?? ''));
+            if ($name === '' && $addr === '') {
+                continue;
+            }
+            $meaningful++;
+
+            // "Good" address = full-ish Marathi address fragment (has taluka/district OR long comma-separated location).
+            if (
+                $addr !== '' &&
+                (
+                    mb_strpos($addr, 'ता.') !== false ||
+                    mb_strpos($addr, 'जि.') !== false ||
+                    mb_strlen($addr) >= 18
+                )
+            ) {
+                $goodAddress++;
             }
         }
-        return false;
+
+        if ($meaningful === 0) {
+            return false;
+        }
+
+        // If AI gave mostly short addresses (only village), treat as low-quality so rules parser can supply full address_line.
+        return ($goodAddress / $meaningful) >= 0.5;
     }
 
     /**

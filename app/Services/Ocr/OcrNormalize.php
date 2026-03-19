@@ -374,5 +374,20 @@ class OcrNormalize
                 return mb_strlen($v) <= 500;
         }
     }
+
+    /**
+     * Normalise raw OCR text before parsing so both AI and rules get corrected input.
+     * Fixes common OCR errors: ७५ फुट (75 feet) → ५ फुट (5 feet).
+     * Does not modify stored raw_ocr_text; use the returned string only for parse().
+     */
+    public static function normalizeRawTextForParsing(string $rawText): string
+    {
+        if ($rawText === '') {
+            return $rawText;
+        }
+        // OCR often reads Devanagari ५ (5) as ७५ (75) in height context. Fix "७५ फुट" → "५ फुट".
+        $out = preg_replace('/७५\s*फ[ुू]ट/u', '५ फुट', $rawText);
+        return $out !== null ? $out : $rawText;
+    }
 }
 

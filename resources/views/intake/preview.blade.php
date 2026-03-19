@@ -7,7 +7,17 @@
     </p>
     <h1 class="text-2xl font-bold mb-2">{{ __('intake.intake_preview') }}</h1>
     <p class="text-gray-600 dark:text-gray-400 text-sm mb-2">तुमची माहिती तपासा आणि आवश्यक ते सुधारा. खाली स्क्रोल करून सर्व तपासल्यानंतरच अप्रूव्ह करा.</p>
-    <p class="text-gray-500 dark:text-gray-500 text-xs mb-6">डावीकडे रॉ बायोडाटा, उजवीकडे पार्स केलेला JSON. खाली फॉर्म भरून अप्रूव्ह करा.</p>
+    <p class="text-gray-500 dark:text-gray-500 text-xs mb-4">डावीकडे रॉ बायोडाटा, उजवीकडे पार्स केलेला JSON. खाली फॉर्म भरून अप्रूव्ह करा.</p>
+
+    <div class="mb-6 flex flex-wrap items-center gap-3">
+        <form method="POST" action="{{ route('intake.reparse', $intake) }}" class="inline" onsubmit="return confirm('पार्स पुन्हा चालवायचा आहे? पृष्ठ रिफ्रेश केल्यावर अद्ययावत माहिती (उंची, धर्म/जात इ.) दिसेल.');">
+            @csrf
+            <button type="submit" class="px-3 py-1.5 text-sm border border-amber-500 text-amber-700 dark:text-amber-400 dark:border-amber-400 rounded hover:bg-amber-50 dark:hover:bg-amber-900/20">
+                पार्स पुन्हा चालवा (नवीन नियम लागू)
+            </button>
+        </form>
+        <span class="text-xs text-gray-500 dark:text-gray-400">— जर Religion/Caste/Height इ. चुकीचे दिसत असतील तर हे बटण दाबा, नंतर पृष्ठ रिफ्रेश करा.</span>
+    </div>
 
     <form id="intake-preview-form" method="POST" action="{{ route('intake.approve', $intake) }}" class="space-y-8">
         @csrf

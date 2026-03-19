@@ -71,6 +71,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/intake/upload', [IntakeController::class, 'uploadForm'])->name('intake.upload');
     Route::post('/intake/upload', [IntakeController::class, 'store'])->name('intake.store');
     Route::get('/intake/preview/{intake}', [IntakeController::class, 'preview'])->name('intake.preview');
+    Route::post('/intake/reparse/{intake}', [IntakeController::class, 'reparse'])->name('intake.reparse');
     Route::post('/intake/approve/{intake}', [IntakeController::class, 'approve'])->name('intake.approve');
     Route::get('/intake/approval', [IntakeController::class, 'approval'])->name('intake.approval');
     Route::get('/intake/status/{intake}', [IntakeController::class, 'status'])

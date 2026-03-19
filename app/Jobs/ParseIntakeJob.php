@@ -99,6 +99,7 @@ class ParseIntakeJob implements ShouldQueue
 
         $parser = $resolver->makeParser($mode);
         $raw = $intake->raw_ocr_text ?? '';
+        $raw = \App\Services\Ocr\OcrNormalize::normalizeRawTextForParsing($raw);
 
         $parsed = null;
         $attempts = 0;

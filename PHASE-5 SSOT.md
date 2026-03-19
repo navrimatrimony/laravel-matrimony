@@ -7243,3 +7243,32 @@ Meaning:
 ############################################################
 END OF DAY-36
 ############################################################
+
+============================================================
+NEXT DAY — INTAKE: DIRECT FORM-TO-DATABASE (SINGLE SOURCE OF TRUTH)
+============================================================
+
+Goal:
+- One unique form for profile data. One source of truth: database.
+- Intake flow: parsed JSON → map once into DB columns → save to profile + related tables. No intermediate approval_snapshot_json schema; no separate "apply" translation layer.
+- Edit flow: same form loads from and saves to DB (unchanged).
+- Eliminates "intake correct, edit wrong" class of bugs (snapshot vs DB shape mismatch).
+
+Scope:
+- Refactor same files (IntakeController, MutationService, related). Do not create parallel new files that duplicate form logic.
+- Add direct DB path: on intake approve, map parsed/edited data to profile + entities and persist directly (reuse existing MutationService entity sync logic; drop snapshot as interchange format).
+- Remove or bypass: approval_snapshot_json as canonical stored shape; two-step "approve then apply" where apply reads snapshot and maps again to DB.
+- Backup already taken: tag `intake-snapshot-flow-backup-before-db-form-refactor`. Rollback = checkout that tag.
+
+Constraints (unchanged):
+- Phase-5 protection: no delete/rename/repurpose of existing DB columns or tables; additive only.
+- All mutations still via MutationService (or equivalent single authority). No direct profile update() bypass.
+- raw_ocr_text immutable; conflict/lifecycle rules unchanged.
+
+Success criteria:
+- Intake approve: form data (or parsed JSON merged with form) written directly to matrimony_profiles + profile_* tables. Full profile wizard shows same data without snapshot→DB mapping bugs.
+- No code path that "reads old intake/snapshot file and keeps patching there"; single path = form ↔ DB.
+
+############################################################
+END OF NEXT-DAY PLAN (Intake direct DB form)
+############################################################

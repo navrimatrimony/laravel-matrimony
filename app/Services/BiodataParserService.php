@@ -133,12 +133,14 @@ class BiodataParserService
         $confidence['highest_education'] = $education !== null ? self::CONF_DIRECT : self::CONF_MISSING;
 
         // Parent names: prefer FAMILY section first, then full text; UTF-8 Marathi labels only.
-        $fatherLabels = ['वडिलांचे नाव', 'वडीलांचे नाव', 'पित्याचे नाव', 'पिता', 'Father'];
+        $fatherLabels = ['वडिलांचे नाव', 'वडिलांचे नांव', 'वडीलांचे नाव', 'पित्याचे नाव', 'पिता', 'Father'];
         $motherLabels = ['आईचे नाव', 'आईचं नाव', 'मातेचे नाव', 'माता', 'Mother'];
 
         $fatherName = $this->extractFieldAfterLabels($familyText, $fatherLabels);
         $fatherName = $fatherName ?? $this->extractFieldAfterLabels($text, $fatherLabels);
         $fatherName = $fatherName ?? $this->extractAfterLabelNextLine($text, 'वडिलांचे नाव');
+        $fatherName = $fatherName ?? $this->extractAfterLabelNextLine($text, 'वडिलांचे नांव');
+        $fatherName = $fatherName ?? $this->extractFatherNameFromKaiOrDoctor($text);
         $fatherName = $fatherName ?? $this->extractField($familyText, $fatherLabels);
         $fatherName = $fatherName ?? (isset($romanized['father_name']) ? $this->validateFatherName($this->cleanRomanizedName($romanized['father_name'])) : null);
         $fatherName = $this->rejectIfLabelNoise($fatherName);
@@ -192,27 +194,40 @@ class BiodataParserService
         $birthTimeRaw = $this->rejectIfLabelNoise($this->extractField($personalText, ['जन्म वेळ', 'Birth time']) ?? $this->extractField($text, ['जन्म वेळ', 'Birth time']));
         $birthTime = $this->normalizeBirthTime($birthTimeRaw);
         $birthPlace = $this->rejectIfLabelNoise($this->extractField($personalText, ['जन्म स्थळ', 'Birth place']) ?? $this->extractField($text, ['जन्म स्थळ', 'Birth place']));
-        $gotra = $this->rejectIfLabelNoise($this->extractField($personalText, ['गोत्र']) ?? $this->extractField($text, ['गोत्र']));
-        $kuldaivat = $this->rejectIfLabelNoise($this->extractField($personalText, ['कुल दैवत', 'कुलदैवत']) ?? $this->extractField($text, ['कुल दैवत', 'कुलदैवत']));
-        $rashi = $this->rejectIfLabelNoise($this->extractField($horoscopeText, ['रास', 'टाशी', 'राशी']) ?? $this->extractField($text, ['रास', 'टाशी', 'राशी']));
+        $gotra = $this->rejectIfLabelNoise(
+            $this->extractFieldAfterLabels($personalText, ['गोत्र']) ?? $this->extractField($personalText, ['गोत्र']) ??
+            $this->extractFieldAfterLabels($text, ['गोत्र']) ?? $this->extractField($text, ['गोत्र'])
+        );
+        $kuldaivat = $this->rejectIfLabelNoise(
+            $this->extractFieldAfterLabels($personalText, ['कुलस्वामी', 'कुल दैवत', 'कुलदैवत']) ?? $this->extractField($personalText, ['कुल दैवत', 'कुलदैवत']) ??
+            $this->extractFieldAfterLabels($text, ['कुलस्वामी', 'कुल दैवत', 'कुलदैवत']) ?? $this->extractField($text, ['कुल दैवत', 'कुलदैवत'])
+        );
+        $rashi = $this->rejectIfLabelNoise($this->extractFieldAfterLabels($horoscopeText, ['रास', 'राशी']) ?? $this->extractField($horoscopeText, ['रास', 'टाशी', 'राशी']) ?? $this->extractField($text, ['रास', 'टाशी', 'राशी']));
+        $nakshatra = $this->rejectIfLabelNoise($this->extractFieldAfterLabels($horoscopeText, ['नक्षत्र']) ?? $this->extractFieldAfterLabels($text, ['नक्षत्र']) ?? $this->extractField($horoscopeText, ['नक्षत्र']) ?? $this->extractField($text, ['नक्षत्र']));
         $nadiRaw = $this->rejectIfLabelNoise($this->extractField($horoscopeText, ['नाडी', 'नाड २', 'नाड']) ?? $this->extractField($text, ['नाडी', 'नाड २', 'नाड']));
         $nadi = $nadiRaw !== null ? $this->normalizeNadiValue($nadiRaw) : null;
+        $yoni = $this->rejectIfLabelNoise($this->extractFieldAfterLabels($horoscopeText, ['योनी']) ?? $this->extractFieldAfterLabels($text, ['योनी']) ?? $this->extractField($horoscopeText, ['योनी']) ?? $this->extractField($text, ['योनी']));
         // Prefer label-style "गण :- value" so we don't capture text after "गण" in "गणपती" (मामा line)
         $gan = $this->rejectIfLabelNoise($this->extractFieldAfterLabels($horoscopeText, ['गण']) ?? $this->extractFieldAfterLabels($text, ['गण']) ?? $this->extractField($horoscopeText, ['गण']) ?? $this->extractField($text, ['गण']));
         $mangalik = $this->rejectIfLabelNoise($this->extractField($text, ['मांगलिक']));
         // "वर्ण" ओळीतला raw value दोन use-cases साठी वापरतो:
         // 1) Physical complexion (raw 그대로, e.g. "गोरा")
         // 2) Horoscope varna (canonical keys via validateVarna)
-        $varnaRaw = $this->extractField($personalText, ['वर्ण']) ?? $this->extractField($text, ['वर्ण']);
+        $varnaRaw = $this->extractFieldAfterLabels($personalText, ['वर्ण']) ?? $this->extractField($personalText, ['वर्ण'])
+            ?? $this->extractFieldAfterLabels($text, ['वर्ण']) ?? $this->extractField($text, ['वर्ण']);
         $complexion = $varnaRaw !== null ? trim((string) $varnaRaw) : null;
         // New structured fields for Phase-5: Kul / Devak / Navras / Birth weekday.
         $kulName = $this->rejectIfLabelNoise(
             $this->extractField($familyText, ['कुळ', 'कुल']) ?? $this->extractField($text, ['कुळ', 'कुल'])
         );
         $devak = $this->rejectIfLabelNoise(
+            $this->extractFieldAfterLabels($horoscopeText, ['देवक']) ?? $this->extractFieldAfterLabels($text, ['देवक']) ??
             $this->extractField($familyText, ['देवक', 'कुल देवता', 'कुलदेवता']) ??
             $this->extractField($text, ['देवक', 'कुल देवता', 'कुलदेवता'])
         );
+        if ($devak !== null && trim((string) $devak) === 'देव') {
+            $devak = null;
+        }
         if ($devak === null) {
             $devak = $kuldaivat;
         }
@@ -250,18 +265,20 @@ class BiodataParserService
         $religion = $this->extractField($text, ['धर्म', 'Religion']);
         $religion = $religion ?? $romanized['religion'] ?? null;
         $casteRaw = $this->extractFieldAfterLabels($text, ['जात', 'Caste', 'Community']);
+        $casteRaw = $casteRaw ?? $this->extractAfterLabelNextLine($text, 'जात');
         $casteRaw = $casteRaw ?? $romanized['caste'] ?? null;
         if ($casteRaw !== null) {
             $casteRaw = $this->cleanOcrNoiseFromFieldValue($casteRaw);
         }
+        $kuliPattern = '(?:कुळी|क्‌ळी|क[\x{094D}\x{200C}\s]*ळी|कळी)';
         if ($casteRaw !== null && $casteRaw !== '') {
-            // Pattern: "हिंदु- 96 कुळी मराठा" or "हिंदु- ९६ कुळी मराठा" (with/without OCR noise prefix).
-            if (preg_match('/हिंद[ुू]\s*-\s*([0-9०-९]+\s*कुळी)\s*(मराठा)?/u', $casteRaw, $m)) {
-                $subCaste = trim($m[1]); // e.g. "96 कुळी" or "९६ कुळी"
+            // Pattern: "हिंदु- 96 कुळी मराठा" or "हिंदू- ९६ क्‌ळी मराठा" (क्‌ळी may include ZWNJ).
+            if (preg_match('/हिंद[ुू]\s*-\s*([0-9०-९]+\s*' . $kuliPattern . ')\s*(मराठा)?/u', $casteRaw, $m)) {
+                $subCaste = trim(preg_replace('/(?:क्‌ळी|क[\x{094D}\x{200C}\s]*ळी|कळी)/u', 'कुळी', $m[1]));
                 $caste = 'मराठा';
                 $religion = $religion ?? 'हिंदु';
-            } elseif (preg_match('/हिंद[ुू]\s*[-]?\s*([0-9०-९]+\s*कुळी)\s*मराठा/u', $casteRaw, $m)) {
-                $subCaste = trim($m[1]);
+            } elseif (preg_match('/हिंद[ुू]\s*[-]?\s*([0-9०-९]+\s*' . $kuliPattern . ')\s*मराठा/u', $casteRaw, $m)) {
+                $subCaste = trim(preg_replace('/(?:क्‌ळी|क[\x{094D}\x{200C}\s]*ळी|कळी)/u', 'कुळी', $m[1]));
                 $caste = 'मराठा';
                 $religion = $religion ?? 'हिंदु';
             } else {
@@ -272,6 +289,31 @@ class BiodataParserService
             $subCaste = $this->extractField($text, ['उपजात', 'Sub caste']);
             $caste = $this->extractCasteByDictionary($text);
             $caste = $this->normalizeCasteValue($caste);
+        }
+
+        // Fallback when जात line is broken/missing: full text contains हिंदु - मराठा (९६ कुळी / ९६ क्‌ळी)
+        if (($religion === null || $caste === null) && preg_match('/हिंद[ुू]\s*[-–]\s*मराठा\s*\(([०-९0-9]+)\s*(?:कुळी|क्‌ळी|कळी)\)/u', $text, $m)) {
+            $religion = $religion ?? 'हिंदू';
+            $caste = $caste ?? 'मराठा';
+            $subCaste = $subCaste ?? ($m[1] . ' कुळी');
+        }
+        if (($religion === null || $caste === null) && (preg_match('/हिंद[ुू]\s*[-–]?\s*(?:[०-९0-9]+\s*क[\x{094D}\x{200C}\s]*(?:ुळी|ळी)\s*)?मराठा/u', $text) || preg_match('/हिंद[ुू]\s*[-–]?\s*मराठा/u', $text) || (mb_strpos($text, 'हिंदु') !== false && mb_strpos($text, 'मराठा') !== false))) {
+            $religion = $religion ?? 'हिंदू';
+            $caste = $caste ?? 'मराठा';
+            if ($subCaste === null && preg_match('/([०-९0-9]+)\s*(?:कुळी|क्‌ळी|क[\x{094D}\x{200C}\s]*ळी|कळी)/u', $text, $m)) {
+                $subCaste = $m[1] . ' कुळी';
+            }
+        }
+
+        // When जात line is missing in OCR: infer from कुलस्वामी/माणकेश्वर/तुळजाभवानी + Maratha surname (भोसले).
+        if (($religion === null || $caste === null) && (
+            mb_strpos($text, 'कुलस्वामी') !== false || mb_strpos($text, 'माणकेश्वर') !== false || mb_strpos($text, 'तुळजाभवानी') !== false || mb_strpos($text, 'तुळनापूर') !== false
+        ) && (mb_strpos($text, 'भोसले') !== false || mb_strpos($text, 'मराठा') !== false)) {
+            $religion = $religion ?? 'हिंदू';
+            $caste = $caste ?? 'मराठा';
+            if ($subCaste === null && preg_match('/([०-९0-9]+)\s*(?:कुळी|क्‌ळी|कळी)/u', $text, $m)) {
+                $subCaste = $m[1] . ' कुळी';
+            }
         }
 
         if ($religion === null) {
@@ -330,7 +372,11 @@ class BiodataParserService
         }
         $confidence['primary_contact_number'] = $primaryContact !== null ? self::CONF_DIRECT : self::CONF_MISSING;
 
-        $bloodGroupRaw = $this->extractField($text, ['रक्तगट', 'रक्‍त गट', 'रक्त गट', 'Blood group']);
+        $bloodGroupRaw = $this->extractFieldAfterLabels($text, ['रक्तगट', 'रक्‍त गट', 'रक्त गट', 'Blood group'])
+            ?? $this->extractField($text, ['रक्तगट', 'रक्‍त गट', 'रक्त गट', 'Blood group']);
+        if ($bloodGroupRaw === null && preg_match('/([ABO])\s*[\+\-]?\s*(?:\+ve|\+|\-ve|-)/ui', $text, $m)) {
+            $bloodGroupRaw = $m[0];
+        }
         // SSOT Day-27: Apply baseline normalization + patterns
         $bloodGroup = \App\Services\Ocr\OcrNormalize::normalizeBloodGroup($bloodGroupRaw);
         if ($bloodGroup) {
@@ -339,7 +385,6 @@ class BiodataParserService
         // Fallback to existing normalizeBloodGroup if OcrNormalize returns original value
         if ($bloodGroup === $bloodGroupRaw) {
             $bloodGroup = $this->normalizeBloodGroup($bloodGroupRaw);
-           $core['blood_group'] = $bloodGroup;
         }
         // Reject invalid blood_group (e.g. numeric garbage "84४७"); allow only A+, A-, B+, B-, AB+, AB-, O+, O-
         $bloodGroup = $this->validateBloodGroupStrict($bloodGroup);
@@ -479,12 +524,15 @@ class BiodataParserService
         // Phase-5: structured array-of-rows, aligned with ProfileHoroscopeData / horoscope-engine.
         $horoscopeRows = [];
         $hasAnyHoroscopeText = $rashi !== null
+            || $nakshatra !== null
             || $nadi !== null
             || $gan !== null
+            || $yoni !== null
             || $mangalik !== null
             || $varna !== null
             || $gotra !== null
             || $kuldaivat !== null
+            || $devak !== null
             || $navrasName !== null
             || $birthWeekday !== null;
 
@@ -501,8 +549,10 @@ class BiodataParserService
                 'mangal_dosh_type_id' => null,
                 // Preserve sanitized free-text so intake snapshot normalizer can map safely.
                 'rashi' => $this->rejectHoroscopeJunk($rashi),
+                'nakshatra' => $this->rejectHoroscopeJunk($nakshatra),
                 'nadi' => $this->rejectHoroscopeJunk($nadi),
                 'gan' => $this->rejectHoroscopeJunk($gan),
+                'yoni' => $this->rejectHoroscopeJunk($yoni),
                 // Textual attributes — kuldaivat = कुलदैवत / kuldevta / कुलदेवता / कुलस्वामी / कूळस्वामी.
                 'devak' => $devak ?? $kuldaivat,
                 'kuldaivat' => $kuldaivat,
@@ -633,10 +683,11 @@ $coreKeys = [
             $core['other_relatives_text'] = $familyStructures['other_relatives_text'];
         }
 
-        // Marathi-safe caste/sub_caste: "NN कुळी मराठा" → sub_caste = "NN कुळी", caste = "मराठा". No mojibake.
+        // Marathi-safe caste/sub_caste: "NN कुळी/क्‌ळी मराठा" → sub_caste = "NN कुळी", caste = "मराठा". No mojibake.
         if (($core['sub_caste'] ?? null) === null && isset($core['caste']) && is_string($core['caste'])) {
-            if (preg_match('/([0-9०-९]+\s*कुळी)/u', $core['caste'], $m) && mb_strpos($core['caste'], 'मराठा') !== false) {
-                $core['sub_caste'] = trim($m[1]);
+            if (preg_match('/([0-9०-९]+\s*(?:कुळी|क्‌ळी|क[\x{094D}\x{200C}\s]*ळी|कळी))/u', $core['caste'], $m) && mb_strpos($core['caste'], 'मराठा') !== false) {
+                $normalized = preg_replace('/(?:क्‌ळी|क[\x{094D}\x{200C}\s]*ळी|कळी)/u', 'कुळी', $m[1]);
+                $core['sub_caste'] = trim($normalized);
                 $core['caste'] = 'मराठा';
             }
         }
@@ -704,6 +755,9 @@ $coreKeys = [
             array_map(fn ($v) => (float) $v, $confidence),
             $relationsConfidence
         );
+
+        $educationHistory = $this->sanitizeEducationInstitutionFromDevak($educationHistory);
+        $careerHistory = $this->sanitizeCareerLocationFromGotra($careerHistory);
 
         return [
             'core' => $core,
@@ -1069,6 +1123,9 @@ $coreKeys = [
         if ($value === null || $value === '') {
             return null;
         }
+        if (mb_strpos($value, 'आईचे') !== false || mb_strpos($value, 'आईचं') !== false) {
+            return null;
+        }
         if (preg_match('/\d{10}/', $value)) {
             return null;
         }
@@ -1156,6 +1213,28 @@ $coreKeys = [
         return null;
     }
 
+    /**
+     * Fallback when father name is on same line after वडिलांचे नांव or appears as कै. डॉ. <name> before आईचे.
+     */
+    private function extractFatherNameFromKaiOrDoctor(string $text): ?string
+    {
+        // Same line: वडिलांचे नांव : कै. डॉ. शहाजी विष्णू भोसले
+        if (preg_match('/वडिलांचे\s*नांव\s*[:\-]?\s*(कै\.?\s*डॉ\.?\s*[^\n]+?)(?=\s*आईचे|\n)/u', $text, $m)) {
+            $name = trim(preg_replace('/\s+/u', ' ', $m[1]));
+            if (mb_strlen($name) > 5 && $this->rejectIfLabelNoise($name) !== null) {
+                return $this->validateFatherName($name);
+            }
+        }
+        // Between वडिलांचे and आईचे: capture line containing कै. or डॉ. and a surname-like word
+        if (preg_match('/(कै\.?\s*डॉ\.?\s*[\p{L}\s.]+?)(?=\s*आईचे|\n\s*आईचे)/u', $text, $m)) {
+            $name = trim(preg_replace('/\s+/u', ' ', $m[1]));
+            if (mb_strlen($name) > 8 && preg_match('/[\p{L}]{2,}/u', $name)) {
+                return $this->validateFatherName($this->rejectIfLabelNoise($name) ?? $name);
+            }
+        }
+        return null;
+    }
+
     /** Extract value when it appears on the next line after label (e.g. "मुलीचे नाव\nकु. प्राजक्ता..."). */
     private function extractAfterLabelNextLine(string $text, string $label): ?string
     {
@@ -1163,6 +1242,9 @@ $coreKeys = [
         if (preg_match($pattern, $text, $match) && isset($match[1])) {
             $value = trim($match[1]);
             if ($value === '' || $value === trim($label)) {
+                return null;
+            }
+            if ((mb_strpos($label, 'वडिलांचे') !== false || mb_strpos($label, 'वडीलांचे') !== false) && (mb_strpos($value, 'आईचे') !== false || mb_strpos($value, 'आईचं') !== false)) {
                 return null;
             }
             $cleaned = $this->cleanValue($value);
@@ -1624,6 +1706,21 @@ $coreKeys = [
                 }
             }
 
+            // Brother: "चि." (Chiranjeevi) prefix without explicit "भाऊ" (e.g. "चि. प्रज्योत सुभाष पानसरे (B.SC Horti)")
+            if (preg_match('/^चि\.\s+(.+?)(?:\s*\(([^)]+)\))?\s*$/u', $line, $m)) {
+                $namePart = trim($m[1]);
+                $occupation = isset($m[2]) ? trim($m[2]) : null;
+                $name = $this->cleanPersonName($namePart);
+                if ($name !== null && $this->isMeaningfulSiblingName($name, 'brother')) {
+                    $siblings[] = [
+                        'relation_type' => 'brother',
+                        'name' => $name,
+                        'contact_number' => null,
+                        'occupation' => $occupation,
+                    ];
+                }
+            }
+
             // Sister: lines containing "बहिण/बहीण", possibly split across two OCR lines:
             // "बहीण २ सौ." / "पुजा नवनाथ कन्हेरे."
             if (mb_strpos($line, 'बहिण') !== false || mb_strpos($line, 'बहीण') !== false) {
@@ -1637,8 +1734,8 @@ $coreKeys = [
                 // Remove leading "बहीण NN" with Marathi or Arabic digits.
                 $namePart = preg_replace('/^\s*ब[ही]ण\s*[0-9०-९]*\s*/u', '', $combined);
 
-                // Stop at the start of any new relative heading (दाजी/चुलते/मामा/इतर नातेवाईक)
-                $parts = preg_split('/\s+(दाजी|चुलते|मामा|इतर\s+नातेवाईक)\b/u', $namePart);
+                // Stop at the start of any new relative heading (दाजी/चुलते/मामा/इतर नातेवाईक/इतर पाहुणे)
+                $parts = preg_split('/\s+(दाजी|चुलते|मामा|इतर\s+नातेवाईक|इतर\s+पाहुणे)\b/u', $namePart);
                 $namePart = $parts[0] ?? $namePart;
 
                 $name = $this->cleanPersonName($namePart);
@@ -1681,15 +1778,21 @@ $coreKeys = [
                 $flushRelative();
                 $currentType = 'चुलते';
                 $buffer[] = $line;
+            } elseif (mb_strpos($line, 'आत्या') !== false) {
+                // Separate block for paternal aunt (आत्या) and तिचा नवरा.
+                $inOtherRelatives = false;
+                $flushRelative();
+                $currentType = 'आत्या';
+                $buffer[] = $line;
             } elseif (mb_strpos($line, 'मामा') !== false) {
                 $inOtherRelatives = false;
                 $flushRelative();
                 $currentType = 'मामा';
                 $buffer[] = $line;
-            } elseif (mb_strpos($line, 'इतर नातेवाईक') !== false) {
+            } elseif (mb_strpos($line, 'इतर नातेवाईक') !== false || mb_strpos($line, 'इतर पाहुणे') !== false) {
                 $flushRelative();
                 $inOtherRelatives = true;
-                $firstLine = preg_replace('/^.*?इतर\s+नातेवाईक\s*[:-]\s*/u', '', $line);
+                $firstLine = preg_replace('/^.*?इतर\s+(?:नातेवाईक|पाहुणे)\s*[:-]\s*/u', '', $line);
                 $otherRelativesBuffer = [trim($firstLine)];
             } elseif ($inOtherRelatives && (preg_match('/^\s*Contact\.?\s*No\.?/ui', $line) || preg_match('/मोबाइल|Mobile\s*[:.-]/ui', $line))) {
                 $inOtherRelatives = false;
@@ -1843,12 +1946,28 @@ $coreKeys = [
         if ($value === null || $value === '') {
             return null;
         }
-        // फूट or फुट, optional space after digit (५फुट ६इंच)
+        // फूट or फुट, optional space after digit (५फुट ६इंच). OCR often reads ५ as ७५ (5 feet → 75 feet).
         if (preg_match('/(\d{1,2})\s*फ[ुू]ट\s*(\d{1,2})\s*(इंच|inch|bap)?/u', $value, $m)) {
-            return round((float) $m[1] * 30.48 + (float) $m[2] * 2.54, 2);
+            $feet = (int) $m[1];
+            $inches = (int) $m[2];
+            if ($feet >= 10) {
+                $feet = $feet % 10;
+            }
+            if ($feet > 7) {
+                $feet = 5;
+            }
+            return round((float) $feet * 30.48 + (float) $inches * 2.54, 2);
         }
         if (preg_match('/(\d+)\'(\d+)/', $value, $m)) {
-            return round((float) $m[1] * 30.48 + (float) $m[2] * 2.54, 2);
+            $feet = (int) $m[1];
+            $inches = (int) $m[2];
+            if ($feet >= 10) {
+                $feet = $feet % 10;
+            }
+            if ($feet > 7) {
+                $feet = 5;
+            }
+            return round((float) $feet * 30.48 + (float) $inches * 2.54, 2);
         }
         if (preg_match('/(\d+)\s*cm/u', $value, $m)) {
             return (float) $m[1];
@@ -1860,11 +1979,27 @@ $coreKeys = [
     private function extractHeightFromText(string $text): ?float
     {
         if (preg_match('/(\d{1,2})\s*फ[ुू]ट\s*(\d{1,2})/u', $text, $m)) {
-            $totalInches = (int) $m[1] * 12 + (int) $m[2];
+            $feet = (int) $m[1];
+            $inches = (int) $m[2];
+            if ($feet >= 10) {
+                $feet = $feet % 10;
+            }
+            if ($feet > 7) {
+                $feet = 5;
+            }
+            $totalInches = $feet * 12 + $inches;
             return round($totalInches * 2.54, 2);
         }
         if (preg_match("/(\d{1,2})'\s*(\d{1,2})/", $text, $m)) {
-            $totalInches = (int) $m[1] * 12 + (int) $m[2];
+            $feet = (int) $m[1];
+            $inches = (int) $m[2];
+            if ($feet >= 10) {
+                $feet = $feet % 10;
+            }
+            if ($feet > 7) {
+                $feet = 5;
+            }
+            $totalInches = $feet * 12 + $inches;
             return round($totalInches * 2.54, 2);
         }
         // Romanized/garbled: "5 QqV 8 bap" (feet/inch)
@@ -2138,35 +2273,101 @@ $coreKeys = [
             $notes = (string) ($row['notes'] ?? '');
             $name = null;
             $location = null;
+            $addressLine = null;
+            $phone = null;
+            $occupation = null;
             if (preg_match('/श्री\.?\s*([^(]+?)\s*(?:\(([^)]+)\))/u', $notes, $m)) {
                 $name = trim($m[1]);
-                $location = isset($m[2]) ? trim($m[2]) : null;
+                $paren = isset($m[2]) ? trim($m[2]) : null;
+                if ($paren !== null && $paren !== '') {
+                    if (preg_match('/रा\.|मु\.?\s*पो\.?|ता\.|जि\.|[6-9]\d{9}|मो\.|Mobile|फोन|Ph\./u', $paren)) {
+                        $location = $paren;
+                    } else {
+                        $occupation = $paren;
+                    }
+                }
             } elseif (preg_match('/सौ\.?\s*([^(]+?)\s*(?:\(([^)]+)\))/u', $notes, $m)) {
                 $name = trim($m[1]);
-                $location = isset($m[2]) ? trim($m[2]) : null;
+                $paren = isset($m[2]) ? trim($m[2]) : null;
+                if ($paren !== null && $paren !== '') {
+                    if (preg_match('/रा\.|मु\.?\s*पो\.?|ता\.|जि\.|[6-9]\d{9}|मो\.|Mobile|फोन|Ph\./u', $paren)) {
+                        $location = $paren;
+                    } else {
+                        $occupation = $paren;
+                    }
+                }
             } elseif (preg_match('/श्री\.?\s*(.+)/u', $notes, $m)) {
                 $name = trim($m[1]);
                 if (preg_match('/\(([^)]+)\)/u', $notes, $locM)) {
-                    $location = trim($locM[1]);
+                    $paren = trim($locM[1]);
+                    if ($paren !== '') {
+                        if (preg_match('/रा\.|मु\.?\s*पो\.?|ता\.|जि\.|[6-9]\d{9}|मो\.|Mobile|फोन|Ph\./u', $paren)) {
+                            $location = $paren;
+                        } else {
+                            $occupation = $paren;
+                        }
+                    }
                     $name = trim(preg_replace('/\s*\([^)]+\)\s*$/u', '', $name));
                 }
             } elseif (preg_match('/सौ\.?\s*(.+)/u', $notes, $m)) {
                 $name = trim($m[1]);
                 if (preg_match('/\(([^)]+)\)/u', $notes, $locM)) {
-                    $location = trim($locM[1]);
+                    $paren = trim($locM[1]);
+                    if ($paren !== '') {
+                        if (preg_match('/रा\.|मु\.?\s*पो\.?|ता\.|जि\.|[6-9]\d{9}|मो\.|Mobile|फोन|Ph\./u', $paren)) {
+                            $location = $paren;
+                        } else {
+                            $occupation = $paren;
+                        }
+                    }
                     $name = trim(preg_replace('/\s*\([^)]+\)\s*$/u', '', $name));
                 }
             }
-            if ($location === null && preg_match('/\(([^)]+)\)/u', $notes, $locM)) {
-                $location = trim($locM[1]);
+            if ($location === null && $occupation === null && preg_match('/\(([^)]+)\)/u', $notes, $locM)) {
+                $paren = trim($locM[1]);
+                if ($paren !== '') {
+                    if (preg_match('/रा\.|मु\.?\s*पो\.?|ता\.|जि\.|[6-9]\d{9}|मो\.|Mobile|फोन|Ph\./u', $paren)) {
+                        $location = $paren;
+                    } else {
+                        $occupation = $paren;
+                    }
+                }
+            }
+            // Extract first 10-digit Indian mobile if present.
+            if (preg_match('/\b([6-9]\d{9})\b/u', $notes, $pm)) {
+                $phone = $pm[1];
+            }
+            // Prefer full address blocks when present: take everything from "रा." / "मु.पो." until phone/next section.
+            // This deliberately keeps taluka/district so users don't have to re-type them.
+            $addrCandidates = [];
+            if (preg_match('/(रा\.[^\n]*)/u', $notes, $am)) {
+                $addrCandidates[] = trim($am[1]);
+            }
+            if (preg_match('/(मु\.?\s*पो\.?[^\n]*)/u', $notes, $bm)) {
+                $addrCandidates[] = trim($bm[1]);
+            }
+            if (! empty($addrCandidates)) {
+                // Choose the longest candidate (most complete address), strip obvious trailing phone fragments.
+                usort($addrCandidates, fn ($a, $b) => mb_strlen($b) <=> mb_strlen($a));
+                $chosen = $addrCandidates[0];
+                // Remove trailing phone / "मो." / "Mobile" parts.
+                $chosen = preg_replace('/\s*(मो\.|Mobile|फोन|Ph\.).*$/u', '', $chosen);
+                $chosen = trim(preg_replace('/\s+/u', ' ', (string) $chosen));
+                $addressLine = $chosen !== '' ? $chosen : null;
+            }
+            // If no explicit full address, keep a shorter "रा." location fragment (at least village/city).
+            if ($addressLine === null && preg_match('/रा\.\s*([^\n]+)/u', $notes, $rm)) {
+                $location = trim(preg_replace('/\s+/u', ' ', $rm[0]));
             }
             $name = $name !== null && $name !== '' ? $this->cleanPersonName($name) : null;
             $out[] = [
                 'relation_type' => $row['relation_type'] ?? null,
                 'name' => $name,
-                'location' => $location !== null && $location !== '' ? $location : null,
-                'occupation' => null,
-                'contact_number' => null,
+                // Provide both keys: some UI expects address_line; older code may still read location.
+                'address_line' => $addressLine,
+                'location' => $addressLine ?? ($location !== null && $location !== '' ? $location : null),
+                'occupation' => $occupation,
+                'contact_number' => $phone,
                 'raw_note' => $notes,
             ];
         }
@@ -2298,6 +2499,52 @@ $coreKeys = [
     private function rejectHoroscopeJunk(?string $value): ?string
     {
         return self::sanitizeHoroscopeValue($value);
+    }
+
+    /** Clear education institution when it is actually devak/horoscope term (e.g. पंचपल्लव). Public for use from AiFirstBiodataParser. */
+    public function sanitizeEducationInstitutionFromDevak(array $educationHistory): array
+    {
+        return self::sanitizeEducationInstitutionFromDevakStatic($educationHistory);
+    }
+
+    /** Static so AiFirstBiodataParser can call without parser instance. */
+    public static function sanitizeEducationInstitutionFromDevakStatic(array $educationHistory): array
+    {
+        $devakLike = ['पंचपल्लव', 'देव', 'माणकेश्वर', 'तुळजाभवानी', 'कुलस्वामी', 'कुलस्वामीनी', 'देवक', 'नक्षत्र', 'हस्त', 'गण', 'नाडी', 'आद्य', 'योनी', 'महिषा', 'कन्या', 'रास'];
+        foreach ($educationHistory as $i => $row) {
+            $inst = $row['institution'] ?? null;
+            if ($inst !== null && $inst !== '') {
+                $trimmed = trim((string) $inst);
+                foreach ($devakLike as $term) {
+                    if (mb_strpos($trimmed, $term) !== false || $trimmed === $term) {
+                        $educationHistory[$i]['institution'] = null;
+                        break;
+                    }
+                }
+            }
+        }
+        return $educationHistory;
+    }
+
+    /** Clear career location when it is actually gotra (e.g. कश्यप पुरशी). Public for use from AiFirstBiodataParser. */
+    public function sanitizeCareerLocationFromGotra(array $careerHistory): array
+    {
+        return self::sanitizeCareerLocationFromGotraStatic($careerHistory);
+    }
+
+    /** Static so AiFirstBiodataParser can call without parser instance. */
+    public static function sanitizeCareerLocationFromGotraStatic(array $careerHistory): array
+    {
+        foreach ($careerHistory as $i => $row) {
+            $loc = $row['location'] ?? null;
+            if ($loc !== null && $loc !== '') {
+                $trimmed = trim((string) $loc);
+                if (preg_match('/पुरशी|गोत्र|कौशिक|कश्यप\s/u', $trimmed) || mb_strpos($trimmed, 'गोत्र') !== false) {
+                    $careerHistory[$i]['location'] = null;
+                }
+            }
+        }
+        return $careerHistory;
     }
 
     private function normalizeMaritalStatus(?string $value): ?string

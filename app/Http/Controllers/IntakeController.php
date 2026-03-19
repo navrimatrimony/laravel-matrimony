@@ -954,7 +954,9 @@ if ($bloodLabel !== '') {
         $profile = $intakeProfile;
         $currentSection = 'full';
         $profileSiblings = collect($snapshot['siblings'] ?? [])->map(fn ($r) => (object) (is_array($r) ? $r : []));
-        $relativesFromSnapshot = $snapshot['relatives'] ?? [];
+        // Important: approval_snapshot_json may exist with partial data (e.g., core edits only).
+        // For relatives building, always fall back to parsed_json ($data) when snapshot lacks relatives.
+        $relativesFromSnapshot = $snapshot['relatives'] ?? ($data['relatives'] ?? []);
         // Preview-only safety-net: जर parsed relatives मध्ये एकही "चुलते" / paternal uncle नसेल,
         // पण raw biodata text मध्ये "चुलते" block स्पष्ट असेल तर, तेथून चुलते rows तयार करा.
         if (is_array($relativesFromSnapshot)) {
@@ -1052,12 +1054,34 @@ if ($bloodLabel !== '') {
         $relativesOnly = $this->excludeSiblingRelationsFromRelatives($relativesFromSnapshot);
         $hasSiblings = isset($snapshot['core']['has_siblings']) ? (bool) $snapshot['core']['has_siblings'] : $profileSiblings->isNotEmpty();
         [$builtPaternal, $builtMaternal, $dajiRows] = $this->partitionAndStructureRelativesForIntake($relativesOnly);
-        $profileRelativesParentsFamily = isset($snapshot['relatives_parents_family']) && is_array($snapshot['relatives_parents_family'])
-            ? collect($snapshot['relatives_parents_family'])->map(fn ($r) => (object) (is_array($r) ? $r : []))
-            : $builtPaternal;
-        $profileRelativesMaternalFamily = isset($snapshot['relatives_maternal_family']) && is_array($snapshot['relatives_maternal_family'])
-            ? collect($snapshot['relatives_maternal_family'])->map(fn ($r) => (object) (is_array($r) ? $r : []))
-            : $builtMaternal;
+
+        // Prefer user-edited relatives_parents_family when it has meaningful names; otherwise fall back to parsed/built relatives.
+        if (isset($snapshot['relatives_parents_family']) && is_array($snapshot['relatives_parents_family'])) {
+            $fromSnapshotParents = collect($snapshot['relatives_parents_family'])->map(fn ($r) => (object) (is_array($r) ? $r : []));
+            $hasAnyParentName = $fromSnapshotParents->contains(function ($row) {
+                $name = trim((string) ($row->name ?? ''));
+                return $name !== '';
+            });
+            $profileRelativesParentsFamily = $hasAnyParentName || $builtPaternal->isEmpty()
+                ? $fromSnapshotParents
+                : $builtPaternal;
+        } else {
+            $profileRelativesParentsFamily = $builtPaternal;
+        }
+
+        // Same strategy for maternal relatives: keep user edits when they added names; else use parsed/built data.
+        if (isset($snapshot['relatives_maternal_family']) && is_array($snapshot['relatives_maternal_family'])) {
+            $fromSnapshotMaternal = collect($snapshot['relatives_maternal_family'])->map(fn ($r) => (object) (is_array($r) ? $r : []));
+            $hasAnyMaternalName = $fromSnapshotMaternal->contains(function ($row) {
+                $name = trim((string) ($row->name ?? ''));
+                return $name !== '';
+            });
+            $profileRelativesMaternalFamily = $hasAnyMaternalName || $builtMaternal->isEmpty()
+                ? $fromSnapshotMaternal
+                : $builtMaternal;
+        } else {
+            $profileRelativesMaternalFamily = $builtMaternal;
+        }
         // Ensure one explicit Maternal address (Ajol) row from raw OCR when missing.
         if ($profileRelativesMaternalFamily->where('relation_type', 'maternal_address_ajol')->isEmpty()) {
             $rawAjolText = (string) ($intake->raw_ocr_text ?? '');
@@ -1406,6 +1430,34 @@ if ($bloodLabel !== '') {
             'otherRelativesText',
             'birthPlaceDisplay'
         ));
+    }
+
+    /**
+     * Re-run parse on this intake so updated parser rules (height, religion/caste, etc.) apply.
+     * Sets parse_status = pending and dispatches ParseIntakeJob with forceRecompute.
+     * User must own the intake or be admin (same as preview).
+     */
+    public function reparse(BiodataIntake $intake)
+    {
+        $isOwner = (int) $intake->uploaded_by === (int) auth()->id();
+        $isAdmin = auth()->user()?->isAnyAdmin() ?? false;
+        if (! $isOwner && ! $isAdmin) {
+            abort(403, __('intake.only_preview_own'));
+        }
+        if ($intake->approved_by_user) {
+            return redirect()->route('intake.preview', $intake)
+                ->with('info', 'या intake चे अप्रूव्हल झाले आहे; पुन्हा पार्स करता येत नाही.');
+        }
+        if ($intake->raw_ocr_text === null || trim((string) $intake->raw_ocr_text) === '') {
+            return redirect()->route('intake.preview', $intake)
+                ->with('error', 'रॉ OCR टेक्स्ट नाही, म्हणून पुन्हा पार्स करता येत नाही.');
+        }
+
+        $intake->update(['parse_status' => 'pending']);
+        ParseIntakeJob::dispatch($intake->id, true);
+
+        return redirect()->route('intake.index')
+            ->with('success', 'पुन्हा पार्स चालू केले. काही सेकंदांनी या intake चे प्रिव्ह्यू पुन्हा उघडा — अद्ययावत माहिती दिसेल.');
     }
 
     /**
@@ -1879,6 +1931,12 @@ if ($bloodLabel !== '') {
             if (mb_strpos($relationTypeRaw, 'इतर') !== false || mb_strpos($relationTypeRaw, 'नातेवाईक') !== false) {
                 $relationTypeRaw = 'इतर';
             }
+            // Special case: आत्या block मधली ओळ AI ने "मामा" म्हणून tag केली तर,
+            // notes मध्ये "आत्या" असल्यामुळे relationTypeRaw ला "आत्या" normalize करा
+            // जेणेकरून तो स्पष्टपणे paternal aunt / तिच्या नवऱ्याच्या bucket मध्ये जाईल.
+            if ($relationTypeRaw === 'मामा' && mb_strpos($notes, 'आत्या') !== false) {
+                $relationTypeRaw = 'आत्या';
+            }
             // Normalize AI relation_type aliases → Marathi buckets (e.g. mama/mami/aunt).
             if (strcasecmp($relationTypeRaw, 'mama') === 0) {
                 $relationTypeRaw = 'मामा';
@@ -1905,8 +1963,18 @@ if ($bloodLabel !== '') {
                 $englishType = 'Other';
             }
             if ($directName !== '') {
+                // Clean trailing enumeration markers ("1)", "2)") and stray address prefixes ("मु", "रा", "मो") from names.
+                $directName = preg_replace('/\s*[०-९0-9]+\)\s*$/u', '', $directName);
+                $directName = preg_replace('/\s*(,?\s*(मु|रा|मो)\.?)\s*$/u', '', $directName);
+                $directName = trim((string) $directName);
+
                 $structuredNotes = $notes !== '' ? $notes : '';
                 $structuredAddress = $row['address_line'] ?? ($notes !== '' ? $notes : '');
+                // Remove trailing section labels like "मावशी : 1)" / "आत्या :" / "मामा :".
+                $structuredAddress = preg_replace('/\s*(मावशी|आत्या|मामा)\s*:\s*[०-९0-9]*\)?\s*$/u', '', (string) $structuredAddress);
+                // Remove trailing enumeration markers like "2)" that belong to list numbering, not address.
+                $structuredAddress = preg_replace('/\s*[०-९0-9]+\)\s*$/u', '', (string) $structuredAddress);
+                $structuredAddress = trim((string) $structuredAddress);
                 // Address व Additional info duplicate असल्यास, notes रिकामे ठेव.
                 if ($structuredNotes !== '' && $structuredNotes === $structuredAddress) {
                     $structuredNotes = '';
@@ -1962,8 +2030,11 @@ if ($bloodLabel !== '') {
                     $addressOrNotes = '';
                 }
                 if ($name !== null && $name !== '') {
+                    // Drop leading bullets/indices, trailing enumeration like "1)" / "2)", and stray address prefixes ("मु", "रा", "मो").
                     $name = preg_replace('/^\s*[+\-*\.\s०-९0-9]+\s*/u', '', $name);
-                    $name = trim($name);
+                    $name = preg_replace('/\s*[०-९0-9]+\)\s*$/u', '', $name);
+                    $name = preg_replace('/\s*(,?\s*(मु|रा|मो)\.?)\s*$/u', '', $name);
+                    $name = trim((string) $name);
                 }
                 if ($name === '' || $name === null) {
                     $name = '';
@@ -1987,6 +2058,9 @@ if ($bloodLabel !== '') {
                 } else {
                     $structuredNotes = $addressOrNotes !== '' ? $addressOrNotes : (string) $segment;
                     $structuredAddress = $row['address_line'] ?? ($addressOrNotes !== '' ? $addressOrNotes : (string) $segment);
+                    $structuredAddress = preg_replace('/\s*(मावशी|आत्या|मामा)\s*:\s*[०-९0-9]*\)?\s*$/u', '', (string) $structuredAddress);
+                    $structuredAddress = preg_replace('/\s*[०-९0-9]+\)\s*$/u', '', (string) $structuredAddress);
+                    $structuredAddress = trim((string) $structuredAddress);
                     if ($structuredNotes !== '' && $structuredNotes === $structuredAddress) {
                         $structuredNotes = '';
                     }

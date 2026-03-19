@@ -53,11 +53,21 @@ if ($intake->approved_by_user === true) {
         $approvalSnapshot = app(\App\Services\ControlledOptionNormalizer::class)
             ->normalizeIntakeHoroscopeSnapshot($approvalSnapshot);
 
-        DB::transaction(function () use ($intake, $approvalSnapshot, $userId): void {
+        // Ensure full_name never contains parser noise "तपासा" (form title leak) before apply.
+        if (isset($approvalSnapshot['core']['full_name']) && is_string($approvalSnapshot['core']['full_name'])) {
+            $cleaned = preg_replace('/\s*तपासा\s*/u', ' ', $approvalSnapshot['core']['full_name']);
+            $cleaned = preg_replace('/\s+/u', ' ', trim($cleaned));
+            if ($cleaned !== $approvalSnapshot['core']['full_name']) {
+                $approvalSnapshot['core']['full_name'] = $cleaned;
+            }
+        }
+
+        $manualEdits = 0;
+        $autoFilled = 0;
+
+        DB::transaction(function () use ($intake, $approvalSnapshot, $userId, $snapshot, &$manualEdits, &$autoFilled): void {
             $parsedCore = $intake->parsed_json['core'] ?? [];
             $approvedCore = $approvalSnapshot['core'] ?? [];
-
-            $manualEdits = 0;
 
             foreach ($approvedCore as $field => $newValue) {
                 $oldValue = $parsedCore[$field] ?? null;
@@ -80,19 +90,10 @@ if ($intake->approved_by_user === true) {
                         'created_at' => now(),
                     ]);
 
-                    // Learning: after same (field_key, X->Y) observed 5+ times, strengthen pattern for better suggestions/autofill
                     $this->strengthenPatternIfThreshold($field, $normalizedOld, $normalizedNew);
                 }
             }
 
-            $intake->approved_by_user = true;
-            $intake->approved_at = now();
-            $intake->approval_snapshot_json = $approvalSnapshot;
-            $intake->snapshot_schema_version = 1;
-            $intake->intake_status = 'approved';
-
-            // Metrics: manual vs auto-filled fields (approximation).
-            $intake->fields_manually_edited_count = $manualEdits;
             $nonEmptyApproved = 0;
             foreach ($approvedCore as $value) {
                 $norm = $this->normalizeForComparison($value);
@@ -101,25 +102,35 @@ if ($intake->approved_by_user === true) {
                 }
             }
             $autoFilled = max(0, $nonEmptyApproved - $manualEdits);
-            $intake->fields_auto_filled_count = $autoFilled;
 
-            $intake->save();
+            // Direct path: when snapshot was passed from controller, do NOT save to intake here.
+            // MutationService::applyApprovedIntake will persist snapshot + approved_* in one transaction with profile write.
+            if ($snapshot === null) {
+                $intake->approved_by_user = true;
+                $intake->approved_at = now();
+                $intake->approval_snapshot_json = $approvalSnapshot;
+                $intake->snapshot_schema_version = 1;
+                $intake->intake_status = 'approved';
+                $intake->fields_manually_edited_count = $manualEdits;
+                $intake->fields_auto_filled_count = $autoFilled;
+                $intake->save();
+            }
         });
 
-// After approval commit → trigger Apply Pipeline based on admin policy.
-$requireAdmin = \App\Models\AdminSetting::getBool('intake_require_admin_before_attach', false);
-if ($requireAdmin) {
-    // Admin must attach/trigger mutation from admin panel.
-    return [
-        'mutation_success' => false,
-        'conflict_detected' => false,
-        'profile_id' => $intake->matrimony_profile_id,
-        'awaiting_admin' => true,
-    ];
-}
+        $requireAdmin = \App\Models\AdminSetting::getBool('intake_require_admin_before_attach', false);
+        if ($requireAdmin) {
+            return [
+                'mutation_success' => false,
+                'conflict_detected' => false,
+                'profile_id' => $intake->matrimony_profile_id,
+                'awaiting_admin' => true,
+            ];
+        }
 
-return app(\App\Services\MutationService::class)
-    ->applyApprovedIntake($intake->id);
+        // Direct form→DB path: pass snapshot in memory so MutationService writes profile + intake in one transaction (no save-then-read).
+        $metrics = $snapshot !== null ? ['manual_edits' => $manualEdits, 'auto_filled' => $autoFilled] : null;
+        return app(\App\Services\MutationService::class)
+            ->applyApprovedIntake($intake->id, $snapshot !== null ? $approvalSnapshot : null, $metrics);
         
     }
 

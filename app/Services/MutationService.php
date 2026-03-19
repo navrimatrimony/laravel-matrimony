@@ -461,21 +461,28 @@ class MutationService
     }
 
     /**
+     * Apply intake to profile. Direct path: pass snapshot in memory so we write to DB without save-then-read.
+     *
+     * @param  int  $intakeId
+     * @param  array<string, mixed>|null  $snapshot  When provided, use this (direct form→DB); intake row updated at end with this for audit.
+     * @param  array{manual_edits?: int, auto_filled?: int}|null  $metrics  Optional when snapshot passed; stored on intake.
      * @return array{mutation_success: bool, conflict_detected: bool, profile_id: int|null}
      */
-    public function applyApprovedIntake(int $intakeId): array
+    public function applyApprovedIntake(int $intakeId, ?array $snapshot = null, ?array $metrics = null): array
     {
-        Log::info('MutationService::applyApprovedIntake START', ['intakeId' => $intakeId]);
+        Log::info('MutationService::applyApprovedIntake START', ['intakeId' => $intakeId, 'snapshotInMemory' => $snapshot !== null]);
 
         $intake = BiodataIntake::find($intakeId);
         if (!$intake) {
             throw new \RuntimeException("BiodataIntake not found: {$intakeId}");
         }
-        if (empty($intake->approval_snapshot_json)) {
-            throw new \RuntimeException('Intake must have approval_snapshot_json.');
-        }
-        if ($intake->approved_by_user !== true) {
-            throw new \RuntimeException('Intake must be approved (approved_by_user = true).');
+        if ($snapshot === null) {
+            if (empty($intake->approval_snapshot_json)) {
+                throw new \RuntimeException('Intake must have approval_snapshot_json.');
+            }
+            if ($intake->approved_by_user !== true) {
+                throw new \RuntimeException('Intake must be approved (approved_by_user = true).');
+            }
         }
         if ($intake->intake_status === 'applied' || $intake->intake_locked === true) {
             return [
@@ -486,15 +493,24 @@ class MutationService
             ];
         }
 
-        $snapshot = is_array($intake->approval_snapshot_json) ? $intake->approval_snapshot_json : [];
-        $version = $intake->snapshot_schema_version ?? $snapshot['snapshot_schema_version'] ?? null;
+        $snapshotPassedInMemory = $snapshot !== null;
+        $snapshot = $snapshot !== null ? $snapshot : (is_array($intake->approval_snapshot_json) ? $intake->approval_snapshot_json : []);
+        if (empty($snapshot)) {
+            throw new \RuntimeException('Intake must have approval_snapshot_json or snapshot passed.');
+        }
+        if (! isset($snapshot['snapshot_schema_version'])) {
+            $snapshot['snapshot_schema_version'] = 1;
+        }
+        $version = $intake->snapshot_schema_version ?? $snapshot['snapshot_schema_version'] ?? 1;
         $version = $version !== null ? (int) $version : null;
         if ($version === null || !in_array($version, self::SUPPORTED_SNAPSHOT_VERSIONS, true)) {
             throw new \RuntimeException('Unsupported or missing snapshot_schema_version. Supported: [1].');
         }
+        $snapshotInMemory = $snapshotPassedInMemory;
         Log::info('MutationService::applyApprovedIntake after snapshot version check', [
             'version' => $version,
             'version_type' => gettype($version),
+            'snapshotInMemory' => $snapshotInMemory,
         ]);
 
         $duplicateDetected = false;
@@ -507,7 +523,7 @@ class MutationService
         $this->mutationBatchId = now()->timestamp;
 
         try {
-            DB::transaction(function () use ($intake, $snapshot, &$duplicateDetected, &$hadConflicts, &$profileIdForLog, &$blockedByConflictPending, &$alreadyAppliedInTransaction): void {
+            DB::transaction(function () use ($intake, $snapshot, $metrics, $snapshotInMemory, $version, &$duplicateDetected, &$hadConflicts, &$profileIdForLog, &$blockedByConflictPending, &$alreadyAppliedInTransaction): void {
                 $intakeId = $intake->id;
                 $intake = BiodataIntake::where('id', $intakeId)->lockForUpdate()->first();
                 if (!$intake) {
@@ -523,6 +539,11 @@ class MutationService
                 $proposedExtended = $snapshot['extended'] ?? [];
                 if (array_key_exists('other_relatives_text', $snapshot) && ! array_key_exists('other_relatives_text', $proposedCore)) {
                     $proposedCore['other_relatives_text'] = $snapshot['other_relatives_text'];
+                }
+                // Ensure birth_place_text is set when core has only scalar birth_place (so Full profile shows it).
+                if ((empty($proposedCore['birth_place_text']) || trim((string) ($proposedCore['birth_place_text'] ?? '')) === '')
+                    && ! empty($proposedCore['birth_place']) && is_scalar($proposedCore['birth_place']) && trim((string) $proposedCore['birth_place']) !== '') {
+                    $proposedCore['birth_place_text'] = trim((string) $proposedCore['birth_place']);
                 }
                 // Map income-engine keys to profile columns (intake/full form may send income_amount, nested income.amount, or income_normalized_annual_amount).
                 if (! isset($proposedCore['annual_income']) || $proposedCore['annual_income'] === '' || $proposedCore['annual_income'] === null) {
@@ -841,11 +862,25 @@ class MutationService
                 }
             }
 
-            Log::info('MutationService::applyApprovedIntake before intake finalization', ['hasConflicts' => $hasConflicts]);
-            // ——— Step 10: Intake finalization (update only these columns to avoid touching approval_snapshot_json) ———
+            Log::info('MutationService::applyApprovedIntake before intake finalization', ['hasConflicts' => $hasConflicts, 'snapshotInMemory' => $snapshotInMemory]);
+            // ——— Step 10: Intake finalization ———
             $updates = ['matrimony_profile_id' => $profile->id, 'intake_locked' => true];
             if (!$hasConflicts) {
                 $updates['intake_status'] = 'applied';
+            }
+            if ($snapshotInMemory) {
+                $updates['approval_snapshot_json'] = $snapshot;
+                $updates['approved_by_user'] = true;
+                $updates['approved_at'] = now();
+                $updates['snapshot_schema_version'] = $version;
+                if (is_array($metrics)) {
+                    if (isset($metrics['manual_edits'])) {
+                        $updates['fields_manually_edited_count'] = (int) $metrics['manual_edits'];
+                    }
+                    if (isset($metrics['auto_filled'])) {
+                        $updates['fields_auto_filled_count'] = (int) $metrics['auto_filled'];
+                    }
+                }
             }
             $intake->update($updates);
 
@@ -1129,6 +1164,12 @@ class MutationService
             $mapped['notes'] = $notesParts !== [] ? implode("\n", $notesParts) : null;
             $mapped['sort_order'] = isset($mapped['sort_order']) && $mapped['sort_order'] !== '' ? (int) $mapped['sort_order'] : 0;
             unset($mapped['spouse'], $mapped['is_married'], $mapped['address'], $mapped['address_line'], $mapped['Address'], $mapped['additional_info']);
+            // profile_siblings has no contact_preference_* columns (those are on profile_contacts); drop so insert doesn't fail.
+            foreach (array_keys($mapped) as $k) {
+                if (str_starts_with($k, 'contact_preference')) {
+                    unset($mapped[$k]);
+                }
+            }
             return $mapped;
         }
         if ($entityType === 'profile_career') {
@@ -1534,8 +1575,10 @@ class MutationService
             $id = isset($mapped['id']) ? (int) $mapped['id'] : null;
             $existingRow = $id !== null ? $existing->get($id) : null;
 
+            $allowedColumns = array_flip(Schema::getColumnListing($table));
             $insertData = array_merge(['profile_id' => $profile->id], $mapped);
             unset($insertData['id']);
+            $insertData = array_intersect_key($insertData, $allowedColumns);
             if ($hasDeletedAt) {
                 $insertData['deleted_at'] = null;
             }
@@ -1544,6 +1587,7 @@ class MutationService
 
             if ($existingRow !== null) {
                 $updateData = collect($insertData)->except(['profile_id', 'created_at'])->all();
+                $updateData = array_intersect_key($updateData, $allowedColumns);
                 DB::table($table)->where('id', $id)->update($updateData);
                 $siblingIds[$idx] = $id;
             } else {
