@@ -19,8 +19,7 @@ class ParseService
 {
     public function __construct(
         protected ParserStrategyResolver $strategyResolver,
-    ) {
-    }
+    ) {}
 
     /**
      * Parse raw OCR text for the given intake into a SSOT-compatible array.
@@ -38,4 +37,3 @@ class ParseService
         ]);
     }
 }
-

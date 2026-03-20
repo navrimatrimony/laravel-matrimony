@@ -24,4 +24,4 @@
 @include('matrimony.profile.wizard.sections.contacts')
 @include('matrimony.profile.wizard.sections.about_me', ['namePrefix' => $narrativePrefix])
 @include('matrimony.profile.wizard.sections.about_preferences')
-@include('matrimony.profile.wizard.sections.photo')
+{{-- Photo is managed via the dedicated photo upload engine (upload-photo page). --}}

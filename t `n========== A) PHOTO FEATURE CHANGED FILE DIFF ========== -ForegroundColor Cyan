@@ -1,0 +1,39 @@
+[1mdiff --git a/app/Models/MatrimonyProfile.php b/app/Models/MatrimonyProfile.php[m
+[1mindex b347c48..f2db505 100644[m
+[1m--- a/app/Models/MatrimonyProfile.php[m
+[1m+++ b/app/Models/MatrimonyProfile.php[m
+[36m@@ -9,6 +9,7 @@[m
+ use Illuminate\Database\Eloquent\SoftDeletes;[m
+ use Illuminate\Support\Facades\DB;[m
+ use Illuminate\Validation\ValidationException;[m
+[32m+[m[32muse App\Models\ProfilePhoto;[m
+ [m
+ /*[m
+ |--------------------------------------------------------------------------[m
+[36m@@ -240,6 +241,26 @@[m [mpublic function getContactNumberAttribute(): ?string[m
+         return $this->primary_contact_number;[m
+     }[m
+ [m
+[32m+[m[32m    /**[m
+[32m+[m[32m     * Profile photo gallery (sorted + primary first in UI ordering).[m
+[32m+[m[32m     */[m
+[32m+[m[32m    public function photos()[m
+[32m+[m[32m    {[m
+[32m+[m[32m        return $this->hasMany(ProfilePhoto::class, 'profile_id')[m
+[32m+[m[32m            ->orderBy('sort_order')[m
+[32m+[m[32m            ->orderByDesc('is_primary')[m
+[32m+[m[32m            ->orderBy('id');[m
+[32m+[m[32m    }[m
+[32m+[m
+[32m+[m[32m    /**[m
+[32m+[m[32m     * Single primary photo record.[m
+[32m+[m[32m     */[m
+[32m+[m[32m    public function primaryPhotoRecord()[m
+[32m+[m[32m    {[m
+[32m+[m[32m        return $this->hasOne(ProfilePhoto::class, 'profile_id')[m
+[32m+[m[32m            ->where('is_primary', true);[m
+[32m+[m[32m    }[m
+[32m+[m
+     public function setLifecycleStateAttribute($value): void[m
+     {[m
+         if (! in_array($value, self::LIFECYCLE_STATES, true)) {[m

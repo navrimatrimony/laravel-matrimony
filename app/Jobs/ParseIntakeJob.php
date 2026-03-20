@@ -4,12 +4,16 @@ namespace App\Jobs;
 
 use App\Models\AdminSetting;
 use App\Models\BiodataIntake;
+use App\Services\IntakeManualOcrPreparedService;
+use App\Services\Ocr\OcrQualityEvaluator;
+use App\Services\OcrService;
 use App\Services\Parsing\ParserStrategyResolver;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 
 /*
@@ -17,9 +21,10 @@ use Illuminate\Support\Facades\Log;
 | ParseIntakeJob — Phase-5 SSOT: parse only, never modify raw_ocr_text
 |--------------------------------------------------------------------------
 |
-| 1) Fetch intake. 2) If parse_status != pending return. 3) Parse raw_ocr_text
-| via BiodataParserService. 4) Wrap to SSOT structure. 5) Store parsed_json.
-| Do NOT touch raw_ocr_text. Do NOT recalculate OCR.
+| 1) Fetch intake. 2) If parse_status != pending return. 3) Build parse text:
+|    if ocr-manual-prepared/{id}/manual.png exists, OCR that derived file (raw_ocr_text unchanged);
+|    else use normalized raw_ocr_text. 4) Parse via BiodataParserService. 5) Store parsed_json.
+| Do NOT touch raw_ocr_text.
 |
 | When forceRecompute is true (e.g. admin reparse), content_hash cache is
 | bypassed so updated parser code runs and parsed_json is recomputed.
@@ -70,10 +75,13 @@ class ParseIntakeJob implements ShouldQueue
         $resolver = app(ParserStrategyResolver::class);
         $mode = $resolver->resolveActiveMode();
 
+        $manualPreparedExists = app(IntakeManualOcrPreparedService::class)->exists($intake);
+
         // Smart caching — avoid re-parsing identical content for same parser_version.
         // Bypass cache when forceRecompute is true (e.g. admin reparse) so updated parser runs.
+        // Bypass when manual crop exists (parse input is not the same as upload-time content_hash).
         $canonicalVersion = $resolver->normalizeMode($intake->parser_version ?: $mode);
-        if (!$this->forceRecompute && $intake->content_hash && $canonicalVersion) {
+        if (!$this->forceRecompute && !$manualPreparedExists && $intake->content_hash && $canonicalVersion) {
             $cached = BiodataIntake::where('id', '!=', $intake->id)
                 ->where('content_hash', $intake->content_hash)
                 ->where('parser_version', $canonicalVersion)
@@ -98,8 +106,48 @@ class ParseIntakeJob implements ShouldQueue
         $retryLimit = (int) AdminSetting::getValue('intake_parse_retry_limit', '3');
 
         $parser = $resolver->makeParser($mode);
-        $raw = $intake->raw_ocr_text ?? '';
-        $raw = \App\Services\Ocr\OcrNormalize::normalizeRawTextForParsing($raw);
+        $ocr = app(OcrService::class);
+        $qualityEvaluator = app(OcrQualityEvaluator::class);
+
+        $resolved = $ocr->resolveParseInputText($intake);
+        $raw = $resolved['text'];
+        $ocrQuality = $qualityEvaluator->evaluate($raw);
+
+        $retryConfig = config('ocr.auto_retry', []);
+        if ($manualPreparedExists
+            && ($retryConfig['enabled'] ?? false)
+            && ($ocrQuality['score'] ?? 0) < (float) ($retryConfig['quality_threshold'] ?? 0.6)) {
+            $maxAttempts = max(0, (int) ($retryConfig['max_attempts'] ?? 0));
+            $attempt = 0;
+            foreach ($retryConfig['retry_presets'] ?? [] as $preset) {
+                if ($attempt >= $maxAttempts) {
+                    break;
+                }
+                $attempt++;
+                $retryResolved = $ocr->resolveParseInputText($intake, [
+                    'force_preset' => (string) $preset,
+                ]);
+                $retryText = $retryResolved['text'];
+                $retryQuality = $qualityEvaluator->evaluate($retryText);
+                if (($retryQuality['score'] ?? 0) > ($ocrQuality['score'] ?? 0)) {
+                    $raw = $retryText;
+                    $ocrQuality = $retryQuality;
+                    $resolved = $retryResolved;
+                }
+            }
+        }
+
+        Cache::put('intake.parse_ocr_quality.'.$intake->id, $ocrQuality, now()->addDays(7));
+
+        if (is_array($resolved['ocr_debug'] ?? null)) {
+            Cache::put('intake.parse_ocr_debug.'.$intake->id, $resolved['ocr_debug'], now()->addDays(7));
+        }
+
+        if (config('app.debug') && is_array($resolved['ocr_debug'] ?? null)) {
+            Log::info('ParseIntakeJob: parse OCR source', array_merge($resolved['ocr_debug'], [
+                'ocr_quality' => $ocrQuality,
+            ]));
+        }
 
         $parsed = null;
         $attempts = 0;

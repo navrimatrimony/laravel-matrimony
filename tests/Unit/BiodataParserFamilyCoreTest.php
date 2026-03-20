@@ -42,5 +42,24 @@ TXT;
         $primary = $contacts[0];
         $this->assertSame('9145206745', $primary['number'] ?? $primary['phone_number'] ?? null);
     }
+
+    public function test_bhahi_nahi_line_does_not_create_sister_sibling_row(): void
+    {
+        /** @var BiodataParserService $service */
+        $service = $this->app->make(BiodataParserService::class);
+
+        $rawText = <<<TXT
+मुलीचे नाव :- कु. प्राजक्ता सुभाष पानसरे
+4 भाऊ :-नाही
+4 बहीण १-नाही
+मामाचे नाव :- श्री. शिवाजी साळुंखे
+TXT;
+
+        $parsed = $service->parse($rawText);
+        $siblings = $parsed['siblings'] ?? [];
+
+        $sisters = array_filter($siblings, fn ($r) => ($r['relation_type'] ?? '') === 'sister');
+        $this->assertCount(0, $sisters, 'बहीण नाही should not become a named sister row');
+    }
 }
 

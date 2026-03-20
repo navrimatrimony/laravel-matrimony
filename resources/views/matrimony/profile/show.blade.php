@@ -7,6 +7,14 @@
         <p class="text-sm text-gray-500 dark:text-gray-400 mb-6">{{ $profile->full_name ?? '—' }}@if (!empty($profile->is_demo)) <span class="inline-block ml-2 px-2 py-0.5 text-xs font-semibold bg-sky-100 dark:bg-sky-900/40 text-sky-700 dark:text-sky-300 rounded">Demo</span>@endif</p>
     @else
         <h1 class="text-2xl font-bold mb-6">Matrimony Profile</h1>
+        @if (($isOwnProfile ?? false) && auth()->check() && auth()->user()->is_admin !== true)
+            <div class="mb-6">
+                <a href="{{ route('matrimony.profile.edit') }}"
+                   class="inline-flex items-center px-5 py-2.5 rounded-md bg-red-600 text-white hover:bg-red-700 transition font-medium text-sm">
+                    {{ __('Edit Profile') }}
+                </a>
+            </div>
+        @endif
     @endif
 
 @if (($profile->lifecycle_state ?? null) === 'conflict_pending' && ($hasBlockingConflicts ?? false))
@@ -303,6 +311,41 @@
         <p class="mt-2 text-sm text-amber-700 bg-amber-50 dark:bg-amber-900/30 dark:text-amber-200 px-3 py-2 rounded">Your photo is under review. It is not visible to others until approved.</p>
     @endif
 </div>
+@endif
+
+@if ($profilePhotoVisible)
+    @php
+        $galleryPhotosQuery = \App\Models\ProfilePhoto::query()
+            ->where('profile_id', $profile->id)
+            ->where('is_primary', false);
+
+        if (! $isOwnProfile) {
+            $galleryPhotosQuery->where('approved_status', 'approved');
+        }
+
+        if (\Illuminate\Support\Facades\Schema::hasColumn('profile_photos', 'sort_order')) {
+            $galleryPhotosQuery->orderBy('sort_order')->orderBy('id');
+        } else {
+            $galleryPhotosQuery->orderByDesc('created_at')->orderBy('id');
+        }
+
+        $galleryPhotos = $galleryPhotosQuery->take(12)->get();
+    @endphp
+
+    @if ($galleryPhotos->isNotEmpty())
+        <div class="mb-6">
+            <div class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 text-center">Photo gallery</div>
+            <div class="flex gap-2 overflow-x-auto px-2 py-1">
+                @foreach ($galleryPhotos as $photo)
+                    <img
+                        src="{{ asset('uploads/matrimony_photos/'.$photo->file_path) }}"
+                        alt="Profile photo"
+                        class="w-20 h-20 rounded-md object-cover border border-gray-200 dark:border-gray-700 flex-none"
+                    />
+                @endforeach
+            </div>
+        </div>
+    @endif
 @endif
 
 {{-- Name & Gender --}}

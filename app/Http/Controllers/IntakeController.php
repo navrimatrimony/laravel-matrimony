@@ -6,9 +6,11 @@ use App\Jobs\ParseIntakeJob;
 use App\Models\AdminSetting;
 use App\Models\BiodataIntake;
 use App\Services\IntakeApprovalService;
+use App\Services\IntakeManualOcrPreparedService;
 use App\Services\OcrService;
 use App\Services\Preview\PreviewSectionMapper;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Smalot\PdfParser\Parser as PdfParser;
@@ -1356,8 +1358,44 @@ if ($bloodLabel !== '') {
         }
         $birthPlaceDisplay = $profile->birthPlaceDisplay ?? '';
 
+        $ocrPresetFeedback = null;
+
+        $ocrDebugMeta = null;
+        $ocrDriverCapability = null;
+        if (config('app.debug') && (bool) config('ocr.preprocessing.debug_expose_derived_notice', true)) {
+            $ocrDebugMeta = $this->buildPreviewOcrDebugMeta($intake);
+        }
+
+        $manualPreparedSvc = app(IntakeManualOcrPreparedService::class);
+        $uploadRel = (string) ($intake->file_path ?? '');
+        $uploadExt = strtolower(pathinfo($uploadRel, PATHINFO_EXTENSION));
+        $manualCropEligible = $uploadRel !== ''
+            && in_array($uploadExt, ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp'], true);
+        $manualCropOriginalUrl = $manualCropEligible ? route('intake.biodata-original', $intake) : null;
+        $manualPreparedExists = $manualPreparedSvc->exists($intake);
+
+        $autoCropSuggestion = null;
+
+        $ocrQualityEvaluation = Cache::get('intake.parse_ocr_quality.'.$intake->id);
+        if (! is_array($ocrQualityEvaluation)) {
+            $ocrQualityEvaluation = null;
+        }
+
+        $showOcrLowQualityWarning = (bool) ($ocrQualityEvaluation['is_low'] ?? false)
+            && $manualCropEligible
+            && ! $manualPreparedExists;
+
         return view('intake.preview', compact(
             'intake',
+            'ocrPresetFeedback',
+            'ocrDebugMeta',
+            'ocrDriverCapability',
+            'manualCropEligible',
+            'manualCropOriginalUrl',
+            'manualPreparedExists',
+            'autoCropSuggestion',
+            'ocrQualityEvaluation',
+            'showOcrLowQualityWarning',
             'sections',
             'confidenceMap',
             'criticalFields',
@@ -1448,11 +1486,14 @@ if ($bloodLabel !== '') {
             return redirect()->route('intake.preview', $intake)
                 ->with('info', 'या intake चे अप्रूव्हल झाले आहे; पुन्हा पार्स करता येत नाही.');
         }
-        if ($intake->raw_ocr_text === null || trim((string) $intake->raw_ocr_text) === '') {
+        $manualPreparedSvc = app(IntakeManualOcrPreparedService::class);
+        $hasStoredOcr = $intake->raw_ocr_text !== null && trim((string) $intake->raw_ocr_text) !== '';
+        if (! $hasStoredOcr && ! $manualPreparedSvc->exists($intake)) {
             return redirect()->route('intake.preview', $intake)
-                ->with('error', 'रॉ OCR टेक्स्ट नाही, म्हणून पुन्हा पार्स करता येत नाही.');
+                ->with('error', __('intake.reparse_requires_ocr_or_manual'));
         }
 
+        $this->forgetIntakeParseOcrDebugCache($intake);
         $intake->update(['parse_status' => 'pending']);
         ParseIntakeJob::dispatch($intake->id, true);
 
@@ -2475,6 +2516,314 @@ if ($bloodLabel !== '') {
     }
 
     /**
+     * Forget cached parse-time OCR debug so preview does not show a stale effective OCR source after manual save, clear, or reparse.
+     */
+    private function forgetIntakeParseOcrDebugCache(BiodataIntake $intake): void
+    {
+        Cache::forget('intake.parse_ocr_debug.'.$intake->id);
+    }
+
+    /**
+     * Merge upload-time OCR debug session, last manual-crop session hint, on-disk manual flags,
+     * and the last completed parse OCR debug snapshot (cache) when present.
+     *
+     * @return array<string, mixed>|null
+     */
+    private function buildPreviewOcrDebugMeta(BiodataIntake $intake): ?array
+    {
+        if (! config('app.debug')) {
+            return null;
+        }
+
+        $manualSvc = app(IntakeManualOcrPreparedService::class);
+        $upload = session('intake_ocr_debug_meta');
+        $manualSession = session('intake_manual_ocr_debug_'.$intake->id);
+
+        $base = [];
+        if (is_array($upload) && (int) ($upload['intake_id'] ?? 0) === (int) $intake->id) {
+            $base = $upload;
+        }
+        if (is_array($manualSession) && (int) ($manualSession['intake_id'] ?? 0) === (int) $intake->id) {
+            $base = array_merge($base, $manualSession);
+        }
+
+        $manualOnDisk = $manualSvc->exists($intake);
+        $base['parse_uses_manual_prepared'] = $manualOnDisk;
+        $base['manual_prepared_storage_relative'] = $manualOnDisk
+            ? $manualSvc->relativePath($intake)
+            : null;
+        $base['ocr_source_type_effective'] = $manualOnDisk ? 'manual_prepared' : 'original';
+
+        $parseOcrDbg = Cache::get('intake.parse_ocr_debug.'.$intake->id);
+        if (is_array($parseOcrDbg) && $parseOcrDbg !== []) {
+            if (isset($parseOcrDbg['ocr_source_type'])) {
+                $base['ocr_source_type_effective'] = $parseOcrDbg['ocr_source_type'];
+                $base['parse_uses_manual_prepared'] = $parseOcrDbg['ocr_source_type'] === 'manual_prepared';
+            }
+            foreach ([
+                'ocr_pipeline',
+                'final_ocr_input_path',
+                'manual_prepared_storage_relative',
+                'manual_prepared_absolute_path',
+                'original_storage_relative',
+                'original_absolute_path',
+                'derived_absolute_path',
+                'derived_storage_relative',
+                'preset_resolved',
+                'preset_request',
+                'preprocess_used',
+                'fallback_used',
+                'skipped_preprocessing_reason',
+                'driver',
+                'applied_steps',
+                'kind',
+            ] as $k) {
+                if (! array_key_exists($k, $parseOcrDbg)) {
+                    continue;
+                }
+                $v = $parseOcrDbg[$k];
+                if ($v === null || $v === '') {
+                    continue;
+                }
+                $base[$k] = $v;
+            }
+        }
+
+        $quality = Cache::get('intake.parse_ocr_quality.'.$intake->id);
+        if (is_array($quality) && $quality !== []) {
+            $base['ocr_quality'] = $quality;
+        }
+
+        if ($base === [] && ! $manualSvc->exists($intake)) {
+            return null;
+        }
+
+        $base['intake_id'] = (int) $intake->id;
+
+        return $base;
+    }
+
+    private function intakeManualCropAccessGranted(BiodataIntake $intake): bool
+    {
+        $isOwner = (int) $intake->uploaded_by === (int) auth()->id();
+        $isAdmin = auth()->user()?->isAnyAdmin() ?? false;
+
+        return $isOwner || $isAdmin;
+    }
+
+    /**
+     * Authenticated: original biodata image bytes for manual crop UI (never overwrites file_path).
+     */
+    public function biodataOriginalImage(BiodataIntake $intake)
+    {
+        if (! $this->intakeManualCropAccessGranted($intake)) {
+            abort(403, __('intake.only_preview_own'));
+        }
+
+        $rel = $intake->file_path;
+        if ($rel === null || $rel === '') {
+            abort(404);
+        }
+
+        $ext = strtolower(pathinfo((string) $rel, PATHINFO_EXTENSION));
+        if (! in_array($ext, ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp'], true)) {
+            abort(404);
+        }
+
+        $full = storage_path('app/private/'.$rel);
+        if (! is_file($full) || ! is_readable($full)) {
+            abort(404);
+        }
+
+        return response()->file($full);
+    }
+
+    /**
+     * Authenticated: saved manual crop PNG (derived only).
+     */
+    public function manualPreparedImage(BiodataIntake $intake, IntakeManualOcrPreparedService $manual)
+    {
+        if (! $this->intakeManualCropAccessGranted($intake)) {
+            abort(403, __('intake.only_preview_own'));
+        }
+
+        if (! $manual->exists($intake)) {
+            abort(404);
+        }
+
+        return response()->file($manual->absolutePath($intake));
+    }
+
+    /**
+     * Store manual crop as ocr-manual-prepared/{id}/manual.png and re-queue parse (OCR runs in job).
+     */
+    public function saveManualOcrPrepared(Request $request, BiodataIntake $intake, IntakeManualOcrPreparedService $manual)
+    {
+        if (! $this->intakeManualCropAccessGranted($intake)) {
+            abort(403, __('intake.only_preview_own'));
+        }
+
+        if ($intake->approved_by_user) {
+            return $this->manualCropSaveResponse($request, $intake, false, __('intake.manual_crop_denied_approved'), null);
+        }
+
+        $uploadRel = (string) ($intake->file_path ?? '');
+        $uploadExt = strtolower(pathinfo($uploadRel, PATHINFO_EXTENSION));
+        if ($uploadRel === '' || ! in_array($uploadExt, ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp'], true)) {
+            return $this->manualCropSaveResponse($request, $intake, false, __('intake.manual_crop_not_image_intake'), null);
+        }
+
+        $hasFile = $request->hasFile('cropped_image');
+        $pointsJson = $request->input('points');
+        $rotationDeg = (int) $request->input('rotation_deg', 0);
+        $hasPoints = is_string($pointsJson) && trim($pointsJson) !== '';
+
+        if (! $hasFile && ! $hasPoints) {
+            return $this->manualCropSaveResponse($request, $intake, false, __('intake.manual_crop_invalid_image'), null);
+        }
+
+        try {
+            if ($hasFile) {
+                $request->validate([
+                    'cropped_image' => ['required', 'file', 'max:16384', 'mimes:png,jpeg,jpg,webp'],
+                ]);
+
+                $manual->saveFromUploadedFile($intake, $request->file('cropped_image'));
+            } else {
+                if (is_string($pointsJson) && strlen($pointsJson) > 20000) {
+                    return $this->manualCropSaveResponse($request, $intake, false, __('intake.manual_crop_invalid_image'), null);
+                }
+
+                $points = json_decode((string) $pointsJson, true);
+                if (! is_array($points)) {
+                    return $this->manualCropSaveResponse($request, $intake, false, __('intake.manual_crop_invalid_image'), null);
+                }
+
+                $manual->saveFromPerspectivePoints($intake, $points, $rotationDeg);
+            }
+        } catch (\InvalidArgumentException) {
+            return $this->manualCropSaveResponse($request, $intake, false, __('intake.manual_crop_invalid_image'), null);
+        } catch (\Throwable $e) {
+            report($e);
+
+            return $this->manualCropSaveResponse($request, $intake, false, __('intake.manual_crop_save_failed'), null);
+        }
+
+        if (config('app.debug')) {
+            session()->put('intake_manual_ocr_debug_'.$intake->id, [
+                'intake_id' => $intake->id,
+                'ocr_source_type' => 'manual_prepared',
+                'manual_prepared_storage_relative' => $manual->relativePath($intake),
+                'note' => 'Manual crop saved; OCR runs in ParseIntakeJob (no synchronous warm here).',
+            ]);
+        }
+
+        $this->forgetIntakeParseOcrDebugCache($intake);
+        $intake->update(['parse_status' => 'pending']);
+        ParseIntakeJob::dispatchAfterResponse($intake->id, true);
+
+        return $this->manualCropSaveResponse(
+            $request,
+            $intake,
+            true,
+            __('intake.manual_crop_saved_reparsing'),
+            route('intake.status', $intake->id)
+        );
+    }
+
+    /**
+     * Remove manual prepared image; parse again from stored raw_ocr_text.
+     */
+    public function clearManualOcrPrepared(Request $request, BiodataIntake $intake, IntakeManualOcrPreparedService $manual)
+    {
+        if (! $this->intakeManualCropAccessGranted($intake)) {
+            abort(403, __('intake.only_preview_own'));
+        }
+
+        if ($intake->approved_by_user) {
+            return redirect()->back()->with('error', __('intake.manual_crop_denied_approved'));
+        }
+
+        $manual->delete($intake);
+        session()->forget('intake_manual_ocr_debug_'.$intake->id);
+        $this->forgetIntakeParseOcrDebugCache($intake);
+        $intake->update(['parse_status' => 'pending']);
+        ParseIntakeJob::dispatchAfterResponse($intake->id, true);
+
+        if ($request->wantsJson()) {
+            return response()->json([
+                'ok' => true,
+                'message' => __('intake.manual_crop_cleared'),
+                'redirect' => route('intake.status', $intake->id),
+            ]);
+        }
+
+        return redirect()->route('intake.status', $intake->id)
+            ->with('success', __('intake.manual_crop_cleared'));
+    }
+
+    /**
+     * @return \Illuminate\Http\JsonResponse|\Illuminate\Http\RedirectResponse
+     */
+    private function manualCropSaveResponse(Request $request, BiodataIntake $intake, bool $ok, string $message, ?string $redirectUrl)
+    {
+        if ($request->expectsJson() || $request->ajax() || $request->wantsJson() || $request->boolean('json')) {
+            return response()->json([
+                'ok' => $ok,
+                'message' => $message,
+                'redirect' => $redirectUrl,
+            ], $ok ? 200 : 422);
+        }
+
+        if ($ok) {
+            return redirect()->to($redirectUrl ?? route('intake.status', $intake->id))
+                ->with('success', $message);
+        }
+
+        return redirect()->back()->with('error', $message);
+    }
+
+    /**
+     * Local/dev only: serve original or last derived OCR preprocess artifact for this intake (session-bound).
+     */
+    public function debugOcrArtifact(Request $request, BiodataIntake $intake)
+    {
+        abort_unless(config('app.debug'), 404);
+        if ((int) $intake->uploaded_by !== (int) auth()->id()) {
+            abort(403);
+        }
+
+        $which = (string) $request->query('which', 'original');
+        if ($which === 'original') {
+            $rel = $intake->file_path;
+            if ($rel === null || $rel === '') {
+                abort(404);
+            }
+            $path = storage_path('app/private/'.$rel);
+        } elseif ($which === 'derived') {
+            $m = session('intake_ocr_debug_meta');
+            if (! is_array($m) || (int) ($m['intake_id'] ?? 0) !== (int) $intake->id) {
+                abort(404);
+            }
+            $path = $m['derived_absolute_path'] ?? null;
+        } elseif ($which === 'manual_prepared') {
+            $manual = app(IntakeManualOcrPreparedService::class);
+            if (! $manual->exists($intake)) {
+                abort(404);
+            }
+            $path = $manual->absolutePath($intake);
+        } else {
+            abort(404);
+        }
+
+        if ($path === '' || ! is_string($path) || ! is_file($path) || ! is_readable($path)) {
+            abort(404);
+        }
+
+        return response()->file($path);
+    }
+
+    /**
      * Show approval.
      */
     public function approval()
@@ -2491,6 +2840,8 @@ if ($bloodLabel !== '') {
             abort(403, __('intake.only_view_status_own'));
         }
 
-        return view('intake.status', compact('intake'));
+        $ocrPresetFeedback = null;
+
+        return view('intake.status', compact('intake', 'ocrPresetFeedback'));
     }
 }

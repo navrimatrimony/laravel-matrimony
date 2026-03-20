@@ -12,10 +12,24 @@ class ProfilePhoto extends Model
         'profile_id',
         'file_path',
         'is_primary',
+        'sort_order',
         'uploaded_via',
         'approved_status',
         'watermark_detected',
     ];
+
+    protected $casts = [
+        'is_primary' => 'boolean',
+        'watermark_detected' => 'boolean',
+    ];
+
+    public function scopeOrdered($query)
+    {
+        return $query
+            ->orderByDesc('is_primary')
+            ->orderBy('sort_order')
+            ->orderBy('id');
+    }
 
     public function profile()
     {

@@ -1,44 +1,19 @@
-{{-- Photo section: uses centralized photo upload engine (cropper, dedicated page). No direct file input here. --}}
-<div class="space-y-4">
-    <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100 border-b border-gray-200 dark:border-gray-700 pb-2">Profile photo</h2>
-
-    @php
-        $profile = $profile ?? (auth()->user()->matrimonyProfile ?? null);
-        $gender = $profile?->gender?->key ?? null;
-        if ($gender === 'male') {
-            $placeholderSrc = asset('images/placeholders/male-profile.svg');
-        } elseif ($gender === 'female') {
-            $placeholderSrc = asset('images/placeholders/female-profile.svg');
-        } else {
-            $placeholderSrc = asset('images/placeholders/default-profile.svg');
-        }
-    @endphp
-
-    <p class="text-sm text-gray-600 dark:text-gray-400">
-        Photo upload is handled by the dedicated photo engine so that you get better cropping and quality.
-        Use the button below to open the photo upload screen.
-    </p>
-
-    <div class="flex items-center gap-4">
-        <div class="flex-shrink-0">
-            @if ($profile && isset($profile->profile_photo) && $profile->profile_photo !== '' && (!isset($profile->photo_approved) || $profile->photo_approved !== false))
-                <img src="{{ asset('uploads/matrimony_photos/'.$profile->profile_photo) }}"
-                     alt="Profile photo"
-                     class="w-20 h-20 rounded-full object-cover border-4 border-indigo-200 shadow-sm">
-            @else
-                <img src="{{ $placeholderSrc }}"
-                     alt="Profile placeholder"
-                     class="w-20 h-20 rounded-full object-cover border-4 border-indigo-200 shadow-sm">
-            @endif
-        </div>
-        <div class="flex-1">
-            <p class="text-xs text-gray-500 dark:text-gray-400 mb-2">
-                Tip: A clear face photo gets you more relevant matches.
-            </p>
-            <a href="{{ route('matrimony.profile.upload-photo') }}"
-               class="inline-flex items-center px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded-lg shadow-sm">
-                Open photo upload engine →
-            </a>
-        </div>
+{{-- Centralized photo workflow: always forward to the dedicated photo manager page. --}}
+<div style="padding: 18px 16px; background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 12px;">
+    <div style="font-weight: 900; color: #111827; margin-bottom: 6px;">
+        Photo Manager
+    </div>
+    <div style="font-size: 13px; color: #6b7280;">
+        Redirecting to your centralized photo manager so you can upload, delete, and select the primary photo.
+    </div>
+    <div style="margin-top: 12px;">
+        <a href="{{ route('matrimony.profile.upload-photo') }}"
+           style="display: inline-block; padding: 10px 14px; background: #4f46e5; color: #fff; border-radius: 10px; font-weight: 800; text-decoration: none;">
+            Go to Photo Manager →
+        </a>
     </div>
 </div>
+<script>
+    // Immediate redirect keeps the wizard “photo” section consistent and avoids duplicated UI.
+    window.location.replace(@json(route('matrimony.profile.upload-photo')));
+</script>

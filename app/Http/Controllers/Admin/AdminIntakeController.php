@@ -3,10 +3,11 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
-use App\Models\BiodataIntake;
-use App\Models\AdminSetting;
 use App\Jobs\ParseIntakeJob;
+use App\Models\AdminSetting;
+use App\Models\BiodataIntake;
 use App\Services\IntakeApprovalService;
+use App\Services\IntakeManualOcrPreparedService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 
@@ -33,6 +34,7 @@ class AdminIntakeController extends Controller
             ->latest()
             ->paginate($perPage)
             ->withQueryString();
+
         return view('admin.intake.index', compact('intakes'));
     }
 
@@ -43,6 +45,7 @@ class AdminIntakeController extends Controller
     public function showBiodataIntake(BiodataIntake $intake)
     {
         $intake->load(['uploadedByUser:id,name,email', 'profile:id,full_name']);
+
         return view('admin.intake.show', compact('intake'));
     }
 
@@ -91,8 +94,10 @@ class AdminIntakeController extends Controller
             'timestamp' => now()->toIso8601String(),
         ]);
 
-        if ($intake->raw_ocr_text === null || $intake->raw_ocr_text === '') {
+        $hasManualPrepared = app(IntakeManualOcrPreparedService::class)->exists($intake);
+        if (($intake->raw_ocr_text === null || $intake->raw_ocr_text === '') && ! $hasManualPrepared) {
             Log::warning('AdminIntakeController::reparse() early return: raw_ocr_text empty', ['intake_id' => $intake->id]);
+
             return redirect()
                 ->route('admin.biodata-intakes.show', $intake)
                 ->with('error', 'Cannot re-parse: raw OCR text is empty.');

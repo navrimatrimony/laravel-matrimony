@@ -2,8 +2,8 @@
 
 namespace App\Http\Controllers\Auth;
 
+use App\Http\Controllers\Concerns\RedirectsUnprofiledUsers;
 use App\Http\Controllers\Controller;
-use App\Models\AdminSetting;
 use App\Models\User;
 use Illuminate\Auth\Events\Registered;
 use Illuminate\Http\RedirectResponse;
@@ -14,6 +14,8 @@ use Illuminate\Validation\Rules;
 
 class RegisteredUserController extends Controller
 {
+    use RedirectsUnprofiledUsers;
+
     /**
      * Handle an incoming registration request.
      */
@@ -49,28 +51,8 @@ class RegisteredUserController extends Controller
         // 4️⃣ User ला login करा
         Auth::login($user);
 
-        /*
-        |--------------------------------------------------------------------------
-        | Post-registration: OTP step or wizard (admin-controlled)
-        |--------------------------------------------------------------------------
-        | If admin enabled "redirect to mobile verify after registration" and
-        | mobile verification mode is not 'off', send user to OTP page first.
-        | They can Verify (then wizard) or Skip / Verify later (wizard). Else → wizard.
-        */
-        $wizardUrl = route('matrimony.profile.wizard.section', ['section' => 'basic-info']);
-        $redirectToVerify = AdminSetting::getBool('redirect_to_mobile_verify_after_registration', true);
-        $mobileMode = AdminSetting::getValue('mobile_verification_mode', 'off');
-
-        if (! $user->matrimonyProfile && $redirectToVerify && $mobileMode !== 'off') {
-            session()->put('intended_after_verify', $wizardUrl);
-            session()->put('from_registration', true);
-            session()->put('wizard_minimal', true); // Phase-5 Point 5: post-registration wizard shows fewer sections
-            return redirect()->route('mobile.verify');
-        }
-
-        if (! $user->matrimonyProfile) {
-            session()->put('wizard_minimal', true); // Phase-5 Point 5: post-registration minimal wizard
-            return redirect($wizardUrl);
+        if ($redirect = $this->redirectIfNoMatrimonyProfile($user, fromRegistration: true)) {
+            return $redirect;
         }
 
         return redirect('/dashboard');

@@ -55,6 +55,11 @@
                         this.hasFile = true;
                         this.fileLabel = fileInput.files[0].name;
                     }
+                },
+                isImagePresetVisible() {
+                    if (!this.hasFile || !this.$refs.fileInput || !this.$refs.fileInput.files || !this.$refs.fileInput.files.length) return false;
+                    const n = (this.fileLabel || '').toLowerCase();
+                    return /\.(jpe?g|png|gif|webp|bmp)$/.test(n);
                 }
             }"
             @dragover.prevent="drag = true"
@@ -133,6 +138,38 @@
                             </div>
                         </template>
                     </label>
+                </div>
+
+                {{-- OCR preprocessing preset: images only (hidden/disabled for PDF/TXT or no file) --}}
+                <div
+                    class="mb-8 rounded-xl border border-gray-200 dark:border-gray-600 bg-gray-50/80 dark:bg-gray-900/30 px-4 py-3"
+                    x-show="isImagePresetVisible()"
+                    x-cloak
+                >
+                    <label for="preprocessing_preset" class="block text-sm font-semibold text-gray-800 dark:text-gray-200 mb-1">
+                        {{ __('intake.preprocessing_preset_label') }}
+                    </label>
+                    <select
+                        name="preprocessing_preset"
+                        id="preprocessing_preset"
+                        class="mt-1 w-full max-w-md rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 text-sm py-2 px-3 focus:ring-2 focus:ring-red-500 focus:border-red-500"
+                        x-bind:disabled="!isImagePresetVisible()"
+                    >
+                        <option value="auto" @selected(old('preprocessing_preset', 'auto') === 'auto')>{{ __('intake.preprocessing_preset_option_auto') }}</option>
+                        <option value="clean_document" @selected(old('preprocessing_preset') === 'clean_document')>{{ __('intake.preprocessing_preset_option_clean_document') }}</option>
+                        <option value="marathi_printed" @selected(old('preprocessing_preset') === 'marathi_printed')>{{ __('intake.preprocessing_preset_option_marathi_printed') }}</option>
+                        <option value="noisy_scan" @selected(old('preprocessing_preset') === 'noisy_scan')>{{ __('intake.preprocessing_preset_option_noisy_scan') }}</option>
+                        <option value="photo_capture" @selected(old('preprocessing_preset') === 'photo_capture')>{{ __('intake.preprocessing_preset_option_photo_capture') }}</option>
+                        @if (config('app.debug'))
+                            <option value="off" @selected(old('preprocessing_preset') === 'off')>{{ __('intake.preprocessing_preset_option_off_debug') }}</option>
+                        @endif
+                    </select>
+                    <p class="mt-2 text-xs text-gray-700 dark:text-gray-300 leading-relaxed">
+                        {{ __('intake.preprocessing_preset_help') }}
+                    </p>
+                    <div class="mt-3 rounded-lg bg-white/90 dark:bg-gray-800/80 border border-gray-200 dark:border-gray-600 px-3 py-2 text-xs text-gray-700 dark:text-gray-300 leading-relaxed">
+                        {{ __('intake.preprocessing_preset_info_box') }}
+                    </div>
                 </div>
 
                 {{-- Submit --}}

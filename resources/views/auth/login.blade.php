@@ -12,7 +12,7 @@
     </a>
 </div>
 
-    <form method="POST" action="{{ route('login') }}">
+    <form id="login-form" method="POST" action="{{ route('login') }}">
         @csrf
 
         <!-- Email Address -->
@@ -54,4 +54,16 @@
             </x-primary-button>
         </div>
     </form>
+    <script>
+        (function () {
+            var f = document.getElementById('login-form');
+            if (!f) return;
+            f.addEventListener('submit', function () {
+                var btn = f.querySelector('button[type="submit"]');
+                if (!btn || btn.dataset.once) return;
+                btn.dataset.once = '1';
+                btn.disabled = true;
+            });
+        })();
+    </script>
 </x-guest-layout>

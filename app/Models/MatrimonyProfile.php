@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
+use App\Models\ProfilePhoto;
 
 /*
 |--------------------------------------------------------------------------
@@ -238,6 +239,26 @@ class MatrimonyProfile extends Model
     public function getContactNumberAttribute(): ?string
     {
         return $this->primary_contact_number;
+    }
+
+    /**
+     * Profile photo gallery (sorted + primary first in UI ordering).
+     */
+    public function photos()
+    {
+        return $this->hasMany(ProfilePhoto::class, 'profile_id')
+            ->orderByDesc('is_primary')
+            ->orderBy('sort_order')
+            ->orderBy('id');
+    }
+
+    /**
+     * Single primary photo record.
+     */
+    public function primaryPhotoRecord()
+    {
+        return $this->hasOne(ProfilePhoto::class, 'profile_id')
+            ->where('is_primary', true);
     }
 
     public function setLifecycleStateAttribute($value): void

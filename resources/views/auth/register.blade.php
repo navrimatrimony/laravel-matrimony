@@ -1,5 +1,5 @@
 <x-guest-layout>
-    <form method="POST" action="{{ route('register') }}">
+    <form id="register-form" method="POST" action="{{ route('register') }}">
         @csrf
         {{-- Navigation links for usability --}}
 <div class="mt-6 text-center text-sm text-gray-600">
@@ -90,4 +90,17 @@
             
         </div>
     </form>
+    {{-- Prevent double-submit: first request logs in and migrates session; a second in-flight POST keeps the old CSRF and gets 419. --}}
+    <script>
+        (function () {
+            var f = document.getElementById('register-form');
+            if (!f) return;
+            f.addEventListener('submit', function () {
+                var btn = f.querySelector('button[type="submit"]');
+                if (!btn || btn.dataset.once) return;
+                btn.dataset.once = '1';
+                btn.disabled = true;
+            });
+        })();
+    </script>
 </x-guest-layout>

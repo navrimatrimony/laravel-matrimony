@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Auth;
 
+use App\Http\Controllers\Concerns\RedirectsUnprofiledUsers;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Auth\LoginRequest;
 use Illuminate\Http\RedirectResponse;
@@ -11,6 +12,8 @@ use Illuminate\View\View;
 
 class AuthenticatedSessionController extends Controller
 {
+    use RedirectsUnprofiledUsers;
+
     /**
      * Display the login view.
      */
@@ -27,6 +30,10 @@ class AuthenticatedSessionController extends Controller
         $request->authenticate();
 
         $request->session()->regenerate();
+
+        if ($redirect = $this->redirectIfNoMatrimonyProfile($request->user(), fromRegistration: false)) {
+            return $redirect;
+        }
 
         return redirect()->intended(route('dashboard', absolute: false));
     }

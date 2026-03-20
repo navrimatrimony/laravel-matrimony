@@ -32,6 +32,7 @@ use App\Http\Controllers\Internal\Admin\LocationSuggestionAdminController;
 use App\Http\Controllers\Internal\Admin\CityAliasAdminController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\IntakeController;
+use App\Http\Controllers\UserSettingsController;
 use App\Models\BiodataIntake;
 /*
 |--------------------------------------------------------------------------
@@ -86,6 +87,27 @@ Route::middleware('auth')->group(function () {
 });
 
     /*
+    |--------------------------------------------------------------------------
+    | User Settings
+    |--------------------------------------------------------------------------
+    */
+    Route::get('/settings', [UserSettingsController::class, 'index'])
+        ->name('user.settings.index');
+
+    Route::get('/settings/privacy', [UserSettingsController::class, 'privacy'])
+        ->name('user.settings.privacy');
+    Route::post('/settings/privacy', [UserSettingsController::class, 'updatePrivacy'])
+        ->name('user.settings.privacy.update');
+
+    Route::get('/settings/communication', [UserSettingsController::class, 'communication'])
+        ->name('user.settings.communication');
+    Route::post('/settings/communication', [UserSettingsController::class, 'updateCommunication'])
+        ->name('user.settings.communication.update');
+
+    Route::get('/settings/security', [UserSettingsController::class, 'security'])
+        ->name('user.settings.security');
+
+    /*
     | Matrimony Profile (Phase-5B: wizard is the only create path; create/store disallowed — Point 5)
     */
     Route::get('/matrimony/profile/create', function () {
@@ -123,6 +145,16 @@ Route::middleware('auth')->group(function () {
 
 	Route::post('/matrimony/profile/upload-photo', [MatrimonyProfileController::class, 'storePhoto'])
     ->name('matrimony.profile.store-photo');
+
+    // User profile photo manager (gallery) — same-page actions.
+    Route::post('/matrimony/profile/photos/{photo}/make-primary', [MatrimonyProfileController::class, 'makePrimary'])
+        ->name('matrimony.profile.photos.make-primary');
+
+    Route::post('/matrimony/profile/photos/reorder', [MatrimonyProfileController::class, 'reorderPhotos'])
+        ->name('matrimony.profile.photos.reorder');
+
+    Route::delete('/matrimony/profile/photos/{photo}', [MatrimonyProfileController::class, 'destroy'])
+        ->name('matrimony.profile.photos.destroy');
 
 
     /*

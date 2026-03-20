@@ -1,0 +1,21 @@
+---
+description: Intake parsing must maximize auto-fill and never drop biodata info
+alwaysApply: true
+---
+
+# Intake Parsing: Completeness by Default
+
+## Non-negotiables
+- **Never drop information**: if a value cannot be confidently structured, preserve it in a safe text field (e.g. `core.other_relatives_text`, `relatives[].raw_note`, narrative fields).
+- **Max auto-fill**: prefer deterministic extraction + normalization + safe heuristics over asking the user to manually fill many fields.
+- **Fallback strategy**: when OCR is messy, extract from the *full* raw text using label variants + common Marathi patterns (e.g. `रा.`, `मु.पो.`, `ता.`, `जि.`, `मो.`).
+
+## Relatives rule
+- **Structured rows first**: attempt to produce one row per person with `relation_type`, `name`, `address_line` (or `location`), `contact_number`, and always keep `raw_note`.
+- **Full address when present**: prefer capturing the fullest address segment (not just village) and map it to `address_line` / `location`.
+- **Phone extraction**: extract valid 10-digit mobiles from notes into `contact_number`.
+
+## Practical guardrails
+- **Don’t hallucinate**: do not invent missing values; only infer when signals are strong and consistent.
+- **Re-parse support**: when parser rules change, ensure there is a user/admin path to re-run parse so old intakes can benefit.
+

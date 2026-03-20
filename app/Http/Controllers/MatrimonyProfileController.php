@@ -268,19 +268,52 @@ public function uploadPhoto()
 {
     $user = auth()->user();
 
-    if (!$user->matrimonyProfile) {
+    if (! $user || ! $user->matrimonyProfile) {
         return redirect()
             ->route('matrimony.profile.wizard.section', ['section' => 'basic-info'])
             ->with('error', __('profile_actions.create_profile_first'));
     }
 
-    return view('matrimony.profile.upload-photo');
+    $profile = $user->matrimonyProfile;
+
+    $galleryPhotosQuery = ProfilePhoto::query()
+        ->where('profile_id', $profile->id);
+
+    if (\Illuminate\Support\Facades\Schema::hasColumn('profile_photos', 'sort_order')) {
+        $galleryPhotosQuery->orderByDesc('is_primary')->orderBy('sort_order')->orderBy('id');
+    } else {
+        $galleryPhotosQuery->orderByDesc('is_primary')->orderByDesc('created_at')->orderBy('id');
+    }
+
+    $galleryPhotos = $galleryPhotosQuery->get();
+
+    $photoApprovalRequired = \App\Services\AdminSettingService::isPhotoApprovalRequired();
+    $photoMaxPerProfile = (int) \App\Models\AdminSetting::getValue('photo_max_per_profile', '5');
+
+    $currentPhotoCount = $galleryPhotos->count();
+    $photoSlotsRemaining = max(0, $photoMaxPerProfile - $currentPhotoCount);
+    $photoLimitReached = $currentPhotoCount >= $photoMaxPerProfile;
+
+    return view('matrimony.profile.upload-photo', [
+        'profile' => $profile,
+        'galleryPhotos' => $galleryPhotos,
+        'photoApprovalRequired' => $photoApprovalRequired,
+        'photoMaxPerProfile' => $photoMaxPerProfile,
+        'currentPhotoCount' => $currentPhotoCount,
+        'photoSlotsRemaining' => $photoSlotsRemaining,
+        'photoLimitReached' => $photoLimitReached,
+    ]);
 }
 
 public function storePhoto(Request $request)
 {
+    $maxUploadMb = (int) \App\Models\AdminSetting::getValue('photo_max_upload_mb', '8');
+    $maxUploadKb = max(1, $maxUploadMb) * 1024;
+
     $request->validate([
-        'profile_photo' => 'required|image|max:2048',
+        'profile_photo' => 'required|image|max:'.$maxUploadKb,
+        'profile_photos' => 'sometimes|array',
+        'profile_photos.*' => 'image|max:'.$maxUploadKb,
     ]);
 
     $user = auth()->user();
@@ -304,103 +337,401 @@ if (!$user->matrimonyProfile) {
         return redirect()->back()->with('error', __('common.profile_edit_blocked_intake_conflict'));
     }
 
-    $file = $request->file('profile_photo');
-    $originalName = basename($file->getClientOriginalName());
-    $baseName = time() . '_' . pathinfo($originalName, PATHINFO_FILENAME);
+    $maxPerProfile = (int) \App\Models\AdminSetting::getValue('photo_max_per_profile', '5');
+    $maxEdgePx = (int) \App\Models\AdminSetting::getValue('photo_max_edge_px', '1200');
+    $maxEdgePx = max(400, $maxEdgePx);
+
+    $primaryFile = $request->file('profile_photo');
+    $additionalFiles = $request->file('profile_photos', []);
+    if (! is_array($additionalFiles)) {
+        $additionalFiles = [];
+    }
+    $additionalFiles = array_values(array_filter($additionalFiles));
+
+    $existingPhotosCount = ProfilePhoto::query()
+        ->where('profile_id', $profile->id)
+        ->count();
+
+    $incomingCount = 1 + count($additionalFiles);
+    if (($existingPhotosCount + $incomingCount) > $maxPerProfile) {
+        $limitMessage = "You have already used all {$maxPerProfile} photo slots. Delete one photo before uploading a new one.";
+
+        if ($request->expectsJson() || $request->ajax()) {
+            return response()->json([
+                'message' => $limitMessage,
+                'errors' => [
+                    'profile_photos' => [$limitMessage],
+                ],
+            ], 422);
+        }
+
+        return redirect()->back()
+            ->withErrors([
+                'profile_photos' => $limitMessage,
+            ])
+            ->withInput();
+    }
+
+    // If user has no existing photos, the first uploaded photo becomes primary.
+    // Otherwise, new uploads are added as non-primary by default.
+    $mainBecomesPrimary = $existingPhotosCount === 0;
+
     $targetDir = public_path('uploads/matrimony_photos');
     if (! is_dir($targetDir)) {
         mkdir($targetDir, 0755, true);
     }
 
-    // Prefer WebP + resize when GD/WebP extensions are available; otherwise fall back to original upload.
-    if (function_exists('imagecreatefromstring') && function_exists('imagewebp')) {
-        $imageData = @file_get_contents($file->getRealPath());
-        $image = $imageData !== false ? @imagecreatefromstring($imageData) : false;
-        if ($image === false) {
-            return redirect()->back()->with('error', __('common.invalid_photo_upload_jpg_png'));
-        }
-        $width = imagesx($image);
-        $height = imagesy($image);
-        $maxEdge = 1200;
-        if ($width > $maxEdge || $height > $maxEdge) {
-            $scale = min($maxEdge / $width, $maxEdge / $height);
-            $newWidth = (int) floor($width * $scale);
-            $newHeight = (int) floor($height * $scale);
-            $resized = imagecreatetruecolor($newWidth, $newHeight);
-            imagecopyresampled($resized, $image, 0, 0, 0, 0, $newWidth, $newHeight, $width, $height);
-            imagedestroy($image);
-            $image = $resized;
-        }
+    $storeUploadedPhoto = function ($file, int $idx) use ($targetDir, $maxEdgePx): string {
+        $originalName = basename((string) ($file->getClientOriginalName() ?: 'photo'));
+        $slug = pathinfo($originalName, PATHINFO_FILENAME);
+        $rand = bin2hex(random_bytes(3));
+        $baseName = time() . '_' . $idx . '_' . $rand . '_' . $slug;
 
-        $webpFilename = $baseName . '.webp';
-        $webpPath = $targetDir . DIRECTORY_SEPARATOR . $webpFilename;
-        imagewebp($image, $webpPath, 80);
-        imagedestroy($image);
-
-        // If file is still large, attempt lighter encode
-        if (is_file($webpPath) && filesize($webpPath) > 200 * 1024) {
-            $tmpImage = @imagecreatefromstring(file_get_contents($webpPath));
-            if ($tmpImage !== false) {
-                imagewebp($tmpImage, $webpPath, 70);
-                imagedestroy($tmpImage);
+        // Prefer WebP + resize when GD/WebP extensions are available; otherwise fall back to original upload.
+        if (function_exists('imagecreatefromstring') && function_exists('imagewebp')) {
+            $realPath = $file->getRealPath() ?: $file->getPathname();
+            $imageData = is_string($realPath) ? @file_get_contents($realPath) : false;
+            $image = $imageData !== false ? @imagecreatefromstring($imageData) : false;
+            if ($image === false) {
+                throw new \RuntimeException(__('common.invalid_photo_upload_jpg_png'));
             }
+
+            $width = imagesx($image);
+            $height = imagesy($image);
+            $maxEdge = $maxEdgePx;
+            if ($width > $maxEdge || $height > $maxEdge) {
+                $scale = min($maxEdge / $width, $maxEdge / $height);
+                $newWidth = (int) floor($width * $scale);
+                $newHeight = (int) floor($height * $scale);
+                $resized = imagecreatetruecolor($newWidth, $newHeight);
+                imagecopyresampled($resized, $image, 0, 0, 0, 0, $newWidth, $newHeight, $width, $height);
+                imagedestroy($image);
+                $image = $resized;
+            }
+
+            $webpFilename = $baseName . '.webp';
+            $webpPath = $targetDir . DIRECTORY_SEPARATOR . $webpFilename;
+            imagewebp($image, $webpPath, 80);
+            imagedestroy($image);
+
+            // If file is still large, attempt lighter encode.
+            if (is_file($webpPath) && filesize($webpPath) > 200 * 1024) {
+                $tmpImage = @imagecreatefromstring(file_get_contents($webpPath));
+                if ($tmpImage !== false) {
+                    imagewebp($tmpImage, $webpPath, 70);
+                    imagedestroy($tmpImage);
+                }
+            }
+
+            return $webpFilename;
         }
 
-        $filename = $webpFilename;
-    } else {
         // Fallback: store original file without re-encoding (keeps old behaviour on systems without GD/WebP)
         $extension = $file->getClientOriginalExtension() ?: 'jpg';
         $filename = $baseName . '.' . $extension;
         $file->move($targetDir, $filename);
+
+        return $filename;
+    };
+
+    try {
+        $primaryFilename = $storeUploadedPhoto($primaryFile, 0);
+        $additionalFilenames = [];
+        foreach ($additionalFiles as $i => $addFile) {
+            $additionalFilenames[] = $storeUploadedPhoto($addFile, (int) $i + 1);
+        }
+    } catch (\RuntimeException $e) {
+        return redirect()->back()->with('error', $e->getMessage());
     }
 
     $photoApprovalRequired = \App\Services\AdminSettingService::isPhotoApprovalRequired();
     $photoApproved = ! $photoApprovalRequired;
 
-    $snapshot = [
-        'core' => [
-            'profile_photo' => $filename,
-            'photo_approved' => $photoApproved,
-            'photo_rejected_at' => null,
-            'photo_rejection_reason' => null,
-        ],
-        'contacts' => [],
-        'children' => [],
-        'education_history' => [],
-        'career_history' => [],
-        'addresses' => [],
-        'property_summary' => [],
-        'property_assets' => [],
-        'horoscope' => [],
-        'preferences' => [],
-        'extended_narrative' => [],
-    ];
+    $approvedStatus = $photoApproved ? 'approved' : 'pending';
 
-    try {
-        $result = app(\App\Services\MutationService::class)->applyManualSnapshot($profile, $snapshot, (int) $user->id);
-    } catch (\RuntimeException $e) {
-        return redirect()->back()->with('error', $e->getMessage());
+    $result = ['conflict_detected' => false];
+    if ($mainBecomesPrimary) {
+        $snapshot = [
+            'core' => [
+                'profile_photo' => $primaryFilename,
+                'photo_approved' => $photoApproved,
+                'photo_rejected_at' => null,
+                'photo_rejection_reason' => null,
+            ],
+            'contacts' => [],
+            'children' => [],
+            'education_history' => [],
+            'career_history' => [],
+            'addresses' => [],
+            'property_summary' => [],
+            'property_assets' => [],
+            'horoscope' => [],
+            'preferences' => [],
+            'extended_narrative' => [],
+        ];
+
+        try {
+            $result = app(\App\Services\MutationService::class)->applyManualSnapshot(
+                $profile,
+                $snapshot,
+                (int) $user->id
+            );
+        } catch (\RuntimeException $e) {
+            return redirect()->back()->with('error', $e->getMessage());
+        }
     }
 
-    // Store in profile_photos gallery (primary slot)
-    ProfilePhoto::updateOrCreate(
-        ['profile_id' => $profile->id, 'is_primary' => true],
-        [
-            'file_path' => $filename,
-            'uploaded_via' => 'user_web',
-            'approved_status' => $photoApproved ? 'approved' : 'pending',
-            'watermark_detected' => false,
-        ]
-    );
+    $sortBase = -1;
+    if (\Illuminate\Support\Facades\Schema::hasColumn('profile_photos', 'sort_order')) {
+        $maxSortOrder = ProfilePhoto::query()
+            ->where('profile_id', $profile->id)
+            ->max('sort_order');
+        $sortBase = $maxSortOrder !== null ? (int) $maxSortOrder : -1;
+    }
 
-    if ($result['conflict_detected']) {
+    $sortFieldsMain = [];
+    $sortFieldsAdditional = [];
+    $hasSort = \Illuminate\Support\Facades\Schema::hasColumn('profile_photos', 'sort_order');
+    if ($hasSort) {
+        $sortFieldsMain['sort_order'] = $sortBase + 1;
+    }
+
+    // Insert main uploaded photo.
+    ProfilePhoto::create([
+        'profile_id' => $profile->id,
+        'file_path' => $primaryFilename,
+        'is_primary' => $mainBecomesPrimary,
+        'uploaded_via' => 'user_web',
+        'approved_status' => $approvedStatus,
+        'watermark_detected' => false,
+    ] + $sortFieldsMain);
+
+    // Insert additional photos as non-primary by default.
+    if (! empty($additionalFilenames)) {
+        foreach (array_values($additionalFilenames) as $i => $filename) {
+            $sortFieldsAdditional = [];
+            if ($hasSort) {
+                $sortFieldsAdditional['sort_order'] = $sortBase + 2 + (int) $i;
+            }
+
+            ProfilePhoto::create([
+                'profile_id' => $profile->id,
+                'file_path' => $filename,
+                'is_primary' => false,
+                'uploaded_via' => 'user_web',
+                'approved_status' => $approvedStatus,
+                'watermark_detected' => false,
+            ] + $sortFieldsAdditional);
+        }
+    }
+
+    if (! empty($result['conflict_detected'])) {
         return redirect()->route('matrimony.profile.wizard.section', ['section' => 'full'])->with('warning', 'Photo uploaded but some conflicts were detected.');
     }
 
-    return redirect()
-        ->route('matrimony.profiles.index')
-        ->with('success', 'Profile photo uploaded successfully.');
+    $additionalCount = is_array($additionalFilenames) ? count($additionalFilenames) : 0;
+    $uploadedCount = 1 + $additionalCount;
+
+    return redirect()->route('matrimony.profile.upload-photo')->with(
+        'success',
+        "Photos uploaded successfully ({$uploadedCount}). You can add more photos below."
+    );
 }
+
+    /**
+     * Make a specific photo the primary photo for the logged-in profile.
+     * This does not auto-approve pending/rejected photos.
+     */
+    public function makePrimary(ProfilePhoto $photo)
+    {
+        $user = auth()->user();
+        if (! $user || ! $user->matrimonyProfile) {
+            abort(403);
+        }
+
+        $profile = $user->matrimonyProfile;
+        if ((int) $photo->profile_id !== (int) $profile->id) {
+            abort(403);
+        }
+
+        $targetApproved = ((string) $photo->approved_status) === 'approved';
+
+        $priorBypass = \App\Models\MatrimonyProfile::$bypassGovernanceEnforcement;
+        \App\Models\MatrimonyProfile::$bypassGovernanceEnforcement = true;
+        try {
+            \Illuminate\Support\Facades\DB::transaction(function () use ($profile, $photo, $targetApproved): void {
+                ProfilePhoto::query()
+                    ->where('profile_id', $profile->id)
+                    ->update(['is_primary' => false]);
+
+                $photo->is_primary = true;
+                $photo->save();
+
+                // Legacy sync: legacy views depend on matrimony_profiles.profile_photo.
+                $profile->profile_photo = $photo->file_path;
+                $profile->photo_approved = $targetApproved;
+                $profile->photo_rejected_at = null;
+                $profile->photo_rejection_reason = null;
+                $profile->save();
+            });
+        } finally {
+            \App\Models\MatrimonyProfile::$bypassGovernanceEnforcement = $priorBypass;
+        }
+
+        return redirect()->route('matrimony.profile.upload-photo')
+            ->with('success', 'Selected photo updated.');
+    }
+
+    /**
+     * Reorder photos by updating sort_order sequentially (does not change is_primary).
+     */
+    public function reorderPhotos(Request $request)
+    {
+        $user = auth()->user();
+        if (! $user || ! $user->matrimonyProfile) {
+            abort(403);
+        }
+
+        $profile = $user->matrimonyProfile;
+
+        $request->validate([
+            'photo_ids' => ['required', 'array'],
+            'photo_ids.*' => ['integer'],
+        ]);
+
+        $photoIds = array_values(array_unique(array_map('intval', (array) $request->input('photo_ids', []))));
+        if ($photoIds === []) {
+            return redirect()->back()->withErrors(['photo_ids' => 'Invalid photo order.'])->withInput();
+        }
+
+        $totalPhotos = (int) ProfilePhoto::query()
+            ->where('profile_id', $profile->id)
+            ->count();
+
+        // Require full set so we can set sort_order sequentially from 0..n-1.
+        if (count($photoIds) !== $totalPhotos) {
+            return redirect()->back()->withErrors(['photo_ids' => 'Invalid photo order.'])->withInput();
+        }
+
+        $countOwned = (int) ProfilePhoto::query()
+            ->where('profile_id', $profile->id)
+            ->whereIn('id', $photoIds)
+            ->count();
+
+        if ($countOwned !== $totalPhotos) {
+            return redirect()->back()->withErrors(['photo_ids' => 'Invalid photo order.'])->withInput();
+        }
+
+        \Illuminate\Support\Facades\DB::transaction(function () use ($profile, $photoIds): void {
+            foreach ($photoIds as $idx => $id) {
+                ProfilePhoto::query()
+                    ->where('profile_id', $profile->id)
+                    ->where('id', (int) $id)
+                    ->update(['sort_order' => (int) $idx]);
+            }
+        });
+
+        return redirect()->route('matrimony.profile.upload-photo')
+            ->with('success', 'Photo order updated.');
+    }
+
+    /**
+     * Delete a photo and keep primary + legacy profile_photo consistent.
+     */
+    public function destroy(ProfilePhoto $photo)
+    {
+        $user = auth()->user();
+        if (! $user || ! $user->matrimonyProfile) {
+            abort(403);
+        }
+
+        $profile = $user->matrimonyProfile;
+        if ((int) $photo->profile_id !== (int) $profile->id) {
+            abort(403);
+        }
+
+        $wasPrimary = (bool) $photo->is_primary;
+        $fileToDelete = public_path('uploads/matrimony_photos/'.$photo->file_path);
+
+        $priorBypass = \App\Models\MatrimonyProfile::$bypassGovernanceEnforcement;
+        \App\Models\MatrimonyProfile::$bypassGovernanceEnforcement = true;
+        try {
+            \Illuminate\Support\Facades\DB::transaction(function () use ($profile, $photo, $wasPrimary): void {
+                // Delete record.
+                $photo->delete();
+
+                // Resequence sort_order sequentially.
+                $remaining = ProfilePhoto::query()
+                    ->where('profile_id', $profile->id)
+                    ->orderBy('sort_order')
+                    ->orderBy('id')
+                    ->get(['id']);
+
+                foreach ($remaining as $idx => $row) {
+                    ProfilePhoto::query()
+                        ->where('profile_id', $profile->id)
+                        ->where('id', (int) $row->id)
+                        ->update(['sort_order' => (int) $idx]);
+                }
+
+                if (! $wasPrimary) {
+                    return;
+                }
+
+                if ($remaining->count() === 0) {
+                    $profile->profile_photo = null;
+                    $profile->photo_approved = false;
+                    $profile->photo_rejected_at = null;
+                    $profile->photo_rejection_reason = null;
+                    $profile->save();
+                    return;
+                }
+
+                // Choose replacement primary: first approved, else first remaining by sort_order.
+                $replacement = ProfilePhoto::query()
+                    ->where('profile_id', $profile->id)
+                    ->where('approved_status', 'approved')
+                    ->orderBy('sort_order')
+                    ->orderBy('id')
+                    ->first();
+
+                if (! $replacement) {
+                    $replacement = ProfilePhoto::query()
+                        ->where('profile_id', $profile->id)
+                        ->orderBy('sort_order')
+                        ->orderBy('id')
+                        ->first();
+                }
+
+                if (! $replacement) {
+                    return;
+                }
+
+                ProfilePhoto::query()
+                    ->where('profile_id', $profile->id)
+                    ->update(['is_primary' => false]);
+
+                $replacement->is_primary = true;
+                $replacement->save();
+
+                $replacementApproved = ((string) $replacement->approved_status) === 'approved';
+                $profile->profile_photo = $replacement->file_path;
+                $profile->photo_approved = $replacementApproved;
+                $profile->photo_rejected_at = null;
+                $profile->photo_rejection_reason = null;
+                $profile->save();
+            });
+        } finally {
+            \App\Models\MatrimonyProfile::$bypassGovernanceEnforcement = $priorBypass;
+        }
+
+        if (is_string($fileToDelete) && $fileToDelete !== '' && is_file($fileToDelete)) {
+            @unlink($fileToDelete);
+        }
+
+        return redirect()->route('matrimony.profile.upload-photo')
+            ->with('success', 'Photo deleted.');
+    }
 
 
     /*
