@@ -33,6 +33,19 @@ return [
     'only_view_status_own' => 'तुम्ही फक्त तुमचे स्वतःचे बायोडाटा अपलोडचे स्टेटस पाहू शकता.',
     'approved_successfully' => 'इंटेक यशस्वीरीत्या अप्रूव्ह झाला.',
 
+    'pending_suggestions_title' => 'बायोडेटामधून सूचना (आपोआप लागू केल्या नाहीत)',
+    'pending_suggestions_intro' => 'हे मूल्ये तुमच्या प्रोफाइलवरील विद्यमान माहितीवर लागू होतील असे होते. फक्त तुम्ही सध्याचे मूल्य बदलू इच्छित असल्याच “Apply” वापरा.',
+    'apply_suggestion_button' => 'लागू करा',
+    'apply_suggestion_ok' => '“:field” बायोडेटा सूचनेनुसार अपडेट केले.',
+    'apply_suggestion_no_profile' => 'आधी प्रोफाइल तयार करा.',
+    'apply_suggestion_none' => 'या प्रोफाइलसाठी प्रलंबित सूचना नाहीत.',
+    'apply_suggestion_missing' => 'ही सूचना आता उपलब्ध नाही.',
+    'apply_suggestion_invalid_field' => 'हे फील्ड इथून लागू करता येत नाही.',
+    'apply_suggestion_failed' => 'सूचना लागू करता आली नाही. प्रोफाइल विझार्डमध्ये तपासा.',
+
+    'pending_suggestions_other_title' => 'इतर विभाग आपोआप मर्ज झाले नाहीत',
+    'pending_suggestions_other_body' => 'तुमच्या प्रोफाइलमध्ये आधीच माहिती असल्याने याद्या (कुटुंब / शिक्षण इ.) तशाच ठेवल्या. विझार्डमधून भरा किंवा बदला.',
+
     // Status page while parse job runs (background)
     'processing_title' => 'तुमचा बायोडाटा प्रक्रिया होत आहे…',
     'processing_subtitle' => 'मजकूर काढणे आणि पार्सिंग पार्श्वभागात चालू आहे. हे पृष्ठ उघडे ठेवा — तयार झाल्यावर आम्ही प्रीव्ह्यू आपोआप उघडू.',

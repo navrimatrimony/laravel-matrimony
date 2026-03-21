@@ -2,15 +2,15 @@
 @php
     $criteria = $preferenceCriteria ?? null;
     $oldCriteria = [
-        'preferred_age_min' => old('preferred_age_min', $criteria->preferred_age_min ?? null),
-        'preferred_age_max' => old('preferred_age_max', $criteria->preferred_age_max ?? null),
-        'preferred_income_min' => old('preferred_income_min', $criteria->preferred_income_min ?? null),
-        'preferred_income_max' => old('preferred_income_max', $criteria->preferred_income_max ?? null),
-        'preferred_education' => old('preferred_education', $criteria->preferred_education ?? ''),
-        'preferred_city_id' => old('preferred_city_id', $criteria->preferred_city_id ?? null),
-        'willing_to_relocate' => old('willing_to_relocate', $criteria->willing_to_relocate ?? null),
-        'settled_city_preference_id' => old('settled_city_preference_id', $criteria->settled_city_preference_id ?? null),
-        'marriage_type_preference_id' => old('marriage_type_preference_id', $criteria->marriage_type_preference_id ?? null),
+        'preferred_age_min' => old('preferred_age_min', $criteria?->preferred_age_min ?? null),
+        'preferred_age_max' => old('preferred_age_max', $criteria?->preferred_age_max ?? null),
+        'preferred_income_min' => old('preferred_income_min', $criteria?->preferred_income_min ?? null),
+        'preferred_income_max' => old('preferred_income_max', $criteria?->preferred_income_max ?? null),
+        'preferred_education' => old('preferred_education', $criteria?->preferred_education ?? ''),
+        'preferred_city_id' => old('preferred_city_id', $criteria?->preferred_city_id ?? null),
+        'willing_to_relocate' => old('willing_to_relocate', $criteria?->willing_to_relocate ?? null),
+        'settled_city_preference_id' => old('settled_city_preference_id', $criteria?->settled_city_preference_id ?? null),
+        'marriage_type_preference_id' => old('marriage_type_preference_id', $criteria?->marriage_type_preference_id ?? null),
     ];
     $settledCityDisplay = '';
     if (!empty($oldCriteria['settled_city_preference_id'])) {
@@ -19,6 +19,45 @@
     $selectedReligionIds = collect(old('preferred_religion_ids', $preferredReligionIds ?? []))->map(fn($id) => (int) $id)->all();
     $selectedCasteIds = collect(old('preferred_caste_ids', $preferredCasteIds ?? []))->map(fn($id) => (int) $id)->all();
     $selectedDistrictIds = collect(old('preferred_district_ids', $preferredDistrictIds ?? []))->map(fn($id) => (int) $id)->all();
+    $ageRangeDefault = (isset($profile) && $profile instanceof \App\Models\MatrimonyProfile)
+        ? \App\Services\PartnerPreferenceSuggestionService::defaultPreferredAgeRange($profile)
+        : null;
+    $dAgeMin = $ageRangeDefault['min'] ?? 22;
+    $dAgeMax = $ageRangeDefault['max'] ?? 35;
+    $rawAgeMin = $oldCriteria['preferred_age_min'];
+    $rawAgeMax = $oldCriteria['preferred_age_max'];
+    $rawAgeMin = ($rawAgeMin === '' || $rawAgeMin === null) ? null : (int) $rawAgeMin;
+    $rawAgeMax = ($rawAgeMax === '' || $rawAgeMax === null) ? null : (int) $rawAgeMax;
+    $ageMinInit = $rawAgeMin ?? $dAgeMin;
+    $ageMaxInit = $rawAgeMax ?? $dAgeMax;
+    $ageMinInit = max(18, min(80, $ageMinInit));
+    $ageMaxInit = max(18, min(80, $ageMaxInit));
+    if ($ageMinInit > $ageMaxInit) {
+        [$ageMinInit, $ageMaxInit] = [$ageMaxInit, $ageMinInit];
+    }
+    $rupeesToLakhs = function ($v): ?int {
+        if ($v === null || $v === '') {
+            return null;
+        }
+
+        return max(0, min(500, (int) round((float) $v / 100000)));
+    };
+    $incMinLakhs = $rupeesToLakhs($oldCriteria['preferred_income_min'] ?? null);
+    $incMaxLakhs = $rupeesToLakhs($oldCriteria['preferred_income_max'] ?? null);
+    if ($incMinLakhs === null && $incMaxLakhs === null) {
+        $incMinLakhs = 3;
+        $incMaxLakhs = 25;
+    } elseif ($incMinLakhs === null) {
+        $incMinLakhs = max(0, $incMaxLakhs - 15);
+    } elseif ($incMaxLakhs === null) {
+        $incMaxLakhs = min(500, $incMinLakhs + 22);
+    }
+    if ($incMinLakhs > $incMaxLakhs) {
+        [$incMinLakhs, $incMaxLakhs] = [$incMaxLakhs, $incMinLakhs];
+    }
+    $incomeFmtLakh = function (int $l): string {
+        return $l === 0 ? __('wizard.income_lakh_zero') : __('wizard.income_lakh_format', ['num' => $l]);
+    };
 @endphp
 
 <div class="space-y-6">
@@ -157,8 +196,8 @@
                         return;
                     }
 
-                    var ageMin = document.querySelector('input[name="preferred_age_min"]');
-                    var ageMax = document.querySelector('input[name="preferred_age_max"]');
+                    var ageMin = document.getElementById('partner-age-min-hidden');
+                    var ageMax = document.getElementById('partner-age-max-hidden');
                     var incomeMin = document.querySelector('input[name="preferred_income_min"]');
                     var incomeMax = document.querySelector('input[name="preferred_income_max"]');
                     var education = document.querySelector('input[name="preferred_education"]');
@@ -168,17 +207,33 @@
                     var cityHidden = document.querySelector('input[name="preferred_cities[0][city_id]"]');
                     var cityInput = document.querySelector('#{{ $preferredCitiesContainerId }} .preferred-city-row .location-typeahead-input');
 
-                    if (ageMin && preset.preferred_age_min !== undefined && preset.preferred_age_min !== null) {
-                        ageMin.value = preset.preferred_age_min;
+                    if (typeof window.__setPartnerAgeRange === 'function'
+                        && preset.preferred_age_min !== undefined && preset.preferred_age_min !== null
+                        && preset.preferred_age_max !== undefined && preset.preferred_age_max !== null) {
+                        window.__setPartnerAgeRange(preset.preferred_age_min, preset.preferred_age_max);
+                    } else {
+                        if (ageMin && preset.preferred_age_min !== undefined && preset.preferred_age_min !== null) {
+                            ageMin.value = preset.preferred_age_min;
+                        }
+                        if (ageMax && preset.preferred_age_max !== undefined && preset.preferred_age_max !== null) {
+                            ageMax.value = preset.preferred_age_max;
+                        }
                     }
-                    if (ageMax && preset.preferred_age_max !== undefined && preset.preferred_age_max !== null) {
-                        ageMax.value = preset.preferred_age_max;
-                    }
-                    if (incomeMin && preset.preferred_income_min !== undefined && preset.preferred_income_min !== null) {
-                        incomeMin.value = preset.preferred_income_min;
-                    }
-                    if (incomeMax && preset.preferred_income_max !== undefined && preset.preferred_income_max !== null) {
-                        incomeMax.value = preset.preferred_income_max;
+                    if (typeof window.__setPartnerIncomeRange === 'function'
+                        && preset.preferred_income_min !== undefined && preset.preferred_income_min !== null) {
+                        window.__setPartnerIncomeRange(
+                            preset.preferred_income_min,
+                            preset.preferred_income_max !== undefined && preset.preferred_income_max !== null
+                                ? preset.preferred_income_max
+                                : null
+                        );
+                    } else {
+                        if (incomeMin && preset.preferred_income_min !== undefined && preset.preferred_income_min !== null) {
+                            incomeMin.value = preset.preferred_income_min;
+                        }
+                        if (incomeMax && preset.preferred_income_max !== undefined && preset.preferred_income_max !== null) {
+                            incomeMax.value = preset.preferred_income_max;
+                        }
                     }
                     if (education && preset.preferred_education !== undefined && preset.preferred_education !== null) {
                         education.value = preset.preferred_education;
@@ -263,25 +318,203 @@
         </div>
         <div></div>
     </div>
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div class="flex gap-2">
-            <div class="flex-1">
-                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{{ __('wizard.age_min') }}</label>
-                <input type="number" name="preferred_age_min" value="{{ $oldCriteria['preferred_age_min'] }}" placeholder="{{ __('wizard.placeholder_min') }}" class="w-full rounded border px-3 py-2">
+    <div class="space-y-4">
+        <style>
+            .partner-pref-dual-range { pointer-events: none; }
+            .partner-pref-dual-range::-webkit-slider-thumb { pointer-events: auto; -webkit-appearance: none; appearance: none; height: 1.125rem; width: 1.125rem; border-radius: 9999px; background: rgb(79 70 229); border: 2px solid rgb(255 255 255); box-shadow: 0 1px 2px rgb(0 0 0 / 0.15); cursor: grab; margin-top: -5px; }
+            .partner-pref-dual-range::-moz-range-thumb { pointer-events: auto; height: 1.125rem; width: 1.125rem; border-radius: 9999px; background: rgb(79 70 229); border: 2px solid rgb(255 255 255); box-shadow: 0 1px 2px rgb(0 0 0 / 0.15); cursor: grab; }
+            .partner-pref-dual-range::-webkit-slider-runnable-track { -webkit-appearance: none; appearance: none; height: 8px; background: transparent; }
+            .partner-pref-dual-range::-moz-range-track { height: 8px; background: transparent; }
+        </style>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 items-stretch">
+            <div class="rounded-xl border-2 border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800/60 p-4 space-y-2 shadow-sm min-w-0">
+            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">{{ __('wizard.preferred_age_range') }}</label>
+            <p class="text-xs text-gray-500 dark:text-gray-400">{{ __('wizard.preferred_age_range_hint') }}</p>
+            <p id="partner-age-range-label" class="text-base font-semibold text-indigo-700 dark:text-indigo-300 tabular-nums" aria-live="polite">{{ $ageMinInit }} – {{ $ageMaxInit }} {{ __('wizard.years') }}</p>
+            <div class="partner-age-slider relative h-10 px-0.5" data-age-absolute-min="18" data-age-absolute-max="80">
+                <div class="absolute left-0 right-0 top-1/2 h-2 -translate-y-1/2 rounded-full bg-gray-200 dark:bg-gray-600 pointer-events-none"></div>
+                <div id="partner-age-range-fill" class="absolute top-1/2 h-2 -translate-y-1/2 rounded-full bg-indigo-500 pointer-events-none" style="left: 0%; width: 0%"></div>
+                <input type="range" id="partner-age-range-min" class="partner-pref-dual-range absolute inset-x-0 top-0 z-[2] h-10 w-full cursor-pointer appearance-none bg-transparent" min="18" max="80" step="1" value="{{ $ageMinInit }}" aria-label="{{ __('wizard.age_min') }}">
+                <input type="range" id="partner-age-range-max" class="partner-pref-dual-range absolute inset-x-0 top-0 z-[3] h-10 w-full cursor-pointer appearance-none bg-transparent" min="18" max="80" step="1" value="{{ $ageMaxInit }}" aria-label="{{ __('wizard.age_max') }}">
             </div>
-            <div class="flex-1">
-                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{{ __('wizard.age_max') }}</label>
-                <input type="number" name="preferred_age_max" value="{{ $oldCriteria['preferred_age_max'] }}" placeholder="{{ __('wizard.placeholder_max') }}" class="w-full rounded border px-3 py-2">
+            <input type="hidden" name="preferred_age_min" id="partner-age-min-hidden" value="{{ $ageMinInit }}">
+            <input type="hidden" name="preferred_age_max" id="partner-age-max-hidden" value="{{ $ageMaxInit }}">
+            <script>
+                (function () {
+                    var ABS_MIN = 18;
+                    var ABS_MAX = 80;
+                    var minR = document.getElementById('partner-age-range-min');
+                    var maxR = document.getElementById('partner-age-range-max');
+                    var minH = document.getElementById('partner-age-min-hidden');
+                    var maxH = document.getElementById('partner-age-max-hidden');
+                    var fill = document.getElementById('partner-age-range-fill');
+                    var label = document.getElementById('partner-age-range-label');
+                    var yearsWord = @json(__('wizard.years'));
+                    if (!minR || !maxR || !minH || !maxH || !fill || !label) return;
+
+                    function clamp(n) {
+                        n = parseInt(n, 10);
+                        if (isNaN(n)) return ABS_MIN;
+                        return Math.max(ABS_MIN, Math.min(ABS_MAX, n));
+                    }
+
+                    function syncZ() {
+                        var mn = parseInt(minR.value, 10);
+                        var mx = parseInt(maxR.value, 10);
+                        minR.style.zIndex = mn > ABS_MAX - 5 ? '4' : '2';
+                        maxR.style.zIndex = mx < ABS_MIN + 5 ? '4' : '3';
+                    }
+
+                    function paint() {
+                        var mn = clamp(minR.value);
+                        var mx = clamp(maxR.value);
+                        if (mn > mx) {
+                            var t = mn;
+                            mn = mx;
+                            mx = t;
+                            minR.value = String(mn);
+                            maxR.value = String(mx);
+                        }
+                        minH.value = String(mn);
+                        maxH.value = String(mx);
+                        var p1 = ((mn - ABS_MIN) / (ABS_MAX - ABS_MIN)) * 100;
+                        var p2 = ((mx - ABS_MIN) / (ABS_MAX - ABS_MIN)) * 100;
+                        fill.style.left = p1 + '%';
+                        fill.style.width = Math.max(0, p2 - p1) + '%';
+                        label.textContent = mn + ' – ' + mx + ' ' + yearsWord;
+                        syncZ();
+                    }
+
+                    minR.addEventListener('input', function () {
+                        var mn = clamp(minR.value);
+                        var mx = clamp(maxR.value);
+                        if (mn > mx) maxR.value = String(mn);
+                        paint();
+                    });
+                    maxR.addEventListener('input', function () {
+                        var mn = clamp(minR.value);
+                        var mx = clamp(maxR.value);
+                        if (mx < mn) minR.value = String(mx);
+                        paint();
+                    });
+
+                    window.__setPartnerAgeRange = function (mn, mx) {
+                        mn = clamp(mn);
+                        mx = clamp(mx);
+                        if (mn > mx) {
+                            var s = mn;
+                            mn = mx;
+                            mx = s;
+                        }
+                        minR.value = String(mn);
+                        maxR.value = String(mx);
+                        paint();
+                    };
+
+                    paint();
+                })();
+            </script>
             </div>
-        </div>
-        <div class="flex gap-2">
-            <div class="flex-1">
-                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{{ __('wizard.income_min') }}</label>
-                <input type="number" step="0.01" name="preferred_income_min" value="{{ $oldCriteria['preferred_income_min'] }}" placeholder="{{ __('wizard.placeholder_min') }}" class="w-full rounded border px-3 py-2">
+            <div class="rounded-xl border-2 border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800/60 p-4 space-y-2 shadow-sm min-w-0">
+            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">{{ __('wizard.preferred_income_range') }}</label>
+            <p class="text-xs text-gray-500 dark:text-gray-400">{{ __('wizard.preferred_income_range_hint') }}</p>
+            <p id="partner-income-range-label" class="text-base font-semibold text-indigo-700 dark:text-indigo-300 tabular-nums" aria-live="polite">{{ $incomeFmtLakh($incMinLakhs) }} – {{ $incomeFmtLakh($incMaxLakhs) }}</p>
+            <div class="partner-income-slider relative h-10 px-0.5">
+                <div class="absolute left-0 right-0 top-1/2 h-2 -translate-y-1/2 rounded-full bg-gray-200 dark:bg-gray-600 pointer-events-none"></div>
+                <div id="partner-income-range-fill" class="absolute top-1/2 h-2 -translate-y-1/2 rounded-full bg-indigo-500 pointer-events-none" style="left: 0%; width: 0%"></div>
+                <input type="range" id="partner-income-range-min" class="partner-pref-dual-range absolute inset-x-0 top-0 z-[2] h-10 w-full cursor-pointer appearance-none bg-transparent" min="0" max="500" step="1" value="{{ $incMinLakhs }}" aria-label="{{ __('wizard.income_min') }}">
+                <input type="range" id="partner-income-range-max" class="partner-pref-dual-range absolute inset-x-0 top-0 z-[3] h-10 w-full cursor-pointer appearance-none bg-transparent" min="0" max="500" step="1" value="{{ $incMaxLakhs }}" aria-label="{{ __('wizard.income_max') }}">
             </div>
-            <div class="flex-1">
-                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{{ __('wizard.income_max') }}</label>
-                <input type="number" step="0.01" name="preferred_income_max" value="{{ $oldCriteria['preferred_income_max'] }}" placeholder="{{ __('wizard.placeholder_max') }}" class="w-full rounded border px-3 py-2">
+            <input type="hidden" name="preferred_income_min" id="partner-income-min-hidden" value="{{ $incMinLakhs * 100000 }}">
+            <input type="hidden" name="preferred_income_max" id="partner-income-max-hidden" value="{{ $incMaxLakhs * 100000 }}">
+            <script>
+                (function () {
+                    var ABS_MIN = 0;
+                    var ABS_MAX = 500;
+                    var LAKH = 100000;
+                    var minR = document.getElementById('partner-income-range-min');
+                    var maxR = document.getElementById('partner-income-range-max');
+                    var minH = document.getElementById('partner-income-min-hidden');
+                    var maxH = document.getElementById('partner-income-max-hidden');
+                    var fill = document.getElementById('partner-income-range-fill');
+                    var label = document.getElementById('partner-income-range-label');
+                    var lakhFmt = @json(__('wizard.income_lakh_format'));
+                    var lakhZero = @json(__('wizard.income_lakh_zero'));
+                    if (!minR || !maxR || !minH || !maxH || !fill || !label) return;
+
+                    function fmtLakhs(l) {
+                        l = parseInt(l, 10);
+                        if (isNaN(l)) l = 0;
+                        if (l === 0) return lakhZero;
+                        return String(lakhFmt).split(':num').join(String(l));
+                    }
+
+                    function clamp(n) {
+                        n = parseInt(n, 10);
+                        if (isNaN(n)) return ABS_MIN;
+                        return Math.max(ABS_MIN, Math.min(ABS_MAX, n));
+                    }
+
+                    function syncZ() {
+                        var mn = parseInt(minR.value, 10);
+                        var mx = parseInt(maxR.value, 10);
+                        minR.style.zIndex = mn > ABS_MAX - 25 ? '4' : '2';
+                        maxR.style.zIndex = mx < ABS_MIN + 25 ? '4' : '3';
+                    }
+
+                    function paint() {
+                        var mn = clamp(minR.value);
+                        var mx = clamp(maxR.value);
+                        if (mn > mx) {
+                            var t = mn;
+                            mn = mx;
+                            mx = t;
+                            minR.value = String(mn);
+                            maxR.value = String(mx);
+                        }
+                        minH.value = String(mn * LAKH);
+                        maxH.value = String(mx * LAKH);
+                        var p1 = ABS_MAX > ABS_MIN ? ((mn - ABS_MIN) / (ABS_MAX - ABS_MIN)) * 100 : 0;
+                        var p2 = ABS_MAX > ABS_MIN ? ((mx - ABS_MIN) / (ABS_MAX - ABS_MIN)) * 100 : 0;
+                        fill.style.left = p1 + '%';
+                        fill.style.width = Math.max(0, p2 - p1) + '%';
+                        label.textContent = fmtLakhs(mn) + ' – ' + fmtLakhs(mx);
+                        syncZ();
+                    }
+
+                    minR.addEventListener('input', function () {
+                        var mn = clamp(minR.value);
+                        var mx = clamp(maxR.value);
+                        if (mn > mx) maxR.value = String(mn);
+                        paint();
+                    });
+                    maxR.addEventListener('input', function () {
+                        var mn = clamp(minR.value);
+                        var mx = clamp(maxR.value);
+                        if (mx < mn) minR.value = String(mx);
+                        paint();
+                    });
+
+                    window.__setPartnerIncomeRange = function (minRupees, maxRupees) {
+                        var mn = Math.round((parseFloat(minRupees) || 0) / LAKH);
+                        var mx = maxRupees != null && maxRupees !== ''
+                            ? Math.round((parseFloat(maxRupees) || 0) / LAKH)
+                            : Math.min(ABS_MAX, mn + 20);
+                        mn = clamp(mn);
+                        mx = clamp(mx);
+                        if (mn > mx) {
+                            var s = mn;
+                            mn = mx;
+                            mx = s;
+                        }
+                        minR.value = String(mn);
+                        maxR.value = String(mx);
+                        paint();
+                    };
+
+                    paint();
+                })();
+            </script>
             </div>
         </div>
         <div>

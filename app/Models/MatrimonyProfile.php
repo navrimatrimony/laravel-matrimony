@@ -9,13 +9,12 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
-use App\Models\ProfilePhoto;
 
 /*
 |--------------------------------------------------------------------------
 | MatrimonyProfile Model
 |--------------------------------------------------------------------------
-| 
+|
 | 👉 हा model MATRIMONY BIODATA साठी आहे
 | 👉 User model पासून वेगळा ठेवलेला आहे (SSOT v3.1 rule)
 | 👉 Search, Interest, View, Edit — सगळं याच model वर होईल
@@ -151,6 +150,7 @@ class MatrimonyProfile extends Model
         'edit_reason',
         'edited_source',
         'admin_edited_fields',
+        'pending_intake_suggestions_json',
         'profile_visibility_mode',
         'contact_unlock_mode',
         'safety_defaults_applied',
@@ -215,6 +215,7 @@ class MatrimonyProfile extends Model
         'visibility_override' => 'boolean',
         'edited_at' => 'datetime',
         'admin_edited_fields' => 'array',
+        'pending_intake_suggestions_json' => 'array',
         'safety_defaults_applied' => 'boolean',
         'income_private' => 'boolean',
         'family_income_private' => 'boolean',
@@ -222,6 +223,7 @@ class MatrimonyProfile extends Model
 
     /**
      * Primary contact number from profile_contacts (relation-based). No direct column.
+     * Falls back to the account mobile (registration / OTP) when no primary contact row exists.
      */
     public function getPrimaryContactNumberAttribute(): ?string
     {
@@ -230,7 +232,16 @@ class MatrimonyProfile extends Model
             ->where('is_primary', true)
             ->value('phone_number');
 
-        return $phone !== null ? (string) $phone : null;
+        if ($phone !== null && trim((string) $phone) !== '') {
+            return trim((string) $phone);
+        }
+
+        $mobile = $this->user?->mobile ?? null;
+        if ($mobile !== null && trim((string) $mobile) !== '') {
+            return trim((string) $mobile);
+        }
+
+        return null;
     }
 
     /**
@@ -482,20 +493,21 @@ class MatrimonyProfile extends Model
     {
         return $this->belongsTo(MasterGender::class, 'gender_id');
     }
-	public function religion()
-{
-    return $this->belongsTo(\App\Models\Religion::class);
-}
 
-public function caste()
-{
-    return $this->belongsTo(\App\Models\Caste::class);
-}
+    public function religion()
+    {
+        return $this->belongsTo(\App\Models\Religion::class);
+    }
 
-public function subCaste()
-{
-    return $this->belongsTo(\App\Models\SubCaste::class);
-}
+    public function caste()
+    {
+        return $this->belongsTo(\App\Models\Caste::class);
+    }
+
+    public function subCaste()
+    {
+        return $this->belongsTo(\App\Models\SubCaste::class);
+    }
 
     public function maritalStatus()
     {
@@ -617,7 +629,7 @@ public function subCaste()
         return $this->hasOne(\App\Models\ProfileHoroscopeData::class, 'profile_id');
     }
 
-	public $timestamps = true;
+    public $timestamps = true;
 
     /**
      * Model-level governance seal: prevent update/save from bypassing locks and conflict detection.
@@ -665,7 +677,7 @@ public function subCaste()
             }
         }
 
-        $clone = new self();
+        $clone = new self;
         $clone->setRawAttributes($model->getOriginal());
         $clone->id = $model->id;
         $clone->exists = true;
@@ -676,13 +688,14 @@ public function subCaste()
         if (count($created) > 0) {
             throw ValidationException::withMessages([
                 'lifecycle_state' => [
-                    'Governance: conflicting change detected. ' . count($created) . ' conflict(s) created. Direct overwrite is not allowed.',
+                    'Governance: conflicting change detected. '.count($created).' conflict(s) created. Direct overwrite is not allowed.',
                 ],
             ]);
         }
     }
-	public function marriages()
-{
-    return $this->hasMany(ProfileMarriage::class, 'profile_id');
-}
+
+    public function marriages()
+    {
+        return $this->hasMany(ProfileMarriage::class, 'profile_id');
+    }
 }

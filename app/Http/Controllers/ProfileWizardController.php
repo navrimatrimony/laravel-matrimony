@@ -3,10 +3,12 @@
 namespace App\Http\Controllers;
 
 use App\Models\MatrimonyProfile;
+use App\Services\CareerHistoryRowNormalizer;
 use App\Services\FieldCatalogService;
 use App\Services\ProfileCompletionService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Rule;
 
@@ -61,6 +63,7 @@ class ProfileWizardController extends Controller
         $pct = ProfileCompletionService::calculateCompletionPercentage($profile);
         if ($pct >= 100) {
             session()->forget('wizard_minimal');
+
             return redirect()->route('matrimony.profiles.index')->with('info', __('wizard.profile_complete'));
         }
 
@@ -86,6 +89,7 @@ class ProfileWizardController extends Controller
         if (! in_array($section, $allowed, true)) {
             $minimal = $this->isMinimalWizard();
             $first = $minimal ? FieldCatalogService::getFirstSection(true) : FieldCatalogService::getFirstSection(false);
+
             return redirect()->route('matrimony.profile.wizard.section', ['section' => $first])
                 ->with('error', $minimal ? __('wizard.complete_short_onboarding_first') : __('wizard.invalid_section'));
         }
@@ -147,7 +151,7 @@ class ProfileWizardController extends Controller
         }
 
         $marriage = \App\Models\ProfileMarriage::where('profile_id', $profile->id)->orderBy('id')->first();
-        $view = 'matrimony.profile.wizard.sections.marriage_partials.marriages_' . $status;
+        $view = 'matrimony.profile.wizard.sections.marriage_partials.marriages_'.$status;
 
         return response()->view($view, ['marriage' => $marriage], 200, [
             'Content-Type' => 'text/html; charset=UTF-8',
@@ -176,6 +180,7 @@ class ProfileWizardController extends Controller
         if (! in_array($section, $allowed, true)) {
             $minimal = $this->isMinimalWizard();
             $first = $minimal ? FieldCatalogService::getFirstSection(true) : FieldCatalogService::getFirstSection(false);
+
             return redirect()->route('matrimony.profile.wizard.section', ['section' => $first])
                 ->with('error', __('wizard.invalid_section'));
         }
@@ -198,6 +203,7 @@ class ProfileWizardController extends Controller
                 return redirect()->route('matrimony.profile.wizard.section', ['section' => $next])
                     ->with('info', 'Use the photo upload engine above to add or change your photo.');
             }
+
             return redirect()->route('matrimony.profiles.index')->with('info', 'You can add a photo anytime from the photo section.');
         }
 
@@ -259,6 +265,7 @@ class ProfileWizardController extends Controller
         }
         if ($minimal) {
             session()->forget('wizard_minimal');
+
             return redirect()->route('matrimony.profiles.index')
                 ->with('success', 'Profile saved. You can complete the rest of your profile anytime from your profile page.');
         }
@@ -372,11 +379,12 @@ class ProfileWizardController extends Controller
                 // Dedupe education rows (same degree/specialization/university/year) so full form does not show duplicate blocks.
                 $seen = [];
                 $data['profileEducation'] = $profileEducation->filter(function ($r) use (&$seen) {
-                    $key = implode('|', [trim((string)($r->degree ?? '')), trim((string)($r->specialization ?? '')), trim((string)($r->university ?? '')), (string)($r->year_completed ?? '')]);
+                    $key = implode('|', [trim((string) ($r->degree ?? '')), trim((string) ($r->specialization ?? '')), trim((string) ($r->university ?? '')), (string) ($r->year_completed ?? '')]);
                     if (isset($seen[$key])) {
                         return false;
                     }
                     $seen[$key] = true;
+
                     return true;
                 })->values();
                 $profileCareer = DB::table('profile_career')->where('profile_id', $profile->id)->orderBy('id')->get();
@@ -429,6 +437,7 @@ class ProfileWizardController extends Controller
                     if ($spouse && (trim((string) ($spouse->name ?? '')) !== '' || trim((string) ($spouse->address_line ?? '')) !== '' || trim((string) ($spouse->occupation_title ?? '')) !== '')) {
                         $arr['marital_status'] = 'married';
                     }
+
                     return (object) $arr;
                 });
                 // For "Siblings?" Yes/No: when No, sibling form is hidden
@@ -445,6 +454,7 @@ class ProfileWizardController extends Controller
                     if (empty($arr['address_line']) && ! empty(trim((string) ($arr['notes'] ?? '')))) {
                         $arr['address_line'] = $arr['notes'];
                     }
+
                     return (object) $arr;
                 };
                 $parentsFamilyTypes = ['native_place', 'paternal_grandfather', 'paternal_grandmother', 'paternal_uncle', 'wife_paternal_uncle', 'paternal_aunt', 'husband_paternal_aunt', 'Cousin'];
@@ -498,6 +508,7 @@ class ProfileWizardController extends Controller
                     if (empty($arr['address_line']) && ! empty(trim((string) ($arr['notes'] ?? '')))) {
                         $arr['address_line'] = $arr['notes'];
                     }
+
                     return (object) $arr;
                 };
                 $maternalFamilyTypes = ['maternal_address_ajol', 'maternal_grandfather', 'maternal_grandmother', 'maternal_uncle', 'wife_maternal_uncle', 'maternal_aunt', 'husband_maternal_aunt', 'maternal_cousin'];
@@ -538,6 +549,7 @@ class ProfileWizardController extends Controller
                     $hasType = ! empty($r->asset_type_id ?? null);
                     $hasLoc = trim((string) ($r->location ?? '')) !== '';
                     $hasOwn = ! empty($r->ownership_type_id ?? null);
+
                     return $hasType || $hasLoc || $hasOwn;
                 })->values();
                 $data['assetTypes'] = \App\Models\MasterAssetType::where('is_active', true)->get();
@@ -605,7 +617,7 @@ class ProfileWizardController extends Controller
                 $preferredDistrictIds = DB::table('profile_preferred_districts')->where('profile_id', $profile->id)->pluck('district_id')->all();
 
                 $suggestions = \App\Services\PartnerPreferenceSuggestionService::suggestForProfile($profile);
-                if (!$criteria && empty($preferredReligionIds) && empty($preferredCasteIds) && empty($preferredDistrictIds)) {
+                if (! $criteria && empty($preferredReligionIds) && empty($preferredCasteIds) && empty($preferredDistrictIds)) {
                     $criteria = (object) [
                         'preferred_age_min' => $suggestions['preferred_age_min'],
                         'preferred_age_max' => $suggestions['preferred_age_max'],
@@ -622,7 +634,7 @@ class ProfileWizardController extends Controller
                     $data['preferencePreset'] = 'custom';
                 }
                 $base = $suggestions;
-                if (!empty($base['preferred_city_id'])) {
+                if (! empty($base['preferred_city_id'])) {
                     $cityName = \App\Models\City::where('id', $base['preferred_city_id'])->value('name');
                     if ($cityName) {
                         $base['preferred_city_name'] = $cityName;
@@ -973,6 +985,10 @@ class ProfileWizardController extends Controller
             'work_city_id' => $workCityId,
             'work_state_id' => $workStateId,
         ];
+        if (Schema::hasColumn('matrimony_profiles', 'work_location_text')) {
+            $wlt = trim((string) $request->input('work_location_text', ''));
+            $core['work_location_text'] = $wlt !== '' ? mb_substr($wlt, 0, 255) : null;
+        }
         $core = array_merge($core, $incomeCore);
         $core = array_map(fn ($v) => $v === '' ? null : $v, $core);
 
@@ -988,15 +1004,13 @@ class ProfileWizardController extends Controller
         }
         $career_history = [];
         foreach ($request->input('career_history', []) as $row) {
-            $career_history[] = [
-                'id' => ! empty($row['id']) ? (int) $row['id'] : null,
-                'designation' => trim((string) ($row['designation'] ?? '')),
-                'company' => trim((string) ($row['company'] ?? '')),
-                'location' => trim((string) ($row['location'] ?? '')) ?: null,
-                'start_year' => ! empty($row['start_year']) ? (int) $row['start_year'] : null,
-                'end_year' => ! empty($row['end_year']) ? (int) $row['end_year'] : null,
-                'is_current' => isset($row['is_current']) && (string) $row['is_current'] === '1',
-            ];
+            if (! is_array($row)) {
+                continue;
+            }
+            $normalized = CareerHistoryRowNormalizer::fromRequestRowOrNull($row);
+            if ($normalized !== null) {
+                $career_history[] = $normalized;
+            }
         }
 
         return [
@@ -1156,15 +1170,13 @@ class ProfileWizardController extends Controller
 
         $career_history = [];
         foreach ($request->input('career_history', []) as $row) {
-            $career_history[] = [
-                'id' => ! empty($row['id']) ? (int) $row['id'] : null,
-                'designation' => trim((string) ($row['designation'] ?? '')),
-                'company' => trim((string) ($row['company'] ?? '')),
-                'location' => trim((string) ($row['location'] ?? '')) ?: null,
-                'start_year' => ! empty($row['start_year']) ? (int) $row['start_year'] : null,
-                'end_year' => ! empty($row['end_year']) ? (int) $row['end_year'] : null,
-                'is_current' => isset($row['is_current']) && (string) $row['is_current'] === '1',
-            ];
+            if (! is_array($row)) {
+                continue;
+            }
+            $normalized = CareerHistoryRowNormalizer::fromRequestRowOrNull($row);
+            if ($normalized !== null) {
+                $career_history[] = $normalized;
+            }
         }
 
         $snapshot = ['core' => $core];
@@ -1188,45 +1200,46 @@ class ProfileWizardController extends Controller
         if ($hasSiblings === false) {
             // User chose "No" — do not persist sibling rows
         } else {
-        foreach ($request->input('siblings', []) as $row) {
-            $relationType = in_array($row['relation_type'] ?? null, ['brother', 'sister'], true) ? $row['relation_type'] : null;
-            $maritalStatus = in_array($row['marital_status'] ?? null, ['unmarried', 'married'], true) ? $row['marital_status'] : null;
-            $isMarried = $maritalStatus === 'married' || ! empty($row['is_married']);
-            $spouseIn = $row['spouse'] ?? [];
-            $siblingRow = [
-                'id' => ! empty($row['id']) ? (int) $row['id'] : null,
-                'relation_type' => $relationType,
-                'name' => trim((string) ($row['name'] ?? '')) ?: null,
-                'gender' => in_array($row['gender'] ?? null, ['male', 'female'], true) ? $row['gender'] : null,
-                'marital_status' => $maritalStatus,
-                'occupation' => trim((string) ($row['occupation'] ?? '')) ?: null,
-                'city_id' => ! empty($row['city_id']) ? (int) $row['city_id'] : null,
-                'contact_number' => trim((string) ($row['contact_number'] ?? '')) ?: null,
-                'contact_number_2' => trim((string) ($row['contact_number_2'] ?? '')) ?: null,
-                'contact_number_3' => trim((string) ($row['contact_number_3'] ?? '')) ?: null,
-                'notes' => trim((string) ($row['notes'] ?? '')) ?: null,
-                'sort_order' => isset($row['sort_order']) && $row['sort_order'] !== '' ? (int) $row['sort_order'] : 0,
-            ];
-            if ($isMarried && (array_key_exists('name', $spouseIn) || array_key_exists('occupation_title', $spouseIn) || array_key_exists('contact_number', $spouseIn) || array_key_exists('city_id', $spouseIn))) {
-                $siblingRow['spouse'] = [
-                    'name' => trim((string) ($spouseIn['name'] ?? '')) ?: null,
-                    'occupation_title' => trim((string) ($spouseIn['occupation_title'] ?? '')) ?: null,
-                    'contact_number' => trim((string) ($spouseIn['contact_number'] ?? '')) ?: null,
-                    'address_line' => trim((string) ($spouseIn['address_line'] ?? '')) ?: null,
-                    'city_id' => ! empty($spouseIn['city_id']) ? (int) $spouseIn['city_id'] : null,
-                    'taluka_id' => ! empty($spouseIn['taluka_id']) ? (int) $spouseIn['taluka_id'] : null,
-                    'district_id' => ! empty($spouseIn['district_id']) ? (int) $spouseIn['district_id'] : null,
-                    'state_id' => ! empty($spouseIn['state_id']) ? (int) $spouseIn['state_id'] : null,
+            foreach ($request->input('siblings', []) as $row) {
+                $relationType = in_array($row['relation_type'] ?? null, ['brother', 'sister'], true) ? $row['relation_type'] : null;
+                $maritalStatus = in_array($row['marital_status'] ?? null, ['unmarried', 'married'], true) ? $row['marital_status'] : null;
+                $isMarried = $maritalStatus === 'married' || ! empty($row['is_married']);
+                $spouseIn = $row['spouse'] ?? [];
+                $siblingRow = [
+                    'id' => ! empty($row['id']) ? (int) $row['id'] : null,
+                    'relation_type' => $relationType,
+                    'name' => trim((string) ($row['name'] ?? '')) ?: null,
+                    'gender' => in_array($row['gender'] ?? null, ['male', 'female'], true) ? $row['gender'] : null,
+                    'marital_status' => $maritalStatus,
+                    'occupation' => trim((string) ($row['occupation'] ?? '')) ?: null,
+                    'city_id' => ! empty($row['city_id']) ? (int) $row['city_id'] : null,
+                    'contact_number' => trim((string) ($row['contact_number'] ?? '')) ?: null,
+                    'contact_number_2' => trim((string) ($row['contact_number_2'] ?? '')) ?: null,
+                    'contact_number_3' => trim((string) ($row['contact_number_3'] ?? '')) ?: null,
+                    'notes' => trim((string) ($row['notes'] ?? '')) ?: null,
+                    'sort_order' => isset($row['sort_order']) && $row['sort_order'] !== '' ? (int) $row['sort_order'] : 0,
                 ];
+                if ($isMarried && (array_key_exists('name', $spouseIn) || array_key_exists('occupation_title', $spouseIn) || array_key_exists('contact_number', $spouseIn) || array_key_exists('city_id', $spouseIn))) {
+                    $siblingRow['spouse'] = [
+                        'name' => trim((string) ($spouseIn['name'] ?? '')) ?: null,
+                        'occupation_title' => trim((string) ($spouseIn['occupation_title'] ?? '')) ?: null,
+                        'contact_number' => trim((string) ($spouseIn['contact_number'] ?? '')) ?: null,
+                        'address_line' => trim((string) ($spouseIn['address_line'] ?? '')) ?: null,
+                        'city_id' => ! empty($spouseIn['city_id']) ? (int) $spouseIn['city_id'] : null,
+                        'taluka_id' => ! empty($spouseIn['taluka_id']) ? (int) $spouseIn['taluka_id'] : null,
+                        'district_id' => ! empty($spouseIn['district_id']) ? (int) $spouseIn['district_id'] : null,
+                        'state_id' => ! empty($spouseIn['state_id']) ? (int) $spouseIn['state_id'] : null,
+                    ];
+                }
+                $siblings[] = $siblingRow;
             }
-            $siblings[] = $siblingRow;
-        }
         }
 
         $core = [];
         if ($request->has('has_siblings')) {
             $core['has_siblings'] = $hasSiblings;
         }
+
         return [
             'core' => $core,
             'siblings' => $siblings,
@@ -1284,6 +1297,7 @@ class ProfileWizardController extends Controller
     private function loadRelativesFromDb(int $profileId, array $relationTypes): array
     {
         $rows = DB::table('profile_relatives')->where('profile_id', $profileId)->whereIn('relation_type', $relationTypes)->orderBy('id')->get();
+
         return $rows->map(fn ($r) => [
             'id' => $r->id,
             'relation_type' => $r->relation_type ?? '',
@@ -1303,6 +1317,7 @@ class ProfileWizardController extends Controller
     private function loadAllianceNetworksFromDb(int $profileId): array
     {
         $rows = DB::table('profile_alliance_networks')->where('profile_id', $profileId)->orderBy('id')->get();
+
         return $rows->map(fn ($r) => [
             'id' => $r->id,
             'surname' => $r->surname ?? '',
@@ -1433,7 +1448,7 @@ class ProfileWizardController extends Controller
         $cityIdsFromPreferred = [];
         if (is_array($preferredCitiesInput)) {
             foreach ($preferredCitiesInput as $row) {
-                if (!is_array($row)) {
+                if (! is_array($row)) {
                     continue;
                 }
                 $cid = $row['city_id'] ?? $row['preferred_city_id'] ?? null;
@@ -1466,16 +1481,16 @@ class ProfileWizardController extends Controller
         }
 
         $preferredCityId = $validated['preferred_city_id'] ?? null;
-        if ($preferredCityId === null && !empty($cityIdsFromPreferred)) {
+        if ($preferredCityId === null && ! empty($cityIdsFromPreferred)) {
             $preferredCityId = $cityIdsFromPreferred[0];
         }
 
         $districtIds = $validated['preferred_district_ids'] ?? [];
-        if (!empty($cityIdsFromPreferred)) {
+        if (! empty($cityIdsFromPreferred)) {
             $talukaIds = DB::table('cities')->whereIn('id', $cityIdsFromPreferred)->pluck('taluka_id')->filter()->all();
-            if (!empty($talukaIds)) {
+            if (! empty($talukaIds)) {
                 $districtsFromCities = DB::table('talukas')->whereIn('id', $talukaIds)->pluck('district_id')->filter()->map(fn ($id) => (int) $id)->all();
-                if (!empty($districtsFromCities)) {
+                if (! empty($districtsFromCities)) {
                     $districtIds = array_values(array_unique(array_merge($districtIds, $districtsFromCities)));
                 }
             }
@@ -1531,7 +1546,7 @@ class ProfileWizardController extends Controller
         ]);
 
         $file = $request->file('profile_photo');
-        $filename = time() . '_' . basename($file->getClientOriginalName());
+        $filename = time().'_'.basename($file->getClientOriginalName());
         $file->move(public_path('uploads/matrimony_photos'), $filename);
 
         $photoApprovalRequired = \App\Services\AdminSettingService::isPhotoApprovalRequired();
@@ -1687,8 +1702,8 @@ class ProfileWizardController extends Controller
         $contacts = [];
         $labels = ['Primary', 'Self 2', 'Self 3'];
         for ($i = 0; $i < 3; $i++) {
-            $key = $i === 0 ? 'primary_contact_number' : 'primary_contact_number_' . ($i + 1);
-            $whatsappKey = $i === 0 ? 'primary_contact_whatsapp' : 'primary_contact_whatsapp_' . ($i + 1);
+            $key = $i === 0 ? 'primary_contact_number' : 'primary_contact_number_'.($i + 1);
+            $whatsappKey = $i === 0 ? 'primary_contact_whatsapp' : 'primary_contact_whatsapp_'.($i + 1);
             $phone = trim((string) $request->input($key, ''));
             if ($phone !== '') {
                 $pref = $request->input($whatsappKey);
@@ -1759,18 +1774,19 @@ class ProfileWizardController extends Controller
             }
         }
     }
-	protected function buildMarriagesSnapshot($request): array
-{
+
+    protected function buildMarriagesSnapshot($request): array
+    {
         $maritalStatusId = $request->input('marital_status_id');
         $statusKey = \App\Models\MasterMaritalStatus::where('id', $maritalStatusId)->value('key');
         $statusesRequiringChildren = ['divorced', 'separated', 'widowed'];
 
         $rules = [
             'marital_status_id' => ['required', Rule::exists('master_marital_statuses', 'id')->where(fn ($q) => $q->where('is_active', true))],
-            'marriages.*.marriage_year' => ['nullable', 'integer', 'min:1901', 'max:' . (int) date('Y')],
-            'marriages.*.separation_year' => ['nullable', 'integer', 'min:1901', 'max:' . (int) date('Y')],
-            'marriages.*.divorce_year' => ['nullable', 'integer', 'min:1901', 'max:' . (int) date('Y')],
-            'marriages.*.spouse_death_year' => ['nullable', 'integer', 'min:1901', 'max:' . (int) date('Y')],
+            'marriages.*.marriage_year' => ['nullable', 'integer', 'min:1901', 'max:'.(int) date('Y')],
+            'marriages.*.separation_year' => ['nullable', 'integer', 'min:1901', 'max:'.(int) date('Y')],
+            'marriages.*.divorce_year' => ['nullable', 'integer', 'min:1901', 'max:'.(int) date('Y')],
+            'marriages.*.spouse_death_year' => ['nullable', 'integer', 'min:1901', 'max:'.(int) date('Y')],
         ];
         if ($statusKey && in_array($statusKey, $statusesRequiringChildren, true)) {
             $rules['has_children'] = ['required', 'in:0,1'];
@@ -1884,23 +1900,24 @@ class ProfileWizardController extends Controller
      */
     private function incomeEngineValidationRules(Request $request, string $prefix): array
     {
-        $vt = $request->input($prefix . '_value_type');
+        $vt = $request->input($prefix.'_value_type');
         $rules = [
-            $prefix . '_period' => 'nullable|in:annual,monthly,weekly,daily',
-            $prefix . '_value_type' => 'nullable|in:exact,approximate,range,undisclosed',
-            $prefix . '_currency_id' => 'nullable|exists:master_income_currencies,id',
-            $prefix . '_private' => 'nullable|boolean',
+            $prefix.'_period' => 'nullable|in:annual,monthly,weekly,daily',
+            $prefix.'_value_type' => 'nullable|in:exact,approximate,range,undisclosed',
+            $prefix.'_currency_id' => 'nullable|exists:master_income_currencies,id',
+            $prefix.'_private' => 'nullable|boolean',
         ];
         if ($prefix === 'family_income') {
-            $rules[$prefix . '_currency_id'] = 'nullable|exists:master_income_currencies,id';
+            $rules[$prefix.'_currency_id'] = 'nullable|exists:master_income_currencies,id';
         }
         if (in_array($vt, ['exact', 'approximate'], true)) {
-            $rules[$prefix . '_amount'] = 'required|numeric|min:0';
+            $rules[$prefix.'_amount'] = 'required|numeric|min:0';
         }
         if ($vt === 'range') {
-            $rules[$prefix . '_min_amount'] = 'required|numeric|min:0';
-            $rules[$prefix . '_max_amount'] = 'required|numeric|min:0|gte:' . $prefix . '_min_amount';
+            $rules[$prefix.'_min_amount'] = 'required|numeric|min:0';
+            $rules[$prefix.'_max_amount'] = 'required|numeric|min:0|gte:'.$prefix.'_min_amount';
         }
+
         return $rules;
     }
 
@@ -1909,12 +1926,12 @@ class ProfileWizardController extends Controller
      */
     private function buildIncomeEngineCore(Request $request, string $prefix, \App\Services\IncomeEngineService $service): array
     {
-        $period = $request->input($prefix . '_period') ?: 'annual';
-        $valueType = $request->input($prefix . '_value_type');
-        $amount = $request->filled($prefix . '_amount') ? (float) $request->input($prefix . '_amount') : null;
-        $minAmount = $request->filled($prefix . '_min_amount') ? (float) $request->input($prefix . '_min_amount') : null;
-        $maxAmount = $request->filled($prefix . '_max_amount') ? (float) $request->input($prefix . '_max_amount') : null;
-        $currencyIdKey = $prefix . '_currency_id';
+        $period = $request->input($prefix.'_period') ?: 'annual';
+        $valueType = $request->input($prefix.'_value_type');
+        $amount = $request->filled($prefix.'_amount') ? (float) $request->input($prefix.'_amount') : null;
+        $minAmount = $request->filled($prefix.'_min_amount') ? (float) $request->input($prefix.'_min_amount') : null;
+        $maxAmount = $request->filled($prefix.'_max_amount') ? (float) $request->input($prefix.'_max_amount') : null;
+        $currencyIdKey = $prefix.'_currency_id';
         $defaultInr = \App\Models\MasterIncomeCurrency::where('code', 'INR')->value('id');
         $currencyId = $request->input($currencyIdKey) ? (int) $request->input($currencyIdKey) : ($prefix === 'income' ? $defaultInr : null);
         if ($prefix === 'family_income' && ! $currencyId) {
@@ -1923,20 +1940,21 @@ class ProfileWizardController extends Controller
         $normalized = $service->normalizeToAnnual($valueType, $period, $amount, $minAmount, $maxAmount);
 
         $out = [
-            $prefix . '_period' => $period,
-            $prefix . '_value_type' => $valueType,
-            $prefix . '_amount' => $amount,
-            $prefix . '_min_amount' => $minAmount,
-            $prefix . '_max_amount' => $maxAmount,
-            $prefix . '_normalized_annual_amount' => $normalized,
+            $prefix.'_period' => $period,
+            $prefix.'_value_type' => $valueType,
+            $prefix.'_amount' => $amount,
+            $prefix.'_min_amount' => $minAmount,
+            $prefix.'_max_amount' => $maxAmount,
+            $prefix.'_normalized_annual_amount' => $normalized,
         ];
         if ($prefix === 'income') {
             $out['income_private'] = $request->boolean('income_private');
             $out['income_currency_id'] = $currencyId ?: $defaultInr;
         } else {
-            $out[$prefix . '_currency_id'] = $currencyId;
-            $out[$prefix . '_private'] = $request->boolean($prefix . '_private');
+            $out[$prefix.'_currency_id'] = $currencyId;
+            $out[$prefix.'_private'] = $request->boolean($prefix.'_private');
         }
+
         return $out;
     }
 }

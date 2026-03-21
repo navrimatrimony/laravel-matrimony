@@ -2,34 +2,13 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\MasterAddressType;
-use App\Models\MasterAssetType;
-use App\Models\MasterBloodGroup;
-use App\Models\MasterChildLivingWith;
-use App\Models\MasterComplexion;
-use App\Models\MasterContactRelation;
-use App\Models\MasterFamilyType;
-use App\Models\MasterGender;
-use App\Models\MasterGan;
-use App\Models\MasterIncomeCurrency;
-use App\Models\MasterMangalDoshType;
-use App\Models\MasterMaritalStatus;
-use App\Models\MasterNadi;
-use App\Models\MasterNakshatra;
-use App\Models\MasterOwnershipType;
-use App\Models\MasterPhysicalBuild;
-use App\Models\MasterRashi;
-use App\Models\MasterYoni;
 use App\Models\MatrimonyProfile;
-use App\Models\ProfileFieldConfig;
 use App\Models\ProfilePhoto;
 use App\Models\Shortlist;
 use App\Services\ProfileCompletenessService;
 use App\Services\ProfileFieldConfigurationService;
-use App\Services\ProfileFieldLockService;
 use App\Services\ViewTrackingService;
 use Illuminate\Http\Request;
-
 
 /*
 |--------------------------------------------------------------------------
@@ -69,14 +48,16 @@ class MatrimonyProfileController extends Controller
         foreach ($coreKeys as $key) {
             if (array_key_exists($key, $overrides)) {
                 $core[$key] = $overrides[$key];
+
                 continue;
             }
-            if ($key === 'gender_id' && !$request->has('gender_id')) {
+            if ($key === 'gender_id' && ! $request->has('gender_id')) {
                 $core[$key] = $profile->getAttribute('gender_id');
+
                 continue;
             }
             $enabled = $key === 'location' ? isset($enabledMap['location']) : isset($enabledMap[$key]);
-            if (!$enabled && !in_array($key, ['gender_id', 'profile_photo', 'photo_approved', 'photo_rejected_at', 'photo_rejection_reason', 'is_suspended'], true)) {
+            if (! $enabled && ! in_array($key, ['gender_id', 'profile_photo', 'photo_approved', 'photo_rejected_at', 'photo_rejection_reason', 'is_suspended'], true)) {
                 continue;
             }
             if ($request->has($key) || array_key_exists($key, $overrides)) {
@@ -114,8 +95,8 @@ class MatrimonyProfileController extends Controller
         if ($request->has('children') && is_array($request->input('children'))) {
             $currentYear = (int) date('Y');
             foreach (array_values($request->input('children')) as $row) {
-                $id = !empty($row['id']) ? (int) $row['id'] : null;
-                $birthYear = !empty($row['child_birth_year']) ? (int) $row['child_birth_year'] : null;
+                $id = ! empty($row['id']) ? (int) $row['id'] : null;
+                $birthYear = ! empty($row['child_birth_year']) ? (int) $row['child_birth_year'] : null;
                 $age = $birthYear > 0 ? $currentYear - $birthYear : 0;
                 $custody = $row['custody_status'] ?? '';
                 $children[] = [
@@ -132,11 +113,11 @@ class MatrimonyProfileController extends Controller
         if ($request->has('education_history') && is_array($request->input('education_history'))) {
             foreach (array_values($request->input('education_history')) as $row) {
                 $education_history[] = [
-                    'id' => !empty($row['id']) ? (int) $row['id'] : null,
+                    'id' => ! empty($row['id']) ? (int) $row['id'] : null,
                     'degree' => trim((string) ($row['degree'] ?? '')),
                     'specialization' => trim((string) ($row['field_of_study'] ?? '')),
                     'university' => trim((string) ($row['institution'] ?? '')),
-                    'year_completed' => !empty($row['year_completed']) ? (int) $row['year_completed'] : 0,
+                    'year_completed' => ! empty($row['year_completed']) ? (int) $row['year_completed'] : 0,
                 ];
             }
             $latest = collect($education_history)->filter(fn ($r) => ($r['year_completed'] ?? 0) > 0 && ($r['degree'] ?? '') !== '')->sortByDesc('year_completed')->first();
@@ -149,11 +130,14 @@ class MatrimonyProfileController extends Controller
         if ($request->has('career_history') && is_array($request->input('career_history'))) {
             foreach (array_values($request->input('career_history')) as $row) {
                 $career_history[] = [
-                    'id' => !empty($row['id']) ? (int) $row['id'] : null,
-                    'designation' => trim((string) ($row['job_title'] ?? '')),
-                    'company' => trim((string) ($row['company_name'] ?? '')),
-                    'start_year' => !empty($row['start_year']) ? (int) $row['start_year'] : null,
-                    'end_year' => !empty($row['end_year']) ? (int) $row['end_year'] : null,
+                    'id' => ! empty($row['id']) ? (int) $row['id'] : null,
+                    'designation' => trim((string) ($row['job_title'] ?? $row['designation'] ?? '')),
+                    'company' => trim((string) ($row['company_name'] ?? $row['company'] ?? '')),
+                    'location' => trim((string) ($row['location'] ?? '')) ?: null,
+                    'city_id' => ! empty($row['city_id']) && is_numeric($row['city_id']) ? (int) $row['city_id'] : null,
+                    'start_year' => ! empty($row['start_year']) ? (int) $row['start_year'] : null,
+                    'end_year' => ! empty($row['end_year']) ? (int) $row['end_year'] : null,
+                    'is_current' => isset($row['is_current']) && (string) $row['is_current'] === '1',
                 ];
             }
         }
@@ -175,6 +159,7 @@ class MatrimonyProfileController extends Controller
         if ($request->has('extended_fields') && is_array($request->input('extended_fields'))) {
             $snapshot['extended_fields'] = $request->input('extended_fields');
         }
+
         return $snapshot;
     }
 
@@ -187,19 +172,19 @@ class MatrimonyProfileController extends Controller
     |
     */
     public function edit()
-{
-    $user = auth()->user();
+    {
+        $user = auth()->user();
 
-    // 🔒 GUARD: Profile नसेल तर edit allowed नाही
-    if (!$user->matrimonyProfile) {
-        return redirect()
-            ->route('matrimony.profile.wizard.section', ['section' => 'basic-info'])
-            ->with('error', __('interest.create_profile_first'));
+        // 🔒 GUARD: Profile नसेल तर edit allowed नाही
+        if (! $user->matrimonyProfile) {
+            return redirect()
+                ->route('matrimony.profile.wizard.section', ['section' => 'basic-info'])
+                ->with('error', __('interest.create_profile_first'));
+        }
+
+        // Phase-5B: Single edit path = wizard. Redirect to wizard (full section).
+        return redirect()->route('matrimony.profile.wizard.section', ['section' => 'full']);
     }
-
-    // Phase-5B: Single edit path = wizard. Redirect to wizard (full section).
-    return redirect()->route('matrimony.profile.wizard.section', ['section' => 'full']);
-}
 
     /**
      * Phase-5 Point 6: edit-full shows same form as wizard section=full. Redirect to wizard.
@@ -212,6 +197,7 @@ class MatrimonyProfileController extends Controller
                 ->route('matrimony.profile.wizard.section', ['section' => 'basic-info'])
                 ->with('error', __('profile_actions.create_profile_first'));
         }
+
         return redirect()->route('matrimony.profile.wizard.section', ['section' => 'full']);
     }
 
@@ -253,6 +239,7 @@ class MatrimonyProfileController extends Controller
                 ->with('warning', __('common.some_changes_conflict'))
                 ->withInput();
         }
+
         return redirect()->route('matrimony.profiles.index')->with('success', __('common.profile_updated'));
     }
 
@@ -264,282 +251,282 @@ class MatrimonyProfileController extends Controller
         abort(404);
     }
 
-public function uploadPhoto(Request $request)
-{
-    $user = auth()->user();
+    public function uploadPhoto(Request $request)
+    {
+        $user = auth()->user();
 
-    if (! $user || ! $user->matrimonyProfile) {
-        return redirect()
-            ->route('matrimony.profile.wizard.section', ['section' => 'basic-info'])
-            ->with('error', __('profile_actions.create_profile_first'));
-    }
-
-    $profile = $user->matrimonyProfile;
-
-    $galleryPhotosQuery = ProfilePhoto::query()
-        ->where('profile_id', $profile->id);
-
-    if (\Illuminate\Support\Facades\Schema::hasColumn('profile_photos', 'sort_order')) {
-        $galleryPhotosQuery->orderByDesc('is_primary')->orderBy('sort_order')->orderBy('id');
-    } else {
-        $galleryPhotosQuery->orderByDesc('is_primary')->orderByDesc('created_at')->orderBy('id');
-    }
-
-    $galleryPhotos = $galleryPhotosQuery->get();
-
-    $photoApprovalRequired = \App\Services\AdminSettingService::isPhotoApprovalRequired();
-    $photoMaxPerProfile = (int) \App\Models\AdminSetting::getValue('photo_max_per_profile', '5');
-
-    $currentPhotoCount = $galleryPhotos->count();
-    $photoSlotsRemaining = max(0, $photoMaxPerProfile - $currentPhotoCount);
-    $photoLimitReached = $currentPhotoCount >= $photoMaxPerProfile;
-
-    $fromOnboarding = $request->query('from') === 'onboarding';
-
-    return view('matrimony.profile.upload-photo', [
-        'profile' => $profile,
-        'galleryPhotos' => $galleryPhotos,
-        'photoApprovalRequired' => $photoApprovalRequired,
-        'photoMaxPerProfile' => $photoMaxPerProfile,
-        'currentPhotoCount' => $currentPhotoCount,
-        'photoSlotsRemaining' => $photoSlotsRemaining,
-        'photoLimitReached' => $photoLimitReached,
-        'fromOnboarding' => $fromOnboarding,
-    ]);
-}
-
-public function storePhoto(Request $request)
-{
-    $maxUploadMb = (int) \App\Models\AdminSetting::getValue('photo_max_upload_mb', '8');
-    $maxUploadKb = max(1, $maxUploadMb) * 1024;
-
-    $request->validate([
-        'profile_photo' => 'required|image|max:'.$maxUploadKb,
-        'profile_photos' => 'sometimes|array',
-        'profile_photos.*' => 'image|max:'.$maxUploadKb,
-    ]);
-
-    $user = auth()->user();
-
-    // 🔒 Guard: MatrimonyProfile must exist
-if (!$user->matrimonyProfile) {
-    return redirect()
-        ->route('matrimony.profile.wizard.section', ['section' => 'basic-info'])
-        ->with('error', __('profile_actions.create_profile_first'));
-}
-
-    $profile = $user->matrimonyProfile;
-    if ($profile->user_id !== $user->id) {
-        abort(403, __('common.unauthorized_photo_update'));
-    }
-
-    // Phase-5 PART-5: Block manual edit when lifecycle blocks it
-    if (in_array($profile->lifecycle_state, [
-        'intake_uploaded', 'awaiting_user_approval', 'approved_pending_mutation', 'conflict_pending',
-    ], true)) {
-        return redirect()->back()->with('error', __('common.profile_edit_blocked_intake_conflict'));
-    }
-
-    $maxPerProfile = (int) \App\Models\AdminSetting::getValue('photo_max_per_profile', '5');
-    $maxEdgePx = (int) \App\Models\AdminSetting::getValue('photo_max_edge_px', '1200');
-    $maxEdgePx = max(400, $maxEdgePx);
-
-    $primaryFile = $request->file('profile_photo');
-    $additionalFiles = $request->file('profile_photos', []);
-    if (! is_array($additionalFiles)) {
-        $additionalFiles = [];
-    }
-    $additionalFiles = array_values(array_filter($additionalFiles));
-
-    $existingPhotosCount = ProfilePhoto::query()
-        ->where('profile_id', $profile->id)
-        ->count();
-
-    $incomingCount = 1 + count($additionalFiles);
-    if (($existingPhotosCount + $incomingCount) > $maxPerProfile) {
-        $limitMessage = "You have already used all {$maxPerProfile} photo slots. Delete one photo before uploading a new one.";
-
-        if ($request->expectsJson() || $request->ajax()) {
-            return response()->json([
-                'message' => $limitMessage,
-                'errors' => [
-                    'profile_photos' => [$limitMessage],
-                ],
-            ], 422);
+        if (! $user || ! $user->matrimonyProfile) {
+            return redirect()
+                ->route('matrimony.profile.wizard.section', ['section' => 'basic-info'])
+                ->with('error', __('profile_actions.create_profile_first'));
         }
 
-        return redirect()->back()
-            ->withErrors([
-                'profile_photos' => $limitMessage,
-            ])
-            ->withInput();
+        $profile = $user->matrimonyProfile;
+
+        $galleryPhotosQuery = ProfilePhoto::query()
+            ->where('profile_id', $profile->id);
+
+        if (\Illuminate\Support\Facades\Schema::hasColumn('profile_photos', 'sort_order')) {
+            $galleryPhotosQuery->orderByDesc('is_primary')->orderBy('sort_order')->orderBy('id');
+        } else {
+            $galleryPhotosQuery->orderByDesc('is_primary')->orderByDesc('created_at')->orderBy('id');
+        }
+
+        $galleryPhotos = $galleryPhotosQuery->get();
+
+        $photoApprovalRequired = \App\Services\AdminSettingService::isPhotoApprovalRequired();
+        $photoMaxPerProfile = (int) \App\Models\AdminSetting::getValue('photo_max_per_profile', '5');
+
+        $currentPhotoCount = $galleryPhotos->count();
+        $photoSlotsRemaining = max(0, $photoMaxPerProfile - $currentPhotoCount);
+        $photoLimitReached = $currentPhotoCount >= $photoMaxPerProfile;
+
+        $fromOnboarding = $request->query('from') === 'onboarding';
+
+        return view('matrimony.profile.upload-photo', [
+            'profile' => $profile,
+            'galleryPhotos' => $galleryPhotos,
+            'photoApprovalRequired' => $photoApprovalRequired,
+            'photoMaxPerProfile' => $photoMaxPerProfile,
+            'currentPhotoCount' => $currentPhotoCount,
+            'photoSlotsRemaining' => $photoSlotsRemaining,
+            'photoLimitReached' => $photoLimitReached,
+            'fromOnboarding' => $fromOnboarding,
+        ]);
     }
 
-    // If user has no existing photos, the first uploaded photo becomes primary.
-    // Otherwise, new uploads are added as non-primary by default.
-    $mainBecomesPrimary = $existingPhotosCount === 0;
+    public function storePhoto(Request $request)
+    {
+        $maxUploadMb = (int) \App\Models\AdminSetting::getValue('photo_max_upload_mb', '8');
+        $maxUploadKb = max(1, $maxUploadMb) * 1024;
 
-    $targetDir = public_path('uploads/matrimony_photos');
-    if (! is_dir($targetDir)) {
-        mkdir($targetDir, 0755, true);
-    }
+        $request->validate([
+            'profile_photo' => 'required|image|max:'.$maxUploadKb,
+            'profile_photos' => 'sometimes|array',
+            'profile_photos.*' => 'image|max:'.$maxUploadKb,
+        ]);
 
-    $storeUploadedPhoto = function ($file, int $idx) use ($targetDir, $maxEdgePx): string {
-        $originalName = basename((string) ($file->getClientOriginalName() ?: 'photo'));
-        $slug = pathinfo($originalName, PATHINFO_FILENAME);
-        $rand = bin2hex(random_bytes(3));
-        $baseName = time() . '_' . $idx . '_' . $rand . '_' . $slug;
+        $user = auth()->user();
 
-        // Prefer WebP + resize when GD/WebP extensions are available; otherwise fall back to original upload.
-        if (function_exists('imagecreatefromstring') && function_exists('imagewebp')) {
-            $realPath = $file->getRealPath() ?: $file->getPathname();
-            $imageData = is_string($realPath) ? @file_get_contents($realPath) : false;
-            $image = $imageData !== false ? @imagecreatefromstring($imageData) : false;
-            if ($image === false) {
-                throw new \RuntimeException(__('common.invalid_photo_upload_jpg_png'));
+        // 🔒 Guard: MatrimonyProfile must exist
+        if (! $user->matrimonyProfile) {
+            return redirect()
+                ->route('matrimony.profile.wizard.section', ['section' => 'basic-info'])
+                ->with('error', __('profile_actions.create_profile_first'));
+        }
+
+        $profile = $user->matrimonyProfile;
+        if ($profile->user_id !== $user->id) {
+            abort(403, __('common.unauthorized_photo_update'));
+        }
+
+        // Phase-5 PART-5: Block manual edit when lifecycle blocks it
+        if (in_array($profile->lifecycle_state, [
+            'intake_uploaded', 'awaiting_user_approval', 'approved_pending_mutation', 'conflict_pending',
+        ], true)) {
+            return redirect()->back()->with('error', __('common.profile_edit_blocked_intake_conflict'));
+        }
+
+        $maxPerProfile = (int) \App\Models\AdminSetting::getValue('photo_max_per_profile', '5');
+        $maxEdgePx = (int) \App\Models\AdminSetting::getValue('photo_max_edge_px', '1200');
+        $maxEdgePx = max(400, $maxEdgePx);
+
+        $primaryFile = $request->file('profile_photo');
+        $additionalFiles = $request->file('profile_photos', []);
+        if (! is_array($additionalFiles)) {
+            $additionalFiles = [];
+        }
+        $additionalFiles = array_values(array_filter($additionalFiles));
+
+        $existingPhotosCount = ProfilePhoto::query()
+            ->where('profile_id', $profile->id)
+            ->count();
+
+        $incomingCount = 1 + count($additionalFiles);
+        if (($existingPhotosCount + $incomingCount) > $maxPerProfile) {
+            $limitMessage = "You have already used all {$maxPerProfile} photo slots. Delete one photo before uploading a new one.";
+
+            if ($request->expectsJson() || $request->ajax()) {
+                return response()->json([
+                    'message' => $limitMessage,
+                    'errors' => [
+                        'profile_photos' => [$limitMessage],
+                    ],
+                ], 422);
             }
 
-            $width = imagesx($image);
-            $height = imagesy($image);
-            $maxEdge = $maxEdgePx;
-            if ($width > $maxEdge || $height > $maxEdge) {
-                $scale = min($maxEdge / $width, $maxEdge / $height);
-                $newWidth = (int) floor($width * $scale);
-                $newHeight = (int) floor($height * $scale);
-                $resized = imagecreatetruecolor($newWidth, $newHeight);
-                imagecopyresampled($resized, $image, 0, 0, 0, 0, $newWidth, $newHeight, $width, $height);
-                imagedestroy($image);
-                $image = $resized;
-            }
+            return redirect()->back()
+                ->withErrors([
+                    'profile_photos' => $limitMessage,
+                ])
+                ->withInput();
+        }
 
-            $webpFilename = $baseName . '.webp';
-            $webpPath = $targetDir . DIRECTORY_SEPARATOR . $webpFilename;
-            imagewebp($image, $webpPath, 80);
-            imagedestroy($image);
+        // If user has no existing photos, the first uploaded photo becomes primary.
+        // Otherwise, new uploads are added as non-primary by default.
+        $mainBecomesPrimary = $existingPhotosCount === 0;
 
-            // If file is still large, attempt lighter encode.
-            if (is_file($webpPath) && filesize($webpPath) > 200 * 1024) {
-                $tmpImage = @imagecreatefromstring(file_get_contents($webpPath));
-                if ($tmpImage !== false) {
-                    imagewebp($tmpImage, $webpPath, 70);
-                    imagedestroy($tmpImage);
+        $targetDir = public_path('uploads/matrimony_photos');
+        if (! is_dir($targetDir)) {
+            mkdir($targetDir, 0755, true);
+        }
+
+        $storeUploadedPhoto = function ($file, int $idx) use ($targetDir, $maxEdgePx): string {
+            $originalName = basename((string) ($file->getClientOriginalName() ?: 'photo'));
+            $slug = pathinfo($originalName, PATHINFO_FILENAME);
+            $rand = bin2hex(random_bytes(3));
+            $baseName = time().'_'.$idx.'_'.$rand.'_'.$slug;
+
+            // Prefer WebP + resize when GD/WebP extensions are available; otherwise fall back to original upload.
+            if (function_exists('imagecreatefromstring') && function_exists('imagewebp')) {
+                $realPath = $file->getRealPath() ?: $file->getPathname();
+                $imageData = is_string($realPath) ? @file_get_contents($realPath) : false;
+                $image = $imageData !== false ? @imagecreatefromstring($imageData) : false;
+                if ($image === false) {
+                    throw new \RuntimeException(__('common.invalid_photo_upload_jpg_png'));
                 }
+
+                $width = imagesx($image);
+                $height = imagesy($image);
+                $maxEdge = $maxEdgePx;
+                if ($width > $maxEdge || $height > $maxEdge) {
+                    $scale = min($maxEdge / $width, $maxEdge / $height);
+                    $newWidth = (int) floor($width * $scale);
+                    $newHeight = (int) floor($height * $scale);
+                    $resized = imagecreatetruecolor($newWidth, $newHeight);
+                    imagecopyresampled($resized, $image, 0, 0, 0, 0, $newWidth, $newHeight, $width, $height);
+                    imagedestroy($image);
+                    $image = $resized;
+                }
+
+                $webpFilename = $baseName.'.webp';
+                $webpPath = $targetDir.DIRECTORY_SEPARATOR.$webpFilename;
+                imagewebp($image, $webpPath, 80);
+                imagedestroy($image);
+
+                // If file is still large, attempt lighter encode.
+                if (is_file($webpPath) && filesize($webpPath) > 200 * 1024) {
+                    $tmpImage = @imagecreatefromstring(file_get_contents($webpPath));
+                    if ($tmpImage !== false) {
+                        imagewebp($tmpImage, $webpPath, 70);
+                        imagedestroy($tmpImage);
+                    }
+                }
+
+                return $webpFilename;
             }
 
-            return $webpFilename;
-        }
+            // Fallback: store original file without re-encoding (keeps old behaviour on systems without GD/WebP)
+            $extension = $file->getClientOriginalExtension() ?: 'jpg';
+            $filename = $baseName.'.'.$extension;
+            $file->move($targetDir, $filename);
 
-        // Fallback: store original file without re-encoding (keeps old behaviour on systems without GD/WebP)
-        $extension = $file->getClientOriginalExtension() ?: 'jpg';
-        $filename = $baseName . '.' . $extension;
-        $file->move($targetDir, $filename);
-
-        return $filename;
-    };
-
-    try {
-        $primaryFilename = $storeUploadedPhoto($primaryFile, 0);
-        $additionalFilenames = [];
-        foreach ($additionalFiles as $i => $addFile) {
-            $additionalFilenames[] = $storeUploadedPhoto($addFile, (int) $i + 1);
-        }
-    } catch (\RuntimeException $e) {
-        return redirect()->back()->with('error', $e->getMessage());
-    }
-
-    $photoApprovalRequired = \App\Services\AdminSettingService::isPhotoApprovalRequired();
-    $photoApproved = ! $photoApprovalRequired;
-
-    $approvedStatus = $photoApproved ? 'approved' : 'pending';
-
-    $result = ['conflict_detected' => false];
-    if ($mainBecomesPrimary) {
-        $snapshot = [
-            'core' => [
-                'profile_photo' => $primaryFilename,
-                'photo_approved' => $photoApproved,
-                'photo_rejected_at' => null,
-                'photo_rejection_reason' => null,
-            ],
-            'contacts' => [],
-            'children' => [],
-            'education_history' => [],
-            'career_history' => [],
-            'addresses' => [],
-            'property_summary' => [],
-            'property_assets' => [],
-            'horoscope' => [],
-            'preferences' => [],
-            'extended_narrative' => [],
-        ];
+            return $filename;
+        };
 
         try {
-            $result = app(\App\Services\MutationService::class)->applyManualSnapshot(
-                $profile,
-                $snapshot,
-                (int) $user->id
-            );
+            $primaryFilename = $storeUploadedPhoto($primaryFile, 0);
+            $additionalFilenames = [];
+            foreach ($additionalFiles as $i => $addFile) {
+                $additionalFilenames[] = $storeUploadedPhoto($addFile, (int) $i + 1);
+            }
         } catch (\RuntimeException $e) {
             return redirect()->back()->with('error', $e->getMessage());
         }
-    }
 
-    $sortBase = -1;
-    if (\Illuminate\Support\Facades\Schema::hasColumn('profile_photos', 'sort_order')) {
-        $maxSortOrder = ProfilePhoto::query()
-            ->where('profile_id', $profile->id)
-            ->max('sort_order');
-        $sortBase = $maxSortOrder !== null ? (int) $maxSortOrder : -1;
-    }
+        $photoApprovalRequired = \App\Services\AdminSettingService::isPhotoApprovalRequired();
+        $photoApproved = ! $photoApprovalRequired;
 
-    $sortFieldsMain = [];
-    $sortFieldsAdditional = [];
-    $hasSort = \Illuminate\Support\Facades\Schema::hasColumn('profile_photos', 'sort_order');
-    if ($hasSort) {
-        $sortFieldsMain['sort_order'] = $sortBase + 1;
-    }
+        $approvedStatus = $photoApproved ? 'approved' : 'pending';
 
-    // Insert main uploaded photo.
-    ProfilePhoto::create([
-        'profile_id' => $profile->id,
-        'file_path' => $primaryFilename,
-        'is_primary' => $mainBecomesPrimary,
-        'uploaded_via' => 'user_web',
-        'approved_status' => $approvedStatus,
-        'watermark_detected' => false,
-    ] + $sortFieldsMain);
+        $result = ['conflict_detected' => false];
+        if ($mainBecomesPrimary) {
+            $snapshot = [
+                'core' => [
+                    'profile_photo' => $primaryFilename,
+                    'photo_approved' => $photoApproved,
+                    'photo_rejected_at' => null,
+                    'photo_rejection_reason' => null,
+                ],
+                'contacts' => [],
+                'children' => [],
+                'education_history' => [],
+                'career_history' => [],
+                'addresses' => [],
+                'property_summary' => [],
+                'property_assets' => [],
+                'horoscope' => [],
+                'preferences' => [],
+                'extended_narrative' => [],
+            ];
 
-    // Insert additional photos as non-primary by default.
-    if (! empty($additionalFilenames)) {
-        foreach (array_values($additionalFilenames) as $i => $filename) {
-            $sortFieldsAdditional = [];
-            if ($hasSort) {
-                $sortFieldsAdditional['sort_order'] = $sortBase + 2 + (int) $i;
+            try {
+                $result = app(\App\Services\MutationService::class)->applyManualSnapshot(
+                    $profile,
+                    $snapshot,
+                    (int) $user->id
+                );
+            } catch (\RuntimeException $e) {
+                return redirect()->back()->with('error', $e->getMessage());
             }
-
-            ProfilePhoto::create([
-                'profile_id' => $profile->id,
-                'file_path' => $filename,
-                'is_primary' => false,
-                'uploaded_via' => 'user_web',
-                'approved_status' => $approvedStatus,
-                'watermark_detected' => false,
-            ] + $sortFieldsAdditional);
         }
+
+        $sortBase = -1;
+        if (\Illuminate\Support\Facades\Schema::hasColumn('profile_photos', 'sort_order')) {
+            $maxSortOrder = ProfilePhoto::query()
+                ->where('profile_id', $profile->id)
+                ->max('sort_order');
+            $sortBase = $maxSortOrder !== null ? (int) $maxSortOrder : -1;
+        }
+
+        $sortFieldsMain = [];
+        $sortFieldsAdditional = [];
+        $hasSort = \Illuminate\Support\Facades\Schema::hasColumn('profile_photos', 'sort_order');
+        if ($hasSort) {
+            $sortFieldsMain['sort_order'] = $sortBase + 1;
+        }
+
+        // Insert main uploaded photo.
+        ProfilePhoto::create([
+            'profile_id' => $profile->id,
+            'file_path' => $primaryFilename,
+            'is_primary' => $mainBecomesPrimary,
+            'uploaded_via' => 'user_web',
+            'approved_status' => $approvedStatus,
+            'watermark_detected' => false,
+        ] + $sortFieldsMain);
+
+        // Insert additional photos as non-primary by default.
+        if (! empty($additionalFilenames)) {
+            foreach (array_values($additionalFilenames) as $i => $filename) {
+                $sortFieldsAdditional = [];
+                if ($hasSort) {
+                    $sortFieldsAdditional['sort_order'] = $sortBase + 2 + (int) $i;
+                }
+
+                ProfilePhoto::create([
+                    'profile_id' => $profile->id,
+                    'file_path' => $filename,
+                    'is_primary' => false,
+                    'uploaded_via' => 'user_web',
+                    'approved_status' => $approvedStatus,
+                    'watermark_detected' => false,
+                ] + $sortFieldsAdditional);
+            }
+        }
+
+        if (! empty($result['conflict_detected'])) {
+            return redirect()->route('matrimony.profile.wizard.section', ['section' => 'full'])->with('warning', 'Photo uploaded but some conflicts were detected.');
+        }
+
+        $additionalCount = is_array($additionalFilenames) ? count($additionalFilenames) : 0;
+        $uploadedCount = 1 + $additionalCount;
+
+        return redirect()->route('matrimony.profile.upload-photo')->with(
+            'success',
+            "Photos uploaded successfully ({$uploadedCount}). You can add more photos below."
+        );
     }
-
-    if (! empty($result['conflict_detected'])) {
-        return redirect()->route('matrimony.profile.wizard.section', ['section' => 'full'])->with('warning', 'Photo uploaded but some conflicts were detected.');
-    }
-
-    $additionalCount = is_array($additionalFilenames) ? count($additionalFilenames) : 0;
-    $uploadedCount = 1 + $additionalCount;
-
-    return redirect()->route('matrimony.profile.upload-photo')->with(
-        'success',
-        "Photos uploaded successfully ({$uploadedCount}). You can add more photos below."
-    );
-}
 
     /**
      * Make a specific photo the primary photo for the logged-in profile.
@@ -687,6 +674,7 @@ if (!$user->matrimonyProfile) {
                     $profile->photo_rejected_at = null;
                     $profile->photo_rejection_reason = null;
                     $profile->save();
+
                     return;
                 }
 
@@ -736,7 +724,6 @@ if (!$user->matrimonyProfile) {
             ->with('success', 'Photo deleted.');
     }
 
-
     /*
     |--------------------------------------------------------------------------
     | Show Single Matrimony Profile
@@ -748,272 +735,264 @@ if (!$user->matrimonyProfile) {
     | पुढच्या step मध्ये refactor होईल
     |
     */
- 
 
+    // Route param: {matrimony_profile_id} (profile id)
+    public function show($matrimony_profile_id)
+    {
+        $profile = \App\Models\MatrimonyProfile::with([
+            'gender',
+            'maritalStatus',
+            'complexion',
+            'physicalBuild',
+            'bloodGroup',
+            'familyType',
+            'incomeCurrency',
+            'horoscope',
+            'children',
+            'educationHistory',
+            'career',
+            'addresses.village',
+            'relatives.city',
+            'relatives.state',
+            'allianceNetworks.city',
+            'allianceNetworks.state',
+            'allianceNetworks.district',
+            'allianceNetworks.taluka',
+            'birthCity',
+            'birthState',
+            'birthDistrict',
+            'birthTaluka',
+            'nativeCity',
+            'nativeState',
+            'nativeDistrict',
+            'nativeTaluka',
+            'siblings.city',
+            'religion',
+            'caste',
+            'subCaste',
+            'user',
+        ])->findOrFail($matrimony_profile_id);
 
-// Route param: {matrimony_profile_id} (profile id)
-public function show($matrimony_profile_id)
-{
-    $profile = \App\Models\MatrimonyProfile::with([
-        'gender',
-        'maritalStatus',
-        'complexion',
-        'physicalBuild',
-        'bloodGroup',
-        'familyType',
-        'incomeCurrency',
-        'horoscope',
-        'children',
-        'educationHistory',
-        'career',
-        'addresses.village',
-        'relatives.city',
-        'relatives.state',
-        'allianceNetworks.city',
-        'allianceNetworks.state',
-        'allianceNetworks.district',
-        'allianceNetworks.taluka',
-        'birthCity',
-        'birthState',
-        'birthDistrict',
-        'birthTaluka',
-        'nativeCity',
-        'nativeState',
-        'nativeDistrict',
-        'nativeTaluka',
-        'siblings.city',
-        'religion',
-        'caste',
-        'subCaste',
-    ])->findOrFail($matrimony_profile_id);
+        $extendedAttributes = \Illuminate\Support\Facades\DB::table('profile_extended_attributes')->where('profile_id', $profile->id)->first();
+        $preferenceCriteria = \Illuminate\Support\Facades\DB::table('profile_preference_criteria')->where('profile_id', $profile->id)->first();
+        $preferredReligionIds = \Illuminate\Support\Facades\DB::table('profile_preferred_religions')->where('profile_id', $profile->id)->pluck('religion_id')->all();
+        $preferredCasteIds = \Illuminate\Support\Facades\DB::table('profile_preferred_castes')->where('profile_id', $profile->id)->pluck('caste_id')->all();
+        $preferredDistrictIds = \Illuminate\Support\Facades\DB::table('profile_preferred_districts')->where('profile_id', $profile->id)->pluck('district_id')->all();
 
-    $extendedAttributes = \Illuminate\Support\Facades\DB::table('profile_extended_attributes')->where('profile_id', $profile->id)->first();
-    $preferenceCriteria = \Illuminate\Support\Facades\DB::table('profile_preference_criteria')->where('profile_id', $profile->id)->first();
-    $preferredReligionIds = \Illuminate\Support\Facades\DB::table('profile_preferred_religions')->where('profile_id', $profile->id)->pluck('religion_id')->all();
-    $preferredCasteIds = \Illuminate\Support\Facades\DB::table('profile_preferred_castes')->where('profile_id', $profile->id)->pluck('caste_id')->all();
-    $preferredDistrictIds = \Illuminate\Support\Facades\DB::table('profile_preferred_districts')->where('profile_id', $profile->id)->pluck('district_id')->all();
+        // 🔒 GUARD: Guest users are NOT allowed to view single profiles
+        if (! auth()->check()) {
+            return redirect()
+                ->route('login')
+                ->with('error', __('common.login_required_to_view_matrimony_profiles'));
+        }
 
+        $authUser = auth()->user();
 
-    // 🔒 GUARD: Guest users are NOT allowed to view single profiles
-    if (!auth()->check()) {
-        return redirect()
-            ->route('login')
-            ->with('error', __('common.login_required_to_view_matrimony_profiles'));
-    }
+        // 🔒 Logged-in but no profile
+        if (! $authUser->matrimonyProfile) {
+            return redirect()
+                ->route('matrimony.profile.wizard.section', ['section' => 'basic-info'])
+                ->with('error', __('interest.create_profile_first'));
+        }
 
-    $authUser = auth()->user();
+        $viewer = auth()->user(); // logged-in user
+        $isOwnProfile = $viewer && (
+            $viewer->matrimonyProfile->id === $profile->id
+        );
 
-    // 🔒 Logged-in but no profile
-    if (!$authUser->matrimonyProfile) {
-        return redirect()
-            ->route('matrimony.profile.wizard.section', ['section' => 'basic-info'])
-            ->with('error', __('interest.create_profile_first'));
-    }
-
-    $viewer = auth()->user(); // logged-in user
-    $isOwnProfile = $viewer && (
-        $viewer->matrimonyProfile->id === $profile->id
-    );
-
-    // 🔒 GUARD: Day 7 lifecycle — Archived/Suspended not visible to others (backward compat: is_suspended, trashed)
-    if (!$isOwnProfile && !\App\Services\ProfileLifecycleService::isVisibleToOthers($profile)) {
-        abort(404, __('common.profile_not_found'));
-    }
-
-    // 🔒 GUARD: Block excludes profile view (either direction)
-    if (!$isOwnProfile && $viewer->matrimonyProfile) {
-        if (ViewTrackingService::isBlocked($viewer->matrimonyProfile->id, $profile->id)) {
+        // 🔒 GUARD: Day 7 lifecycle — Archived/Suspended not visible to others (backward compat: is_suspended, trashed)
+        if (! $isOwnProfile && ! \App\Services\ProfileLifecycleService::isVisibleToOthers($profile)) {
             abort(404, __('common.profile_not_found'));
         }
-    }
 
-    // 🔒 GUARD: Phase-4 Day-10 — Women-First Safety visibility policy
-    if (!$isOwnProfile && !\App\Services\ProfileVisibilityPolicyService::canViewProfile($profile, $viewer)) {
-        abort(404, __('common.profile_not_found'));
-    }
-
-    $interestAlreadySent = false;
-
-    if (auth()->check()) {
-        $interestAlreadySent = \App\Models\Interest::where(
-            'sender_profile_id',
-            auth()->user()->matrimonyProfile->id
-        )
-        ->where('receiver_profile_id', $profile->id)
-        ->exists();
-    }
-
-    // Check if user has already submitted an open abuse report for this profile
-    $hasAlreadyReported = false;
-    if (auth()->check() && !$isOwnProfile) {
-        $hasAlreadyReported = \App\Models\AbuseReport::where('reporter_user_id', auth()->id())
-            ->where('reported_profile_id', $profile->id)
-            ->where('status', 'open')
-            ->exists();
-    }
-
-    $inShortlist = false;
-    if (!$isOwnProfile && $viewer->matrimonyProfile) {
-        $inShortlist = Shortlist::where('owner_profile_id', $viewer->matrimonyProfile->id)
-            ->where('shortlisted_profile_id', $profile->id)
-            ->exists();
-    }
-
-    if (!$isOwnProfile && $viewer->matrimonyProfile) {
-        ViewTrackingService::recordView($viewer->matrimonyProfile, $profile);
-        ViewTrackingService::maybeTriggerViewBack($viewer->matrimonyProfile, $profile);
-    }
-
-    // Profile completeness (from service, passed to view)
-    $completenessPct = ProfileCompletenessService::percentage($profile);
-
-    // Day-18: Calculate individual boolean visibility flags (Blade Purity Law compliance)
-    $visibleFields = ProfileFieldConfigurationService::getVisibleFieldKeys();
-    $profilePhotoVisible = in_array('profile_photo', $visibleFields, true);
-    $dateOfBirthVisible = in_array('date_of_birth', $visibleFields, true);
-    $maritalStatusVisible = in_array('marital_status', $visibleFields, true);
-    $educationVisible = in_array('education', $visibleFields, true);
-    $locationVisible = in_array('location', $visibleFields, true);
-    $casteVisible = in_array('caste', $visibleFields, true);
-    $heightVisible = in_array('height_cm', $visibleFields, true);
-
-    // Match explanation data (rule-based comparison)
-    $matchData = null;
-    if (!$isOwnProfile && $viewer->matrimonyProfile) {
-        $matchData = self::calculateMatchExplanation($viewer->matrimonyProfile, $profile);
-    }
-
-    $canViewContact = \App\Services\ContactVisibilityPolicyService::canViewContact(
-        $profile,
-        $viewer->matrimonyProfile ?? null
-    );
-
-    $extendedValues = \App\Services\ExtendedFieldService::getValuesForProfile($profile);
-    // Phase-4: Only show extended fields that are enabled in registry (visibility)
-    $visibleExtendedKeys = \App\Models\FieldRegistry::where('field_type', 'EXTENDED')
-        ->where(function ($q) {
-            $q->where('is_enabled', true)->orWhereNull('is_enabled');
-        })
-        ->pluck('field_key')
-        ->flip()
-        ->all();
-    $extendedValues = array_intersect_key($extendedValues, $visibleExtendedKeys);
-    $extendedMeta = \App\Models\FieldRegistry::where('field_type', 'EXTENDED')
-        ->where(function ($q) {
-            $q->where('is_enabled', true)->orWhereNull('is_enabled');
-        })
-        ->pluck('display_label', 'field_key')
-        ->toArray();
-
-    $primaryContactPhone = \Illuminate\Support\Facades\DB::table('profile_contacts')
-        ->where('profile_id', $profile->id)
-        ->where('is_primary', true)
-        ->value('phone_number');
-
-    $hasBlockingConflicts = \App\Services\ProfileLifecycleService::hasBlockingUnresolvedConflicts($profile);
-
-    $conflictRecords = collect();
-    if ($isOwnProfile && ($profile->lifecycle_state ?? null) === 'conflict_pending') {
-        $conflictRecords = \App\Models\ConflictRecord::where('profile_id', $profile->id)
-            ->where('resolution_status', 'PENDING')
-            ->orderBy('field_name')
-            ->get();
-    }
-
-    $visibilitySettings = \Illuminate\Support\Facades\DB::table('profile_visibility_settings')
-        ->where('profile_id', $profile->id)
-        ->first();
-    $enableRelativesSection = optional($visibilitySettings)->enable_relatives_section ?? true;
-
-    $profilePropertySummary = \Illuminate\Support\Facades\DB::table('profile_property_summary')
-        ->where('profile_id', $profile->id)
-        ->first();
-
-    // Preferences: aggregate for view (view also uses $preferenceCriteria, $preferredReligionIds, $preferredCasteIds, $preferredDistrictIds)
-    $preferences = [];
-
-    // Day-32: Contact request state for viewer (sender) vs profile owner (receiver)
-    $contactRequestState = null;
-    $contactRequestDisabled = true;
-    $contactGrantReveal = null; // [ 'phone' => ... ] when viewer has valid grant
-    $canSendContactRequest = false;
-    if (auth()->check() && !$isOwnProfile && $viewer && $viewer->matrimonyProfile) {
-        $contactRequestService = app(\App\Services\ContactRequestService::class);
-        $contactRequestDisabled = $contactRequestService->isContactRequestDisabled();
-        $receiver = $profile->user;
-        if ($receiver) {
-            $contactRequestState = $contactRequestService->getSenderState($viewer, $receiver);
-            $canSendContactRequest = $contactRequestService->canSendContactRequest($viewer, $receiver);
-            if (($contactRequestState['state'] ?? '') === 'accepted' && !empty($contactRequestState['grant']) && $contactRequestState['grant']->isValid()) {
-                $primaryContact = \Illuminate\Support\Facades\DB::table('profile_contacts')
-                    ->where('profile_id', $profile->id)->where('is_primary', true)->first();
-                // After contact-request acceptance, reveal ONLY the profile's primary phone number.
-                $phone = optional($primaryContact)->phone_number;
-                $contactGrantReveal = ! empty($phone) ? ['phone' => $phone] : null;
+        // 🔒 GUARD: Block excludes profile view (either direction)
+        if (! $isOwnProfile && $viewer->matrimonyProfile) {
+            if (ViewTrackingService::isBlocked($viewer->matrimonyProfile->id, $profile->id)) {
+                abort(404, __('common.profile_not_found'));
             }
         }
+
+        // 🔒 GUARD: Phase-4 Day-10 — Women-First Safety visibility policy
+        if (! $isOwnProfile && ! \App\Services\ProfileVisibilityPolicyService::canViewProfile($profile, $viewer)) {
+            abort(404, __('common.profile_not_found'));
+        }
+
+        $interestAlreadySent = false;
+
+        if (auth()->check()) {
+            $interestAlreadySent = \App\Models\Interest::where(
+                'sender_profile_id',
+                auth()->user()->matrimonyProfile->id
+            )
+                ->where('receiver_profile_id', $profile->id)
+                ->exists();
+        }
+
+        // Check if user has already submitted an open abuse report for this profile
+        $hasAlreadyReported = false;
+        if (auth()->check() && ! $isOwnProfile) {
+            $hasAlreadyReported = \App\Models\AbuseReport::where('reporter_user_id', auth()->id())
+                ->where('reported_profile_id', $profile->id)
+                ->where('status', 'open')
+                ->exists();
+        }
+
+        $inShortlist = false;
+        if (! $isOwnProfile && $viewer->matrimonyProfile) {
+            $inShortlist = Shortlist::where('owner_profile_id', $viewer->matrimonyProfile->id)
+                ->where('shortlisted_profile_id', $profile->id)
+                ->exists();
+        }
+
+        if (! $isOwnProfile && $viewer->matrimonyProfile) {
+            ViewTrackingService::recordView($viewer->matrimonyProfile, $profile);
+            ViewTrackingService::maybeTriggerViewBack($viewer->matrimonyProfile, $profile);
+        }
+
+        // Profile completeness (from service, passed to view)
+        $completenessPct = ProfileCompletenessService::percentage($profile);
+
+        // Day-18: Calculate individual boolean visibility flags (Blade Purity Law compliance)
+        $visibleFields = ProfileFieldConfigurationService::getVisibleFieldKeys();
+        $profilePhotoVisible = in_array('profile_photo', $visibleFields, true);
+        $dateOfBirthVisible = in_array('date_of_birth', $visibleFields, true);
+        $maritalStatusVisible = in_array('marital_status', $visibleFields, true);
+        $educationVisible = in_array('education', $visibleFields, true);
+        $locationVisible = in_array('location', $visibleFields, true);
+        $casteVisible = in_array('caste', $visibleFields, true);
+        $heightVisible = in_array('height_cm', $visibleFields, true);
+
+        // Match explanation data (rule-based comparison)
+        $matchData = null;
+        if (! $isOwnProfile && $viewer->matrimonyProfile) {
+            $matchData = self::calculateMatchExplanation($viewer->matrimonyProfile, $profile);
+        }
+
+        $canViewContact = \App\Services\ContactVisibilityPolicyService::canViewContact(
+            $profile,
+            $viewer->matrimonyProfile ?? null
+        );
+
+        $extendedValues = \App\Services\ExtendedFieldService::getValuesForProfile($profile);
+        // Phase-4: Only show extended fields that are enabled in registry (visibility)
+        $visibleExtendedKeys = \App\Models\FieldRegistry::where('field_type', 'EXTENDED')
+            ->where(function ($q) {
+                $q->where('is_enabled', true)->orWhereNull('is_enabled');
+            })
+            ->pluck('field_key')
+            ->flip()
+            ->all();
+        $extendedValues = array_intersect_key($extendedValues, $visibleExtendedKeys);
+        $extendedMeta = \App\Models\FieldRegistry::where('field_type', 'EXTENDED')
+            ->where(function ($q) {
+                $q->where('is_enabled', true)->orWhereNull('is_enabled');
+            })
+            ->pluck('display_label', 'field_key')
+            ->toArray();
+
+        $profile->loadMissing('user');
+        $primaryContactPhone = $profile->primary_contact_number;
+
+        $hasBlockingConflicts = \App\Services\ProfileLifecycleService::hasBlockingUnresolvedConflicts($profile);
+
+        $conflictRecords = collect();
+        if ($isOwnProfile && ($profile->lifecycle_state ?? null) === 'conflict_pending') {
+            $conflictRecords = \App\Models\ConflictRecord::where('profile_id', $profile->id)
+                ->where('resolution_status', 'PENDING')
+                ->orderBy('field_name')
+                ->get();
+        }
+
+        $visibilitySettings = \Illuminate\Support\Facades\DB::table('profile_visibility_settings')
+            ->where('profile_id', $profile->id)
+            ->first();
+        $enableRelativesSection = optional($visibilitySettings)->enable_relatives_section ?? true;
+
+        $profilePropertySummary = \Illuminate\Support\Facades\DB::table('profile_property_summary')
+            ->where('profile_id', $profile->id)
+            ->first();
+
+        // Preferences: aggregate for view (view also uses $preferenceCriteria, $preferredReligionIds, $preferredCasteIds, $preferredDistrictIds)
+        $preferences = [];
+
+        // Day-32: Contact request state for viewer (sender) vs profile owner (receiver)
+        $contactRequestState = null;
+        $contactRequestDisabled = true;
+        $contactGrantReveal = null; // [ 'phone' => ... ] when viewer has valid grant
+        $canSendContactRequest = false;
+        if (auth()->check() && ! $isOwnProfile && $viewer && $viewer->matrimonyProfile) {
+            $contactRequestService = app(\App\Services\ContactRequestService::class);
+            $contactRequestDisabled = $contactRequestService->isContactRequestDisabled();
+            $receiver = $profile->user;
+            if ($receiver) {
+                $contactRequestState = $contactRequestService->getSenderState($viewer, $receiver);
+                $canSendContactRequest = $contactRequestService->canSendContactRequest($viewer, $receiver);
+                if (($contactRequestState['state'] ?? '') === 'accepted' && ! empty($contactRequestState['grant']) && $contactRequestState['grant']->isValid()) {
+                    // Same resolution as public profile display: primary profile_contacts row, else account mobile.
+                    $phone = $profile->primary_contact_number;
+                    $contactGrantReveal = $phone !== null && $phone !== '' ? ['phone' => $phone] : null;
+                }
+            }
+        }
+
+        // Photo privacy (blur + access request) based on per-profile visibility settings.
+        // show_photo_to meanings:
+        // - all: viewers can see photos
+        // - premium: photos stay locked (no unlock in this release)
+        // - accepted_interest: photos unlock only after viewer's contact access is accepted
+        $showPhotoTo = optional($visibilitySettings)->show_photo_to;
+        $photoViewAllowed = $isOwnProfile;
+        if (! $isOwnProfile) {
+            $showPhotoTo = $showPhotoTo ?? 'all';
+            $photoViewAllowed = match ($showPhotoTo) {
+                'all' => true,
+                'premium' => false,
+                'accepted_interest' => (is_array($contactRequestState) && (($contactRequestState['state'] ?? '') === 'accepted')),
+                default => true,
+            };
+        }
+        $photoLocked = ! $photoViewAllowed && ! $isOwnProfile;
+
+        return view(
+            'matrimony.profile.show',
+            [
+                'profile' => $profile,
+                'profilePropertySummary' => $profilePropertySummary,
+                'enableRelativesSection' => $enableRelativesSection,
+                'isOwnProfile' => $isOwnProfile,
+                'interestAlreadySent' => $interestAlreadySent,
+                'hasAlreadyReported' => $hasAlreadyReported,
+                'inShortlist' => $inShortlist,
+                'extendedValues' => $extendedValues,
+                'extendedMeta' => $extendedMeta,
+                'extendedAttributes' => $extendedAttributes,
+                'preferences' => $preferences,
+                'preferenceCriteria' => $preferenceCriteria,
+                'preferredReligionIds' => $preferredReligionIds,
+                'preferredCasteIds' => $preferredCasteIds,
+                'preferredDistrictIds' => $preferredDistrictIds,
+                'completenessPct' => $completenessPct,
+                'profilePhotoVisible' => $profilePhotoVisible,
+                'dateOfBirthVisible' => $dateOfBirthVisible,
+                'maritalStatusVisible' => $maritalStatusVisible,
+                'educationVisible' => $educationVisible,
+                'locationVisible' => $locationVisible,
+                'casteVisible' => $casteVisible,
+                'heightVisible' => $heightVisible,
+                'matchData' => $matchData,
+                'canViewContact' => $canViewContact,
+                'primaryContactPhone' => $primaryContactPhone,
+                'hasBlockingConflicts' => $hasBlockingConflicts,
+                'conflictRecords' => $conflictRecords,
+                'contactRequestState' => $contactRequestState,
+                'contactRequestDisabled' => $contactRequestDisabled,
+                'contactGrantReveal' => $contactGrantReveal,
+                'canSendContactRequest' => $canSendContactRequest,
+                'photoLocked' => $photoLocked,
+                'photoLockMode' => $showPhotoTo ?? 'all',
+            ]
+        );
     }
-
-    // Photo privacy (blur + access request) based on per-profile visibility settings.
-    // show_photo_to meanings:
-    // - all: viewers can see photos
-    // - premium: photos stay locked (no unlock in this release)
-    // - accepted_interest: photos unlock only after viewer's contact access is accepted
-    $showPhotoTo = optional($visibilitySettings)->show_photo_to;
-    $photoViewAllowed = $isOwnProfile;
-    if (! $isOwnProfile) {
-        $showPhotoTo = $showPhotoTo ?? 'all';
-        $photoViewAllowed = match ($showPhotoTo) {
-            'all' => true,
-            'premium' => false,
-            'accepted_interest' => (is_array($contactRequestState) && (($contactRequestState['state'] ?? '') === 'accepted')),
-            default => true,
-        };
-    }
-    $photoLocked = ! $photoViewAllowed && ! $isOwnProfile;
-
-    return view(
-        'matrimony.profile.show',
-        [
-            'profile'              => $profile,
-            'profilePropertySummary' => $profilePropertySummary,
-            'enableRelativesSection' => $enableRelativesSection,
-            'isOwnProfile'         => $isOwnProfile,
-            'interestAlreadySent'  => $interestAlreadySent,
-            'hasAlreadyReported'   => $hasAlreadyReported,
-            'inShortlist'          => $inShortlist,
-            'extendedValues'       => $extendedValues,
-            'extendedMeta'         => $extendedMeta,
-            'extendedAttributes'   => $extendedAttributes,
-            'preferences'          => $preferences,
-            'preferenceCriteria'   => $preferenceCriteria,
-            'preferredReligionIds' => $preferredReligionIds,
-            'preferredCasteIds'    => $preferredCasteIds,
-            'preferredDistrictIds' => $preferredDistrictIds,
-            'completenessPct'      => $completenessPct,
-            'profilePhotoVisible' => $profilePhotoVisible,
-            'dateOfBirthVisible'  => $dateOfBirthVisible,
-            'maritalStatusVisible' => $maritalStatusVisible,
-            'educationVisible'     => $educationVisible,
-            'locationVisible'      => $locationVisible,
-            'casteVisible'         => $casteVisible,
-            'heightVisible'        => $heightVisible,
-            'matchData'            => $matchData,
-            'canViewContact'       => $canViewContact,
-            'primaryContactPhone'  => $primaryContactPhone,
-            'hasBlockingConflicts'  => $hasBlockingConflicts,
-            'conflictRecords'       => $conflictRecords,
-            'contactRequestState'  => $contactRequestState,
-            'contactRequestDisabled' => $contactRequestDisabled,
-            'contactGrantReveal'   => $contactGrantReveal,
-            'canSendContactRequest'=> $canSendContactRequest,
-            'photoLocked'          => $photoLocked,
-            'photoLockMode'        => $showPhotoTo ?? 'all',
-        ]
-    );
-}
-
-
 
     /*
     |--------------------------------------------------------------------------
@@ -1037,12 +1016,12 @@ public function show($matrimony_profile_id)
         // Day-18: Only use enabled AND searchable fields for search
         $searchableFields = ProfileFieldConfigurationService::getSearchableFieldKeys();
         $enabledFields = ProfileFieldConfigurationService::getEnabledFieldKeys();
-        
+
         // Intersection: fields that are both enabled and searchable
         $enabledSearchableFields = array_intersect($searchableFields, $enabledFields);
 
         // Helper: check if field is enabled and searchable
-        $isSearchable = fn(string $fieldKey) => in_array($fieldKey, $enabledSearchableFields, true);
+        $isSearchable = fn (string $fieldKey) => in_array($fieldKey, $enabledSearchableFields, true);
 
         // Caste filter (only if searchable) — normalized: use caste_id
         if ($isSearchable('caste') && $request->filled('caste_id')) {
@@ -1099,7 +1078,7 @@ public function show($matrimony_profile_id)
 
         // Admin global toggle: hide demo profiles from search when OFF (Day-8)
         $demoVisible = \App\Models\AdminSetting::getBool('demo_profiles_visible_in_search', true);
-        if (!$demoVisible) {
+        if (! $demoVisible) {
             $query->where(function ($q) {
                 $q->where('is_demo', false)->orWhereNull('is_demo');
             });
@@ -1129,8 +1108,8 @@ public function show($matrimony_profile_id)
      * Calculate match explanation between viewer's profile and viewed profile.
      * Rule-based comparison, no AI/ML. Returns match data for UI display.
      *
-     * @param MatrimonyProfile $viewerProfile Viewer's own profile
-     * @param MatrimonyProfile $viewedProfile Profile being viewed
+     * @param  MatrimonyProfile  $viewerProfile  Viewer's own profile
+     * @param  MatrimonyProfile  $viewedProfile  Profile being viewed
      * @return array|null Match explanation data or null if own profile
      */
     private static function calculateMatchExplanation(MatrimonyProfile $viewerProfile, MatrimonyProfile $viewedProfile): array
@@ -1178,7 +1157,7 @@ public function show($matrimony_profile_id)
             $viewerAge = now()->diffInYears($viewerProfile->date_of_birth);
             $viewedAge = now()->diffInYears($viewedProfile->date_of_birth);
             $ageDiff = abs($viewerAge - $viewedAge);
-            
+
             // Consider age match if within 5 years (flexible)
             if ($ageDiff <= 5) {
                 $matches[] = [
@@ -1204,7 +1183,7 @@ public function show($matrimony_profile_id)
 
             if ($viewerValue && $viewedValue) {
                 $isMatch = strtolower(trim($viewerValue)) === strtolower(trim($viewedValue));
-                
+
                 $matches[] = [
                     'field' => $fieldKey,
                     'label' => __($fieldInfo['label']),
@@ -1225,7 +1204,7 @@ public function show($matrimony_profile_id)
         }
 
         // Calculate match summary
-        $matchedCount = count(array_filter($matches, fn($m) => $m['matched']));
+        $matchedCount = count(array_filter($matches, fn ($m) => $m['matched']));
         $totalCount = count($matches);
 
         // Generate summary text (translated)
@@ -1268,7 +1247,7 @@ public function show($matrimony_profile_id)
             $city = \App\Models\City::find($request->city_id);
             if ($city && $city->taluka_id != $request->taluka_id) {
                 throw \Illuminate\Validation\ValidationException::withMessages([
-                    'city_id' => 'Selected city does not belong to the selected taluka.'
+                    'city_id' => 'Selected city does not belong to the selected taluka.',
                 ]);
             }
         }
@@ -1278,7 +1257,7 @@ public function show($matrimony_profile_id)
             $taluka = \App\Models\Taluka::find($request->taluka_id);
             if ($taluka && $taluka->district_id != $request->district_id) {
                 throw \Illuminate\Validation\ValidationException::withMessages([
-                    'taluka_id' => 'Selected taluka does not belong to the selected district.'
+                    'taluka_id' => 'Selected taluka does not belong to the selected district.',
                 ]);
             }
         }
@@ -1288,7 +1267,7 @@ public function show($matrimony_profile_id)
             $district = \App\Models\District::find($request->district_id);
             if ($district && $district->state_id != $request->state_id) {
                 throw \Illuminate\Validation\ValidationException::withMessages([
-                    'district_id' => 'Selected district does not belong to the selected state.'
+                    'district_id' => 'Selected district does not belong to the selected state.',
                 ]);
             }
         }
@@ -1298,10 +1277,9 @@ public function show($matrimony_profile_id)
             $state = \App\Models\State::find($request->state_id);
             if ($state && $state->country_id != $request->country_id) {
                 throw \Illuminate\Validation\ValidationException::withMessages([
-                    'state_id' => 'Selected state does not belong to the selected country.'
+                    'state_id' => 'Selected state does not belong to the selected country.',
                 ]);
             }
         }
     }
-
 }

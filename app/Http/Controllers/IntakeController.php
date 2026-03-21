@@ -7,6 +7,7 @@ use App\Models\AdminSetting;
 use App\Models\BiodataIntake;
 use App\Services\IntakeApprovalService;
 use App\Services\IntakeManualOcrPreparedService;
+use App\Services\MutationService;
 use App\Services\OcrService;
 use App\Services\Preview\PreviewSectionMapper;
 use Illuminate\Http\Request;
@@ -93,6 +94,7 @@ class IntakeController extends Controller
                     'user_id' => $userId,
                     'cap' => $globalDailyCap,
                 ]);
+
                 return redirect()->back()
                     ->withErrors(['file' => __('intake.global_cap_try_tomorrow')])
                     ->withInput();
@@ -125,7 +127,7 @@ class IntakeController extends Controller
 
             if ($ext === 'pdf' && $maxPdfPages > 0) {
                 try {
-                    $parser = new PdfParser();
+                    $parser = new PdfParser;
                     $pdf = $parser->parseFile($uploaded->getRealPath());
                     $pages = $pdf->getPages();
                     $pageCount = is_array($pages) ? count($pages) : 0;
@@ -158,7 +160,7 @@ class IntakeController extends Controller
                 $rawText = $ocrService->extractTextFromPath($path, $originalName);
             } catch (\Throwable $e) {
                 return redirect()->back()
-                    ->withErrors(['file' => __('intake.ocr_extraction_failed') . ' ' . $e->getMessage()])
+                    ->withErrors(['file' => __('intake.ocr_extraction_failed').' '.$e->getMessage()])
                     ->withInput();
             }
         } else {
@@ -192,7 +194,7 @@ class IntakeController extends Controller
         }
 
         return redirect()->route('intake.status', $intake->id)
-    ->with('success', __('intake.uploaded_successfully'));
+            ->with('success', __('intake.uploaded_successfully'));
     }
 
     /**
@@ -200,7 +202,6 @@ class IntakeController extends Controller
      * When parse_status = 'parsed' and intake has linked profile: transition profile to awaiting_user_approval.
      * No profile mutation in preview; only biodata_intakes may be modified later on approve.
      */
-	 
     public function preview(BiodataIntake $intake)
     {
         $isOwner = (int) $intake->uploaded_by === (int) auth()->id();
@@ -216,11 +217,11 @@ class IntakeController extends Controller
         }
 
         $data = $intake->parsed_json;
-        if (empty($data) || !is_array($data)) {
+        if (empty($data) || ! is_array($data)) {
             abort(400);
         }
 
-        $mapper = new PreviewSectionMapper();
+        $mapper = new PreviewSectionMapper;
         $sections = $mapper->map($data);
 
         // Display: use approval_snapshot_json['core'] for form values when present, else parsed_json (already in sections).
@@ -231,7 +232,7 @@ class IntakeController extends Controller
         }
 
         $confidenceMap = $data['confidence_map'] ?? [];
-        if (!is_array($confidenceMap)) {
+        if (! is_array($confidenceMap)) {
             $confidenceMap = [];
         }
 
@@ -293,17 +294,17 @@ class IntakeController extends Controller
 
         $missingCriticalFields = [];
         foreach ($criticalFields as $field) {
-    $val = $coreForRequiredCheck[$field] ?? null;
-    $trimmed = ($val !== null && $val !== '') ? trim((string) $val) : '';
+            $val = $coreForRequiredCheck[$field] ?? null;
+            $trimmed = ($val !== null && $val !== '') ? trim((string) $val) : '';
 
-    if ($trimmed === '—' || $trimmed === '-') {
-        $trimmed = '';
-    }
+            if ($trimmed === '—' || $trimmed === '-') {
+                $trimmed = '';
+            }
 
-    if ($trimmed === '') {
-        $missingCriticalFields[] = $field;
-    }
-}
+            if ($trimmed === '') {
+                $missingCriticalFields[] = $field;
+            }
+        }
 
         // Day-19: When preview loaded and intake has linked profile with state 'parsed' → awaiting_user_approval
         if ($intake->matrimony_profile_id) {
@@ -318,7 +319,7 @@ class IntakeController extends Controller
             }
         }
 
-        session(['preview_seen_' . $intake->id => true]);
+        session(['preview_seen_'.$intake->id => true]);
 
         $sectionSourceKeys = [
             'core' => 'core',
@@ -565,19 +566,25 @@ class IntakeController extends Controller
             // Already normalized?
             if (! preg_match('/^\d{1,2}:\d{2}(\s*(AM|PM))?$/iu', $btRaw)) {
                 $period = null; // 'AM' | 'PM' | null
-                if (mb_stripos($btRaw, 'सकाळी') !== false) $period = 'AM';
-                elseif (mb_stripos($btRaw, 'दुपारी') !== false) $period = 'PM';
-                elseif (mb_stripos($btRaw, 'सायंकाळी') !== false || mb_stripos($btRaw, 'सायंकाळ') !== false) $period = 'PM';
-                elseif (mb_stripos($btRaw, 'रात्री') !== false || mb_stripos($btRaw, 'रात्रीचे') !== false) $period = 'PM';
+                if (mb_stripos($btRaw, 'सकाळी') !== false) {
+                    $period = 'AM';
+                } elseif (mb_stripos($btRaw, 'दुपारी') !== false) {
+                    $period = 'PM';
+                } elseif (mb_stripos($btRaw, 'सायंकाळी') !== false || mb_stripos($btRaw, 'सायंकाळ') !== false) {
+                    $period = 'PM';
+                } elseif (mb_stripos($btRaw, 'रात्री') !== false || mb_stripos($btRaw, 'रात्रीचे') !== false) {
+                    $period = 'PM';
+                }
 
                 // Extract hour + minute allowing Marathi digits + junk between.
                 if (preg_match('/([०-९0-9]{1,2})[^\d०-९]+([०-९0-9]{1,2})/u', $btRaw, $mBt)) {
                     $toLatin = function (string $v): int {
-                        $map = ['०'=>'0','१'=>'1','२'=>'2','३'=>'3','४'=>'4','५'=>'5','६'=>'6','७'=>'7','८'=>'8','९'=>'9'];
+                        $map = ['०' => '0', '१' => '1', '२' => '2', '३' => '3', '४' => '4', '५' => '5', '६' => '6', '७' => '7', '८' => '8', '९' => '9'];
                         $out = '';
                         foreach (preg_split('//u', $v, -1, PREG_SPLIT_NO_EMPTY) as $ch) {
                             $out .= $map[$ch] ?? $ch;
                         }
+
                         return (int) $out;
                     };
                     $h = $toLatin($mBt[1]);
@@ -674,7 +681,7 @@ class IntakeController extends Controller
             $cx = \App\Models\MasterComplexion::where('is_active', true)
                 ->where(function ($q) use ($complexionLabel, $guessedKey) {
                     $q->where('label', $complexionLabel)
-                      ->orWhere('key', $complexionLabel);
+                        ->orWhere('key', $complexionLabel);
                     if ($guessedKey !== null) {
                         $q->orWhere('key', $guessedKey);
                     }
@@ -684,18 +691,18 @@ class IntakeController extends Controller
                 $coreData['complexion_id'] = $cx->id;
             }
         }
-$bloodLabel = is_scalar($coreData['blood_group'] ?? null) ? trim((string) $coreData['blood_group']) : '';
-if ($bloodLabel !== '') {
-    $bg = \App\Models\MasterBloodGroup::where('is_active', true)
-        ->where(function ($q) use ($bloodLabel) {
-            $q->where('label', $bloodLabel)
-              ->orWhere('key', $bloodLabel);
-        })
-        ->first();
-    if ($bg) {
-        $coreData['blood_group_id'] = $bg->id;
-    }
-}
+        $bloodLabel = is_scalar($coreData['blood_group'] ?? null) ? trim((string) $coreData['blood_group']) : '';
+        if ($bloodLabel !== '') {
+            $bg = \App\Models\MasterBloodGroup::where('is_active', true)
+                ->where(function ($q) use ($bloodLabel) {
+                    $q->where('label', $bloodLabel)
+                        ->orWhere('key', $bloodLabel);
+                })
+                ->first();
+            if ($bg) {
+                $coreData['blood_group_id'] = $bg->id;
+            }
+        }
         // Copy every other key from parsed core so form/engines see 100% of biodata (e.g. primary_contact_number, father_name, mother_name, height_cm, annual_income, birth_place string).
         foreach ($coreData as $k => $v) {
             if (! property_exists($intakeProfile, $k)) {
@@ -725,9 +732,9 @@ if ($bloodLabel !== '') {
         if (empty($intakeProfile->birth_city_id) && ! empty($intakeProfile->birth_place) && is_scalar($intakeProfile->birth_place)) {
             $birthPlaceStr = trim((string) $intakeProfile->birth_place);
             if ($birthPlaceStr !== '' && $birthPlaceStr !== \App\Services\Ocr\OcrSuggestionEngine::PLACEHOLDER_NOT_FOUND) {
-                $cityQuery = \App\Models\City::where('name', 'like', $birthPlaceStr . '%');
+                $cityQuery = \App\Models\City::where('name', 'like', $birthPlaceStr.'%');
                 if (\Illuminate\Support\Facades\Schema::hasColumn((new \App\Models\City)->getTable(), 'name_mr')) {
-                    $cityQuery->orWhere('name_mr', 'like', $birthPlaceStr . '%');
+                    $cityQuery->orWhere('name_mr', 'like', $birthPlaceStr.'%');
                 }
                 $city = $cityQuery->first();
                 if ($city) {
@@ -979,42 +986,44 @@ if ($bloodLabel !== '') {
                     $paternalFromRaw = [];
                     foreach ($lines as $ln) {
                         $line = trim($ln);
-                    if ($line === '') {
+                        if ($line === '') {
                             if ($inChulate) {
                                 // रिकामी line आली की chulate block संपला असे समजा.
                                 break;
                             }
+
                             continue;
                         }
-                    if (mb_strpos($line, 'चुलते') !== false) {
-                        $inChulate = true;
-                        // या ओळीतच "चुलते २- श्री. अनिल ..." असा first uncle असेल तर तोही capture कर.
-                        $posSri = mb_strpos($line, 'श्री.');
-                        if ($posSri !== false) {
-                            $lineAfter = trim(mb_substr($line, $posSri));
-                            if ($lineAfter !== '') {
-                                $name = null;
-                                $addr = null;
-                                if (preg_match('/श्री\.?\s*([^(]+?)\s*\(([^)]+)\)/u', $lineAfter, $mHead)) {
-                                    $name = trim($mHead[1]);
-                                    $addr = trim($mHead[2]);
-                                } elseif (preg_match('/श्री\.?\s*(.+)/u', $lineAfter, $mHead)) {
-                                    $name = trim($mHead[1]);
-                                }
-                                if ($name !== null && $name !== '') {
-                                    $paternalFromRaw[] = [
-                                        'relation_type' => 'चुलते',
-                                        'name' => $name,
-                                        'occupation' => null,
-                                        'address_line' => $addr ?? '',
-                                        'contact_number' => null,
-                                        'notes' => $addr ?? '',
-                                    ];
+                        if (mb_strpos($line, 'चुलते') !== false) {
+                            $inChulate = true;
+                            // या ओळीतच "चुलते २- श्री. अनिल ..." असा first uncle असेल तर तोही capture कर.
+                            $posSri = mb_strpos($line, 'श्री.');
+                            if ($posSri !== false) {
+                                $lineAfter = trim(mb_substr($line, $posSri));
+                                if ($lineAfter !== '') {
+                                    $name = null;
+                                    $addr = null;
+                                    if (preg_match('/श्री\.?\s*([^(]+?)\s*\(([^)]+)\)/u', $lineAfter, $mHead)) {
+                                        $name = trim($mHead[1]);
+                                        $addr = trim($mHead[2]);
+                                    } elseif (preg_match('/श्री\.?\s*(.+)/u', $lineAfter, $mHead)) {
+                                        $name = trim($mHead[1]);
+                                    }
+                                    if ($name !== null && $name !== '') {
+                                        $paternalFromRaw[] = [
+                                            'relation_type' => 'चुलते',
+                                            'name' => $name,
+                                            'occupation' => null,
+                                            'address_line' => $addr ?? '',
+                                            'contact_number' => null,
+                                            'notes' => $addr ?? '',
+                                        ];
+                                    }
                                 }
                             }
+
+                            continue;
                         }
-                        continue;
-                    }
                         if (! $inChulate) {
                             continue;
                         }
@@ -1062,6 +1071,7 @@ if ($bloodLabel !== '') {
             $fromSnapshotParents = collect($snapshot['relatives_parents_family'])->map(fn ($r) => (object) (is_array($r) ? $r : []));
             $hasAnyParentName = $fromSnapshotParents->contains(function ($row) {
                 $name = trim((string) ($row->name ?? ''));
+
                 return $name !== '';
             });
             $profileRelativesParentsFamily = $hasAnyParentName || $builtPaternal->isEmpty()
@@ -1076,6 +1086,7 @@ if ($bloodLabel !== '') {
             $fromSnapshotMaternal = collect($snapshot['relatives_maternal_family'])->map(fn ($r) => (object) (is_array($r) ? $r : []));
             $hasAnyMaternalName = $fromSnapshotMaternal->contains(function ($row) {
                 $name = trim((string) ($row->name ?? ''));
+
                 return $name !== '';
             });
             $profileRelativesMaternalFamily = $hasAnyMaternalName || $builtMaternal->isEmpty()
@@ -1147,12 +1158,12 @@ if ($bloodLabel !== '') {
             // 1) title exactly matches "BE - Computer Engineering" style composite,
             // 2) else by code/title = raw degreeText.
             if ($degreeText !== '') {
-                $candidateTitle = $instText !== '' ? ($degreeText . ' - ' . $instText) : $degreeText;
+                $candidateTitle = $instText !== '' ? ($degreeText.' - '.$instText) : $degreeText;
                 $deg = \App\Models\EducationDegree::query()
                     ->where('title', $candidateTitle)
                     ->orWhere(function ($q) use ($degreeText) {
                         $q->where('code', $degreeText)
-                          ->orWhere('title', $degreeText);
+                            ->orWhere('title', $degreeText);
                     })
                     ->first();
 
@@ -1160,6 +1171,7 @@ if ($bloodLabel !== '') {
                 if (! $deg) {
                     $normalize = static function (string $v): string {
                         $v = strtoupper($v);
+
                         return preg_replace('/[^A-Z]/', '', $v) ?? '';
                     };
                     $needle = $normalize($degreeText);
@@ -1168,6 +1180,7 @@ if ($bloodLabel !== '') {
                         $matches = $allDegrees->filter(function ($row) use ($needle, $normalize) {
                             $codeNorm = $normalize((string) ($row->code ?? ''));
                             $titleNorm = $normalize((string) ($row->title ?? ''));
+
                             return $codeNorm === $needle || $titleNorm === $needle;
                         });
                         if ($matches->count() === 1) {
@@ -1178,9 +1191,9 @@ if ($bloodLabel !== '') {
                                 ->whereHas('category', fn ($q) => $q->where('name', 'Engineering'))
                                 ->where(function ($q) {
                                     $q->where('code', 'like', '%B.E%')
-                                      ->orWhere('title', 'like', '%B.E%')
-                                      ->orWhere('code', 'like', '%B.Tech%')
-                                      ->orWhere('title', 'like', '%B.Tech%');
+                                        ->orWhere('title', 'like', '%B.E%')
+                                        ->orWhere('code', 'like', '%B.Tech%')
+                                        ->orWhere('title', 'like', '%B.Tech%');
                                 })
                                 ->orderBy('sort_order')
                                 ->first();
@@ -1242,10 +1255,10 @@ if ($bloodLabel !== '') {
                 // Start from raw address, then softly append taluka/district if missing so कि parsed JSON मधली extra माहिती हरवू नये.
                 $addrLine = $rawAddr;
                 if ($talukaText !== '' && mb_strpos($addrLine, $talukaText) === false) {
-                    $addrLine .= ($addrLine !== '' ? ', ' : '') . 'ता. ' . $talukaText;
+                    $addrLine .= ($addrLine !== '' ? ', ' : '').'ता. '.$talukaText;
                 }
                 if ($districtText !== '' && mb_strpos($addrLine, $districtText) === false) {
-                    $addrLine .= ($addrLine !== '' ? ', ' : '') . 'जि. ' . $districtText;
+                    $addrLine .= ($addrLine !== '' ? ', ' : '').'जि. '.$districtText;
                 }
             } else {
                 $parts = [];
@@ -1253,10 +1266,10 @@ if ($bloodLabel !== '') {
                     $parts[] = $base;
                 }
                 if ($talukaText !== '') {
-                    $parts[] = 'ता. ' . $talukaText;
+                    $parts[] = 'ता. '.$talukaText;
                 }
                 if ($districtText !== '') {
-                    $parts[] = 'जि. ' . $districtText;
+                    $parts[] = 'जि. '.$districtText;
                 }
                 $addrLine = implode(', ', $parts);
             }
@@ -1271,16 +1284,16 @@ if ($bloodLabel !== '') {
                 ) {
                     $fromTextTaluka = trim($mTal[1]);
                     if ($fromTextTaluka !== '' && mb_strpos($addrLine, $fromTextTaluka) === false) {
-                        $insert = 'ता. ' . $fromTextTaluka;
+                        $insert = 'ता. '.$fromTextTaluka;
                         // जर address मध्ये आधीच "जि." असेल, तर गावानंतर पण जिल्ह्याआधी taluka insert कर (गाव, ता., जि. असा sequence).
                         $posJilha = mb_strpos($addrLine, 'जि.');
                         if ($posJilha !== false) {
-                            $before = rtrim(mb_substr($addrLine, 0, $posJilha), " ,");
-                            $after = ltrim(mb_substr($addrLine, $posJilha), " ,");
-                            $addrLine = $before . ', ' . $insert . ', ' . $after;
+                            $before = rtrim(mb_substr($addrLine, 0, $posJilha), ' ,');
+                            $after = ltrim(mb_substr($addrLine, $posJilha), ' ,');
+                            $addrLine = $before.', '.$insert.', '.$after;
                         } else {
                             // अन्यथा शेवटी append कर.
-                            $addrLine .= ($addrLine !== '' ? ', ' : '') . $insert;
+                            $addrLine .= ($addrLine !== '' ? ', ' : '').$insert;
                         }
                     }
                 }
@@ -1510,7 +1523,7 @@ if ($bloodLabel !== '') {
         if ((int) $intake->uploaded_by !== (int) auth()->id()) {
             abort(403, __('intake.only_approve_own'));
         }
-        if (! session('preview_seen_' . $intake->id)) {
+        if (! session('preview_seen_'.$intake->id)) {
             abort(403);
         }
 
@@ -1649,9 +1662,9 @@ if ($bloodLabel !== '') {
                 $birthStr = trim((string) $core['birth_place']);
                 $firstPart = trim(preg_replace('/[\s.\-,].*$/u', '', $birthStr));
                 if ($firstPart !== '') {
-                    $cityQuery = \App\Models\City::where('name', 'like', $firstPart . '%');
+                    $cityQuery = \App\Models\City::where('name', 'like', $firstPart.'%');
                     if (\Illuminate\Support\Facades\Schema::hasColumn((new \App\Models\City)->getTable(), 'name_mr')) {
-                        $cityQuery->orWhere('name_mr', 'like', $firstPart . '%');
+                        $cityQuery->orWhere('name_mr', 'like', $firstPart.'%');
                     }
                     $city = $cityQuery->first();
                 } else {
@@ -1685,9 +1698,10 @@ if ($bloodLabel !== '') {
         }
 
         $result = app(IntakeApprovalService::class)->approve($intake, (int) auth()->id(), $snapshot);
+
         return redirect()->route('intake.status', $intake->id)
-    ->with('success', __('intake.approved_successfully'))
-    ->with('mutation_result', $result);
+            ->with('success', __('intake.approved_successfully'))
+            ->with('mutation_result', $result);
     }
 
     /**
@@ -1891,6 +1905,7 @@ if ($bloodLabel !== '') {
                 ];
             }
         }
+
         return $out;
     }
 
@@ -1911,6 +1926,7 @@ if ($bloodLabel !== '') {
                 'address_line' => '',
             ]);
         }
+
         return collect($existing);
     }
 
@@ -1920,9 +1936,11 @@ if ($bloodLabel !== '') {
     private function excludeSiblingRelationsFromRelatives(array $relatives): array
     {
         $siblingRelations = ['बहिण', 'बहीण', 'भाऊ', 'बंधू'];
+
         return array_values(array_filter($relatives, function ($row) use ($siblingRelations) {
             $row = is_array($row) ? $row : (array) $row;
             $relation = trim((string) ($row['relation_type'] ?? $row['relation'] ?? ''));
+
             return ! in_array($relation, $siblingRelations, true);
         }));
     }
@@ -2040,6 +2058,7 @@ if ($bloodLabel !== '') {
                 } else {
                     $paternal[] = (object) $structured;
                 }
+
                 continue;
             }
             $segments = preg_split('/(?=श्री\.|सौ\.)/u', $notes, -1, PREG_SPLIT_NO_EMPTY);
@@ -2209,6 +2228,7 @@ if ($bloodLabel !== '') {
             if ($a['prio'] === $b['prio']) {
                 return $a['idx'] <=> $b['idx'];
             }
+
             return $a['prio'] <=> $b['prio'];
         });
         $maternal = array_map(fn ($e) => $e['row'], $indexedMaternal);
@@ -2246,7 +2266,7 @@ if ($bloodLabel !== '') {
         // दाजी: नाव वेगळं, पत्ता Additional info (address_line) मध्ये साध्या text स्वरूपात.
         $spouse = [
             'name' => $cleanName,
-            'address_line' => $spouseAddressRaw !== '' ? ('पत्ता. ' . $spouseAddressRaw) : '',
+            'address_line' => $spouseAddressRaw !== '' ? ('पत्ता. '.$spouseAddressRaw) : '',
             'occupation_title' => $firstDaji['occupation_title'] ?? null,
             'contact_number' => $firstDaji['contact_number'] ?? null,
         ];
@@ -2264,6 +2284,7 @@ if ($bloodLabel !== '') {
                 'spouse' => $spouse,
             ];
         }
+
         return collect($siblingsArray);
     }
 
@@ -2330,7 +2351,7 @@ if ($bloodLabel !== '') {
                     if (preg_match('/^\s*([^\r\n]+)/u', $rest, $mNext)) {
                         $line2 = trim($mNext[1]);
                         if ($line2 !== '') {
-                            $addr = rtrim($addrLine1, " ,،，") . ', ' . $line2;
+                            $addr = rtrim($addrLine1, ' ,،，').', '.$line2;
                         }
                     }
                 }
@@ -2348,7 +2369,7 @@ if ($bloodLabel !== '') {
                     // notes रिकामे असेल तर थेट first line; अन्यथा शेवटी append करा. (loc match झालं वा नाही तरी raw flat-level info हरवू नये.)
                     $existingNotes = trim((string) ($r['notes'] ?? ''));
                     if ($addrLine1 !== '') {
-                        $r['notes'] = $existingNotes !== '' ? ($existingNotes . ' | ' . $addrLine1) : $addrLine1;
+                        $r['notes'] = $existingNotes !== '' ? ($existingNotes.' | '.$addrLine1) : $addrLine1;
                     }
                 }
             }
@@ -2477,6 +2498,7 @@ if ($bloodLabel !== '') {
         $t = trim($token);
         // Remove trailing punctuation and danda.
         $t = preg_replace('/[[:punct:]।]+$/u', '', $t);
+
         return trim($t);
     }
 
@@ -2512,6 +2534,7 @@ if ($bloodLabel !== '') {
                 'is_primary_contact' => ! empty($row['is_primary_contact']),
             ];
         }
+
         return $relatives;
     }
 
@@ -2841,7 +2864,97 @@ if ($bloodLabel !== '') {
         }
 
         $ocrPresetFeedback = null;
+        $profile = auth()->user()->matrimonyProfile;
+        $pendingSuggestions = is_array($profile?->pending_intake_suggestions_json)
+            ? $profile->pending_intake_suggestions_json
+            : [];
 
-        return view('intake.status', compact('intake', 'ocrPresetFeedback'));
+        return view('intake.status', compact('intake', 'ocrPresetFeedback', 'profile', 'pendingSuggestions'));
+    }
+
+    /**
+     * Apply one value from profile.pending_intake_suggestions_json (explicit user opt-in).
+     */
+    public function applyPendingIntakeSuggestion(Request $request, BiodataIntake $intake)
+    {
+        if ((int) $intake->uploaded_by !== (int) auth()->id()) {
+            abort(403, __('intake.only_view_status_own'));
+        }
+
+        $validated = $request->validate([
+            'scope' => ['required', 'in:core,extended'],
+            'field_key' => ['required', 'string', 'max:160'],
+        ]);
+
+        $user = auth()->user();
+        $profile = $user->matrimonyProfile;
+        if (! $profile) {
+            return redirect()
+                ->route('intake.status', $intake)
+                ->with('error', __('intake.apply_suggestion_no_profile'));
+        }
+
+        $pending = $profile->pending_intake_suggestions_json;
+        if (! is_array($pending)) {
+            return redirect()
+                ->route('intake.status', $intake)
+                ->with('error', __('intake.apply_suggestion_none'));
+        }
+
+        $scope = $validated['scope'];
+        $key = $validated['field_key'];
+        $bucket = $pending[$scope] ?? null;
+        if (! is_array($bucket) || ! array_key_exists($key, $bucket)) {
+            return redirect()
+                ->route('intake.status', $intake)
+                ->with('error', __('intake.apply_suggestion_missing'));
+        }
+
+        $value = $bucket[$key];
+        $mutation = app(MutationService::class);
+
+        if ($scope === 'core') {
+            $allowed = $mutation->coreFieldKeysAllowedForIntakeSuggestionApply();
+            if (! in_array($key, $allowed, true)) {
+                return redirect()
+                    ->route('intake.status', $intake)
+                    ->with('error', __('intake.apply_suggestion_invalid_field'));
+            }
+            $snapshot = [
+                'snapshot_schema_version' => 1,
+                'core' => [$key => $value],
+            ];
+        } else {
+            $snapshot = [
+                'snapshot_schema_version' => 1,
+                'extended_fields' => [$key => $value],
+            ];
+        }
+
+        try {
+            $mutation->applyManualSnapshot($profile, $snapshot, (int) $user->id, 'manual');
+        } catch (\Throwable $e) {
+            Log::warning('applyPendingIntakeSuggestion failed', [
+                'profile_id' => $profile->id,
+                'scope' => $scope,
+                'field_key' => $key,
+                'message' => $e->getMessage(),
+            ]);
+
+            return redirect()
+                ->route('intake.status', $intake)
+                ->with('error', __('intake.apply_suggestion_failed'));
+        }
+
+        unset($pending[$scope][$key]);
+        if ($pending[$scope] === []) {
+            unset($pending[$scope]);
+        }
+        $profile->pending_intake_suggestions_json = $pending === [] ? null : $pending;
+        $profile->save();
+
+        return redirect()
+            ->route('intake.status', $intake)
+            ->with('success', __('intake.apply_suggestion_ok', ['field' => $key]));
     }
 }

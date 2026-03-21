@@ -3,8 +3,8 @@
 namespace App\Services;
 
 use App\Models\MatrimonyProfile;
-use App\Services\IncomeEngineService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Schema;
 
 /**
  * Phase-5 SSOT: Reusable builder for full manual profile snapshot.
@@ -73,6 +73,10 @@ class ManualSnapshotBuilderService
         $core['address_line'] = $request->filled('address_line') ? trim($request->input('address_line')) : null;
         $core['work_city_id'] = $request->input('work_city_id') ?: null;
         $core['work_state_id'] = $request->input('work_state_id') ?: null;
+        if (Schema::hasColumn('matrimony_profiles', 'work_location_text')) {
+            $wlt = trim((string) $request->input('work_location_text', ''));
+            $core['work_location_text'] = $wlt !== '' ? mb_substr($wlt, 0, 255) : null;
+        }
         $core['serious_intent_id'] = $request->input('serious_intent_id') ?: null;
         $core['has_siblings'] = $request->has('has_siblings') ? ($request->input('has_siblings') === '1' || $request->input('has_siblings') === 1) : null;
         $core = array_map(fn ($v) => $v === '' ? null : $v, $core);
@@ -81,7 +85,7 @@ class ManualSnapshotBuilderService
         if ($request->hasFile('profile_photo')) {
             $request->validate(['profile_photo' => ['image', 'max:2048']]);
             $file = $request->file('profile_photo');
-            $filename = time() . '_' . basename($file->getClientOriginalName());
+            $filename = time().'_'.basename($file->getClientOriginalName());
             $file->move(public_path('uploads/matrimony_photos'), $filename);
             $photoApprovalRequired = \App\Services\AdminSettingService::isPhotoApprovalRequired();
             $core['profile_photo'] = $filename;
@@ -131,15 +135,13 @@ class ManualSnapshotBuilderService
 
         $career_history = [];
         foreach ($request->input('career_history', []) as $row) {
-            $career_history[] = [
-                'id' => ! empty($row['id']) ? (int) $row['id'] : null,
-                'designation' => trim((string) ($row['designation'] ?? '')),
-                'company' => trim((string) ($row['company'] ?? '')),
-                'location' => trim((string) ($row['location'] ?? '')) ?: null,
-                'start_year' => ! empty($row['start_year']) ? (int) $row['start_year'] : null,
-                'end_year' => ! empty($row['end_year']) ? (int) $row['end_year'] : null,
-                'is_current' => isset($row['is_current']) && (string) $row['is_current'] === '1',
-            ];
+            if (! is_array($row)) {
+                continue;
+            }
+            $normalized = CareerHistoryRowNormalizer::fromRequestRowOrNull($row);
+            if ($normalized !== null) {
+                $career_history[] = $normalized;
+            }
         }
 
         $addresses = [];
@@ -411,29 +413,30 @@ class ManualSnapshotBuilderService
     private function buildIncomeEngineCoreForSnapshot(Request $request, string $prefix): array
     {
         $service = app(IncomeEngineService::class);
-        $period = $request->input($prefix . '_period') ?: 'annual';
-        $valueType = $request->input($prefix . '_value_type');
-        $amount = $request->filled($prefix . '_amount') ? (float) $request->input($prefix . '_amount') : null;
-        $minAmount = $request->filled($prefix . '_min_amount') ? (float) $request->input($prefix . '_min_amount') : null;
-        $maxAmount = $request->filled($prefix . '_max_amount') ? (float) $request->input($prefix . '_max_amount') : null;
+        $period = $request->input($prefix.'_period') ?: 'annual';
+        $valueType = $request->input($prefix.'_value_type');
+        $amount = $request->filled($prefix.'_amount') ? (float) $request->input($prefix.'_amount') : null;
+        $minAmount = $request->filled($prefix.'_min_amount') ? (float) $request->input($prefix.'_min_amount') : null;
+        $maxAmount = $request->filled($prefix.'_max_amount') ? (float) $request->input($prefix.'_max_amount') : null;
         $normalized = $service->normalizeToAnnual($valueType, $period, $amount, $minAmount, $maxAmount);
         $defaultInr = \App\Models\MasterIncomeCurrency::where('code', 'INR')->value('id');
 
         $out = [
-            $prefix . '_period' => $period,
-            $prefix . '_value_type' => $valueType,
-            $prefix . '_amount' => $amount,
-            $prefix . '_min_amount' => $minAmount,
-            $prefix . '_max_amount' => $maxAmount,
-            $prefix . '_normalized_annual_amount' => $normalized,
+            $prefix.'_period' => $period,
+            $prefix.'_value_type' => $valueType,
+            $prefix.'_amount' => $amount,
+            $prefix.'_min_amount' => $minAmount,
+            $prefix.'_max_amount' => $maxAmount,
+            $prefix.'_normalized_annual_amount' => $normalized,
         ];
         if ($prefix === 'income') {
             $out['income_private'] = $request->boolean('income_private');
             $out['income_currency_id'] = $request->input('income_currency_id') ? (int) $request->input('income_currency_id') : $defaultInr;
         } else {
-            $out[$prefix . '_currency_id'] = $request->input($prefix . '_currency_id') ? (int) $request->input($prefix . '_currency_id') : $defaultInr;
-            $out[$prefix . '_private'] = $request->boolean($prefix . '_private');
+            $out[$prefix.'_currency_id'] = $request->input($prefix.'_currency_id') ? (int) $request->input($prefix.'_currency_id') : $defaultInr;
+            $out[$prefix.'_private'] = $request->boolean($prefix.'_private');
         }
+
         return $out;
     }
 }

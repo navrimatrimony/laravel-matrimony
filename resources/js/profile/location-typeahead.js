@@ -354,6 +354,27 @@
         }
     }
 
+    /** Copy visible typeahead text into the named sync field (e.g. career_history[n][location]) so free-typed text posts. */
+    function syncLocationDisplaySyncTargets(form) {
+        if (!form || !form.elements) return;
+        form.querySelectorAll('.location-typeahead-wrapper[data-display-sync-name]').forEach(function (wrapper) {
+            var syncName = wrapper.getAttribute('data-display-sync-name');
+            if (!syncName) return;
+            var vis = wrapper.querySelector('.location-typeahead-input');
+            if (!vis) return;
+            var found = null;
+            for (var i = 0; i < form.elements.length; i++) {
+                var el = form.elements[i];
+                if (el.name === syncName) {
+                    found = el;
+                    break;
+                }
+            }
+            if (!found) return;
+            found.value = vis.value != null ? vis.value : '';
+        });
+    }
+
     /** Before native submit: restore residence IDs from dataset if hiddens were cleared. */
     function restoreResidenceHiddensFromDataset(form) {
         if (!form || !form.querySelectorAll) return;
@@ -389,6 +410,7 @@
         var t = e.target;
         if (!t || t.tagName !== 'FORM') return;
         restoreResidenceHiddensFromDataset(t);
+        syncLocationDisplaySyncTargets(t);
     }, true);
 
     if (document.readyState === 'loading') {

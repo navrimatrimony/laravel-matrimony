@@ -1,40 +1,41 @@
 <?php
 
-use Illuminate\Support\Facades\Route;
-use App\Models\Caste;
-use App\Models\SubCaste;
-use App\Http\Controllers\MatrimonyProfileController;
-use App\Http\Controllers\ProfileWizardController;
-use App\Http\Controllers\OnboardingController;
-use App\Http\Controllers\InterestController;
-use App\Http\Controllers\NotificationController;
-use App\Http\Controllers\AdminController;
 use App\Http\Controllers\AbuseReportController;
-use App\Http\Controllers\BlockController;
-use App\Http\Controllers\ShortlistController;
-use App\Http\Controllers\ContactRequestController;
-use App\Http\Controllers\ContactInboxController;
-use App\Http\Controllers\WhoViewedController;
-use App\Http\Controllers\Admin\DemoProfileController;
 use App\Http\Controllers\Admin\AdminCapabilityController;
-use App\Http\Controllers\Admin\AdminVerificationTagController;
-use App\Http\Controllers\Admin\AdminSeriousIntentController;
-use App\Http\Controllers\Admin\AdminProfileTagController;
-use App\Http\Controllers\Admin\AdminIntakeController;
-use App\Http\Controllers\Admin\LocationSuggestionWebController;
-use App\Http\Controllers\Admin\GovernanceDashboardController;
-use App\Http\Controllers\Admin\OcrPatternController;
-use App\Http\Controllers\Admin\AdminReligionController;
 use App\Http\Controllers\Admin\AdminCasteController;
-use App\Http\Controllers\Admin\SubCasteAdminController;
+use App\Http\Controllers\Admin\AdminIntakeController;
+use App\Http\Controllers\Admin\AdminProfileTagController;
+use App\Http\Controllers\Admin\AdminReligionController;
+use App\Http\Controllers\Admin\AdminSeriousIntentController;
+use App\Http\Controllers\Admin\AdminVerificationTagController;
+use App\Http\Controllers\Admin\DemoProfileController;
+use App\Http\Controllers\Admin\GovernanceDashboardController;
 use App\Http\Controllers\Admin\HomepageImageController;
+use App\Http\Controllers\Admin\LocationSuggestionWebController;
+use App\Http\Controllers\Admin\OcrPatternController;
+use App\Http\Controllers\Admin\SubCasteAdminController;
 use App\Http\Controllers\Admin\TranslationController;
-use App\Http\Controllers\Internal\Admin\LocationSuggestionAdminController;
-use App\Http\Controllers\Internal\Admin\CityAliasAdminController;
+use App\Http\Controllers\AdminController;
+use App\Http\Controllers\BlockController;
+use App\Http\Controllers\ContactInboxController;
+use App\Http\Controllers\ContactRequestController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\IntakeController;
+use App\Http\Controllers\InterestController;
+use App\Http\Controllers\Internal\Admin\CityAliasAdminController;
+use App\Http\Controllers\Internal\Admin\LocationSuggestionAdminController;
+use App\Http\Controllers\MatrimonyProfileController;
+use App\Http\Controllers\NotificationController;
+use App\Http\Controllers\OnboardingController;
+use App\Http\Controllers\ProfileWizardController;
+use App\Http\Controllers\ShortlistController;
 use App\Http\Controllers\UserSettingsController;
+use App\Http\Controllers\WhoViewedController;
 use App\Models\BiodataIntake;
+use App\Models\Caste;
+use App\Models\SubCaste;
+use Illuminate\Support\Facades\Route;
+
 /*
 |--------------------------------------------------------------------------
 | Public Routes
@@ -57,7 +58,6 @@ Route::get('/phase5-test', function () {
 Route::get('/dashboard', [DashboardController::class, 'index'])
     ->middleware(['auth'])
     ->name('dashboard');
-
 
 /*
 |--------------------------------------------------------------------------
@@ -87,15 +87,17 @@ Route::middleware('auth')->group(function () {
     Route::post('/intake/approve/{intake}', [IntakeController::class, 'approve'])->name('intake.approve');
     Route::get('/intake/approval', [IntakeController::class, 'approval'])->name('intake.approval');
     Route::get('/intake/status/{intake}', [IntakeController::class, 'status'])
-    ->name('intake.status');
-	
+        ->name('intake.status');
+    Route::post('/intake/apply-suggestion/{intake}', [IntakeController::class, 'applyPendingIntakeSuggestion'])
+        ->name('intake.apply-suggestion');
+
     Route::get('/api/intake-status/{intake}', function (BiodataIntake $intake) {
-    return response()->json([
-        'parse_status'     => $intake->parse_status,
-        'approved_by_user' => (bool) $intake->approved_by_user,
-        'intake_status'    => $intake->intake_status,
-    ]);
-});
+        return response()->json([
+            'parse_status' => $intake->parse_status,
+            'approved_by_user' => (bool) $intake->approved_by_user,
+            'intake_status' => $intake->intake_status,
+        ]);
+    });
 
     /*
     |--------------------------------------------------------------------------
@@ -159,12 +161,12 @@ Route::middleware('auth')->group(function () {
 
     Route::post('/matrimony/profile/update-full', [MatrimonyProfileController::class, 'updateFull'])
         ->name('matrimony.profile.update-full');
-		
-	Route::get('/matrimony/profile/upload-photo', [MatrimonyProfileController::class, 'uploadPhoto'])
-    ->name('matrimony.profile.upload-photo');
 
-	Route::post('/matrimony/profile/upload-photo', [MatrimonyProfileController::class, 'storePhoto'])
-    ->name('matrimony.profile.store-photo');
+    Route::get('/matrimony/profile/upload-photo', [MatrimonyProfileController::class, 'uploadPhoto'])
+        ->name('matrimony.profile.upload-photo');
+
+    Route::post('/matrimony/profile/upload-photo', [MatrimonyProfileController::class, 'storePhoto'])
+        ->name('matrimony.profile.store-photo');
 
     // User profile photo manager (gallery) — same-page actions.
     Route::post('/matrimony/profile/photos/{photo}/make-primary', [MatrimonyProfileController::class, 'makePrimary'])
@@ -176,7 +178,6 @@ Route::middleware('auth')->group(function () {
     Route::delete('/matrimony/profile/photos/{photo}', [MatrimonyProfileController::class, 'destroy'])
         ->name('matrimony.profile.photos.destroy');
 
-
     /*
     | Matrimony Profiles (View / Search)
     */
@@ -184,20 +185,15 @@ Route::middleware('auth')->group(function () {
         ->name('matrimony.profiles.index');
 
     // 🔒 SSOT: MatrimonyProfile route MUST use matrimony_profile_id
-Route::get('/profile/{matrimony_profile_id}', [MatrimonyProfileController::class, 'show'])
-    ->name('matrimony.profile.show');
-
-
-
+    Route::get('/profile/{matrimony_profile_id}', [MatrimonyProfileController::class, 'show'])
+        ->name('matrimony.profile.show');
 
     /*
     | Interests
     */
     // 🔒 SSOT: MatrimonyProfile route param consistency
-Route::post('/interests/send/{matrimony_profile_id}', [InterestController::class, 'store'])
-    ->name('interests.send');
-
-
+    Route::post('/interests/send/{matrimony_profile_id}', [InterestController::class, 'store'])
+        ->name('interests.send');
 
     Route::get('/interests/sent', [InterestController::class, 'sent'])
         ->name('interests.sent');
@@ -205,17 +201,17 @@ Route::post('/interests/send/{matrimony_profile_id}', [InterestController::class
     Route::get('/interests/received', [InterestController::class, 'received'])
         ->name('interests.received');
 
-        // 🔴 Interest Accept
-Route::post('/interests/{interest}/accept', [App\Http\Controllers\InterestController::class, 'accept'])
-->name('interests.accept');
+    // 🔴 Interest Accept
+    Route::post('/interests/{interest}/accept', [App\Http\Controllers\InterestController::class, 'accept'])
+        ->name('interests.accept');
 
-// 🔴 Interest Reject
-Route::post('/interests/{interest}/reject', [App\Http\Controllers\InterestController::class, 'reject'])
-->name('interests.reject');
+    // 🔴 Interest Reject
+    Route::post('/interests/{interest}/reject', [App\Http\Controllers\InterestController::class, 'reject'])
+        ->name('interests.reject');
 
-// 🔴 Withdraw (Cancel) Interest
-Route::post('/interests/{interest}/withdraw', [App\Http\Controllers\InterestController::class, 'withdraw'])
-    ->name('interests.withdraw');
+    // 🔴 Withdraw (Cancel) Interest
+    Route::post('/interests/{interest}/withdraw', [App\Http\Controllers\InterestController::class, 'withdraw'])
+        ->name('interests.withdraw');
 
     /*
     | Block (SSOT Day-5)
@@ -344,22 +340,22 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
     */
     Route::get('/profiles/{id}', [AdminController::class, 'showProfile'])
         ->name('profiles.show');
-    
+
     /*
     | Profile Edit (Admin)
     */
     Route::put('/profiles/{profile}', [AdminController::class, 'updateProfile'])
         ->name('profiles.update');
-    
+
     /*
     | Profile Moderation
     */
     Route::post('/profiles/{profile}/suspend', [AdminController::class, 'suspendProfile'])
         ->name('profiles.suspend');
-    
+
     Route::post('/profiles/{profile}/unsuspend', [AdminController::class, 'unsuspendProfile'])
         ->name('profiles.unsuspend');
-    
+
     Route::post('/profiles/{profile}/soft-delete', [AdminController::class, 'softDeleteProfile'])
         ->name('profiles.soft-delete');
 
@@ -368,7 +364,7 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
     */
     Route::post('/profiles/{profile}/approve-image', [AdminController::class, 'approveImage'])
         ->name('profiles.approve-image');
-    
+
     Route::post('/profiles/{profile}/reject-image', [AdminController::class, 'rejectImage'])
         ->name('profiles.reject-image');
 
@@ -409,7 +405,7 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
     */
     Route::get('/abuse-reports', [AbuseReportController::class, 'index'])
         ->name('abuse-reports.index');
-    
+
     Route::post('/abuse-reports/{report}/resolve', [AbuseReportController::class, 'resolve'])
         ->name('abuse-reports.resolve');
 
@@ -532,17 +528,16 @@ require __DIR__.'/auth.php';
 
 // Temporary debug route — Phase-5 Day-12 verification. Remove before production.
 
-
 Route::get('/api/castes/{religionId}', function ($religionId) {
     return Caste::where('religion_id', $religionId)
         ->where('is_active', true)
         ->orderBy('label')
-        ->get(['id','label']);
+        ->get(['id', 'label']);
 });
 
 Route::get('/api/subcastes/{casteId}', function ($casteId) {
     return SubCaste::where('caste_id', $casteId)
         ->where('is_active', true)
         ->orderBy('label')
-        ->get(['id','label']);
+        ->get(['id', 'label']);
 });

@@ -111,8 +111,8 @@ class MutationService
 
         $state = $profile->lifecycle_state ?? '';
         $isAdmin = $mode === 'admin';
-        if (!$isAdmin && in_array($state, self::BLOCK_MANUAL_EDIT_STATES, true)) {
-            throw new \RuntimeException('Profile cannot be edited while intake or conflict is pending. Lifecycle: ' . $state);
+        if (! $isAdmin && in_array($state, self::BLOCK_MANUAL_EDIT_STATES, true)) {
+            throw new \RuntimeException('Profile cannot be edited while intake or conflict is pending. Lifecycle: '.$state);
         }
 
         $this->historySourceContext = $mode;
@@ -129,7 +129,7 @@ class MutationService
         }
 
         try {
-            DB::transaction(function () use ($profile, $snapshot, $actorUserId, $isAdmin, $mode, &$hadConflicts): void {
+            DB::transaction(function () use ($profile, $snapshot, $isAdmin, $mode, &$hadConflicts): void {
                 $proposedCore = $snapshot['core'] ?? [];
                 $proposedExtended = $snapshot['extended'] ?? [];
                 $conflictRecords = [];
@@ -145,10 +145,11 @@ class MutationService
                     foreach ($identityCriticalKeys as $k) {
                         if ($k === 'primary_contact_number') {
                             $contacts = $snapshot['contacts'] ?? [];
-                            if (!empty($contacts)) {
+                            if (! empty($contacts)) {
                                 $hasIdentityChange = true;
                                 break;
                             }
+
                             continue;
                         }
                         if (array_key_exists($k, $proposedCore)) {
@@ -159,16 +160,16 @@ class MutationService
                     if ($hasIdentityChange) {
                         $duplicateResult = app(DuplicateDetectionService::class)->detectFromSnapshot($snapshot, $profile->user_id);
                         if ($duplicateResult->isDuplicate && $duplicateResult->existingProfileId !== null && (int) $duplicateResult->existingProfileId !== (int) $profile->id) {
-                            if (!$this->hasPendingConflictForField($profile->id, 'duplicate_detection')) {
+                            if (! $this->hasPendingConflictForField($profile->id, 'duplicate_detection')) {
                                 ConflictRecord::create([
                                     'profile_id' => $profile->id,
                                     'field_name' => 'duplicate_detection',
-                                'field_type' => 'CORE',
-                                'old_value' => null,
-                                'new_value' => $duplicateResult->duplicateType . ':' . $duplicateResult->existingProfileId,
-                                'source' => 'USER',
-                                'detected_at' => now(),
-                                'resolution_status' => 'PENDING',
+                                    'field_type' => 'CORE',
+                                    'old_value' => null,
+                                    'new_value' => $duplicateResult->duplicateType.':'.$duplicateResult->existingProfileId,
+                                    'source' => 'USER',
+                                    'detected_at' => now(),
+                                    'resolution_status' => 'PENDING',
                                 ]);
                                 $conflictFieldNames = array_merge($conflictFieldNames, $identityCriticalKeys);
                                 $hadConflicts = true;
@@ -183,12 +184,12 @@ class MutationService
 
                     // ——— Field lock check (PART-2: skip for admin so admin can override locked fields) ———
                     $coreFieldKeys = $this->getCoreFieldKeysFromRegistry();
-                    if (!$isAdmin) {
+                    if (! $isAdmin) {
                         foreach ($coreFieldKeys as $fieldKey) {
-                            if (!array_key_exists($fieldKey, $proposedCore)) {
+                            if (! array_key_exists($fieldKey, $proposedCore)) {
                                 continue;
                             }
-                            if (ProfileFieldLockService::isLocked($profile, $fieldKey) && !$this->hasPendingConflictForField($profile->id, $fieldKey)) {
+                            if (ProfileFieldLockService::isLocked($profile, $fieldKey) && ! $this->hasPendingConflictForField($profile->id, $fieldKey)) {
                                 $conflictRecords[] = ConflictRecord::create([
                                     'profile_id' => $profile->id,
                                     'field_name' => $fieldKey,
@@ -207,10 +208,10 @@ class MutationService
                             array_keys($proposedExtended)
                         ));
                         foreach ($extendedKeys as $fieldKey) {
-                            if (!array_key_exists($fieldKey, $proposedExtended)) {
+                            if (! array_key_exists($fieldKey, $proposedExtended)) {
                                 continue;
                             }
-                            if (ProfileFieldLockService::isLocked($profile, $fieldKey) && !$this->hasPendingConflictForField($profile->id, $fieldKey)) {
+                            if (ProfileFieldLockService::isLocked($profile, $fieldKey) && ! $this->hasPendingConflictForField($profile->id, $fieldKey)) {
                                 $current = ExtendedFieldService::getValuesForProfile($profile)[$fieldKey] ?? null;
                                 $conflictRecords[] = ConflictRecord::create([
                                     'profile_id' => $profile->id,
@@ -232,14 +233,15 @@ class MutationService
 
                 // ——— CORE field apply ———
                 foreach ($coreFieldKeys as $fieldKey) {
-                    if (!array_key_exists($fieldKey, $proposedCore)) {
+                    if (! array_key_exists($fieldKey, $proposedCore)) {
                         continue;
                     }
                     if (in_array($fieldKey, $conflictFieldNames, true)) {
                         continue;
                     }
-                    if (!$isAdmin && ProfileFieldLockService::isLocked($profile, $fieldKey)) {
+                    if (! $isAdmin && ProfileFieldLockService::isLocked($profile, $fieldKey)) {
                         \Illuminate\Support\Facades\Log::info('MANUAL EDIT: field locked (skipped)', ['field' => $fieldKey, 'profile_id' => $profile->id]);
+
                         continue;
                     }
                     $oldVal = $this->getCurrentCoreValue($profile, $fieldKey);
@@ -266,7 +268,7 @@ class MutationService
                         if (in_array($fieldKey, $coreFieldKeys, true)) {
                             continue;
                         }
-                        if (!Schema::hasColumn($profile->getTable(), $fieldKey)) {
+                        if (! Schema::hasColumn($profile->getTable(), $fieldKey)) {
                             continue;
                         }
                         \Illuminate\Support\Facades\Log::warning('Core column missing in registry', [
@@ -274,8 +276,9 @@ class MutationService
                             'profile_id' => $profile->id,
                             'source' => $isAdmin ? 'admin' : 'manual',
                         ]);
-                        if (!$isAdmin && ProfileFieldLockService::isLocked($profile, $fieldKey)) {
+                        if (! $isAdmin && ProfileFieldLockService::isLocked($profile, $fieldKey)) {
                             \Illuminate\Support\Facades\Log::info('MANUAL EDIT: field locked (skipped)', ['field' => $fieldKey, 'profile_id' => $profile->id]);
+
                             continue;
                         }
                         $oldVal = $profile->getAttribute($fieldKey);
@@ -316,6 +319,7 @@ class MutationService
                             return true;
                         }
                     }
+
                     return false;
                 };
                 if (isset($snapshot['birth_place']) && is_array($snapshot['birth_place']) && $hasAnyPlaceValue($snapshot['birth_place'])) {
@@ -366,19 +370,21 @@ class MutationService
                 // ——— Entity sync (only keys present in snapshot) ———
                 foreach (self::ENTITY_SYNC_ORDER as $snapshotKey) {
                     \Log::info('DEBUG MULTI ROW SECTION', ['section' => $snapshotKey]);
-                    if (!array_key_exists($snapshotKey, $snapshot) || !is_array($snapshot[$snapshotKey])) {
+                    if (! array_key_exists($snapshotKey, $snapshot) || ! is_array($snapshot[$snapshotKey])) {
                         continue;
                     }
                     if ($snapshotKey === 'siblings' && Schema::hasTable('profile_siblings')) {
                         $this->syncSiblingsWithSpouses($profile, $snapshot['siblings']);
+
                         continue;
                     }
                     if ($snapshotKey === 'horoscope' && Schema::hasTable('profile_horoscope_data')) {
                         $this->syncHoroscopeUpsert($profile, $snapshot['horoscope']);
+
                         continue;
                     }
                     $table = self::SNAPSHOT_KEY_TO_TABLE[$snapshotKey] ?? null;
-                    if ($table === null || !Schema::hasTable($table)) {
+                    if ($table === null || ! Schema::hasTable($table)) {
                         continue;
                     }
                     if (in_array($snapshotKey, self::SINGLE_ROW_SNAPSHOT_KEYS, true)) {
@@ -418,7 +424,7 @@ class MutationService
                     \App\Services\ProfileLifecycleService::syncLifecycleFromPendingConflicts($profile);
                 } else {
                     $current = $profile->lifecycle_state ?? 'draft';
-                    if ($current === 'draft' && !empty($profile->profile_photo) && !in_array($current, self::NO_AUTO_ACTIVATE_STATES, true)) {
+                    if ($current === 'draft' && ! empty($profile->profile_photo) && ! in_array($current, self::NO_AUTO_ACTIVATE_STATES, true)) {
                         $this->setLifecycleState($profile, 'active');
                     }
                 }
@@ -442,7 +448,7 @@ class MutationService
         }
 
         return [
-            'mutation_success' => !$hadConflicts,
+            'mutation_success' => ! $hadConflicts,
             'conflict_detected' => $hadConflicts,
             'profile_id' => $profile->id,
         ];
@@ -463,7 +469,6 @@ class MutationService
     /**
      * Apply intake to profile. Direct path: pass snapshot in memory so we write to DB without save-then-read.
      *
-     * @param  int  $intakeId
      * @param  array<string, mixed>|null  $snapshot  When provided, use this (direct form→DB); intake row updated at end with this for audit.
      * @param  array{manual_edits?: int, auto_filled?: int}|null  $metrics  Optional when snapshot passed; stored on intake.
      * @return array{mutation_success: bool, conflict_detected: bool, profile_id: int|null}
@@ -473,7 +478,7 @@ class MutationService
         Log::info('MutationService::applyApprovedIntake START', ['intakeId' => $intakeId, 'snapshotInMemory' => $snapshot !== null]);
 
         $intake = BiodataIntake::find($intakeId);
-        if (!$intake) {
+        if (! $intake) {
             throw new \RuntimeException("BiodataIntake not found: {$intakeId}");
         }
         if ($snapshot === null) {
@@ -503,7 +508,7 @@ class MutationService
         }
         $version = $intake->snapshot_schema_version ?? $snapshot['snapshot_schema_version'] ?? 1;
         $version = $version !== null ? (int) $version : null;
-        if ($version === null || !in_array($version, self::SUPPORTED_SNAPSHOT_VERSIONS, true)) {
+        if ($version === null || ! in_array($version, self::SUPPORTED_SNAPSHOT_VERSIONS, true)) {
             throw new \RuntimeException('Unsupported or missing snapshot_schema_version. Supported: [1].');
         }
         $snapshotInMemory = $snapshotPassedInMemory;
@@ -526,14 +531,19 @@ class MutationService
             DB::transaction(function () use ($intake, $snapshot, $metrics, $snapshotInMemory, $version, &$duplicateDetected, &$hadConflicts, &$profileIdForLog, &$blockedByConflictPending, &$alreadyAppliedInTransaction): void {
                 $intakeId = $intake->id;
                 $intake = BiodataIntake::where('id', $intakeId)->lockForUpdate()->first();
-                if (!$intake) {
+                if (! $intake) {
                     throw new \RuntimeException("BiodataIntake not found (locked): {$intakeId}");
                 }
                 if ($intake->intake_locked === true) {
                     $profileIdForLog = $intake->matrimony_profile_id;
                     $alreadyAppliedInTransaction = true;
+
                     return;
                 }
+
+                // Full approval payload for audit (never strip). Working copy may lose keys we refuse to overwrite.
+                $auditSnapshot = json_decode(json_encode($snapshot), true);
+                $snapshot = json_decode(json_encode($auditSnapshot), true);
 
                 $proposedCore = $snapshot['core'] ?? [];
                 $proposedExtended = $snapshot['extended'] ?? [];
@@ -605,13 +615,13 @@ class MutationService
                         $profile = $existingProfile;
                         Log::info('MutationService::applyApprovedIntake SAME_USER duplicate — applying to existing profile', ['profileId' => $existingProfileId]);
                     } else {
-                        if ($existingProfile && !$this->hasPendingConflictForField($existingProfile->id, 'duplicate_detection')) {
+                        if ($existingProfile && ! $this->hasPendingConflictForField($existingProfile->id, 'duplicate_detection')) {
                             ConflictRecord::create([
                                 'profile_id' => $existingProfile->id,
                                 'field_name' => 'duplicate_detection',
                                 'field_type' => 'CORE',
                                 'old_value' => null,
-                                'new_value' => $duplicateResult->duplicateType . ':' . $duplicateResult->existingProfileId,
+                                'new_value' => $duplicateResult->duplicateType.':'.$duplicateResult->existingProfileId,
                                 'source' => 'SYSTEM',
                                 'detected_at' => now(),
                                 'resolution_status' => 'PENDING',
@@ -624,268 +634,280 @@ class MutationService
                         ]);
                         $profileIdForLog = $existingProfileId;
                         $duplicateDetected = true;
+
                         return;
                     }
                 }
 
                 if ($profile === null) {
                     Log::info('MutationService::applyApprovedIntake before profile existence step');
-            // ——— Step 2: Profile existence ———
-            if (!empty($intake->matrimony_profile_id)) {
-                $profile = MatrimonyProfile::where('id', $intake->matrimony_profile_id)->lockForUpdate()->first();
-                if (!$profile) {
-                    throw new \RuntimeException('Intake references non-existent profile.');
-                }
-                if (($profile->lifecycle_state ?? '') === 'conflict_pending') {
-                    $profileIdForLog = $profile->id;
-                    $blockedByConflictPending = true;
-                    $intake->update(['intake_locked' => true]);
-                    return;
-                }
-            } else {
-                $actor = User::find($intake->uploaded_by);
-                if (!$actor) {
-                    throw new \RuntimeException('Intake uploaded_by user not found.');
-                }
-                // Use existing profile for this user so wizard shows the same profile (hasOne); avoid creating a second profile.
-                $profile = MatrimonyProfile::where('user_id', $intake->uploaded_by)->lockForUpdate()->first();
-                if ($profile) {
-                    if (($profile->lifecycle_state ?? '') === 'conflict_pending') {
-                        $profileIdForLog = $profile->id;
-                        $blockedByConflictPending = true;
-                        $intake->update(['matrimony_profile_id' => $profile->id, 'intake_locked' => true]);
-                        return;
-                    }
-                    $intake->update(['matrimony_profile_id' => $profile->id]);
-                } else {
-                    $profile = new MatrimonyProfile();
-                    $profile->user_id = $intake->uploaded_by;
-                    $profile->full_name = $proposedCore['full_name'] ?? 'Draft';
-                    $profile->lifecycle_state = 'draft';
-                    $profile->save();
-                    $intake->update(['matrimony_profile_id' => $profile->id]);
-                    $profileCreatedInThisTransaction = true;
-                }
-            }
-                }
+                    // ——— Step 2: Profile existence ———
+                    if (! empty($intake->matrimony_profile_id)) {
+                        $profile = MatrimonyProfile::where('id', $intake->matrimony_profile_id)->lockForUpdate()->first();
+                        if (! $profile) {
+                            throw new \RuntimeException('Intake references non-existent profile.');
+                        }
+                        if (($profile->lifecycle_state ?? '') === 'conflict_pending') {
+                            $profileIdForLog = $profile->id;
+                            $blockedByConflictPending = true;
+                            $intake->update(['intake_locked' => true]);
 
-            // ——— Step 3: Field-level conflict detection (ConflictDetectionService owns escalation) ———
-            $conflictResult = ConflictDetectionService::detectResult($profile, $proposedCore, $proposedExtended);
-            $conflictRecords = $conflictResult->conflictRecords;
-            $conflictFieldNames = array_map(fn (ConflictRecord $r) => $r->field_name, $conflictRecords);
+                            return;
+                        }
+                    } else {
+                        $actor = User::find($intake->uploaded_by);
+                        if (! $actor) {
+                            throw new \RuntimeException('Intake uploaded_by user not found.');
+                        }
+                        // Use existing profile for this user so wizard shows the same profile (hasOne); avoid creating a second profile.
+                        $profile = MatrimonyProfile::where('user_id', $intake->uploaded_by)->lockForUpdate()->first();
+                        if ($profile) {
+                            if (($profile->lifecycle_state ?? '') === 'conflict_pending') {
+                                $profileIdForLog = $profile->id;
+                                $blockedByConflictPending = true;
+                                $intake->update(['matrimony_profile_id' => $profile->id, 'intake_locked' => true]);
 
-            // ——— Step 4: Field lock check ———
-            $coreFieldKeys = $this->getCoreFieldKeysFromRegistry();
-            foreach ($coreFieldKeys as $fieldKey) {
-                if (!array_key_exists($fieldKey, $proposedCore)) {
-                    continue;
-                }
-                if (ProfileFieldLockService::isLocked($profile, $fieldKey) && !$this->hasPendingConflictForField($profile->id, $fieldKey)) {
-                    $conflictRecords[] = ConflictRecord::create([
-                        'profile_id' => $profile->id,
-                        'field_name' => $fieldKey,
-                        'field_type' => 'CORE',
-                        'old_value' => $this->getCurrentCoreValue($profile, $fieldKey),
-                        'new_value' => $this->normalizeValue($proposedCore[$fieldKey]),
-                        'source' => 'SYSTEM',
-                        'detected_at' => now(),
-                        'resolution_status' => 'PENDING',
-                    ]);
-                    $conflictFieldNames[] = $fieldKey;
-                }
-            }
-            $extendedKeys = array_unique(array_merge(
-                array_keys(ExtendedFieldService::getValuesForProfile($profile)),
-                array_keys($proposedExtended)
-            ));
-            foreach ($extendedKeys as $fieldKey) {
-                if (!array_key_exists($fieldKey, $proposedExtended)) {
-                    continue;
-                }
-                if (ProfileFieldLockService::isLocked($profile, $fieldKey) && !$this->hasPendingConflictForField($profile->id, $fieldKey)) {
-                    $current = ExtendedFieldService::getValuesForProfile($profile)[$fieldKey] ?? null;
-                    $conflictRecords[] = ConflictRecord::create([
-                        'profile_id' => $profile->id,
-                        'field_name' => $fieldKey,
-                        'field_type' => 'EXTENDED',
-                        'old_value' => $current === null ? null : (string) $current,
-                        'new_value' => $this->normalizeValue($proposedExtended[$fieldKey]),
-                        'source' => 'SYSTEM',
-                        'detected_at' => now(),
-                        'resolution_status' => 'PENDING',
-                    ]);
-                    $conflictFieldNames[] = $fieldKey;
-                }
-            }
-
-            // ——— Step 4.5: Normalize intake core (text → IDs) so wizard shows religion/caste/complexion correctly ———
-            $proposedCore = $this->normalizeIntakeCoreForApply($proposedCore);
-
-            // ——— Step 5: CORE field apply (FieldRegistry-driven) ———
-            foreach ($coreFieldKeys as $fieldKey) {
-                if (!array_key_exists($fieldKey, $proposedCore)) {
-                    continue;
-                }
-                if (in_array($fieldKey, $conflictFieldNames, true)) {
-                    continue;
-                }
-                if (ProfileFieldLockService::isLocked($profile, $fieldKey)) {
-                    continue;
-                }
-                $oldVal = $this->getCurrentCoreValue($profile, $fieldKey);
-                $newVal = $this->normalizeValue($proposedCore[$fieldKey]);
-                // DB columns income_private / family_income_private are NOT NULL; never persist null.
-                if (in_array($fieldKey, ['income_private', 'family_income_private'], true) && $newVal === null) {
-                    $newVal = false;
-                }
-                $unchanged = (string) ($oldVal ?? '') === (string) ($newVal ?? '');
-                if ($unchanged && !$profileCreatedInThisTransaction) {
-                    continue;
-                }
-                $this->setProfileAttribute($profile, $fieldKey, $newVal);
-                $this->writeProfileChangeHistory(
-                    $profile->id,
-                    'matrimony_profile',
-                    $profile->id,
-                    $fieldKey,
-                    $oldVal,
-                    $newVal
-                );
-            }
-            $profile->save();
-
-            // ——— Step 5.5: Birth place / Native place (snapshot → profile columns; applyApprovedIntake path) ———
-            $tableName = $profile->getTable();
-            $hasAnyPlaceValue = static function (array $place): bool {
-                foreach (['city_id', 'taluka_id', 'district_id', 'state_id'] as $k) {
-                    if (isset($place[$k]) && $place[$k] !== null && $place[$k] !== '') {
-                        return true;
+                                return;
+                            }
+                            $intake->update(['matrimony_profile_id' => $profile->id]);
+                        } else {
+                            $profile = new MatrimonyProfile;
+                            $profile->user_id = $intake->uploaded_by;
+                            $profile->full_name = $proposedCore['full_name'] ?? 'Draft';
+                            $profile->lifecycle_state = 'draft';
+                            $profile->save();
+                            $intake->update(['matrimony_profile_id' => $profile->id]);
+                            $profileCreatedInThisTransaction = true;
+                        }
                     }
                 }
-                return false;
-            };
-            $placeUpdated = false;
-            if (isset($snapshot['birth_place']) && is_array($snapshot['birth_place']) && $hasAnyPlaceValue($snapshot['birth_place'])) {
-                $bp = $snapshot['birth_place'];
-                if (Schema::hasColumn($tableName, 'birth_city_id')) {
-                    $profile->birth_city_id = isset($bp['city_id']) ? (int) $bp['city_id'] : null;
+
+                if (! $profileCreatedInThisTransaction) {
+                    $mergeSuggestions = $this->partitionIntakeSnapshotForExistingProfile($profile, $snapshot, $proposedCore);
+                    $this->mergePendingIntakeSuggestionsIntoProfile($profile, $mergeSuggestions);
+                    $proposedExtended = $snapshot['extended'] ?? [];
                 }
-                if (Schema::hasColumn($tableName, 'birth_taluka_id')) {
-                    $profile->birth_taluka_id = isset($bp['taluka_id']) ? (int) $bp['taluka_id'] : null;
+
+                // ——— Step 3: Field-level conflict detection (ConflictDetectionService owns escalation) ———
+                $conflictResult = ConflictDetectionService::detectResult($profile, $proposedCore, $proposedExtended);
+                $conflictRecords = $conflictResult->conflictRecords;
+                $conflictFieldNames = array_map(fn (ConflictRecord $r) => $r->field_name, $conflictRecords);
+
+                // ——— Step 4: Field lock check ———
+                $coreFieldKeys = $this->getCoreFieldKeysFromRegistry();
+                foreach ($coreFieldKeys as $fieldKey) {
+                    if (! array_key_exists($fieldKey, $proposedCore)) {
+                        continue;
+                    }
+                    if (ProfileFieldLockService::isLocked($profile, $fieldKey) && ! $this->hasPendingConflictForField($profile->id, $fieldKey)) {
+                        $conflictRecords[] = ConflictRecord::create([
+                            'profile_id' => $profile->id,
+                            'field_name' => $fieldKey,
+                            'field_type' => 'CORE',
+                            'old_value' => $this->getCurrentCoreValue($profile, $fieldKey),
+                            'new_value' => $this->normalizeValue($proposedCore[$fieldKey]),
+                            'source' => 'SYSTEM',
+                            'detected_at' => now(),
+                            'resolution_status' => 'PENDING',
+                        ]);
+                        $conflictFieldNames[] = $fieldKey;
+                    }
                 }
-                if (Schema::hasColumn($tableName, 'birth_district_id')) {
-                    $profile->birth_district_id = isset($bp['district_id']) ? (int) $bp['district_id'] : null;
+                $extendedKeys = array_unique(array_merge(
+                    array_keys(ExtendedFieldService::getValuesForProfile($profile)),
+                    array_keys($proposedExtended)
+                ));
+                foreach ($extendedKeys as $fieldKey) {
+                    if (! array_key_exists($fieldKey, $proposedExtended)) {
+                        continue;
+                    }
+                    if (ProfileFieldLockService::isLocked($profile, $fieldKey) && ! $this->hasPendingConflictForField($profile->id, $fieldKey)) {
+                        $current = ExtendedFieldService::getValuesForProfile($profile)[$fieldKey] ?? null;
+                        $conflictRecords[] = ConflictRecord::create([
+                            'profile_id' => $profile->id,
+                            'field_name' => $fieldKey,
+                            'field_type' => 'EXTENDED',
+                            'old_value' => $current === null ? null : (string) $current,
+                            'new_value' => $this->normalizeValue($proposedExtended[$fieldKey]),
+                            'source' => 'SYSTEM',
+                            'detected_at' => now(),
+                            'resolution_status' => 'PENDING',
+                        ]);
+                        $conflictFieldNames[] = $fieldKey;
+                    }
                 }
-                if (Schema::hasColumn($tableName, 'birth_state_id')) {
-                    $profile->birth_state_id = isset($bp['state_id']) ? (int) $bp['state_id'] : null;
+
+                // ——— Step 4.5: Normalize intake core (text → IDs) so wizard shows religion/caste/complexion correctly ———
+                $proposedCore = $this->normalizeIntakeCoreForApply($proposedCore);
+
+                // ——— Step 5: CORE field apply (FieldRegistry-driven) ———
+                foreach ($coreFieldKeys as $fieldKey) {
+                    if (! array_key_exists($fieldKey, $proposedCore)) {
+                        continue;
+                    }
+                    if (in_array($fieldKey, $conflictFieldNames, true)) {
+                        continue;
+                    }
+                    if (ProfileFieldLockService::isLocked($profile, $fieldKey)) {
+                        continue;
+                    }
+                    $oldVal = $this->getCurrentCoreValue($profile, $fieldKey);
+                    $newVal = $this->normalizeValue($proposedCore[$fieldKey]);
+                    // DB columns income_private / family_income_private are NOT NULL; never persist null.
+                    if (in_array($fieldKey, ['income_private', 'family_income_private'], true) && $newVal === null) {
+                        $newVal = false;
+                    }
+                    $unchanged = (string) ($oldVal ?? '') === (string) ($newVal ?? '');
+                    if ($unchanged && ! $profileCreatedInThisTransaction) {
+                        continue;
+                    }
+                    $this->setProfileAttribute($profile, $fieldKey, $newVal);
+                    $this->writeProfileChangeHistory(
+                        $profile->id,
+                        'matrimony_profile',
+                        $profile->id,
+                        $fieldKey,
+                        $oldVal,
+                        $newVal
+                    );
                 }
-                $placeUpdated = true;
-            }
-            if (isset($snapshot['native_place']) && is_array($snapshot['native_place']) && $hasAnyPlaceValue($snapshot['native_place'])) {
-                $np = $snapshot['native_place'];
-                if (Schema::hasColumn($tableName, 'native_city_id')) {
-                    $profile->native_city_id = isset($np['city_id']) ? (int) $np['city_id'] : null;
-                }
-                if (Schema::hasColumn($tableName, 'native_taluka_id')) {
-                    $profile->native_taluka_id = isset($np['taluka_id']) ? (int) $np['taluka_id'] : null;
-                }
-                if (Schema::hasColumn($tableName, 'native_district_id')) {
-                    $profile->native_district_id = isset($np['district_id']) ? (int) $np['district_id'] : null;
-                }
-                if (Schema::hasColumn($tableName, 'native_state_id')) {
-                    $profile->native_state_id = isset($np['state_id']) ? (int) $np['state_id'] : null;
-                }
-                $placeUpdated = true;
-            }
-            if ($placeUpdated) {
                 $profile->save();
-            }
 
-            // ——— Step 6: Contact sync (snapshot key: contacts → profile_contacts) ———
-            $contactConflict = $this->syncContactsFromSnapshot($profile, $snapshot['contacts'] ?? []);
-            if ($contactConflict) {
-                $conflictRecords[] = $contactConflict;
-                $conflictFieldNames[] = $contactConflict->field_name;
-            }
+                // ——— Step 5.5: Birth place / Native place (snapshot → profile columns; applyApprovedIntake path) ———
+                $tableName = $profile->getTable();
+                $hasAnyPlaceValue = static function (array $place): bool {
+                    foreach (['city_id', 'taluka_id', 'district_id', 'state_id'] as $k) {
+                        if (isset($place[$k]) && $place[$k] !== null && $place[$k] !== '') {
+                            return true;
+                        }
+                    }
 
-            // ——— Step 7: Normalized entity sync (snapshot keys → tables) ———
-            foreach (self::ENTITY_SYNC_ORDER as $snapshotKey) {
-                $table = self::SNAPSHOT_KEY_TO_TABLE[$snapshotKey] ?? null;
-                if ($table === null || !Schema::hasTable($table)) {
-                    continue;
+                    return false;
+                };
+                $placeUpdated = false;
+                if (isset($snapshot['birth_place']) && is_array($snapshot['birth_place']) && $hasAnyPlaceValue($snapshot['birth_place'])) {
+                    $bp = $snapshot['birth_place'];
+                    if (Schema::hasColumn($tableName, 'birth_city_id')) {
+                        $profile->birth_city_id = isset($bp['city_id']) ? (int) $bp['city_id'] : null;
+                    }
+                    if (Schema::hasColumn($tableName, 'birth_taluka_id')) {
+                        $profile->birth_taluka_id = isset($bp['taluka_id']) ? (int) $bp['taluka_id'] : null;
+                    }
+                    if (Schema::hasColumn($tableName, 'birth_district_id')) {
+                        $profile->birth_district_id = isset($bp['district_id']) ? (int) $bp['district_id'] : null;
+                    }
+                    if (Schema::hasColumn($tableName, 'birth_state_id')) {
+                        $profile->birth_state_id = isset($bp['state_id']) ? (int) $bp['state_id'] : null;
+                    }
+                    $placeUpdated = true;
                 }
-                $proposed = $snapshot[$snapshotKey] ?? [];
-                if (!is_array($proposed)) {
-                    continue;
+                if (isset($snapshot['native_place']) && is_array($snapshot['native_place']) && $hasAnyPlaceValue($snapshot['native_place'])) {
+                    $np = $snapshot['native_place'];
+                    if (Schema::hasColumn($tableName, 'native_city_id')) {
+                        $profile->native_city_id = isset($np['city_id']) ? (int) $np['city_id'] : null;
+                    }
+                    if (Schema::hasColumn($tableName, 'native_taluka_id')) {
+                        $profile->native_taluka_id = isset($np['taluka_id']) ? (int) $np['taluka_id'] : null;
+                    }
+                    if (Schema::hasColumn($tableName, 'native_district_id')) {
+                        $profile->native_district_id = isset($np['district_id']) ? (int) $np['district_id'] : null;
+                    }
+                    if (Schema::hasColumn($tableName, 'native_state_id')) {
+                        $profile->native_state_id = isset($np['state_id']) ? (int) $np['state_id'] : null;
+                    }
+                    $placeUpdated = true;
                 }
-                if ($snapshotKey === 'siblings' && Schema::hasTable('profile_siblings')) {
-                    $this->syncSiblingsWithSpouses($profile, $proposed);
-                    continue;
+                if ($placeUpdated) {
+                    $profile->save();
                 }
-                if ($snapshotKey === 'horoscope' && Schema::hasTable('profile_horoscope_data')) {
-                    $this->syncHoroscopeUpsert($profile, $proposed);
-                    continue;
+
+                // ——— Step 6: Contact sync (snapshot key: contacts → profile_contacts) ———
+                $contactConflict = $this->syncContactsFromSnapshot($profile, $snapshot['contacts'] ?? []);
+                if ($contactConflict) {
+                    $conflictRecords[] = $contactConflict;
+                    $conflictFieldNames[] = $contactConflict->field_name;
                 }
-                if (in_array($snapshotKey, self::SINGLE_ROW_SNAPSHOT_KEYS, true)) {
-                    $this->syncSingleRowSection($profile, $table, $proposed);
+
+                // ——— Step 7: Normalized entity sync (snapshot keys → tables) ———
+                foreach (self::ENTITY_SYNC_ORDER as $snapshotKey) {
+                    $table = self::SNAPSHOT_KEY_TO_TABLE[$snapshotKey] ?? null;
+                    if ($table === null || ! Schema::hasTable($table)) {
+                        continue;
+                    }
+                    $proposed = $snapshot[$snapshotKey] ?? [];
+                    if (! is_array($proposed)) {
+                        continue;
+                    }
+                    if ($snapshotKey === 'siblings' && Schema::hasTable('profile_siblings')) {
+                        $this->syncSiblingsWithSpouses($profile, $proposed);
+
+                        continue;
+                    }
+                    if ($snapshotKey === 'horoscope' && Schema::hasTable('profile_horoscope_data')) {
+                        $this->syncHoroscopeUpsert($profile, $proposed);
+
+                        continue;
+                    }
+                    if (in_array($snapshotKey, self::SINGLE_ROW_SNAPSHOT_KEYS, true)) {
+                        $this->syncSingleRowSection($profile, $table, $proposed);
+                    } else {
+                        $this->syncEntityDiff($profile, $table, $proposed);
+                    }
+                }
+
+                if (isset($snapshot['preferences']) && is_array($snapshot['preferences'])) {
+                    $prefRow = isset($snapshot['preferences'][0]) && is_array($snapshot['preferences'][0])
+                        ? $snapshot['preferences'][0]
+                        : $snapshot['preferences'];
+                    if (is_array($prefRow)) {
+                        $this->syncPreferencesFromSnapshot($profile, $prefRow);
+                    }
+                }
+
+                // ——— Step 8: Extended narrative (single row per profile — upsert to avoid duplicate key) ———
+                $extendedNarrative = $snapshot['extended_narrative'] ?? null;
+                if (Schema::hasTable('profile_extended_attributes') && is_array($extendedNarrative)) {
+                    $row = isset($extendedNarrative[0]) ? $extendedNarrative[0] : $extendedNarrative;
+                    $this->syncExtendedAttributesUpsert($profile, $row);
+                }
+
+                Log::info('MutationService::applyApprovedIntake before lifecycle transition', ['profileId' => $profile->id]);
+                // ——— Step 9: Lifecycle transition ———
+                $hasConflicts = count($conflictRecords) > 0;
+                if ($hasConflicts) {
+                    \App\Services\ProfileLifecycleService::syncLifecycleFromPendingConflicts($profile);
                 } else {
-                    $this->syncEntityDiff($profile, $table, $proposed);
-                }
-            }
-
-            if (isset($snapshot['preferences']) && is_array($snapshot['preferences'])) {
-                $prefRow = isset($snapshot['preferences'][0]) && is_array($snapshot['preferences'][0])
-                    ? $snapshot['preferences'][0]
-                    : $snapshot['preferences'];
-                if (is_array($prefRow)) {
-                    $this->syncPreferencesFromSnapshot($profile, $prefRow);
-                }
-            }
-
-            // ——— Step 8: Extended narrative (single row per profile — upsert to avoid duplicate key) ———
-            $extendedNarrative = $snapshot['extended_narrative'] ?? null;
-            if (Schema::hasTable('profile_extended_attributes') && is_array($extendedNarrative)) {
-                $row = isset($extendedNarrative[0]) ? $extendedNarrative[0] : $extendedNarrative;
-                $this->syncExtendedAttributesUpsert($profile, $row);
-            }
-
-            Log::info('MutationService::applyApprovedIntake before lifecycle transition', ['profileId' => $profile->id]);
-            // ——— Step 9: Lifecycle transition ———
-            $hasConflicts = count($conflictRecords) > 0;
-            if ($hasConflicts) {
-                \App\Services\ProfileLifecycleService::syncLifecycleFromPendingConflicts($profile);
-            } else {
-                $current = $profile->lifecycle_state ?? 'active';
-                if (!in_array($current, self::NO_AUTO_ACTIVATE_STATES, true)) {
-                    // Intake apply: allow activation without photo so applied data is visible in wizard (new or existing profile).
-                    $this->setLifecycleState($profile, 'active');
-                }
-            }
-
-            Log::info('MutationService::applyApprovedIntake before intake finalization', ['hasConflicts' => $hasConflicts, 'snapshotInMemory' => $snapshotInMemory]);
-            // ——— Step 10: Intake finalization ———
-            $updates = ['matrimony_profile_id' => $profile->id, 'intake_locked' => true];
-            if (!$hasConflicts) {
-                $updates['intake_status'] = 'applied';
-            }
-            if ($snapshotInMemory) {
-                $updates['approval_snapshot_json'] = $snapshot;
-                $updates['approved_by_user'] = true;
-                $updates['approved_at'] = now();
-                $updates['snapshot_schema_version'] = $version;
-                if (is_array($metrics)) {
-                    if (isset($metrics['manual_edits'])) {
-                        $updates['fields_manually_edited_count'] = (int) $metrics['manual_edits'];
-                    }
-                    if (isset($metrics['auto_filled'])) {
-                        $updates['fields_auto_filled_count'] = (int) $metrics['auto_filled'];
+                    $current = $profile->lifecycle_state ?? 'active';
+                    if (! in_array($current, self::NO_AUTO_ACTIVATE_STATES, true)) {
+                        // Intake apply: allow activation without photo so applied data is visible in wizard (new or existing profile).
+                        $this->setLifecycleState($profile, 'active');
                     }
                 }
-            }
-            $intake->update($updates);
 
-            $hadConflicts = $hasConflicts;
-            $profileIdForLog = $profile->id;
+                Log::info('MutationService::applyApprovedIntake before intake finalization', ['hasConflicts' => $hasConflicts, 'snapshotInMemory' => $snapshotInMemory]);
+                // ——— Step 10: Intake finalization ———
+                $updates = ['matrimony_profile_id' => $profile->id, 'intake_locked' => true];
+                if (! $hasConflicts) {
+                    $updates['intake_status'] = 'applied';
+                }
+                if ($snapshotInMemory) {
+                    $updates['approval_snapshot_json'] = $auditSnapshot;
+                    $updates['approved_by_user'] = true;
+                    $updates['approved_at'] = now();
+                    $updates['snapshot_schema_version'] = $version;
+                    if (is_array($metrics)) {
+                        if (isset($metrics['manual_edits'])) {
+                            $updates['fields_manually_edited_count'] = (int) $metrics['manual_edits'];
+                        }
+                        if (isset($metrics['auto_filled'])) {
+                            $updates['fields_auto_filled_count'] = (int) $metrics['auto_filled'];
+                        }
+                    }
+                }
+                $intake->update($updates);
+
+                $hadConflicts = $hasConflicts;
+                $profileIdForLog = $profile->id;
             });
 
             Log::info('MutationService::applyApprovedIntake AFTER DB::transaction');
@@ -931,7 +953,7 @@ class MutationService
         }
 
         return [
-            'mutation_success' => !$duplicateDetected && !$hadConflicts,
+            'mutation_success' => ! $duplicateDetected && ! $hadConflicts,
             'conflict_detected' => $duplicateDetected || $hadConflicts,
             'profile_id' => $profileIdForLog,
         ];
@@ -976,7 +998,7 @@ class MutationService
      */
     private function syncContactsFromSnapshot(MatrimonyProfile $profile, array $proposed, bool $createConflictRecord = true): ?ConflictRecord
     {
-        if (!Schema::hasTable('profile_contacts')) {
+        if (! Schema::hasTable('profile_contacts')) {
             return null;
         }
         $existing = DB::table('profile_contacts')->where('profile_id', $profile->id)->get();
@@ -985,17 +1007,19 @@ class MutationService
         // 1) If more than one proposed contact has is_primary = true, keep only the first as primary, others false.
         $primarySeen = false;
         $proposed = array_map(function ($c) use (&$primarySeen) {
-            if (!is_array($c)) {
+            if (! is_array($c)) {
                 return $c;
             }
-            $isPrimary = !empty($c['is_primary']);
+            $isPrimary = ! empty($c['is_primary']);
             if ($isPrimary && $primarySeen) {
                 $c['is_primary'] = false;
+
                 return $c;
             }
             if ($isPrimary) {
                 $primarySeen = true;
             }
+
             return $c;
         }, $proposed);
         $proposedPrimary = collect($proposed)->firstWhere('is_primary', true);
@@ -1004,7 +1028,7 @@ class MutationService
         if ($existingPrimary && $proposedPrimary && isset($proposedPrimary['phone_number'])) {
             $existingPhone = trim((string) ($existingPrimary->phone_number ?? ''));
             $proposedPhone = trim((string) ($proposedPrimary['phone_number'] ?? ''));
-            if ($existingPhone !== '' && $proposedPhone !== '' && $existingPhone !== $proposedPhone && $createConflictRecord && !$this->hasPendingConflictForField($profile->id, 'primary_contact_number')) {
+            if ($existingPhone !== '' && $proposedPhone !== '' && $existingPhone !== $proposedPhone && $createConflictRecord && ! $this->hasPendingConflictForField($profile->id, 'primary_contact_number')) {
                 $contactConflict = ConflictRecord::create([
                     'profile_id' => $profile->id,
                     'field_name' => 'primary_contact_number',
@@ -1025,6 +1049,7 @@ class MutationService
 
         // 3) Exactly one in $proposed has is_primary = true (or none — we do not auto-create).
         $this->syncEntityDiff($profile, 'profile_contacts', $proposed);
+
         return $contactConflict;
     }
 
@@ -1034,7 +1059,7 @@ class MutationService
     public function syncEntityFromSnapshot(MatrimonyProfile $profile, string $snapshotKey, array $proposed): void
     {
         $table = self::SNAPSHOT_KEY_TO_TABLE[$snapshotKey] ?? null;
-        if ($table === null || !Schema::hasTable($table)) {
+        if ($table === null || ! Schema::hasTable($table)) {
             return;
         }
         $this->syncEntityDiff($profile, $table, $proposed);
@@ -1059,12 +1084,13 @@ class MutationService
                 $mapped['year_completed'] = $mapped['year'] !== null && $mapped['year'] !== '' ? (int) $mapped['year'] : 0;
                 unset($mapped['year']);
             }
-            if (!array_key_exists('year_completed', $mapped)) {
+            if (! array_key_exists('year_completed', $mapped)) {
                 $mapped['year_completed'] = 0;
             }
             // DB: degree NOT NULL
             $degree = trim((string) ($mapped['degree'] ?? ''));
             $mapped['degree'] = $degree !== '' ? $degree : '—';
+
             return $mapped;
         }
         if ($entityType === 'profile_addresses') {
@@ -1078,22 +1104,27 @@ class MutationService
             }
             $mapped['village_id'] = $mapped['village_id'] ?? null;
             $mapped = $this->resolveAddressTypeToId($mapped);
+
             return $mapped;
         }
         if ($entityType === 'profile_contacts') {
             $mapped = $this->resolveContactRelationToId($row);
+
             return $mapped;
         }
         if ($entityType === 'profile_children') {
             $mapped = $this->resolveChildLivingWithToId($row);
+
             return $mapped;
         }
         if ($entityType === 'profile_property_assets') {
             $mapped = $this->resolvePropertyAssetLookupsToId($row);
+
             return $mapped;
         }
         if ($entityType === 'profile_horoscope_data') {
             $mapped = $this->resolveHoroscopeLookupsToId($row);
+
             return $mapped;
         }
         if ($entityType === 'profile_relatives') {
@@ -1112,6 +1143,7 @@ class MutationService
             $mapped['notes'] = $parts !== [] ? implode("\n", array_unique($parts)) : null;
             unset($mapped['address_line'], $mapped['address'], $mapped['Address']);
             $mapped['is_primary_contact'] = ! empty($mapped['is_primary_contact']);
+
             return $mapped;
         }
         if ($entityType === 'profile_alliance_networks') {
@@ -1122,6 +1154,7 @@ class MutationService
             $mapped['district_id'] = ! empty($mapped['district_id']) ? (int) $mapped['district_id'] : null;
             $mapped['state_id'] = ! empty($mapped['state_id']) ? (int) $mapped['state_id'] : null;
             $mapped['notes'] = isset($mapped['notes']) && trim((string) $mapped['notes']) !== '' ? trim((string) $mapped['notes']) : null;
+
             return $mapped;
         }
         if ($entityType === 'profile_siblings') {
@@ -1170,6 +1203,7 @@ class MutationService
                     unset($mapped[$k]);
                 }
             }
+
             return $mapped;
         }
         if ($entityType === 'profile_career') {
@@ -1190,13 +1224,28 @@ class MutationService
             $mapped['end_year'] = isset($mapped['end_year']) && (string) $mapped['end_year'] !== '' && is_numeric($mapped['end_year'])
                 ? (int) $mapped['end_year']
                 : null;
+            $cityId = ! empty($mapped['city_id']) && is_numeric($mapped['city_id']) ? (int) $mapped['city_id'] : null;
+            if ($cityId !== null && $cityId <= 0) {
+                $cityId = null;
+            }
+            if (Schema::hasColumn('profile_career', 'city_id')) {
+                $mapped['city_id'] = $cityId;
+            } else {
+                unset($mapped['city_id']);
+            }
+            unset($mapped['taluka_id'], $mapped['district_id'], $mapped['state_id']);
             $loc = trim((string) ($mapped['location'] ?? $mapped['work_location'] ?? ''));
+            if ($loc === '' && $cityId !== null) {
+                $loc = CareerHistoryRowNormalizer::lineForCityId($cityId) ?? '';
+            }
             $mapped['location'] = $loc !== '' ? $loc : null;
             $mapped['is_current'] = ! empty($mapped['is_current']);
+
             return $mapped;
         }
         if ($entityType === 'profile_marriages') {
             \Log::info('DEBUG MAP ROW', $row);
+
             return [
                 'marital_status_id' => $row['marital_status_id'] ?? null,
                 'marriage_year' => $row['marriage_year'] ?? null,
@@ -1208,6 +1257,7 @@ class MutationService
                 'notes' => $row['notes'] ?? null,
             ];
         }
+
         return $row;
     }
 
@@ -1264,6 +1314,7 @@ class MutationService
             $mapped['address_type_id'] = $engine->resolveId('entity.address_type', $mapped['address_type_id']);
         }
         unset($mapped['address_type'], $mapped['type']);
+
         return $mapped;
     }
 
@@ -1296,6 +1347,7 @@ class MutationService
         if ($name === '') {
             $mapped['contact_name'] = 'Self';
         }
+
         return $mapped;
     }
 
@@ -1306,6 +1358,7 @@ class MutationService
         if (array_key_exists('child_living_with_id', $mapped) && is_numeric($mapped['child_living_with_id'])) {
             $mapped['child_living_with_id'] = $engine->resolveId('entity.child_living_with', $mapped['child_living_with_id']);
             unset($mapped['lives_with_parent']);
+
             return $mapped;
         }
         if (array_key_exists('lives_with_parent', $mapped)) {
@@ -1315,6 +1368,7 @@ class MutationService
             $mapped['child_living_with_id'] = $res['matched'] ? $res['id'] : null;
         }
         unset($mapped['lives_with_parent']);
+
         return $mapped;
     }
 
@@ -1342,6 +1396,7 @@ class MutationService
         $mapped['taluka_id'] = ! empty($mapped['taluka_id']) ? (int) $mapped['taluka_id'] : null;
         $mapped['district_id'] = ! empty($mapped['district_id']) ? (int) $mapped['district_id'] : null;
         $mapped['state_id'] = ! empty($mapped['state_id']) ? (int) $mapped['state_id'] : null;
+
         return $mapped;
     }
 
@@ -1419,7 +1474,7 @@ class MutationService
      */
     private function syncPreferencesFromSnapshot(MatrimonyProfile $profile, array $proposed): void
     {
-        if (!is_array($proposed)) {
+        if (! is_array($proposed)) {
             return;
         }
         $profileId = $profile->id;
@@ -1446,7 +1501,7 @@ class MutationService
                         $changes[$col] = ['old' => $oldVal, 'new' => $newVal];
                     }
                 }
-                if (!empty($changes)) {
+                if (! empty($changes)) {
                     DB::table('profile_preference_criteria')->where('profile_id', $profileId)->update($data);
                     foreach ($changes as $fieldName => $vals) {
                         $this->writeProfileChangeHistory($profileId, 'profile_preference_criteria', (int) $existing->id, $fieldName, $vals['old'], $vals['new']);
@@ -1466,11 +1521,11 @@ class MutationService
             'profile_preferred_districts' => ['preferred_district_ids', 'district_id'],
         ];
         foreach ($pivotConfig as $table => [$key, $fkCol]) {
-            if (!Schema::hasTable($table)) {
+            if (! Schema::hasTable($table)) {
                 continue;
             }
             $ids = $proposed[$key] ?? [];
-            if (!is_array($ids)) {
+            if (! is_array($ids)) {
                 $ids = [];
             }
             $ids = array_filter(array_map('intval', $ids));
@@ -1501,11 +1556,11 @@ class MutationService
      */
     private function syncSingleRowSection(MatrimonyProfile $profile, string $table, array $proposed): void
     {
-        if (!Schema::hasTable($table)) {
+        if (! Schema::hasTable($table)) {
             return;
         }
         $row = isset($proposed[0]) && is_array($proposed[0]) ? $proposed[0] : $proposed;
-        if (!is_array($row)) {
+        if (! is_array($row)) {
             return;
         }
         $row = $this->mapSnapshotRowToTable($table, $row);
@@ -1515,7 +1570,7 @@ class MutationService
             if ($col === 'id' || $col === 'profile_id') {
                 continue;
             }
-            if (!isset($allowedColumns[$col])) {
+            if (! isset($allowedColumns[$col])) {
                 continue;
             }
             $data[$col] = $value;
@@ -1529,7 +1584,7 @@ class MutationService
                     $changes[$col] = ['old' => $oldVal, 'new' => $newVal];
                 }
             }
-            if (!empty($changes)) {
+            if (! empty($changes)) {
                 $updateData = $data;
                 $updateData['updated_at'] = now();
                 DB::table($table)->where('profile_id', $profile->id)->update($updateData);
@@ -1693,12 +1748,12 @@ class MutationService
 
     private function syncEntityDiff(MatrimonyProfile $profile, string $entityType, array $proposed): void
     {
-        if (!Schema::hasTable($entityType)) {
+        if (! Schema::hasTable($entityType)) {
             return;
         }
         $existing = DB::table($entityType)->where('profile_id', $profile->id)->get()->keyBy('id');
         foreach ($proposed as $row) {
-            if (!is_array($row)) {
+            if (! is_array($row)) {
                 continue;
             }
             $row = $this->mapSnapshotRowToTable($entityType, $row);
@@ -1743,7 +1798,7 @@ class MutationService
                         $changes[$col] = ['old' => $oldVal, 'new' => $newVal];
                     }
                 }
-                if (!empty($changes)) {
+                if (! empty($changes)) {
                     $updateData = collect($row)->except(['id', 'profile_id', 'created_at'])->all();
                     $updateData['updated_at'] = now();
                     $allowedColumns = array_fill_keys(Schema::getColumnListing($entityType), true);
@@ -1809,7 +1864,7 @@ class MutationService
         $currentValues = ExtendedFieldService::getValuesForProfile($profile);
         foreach ($extendedFields as $fieldKey => $value) {
             $registry = FieldRegistry::where('field_key', $fieldKey)->where('field_type', 'EXTENDED')->first();
-            if (!$registry) {
+            if (! $registry) {
                 throw ValidationException::withMessages([$fieldKey => ['Extended field is not defined in registry.']]);
             }
             if (($registry->is_enabled ?? true) === false) {
@@ -1819,11 +1874,11 @@ class MutationService
                 'profile_id' => $profile->id,
                 'field_key' => $fieldKey,
             ]);
-            if (($registry->is_archived ?? false) && !$row->exists) {
+            if (($registry->is_archived ?? false) && ! $row->exists) {
                 throw ValidationException::withMessages([$fieldKey => ['This field is archived and cannot be set for new entry.']]);
             }
-            if (!ExtendedFieldService::validateValue($registry, $value)) {
-                throw ValidationException::withMessages([$fieldKey => ['Invalid value for data type ' . $registry->data_type . '.']]);
+            if (! ExtendedFieldService::validateValue($registry, $value)) {
+                throw ValidationException::withMessages([$fieldKey => ['Invalid value for data type '.$registry->data_type.'.']]);
             }
             $newValue = ExtendedFieldService::normalizeValueForMutation($registry, $value);
             $newValue = $newValue === '' ? null : $newValue;
@@ -1877,6 +1932,7 @@ class MutationService
         if ($fieldKey === 'location') {
             return $profile->city_id ?? $profile->state_id ?? $profile->country_id ?? null;
         }
+
         return $profile->getAttribute($fieldKey);
     }
 
@@ -1962,7 +2018,7 @@ class MutationService
         $oldValue,
         $newValue
     ): void {
-        if (!Schema::hasTable('profile_change_history')) {
+        if (! Schema::hasTable('profile_change_history')) {
             return;
         }
         $source = $this->historySourceContext ?? 'intake';
@@ -1993,9 +2049,275 @@ class MutationService
 
     private function mutationLogTableExists(): bool
     {
-        if (!Schema::hasTable('mutation_log')) {
+        if (! Schema::hasTable('mutation_log')) {
             return false;
         }
+
         return true;
+    }
+
+    /**
+     * Keys allowed when user explicitly applies a single core value from pending intake suggestions.
+     *
+     * @return list<string>
+     */
+    public function coreFieldKeysAllowedForIntakeSuggestionApply(): array
+    {
+        return $this->getCoreFieldKeysFromRegistry();
+    }
+
+    /**
+     * Intake apply: strip snapshot/proposed core values that would replace non-empty profile data.
+     * Stores stripped payloads in profile.pending_intake_suggestions_json for optional "Apply" in UI.
+     *
+     * @param  array<string, mixed>  $snapshot  Working intake snapshot (modified in place).
+     * @param  array<string, mixed>  $proposedCore  Core subset used by apply pipeline (modified in place).
+     * @return array<string, mixed>
+     */
+    private function partitionIntakeSnapshotForExistingProfile(MatrimonyProfile $profile, array &$snapshot, array &$proposedCore): array
+    {
+        $profile->loadMissing('user');
+
+        $suggestions = [
+            'core' => [],
+            'extended' => [],
+            'entities' => [],
+        ];
+
+        foreach (array_keys($proposedCore) as $fieldKey) {
+            if (! array_key_exists($fieldKey, $proposedCore)) {
+                continue;
+            }
+            $current = $this->getCurrentCoreValue($profile, $fieldKey);
+            if ($this->isEmptyExistingValueForIntakeMerge($fieldKey, $current)) {
+                continue;
+            }
+            $suggestions['core'][$fieldKey] = $proposedCore[$fieldKey];
+            unset($proposedCore[$fieldKey]);
+            if (isset($snapshot['core']) && is_array($snapshot['core'])) {
+                unset($snapshot['core'][$fieldKey]);
+            }
+        }
+
+        if (isset($snapshot['extended']) && is_array($snapshot['extended'])) {
+            $currentExtended = ExtendedFieldService::getValuesForProfile($profile);
+            foreach ($snapshot['extended'] as $ek => $ev) {
+                $cur = $currentExtended[$ek] ?? null;
+                if ($this->isEmptyExistingValueForIntakeMerge((string) $ek, $cur)) {
+                    continue;
+                }
+                $suggestions['extended'][$ek] = $ev;
+                unset($snapshot['extended'][$ek]);
+            }
+            if ($snapshot['extended'] === []) {
+                unset($snapshot['extended']);
+            }
+        }
+
+        $hasAnyPlace = static function (array $place): bool {
+            foreach (['city_id', 'taluka_id', 'district_id', 'state_id'] as $k) {
+                if (isset($place[$k]) && $place[$k] !== null && $place[$k] !== '' && (int) $place[$k] !== 0) {
+                    return true;
+                }
+            }
+
+            return false;
+        };
+
+        if (isset($snapshot['birth_place']) && is_array($snapshot['birth_place']) && $hasAnyPlace($snapshot['birth_place'])) {
+            if ($this->profileHasExistingBirthPlace($profile)) {
+                $suggestions['birth_place'] = $snapshot['birth_place'];
+                unset($snapshot['birth_place']);
+            }
+        }
+
+        if (isset($snapshot['native_place']) && is_array($snapshot['native_place']) && $hasAnyPlace($snapshot['native_place'])) {
+            if ($this->profileHasExistingNativePlace($profile)) {
+                $suggestions['native_place'] = $snapshot['native_place'];
+                unset($snapshot['native_place']);
+            }
+        }
+
+        if (! empty($snapshot['contacts']) && is_array($snapshot['contacts'])) {
+            if (DB::table('profile_contacts')->where('profile_id', $profile->id)->exists()) {
+                $suggestions['contacts'] = $snapshot['contacts'];
+                $snapshot['contacts'] = [];
+            }
+        }
+
+        foreach (self::ENTITY_SYNC_ORDER as $snapshotKey) {
+            $table = self::SNAPSHOT_KEY_TO_TABLE[$snapshotKey] ?? null;
+            if ($table === null || ! Schema::hasTable($table)) {
+                continue;
+            }
+            if (empty($snapshot[$snapshotKey]) || ! is_array($snapshot[$snapshotKey])) {
+                continue;
+            }
+            if ($this->entityRowCountForProfile($table, (int) $profile->id) > 0) {
+                $suggestions['entities'][$snapshotKey] = $snapshot[$snapshotKey];
+                unset($snapshot[$snapshotKey]);
+            }
+        }
+
+        if (isset($snapshot['preferences']) && is_array($snapshot['preferences'])) {
+            if (Schema::hasTable('profile_preference_criteria')
+                && DB::table('profile_preference_criteria')->where('profile_id', $profile->id)->exists()) {
+                $suggestions['preferences'] = $snapshot['preferences'];
+                unset($snapshot['preferences']);
+            }
+        }
+
+        if (isset($snapshot['extended_narrative']) && is_array($snapshot['extended_narrative']) && Schema::hasTable('profile_extended_attributes')) {
+            if ($this->profileExtendedNarrativeHasAnyText($profile->id)) {
+                $suggestions['extended_narrative'] = $snapshot['extended_narrative'];
+                unset($snapshot['extended_narrative']);
+            }
+        }
+
+        if (array_key_exists('other_relatives_text', $snapshot) && trim((string) $snapshot['other_relatives_text']) !== '') {
+            $cur = (string) ($profile->other_relatives_text ?? '');
+            if (trim($cur) !== '') {
+                $suggestions['other_relatives_text'] = $snapshot['other_relatives_text'];
+                unset($snapshot['other_relatives_text']);
+            }
+        }
+
+        return $this->pruneEmptySuggestionBuckets($suggestions);
+    }
+
+    /**
+     * @param  array<string, mixed>  $delta
+     */
+    private function mergePendingIntakeSuggestionsIntoProfile(MatrimonyProfile $profile, array $delta): void
+    {
+        $delta = $this->pruneEmptySuggestionBuckets($delta);
+        if ($delta === []) {
+            return;
+        }
+        $prev = $profile->pending_intake_suggestions_json;
+        if (! is_array($prev)) {
+            $prev = [];
+        }
+        $profile->pending_intake_suggestions_json = $this->mergeSuggestionPayloads($prev, $delta);
+        $profile->save();
+    }
+
+    /**
+     * @param  array<string, mixed>  $a
+     * @param  array<string, mixed>  $b
+     * @return array<string, mixed>
+     */
+    private function mergeSuggestionPayloads(array $a, array $b): array
+    {
+        $out = $a;
+        foreach (['core', 'extended', 'entities'] as $k) {
+            if (! empty($b[$k]) && is_array($b[$k])) {
+                $out[$k] = array_merge($out[$k] ?? [], $b[$k]);
+            }
+        }
+        foreach (['birth_place', 'native_place', 'contacts', 'preferences', 'extended_narrative', 'other_relatives_text'] as $k) {
+            if (array_key_exists($k, $b) && $b[$k] !== null && $b[$k] !== [] && $b[$k] !== '') {
+                $out[$k] = $b[$k];
+            }
+        }
+
+        return $this->pruneEmptySuggestionBuckets($out);
+    }
+
+    /**
+     * @param  array<string, mixed>  $suggestions
+     * @return array<string, mixed>
+     */
+    private function pruneEmptySuggestionBuckets(array $suggestions): array
+    {
+        foreach ($suggestions as $k => $v) {
+            if ($v === null || $v === [] || $v === '') {
+                unset($suggestions[$k]);
+            }
+            if (is_array($v) && $v === []) {
+                unset($suggestions[$k]);
+            }
+        }
+
+        return $suggestions;
+    }
+
+    private function entityRowCountForProfile(string $table, int $profileId): int
+    {
+        if (! Schema::hasTable($table)) {
+            return 0;
+        }
+        $q = DB::table($table)->where('profile_id', $profileId);
+        if (Schema::hasColumn($table, 'deleted_at')) {
+            $q->whereNull('deleted_at');
+        }
+
+        return (int) $q->count();
+    }
+
+    private function profileHasExistingBirthPlace(MatrimonyProfile $profile): bool
+    {
+        if (trim((string) ($profile->birth_place_text ?? '')) !== '') {
+            return true;
+        }
+        foreach (['birth_city_id', 'birth_taluka_id', 'birth_district_id', 'birth_state_id'] as $col) {
+            $v = $profile->getAttribute($col);
+            if ($v !== null && $v !== '' && (int) $v !== 0) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function profileHasExistingNativePlace(MatrimonyProfile $profile): bool
+    {
+        foreach (['native_city_id', 'native_taluka_id', 'native_district_id', 'native_state_id'] as $col) {
+            $v = $profile->getAttribute($col);
+            if ($v !== null && $v !== '' && (int) $v !== 0) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function profileExtendedNarrativeHasAnyText(int $profileId): bool
+    {
+        $row = DB::table('profile_extended_attributes')->where('profile_id', $profileId)->first();
+        if (! $row) {
+            return false;
+        }
+        foreach (['narrative_about_me', 'narrative_expectations', 'additional_notes'] as $col) {
+            if (trim((string) ($row->$col ?? '')) !== '') {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function isEmptyExistingValueForIntakeMerge(string $fieldKey, mixed $current): bool
+    {
+        if ($current instanceof \DateTimeInterface) {
+            $current = $current->format('Y-m-d');
+        }
+        if ($current === null || $current === '') {
+            return true;
+        }
+        if (is_string($current) && trim($current) === '') {
+            return true;
+        }
+        if (str_ends_with($fieldKey, '_id') && (int) $current === 0) {
+            return true;
+        }
+        if ($fieldKey === 'location') {
+            return (int) ($current ?? 0) === 0;
+        }
+        if (in_array($fieldKey, ['has_children', 'has_siblings'], true)) {
+            return $current === null;
+        }
+
+        return false;
     }
 }

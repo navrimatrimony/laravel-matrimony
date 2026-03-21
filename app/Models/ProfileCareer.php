@@ -13,6 +13,7 @@ class ProfileCareer extends Model
         'designation',
         'company',
         'location',
+        'city_id',
         'start_year',
         'end_year',
         'is_current',

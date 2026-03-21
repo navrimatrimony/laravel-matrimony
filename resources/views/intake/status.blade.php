@@ -19,6 +19,14 @@
     @endif
 
     @if($approved)
+        @php
+            $pendingCore = is_array($pendingSuggestions ?? null) ? ($pendingSuggestions['core'] ?? []) : [];
+            $pendingExtended = is_array($pendingSuggestions ?? null) ? ($pendingSuggestions['extended'] ?? []) : [];
+            $pendingEntities = is_array($pendingSuggestions ?? null) ? ($pendingSuggestions['entities'] ?? []) : [];
+            $pendingOtherKeys = is_array($pendingSuggestions ?? null)
+                ? array_keys(array_diff_key($pendingSuggestions, array_flip(['core', 'extended', 'entities'])))
+                : [];
+        @endphp
 
         <div class="bg-white dark:bg-gray-800 rounded shadow p-6 border border-green-300">
             <h1 class="text-2xl font-bold text-green-600 mb-4">
@@ -28,6 +36,60 @@
             <p class="text-gray-700 dark:text-gray-300">
                 तुमची माहिती यशस्वीरित्या सेव्ह झाली आहे.
             </p>
+
+            @if(!empty($pendingCore) || !empty($pendingExtended))
+                <div class="mt-6 rounded-lg border border-amber-200 dark:border-amber-900/50 bg-amber-50 dark:bg-amber-950/30 p-4">
+                    <h2 class="text-sm font-semibold text-amber-900 dark:text-amber-100 mb-2">{{ __('intake.pending_suggestions_title') }}</h2>
+                    <p class="text-sm text-amber-900/90 dark:text-amber-100/90 mb-3">{{ __('intake.pending_suggestions_intro') }}</p>
+                    <ul class="space-y-2 text-sm">
+                        @foreach($pendingCore as $fieldKey => $fieldVal)
+                            <li class="flex flex-wrap items-start gap-2 justify-between border-b border-amber-200/60 dark:border-amber-800/40 pb-2">
+                                <div class="min-w-0 flex-1">
+                                    <span class="font-medium text-gray-800 dark:text-gray-200">{{ $fieldKey }}</span>
+                                    <span class="block text-gray-600 dark:text-gray-400 break-words">{{ is_scalar($fieldVal) ? $fieldVal : json_encode($fieldVal) }}</span>
+                                </div>
+                                <form method="POST" action="{{ route('intake.apply-suggestion', $intake) }}" class="shrink-0">
+                                    @csrf
+                                    <input type="hidden" name="scope" value="core">
+                                    <input type="hidden" name="field_key" value="{{ $fieldKey }}">
+                                    <button type="submit" class="px-3 py-1.5 rounded-md bg-amber-600 text-white text-xs font-semibold hover:bg-amber-700">
+                                        {{ __('intake.apply_suggestion_button') }}
+                                    </button>
+                                </form>
+                            </li>
+                        @endforeach
+                        @foreach($pendingExtended as $fieldKey => $fieldVal)
+                            <li class="flex flex-wrap items-start gap-2 justify-between border-b border-amber-200/60 dark:border-amber-800/40 pb-2">
+                                <div class="min-w-0 flex-1">
+                                    <span class="font-medium text-gray-800 dark:text-gray-200">{{ $fieldKey }}</span>
+                                    <span class="block text-gray-600 dark:text-gray-400 break-words">{{ is_scalar($fieldVal) ? $fieldVal : json_encode($fieldVal) }}</span>
+                                </div>
+                                <form method="POST" action="{{ route('intake.apply-suggestion', $intake) }}" class="shrink-0">
+                                    @csrf
+                                    <input type="hidden" name="scope" value="extended">
+                                    <input type="hidden" name="field_key" value="{{ $fieldKey }}">
+                                    <button type="submit" class="px-3 py-1.5 rounded-md bg-amber-600 text-white text-xs font-semibold hover:bg-amber-700">
+                                        {{ __('intake.apply_suggestion_button') }}
+                                    </button>
+                                </form>
+                            </li>
+                        @endforeach
+                    </ul>
+                </div>
+            @endif
+
+            @if(!empty($pendingEntities) || !empty($pendingOtherKeys))
+                <div class="mt-4 rounded-lg border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-900/40 p-4 text-sm text-gray-700 dark:text-gray-300">
+                    <p class="font-medium mb-1">{{ __('intake.pending_suggestions_other_title') }}</p>
+                    <p class="text-gray-600 dark:text-gray-400 mb-2">{{ __('intake.pending_suggestions_other_body') }}</p>
+                    @if(!empty($pendingEntities))
+                        <p class="text-xs font-mono text-gray-500 dark:text-gray-500">{{ implode(', ', array_keys($pendingEntities)) }}</p>
+                    @endif
+                    @if(!empty($pendingOtherKeys))
+                        <p class="text-xs font-mono text-gray-500 dark:text-gray-500 mt-1">{{ implode(', ', $pendingOtherKeys) }}</p>
+                    @endif
+                </div>
+            @endif
 
             <div class="mt-6 flex flex-wrap gap-3">
                 <a href="{{ route('matrimony.profile.wizard.section', ['section' => 'full']) }}"

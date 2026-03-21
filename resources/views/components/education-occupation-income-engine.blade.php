@@ -279,11 +279,22 @@
                             <div class="min-w-0"><label class="text-xs text-gray-600 dark:text-gray-400">Employer name</label><input type="text" name="{{ $hnC($idx, 'company') }}" value="{{ $row['company'] ?? '' }}" class="{{ $inputCls }} text-sm" placeholder="Company / organisation"></div>
                             <div class="min-w-0 career-work-location-cell">
                                 <label class="text-xs text-gray-600 dark:text-gray-400">Work location</label>
-                                <input type="text"
-                                       name="{{ $hnC($idx, 'location') }}"
-                                       value="{{ $row['location'] ?? '' }}"
-                                       class="{{ $inputCls }} text-sm"
-                                       placeholder="City / area">
+                                @if($readOnly)
+                                    @php $locRo = trim((string) ($row['location'] ?? '')); @endphp
+                                    <p class="py-1 text-sm text-gray-900 dark:text-gray-100">{{ $locRo !== '' ? $locRo : '—' }}</p>
+                                @else
+                                    <input type="hidden" name="{{ $hnC($idx, 'location') }}" value="{{ $row['location'] ?? '' }}" class="career-location-hidden">
+                                    <x-profile.location-typeahead
+                                        context="alliance"
+                                        :namePrefix="$careerRowPrefix"
+                                        :value="$row['location'] ?? ''"
+                                        :dataCityId="isset($row['city_id']) && $row['city_id'] !== null && $row['city_id'] !== '' ? (string) (int) $row['city_id'] : ''"
+                                        :displaySyncName="$hnC($idx, 'location')"
+                                        :placeholder="__('components.education.city_area')"
+                                        compactRow="true"
+                                        noBorder="true"
+                                    />
+                                @endif
                             </div>
                         </div>
                         <div class="w-20"><label class="text-xs text-gray-600 dark:text-gray-400">Start</label><input type="number" name="{{ $hnC($idx, 'start_year') }}" value="{{ $row['start_year'] ?? '' }}" min="1900" max="2100" class="{{ $inputCls }} text-sm"></div>
@@ -430,7 +441,32 @@
             if (rows.length >= MAX_HISTORY_ROWS) return;
             var i = rows.length;
             var lastRow = rows[rows.length - 1];
-            if (!lastRow) return;
+            if (!lastRow) {
+                var tDes = @json(__('components.education.designation'));
+                var tEmp = @json(__('components.education.employer_name'));
+                var tWl = @json(__('components.education.work_location'));
+                var tStart = @json(__('components.education.start'));
+                var tEnd = @json(__('components.education.end'));
+                var tCur = @json(__('components.education.current'));
+                var tRemove = @json(__('common.remove_this_entry'));
+                var tCity = @json(__('components.education.city_area'));
+                var div = document.createElement('div');
+                div.className = 'flex flex-wrap items-end gap-2 border border-gray-200 dark:border-gray-600 rounded p-2 career-history-row';
+                var p = careerPrefix;
+                div.innerHTML =
+                    '<div class="w-full"><label class="text-xs text-gray-600 dark:text-gray-400">' + tDes + '</label><input type="text" name="' + p + '[0][designation]" class="{{ $inputCls }} text-sm" placeholder="' + @json(__('components.education.role_title')) + '"></div>' +
+                    '<div class="flex flex-wrap items-end gap-2 w-full" style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem;">' +
+                    '<div class="min-w-0"><label class="text-xs text-gray-600 dark:text-gray-400">' + tEmp + '</label><input type="text" name="' + p + '[0][company]" class="{{ $inputCls }} text-sm" placeholder="Company / organisation"></div>' +
+                    '<div class="min-w-0 career-work-location-cell"><label class="text-xs text-gray-600 dark:text-gray-400">' + tWl + '</label><input type="text" name="' + p + '[0][location]" class="{{ $inputCls }} text-sm" placeholder="' + tCity + '"></div></div>' +
+                    '<div class="w-20"><label class="text-xs text-gray-600 dark:text-gray-400">' + tStart + '</label><input type="number" name="' + p + '[0][start_year]" min="1900" max="2100" class="{{ $inputCls }} text-sm"></div>' +
+                    '<div class="w-20"><label class="text-xs text-gray-600 dark:text-gray-400">' + tEnd + '</label><input type="number" name="' + p + '[0][end_year]" min="1900" max="2100" class="{{ $inputCls }} text-sm"></div>' +
+                    '<div class="flex items-center gap-1"><label class="text-xs text-gray-600 dark:text-gray-400">' + tCur + '</label><input type="checkbox" name="' + p + '[0][is_current]" value="1" class="rounded"></div>' +
+                    '<div class="career-row-actions flex items-center gap-1 shrink-0"><button type="button" class="remove-career-row flex items-center justify-center w-8 h-8 rounded text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 cursor-pointer shrink-0" title="' + tRemove + '" aria-label="' + tRemove + '"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 12H4"/></svg></button></div>';
+                careerRows.appendChild(div);
+                refreshSummaryCareer();
+                refreshCareerRowAddButtons();
+                return;
+            }
             var clone = lastRow.cloneNode(true);
             clone.classList.remove('career-history-row-server');
             var oldIdx = i - 1;

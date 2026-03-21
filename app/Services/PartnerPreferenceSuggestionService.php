@@ -11,6 +11,50 @@ use Illuminate\Support\Facades\DB;
  */
 class PartnerPreferenceSuggestionService
 {
+    public static function profileAge(MatrimonyProfile $profile): ?int
+    {
+        if (! $profile->date_of_birth) {
+            return null;
+        }
+        try {
+            $a = \Carbon\Carbon::parse($profile->date_of_birth)->age;
+
+            return $a > 0 ? $a : null;
+        } catch (\Throwable $e) {
+            return null;
+        }
+    }
+
+    /**
+     * Default partner age range from member gender + age (slider domain 18–80).
+     * Male: min = user age − 5, max = user age. Female: min = user age, max = user age + 5.
+     *
+     * @return array{min: int, max: int}|null
+     */
+    public static function defaultPreferredAgeRange(MatrimonyProfile $profile): ?array
+    {
+        $profile->loadMissing('gender');
+        $age = self::profileAge($profile);
+        if ($age === null) {
+            return null;
+        }
+        $isFemale = ($profile->gender?->key ?? null) === 'female';
+        if ($isFemale) {
+            $min = $age;
+            $max = $age + 5;
+        } else {
+            $min = $age - 5;
+            $max = $age;
+        }
+        $min = max(18, min(80, $min));
+        $max = max(18, min(80, $max));
+        if ($min > $max) {
+            [$min, $max] = [$max, $min];
+        }
+
+        return ['min' => $min, 'max' => $max];
+    }
+
     /**
      * @return array<string, mixed>
      */
@@ -29,24 +73,10 @@ class PartnerPreferenceSuggestionService
             'preference_preset' => 'balanced',
         ];
 
-        $age = null;
-        if ($profile->date_of_birth) {
-            try {
-                $dob = \Carbon\Carbon::parse($profile->date_of_birth);
-                $age = $dob->age;
-            } catch (\Throwable $e) {
-                $age = null;
-            }
-        }
-
-        if ($age !== null && $age > 0) {
-            if ($profile->gender_id && ($profile->gender?->key ?? null) === 'female') {
-                $out['preferred_age_min'] = max(21, $age);
-                $out['preferred_age_max'] = min(50, $age + 5);
-            } else {
-                $out['preferred_age_min'] = max(18, $age - 5);
-                $out['preferred_age_max'] = $age;
-            }
+        $ageRange = self::defaultPreferredAgeRange($profile);
+        if ($ageRange !== null) {
+            $out['preferred_age_min'] = $ageRange['min'];
+            $out['preferred_age_max'] = $ageRange['max'];
         }
 
         // Income: prefer normalized annual amount from income engine; fallback to legacy annual_income.

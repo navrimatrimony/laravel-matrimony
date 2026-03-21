@@ -33,6 +33,19 @@ return [
     'only_view_status_own' => 'You can only view status of your own biodata uploads.',
     'approved_successfully' => 'Intake approved successfully.',
 
+    'pending_suggestions_title' => 'Suggestions from biodata (not applied automatically)',
+    'pending_suggestions_intro' => 'These values would have replaced information already on your profile. Use Apply only if you want to replace your current value with the biodata suggestion.',
+    'apply_suggestion_button' => 'Apply',
+    'apply_suggestion_ok' => 'Updated “:field” from your biodata suggestion.',
+    'apply_suggestion_no_profile' => 'Create a profile first.',
+    'apply_suggestion_none' => 'No pending suggestions for this profile.',
+    'apply_suggestion_missing' => 'That suggestion is no longer available.',
+    'apply_suggestion_invalid_field' => 'This field cannot be applied from here.',
+    'apply_suggestion_failed' => 'Could not apply the suggestion. Check the field in the profile wizard.',
+
+    'pending_suggestions_other_title' => 'Other biodata sections were not merged automatically',
+    'pending_suggestions_other_body' => 'Because your profile already had data in those areas, lists (e.g. family / education) were kept as-is. You can add or edit them in the profile wizard.',
+
     // Status page while parse job runs (background)
     'processing_title' => 'Processing your biodata…',
     'processing_subtitle' => 'Text extraction and parsing are running in the background. Stay on this page — we will open the preview when it is ready.',

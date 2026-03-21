@@ -9,6 +9,7 @@ export default defineConfig({
                 'resources/js/app.js',
                 'resources/js/profile/religion-caste-selector.js',
                 'resources/js/profile/location-typeahead.js',
+                'resources/js/profile/about-me-narrative.js',
                 'resources/js/intake-preview-crop.js',
             ],
             refresh: true,

@@ -16,10 +16,23 @@
             'designation' => $r->designation ?? '',
             'company' => $r->company ?? '',
             'location' => $r->location ?? '',
+            'city_id' => $r->city_id ?? null,
             'start_year' => $r->start_year ?? null,
             'end_year' => $r->end_year ?? null,
             'is_current' => !empty($r->is_current),
         ])->values()->all();
+        if ($careerHist === []) {
+            $careerHist = [[
+                'id' => null,
+                'designation' => '',
+                'company' => '',
+                'location' => '',
+                'city_id' => null,
+                'start_year' => null,
+                'end_year' => null,
+                'is_current' => false,
+            ]];
+        }
     @endphp
     <x-education-occupation-income-engine
         :profile="$profile"

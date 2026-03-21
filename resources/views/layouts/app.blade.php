@@ -15,7 +15,7 @@
         <link href="https://fonts.bunny.net/css?family=figtree:400,500,600&display=swap" rel="stylesheet" />
 
         <!-- Scripts -->
-        @vite(['resources/css/app.css', 'resources/js/app.js', 'resources/js/profile/religion-caste-selector.js', 'resources/js/profile/location-typeahead.js'])
+        @vite(['resources/css/app.css', 'resources/js/app.js', 'resources/js/profile/religion-caste-selector.js', 'resources/js/profile/location-typeahead.js', 'resources/js/profile/about-me-narrative.js'])
     </head>
     <body class="font-sans antialiased">
         <div class="min-h-screen bg-gray-100 dark:bg-gray-900">

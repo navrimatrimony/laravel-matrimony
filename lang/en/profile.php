@@ -49,6 +49,22 @@ return [
     'partner_preferences' => 'Partner preferences',
     'about_expectations' => 'About & expectations',
     'about_me' => 'About me',
+    /** Wizard: first narrative field — avoid repeating the same “About me” as the page title */
+    'narrative_intro_label' => 'Introduction',
+    'narrative_about_me_placeholder' => 'A few lines about you: background, values, hobbies, family.',
+    'expectations_placeholder' => 'What you value in a partner and marriage (respect, family, goals, etc.).',
+    'suggestion_templates_hint' => 'Quick starters — tap one to fill the box, then edit if you like and save.',
+    'template_replaces_text' => 'Replaces current text in this box',
+    'about_me_quick_templates' => [
+        ['label' => 'Simple', 'text' => 'I am a simple, family-oriented person. I value honesty, respect, and open communication. In my free time I enjoy spending time with family and close friends.'],
+        ['label' => 'Career + values', 'text' => 'I take my career seriously but believe in work–life balance. I am looking for a meaningful relationship built on trust, mutual respect, and shared values.'],
+        ['label' => 'Tradition + modern', 'text' => 'I respect our traditions while keeping an open mind. I enjoy learning new things and hope to build a warm home with someone who shares similar goals.'],
+    ],
+    'expectations_quick_templates' => [
+        ['label' => 'Shared values', 'text' => 'I hope to meet someone kind, respectful, and family-oriented, who believes in growing together and supporting each other through life.'],
+        ['label' => 'Honest partner', 'text' => 'I am looking for an honest, understanding life partner with a positive outlook, good communication, and respect for both families.'],
+        ['label' => 'Life goals', 'text' => 'I would like a partner who is ready to build a stable future together, values education and health, and is open to discussing plans and expectations clearly.'],
+    ],
     'expectations' => 'Expectations',
     'horoscope' => 'Horoscope',
     'contact_information' => 'Contact Information',
