@@ -45,7 +45,7 @@ class MobileOtpController extends Controller
     {
         $intended = $request->session()->pull('intended_after_verify');
         $request->session()->forget('from_registration');
-        $redirectTo = $intended ?: route('matrimony.profile.wizard.section', ['section' => 'basic-info']);
+        $redirectTo = $intended ?: route('matrimony.onboarding.show', ['step' => 2]);
         return redirect($redirectTo)->with('info', __('otp.can_verify_later_from_dashboard'));
     }
 

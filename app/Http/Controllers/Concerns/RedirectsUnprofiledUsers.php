@@ -17,7 +17,7 @@ trait RedirectsUnprofiledUsers
             return null;
         }
 
-        $wizardUrl = route('matrimony.profile.wizard.section', ['section' => 'basic-info']);
+        $wizardUrl = route('matrimony.onboarding.show', ['step' => 2]);
         $redirectToVerify = AdminSetting::getBool('redirect_to_mobile_verify_after_registration', true);
         $mobileMode = AdminSetting::getValue('mobile_verification_mode', 'off');
 

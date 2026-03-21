@@ -34,12 +34,12 @@ class EnsureMatrimonyProfileExists
 
             // Infinite loop टाळण्यासाठी:
             // जर user आधीच profile create page वर असेल तर allow करा
-            if ($request->routeIs('matrimony.profile.wizard*')) {
+            if ($request->routeIs('matrimony.profile.wizard*') || $request->routeIs('matrimony.onboarding*')) {
                 return $next($request);
             }
 
             // बाकी सर्व routes साठी force redirect
-            return redirect()->route('matrimony.profile.wizard.section', ['section' => 'basic-info']);
+            return redirect()->route('matrimony.onboarding.show', ['step' => 2]);
         }
 
         return $next($request);

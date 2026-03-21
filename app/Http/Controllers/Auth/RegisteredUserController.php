@@ -43,6 +43,8 @@ class RegisteredUserController extends Controller
             'mobile' => $mobileDigits,
             'gender' => $request->gender ?? null,
             'password' => Hash::make($request->password),
+            'registering_for' => $request->registering_for,
+            'relation_to_profile' => $request->relation_to_profile,
         ]);
 
         // 3️⃣ Registered event fire करा

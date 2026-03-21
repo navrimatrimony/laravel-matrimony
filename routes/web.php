@@ -5,6 +5,7 @@ use App\Models\Caste;
 use App\Models\SubCaste;
 use App\Http\Controllers\MatrimonyProfileController;
 use App\Http\Controllers\ProfileWizardController;
+use App\Http\Controllers\OnboardingController;
 use App\Http\Controllers\InterestController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\AdminController;
@@ -121,13 +122,20 @@ Route::middleware('auth')->group(function () {
     | Matrimony Profile (Phase-5B: wizard is the only create path; create/store disallowed — Point 5)
     */
     Route::get('/matrimony/profile/create', function () {
-        return redirect()->route('matrimony.profile.wizard.section', ['section' => 'basic-info']);
+        return redirect()->route('matrimony.onboarding.show', ['step' => 2]);
     })->name('matrimony.profile.create');
 
     Route::post('/matrimony/profile/store', function () {
-        return redirect()->route('matrimony.profile.wizard.section', ['section' => 'basic-info'])
-            ->with('info', 'Please use the profile wizard to create or update your profile.');
+        return redirect()->route('matrimony.onboarding.show', ['step' => 2])
+            ->with('info', 'Please use the profile wizard or onboarding to create or update your profile.');
     })->name('matrimony.profile.store');
+
+    Route::get('/matrimony/onboarding/{step}', [OnboardingController::class, 'show'])
+        ->name('matrimony.onboarding.show')
+        ->where('step', '[2-5]');
+    Route::post('/matrimony/onboarding/{step}', [OnboardingController::class, 'store'])
+        ->name('matrimony.onboarding.store')
+        ->where('step', '[2-5]');
 
     Route::get('/matrimony/profile/wizard', [ProfileWizardController::class, 'index'])
         ->name('matrimony.profile.wizard');

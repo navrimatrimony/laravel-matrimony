@@ -42,6 +42,8 @@ class User extends Authenticatable
         'password',
         'gender',
         'mobile_verified_at',
+        'registering_for',
+        'relation_to_profile',
     ];
 
     /*

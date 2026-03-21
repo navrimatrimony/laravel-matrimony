@@ -1,0 +1,37 @@
+<?php
+
+return [
+    'page_title' => 'प्रोफाइल सेटअप',
+    'step_of' => 'पायरी :current / :total',
+    'registration_done' => 'खाते तयार. चला प्रोफाइल पूर्ण करूया.',
+    'saved_continue' => 'जतन झालं. पुढच्या पायरीकडे जा.',
+    'all_set' => 'सगळं झालं — तुम्ही जुळण्या पाहू शकता किंवा नंतर अधिक तपशील भरू शकता.',
+    'education_examples' => 'उदा. बी.ई., एम.कॉम, डिप्लोमा, पीएच.डी.',
+
+    'step2_title' => 'उमेदवाराबद्दल',
+    'step2_sub' => 'योग्य जुळण्या दाखवण्यास मदत होते.',
+    'step3_title' => 'समाज / धर्म',
+    'step3_sub' => 'धर्म व जात सुसंगत जुळण्यांसाठी.',
+    'step4_title' => 'शिक्षण व काम',
+    'step4_sub' => 'थोडकं भरलं तरी चालेल — नंतर तपशीलात भरू शकता.',
+    'step5_title' => 'उंची व पत्ता',
+    'step5_sub' => 'अंतर व प्राधान्यांसाठी वापरतो.',
+
+    'continue' => 'पुढे जा',
+    'back' => 'मागे',
+
+    'registering_for' => 'कोणासाठी नोंदणी?',
+    'registering_for_self' => 'स्वतःसाठी',
+    'registering_for_son' => 'मुलासाठी (मुलगा)',
+    'registering_for_daughter' => 'मुलासाठी (मुलगी)',
+    'registering_for_sibling' => 'भावा-बहिणीसाठी',
+    'registering_for_other' => 'इतर',
+
+    'relation_to_profile' => 'या स्थळाशी तुमचे नाते',
+    'relation_placeholder' => 'उदा. वडील, आई, भाऊ',
+    'optional_relation_hint' => 'स्वतःसाठी असल्यास ऐच्छिक.',
+
+    'hero_line' => 'चला, तुमच्यासाठी स्थळे शोधायला सुरुवात करूया.',
+
+    'height_cm_label' => 'उंची',
+];

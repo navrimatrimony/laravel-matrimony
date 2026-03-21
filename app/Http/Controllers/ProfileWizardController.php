@@ -7,6 +7,7 @@ use App\Services\FieldCatalogService;
 use App\Services\ProfileCompletionService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Rule;
 
 /**
@@ -55,12 +56,6 @@ class ProfileWizardController extends Controller
             return redirect()->route('login');
         }
 
-        // Feature removal: Marriages + Location tabs removed. Purge their stored data once per session.
-        if (! session()->has('purged_marriages_location')) {
-            $this->purgeMarriagesAndLocationData($profile);
-            session(['purged_marriages_location' => true]);
-        }
-
         $minimal = $this->isMinimalWizard();
         $first = $minimal ? FieldCatalogService::getFirstSection(true) : FieldCatalogService::getFirstSection(false);
         $pct = ProfileCompletionService::calculateCompletionPercentage($profile);
@@ -81,13 +76,9 @@ class ProfileWizardController extends Controller
         if ($section === 'personal-family') {
             return redirect()->route('matrimony.profile.wizard.section', ['section' => 'education-career'], 301);
         }
-        // Legacy: marriages/location tabs removed; purge and redirect
+        // Legacy: marriages/location tabs removed — redirect to Basic info (marital engine + residence live there).
         if ($section === 'marriages' || $section === 'location') {
-            $profile = $this->ensureProfile(auth()->user());
-            if ($profile) {
-                $this->purgeMarriagesAndLocationData($profile);
-            }
-            return redirect()->route('matrimony.profile.wizard.section', ['section' => FieldCatalogService::getFirstSection($this->isMinimalWizard() ? true : false)], 301)
+            return redirect()->route('matrimony.profile.wizard.section', ['section' => 'basic-info'], 301)
                 ->with('info', __('wizard.marriages_location_removed'));
         }
 
@@ -175,14 +166,10 @@ class ProfileWizardController extends Controller
             return redirect()->route('matrimony.profile.wizard.section', ['section' => 'education-career'])
                 ->with('info', 'This section is now split into Education & Career and Family details.');
         }
-        // Legacy: marriages/location tabs removed; purge and redirect
+        // Legacy: marriages/location sections removed — do not accept POST here (no purge; data is edited under basic-info / full).
         if ($section === 'marriages' || $section === 'location') {
-            $profile = $this->ensureProfile(auth()->user());
-            if ($profile) {
-                $this->purgeMarriagesAndLocationData($profile);
-            }
-            return redirect()->route('matrimony.profile.wizard.section', ['section' => FieldCatalogService::getFirstSection($this->isMinimalWizard() ? true : false)])
-                ->with('success', 'Removed marriages and location data.');
+            return redirect()->route('matrimony.profile.wizard.section', ['section' => 'basic-info'])
+                ->with('info', __('wizard.marriages_location_removed'));
         }
 
         $allowed = $this->getAllowedSectionKeys();
@@ -201,16 +188,6 @@ class ProfileWizardController extends Controller
 
         if (! \App\Services\ProfileLifecycleService::isEditableForManual($profile)) {
             return redirect()->route('matrimony.profile.show', $profile->id)->with('error', __('wizard.profile_not_editable_current_state'));
-        }
-
-        if ($section === 'location') {
-            $minimal = $this->isMinimalWizard();
-            $next = $minimal ? FieldCatalogService::getNextSection($section, true) : FieldCatalogService::getNextSection($section, false);
-            if ($next) {
-                return redirect()->route('matrimony.profile.wizard.section', ['section' => $next])
-                    ->with('success', __('wizard.saved_continue_next'));
-            }
-            return redirect()->route('matrimony.profiles.index')->with('success', 'Profile updated.');
         }
 
         // Photo section: no direct upload in wizard; user uses centralized upload engine. Save & Next without file = skip to next.
@@ -243,7 +220,7 @@ class ProfileWizardController extends Controller
             $result = app(\App\Services\MutationService::class)->applyManualSnapshot($profile, $snapshot, (int) $user->id, 'manual');
             \Illuminate\Support\Facades\Log::info('WIZARD RESULT DEBUG', ['result' => $result, 'keys' => array_keys($result)]);
             $hasChildrenNo = isset($snapshot['core']['has_children']) && ($snapshot['core']['has_children'] === false || $snapshot['core']['has_children'] === 0 || $snapshot['core']['has_children'] === '0');
-            if (($section === 'marriages' || $section === 'full') && $hasChildrenNo) {
+            if (in_array($section, ['basic-info', 'marriages', 'full'], true) && $hasChildrenNo) {
                 DB::table('profile_children')->where('profile_id', $profile->id)->delete();
             }
         } catch (\Illuminate\Validation\ValidationException $e) {
@@ -315,45 +292,6 @@ class ProfileWizardController extends Controller
         ]);
 
         return $profile;
-    }
-
-    /**
-     * Purge Marriages + Location data for this profile (feature removed).
-     * No schema changes; only clears existing rows/columns for the current profile.
-     */
-    private function purgeMarriagesAndLocationData(MatrimonyProfile $profile): void
-    {
-        // Marriages + children (entity tables)
-        if (\Schema::hasTable('profile_marriages')) {
-            DB::table('profile_marriages')->where('profile_id', $profile->id)->delete();
-        }
-        if (\Schema::hasTable('profile_children')) {
-            DB::table('profile_children')->where('profile_id', $profile->id)->delete();
-        }
-
-        // Core marital fields
-        $coreUpdates = [];
-        if (\Schema::hasColumn('matrimony_profiles', 'marital_status_id')) {
-            $coreUpdates['marital_status_id'] = null;
-        }
-        if (\Schema::hasColumn('matrimony_profiles', 'has_children')) {
-            $coreUpdates['has_children'] = null;
-        }
-
-        // Location hierarchy + address_line + work/native place
-        foreach (['country_id', 'state_id', 'district_id', 'taluka_id', 'city_id', 'address_line', 'work_city_id', 'work_state_id', 'native_city_id', 'native_taluka_id', 'native_district_id', 'native_state_id'] as $col) {
-            if (\Schema::hasColumn('matrimony_profiles', $col)) {
-                $coreUpdates[$col] = null;
-            }
-        }
-        if ($coreUpdates !== []) {
-            DB::table('matrimony_profiles')->where('id', $profile->id)->update($coreUpdates);
-        }
-
-        // Normalized address rows
-        if (\Schema::hasTable('profile_addresses')) {
-            DB::table('profile_addresses')->where('profile_id', $profile->id)->delete();
-        }
     }
 
     private function getSectionViewData(string $section, MatrimonyProfile $profile): array
@@ -752,6 +690,27 @@ class ProfileWizardController extends Controller
     }
 
     /**
+     * Same snapshot builder as wizard `store()` — used by card onboarding to reuse validation + core shape.
+     */
+    public function buildSnapshotForSection(Request $request, string $section, MatrimonyProfile $profile): ?array
+    {
+        return $this->buildSectionSnapshot($section, $request, $profile);
+    }
+
+    /**
+     * Card onboarding step 5: physical core + residence hierarchy/address_line (single applyManualSnapshot).
+     */
+    public function buildOnboardingPhysicalAddressSnapshot(Request $request, MatrimonyProfile $profile): array
+    {
+        $this->validateResidenceCoreForSnapshot($request);
+        $physical = $this->buildPhysicalSnapshot($request, $profile);
+        $res = $this->residenceCoreFromRequest($request);
+        $physical['core'] = array_merge($physical['core'], $res);
+
+        return $physical;
+    }
+
+    /**
      * Build partial snapshot for the given section (MutationService applies only present keys).
      */
     private function buildSectionSnapshot(string $section, Request $request, MatrimonyProfile $profile): ?array
@@ -812,6 +771,8 @@ class ProfileWizardController extends Controller
             'mother_tongue_id' => ['nullable', Rule::exists('master_mother_tongues', 'id')->where(fn ($q) => $q->where('is_active', true))],
         ]);
 
+        $this->validateResidenceCoreForSnapshot($request);
+
         $birthTimeValue = $request->filled('birth_time') ? trim($request->input('birth_time')) : null;
         if ($birthTimeValue === '') {
             $birthTimeValue = null;
@@ -828,6 +789,9 @@ class ProfileWizardController extends Controller
             'mother_tongue_id' => $request->input('mother_tongue_id') ? (int) $request->input('mother_tongue_id') : null,
         ];
         $core = array_map(fn ($v) => $v === '' ? null : $v, $core);
+
+        // Current residence (district/taluka/city + address line) — same fields as location snapshot; rendered on Basic info.
+        $core = array_merge($core, $this->residenceCoreFromRequest($request));
 
         // Merge full marital engine snapshot (marital_status_id, has_children, marriages, children)
         $marriagesSnapshot = $this->buildMarriagesSnapshot($request);
@@ -857,6 +821,61 @@ class ProfileWizardController extends Controller
             'marriages' => $marriagesSnapshot['marriages'] ?? [],
             'children' => $marriagesSnapshot['children'] ?? [],
         ];
+    }
+
+    /**
+     * First non-empty residence value across flat input, core[...], and snapshot[core][...].
+     * Important: if request has core[] for any reason but city_id is only posted flat, we must not ignore flat keys.
+     */
+    private function residenceScalarFromRequest(Request $request, string $key): mixed
+    {
+        foreach ([
+            $request->input($key),
+            data_get($request->all(), 'core.'.$key),
+            data_get($request->all(), 'snapshot.core.'.$key),
+        ] as $v) {
+            if ($v !== null && $v !== '') {
+                return $v;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Residence CORE fields from request (wizard: flat; intake: snapshot[core][...]).
+     */
+    private function residenceCoreFromRequest(Request $request): array
+    {
+        $toInt = fn ($v) => $v !== null && $v !== '' ? (int) $v : null;
+        $addr = $this->residenceScalarFromRequest($request, 'address_line');
+        $addressLine = ($addr !== null && trim((string) $addr) !== '') ? trim((string) $addr) : null;
+
+        return [
+            'country_id' => $toInt($this->residenceScalarFromRequest($request, 'country_id')),
+            'state_id' => $toInt($this->residenceScalarFromRequest($request, 'state_id')),
+            'district_id' => $toInt($this->residenceScalarFromRequest($request, 'district_id')),
+            'taluka_id' => $toInt($this->residenceScalarFromRequest($request, 'taluka_id')),
+            'city_id' => $toInt($this->residenceScalarFromRequest($request, 'city_id')),
+            'address_line' => $addressLine,
+        ];
+    }
+
+    private function validateResidenceCoreForSnapshot(Request $request): void
+    {
+        $keys = ['country_id', 'state_id', 'district_id', 'taluka_id', 'city_id', 'address_line'];
+        $data = [];
+        foreach ($keys as $k) {
+            $data[$k] = $this->residenceScalarFromRequest($request, $k);
+        }
+        Validator::make($data, [
+            'country_id' => ['nullable', 'exists:countries,id'],
+            'state_id' => ['nullable', 'exists:states,id'],
+            'district_id' => ['nullable', 'exists:districts,id'],
+            'taluka_id' => ['nullable', 'exists:talukas,id'],
+            'city_id' => ['nullable', 'exists:cities,id'],
+            'address_line' => ['nullable', 'string', 'max:255'],
+        ])->validate();
     }
 
     private function buildPhysicalSnapshot(Request $request, MatrimonyProfile $profile): array
