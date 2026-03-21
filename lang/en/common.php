@@ -41,5 +41,6 @@ return [
     'invalid_photo_upload_jpg_png' => 'We could not read this image. Please upload a valid JPG or PNG photo.',
     'login_required_to_view_matrimony_profiles' => 'Please login to view matrimony profiles.',
     'profile_not_found' => 'Profile not found.',
+    'dismiss' => 'Dismiss',
 ];
 

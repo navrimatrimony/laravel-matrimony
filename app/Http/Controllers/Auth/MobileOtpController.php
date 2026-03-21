@@ -23,9 +23,24 @@ class MobileOtpController extends Controller
         $fromRegistration = (bool) $request->session()->get('from_registration', false);
 
         if ($mode === 'off') {
-            $redirectTo = $intendedAfterVerify ?: route('dashboard');
+            $user = $request->user();
+            $user?->loadMissing('matrimonyProfile');
+            $fromRegistration = (bool) $request->session()->get('from_registration', false);
+            $wizardMinimal = (bool) session('wizard_minimal', false);
+            $onboardingUrl = route('matrimony.onboarding.show', ['step' => 2], absolute: false);
+
+            // wizard_minimal: user is still in card onboarding (e.g. went back to OTP); draft profile may already exist.
+            if ($wizardMinimal || $fromRegistration || ($user && ! $user->matrimonyProfile)) {
+                session()->put('wizard_minimal', true);
+                $redirectTo = $onboardingUrl;
+            } elseif ($intendedAfterVerify) {
+                $redirectTo = $intendedAfterVerify;
+            } else {
+                $redirectTo = route('dashboard', absolute: false);
+            }
             $request->session()->forget(['intended_after_verify', 'from_registration']);
-            return redirect($redirectTo)->with('info', __('otp.mobile_verification_disabled'));
+
+            return redirect()->to($redirectTo)->with('info', __('otp.mobile_verification_disabled'));
         }
 
         $otpDisplay = $request->session()->pull('otp_display');
@@ -39,21 +54,34 @@ class MobileOtpController extends Controller
     }
 
     /**
-     * Skip verification (e.g. after registration). Redirect to wizard or intended URL.
+     * Skip verification (e.g. after registration). Same destination rules as verifyOtp (onboarding for users without a profile).
      */
     public function skip(Request $request): RedirectResponse
     {
+        $user = $request->user();
+        $fromRegistration = (bool) $request->session()->pull('from_registration', false);
         $intended = $request->session()->pull('intended_after_verify');
-        $request->session()->forget('from_registration');
-        $redirectTo = $intended ?: route('matrimony.onboarding.show', ['step' => 2]);
-        return redirect($redirectTo)->with('info', __('otp.can_verify_later_from_dashboard'));
+        $user?->loadMissing('matrimonyProfile');
+
+        $wizardMinimal = (bool) session('wizard_minimal', false);
+        $onboardingUrl = route('matrimony.onboarding.show', ['step' => 2], absolute: false);
+        if ($wizardMinimal || $fromRegistration || ($user && ! $user->matrimonyProfile)) {
+            session()->put('wizard_minimal', true);
+            $redirectTo = $onboardingUrl;
+        } elseif ($intended) {
+            $redirectTo = $intended;
+        } else {
+            $redirectTo = route('dashboard', absolute: false);
+        }
+
+        return redirect()->to($redirectTo)->with('info', __('otp.can_verify_later_from_dashboard'));
     }
 
     public function sendOtp(Request $request): RedirectResponse
     {
         $mode = AdminSetting::getValue('mobile_verification_mode', 'dev_show');
         if ($mode === 'off') {
-            return redirect()->route('dashboard');
+            return redirect()->to(route('dashboard', absolute: false));
         }
 
         $request->validate([
@@ -98,10 +126,21 @@ class MobileOtpController extends Controller
         Cache::forget($key);
         $user->update(['mobile_verified_at' => now()]);
 
+        $fromRegistration = (bool) $request->session()->pull('from_registration', false);
         $intended = $request->session()->pull('intended_after_verify');
-        $request->session()->forget('from_registration');
-        $redirectTo = $intended ?: route('dashboard');
 
-        return redirect($redirectTo)->with('status', __('otp.mobile_verified_successfully'));
+        $user->loadMissing('matrimonyProfile');
+        $wizardMinimal = (bool) session('wizard_minimal', false);
+        $onboardingUrl = route('matrimony.onboarding.show', ['step' => 2], absolute: false);
+        if ($wizardMinimal || $fromRegistration || ! $user->matrimonyProfile) {
+            session()->put('wizard_minimal', true);
+            $redirectTo = $onboardingUrl;
+        } elseif ($intended) {
+            $redirectTo = $intended;
+        } else {
+            $redirectTo = route('dashboard', absolute: false);
+        }
+
+        return redirect()->to($redirectTo)->with('status', __('otp.mobile_verified_successfully'));
     }
 }

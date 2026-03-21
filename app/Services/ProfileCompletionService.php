@@ -18,6 +18,7 @@ class ProfileCompletionService
         'siblings' => 0,
         'relatives' => 0,
         'alliance' => 0,
+        'location' => 0,
         'property' => 0,
         'horoscope' => 0,
         'about-preferences' => 20,

@@ -76,8 +76,8 @@ class ProfileWizardController extends Controller
         if ($section === 'personal-family') {
             return redirect()->route('matrimony.profile.wizard.section', ['section' => 'education-career'], 301);
         }
-        // Legacy: marriages/location tabs removed — redirect to Basic info (marital engine + residence live there).
-        if ($section === 'marriages' || $section === 'location') {
+        // Legacy: marriages tab removed — marital engine lives under Basic info.
+        if ($section === 'marriages') {
             return redirect()->route('matrimony.profile.wizard.section', ['section' => 'basic-info'], 301)
                 ->with('info', __('wizard.marriages_location_removed'));
         }
@@ -166,8 +166,8 @@ class ProfileWizardController extends Controller
             return redirect()->route('matrimony.profile.wizard.section', ['section' => 'education-career'])
                 ->with('info', 'This section is now split into Education & Career and Family details.');
         }
-        // Legacy: marriages/location sections removed — do not accept POST here (no purge; data is edited under basic-info / full).
-        if ($section === 'marriages' || $section === 'location') {
+        // Legacy: marriages section removed — do not accept POST here.
+        if ($section === 'marriages') {
             return redirect()->route('matrimony.profile.wizard.section', ['section' => 'basic-info'])
                 ->with('info', __('wizard.marriages_location_removed'));
         }
@@ -519,10 +519,13 @@ class ProfileWizardController extends Controller
                 $data['districts'] = \App\Models\District::all();
                 $data['talukas'] = \App\Models\Taluka::all();
                 $data['cities'] = \App\Models\City::all();
-                $profile->load('addresses.village');
+                $profile->loadMissing(['city', 'nativeCity', 'addresses.village']);
                 $data['profileAddresses'] = $profile->addresses;
                 $data['workCityName'] = $profile->work_city_id ? \App\Models\City::where('id', $profile->work_city_id)->value('name') : '';
                 $data['nativePlaceDisplay'] = $profile->native_city_id ? \App\Models\City::where('id', $profile->native_city_id)->value('name') : '';
+                $data['residencePlaceDisplay'] = old('wizard_residence_display', $profile->residenceLocationDisplayLine());
+                $data['workPlaceDisplay'] = old('wizard_work_place_display', $data['workCityName'] ?? '');
+                $data['nativePlaceTypeaheadDisplay'] = old('wizard_native_place_display', $data['nativePlaceDisplay'] ?? '');
                 $data['talukasByDistrict'] = \App\Models\Taluka::all()->groupBy('district_id')->map(fn ($col) => $col->map(fn ($t) => ['id' => $t->id, 'name' => $t->name])->values()->toArray())->toArray();
                 $data['districtsByState'] = \App\Models\District::all()->groupBy('state_id')->map(fn ($col) => $col->map(fn ($d) => ['id' => $d->id, 'name' => $d->name])->values()->toArray())->toArray();
                 $data['stateIdToCountryId'] = \App\Models\State::all()->pluck('country_id', 'id')->toArray();
@@ -1362,25 +1365,15 @@ class ProfileWizardController extends Controller
 
     private function buildLocationSnapshot(Request $request, MatrimonyProfile $profile): array
     {
+        $this->validateResidenceCoreForSnapshot($request);
         $request->validate([
-            'country_id' => ['nullable', 'exists:countries,id'],
-            'state_id' => ['nullable', 'exists:states,id'],
-            'district_id' => ['nullable', 'exists:districts,id'],
-            'taluka_id' => ['nullable', 'exists:talukas,id'],
-            'city_id' => ['nullable', 'exists:cities,id'],
-            'address_line' => ['nullable', 'string', 'max:255'],
+            'work_city_id' => ['nullable', 'exists:cities,id'],
+            'work_state_id' => ['nullable', 'exists:states,id'],
         ]);
 
-        $core = [
-            'country_id' => $request->input('country_id') ?: null,
-            'state_id' => $request->input('state_id') ?: null,
-            'district_id' => $request->input('district_id') ?: null,
-            'taluka_id' => $request->input('taluka_id') ?: null,
-            'city_id' => $request->input('city_id') ?: null,
-            'address_line' => $request->filled('address_line') ? trim($request->input('address_line')) : null,
-            'work_city_id' => $request->input('work_city_id') ?: null,
-            'work_state_id' => $request->input('work_state_id') ?: null,
-        ];
+        $core = $this->residenceCoreFromRequest($request);
+        $core['work_city_id'] = $request->filled('work_city_id') ? (int) $request->input('work_city_id') : null;
+        $core['work_state_id'] = $request->filled('work_state_id') ? (int) $request->input('work_state_id') : null;
         $core = array_map(fn ($v) => $v === '' ? null : $v, $core);
 
         $addresses = [];

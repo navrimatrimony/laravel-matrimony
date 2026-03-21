@@ -264,7 +264,7 @@ class MatrimonyProfileController extends Controller
         abort(404);
     }
 
-public function uploadPhoto()
+public function uploadPhoto(Request $request)
 {
     $user = auth()->user();
 
@@ -294,6 +294,8 @@ public function uploadPhoto()
     $photoSlotsRemaining = max(0, $photoMaxPerProfile - $currentPhotoCount);
     $photoLimitReached = $currentPhotoCount >= $photoMaxPerProfile;
 
+    $fromOnboarding = $request->query('from') === 'onboarding';
+
     return view('matrimony.profile.upload-photo', [
         'profile' => $profile,
         'galleryPhotos' => $galleryPhotos,
@@ -302,6 +304,7 @@ public function uploadPhoto()
         'currentPhotoCount' => $currentPhotoCount,
         'photoSlotsRemaining' => $photoSlotsRemaining,
         'photoLimitReached' => $photoLimitReached,
+        'fromOnboarding' => $fromOnboarding,
     ]);
 }
 

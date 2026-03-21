@@ -39,7 +39,7 @@
 
     <div class="rounded-xl border border-rose-200 dark:border-rose-800/60 bg-white dark:bg-gray-900/30 p-4 space-y-4 career-dependent-block">
         <h3 class="text-sm font-semibold text-gray-800 dark:text-gray-100">{{ __('components.education.career') }}</h3>
-        <div class="grid grid-cols-1 gap-4">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-5">
             <div>
                 <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{{ __('components.education.working_with') }}</label>
                 <select name="working_with_type_id" class="w-full rounded-xl border border-gray-300 dark:border-gray-600 dark:bg-gray-700 px-4 py-3 text-base min-h-[48px] career-parent-select">
@@ -101,12 +101,19 @@
         </script>
     </div>
 
-    <div class="flex flex-col sm:flex-row gap-3 pt-2">
-        <a href="{{ route('matrimony.onboarding.show', ['step' => 3]) }}" class="inline-flex justify-center items-center min-h-[52px] px-6 rounded-xl text-base font-semibold border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 w-full sm:w-auto text-center">
-            {{ __('onboarding.back') }}
-        </a>
-        <button type="submit" class="inline-flex justify-center items-center min-h-[52px] px-6 rounded-xl text-base font-semibold text-white bg-indigo-600 hover:bg-indigo-700 w-full sm:flex-1">
-            {{ __('onboarding.continue') }}
-        </button>
+    <div class="rounded-xl border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-900/20 p-4 space-y-3">
+        <h3 class="text-sm font-semibold text-gray-800 dark:text-gray-100">{{ __('onboarding.career_income_section') }}</h3>
+        <p class="text-xs text-gray-500 dark:text-gray-400">{{ __('onboarding.career_income_hint') }}</p>
+        <x-income-engine
+            :label="__('onboarding.career_income_label')"
+            name-prefix="income"
+            :profile="$profile"
+            :currencies="$currencies ?? collect()"
+            :help-text="__('onboarding.career_income_help')"
+        />
     </div>
+
+    <x-onboarding.form-footer
+        :back-url="route('matrimony.onboarding.show', ['step' => 3])"
+    />
 </form>

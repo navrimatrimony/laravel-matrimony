@@ -29,21 +29,23 @@
         {{-- Step 1: Marital status (radios) — bold, spaced, card-style options --}}
         <div>
             <p class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">{{ __('Marital status') }} <span class="text-red-500">*</span></p>
-            <div class="flex flex-nowrap gap-1.5 sm:gap-2 w-full overflow-x-auto items-stretch shrink-0">
+            <div class="w-full overflow-x-auto overflow-y-visible -mx-1 px-1 sm:mx-0 sm:px-0 pb-1 scroll-pl-2 snap-x snap-mandatory">
+                <div class="flex flex-nowrap gap-2 sm:gap-2.5 items-stretch min-w-min py-0.5">
                 @foreach($maritalStatuses as $s)
-                    <label class="inline-flex items-center justify-center cursor-pointer rounded-lg border-2 pl-2 pr-2.5 sm:pl-3 sm:pr-4 py-2 sm:py-2.5 transition-all duration-150 flex-1 min-w-0 shrink-0 min-h-[42px] whitespace-nowrap
+                    <label class="snap-start inline-flex items-center justify-center cursor-pointer rounded-lg border-2 pl-3 pr-3.5 sm:pl-4 sm:pr-4 py-2 sm:py-2.5 transition-all duration-150 shrink-0 min-h-[42px] whitespace-nowrap
                         hover:border-gray-300 dark:hover:border-gray-500
-                        focus-within:ring-2 focus-within:ring-red-500 focus-within:ring-offset-1"
-                        :class="maritalStatusId == '{{ $s->id }}' ? 'border-red-600 bg-red-500 dark:bg-red-600 dark:border-red-500 shadow-md' : 'border-gray-200 dark:border-gray-600 bg-gray-50/50 dark:bg-gray-700/30'">
+                        focus-within:ring-2 focus-within:ring-indigo-400 focus-within:ring-offset-1 dark:focus-within:ring-offset-gray-800"
+                        :class="maritalStatusId == '{{ $s->id }}' ? 'border-indigo-600 bg-indigo-600 dark:bg-indigo-500 dark:border-indigo-400 shadow-md ring-2 ring-indigo-400/30' : 'border-gray-200 dark:border-gray-600 bg-gray-50/50 dark:bg-gray-700/30'">
                         <input type="radio" name="{{ $coreName }}marital_status_id{{ $coreNameSuffix }}" value="{{ $s->id }}"
                                {{ (string) $currentStatusId === (string) $s->id ? 'checked' : '' }}
-                               class="rounded-full border-2 border-gray-400 flex-shrink-0 w-3.5 h-3.5 accent-white"
+                               class="rounded-full border-2 border-gray-400 flex-shrink-0 w-3.5 h-3.5 accent-indigo-600"
                                x-model="maritalStatusId"
                                @change="onMaritalChange()">
                         <span class="ml-1.5 sm:ml-2 text-xs font-semibold whitespace-nowrap"
                               :class="maritalStatusId == '{{ $s->id }}' ? 'text-white' : 'text-gray-800 dark:text-gray-200'">{{ __($s->label) }}</span>
                     </label>
                 @endforeach
+                </div>
             </div>
             @error($isSnapshot ? 'snapshot.core.marital_status_id' : 'marital_status_id')
                 <p class="mt-2 text-sm text-red-600 dark:text-red-400">{{ $message }}</p>
@@ -132,7 +134,7 @@
         <h3 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">{{ __('wizard.children_details') }}</h3>
         <div class="space-y-3" x-ref="childrenContainer">
             <template x-for="(child, index) in children" :key="'child-' + index">
-                <div class="flex flex-wrap sm:flex-nowrap gap-2 sm:gap-3 items-end border border-gray-200 dark:border-gray-600 rounded p-2 sm:p-3 bg-gray-50 dark:bg-gray-700/30">
+                <div class="flex flex-wrap sm:flex-nowrap gap-2 sm:gap-3 items-end border border-gray-200 dark:border-gray-600 rounded-lg p-3 sm:p-4 bg-gray-50 dark:bg-gray-700/30">
                     <div class="flex-shrink-0" style="min-width: 5.5rem;">
                         <label class="block text-xs text-gray-600 dark:text-gray-400 mb-0.5">{{ __('wizard.gender') }}</label>
                         <select :name="(namePrefix ? 'snapshot[children][' : 'children[') + index + '][gender]'" class="w-full rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-3 py-2.5 text-sm h-[42px]" x-model="child.gender">
@@ -156,22 +158,20 @@
                             @endforeach
                         </select>
                     </div>
-                    <div class="flex-shrink-0 flex items-end">
-                        <div class="flex flex-col items-end space-y-1">
+                    <div class="w-full sm:w-auto sm:flex-shrink-0 flex sm:items-end pt-2 sm:pt-0 border-t sm:border-t-0 border-gray-200/80 dark:border-gray-600 sm:pl-2">
+                        <div class="flex flex-row flex-wrap items-center gap-x-4 gap-y-2 w-full sm:w-auto sm:justify-end">
                             <input type="hidden" :name="(namePrefix ? 'snapshot[children][' : 'children[') + index + '][id]'" :value="child.id || ''">
                             <input type="hidden" :name="(namePrefix ? 'snapshot[children][' : 'children[') + index + '][sort_order]'" :value="index">
-                            <div class="flex items-center gap-3 h-[42px]">
-                                <button type="button"
-                                        @click="addChild()"
-                                        class="text-xs text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300">
-                                    + {{ __('wizard.add') }}
-                                </button>
-                                <button type="button"
-                                        @click="removeChild(index)"
-                                        class="text-xs text-red-600 dark:text-red-400 hover:text-red-800 dark:hover:text-red-300 whitespace-nowrap">
-                                    {{ __('wizard.remove_entry') }}
-                                </button>
-                            </div>
+                            <button type="button"
+                                    @click="addChild()"
+                                    class="text-sm font-medium text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-300 underline-offset-2 hover:underline">
+                                + {{ __('wizard.add') }}
+                            </button>
+                            <button type="button"
+                                    @click="removeChild(index)"
+                                    class="text-sm font-medium text-rose-700 dark:text-rose-400 hover:text-rose-900 dark:hover:text-rose-300 underline-offset-2 hover:underline whitespace-nowrap">
+                                {{ __('wizard.remove_entry') }}
+                            </button>
                         </div>
                     </div>
                 </div>

@@ -130,6 +130,8 @@ Route::middleware('auth')->group(function () {
             ->with('info', 'Please use the profile wizard or onboarding to create or update your profile.');
     })->name('matrimony.profile.store');
 
+    Route::get('/matrimony/onboarding/complete', [OnboardingController::class, 'complete'])
+        ->name('matrimony.onboarding.complete');
     Route::get('/matrimony/onboarding/{step}', [OnboardingController::class, 'show'])
         ->name('matrimony.onboarding.show')
         ->where('step', '[2-5]');

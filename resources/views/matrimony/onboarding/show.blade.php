@@ -9,13 +9,12 @@
         5 => ['title' => __('onboarding.step5_title'), 'sub' => __('onboarding.step5_sub')],
     ];
     $head = $labels[$step] ?? ['title' => '', 'sub' => ''];
-    $pct = (int) round(($step / 5) * 100);
+    $pct = (int) round(($step / max(1, (int) ($totalSteps ?? 5))) * 100);
 @endphp
-<div class="py-6 md:py-10">
-    <div class="max-w-lg mx-auto px-4 sm:px-6">
-        @if (session('success'))
-            <div class="mb-4 px-4 py-3 rounded-xl bg-emerald-50 dark:bg-emerald-900/30 text-emerald-900 dark:text-emerald-100 text-sm border border-emerald-200 dark:border-emerald-800">{{ session('success') }}</div>
-        @endif
+<div class="py-6 md:py-12 bg-gradient-to-b from-slate-50/90 via-white to-slate-50/80 dark:from-gray-950 dark:via-gray-900 dark:to-gray-950 min-h-[calc(100vh-5rem)]">
+    {{-- Capped width on large screens so fields and CTAs do not stretch edge-to-edge --}}
+    <div class="w-full max-w-xl md:max-w-2xl mx-auto px-4 sm:px-6 lg:px-8">
+        {{-- success/info flash: layouts.app only (dismissible + auto-hide) to avoid duplicate banners --}}
         @if ($errors->any())
             <div class="mb-4 px-4 py-3 rounded-xl bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 text-red-800 dark:text-red-200 text-sm">
                 {{ $errors->first() }}
@@ -29,7 +28,7 @@
             </div>
         </div>
 
-        <div class="rounded-2xl border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 shadow-lg shadow-indigo-500/5 dark:shadow-none p-6 sm:p-8 space-y-6">
+        <div class="rounded-2xl border border-gray-200/90 dark:border-gray-600/90 bg-white dark:bg-gray-800 shadow-xl shadow-slate-200/40 dark:shadow-none ring-1 ring-black/[0.03] dark:ring-white/[0.06] p-6 sm:p-8 md:p-9 space-y-6 md:space-y-8">
             <header>
                 <h1 class="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-gray-50 leading-tight">{{ $head['title'] }}</h1>
                 <p class="mt-2 text-gray-600 dark:text-gray-300 text-sm sm:text-base">{{ $head['sub'] }}</p>

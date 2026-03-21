@@ -33,46 +33,31 @@
             <!-- Page Content -->
             <!-- Page Content -->
 				<main>
-                {{-- Flash Messages --}}
+                {{-- Flash messages: single place, dismissible + auto-hide (see resources/js/app.js) --}}
 @if (session('success'))
-    <div style="
-        margin: 15px auto;
-        max-width: 800px;
-        padding: 12px;
-        background: #d1fae5;
-        color: #065f46;
-        border: 1px solid #10b981;
-        border-radius: 6px;
-    ">
-        {{ session('success') }}
+    <div data-flash-dismissible data-flash-auto-ms="8000" role="status" class="relative z-40 mx-auto max-w-2xl px-4 pt-4">
+        <div class="flex items-start gap-3 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900 shadow-sm dark:border-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-100">
+            <p class="min-w-0 flex-1 leading-relaxed">{{ session('success') }}</p>
+            <button type="button" data-flash-close class="shrink-0 rounded-lg px-2 py-1 text-xs font-semibold text-emerald-800 hover:bg-emerald-100 dark:text-emerald-200 dark:hover:bg-emerald-900/60" aria-label="{{ __('common.dismiss') }}">×</button>
+        </div>
     </div>
 @endif
 
 @if (session('error'))
-    <div style="
-        margin: 15px auto;
-        max-width: 800px;
-        padding: 12px;
-        background: #fee2e2;
-        color: #991b1b;
-        border: 1px solid #ef4444;
-        border-radius: 6px;
-    ">
-        {{ session('error') }}
+    <div data-flash-dismissible data-flash-auto-ms="12000" role="alert" class="relative z-40 mx-auto max-w-2xl px-4 pt-4">
+        <div class="flex items-start gap-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-900 shadow-sm dark:border-red-800 dark:bg-red-950/40 dark:text-red-100">
+            <p class="min-w-0 flex-1 leading-relaxed">{{ session('error') }}</p>
+            <button type="button" data-flash-close class="shrink-0 rounded-lg px-2 py-1 text-xs font-semibold text-red-800 hover:bg-red-100 dark:text-red-200 dark:hover:bg-red-900/50" aria-label="{{ __('common.dismiss') }}">×</button>
+        </div>
     </div>
 @endif
 
 @if (session('info'))
-    <div style="
-        margin: 15px auto;
-        max-width: 800px;
-        padding: 12px;
-        background: #e0f2fe;
-        color: #075985;
-        border: 1px solid #38bdf8;
-        border-radius: 6px;
-    ">
-        {{ session('info') }}
+    <div data-flash-dismissible data-flash-auto-ms="8000" role="status" class="relative z-40 mx-auto max-w-2xl px-4 pt-4">
+        <div class="flex items-start gap-3 rounded-xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-900 shadow-sm dark:border-sky-800 dark:bg-sky-950/40 dark:text-sky-100">
+            <p class="min-w-0 flex-1 leading-relaxed">{{ session('info') }}</p>
+            <button type="button" data-flash-close class="shrink-0 rounded-lg px-2 py-1 text-xs font-semibold text-sky-800 hover:bg-sky-100 dark:text-sky-200 dark:hover:bg-sky-900/50" aria-label="{{ __('common.dismiss') }}">×</button>
+        </div>
     </div>
 @endif
 

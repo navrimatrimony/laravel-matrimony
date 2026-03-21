@@ -41,5 +41,6 @@ return [
     'invalid_photo_upload_jpg_png' => 'हा फोटो वाचता आला नाही. कृपया वैध JPG किंवा PNG फोटो अपलोड करा.',
     'login_required_to_view_matrimony_profiles' => 'विवाह प्रोफाइल पाहण्यासाठी कृपया लॉगिन करा.',
     'profile_not_found' => 'प्रोफाइल सापडली नाही.',
+    'dismiss' => 'बंद करा',
 ];
 

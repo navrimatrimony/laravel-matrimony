@@ -73,6 +73,18 @@ body.upload-landscape .upload-gallery-col {
 </style>
 
 <div style="min-height: 80vh; background: linear-gradient(135deg, #fdf2f8 0%, #f5f3ff 50%, #eff6ff 100%); padding: 40px 16px;">
+    @if (!empty($fromOnboarding))
+        <div style="max-width: 520px; margin: 0 auto 16px auto; display: flex; flex-wrap: wrap; gap: 10px; align-items: center;">
+            <a href="{{ route('matrimony.onboarding.show', ['step' => 5]) }}"
+               style="display: inline-flex; align-items: center; gap: 8px; padding: 12px 18px; background: #ffffff; border: 1px solid #e5e7eb; border-radius: 12px; color: #374151; font-weight: 700; font-size: 14px; text-decoration: none; box-shadow: 0 2px 8px rgba(0,0,0,0.06);">
+                ← {{ __('onboarding.photo_flow_edit_step5') }}
+            </a>
+            <a href="{{ route('matrimony.onboarding.complete') }}"
+               style="display: inline-flex; align-items: center; gap: 8px; padding: 12px 18px; background: linear-gradient(90deg, #4f46e5, #7c3aed); border: 1px solid #6366f1; border-radius: 12px; color: #ffffff; font-weight: 700; font-size: 14px; text-decoration: none; box-shadow: 0 2px 10px rgba(79, 70, 229, 0.35);">
+                {{ __('onboarding.photo_flow_finish') }}
+            </a>
+        </div>
+    @endif
     <div id="uploadManagerPage" style="max-width: 520px; margin: 0 auto;">
         @php
             $currentPhotoCount = isset($currentPhotoCount) ? (int) $currentPhotoCount : (isset($galleryPhotos) ? $galleryPhotos->count() : 0);

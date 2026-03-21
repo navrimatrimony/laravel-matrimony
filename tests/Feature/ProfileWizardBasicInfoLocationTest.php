@@ -92,3 +92,56 @@ test('basic info save persists residence core fields', function () {
         ->and($profile->city_id)->toBe($city->id)
         ->and($profile->address_line)->toBe('Flat 1, Sample Society, Pune');
 });
+
+test('basic info GET shows saved residence line in typeahead value', function () {
+    $user = User::factory()->create();
+    $profile = MatrimonyProfile::factory()->create(['user_id' => $user->id]);
+    $country = Country::where('name', 'India')->firstOrFail();
+    $state = State::where('name', 'Maharashtra')->firstOrFail();
+    $district = District::where('name', 'Pune')->firstOrFail();
+    $taluka = Taluka::where('name', 'Haveli')->firstOrFail();
+    $city = City::where('name', 'Pune City')->firstOrFail();
+
+    $profile->update([
+        'country_id' => $country->id,
+        'state_id' => $state->id,
+        'district_id' => $district->id,
+        'taluka_id' => $taluka->id,
+        'city_id' => $city->id,
+        'address_line' => 'Saved society line',
+    ]);
+
+    $line = $profile->fresh()->residenceLocationDisplayLine();
+    expect($line)->toContain('Pune City')->and($line)->toContain('Maharashtra');
+
+    $this->actingAs($user)
+        ->get(route('matrimony.profile.wizard.section', ['section' => 'basic-info']))
+        ->assertOk()
+        ->assertSee('Pune City', false)
+        ->assertSee('Saved society line', false);
+});
+
+test('onboarding step 5 GET shows saved residence line in typeahead value', function () {
+    $user = User::factory()->create();
+    $profile = MatrimonyProfile::factory()->create(['user_id' => $user->id]);
+    $country = Country::where('name', 'India')->firstOrFail();
+    $state = State::where('name', 'Maharashtra')->firstOrFail();
+    $district = District::where('name', 'Pune')->firstOrFail();
+    $taluka = Taluka::where('name', 'Haveli')->firstOrFail();
+    $city = City::where('name', 'Pune City')->firstOrFail();
+
+    $profile->update([
+        'country_id' => $country->id,
+        'state_id' => $state->id,
+        'district_id' => $district->id,
+        'taluka_id' => $taluka->id,
+        'city_id' => $city->id,
+        'address_line' => 'Step5 visible line',
+    ]);
+
+    $this->actingAs($user)
+        ->get(route('matrimony.onboarding.show', ['step' => 5]))
+        ->assertOk()
+        ->assertSee('Pune City', false)
+        ->assertSee('Step5 visible line', false);
+});

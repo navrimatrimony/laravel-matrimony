@@ -15,14 +15,16 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
 /**
- * Card onboarding (steps 2–5): delegates snapshots to ProfileWizardController + MutationService.
- * Step 1 (registration) is handled by RegisteredUserController.
+ * Card onboarding (steps 2–5). After step 5, user is sent to the centralized photo upload page.
+ * Finish: GET matrimony.onboarding.complete (from photo page when coming from onboarding).
  */
 class OnboardingController extends Controller
 {
+    private const LAST_STEP = 5;
+
     public function show(int $step)
     {
-        if ($step < 2 || $step > 5) {
+        if ($step < 2 || $step > self::LAST_STEP) {
             abort(404);
         }
         $user = auth()->user();
@@ -37,7 +39,7 @@ class OnboardingController extends Controller
         $data = [
             'step' => $step,
             'profile' => $profile,
-            'totalSteps' => 5,
+            'totalSteps' => self::LAST_STEP,
         ];
 
         switch ($step) {
@@ -73,8 +75,9 @@ class OnboardingController extends Controller
                 $data['profile'] = $profile->load(['religion', 'caste', 'subCaste']);
                 break;
             case 4:
-                $data['workingWithTypes'] = WorkingWithType::where('is_active', true)->orderBy('sort_order')->orderBy('label')->get();
-                $data['professions'] = Profession::where('is_active', true)->with('workingWithType')->orderBy('sort_order')->orderBy('label')->get();
+                $data['workingWithTypes'] = WorkingWithType::where('is_active', true)->orderBy('sort_order')->orderBy('name')->get();
+                $data['professions'] = Profession::where('is_active', true)->with('workingWithType')->orderBy('sort_order')->orderBy('name')->get();
+                $data['currencies'] = \App\Models\MasterIncomeCurrency::where('is_active', true)->get();
                 $data['educationExamples'] = __('onboarding.education_examples');
                 $deg = $profile->highest_education
                     ? \App\Models\EducationDegree::where('code', $profile->highest_education)->with('category')->first()
@@ -88,9 +91,21 @@ class OnboardingController extends Controller
         return view('matrimony.onboarding.show', $data);
     }
 
+    public function complete(): RedirectResponse
+    {
+        if (! auth()->check()) {
+            return redirect()->route('login');
+        }
+
+        session()->forget('wizard_minimal');
+
+        return redirect()->route('matrimony.profiles.index')
+            ->with('success', __('onboarding.all_set'));
+    }
+
     public function store(Request $request, int $step): RedirectResponse
     {
-        if ($step < 2 || $step > 5) {
+        if ($step < 2 || $step > self::LAST_STEP) {
             abort(404);
         }
         $user = auth()->user();
@@ -123,15 +138,16 @@ class OnboardingController extends Controller
                 app(MutationService::class)->applyManualSnapshot($profile, $snapshot, (int) $user->id, 'manual');
             });
         } catch (ValidationException $e) {
-            return redirect()->route('matrimony.onboarding.show', ['step' => $step])
+            $redirectStep = $this->onboardingStepForValidationErrors($e->errors(), $step);
+
+            return redirect()->route('matrimony.onboarding.show', ['step' => $redirectStep])
                 ->withErrors($e->errors())
                 ->withInput();
         }
 
         if ($step === 5) {
-            session()->forget('wizard_minimal');
-
-            return redirect()->route('matrimony.profiles.index')->with('success', __('onboarding.all_set'));
+            return redirect()->route('matrimony.profile.upload-photo', ['from' => 'onboarding'])
+                ->with('info', __('onboarding.after_step5_redirect_photos'));
         }
 
         return redirect()->route('matrimony.onboarding.show', ['step' => $step + 1])
@@ -206,27 +222,130 @@ class OnboardingController extends Controller
         if ($request->input('has_children') === null && $profile->has_children !== null) {
             $request->merge(['has_children' => $profile->has_children ? '1' : '0']);
         }
+
+        // Step 3+ posts omit marital/children inputs; re-apply saved rows so basic-info snapshot validation
+        // does not fail with "children required" while updating religion/caste only.
+        if (! $request->has('children')) {
+            $maritalId = (int) $request->input('marital_status_id', $profile->marital_status_id ?? 0);
+            $statusKey = MasterMaritalStatus::where('id', $maritalId)->value('key');
+            $statusesRequiringChildren = ['divorced', 'separated', 'widowed'];
+            $needsChildrenBlock = $statusKey && in_array($statusKey, $statusesRequiringChildren, true);
+            $hc = $request->input('has_children');
+            $hasChildrenYes = $hc === '1' || $hc === 1 || $hc === true;
+
+            if ($needsChildrenBlock && $hasChildrenYes) {
+                $request->merge(['children' => $this->existingChildrenPayloadFromProfile($profile)]);
+            } else {
+                $request->merge(['children' => []]);
+            }
+        }
+    }
+
+    /**
+     * Rows in the shape expected by ProfileWizardController::buildMarriagesSnapshot.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    private function existingChildrenPayloadFromProfile(MatrimonyProfile $profile): array
+    {
+        $rows = DB::table('profile_children')
+            ->where('profile_id', $profile->id)
+            ->orderBy('sort_order')
+            ->orderBy('id')
+            ->get();
+
+        $out = [];
+        foreach ($rows as $i => $c) {
+            $out[] = [
+                'id' => $c->id ?? null,
+                'gender' => (string) ($c->gender ?? ''),
+                'age' => isset($c->age) && $c->age !== '' ? (int) $c->age : '',
+                'child_living_with_id' => $c->child_living_with_id ?? '',
+                'sort_order' => isset($c->sort_order) ? (int) $c->sort_order : $i,
+            ];
+        }
+
+        return $out;
+    }
+
+    /**
+     * Send the user to the onboarding card that actually contains the failing fields.
+     *
+     * @param  array<string, array<int, string>>  $errors
+     */
+    private function onboardingStepForValidationErrors(array $errors, int $submittedStep): int
+    {
+        $steps = [];
+        foreach (array_keys($errors) as $key) {
+            if ($this->validationErrorKeyBelongsToOnboardingStep($key, 2)) {
+                $steps[2] = true;
+            }
+            if ($this->validationErrorKeyBelongsToOnboardingStep($key, 3)) {
+                $steps[3] = true;
+            }
+            if ($this->validationErrorKeyBelongsToOnboardingStep($key, 4)) {
+                $steps[4] = true;
+            }
+            if ($this->validationErrorKeyBelongsToOnboardingStep($key, 5)) {
+                $steps[5] = true;
+            }
+        }
+
+        if ($steps === []) {
+            return $submittedStep;
+        }
+
+        return (int) min(array_keys($steps));
+    }
+
+    private function validationErrorKeyBelongsToOnboardingStep(string $key, int $step): bool
+    {
+        return match ($step) {
+            2 => (bool) preg_match(
+                '/^(full_name|gender_id|date_of_birth|birth_time|mother_tongue_id|marital_status_id|has_children|marriages|children)(\.|$)/',
+                $key
+            ),
+            3 => (bool) preg_match('/^(religion_id|caste_id|sub_caste_id)(\.|$)/', $key),
+            4 => (bool) preg_match(
+                '/^(highest_education|highest_education_other|specialization|working_with_type_id|profession_id|company_name|annual_income|income_range_id|income_currency_id|income_private|college_id|work_city_id|work_state_id|income_period|income_value_type|income_amount|income_min_amount|income_max_amount)(\.|$)/',
+                $key
+            ),
+            5 => (bool) preg_match(
+                '/^(height_cm|complexion_id|blood_group_id|physical_build_id|spectacles_lens|physical_condition|diet_id|smoking_status_id|drinking_status_id|weight_kg|country_id|state_id|district_id|taluka_id|city_id|address_line|birth_.*)(\.|$)/',
+                $key
+            ),
+            default => false,
+        };
     }
 
     private function hydratePhysicalAddressContext(Request $request, MatrimonyProfile $profile): void
     {
+        // Empty string from hidden inputs is still "present" for input($key, $default) — do not drop saved residence IDs.
+        $coalesce = static function (mixed $posted, mixed $fallback): mixed {
+            if ($posted === null || $posted === '') {
+                return $fallback;
+            }
+
+            return $posted;
+        };
+
         $request->merge([
-            'height_cm' => $request->input('height_cm', $profile->height_cm),
-            'complexion_id' => $request->input('complexion_id', $profile->complexion_id),
-            'blood_group_id' => $request->input('blood_group_id', $profile->blood_group_id),
-            'physical_build_id' => $request->input('physical_build_id', $profile->physical_build_id),
-            'spectacles_lens' => $request->input('spectacles_lens', $profile->spectacles_lens),
-            'physical_condition' => $request->input('physical_condition', $profile->physical_condition),
-            'diet_id' => $request->input('diet_id', $profile->diet_id),
-            'smoking_status_id' => $request->input('smoking_status_id', $profile->smoking_status_id),
-            'drinking_status_id' => $request->input('drinking_status_id', $profile->drinking_status_id),
-            'weight_kg' => $request->input('weight_kg', $profile->weight_kg),
-            'country_id' => $request->input('country_id', $profile->country_id),
-            'state_id' => $request->input('state_id', $profile->state_id),
-            'district_id' => $request->input('district_id', $profile->district_id),
-            'taluka_id' => $request->input('taluka_id', $profile->taluka_id),
-            'city_id' => $request->input('city_id', $profile->city_id),
-            'address_line' => $request->input('address_line', $profile->address_line),
+            'height_cm' => $coalesce($request->input('height_cm'), $profile->height_cm),
+            'complexion_id' => $coalesce($request->input('complexion_id'), $profile->complexion_id),
+            'blood_group_id' => $coalesce($request->input('blood_group_id'), $profile->blood_group_id),
+            'physical_build_id' => $coalesce($request->input('physical_build_id'), $profile->physical_build_id),
+            'spectacles_lens' => $coalesce($request->input('spectacles_lens'), $profile->spectacles_lens),
+            'physical_condition' => $coalesce($request->input('physical_condition'), $profile->physical_condition),
+            'diet_id' => $coalesce($request->input('diet_id'), $profile->diet_id),
+            'smoking_status_id' => $coalesce($request->input('smoking_status_id'), $profile->smoking_status_id),
+            'drinking_status_id' => $coalesce($request->input('drinking_status_id'), $profile->drinking_status_id),
+            'weight_kg' => $coalesce($request->input('weight_kg'), $profile->weight_kg),
+            'country_id' => $coalesce($request->input('country_id'), $profile->country_id),
+            'state_id' => $coalesce($request->input('state_id'), $profile->state_id),
+            'district_id' => $coalesce($request->input('district_id'), $profile->district_id),
+            'taluka_id' => $coalesce($request->input('taluka_id'), $profile->taluka_id),
+            'city_id' => $coalesce($request->input('city_id'), $profile->city_id),
+            'address_line' => $request->filled('address_line') ? trim((string) $request->input('address_line')) : $profile->address_line,
         ]);
     }
 

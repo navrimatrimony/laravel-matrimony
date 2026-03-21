@@ -17,7 +17,8 @@ trait RedirectsUnprofiledUsers
             return null;
         }
 
-        $wizardUrl = route('matrimony.onboarding.show', ['step' => 2]);
+        // Relative URL so redirect stays on the same host the user used (e.g. 127.0.0.1 vs localhost).
+        $wizardUrl = route('matrimony.onboarding.show', ['step' => 2], absolute: false);
         $redirectToVerify = AdminSetting::getBool('redirect_to_mobile_verify_after_registration', true);
         $mobileMode = AdminSetting::getValue('mobile_verification_mode', 'off');
 
@@ -29,9 +30,9 @@ trait RedirectsUnprofiledUsers
                 session()->put('from_registration', true);
             }
 
-            return redirect()->route('mobile.verify');
+            return redirect()->to(route('mobile.verify', absolute: false));
         }
 
-        return redirect($wizardUrl);
+        return redirect()->to($wizardUrl);
     }
 }

@@ -3,8 +3,13 @@
 namespace Tests\Feature;
 
 use App\Models\MatrimonyProfile;
+use App\Models\MasterGender;
+use App\Models\MasterMaritalStatus;
+use App\Models\MasterChildLivingWith;
+use App\Models\Religion;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 class OnboardingFlowTest extends TestCase
@@ -86,5 +91,117 @@ class OnboardingFlowTest extends TestCase
         ]);
 
         $this->assertSame('', $user->defaultBootstrapProfileFullName());
+    }
+
+    public function test_onboarding_step_three_post_uses_saved_children_without_reposting_marital_fields(): void
+    {
+        $this->seed(\Database\Seeders\MasterLookupSeeder::class);
+        $this->seed(\Database\Seeders\ReligionCasteSubCasteSeeder::class);
+
+        $user = User::factory()->create();
+        $genderId = MasterGender::where('key', 'male')->where('is_active', true)->value('id');
+        $divorcedId = MasterMaritalStatus::where('key', 'divorced')->value('id');
+        $livingWithId = MasterChildLivingWith::where('key', 'with_parent')->value('id')
+            ?? MasterChildLivingWith::query()->value('id');
+        $religion = Religion::where('is_active', true)->first();
+
+        if (! $genderId || ! $divorcedId || ! $livingWithId || ! $religion) {
+            $this->markTestSkipped('Seed data incomplete.');
+        }
+
+        $profile = MatrimonyProfile::factory()->create([
+            'user_id' => $user->id,
+            'full_name' => 'Test User',
+            'gender_id' => $genderId,
+            'marital_status_id' => $divorcedId,
+            'has_children' => true,
+        ]);
+
+        DB::table('profile_children')->insert([
+            'profile_id' => $profile->id,
+            'gender' => 'male',
+            'age' => 10,
+            'child_living_with_id' => $livingWithId,
+            'sort_order' => 0,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $response = $this->actingAs($user)->post(route('matrimony.onboarding.store', ['step' => 3]), [
+            'religion_id' => (string) $religion->id,
+            'caste_id' => '',
+            'sub_caste_id' => '',
+        ]);
+
+        $response->assertRedirect(route('matrimony.onboarding.show', ['step' => 4]));
+        $response->assertSessionHasNoErrors();
+    }
+
+    public function test_onboarding_validation_for_children_redirects_to_step_two_not_three(): void
+    {
+        $this->seed(\Database\Seeders\MasterLookupSeeder::class);
+        $this->seed(\Database\Seeders\ReligionCasteSubCasteSeeder::class);
+
+        $user = User::factory()->create();
+        $genderId = MasterGender::where('key', 'male')->where('is_active', true)->value('id');
+        $divorcedId = MasterMaritalStatus::where('key', 'divorced')->value('id');
+        $religion = Religion::where('is_active', true)->first();
+
+        if (! $genderId || ! $divorcedId || ! $religion) {
+            $this->markTestSkipped('Seed data incomplete.');
+        }
+
+        MatrimonyProfile::factory()->create([
+            'user_id' => $user->id,
+            'full_name' => 'Test User',
+            'gender_id' => $genderId,
+            'marital_status_id' => $divorcedId,
+            'has_children' => true,
+        ]);
+
+        $response = $this->actingAs($user)->post(route('matrimony.onboarding.store', ['step' => 3]), [
+            'religion_id' => (string) $religion->id,
+        ]);
+
+        $response->assertRedirect(route('matrimony.onboarding.show', ['step' => 2]));
+        $response->assertSessionHasErrors('children');
+    }
+
+    public function test_onboarding_step_six_is_not_a_route(): void
+    {
+        $user = User::factory()->create();
+        MatrimonyProfile::factory()->create(['user_id' => $user->id]);
+
+        $this->actingAs($user)
+            ->get('/matrimony/onboarding/6')
+            ->assertNotFound();
+    }
+
+    public function test_onboarding_step_five_success_redirects_to_photo_upload(): void
+    {
+        $user = User::factory()->create();
+        MatrimonyProfile::factory()->create(['user_id' => $user->id]);
+
+        $response = $this->actingAs($user)->post(route('matrimony.onboarding.store', ['step' => 5]), [
+            'height_cm' => '170',
+        ]);
+
+        $response->assertRedirect(route('matrimony.profile.upload-photo', ['from' => 'onboarding']));
+        $response->assertSessionHasNoErrors();
+        $response->assertSessionHas('info', __('onboarding.after_step5_redirect_photos'));
+    }
+
+    public function test_onboarding_complete_redirects_to_profiles_index(): void
+    {
+        $user = User::factory()->create();
+        MatrimonyProfile::factory()->create(['user_id' => $user->id]);
+
+        $response = $this->actingAs($user)
+            ->withSession(['wizard_minimal' => true])
+            ->get(route('matrimony.onboarding.complete'));
+
+        $response->assertRedirect(route('matrimony.profiles.index'));
+        $response->assertSessionHas('success', __('onboarding.all_set'));
+        $response->assertSessionMissing('wizard_minimal');
     }
 }

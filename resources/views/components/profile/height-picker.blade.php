@@ -1,4 +1,4 @@
-@props(['value' => null, 'namePrefix' => '', 'label' => 'Height', 'required' => false])
+@props(['value' => null, 'namePrefix' => '', 'label' => 'Height', 'required' => false, 'wrapperClass' => null])
 
 @php
     $inputName = $namePrefix !== '' ? $namePrefix . '[height_cm]' : 'height_cm';
@@ -31,8 +31,9 @@
             }
         }
     }
+    $wrap = $wrapperClass ?? 'height-picker w-full border-2 border-rose-500 dark:border-rose-400 rounded-lg p-3';
 @endphp
-<div class="height-picker w-full border-2 border-rose-500 dark:border-rose-400 rounded-lg p-3" x-data="heightPickerState({{ $selectedCm }})">
+<div class="{{ $wrap }}" x-data="heightPickerState({{ $selectedCm }})">
     <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{{ $label }} @if($required)<span class="text-red-500">*</span>@endif</label>
 
     <div class="flex items-center gap-3 w-full">

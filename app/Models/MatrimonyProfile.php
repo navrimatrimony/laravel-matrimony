@@ -366,6 +366,72 @@ class MatrimonyProfile extends Model
         return $this->belongsTo(City::class);
     }
 
+    /**
+     * Human-readable current residence line (city, taluka, district, state) for location typeahead `value=`.
+     * Matches the label shape used when a row is picked in JS (village/city first).
+     */
+    public static function residenceLocationDisplayLineFromIds(
+        mixed $cityId,
+        mixed $talukaId,
+        mixed $districtId,
+        mixed $stateId,
+    ): string {
+        if (! $cityId && ! $talukaId && ! $districtId && ! $stateId) {
+            return '';
+        }
+        $parts = [];
+        if ($cityId) {
+            $parts[] = (string) (City::query()->where('id', (int) $cityId)->value('name') ?? '');
+        }
+        if ($talukaId) {
+            $parts[] = (string) (Taluka::query()->where('id', (int) $talukaId)->value('name') ?? '');
+        }
+        if ($districtId) {
+            $parts[] = (string) (District::query()->where('id', (int) $districtId)->value('name') ?? '');
+        }
+        if ($stateId) {
+            $parts[] = (string) (State::query()->where('id', (int) $stateId)->value('name') ?? '');
+        }
+
+        return implode(', ', array_values(array_filter($parts, static fn ($p) => $p !== '')));
+    }
+
+    /**
+     * Shared by wizard basic_info and intake preview (where $profile may be a stdClass snapshot row).
+     *
+     * @param  self|object  $profileOrRow
+     */
+    public static function residenceLocationDisplayLineFor(mixed $profileOrRow): string
+    {
+        if ($profileOrRow instanceof self) {
+            return $profileOrRow->residenceLocationDisplayLine();
+        }
+        if (! is_object($profileOrRow)) {
+            return '';
+        }
+
+        return self::residenceLocationDisplayLineFromIds(
+            $profileOrRow->city_id ?? null,
+            $profileOrRow->taluka_id ?? null,
+            $profileOrRow->district_id ?? null,
+            $profileOrRow->state_id ?? null,
+        );
+    }
+
+    /**
+     * Human-readable current residence line (city, taluka, district, state) for location typeahead `value=`.
+     * Matches the label shape used when a row is picked in JS (village/city first).
+     */
+    public function residenceLocationDisplayLine(): string
+    {
+        return self::residenceLocationDisplayLineFromIds(
+            $this->city_id,
+            $this->taluka_id,
+            $this->district_id,
+            $this->state_id,
+        );
+    }
+
     public function birthCity()
     {
         return $this->belongsTo(City::class, 'birth_city_id');

@@ -6,3 +6,62 @@
 [x-cloak] {
     display: none !important;
 }
+
+/*
+ * Onboarding CTAs: @tailwindcss/forms resets submit buttons — paint + shadow here so all steps match.
+ */
+button.onboarding-primary-btn,
+button.onboarding-step5-submit.onboarding-primary-btn {
+    background-image: linear-gradient(to bottom, #6366f1, #4f46e5 45%, #4338ca) !important;
+    background-color: #4f46e5 !important;
+    color: #ffffff !important;
+    -webkit-appearance: none;
+    appearance: none;
+    box-shadow:
+        0 4px 6px -1px rgb(79 70 229 / 0.35),
+        0 12px 24px -6px rgb(79 70 229 / 0.45),
+        inset 0 1px 0 0 rgb(255 255 255 / 0.12) !important;
+}
+button.onboarding-primary-btn:hover,
+button.onboarding-step5-submit.onboarding-primary-btn:hover {
+    background-image: linear-gradient(to bottom, #818cf8, #6366f1 40%, #4f46e5) !important;
+    box-shadow:
+        0 6px 8px -2px rgb(79 70 229 / 0.4),
+        0 18px 32px -8px rgb(67 56 202 / 0.5),
+        inset 0 1px 0 0 rgb(255 255 255 / 0.15) !important;
+}
+button.onboarding-primary-btn:active,
+button.onboarding-step5-submit.onboarding-primary-btn:active {
+    background-image: linear-gradient(to bottom, #4f46e5, #4338ca 55%, #3730a3) !important;
+    box-shadow:
+        0 2px 4px -1px rgb(30 27 75 / 0.4),
+        inset 0 2px 4px 0 rgb(0 0 0 / 0.12) !important;
+    transform: translateY(1px);
+}
+
+/* Final onboarding step: slightly taller CTA, deeper glow */
+button.onboarding-primary-btn.onboarding-step5-submit {
+    box-shadow:
+        0 6px 8px -2px rgb(79 70 229 / 0.4),
+        0 16px 36px -10px rgb(67 56 202 / 0.55),
+        inset 0 1px 0 0 rgb(255 255 255 / 0.14) !important;
+}
+button.onboarding-primary-btn.onboarding-step5-submit:hover {
+    box-shadow:
+        0 8px 12px -2px rgb(79 70 229 / 0.45),
+        0 22px 44px -12px rgb(67 56 202 / 0.58),
+        inset 0 1px 0 0 rgb(255 255 255 / 0.16) !important;
+}
+
+button.onboarding-primary-btn.onboarding-step6-submit {
+    box-shadow:
+        0 6px 8px -2px rgb(79 70 229 / 0.4),
+        0 16px 36px -10px rgb(67 56 202 / 0.55),
+        inset 0 1px 0 0 rgb(255 255 255 / 0.14) !important;
+}
+button.onboarding-primary-btn.onboarding-step6-submit:hover {
+    box-shadow:
+        0 8px 12px -2px rgb(79 70 229 / 0.45),
+        0 22px 44px -12px rgb(67 56 202 / 0.58),
+        inset 0 1px 0 0 rgb(255 255 255 / 0.16) !important;
+}

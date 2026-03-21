@@ -59,11 +59,7 @@
         'childLivingWithOptions' => $childLivingWithOptions ?? collect(),
     ])
 
-    <div class="flex flex-col sm:flex-row gap-3 pt-2">
-        <button type="submit" class="inline-flex justify-center items-center min-h-[52px] px-6 rounded-xl text-base font-semibold text-white bg-indigo-600 hover:bg-indigo-700 focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 dark:focus:ring-offset-gray-900 w-full sm:w-auto">
-            {{ __('onboarding.continue') }}
-        </button>
-    </div>
+    <x-onboarding.form-footer />
 </form>
 
 <script>
