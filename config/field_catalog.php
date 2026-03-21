@@ -94,12 +94,13 @@ return [
         'mother_name' => 'family-details',
         'brothers_count' => 'family-details',
         'sisters_count' => 'family-details',
-        'city_id' => 'location',
-        'work_city_id' => 'location',
-        'country_id' => 'location',
-        'state_id' => 'location',
-        'district_id' => 'location',
-        'taluka_id' => 'location',
+        // Residence hierarchy lives on Basic info (centralized typeahead); not a separate wizard tab.
+        'city_id' => 'basic-info',
+        'work_city_id' => 'education-career',
+        'country_id' => 'basic-info',
+        'state_id' => 'basic-info',
+        'district_id' => 'basic-info',
+        'taluka_id' => 'basic-info',
     ],
 
 ];

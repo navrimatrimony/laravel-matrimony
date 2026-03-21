@@ -31,19 +31,16 @@ class OnboardingFlowTest extends TestCase
     {
         $this->post(route('register'), [
             'name' => 'Test Parent',
-            'email' => 'onboard-test@example.com',
             'mobile' => '9876543210',
-            'gender' => 'male',
             'password' => 'Password1!',
             'password_confirmation' => 'Password1!',
-            'registering_for' => 'son',
-            'relation_to_profile' => 'Father',
+            'registering_for' => 'parent_guardian',
         ])->assertRedirect();
 
         $this->assertDatabaseHas('users', [
-            'email' => 'onboard-test@example.com',
-            'registering_for' => 'son',
-            'relation_to_profile' => 'Father',
+            'mobile' => '9876543210',
+            'registering_for' => 'parent_guardian',
+            'email' => null,
         ]);
     }
 
@@ -65,7 +62,7 @@ class OnboardingFlowTest extends TestCase
 
     public function test_draft_profile_full_name_is_blank_when_registering_for_not_self(): void
     {
-        foreach (['son', 'daughter', 'sibling', 'other'] as $for) {
+        foreach (['parent_guardian', 'sibling', 'relative', 'friend', 'other'] as $for) {
             $user = User::factory()->create([
                 'name' => 'Parent Registrant',
                 'registering_for' => $for,

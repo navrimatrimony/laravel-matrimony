@@ -20,16 +20,14 @@ return [
     'continue' => 'पुढे जा',
     'back' => 'मागे',
 
+    'registrant_name' => 'तुमचं नाव (खाते)',
     'registering_for' => 'कोणासाठी नोंदणी?',
     'registering_for_self' => 'स्वतःसाठी',
-    'registering_for_son' => 'मुलासाठी (मुलगा)',
-    'registering_for_daughter' => 'मुलासाठी (मुलगी)',
-    'registering_for_sibling' => 'भावा-बहिणीसाठी',
+    'registering_for_parent_guardian' => 'पालक / पालकप्रतिनिधी',
+    'registering_for_sibling' => 'भाऊ / बहीण',
+    'registering_for_relative' => 'नातेवाईक',
+    'registering_for_friend' => 'मित्र / मैत्रीण',
     'registering_for_other' => 'इतर',
-
-    'relation_to_profile' => 'या स्थळाशी तुमचे नाते',
-    'relation_placeholder' => 'उदा. वडील, आई, भाऊ',
-    'optional_relation_hint' => 'स्वतःसाठी असल्यास ऐच्छिक.',
 
     'hero_line' => 'चला, तुमच्यासाठी स्थळे शोधायला सुरुवात करूया.',
 

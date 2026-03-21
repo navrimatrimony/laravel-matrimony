@@ -9,10 +9,12 @@ test('login screen can be rendered', function () {
 });
 
 test('users can authenticate using the login screen', function () {
-    $user = User::factory()->create();
+    $user = User::factory()->create([
+        'mobile' => '9876543210',
+    ]);
 
     $response = $this->post('/login', [
-        'email' => $user->email,
+        'mobile' => $user->mobile,
         'password' => 'password',
     ]);
 
@@ -21,10 +23,12 @@ test('users can authenticate using the login screen', function () {
 });
 
 test('users can not authenticate with invalid password', function () {
-    $user = User::factory()->create();
+    $user = User::factory()->create([
+        'mobile' => '9876543211',
+    ]);
 
     $this->post('/login', [
-        'email' => $user->email,
+        'mobile' => $user->mobile,
         'password' => 'wrong-password',
     ]);
 

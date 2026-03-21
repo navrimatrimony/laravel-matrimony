@@ -26,11 +26,10 @@ class ContactRequestAcceptedNotification extends Notification
     {
         $receiver = $this->grant->contactRequest->receiver;
         $name = $receiver->matrimonyProfile->full_name ?? $receiver->name ?? 'They';
-        $scopes = implode(', ', $this->grant->granted_scopes ?? []);
         $validUntil = $this->grant->valid_until->format('M j, Y');
         return [
             'type' => 'contact_request_accepted',
-            'message' => "{$name} approved your contact request. Shared: {$scopes}. Valid until {$validUntil}.",
+            'message' => "{$name} approved your contact request. Shared: Phone (primary). Valid until {$validUntil}.",
             'contact_request_id' => $this->grant->contact_request_id,
             'contact_grant_id' => $this->grant->id,
         ];

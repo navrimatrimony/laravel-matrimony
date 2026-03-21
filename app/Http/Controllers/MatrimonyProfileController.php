@@ -932,30 +932,21 @@ public function show($matrimony_profile_id)
     // Day-32: Contact request state for viewer (sender) vs profile owner (receiver)
     $contactRequestState = null;
     $contactRequestDisabled = true;
-    $contactGrantReveal = null; // [ 'email' => ..., 'phone' => ..., 'whatsapp' => ... ] when viewer has valid grant
+    $contactGrantReveal = null; // [ 'phone' => ... ] when viewer has valid grant
+    $canSendContactRequest = false;
     if (auth()->check() && !$isOwnProfile && $viewer && $viewer->matrimonyProfile) {
         $contactRequestService = app(\App\Services\ContactRequestService::class);
         $contactRequestDisabled = $contactRequestService->isContactRequestDisabled();
         $receiver = $profile->user;
         if ($receiver) {
             $contactRequestState = $contactRequestService->getSenderState($viewer, $receiver);
+            $canSendContactRequest = $contactRequestService->canSendContactRequest($viewer, $receiver);
             if (($contactRequestState['state'] ?? '') === 'accepted' && !empty($contactRequestState['grant']) && $contactRequestState['grant']->isValid()) {
-                $grant = $contactRequestState['grant'];
-                $scopes = $grant->granted_scopes ?? [];
-                $contactGrantReveal = [];
                 $primaryContact = \Illuminate\Support\Facades\DB::table('profile_contacts')
                     ->where('profile_id', $profile->id)->where('is_primary', true)->first();
-                if (in_array('email', $scopes, true) && $receiver->email) {
-                    $contactGrantReveal['email'] = $receiver->email;
-                }
-                if (in_array('phone', $scopes, true)) {
-                    $contactGrantReveal['phone'] = optional($primaryContact)->phone_number ?? $receiver->mobile ?? null;
-                }
-                if (in_array('whatsapp', $scopes, true)) {
-                    $whatsappRow = \Illuminate\Support\Facades\DB::table('profile_contacts')
-                        ->where('profile_id', $profile->id)->where('is_whatsapp', true)->first();
-                    $contactGrantReveal['whatsapp'] = optional($whatsappRow)->phone_number ?? optional($primaryContact)->phone_number ?? $receiver->mobile ?? null;
-                }
+                // After contact-request acceptance, reveal ONLY the profile's primary phone number.
+                $phone = optional($primaryContact)->phone_number;
+                $contactGrantReveal = ! empty($phone) ? ['phone' => $phone] : null;
             }
         }
     }
@@ -1012,6 +1003,7 @@ public function show($matrimony_profile_id)
             'contactRequestState'  => $contactRequestState,
             'contactRequestDisabled' => $contactRequestDisabled,
             'contactGrantReveal'   => $contactGrantReveal,
+            'canSendContactRequest'=> $canSendContactRequest,
             'photoLocked'          => $photoLocked,
             'photoLockMode'        => $showPhotoTo ?? 'all',
         ]

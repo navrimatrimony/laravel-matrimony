@@ -33,11 +33,11 @@
                 <div class="space-y-2">
                     <label class="flex items-center gap-2">
                         <input type="radio" name="contact_request_mode" value="mutual_only" {{ ($current['contact_request_mode'] ?? '') === 'mutual_only' ? 'checked' : '' }}>
-                        <span class="text-sm">Mutual only — request allowed only after mutual interest</span>
+                        <span class="text-sm">After accepted interest — request allowed only after the receiver accepts your interest</span>
                     </label>
                     <label class="flex items-center gap-2">
                         <input type="radio" name="contact_request_mode" value="direct_allowed" {{ ($current['contact_request_mode'] ?? '') === 'direct_allowed' ? 'checked' : '' }}>
-                        <span class="text-sm">Direct allowed — request allowed without mutual interest</span>
+                        <span class="text-sm">After accepted interest — legacy option kept for backward compatibility</span>
                     </label>
                     <label class="flex items-center gap-2">
                         <input type="radio" name="contact_request_mode" value="disabled" {{ ($current['contact_request_mode'] ?? '') === 'disabled' ? 'checked' : '' }}>

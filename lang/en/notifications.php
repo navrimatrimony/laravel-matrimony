@@ -29,7 +29,7 @@ return [
     'contact_request_disabled' => 'Contact request is currently disabled.',
     'pending_request_exists' => 'You already have a pending contact request with this member.',
     'contact_already_shared' => 'Contact details are already shared for this member.',
-    'mutual_only' => 'Contact request is allowed only after mutual interest.',
+    'mutual_only' => 'Contact request is allowed only after the receiver accepts your interest.',
     'cooldown_not_ended' => 'You cannot send another request until the cooling period ends.',
     'daily_limit_reached' => 'Daily limit for contact requests reached. Try again tomorrow.',
     'select_at_least_one_contact_method' => 'Select at least one contact method.',

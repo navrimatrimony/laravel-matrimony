@@ -27,9 +27,11 @@ class UserFactory extends Factory
             'name' => fake()->name(),
             'email' => fake()->unique()->safeEmail(),
             'email_verified_at' => now(),
+            'mobile' => fake()->unique()->numerify('##########'),
             'password' => static::$password ??= Hash::make('password'),
             'remember_token' => Str::random(10),
-            'gender' => 'Male',
+            // Account-level gender (legacy column); not collected at registration. Required on SQLite tests where gender is still NOT NULL.
+            'gender' => 'male',
             'is_admin' => false,
         ];
     }

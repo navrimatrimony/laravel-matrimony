@@ -18,7 +18,7 @@
                 </p>
 
                 <div class="flex flex-wrap gap-3">
-                    <a href="{{ route('matrimony.profile.wizard.section', ['section' => 'basic-info']) }}"
+                    <a href="{{ route('matrimony.onboarding.show', ['step' => 2]) }}"
                        class="inline-block px-6 py-3 bg-red-600 text-white rounded hover:bg-red-700 transition">
                         {{ __('dashboard.create_matrimony_profile') }}
                     </a>

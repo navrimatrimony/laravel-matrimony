@@ -1193,9 +1193,18 @@
                 @endphp
                 <div>
                     @if ($crState === 'none' || ($crState === 'expired' && !$cooldownEndsAt) || $crState === 'cancelled')
-                        <button type="button" @click="$root.openRequestModal = true" style="background-color: #10b981; color: white; padding: 12px 24px; border-radius: 6px; font-weight: 600; font-size: 16px; border: none; cursor: pointer;">
-                            {{ __('Request Contact') }}
-                        </button>
+                        @if ($canSendContactRequest)
+                            <button type="button" @click="$root.openRequestModal = true" style="background-color: #10b981; color: white; padding: 12px 24px; border-radius: 6px; font-weight: 600; font-size: 16px; border: none; cursor: pointer;">
+                                {{ __('Request Contact') }}
+                            </button>
+                        @else
+                            <button type="button" disabled style="background-color: #9ca3af; color: white; padding: 12px 24px; border-radius: 6px; font-weight: 600; font-size: 16px; border: none; cursor: not-allowed;">
+                                {{ __('Request Contact') }}
+                            </button>
+                            <p class="text-xs text-gray-500 dark:text-gray-400 mt-2">
+                                {{ __('notifications.mutual_only') }}
+                            </p>
+                        @endif
                     @elseif ($crState === 'pending')
                         <span style="background-color: #f59e0b; color: white; padding: 12px 24px; border-radius: 6px; font-weight: 600; font-size: 16px;">{{ __('Request Sent (Pending)') }}</span>
                         @if ($crRequest)

@@ -20,6 +20,11 @@
     'detailedName' => 'address_line',
     // Optional: when set, onSelect will set form input with this name to display label (e.g. preferences[preferred_city])
     'displaySyncName' => null,
+    'dataCountryId' => '',
+    'dataStateId' => '',
+    'dataDistrictId' => '',
+    'dataTalukaId' => '',
+    'dataCityId' => '',
 ])
 @php
     $inputId = $attributes->get('id') ?? 'location-typeahead-' . $context . '-' . (\Illuminate\Support\Str::random(4));
@@ -57,11 +62,11 @@
 @endphp
 <div class="{{ $wrapperClass }} space-y-0 rounded-lg {{ $paddingClass }} {{ $borderClass }}" data-location-context="{{ $context }}" data-name-prefix="{{ $namePrefix }}" @if(!empty($displaySyncName)) data-display-sync-name="{{ $displaySyncName }}" @endif>
     @if ($context === 'residence')
-        <input type="hidden" name="{{ $namePrefix !== '' ? $namePrefix . '[country_id]' : 'country_id' }}" class="location-hidden-country" value="{{ $attributes->get('data-country-id', '') }}">
-        <input type="hidden" name="{{ $namePrefix !== '' ? $namePrefix . '[state_id]' : 'state_id' }}" class="location-hidden-state" value="{{ $attributes->get('data-state-id', '') }}">
-        <input type="hidden" name="{{ $namePrefix !== '' ? $namePrefix . '[district_id]' : 'district_id' }}" class="location-hidden-district" value="{{ $attributes->get('data-district-id', '') }}">
-        <input type="hidden" name="{{ $namePrefix !== '' ? $namePrefix . '[taluka_id]' : 'taluka_id' }}" class="location-hidden-taluka" value="{{ $attributes->get('data-taluka-id', '') }}">
-        <input type="hidden" name="{{ $namePrefix !== '' ? $namePrefix . '[city_id]' : 'city_id' }}" class="location-hidden-city" value="{{ $attributes->get('data-city-id', '') }}">
+        <input type="hidden" name="{{ $namePrefix !== '' ? $namePrefix . '[country_id]' : 'country_id' }}" class="location-hidden-country" value="{{ $dataCountryId }}">
+        <input type="hidden" name="{{ $namePrefix !== '' ? $namePrefix . '[state_id]' : 'state_id' }}" class="location-hidden-state" value="{{ $dataStateId }}">
+        <input type="hidden" name="{{ $namePrefix !== '' ? $namePrefix . '[district_id]' : 'district_id' }}" class="location-hidden-district" value="{{ $dataDistrictId }}">
+        <input type="hidden" name="{{ $namePrefix !== '' ? $namePrefix . '[taluka_id]' : 'taluka_id' }}" class="location-hidden-taluka" value="{{ $dataTalukaId }}">
+        <input type="hidden" name="{{ $namePrefix !== '' ? $namePrefix . '[city_id]' : 'city_id' }}" class="location-hidden-city" value="{{ $dataCityId }}">
     @elseif ($context === 'work')
         <input type="hidden" name="work_city_id" class="location-hidden-work-city" value="{{ $attributes->get('data-work-city-id', '') }}">
         <input type="hidden" name="work_state_id" class="location-hidden-work-state" value="{{ $attributes->get('data-work-state-id', '') }}">
@@ -77,10 +82,10 @@
         <input type="hidden" name="{{ $birthD }}" class="location-hidden-birth-district" value="{{ $attributes->get('data-birth-district-id', '') }}">
         <input type="hidden" name="{{ $birthS }}" class="location-hidden-birth-state" value="{{ $attributes->get('data-birth-state-id', '') }}">
     @elseif ($context === 'alliance' && $namePrefix !== '')
-        <input type="hidden" name="{{ $namePrefix }}[city_id]" class="location-hidden-city" value="{{ $attributes->get('data-city-id', '') }}">
-        <input type="hidden" name="{{ $namePrefix }}[taluka_id]" class="location-hidden-taluka" value="{{ $attributes->get('data-taluka-id', '') }}">
-        <input type="hidden" name="{{ $namePrefix }}[district_id]" class="location-hidden-district" value="{{ $attributes->get('data-district-id', '') }}">
-        <input type="hidden" name="{{ $namePrefix }}[state_id]" class="location-hidden-state" value="{{ $attributes->get('data-state-id', '') }}">
+        <input type="hidden" name="{{ $namePrefix }}[city_id]" class="location-hidden-city" value="{{ $dataCityId }}">
+        <input type="hidden" name="{{ $namePrefix }}[taluka_id]" class="location-hidden-taluka" value="{{ $dataTalukaId }}">
+        <input type="hidden" name="{{ $namePrefix }}[district_id]" class="location-hidden-district" value="{{ $dataDistrictId }}">
+        <input type="hidden" name="{{ $namePrefix }}[state_id]" class="location-hidden-state" value="{{ $dataStateId }}">
     @endif
     @if ($isFullMode)
         <div class="flex flex-row flex-wrap items-end gap-4">

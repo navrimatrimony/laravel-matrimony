@@ -20,16 +20,14 @@ return [
     'continue' => 'Continue',
     'back' => 'Back',
 
+    'registrant_name' => 'Your name (account)',
     'registering_for' => 'Who are you registering for?',
     'registering_for_self' => 'Myself',
-    'registering_for_son' => 'Son',
-    'registering_for_daughter' => 'Daughter',
+    'registering_for_parent_guardian' => 'Parent / guardian',
     'registering_for_sibling' => 'Sibling',
+    'registering_for_relative' => 'Relative',
+    'registering_for_friend' => 'Friend',
     'registering_for_other' => 'Other',
-
-    'relation_to_profile' => 'Your relation to this profile',
-    'relation_placeholder' => 'e.g. Father, Mother, Brother',
-    'optional_relation_hint' => 'Optional if registering for yourself.',
 
     'hero_line' => 'Let’s find better matches for you.',
 

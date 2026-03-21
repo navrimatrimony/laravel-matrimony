@@ -252,6 +252,12 @@
                 if (district) district.value = districtId;
                 if (taluka) taluka.value = talukaId;
                 if (city) city.value = cityId;
+                // Backup for submit: some stacks clear hiddens; dataset survives on the wrapper.
+                wrapper.dataset.resCountryId = countryId || '';
+                wrapper.dataset.resStateId = stateId || '';
+                wrapper.dataset.resDistrictId = districtId || '';
+                wrapper.dataset.resTalukaId = talukaId || '';
+                wrapper.dataset.resCityId = cityId || '';
             } else if (context === 'work') {
                 var workCity = wrapper.querySelector('.location-hidden-work-city');
                 var workState = wrapper.querySelector('.location-hidden-work-state');
@@ -333,11 +339,57 @@
             resultsEl.classList.add('hidden');
             resultsEl.style.display = 'none';
         });
+
+        if (context === 'residence') {
+            var hc = wrapper.querySelector('.location-hidden-country');
+            var hs = wrapper.querySelector('.location-hidden-state');
+            var hd = wrapper.querySelector('.location-hidden-district');
+            var ht = wrapper.querySelector('.location-hidden-taluka');
+            var hcity = wrapper.querySelector('.location-hidden-city');
+            if (hc && hc.value) wrapper.dataset.resCountryId = hc.value;
+            if (hs && hs.value) wrapper.dataset.resStateId = hs.value;
+            if (hd && hd.value) wrapper.dataset.resDistrictId = hd.value;
+            if (ht && ht.value) wrapper.dataset.resTalukaId = ht.value;
+            if (hcity && hcity.value) wrapper.dataset.resCityId = hcity.value;
+        }
+    }
+
+    /** Before native submit: restore residence IDs from dataset if hiddens were cleared. */
+    function restoreResidenceHiddensFromDataset(form) {
+        if (!form || !form.querySelectorAll) return;
+        form.querySelectorAll('.location-typeahead-wrapper[data-location-context="residence"]').forEach(function (wrapper) {
+            var country = wrapper.querySelector('.location-hidden-country');
+            var state = wrapper.querySelector('.location-hidden-state');
+            var district = wrapper.querySelector('.location-hidden-district');
+            var taluka = wrapper.querySelector('.location-hidden-taluka');
+            var city = wrapper.querySelector('.location-hidden-city');
+            if (country && !String(country.value || '').trim() && wrapper.dataset.resCountryId) {
+                country.value = wrapper.dataset.resCountryId;
+            }
+            if (state && !String(state.value || '').trim() && wrapper.dataset.resStateId) {
+                state.value = wrapper.dataset.resStateId;
+            }
+            if (district && !String(district.value || '').trim() && wrapper.dataset.resDistrictId) {
+                district.value = wrapper.dataset.resDistrictId;
+            }
+            if (taluka && !String(taluka.value || '').trim() && wrapper.dataset.resTalukaId) {
+                taluka.value = wrapper.dataset.resTalukaId;
+            }
+            if (city && !String(city.value || '').trim() && wrapper.dataset.resCityId) {
+                city.value = wrapper.dataset.resCityId;
+            }
+        });
     }
 
     function init() {
         document.querySelectorAll('.location-typeahead-wrapper').forEach(bindWrapper);
     }
+
+    document.addEventListener('submit', function (e) {
+        var t = e.target;
+        if (!t || t.tagName !== 'FORM') return;
+        restoreResidenceHiddensFromDataset(t);
+    }, true);
 
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', init);

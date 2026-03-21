@@ -10,6 +10,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\Rules;
 
 class RegisteredUserController extends Controller
@@ -19,38 +20,43 @@ class RegisteredUserController extends Controller
     /**
      * Handle an incoming registration request.
      */
-	 public function create()
-{
-    return view('auth.register');
-}
+    public function create()
+    {
+        return view('auth.register');
+    }
 
     public function store(Request $request): RedirectResponse
     {
         $request->validate([
             'name' => ['required', 'string', 'max:255'],
-            'email' => ['required', 'string', 'lowercase', 'email', 'max:255', 'unique:'.User::class],
             'mobile' => ['required', 'string', 'max:20'],
             'password' => ['required', 'confirmed', Rules\Password::defaults()],
+            'registering_for' => ['required', 'string', Rule::in(['self', 'parent_guardian', 'sibling', 'relative', 'friend', 'other'])],
         ]);
+
         $mobileDigits = preg_replace('/\D/', '', $request->mobile);
         if (strlen($mobileDigits) !== 10) {
             return redirect()->back()->withInput()->withErrors(['mobile' => __('otp.enter_valid_10_digit_mobile')]);
         }
 
+        if (User::where('mobile', $mobileDigits)->exists()) {
+            return redirect()->back()->withInput()->withErrors([
+                'mobile' => __('auth.mobile_already_registered'),
+            ]);
+        }
+
         $user = User::create([
             'name' => $request->name,
-            'email' => $request->email,
+            'email' => null,
             'mobile' => $mobileDigits,
-            'gender' => $request->gender ?? null,
             'password' => Hash::make($request->password),
             'registering_for' => $request->registering_for,
-            'relation_to_profile' => $request->relation_to_profile,
+            // Legacy NOT NULL column; candidate gender is captured on matrimony_profiles in onboarding.
+            'gender' => '',
         ]);
 
-        // 3️⃣ Registered event fire करा
         event(new Registered($user));
 
-        // 4️⃣ User ला login करा
         Auth::login($user);
 
         if ($redirect = $this->redirectIfNoMatrimonyProfile($user, fromRegistration: true)) {
@@ -58,7 +64,5 @@ class RegisteredUserController extends Controller
         }
 
         return redirect('/dashboard');
-
-
     }
 }

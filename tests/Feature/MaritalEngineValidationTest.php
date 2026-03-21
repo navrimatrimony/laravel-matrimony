@@ -1,6 +1,7 @@
 <?php
 
 use App\Models\MatrimonyProfile;
+use App\Models\MasterGender;
 use App\Models\MasterMaritalStatus;
 use App\Models\MasterChildLivingWith;
 use App\Models\User;
@@ -14,11 +15,14 @@ test('divorced without has_children returns validation error', function () {
     $user = User::factory()->create();
     $profile = MatrimonyProfile::factory()->create(['user_id' => $user->id]);
     $divorcedId = MasterMaritalStatus::where('key', 'divorced')->value('id');
-    if (! $divorcedId) {
-        $this->markTestSkipped('Master marital statuses not seeded.');
+    $genderId = MasterGender::where('key', 'male')->where('is_active', true)->value('id');
+    if (! $divorcedId || ! $genderId) {
+        $this->markTestSkipped('Master lookups not seeded.');
     }
 
-    $response = $this->actingAs($user)->post(route('matrimony.profile.wizard.store', ['section' => 'marriages']), [
+    $response = $this->actingAs($user)->post(route('matrimony.profile.wizard.store', ['section' => 'basic-info']), [
+        'full_name' => $profile->full_name,
+        'gender_id' => $genderId,
         'marital_status_id' => $divorcedId,
         'marriages' => [
             ['id' => null, 'marriage_year' => '', 'divorce_year' => '', 'divorce_status' => ''],
@@ -32,11 +36,14 @@ test('divorced has_children yes with zero children rows returns validation error
     $user = User::factory()->create();
     $profile = MatrimonyProfile::factory()->create(['user_id' => $user->id]);
     $divorcedId = MasterMaritalStatus::where('key', 'divorced')->value('id');
-    if (! $divorcedId) {
-        $this->markTestSkipped('Master marital statuses not seeded.');
+    $genderId = MasterGender::where('key', 'male')->where('is_active', true)->value('id');
+    if (! $divorcedId || ! $genderId) {
+        $this->markTestSkipped('Master lookups not seeded.');
     }
 
-    $response = $this->actingAs($user)->post(route('matrimony.profile.wizard.store', ['section' => 'marriages']), [
+    $response = $this->actingAs($user)->post(route('matrimony.profile.wizard.store', ['section' => 'basic-info']), [
+        'full_name' => $profile->full_name,
+        'gender_id' => $genderId,
         'marital_status_id' => $divorcedId,
         'has_children' => '1',
         'marriages' => [
@@ -52,9 +59,10 @@ test('divorced has_children no deletes existing children rows', function () {
     $user = User::factory()->create();
     $profile = MatrimonyProfile::factory()->create(['user_id' => $user->id]);
     $divorcedId = MasterMaritalStatus::where('key', 'divorced')->value('id');
+    $genderId = MasterGender::where('key', 'male')->where('is_active', true)->value('id');
     $livingWithId = MasterChildLivingWith::where('key', 'with_parent')->value('id') ?? MasterChildLivingWith::first()?->id;
-    if (! $divorcedId) {
-        $this->markTestSkipped('Master marital statuses not seeded.');
+    if (! $divorcedId || ! $genderId) {
+        $this->markTestSkipped('Master lookups not seeded.');
     }
 
     DB::table('profile_children')->insert([
@@ -75,7 +83,9 @@ test('divorced has_children no deletes existing children rows', function () {
     ]);
     $this->assertSame(2, DB::table('profile_children')->where('profile_id', $profile->id)->count());
 
-    $response = $this->actingAs($user)->post(route('matrimony.profile.wizard.store', ['section' => 'marriages']), [
+    $response = $this->actingAs($user)->post(route('matrimony.profile.wizard.store', ['section' => 'basic-info']), [
+        'full_name' => $profile->full_name,
+        'gender_id' => $genderId,
         'marital_status_id' => $divorcedId,
         'has_children' => '0',
         'marriages' => [
@@ -92,11 +102,14 @@ test('year sanity divorce_year less than marriage_year returns validation error'
     $user = User::factory()->create();
     $profile = MatrimonyProfile::factory()->create(['user_id' => $user->id]);
     $divorcedId = MasterMaritalStatus::where('key', 'divorced')->value('id');
-    if (! $divorcedId) {
-        $this->markTestSkipped('Master marital statuses not seeded.');
+    $genderId = MasterGender::where('key', 'male')->where('is_active', true)->value('id');
+    if (! $divorcedId || ! $genderId) {
+        $this->markTestSkipped('Master lookups not seeded.');
     }
 
-    $response = $this->actingAs($user)->post(route('matrimony.profile.wizard.store', ['section' => 'marriages']), [
+    $response = $this->actingAs($user)->post(route('matrimony.profile.wizard.store', ['section' => 'basic-info']), [
+        'full_name' => $profile->full_name,
+        'gender_id' => $genderId,
         'marital_status_id' => $divorcedId,
         'has_children' => '0',
         'marriages' => [
@@ -112,11 +125,14 @@ test('year sanity separation_year less than marriage_year returns validation err
     $user = User::factory()->create();
     $profile = MatrimonyProfile::factory()->create(['user_id' => $user->id]);
     $separatedId = MasterMaritalStatus::where('key', 'separated')->value('id');
-    if (! $separatedId) {
-        $this->markTestSkipped('Master marital statuses not seeded.');
+    $genderId = MasterGender::where('key', 'male')->where('is_active', true)->value('id');
+    if (! $separatedId || ! $genderId) {
+        $this->markTestSkipped('Master lookups not seeded.');
     }
 
-    $response = $this->actingAs($user)->post(route('matrimony.profile.wizard.store', ['section' => 'marriages']), [
+    $response = $this->actingAs($user)->post(route('matrimony.profile.wizard.store', ['section' => 'basic-info']), [
+        'full_name' => $profile->full_name,
+        'gender_id' => $genderId,
         'marital_status_id' => $separatedId,
         'has_children' => '0',
         'marriages' => [

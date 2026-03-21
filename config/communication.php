@@ -10,7 +10,8 @@
 
 return [
     /*
-    | Contact request allowed only after mutual interest when true.
+    | Contact request eligibility does NOT require mutual interest.
+    | Sender can request contact only after the receiver accepts sender's interest.
     */
     'contact_request_mode' => env('COMMUNICATION_CONTACT_REQUEST_MODE', 'mutual_only'), // mutual_only | direct_allowed | disabled
 

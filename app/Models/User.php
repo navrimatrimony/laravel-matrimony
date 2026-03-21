@@ -43,7 +43,6 @@ class User extends Authenticatable
         'gender',
         'mobile_verified_at',
         'registering_for',
-        'relation_to_profile',
     ];
 
     /*

@@ -28,7 +28,7 @@ class ContactRequestService
     }
 
     /**
-     * Check if contact request system is enabled and if mutual is required.
+     * Check if contact request system is enabled.
      */
     public function isContactRequestDisabled(): bool
     {
@@ -36,28 +36,64 @@ class ContactRequestService
     }
 
     /**
-     * Whether contact request is allowed only after mutual interest.
+     * Accepted interest: receiver has accepted sender's interest (A→B accepted).
      */
-    public function isMutualOnly(): bool
-    {
-        return ($this->config['contact_request_mode'] ?? 'mutual_only') === 'mutual_only';
-    }
-
-    /**
-     * Mutual interest: both A→B and B→A interests exist and are accepted.
-     */
-    public function hasMutualInterest(User $sender, User $receiver): bool
+    public function hasAcceptedInterest(User $sender, User $receiver): bool
     {
         $senderProfile = $sender->matrimonyProfile;
         $receiverProfile = $receiver->matrimonyProfile;
         if (! $senderProfile || ! $receiverProfile) {
             return false;
         }
-        $a = $senderProfile->id;
-        $b = $receiverProfile->id;
-        $ab = Interest::where('sender_profile_id', $a)->where('receiver_profile_id', $b)->where('status', 'accepted')->exists();
-        $ba = Interest::where('sender_profile_id', $b)->where('receiver_profile_id', $a)->where('status', 'accepted')->exists();
-        return $ab && $ba;
+
+        return Interest::where('sender_profile_id', $senderProfile->id)
+            ->where('receiver_profile_id', $receiverProfile->id)
+            ->where('status', 'accepted')
+            ->exists();
+    }
+
+    /**
+     * UI eligibility for "Send Contact Request" button.
+     * Mutual interest is never required; only accepted interest qualifies.
+     */
+    public function canSendContactRequest(User $sender, User $receiver): bool
+    {
+        if ($this->isContactRequestDisabled()) {
+            return false;
+        }
+
+        if (! $this->hasAcceptedInterest($sender, $receiver)) {
+            return false;
+        }
+
+        // Avoid duplicate *outgoing* pending request.
+        $openPending = ContactRequest::where('sender_id', $sender->id)
+            ->where('receiver_id', $receiver->id)
+            ->where('status', ContactRequest::STATUS_PENDING)
+            ->where(function ($q) {
+                $q->whereNull('expires_at')->orWhere('expires_at', '>', now());
+            })
+            ->exists();
+        if ($openPending) {
+            return false;
+        }
+
+        // If there is an active grant for this sender→receiver, avoid duplicate requests.
+        if ($this->getEffectiveGrant($sender, $receiver)) {
+            return false;
+        }
+
+        $cooldownEnds = $this->getCooldownEndsAt($sender, $receiver);
+        if ($cooldownEnds) {
+            return false;
+        }
+
+        $maxPerDay = $this->config['max_requests_per_day_per_sender'] ?? null;
+        if ($maxPerDay !== null && $this->countRequestsTodayBySender($sender) >= $maxPerDay) {
+            return false;
+        }
+
+        return true;
     }
 
     /**
@@ -112,21 +148,17 @@ class ContactRequestService
             throw ValidationException::withMessages(['contact_request' => __('notifications.contact_already_shared')]);
         }
 
-        if ($this->isMutualOnly() && ! $this->hasMutualInterest($sender, $receiver)) {
-            $receiverProfile = $receiver->matrimonyProfile;
-            $isDemoReceiver = $receiverProfile && ($receiverProfile->is_demo ?? false);
-            if (! $isDemoReceiver) {
-                    throw ValidationException::withMessages(['contact_request' => __('notifications.mutual_only')]);
-            }
-            // For demo profiles, allow contact request even without mutual interest (testing flow).
-        }
-
         $cooldownEnds = $this->getCooldownEndsAt($sender, $receiver);
         if ($cooldownEnds) {
             throw ValidationException::withMessages([
                 'contact_request' => __('notifications.cooldown_not_ended'),
                 'cooldown_ends_at' => $cooldownEnds->format('Y-m-d H:i:s'),
             ]);
+        }
+
+        // New business rule: only accepted interest qualifies.
+        if (! $this->hasAcceptedInterest($sender, $receiver)) {
+            throw ValidationException::withMessages(['contact_request' => __('notifications.mutual_only')]);
         }
 
         $maxPerDay = $this->config['max_requests_per_day_per_sender'] ?? null;
