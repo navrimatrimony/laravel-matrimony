@@ -2,8 +2,8 @@
 
 @section('content')
 <div class="bg-white dark:bg-gray-800 shadow rounded-lg p-6">
-    <h1 class="text-2xl font-bold text-gray-800 dark:text-gray-100 mb-2">Create Demo Profile</h1>
-    <p class="text-gray-500 dark:text-gray-400 text-sm mb-6">Single demo profile. Mandatory fields are auto-filled.</p>
+    <h1 class="text-2xl font-bold text-gray-800 dark:text-gray-100 mb-2">Create Showcase Profile</h1>
+    <p class="text-gray-500 dark:text-gray-400 text-sm mb-6">Single showcase profile. Mandatory fields are auto-filled.</p>
     @if ($errors->any())
         <ul class="text-red-600 text-sm mb-4 space-y-1">
             @foreach ($errors->all() as $e) <li>{{ $e }}</li> @endforeach
@@ -22,7 +22,7 @@
     </div>
     <div class="mb-6">
         <p class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Preview — profile photo</p>
-        <img src="{{ asset('uploads/matrimony_photos/demo_placeholder.png') }}" alt="Demo" onerror="this.src='{{ asset('images/default-profile.png') }}';" class="w-24 h-24 rounded-full object-cover border-2 border-gray-200 dark:border-gray-600" />
+        <img src="{{ asset('uploads/matrimony_photos/demo_placeholder.png') }}" alt="Showcase" onerror="this.src='{{ asset('images/default-profile.png') }}';" class="w-24 h-24 rounded-full object-cover border-2 border-gray-200 dark:border-gray-600" />
     </div>
     <form method="POST" action="{{ route('admin.demo-profile.store') }}" class="space-y-4">
         @csrf
@@ -38,7 +38,7 @@
         <div>
             <label class="flex items-center gap-2">
                 <input type="checkbox" name="demo_profile" value="1" {{ old('demo_profile') ? 'checked' : '' }} required>
-                <span class="text-sm font-medium text-gray-700 dark:text-gray-300">Create as Demo Profile</span>
+                <span class="text-sm font-medium text-gray-700 dark:text-gray-300">Create as Showcase Profile</span>
             </label>
         </div>
         <div class="flex gap-3">

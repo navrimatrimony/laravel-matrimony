@@ -1,10 +1,10 @@
 @extends(request()->routeIs('admin.*') ? 'layouts.admin' : 'layouts.app')
 
 @section('content')
-<div class="{{ request()->routeIs('admin.*') ? 'bg-white dark:bg-gray-800 shadow rounded-lg p-6' : 'max-w-3xl mx-auto py-8' }}" x-data="{ adminEditMode: @js(auth()->check() && auth()->user()->is_admin === true && request()->has('admin_edit')) }">
+<div class="{{ request()->routeIs('admin.*') ? 'bg-white dark:bg-gray-800 shadow rounded-lg p-6' : 'max-w-3xl mx-auto py-8' }}" x-data="{ adminEditMode: @js(auth()->check() && auth()->user()->is_admin === true && request()->has('admin_edit')), openRequestModal: false }">
     @if (request()->routeIs('admin.*'))
         <h1 class="text-2xl font-bold text-gray-800 dark:text-gray-100 mb-1">Admin — Profile #{{ $profile->id }}</h1>
-        <p class="text-sm text-gray-500 dark:text-gray-400 mb-6">{{ $profile->full_name ?? '—' }}@if (!empty($profile->is_demo)) <span class="inline-block ml-2 px-2 py-0.5 text-xs font-semibold bg-sky-100 dark:bg-sky-900/40 text-sky-700 dark:text-sky-300 rounded">Demo</span>@endif</p>
+        <p class="text-sm text-gray-500 dark:text-gray-400 mb-6">{{ $profile->full_name ?? '—' }}@if (!empty($profile->is_demo)) <span class="inline-block ml-2 px-2 py-0.5 text-xs font-semibold bg-sky-100 dark:bg-sky-900/40 text-sky-700 dark:text-sky-300 rounded">Showcase</span>@endif</p>
     @else
         <h1 class="text-2xl font-bold mb-6">Matrimony Profile</h1>
         @if (($isOwnProfile ?? false) && auth()->check() && auth()->user()->is_admin !== true)
@@ -281,32 +281,93 @@
 
 {{-- Profile Photo with Gender-based Fallback --}}
 @if ($profilePhotoVisible)
-<div class="mb-6 flex flex-col items-center">
-    @if ($profile->profile_photo)
-        {{-- Real uploaded photo --}}
-        <img
-            src="{{ asset('uploads/matrimony_photos/'.$profile->profile_photo) }}"
-            alt="{{ __('profile.profile_photo') }}"
-            class="w-40 h-40 rounded-full object-cover border"
-        />
-    @else
-        {{-- Gender-based placeholder fallback (UI only) --}}
-        @php
-            $genderKey = $profile->gender?->key ?? $profile->gender;
-            if ($genderKey === 'male') {
-                $placeholderSrc = asset('images/placeholders/male-profile.svg');
-            } elseif ($genderKey === 'female') {
-                $placeholderSrc = asset('images/placeholders/female-profile.svg');
-            } else {
-                $placeholderSrc = asset('images/placeholders/default-profile.svg');
-            }
-        @endphp
-        <img
-            src="{{ $placeholderSrc }}"
-            alt="{{ __('dashboard.profile_placeholder') }}"
-            class="w-40 h-40 rounded-full object-cover border"
-        />
-    @endif
+<div class="mb-6 flex flex-col items-center bg-white/80 dark:bg-gray-800/60 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-sm px-4 py-4">
+    <div class="relative rounded-full overflow-hidden">
+        @if ($profile->profile_photo)
+            {{-- Real uploaded photo --}}
+            <img
+                src="{{ asset('uploads/matrimony_photos/'.$profile->profile_photo) }}"
+                alt="{{ __('profile.profile_photo') }}"
+                class="w-40 h-40 rounded-full object-cover border"
+                style="{{ $photoLocked ? 'filter: blur(10px); transform: scale(1.05);' : '' }}"
+            />
+        @else
+            {{-- Gender-based placeholder fallback (UI only) --}}
+            @php
+                $genderKey = $profile->gender?->key ?? $profile->gender;
+                if ($genderKey === 'male') {
+                    $placeholderSrc = asset('images/placeholders/male-profile.svg');
+                } elseif ($genderKey === 'female') {
+                    $placeholderSrc = asset('images/placeholders/female-profile.svg');
+                } else {
+                    $placeholderSrc = asset('images/placeholders/default-profile.svg');
+                }
+            @endphp
+            <img
+                src="{{ $placeholderSrc }}"
+                alt="{{ __('dashboard.profile_placeholder') }}"
+                class="w-40 h-40 rounded-full object-cover border"
+                style="{{ $photoLocked ? 'filter: blur(10px); transform: scale(1.05);' : '' }}"
+            />
+        @endif
+
+        @if ($photoLocked)
+            <div class="absolute inset-0 flex items-center justify-center px-4"
+                 style="background: rgba(0, 0, 0, 0.35);">
+                <div class="text-center">
+                    <p class="text-white font-semibold text-sm mb-3" style="text-shadow: 0 1px 2px rgba(0,0,0,0.35);">
+                        Photo is private
+                    </p>
+
+                    @if (($photoLockMode ?? 'all') === 'premium')
+                        {{-- Option B: premium photos stay locked; request contact --}}
+                        @if (! $contactRequestDisabled && $contactRequestState !== null)
+                            @if (auth()->check())
+                                <button type="button"
+                                        @click="$root.openRequestModal = true"
+                                        style="background-color: #10b981; color: white; padding: 10px 18px; border-radius: 6px; font-weight: 600; font-size: 14px; border: none; cursor: pointer;">
+                                    {{ __('Request Contact') }}
+                                </button>
+                            @else
+                                <button type="button" disabled
+                                        style="background-color: #9ca3af; color: white; padding: 10px 18px; border-radius: 6px; font-weight: 600; font-size: 14px; border: none; cursor: not-allowed;">
+                                    {{ __('Login to Request Contact') }}
+                                </button>
+                            @endif
+                        @else
+                            <button type="button" disabled
+                                    style="background-color: #9ca3af; color: white; padding: 10px 18px; border-radius: 6px; font-weight: 600; font-size: 14px; border: none; cursor: not-allowed;">
+                                {{ __('Request Contact') }}
+                            </button>
+                        @endif
+                    @else
+                        {{-- accepted_interest mode: send interest first --}}
+                        @if ($interestAlreadySent)
+                            <button type="button" disabled
+                                    style="background-color: #9ca3af; color: white; padding: 10px 18px; border-radius: 6px; font-weight: 600; font-size: 14px; border: none; cursor: not-allowed;">
+                                {{ __('Interest Sent') }}
+                            </button>
+                        @else
+                            @if (auth()->check())
+                                <form method="POST" action="{{ route('interests.send', $profile) }}" style="display: inline;">
+                                    @csrf
+                                    <button type="submit"
+                                            style="background-color: #ec4899; color: white; padding: 10px 18px; border-radius: 6px; font-weight: 600; font-size: 14px; border: none; cursor: pointer;">
+                                        {{ __('Send Interest') }}
+                                    </button>
+                                </form>
+                            @else
+                                <button type="button" disabled
+                                        style="background-color: #9ca3af; color: white; padding: 10px 18px; border-radius: 6px; font-weight: 600; font-size: 14px; border: none; cursor: not-allowed;">
+                                    {{ __('Login to Send Interest') }}
+                                </button>
+                            @endif
+                        @endif
+                    @endif
+                </div>
+            </div>
+        @endif
+    </div>
     @if ($isOwnProfile && $profile->profile_photo && $profile->photo_approved === false && empty($profile->photo_rejected_at))
         <p class="mt-2 text-sm text-amber-700 bg-amber-50 dark:bg-amber-900/30 dark:text-amber-200 px-3 py-2 rounded">Your photo is under review. It is not visible to others until approved.</p>
     @endif
@@ -335,13 +396,89 @@
     @if ($galleryPhotos->isNotEmpty())
         <div class="mb-6">
             <div class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 text-center">Photo gallery</div>
-            <div class="flex gap-2 overflow-x-auto px-2 py-1">
+            @if ($photoLocked)
+                <div class="mb-3 text-center">
+                    <p class="text-xs text-gray-600 dark:text-gray-300 mb-2">Photo gallery is private</p>
+                    @if (($photoLockMode ?? 'all') === 'premium')
+                        @if (! $contactRequestDisabled && $contactRequestState !== null)
+                            @if (auth()->check())
+                                <button type="button"
+                                        @click="$root.openRequestModal = true"
+                                        style="background-color: #10b981; color: white; padding: 8px 14px; border-radius: 6px; font-weight: 600; font-size: 13px; border: none; cursor: pointer;">
+                                    {{ __('Request Contact') }}
+                                </button>
+                            @else
+                                <button type="button" disabled
+                                        style="background-color: #9ca3af; color: white; padding: 8px 14px; border-radius: 6px; font-weight: 600; font-size: 13px; border: none; cursor: not-allowed;">
+                                    {{ __('Login to Request Contact') }}
+                                </button>
+                            @endif
+                        @else
+                            <button type="button" disabled
+                                    style="background-color: #9ca3af; color: white; padding: 8px 14px; border-radius: 6px; font-weight: 600; font-size: 13px; border: none; cursor: not-allowed;">
+                                {{ __('Request Contact') }}
+                            </button>
+                        @endif
+                    @else
+                        @if ($interestAlreadySent)
+                            <button type="button" disabled
+                                    style="background-color: #9ca3af; color: white; padding: 8px 14px; border-radius: 6px; font-weight: 600; font-size: 13px; border: none; cursor: not-allowed;">
+                                {{ __('Interest Sent') }}
+                            </button>
+                        @else
+                            @if (auth()->check())
+                                <form method="POST" action="{{ route('interests.send', $profile) }}" style="display: inline;">
+                                    @csrf
+                                    <button type="submit"
+                                            style="background-color: #ec4899; color: white; padding: 8px 14px; border-radius: 6px; font-weight: 600; font-size: 13px; border: none; cursor: pointer;">
+                                        {{ __('Send Interest') }}
+                                    </button>
+                                </form>
+                            @else
+                                <button type="button" disabled
+                                        style="background-color: #9ca3af; color: white; padding: 8px 14px; border-radius: 6px; font-weight: 600; font-size: 13px; border: none; cursor: not-allowed;">
+                                    {{ __('Login to Send Interest') }}
+                                </button>
+                            @endif
+                        @endif
+                    @endif
+                </div>
+            @endif
+            <div
+                class="flex gap-3 overflow-x-auto px-2 py-2 snap-x snap-mandatory"
+                style="scrollbar-width: none; -ms-overflow-style: none;"
+            >
                 @foreach ($galleryPhotos as $photo)
-                    <img
-                        src="{{ asset('uploads/matrimony_photos/'.$photo->file_path) }}"
-                        alt="Profile photo"
-                        class="w-20 h-20 rounded-md object-cover border border-gray-200 dark:border-gray-700 flex-none"
-                    />
+                    @php
+                        $status = (string) ($photo->approved_status ?? '');
+                        $statusLabel = $status === 'approved' ? 'approved' : ($status === 'pending' ? 'pending' : 'rejected');
+                    @endphp
+
+                    <div class="snap-start flex-none w-24 sm:w-28">
+                        <div class="relative overflow-hidden rounded-xl border border-gray-200 dark:border-gray-700 bg-white/70 dark:bg-gray-800/40 shadow-sm">
+                            <img
+                                src="{{ asset('uploads/matrimony_photos/'.$photo->file_path) }}"
+                                alt="Profile photo"
+                                class="w-full h-24 sm:h-28 object-cover"
+                                style="{{ $photoLocked ? 'filter: blur(8px);' : '' }}"
+                            />
+
+                            @if ($isOwnProfile)
+                                @php
+                                    $badgeBg = $status === 'approved' ? '#dcfce7' : ($status === 'pending' ? '#fef3c7' : '#fee2e2');
+                                    $badgeBorder = $status === 'approved' ? '#86efac' : ($status === 'pending' ? '#fbbf24' : '#fca5a5');
+                                @endphp
+                                <div
+                                    class="absolute bottom-2 left-2 px-2 py-1 rounded-full"
+                                    style="background: {{ $badgeBg }}; border: 1px solid {{ $badgeBorder }};"
+                                >
+                                    <span class="text-[11px] font-extrabold text-gray-900 dark:text-gray-900">
+                                        {{ $statusLabel }}
+                                    </span>
+                                </div>
+                            @endif
+                        </div>
+                    </div>
                 @endforeach
             </div>
         </div>
@@ -1054,9 +1191,9 @@
                     $cooldownEndsAt = $contactRequestState['cooldown_ends_at'] ?? null;
                     $reasons = config('communication.request_reasons', []);
                 @endphp
-                <div x-data="{ openRequestModal: false }">
+                <div>
                     @if ($crState === 'none' || ($crState === 'expired' && !$cooldownEndsAt) || $crState === 'cancelled')
-                        <button type="button" @click="openRequestModal = true" style="background-color: #10b981; color: white; padding: 12px 24px; border-radius: 6px; font-weight: 600; font-size: 16px; border: none; cursor: pointer;">
+                        <button type="button" @click="$root.openRequestModal = true" style="background-color: #10b981; color: white; padding: 12px 24px; border-radius: 6px; font-weight: 600; font-size: 16px; border: none; cursor: pointer;">
                             {{ __('Request Contact') }}
                         </button>
                     @elseif ($crState === 'pending')
@@ -1077,14 +1214,14 @@
                     @elseif ($crState === 'expired')
                         <span style="background-color: #9ca3af; color: white; padding: 12px 24px; border-radius: 6px; font-weight: 600; font-size: 16px;">{{ __('Request Expired') }}</span>
                         @if (!$cooldownEndsAt)
-                        <button type="button" @click="openRequestModal = true" style="background-color: #10b981; color: white; padding: 12px 20px; border-radius: 6px; font-weight: 500; font-size: 14px; border: none; cursor: pointer;">{{ __('Request again') }}</button>
+                        <button type="button" @click="$root.openRequestModal = true" style="background-color: #10b981; color: white; padding: 12px 20px; border-radius: 6px; font-weight: 500; font-size: 14px; border: none; cursor: pointer;">{{ __('Request again') }}</button>
                         @endif
                     @elseif ($crState === 'revoked')
                         <span style="background-color: #6b7280; color: white; padding: 12px 24px; border-radius: 6px; font-weight: 600; font-size: 16px;">{{ __('Contact no longer available') }}</span>
                     @endif
 
                     {{-- Request Contact modal --}}
-                    <div x-show="openRequestModal" x-cloak x-transition class="fixed inset-0 z-50 flex items-center justify-center bg-black/50" style="display: none;" @click.self="openRequestModal = false">
+                    <div x-show="$root.openRequestModal" x-cloak x-transition class="fixed inset-0 z-50 flex items-center justify-center bg-black/50" style="display: none;" @click.self="$root.openRequestModal = false">
                         <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-md w-full mx-4 p-6" @click.stop x-data="{ reason: '{{ old('reason', 'talk_to_family') }}' }">
                             <h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">{{ __('Request Contact') }}</h3>
                             <p class="text-sm text-gray-600 dark:text-gray-400 mb-4">They will see your reason and chosen contact methods. They can approve or reject.</p>
@@ -1110,7 +1247,7 @@
                                 </div>
                                 <div class="flex gap-2">
                                     <button type="submit" class="px-4 py-2 bg-green-600 text-white rounded-md font-medium">Send request</button>
-                                    <button type="button" @click="openRequestModal = false" class="px-4 py-2 bg-gray-500 text-white rounded-md font-medium">Cancel</button>
+                                    <button type="button" @click="$root.openRequestModal = false" class="px-4 py-2 bg-gray-500 text-white rounded-md font-medium">Cancel</button>
                                 </div>
                             </form>
                         </div>

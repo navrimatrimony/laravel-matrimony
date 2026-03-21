@@ -72,6 +72,16 @@ Route::middleware('auth')->group(function () {
     Route::get('/intake/upload', [IntakeController::class, 'uploadForm'])->name('intake.upload');
     Route::post('/intake/upload', [IntakeController::class, 'store'])->name('intake.store');
     Route::get('/intake/preview/{intake}', [IntakeController::class, 'preview'])->name('intake.preview');
+    Route::get('/intake/biodata-original/{intake}', [IntakeController::class, 'biodataOriginalImage'])
+        ->name('intake.biodata-original');
+    Route::get('/intake/manual-prepared/{intake}', [IntakeController::class, 'manualPreparedImage'])
+        ->name('intake.manual-prepared-image');
+    Route::post('/intake/manual-crop/{intake}', [IntakeController::class, 'saveManualOcrPrepared'])
+        ->name('intake.manual-crop-save');
+    Route::post('/intake/manual-crop-clear/{intake}', [IntakeController::class, 'clearManualOcrPrepared'])
+        ->name('intake.manual-crop-clear');
+    Route::get('/intake/debug/ocr-artifact/{intake}', [IntakeController::class, 'debugOcrArtifact'])
+        ->name('intake.debug.ocr-artifact');
     Route::post('/intake/reparse/{intake}', [IntakeController::class, 'reparse'])->name('intake.reparse');
     Route::post('/intake/approve/{intake}', [IntakeController::class, 'approve'])->name('intake.approve');
     Route::get('/intake/approval', [IntakeController::class, 'approval'])->name('intake.approval');

@@ -38,7 +38,7 @@ class DemoProfileController extends Controller
         $demoUser = User::firstOrCreate(
             ['email' => 'demo-profiles@system.local'],
             [
-                'name' => 'Demo Profiles',
+                'name' => 'Showcase Profiles',
                 'password' => bcrypt(Str::random(32)),
                 'gender' => 'other',
             ]
@@ -58,7 +58,7 @@ class DemoProfileController extends Controller
 
         return redirect()
             ->route('matrimony.profile.show', $profile->id)
-            ->with('success', 'Demo profile created successfully.');
+            ->with('success', 'Showcase profile created successfully.');
     }
 
     public function bulkCreate()
@@ -84,7 +84,7 @@ class DemoProfileController extends Controller
             $user = User::firstOrCreate(
                 ['email' => $email],
                 [
-                    'name' => 'Demo ' . ($i + 1),
+                    'name' => 'Showcase ' . ($i + 1),
                     'password' => bcrypt(Str::random(32)),
                     'gender' => 'other',
                 ]
@@ -106,7 +106,7 @@ class DemoProfileController extends Controller
 
         return redirect()
             ->route('admin.demo-profile.bulk-create')
-            ->with('success', "Created {$created} demo profile(s).");
+            ->with('success', "Created {$created} showcase profile(s).");
     }
 
     /**

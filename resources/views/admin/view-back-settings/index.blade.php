@@ -18,15 +18,15 @@
 
 <div class="bg-white dark:bg-gray-800 shadow rounded-lg p-6">
     <h1 class="text-2xl font-bold text-gray-800 dark:text-gray-100 mb-2">View-Back Settings</h1>
-    <p class="text-gray-500 dark:text-gray-400 text-sm mb-6">Control demo → real view-back. Max one per demo–real pair per 24 hours. No recursion.</p>
+    <p class="text-gray-500 dark:text-gray-400 text-sm mb-6">Control showcase → real view-back. Max one per showcase–real pair per 24 hours. No recursion.</p>
     @if ($errors->any())
         <ul class="text-red-600 text-sm mb-4 space-y-1">
             @foreach ($errors->all() as $e) <li>{{ $e }}</li> @endforeach
         </ul>
     @endif
     <div class="mb-6 p-4 bg-sky-50 dark:bg-sky-900/20 border border-sky-200 dark:border-sky-800 rounded-lg text-sky-800 dark:text-sky-200 text-sm">
-        <p class="font-semibold mb-1">Demo → Real view-back</p>
-        <p>When a real user views a demo profile, the system may create a view-back (demo views real).</p>
+        <p class="font-semibold mb-1">Showcase → Real view-back</p>
+        <p>When a real user views a showcase profile, the system may create a view-back (showcase views real).</p>
     </div>
     <form method="POST" action="{{ route('admin.view-back-settings.update') }}" class="space-y-6">
         @csrf
@@ -40,7 +40,7 @@
                     {{ $viewBackEnabled ? 'View-Back is ENABLED' : 'View-Back is DISABLED' }}
                 </span>
             </label>
-            <p class="text-xs text-gray-500 dark:text-gray-400 mt-2">When OFF, no demo→real view-backs will be created regardless of other settings.</p>
+            <p class="text-xs text-gray-500 dark:text-gray-400 mt-2">When OFF, no showcase→real view-backs will be created regardless of other settings.</p>
         </div>
 
         {{-- Dependent Fields --}}

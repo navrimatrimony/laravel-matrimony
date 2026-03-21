@@ -15,30 +15,30 @@
 </style>
 
 <div class="bg-white dark:bg-gray-800 shadow rounded-lg p-6">
-    <h1 class="text-2xl font-bold text-gray-800 dark:text-gray-100 mb-2">Demo Search Visibility</h1>
-    <p class="text-gray-500 dark:text-gray-400 text-sm mb-6">Show or hide all demo profiles from search. Profile view, interests, and completeness rules unchanged.</p>
+    <h1 class="text-2xl font-bold text-gray-800 dark:text-gray-100 mb-2">Showcase Search Visibility</h1>
+    <p class="text-gray-500 dark:text-gray-400 text-sm mb-6">Show or hide all showcase profiles from search. Profile view, interests, and completeness rules unchanged.</p>
     @if ($errors->any())
         <ul class="text-red-600 text-sm mb-4 space-y-1">
             @foreach ($errors->all() as $e) <li>{{ $e }}</li> @endforeach
         </ul>
     @endif
     <div class="mb-6 p-4 bg-sky-50 dark:bg-sky-900/20 border border-sky-200 dark:border-sky-800 rounded-lg text-sky-800 dark:text-sky-200 text-sm">
-        <p class="font-semibold mb-1">Demo Profiles in Search Results</p>
-        <p>Controls whether demo profiles appear in user search results. Direct profile views and interest actions are unaffected.</p>
+        <p class="font-semibold mb-1">Showcase Profiles in Search Results</p>
+        <p>Controls whether showcase profiles appear in user search results. Direct profile views and interest actions are unaffected.</p>
     </div>
     <form method="POST" action="{{ route('admin.demo-search-settings.update') }}" class="space-y-6">
         @csrf
 
-        {{-- Demo Search Visibility Toggle --}}
+        {{-- Showcase Search Visibility Toggle --}}
         <div class="p-4 bg-gray-50 dark:bg-gray-700/30 rounded-lg border border-gray-200 dark:border-gray-600">
             <label class="admin-toggle" id="demoSearchToggle">
                 <input type="checkbox" name="demo_profiles_visible_in_search" value="1" {{ $demoProfilesVisibleInSearch ? 'checked' : '' }} onchange="updateDemoSearchUI()">
                 <span class="toggle-track"><span class="toggle-thumb"></span></span>
                 <span class="toggle-label {{ $demoProfilesVisibleInSearch ? 'on' : 'off' }}" id="demoSearchLabel">
-                    {{ $demoProfilesVisibleInSearch ? 'Demo Profiles VISIBLE in Search' : 'Demo Profiles HIDDEN from Search' }}
+                    {{ $demoProfilesVisibleInSearch ? 'Showcase Profiles VISIBLE in Search' : 'Showcase Profiles HIDDEN from Search' }}
                 </span>
             </label>
-            <p class="text-xs text-gray-500 dark:text-gray-400 mt-2">When OFF, demo profiles will not appear in search results but can still be accessed via direct links.</p>
+            <p class="text-xs text-gray-500 dark:text-gray-400 mt-2">When OFF, showcase profiles will not appear in search results but can still be accessed via direct links.</p>
         </div>
 
         <div class="pt-2">
@@ -55,11 +55,11 @@ function updateDemoSearchUI() {
     const label = document.getElementById('demoSearchLabel');
     
     if (checkbox.checked) {
-        label.textContent = 'Demo Profiles VISIBLE in Search';
+        label.textContent = 'Showcase Profiles VISIBLE in Search';
         label.classList.remove('off');
         label.classList.add('on');
     } else {
-        label.textContent = 'Demo Profiles HIDDEN from Search';
+        label.textContent = 'Showcase Profiles HIDDEN from Search';
         label.classList.remove('on');
         label.classList.add('off');
     }

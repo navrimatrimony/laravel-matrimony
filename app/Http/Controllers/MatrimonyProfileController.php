@@ -960,6 +960,24 @@ public function show($matrimony_profile_id)
         }
     }
 
+    // Photo privacy (blur + access request) based on per-profile visibility settings.
+    // show_photo_to meanings:
+    // - all: viewers can see photos
+    // - premium: photos stay locked (no unlock in this release)
+    // - accepted_interest: photos unlock only after viewer's contact access is accepted
+    $showPhotoTo = optional($visibilitySettings)->show_photo_to;
+    $photoViewAllowed = $isOwnProfile;
+    if (! $isOwnProfile) {
+        $showPhotoTo = $showPhotoTo ?? 'all';
+        $photoViewAllowed = match ($showPhotoTo) {
+            'all' => true,
+            'premium' => false,
+            'accepted_interest' => (is_array($contactRequestState) && (($contactRequestState['state'] ?? '') === 'accepted')),
+            default => true,
+        };
+    }
+    $photoLocked = ! $photoViewAllowed && ! $isOwnProfile;
+
     return view(
         'matrimony.profile.show',
         [
@@ -994,6 +1012,8 @@ public function show($matrimony_profile_id)
             'contactRequestState'  => $contactRequestState,
             'contactRequestDisabled' => $contactRequestDisabled,
             'contactGrantReveal'   => $contactGrantReveal,
+            'photoLocked'          => $photoLocked,
+            'photoLockMode'        => $showPhotoTo ?? 'all',
         ]
     );
 }

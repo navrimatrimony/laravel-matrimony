@@ -11,7 +11,7 @@
         </div>
     @endif
     <h1 class="text-2xl font-bold text-gray-800 dark:text-gray-100 mb-1">Admin — Profile #{{ $matrimonyProfile->id }}</h1>
-    <p class="text-sm text-gray-500 dark:text-gray-400 mb-2">{{ $matrimonyProfile->full_name ?? '—' }}@if (!empty($matrimonyProfile->is_demo)) <span class="inline-block ml-2 px-2 py-0.5 text-xs font-semibold bg-sky-100 dark:bg-sky-900/40 text-sky-700 dark:text-sky-300 rounded">Demo</span>@endif</p>
+    <p class="text-sm text-gray-500 dark:text-gray-400 mb-2">{{ $matrimonyProfile->full_name ?? '—' }}@if (!empty($matrimonyProfile->is_demo)) <span class="inline-block ml-2 px-2 py-0.5 text-xs font-semibold bg-sky-100 dark:bg-sky-900/40 text-sky-700 dark:text-sky-300 rounded">Showcase</span>@endif</p>
     <p class="text-xs text-gray-500 dark:text-gray-400 mb-4">Lifecycle: <strong>{{ $matrimonyProfile->lifecycle_state ?? 'active' }}</strong></p>
 
     @if (!empty($lifecycleAllowedTargets ?? []))
@@ -426,7 +426,7 @@
                     class="w-40 h-40 rounded-full object-cover border"
                 />
                 @if (!empty($matrimonyProfile->is_demo))
-                    <span class="text-xs text-gray-500 mt-1">Demo profile</span>
+                    <span class="text-xs text-gray-500 mt-1">Showcase profile</span>
                 @endif
             @endif
         </div>

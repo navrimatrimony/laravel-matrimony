@@ -467,7 +467,7 @@ class AdminController extends Controller
         );
 
         return redirect()->route('admin.demo-search-settings.index')
-            ->with('success', 'Demo search visibility updated.');
+            ->with('success', 'Showcase search visibility updated.');
     }
 
     /**

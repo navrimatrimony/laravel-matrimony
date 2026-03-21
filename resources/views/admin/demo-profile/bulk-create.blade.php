@@ -2,8 +2,8 @@
 
 @section('content')
 <div class="bg-white dark:bg-gray-800 shadow rounded-lg p-6">
-    <h1 class="text-2xl font-bold text-gray-800 dark:text-gray-100 mb-2">Bulk Create Demo Profiles (1–50)</h1>
-    <p class="text-gray-500 dark:text-gray-400 text-sm mb-6">Create multiple demo profiles. All mandatory fields auto-filled per profile.</p>
+    <h1 class="text-2xl font-bold text-gray-800 dark:text-gray-100 mb-2">Bulk Create Showcase Profiles (1–50)</h1>
+    <p class="text-gray-500 dark:text-gray-400 text-sm mb-6">Create multiple showcase profiles. All mandatory fields auto-filled per profile.</p>
     @if ($errors->any())
         <ul class="text-red-600 text-sm mb-4 space-y-1">
             @foreach ($errors->all() as $e) <li>{{ $e }}</li> @endforeach

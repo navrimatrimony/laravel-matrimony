@@ -382,12 +382,12 @@ class DemoProfileDefaultsService
     {
         // Validate gender
         if (!in_array($gender, self::GENDERS, true)) {
-            return 'Demo Profile ' . ($index + 1);
+            return 'Showcase Profile ' . ($index + 1);
         }
 
         // If caste is missing or empty, use fallback
         if (empty($caste) || !is_string($caste)) {
-            return 'Demo Profile ' . ($index + 1);
+            return 'Showcase Profile ' . ($index + 1);
         }
 
         // Get name pools
@@ -395,7 +395,7 @@ class DemoProfileDefaultsService
 
         // Check if caste is mapped
         if (!isset($namePools[$caste]) || !isset($namePools[$caste][$gender])) {
-            return 'Demo Profile ' . ($index + 1);
+            return 'Showcase Profile ' . ($index + 1);
         }
 
         // Get names for this caste and gender
@@ -403,7 +403,7 @@ class DemoProfileDefaultsService
 
         // If pool is empty, use fallback
         if (empty($names) || !is_array($names)) {
-            return 'Demo Profile ' . ($index + 1);
+            return 'Showcase Profile ' . ($index + 1);
         }
 
         // Randomly select one name
@@ -411,7 +411,7 @@ class DemoProfileDefaultsService
 
         // Ensure name doesn't exceed max length (255 chars)
         if (strlen($selectedName) > 255) {
-            return 'Demo Profile ' . ($index + 1);
+            return 'Showcase Profile ' . ($index + 1);
         }
 
         return $selectedName;
@@ -422,7 +422,7 @@ class DemoProfileDefaultsService
      */
     public static function fullNameForIndex(int $index): string
     {
-        return 'Demo Profile ' . ($index + 1);
+        return 'Showcase Profile ' . ($index + 1);
     }
 
     private static function resolveGender(?string $override): string
