@@ -267,7 +267,7 @@ class ProfileWizardController extends Controller
     }
 
     /**
-     * Ensure user has a matrimony profile. Create minimal one if not (full_name from user->name).
+     * Ensure user has a matrimony profile. Create minimal one if not (full_name from registrant only when registering_for = self).
      */
     private function ensureProfile($user): ?MatrimonyProfile
     {
@@ -286,7 +286,7 @@ class ProfileWizardController extends Controller
         $profile = MatrimonyProfile::create([
             'user_id' => $user->id,
             'lifecycle_state' => 'draft',
-            'full_name' => $user->name ?? 'Draft',
+            'full_name' => $user->defaultBootstrapProfileFullName(),
             'gender_id' => $genderId,
             'is_suspended' => $manualActivation,
         ]);

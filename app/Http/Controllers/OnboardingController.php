@@ -272,7 +272,7 @@ class OnboardingController extends Controller
         $profile = MatrimonyProfile::create([
             'user_id' => $user->id,
             'lifecycle_state' => 'draft',
-            'full_name' => $user->name ?? 'Draft',
+            'full_name' => $user->defaultBootstrapProfileFullName(),
             'gender_id' => $genderId,
             'is_suspended' => $manualActivation,
         ]);

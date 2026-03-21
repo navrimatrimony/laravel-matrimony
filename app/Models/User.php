@@ -95,6 +95,19 @@ class User extends Authenticatable
         return $this->hasOne(\App\Models\MatrimonyProfile::class);
     }
 
+    /**
+     * Default `matrimony_profiles.full_name` when creating a minimal draft profile.
+     * Registrant (`users.name`) maps to profile full name only when `registering_for` is `self`.
+     */
+    public function defaultBootstrapProfileFullName(): string
+    {
+        if (($this->registering_for ?? '') !== 'self') {
+            return '';
+        }
+
+        return trim((string) ($this->name ?? ''));
+    }
+
     /*
     |--------------------------------------------------------------------------
     | Admin Role Helper Methods (Day-7)
