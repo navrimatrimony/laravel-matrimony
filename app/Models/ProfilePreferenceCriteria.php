@@ -19,6 +19,8 @@ class ProfilePreferenceCriteria extends Model
         'profile_id',
         'preferred_age_min',
         'preferred_age_max',
+        'preferred_height_min_cm',
+        'preferred_height_max_cm',
         'preferred_income_min',
         'preferred_income_max',
         'preferred_education',
@@ -26,6 +28,11 @@ class ProfilePreferenceCriteria extends Model
         'willing_to_relocate',
         'settled_city_preference_id',
         'marriage_type_preference_id',
+        'preferred_marital_status_id',
+        /** Canonical: no | yes_if_live_separate | yes */
+        'partner_profile_with_children',
+        /** Same enum keys as users.registering_for (self, parent_guardian, …) */
+        'preferred_profile_managed_by',
     ];
 
     protected $casts = [
@@ -45,6 +52,11 @@ class ProfilePreferenceCriteria extends Model
     public function marriageTypePreference()
     {
         return $this->belongsTo(MasterMarriageTypePreference::class, 'marriage_type_preference_id');
+    }
+
+    public function preferredMaritalStatus()
+    {
+        return $this->belongsTo(MasterMaritalStatus::class, 'preferred_marital_status_id');
     }
 }
 

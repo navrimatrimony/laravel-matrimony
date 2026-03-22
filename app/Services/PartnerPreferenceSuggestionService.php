@@ -2,6 +2,8 @@
 
 namespace App\Services;
 
+use App\Models\District;
+use App\Models\MasterMaritalStatus;
 use App\Models\MatrimonyProfile;
 use Illuminate\Support\Facades\DB;
 
@@ -11,6 +13,74 @@ use Illuminate\Support\Facades\DB;
  */
 class PartnerPreferenceSuggestionService
 {
+    /** Canonical centimetres for a 4-inch span (4 × 2.54, rounded). */
+    public static function fourInchesCm(): int
+    {
+        return (int) round(4 * 2.54);
+    }
+
+    /**
+     * Suggested partner height range from profile gender + height_cm (not persisted).
+     * Male: min = height − 4 in, max = height. Female: min = height, max = height + 4 in.
+     *
+     * @return array{min: int, max: int}|null
+     */
+    public static function defaultPreferredHeightRangeCm(MatrimonyProfile $profile): ?array
+    {
+        $profile->loadMissing('gender');
+        $h = $profile->height_cm;
+        if ($h === null || $h === '') {
+            return null;
+        }
+        $h = (int) $h;
+        if ($h < 1) {
+            return null;
+        }
+        $genderKey = $profile->gender?->key ?? null;
+        if ($genderKey !== 'male' && $genderKey !== 'female') {
+            return null;
+        }
+        $delta = self::fourInchesCm();
+        if ($genderKey === 'male') {
+            $min = $h - $delta;
+            $max = $h;
+        } else {
+            $min = $h;
+            $max = $h + $delta;
+        }
+        $min = max(1, $min);
+        $max = max(1, $max);
+        if ($min > $max) {
+            [$min, $max] = [$max, $min];
+        }
+
+        return ['min' => $min, 'max' => $max];
+    }
+
+    /**
+     * Default partner marital status preference from the member's own marital status (not persisted here).
+     * never_married → prefer never_married; any other known status → open to all (null).
+     * Missing/invalid member marital status → null (no default forced).
+     *
+     * @return int|null master_marital_statuses.id for never_married, or null for open-to-all
+     */
+    public static function defaultPreferredMaritalStatusId(MatrimonyProfile $profile): ?int
+    {
+        $profile->loadMissing('maritalStatus');
+        $key = $profile->maritalStatus?->key;
+        if ($key === null || $key === '') {
+            return null;
+        }
+        if ($key === 'never_married') {
+            return MasterMaritalStatus::query()
+                ->where('key', 'never_married')
+                ->where('is_active', true)
+                ->value('id');
+        }
+
+        return null;
+    }
+
     public static function profileAge(MatrimonyProfile $profile): ?int
     {
         if (! $profile->date_of_birth) {
@@ -56,20 +126,114 @@ class PartnerPreferenceSuggestionService
     }
 
     /**
+     * Member's residence district: profile.district_id, else city→district. Validates districts.id.
+     */
+    public static function resolveProfileDistrictId(MatrimonyProfile $profile): ?int
+    {
+        if (! empty($profile->district_id)) {
+            $id = (int) $profile->district_id;
+            if ($id > 0 && District::query()->whereKey($id)->exists()) {
+                return $id;
+            }
+
+            return null;
+        }
+        if (! empty($profile->city_id)) {
+            $districtId = DB::table('cities')->where('id', $profile->city_id)->value('district_id');
+            if ($districtId && District::query()->whereKey((int) $districtId)->exists()) {
+                return (int) $districtId;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Default partner location pivots from member district (minimal valid country→state→district chain).
+     * If district cannot be resolved, returns empty arrays ("open to all" in UI).
+     *
+     * @return array{
+     *   preferred_country_ids: array<int, int>,
+     *   preferred_state_ids: array<int, int>,
+     *   preferred_district_ids: array<int, int>,
+     *   preferred_taluka_ids: array<int, int>
+     * }
+     */
+    public static function defaultLocationPivotsFromOwnDistrict(MatrimonyProfile $profile): array
+    {
+        $empty = [
+            'preferred_country_ids' => [],
+            'preferred_state_ids' => [],
+            'preferred_district_ids' => [],
+            'preferred_taluka_ids' => [],
+        ];
+        $districtId = self::resolveProfileDistrictId($profile);
+        if ($districtId === null) {
+            return $empty;
+        }
+        $district = District::query()->with('state')->whereKey($districtId)->first();
+        if ($district === null) {
+            return $empty;
+        }
+        $state = $district->state;
+        if ($state === null || $state->country_id === null || $state->country_id === '') {
+            return $empty;
+        }
+
+        return [
+            'preferred_country_ids' => [(int) $state->country_id],
+            'preferred_state_ids' => [(int) $state->id],
+            'preferred_district_ids' => [(int) $district->id],
+            'preferred_taluka_ids' => [],
+        ];
+    }
+
+    /**
+     * Default partner diet pivot IDs from member's own diet_id (single id in pivot). Not persisted here.
+     *
+     * @return array<int, int>
+     */
+    public static function defaultPreferredDietIds(MatrimonyProfile $profile): array
+    {
+        $did = $profile->diet_id;
+        if ($did === null || $did === '') {
+            return [];
+        }
+        $id = (int) $did;
+        if ($id < 1) {
+            return [];
+        }
+        $exists = DB::table('master_diets')->where('id', $id)->where('is_active', true)->exists();
+
+        return $exists ? [$id] : [];
+    }
+
+    /**
      * @return array<string, mixed>
      */
     public static function suggestForProfile(MatrimonyProfile $profile): array
     {
+        $location = self::defaultLocationPivotsFromOwnDistrict($profile);
+
         $out = [
             'preferred_age_min' => null,
             'preferred_age_max' => null,
+            'preferred_height_min_cm' => null,
+            'preferred_height_max_cm' => null,
             'preferred_income_min' => null,
             'preferred_income_max' => null,
+            /** Legacy criteria column; partner "education preference" uses master-education pivots — default open to all (null). */
             'preferred_education' => null,
             'preferred_city_id' => null,
             'preferred_religion_ids' => [],
             'preferred_caste_ids' => [],
-            'preferred_district_ids' => [],
+            'preferred_country_ids' => $location['preferred_country_ids'],
+            'preferred_state_ids' => $location['preferred_state_ids'],
+            'preferred_district_ids' => $location['preferred_district_ids'],
+            'preferred_taluka_ids' => $location['preferred_taluka_ids'],
+            'preferred_master_education_ids' => [],
+            'preferred_diet_ids' => self::defaultPreferredDietIds($profile),
+            'preferred_marital_status_id' => null,
             'preference_preset' => 'balanced',
         ];
 
@@ -77,6 +241,12 @@ class PartnerPreferenceSuggestionService
         if ($ageRange !== null) {
             $out['preferred_age_min'] = $ageRange['min'];
             $out['preferred_age_max'] = $ageRange['max'];
+        }
+
+        $heightRange = self::defaultPreferredHeightRangeCm($profile);
+        if ($heightRange !== null) {
+            $out['preferred_height_min_cm'] = $heightRange['min'];
+            $out['preferred_height_max_cm'] = $heightRange['max'];
         }
 
         // Income: prefer normalized annual amount from income engine; fallback to legacy annual_income.
@@ -89,10 +259,6 @@ class PartnerPreferenceSuggestionService
         if ($income !== null) {
             $out['preferred_income_min'] = max(0, round($income * 0.7, 2));
             $out['preferred_income_max'] = null;
-        }
-
-        if (!empty($profile->highest_education)) {
-            $out['preferred_education'] = $profile->highest_education;
         }
 
         if (!empty($profile->city_id)) {
@@ -109,14 +275,7 @@ class PartnerPreferenceSuggestionService
             $out['preferred_caste_ids'] = [(int) $profile->caste_id];
         }
 
-        if (!empty($profile->district_id)) {
-            $out['preferred_district_ids'] = [(int) $profile->district_id];
-        } elseif (!empty($profile->city_id)) {
-            $districtId = DB::table('cities')->where('id', $profile->city_id)->value('district_id');
-            if ($districtId) {
-                $out['preferred_district_ids'] = [(int) $districtId];
-            }
-        }
+        $out['preferred_marital_status_id'] = self::defaultPreferredMaritalStatusId($profile);
 
         return $out;
     }

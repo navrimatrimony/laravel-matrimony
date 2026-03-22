@@ -294,10 +294,14 @@ class ManualSnapshotBuilderService
                 'preferred_caste' => trim((string) ($pr['preferred_caste'] ?? '')),
                 'preferred_age_min' => isset($pr['preferred_age_min']) && $pr['preferred_age_min'] !== '' ? (int) $pr['preferred_age_min'] : null,
                 'preferred_age_max' => isset($pr['preferred_age_max']) && $pr['preferred_age_max'] !== '' ? (int) $pr['preferred_age_max'] : null,
+                'preferred_height_min_cm' => isset($pr['preferred_height_min_cm']) && $pr['preferred_height_min_cm'] !== '' ? (int) $pr['preferred_height_min_cm'] : null,
+                'preferred_height_max_cm' => isset($pr['preferred_height_max_cm']) && $pr['preferred_height_max_cm'] !== '' ? (int) $pr['preferred_height_max_cm'] : null,
                 'preferred_income_min' => isset($pr['preferred_income_min']) && $pr['preferred_income_min'] !== '' ? (float) $pr['preferred_income_min'] : null,
                 'preferred_income_max' => isset($pr['preferred_income_max']) && $pr['preferred_income_max'] !== '' ? (float) $pr['preferred_income_max'] : null,
                 'preferred_education' => trim((string) ($pr['preferred_education'] ?? '')),
             ]];
+        } elseif (\App\Services\PartnerPreferenceSnapshotBuilder::requestHasFlatPartnerPreferenceFields($request)) {
+            $preferences = [\App\Services\PartnerPreferenceSnapshotBuilder::validateAndBuildRow($request)];
         }
 
         $extended_narrative = [];

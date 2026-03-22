@@ -881,7 +881,11 @@
         $hasAnyPrefs = ($preferenceCriteria->preferred_city_id ?? null) !== null
             || ($preferenceCriteria->preferred_education ?? '') !== ''
             || ($preferenceCriteria->preferred_age_min ?? null) !== null
-            || ($preferenceCriteria->preferred_age_max ?? null) !== null;
+            || ($preferenceCriteria->preferred_age_max ?? null) !== null
+            || ($preferenceCriteria->preferred_height_min_cm ?? null) !== null
+            || ($preferenceCriteria->preferred_height_max_cm ?? null) !== null
+            || ($preferenceCriteria->preferred_marital_status_id ?? null) !== null
+            || ($preferenceCriteria->partner_profile_with_children ?? null) !== null;
     }
     $hasAnyPrefs = $hasAnyPrefs
         || !empty($preferredReligionIds ?? [])
@@ -895,12 +899,45 @@
         @if($hasPrefCriteria && ($preferenceCriteria->preferred_age_min ?? null) !== null || ($preferenceCriteria->preferred_age_max ?? null) !== null)
             <p><span class="text-gray-500">{{ __('Age:') }}</span> {{ $preferenceCriteria->preferred_age_min ?? '—' }}–{{ $preferenceCriteria->preferred_age_max ?? '—' }}</p>
         @endif
+        @if($hasPrefCriteria && (($preferenceCriteria->preferred_height_min_cm ?? null) !== null || ($preferenceCriteria->preferred_height_max_cm ?? null) !== null))
+            @php
+                $hMin = (int) ($preferenceCriteria->preferred_height_min_cm ?? 0);
+                $hMax = (int) ($preferenceCriteria->preferred_height_max_cm ?? 0);
+            @endphp
+            <p><span class="text-gray-500">{{ __('wizard.preferred_height_range') }}:</span>
+                @if($hMin > 0 && $hMax > 0)
+                    {{ \App\Support\HeightDisplay::formatCmRange($hMin, $hMax) }}
+                @else
+                    {{ $preferenceCriteria->preferred_height_min_cm ?? '—' }}–{{ $preferenceCriteria->preferred_height_max_cm ?? '—' }} cm
+                @endif
+            </p>
+        @endif
         @if($hasPrefCriteria && ($preferenceCriteria->preferred_education ?? '') !== '')
             <p><span class="text-gray-500">{{ __('Education:') }}</span> {{ $preferenceCriteria->preferred_education }}</p>
         @endif
         @if($hasPrefCriteria && ($preferenceCriteria->preferred_city_id ?? null))
             @php $prefCityName = \App\Models\City::where('id', $preferenceCriteria->preferred_city_id)->value('name'); @endphp
             @if($prefCityName)<p><span class="text-gray-500">{{ __('City:') }}</span> {{ $prefCityName }}</p>@endif
+        @endif
+        @if($hasPrefCriteria && ($preferenceCriteria->preferred_marital_status_id ?? null))
+            @php
+                $prefMs = \App\Models\MasterMaritalStatus::where('id', $preferenceCriteria->preferred_marital_status_id)->first();
+            @endphp
+            @if($prefMs)
+                <p><span class="text-gray-500">{{ __('wizard.marital_status_preference') }}:</span> {{ $prefMs->label }}</p>
+            @endif
+        @endif
+        @if($hasPrefCriteria && in_array($preferenceCriteria->partner_profile_with_children ?? null, ['no', 'yes_if_live_separate', 'yes'], true))
+            @php
+                $pwc = $preferenceCriteria->partner_profile_with_children;
+                $pwcLabel = match ($pwc) {
+                    'no' => __('wizard.partner_children_no'),
+                    'yes_if_live_separate' => __('wizard.partner_children_yes_if_live_separate'),
+                    'yes' => __('wizard.partner_children_yes'),
+                    default => $pwc,
+                };
+            @endphp
+            <p><span class="text-gray-500">{{ __('wizard.profile_with_children_partner') }}:</span> {{ $pwcLabel }}</p>
         @endif
         @if(!empty($preferredReligionIds ?? []))
             @php $prefReligions = \App\Models\Religion::whereIn('id', $preferredReligionIds)->pluck('label')->all(); @endphp

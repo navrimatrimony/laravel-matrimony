@@ -9,6 +9,8 @@
     $sectionStatuses = $sectionStatuses ?? [];
     $nextSection = $nextSection ?? null;
     $previousSection = $previousSection ?? null;
+    $partnerPrefNavItems = $partnerPrefNavItems ?? [];
+    $partnerPrefSection = $partnerPrefSection ?? 'basics';
 @endphp
 <div class="py-4 md:py-6">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -50,15 +52,43 @@
                             $status = $sectionStatuses[$s] ?? 'incomplete';
                             $isActive = $currentSection === $s;
                         @endphp
-                        <a href="{{ route('matrimony.profile.wizard.section', ['section' => $s]) }}"
-                            class="flex items-center gap-2 rounded-md px-2 py-2 text-sm font-medium transition-colors {{ $isActive ? 'bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300' : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700' }}">
-                            <span class="shrink-0 w-2 h-2 rounded-full
-                                @if($status === 'completed') bg-emerald-500
-                                @elseif($status === 'warning') bg-amber-500
-                                @else bg-gray-300 dark:bg-gray-500
-                                @endif" aria-hidden="true"></span>
-                            <span class="truncate">{{ __($label) }}</span>
-                        </a>
+                        @if ($s === 'about-preferences')
+                            <div class="space-y-0.5">
+                                <a href="{{ route('matrimony.profile.wizard.section', ['section' => $s]) }}"
+                                    class="flex items-center gap-2 rounded-md px-2 py-2 text-sm font-medium transition-colors {{ $isActive ? 'bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300' : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700' }}">
+                                    <span class="shrink-0 w-2 h-2 rounded-full
+                                        @if($status === 'completed') bg-emerald-500
+                                        @elseif($status === 'warning') bg-amber-500
+                                        @else bg-gray-300 dark:bg-gray-500
+                                        @endif" aria-hidden="true"></span>
+                                    <span class="truncate">{{ __($label) }}</span>
+                                </a>
+                                @if ($currentSection === 'about-preferences')
+                                    @foreach ($partnerPrefNavItems as $pItem)
+                                        @php
+                                            $pSlug = $pItem['slug'] ?? '';
+                                            $pActive = ($partnerPrefSection === $pSlug);
+                                        @endphp
+                                        <a href="{{ route('matrimony.profile.wizard.section', array_merge(['section' => 'about-preferences'], ['pref' => $pSlug])) }}"
+                                            class="flex items-center gap-2 rounded-md pl-6 pr-2 py-1.5 text-xs font-medium transition-colors {{ $pActive ? 'bg-indigo-100/80 dark:bg-indigo-900/40 text-indigo-800 dark:text-indigo-200' : 'text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700/50' }}">
+                                            <span class="shrink-0 w-1.5 h-1.5 rounded-full {{ $pActive ? 'bg-indigo-500' : 'bg-gray-300 dark:bg-gray-600' }}" aria-hidden="true"></span>
+                                            <span class="truncate flex-1 min-w-0">{{ __($pItem['label'] ?? '') }}</span>
+                                            <span class="shrink-0 tabular-nums text-[10px] font-semibold px-1.5 py-0.5 rounded-md {{ $pActive ? 'bg-white/70 dark:bg-gray-800 text-indigo-700 dark:text-indigo-300' : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300' }}">{{ $pItem['badge'] ?? '' }}</span>
+                                        </a>
+                                    @endforeach
+                                @endif
+                            </div>
+                        @else
+                            <a href="{{ route('matrimony.profile.wizard.section', ['section' => $s]) }}"
+                                class="flex items-center gap-2 rounded-md px-2 py-2 text-sm font-medium transition-colors {{ $isActive ? 'bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300' : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700' }}">
+                                <span class="shrink-0 w-2 h-2 rounded-full
+                                    @if($status === 'completed') bg-emerald-500
+                                    @elseif($status === 'warning') bg-amber-500
+                                    @else bg-gray-300 dark:bg-gray-500
+                                    @endif" aria-hidden="true"></span>
+                                <span class="truncate">{{ __($label) }}</span>
+                            </a>
+                        @endif
                     @endforeach
                 </div>
             </aside>
@@ -81,6 +111,26 @@
                 </div>
             </div>
 
+            @if ($currentSection === 'about-preferences' && count($partnerPrefNavItems))
+                <div class="lg:hidden overflow-x-auto pb-2 -mx-4 px-4">
+                    <p class="text-[10px] font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400 mb-1.5 px-1">{{ __('wizard.partner_pref_submenu_label') }}</p>
+                    <div class="flex gap-2 min-w-max">
+                        @foreach ($partnerPrefNavItems as $pItem)
+                            @php
+                                $pSlug = $pItem['slug'] ?? '';
+                                $pActive = ($partnerPrefSection === $pSlug);
+                            @endphp
+                            <a href="{{ route('matrimony.profile.wizard.section', array_merge(['section' => 'about-preferences'], ['pref' => $pSlug])) }}"
+                                class="shrink-0 px-3 py-1.5 rounded-full text-xs font-medium border transition-colors whitespace-nowrap
+                                    {{ $pActive ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-600 hover:border-indigo-400' }}">
+                                {{ __($pItem['label'] ?? '') }}
+                                <span class="opacity-80">· {{ $pItem['badge'] ?? '' }}</span>
+                            </a>
+                        @endforeach
+                    </div>
+                </div>
+            @endif
+
             {{-- Main content: one section at a time --}}
             <main class="flex-1 min-w-0">
                 <div class="bg-white dark:bg-gray-800 shadow rounded-lg border border-gray-200 dark:border-gray-600 overflow-hidden">
@@ -91,6 +141,9 @@
                     </div>
                     <form method="POST" action="{{ route('matrimony.profile.wizard.store', ['section' => $currentSection]) }}" enctype="{{ in_array($currentSection, ['photo', 'full'], true) ? 'multipart/form-data' : 'application/x-www-form-urlencoded' }}" class="p-4 sm:p-6">
                         @csrf
+                        @if ($currentSection === 'about-preferences')
+                            <input type="hidden" name="pref" value="{{ $partnerPrefSection }}">
+                        @endif
 
                         @include('matrimony.profile.wizard.sections.' . str_replace('-', '_', $currentSection))
 
@@ -104,7 +157,7 @@
                                 {{ __('wizard.save') }}
                             </button>
                             <button type="submit" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-medium transition-colors">
-                                {{ $nextSection ? __('Save & Next') : __('Save & Finish') }}
+                                {{ $nextSection ? __('wizard.save_next') : __('wizard.save_finish') }}
                             </button>
                             @if ($nextSection)
                                 <a href="{{ route('matrimony.profile.wizard.section', ['section' => $nextSection]) }}" class="px-4 py-2 text-gray-600 dark:text-gray-400 text-sm font-medium hover:text-indigo-600 dark:hover:text-indigo-400">

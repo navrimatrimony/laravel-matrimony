@@ -1480,7 +1480,7 @@ class MutationService
         $profileId = $profile->id;
 
         if (Schema::hasTable('profile_preference_criteria')) {
-            $allowed = ['preferred_age_min', 'preferred_age_max', 'preferred_income_min', 'preferred_income_max', 'preferred_education', 'preferred_city_id', 'willing_to_relocate', 'settled_city_preference_id', 'marriage_type_preference_id'];
+            $allowed = ['preferred_age_min', 'preferred_age_max', 'preferred_height_min_cm', 'preferred_height_max_cm', 'preferred_income_min', 'preferred_income_max', 'preferred_education', 'preferred_city_id', 'willing_to_relocate', 'settled_city_preference_id', 'marriage_type_preference_id', 'preferred_marital_status_id', 'partner_profile_with_children', 'preferred_profile_managed_by'];
             $data = [];
             foreach ($allowed as $col) {
                 if (array_key_exists($col, $proposed)) {
@@ -1518,7 +1518,14 @@ class MutationService
         $pivotConfig = [
             'profile_preferred_religions' => ['preferred_religion_ids', 'religion_id'],
             'profile_preferred_castes' => ['preferred_caste_ids', 'caste_id'],
+            'profile_preferred_countries' => ['preferred_country_ids', 'country_id'],
+            'profile_preferred_states' => ['preferred_state_ids', 'state_id'],
             'profile_preferred_districts' => ['preferred_district_ids', 'district_id'],
+            'profile_preferred_talukas' => ['preferred_taluka_ids', 'taluka_id'],
+            'profile_preferred_master_education' => ['preferred_master_education_ids', 'master_education_id'],
+            'profile_preferred_working_with_types' => ['preferred_working_with_type_ids', 'working_with_type_id'],
+            'profile_preferred_professions' => ['preferred_profession_ids', 'profession_id'],
+            'profile_preferred_diets' => ['preferred_diet_ids', 'diet_id'],
         ];
         foreach ($pivotConfig as $table => [$key, $fkCol]) {
             if (! Schema::hasTable($table)) {

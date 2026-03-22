@@ -5,6 +5,8 @@ namespace App\Http\Controllers;
 use App\Models\MatrimonyProfile;
 use App\Services\CareerHistoryRowNormalizer;
 use App\Services\FieldCatalogService;
+use App\Services\PartnerPreferenceNavService;
+use App\Services\PartnerPreferenceSnapshotBuilder;
 use App\Services\ProfileCompletionService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -73,7 +75,7 @@ class ProfileWizardController extends Controller
     /**
      * Show wizard section form.
      */
-    public function show(string $section)
+    public function show(Request $request, string $section)
     {
         // Legacy: personal-family was split into education-career + family-details; redirect old links
         if ($section === 'personal-family') {
@@ -130,7 +132,22 @@ class ProfileWizardController extends Controller
         $viewData['sectionStatuses'] = $sectionStatuses;
         $viewData['wizardMinimal'] = $minimal;
 
+        if ($section === 'about-preferences') {
+            $viewData['partnerPrefSection'] = PartnerPreferenceNavService::resolveActiveSection($request);
+            $viewData['partnerPrefNavItems'] = PartnerPreferenceNavService::navItems($profile, $viewData);
+        }
+
         return view('matrimony.profile.wizard.section', $viewData);
+    }
+
+    /**
+     * Preserve ?pref= when redirecting within Partner Preferences workspace.
+     *
+     * @return array<string, string>
+     */
+    private function partnerPrefQuery(Request $request): array
+    {
+        return PartnerPreferenceNavService::prefQuery($request);
     }
 
     /**
@@ -212,7 +229,7 @@ class ProfileWizardController extends Controller
         \Log::info('DEBUG SNAPSHOT FULL', $snapshot ?? []);
 
         if ($snapshot === null) {
-            return redirect()->route('matrimony.profile.wizard.section', ['section' => $section])
+            return redirect()->route('matrimony.profile.wizard.section', array_merge(['section' => $section], $this->partnerPrefQuery($request)))
                 ->with('error', 'Invalid section or no data.')
                 ->withInput();
         }
@@ -230,11 +247,11 @@ class ProfileWizardController extends Controller
                 DB::table('profile_children')->where('profile_id', $profile->id)->delete();
             }
         } catch (\Illuminate\Validation\ValidationException $e) {
-            return redirect()->route('matrimony.profile.wizard.section', ['section' => $section])
+            return redirect()->route('matrimony.profile.wizard.section', array_merge(['section' => $section], $this->partnerPrefQuery($request)))
                 ->withErrors($e->errors())
                 ->withInput();
         } catch (\RuntimeException $e) {
-            return redirect()->route('matrimony.profile.wizard.section', ['section' => $section])
+            return redirect()->route('matrimony.profile.wizard.section', array_merge(['section' => $section], $this->partnerPrefQuery($request)))
                 ->withErrors(['lifecycle' => $e->getMessage()])
                 ->withInput();
         } catch (\Throwable $e) {
@@ -247,13 +264,13 @@ class ProfileWizardController extends Controller
         }
 
         if ($result['conflict_detected'] ?? false) {
-            return redirect()->route('matrimony.profile.wizard.section', ['section' => $section])
+            return redirect()->route('matrimony.profile.wizard.section', array_merge(['section' => $section], $this->partnerPrefQuery($request)))
                 ->with('warning', 'Some changes could not be applied due to conflicts.')
                 ->withInput();
         }
 
         if ($request->boolean('save_only')) {
-            return redirect()->route('matrimony.profile.wizard.section', ['section' => $section])
+            return redirect()->route('matrimony.profile.wizard.section', array_merge(['section' => $section], $this->partnerPrefQuery($request)))
                 ->with('success', __('wizard.saved'));
         }
 
@@ -615,23 +632,70 @@ class ProfileWizardController extends Controller
                 $preferredReligionIds = DB::table('profile_preferred_religions')->where('profile_id', $profile->id)->pluck('religion_id')->all();
                 $preferredCasteIds = DB::table('profile_preferred_castes')->where('profile_id', $profile->id)->pluck('caste_id')->all();
                 $preferredDistrictIds = DB::table('profile_preferred_districts')->where('profile_id', $profile->id)->pluck('district_id')->all();
+                $preferredCountryIds = Schema::hasTable('profile_preferred_countries')
+                    ? DB::table('profile_preferred_countries')->where('profile_id', $profile->id)->pluck('country_id')->all()
+                    : [];
+                $preferredStateIds = Schema::hasTable('profile_preferred_states')
+                    ? DB::table('profile_preferred_states')->where('profile_id', $profile->id)->pluck('state_id')->all()
+                    : [];
+                $preferredTalukaIds = Schema::hasTable('profile_preferred_talukas')
+                    ? DB::table('profile_preferred_talukas')->where('profile_id', $profile->id)->pluck('taluka_id')->all()
+                    : [];
+                $preferredMasterEducationIds = Schema::hasTable('profile_preferred_master_education')
+                    ? DB::table('profile_preferred_master_education')->where('profile_id', $profile->id)->pluck('master_education_id')->all()
+                    : [];
+                $preferredWorkingWithTypeIds = Schema::hasTable('profile_preferred_working_with_types')
+                    ? DB::table('profile_preferred_working_with_types')->where('profile_id', $profile->id)->pluck('working_with_type_id')->all()
+                    : [];
+                $preferredProfessionIds = Schema::hasTable('profile_preferred_professions')
+                    ? DB::table('profile_preferred_professions')->where('profile_id', $profile->id)->pluck('profession_id')->all()
+                    : [];
+                $preferredDietIds = Schema::hasTable('profile_preferred_diets')
+                    ? DB::table('profile_preferred_diets')->where('profile_id', $profile->id)->pluck('diet_id')->all()
+                    : [];
 
                 $suggestions = \App\Services\PartnerPreferenceSuggestionService::suggestForProfile($profile);
-                if (! $criteria && empty($preferredReligionIds) && empty($preferredCasteIds) && empty($preferredDistrictIds)) {
+                if (! $criteria && empty($preferredReligionIds) && empty($preferredCasteIds) && empty($preferredDistrictIds)
+                    && empty($preferredCountryIds) && empty($preferredStateIds) && empty($preferredTalukaIds)
+                    && empty($preferredMasterEducationIds) && empty($preferredWorkingWithTypeIds) && empty($preferredProfessionIds)
+                    && empty($preferredDietIds)) {
                     $criteria = (object) [
                         'preferred_age_min' => $suggestions['preferred_age_min'],
                         'preferred_age_max' => $suggestions['preferred_age_max'],
+                        'preferred_height_min_cm' => $suggestions['preferred_height_min_cm'] ?? null,
+                        'preferred_height_max_cm' => $suggestions['preferred_height_max_cm'] ?? null,
                         'preferred_income_min' => $suggestions['preferred_income_min'],
                         'preferred_income_max' => $suggestions['preferred_income_max'],
                         'preferred_education' => $suggestions['preferred_education'],
                         'preferred_city_id' => $suggestions['preferred_city_id'],
+                        'preferred_marital_status_id' => $suggestions['preferred_marital_status_id'] ?? null,
+                        /** UI default "No preference" — null; not persisted until user saves. */
+                        'preferred_profile_managed_by' => null,
                     ];
                     $preferredReligionIds = $suggestions['preferred_religion_ids'] ?? [];
                     $preferredCasteIds = $suggestions['preferred_caste_ids'] ?? [];
+                    $preferredCountryIds = $suggestions['preferred_country_ids'] ?? [];
+                    $preferredStateIds = $suggestions['preferred_state_ids'] ?? [];
                     $preferredDistrictIds = $suggestions['preferred_district_ids'] ?? [];
+                    $preferredTalukaIds = $suggestions['preferred_taluka_ids'] ?? [];
+                    $preferredDietIds = $suggestions['preferred_diet_ids'] ?? [];
                     $data['preferencePreset'] = $suggestions['preference_preset'] ?? 'balanced';
                 } else {
                     $data['preferencePreset'] = 'custom';
+                }
+
+                // Defaults for empty partner-preference fields only (saved DB values always win; no auto-save).
+                if (empty($preferredDietIds)) {
+                    $preferredDietIds = $suggestions['preferred_diet_ids'] ?? [];
+                }
+                if (
+                    empty($preferredCountryIds) && empty($preferredStateIds)
+                    && empty($preferredDistrictIds) && empty($preferredTalukaIds)
+                ) {
+                    $preferredCountryIds = $suggestions['preferred_country_ids'] ?? [];
+                    $preferredStateIds = $suggestions['preferred_state_ids'] ?? [];
+                    $preferredDistrictIds = $suggestions['preferred_district_ids'] ?? [];
+                    $preferredTalukaIds = $suggestions['preferred_taluka_ids'] ?? [];
                 }
                 $base = $suggestions;
                 if (! empty($base['preferred_city_id'])) {
@@ -649,11 +713,105 @@ class ProfileWizardController extends Controller
                 $data['preferredReligionIds'] = $preferredReligionIds;
                 $data['preferredCasteIds'] = $preferredCasteIds;
                 $data['preferredDistrictIds'] = $preferredDistrictIds;
+                $data['preferredCountryIds'] = $preferredCountryIds;
+                $data['preferredStateIds'] = $preferredStateIds;
+                $data['preferredTalukaIds'] = $preferredTalukaIds;
+                $data['preferredMasterEducationIds'] = $preferredMasterEducationIds;
+                $data['preferredWorkingWithTypeIds'] = $preferredWorkingWithTypeIds;
+                $data['preferredProfessionIds'] = $preferredProfessionIds;
+                $data['preferredDietIds'] = $preferredDietIds;
+                $data['partnerDietOptions'] = \App\Models\MasterDiet::where('is_active', true)->orderBy('sort_order')->orderBy('label')->get();
+
+                $preferredCountryIds = array_values(array_unique(array_map('intval', $preferredCountryIds)));
+                $preferredStateIds = array_values(array_unique(array_map('intval', $preferredStateIds)));
+                $preferredDistrictIds = array_values(array_unique(array_map('intval', $preferredDistrictIds)));
+                $preferredTalukaIds = array_values(array_unique(array_map('intval', $preferredTalukaIds)));
+
+                $data['allCountries'] = \App\Models\Country::query()->orderBy('name')->get();
+                $data['partnerLocationInitialStates'] = $preferredStateIds !== [] || $preferredCountryIds !== []
+                    ? \App\Models\State::query()
+                        ->where(function ($q) use ($preferredCountryIds, $preferredStateIds) {
+                            if ($preferredCountryIds !== []) {
+                                $q->whereIn('country_id', $preferredCountryIds);
+                            }
+                            if ($preferredStateIds !== []) {
+                                $q->orWhereIn('id', $preferredStateIds);
+                            }
+                        })
+                        ->orderBy('name')
+                        ->get()
+                    : collect();
+                $data['partnerLocationInitialDistricts'] = $preferredDistrictIds !== [] || $preferredStateIds !== []
+                    ? \App\Models\District::query()
+                        ->where(function ($q) use ($preferredStateIds, $preferredDistrictIds) {
+                            if ($preferredStateIds !== []) {
+                                $q->whereIn('state_id', $preferredStateIds);
+                            }
+                            if ($preferredDistrictIds !== []) {
+                                $q->orWhereIn('id', $preferredDistrictIds);
+                            }
+                        })
+                        ->orderBy('name')
+                        ->get()
+                    : collect();
+                $data['partnerLocationInitialTalukas'] = $preferredTalukaIds !== [] || $preferredDistrictIds !== []
+                    ? \App\Models\Taluka::query()
+                        ->where(function ($q) use ($preferredDistrictIds, $preferredTalukaIds) {
+                            if ($preferredDistrictIds !== []) {
+                                $q->whereIn('district_id', $preferredDistrictIds);
+                            }
+                            if ($preferredTalukaIds !== []) {
+                                $q->orWhereIn('id', $preferredTalukaIds);
+                            }
+                        })
+                        ->orderBy('name')
+                        ->get()
+                    : collect();
+                $data['partnerLocationStateById'] = $data['partnerLocationInitialStates']->mapWithKeys(
+                    fn ($s) => [$s->id => ['id' => $s->id, 'name' => $s->name, 'country_id' => $s->country_id]]
+                )->all();
+                $data['partnerLocationDistrictById'] = $data['partnerLocationInitialDistricts']->mapWithKeys(
+                    fn ($d) => [$d->id => ['id' => $d->id, 'name' => $d->name, 'state_id' => $d->state_id]]
+                )->all();
+                $data['partnerLocationTalukaById'] = $data['partnerLocationInitialTalukas']->mapWithKeys(
+                    fn ($t) => [$t->id => ['id' => $t->id, 'name' => $t->name, 'district_id' => $t->district_id]]
+                )->all();
+                $data['partnerLocationApiBase'] = url('/api/internal/location');
+
+                $partnerProfessions = \App\Models\Profession::where('is_active', true)->with('workingWithType')->orderBy('sort_order')->orderBy('name')->get();
+                $data['masterEducationOptions'] = \App\Models\MasterEducation::where('is_active', true)->orderBy('sort_order')->orderBy('name')->get();
+                $data['workingWithTypes'] = \App\Models\WorkingWithType::where('is_active', true)->orderBy('sort_order')->orderBy('name')->get();
+                $data['partnerProfessions'] = $partnerProfessions;
+                $data['partnerProfessionsByWorkingWithType'] = $partnerProfessions->groupBy('working_with_type_id')->map(
+                    fn ($group) => $group->map(fn ($p) => ['id' => $p->id, 'name' => $p->name, 'working_with_type_id' => $p->working_with_type_id])->values()->all()
+                )->all();
+                $data['partnerProfessionById'] = $partnerProfessions->keyBy('id')->map(
+                    fn ($p) => ['id' => $p->id, 'name' => $p->name, 'working_with_type_id' => $p->working_with_type_id]
+                )->all();
+
+                $data['preferredMaritalStatusId'] = old(
+                    'preferred_marital_status_id',
+                    $criteria !== null
+                        ? ($criteria->preferred_marital_status_id ?? null)
+                        : ($suggestions['preferred_marital_status_id'] ?? null)
+                );
+
+                $data['neverMarriedMaritalStatusId'] = \App\Models\MasterMaritalStatus::where('key', 'never_married')->where('is_active', true)->value('id');
+                $data['partnerProfileWithChildren'] = old(
+                    'partner_profile_with_children',
+                    $criteria !== null ? ($criteria->partner_profile_with_children ?? null) : null
+                );
 
                 $data['allReligions'] = \App\Models\Religion::where('is_active', true)->orderBy('label')->get();
-                $data['allCastes'] = \App\Models\Caste::where('is_active', true)->orderBy('label')->get();
-                $data['allDistricts'] = \App\Models\District::orderBy('name')->get();
+                $partnerCastes = \App\Models\Caste::where('is_active', true)->orderBy('label')->get();
+                $data['partnerCastesByReligion'] = $partnerCastes->groupBy('religion_id')->map(
+                    fn ($group) => $group->map(fn ($c) => ['id' => $c->id, 'label' => $c->display_label])->values()->all()
+                )->all();
+                $data['partnerCasteById'] = $partnerCastes->keyBy('id')->map(
+                    fn ($c) => ['id' => $c->id, 'religion_id' => $c->religion_id, 'label' => $c->display_label]
+                )->all();
                 $data['marriageTypePreferences'] = \App\Models\MasterMarriageTypePreference::where('is_active', true)->orderBy('sort_order')->get();
+                $data['allMaritalStatuses'] = \App\Models\MasterMaritalStatus::where('is_active', true)->orderBy('label')->get();
                 break;
             case 'photo':
                 break;
@@ -1424,95 +1582,8 @@ class ProfileWizardController extends Controller
 
     private function buildAboutPreferencesSnapshot(Request $request, MatrimonyProfile $profile): array
     {
-        $validated = $request->validate([
-            'preferred_age_min' => ['nullable', 'integer', 'min:18', 'max:80'],
-            'preferred_age_max' => ['nullable', 'integer', 'min:18', 'max:80'],
-            'preferred_income_min' => ['nullable', 'numeric', 'min:0'],
-            'preferred_income_max' => ['nullable', 'numeric', 'min:0'],
-            'preferred_education' => ['nullable', 'string', 'max:255'],
-            'preferred_city_id' => ['nullable', 'integer', 'exists:cities,id'],
-            'preferred_religion_ids' => ['nullable', 'array'],
-            'preferred_religion_ids.*' => ['integer', Rule::exists('religions', 'id')->where(fn ($q) => $q->where('is_active', true))],
-            'preferred_caste_ids' => ['nullable', 'array'],
-            'preferred_caste_ids.*' => ['integer', Rule::exists('castes', 'id')->where(fn ($q) => $q->where('is_active', true))],
-            'preferred_district_ids' => ['nullable', 'array'],
-            'preferred_district_ids.*' => ['integer', 'exists:districts,id'],
-            'willing_to_relocate' => ['nullable', 'boolean'],
-            'settled_city_preference_id' => ['nullable', 'integer', 'exists:cities,id'],
-            'settled_preference' => ['nullable', 'array'],
-            'settled_preference.city_id' => ['nullable', 'integer', 'exists:cities,id'],
-            'marriage_type_preference_id' => ['nullable', 'integer', Rule::exists('master_marriage_type_preferences', 'id')->where(fn ($q) => $q->where('is_active', true))],
-        ]);
-
-        $preferredCitiesInput = $request->input('preferred_cities', []);
-        $cityIdsFromPreferred = [];
-        if (is_array($preferredCitiesInput)) {
-            foreach ($preferredCitiesInput as $row) {
-                if (! is_array($row)) {
-                    continue;
-                }
-                $cid = $row['city_id'] ?? $row['preferred_city_id'] ?? null;
-                if ($cid !== null && $cid !== '') {
-                    $cityIdsFromPreferred[] = (int) $cid;
-                }
-            }
-        }
-        $cityIdsFromPreferred = array_values(array_unique($cityIdsFromPreferred));
-
-        if (
-            isset($validated['preferred_age_min'], $validated['preferred_age_max']) &&
-            $validated['preferred_age_min'] !== null &&
-            $validated['preferred_age_max'] !== null &&
-            $validated['preferred_age_min'] > $validated['preferred_age_max']
-        ) {
-            throw \Illuminate\Validation\ValidationException::withMessages([
-                'preferred_age_min' => ['Minimum age must be less than or equal to maximum age.'],
-            ]);
-        }
-        if (
-            isset($validated['preferred_income_min'], $validated['preferred_income_max']) &&
-            $validated['preferred_income_min'] !== null &&
-            $validated['preferred_income_max'] !== null &&
-            (float) $validated['preferred_income_min'] > (float) $validated['preferred_income_max']
-        ) {
-            throw \Illuminate\Validation\ValidationException::withMessages([
-                'preferred_income_min' => ['Minimum income must be less than or equal to maximum income.'],
-            ]);
-        }
-
-        $preferredCityId = $validated['preferred_city_id'] ?? null;
-        if ($preferredCityId === null && ! empty($cityIdsFromPreferred)) {
-            $preferredCityId = $cityIdsFromPreferred[0];
-        }
-
-        $districtIds = $validated['preferred_district_ids'] ?? [];
-        if (! empty($cityIdsFromPreferred)) {
-            $talukaIds = DB::table('cities')->whereIn('id', $cityIdsFromPreferred)->pluck('taluka_id')->filter()->all();
-            if (! empty($talukaIds)) {
-                $districtsFromCities = DB::table('talukas')->whereIn('id', $talukaIds)->pluck('district_id')->filter()->map(fn ($id) => (int) $id)->all();
-                if (! empty($districtsFromCities)) {
-                    $districtIds = array_values(array_unique(array_merge($districtIds, $districtsFromCities)));
-                }
-            }
-        }
-
-        $snapshotPreferences = [
-            'preferred_age_min' => $validated['preferred_age_min'] ?? null,
-            'preferred_age_max' => $validated['preferred_age_max'] ?? null,
-            'preferred_income_min' => $validated['preferred_income_min'] ?? null,
-            'preferred_income_max' => $validated['preferred_income_max'] ?? null,
-            'preferred_education' => $validated['preferred_education'] ?? null,
-            'preferred_city_id' => $preferredCityId,
-            'willing_to_relocate' => $request->boolean('willing_to_relocate') ? true : null,
-            'settled_city_preference_id' => $validated['settled_city_preference_id'] ?? (isset($validated['settled_preference']['city_id']) ? (int) $validated['settled_preference']['city_id'] : null),
-            'marriage_type_preference_id' => $validated['marriage_type_preference_id'] ?? null,
-            'preferred_religion_ids' => $validated['preferred_religion_ids'] ?? [],
-            'preferred_caste_ids' => $validated['preferred_caste_ids'] ?? [],
-            'preferred_district_ids' => $districtIds,
-        ];
-
         return [
-            'preferences' => $snapshotPreferences,
+            'preferences' => PartnerPreferenceSnapshotBuilder::validateAndBuildRow($request),
         ];
     }
 

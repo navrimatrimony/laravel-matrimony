@@ -1,24 +1,32 @@
 {{-- Phase-5B: Partner preferences — criteria + pivot-based engine. About Me is a separate tab. --}}
 @php
+    use App\Support\HeightDisplay;
     $criteria = $preferenceCriteria ?? null;
     $oldCriteria = [
         'preferred_age_min' => old('preferred_age_min', $criteria?->preferred_age_min ?? null),
         'preferred_age_max' => old('preferred_age_max', $criteria?->preferred_age_max ?? null),
         'preferred_income_min' => old('preferred_income_min', $criteria?->preferred_income_min ?? null),
         'preferred_income_max' => old('preferred_income_max', $criteria?->preferred_income_max ?? null),
-        'preferred_education' => old('preferred_education', $criteria?->preferred_education ?? ''),
-        'preferred_city_id' => old('preferred_city_id', $criteria?->preferred_city_id ?? null),
         'willing_to_relocate' => old('willing_to_relocate', $criteria?->willing_to_relocate ?? null),
-        'settled_city_preference_id' => old('settled_city_preference_id', $criteria?->settled_city_preference_id ?? null),
         'marriage_type_preference_id' => old('marriage_type_preference_id', $criteria?->marriage_type_preference_id ?? null),
+        'preferred_height_min_cm' => old('preferred_height_min_cm', $criteria?->preferred_height_min_cm ?? null),
+        'preferred_height_max_cm' => old('preferred_height_max_cm', $criteria?->preferred_height_max_cm ?? null),
     ];
-    $settledCityDisplay = '';
-    if (!empty($oldCriteria['settled_city_preference_id'])) {
-        $settledCityDisplay = \App\Models\City::where('id', $oldCriteria['settled_city_preference_id'])->value('name') ?? '';
-    }
     $selectedReligionIds = collect(old('preferred_religion_ids', $preferredReligionIds ?? []))->map(fn($id) => (int) $id)->all();
     $selectedCasteIds = collect(old('preferred_caste_ids', $preferredCasteIds ?? []))->map(fn($id) => (int) $id)->all();
+    $selectedCasteMap = [];
+    foreach ($selectedCasteIds as $sid) {
+        $selectedCasteMap[$sid] = true;
+    }
     $selectedDistrictIds = collect(old('preferred_district_ids', $preferredDistrictIds ?? []))->map(fn($id) => (int) $id)->all();
+    $selectedCountryIds = collect(old('preferred_country_ids', $preferredCountryIds ?? []))->map(fn($id) => (int) $id)->all();
+    $selectedStateIds = collect(old('preferred_state_ids', $preferredStateIds ?? []))->map(fn($id) => (int) $id)->all();
+    $selectedTalukaIds = collect(old('preferred_taluka_ids', $preferredTalukaIds ?? []))->map(fn($id) => (int) $id)->all();
+    $selectedMasterEducationIds = collect(old('preferred_master_education_ids', $preferredMasterEducationIds ?? []))->map(fn($id) => (int) $id)->all();
+    $selectedWorkingWithTypeIds = collect(old('preferred_working_with_type_ids', $preferredWorkingWithTypeIds ?? []))->map(fn($id) => (int) $id)->all();
+    $selectedProfessionIds = collect(old('preferred_profession_ids', $preferredProfessionIds ?? []))->map(fn($id) => (int) $id)->all();
+    $selectedDietIds = collect(old('preferred_diet_ids', $preferredDietIds ?? []))->map(fn($id) => (int) $id)->all();
+    $selectedProfileManagedBy = old('preferred_profile_managed_by', $criteria?->preferred_profile_managed_by ?? null);
     $ageRangeDefault = (isset($profile) && $profile instanceof \App\Models\MatrimonyProfile)
         ? \App\Services\PartnerPreferenceSuggestionService::defaultPreferredAgeRange($profile)
         : null;
@@ -35,6 +43,35 @@
     if ($ageMinInit > $ageMaxInit) {
         [$ageMinInit, $ageMaxInit] = [$ageMaxInit, $ageMinInit];
     }
+    $heightSuggest = (isset($profile) && $profile instanceof \App\Models\MatrimonyProfile)
+        ? \App\Services\PartnerPreferenceSuggestionService::defaultPreferredHeightRangeCm($profile)
+        : null;
+    $hasSavedHeightCm = ($criteria?->preferred_height_min_cm ?? null) !== null
+        || ($criteria?->preferred_height_max_cm ?? null) !== null;
+    $rawHMin = $oldCriteria['preferred_height_min_cm'];
+    $rawHMax = $oldCriteria['preferred_height_max_cm'];
+    $rawHMin = ($rawHMin === '' || $rawHMin === null) ? null : (int) $rawHMin;
+    $rawHMax = ($rawHMax === '' || $rawHMax === null) ? null : (int) $rawHMax;
+    $heightSliderMin = 120;
+    $heightSliderMax = 220;
+    $heightMinValue = $rawHMin;
+    $heightMaxValue = $rawHMax;
+    if ($heightMinValue === null && $heightMaxValue === null && $heightSuggest !== null) {
+        $heightMinValue = $heightSuggest['min'];
+        $heightMaxValue = $heightSuggest['max'];
+    }
+    $heightMinInit = $heightMinValue !== null ? (int) $heightMinValue : 135;
+    $heightMaxInit = $heightMaxValue !== null ? (int) $heightMaxValue : 185;
+    if ($rawHMin === null && $rawHMax === null && $heightSuggest === null) {
+        $heightMinInit = 135;
+        $heightMaxInit = 185;
+    }
+    $heightMinInit = max($heightSliderMin, min($heightSliderMax, $heightMinInit));
+    $heightMaxInit = max($heightSliderMin, min($heightSliderMax, $heightMaxInit));
+    if ($heightMinInit > $heightMaxInit) {
+        [$heightMinInit, $heightMaxInit] = [$heightMaxInit, $heightMinInit];
+    }
+    $showHeightHint = ($heightSuggest !== null && ! $hasSavedHeightCm);
     $rupeesToLakhs = function ($v): ?int {
         if ($v === null || $v === '') {
             return null;
@@ -58,9 +95,25 @@
     $incomeFmtLakh = function (int $l): string {
         return $l === 0 ? __('wizard.income_lakh_zero') : __('wizard.income_lakh_format', ['num' => $l]);
     };
+    $optionLabel = function ($row, string $field) {
+        $key = $row->key ?? null;
+        $dbLabel = $row->label ?? '';
+        if ($key) {
+            $tKey = 'components.options.' . $field . '.' . $key;
+            $t = __($tKey);
+            if ($t !== $tKey) {
+                return $t;
+            }
+        }
+
+        return $dbLabel;
+    };
+@endphp
+@php
+    $activePref = $partnerPrefSection ?? 'basics';
 @endphp
 
-<div class="space-y-6">
+<div class="space-y-5" id="partner-pref-workspace">
     <div class="flex items-center justify-between">
         <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100 border-b border-gray-200 dark:border-gray-700 pb-2 flex-1">{{ __('wizard.partner_preferences') }}</h2>
         <div class="ml-4 flex items-center gap-2 text-xs">
@@ -77,475 +130,813 @@
         </div>
     </div>
 
-    @php
-        $preferredCities = old('preferred_cities', []);
-        if (!is_array($preferredCities)) { $preferredCities = []; }
-        if (count($preferredCities) === 0 && $oldCriteria['preferred_city_id']) {
-            $preferredCities = [['city_id' => $oldCriteria['preferred_city_id']]];
-        }
-        $preferredCitiesContainerId = 'preferred-cities-container';
+    <p class="text-sm text-gray-600 dark:text-gray-400 -mt-1">{{ __('wizard.partner_pref_workspace_intro') }}</p>
+    <p class="text-xs font-medium text-indigo-600 dark:text-indigo-400">{{ __('wizard.partner_pref_section_' . $activePref) }}</p>
 
-        $preferredDistrictContainerId = 'preferred-districts-container';
-        $preferredDistrictRows = [];
-        if (!empty($selectedDistrictIds)) {
-            foreach ($selectedDistrictIds as $i => $did) {
-                $preferredDistrictRows[] = ['district_id' => $did];
-            }
-        }
-        if (count($preferredDistrictRows) === 0) {
-            $preferredDistrictRows = [['district_id' => null]];
-        }
-    @endphp
-
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div class="space-y-2">
-            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{{ __('wizard.preferred_cities') }}</label>
-            <div id="{{ $preferredCitiesContainerId }}" class="space-y-2" data-repeater-container data-name-prefix="preferred_cities" data-row-class="preferred-city-row" data-min-rows="1">
-                @forelse($preferredCities as $idx => $cityRow)
-                    @php
-                        $row = is_array($cityRow) ? $cityRow : (array) $cityRow;
-                        $cityId = $row['city_id'] ?? $row['preferred_city_id'] ?? null;
-                        $cityName = $cityId ? (\App\Models\City::where('id', $cityId)->value('name') ?? '') : '';
-                    @endphp
-                    <div class="preferred-city-row p-2 bg-gray-50 dark:bg-gray-800/60 rounded space-y-2">
-                        <input type="hidden" name="preferred_cities[{{ $idx }}][city_id]" value="{{ $cityId }}">
-                        <x-profile.location-typeahead
-                            context="alliance"
-                            :namePrefix="'preferred_cities['.$idx.']'"
-                            :value="$cityName"
-                            placeholder="{{ __('wizard.preferred_city_placeholder') }}"
-                            label=""
-                            :data-city-id="$cityId ?? ''"
-                        />
-                        <div class="flex justify-between items-center">
-                            <div class="preferred-city-add-wrap">
-                                <span role="button" tabindex="0" class="inline-flex items-center gap-1 text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 cursor-pointer font-medium text-xs" data-repeater-add data-repeater-for="{{ $preferredCitiesContainerId }}">
-                                    <span aria-hidden="true">+</span> {{ __('wizard.add_city') }}
-                                </span>
-                            </div>
-                            <button type="button" class="text-xs text-red-600 dark:text-red-400 hover:underline" data-repeater-remove>{{ __('wizard.remove_city') }}</button>
-                        </div>
-                    </div>
-                @empty
-                    <div class="preferred-city-row p-2 bg-gray-50 dark:bg-gray-800/60 rounded space-y-2">
-                        <input type="hidden" name="preferred_cities[0][city_id]" value="">
-                        <x-profile.location-typeahead
-                            context="alliance"
-                            :namePrefix="'preferred_cities[0]'"
-                            :value="''"
-                            placeholder="{{ __('wizard.preferred_city_placeholder') }}"
-                            label=""
-                            :data-city-id="''"
-                        />
-                        <div class="flex justify-between items-center">
-                            <div class="preferred-city-add-wrap">
-                                <span role="button" tabindex="0" class="inline-flex items-center gap-1 text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 cursor-pointer font-medium text-xs" data-repeater-add data-repeater-for="{{ $preferredCitiesContainerId }}">
-                                    <span aria-hidden="true">+</span> {{ __('wizard.add_city') }}
-                                </span>
-                            </div>
-                            <button type="button" class="text-xs text-red-600 dark:text-red-400 hover:underline" data-repeater-remove>{{ __('wizard.remove_city') }}</button>
-                        </div>
-                    </div>
-                @endforelse
-            </div>
-            <style>
-            .preferred-city-row:not(:last-child) .preferred-city-add-wrap { display: none; }
-            </style>
-        </div>
-        <div class="space-y-2">
-            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{{ __('wizard.preferred_districts') }}</label>
-            <div id="{{ $preferredDistrictContainerId }}" class="space-y-2" data-repeater-container data-name-prefix="preferred_districts" data-row-class="preferred-district-row" data-min-rows="1">
-                @foreach($preferredDistrictRows as $idx => $row)
-                    @php $districtId = $row['district_id'] ?? null; @endphp
-                    <div class="preferred-district-row p-2 bg-gray-50 dark:bg-gray-800/60 rounded space-y-2">
-                        <select name="preferred_district_ids[]" class="w-full rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 px-2 py-1 text-sm h-[42px]">
-                            <option value="">{{ __('wizard.select_district') }}</option>
-                            @foreach(($allDistricts ?? collect()) as $district)
-                                <option value="{{ $district->id }}" @if($districtId === $district->id) selected @endif>{{ $district->name }}</option>
-                            @endforeach
-                        </select>
-                        <div class="flex justify-between items-center">
-                            <div class="preferred-district-add-wrap">
-                                <span role="button" tabindex="0" class="inline-flex items-center gap-1 text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 cursor-pointer font-medium text-xs" data-repeater-add data-repeater-for="{{ $preferredDistrictContainerId }}">
-                                    <span aria-hidden="true">+</span> {{ __('wizard.add_district') }}
-                                </span>
-                            </div>
-                            <button type="button" class="text-xs text-red-600 dark:text-red-400 hover:underline" data-repeater-remove>{{ __('wizard.remove_district') }}</button>
-                        </div>
-                    </div>
-                @endforeach
-            </div>
-            <style>
-            .preferred-district-row:not(:last-child) .preferred-district-add-wrap { display: none; }
-            </style>
-        </div>
+    <div class="space-y-4 {{ $activePref !== 'basics' ? 'hidden' : '' }}">
+        @include('matrimony.profile.wizard.partials.partner_pref_basics_core')
     </div>
 
-    @if(!empty($preferencePresetDefaults ?? []))
-        <script>
-            document.addEventListener('DOMContentLoaded', function () {
-                var presets = @json($preferencePresetDefaults);
-                var selectEl = document.getElementById('preference_preset');
-                if (!selectEl || !presets) {
-                    return;
-                }
-
-                function applyPreset(presetKey) {
-                    var preset = presets[presetKey];
-                    if (!preset) {
-                        return;
-                    }
-
-                    var ageMin = document.getElementById('partner-age-min-hidden');
-                    var ageMax = document.getElementById('partner-age-max-hidden');
-                    var incomeMin = document.querySelector('input[name="preferred_income_min"]');
-                    var incomeMax = document.querySelector('input[name="preferred_income_max"]');
-                    var education = document.querySelector('input[name="preferred_education"]');
-                    var religionsSelect = document.querySelector('select[name="preferred_religion_ids[]"]');
-                    var castesSelect = document.querySelector('select[name="preferred_caste_ids[]"]');
-                    var districtsSelect = document.querySelector('select[name="preferred_district_ids[]"]');
-                    var cityHidden = document.querySelector('input[name="preferred_cities[0][city_id]"]');
-                    var cityInput = document.querySelector('#{{ $preferredCitiesContainerId }} .preferred-city-row .location-typeahead-input');
-
-                    if (typeof window.__setPartnerAgeRange === 'function'
-                        && preset.preferred_age_min !== undefined && preset.preferred_age_min !== null
-                        && preset.preferred_age_max !== undefined && preset.preferred_age_max !== null) {
-                        window.__setPartnerAgeRange(preset.preferred_age_min, preset.preferred_age_max);
-                    } else {
-                        if (ageMin && preset.preferred_age_min !== undefined && preset.preferred_age_min !== null) {
-                            ageMin.value = preset.preferred_age_min;
-                        }
-                        if (ageMax && preset.preferred_age_max !== undefined && preset.preferred_age_max !== null) {
-                            ageMax.value = preset.preferred_age_max;
-                        }
-                    }
-                    if (typeof window.__setPartnerIncomeRange === 'function'
-                        && preset.preferred_income_min !== undefined && preset.preferred_income_min !== null) {
-                        window.__setPartnerIncomeRange(
-                            preset.preferred_income_min,
-                            preset.preferred_income_max !== undefined && preset.preferred_income_max !== null
-                                ? preset.preferred_income_max
-                                : null
-                        );
-                    } else {
-                        if (incomeMin && preset.preferred_income_min !== undefined && preset.preferred_income_min !== null) {
-                            incomeMin.value = preset.preferred_income_min;
-                        }
-                        if (incomeMax && preset.preferred_income_max !== undefined && preset.preferred_income_max !== null) {
-                            incomeMax.value = preset.preferred_income_max;
-                        }
-                    }
-                    if (education && preset.preferred_education !== undefined && preset.preferred_education !== null) {
-                        education.value = preset.preferred_education;
-                    }
-                    if (religionsSelect && Array.isArray(preset.preferred_religion_ids)) {
-                        var relIds = preset.preferred_religion_ids.map(function (v) { return parseInt(v, 10); });
-                        Array.prototype.forEach.call(religionsSelect.options, function (opt) {
-                            var val = parseInt(opt.value || '0', 10);
-                            opt.selected = relIds.indexOf(val) !== -1;
-                        });
-                    }
-                    if (castesSelect && Array.isArray(preset.preferred_caste_ids)) {
-                        var casteIds = preset.preferred_caste_ids.map(function (v) { return parseInt(v, 10); });
-                        Array.prototype.forEach.call(castesSelect.options, function (opt) {
-                            var val = parseInt(opt.value || '0', 10);
-                            opt.selected = casteIds.indexOf(val) !== -1;
-                        });
-                    }
-                    if (districtsSelect && Array.isArray(preset.preferred_district_ids) && preset.preferred_district_ids.length > 0) {
-                        districtsSelect.value = String(preset.preferred_district_ids[0]);
-                    }
-                    if (cityHidden && preset.preferred_city_id) {
-                        cityHidden.value = preset.preferred_city_id;
-                    }
-                    if (cityInput && preset.preferred_city_name) {
-                        cityInput.value = preset.preferred_city_name;
-                    }
-                }
-
-                selectEl.addEventListener('change', function () {
-                    var value = this.value;
-                    if (value === 'custom') {
-                        return;
-                    }
-                    applyPreset(value);
-                });
-            });
-        </script>
-    @endif
-
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div class="flex items-center gap-2">
-            <label class="inline-flex items-center gap-2 cursor-pointer">
-                <input type="checkbox" name="willing_to_relocate" value="1" class="rounded border-gray-300 dark:border-gray-600"
+    <div class="rounded-xl border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800/60 p-4 space-y-4 mt-6 {{ $activePref !== 'location' ? 'hidden' : '' }}" id="partner-pref-location-section">
+        <h3 class="text-base font-semibold text-gray-900 dark:text-gray-100 border-b border-gray-200 dark:border-gray-700 pb-2">{{ __('wizard.partner_location_heading') }}</h3>
+        <div class="rounded-lg border border-indigo-200/90 dark:border-indigo-500/35 bg-indigo-50/80 dark:bg-indigo-950/30 p-3 sm:p-4 shadow-sm">
+            <label class="flex items-start gap-3 cursor-pointer">
+                <input type="checkbox" name="willing_to_relocate" value="1"
+                    class="mt-0.5 h-4 w-4 shrink-0 rounded border-gray-300 dark:border-gray-600 text-indigo-600 focus:ring-2 focus:ring-indigo-500 focus:ring-offset-0 dark:focus:ring-offset-gray-900"
                     {{ $oldCriteria['willing_to_relocate'] ? 'checked' : '' }}>
-                <span class="text-sm font-medium text-gray-700 dark:text-gray-300">{{ __('wizard.willing_to_relocate') }}</span>
+                <span class="min-w-0 flex flex-col gap-0.5">
+                    <span class="text-sm font-semibold text-gray-900 dark:text-gray-100">{{ __('wizard.willing_to_relocate') }}</span>
+                    <span class="text-xs text-gray-600 dark:text-gray-400 leading-snug">{{ __('wizard.willing_to_relocate_hint') }}</span>
+                </span>
             </label>
         </div>
         <div>
-            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{{ __('wizard.settled_city_preference') }}</label>
-            <x-profile.location-typeahead
-                context="alliance"
-                namePrefix="settled_preference"
-                :value="$settledCityDisplay"
-                :placeholder="__('wizard.city_to_settle_in')"
-                label=""
-                :data-city-id="$oldCriteria['settled_city_preference_id'] ?? ''"
-            />
+            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">{{ __('wizard.preferred_countries') }}</label>
+            <div class="flex flex-wrap gap-2" id="partner-location-country-chips">
+                @foreach(($allCountries ?? collect()) as $country)
+                    <label class="inline-flex items-center gap-1.5 rounded-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-2.5 py-1 text-sm cursor-pointer hover:border-indigo-400 dark:hover:border-indigo-500">
+                        <input type="checkbox" name="preferred_country_ids[]" value="{{ $country->id }}" class="partner-pref-country-cb rounded border-gray-300 dark:border-gray-600 text-indigo-600"
+                            @if(in_array($country->id, $selectedCountryIds, true)) checked @endif>
+                        <span class="text-gray-800 dark:text-gray-100">{{ $country->name }}</span>
+                    </label>
+                @endforeach
+            </div>
+        </div>
+        <div>
+            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{{ __('wizard.preferred_states') }}</label>
+            <p id="partner-location-state-placeholder" class="text-xs text-gray-500 dark:text-gray-400 mb-2 min-h-[1rem]">{{ count($selectedCountryIds) ? '' : __('wizard.select_country_first') }}</p>
+            <input type="search" id="partner-location-state-filter" class="{{ count($selectedCountryIds) ? '' : 'hidden' }} w-full rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 px-2 py-1.5 text-sm mb-2" placeholder="{{ __('wizard.filter_locations') }}" autocomplete="off">
+            <div id="partner-location-state-wrap" class="{{ count($selectedCountryIds) ? '' : 'hidden' }} max-h-36 overflow-y-auto rounded border border-gray-200 dark:border-gray-600 p-2 bg-gray-50 dark:bg-gray-900/40">
+                <div id="partner-location-state-chips" class="flex flex-wrap gap-2 content-start"></div>
+            </div>
+        </div>
+        <div>
+            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{{ __('wizard.preferred_districts') }}</label>
+            <p id="partner-location-district-placeholder" class="text-xs text-gray-500 dark:text-gray-400 mb-2 min-h-[1rem]">{{ count($selectedStateIds) ? '' : __('wizard.select_state_first') }}</p>
+            <input type="search" id="partner-location-district-filter" class="{{ count($selectedStateIds) ? '' : 'hidden' }} w-full rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 px-2 py-1.5 text-sm mb-2" placeholder="{{ __('wizard.filter_locations') }}" autocomplete="off">
+            <div id="partner-location-district-wrap" class="{{ count($selectedStateIds) ? '' : 'hidden' }} max-h-36 overflow-y-auto rounded border border-gray-200 dark:border-gray-600 p-2 bg-gray-50 dark:bg-gray-900/40">
+                <div id="partner-location-district-chips" class="flex flex-wrap gap-2 content-start"></div>
+            </div>
+        </div>
+        <div>
+            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{{ __('wizard.preferred_talukas') }}</label>
+            <p id="partner-location-taluka-placeholder" class="text-xs text-gray-500 dark:text-gray-400 mb-2 min-h-[1rem]">{{ count($selectedDistrictIds) ? '' : __('wizard.select_district_first') }}</p>
+            <input type="search" id="partner-location-taluka-filter" class="{{ count($selectedDistrictIds) ? '' : 'hidden' }} w-full rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 px-2 py-1.5 text-sm mb-2" placeholder="{{ __('wizard.filter_locations') }}" autocomplete="off">
+            <div id="partner-location-taluka-wrap" class="{{ count($selectedDistrictIds) ? '' : 'hidden' }} max-h-36 overflow-y-auto rounded border border-gray-200 dark:border-gray-600 p-2 bg-gray-50 dark:bg-gray-900/40">
+                <div id="partner-location-taluka-chips" class="flex flex-wrap gap-2 content-start"></div>
+            </div>
         </div>
     </div>
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
-        @php
-            $optionLabel = function ($row, string $field) {
-                $key = $row->key ?? null;
-                $dbLabel = $row->label ?? '';
-                if ($key) {
-                    $tKey = 'components.options.' . $field . '.' . $key;
-                    $t = __($tKey);
-                    if ($t !== $tKey) return $t;
+
+    <div class="{{ $activePref !== 'education' ? 'hidden' : '' }}">
+        @include('matrimony.profile.wizard.partials.partner_preferences_education_career')
+    </div>
+
+    <script>
+        (function () {
+            var apiBase = @json($partnerLocationApiBase ?? url('/api/internal/location'));
+            var stateById = @json($partnerLocationStateById ?? []);
+            var districtById = @json($partnerLocationDistrictById ?? []);
+            var talukaById = @json($partnerLocationTalukaById ?? []);
+            var selectedStateMap = @json(array_fill_keys($selectedStateIds, true));
+            var selectedDistrictMap = @json(array_fill_keys($selectedDistrictIds, true));
+            var selectedTalukaMap = @json(array_fill_keys($selectedTalukaIds, true));
+            var orphanHint = @json(__('wizard.location_orphan_hint'));
+            var debounceTimer;
+
+            function getSelectedCountryIds() {
+                var ids = [];
+                document.querySelectorAll('input.partner-pref-country-cb:checked').forEach(function (cb) {
+                    ids.push(parseInt(cb.value, 10));
+                });
+                return ids;
+            }
+
+            function getSelectedStateIds() {
+                var ids = [];
+                document.querySelectorAll('input.partner-pref-state-cb:checked').forEach(function (cb) {
+                    ids.push(parseInt(cb.value, 10));
+                });
+                return ids;
+            }
+
+            function getSelectedDistrictIds() {
+                var ids = [];
+                document.querySelectorAll('input.partner-pref-district-cb:checked').forEach(function (cb) {
+                    ids.push(parseInt(cb.value, 10));
+                });
+                return ids;
+            }
+
+            function getStateIdsFromMap() {
+                return Object.keys(selectedStateMap)
+                    .filter(function (k) {
+                        return selectedStateMap[k];
+                    })
+                    .map(function (k) {
+                        return parseInt(k, 10);
+                    });
+            }
+
+            function getDistrictIdsFromMap() {
+                return Object.keys(selectedDistrictMap)
+                    .filter(function (k) {
+                        return selectedDistrictMap[k];
+                    })
+                    .map(function (k) {
+                        return parseInt(k, 10);
+                    });
+            }
+
+            function pruneAfterCountryChange() {
+                var cids = getSelectedCountryIds();
+                Object.keys(selectedStateMap).forEach(function (k) {
+                    var id = parseInt(k, 10);
+                    if (!selectedStateMap[id]) {
+                        return;
+                    }
+                    var meta = stateById[String(id)] || stateById[id];
+                    if (meta && cids.indexOf(meta.country_id) === -1) {
+                        delete selectedStateMap[id];
+                    }
+                });
+                pruneAfterStateChange();
+            }
+
+            function pruneAfterStateChange() {
+                var sids = getStateIdsFromMap();
+                Object.keys(selectedDistrictMap).forEach(function (k) {
+                    var id = parseInt(k, 10);
+                    if (!selectedDistrictMap[id]) {
+                        return;
+                    }
+                    var meta = districtById[String(id)] || districtById[id];
+                    if (meta && sids.indexOf(meta.state_id) === -1) {
+                        delete selectedDistrictMap[id];
+                    }
+                });
+                pruneAfterDistrictChange();
+            }
+
+            function pruneAfterDistrictChange() {
+                var dids = getDistrictIdsFromMap();
+                Object.keys(selectedTalukaMap).forEach(function (k) {
+                    var id = parseInt(k, 10);
+                    if (!selectedTalukaMap[id]) {
+                        return;
+                    }
+                    var meta = talukaById[String(id)] || talukaById[id];
+                    if (meta && dids.indexOf(meta.district_id) === -1) {
+                        delete selectedTalukaMap[id];
+                    }
+                });
+            }
+
+            function syncStateUi() {
+                var ph = document.getElementById('partner-location-state-placeholder');
+                var wrap = document.getElementById('partner-location-state-wrap');
+                var filterEl = document.getElementById('partner-location-state-filter');
+                var countryIds = getSelectedCountryIds();
+                var hasOrphan = false;
+                Object.keys(selectedStateMap).forEach(function (k) {
+                    var id = parseInt(k, 10);
+                    if (!selectedStateMap[id]) {
+                        return;
+                    }
+                    var meta = stateById[String(id)] || stateById[id];
+                    if (meta && countryIds.indexOf(meta.country_id) === -1) {
+                        hasOrphan = true;
+                    }
+                });
+                var show = countryIds.length > 0 || hasOrphan || Object.keys(selectedStateMap).length > 0;
+                if (ph) {
+                    if (countryIds.length === 0 && !hasOrphan) {
+                        ph.textContent = @json(__('wizard.select_country_first'));
+                        ph.classList.remove('hidden');
+                    } else if (countryIds.length === 0 && hasOrphan) {
+                        ph.textContent = orphanHint;
+                        ph.classList.remove('hidden');
+                    } else {
+                        ph.textContent = '';
+                        ph.classList.add('hidden');
+                    }
                 }
-                return $dbLabel;
-            };
-        @endphp
+                if (wrap) {
+                    wrap.classList.toggle('hidden', !show);
+                }
+                if (filterEl) {
+                    filterEl.classList.toggle('hidden', !show);
+                }
+            }
+
+            function syncDistrictUi() {
+                var ph = document.getElementById('partner-location-district-placeholder');
+                var wrap = document.getElementById('partner-location-district-wrap');
+                var filterEl = document.getElementById('partner-location-district-filter');
+                var stateIds = getStateIdsFromMap();
+                var hasOrphan = false;
+                Object.keys(selectedDistrictMap).forEach(function (k) {
+                    var id = parseInt(k, 10);
+                    if (!selectedDistrictMap[id]) {
+                        return;
+                    }
+                    var meta = districtById[String(id)] || districtById[id];
+                    if (meta && stateIds.indexOf(meta.state_id) === -1) {
+                        hasOrphan = true;
+                    }
+                });
+                var show = stateIds.length > 0 || hasOrphan || Object.keys(selectedDistrictMap).length > 0;
+                if (ph) {
+                    if (stateIds.length === 0 && !hasOrphan) {
+                        ph.textContent = @json(__('wizard.select_state_first'));
+                        ph.classList.remove('hidden');
+                    } else if (stateIds.length === 0 && hasOrphan) {
+                        ph.textContent = orphanHint;
+                        ph.classList.remove('hidden');
+                    } else {
+                        ph.textContent = '';
+                        ph.classList.add('hidden');
+                    }
+                }
+                if (wrap) {
+                    wrap.classList.toggle('hidden', !show);
+                }
+                if (filterEl) {
+                    filterEl.classList.toggle('hidden', !show);
+                }
+            }
+
+            function syncTalukaUi() {
+                var ph = document.getElementById('partner-location-taluka-placeholder');
+                var wrap = document.getElementById('partner-location-taluka-wrap');
+                var filterEl = document.getElementById('partner-location-taluka-filter');
+                var districtIds = getDistrictIdsFromMap();
+                var hasOrphan = false;
+                Object.keys(selectedTalukaMap).forEach(function (k) {
+                    var id = parseInt(k, 10);
+                    if (!selectedTalukaMap[id]) {
+                        return;
+                    }
+                    var meta = talukaById[String(id)] || talukaById[id];
+                    if (meta && districtIds.indexOf(meta.district_id) === -1) {
+                        hasOrphan = true;
+                    }
+                });
+                var show = districtIds.length > 0 || hasOrphan || Object.keys(selectedTalukaMap).length > 0;
+                if (ph) {
+                    if (districtIds.length === 0 && !hasOrphan) {
+                        ph.textContent = @json(__('wizard.select_district_first'));
+                        ph.classList.remove('hidden');
+                    } else if (districtIds.length === 0 && hasOrphan) {
+                        ph.textContent = orphanHint;
+                        ph.classList.remove('hidden');
+                    } else {
+                        ph.textContent = '';
+                        ph.classList.add('hidden');
+                    }
+                }
+                if (wrap) {
+                    wrap.classList.toggle('hidden', !show);
+                }
+                if (filterEl) {
+                    filterEl.classList.toggle('hidden', !show);
+                }
+            }
+
+            function mergeStateRows(rows) {
+                var seen = {};
+                var items = [];
+                (rows || []).forEach(function (row) {
+                    seen[row.id] = true;
+                    items.push({ id: row.id, label: row.name, country_id: row.country_id, orphan: false });
+                });
+                Object.keys(selectedStateMap).forEach(function (k) {
+                    var id = parseInt(k, 10);
+                    if (!selectedStateMap[id] || seen[id]) {
+                        return;
+                    }
+                    var meta = stateById[String(id)] || stateById[id];
+                    if (meta) {
+                        items.push({ id: meta.id, label: meta.name, country_id: meta.country_id, orphan: true });
+                        seen[id] = true;
+                    }
+                });
+                return items;
+            }
+
+            function mergeDistrictRows(rows) {
+                var seen = {};
+                var items = [];
+                (rows || []).forEach(function (row) {
+                    seen[row.id] = true;
+                    items.push({ id: row.id, label: row.name, state_id: row.state_id, orphan: false });
+                });
+                Object.keys(selectedDistrictMap).forEach(function (k) {
+                    var id = parseInt(k, 10);
+                    if (!selectedDistrictMap[id] || seen[id]) {
+                        return;
+                    }
+                    var meta = districtById[String(id)] || districtById[id];
+                    if (meta) {
+                        items.push({ id: meta.id, label: meta.name, state_id: meta.state_id, orphan: true });
+                        seen[id] = true;
+                    }
+                });
+                return items;
+            }
+
+            function mergeTalukaRows(rows) {
+                var seen = {};
+                var items = [];
+                (rows || []).forEach(function (row) {
+                    seen[row.id] = true;
+                    items.push({ id: row.id, label: row.name, district_id: row.district_id, orphan: false });
+                });
+                Object.keys(selectedTalukaMap).forEach(function (k) {
+                    var id = parseInt(k, 10);
+                    if (!selectedTalukaMap[id] || seen[id]) {
+                        return;
+                    }
+                    var meta = talukaById[String(id)] || talukaById[id];
+                    if (meta) {
+                        items.push({ id: meta.id, label: meta.name, district_id: meta.district_id, orphan: true });
+                        seen[id] = true;
+                    }
+                });
+                return items;
+            }
+
+            function esc(s) {
+                return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
+            }
+
+            function paintStateChips(items) {
+                var inner = document.getElementById('partner-location-state-chips');
+                if (!inner) {
+                    return;
+                }
+                items.sort(function (a, b) {
+                    return a.label.localeCompare(b.label);
+                });
+                var html = [];
+                items.forEach(function (item) {
+                    var checked = selectedStateMap[item.id] ? ' checked' : '';
+                    var orphanClass = item.orphan ? ' border-amber-400 dark:border-amber-600 bg-amber-50/80 dark:bg-amber-900/20' : '';
+                    var title = item.orphan ? orphanHint : '';
+                    html.push(
+                        '<label class="partner-state-chip inline-flex items-center gap-1.5 rounded-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-2 py-0.5 text-xs cursor-pointer' +
+                            orphanClass +
+                            '" data-chip-label="' +
+                            esc(item.label) +
+                            '"' +
+                            (title ? ' title="' + esc(title) + '"' : '') +
+                            '>' +
+                            '<input type="checkbox" name="preferred_state_ids[]" value="' +
+                            item.id +
+                            '" class="partner-pref-state-cb rounded border-gray-300 dark:border-gray-600 text-indigo-600"' +
+                            checked +
+                            '>' +
+                            '<span class="text-gray-800 dark:text-gray-100">' +
+                            esc(item.label) +
+                            '</span></label>'
+                    );
+                });
+                inner.innerHTML = html.join('');
+                inner.querySelectorAll('input.partner-pref-state-cb').forEach(function (cb) {
+                    cb.addEventListener('change', function () {
+                        var id = parseInt(cb.value, 10);
+                        if (cb.checked) {
+                            selectedStateMap[id] = true;
+                        } else {
+                            delete selectedStateMap[id];
+                        }
+                        pruneAfterStateChange();
+                        renderDistrictChips();
+                    });
+                });
+                applyLocationFilter('partner-state-chip', 'partner-location-state-filter');
+            }
+
+            function paintDistrictChips(items) {
+                var inner = document.getElementById('partner-location-district-chips');
+                if (!inner) {
+                    return;
+                }
+                items.sort(function (a, b) {
+                    return a.label.localeCompare(b.label);
+                });
+                var html = [];
+                items.forEach(function (item) {
+                    var checked = selectedDistrictMap[item.id] ? ' checked' : '';
+                    var orphanClass = item.orphan ? ' border-amber-400 dark:border-amber-600 bg-amber-50/80 dark:bg-amber-900/20' : '';
+                    var title = item.orphan ? orphanHint : '';
+                    html.push(
+                        '<label class="partner-district-chip inline-flex items-center gap-1.5 rounded-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-2 py-0.5 text-xs cursor-pointer' +
+                            orphanClass +
+                            '" data-chip-label="' +
+                            esc(item.label) +
+                            '"' +
+                            (title ? ' title="' + esc(title) + '"' : '') +
+                            '>' +
+                            '<input type="checkbox" name="preferred_district_ids[]" value="' +
+                            item.id +
+                            '" class="partner-pref-district-cb rounded border-gray-300 dark:border-gray-600 text-indigo-600"' +
+                            checked +
+                            '>' +
+                            '<span class="text-gray-800 dark:text-gray-100">' +
+                            esc(item.label) +
+                            '</span></label>'
+                    );
+                });
+                inner.innerHTML = html.join('');
+                inner.querySelectorAll('input.partner-pref-district-cb').forEach(function (cb) {
+                    cb.addEventListener('change', function () {
+                        var id = parseInt(cb.value, 10);
+                        if (cb.checked) {
+                            selectedDistrictMap[id] = true;
+                        } else {
+                            delete selectedDistrictMap[id];
+                        }
+                        pruneAfterDistrictChange();
+                        renderTalukaChips();
+                    });
+                });
+                applyLocationFilter('partner-district-chip', 'partner-location-district-filter');
+            }
+
+            function paintTalukaChips(items) {
+                var inner = document.getElementById('partner-location-taluka-chips');
+                if (!inner) {
+                    return;
+                }
+                items.sort(function (a, b) {
+                    return a.label.localeCompare(b.label);
+                });
+                var html = [];
+                items.forEach(function (item) {
+                    var checked = selectedTalukaMap[item.id] ? ' checked' : '';
+                    var orphanClass = item.orphan ? ' border-amber-400 dark:border-amber-600 bg-amber-50/80 dark:bg-amber-900/20' : '';
+                    var title = item.orphan ? orphanHint : '';
+                    html.push(
+                        '<label class="partner-taluka-chip inline-flex items-center gap-1.5 rounded-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-2 py-0.5 text-xs cursor-pointer' +
+                            orphanClass +
+                            '" data-chip-label="' +
+                            esc(item.label) +
+                            '"' +
+                            (title ? ' title="' + esc(title) + '"' : '') +
+                            '>' +
+                            '<input type="checkbox" name="preferred_taluka_ids[]" value="' +
+                            item.id +
+                            '" class="partner-pref-taluka-cb rounded border-gray-300 dark:border-gray-600 text-indigo-600"' +
+                            checked +
+                            '>' +
+                            '<span class="text-gray-800 dark:text-gray-100">' +
+                            esc(item.label) +
+                            '</span></label>'
+                    );
+                });
+                inner.innerHTML = html.join('');
+                inner.querySelectorAll('input.partner-pref-taluka-cb').forEach(function (cb) {
+                    cb.addEventListener('change', function () {
+                        var id = parseInt(cb.value, 10);
+                        if (cb.checked) {
+                            selectedTalukaMap[id] = true;
+                        } else {
+                            delete selectedTalukaMap[id];
+                        }
+                    });
+                });
+                applyLocationFilter('partner-taluka-chip', 'partner-location-taluka-filter');
+            }
+
+            function applyLocationFilter(chipClass, filterId) {
+                var q = ((document.getElementById(filterId) || {}).value || '').trim().toLowerCase();
+                document.querySelectorAll('.' + chipClass).forEach(function (el) {
+                    var lab = (el.getAttribute('data-chip-label') || el.textContent || '').toLowerCase();
+                    el.style.display = !q || lab.indexOf(q) !== -1 ? '' : 'none';
+                });
+            }
+
+            function renderStateChips() {
+                syncStateUi();
+                var countryIds = getSelectedCountryIds();
+                if (countryIds.length === 0) {
+                    paintStateChips(mergeStateRows([]));
+                    return Promise.resolve();
+                }
+                var params = new URLSearchParams();
+                countryIds.forEach(function (id) {
+                    params.append('country_ids[]', id);
+                });
+                return fetch(apiBase + '/states?' + params.toString(), { headers: { Accept: 'application/json' } })
+                    .then(function (r) {
+                        return r.json();
+                    })
+                    .then(function (data) {
+                        if (!data.success || !Array.isArray(data.data)) {
+                            return;
+                        }
+                        data.data.forEach(function (row) {
+                            stateById[row.id] = { id: row.id, name: row.name, country_id: row.country_id };
+                        });
+                        paintStateChips(mergeStateRows(data.data));
+                    })
+                    .catch(function () {});
+            }
+
+            function renderDistrictChips() {
+                syncDistrictUi();
+                var stateIds = getSelectedStateIds();
+                if (stateIds.length === 0) {
+                    paintDistrictChips(mergeDistrictRows([]));
+                    return Promise.resolve();
+                }
+                var params = new URLSearchParams();
+                stateIds.forEach(function (id) {
+                    params.append('state_ids[]', id);
+                });
+                return fetch(apiBase + '/districts?' + params.toString(), { headers: { Accept: 'application/json' } })
+                    .then(function (r) {
+                        return r.json();
+                    })
+                    .then(function (data) {
+                        if (!data.success || !Array.isArray(data.data)) {
+                            return;
+                        }
+                        data.data.forEach(function (row) {
+                            districtById[row.id] = { id: row.id, name: row.name, state_id: row.state_id };
+                        });
+                        paintDistrictChips(mergeDistrictRows(data.data));
+                    })
+                    .catch(function () {});
+            }
+
+            function renderTalukaChips() {
+                syncTalukaUi();
+                var districtIds = getSelectedDistrictIds();
+                if (districtIds.length === 0) {
+                    paintTalukaChips(mergeTalukaRows([]));
+                    return Promise.resolve();
+                }
+                var params = new URLSearchParams();
+                districtIds.forEach(function (id) {
+                    params.append('district_ids[]', id);
+                });
+                return fetch(apiBase + '/talukas?' + params.toString(), { headers: { Accept: 'application/json' } })
+                    .then(function (r) {
+                        return r.json();
+                    })
+                    .then(function (data) {
+                        if (!data.success || !Array.isArray(data.data)) {
+                            return;
+                        }
+                        data.data.forEach(function (row) {
+                            talukaById[row.id] = { id: row.id, name: row.name, district_id: row.district_id };
+                        });
+                        paintTalukaChips(mergeTalukaRows(data.data));
+                    })
+                    .catch(function () {});
+            }
+
+            function scheduleRenderStates() {
+                clearTimeout(debounceTimer);
+                debounceTimer = setTimeout(function () {
+                    pruneAfterCountryChange();
+                    renderStateChips().then(function () {
+                        return renderDistrictChips();
+                    }).then(function () {
+                        return renderTalukaChips();
+                    });
+                }, 200);
+            }
+
+            document.addEventListener('DOMContentLoaded', function () {
+                document.querySelectorAll('input.partner-pref-country-cb').forEach(function (cb) {
+                    cb.addEventListener('change', scheduleRenderStates);
+                });
+                var sf = document.getElementById('partner-location-state-filter');
+                var df = document.getElementById('partner-location-district-filter');
+                var tf = document.getElementById('partner-location-taluka-filter');
+                if (sf) {
+                    sf.addEventListener('input', function () {
+                        applyLocationFilter('partner-state-chip', 'partner-location-state-filter');
+                    });
+                }
+                if (df) {
+                    df.addEventListener('input', function () {
+                        applyLocationFilter('partner-district-chip', 'partner-location-district-filter');
+                    });
+                }
+                if (tf) {
+                    tf.addEventListener('input', function () {
+                        applyLocationFilter('partner-taluka-chip', 'partner-location-taluka-filter');
+                    });
+                }
+                renderStateChips().then(function () {
+                    return renderDistrictChips();
+                }).then(function () {
+                    return renderTalukaChips();
+                });
+            });
+        })();
+    </script>
+
+    <div class="space-y-4 {{ $activePref !== 'community' ? 'hidden' : '' }}">
+    <div class="rounded-xl border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800/60 p-4 space-y-4 mt-6">
+        <h3 class="text-base font-semibold text-gray-900 dark:text-gray-100 border-b border-gray-200 dark:border-gray-700 pb-2">{{ __('wizard.community') }}</h3>
         <div>
-            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{{ __('wizard.marriage_type_preference') }}</label>
-            <select name="marriage_type_preference_id" class="w-full rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 px-3 py-2">
-                <option value="">{{ __('common.select_placeholder') }}</option>
-                @foreach($marriageTypePreferences ?? [] as $mtp)
-                    <option value="{{ $mtp->id }}" {{ (string)($oldCriteria['marriage_type_preference_id'] ?? '') === (string)$mtp->id ? 'selected' : '' }}>{{ $optionLabel($mtp, 'marriage_type_preference') }}</option>
-                @endforeach
-            </select>
-        </div>
-        <div></div>
-    </div>
-    <div class="space-y-4">
-        <style>
-            .partner-pref-dual-range { pointer-events: none; }
-            .partner-pref-dual-range::-webkit-slider-thumb { pointer-events: auto; -webkit-appearance: none; appearance: none; height: 1.125rem; width: 1.125rem; border-radius: 9999px; background: rgb(79 70 229); border: 2px solid rgb(255 255 255); box-shadow: 0 1px 2px rgb(0 0 0 / 0.15); cursor: grab; margin-top: -5px; }
-            .partner-pref-dual-range::-moz-range-thumb { pointer-events: auto; height: 1.125rem; width: 1.125rem; border-radius: 9999px; background: rgb(79 70 229); border: 2px solid rgb(255 255 255); box-shadow: 0 1px 2px rgb(0 0 0 / 0.15); cursor: grab; }
-            .partner-pref-dual-range::-webkit-slider-runnable-track { -webkit-appearance: none; appearance: none; height: 8px; background: transparent; }
-            .partner-pref-dual-range::-moz-range-track { height: 8px; background: transparent; }
-        </style>
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 items-stretch">
-            <div class="rounded-xl border-2 border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800/60 p-4 space-y-2 shadow-sm min-w-0">
-            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">{{ __('wizard.preferred_age_range') }}</label>
-            <p class="text-xs text-gray-500 dark:text-gray-400">{{ __('wizard.preferred_age_range_hint') }}</p>
-            <p id="partner-age-range-label" class="text-base font-semibold text-indigo-700 dark:text-indigo-300 tabular-nums" aria-live="polite">{{ $ageMinInit }} – {{ $ageMaxInit }} {{ __('wizard.years') }}</p>
-            <div class="partner-age-slider relative h-10 px-0.5" data-age-absolute-min="18" data-age-absolute-max="80">
-                <div class="absolute left-0 right-0 top-1/2 h-2 -translate-y-1/2 rounded-full bg-gray-200 dark:bg-gray-600 pointer-events-none"></div>
-                <div id="partner-age-range-fill" class="absolute top-1/2 h-2 -translate-y-1/2 rounded-full bg-indigo-500 pointer-events-none" style="left: 0%; width: 0%"></div>
-                <input type="range" id="partner-age-range-min" class="partner-pref-dual-range absolute inset-x-0 top-0 z-[2] h-10 w-full cursor-pointer appearance-none bg-transparent" min="18" max="80" step="1" value="{{ $ageMinInit }}" aria-label="{{ __('wizard.age_min') }}">
-                <input type="range" id="partner-age-range-max" class="partner-pref-dual-range absolute inset-x-0 top-0 z-[3] h-10 w-full cursor-pointer appearance-none bg-transparent" min="18" max="80" step="1" value="{{ $ageMaxInit }}" aria-label="{{ __('wizard.age_max') }}">
-            </div>
-            <input type="hidden" name="preferred_age_min" id="partner-age-min-hidden" value="{{ $ageMinInit }}">
-            <input type="hidden" name="preferred_age_max" id="partner-age-max-hidden" value="{{ $ageMaxInit }}">
-            <script>
-                (function () {
-                    var ABS_MIN = 18;
-                    var ABS_MAX = 80;
-                    var minR = document.getElementById('partner-age-range-min');
-                    var maxR = document.getElementById('partner-age-range-max');
-                    var minH = document.getElementById('partner-age-min-hidden');
-                    var maxH = document.getElementById('partner-age-max-hidden');
-                    var fill = document.getElementById('partner-age-range-fill');
-                    var label = document.getElementById('partner-age-range-label');
-                    var yearsWord = @json(__('wizard.years'));
-                    if (!minR || !maxR || !minH || !maxH || !fill || !label) return;
-
-                    function clamp(n) {
-                        n = parseInt(n, 10);
-                        if (isNaN(n)) return ABS_MIN;
-                        return Math.max(ABS_MIN, Math.min(ABS_MAX, n));
-                    }
-
-                    function syncZ() {
-                        var mn = parseInt(minR.value, 10);
-                        var mx = parseInt(maxR.value, 10);
-                        minR.style.zIndex = mn > ABS_MAX - 5 ? '4' : '2';
-                        maxR.style.zIndex = mx < ABS_MIN + 5 ? '4' : '3';
-                    }
-
-                    function paint() {
-                        var mn = clamp(minR.value);
-                        var mx = clamp(maxR.value);
-                        if (mn > mx) {
-                            var t = mn;
-                            mn = mx;
-                            mx = t;
-                            minR.value = String(mn);
-                            maxR.value = String(mx);
-                        }
-                        minH.value = String(mn);
-                        maxH.value = String(mx);
-                        var p1 = ((mn - ABS_MIN) / (ABS_MAX - ABS_MIN)) * 100;
-                        var p2 = ((mx - ABS_MIN) / (ABS_MAX - ABS_MIN)) * 100;
-                        fill.style.left = p1 + '%';
-                        fill.style.width = Math.max(0, p2 - p1) + '%';
-                        label.textContent = mn + ' – ' + mx + ' ' + yearsWord;
-                        syncZ();
-                    }
-
-                    minR.addEventListener('input', function () {
-                        var mn = clamp(minR.value);
-                        var mx = clamp(maxR.value);
-                        if (mn > mx) maxR.value = String(mn);
-                        paint();
-                    });
-                    maxR.addEventListener('input', function () {
-                        var mn = clamp(minR.value);
-                        var mx = clamp(maxR.value);
-                        if (mx < mn) minR.value = String(mx);
-                        paint();
-                    });
-
-                    window.__setPartnerAgeRange = function (mn, mx) {
-                        mn = clamp(mn);
-                        mx = clamp(mx);
-                        if (mn > mx) {
-                            var s = mn;
-                            mn = mx;
-                            mx = s;
-                        }
-                        minR.value = String(mn);
-                        maxR.value = String(mx);
-                        paint();
-                    };
-
-                    paint();
-                })();
-            </script>
-            </div>
-            <div class="rounded-xl border-2 border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800/60 p-4 space-y-2 shadow-sm min-w-0">
-            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">{{ __('wizard.preferred_income_range') }}</label>
-            <p class="text-xs text-gray-500 dark:text-gray-400">{{ __('wizard.preferred_income_range_hint') }}</p>
-            <p id="partner-income-range-label" class="text-base font-semibold text-indigo-700 dark:text-indigo-300 tabular-nums" aria-live="polite">{{ $incomeFmtLakh($incMinLakhs) }} – {{ $incomeFmtLakh($incMaxLakhs) }}</p>
-            <div class="partner-income-slider relative h-10 px-0.5">
-                <div class="absolute left-0 right-0 top-1/2 h-2 -translate-y-1/2 rounded-full bg-gray-200 dark:bg-gray-600 pointer-events-none"></div>
-                <div id="partner-income-range-fill" class="absolute top-1/2 h-2 -translate-y-1/2 rounded-full bg-indigo-500 pointer-events-none" style="left: 0%; width: 0%"></div>
-                <input type="range" id="partner-income-range-min" class="partner-pref-dual-range absolute inset-x-0 top-0 z-[2] h-10 w-full cursor-pointer appearance-none bg-transparent" min="0" max="500" step="1" value="{{ $incMinLakhs }}" aria-label="{{ __('wizard.income_min') }}">
-                <input type="range" id="partner-income-range-max" class="partner-pref-dual-range absolute inset-x-0 top-0 z-[3] h-10 w-full cursor-pointer appearance-none bg-transparent" min="0" max="500" step="1" value="{{ $incMaxLakhs }}" aria-label="{{ __('wizard.income_max') }}">
-            </div>
-            <input type="hidden" name="preferred_income_min" id="partner-income-min-hidden" value="{{ $incMinLakhs * 100000 }}">
-            <input type="hidden" name="preferred_income_max" id="partner-income-max-hidden" value="{{ $incMaxLakhs * 100000 }}">
-            <script>
-                (function () {
-                    var ABS_MIN = 0;
-                    var ABS_MAX = 500;
-                    var LAKH = 100000;
-                    var minR = document.getElementById('partner-income-range-min');
-                    var maxR = document.getElementById('partner-income-range-max');
-                    var minH = document.getElementById('partner-income-min-hidden');
-                    var maxH = document.getElementById('partner-income-max-hidden');
-                    var fill = document.getElementById('partner-income-range-fill');
-                    var label = document.getElementById('partner-income-range-label');
-                    var lakhFmt = @json(__('wizard.income_lakh_format'));
-                    var lakhZero = @json(__('wizard.income_lakh_zero'));
-                    if (!minR || !maxR || !minH || !maxH || !fill || !label) return;
-
-                    function fmtLakhs(l) {
-                        l = parseInt(l, 10);
-                        if (isNaN(l)) l = 0;
-                        if (l === 0) return lakhZero;
-                        return String(lakhFmt).split(':num').join(String(l));
-                    }
-
-                    function clamp(n) {
-                        n = parseInt(n, 10);
-                        if (isNaN(n)) return ABS_MIN;
-                        return Math.max(ABS_MIN, Math.min(ABS_MAX, n));
-                    }
-
-                    function syncZ() {
-                        var mn = parseInt(minR.value, 10);
-                        var mx = parseInt(maxR.value, 10);
-                        minR.style.zIndex = mn > ABS_MAX - 25 ? '4' : '2';
-                        maxR.style.zIndex = mx < ABS_MIN + 25 ? '4' : '3';
-                    }
-
-                    function paint() {
-                        var mn = clamp(minR.value);
-                        var mx = clamp(maxR.value);
-                        if (mn > mx) {
-                            var t = mn;
-                            mn = mx;
-                            mx = t;
-                            minR.value = String(mn);
-                            maxR.value = String(mx);
-                        }
-                        minH.value = String(mn * LAKH);
-                        maxH.value = String(mx * LAKH);
-                        var p1 = ABS_MAX > ABS_MIN ? ((mn - ABS_MIN) / (ABS_MAX - ABS_MIN)) * 100 : 0;
-                        var p2 = ABS_MAX > ABS_MIN ? ((mx - ABS_MIN) / (ABS_MAX - ABS_MIN)) * 100 : 0;
-                        fill.style.left = p1 + '%';
-                        fill.style.width = Math.max(0, p2 - p1) + '%';
-                        label.textContent = fmtLakhs(mn) + ' – ' + fmtLakhs(mx);
-                        syncZ();
-                    }
-
-                    minR.addEventListener('input', function () {
-                        var mn = clamp(minR.value);
-                        var mx = clamp(maxR.value);
-                        if (mn > mx) maxR.value = String(mn);
-                        paint();
-                    });
-                    maxR.addEventListener('input', function () {
-                        var mn = clamp(minR.value);
-                        var mx = clamp(maxR.value);
-                        if (mx < mn) minR.value = String(mx);
-                        paint();
-                    });
-
-                    window.__setPartnerIncomeRange = function (minRupees, maxRupees) {
-                        var mn = Math.round((parseFloat(minRupees) || 0) / LAKH);
-                        var mx = maxRupees != null && maxRupees !== ''
-                            ? Math.round((parseFloat(maxRupees) || 0) / LAKH)
-                            : Math.min(ABS_MAX, mn + 20);
-                        mn = clamp(mn);
-                        mx = clamp(mx);
-                        if (mn > mx) {
-                            var s = mn;
-                            mn = mx;
-                            mx = s;
-                        }
-                        minR.value = String(mn);
-                        maxR.value = String(mx);
-                        paint();
-                    };
-
-                    paint();
-                })();
-            </script>
-            </div>
-        </div>
-        <div>
-            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{{ __('wizard.preferred_education') }}</label>
-            <input type="text" name="preferred_education" value="{{ $oldCriteria['preferred_education'] }}" placeholder="{{ __('wizard.preferred_education_placeholder') }}" class="w-full rounded border px-3 py-2">
-        </div>
-    </div>
-
-    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div>
-            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{{ __('wizard.preferred_religions') }}</label>
-            <select name="preferred_religion_ids[]" multiple class="w-full rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 px-2 py-1 text-sm">
+            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">{{ __('wizard.preferred_religions') }}</label>
+            <div class="flex flex-wrap gap-2" id="partner-community-religion-chips">
                 @foreach(($allReligions ?? collect()) as $religion)
-                    <option value="{{ $religion->id }}" @if(in_array($religion->id, $selectedReligionIds, true)) selected @endif>{{ $optionLabel($religion, 'religion') }}</option>
+                    <label class="inline-flex items-center gap-1.5 rounded-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-2.5 py-1 text-sm cursor-pointer hover:border-indigo-400 dark:hover:border-indigo-500">
+                        <input type="checkbox" name="preferred_religion_ids[]" value="{{ $religion->id }}" class="partner-religion-cb rounded border-gray-300 dark:border-gray-600 text-indigo-600"
+                            @if(in_array($religion->id, $selectedReligionIds, true)) checked @endif>
+                        <span class="text-gray-800 dark:text-gray-100">{{ $optionLabel($religion, 'religion') }}</span>
+                    </label>
                 @endforeach
-            </select>
+            </div>
         </div>
         <div>
             <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{{ __('wizard.preferred_caste') }}</label>
-            <select name="preferred_caste_ids[]" multiple class="w-full rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 px-2 py-1 text-sm">
-                @foreach(($allCastes ?? collect()) as $caste)
-                    <option value="{{ $caste->id }}" @if(in_array($caste->id, $selectedCasteIds, true)) selected @endif>{{ $optionLabel($caste, 'caste') }}</option>
-                @endforeach
-            </select>
-            <p class="mt-1 text-[11px] text-gray-500 dark:text-gray-400">{{ __('wizard.hold_ctrl_multiple') }}</p>
-            <label class="mt-2 inline-flex items-center gap-2 text-[11px] text-gray-600 dark:text-gray-300">
+            <p id="partner-community-caste-placeholder" class="text-xs text-gray-500 dark:text-gray-400 mb-2 min-h-[1rem] {{ count($selectedReligionIds) ? 'hidden' : '' }}">{{ __('wizard.select_religion_first') }}</p>
+            <input type="search" id="partner-caste-filter" class="{{ count($selectedReligionIds) ? '' : 'hidden' }} w-full rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 px-2 py-1.5 text-sm mb-2" placeholder="{{ __('wizard.filter_castes') }}" autocomplete="off">
+            <div id="partner-community-caste-wrap" class="{{ count($selectedReligionIds) ? '' : 'hidden' }} max-h-36 overflow-y-auto rounded border border-gray-200 dark:border-gray-600 p-2 bg-gray-50 dark:bg-gray-900/40">
+                <div id="partner-community-caste-chips" class="flex flex-wrap gap-2 content-start"></div>
+            </div>
+        </div>
+        <div>
+            <label class="inline-flex items-center gap-2 text-sm text-gray-600 dark:text-gray-300">
                 <input type="checkbox" name="preferred_intercaste" value="1" class="rounded border-gray-300 dark:border-gray-600"
                     {{ old('preferred_intercaste') ? 'checked' : '' }}>
                 <span>{{ __('wizard.open_to_intercaste') }}</span>
             </label>
         </div>
-        <div></div>
+    </div>
+    <script>
+        (function () {
+            var byRel = @json($partnerCastesByReligion ?? []);
+            var byId = @json($partnerCasteById ?? []);
+            var selectedCasteState = @json($selectedCasteMap ?? []);
+            var orphanHint = @json(__('wizard.caste_orphan_hint'));
+
+            function getSelectedReligionIds() {
+                var ids = [];
+                document.querySelectorAll('input.partner-religion-cb:checked').forEach(function (cb) {
+                    ids.push(parseInt(cb.value, 10));
+                });
+                return ids;
+            }
+
+            function renderCasteChips() {
+                var relIds = getSelectedReligionIds();
+                var wrap = document.getElementById('partner-community-caste-wrap');
+                var inner = document.getElementById('partner-community-caste-chips');
+                var placeholder = document.getElementById('partner-community-caste-placeholder');
+                var filterEl = document.getElementById('partner-caste-filter');
+                if (!wrap || !inner || !placeholder) {
+                    return;
+                }
+
+                document.querySelectorAll('input.partner-caste-cb').forEach(function (cb) {
+                    var id = parseInt(cb.value, 10);
+                    if (cb.checked) {
+                        selectedCasteState[id] = true;
+                    } else {
+                        delete selectedCasteState[id];
+                    }
+                });
+
+                if (relIds.length === 0) {
+                    wrap.classList.add('hidden');
+                    inner.innerHTML = '';
+                    if (filterEl) {
+                        filterEl.classList.add('hidden');
+                        filterEl.value = '';
+                    }
+                    placeholder.textContent = @json(__('wizard.select_religion_first'));
+                    placeholder.classList.remove('hidden');
+                    return;
+                }
+
+                placeholder.classList.add('hidden');
+                wrap.classList.remove('hidden');
+                if (filterEl) {
+                    filterEl.classList.remove('hidden');
+                }
+
+                var seen = {};
+                var items = [];
+                relIds.forEach(function (rid) {
+                    var list = byRel[String(rid)] || [];
+                    list.forEach(function (item) {
+                        if (seen[item.id]) {
+                            return;
+                        }
+                        seen[item.id] = true;
+                        items.push({ id: item.id, label: item.label, orphan: false });
+                    });
+                });
+
+                Object.keys(selectedCasteState).forEach(function (k) {
+                    var cid = parseInt(k, 10);
+                    if (!selectedCasteState[cid]) {
+                        return;
+                    }
+                    if (seen[cid]) {
+                        return;
+                    }
+                    var meta = byId[String(cid)] || byId[cid];
+                    if (meta) {
+                        items.push({ id: meta.id, label: meta.label, orphan: true });
+                        seen[cid] = true;
+                    }
+                });
+
+                items.sort(function (a, b) {
+                    return a.label.localeCompare(b.label);
+                });
+
+                var html = [];
+                items.forEach(function (item) {
+                    var checked = selectedCasteState[item.id] ? ' checked' : '';
+                    var orphanClass = item.orphan ? ' border-amber-400 dark:border-amber-600 bg-amber-50/80 dark:bg-amber-900/20' : '';
+                    var title = item.orphan ? orphanHint : '';
+                    html.push(
+                        '<label class="partner-caste-chip inline-flex items-center gap-1.5 rounded-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-2 py-0.5 text-xs cursor-pointer' + orphanClass + '" data-caste-label="' + String(item.label).replace(/"/g, '&quot;') + '"' + (title ? ' title="' + String(title).replace(/"/g, '&quot;') + '"' : '') + '>' +
+                        '<input type="checkbox" name="preferred_caste_ids[]" value="' + item.id + '" class="partner-caste-cb rounded border-gray-300 dark:border-gray-600 text-indigo-600"' + checked + '>' +
+                        '<span class="text-gray-800 dark:text-gray-100">' + String(item.label).replace(/</g, '&lt;') + '</span></label>'
+                    );
+                });
+                inner.innerHTML = html.join('');
+
+                inner.querySelectorAll('input.partner-caste-cb').forEach(function (cb) {
+                    cb.addEventListener('change', function () {
+                        var id = parseInt(cb.value, 10);
+                        if (cb.checked) {
+                            selectedCasteState[id] = true;
+                        } else {
+                            delete selectedCasteState[id];
+                        }
+                    });
+                });
+
+                applyCasteFilter();
+            }
+
+            function applyCasteFilter() {
+                var q = (document.getElementById('partner-caste-filter') || {}).value || '';
+                q = q.trim().toLowerCase();
+                document.querySelectorAll('.partner-caste-chip').forEach(function (el) {
+                    var lab = (el.getAttribute('data-caste-label') || el.textContent || '').toLowerCase();
+                    el.style.display = !q || lab.indexOf(q) !== -1 ? '' : 'none';
+                });
+            }
+
+            document.querySelectorAll('input.partner-religion-cb').forEach(function (cb) {
+                cb.addEventListener('change', renderCasteChips);
+            });
+            var filterIn = document.getElementById('partner-caste-filter');
+            if (filterIn) {
+                filterIn.addEventListener('input', applyCasteFilter);
+            }
+
+            window.__partnerCommunityRefreshCastes = renderCasteChips;
+            window.__partnerCommunityApplyCasteIds = function (ids) {
+                selectedCasteState = {};
+                (ids || []).forEach(function (id) {
+                    selectedCasteState[parseInt(id, 10)] = true;
+                });
+                renderCasteChips();
+            };
+
+            document.addEventListener('DOMContentLoaded', renderCasteChips);
+        })();
+    </script>
+    </div>
+
+    <div class="rounded-xl border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800/60 p-4 space-y-4 mt-6 {{ $activePref !== 'lifestyle' ? 'hidden' : '' }}">
+        @include('matrimony.profile.wizard.partials.partner_pref_lifestyle_diet')
+    </div>
+    <div class="rounded-xl border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800/60 p-4 space-y-4 mt-6 {{ $activePref !== 'family' ? 'hidden' : '' }}">
+        @include('matrimony.profile.wizard.partials.partner_pref_family_managed')
+    </div>
+
+    @php
+        $prefOrder = ['basics', 'community', 'location', 'education', 'lifestyle', 'family'];
+        $pi = array_search($activePref, $prefOrder, true);
+        $prevPref = $pi !== false && $pi > 0 ? $prefOrder[$pi - 1] : null;
+        $nextPref = $pi !== false && $pi < count($prefOrder) - 1 ? $prefOrder[$pi + 1] : null;
+    @endphp
+    <div class="flex flex-wrap items-center justify-between gap-3 pt-6 mt-4 border-t border-gray-200 dark:border-gray-700">
+        <div>
+            @if($prevPref)
+                <a href="{{ route('matrimony.profile.wizard.section', array_merge(['section' => 'about-preferences'], ['pref' => $prevPref])) }}" class="inline-flex items-center px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700">{{ __('wizard.partner_pref_prev_section') }}</a>
+            @endif
+        </div>
+        <div>
+            @if($nextPref)
+                <a href="{{ route('matrimony.profile.wizard.section', array_merge(['section' => 'about-preferences'], ['pref' => $nextPref])) }}" class="inline-flex items-center px-3 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium">{{ __('wizard.partner_pref_next_section') }}</a>
+            @endif
+        </div>
     </div>
 </div>
