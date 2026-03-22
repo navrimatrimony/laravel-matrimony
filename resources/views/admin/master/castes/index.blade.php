@@ -27,7 +27,9 @@
                         <th class="text-left py-3 px-4 font-semibold text-gray-700 dark:text-gray-300">ID</th>
                         <th class="text-left py-3 px-4 font-semibold text-gray-700 dark:text-gray-300">Religion</th>
                         <th class="text-left py-3 px-4 font-semibold text-gray-700 dark:text-gray-300">Key</th>
-                        <th class="text-left py-3 px-4 font-semibold text-gray-700 dark:text-gray-300">Label</th>
+                        <th class="text-left py-3 px-4 font-semibold text-gray-700 dark:text-gray-300">Label (legacy)</th>
+                        <th class="text-left py-3 px-4 font-semibold text-gray-700 dark:text-gray-300">English</th>
+                        <th class="text-left py-3 px-4 font-semibold text-gray-700 dark:text-gray-300">Marathi</th>
                         <th class="text-left py-3 px-4 font-semibold text-gray-700 dark:text-gray-300">Status</th>
                         <th class="text-left py-3 px-4 font-semibold text-gray-700 dark:text-gray-300">Actions</th>
                     </tr>
@@ -39,6 +41,8 @@
                             <td class="py-3 px-4 text-gray-700 dark:text-gray-300">{{ $item->religion?->label ?? '—' }}</td>
                             <td class="py-3 px-4 text-gray-700 dark:text-gray-300">{{ $item->key }}</td>
                             <td class="py-3 px-4 text-gray-700 dark:text-gray-300">{{ $item->label }}</td>
+                            <td class="py-3 px-4 text-gray-700 dark:text-gray-300">{{ $item->label_en ?? $item->label }}</td>
+                            <td class="py-3 px-4 text-gray-700 dark:text-gray-300">{{ $item->label_mr ?? '—' }}</td>
                             <td class="py-3 px-4">
                                 @if ($item->is_active)
                                     <span class="text-emerald-600 dark:text-emerald-400">Active</span>
@@ -63,7 +67,7 @@
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="6" class="py-8 px-4 text-center text-gray-500">No castes found.</td>
+                            <td colspan="8" class="py-8 px-4 text-center text-gray-500">No castes found.</td>
                         </tr>
                     @endforelse
                 </tbody>

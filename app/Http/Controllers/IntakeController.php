@@ -774,29 +774,53 @@ class IntakeController extends Controller
                 $casteLabel = 'मराठा';
             }
         }
-        if ($relLabel !== '' && $relLabel !== \App\Services\Ocr\OcrSuggestionEngine::PLACEHOLDER_NOT_FOUND && $relLabel !== \App\Services\Ocr\OcrSuggestionEngine::PLACEHOLDER_SELECT_REQUIRED) {
-            $rel = \App\Models\Religion::where('is_active', true)->where('label', $relLabel)->first();
-            if ($rel) {
-                $intakeProfile->religion_id = $rel->id;
-                $intakeProfile->religion_label = $rel->label;
+        $ph = \App\Services\Ocr\OcrSuggestionEngine::PLACEHOLDER_NOT_FOUND;
+        $ph2 = \App\Services\Ocr\OcrSuggestionEngine::PLACEHOLDER_SELECT_REQUIRED;
+        $resolver = app(\App\Services\MasterData\ReligionCasteSubCasteResolver::class);
+
+        $canRel = $relLabel !== '' && $relLabel !== $ph && $relLabel !== $ph2;
+        $canCas = $casteLabel !== '' && $casteLabel !== $ph && $casteLabel !== $ph2;
+        $canSub = $subLabel !== '' && $subLabel !== $ph && $subLabel !== $ph2;
+
+        $resolved = $resolver->resolve(
+            $canRel ? $relLabel : null,
+            $canCas ? $casteLabel : null,
+            $canSub ? $subLabel : null,
+            $intakeProfile->religion_id,
+            $intakeProfile->caste_id,
+            $intakeProfile->sub_caste_id
+        );
+
+        $thr = 0.86;
+        if ($canRel) {
+            if ($resolved['religion_id'] !== null && $resolved['religion_confidence'] >= $thr) {
+                $rel = \App\Models\Religion::find($resolved['religion_id']);
+                if ($rel) {
+                    $intakeProfile->religion_id = $rel->id;
+                    $intakeProfile->religion_label = $rel->label_en ?? $rel->label;
+                }
             } else {
                 $intakeProfile->religion_label = $relLabel;
             }
         }
-        if ($intakeProfile->religion_id && $casteLabel !== '' && $casteLabel !== \App\Services\Ocr\OcrSuggestionEngine::PLACEHOLDER_NOT_FOUND && $casteLabel !== \App\Services\Ocr\OcrSuggestionEngine::PLACEHOLDER_SELECT_REQUIRED) {
-            $c = \App\Models\Caste::where('religion_id', $intakeProfile->religion_id)->where('label', $casteLabel)->first();
-            if ($c) {
-                $intakeProfile->caste_id = $c->id;
-                $intakeProfile->caste_label = $c->label;
+        if ($canCas && $intakeProfile->religion_id) {
+            if ($resolved['caste_id'] !== null && $resolved['caste_confidence'] >= $thr) {
+                $c = \App\Models\Caste::find($resolved['caste_id']);
+                if ($c) {
+                    $intakeProfile->caste_id = $c->id;
+                    $intakeProfile->caste_label = $c->label_en ?? $c->label;
+                }
             } else {
                 $intakeProfile->caste_label = $casteLabel;
             }
         }
-        if ($intakeProfile->caste_id && $subLabel !== '' && $subLabel !== \App\Services\Ocr\OcrSuggestionEngine::PLACEHOLDER_NOT_FOUND && $subLabel !== \App\Services\Ocr\OcrSuggestionEngine::PLACEHOLDER_SELECT_REQUIRED) {
-            $s = \App\Models\SubCaste::where('caste_id', $intakeProfile->caste_id)->where('label', $subLabel)->first();
-            if ($s) {
-                $intakeProfile->sub_caste_id = $s->id;
-                $intakeProfile->subcaste_label = $s->label;
+        if ($canSub && $intakeProfile->caste_id) {
+            if ($resolved['sub_caste_id'] !== null && $resolved['sub_caste_confidence'] >= $thr) {
+                $s = \App\Models\SubCaste::find($resolved['sub_caste_id']);
+                if ($s) {
+                    $intakeProfile->sub_caste_id = $s->id;
+                    $intakeProfile->subcaste_label = $s->label_en ?? $s->label;
+                }
             } else {
                 $intakeProfile->subcaste_label = $subLabel;
             }
@@ -814,19 +838,19 @@ class IntakeController extends Controller
         if (! empty($intakeProfile->religion_id) && empty($intakeProfile->religion_label)) {
             $r = \App\Models\Religion::find($intakeProfile->religion_id);
             if ($r) {
-                $intakeProfile->religion_label = $r->label;
+                $intakeProfile->religion_label = $r->label_en ?? $r->label;
             }
         }
         if (! empty($intakeProfile->caste_id) && empty($intakeProfile->caste_label)) {
             $c = \App\Models\Caste::find($intakeProfile->caste_id);
             if ($c) {
-                $intakeProfile->caste_label = $c->label;
+                $intakeProfile->caste_label = $c->label_en ?? $c->label;
             }
         }
         if (! empty($intakeProfile->sub_caste_id) && empty($intakeProfile->subcaste_label)) {
             $s = \App\Models\SubCaste::find($intakeProfile->sub_caste_id);
             if ($s) {
-                $intakeProfile->subcaste_label = $s->label;
+                $intakeProfile->subcaste_label = $s->label_en ?? $s->label;
             }
         }
 

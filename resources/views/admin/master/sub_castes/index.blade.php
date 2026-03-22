@@ -31,7 +31,9 @@
                     <tr class="border-b border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-700/50">
                         <th class="text-left py-3 px-4 font-semibold text-gray-700 dark:text-gray-300">ID</th>
                         <th class="text-left py-3 px-4 font-semibold text-gray-700 dark:text-gray-300">Caste</th>
-                        <th class="text-left py-3 px-4 font-semibold text-gray-700 dark:text-gray-300">Label</th>
+                        <th class="text-left py-3 px-4 font-semibold text-gray-700 dark:text-gray-300">Label (legacy)</th>
+                        <th class="text-left py-3 px-4 font-semibold text-gray-700 dark:text-gray-300">English</th>
+                        <th class="text-left py-3 px-4 font-semibold text-gray-700 dark:text-gray-300">Marathi</th>
                         <th class="text-left py-3 px-4 font-semibold text-gray-700 dark:text-gray-300">Status / Active</th>
                         <th class="text-left py-3 px-4 font-semibold text-gray-700 dark:text-gray-300">Actions</th>
                     </tr>
@@ -42,6 +44,8 @@
                             <td class="py-3 px-4 text-gray-800 dark:text-gray-200">{{ $item->id }}</td>
                             <td class="py-3 px-4 text-gray-700 dark:text-gray-300">{{ $item->caste?->label ?? '—' }} ({{ $item->caste?->religion?->label ?? '' }})</td>
                             <td class="py-3 px-4 text-gray-700 dark:text-gray-300">{{ $item->label }}</td>
+                            <td class="py-3 px-4 text-gray-700 dark:text-gray-300">{{ $item->label_en ?? $item->label }}</td>
+                            <td class="py-3 px-4 text-gray-700 dark:text-gray-300">{{ $item->label_mr ?? '—' }}</td>
                             <td class="py-3 px-4 text-gray-700 dark:text-gray-300">{{ $item->status ?? '—' }} / {{ $item->is_active ? 'Active' : 'Disabled' }}</td>
                             <td class="py-3 px-4 flex flex-wrap gap-2">
                                 <a href="{{ route('admin.master.sub-castes.edit', $item) }}" class="text-sm text-indigo-600 hover:text-indigo-800">Edit</a>
@@ -54,7 +58,7 @@
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="5" class="py-8 px-4 text-center text-gray-500">No sub-castes found.</td>
+                            <td colspan="7" class="py-8 px-4 text-center text-gray-500">No sub-castes found.</td>
                         </tr>
                     @endforelse
                 </tbody>

@@ -51,6 +51,8 @@ class AdminCasteController extends Controller
             'religion_id' => $religionId,
             'key' => $key,
             'label' => $label,
+            'label_en' => $label,
+            'label_mr' => null,
             'is_active' => true,
         ]);
         return redirect()->route('admin.master.castes.index')->with('success', 'Caste added.');
@@ -82,6 +84,7 @@ class AdminCasteController extends Controller
         $caste->update([
             'religion_id' => $religionId,
             'label' => $label,
+            'label_en' => $label,
             'key' => $key,
         ]);
         return redirect()->route('admin.master.castes.index')->with('success', 'Caste updated.');

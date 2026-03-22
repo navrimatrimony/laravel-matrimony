@@ -17,7 +17,15 @@
         if (!q) return options;
         const lower = q.toLowerCase();
         return options.filter(function (o) {
-            return o.label && o.label.toLowerCase().indexOf(lower) !== -1;
+            function hay(needle, field) {
+                if (!field || typeof field !== 'string') return false;
+                try {
+                    return field.toLowerCase().indexOf(needle) !== -1;
+                } catch (e) {
+                    return field.indexOf(needle) !== -1;
+                }
+            }
+            return hay(lower, o.label) || hay(lower, o.label_en) || hay(lower, o.label_mr);
         });
     }
 
@@ -25,7 +33,9 @@
         if (!q) return false;
         const lower = q.toLowerCase();
         return options.some(function (o) {
-            return o.label && o.label.toLowerCase() === lower;
+            return (o.label && o.label.toLowerCase() === lower)
+                || (o.label_en && o.label_en.toLowerCase() === lower)
+                || (o.label_mr && o.label_mr.toLowerCase() === lower);
         });
     }
 

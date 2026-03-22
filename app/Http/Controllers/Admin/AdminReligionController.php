@@ -32,6 +32,8 @@ class AdminReligionController extends Controller
         Religion::create([
             'key' => $slugger->makeKey($label),
             'label' => $label,
+            'label_en' => $label,
+            'label_mr' => null,
             'is_active' => true,
         ]);
         return redirect()->route('admin.master.religions.index')->with('success', 'Religion added.');
@@ -48,7 +50,11 @@ class AdminReligionController extends Controller
             'label' => ['required', 'string', 'max:255', Rule::unique('religions', 'label')->ignore($religion->id)],
         ]);
         $label = $slugger->normalizeLabel($request->input('label'));
-        $religion->update(['key' => $slugger->makeKey($label), 'label' => $label]);
+        $religion->update([
+            'key' => $slugger->makeKey($label),
+            'label' => $label,
+            'label_en' => $label,
+        ]);
         return redirect()->route('admin.master.religions.index')->with('success', 'Religion updated.');
     }
 

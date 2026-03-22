@@ -53,6 +53,7 @@ class SubCasteAdminController extends Controller
         $sub_caste->update([
             'caste_id' => $casteId,
             'label' => $label,
+            'label_en' => $label,
             'key' => $key,
         ]);
         return redirect()->route('admin.master.sub-castes.index')->with('success', 'Sub-caste updated.');

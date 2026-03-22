@@ -1,7 +1,12 @@
 @props(['profile', 'namePrefix' => '', 'placeholderNotFound' => null, 'placeholderSelectRequired' => null])
 
 @php
-    $religions = \App\Models\Religion::where('is_active', true)->orderBy('label')->get(['id', 'label'])->toArray();
+    $religions = \App\Models\Religion::where('is_active', true)->orderBy('label')->get()->map(fn ($r) => [
+        'id' => $r->id,
+        'label' => $r->display_label,
+        'label_en' => $r->label_en ?? $r->label,
+        'label_mr' => $r->label_mr,
+    ])->values()->all();
     $nameRel = $namePrefix !== '' ? $namePrefix . '[religion_id]' : 'religion_id';
     $nameCaste = $namePrefix !== '' ? $namePrefix . '[caste_id]' : 'caste_id';
     $nameSub = $namePrefix !== '' ? $namePrefix . '[sub_caste_id]' : 'sub_caste_id';

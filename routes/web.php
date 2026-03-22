@@ -551,12 +551,29 @@ Route::get('/api/castes/{religionId}', function ($religionId) {
     return Caste::where('religion_id', $religionId)
         ->where('is_active', true)
         ->orderBy('label')
-        ->get(['id', 'label']);
+        ->get(['id', 'label', 'label_en', 'label_mr'])
+        ->map(function (\App\Models\Caste $c) {
+            return [
+                'id' => $c->id,
+                'label' => $c->display_label,
+                'label_en' => $c->label_en ?? $c->label,
+                'label_mr' => $c->label_mr,
+            ];
+        });
 });
 
 Route::get('/api/subcastes/{casteId}', function ($casteId) {
     return SubCaste::where('caste_id', $casteId)
         ->where('is_active', true)
+        ->where('status', 'approved')
         ->orderBy('label')
-        ->get(['id', 'label']);
+        ->get(['id', 'label', 'label_en', 'label_mr'])
+        ->map(function (\App\Models\SubCaste $s) {
+            return [
+                'id' => $s->id,
+                'label' => $s->display_label,
+                'label_en' => $s->label_en ?? $s->label,
+                'label_mr' => $s->label_mr,
+            ];
+        });
 });
