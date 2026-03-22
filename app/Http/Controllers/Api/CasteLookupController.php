@@ -5,9 +5,9 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Caste;
 use App\Models\SubCaste;
+use App\Support\MasterData\ReligionCasteSubcasteSlugger;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Str;
 
 class CasteLookupController extends Controller
 {
@@ -67,7 +67,7 @@ class CasteLookupController extends Controller
      * POST /sub-castes
      * Create a new sub-caste (status=pending, is_active=0); duplicate under same caste returns existing.
      */
-    public function createSubCaste(Request $request): JsonResponse
+    public function createSubCaste(Request $request, ReligionCasteSubcasteSlugger $slugger): JsonResponse
     {
         $request->validate([
             'caste_id' => ['required', 'exists:castes,id'],
@@ -75,8 +75,8 @@ class CasteLookupController extends Controller
         ]);
 
         $casteId = (int) $request->input('caste_id');
-        $label = trim($request->input('label'));
-        $key = Str::slug($label);
+        $label = $slugger->normalizeLabel($request->input('label'));
+        $key = $slugger->makeKey($label);
 
         $existing = SubCaste::where('caste_id', $casteId)
             ->where(function ($q) use ($key, $label) {

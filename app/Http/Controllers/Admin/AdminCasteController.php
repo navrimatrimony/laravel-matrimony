@@ -5,9 +5,9 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\Caste;
 use App\Models\Religion;
+use App\Support\MasterData\ReligionCasteSubcasteSlugger;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 
@@ -30,7 +30,7 @@ class AdminCasteController extends Controller
         return view('admin.master.castes.create', compact('religions'));
     }
 
-    public function store(Request $request): RedirectResponse
+    public function store(Request $request, ReligionCasteSubcasteSlugger $slugger): RedirectResponse
     {
         $request->validate([
             'religion_id' => ['required', 'exists:religions,id'],
@@ -42,10 +42,10 @@ class AdminCasteController extends Controller
             ],
         ]);
         $religionId = (int) $request->input('religion_id');
-        $label = trim($request->input('label'));
-        $key = Str::slug($label);
-        if (Caste::where('key', $key)->exists()) {
-            $key = $key . '_' . $religionId;
+        $label = $slugger->normalizeLabel($request->input('label'));
+        $key = $slugger->makeKey($label);
+        if (Caste::where('religion_id', $religionId)->where('key', $key)->exists()) {
+            return back()->withErrors(['label' => 'A caste with this label already exists for this religion.'])->withInput();
         }
         Caste::create([
             'religion_id' => $religionId,
@@ -62,7 +62,7 @@ class AdminCasteController extends Controller
         return view('admin.master.castes.edit', compact('caste', 'religions'));
     }
 
-    public function update(Request $request, Caste $caste): RedirectResponse
+    public function update(Request $request, Caste $caste, ReligionCasteSubcasteSlugger $slugger): RedirectResponse
     {
         $religionId = (int) $request->input('religion_id', $caste->religion_id);
         $request->validate([
@@ -74,10 +74,15 @@ class AdminCasteController extends Controller
                 Rule::unique('castes', 'label')->where('religion_id', $religionId)->ignore($caste->id),
             ],
         ]);
-        $label = trim($request->input('label'));
+        $label = $slugger->normalizeLabel($request->input('label'));
+        $key = $slugger->makeKey($label);
+        if (Caste::where('religion_id', $religionId)->where('key', $key)->where('id', '!=', $caste->id)->exists()) {
+            return back()->withErrors(['label' => 'A caste with this label already exists for this religion.'])->withInput();
+        }
         $caste->update([
             'religion_id' => $religionId,
             'label' => $label,
+            'key' => $key,
         ]);
         return redirect()->route('admin.master.castes.index')->with('success', 'Caste updated.');
     }

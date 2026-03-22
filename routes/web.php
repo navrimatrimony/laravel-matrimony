@@ -419,8 +419,27 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
     | Master Data (Religions, Castes, Sub-castes) — layout expects admin.master.*.index
     */
     Route::get('/master/religions', [AdminReligionController::class, 'index'])->name('master.religions.index');
+    Route::get('/master/religions/create', [AdminReligionController::class, 'create'])->name('master.religions.create');
+    Route::post('/master/religions', [AdminReligionController::class, 'store'])->name('master.religions.store');
+    Route::get('/master/religions/{religion}/edit', [AdminReligionController::class, 'edit'])->name('master.religions.edit');
+    Route::put('/master/religions/{religion}', [AdminReligionController::class, 'update'])->name('master.religions.update');
+    Route::post('/master/religions/{religion}/disable', [AdminReligionController::class, 'disable'])->name('master.religions.disable');
+    Route::post('/master/religions/{religion}/enable', [AdminReligionController::class, 'enable'])->name('master.religions.enable');
+
     Route::get('/master/castes', [AdminCasteController::class, 'index'])->name('master.castes.index');
+    Route::get('/master/castes/create', [AdminCasteController::class, 'create'])->name('master.castes.create');
+    Route::post('/master/castes', [AdminCasteController::class, 'store'])->name('master.castes.store');
+    Route::get('/master/castes/{caste}/edit', [AdminCasteController::class, 'edit'])->name('master.castes.edit');
+    Route::put('/master/castes/{caste}', [AdminCasteController::class, 'update'])->name('master.castes.update');
+    Route::post('/master/castes/{caste}/disable', [AdminCasteController::class, 'disable'])->name('master.castes.disable');
+    Route::post('/master/castes/{caste}/enable', [AdminCasteController::class, 'enable'])->name('master.castes.enable');
+
     Route::get('/master/sub-castes', [SubCasteAdminController::class, 'index'])->name('master.sub-castes.index');
+    Route::get('/master/sub-castes/{sub_caste}/edit', [SubCasteAdminController::class, 'edit'])->name('master.sub-castes.edit');
+    Route::put('/master/sub-castes/{sub_caste}', [SubCasteAdminController::class, 'update'])->name('master.sub-castes.update');
+    Route::post('/master/sub-castes/{subCaste}/merge', [SubCasteAdminController::class, 'merge'])->name('master.sub-castes.merge');
+    Route::post('/master/sub-castes/{subCaste}/disable', [SubCasteAdminController::class, 'disable'])->name('master.sub-castes.disable');
+    Route::post('/master/sub-castes/{subCaste}/enable', [SubCasteAdminController::class, 'enable'])->name('master.sub-castes.enable');
 
     Route::prefix('internal')->group(function () {
         Route::get('/location-suggestions', [LocationSuggestionAdminController::class, 'index']);

@@ -4,9 +4,9 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\Religion;
+use App\Support\MasterData\ReligionCasteSubcasteSlugger;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 
@@ -23,14 +23,14 @@ class AdminReligionController extends Controller
         return view('admin.master.religions.create');
     }
 
-    public function store(Request $request): RedirectResponse
+    public function store(Request $request, ReligionCasteSubcasteSlugger $slugger): RedirectResponse
     {
         $request->validate([
             'label' => ['required', 'string', 'max:255', Rule::unique('religions', 'label')],
         ]);
-        $label = trim($request->input('label'));
+        $label = $slugger->normalizeLabel($request->input('label'));
         Religion::create([
-            'key' => Str::slug($label),
+            'key' => $slugger->makeKey($label),
             'label' => $label,
             'is_active' => true,
         ]);
@@ -42,13 +42,13 @@ class AdminReligionController extends Controller
         return view('admin.master.religions.edit', compact('religion'));
     }
 
-    public function update(Request $request, Religion $religion): RedirectResponse
+    public function update(Request $request, Religion $religion, ReligionCasteSubcasteSlugger $slugger): RedirectResponse
     {
         $request->validate([
             'label' => ['required', 'string', 'max:255', Rule::unique('religions', 'label')->ignore($religion->id)],
         ]);
-        $label = trim($request->input('label'));
-        $religion->update(['key' => Str::slug($label), 'label' => $label]);
+        $label = $slugger->normalizeLabel($request->input('label'));
+        $religion->update(['key' => $slugger->makeKey($label), 'label' => $label]);
         return redirect()->route('admin.master.religions.index')->with('success', 'Religion updated.');
     }
 

@@ -7,9 +7,9 @@ use App\Models\Caste;
 use App\Models\MatrimonyProfile;
 use App\Models\SubCaste;
 use App\Services\MutationService;
+use App\Support\MasterData\ReligionCasteSubcasteSlugger;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Str;
 use Illuminate\View\View;
 
 class SubCasteAdminController extends Controller
@@ -38,18 +38,22 @@ class SubCasteAdminController extends Controller
         return view('admin.master.sub_castes.edit', ['subCaste' => $sub_caste, 'castes' => $castes, 'mergeTargets' => $mergeTargets]);
     }
 
-    public function update(Request $request, SubCaste $sub_caste): RedirectResponse
+    public function update(Request $request, SubCaste $sub_caste, ReligionCasteSubcasteSlugger $slugger): RedirectResponse
     {
         $casteId = (int) $request->input('caste_id');
         $request->validate([
             'caste_id' => ['required', 'exists:castes,id'],
             'label' => ['required', 'string', 'min:2', 'max:255'],
         ]);
-        $label = trim($request->input('label'));
+        $label = $slugger->normalizeLabel($request->input('label'));
+        $key = $slugger->makeKey($label);
+        if (SubCaste::where('caste_id', $casteId)->where('key', $key)->where('id', '!=', $sub_caste->id)->exists()) {
+            return back()->withErrors(['label' => 'A sub-caste with this label already exists for this caste.'])->withInput();
+        }
         $sub_caste->update([
             'caste_id' => $casteId,
             'label' => $label,
-            'key' => Str::slug($label),
+            'key' => $key,
         ]);
         return redirect()->route('admin.master.sub-castes.index')->with('success', 'Sub-caste updated.');
     }
