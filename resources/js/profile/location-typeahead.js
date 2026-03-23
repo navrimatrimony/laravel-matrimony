@@ -1,13 +1,20 @@
 /**
  * Reusable location/address typeahead — single component, used in wizard (residence/work/native)
- * and alliance rows. Uses /api/internal/location/search.
+ * and alliance rows. Local DB search: /api/internal/location/search.
+ * GPS assist (auth): POST web route data-resolve-url — suggestion only; form save → MutationService.
  */
 (function () {
     'use strict';
 
     var SEARCH_URL = '/api/internal/location/search';
     var APP_LOCALE = (document.documentElement && document.documentElement.lang) ? document.documentElement.lang.split('-')[0] : 'en';
-    var DEBOUNCE_MS = 200;
+    var DEBOUNCE_MS = 500;
+    var MIN_SEARCH_CHARS = 3;
+
+    function csrfToken() {
+        var m = document.querySelector('meta[name="csrf-token"]');
+        return m ? m.getAttribute('content') : '';
+    }
 
     function buildLine(item) {
         var cityName = item.city_name || item.label || item.name || '';
@@ -230,7 +237,13 @@
         if (!input || !resultsEl) return;
         wrapper.dataset.bound = '1';
 
-        function onSelect(item, displayLabel) {
+        function clearIntakeBirthPlaceText(wrapper) {
+            if (wrapper.dataset.locationContext !== 'birth') return;
+            var bp = document.getElementById('intake_birth_place_text');
+            if (bp) bp.value = '';
+        }
+
+        function applyCanonicalSelection(item, displayLabel) {
             input.value = displayLabel;
             resultsEl.classList.add('hidden');
             resultsEl.style.display = 'none';
@@ -252,7 +265,6 @@
                 if (district) district.value = districtId;
                 if (taluka) taluka.value = talukaId;
                 if (city) city.value = cityId;
-                // Backup for submit: some stacks clear hiddens; dataset survives on the wrapper.
                 wrapper.dataset.resCountryId = countryId || '';
                 wrapper.dataset.resStateId = stateId || '';
                 wrapper.dataset.resDistrictId = districtId || '';
@@ -281,6 +293,7 @@
                 if (bTaluka) bTaluka.value = talukaId;
                 if (bDistrict) bDistrict.value = districtId;
                 if (bState) bState.value = stateId;
+                clearIntakeBirthPlaceText(wrapper);
             } else if (context === 'alliance') {
                 var c = wrapper.querySelector('.location-hidden-city');
                 var t = wrapper.querySelector('.location-hidden-taluka');
@@ -309,11 +322,191 @@
             }
         }
 
+        function onSelect(item, displayLabel) {
+            applyCanonicalSelection(item, displayLabel);
+        }
+
+        var gpsPanel = wrapper.querySelector('.location-gps-panel');
+        var gpsBtn = wrapper.querySelector('.location-gps-btn');
+
+        function hideGpsPanel() {
+            if (!gpsPanel) return;
+            gpsPanel.classList.add('hidden');
+            gpsPanel.innerHTML = '';
+        }
+
+        function showGpsHtml(html) {
+            if (!gpsPanel) return;
+            gpsPanel.innerHTML = html;
+            gpsPanel.classList.remove('hidden');
+        }
+
+        function itemFromResolvePayload(payload) {
+            return {
+                city_id: payload.city_id,
+                taluka_id: payload.taluka_id,
+                district_id: payload.district_id,
+                state_id: payload.state_id,
+                country_id: payload.country_id,
+            };
+        }
+
+        function bindGpsAssist() {
+            if (!gpsBtn || !wrapper.dataset.resolveUrl) return;
+
+            gpsBtn.addEventListener('click', function () {
+                hideGpsPanel();
+                showGpsHtml('<div class="text-gray-600 dark:text-gray-400 italic">Detecting your location…</div>');
+                if (!navigator.geolocation) {
+                    showGpsHtml('<div class="text-red-600 dark:text-red-400">Location is not supported in this browser.</div>');
+                    return;
+                }
+                navigator.geolocation.getCurrentPosition(
+                    function (pos) {
+                        showGpsHtml('<div class="text-gray-600 dark:text-gray-400 italic">Finding nearest city…</div>');
+                        fetch(wrapper.dataset.resolveUrl, {
+                            method: 'POST',
+                            credentials: 'same-origin',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'Accept': 'application/json',
+                                'X-Requested-With': 'XMLHttpRequest',
+                                'X-CSRF-TOKEN': csrfToken(),
+                            },
+                            body: JSON.stringify({
+                                lat: pos.coords.latitude,
+                                lon: pos.coords.longitude,
+                            }),
+                        })
+                            .then(function (r) {
+                                return r.json().then(function (data) {
+                                    return { ok: r.ok, status: r.status, data: data };
+                                });
+                            })
+                            .then(function (res) {
+                                var data = res.data;
+                                if (res.status === 429) {
+                                    showGpsHtml('<div class="text-amber-700 dark:text-amber-300">Too many location requests. Wait a minute and try again.</div>');
+                                    return;
+                                }
+                                if (data && data.status === 'busy') {
+                                    showGpsHtml(
+                                        '<div class="text-gray-600 dark:text-gray-400">Location service is busy. Please try again in a few seconds.</div>' +
+                                            '<button type="button" class="location-gps-retry mt-2 text-sm text-indigo-600 hover:underline">Retry</button>'
+                                    );
+                                    var busyRetry = gpsPanel.querySelector('.location-gps-retry');
+                                    if (busyRetry) {
+                                        busyRetry.addEventListener('click', function () {
+                                            gpsBtn.click();
+                                        });
+                                    }
+                                    return;
+                                }
+                                if (!data || !data.success) {
+                                    var msg = (data && data.message) ? data.message : 'Could not resolve location.';
+                                    showGpsHtml(
+                                        '<div class="text-red-600 dark:text-red-400">' +
+                                            msg.replace(/</g, '&lt;') +
+                                            '</div>' +
+                                            '<button type="button" class="location-gps-retry mt-2 text-sm text-indigo-600 hover:underline">Retry</button>'
+                                    );
+                                    var retry = gpsPanel.querySelector('.location-gps-retry');
+                                    if (retry) {
+                                        retry.addEventListener('click', function () {
+                                            gpsBtn.click();
+                                        });
+                                    }
+                                    return;
+                                }
+
+                                var conf = typeof data.confidence === 'number' ? Math.round(data.confidence * 100) : null;
+                                var confHtml = conf !== null ? '<span class="text-xs text-gray-500">Confidence ~' + conf + '% (GPS suggestion — confirm below)</span>' : '';
+
+                                var primaryItem = itemFromResolvePayload(data);
+                                var alts = Array.isArray(data.alternatives) ? data.alternatives : [];
+                                var altHtml = '';
+                                alts.forEach(function (alt, i) {
+                                    altHtml +=
+                                        '<button type="button" class="location-gps-alt block w-full text-left mt-1 px-2 py-1 text-sm border border-gray-200 dark:border-gray-600 rounded hover:bg-gray-50 dark:hover:bg-gray-700" data-alt-idx="' +
+                                        i +
+                                        '">' +
+                                        buildLine(alt) +
+                                        '</button>';
+                                });
+
+                                showGpsHtml(
+                                    '<div class="rounded border border-indigo-200 dark:border-indigo-800 bg-indigo-50/50 dark:bg-indigo-950/40 p-2 space-y-2">' +
+                                        '<div class="text-sm text-gray-800 dark:text-gray-100">' +
+                                            (data.display_label || '').replace(/</g, '&lt;') +
+                                            '</div>' +
+                                        confHtml +
+                                        '<div class="flex flex-wrap gap-2 pt-1">' +
+                                        '<button type="button" class="location-gps-apply px-3 py-1.5 rounded text-xs font-semibold bg-indigo-600 text-white hover:bg-indigo-700">Use this location</button>' +
+                                        '<button type="button" class="location-gps-dismiss px-3 py-1.5 rounded text-xs border border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700">Dismiss</button>' +
+                                        '</div>' +
+                                        (alts.length ? '<div class="text-xs text-gray-600 dark:text-gray-400 pt-1">Other matches:</div>' + altHtml : '') +
+                                        '</div>'
+                                );
+
+                                var applyBtn = gpsPanel.querySelector('.location-gps-apply');
+                                if (applyBtn) {
+                                    applyBtn.addEventListener('click', function () {
+                                        applyCanonicalSelection(primaryItem, data.display_label || buildLine(primaryItem));
+                                        hideGpsPanel();
+                                    });
+                                }
+                                var dismissBtn = gpsPanel.querySelector('.location-gps-dismiss');
+                                if (dismissBtn) {
+                                    dismissBtn.addEventListener('click', function () {
+                                        hideGpsPanel();
+                                    });
+                                }
+                                gpsPanel.querySelectorAll('.location-gps-alt').forEach(function (btn) {
+                                    btn.addEventListener('click', function () {
+                                        var idx = parseInt(btn.getAttribute('data-alt-idx'), 10);
+                                        var alt = alts[idx];
+                                        if (!alt) return;
+                                        applyCanonicalSelection(alt, buildLine(alt));
+                                        hideGpsPanel();
+                                    });
+                                });
+                            })
+                            .catch(function () {
+                                showGpsHtml(
+                                    '<div class="text-red-600">Network error.</div><button type="button" class="location-gps-retry mt-2 text-sm text-indigo-600 hover:underline">Retry</button>'
+                                );
+                                var retry2 = gpsPanel.querySelector('.location-gps-retry');
+                                if (retry2) {
+                                    retry2.addEventListener('click', function () {
+                                        gpsBtn.click();
+                                    });
+                                }
+                            });
+                    },
+                    function () {
+                        showGpsHtml(
+                            '<div class="text-red-600 dark:text-red-400">Location permission denied or unavailable.</div>' +
+                                '<button type="button" class="location-gps-retry mt-2 text-sm text-indigo-600 hover:underline">Retry</button>'
+                        );
+                        var retry3 = gpsPanel.querySelector('.location-gps-retry');
+                        if (retry3) {
+                            retry3.addEventListener('click', function () {
+                                gpsBtn.click();
+                            });
+                        }
+                    },
+                    { enableHighAccuracy: false, timeout: 15000, maximumAge: 600000 }
+                );
+            });
+        }
+
+        bindGpsAssist();
+
         var debounce = null;
         input.addEventListener('input', function () {
             clearTimeout(debounce);
             var q = input.value.trim();
-            if (q.length < 2) {
+            if (q.length < MIN_SEARCH_CHARS) {
                 resultsEl.classList.add('hidden');
                 resultsEl.style.display = 'none';
                 return;
@@ -329,7 +522,7 @@
             }, DEBOUNCE_MS);
         });
         input.addEventListener('focus', function () {
-            if (input.value.trim().length >= 2 && resultsEl.innerHTML) {
+            if (input.value.trim().length >= MIN_SEARCH_CHARS && resultsEl.innerHTML) {
                 resultsEl.classList.remove('hidden');
                 resultsEl.style.display = 'block';
             }
@@ -338,6 +531,7 @@
             if (wrapper.contains(e.target)) return;
             resultsEl.classList.add('hidden');
             resultsEl.style.display = 'none';
+            hideGpsPanel();
         });
 
         if (context === 'residence') {

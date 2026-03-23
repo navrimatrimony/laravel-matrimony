@@ -79,7 +79,7 @@ class LocationSearchService
 
         $cityPrefix = City::query()
             ->with(['taluka.district.state'])
-            ->where('name', 'like', $q . '%')
+            ->where('name', 'like', $q.'%')
             ->orderBy('name')
             ->limit($maxResults)
             ->get();
@@ -98,7 +98,7 @@ class LocationSearchService
 
         $cityPartial = City::query()
             ->with(['taluka.district.state'])
-            ->where('name', 'like', '%' . $q . '%')
+            ->where('name', 'like', '%'.$q.'%')
             ->whereNotIn('id', array_keys($seen))
             ->orderBy('name')
             ->limit($maxResults)
@@ -118,14 +118,14 @@ class LocationSearchService
 
         $aliasPrefix = CityAlias::query()
             ->where('is_active', true)
-            ->where('normalized_alias', 'like', $q . '%')
+            ->where('normalized_alias', 'like', $q.'%')
             ->with(['city.taluka.district.state'])
             ->orderBy('normalized_alias')
             ->limit($maxResults)
             ->get();
         foreach ($aliasPrefix as $alias) {
             $city = $alias->city;
-            if (!$city || isset($seen[$city->id])) {
+            if (! $city || isset($seen[$city->id])) {
                 continue;
             }
             $seen[$city->id] = true;
@@ -142,14 +142,14 @@ class LocationSearchService
 
         $aliasPartial = CityAlias::query()
             ->where('is_active', true)
-            ->where('normalized_alias', 'like', '%' . $q . '%')
+            ->where('normalized_alias', 'like', '%'.$q.'%')
             ->with(['city.taluka.district.state'])
             ->orderBy('normalized_alias')
             ->limit($maxResults)
             ->get();
         foreach ($aliasPartial as $alias) {
             $city = $alias->city;
-            if (!$city || isset($seen[$city->id])) {
+            if (! $city || isset($seen[$city->id])) {
                 continue;
             }
             $seen[$city->id] = true;
@@ -183,8 +183,8 @@ class LocationSearchService
      * For Marathi locale, also search by villages.name_mr so that Marathi queries (e.g. "विटा")
      * return correct matches. We then map them back to their mirrored City rows.
      *
-     * @param array<int, array> $rows
-     * @param array<int, bool> $seen  city_id => true
+     * @param  array<int, array>  $rows
+     * @param  array<int, bool>  $seen  city_id => true
      */
     private function appendVillageLocaleMatches(array &$rows, array &$seen, string $q, int $maxResults): void
     {
@@ -196,7 +196,7 @@ class LocationSearchService
 
         $villages = Village::query()
             ->whereNotNull('name_mr')
-            ->whereRaw('name_mr LIKE ?', [$q . '%'])
+            ->whereRaw('name_mr LIKE ?', [$q.'%'])
             ->limit($remaining * 3)
             ->get();
 
@@ -211,7 +211,7 @@ class LocationSearchService
                 break;
             }
 
-            $key = $village->taluka_id . '|' . strtolower(trim((string) $village->name_en));
+            $key = $village->taluka_id.'|'.strtolower(trim((string) $village->name_en));
             if (isset($cityCache[$key])) {
                 $city = $cityCache[$key];
             } else {
@@ -268,6 +268,7 @@ class LocationSearchService
                 ->first();
             if ($district !== null) {
                 $state = $district->state;
+
                 return [
                     'district_id' => (int) $district->id,
                     'district_name' => $district->name ?? '',
@@ -299,8 +300,8 @@ class LocationSearchService
      */
     private function searchByVillageAndPlace(string $namePart, string $placePart, int $limit): array
     {
-        $nameLike = '%' . strtolower($namePart) . '%';
-        $placeLike = '%' . strtolower($placePart) . '%';
+        $nameLike = '%'.strtolower($namePart).'%';
+        $placeLike = '%'.strtolower($placePart).'%';
         $cities = City::query()
             ->with(['taluka.district.state'])
             ->whereRaw('LOWER(name) LIKE ?', [$nameLike])
@@ -353,15 +354,16 @@ class LocationSearchService
         foreach ($cities as $city) {
             $rows[] = $this->formatRow($city);
         }
+
         return $rows;
     }
 
     /**
      * Re-rank results so that matches in preferred districts/states appear first.
      *
-     * @param array<int, array{district_id?: int, state_id?: int}> $rows
-     * @param array<int, int> $preferredStateIds
-     * @param array<int, int> $preferredDistrictIds
+     * @param  array<int, array{district_id?: int, state_id?: int}>  $rows
+     * @param  array<int, int>  $preferredStateIds
+     * @param  array<int, int>  $preferredDistrictIds
      * @return array<int, array>
      */
     private function boostResults(array $rows, array $preferredStateIds, array $preferredDistrictIds): array
@@ -401,7 +403,16 @@ class LocationSearchService
     }
 
     /**
-     * @param City $city
+     * Public wrapper for GPS/canonical flows — same shape as manual typeahead rows.
+     *
+     * @return array{city_id: int, city_name: string, taluka_id: int, taluka_name: string, district_id: int, district_name: string, state_id: int, state_name: string, country_id: int}
+     */
+    public function canonicalPayloadFromCity(City $city): array
+    {
+        return $this->formatRow($city);
+    }
+
+    /**
      * @return array{city_id: int, city_name: string, taluka_id: int, taluka_name: string, district_id: int, district_name: string, state_id: int, state_name: string, country_id: int}
      */
     private function formatRow(City $city): array
@@ -414,7 +425,7 @@ class LocationSearchService
         $cityName = $city->name ?? '';
         if ($locale === 'mr') {
             static $villageCache = [];
-            $cacheKey = $city->taluka_id . '|' . strtolower(trim((string) $city->name));
+            $cacheKey = $city->taluka_id.'|'.strtolower(trim((string) $city->name));
             if (array_key_exists($cacheKey, $villageCache)) {
                 $cached = $villageCache[$cacheKey];
                 if ($cached !== null) {

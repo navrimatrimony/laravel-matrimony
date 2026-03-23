@@ -5,6 +5,10 @@
     'value' => '',
     'placeholder' => 'Type village / city / pincode',
     'label' => null,
+    /** When true and user is logged in, show “current location” assist (never writes profile by itself). */
+    'gpsAssist' => true,
+    /** Optional override for POST resolve URL (defaults to web route). */
+    'resolveUrl' => null,
     'noBorder' => false,      // when true, wrapper has no border (e.g. basic info birth place)
     'compactRow' => false,    // when true, no vertical padding (for single-line row layout)
     /**
@@ -29,9 +33,12 @@
 @php
     $inputId = $attributes->get('id') ?? 'location-typeahead-' . $context . '-' . (\Illuminate\Support\Str::random(4));
     $resultsId = $inputId . '-results';
+    $gpsPanelId = $inputId . '-gps-panel';
     $wrapperClass = 'location-typeahead-wrapper';
     $isFullMode = ($mode ?? 'simple') === 'full';
     $resolvedDetailedName = $namePrefix !== '' ? ($namePrefix . '[' . $detailedName . ']') : $detailedName;
+    $resolveUrlResolved = $resolveUrl ?? (auth()->check() ? route('matrimony.internal.location.resolve-current') : '');
+    $showGps = ($gpsAssist ?? true) && auth()->check() && $resolveUrlResolved !== '';
 @endphp
 <style>
 .location-typeahead-wrapper { position: relative; }
@@ -60,7 +67,7 @@
     $paddingClass = $compactRow ? 'px-2 py-0' : ($noBorder ? 'pt-0 px-3 pb-3' : 'p-3');
     $borderClass = $noBorder ? '' : 'border-2 border-rose-500 dark:border-rose-400';
 @endphp
-<div class="{{ $wrapperClass }} space-y-0 rounded-lg {{ $paddingClass }} {{ $borderClass }}" data-location-context="{{ $context }}" data-name-prefix="{{ $namePrefix }}" @if(!empty($displaySyncName)) data-display-sync-name="{{ $displaySyncName }}" @endif>
+<div class="{{ $wrapperClass }} space-y-0 rounded-lg {{ $paddingClass }} {{ $borderClass }}" data-location-context="{{ $context }}" data-name-prefix="{{ $namePrefix }}" @if($showGps) data-resolve-url="{{ $resolveUrlResolved }}" data-gps="1" @endif @if(!empty($displaySyncName)) data-display-sync-name="{{ $displaySyncName }}" @endif>
     @if ($context === 'residence')
         <input type="hidden" name="{{ $namePrefix !== '' ? $namePrefix . '[country_id]' : 'country_id' }}" class="location-hidden-country" value="{{ $dataCountryId }}">
         <input type="hidden" name="{{ $namePrefix !== '' ? $namePrefix . '[state_id]' : 'state_id' }}" class="location-hidden-state" value="{{ $dataStateId }}">
@@ -104,6 +111,31 @@
                 @if ($label)
                     <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{{ $label }}</label>
                 @endif
+                <div class="flex gap-1.5 items-start">
+                    <div class="flex-1 min-w-0 relative">
+                        <input type="text"
+                               id="{{ $inputId }}"
+                               class="location-typeahead-input w-full rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-3 py-2.5 h-[42px]"
+                               value="{{ $value }}"
+                               placeholder="{{ $placeholder }}"
+                               autocomplete="off">
+                        <div id="{{ $resultsId }}" class="location-typeahead-results border border-t-0 border-gray-300 dark:border-gray-600 rounded-b max-h-48 overflow-y-auto hidden"></div>
+                    </div>
+                    @if ($showGps)
+                        <button type="button" class="location-gps-btn shrink-0 mt-0.5 inline-flex items-center justify-center w-11 h-[42px] rounded border border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 text-lg hover:bg-gray-100 dark:hover:bg-gray-600" title="{{ __('wizard.use_current_location') }}" aria-label="{{ __('wizard.use_current_location') }}">📍</button>
+                    @endif
+                </div>
+                @if ($showGps)
+                    <div id="{{ $gpsPanelId }}" class="location-gps-panel mt-2 text-sm hidden"></div>
+                @endif
+            </div>
+        </div>
+    @else
+        @if ($label)
+            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{{ $label }}</label>
+        @endif
+        <div class="flex gap-1.5 items-start">
+            <div class="flex-1 min-w-0 relative">
                 <input type="text"
                        id="{{ $inputId }}"
                        class="location-typeahead-input w-full rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-3 py-2.5 h-[42px]"
@@ -112,18 +144,13 @@
                        autocomplete="off">
                 <div id="{{ $resultsId }}" class="location-typeahead-results border border-t-0 border-gray-300 dark:border-gray-600 rounded-b max-h-48 overflow-y-auto hidden"></div>
             </div>
+            @if ($showGps)
+                <button type="button" class="location-gps-btn shrink-0 mt-0.5 inline-flex items-center justify-center w-11 h-[42px] rounded border border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 text-lg hover:bg-gray-100 dark:hover:bg-gray-600" title="{{ __('wizard.use_current_location') }}" aria-label="{{ __('wizard.use_current_location') }}">📍</button>
+            @endif
         </div>
-    @else
-        @if ($label)
-            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{{ $label }}</label>
+        @if ($showGps)
+            <div id="{{ $gpsPanelId }}" class="location-gps-panel mt-2 text-sm hidden"></div>
         @endif
-        <input type="text"
-               id="{{ $inputId }}"
-               class="location-typeahead-input w-full rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-3 py-2.5 h-[42px]"
-               value="{{ $value }}"
-               placeholder="{{ $placeholder }}"
-               autocomplete="off">
-        <div id="{{ $resultsId }}" class="location-typeahead-results border border-t-0 border-gray-300 dark:border-gray-600 rounded-b max-h-48 overflow-y-auto hidden"></div>
     @endif
 </div>
 

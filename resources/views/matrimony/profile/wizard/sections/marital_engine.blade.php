@@ -109,7 +109,8 @@
             {{-- Children Yes/No: heading + toggle. Yes selected = green. --}}
             <div class="shrink-0 min-w-0 flex flex-col max-w-full">
                 <label class="block text-xs text-gray-600 dark:text-gray-400 mb-0.5 truncate">{{ __('Children') }} <span class="text-red-500">*</span></label>
-                <input type="hidden" :name="namePrefix ? 'snapshot[core][has_children]' : 'has_children'" :value="hasChildrenValue">
+                {{-- Static name so the field is always submitted (Alpine :name is not a real HTML name until Alpine runs). --}}
+                <input type="hidden" name="{{ $isSnapshot ? 'snapshot[core][has_children]' : 'has_children' }}" :value="hasChildrenValue">
                 <div class="inline-flex max-w-full rounded-full border-2 border-gray-300 dark:border-gray-600 bg-gray-100 dark:bg-gray-700 p-0.5 h-[42px] items-stretch" role="group">
                     <button type="button" @click="hasChildrenValue = '0'; onHasChildrenChange()"
                             class="px-2 sm:px-3 py-2 text-xs sm:text-sm font-medium rounded-full transition-all min-w-0 shrink-0 flex items-center justify-center"

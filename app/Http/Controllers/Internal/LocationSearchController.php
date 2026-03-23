@@ -3,8 +3,8 @@
 namespace App\Http\Controllers\Internal;
 
 use App\Http\Controllers\Controller;
-use App\Services\LocationSearchService;
 use App\Models\MatrimonyProfile;
+use App\Services\LocationSearchService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -12,13 +12,12 @@ class LocationSearchController extends Controller
 {
     public function __construct(
         private LocationSearchService $locationSearchService
-    ) {
-    }
+    ) {}
 
     public function search(Request $request): JsonResponse
     {
         $request->validate([
-            'q' => ['required', 'string', 'max:100'],
+            'q' => ['required', 'string', 'min:2', 'max:100'],
         ]);
 
         $query = trim($request->input('q'));
@@ -61,7 +60,7 @@ class LocationSearchController extends Controller
             ]);
         }
 
-        $canSuggest = strlen($query) >= 3 && !(strlen($query) === 6 && ctype_digit($query));
+        $canSuggest = strlen($query) >= 3 && ! (strlen($query) === 6 && ctype_digit($query));
 
         return response()->json([
             'success' => true,

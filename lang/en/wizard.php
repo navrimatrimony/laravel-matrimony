@@ -23,6 +23,7 @@ return [
     'birth_time_optional' => 'Birth Time (optional)',
     'birth_place_optional' => 'Birth Place (optional)',
     'type_city_area' => 'Type city / area',
+    'use_current_location' => 'Use current location',
     'mother_tongue' => 'Mother Tongue',
     'type_to_search_religion' => 'Type to search religion',
     'select_religion_first' => 'Select religion first, then type to search',

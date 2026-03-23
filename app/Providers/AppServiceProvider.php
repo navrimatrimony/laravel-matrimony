@@ -2,7 +2,10 @@
 
 namespace App\Providers;
 
+use Illuminate\Cache\RateLimiting\Limit;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\View;
 use Illuminate\Support\ServiceProvider;
@@ -22,6 +25,10 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        RateLimiter::for('location-gps', function (Request $request) {
+            return Limit::perMinute(2)->by($request->user()?->id ?: $request->ip());
+        });
+
         Route::bind('profile', function ($value) {
             return \App\Models\MatrimonyProfile::withTrashed()->findOrFail($value);
         });
@@ -65,7 +72,7 @@ class AppServiceProvider extends ServiceProvider
             $isAdminUser = $adminUser && (method_exists($adminUser, 'isAnyAdmin') ? $adminUser->isAnyAdmin() : $adminUser->is_admin === true);
             $isSuperAdmin = $isAdminUser && method_exists($adminUser, 'isSuperAdmin') && $adminUser->isSuperAdmin();
             $adminCapabilities = null;
-            if ($isAdminUser && !$isSuperAdmin) {
+            if ($isAdminUser && ! $isSuperAdmin) {
                 $adminCapabilities = DB::table('admin_capabilities')->where('admin_id', $adminUser->id)->first();
             }
             $canManageVerificationTags = $isAdminUser && ($isSuperAdmin || ($adminCapabilities && $adminCapabilities->can_manage_verification_tags));

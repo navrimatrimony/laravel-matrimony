@@ -24,6 +24,7 @@ use App\Http\Controllers\IntakeController;
 use App\Http\Controllers\InterestController;
 use App\Http\Controllers\Internal\Admin\CityAliasAdminController;
 use App\Http\Controllers\Internal\Admin\LocationSuggestionAdminController;
+use App\Http\Controllers\Internal\CurrentLocationController;
 use App\Http\Controllers\MatrimonyProfileController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\OnboardingController;
@@ -149,6 +150,11 @@ Route::middleware('auth')->group(function () {
     Route::post('/matrimony/profile/wizard/{section}', [ProfileWizardController::class, 'store'])
         ->name('matrimony.profile.wizard.store')
         ->where('section', 'basic-info|physical|marriages|location|personal-family|education-career|family-details|siblings|relatives|alliance|property|horoscope|about-me|about-preferences|contacts|photo|full');
+
+    /** GPS → canonical location suggestion (MutationService-only saves; no direct profile writes here). */
+    Route::post('/matrimony/internal/location/resolve-current', [CurrentLocationController::class, 'resolve'])
+        ->middleware(['throttle:location-gps'])
+        ->name('matrimony.internal.location.resolve-current');
 
     Route::get('/matrimony/profile/wizard/marriage-fields', [ProfileWizardController::class, 'marriageFields'])
         ->name('matrimony.profile.wizard.marriage-fields');

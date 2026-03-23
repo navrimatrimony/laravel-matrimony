@@ -22,6 +22,7 @@ return [
     'birth_time_optional' => 'जन्मवेळ (पर्यायी)',
     'birth_place_optional' => 'जन्मठिकाण (पर्यायी)',
     'type_city_area' => 'शहर / क्षेत्र टाइप करा',
+    'use_current_location' => 'सध्याचे स्थान वापरा',
     'mother_tongue' => 'मातृभाषा',
     'type_to_search_religion' => 'धर्म शोधण्यासाठी टाइप करा',
     'select_religion_first' => 'प्रथम धर्म निवडा, नंतर शोधण्यासाठी टाइप करा',

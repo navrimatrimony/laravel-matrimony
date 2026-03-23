@@ -17,5 +17,11 @@ export default {
         },
     },
 
-    plugins: [forms],
+    plugins: [
+        forms,
+        // Tailwind 3.2+ ships `landscape:`; we are on 3.1.x — register it so profile layout works in horizontal mode.
+        function ({ addVariant }) {
+            addVariant('landscape', '@media (orientation: landscape) { & }');
+        },
+    ],
 };

@@ -1,7 +1,7 @@
 @extends(request()->routeIs('admin.*') ? 'layouts.admin' : 'layouts.app')
 
 @section('content')
-<div class="{{ request()->routeIs('admin.*') ? 'bg-white dark:bg-gray-800 shadow rounded-lg p-6' : 'max-w-3xl mx-auto py-8' }}" x-data="{ adminEditMode: @js(auth()->check() && auth()->user()->is_admin === true && request()->has('admin_edit')), openRequestModal: false }">
+<div class="{{ request()->routeIs('admin.*') ? 'bg-white dark:bg-gray-800 shadow rounded-lg p-6' : 'max-w-6xl mx-auto py-8 px-4 sm:px-6' }}" x-data="{ adminEditMode: @js(auth()->check() && auth()->user()->is_admin === true && request()->has('admin_edit')), openRequestModal: false }">
     @if (request()->routeIs('admin.*'))
         <h1 class="text-2xl font-bold text-gray-800 dark:text-gray-100 mb-1">Admin — Profile #{{ $profile->id }}</h1>
         <p class="text-sm text-gray-500 dark:text-gray-400 mb-6">{{ $profile->full_name ?? '—' }}@if (!empty($profile->is_demo)) <span class="inline-block ml-2 px-2 py-0.5 text-xs font-semibold bg-sky-100 dark:bg-sky-900/40 text-sky-700 dark:text-sky-300 rounded">Showcase</span>@endif</p>
@@ -279,100 +279,27 @@
     </div>
 </div>
 
-{{-- Profile Photo with Gender-based Fallback --}}
-@if ($profilePhotoVisible)
-<div class="mb-6 flex flex-col items-center bg-white/80 dark:bg-gray-800/60 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-sm px-4 py-4">
-    <div class="relative rounded-full overflow-hidden">
-        @if ($profile->profile_photo)
-            {{-- Real uploaded photo --}}
-            <img
-                src="{{ asset('uploads/matrimony_photos/'.$profile->profile_photo) }}"
-                alt="{{ __('profile.profile_photo') }}"
-                class="w-40 h-40 rounded-full object-cover border"
-                style="{{ $photoLocked ? 'filter: blur(10px); transform: scale(1.05);' : '' }}"
-            />
-        @else
-            {{-- Gender-based placeholder fallback (UI only) --}}
-            @php
-                $genderKey = $profile->gender?->key ?? $profile->gender;
-                if ($genderKey === 'male') {
-                    $placeholderSrc = asset('images/placeholders/male-profile.svg');
-                } elseif ($genderKey === 'female') {
-                    $placeholderSrc = asset('images/placeholders/female-profile.svg');
-                } else {
-                    $placeholderSrc = asset('images/placeholders/default-profile.svg');
-                }
-            @endphp
-            <img
-                src="{{ $placeholderSrc }}"
-                alt="{{ __('dashboard.profile_placeholder') }}"
-                class="w-40 h-40 rounded-full object-cover border"
-                style="{{ $photoLocked ? 'filter: blur(10px); transform: scale(1.05);' : '' }}"
-            />
+{{-- Smart layout: 20% photo / 80% info — md+ wide screens; landscape: phones/tablets in horizontal mode (lg alone missed many viewports) --}}
+<div class="flex flex-col gap-6 md:flex-row md:items-start md:gap-6 landscape:flex-row landscape:items-start landscape:gap-4">
+    <aside class="w-full shrink-0 min-w-0 md:w-1/5 landscape:w-1/5 md:sticky md:top-20 landscape:sticky landscape:top-16 lg:top-24">
+        <x-profile.show.hero-card
+            class="w-full"
+            :profile="$profile"
+            :profilePhotoVisible="$profilePhotoVisible"
+            :photoLocked="$photoLocked"
+            :photoLockMode="$photoLockMode ?? 'all'"
+            :interestAlreadySent="$interestAlreadySent"
+            :contactRequestDisabled="$contactRequestDisabled"
+            :contactRequestState="$contactRequestState"
+            :dateOfBirthVisible="$dateOfBirthVisible"
+            :heightVisible="$heightVisible"
+            :locationVisible="$locationVisible"
+            :educationVisible="$educationVisible"
+            :verificationItems="[]"
+        />
+        @if ($profilePhotoVisible && $isOwnProfile && $profile->profile_photo && $profile->photo_approved === false && empty($profile->photo_rejected_at))
+            <p class="mt-3 text-sm text-amber-800 dark:text-amber-200 bg-amber-50 dark:bg-amber-900/30 px-3 py-2 rounded-lg border border-amber-200/80 dark:border-amber-800">{{ __('dashboard.photo_under_review') }}</p>
         @endif
-
-        @if ($photoLocked)
-            <div class="absolute inset-0 flex items-center justify-center px-4"
-                 style="background: rgba(0, 0, 0, 0.35);">
-                <div class="text-center">
-                    <p class="text-white font-semibold text-sm mb-3" style="text-shadow: 0 1px 2px rgba(0,0,0,0.35);">
-                        Photo is private
-                    </p>
-
-                    @if (($photoLockMode ?? 'all') === 'premium')
-                        {{-- Option B: premium photos stay locked; request contact --}}
-                        @if (! $contactRequestDisabled && $contactRequestState !== null)
-                            @if (auth()->check())
-                                <button type="button"
-                                        @click="$root.openRequestModal = true"
-                                        style="background-color: #10b981; color: white; padding: 10px 18px; border-radius: 6px; font-weight: 600; font-size: 14px; border: none; cursor: pointer;">
-                                    {{ __('Request Contact') }}
-                                </button>
-                            @else
-                                <button type="button" disabled
-                                        style="background-color: #9ca3af; color: white; padding: 10px 18px; border-radius: 6px; font-weight: 600; font-size: 14px; border: none; cursor: not-allowed;">
-                                    {{ __('Login to Request Contact') }}
-                                </button>
-                            @endif
-                        @else
-                            <button type="button" disabled
-                                    style="background-color: #9ca3af; color: white; padding: 10px 18px; border-radius: 6px; font-weight: 600; font-size: 14px; border: none; cursor: not-allowed;">
-                                {{ __('Request Contact') }}
-                            </button>
-                        @endif
-                    @else
-                        {{-- accepted_interest mode: send interest first --}}
-                        @if ($interestAlreadySent)
-                            <button type="button" disabled
-                                    style="background-color: #9ca3af; color: white; padding: 10px 18px; border-radius: 6px; font-weight: 600; font-size: 14px; border: none; cursor: not-allowed;">
-                                {{ __('Interest Sent') }}
-                            </button>
-                        @else
-                            @if (auth()->check())
-                                <form method="POST" action="{{ route('interests.send', $profile) }}" style="display: inline;">
-                                    @csrf
-                                    <button type="submit"
-                                            style="background-color: #ec4899; color: white; padding: 10px 18px; border-radius: 6px; font-weight: 600; font-size: 14px; border: none; cursor: pointer;">
-                                        {{ __('Send Interest') }}
-                                    </button>
-                                </form>
-                            @else
-                                <button type="button" disabled
-                                        style="background-color: #9ca3af; color: white; padding: 10px 18px; border-radius: 6px; font-weight: 600; font-size: 14px; border: none; cursor: not-allowed;">
-                                    {{ __('Login to Send Interest') }}
-                                </button>
-                            @endif
-                        @endif
-                    @endif
-                </div>
-            </div>
-        @endif
-    </div>
-    @if ($isOwnProfile && $profile->profile_photo && $profile->photo_approved === false && empty($profile->photo_rejected_at))
-        <p class="mt-2 text-sm text-amber-700 bg-amber-50 dark:bg-amber-900/30 dark:text-amber-200 px-3 py-2 rounded">Your photo is under review. It is not visible to others until approved.</p>
-    @endif
-</div>
-@endif
 
 @if ($profilePhotoVisible)
     @php
@@ -395,9 +322,9 @@
 
     @if ($galleryPhotos->isNotEmpty())
         <div class="mb-6">
-            <div class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 text-center">Photo gallery</div>
+            <div class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 text-left">Photo gallery</div>
             @if ($photoLocked)
-                <div class="mb-3 text-center">
+                <div class="mb-3 text-left">
                     <p class="text-xs text-gray-600 dark:text-gray-300 mb-2">Photo gallery is private</p>
                     @if (($photoLockMode ?? 'all') === 'premium')
                         @if (! $contactRequestDisabled && $contactRequestState !== null)
@@ -484,19 +411,12 @@
         </div>
     @endif
 @endif
+    </aside>
 
-{{-- Name & Gender --}}
-<div class="text-center mb-6">
-    <h2 class="text-2xl font-semibold">
-        {{ $profile->full_name }}
-        @if ($isOwnProfile && $profile->admin_edited_fields && in_array('full_name', $profile->admin_edited_fields ?? []))
-            <span class="ml-2 text-xs text-amber-600 dark:text-amber-400" title="This field was corrected by admin">(Admin corrected)</span>
-        @endif
-    </h2>
-    <p class="text-gray-500">
-        {{ $profile->gender?->label ?? $profile->user?->gender ?? '—' }}
-    </p>
-</div>
+    <div class="min-w-0 w-full md:w-4/5 landscape:w-4/5">
+@if ($isOwnProfile && $profile->admin_edited_fields && in_array('full_name', $profile->admin_edited_fields ?? []))
+    <p class="mb-3 text-xs text-amber-600 dark:text-amber-400" title="This field was corrected by admin">(Admin corrected)</p>
+@endif
 
 @if ($isOwnProfile && $profile->photo_rejection_reason)
     <div style="margin-bottom:1.5rem; padding:1rem; background:#fee2e2; border:1px solid #fca5a5; border-radius:8px; color:#991b1b;">
@@ -714,6 +634,8 @@
     </div>
 </div>
 @endif
+    </div>{{-- end profile main column --}}
+</div>{{-- end smart layout row --}}
 
 @php
     $workCityName = $profile->work_city_id ? \App\Models\City::where('id', $profile->work_city_id)->value('name') : null;

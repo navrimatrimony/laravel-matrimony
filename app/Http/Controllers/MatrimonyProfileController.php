@@ -770,6 +770,13 @@ class MatrimonyProfileController extends Controller
             'religion',
             'caste',
             'subCaste',
+            'city',
+            'taluka',
+            'district',
+            'state',
+            'country',
+            'profession',
+            'seriousIntent',
             'user',
         ])->findOrFail($matrimony_profile_id);
 
