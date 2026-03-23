@@ -135,31 +135,46 @@
     $hasLifestyle = $profile->diet || $profile->smokingStatus || $profile->drinkingStatus;
     $showFamilySection = $hasFamily || $hasFamilyIncome || ($profile->siblings?->isNotEmpty()) || ($profile->children?->isNotEmpty());
     $showEducationSection = $hasEduCareer || ($profile->educationHistory && $profile->educationHistory->isNotEmpty()) || ($profile->career?->isNotEmpty());
-    $basicScanAgeHeightMarital = implode(' · ', array_values(array_filter([
+    $basicScanRow1 = implode(' · ', array_values(array_filter([
         $age !== null ? __('profile.show_age_years', ['age' => $age]) : null,
-        ($heightVisible && ($profile->height_cm ?? '') !== '') ? $profile->height_cm.' cm' : null,
         ($maritalStatusVisible && $profile->maritalStatus) ? ($profile->maritalStatus->label ?? '') : null,
+        ($profile->seriousIntent && ($profile->seriousIntent->name ?? '') !== '') ? $profile->seriousIntent->name : null,
     ])));
-    $basicScanCommunity = implode(', ', array_filter([
+    $basicScanRow2 = implode(', ', array_filter([
         $profile->religion?->label,
         $profile->caste?->label,
         $profile->subCaste?->label,
     ]));
+    $basicScanRow3 = '';
+    if (($locationVisible ?? true) && $locationLine !== '') {
+        $basicScanRow3 = __('profile.scan_lives_in').' '.$locationLine;
+    }
+    if (($profile->address_line ?? '') !== '') {
+        $basicScanRow3 = $basicScanRow3 !== '' ? ($profile->address_line.' · '.$basicScanRow3) : $profile->address_line;
+    }
+    $basicScanRow4 = $eduCareerSubtitle;
+    $basicScanRow5 = implode(' · ', array_values(array_filter([
+        $hasPersonalIncome ? $personalIncomeDisplay : null,
+        $hasFamilyIncome ? $familyIncomeDisplay : null,
+        ($heightVisible && ($profile->height_cm ?? '') !== '') ? $profile->height_cm.' cm' : null,
+        ($profile->birth_time ?? '') !== '' ? $profile->birth_time : null,
+    ])));
 @endphp
 
 @php
     $viewerBrowsingOther = $publicMatrimonyLayout && !($isOwnProfile ?? false);
     $sectionMb = $viewerBrowsingOther ? 'mb-6' : 'mb-8';
+    $sectionCardHeading = '[&>h2]:border-b [&>h2]:border-stone-200/70 [&>h2]:pb-2.5 [&>h2]:text-base [&>h2]:font-semibold [&>h2]:tracking-tight [&>h2]:text-stone-900 [&>h2]:dark:border-gray-700/75 [&>h2]:dark:text-stone-100 [&>p]:!mt-1 [&>p]:text-sm [&>p]:leading-relaxed [&>p]:text-stone-500 [&>p]:dark:text-stone-400';
 @endphp
 
 @if ($viewerBrowsingOther)
-<div id="profile-detailed" class="scroll-mt-28 space-y-6">
+<div id="profile-detailed" class="scroll-mt-28 space-y-7">
 @endif
 
 {{-- When viewing someone else: key highlights first (summary-first), then completeness --}}
 @if ($viewerBrowsingOther && count($overviewHighlights) > 0)
     <x-profile.show.profile-section-card
-        class="{{ $sectionMb }}"
+        class="{{ $sectionMb }} {{ $sectionCardHeading }}"
         :title="__('profile.show_at_a_glance')"
     >
         <x-profile.show.profile-highlight-list :items="$overviewHighlights" />
@@ -168,7 +183,7 @@
 
 @if ($isOwnProfile ?? false)
 {{-- Profile Completeness: own profile only --}}
-<x-profile.show.profile-section-card class="{{ $sectionMb }}" :title="__('profile.profile_completeness')">
+<x-profile.show.profile-section-card class="{{ $sectionMb }} {{ $sectionCardHeading }}" :title="__('profile.profile_completeness')">
     <div class="flex items-center justify-end gap-3">
         <span class="text-lg font-bold tabular-nums text-rose-700 dark:text-rose-400">{{ $completenessPct }}%</span>
     </div>
@@ -180,7 +195,7 @@
 
 @if ((count($overviewHighlights) > 0 || (!($showProfileSidebarLayout ?? false) && !empty($profileHeadline))) && !$viewerBrowsingOther)
     <x-profile.show.profile-section-card
-        class="{{ $sectionMb }}"
+        class="{{ $sectionMb }} {{ $sectionCardHeading }}"
         :title="($showProfileSidebarLayout ?? false) ? __('profile.show_at_a_glance') : __('profile.show_section_overview')"
         :subtitle="(!($showProfileSidebarLayout ?? false) && !empty($profileHeadline)) ? $profileHeadline : null"
     >
@@ -192,7 +207,7 @@
 
 @if (isset($extendedAttributes) && trim($extendedAttributes->narrative_about_me ?? '') !== '')
     <x-profile.show.profile-section-card
-        class="{{ $sectionMb }} {{ $viewerBrowsingOther ? 'border-rose-100/70 bg-gradient-to-br from-rose-50/40 via-white to-white shadow-[0_4px_24px_-8px_rgba(225,29,72,0.08)] dark:border-rose-900/30 dark:from-rose-950/15 dark:via-gray-900 dark:to-gray-900' : '' }}"
+        class="{{ $sectionMb }} {{ $sectionCardHeading }} {{ $viewerBrowsingOther ? 'border-rose-100/70 bg-gradient-to-br from-rose-50/40 via-white to-white shadow-[0_4px_24px_-8px_rgba(225,29,72,0.08)] dark:border-rose-900/30 dark:from-rose-950/15 dark:via-gray-900 dark:to-gray-900' : '' }}"
         :title="__('profile.show_about_title')"
         :subtitle="__('profile.narrative_intro_label')"
     >
@@ -207,7 +222,7 @@
 
 @if (!empty($profileIntroGenerated) && trim((string) ($extendedAttributes->narrative_about_me ?? '')) === '')
     <x-profile.show.profile-section-card
-        class="{{ $sectionMb }} border-dashed border-stone-300/80 dark:border-gray-600 {{ $viewerBrowsingOther ? 'border-rose-200/80 bg-gradient-to-br from-rose-50/35 via-white to-stone-50/30 dark:border-rose-900/40 dark:from-rose-950/20 dark:via-gray-900 dark:to-gray-950' : '' }}"
+        class="{{ $sectionMb }} {{ $sectionCardHeading }} border-dashed border-stone-300/80 dark:border-gray-600 {{ $viewerBrowsingOther ? 'border-rose-200/80 bg-gradient-to-br from-rose-50/35 via-white to-stone-50/30 dark:border-rose-900/40 dark:from-rose-950/20 dark:via-gray-900 dark:to-gray-950' : '' }}"
         :title="__('profile.show_about_title')"
         :subtitle="__('profile.show_section_intro')"
     >
@@ -357,37 +372,50 @@
 
 {{-- Main profile details: basic → education → family → location → lifestyle → property --}}
 @if ($hasBasicSection)
-    <x-profile.show.profile-section-card class="{{ $sectionMb }}" :title="__('profile.show_section_basic')" :subtitle="$basicSubtitle">
-        <div class="space-y-3">
-            @if ($basicScanAgeHeightMarital !== '')
-                <div class="flex items-start gap-2.5">
-                    <span class="mt-0.5 inline-flex h-4 w-4 shrink-0 text-rose-500 dark:text-rose-400" aria-hidden="true">
+    <x-profile.show.profile-section-card class="{{ $sectionMb }} {{ $sectionCardHeading }}" :title="__('profile.show_section_basic')" :subtitle="$basicSubtitle">
+        <div class="space-y-3.5">
+            @if ($basicScanRow1 !== '')
+                <div class="flex items-start gap-3">
+                    <span class="mt-1 inline-flex h-4 w-4 shrink-0 text-rose-500/90 dark:text-rose-400" aria-hidden="true">
                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M21 8.25c0-2.485-2.099-4.5-4.688-4.5-1.935 0-3.597 1.126-4.312 2.733-.715-1.607-2.377-2.733-4.313-2.733C5.1 3.75 3 5.765 3 8.25c0 7.22 9 12 9 12s9-4.78 9-12z"/></svg>
                     </span>
-                    <p class="text-sm font-semibold leading-snug text-stone-900 dark:text-stone-100">{{ $basicScanAgeHeightMarital }}</p>
+                    <p class="text-[15px] font-semibold leading-snug tracking-tight text-stone-900 dark:text-stone-50">{{ $basicScanRow1 }}</p>
                 </div>
             @endif
-            @if ($basicScanCommunity !== '')
-                <div class="flex items-start gap-2.5">
-                    <span class="mt-0.5 inline-flex h-4 w-4 shrink-0 text-rose-500 dark:text-rose-400" aria-hidden="true">
+            @if ($basicScanRow2 !== '')
+                <div class="flex items-start gap-3">
+                    <span class="mt-0.5 inline-flex h-4 w-4 shrink-0 text-rose-500/90 dark:text-rose-400" aria-hidden="true">
                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M9.568 3H5.25A2.25 2.25 0 0 0 3 5.25v4.318c0 .597.237 1.17.659 1.591l9.581 9.581c.699.699 1.78.872 2.607.33a18.095 18.095 0 0 0 5.223-5.223c.542-.827.369-1.908-.33-2.607L11.16 3.66A2.25 2.25 0 0 0 9.568 3Z"/><path stroke-linecap="round" stroke-linejoin="round" d="M6 6h.008v.008H6V6Z"/></svg>
                     </span>
-                    <p class="text-sm font-semibold leading-snug text-stone-900 dark:text-stone-100">{{ $basicScanCommunity }}</p>
+                    <p class="text-sm leading-snug text-stone-800 dark:text-stone-100">{{ $basicScanRow2 }}</p>
+                </div>
+            @endif
+            @if ($basicScanRow3 !== '')
+                <div class="flex items-start gap-3">
+                    <span class="mt-0.5 inline-flex h-4 w-4 shrink-0 text-rose-500/90 dark:text-rose-400" aria-hidden="true">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M15 10.5a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1115 0z"/></svg>
+                    </span>
+                    <p class="text-sm leading-relaxed text-stone-700 dark:text-stone-200">{{ $basicScanRow3 }}</p>
+                </div>
+            @endif
+            @if ($basicScanRow4 !== '')
+                <div class="flex items-start gap-3">
+                    <span class="mt-0.5 inline-flex h-4 w-4 shrink-0 text-rose-500/90 dark:text-rose-400" aria-hidden="true">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M4.26 10.147a60.438 60.438 0 0 0-.491 6.347A48.62 48.62 0 0 1 12 20.904a48.62 48.62 0 0 1 8.232-4.41 60.46 60.46 0 0 0-.491-6.347m-15.482 0a50.636 50.636 0 0 0-2.658-.813A59.906 59.906 0 0 1 12 3.493a59.903 59.903 0 0 1 10.399 5.84c-.896.248-1.783.52-2.658.814m-15.482 0A50.717 50.717 0 0 1 12 13.489a50.702 50.702 0 0 1 7.74-3.342M6.75 15a.75.75 0 1 0 0-1.5.75.75 0 0 0 0 1.5Zm0 0v-3.675A55.378 55.378 0 0 1 12 8.443m-7.007 11.55A5.981 5.981 0 0 0 6.75 15.75v-1.5"/></svg>
+                    </span>
+                    <p class="text-sm leading-snug text-stone-800 dark:text-stone-100">{{ $basicScanRow4 }}</p>
+                </div>
+            @endif
+            @if ($basicScanRow5 !== '')
+                <div class="flex items-start gap-3">
+                    <span class="mt-0.5 inline-flex h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" aria-hidden="true">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 18.75a60.07 60.07 0 0 1 15.797 2.101c.727.198 1.453-.342 1.453-1.096V18.75M3.75 4.5v.75A.75.75 0 0 1 3 6h-.75m0 0v-.375c0-.621.504-1.125 1.125-1.125H20.25M2.25 6v9m18-10.5v.75c0 .414.336.75.75.75h.75m-1.5-1.5h.375c.621 0 1.125.504 1.125 1.125v9.75c0 .621-.504 1.125-1.125 1.125H18.75v-7.5h-3.75v7.5h-3.75v-7.5H9v7.5H5.25v-7.5H2.25"/></svg>
+                    </span>
+                    <p class="text-sm leading-snug text-stone-800 dark:text-stone-100">{{ $basicScanRow5 }}</p>
                 </div>
             @endif
             @if ($dateOfBirthVisible && ($profile->date_of_birth ?? '') !== '')
                 <p class="text-xs text-stone-500 dark:text-stone-400">{{ __('Date of Birth') }}: <span class="font-medium text-stone-700 dark:text-stone-300">{{ $profile->date_of_birth }}</span></p>
-            @endif
-            @if (($profile->birth_time ?? '') !== '')
-                <p class="text-xs text-stone-500 dark:text-stone-400">{{ __('Birth time') }}: <span class="font-medium text-stone-700 dark:text-stone-300">{{ $profile->birth_time }}</span></p>
-            @endif
-            @if ($profile->seriousIntent)
-                <div class="flex items-start gap-2.5">
-                    <span class="mt-0.5 inline-flex h-4 w-4 shrink-0 text-stone-400" aria-hidden="true">
-                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"/></svg>
-                    </span>
-                    <p class="text-sm font-medium text-stone-800 dark:text-stone-200">{{ $profile->seriousIntent->name ?? '—' }}</p>
-                </div>
             @endif
         </div>
     </x-profile.show.profile-section-card>
@@ -395,7 +423,7 @@
 
 {{-- Physical: details below basic identity (summary-first hierarchy) --}}
 @if ($hasPhysical)
-    <x-profile.show.profile-section-card class="{{ $sectionMb }}" :title="__('Physical')">
+    <x-profile.show.profile-section-card class="{{ $sectionMb }} {{ $sectionCardHeading }}" :title="__('Physical')">
         <div class="grid grid-cols-1 gap-x-8 gap-y-5 sm:grid-cols-2">
             @if ($heightVisible && ($profile->height_cm ?? '') !== '')
                 <div class="space-y-1">
@@ -432,11 +460,11 @@
 @endif
 
 @if ($showEducationSection)
-    <x-profile.show.profile-section-card class="{{ $sectionMb }}" :title="__('profile.show_section_education_career')" :subtitle="$eduCareerSubtitle ?: null">
+    <x-profile.show.profile-section-card class="{{ $sectionMb }} {{ $sectionCardHeading }}" :title="__('profile.show_section_education_career')" :subtitle="$eduCareerSubtitle ?: null">
         @if ($hasEduCareer)
             <div class="space-y-3">
                 @if ($eduCareerSubtitle !== '')
-                    <div class="flex items-start gap-2.5">
+                    <div class="flex items-start gap-3">
                         <span class="mt-0.5 inline-flex h-4 w-4 shrink-0 text-indigo-500 dark:text-indigo-400" aria-hidden="true">
                             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M4.26 10.147a60.438 60.438 0 0 0-.491 6.347A48.62 48.62 0 0 1 12 20.904a48.62 48.62 0 0 1 8.232-4.41 60.46 60.46 0 0 0-.491-6.347m-15.482 0a50.636 50.636 0 0 0-2.658-.813A59.906 59.906 0 0 1 12 3.493a59.903 59.903 0 0 1 10.399 5.84c-.896.248-1.783.52-2.658.814m-15.482 0A50.717 50.717 0 0 1 12 13.489a50.702 50.702 0 0 1 7.74-3.342M6.75 15a.75.75 0 1 0 0-1.5.75.75 0 0 0 0 1.5Zm0 0v-3.675A55.378 55.378 0 0 1 12 8.443m-7.007 11.55A5.981 5.981 0 0 0 6.75 15.75v-1.5"/></svg>
                         </span>
@@ -444,7 +472,7 @@
                     </div>
                 @endif
                 @if ($hasPersonalIncome)
-                    <div class="flex items-start gap-2.5">
+                    <div class="flex items-start gap-3">
                         <span class="mt-0.5 inline-flex h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" aria-hidden="true">
                             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 18.75a60.07 60.07 0 0 1 15.797 2.101c.727.198 1.453-.342 1.453-1.096V18.75M3.75 4.5v.75A.75.75 0 0 1 3 6h-.75m0 0v-.375c0-.621.504-1.125 1.125-1.125H20.25M2.25 6v9m18-10.5v.75c0 .414.336.75.75.75h.75m-1.5-1.5h.375c.621 0 1.125.504 1.125 1.125v9.75c0 .621-.504 1.125-1.125 1.125H18.75v-7.5h-3.75v7.5h-3.75v-7.5H9v7.5H5.25v-7.5H2.25"/></svg>
                         </span>
@@ -452,7 +480,7 @@
                     </div>
                 @endif
                 @if ($hasFamilyIncome)
-                    <div class="flex items-start gap-2.5">
+                    <div class="flex items-start gap-3">
                         <span class="mt-0.5 inline-flex h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" aria-hidden="true">
                             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 18.75a60.07 60.07 0 0 1 15.797 2.101c.727.198 1.453-.342 1.453-1.096V18.75M3.75 4.5v.75A.75.75 0 0 1 3 6h-.75m0 0v-.375c0-.621.504-1.125 1.125-1.125H20.25M2.25 6v9m18-10.5v.75c0 .414.336.75.75.75h.75m-1.5-1.5h.375c.621 0 1.125.504 1.125 1.125v9.75c0 .621-.504 1.125-1.125 1.125H18.75v-7.5h-3.75v7.5h-3.75v-7.5H9v7.5H5.25v-7.5H2.25"/></svg>
                         </span>
@@ -492,7 +520,7 @@
 @endif
 
 @if ($showFamilySection)
-    <x-profile.show.profile-section-card class="{{ $sectionMb }}" :title="__('profile.show_section_family')" :subtitle="$familySubtitle">
+    <x-profile.show.profile-section-card class="{{ $sectionMb }} {{ $sectionCardHeading }}" :title="__('profile.show_section_family')" :subtitle="$familySubtitle">
         <div class="grid grid-cols-1 gap-x-8 gap-y-5 sm:grid-cols-2">
             @if (($profile->father_name ?? '') !== '')
                 <div class="space-y-1">
@@ -564,7 +592,7 @@
 @endif
 
 @if ($hasLocationSection)
-    <x-profile.show.profile-section-card class="{{ $sectionMb }}" :title="__('profile.show_section_location')" :subtitle="$locationSubtitle">
+    <x-profile.show.profile-section-card class="{{ $sectionMb }} {{ $sectionCardHeading }}" :title="__('profile.show_section_location')" :subtitle="$locationSubtitle">
         @if ($hasResidence)
             <div class="mb-5 flex items-start gap-2.5">
                 <span class="mt-0.5 inline-flex h-4 w-4 shrink-0 text-sky-500 dark:text-sky-400" aria-hidden="true">
@@ -632,7 +660,7 @@
 @endif
 
 @if ($hasLifestyle || $regLabel)
-    <x-profile.show.profile-section-card class="{{ $sectionMb }}" :title="__('profile.show_section_lifestyle')">
+    <x-profile.show.profile-section-card class="{{ $sectionMb }} {{ $sectionCardHeading }}" :title="__('profile.show_section_lifestyle')">
         @if ($hasLifestyle)
             <div class="flex flex-wrap gap-2">
                 @if ($profile->diet)
@@ -655,7 +683,7 @@
 @endif
 
 @if (($profilePropertySummary ?? null) && ($profilePropertySummary->owns_agriculture ?? false) && (($profilePropertySummary->agriculture_type ?? '') !== ''))
-    <x-profile.show.profile-section-card class="{{ $sectionMb }}" :title="__('Property')">
+    <x-profile.show.profile-section-card class="{{ $sectionMb }} {{ $sectionCardHeading }}" :title="__('Property')">
         <div class="space-y-1">
             <p class="text-[11px] font-medium text-stone-500 dark:text-stone-400">{{ __('Agriculture type') }}</p>
             <p class="text-sm font-semibold text-stone-900 dark:text-stone-100">{{ $profilePropertySummary->agriculture_type }}</p>

@@ -77,6 +77,10 @@ return [
     'show_nav_prev' => 'Previous profile',
     'show_nav_next' => 'Next profile',
     'show_nav_unavailable' => 'Not available',
+    'show_nav_browse_hint' => 'Browse profiles',
+    'show_nav_prev_short' => 'Prev',
+    'show_nav_next_short' => 'Next',
+    'decision_zone_label' => 'Take action',
     'show_hero_trust_heading' => 'Trust & verification',
     /** Public profile: top reading column overview band */
     'profile_overview_band' => 'Profile overview',

@@ -269,11 +269,13 @@
 </div>
 @endif
 
-{{-- Desktop: fixed-width rail + flex-1 main. Mobile: stacked, photo first. --}}
-<div class="w-full flex flex-col gap-8 lg:flex-row lg:items-start lg:gap-8">
-    <aside class="w-full space-y-6 lg:w-[210px] xl:w-[224px] lg:max-w-[224px] lg:shrink-0 lg:sticky lg:top-24">
+{{-- Desktop top fold: one bordered panel (photo rail | summary). Below: full-width detail stack. --}}
+<div class="flex w-full flex-col gap-8">
+    <div class="flex w-full flex-col gap-6 lg:flex-row lg:items-stretch lg:gap-0 lg:overflow-hidden lg:rounded-2xl lg:border lg:border-stone-200/65 lg:bg-white lg:shadow-[0_4px_28px_-8px_rgba(28,25,23,0.1)] lg:ring-1 lg:ring-stone-200/45 dark:lg:border-gray-700/75 dark:lg:bg-gray-900/95 dark:lg:shadow-[0_4px_32px_-10px_rgba(0,0,0,0.42)] dark:lg:ring-gray-700/55">
+    <aside class="w-full space-y-6 lg:sticky lg:top-24 lg:w-[212px] lg:max-w-[220px] lg:shrink-0 lg:space-y-4 lg:border-b lg:border-stone-200/60 lg:bg-gradient-to-b lg:from-stone-50/50 lg:to-stone-50/20 lg:p-4 dark:lg:border-gray-700/70 dark:lg:from-gray-900/50 dark:lg:to-gray-900/30 xl:w-[224px]">
+        <div class="group lg:overflow-hidden lg:rounded-xl lg:ring-1 lg:ring-stone-200/55 lg:transition-[box-shadow,ring-color] lg:duration-300 lg:ease-out dark:lg:ring-gray-600/55 lg:hover:shadow-[0_10px_36px_-14px_rgba(28,25,23,0.14)] lg:hover:ring-stone-300/65 dark:lg:hover:ring-gray-500/60">
         <x-profile.show.hero-card
-            class="w-full"
+            class="w-full !shadow-none !ring-0 lg:!rounded-xl"
             :profile="$profile"
             :profilePhotoVisible="$profilePhotoVisible"
             :photoLocked="$photoLocked"
@@ -287,6 +289,7 @@
             :educationVisible="$educationVisible"
             :verificationItems="[]"
         />
+        </div>
         @if ($profilePhotoVisible && $isOwnProfile && $profile->profile_photo && $profile->photo_approved === false && empty($profile->photo_rejected_at))
             <p class="mt-3 text-sm text-amber-800 dark:text-amber-200 bg-amber-50 dark:bg-amber-900/30 px-3 py-2 rounded-lg border border-amber-200/80 dark:border-amber-800">{{ __('dashboard.photo_under_review') }}</p>
         @endif
@@ -406,7 +409,7 @@
         {{-- Similar profiles: render when $similarProfiles (or equivalent) is passed from the controller --}}
     </aside>
 
-    <div class="w-full min-w-0 space-y-6 lg:flex-1 lg:min-w-0">
+    <div class="flex min-w-0 w-full flex-1 flex-col lg:min-w-0 lg:border-l lg:border-stone-200/55 lg:bg-white/40 lg:p-5 lg:pl-6 dark:lg:border-gray-700/65 dark:lg:bg-transparent lg:pl-7 xl:p-6 xl:pl-8">
 @php
     $incomeService = app(\App\Services\IncomeEngineService::class);
     $profileArr = $profile->toArray();
@@ -421,61 +424,34 @@
             $__prev = $__nav['prev'] ?? null;
             $__next = $__nav['next'] ?? null;
         @endphp
-        {{-- Summary band: floating prev/next outside card; completeness only for own profile --}}
-        <div class="relative">
-            @if ($__prev || $__next)
-                <div class="mb-3 flex justify-end gap-2 lg:absolute lg:right-2 lg:top-2 lg:z-20 lg:mb-0">
-                    @if ($__prev)
-                        <a href="{{ route('matrimony.profile.show', $__prev['id']) }}" class="group inline-flex items-center gap-1 rounded-full border border-stone-200/90 bg-white/95 p-0.5 shadow-md ring-1 ring-stone-200/60 backdrop-blur-sm transition hover:border-rose-300 hover:shadow-lg dark:border-gray-600 dark:bg-gray-800/95 dark:ring-gray-600 dark:hover:border-rose-500/60" title="{{ __('profile.show_nav_prev') }}">
-                            <span class="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-stone-100 text-stone-500 transition group-hover:bg-rose-50 group-hover:text-rose-600 dark:bg-gray-700 dark:text-stone-300 dark:group-hover:bg-rose-950/50 dark:group-hover:text-rose-300">
-                                <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
-                            </span>
-                            <img src="{{ $__prev['photo_url'] }}" alt="" class="h-9 w-9 shrink-0 rounded-full object-cover ring-2 ring-white dark:ring-gray-800" width="36" height="36" />
-                        </a>
-                    @endif
-                    @if ($__next)
-                        <a href="{{ route('matrimony.profile.show', $__next['id']) }}" class="group inline-flex items-center gap-1 rounded-full border border-stone-200/90 bg-white/95 p-0.5 pr-1 shadow-md ring-1 ring-stone-200/60 backdrop-blur-sm transition hover:border-rose-300 hover:shadow-lg dark:border-gray-600 dark:bg-gray-800/95 dark:ring-gray-600 dark:hover:border-rose-500/60" title="{{ __('profile.show_nav_next') }}">
-                            <img src="{{ $__next['photo_url'] }}" alt="" class="h-9 w-9 shrink-0 rounded-full object-cover ring-2 ring-white dark:ring-gray-800" width="36" height="36" />
-                            <span class="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-stone-100 text-stone-500 transition group-hover:bg-rose-50 group-hover:text-rose-600 dark:bg-gray-700 dark:text-stone-300 dark:group-hover:bg-rose-950/50 dark:group-hover:text-rose-300">
-                                <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
-                            </span>
-                        </a>
-                    @endif
-                </div>
-            @endif
-
-        <div class="space-y-5 lg:space-y-6 lg:rounded-2xl lg:border lg:border-stone-200/80 dark:lg:border-gray-700/80 lg:bg-gradient-to-br lg:from-white lg:to-stone-50/90 dark:lg:from-gray-900 dark:lg:to-gray-900/70 lg:p-5 lg:pr-5 lg:pt-6 lg:shadow-[0_12px_40px_-12px_rgba(28,25,23,0.12)] dark:lg:shadow-[0_12px_36px_-12px_rgba(0,0,0,0.35)] lg:ring-1 lg:ring-stone-200/50 dark:lg:ring-gray-700/60 {{ ($__prev || $__next) ? 'lg:pt-14' : '' }}">
-
-        @if (!request()->routeIs('admin.*') && !($isOwnProfile ?? false))
-            <div class="flex flex-col gap-3 border-b border-stone-200/90 pb-4 dark:border-gray-700 sm:flex-row sm:items-center sm:justify-between">
-                <p class="hidden text-sm text-stone-600 dark:text-stone-400 lg:block">{{ $profile->gender?->label ?? $profile->user?->gender ?? '' }}</p>
-                <div class="flex w-full flex-wrap items-center justify-end gap-2 sm:w-auto">
-                    @if (auth()->check())
-                        @if ($interestAlreadySent)
-                            <span class="inline-flex items-center gap-1.5 rounded-full bg-stone-200 px-4 py-2.5 text-sm font-semibold text-stone-600 dark:bg-gray-700 dark:text-stone-300">{{ __('Interest Sent') }}</span>
-                        @else
-                            <form method="POST" action="{{ route('interests.send', $profile) }}" class="inline">
-                                @csrf
-                                <button type="submit" class="inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-rose-500 to-pink-600 px-5 py-2.5 text-sm font-bold text-white shadow-lg shadow-rose-500/30 transition hover:from-rose-600 hover:to-pink-700 hover:shadow-xl focus:outline-none focus:ring-2 focus:ring-rose-400 focus:ring-offset-2 dark:focus:ring-offset-gray-900">
-                                    <span aria-hidden="true">❤️</span> {{ __('profile.cta_interested') }}
-                                </button>
-                            </form>
-                        @endif
-                        @if ($inShortlist)
-                            <form method="POST" action="{{ route('shortlist.destroy', $profile) }}" class="inline">@csrf @method('DELETE')
-                                <button type="submit" class="inline-flex items-center rounded-full border border-stone-300 bg-white px-4 py-2 text-sm font-medium text-stone-700 shadow-sm transition hover:bg-stone-50 dark:border-gray-600 dark:bg-gray-800 dark:text-stone-200 dark:hover:bg-gray-700">{{ __('Remove from shortlist') }}</button>
-                            </form>
-                        @else
-                            <form method="POST" action="{{ route('shortlist.store', $profile) }}" class="inline">@csrf
-                                <button type="submit" class="inline-flex items-center rounded-full border border-stone-300 bg-white px-4 py-2 text-sm font-medium text-stone-700 shadow-sm transition hover:bg-stone-50 dark:border-gray-600 dark:bg-gray-800 dark:text-stone-200 dark:hover:bg-gray-700">{{ __('Add to shortlist') }}</button>
-                            </form>
-                        @endif
-                    @else
-                        <a href="{{ route('login') }}" class="inline-flex items-center gap-2 rounded-full border border-rose-200 bg-white px-4 py-2.5 text-sm font-semibold text-rose-700 shadow-sm transition hover:bg-rose-50 dark:border-rose-900/50 dark:bg-gray-800 dark:text-rose-300 dark:hover:bg-gray-700">{{ __('Login') }} — {{ __('Send Interest') }}</a>
-                    @endif
-                </div>
+        {{-- Top fold (right column): utility strip + overview + integrated actions (single composition) --}}
+        @if ($__prev || $__next)
+        <div class="mb-4 flex items-center justify-between gap-3 border-b border-stone-200/65 pb-3 dark:border-gray-700/75">
+            <span class="text-[10px] font-semibold uppercase tracking-[0.22em] text-stone-400 dark:text-stone-500">{{ __('profile.show_nav_browse_hint') }}</span>
+            <div class="flex items-center gap-2">
+                @if ($__prev)
+                    <a href="{{ route('matrimony.profile.show', $__prev['id']) }}" class="group/pill inline-flex items-center gap-2 rounded-full border border-stone-200/85 bg-white/90 py-1 pl-1 pr-2.5 text-xs font-medium text-stone-700 shadow-sm ring-1 ring-stone-100/60 transition duration-200 ease-out hover:border-stone-300/90 hover:bg-white hover:shadow-md hover:shadow-stone-900/5 active:scale-[0.99] dark:border-gray-600 dark:bg-gray-800/90 dark:text-stone-200 dark:ring-gray-700/50 dark:hover:border-gray-500" title="{{ __('profile.show_nav_prev') }}">
+                        <span class="inline-flex h-7 w-7 items-center justify-center rounded-full bg-stone-50 text-stone-500 shadow-sm ring-1 ring-stone-200/80 transition group-hover/pill:text-rose-600 dark:bg-gray-700 dark:ring-gray-600 dark:group-hover/pill:text-rose-300">
+                            <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
+                        </span>
+                        <img src="{{ $__prev['photo_url'] }}" alt="" class="h-8 w-8 rounded-full object-cover ring-2 ring-white dark:ring-gray-700" width="32" height="32" />
+                        <span class="hidden sm:inline">{{ __('profile.show_nav_prev_short') }}</span>
+                    </a>
+                @endif
+                @if ($__next)
+                    <a href="{{ route('matrimony.profile.show', $__next['id']) }}" class="group/pill inline-flex items-center gap-2 rounded-full border border-stone-200/85 bg-white/90 py-1 pl-2.5 pr-1 text-xs font-medium text-stone-700 shadow-sm ring-1 ring-stone-100/60 transition duration-200 ease-out hover:border-stone-300/90 hover:bg-white hover:shadow-md hover:shadow-stone-900/5 active:scale-[0.99] dark:border-gray-600 dark:bg-gray-800/90 dark:text-stone-200 dark:ring-gray-700/50 dark:hover:border-gray-500" title="{{ __('profile.show_nav_next') }}">
+                        <span class="hidden sm:inline">{{ __('profile.show_nav_next_short') }}</span>
+                        <img src="{{ $__next['photo_url'] }}" alt="" class="h-8 w-8 rounded-full object-cover ring-2 ring-white dark:ring-gray-700" width="32" height="32" />
+                        <span class="inline-flex h-7 w-7 items-center justify-center rounded-full bg-stone-50 text-stone-500 shadow-sm ring-1 ring-stone-200/80 transition group-hover/pill:text-rose-600 dark:bg-gray-700 dark:ring-gray-600 dark:group-hover/pill:text-rose-300">
+                            <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+                        </span>
+                    </a>
+                @endif
             </div>
+        </div>
         @endif
+
+        <div class="space-y-4">
 
         @if (($isOwnProfile ?? false) && !request()->routeIs('admin.*'))
         {{-- Profile completeness: only when viewing your own profile --}}
@@ -501,9 +477,8 @@
     </div>
 @endif
 
-        {{-- Scan-first summary: 2–3 compact rows (icons + human-readable lines) --}}
-        <div class="border-b border-stone-200/90 pb-4 dark:border-gray-700 lg:border-0 lg:pb-0">
-            <h3 class="mb-3 text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">{{ __('profile.profile_overview_band') }}</h3>
+        {{-- Scan-first summary + actions integrated in one panel (no detached CTA card) --}}
+        <div class="border-b border-stone-200/85 pb-4 dark:border-gray-700 lg:border-0 lg:pb-0">
 @php
     $profile->loadMissing(['profession']);
     $overviewAge = null;
@@ -536,11 +511,11 @@
     if ($overviewAge !== null && $dateOfBirthVisible) {
         $scanRow1Parts[] = __('profile.show_age_years', ['age' => $overviewAge]);
     }
-    if ($heightVisible && ($profile->height_cm ?? '') !== '') {
-        $scanRow1Parts[] = $profile->height_cm.' cm';
-    }
     if ($maritalStatusVisible && $profile->maritalStatus) {
         $scanRow1Parts[] = $profile->maritalStatus->label ?? '';
+    }
+    if ($profile->seriousIntent && ($profile->seriousIntent->name ?? '') !== '') {
+        $scanRow1Parts[] = $profile->seriousIntent->name;
     }
     $scanRow1Text = implode(' · ', array_filter($scanRow1Parts));
     $scanCommunityParts = array_filter([
@@ -561,107 +536,132 @@
     $scanEduJobParts = array_filter([$overviewEduLine, $overviewOccLine]);
     $scanEduJobText = implode(' · ', $scanEduJobParts);
     $scanIncomeText = $hasPersonalIncome ? $personalIncomeDisplay : '';
-    $scanExtraParts = array_filter([
-        $profile->seriousIntent ? ($profile->seriousIntent->name ?? '') : '',
-        ($profile->birth_time ?? '') !== '' ? __('Birth time').': '.$profile->birth_time : '',
+    $scanRow5Parts = array_filter([
+        $hasPersonalIncome ? $personalIncomeDisplay : null,
+        $hasFamilyIncome ? $familyIncomeDisplay : null,
+        ($heightVisible && ($profile->height_cm ?? '') !== '') ? $profile->height_cm.' cm' : null,
+        ($profile->birth_time ?? '') !== '' ? $profile->birth_time : null,
     ]);
-    $scanExtraText = implode(' · ', $scanExtraParts);
+    $scanRow5Text = implode(' · ', $scanRow5Parts);
 @endphp
-            <div class="space-y-3">
+            <div class="min-w-0">
+            @if (!request()->routeIs('admin.*') && !($isOwnProfile ?? false))
+            <div class="mb-4 flex flex-col gap-3 border-b border-stone-100/90 pb-4 dark:border-gray-700/80 sm:flex-row sm:items-center sm:justify-between sm:gap-5">
+                <div class="min-w-0">
+                    <p class="text-[10px] font-semibold uppercase tracking-[0.22em] text-stone-400 dark:text-stone-500">{{ __('profile.profile_overview_band') }}</p>
+                </div>
+                <div class="flex w-full min-w-0 shrink-0 flex-col gap-2.5 sm:ml-auto sm:w-auto sm:flex-row sm:flex-wrap sm:items-center sm:justify-end sm:gap-2.5" aria-label="{{ __('profile.decision_zone_label') }}">
+                    @if (auth()->check())
+                        @if ($interestAlreadySent)
+                            <span class="inline-flex w-full items-center justify-center rounded-xl border border-stone-200/90 bg-stone-100/95 py-2.5 text-sm font-semibold text-stone-600 ring-1 ring-stone-200/40 dark:border-gray-600 dark:bg-gray-800/95 dark:text-stone-300 dark:ring-gray-700/50 sm:w-auto sm:min-w-[10rem]">{{ __('Interest Sent') }}</span>
+                        @else
+                            <form method="POST" action="{{ route('interests.send', $profile) }}" class="w-full sm:w-auto">
+                                @csrf
+                                <button type="submit" class="w-full rounded-xl bg-rose-600 px-5 py-2.5 text-sm font-semibold text-white shadow-md shadow-rose-600/25 ring-1 ring-rose-700/20 transition duration-200 ease-out hover:-translate-y-px hover:bg-rose-700 hover:shadow-lg hover:shadow-rose-600/30 focus:outline-none focus:ring-2 focus:ring-rose-400 focus:ring-offset-2 active:translate-y-0 dark:focus:ring-offset-gray-900 sm:min-w-[11.5rem]">
+                                    {{ __('profile.cta_interested') }}
+                                </button>
+                            </form>
+                        @endif
+                        @if ($inShortlist)
+                            <form method="POST" action="{{ route('shortlist.destroy', $profile) }}" class="w-full sm:w-auto">@csrf @method('DELETE')
+                                <button type="submit" class="w-full rounded-xl border-2 border-stone-200/90 bg-stone-50/80 py-2.5 text-sm font-medium text-stone-700 shadow-sm transition duration-200 ease-out hover:border-stone-300 hover:bg-white hover:shadow-md hover:shadow-stone-900/5 active:scale-[0.99] dark:border-gray-600 dark:bg-gray-800/90 dark:text-stone-200 dark:hover:border-gray-500 dark:hover:bg-gray-800 sm:min-w-[10rem]">{{ __('Remove from shortlist') }}</button>
+                            </form>
+                        @else
+                            <form method="POST" action="{{ route('shortlist.store', $profile) }}" class="w-full sm:w-auto">@csrf
+                                <button type="submit" class="w-full rounded-xl border-2 border-stone-200/90 bg-stone-50/80 py-2.5 text-sm font-medium text-stone-700 shadow-sm transition duration-200 ease-out hover:border-stone-300 hover:bg-white hover:shadow-md hover:shadow-stone-900/5 active:scale-[0.99] dark:border-gray-600 dark:bg-gray-800/90 dark:text-stone-200 dark:hover:border-gray-500 dark:hover:bg-gray-800 sm:min-w-[10rem]">{{ __('Add to shortlist') }}</button>
+                            </form>
+                        @endif
+                    @else
+                        <a href="{{ route('login') }}" class="inline-flex w-full items-center justify-center rounded-xl border border-rose-200/90 bg-white px-4 py-2.5 text-center text-sm font-semibold text-rose-900 shadow-sm ring-1 ring-rose-100/80 transition duration-200 ease-out hover:border-rose-300 hover:bg-rose-50/90 hover:shadow-md dark:border-rose-900/45 dark:bg-gray-800 dark:text-rose-100 dark:ring-rose-900/30 dark:hover:bg-gray-800/95 sm:w-auto">{{ __('Login') }} — {{ __('Send Interest') }}</a>
+                    @endif
+                </div>
+            </div>
+            @else
+            <p class="mb-3 text-[10px] font-semibold uppercase tracking-[0.2em] text-stone-400 dark:text-stone-500">{{ __('profile.profile_overview_band') }}</p>
+            @endif
+            <div class="space-y-3 rounded-xl bg-stone-50/50 px-3 py-3.5 ring-1 ring-stone-100/80 dark:bg-stone-900/25 dark:ring-stone-800/60 sm:px-3.5">
                 @if ($scanRow1Text !== '')
-                <div class="flex items-start gap-2.5">
-                    <span class="mt-0.5 inline-flex h-4 w-4 shrink-0 text-rose-500 dark:text-rose-400" aria-hidden="true">
+                <div class="flex items-start gap-3">
+                    <span class="mt-0.5 inline-flex h-4 w-4 shrink-0 text-rose-500/75 dark:text-rose-400/90" aria-hidden="true">
                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M21 8.25c0-2.485-2.099-4.5-4.688-4.5-1.935 0-3.597 1.126-4.312 2.733-.715-1.607-2.377-2.733-4.313-2.733C5.1 3.75 3 5.765 3 8.25c0 7.22 9 12 9 12s9-4.78 9-12z"/></svg>
                     </span>
-                    <p class="text-sm font-semibold leading-snug text-gray-900 dark:text-gray-100">{{ $scanRow1Text }}</p>
+                    <p class="text-[15px] font-semibold leading-snug tracking-tight text-stone-900 dark:text-stone-50">{{ $scanRow1Text }}</p>
                 </div>
                 @endif
                 @if ($scanCommunityText !== '')
-                <div class="flex items-start gap-2.5">
-                    <span class="mt-0.5 inline-flex h-4 w-4 shrink-0 text-rose-500 dark:text-rose-400" aria-hidden="true">
+                <div class="flex items-start gap-3">
+                    <span class="mt-0.5 inline-flex h-4 w-4 shrink-0 text-rose-500/70 dark:text-rose-400/85" aria-hidden="true">
                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M9.568 3H5.25A2.25 2.25 0 0 0 3 5.25v4.318c0 .597.237 1.17.659 1.591l9.581 9.581c.699.699 1.78.872 2.607.33a18.095 18.095 0 0 0 5.223-5.223c.542-.827.369-1.908-.33-2.607L11.16 3.66A2.25 2.25 0 0 0 9.568 3Z"/><path stroke-linecap="round" stroke-linejoin="round" d="M6 6h.008v.008H6V6Z"/></svg>
                     </span>
-                    <p class="min-w-0 text-sm font-semibold leading-snug text-gray-900 dark:text-gray-100">{{ $scanCommunityText }}</p>
+                    <p class="min-w-0 text-sm leading-relaxed text-stone-800/95 dark:text-stone-100">{{ $scanCommunityText }}</p>
                 </div>
                 @endif
                 @if ($scanLivesInText !== '')
-                <div class="flex items-start gap-2.5">
-                    <span class="mt-0.5 inline-flex h-4 w-4 shrink-0 text-rose-500 dark:text-rose-400" aria-hidden="true">
+                <div class="flex items-start gap-3">
+                    <span class="mt-0.5 inline-flex h-4 w-4 shrink-0 text-rose-500/70 dark:text-rose-400/85" aria-hidden="true">
                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M15 10.5a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1115 0z"/></svg>
                     </span>
-                    <p class="min-w-0 text-sm font-semibold leading-snug text-stone-700 dark:text-stone-200">{{ $scanLivesInText }}</p>
+                    <p class="min-w-0 text-sm leading-relaxed text-stone-700 dark:text-stone-200/95">{{ $scanLivesInText }}</p>
                 </div>
                 @endif
-                @if ($scanEduJobText !== '' || $scanIncomeText !== '')
-                <div class="flex items-start gap-2.5">
-                    <span class="mt-0.5 inline-flex h-4 w-4 shrink-0 text-rose-500 dark:text-rose-400" aria-hidden="true">
+                @if ($scanEduJobText !== '')
+                <div class="flex items-start gap-3">
+                    <span class="mt-0.5 inline-flex h-4 w-4 shrink-0 text-rose-500/70 dark:text-rose-400/85" aria-hidden="true">
                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M4.26 10.147a60.438 60.438 0 0 0-.491 6.347A48.62 48.62 0 0 1 12 20.904a48.62 48.62 0 0 1 8.232-4.41 60.46 60.46 0 0 0-.491-6.347m-15.482 0a50.636 50.636 0 0 0-2.658-.813A59.906 59.906 0 0 1 12 3.493a59.903 59.903 0 0 1 10.399 5.84c-.896.248-1.783.52-2.658.814m-15.482 0A50.717 50.717 0 0 1 12 13.489a50.702 50.702 0 0 1 7.74-3.342M6.75 15a.75.75 0 1 0 0-1.5.75.75 0 0 0 0 1.5Zm0 0v-3.675A55.378 55.378 0 0 1 12 8.443m-7.007 11.55A5.981 5.981 0 0 0 6.75 15.75v-1.5"/></svg>
                     </span>
-                    <div class="min-w-0 text-sm font-semibold leading-snug text-gray-900 dark:text-gray-100">
-                        @if ($scanEduJobText !== '')
-                            <p>{{ $scanEduJobText }}</p>
-                        @endif
-                        @if ($scanIncomeText !== '')
-                            <p class="{{ $scanEduJobText !== '' ? 'mt-1 flex items-center gap-1.5' : 'flex items-center gap-1.5' }}">
-                                <span class="inline-flex h-3.5 w-3.5 shrink-0 text-emerald-600 dark:text-emerald-400" aria-hidden="true">
-                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 18.75a60.07 60.07 0 0 1 15.797 2.101c.727.198 1.453-.342 1.453-1.096V18.75M3.75 4.5v.75A.75.75 0 0 1 3 6h-.75m0 0v-.375c0-.621.504-1.125 1.125-1.125H20.25M2.25 6v9m18-10.5v.75c0 .414.336.75.75.75h.75m-1.5-1.5h.375c.621 0 1.125.504 1.125 1.125v9.75c0 .621-.504 1.125-1.125 1.125H18.75v-7.5h-3.75v7.5h-3.75v-7.5H9v7.5H5.25v-7.5H2.25"/></svg>
-                                </span>
-                                <span>{{ $scanIncomeText }}</span>
-                            </p>
-                        @endif
-                    </div>
+                    <p class="min-w-0 text-sm leading-relaxed text-stone-800/95 dark:text-stone-100">{{ $scanEduJobText }}</p>
                 </div>
                 @endif
-                @if ($scanExtraText !== '')
-                <div class="flex items-start gap-2.5">
-                    <span class="mt-0.5 inline-flex h-4 w-4 shrink-0 text-stone-400" aria-hidden="true">
-                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M11.25 11.25l.041-.02a.75.75 0 0 1 1.063.852l-.708 2.836a.75.75 0 0 0 1.063.853l.288-.173M7.5 15.75h3.75a.75.75 0 0 0 .75-.75V9.375a.75.75 0 0 0-.75-.75H6.375a.75.75 0 0 0-.75.75v6.75c0 .414.336.75.75.75Zm9-12.75h.008v.008H16.5V3Z"/></svg>
+                @if ($scanRow5Text !== '')
+                <div class="flex items-start gap-3">
+                    <span class="mt-0.5 inline-flex h-4 w-4 shrink-0 text-emerald-600/85 dark:text-emerald-400/90" aria-hidden="true">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 18.75a60.07 60.07 0 0 1 15.797 2.101c.727.198 1.453-.342 1.453-1.096V18.75M3.75 4.5v.75A.75.75 0 0 1 3 6h-.75m0 0v-.375c0-.621.504-1.125 1.125-1.125H20.25M2.25 6v9m18-10.5v.75c0 .414.336.75.75.75h.75m-1.5-1.5h.375c.621 0 1.125.504 1.125 1.125v9.75c0 .621-.504 1.125-1.125 1.125H18.75v-7.5h-3.75v7.5h-3.75v-7.5H9v7.5H5.25v-7.5H2.25"/></svg>
                     </span>
-                    <p class="text-sm text-stone-600 dark:text-stone-400">{{ $scanExtraText }}</p>
+                    <p class="min-w-0 text-sm leading-relaxed text-stone-800/95 dark:text-stone-100">{{ $scanRow5Text }}</p>
                 </div>
                 @endif
             </div>
-        </div>
+            </div>
         </div>
         </div>
 
-        {{-- Detailed sections below summary band --}}
-        <div class="space-y-6 lg:space-y-8 lg:border-t lg:border-stone-200/80 dark:lg:border-gray-700 lg:pt-6">
+        {{-- Deeper detail: calmer rhythm below the quick-decision band --}}
+        <div class="space-y-6 lg:space-y-7 lg:border-t lg:border-stone-200/65 dark:lg:border-gray-700/85 lg:pt-8 lg:text-[15px]">
 
 @php
     $hasPhysical = ($heightVisible && ($profile->height_cm ?? '') !== '') || ($profile->weight_kg ?? null) !== null || $profile->complexion || $profile->physicalBuild || $profile->bloodGroup;
 @endphp
 @if ($hasPhysical)
 <div class="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700 lg:mt-0 lg:border-t-0 lg:pt-0">
-    <h3 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">{{ __('Physical') }}</h3>
+    <h3 class="mb-3 border-b border-stone-200/75 border-l-2 border-l-rose-400/70 pb-2.5 pl-3 text-base font-semibold tracking-tight text-stone-900 dark:border-gray-700/75 dark:border-l-rose-500/45 dark:text-stone-100">{{ __('Physical') }}</h3>
     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
         @if ($heightVisible && ($profile->height_cm ?? '') !== '')
         <div>
-            <p class="text-gray-500 text-sm">{{ __('Height') }}</p>
+            <p class="text-xs font-medium text-stone-500 dark:text-stone-400">{{ __('Height') }}</p>
             <p class="font-medium text-base">{{ $profile->height_cm }} cm</p>
         </div>
         @endif
         @if (($profile->weight_kg ?? null) !== null && $profile->weight_kg !== '')
         <div>
-            <p class="text-gray-500 text-sm">{{ __('Weight') }}</p>
+            <p class="text-xs font-medium text-stone-500 dark:text-stone-400">{{ __('Weight') }}</p>
             <p class="font-medium text-base">{{ $profile->weight_kg }} kg</p>
         </div>
         @endif
         @if ($profile->complexion)
         <div>
-            <p class="text-gray-500 text-sm">{{ __('Complexion') }}</p>
+            <p class="text-xs font-medium text-stone-500 dark:text-stone-400">{{ __('Complexion') }}</p>
             <p class="font-medium text-base">{{ $profile->complexion->label ?? '—' }}</p>
         </div>
         @endif
         @if ($profile->physicalBuild)
         <div>
-            <p class="text-gray-500 text-sm">{{ __('Physical Build') }}</p>
+            <p class="text-xs font-medium text-stone-500 dark:text-stone-400">{{ __('Physical Build') }}</p>
             <p class="font-medium text-base">{{ $profile->physicalBuild->label ?? '—' }}</p>
         </div>
         @endif
         @if ($profile->bloodGroup)
         <div>
-            <p class="text-gray-500 text-sm">{{ __('Blood Group') }}</p>
+            <p class="text-xs font-medium text-stone-500 dark:text-stone-400">{{ __('Blood Group') }}</p>
             <p class="font-medium text-base">{{ $profile->bloodGroup->label ?? '—' }}</p>
         </div>
         @endif
@@ -671,47 +671,47 @@
 
 @if ($hasEduCareer)
 <div class="mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
-    <h3 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">{{ __('Education & Career') }}</h3>
+    <h3 class="mb-3 border-b border-stone-200/75 border-l-2 border-l-rose-400/70 pb-2.5 pl-3 text-base font-semibold tracking-tight text-stone-900 dark:border-gray-700/75 dark:border-l-rose-500/45 dark:text-stone-100">{{ __('Education & Career') }}</h3>
     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
         @if ($educationVisible && ($profile->highest_education ?? '') !== '')
         <div>
-            <p class="text-gray-500 text-sm">{{ __('Education') }}</p>
+            <p class="text-xs font-medium text-stone-500 dark:text-stone-400">{{ __('Education') }}</p>
             <p class="font-medium text-base">{{ $profile->highest_education }}</p>
         </div>
         @endif
         @if (($profile->specialization ?? '') !== '')
         <div>
-            <p class="text-gray-500 text-sm">{{ __('Specialization') }}</p>
+            <p class="text-xs font-medium text-stone-500 dark:text-stone-400">{{ __('Specialization') }}</p>
             <p class="font-medium text-base">{{ $profile->specialization }}</p>
         </div>
         @endif
         @if (($profile->occupation_title ?? '') !== '')
         <div>
-            <p class="text-gray-500 text-sm">{{ __('Occupation') }}</p>
+            <p class="text-xs font-medium text-stone-500 dark:text-stone-400">{{ __('Occupation') }}</p>
             <p class="font-medium text-base">{{ $profile->occupation_title }}</p>
         </div>
         @endif
         @if (($profile->company_name ?? '') !== '')
         <div>
-            <p class="text-gray-500 text-sm">{{ __('Company') }}</p>
+            <p class="text-xs font-medium text-stone-500 dark:text-stone-400">{{ __('Company') }}</p>
             <p class="font-medium text-base">{{ $profile->company_name }}</p>
         </div>
         @endif
         @if ($hasPersonalIncome)
         <div>
-            <p class="text-gray-500 text-sm">{{ __('Income') }}</p>
+            <p class="text-xs font-medium text-stone-500 dark:text-stone-400">{{ __('Income') }}</p>
             <p class="font-medium text-base">{{ $personalIncomeDisplay }}</p>
         </div>
         @endif
         @if ($hasFamilyIncome)
         <div>
-            <p class="text-gray-500 text-sm">{{ __('Family Income') }}</p>
+            <p class="text-xs font-medium text-stone-500 dark:text-stone-400">{{ __('Family Income') }}</p>
             <p class="font-medium text-base">{{ $familyIncomeDisplay }}</p>
         </div>
         @endif
         @if ($profile->incomeCurrency && ! $hasPersonalIncome && ! $hasFamilyIncome)
         <div>
-            <p class="text-gray-500 text-sm">{{ __('Income Currency') }}</p>
+            <p class="text-xs font-medium text-stone-500 dark:text-stone-400">{{ __('Income Currency') }}</p>
             <p class="font-medium text-base">{{ trim($profile->incomeCurrency->symbol ?? '') }} {{ $profile->incomeCurrency->code ?? '—' }}</p>
         </div>
         @endif
@@ -727,23 +727,23 @@
 @endphp
 @if ($hasFamily)
 <div class="mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
-    <h3 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">{{ __('Family') }}</h3>
+    <h3 class="mb-3 border-b border-stone-200/75 border-l-2 border-l-rose-400/70 pb-2.5 pl-3 text-base font-semibold tracking-tight text-stone-900 dark:border-gray-700/75 dark:border-l-rose-500/45 dark:text-stone-100">{{ __('Family') }}</h3>
     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
         @if (($profile->father_name ?? '') !== '')
         <div>
-            <p class="text-gray-500 text-sm">{{ __('Father') }}</p>
+            <p class="text-xs font-medium text-stone-500 dark:text-stone-400">{{ __('Father') }}</p>
             <p class="font-medium text-base">{{ $profile->father_name }}{{ ($profile->father_occupation ?? '') !== '' ? ' · ' . $profile->father_occupation : '' }}</p>
         </div>
         @endif
         @if (($profile->mother_name ?? '') !== '')
         <div>
-            <p class="text-gray-500 text-sm">{{ __('Mother') }}</p>
+            <p class="text-xs font-medium text-stone-500 dark:text-stone-400">{{ __('Mother') }}</p>
             <p class="font-medium text-base">{{ $profile->mother_name }}{{ ($profile->mother_occupation ?? '') !== '' ? ' · ' . $profile->mother_occupation : '' }}</p>
         </div>
         @endif
         @if ($brothersFromEngine > 0 || $sistersFromEngine > 0)
         <div>
-            <p class="text-gray-500 text-sm">{{ __('Siblings') }}</p>
+            <p class="text-xs font-medium text-stone-500 dark:text-stone-400">{{ __('Siblings') }}</p>
             @php
                 $b = $brothersFromEngine > 0 ? $brothersFromEngine . ' brother' . ($brothersFromEngine !== 1 ? 's' : '') : '';
                 $s = $sistersFromEngine > 0 ? $sistersFromEngine . ' sister' . ($sistersFromEngine !== 1 ? 's' : '') : '';
@@ -754,7 +754,7 @@
         @endif
         @if ($profile->familyType)
         <div>
-            <p class="text-gray-500 text-sm">{{ __('Family Type') }}</p>
+            <p class="text-xs font-medium text-stone-500 dark:text-stone-400">{{ __('Family Type') }}</p>
             <p class="font-medium text-base">{{ $profile->familyType->label ?? '—' }}</p>
         </div>
         @endif
@@ -769,16 +769,16 @@
 @endphp
 @if ($hasWorkLocation)
 <div class="mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
-    <h3 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">{{ __('Work Location') }}</h3>
+    <h3 class="mb-3 border-b border-stone-200/75 border-l-2 border-l-rose-400/70 pb-2.5 pl-3 text-base font-semibold tracking-tight text-stone-900 dark:border-gray-700/75 dark:border-l-rose-500/45 dark:text-stone-100">{{ __('Work Location') }}</h3>
     <p class="font-medium text-base">{{ implode(', ', array_filter([$workCityName, $workStateName])) }}</p>
 </div>
 @endif
 
 @if (($profilePropertySummary ?? null) && ($profilePropertySummary->owns_agriculture ?? false) && (($profilePropertySummary->agriculture_type ?? '') !== ''))
 <div class="mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
-    <h3 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">{{ __('Property') }}</h3>
+    <h3 class="mb-3 border-b border-stone-200/75 border-l-2 border-l-rose-400/70 pb-2.5 pl-3 text-base font-semibold tracking-tight text-stone-900 dark:border-gray-700/75 dark:border-l-rose-500/45 dark:text-stone-100">{{ __('Property') }}</h3>
     <div>
-        <p class="text-gray-500 text-sm">{{ __('Agriculture type') }}</p>
+        <p class="text-xs font-medium text-stone-500 dark:text-stone-400">{{ __('Agriculture type') }}</p>
         <p class="font-medium text-base">{{ $profilePropertySummary->agriculture_type }}</p>
     </div>
 </div>
@@ -789,7 +789,7 @@
 @endphp
 @if ($hasBirthPlace)
 <div class="mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
-    <h3 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">{{ __('Birth Place') }}</h3>
+    <h3 class="mb-3 border-b border-stone-200/75 border-l-2 border-l-rose-400/70 pb-2.5 pl-3 text-base font-semibold tracking-tight text-stone-900 dark:border-gray-700/75 dark:border-l-rose-500/45 dark:text-stone-100">{{ __('Birth Place') }}</h3>
     <p class="font-medium text-base">{{ implode(', ', array_filter([$profile->birthCity?->name, $profile->birthTaluka?->name, $profile->birthDistrict?->name, $profile->birthState?->name])) }}</p>
 </div>
 @endif
@@ -799,7 +799,7 @@
 @endphp
 @if ($hasNativePlace)
 <div class="mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
-    <h3 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">{{ __('Native Place') }}</h3>
+    <h3 class="mb-3 border-b border-stone-200/75 border-l-2 border-l-rose-400/70 pb-2.5 pl-3 text-base font-semibold tracking-tight text-stone-900 dark:border-gray-700/75 dark:border-l-rose-500/45 dark:text-stone-100">{{ __('Native Place') }}</h3>
     <p class="font-medium text-base">{{ implode(', ', array_filter([$profile->nativeCity?->name, $profile->nativeTaluka?->name, $profile->nativeDistrict?->name, $profile->nativeState?->name])) }}</p>
 </div>
 @endif
@@ -809,10 +809,10 @@
     $siblingsByGender = $profile->siblings->groupBy(function ($s) { return ($s->gender ?? 'other') ?: 'other'; });
 @endphp
 <div class="mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
-    <h3 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">{{ __('Siblings') }}</h3>
+    <h3 class="mb-3 border-b border-stone-200/75 border-l-2 border-l-rose-400/70 pb-2.5 pl-3 text-base font-semibold tracking-tight text-stone-900 dark:border-gray-700/75 dark:border-l-rose-500/45 dark:text-stone-100">{{ __('Siblings') }}</h3>
     @foreach($siblingsByGender as $gender => $items)
         <div class="mb-3">
-            <p class="text-gray-500 text-sm font-medium mb-1">{{ ucfirst($gender) }}</p>
+            <p class="text-xs font-medium text-stone-500 dark:text-stone-400 font-medium mb-1">{{ ucfirst($gender) }}</p>
             @foreach($items as $sib)
                 <p class="font-medium text-base ml-2">
                     {{ $sib->occupation ?: '—' }}{{ $sib->marital_status ? ' · ' . ucfirst($sib->marital_status) : '' }}{{ $sib->city?->name ? ' · ' . $sib->city->name : '' }}{{ $sib->notes ? ' · ' . \Illuminate\Support\Str::limit($sib->notes, 50) : '' }}
@@ -825,7 +825,7 @@
 
 @if ($profile->children?->isNotEmpty())
 <div class="mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
-    <p class="text-gray-500 text-sm mb-2">{{ __('Children') }}</p>
+    <p class="text-xs font-medium text-stone-500 dark:text-stone-400 mb-2">{{ __('Children') }}</p>
     @foreach($profile->children as $child)
         <p class="font-medium text-base">{{ $child->child_name ?: '—' }}{{ $child->age ? ', ' . $child->age . ' yrs' : '' }}{{ $child->gender ? ' (' . $child->gender . ')' : '' }}</p>
     @endforeach
@@ -834,7 +834,7 @@
 
 @if ($profile->educationHistory && $profile->educationHistory->isNotEmpty())
 <div class="mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
-    <p class="text-gray-500 text-sm mb-2">{{ __('Education History') }}</p>
+    <p class="text-xs font-medium text-stone-500 dark:text-stone-400 mb-2">{{ __('Education History') }}</p>
     @foreach($profile->educationHistory as $edu)
         <p class="font-medium text-base">{{ $edu->degree ?: '—' }}{{ $edu->specialization ? ' – ' . $edu->specialization : '' }}{{ $edu->university ? ' (' . $edu->university . ')' : '' }}{{ $edu->year_completed ? ', ' . $edu->year_completed : '' }}</p>
     @endforeach
@@ -843,7 +843,7 @@
 
 @if ($profile->career?->isNotEmpty())
 <div class="mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
-    <p class="text-gray-500 text-sm mb-2">{{ __('Career History') }}</p>
+    <p class="text-xs font-medium text-stone-500 dark:text-stone-400 mb-2">{{ __('Career History') }}</p>
     @foreach($profile->career as $job)
         <p class="font-medium text-base">{{ $job->designation ?: '—' }}{{ $job->company ? ' at ' . $job->company : '' }}{{ $job->start_year || $job->end_year ? ' (' . ($job->start_year ?? '') . '–' . ($job->end_year ?? '') . ')' : '' }}</p>
     @endforeach
@@ -852,7 +852,7 @@
 
 @if ($profile->addresses?->isNotEmpty())
 <div class="mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
-    <p class="text-gray-500 text-sm mb-2">{{ __('Address') }}</p>
+    <p class="text-xs font-medium text-stone-500 dark:text-stone-400 mb-2">{{ __('Address') }}</p>
     @foreach($profile->addresses as $addr)
         <p class="font-medium text-base">
             {{ implode(', ', array_filter([
@@ -885,10 +885,10 @@
     ];
 @endphp
 <div class="mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
-    <h3 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">{{ __('Relatives & Family Network') }}</h3>
+    <h3 class="mb-3 border-b border-stone-200/75 border-l-2 border-l-rose-400/70 pb-2.5 pl-3 text-base font-semibold tracking-tight text-stone-900 dark:border-gray-700/75 dark:border-l-rose-500/45 dark:text-stone-100">{{ __('Relatives & Family Network') }}</h3>
     @foreach($relativesByType as $relationType => $relatives)
         <div class="mb-3">
-            <p class="text-gray-500 text-sm font-medium mb-1">{{ $relativeRelationLabels[$relationType] ?? \Illuminate\Support\Str::title(str_replace('_', ' ', $relationType)) }}</p>
+            <p class="text-xs font-medium text-stone-500 dark:text-stone-400 font-medium mb-1">{{ $relativeRelationLabels[$relationType] ?? \Illuminate\Support\Str::title(str_replace('_', ' ', $relationType)) }}</p>
             @foreach($relatives as $rel)
                 <p class="font-medium text-base ml-2">
                     {{ $rel->name ?: '—' }}{{ $rel->occupation ? ' · ' . $rel->occupation : '' }}{{ ($rel->city?->name || $rel->state?->name) ? ' (' . trim(implode(', ', array_filter([$rel->city?->name, $rel->state?->name]))) . ')' : '' }}{{ $rel->contact_number ? ' · ' . $rel->contact_number : '' }}{{ $rel->notes ? ' · ' . \Illuminate\Support\Str::limit($rel->notes, 60) : '' }}
@@ -907,10 +907,10 @@
     });
 @endphp
 <div class="mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
-    <h3 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">{{ __('Relatives & Native Network') }}</h3>
+    <h3 class="mb-3 border-b border-stone-200/75 border-l-2 border-l-rose-400/70 pb-2.5 pl-3 text-base font-semibold tracking-tight text-stone-900 dark:border-gray-700/75 dark:border-l-rose-500/45 dark:text-stone-100">{{ __('Relatives & Native Network') }}</h3>
     @foreach($allianceByLocation as $locationLabel => $items)
         <div class="mb-3">
-            <p class="text-gray-500 text-sm font-medium mb-1">{{ $locationLabel }}</p>
+            <p class="text-xs font-medium text-stone-500 dark:text-stone-400 font-medium mb-1">{{ $locationLabel }}</p>
             @foreach($items as $a)
                 <p class="font-medium text-base ml-2">
                     {{ $a->surname ?: '—' }}{{ $a->notes ? ' · ' . \Illuminate\Support\Str::limit($a->notes, 60) : '' }}
@@ -941,7 +941,7 @@
 @endphp
 @if ($hasAnyPrefs)
 <div class="mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
-    <h3 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">{{ __('Partner preferences') }}</h3>
+    <h3 class="mb-3 border-b border-stone-200/75 border-l-2 border-l-rose-400/70 pb-2.5 pl-3 text-base font-semibold tracking-tight text-stone-900 dark:border-gray-700/75 dark:border-l-rose-500/45 dark:text-stone-100">{{ __('Partner preferences') }}</h3>
     <div class="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm">
         @if($hasPrefCriteria && ($preferenceCriteria->preferred_age_min ?? null) !== null || ($preferenceCriteria->preferred_age_max ?? null) !== null)
             <p><span class="text-gray-500">{{ __('Age:') }}</span> {{ $preferenceCriteria->preferred_age_min ?? '—' }}–{{ $preferenceCriteria->preferred_age_max ?? '—' }}</p>
@@ -1004,13 +1004,13 @@
 
 @if (isset($extendedAttributes) && (trim($extendedAttributes->narrative_about_me ?? '') !== '' || trim($extendedAttributes->narrative_expectations ?? '') !== ''))
 <div class="mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
-    <h3 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">{{ __('About & expectations') }}</h3>
+    <h3 class="mb-3 border-b border-stone-200/75 border-l-2 border-l-rose-400/70 pb-2.5 pl-3 text-base font-semibold tracking-tight text-stone-900 dark:border-gray-700/75 dark:border-l-rose-500/45 dark:text-stone-100">{{ __('About & expectations') }}</h3>
     @if (trim($extendedAttributes->narrative_about_me ?? '') !== '')
-        <p class="text-gray-500 text-sm">{{ __('About me') }}</p>
+        <p class="text-xs font-medium text-stone-500 dark:text-stone-400">{{ __('About me') }}</p>
         <p class="font-medium text-base whitespace-pre-wrap">{{ $extendedAttributes->narrative_about_me }}</p>
     @endif
     @if (trim($extendedAttributes->narrative_expectations ?? '') !== '')
-        <p class="text-gray-500 text-sm mt-2">{{ __('Expectations') }}</p>
+        <p class="text-xs font-medium text-stone-500 dark:text-stone-400 mt-2">{{ __('Expectations') }}</p>
         <p class="font-medium text-base whitespace-pre-wrap">{{ $extendedAttributes->narrative_expectations }}</p>
     @endif
 </div>
@@ -1018,7 +1018,7 @@
 
 @if ($profile->horoscope && ($profile->horoscope->rashi_id || $profile->horoscope->nakshatra_id || $profile->horoscope->gan_id || $profile->horoscope->nadi_id || $profile->horoscope->mangal_dosh_type_id || $profile->horoscope->yoni_id || $profile->horoscope->charan || $profile->horoscope->devak || $profile->horoscope->kul || $profile->horoscope->gotra || $profile->horoscope->navras_name || $profile->horoscope->birth_weekday))
 <div class="mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
-    <h3 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">{{ __('Horoscope') }}</h3>
+    <h3 class="mb-3 border-b border-stone-200/75 border-l-2 border-l-rose-400/70 pb-2.5 pl-3 text-base font-semibold tracking-tight text-stone-900 dark:border-gray-700/75 dark:border-l-rose-500/45 dark:text-stone-100">{{ __('Horoscope') }}</h3>
     <div class="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm">
         @if ($profile->horoscope->rashi)<p><span class="text-gray-500">Rashi:</span> {{ $profile->horoscope->rashi->label ?? '—' }}</p>@endif
         @if ($profile->horoscope->nakshatra)<p><span class="text-gray-500">Nakshatra:</span> {{ $profile->horoscope->nakshatra->label ?? '—' }}</p>@endif
@@ -1037,8 +1037,8 @@
 @endif
 
 <div class="mt-6">
-    <p class="text-gray-500 text-sm">{{ __('Contact Information') }}</p>
-    <p class="font-medium text-base">
+    <p class="text-sm font-semibold tracking-tight text-stone-800 dark:text-stone-200">{{ __('Contact Information') }}</p>
+    <p class="mt-1.5 text-base font-medium text-stone-900 dark:text-stone-100">
         @if ($isOwnProfile)
             @if ($primaryContactPhone)
                 {{ $primaryContactPhone }}
@@ -1052,7 +1052,7 @@
         @endif
     </p>
     @if (!$isOwnProfile && !$canViewContact)
-        <div class="mt-3 px-3 py-2 rounded-lg bg-gray-100 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 text-sm text-gray-600 dark:text-gray-400">
+        <div class="mt-3 rounded-lg border border-stone-200/90 bg-stone-50/90 px-3 py-2.5 text-xs leading-relaxed text-stone-600 dark:border-gray-600 dark:bg-gray-800/50 dark:text-stone-400">
             <strong>{{ __('Contact policy:') }}</strong> {{ __('Contact number is shared only after the other person accepts your interest. We do not reveal contact without mutual interest.') }}
         </div>
     @endif
@@ -1067,11 +1067,11 @@
 
     @if(!empty($filteredExtended))
         <div class="mt-8">
-            <h3 class="text-lg font-semibold mb-4">{{ __('Additional Details') }}</h3>
+            <h3 class="mb-4 border-b border-stone-200/75 border-l-2 border-l-rose-400/70 pb-2.5 pl-3 text-base font-semibold tracking-tight text-stone-900 dark:border-gray-700/75 dark:border-l-rose-500/45 dark:text-stone-100">{{ __('Additional Details') }}</h3>
 
             @foreach($filteredExtended as $label => $value)
                 <div class="mb-2">
-                    <p class="text-gray-500 text-sm">{{ $extendedMeta[$label] ?? $label }}</p>
+                    <p class="text-xs font-medium text-stone-500 dark:text-stone-400">{{ $extendedMeta[$label] ?? $label }}</p>
                     <p class="font-medium text-base">{{ $value }}</p>
                 </div>
             @endforeach
