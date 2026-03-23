@@ -69,4 +69,18 @@ return [
     'horoscope' => 'Horoscope',
     'contact_information' => 'Contact Information',
     'additional_details' => 'Additional Information',
+
+    /** Public profile show (hero rail, nav strip, verification sidebar) */
+    'show_age_years' => ':age years',
+    'show_verification_title' => 'Verification',
+    'show_verification_none' => 'Verification details are not available.',
+    'show_nav_prev' => 'Previous profile',
+    'show_nav_next' => 'Next profile',
+    'show_nav_unavailable' => 'Not available',
+    'show_hero_trust_heading' => 'Trust & verification',
+    /** Public profile: top reading column overview band */
+    'profile_overview_band' => 'Profile overview',
+    /** Scan-friendly residence line */
+    'scan_lives_in' => 'Lives in',
+    'cta_interested' => 'Interested',
 ];

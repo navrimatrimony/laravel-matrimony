@@ -2,8 +2,8 @@
     'items' => [],
 ])
 
-<div class="rounded-2xl bg-white/95 p-4 shadow-[0_8px_24px_-8px_rgba(28,25,23,0.1)] ring-1 ring-stone-200/60 dark:bg-gray-900/85 dark:shadow-[0_8px_22px_-8px_rgba(0,0,0,0.32)] dark:ring-gray-700/70 sm:p-5">
-    <h3 class="mb-3 text-sm font-semibold text-stone-900 dark:text-stone-100">{{ __('profile.show_verification_title') }}</h3>
+<div class="rounded-2xl bg-white/95 p-4 shadow-[0_8px_24px_-8px_rgba(28,25,23,0.1)] ring-1 ring-stone-200/60 dark:bg-gray-900/85 dark:shadow-[0_8px_22px_-8px_rgba(0,0,0,0.32)] dark:ring-gray-700/70 sm:p-5 lg:p-3.5">
+    <h3 class="mb-2 text-xs font-semibold uppercase tracking-wide text-stone-600 dark:text-stone-300 lg:mb-2">{{ __('profile.show_verification_title') }}</h3>
     @if (empty($items))
         <p class="text-sm leading-relaxed text-stone-500 dark:text-stone-400">{{ __('profile.show_verification_none') }}</p>
     @else

@@ -86,15 +86,20 @@
     $metaRaw = trim((string) ($profile->gender?->label ?? $profile->user?->gender ?? ''));
     $metaLine = $metaRaw !== '' ? \Illuminate\Support\Str::title(mb_strtolower($metaRaw)) : '';
     $trustItems = is_array($verificationItems) ? array_values(array_filter($verificationItems)) : [];
+    $formattedNameOverlay = \App\Support\ProfileDisplayCopy::formatPersonName($profile->full_name);
+    $overlayFirstName = preg_split('/\s+/u', trim($formattedNameOverlay), 2)[0] ?? $formattedNameOverlay;
+    $overlayCityShort = $profile->city?->name
+        ?? $profile->district?->name
+        ?? '';
 @endphp
 
 @php
-    $chipClass = 'inline-flex items-center rounded-full bg-white/90 px-3 py-1.5 text-[11px] font-medium text-stone-800 shadow-sm ring-1 ring-stone-200/80 dark:bg-stone-800/90 dark:text-stone-100 dark:ring-stone-600/50 sm:text-xs';
+    $chipClass = 'inline-flex items-center rounded-full bg-white/90 px-3 py-1.5 text-[11px] font-medium text-stone-800 shadow-sm ring-1 ring-stone-200/80 dark:bg-stone-800/90 dark:text-stone-100 dark:ring-stone-600/50 sm:text-xs lg:px-2.5 lg:py-1 lg:text-[10px]';
 @endphp
 
-<div {{ $attributes->merge(['class' => 'overflow-hidden rounded-3xl bg-white shadow-[0_16px_40px_-12px_rgba(28,25,23,0.14)] ring-1 ring-stone-200/70 dark:bg-gray-900 dark:shadow-[0_16px_36px_-12px_rgba(0,0,0,0.38)] dark:ring-gray-700/75']) }}>
+<div {{ $attributes->merge(['class' => 'overflow-hidden rounded-3xl lg:rounded-2xl bg-white shadow-[0_16px_40px_-12px_rgba(28,25,23,0.14)] ring-1 ring-stone-200/70 dark:bg-gray-900 dark:shadow-[0_16px_36px_-12px_rgba(0,0,0,0.38)] dark:ring-gray-700/75']) }}>
     @if ($profilePhotoVisible)
-        <div class="relative aspect-[4/5] max-h-[24rem] w-full bg-stone-100 dark:bg-gray-800 landscape:max-h-[min(52vh,20rem)] md:max-h-[22rem] xl:max-h-[24rem]">
+        <div class="relative aspect-[4/5] max-h-[24rem] w-full bg-stone-100 dark:bg-gray-800 landscape:max-h-[min(52vh,20rem)] md:max-h-[22rem] lg:max-h-[12.5rem] xl:max-h-[13.5rem]">
             @if ($profile->profile_photo)
                 <img
                     src="{{ asset('uploads/matrimony_photos/'.$profile->profile_photo) }}"
@@ -111,15 +116,15 @@
                 @endphp
                 <img src="{{ $placeholderSrc }}" alt="" class="h-full w-full object-cover" style="{{ $photoLocked ? 'filter: blur(10px);' : '' }}" />
             @endif
-            <div class="pointer-events-none absolute inset-x-0 bottom-0 h-[52%] bg-gradient-to-t {{ ($hideOverlayIdentity ?? false) ? 'from-stone-950/35 via-stone-900/12 to-transparent dark:from-black/40 dark:via-stone-950/10' : 'from-stone-950/60 via-stone-900/25 to-transparent dark:from-black/65 dark:via-stone-950/20' }}" aria-hidden="true"></div>
+            <div class="pointer-events-none absolute inset-x-0 bottom-0 h-[58%] bg-gradient-to-t {{ ($hideOverlayIdentity ?? false) ? 'from-stone-950/35 via-stone-900/12 to-transparent dark:from-black/40 dark:via-stone-950/10' : 'from-black/85 via-black/45 to-transparent dark:from-black/90 dark:via-black/50 sm:from-black/80 sm:via-black/40' }}" aria-hidden="true"></div>
             @if (!($hideOverlayIdentity ?? false))
-            <div class="absolute inset-x-0 bottom-0 z-10 px-5 pb-5 pt-20 sm:px-6 sm:pb-6">
-                <h2 class="text-2xl font-semibold leading-tight tracking-tight text-white drop-shadow-sm sm:text-[1.65rem]">{{ \App\Support\ProfileDisplayCopy::formatPersonName($profile->full_name) }}</h2>
-                @if ($summaryLine !== '')
-                    <p class="mt-2 line-clamp-2 text-sm font-medium leading-snug text-white/95">{{ $summaryLine }}</p>
-                @endif
-                @if ($metaLine !== '')
-                    <p class="mt-2 text-xs font-medium tracking-wide text-white/70">{{ $metaLine }}</p>
+            {{-- Compact overlay: first name + age, then city (readable on light/dark photos) --}}
+            <div class="absolute inset-x-0 bottom-0 z-10 px-4 pb-4 pt-14 sm:px-5 sm:pb-5 sm:pt-16">
+                <p class="text-[1.05rem] font-bold leading-tight tracking-tight text-white drop-shadow-[0_2px_8px_rgba(0,0,0,0.85)] sm:text-xl">{{ $overlayFirstName }}@if ($age !== null && ($dateOfBirthVisible ?? true)), {{ $age }}@endif</p>
+                @if ($overlayCityShort !== '' && ($locationVisible ?? true))
+                    <p class="mt-1 text-sm font-medium text-white/95 drop-shadow-[0_1px_6px_rgba(0,0,0,0.75)]">{{ $overlayCityShort }}</p>
+                @elseif ($metaLine !== '')
+                    <p class="mt-1 text-xs font-medium text-white/80 drop-shadow-md">{{ $metaLine }}</p>
                 @endif
             </div>
             @endif
@@ -155,8 +160,8 @@
     @endif
 
     @if (! empty($chips))
-        <div class="border-t border-stone-200/80 bg-stone-50/90 px-4 py-3.5 dark:border-gray-700/80 dark:bg-gray-950/80 sm:px-5">
-            <div class="flex flex-wrap gap-2">
+        <div class="border-t border-stone-200/80 bg-stone-50/90 px-4 py-3 dark:border-gray-700/80 dark:bg-gray-950/80 sm:px-5 lg:px-3 lg:py-1.5">
+            <div class="flex flex-wrap gap-1.5 lg:gap-1">
                 @foreach ($chips as $chip)
                     <span class="{{ $chipClass }}">{{ $chip }}</span>
                 @endforeach
@@ -165,9 +170,9 @@
     @endif
 
     @if (count($trustItems) > 0)
-        <div class="border-t border-stone-200/80 bg-white px-4 py-3 dark:border-gray-700/80 dark:bg-gray-950/90 sm:px-5">
-            <p class="mb-2 text-[11px] font-semibold text-stone-500 dark:text-stone-400">{{ __('profile.show_hero_trust_heading') }}</p>
-            <div class="flex flex-wrap gap-x-3 gap-y-2">
+        <div class="border-t border-stone-200/80 bg-white px-4 py-3 dark:border-gray-700/80 dark:bg-gray-950/90 sm:px-5 lg:px-3 lg:py-1.5">
+            <p class="mb-2 lg:mb-1 text-[11px] font-semibold text-stone-500 dark:text-stone-400">{{ __('profile.show_hero_trust_heading') }}</p>
+            <div class="flex flex-wrap gap-x-3 gap-y-2 lg:gap-x-2 lg:gap-y-1">
                 @foreach ($trustItems as $item)
                     <span class="inline-flex min-w-0 max-w-full items-center gap-1.5 text-xs font-medium text-stone-800 dark:text-stone-200">
                         <span class="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-900/50 dark:text-emerald-300" aria-hidden="true">

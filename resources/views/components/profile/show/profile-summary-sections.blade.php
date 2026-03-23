@@ -1,6 +1,6 @@
 @php
     $publicMatrimonyLayout = $publicMatrimonyLayout ?? false;
-    $profile->loadMissing(['city', 'district', 'state', 'taluka', 'country', 'maritalStatus', 'religion', 'caste', 'subCaste', 'familyType', 'complexion', 'physicalBuild', 'bloodGroup', 'seriousIntent', 'diet', 'smokingStatus', 'drinkingStatus', 'birthCity', 'birthTaluka', 'birthDistrict', 'birthState', 'nativeCity', 'nativeTaluka', 'nativeDistrict', 'nativeState']);
+    $profile->loadMissing(['city', 'district', 'state', 'taluka', 'country', 'maritalStatus', 'religion', 'caste', 'subCaste', 'familyType', 'complexion', 'physicalBuild', 'bloodGroup', 'seriousIntent', 'diet', 'smokingStatus', 'drinkingStatus', 'birthCity', 'birthTaluka', 'birthDistrict', 'birthState', 'nativeCity', 'nativeTaluka', 'nativeDistrict', 'nativeState', 'profession']);
     $locationLine = \App\Support\ProfileDisplayCopy::formatResidenceDisplay(
         $profile->city?->name,
         $profile->taluka?->name,
@@ -91,7 +91,7 @@
     $hasBirthPlace = $birthPlaceLine !== '' || $profile->birth_city_id || $profile->birth_taluka_id || $profile->birth_district_id || $profile->birth_state_id;
     $hasNativePlace = $nativePlaceLine !== '' || $profile->native_city_id || $profile->native_taluka_id || $profile->native_district_id || $profile->native_state_id;
     $hasPhysical = ($heightVisible && ($profile->height_cm ?? '') !== '') || ($profile->weight_kg ?? null) !== null || $profile->complexion || $profile->physicalBuild || $profile->bloodGroup;
-    $hasBasicSection = ($dateOfBirthVisible && ($profile->date_of_birth ?? '') !== '') || (($profile->birth_time ?? '') !== '') || ($maritalStatusVisible && $profile->maritalStatus) || $profile->religion || $profile->caste || $profile->subCaste || $profile->seriousIntent || $hasPhysical;
+    $hasBasicSection = ($dateOfBirthVisible && ($profile->date_of_birth ?? '') !== '') || (($profile->birth_time ?? '') !== '') || ($maritalStatusVisible && $profile->maritalStatus) || $profile->religion || $profile->caste || $profile->subCaste || $profile->seriousIntent;
     $basicSubtitle = null;
     if ($maritalStatusVisible && $profile->maritalStatus) {
         $place = \App\Support\ProfileDisplayCopy::compactLocationLine(
@@ -135,6 +135,16 @@
     $hasLifestyle = $profile->diet || $profile->smokingStatus || $profile->drinkingStatus;
     $showFamilySection = $hasFamily || $hasFamilyIncome || ($profile->siblings?->isNotEmpty()) || ($profile->children?->isNotEmpty());
     $showEducationSection = $hasEduCareer || ($profile->educationHistory && $profile->educationHistory->isNotEmpty()) || ($profile->career?->isNotEmpty());
+    $basicScanAgeHeightMarital = implode(' · ', array_values(array_filter([
+        $age !== null ? __('profile.show_age_years', ['age' => $age]) : null,
+        ($heightVisible && ($profile->height_cm ?? '') !== '') ? $profile->height_cm.' cm' : null,
+        ($maritalStatusVisible && $profile->maritalStatus) ? ($profile->maritalStatus->label ?? '') : null,
+    ])));
+    $basicScanCommunity = implode(', ', array_filter([
+        $profile->religion?->label,
+        $profile->caste?->label,
+        $profile->subCaste?->label,
+    ]));
 @endphp
 
 @php
@@ -146,7 +156,18 @@
 <div id="profile-detailed" class="scroll-mt-28 space-y-6">
 @endif
 
-{{-- Profile Completeness --}}
+{{-- When viewing someone else: key highlights first (summary-first), then completeness --}}
+@if ($viewerBrowsingOther && count($overviewHighlights) > 0)
+    <x-profile.show.profile-section-card
+        class="{{ $sectionMb }}"
+        :title="__('profile.show_at_a_glance')"
+    >
+        <x-profile.show.profile-highlight-list :items="$overviewHighlights" />
+    </x-profile.show.profile-section-card>
+@endif
+
+@if ($isOwnProfile ?? false)
+{{-- Profile Completeness: own profile only --}}
 <x-profile.show.profile-section-card class="{{ $sectionMb }}" :title="__('profile.profile_completeness')">
     <div class="flex items-center justify-end gap-3">
         <span class="text-lg font-bold tabular-nums text-rose-700 dark:text-rose-400">{{ $completenessPct }}%</span>
@@ -155,6 +176,7 @@
         <div class="h-2 rounded-full bg-rose-700 transition-all duration-300 dark:bg-rose-500" style="width: {{ $completenessPct }}%;"></div>
     </div>
 </x-profile.show.profile-section-card>
+@endif
 
 @if ((count($overviewHighlights) > 0 || (!($showProfileSidebarLayout ?? false) && !empty($profileHeadline))) && !$viewerBrowsingOther)
     <x-profile.show.profile-section-card
@@ -336,134 +358,109 @@
 {{-- Main profile details: basic → education → family → location → lifestyle → property --}}
 @if ($hasBasicSection)
     <x-profile.show.profile-section-card class="{{ $sectionMb }}" :title="__('profile.show_section_basic')" :subtitle="$basicSubtitle">
-        <div class="grid grid-cols-1 gap-x-8 gap-y-5 sm:grid-cols-2">
-            @if ($dateOfBirthVisible && ($profile->date_of_birth ?? '') !== '')
-                <div class="space-y-1">
-                    <p class="text-[11px] font-medium text-stone-500 dark:text-stone-400">{{ __('Date of Birth') }}</p>
-                    <p class="text-sm font-semibold text-stone-900 dark:text-stone-100">
-                        {{ $profile->date_of_birth }}
-                        @if ($age !== null)
-                            <span class="font-normal text-stone-500 dark:text-stone-400">({{ __('profile.show_age_years', ['age' => $age]) }})</span>
-                        @endif
-                    </p>
+        <div class="space-y-3">
+            @if ($basicScanAgeHeightMarital !== '')
+                <div class="flex items-start gap-2.5">
+                    <span class="mt-0.5 inline-flex h-4 w-4 shrink-0 text-rose-500 dark:text-rose-400" aria-hidden="true">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M21 8.25c0-2.485-2.099-4.5-4.688-4.5-1.935 0-3.597 1.126-4.312 2.733-.715-1.607-2.377-2.733-4.313-2.733C5.1 3.75 3 5.765 3 8.25c0 7.22 9 12 9 12s9-4.78 9-12z"/></svg>
+                    </span>
+                    <p class="text-sm font-semibold leading-snug text-stone-900 dark:text-stone-100">{{ $basicScanAgeHeightMarital }}</p>
                 </div>
+            @endif
+            @if ($basicScanCommunity !== '')
+                <div class="flex items-start gap-2.5">
+                    <span class="mt-0.5 inline-flex h-4 w-4 shrink-0 text-rose-500 dark:text-rose-400" aria-hidden="true">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M9.568 3H5.25A2.25 2.25 0 0 0 3 5.25v4.318c0 .597.237 1.17.659 1.591l9.581 9.581c.699.699 1.78.872 2.607.33a18.095 18.095 0 0 0 5.223-5.223c.542-.827.369-1.908-.33-2.607L11.16 3.66A2.25 2.25 0 0 0 9.568 3Z"/><path stroke-linecap="round" stroke-linejoin="round" d="M6 6h.008v.008H6V6Z"/></svg>
+                    </span>
+                    <p class="text-sm font-semibold leading-snug text-stone-900 dark:text-stone-100">{{ $basicScanCommunity }}</p>
+                </div>
+            @endif
+            @if ($dateOfBirthVisible && ($profile->date_of_birth ?? '') !== '')
+                <p class="text-xs text-stone-500 dark:text-stone-400">{{ __('Date of Birth') }}: <span class="font-medium text-stone-700 dark:text-stone-300">{{ $profile->date_of_birth }}</span></p>
             @endif
             @if (($profile->birth_time ?? '') !== '')
-                <div class="space-y-1">
-                    <p class="text-[11px] font-medium text-stone-500 dark:text-stone-400">{{ __('Birth time') }}</p>
-                    <p class="text-sm font-semibold text-stone-900 dark:text-stone-100">{{ $profile->birth_time }}</p>
-                </div>
-            @endif
-            @if ($maritalStatusVisible && $profile->maritalStatus)
-                <div class="space-y-1">
-                    <p class="text-[11px] font-medium text-stone-500 dark:text-stone-400">{{ __('Marital Status') }}</p>
-                    <p class="text-sm font-semibold text-stone-900 dark:text-stone-100">{{ $profile->maritalStatus->label ?? '—' }}</p>
-                </div>
-            @endif
-            @if ($profile->religion)
-                <div class="space-y-1">
-                    <p class="text-[11px] font-medium text-stone-500 dark:text-stone-400">{{ __('Religion') }}</p>
-                    <p class="text-sm font-semibold text-stone-900 dark:text-stone-100">{{ $profile->religion->label ?? '—' }}</p>
-                </div>
-            @endif
-            @if ($profile->caste)
-                <div class="space-y-1">
-                    <p class="text-[11px] font-medium text-stone-500 dark:text-stone-400">{{ __('Caste') }}</p>
-                    <p class="text-sm font-semibold text-stone-900 dark:text-stone-100">{{ $profile->caste->label ?? '—' }}</p>
-                </div>
-            @endif
-            @if ($profile->subCaste)
-                <div class="space-y-1">
-                    <p class="text-[11px] font-medium text-stone-500 dark:text-stone-400">{{ __('Sub caste') }}</p>
-                    <p class="text-sm font-semibold text-stone-900 dark:text-stone-100">{{ $profile->subCaste->label ?? '—' }}</p>
-                </div>
+                <p class="text-xs text-stone-500 dark:text-stone-400">{{ __('Birth time') }}: <span class="font-medium text-stone-700 dark:text-stone-300">{{ $profile->birth_time }}</span></p>
             @endif
             @if ($profile->seriousIntent)
-                <div class="space-y-1">
-                    <p class="text-[11px] font-medium text-stone-500 dark:text-stone-400">{{ __('Marriage timeline') }}</p>
-                    <p class="text-sm font-semibold text-stone-900 dark:text-stone-100">{{ $profile->seriousIntent->name ?? '—' }}</p>
+                <div class="flex items-start gap-2.5">
+                    <span class="mt-0.5 inline-flex h-4 w-4 shrink-0 text-stone-400" aria-hidden="true">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"/></svg>
+                    </span>
+                    <p class="text-sm font-medium text-stone-800 dark:text-stone-200">{{ $profile->seriousIntent->name ?? '—' }}</p>
                 </div>
             @endif
         </div>
-        @if ($hasPhysical)
-            <div class="mt-6 border-t border-stone-200/80 pt-5 dark:border-gray-700">
-                <p class="mb-3 text-[11px] font-semibold text-stone-500 dark:text-stone-400">{{ __('Physical') }}</p>
-                <div class="grid grid-cols-1 gap-x-8 gap-y-5 sm:grid-cols-2">
-                    @if ($heightVisible && ($profile->height_cm ?? '') !== '')
-                        <div class="space-y-1">
-                            <p class="text-[11px] font-medium text-stone-500 dark:text-stone-400">{{ __('Height') }}</p>
-                            <p class="text-sm font-semibold text-stone-900 dark:text-stone-100">{{ $profile->height_cm }} cm</p>
-                        </div>
-                    @endif
-                    @if (($profile->weight_kg ?? null) !== null && $profile->weight_kg !== '')
-                        <div class="space-y-1">
-                            <p class="text-[11px] font-medium text-stone-500 dark:text-stone-400">{{ __('Weight') }}</p>
-                            <p class="text-sm font-semibold text-stone-900 dark:text-stone-100">{{ $profile->weight_kg }} kg</p>
-                        </div>
-                    @endif
-                    @if ($profile->complexion)
-                        <div class="space-y-1">
-                            <p class="text-[11px] font-medium text-stone-500 dark:text-stone-400">{{ __('Complexion') }}</p>
-                            <p class="text-sm font-semibold text-stone-900 dark:text-stone-100">{{ $profile->complexion->label ?? '—' }}</p>
-                        </div>
-                    @endif
-                    @if ($profile->physicalBuild)
-                        <div class="space-y-1">
-                            <p class="text-[11px] font-medium text-stone-500 dark:text-stone-400">{{ __('Physical Build') }}</p>
-                            <p class="text-sm font-semibold text-stone-900 dark:text-stone-100">{{ $profile->physicalBuild->label ?? '—' }}</p>
-                        </div>
-                    @endif
-                    @if ($profile->bloodGroup)
-                        <div class="space-y-1">
-                            <p class="text-[11px] font-medium text-stone-500 dark:text-stone-400">{{ __('Blood Group') }}</p>
-                            <p class="text-sm font-semibold text-stone-900 dark:text-stone-100">{{ $profile->bloodGroup->label ?? '—' }}</p>
-                        </div>
-                    @endif
+    </x-profile.show.profile-section-card>
+@endif
+
+{{-- Physical: details below basic identity (summary-first hierarchy) --}}
+@if ($hasPhysical)
+    <x-profile.show.profile-section-card class="{{ $sectionMb }}" :title="__('Physical')">
+        <div class="grid grid-cols-1 gap-x-8 gap-y-5 sm:grid-cols-2">
+            @if ($heightVisible && ($profile->height_cm ?? '') !== '')
+                <div class="space-y-1">
+                    <p class="text-[11px] font-medium text-stone-500 dark:text-stone-400">{{ __('Height') }}</p>
+                    <p class="text-sm font-semibold text-stone-900 dark:text-stone-100">{{ $profile->height_cm }} cm</p>
                 </div>
-            </div>
-        @endif
+            @endif
+            @if (($profile->weight_kg ?? null) !== null && $profile->weight_kg !== '')
+                <div class="space-y-1">
+                    <p class="text-[11px] font-medium text-stone-500 dark:text-stone-400">{{ __('Weight') }}</p>
+                    <p class="text-sm font-semibold text-stone-900 dark:text-stone-100">{{ $profile->weight_kg }} kg</p>
+                </div>
+            @endif
+            @if ($profile->complexion)
+                <div class="space-y-1">
+                    <p class="text-[11px] font-medium text-stone-500 dark:text-stone-400">{{ __('Complexion') }}</p>
+                    <p class="text-sm font-semibold text-stone-900 dark:text-stone-100">{{ $profile->complexion->label ?? '—' }}</p>
+                </div>
+            @endif
+            @if ($profile->physicalBuild)
+                <div class="space-y-1">
+                    <p class="text-[11px] font-medium text-stone-500 dark:text-stone-400">{{ __('Physical Build') }}</p>
+                    <p class="text-sm font-semibold text-stone-900 dark:text-stone-100">{{ $profile->physicalBuild->label ?? '—' }}</p>
+                </div>
+            @endif
+            @if ($profile->bloodGroup)
+                <div class="space-y-1">
+                    <p class="text-[11px] font-medium text-stone-500 dark:text-stone-400">{{ __('Blood Group') }}</p>
+                    <p class="text-sm font-semibold text-stone-900 dark:text-stone-100">{{ $profile->bloodGroup->label ?? '—' }}</p>
+                </div>
+            @endif
+        </div>
     </x-profile.show.profile-section-card>
 @endif
 
 @if ($showEducationSection)
     <x-profile.show.profile-section-card class="{{ $sectionMb }}" :title="__('profile.show_section_education_career')" :subtitle="$eduCareerSubtitle ?: null">
         @if ($hasEduCareer)
-            <div class="grid grid-cols-1 gap-x-8 gap-y-5 sm:grid-cols-2">
-                @if ($educationVisible && ($profile->highest_education ?? '') !== '')
-                    <div class="space-y-1">
-                        <p class="text-[11px] font-medium text-stone-500 dark:text-stone-400">{{ __('Education') }}</p>
-                        <p class="text-sm font-semibold text-stone-900 dark:text-stone-100">{{ $profile->highest_education }}</p>
-                    </div>
-                @endif
-                @if (($profile->specialization ?? '') !== '')
-                    <div class="space-y-1">
-                        <p class="text-[11px] font-medium text-stone-500 dark:text-stone-400">{{ __('Specialization') }}</p>
-                        <p class="text-sm font-semibold text-stone-900 dark:text-stone-100">{{ $profile->specialization }}</p>
-                    </div>
-                @endif
-                @if (($profile->occupation_title ?? '') !== '')
-                    <div class="space-y-1">
-                        <p class="text-[11px] font-medium text-stone-500 dark:text-stone-400">{{ __('Occupation') }}</p>
-                        <p class="text-sm font-semibold text-stone-900 dark:text-stone-100">{{ $profile->occupation_title }}</p>
-                    </div>
-                @endif
-                @if (($profile->company_name ?? '') !== '')
-                    <div class="space-y-1">
-                        <p class="text-[11px] font-medium text-stone-500 dark:text-stone-400">{{ __('Company') }}</p>
-                        <p class="text-sm font-semibold text-stone-900 dark:text-stone-100">{{ $profile->company_name }}</p>
+            <div class="space-y-3">
+                @if ($eduCareerSubtitle !== '')
+                    <div class="flex items-start gap-2.5">
+                        <span class="mt-0.5 inline-flex h-4 w-4 shrink-0 text-indigo-500 dark:text-indigo-400" aria-hidden="true">
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M4.26 10.147a60.438 60.438 0 0 0-.491 6.347A48.62 48.62 0 0 1 12 20.904a48.62 48.62 0 0 1 8.232-4.41 60.46 60.46 0 0 0-.491-6.347m-15.482 0a50.636 50.636 0 0 0-2.658-.813A59.906 59.906 0 0 1 12 3.493a59.903 59.903 0 0 1 10.399 5.84c-.896.248-1.783.52-2.658.814m-15.482 0A50.717 50.717 0 0 1 12 13.489a50.702 50.702 0 0 1 7.74-3.342M6.75 15a.75.75 0 1 0 0-1.5.75.75 0 0 0 0 1.5Zm0 0v-3.675A55.378 55.378 0 0 1 12 8.443m-7.007 11.55A5.981 5.981 0 0 0 6.75 15.75v-1.5"/></svg>
+                        </span>
+                        <p class="text-sm font-semibold leading-snug text-stone-900 dark:text-stone-100">{{ $eduCareerSubtitle }}</p>
                     </div>
                 @endif
                 @if ($hasPersonalIncome)
-                    <div class="space-y-1">
-                        <p class="text-[11px] font-medium text-stone-500 dark:text-stone-400">{{ __('Income') }}</p>
+                    <div class="flex items-start gap-2.5">
+                        <span class="mt-0.5 inline-flex h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" aria-hidden="true">
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 18.75a60.07 60.07 0 0 1 15.797 2.101c.727.198 1.453-.342 1.453-1.096V18.75M3.75 4.5v.75A.75.75 0 0 1 3 6h-.75m0 0v-.375c0-.621.504-1.125 1.125-1.125H20.25M2.25 6v9m18-10.5v.75c0 .414.336.75.75.75h.75m-1.5-1.5h.375c.621 0 1.125.504 1.125 1.125v9.75c0 .621-.504 1.125-1.125 1.125H18.75v-7.5h-3.75v7.5h-3.75v-7.5H9v7.5H5.25v-7.5H2.25"/></svg>
+                        </span>
                         <p class="text-sm font-semibold text-stone-900 dark:text-stone-100">{{ $personalIncomeDisplay }}</p>
                     </div>
                 @endif
-                @if ($profile->incomeCurrency && ! $hasPersonalIncome && ! $hasFamilyIncome)
-                    <div class="space-y-1">
-                        <p class="text-[11px] font-medium text-stone-500 dark:text-stone-400">{{ __('Income Currency') }}</p>
-                        <p class="text-sm font-semibold text-stone-900 dark:text-stone-100">{{ trim($profile->incomeCurrency->symbol ?? '') }} {{ $profile->incomeCurrency->code ?? '—' }}</p>
+                @if ($hasFamilyIncome)
+                    <div class="flex items-start gap-2.5">
+                        <span class="mt-0.5 inline-flex h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" aria-hidden="true">
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 18.75a60.07 60.07 0 0 1 15.797 2.101c.727.198 1.453-.342 1.453-1.096V18.75M3.75 4.5v.75A.75.75 0 0 1 3 6h-.75m0 0v-.375c0-.621.504-1.125 1.125-1.125H20.25M2.25 6v9m18-10.5v.75c0 .414.336.75.75.75h.75m-1.5-1.5h.375c.621 0 1.125.504 1.125 1.125v9.75c0 .621-.504 1.125-1.125 1.125H18.75v-7.5h-3.75v7.5h-3.75v-7.5H9v7.5H5.25v-7.5H2.25"/></svg>
+                        </span>
+                        <p class="text-sm font-semibold text-stone-900 dark:text-stone-100"><span class="text-stone-500 dark:text-stone-400">{{ __('Family Income') }}:</span> {{ $familyIncomeDisplay }}</p>
                     </div>
+                @endif
+                @if ($profile->incomeCurrency && ! $hasPersonalIncome && ! $hasFamilyIncome)
+                    <p class="text-xs text-stone-500 dark:text-stone-400">{{ __('Income Currency') }}: <span class="font-medium text-stone-800 dark:text-stone-200">{{ trim($profile->incomeCurrency->symbol ?? '') }} {{ $profile->incomeCurrency->code ?? '—' }}</span></p>
                 @endif
             </div>
         @endif
@@ -569,14 +566,18 @@
 @if ($hasLocationSection)
     <x-profile.show.profile-section-card class="{{ $sectionMb }}" :title="__('profile.show_section_location')" :subtitle="$locationSubtitle">
         @if ($hasResidence)
-            <div class="mb-5">
-                <p class="mb-1 text-[11px] font-semibold text-stone-500 dark:text-stone-400">{{ __('profile.show_residence') }}</p>
-                @if (($profile->address_line ?? '') !== '')
-                    <p class="text-sm font-semibold text-stone-900 dark:text-stone-100">{{ $profile->address_line }}</p>
-                @endif
-                @if ($locationLine !== '')
-                    <p class="text-sm font-semibold text-stone-900 dark:text-stone-100">{{ $locationLine }}</p>
-                @endif
+            <div class="mb-5 flex items-start gap-2.5">
+                <span class="mt-0.5 inline-flex h-4 w-4 shrink-0 text-sky-500 dark:text-sky-400" aria-hidden="true">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M15 10.5a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1115 0z"/></svg>
+                </span>
+                <div class="min-w-0 space-y-1">
+                    @if (($profile->address_line ?? '') !== '')
+                        <p class="text-sm font-semibold text-stone-900 dark:text-stone-100">{{ $profile->address_line }}</p>
+                    @endif
+                    @if ($locationLine !== '')
+                        <p class="text-sm font-semibold leading-snug text-stone-800 dark:text-stone-100">{{ __('profile.scan_lives_in') }} {{ $locationLine }}</p>
+                    @endif
+                </div>
             </div>
         @endif
         @if ($hasWorkLocation)
