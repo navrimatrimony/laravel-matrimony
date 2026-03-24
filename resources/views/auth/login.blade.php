@@ -1,25 +1,22 @@
 <x-guest-layout>
     <!-- Session Status -->
     <x-auth-session-status class="mb-4" :status="session('status')" />
-    {{-- Navigation links for usability --}}
-<div class="mt-6 text-center text-sm text-gray-600">
-    <a href="{{ url('/') }}" class="underline hover:text-gray-900">
-        Home
-    </a>
-    |
-    <a href="{{ route('register') }}" class="underline hover:text-gray-900">
-        New user? Register here
-    </a>
-</div>
+
+    <div class="mb-5">
+        <h1 class="text-xl font-semibold tracking-tight text-stone-900 dark:text-stone-100">{{ __('Welcome back') }}</h1>
+        <p class="mt-1 text-sm leading-relaxed text-stone-600 dark:text-stone-400">
+            {{ __('Sign in using your mobile number, email, or username in a single step.') }}
+        </p>
+    </div>
 
     <form id="login-form" method="POST" action="{{ route('login') }}">
         @csrf
 
-        <!-- Mobile (10-digit) -->
         <div>
-            <x-input-label for="mobile" :value="__('auth.mobile')" />
-            <x-text-input id="mobile" class="block mt-1 w-full" type="tel" name="mobile" :value="old('mobile')" required autofocus autocomplete="username" inputmode="numeric" />
-            <x-input-error :messages="$errors->get('mobile')" class="mt-2" />
+            <x-input-label for="login" :value="__('Mobile / Email / Username')" />
+            <x-text-input id="login" class="block mt-1 w-full" type="text" name="login" :value="old('login')" required autofocus autocomplete="username" />
+            <x-input-error :messages="$errors->get('login')" class="mt-2" />
+            <p class="mt-2 text-xs text-stone-500 dark:text-stone-400">{{ __('Use any one: 10-digit mobile number, email address, or your username.') }}</p>
         </div>
 
         <!-- Password -->
@@ -42,18 +39,31 @@
             </label>
         </div>
 
-        <div class="flex items-center justify-end mt-4">
-            @if (Route::has('password.request'))
-                <a class="underline text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 dark:focus:ring-offset-gray-800" href="{{ route('password.request') }}">
-                    {{ __('Forgot your password?') }}
-                </a>
-            @endif
-
+        <div class="mt-5 flex items-center justify-between gap-3">
             <x-primary-button class="ms-3">
                 {{ __('Log in') }}
             </x-primary-button>
         </div>
+
+        <div class="mt-5 text-sm text-gray-600 dark:text-gray-400">
+            @if (Route::has('password.request'))
+                <a class="underline hover:text-gray-900 dark:hover:text-gray-100 rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 dark:focus:ring-offset-gray-800" href="{{ route('password.request') }}">
+                    {{ __('Forgot your password?') }}
+                </a>
+                <span class="mx-2 text-gray-400">|</span>
+            @endif
+            <a href="{{ route('register') }}" class="underline hover:text-gray-900 dark:hover:text-gray-100">
+                {{ __('New user? Register here') }}
+            </a>
+        </div>
     </form>
+
+    <div class="mt-6 text-center text-sm text-gray-600 dark:text-gray-400">
+        <a href="{{ url('/') }}" class="underline-offset-2 hover:underline hover:text-gray-900 dark:hover:text-gray-100">
+            {{ __('Back to Home') }}
+        </a>
+    </div>
+
     <script>
         (function () {
             var f = document.getElementById('login-form');

@@ -2,10 +2,10 @@
 
 namespace Tests\Feature;
 
-use App\Models\MatrimonyProfile;
+use App\Models\MasterChildLivingWith;
 use App\Models\MasterGender;
 use App\Models\MasterMaritalStatus;
-use App\Models\MasterChildLivingWith;
+use App\Models\MatrimonyProfile;
 use App\Models\Religion;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -165,19 +165,26 @@ class OnboardingFlowTest extends TestCase
 
         $response->assertRedirect(route('matrimony.onboarding.show', ['step' => 2]));
         $response->assertSessionHasErrors('children');
+        $response2 = $this->actingAs($user)->get(route('matrimony.onboarding.show', ['step' => 2]));
+        $response2->assertOk();
+        $response2->assertSee('name="marital_status_id" value="'.$divorcedId.'"', false);
+        $this->assertDatabaseHas('matrimony_profiles', [
+            'user_id' => $user->id,
+            'marital_status_id' => $divorcedId,
+        ]);
     }
 
-    public function test_onboarding_step_six_is_not_a_route(): void
+    public function test_onboarding_step_six_route_is_available(): void
     {
         $user = User::factory()->create();
         MatrimonyProfile::factory()->create(['user_id' => $user->id]);
 
         $this->actingAs($user)
             ->get('/matrimony/onboarding/6')
-            ->assertNotFound();
+            ->assertOk();
     }
 
-    public function test_onboarding_step_five_success_redirects_to_photo_upload(): void
+    public function test_onboarding_step_five_success_redirects_to_step_six(): void
     {
         $user = User::factory()->create();
         MatrimonyProfile::factory()->create(['user_id' => $user->id]);
@@ -186,9 +193,89 @@ class OnboardingFlowTest extends TestCase
             'height_cm' => '170',
         ]);
 
+        $response->assertRedirect(route('matrimony.onboarding.show', ['step' => 6]));
+        $response->assertSessionHasNoErrors();
+        $response->assertSessionHas('success', __('onboarding.saved_continue'));
+    }
+
+    public function test_onboarding_step_seven_success_redirects_to_photo_upload(): void
+    {
+        $this->seed(\Database\Seeders\MasterLookupSeeder::class);
+
+        $user = User::factory()->create();
+        MatrimonyProfile::factory()->create(['user_id' => $user->id]);
+
+        $response = $this->actingAs($user)->post(route('matrimony.onboarding.store', ['step' => 7]), [
+            'preferred_age_min' => 24,
+            'preferred_age_max' => 32,
+        ]);
+
         $response->assertRedirect(route('matrimony.profile.upload-photo', ['from' => 'onboarding']));
         $response->assertSessionHasNoErrors();
-        $response->assertSessionHas('info', __('onboarding.after_step5_redirect_photos'));
+        $response->assertSessionHas('info', __('onboarding.after_step7_redirect_photos'));
+    }
+
+    public function test_onboarding_step_seven_reflects_saved_profile_district_selection(): void
+    {
+        $this->seed(\Database\Seeders\LocationSeeder::class);
+
+        $district = DB::table('districts')->orderBy('id')->first();
+        if (! $district) {
+            $this->markTestSkipped('No district data available.');
+        }
+
+        $user = User::factory()->create();
+        MatrimonyProfile::factory()->create([
+            'user_id' => $user->id,
+            'district_id' => (int) $district->id,
+        ]);
+
+        $response = $this->actingAs($user)->get(route('matrimony.onboarding.show', ['step' => 7]));
+
+        $response->assertOk();
+        $response->assertSee('name="preferred_district_ids[]" value="'.$district->id.'"', false);
+        $response->assertSee('name="preferred_district_ids[]" value="'.$district->id.'" checked', false);
+    }
+
+    public function test_profile_show_displays_child_living_with_label_when_present(): void
+    {
+        $this->seed(\Database\Seeders\MasterLookupSeeder::class);
+
+        $livingWithId = MasterChildLivingWith::where('key', 'with_parent')->value('id')
+            ?? MasterChildLivingWith::query()->value('id');
+        if (! $livingWithId) {
+            $this->markTestSkipped('Missing child living-with master data.');
+        }
+
+        $user = User::factory()->create();
+        $profile = MatrimonyProfile::factory()->create(['user_id' => $user->id]);
+
+        DB::table('profile_children')->insert([
+            'profile_id' => $profile->id,
+            'child_name' => null,
+            'gender' => 'male',
+            'age' => 10,
+            'child_living_with_id' => $livingWithId,
+            'sort_order' => 0,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $response = $this->actingAs($user)->get(route('matrimony.profile.show', $profile->id));
+
+        $response->assertOk();
+        $response->assertSee('Living with', false);
+    }
+
+    public function test_profile_show_displays_detailed_completion_label_for_own_profile(): void
+    {
+        $user = User::factory()->create();
+        $profile = MatrimonyProfile::factory()->create(['user_id' => $user->id]);
+
+        $response = $this->actingAs($user)->get(route('matrimony.profile.show', $profile->id));
+
+        $response->assertOk();
+        $response->assertSee('Detailed coverage', false);
     }
 
     public function test_onboarding_complete_redirects_to_profiles_index(): void

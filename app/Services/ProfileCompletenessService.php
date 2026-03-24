@@ -27,10 +27,10 @@ class ProfileCompletenessService
     {
         $mandatoryFields = ProfileFieldConfigurationService::getMandatoryFieldKeys();
         $enabledFields = ProfileFieldConfigurationService::getEnabledFieldKeys();
-        
+
         // Only consider mandatory fields that are also enabled
         $enabledMandatoryFields = array_intersect($mandatoryFields, $enabledFields);
-        
+
         $filled = 0;
         $total = count($enabledMandatoryFields);
 
@@ -49,10 +49,6 @@ class ProfileCompletenessService
 
     /**
      * Check if a specific field is filled for a profile.
-     *
-     * @param MatrimonyProfile $profile
-     * @param string $fieldKey
-     * @return bool
      */
     private static function isFieldFilled(MatrimonyProfile $profile, string $fieldKey): bool
     {
@@ -85,6 +81,7 @@ class ProfileCompletenessService
             default:
                 // For any other field, check if it's not null and not empty string
                 $value = $profile->getAttribute($fieldKey);
+
                 return $value !== null && $value !== '';
         }
     }
@@ -98,6 +95,43 @@ class ProfileCompletenessService
     }
 
     /**
+     * Detailed completion across full wizard sections (not only mandatory core fields).
+     * completed=1, warning=0.5, incomplete=0.
+     */
+    public static function detailedPercentage(MatrimonyProfile $profile): int
+    {
+        $sections = FieldCatalogService::getSectionKeys(false);
+        if (empty($sections)) {
+            return 0;
+        }
+        $statuses = ProfileCompletionService::getSectionStatuses($profile, $sections);
+        $score = 0.0;
+        foreach ($sections as $key) {
+            $status = $statuses[$key] ?? 'incomplete';
+            if ($status === 'completed') {
+                $score += 1.0;
+            } elseif ($status === 'warning') {
+                $score += 0.5;
+            }
+        }
+
+        return (int) round(($score / count($sections)) * 100);
+    }
+
+    /**
+     * Returns both completion signals for UI clarity.
+     *
+     * @return array{core:int,detailed:int}
+     */
+    public static function breakdown(MatrimonyProfile $profile): array
+    {
+        return [
+            'core' => self::percentage($profile),
+            'detailed' => self::detailedPercentage($profile),
+        ];
+    }
+
+    /**
      * Raw SQL condition for "meets 70% OR visibility_override".
      * Uses MatrimonyProfile fields only. Table alias optional.
      * Dynamically builds SQL based on enabled mandatory fields from database (Day-18 enforcement).
@@ -106,7 +140,7 @@ class ProfileCompletenessService
     {
         $mandatoryFields = ProfileFieldConfigurationService::getMandatoryFieldKeys();
         $enabledFields = ProfileFieldConfigurationService::getEnabledFieldKeys();
-        
+
         // Only consider mandatory fields that are also enabled
         $enabledMandatoryFields = array_intersect($mandatoryFields, $enabledFields);
         $t = $table;
@@ -122,16 +156,16 @@ class ProfileCompletenessService
         }
 
         $totalFields = count($enabledMandatoryFields);
-        $pct = '(' . implode(' + ', $fieldConditions) . ') / ' . $totalFields . '.0 * 100';
+        $pct = '('.implode(' + ', $fieldConditions).') / '.$totalFields.'.0 * 100';
 
-        return "({$pct} >= " . self::THRESHOLD . " OR {$t}.visibility_override = 1)";
+        return "({$pct} >= ".self::THRESHOLD." OR {$t}.visibility_override = 1)";
     }
 
     /**
      * Get SQL condition for checking if a field is filled.
      *
-     * @param string $table Table alias
-     * @param string $fieldKey Field key from configuration
+     * @param  string  $table  Table alias
+     * @param  string  $fieldKey  Field key from configuration
      * @return string SQL CASE expression
      */
     private static function getFieldSqlCondition(string $table, string $fieldKey): string

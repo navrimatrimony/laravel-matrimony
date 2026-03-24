@@ -9,8 +9,15 @@
     $profileChildren = $profileChildren ?? collect();
     $childLivingWithOptions = $childLivingWithOptions ?? collect();
     $oldCore = $isSnapshot ? 'snapshot.core' : null;
-    $currentStatusId = $oldCore ? old($oldCore . '.marital_status_id', $profile->marital_status_id ?? '') : old('marital_status_id', $profile->marital_status_id ?? '');
-    $currentKey = $maritalStatuses->firstWhere('id', $currentStatusId)?->key ?? '';
+    $savedStatusId = $profile->marital_status_id ?? '';
+    $rawStatusId = $oldCore
+        ? old($oldCore . '.marital_status_id', $savedStatusId)
+        : old('marital_status_id', $savedStatusId);
+    $statusIds = $maritalStatuses->pluck('id')->map(fn ($id) => (string) $id)->all();
+    $currentStatusId = in_array((string) $rawStatusId, $statusIds, true) ? $rawStatusId : $savedStatusId;
+    $currentKey = $maritalStatuses->firstWhere('id', $currentStatusId)?->key
+        ?? $maritalStatuses->firstWhere('id', $savedStatusId)?->key
+        ?? '';
     $hasChildrenValue = $oldCore ? old($oldCore . '.has_children', $profile->has_children) : old('has_children', $profile->has_children);
     $showChildrenQuestion = in_array($currentKey, ['divorced', 'annulled', 'separated', 'widowed'], true);
     $showChildrenDetails = $showChildrenQuestion && ($hasChildrenValue === true || $hasChildrenValue === '1' || $hasChildrenValue === 1);

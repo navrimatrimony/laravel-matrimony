@@ -2,25 +2,28 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\MatrimonyProfile;
 use App\Models\MasterMaritalStatus;
-use App\Models\ProfileMarriage;
+use App\Models\MatrimonyProfile;
 use App\Models\Profession;
+use App\Models\ProfileMarriage;
 use App\Models\WorkingWithType;
+use App\Services\AboutMeQuickTemplateService;
 use App\Services\MutationService;
 use App\Services\ProfileLifecycleService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\ValidationException;
 
 /**
- * Card onboarding (steps 2–5). After step 5, user is sent to the centralized photo upload page.
+ * Card onboarding (steps 2–7).
+ * Step 7 completion sends user to centralized photo upload page.
  * Finish: GET matrimony.onboarding.complete (from photo page when coming from onboarding).
  */
 class OnboardingController extends Controller
 {
-    private const LAST_STEP = 5;
+    private const LAST_STEP = 7;
 
     public function show(int $step)
     {
@@ -86,6 +89,17 @@ class OnboardingController extends Controller
                 break;
             case 5:
                 break;
+            case 6:
+                $data['extendedAttrs'] = DB::table('profile_extended_attributes')
+                    ->where('profile_id', $profile->id)
+                    ->first();
+                $profile->loadMissing(['user', 'religion', 'caste', 'profession']);
+                $data['aboutMeQuickTemplates'] = app(AboutMeQuickTemplateService::class)
+                    ->resolvedAboutTemplatesForProfile($profile);
+                break;
+            case 7:
+                $this->loadStep7PartnerPreferenceData($data, $profile);
+                break;
         }
 
         return view('matrimony.onboarding.show', $data);
@@ -129,6 +143,8 @@ class OnboardingController extends Controller
                         2 => $this->snapshotStep2($request, $profile, $wizard),
                         3 => $this->snapshotStep3($request, $profile, $wizard),
                         4 => $this->snapshotStep4($request, $profile, $wizard),
+                        6 => $wizard->buildSnapshotForSection($request, 'about-me', $profile),
+                        7 => $this->snapshotStep7($request, $profile, $wizard),
                         default => null,
                     };
                 }
@@ -145,9 +161,9 @@ class OnboardingController extends Controller
                 ->withInput();
         }
 
-        if ($step === 5) {
+        if ($step === 7) {
             return redirect()->route('matrimony.profile.upload-photo', ['from' => 'onboarding'])
-                ->with('info', __('onboarding.after_step5_redirect_photos'));
+                ->with('info', __('onboarding.after_step7_redirect_photos'));
         }
 
         return redirect()->route('matrimony.onboarding.show', ['step' => $step + 1])
@@ -184,7 +200,9 @@ class OnboardingController extends Controller
         $dobStr = $dob instanceof \Carbon\CarbonInterface ? $dob->format('Y-m-d') : (is_string($dob) ? $dob : null);
 
         $neverId = MasterMaritalStatus::where('key', 'never_married')->where('is_active', true)->value('id');
-        $maritalId = $request->input('marital_status_id', $profile->marital_status_id ?? $neverId);
+        $maritalId = $request->filled('marital_status_id')
+            ? $request->input('marital_status_id')
+            : ($profile->marital_status_id ?? $neverId);
 
         $marriage = ProfileMarriage::where('profile_id', $profile->id)->orderBy('id')->first();
         $defaultMarriageRow = [
@@ -198,22 +216,23 @@ class OnboardingController extends Controller
             'notes' => $marriage?->notes ?? '',
         ];
 
+        // Use filled() so empty strings from partial posts (e.g. hidden inputs) do not override saved profile values.
         $request->merge([
-            'full_name' => $request->input('full_name', $profile->full_name),
-            'gender_id' => $request->input('gender_id', $profile->gender_id),
-            'date_of_birth' => $request->input('date_of_birth', $dobStr),
-            'birth_time' => $request->input('birth_time', $profile->birth_time),
-            'religion_id' => $request->input('religion_id', $profile->religion_id),
-            'caste_id' => $request->input('caste_id', $profile->caste_id),
-            'sub_caste_id' => $request->input('sub_caste_id', $profile->sub_caste_id),
-            'mother_tongue_id' => $request->input('mother_tongue_id', $profile->mother_tongue_id),
+            'full_name' => $request->filled('full_name') ? $request->input('full_name') : $profile->full_name,
+            'gender_id' => $request->filled('gender_id') ? $request->input('gender_id') : $profile->gender_id,
+            'date_of_birth' => $request->filled('date_of_birth') ? $request->input('date_of_birth') : $dobStr,
+            'birth_time' => $request->filled('birth_time') ? $request->input('birth_time') : $profile->birth_time,
+            'religion_id' => $request->filled('religion_id') ? $request->input('religion_id') : $profile->religion_id,
+            'caste_id' => $request->filled('caste_id') ? $request->input('caste_id') : $profile->caste_id,
+            'sub_caste_id' => $request->filled('sub_caste_id') ? $request->input('sub_caste_id') : $profile->sub_caste_id,
+            'mother_tongue_id' => $request->filled('mother_tongue_id') ? $request->input('mother_tongue_id') : $profile->mother_tongue_id,
             'marital_status_id' => $maritalId,
-            'country_id' => $request->input('country_id', $profile->country_id),
-            'state_id' => $request->input('state_id', $profile->state_id),
-            'district_id' => $request->input('district_id', $profile->district_id),
-            'taluka_id' => $request->input('taluka_id', $profile->taluka_id),
-            'city_id' => $request->input('city_id', $profile->city_id),
-            'address_line' => $request->input('address_line', $profile->address_line),
+            'country_id' => $request->filled('country_id') ? $request->input('country_id') : $profile->country_id,
+            'state_id' => $request->filled('state_id') ? $request->input('state_id') : $profile->state_id,
+            'district_id' => $request->filled('district_id') ? $request->input('district_id') : $profile->district_id,
+            'taluka_id' => $request->filled('taluka_id') ? $request->input('taluka_id') : $profile->taluka_id,
+            'city_id' => $request->filled('city_id') ? $request->input('city_id') : $profile->city_id,
+            'address_line' => $request->filled('address_line') ? $request->input('address_line') : $profile->address_line,
         ]);
 
         if (! $request->has('marriages')) {
@@ -289,6 +308,12 @@ class OnboardingController extends Controller
             if ($this->validationErrorKeyBelongsToOnboardingStep($key, 5)) {
                 $steps[5] = true;
             }
+            if ($this->validationErrorKeyBelongsToOnboardingStep($key, 6)) {
+                $steps[6] = true;
+            }
+            if ($this->validationErrorKeyBelongsToOnboardingStep($key, 7)) {
+                $steps[7] = true;
+            }
         }
 
         if ($steps === []) {
@@ -314,8 +339,136 @@ class OnboardingController extends Controller
                 '/^(height_cm|complexion_id|blood_group_id|physical_build_id|spectacles_lens|physical_condition|diet_id|smoking_status_id|drinking_status_id|weight_kg|country_id|state_id|district_id|taluka_id|city_id|address_line|birth_.*)(\.|$)/',
                 $key
             ),
+            6 => (bool) preg_match('/^(extended_narrative)(\.|$)/', $key),
+            7 => (bool) preg_match('/^(preferred_|willing_to_relocate|marriage_type_preference_id|partner_profile_with_children|preference_preset|settled_.*|extended_narrative)(\.|$)/', $key),
             default => false,
         };
+    }
+
+    private function snapshotStep7(Request $request, MatrimonyProfile $profile, ProfileWizardController $wizard): array
+    {
+        // On onboarding we treat unchecked "open to all" toggles as empty preference arrays.
+        if ($request->boolean('education_open_all')) {
+            $request->merge(['preferred_master_education_ids' => []]);
+        }
+        if ($request->boolean('diet_open_all')) {
+            $request->merge(['preferred_diet_ids' => []]);
+        }
+
+        $pref = $wizard->buildSnapshotForSection($request, 'about-preferences', $profile);
+        $expectations = trim((string) $request->input('extended_narrative.narrative_expectations', ''));
+        if (! $request->has('extended_narrative.narrative_expectations')) {
+            return $pref;
+        }
+
+        $existing = DB::table('profile_extended_attributes')
+            ->where('profile_id', $profile->id)
+            ->first();
+
+        $pref['extended_narrative'] = [[
+            'id' => $existing?->id ? (int) $existing->id : null,
+            'narrative_about_me' => trim((string) ($existing?->narrative_about_me ?? '')),
+            'narrative_expectations' => $expectations,
+        ]];
+
+        return $pref;
+    }
+
+    private function loadStep7PartnerPreferenceData(array &$data, MatrimonyProfile $profile): void
+    {
+        $criteria = DB::table('profile_preference_criteria')->where('profile_id', $profile->id)->first();
+        $preferredReligionIds = DB::table('profile_preferred_religions')->where('profile_id', $profile->id)->pluck('religion_id')->all();
+        $preferredCasteIds = DB::table('profile_preferred_castes')->where('profile_id', $profile->id)->pluck('caste_id')->all();
+        $preferredDistrictIds = DB::table('profile_preferred_districts')->where('profile_id', $profile->id)->pluck('district_id')->all();
+        $preferredCountryIds = Schema::hasTable('profile_preferred_countries')
+            ? DB::table('profile_preferred_countries')->where('profile_id', $profile->id)->pluck('country_id')->all()
+            : [];
+        $preferredStateIds = Schema::hasTable('profile_preferred_states')
+            ? DB::table('profile_preferred_states')->where('profile_id', $profile->id)->pluck('state_id')->all()
+            : [];
+        $preferredTalukaIds = Schema::hasTable('profile_preferred_talukas')
+            ? DB::table('profile_preferred_talukas')->where('profile_id', $profile->id)->pluck('taluka_id')->all()
+            : [];
+        $preferredMasterEducationIds = Schema::hasTable('profile_preferred_master_education')
+            ? DB::table('profile_preferred_master_education')->where('profile_id', $profile->id)->pluck('master_education_id')->all()
+            : [];
+        $preferredWorkingWithTypeIds = Schema::hasTable('profile_preferred_working_with_types')
+            ? DB::table('profile_preferred_working_with_types')->where('profile_id', $profile->id)->pluck('working_with_type_id')->all()
+            : [];
+        $preferredProfessionIds = Schema::hasTable('profile_preferred_professions')
+            ? DB::table('profile_preferred_professions')->where('profile_id', $profile->id)->pluck('profession_id')->all()
+            : [];
+        $preferredDietIds = Schema::hasTable('profile_preferred_diets')
+            ? DB::table('profile_preferred_diets')->where('profile_id', $profile->id)->pluck('diet_id')->all()
+            : [];
+
+        $suggestions = \App\Services\PartnerPreferenceSuggestionService::suggestForProfile($profile);
+        if (! $criteria && empty($preferredReligionIds) && empty($preferredCasteIds) && empty($preferredDistrictIds)
+            && empty($preferredCountryIds) && empty($preferredStateIds) && empty($preferredTalukaIds)
+            && empty($preferredMasterEducationIds) && empty($preferredWorkingWithTypeIds) && empty($preferredProfessionIds)
+            && empty($preferredDietIds)) {
+            $criteria = (object) [
+                'preferred_age_min' => $suggestions['preferred_age_min'],
+                'preferred_age_max' => $suggestions['preferred_age_max'],
+                'preferred_height_min_cm' => $suggestions['preferred_height_min_cm'] ?? null,
+                'preferred_height_max_cm' => $suggestions['preferred_height_max_cm'] ?? null,
+                'preferred_income_min' => $suggestions['preferred_income_min'],
+                'preferred_income_max' => $suggestions['preferred_income_max'],
+                'preferred_education' => $suggestions['preferred_education'],
+                'preferred_city_id' => $suggestions['preferred_city_id'],
+                'preferred_marital_status_id' => $suggestions['preferred_marital_status_id'] ?? null,
+                'preferred_profile_managed_by' => null,
+            ];
+            $preferredReligionIds = $suggestions['preferred_religion_ids'] ?? [];
+            $preferredCasteIds = $suggestions['preferred_caste_ids'] ?? [];
+            $preferredCountryIds = $suggestions['preferred_country_ids'] ?? [];
+            $preferredStateIds = $suggestions['preferred_state_ids'] ?? [];
+            $preferredDistrictIds = $suggestions['preferred_district_ids'] ?? [];
+            $preferredTalukaIds = $suggestions['preferred_taluka_ids'] ?? [];
+            $preferredDietIds = $suggestions['preferred_diet_ids'] ?? [];
+            $data['preferencePreset'] = $suggestions['preference_preset'] ?? 'balanced';
+        } else {
+            $data['preferencePreset'] = 'custom';
+        }
+
+        $base = $suggestions;
+        if (! empty($base['preferred_city_id'])) {
+            $cityName = \App\Models\City::where('id', $base['preferred_city_id'])->value('name');
+            if ($cityName) {
+                $base['preferred_city_name'] = $cityName;
+            }
+        }
+
+        $data['preferencePresetDefaults'] = [
+            'traditional' => \App\Services\PartnerPreferencePresetService::applyPreset('traditional', $base),
+            'balanced' => \App\Services\PartnerPreferencePresetService::applyPreset('balanced', $base),
+            'broad' => \App\Services\PartnerPreferencePresetService::applyPreset('broad', $base),
+        ];
+
+        $data['preferenceCriteria'] = $criteria;
+        $data['preferredReligionIds'] = $preferredReligionIds;
+        $data['preferredCasteIds'] = $preferredCasteIds;
+        $data['preferredDistrictIds'] = $preferredDistrictIds;
+        $data['preferredCountryIds'] = $preferredCountryIds;
+        $data['preferredStateIds'] = $preferredStateIds;
+        $data['preferredTalukaIds'] = $preferredTalukaIds;
+        $data['preferredMasterEducationIds'] = $preferredMasterEducationIds;
+        $data['preferredWorkingWithTypeIds'] = $preferredWorkingWithTypeIds;
+        $data['preferredProfessionIds'] = $preferredProfessionIds;
+        $data['preferredDietIds'] = $preferredDietIds;
+        $data['marriageTypePreferences'] = \App\Models\MasterMarriageTypePreference::where('is_active', true)->orderBy('sort_order')->get();
+        $data['allMaritalStatuses'] = \App\Models\MasterMaritalStatus::where('is_active', true)->orderBy('label')->get();
+        $data['allReligions'] = \App\Models\Religion::where('is_active', true)->orderBy('label')->get();
+        $data['allCastes'] = \App\Models\Caste::where('is_active', true)->orderBy('label')->get();
+        $data['allDistricts'] = \App\Models\District::orderBy('name')->get();
+        $data['masterEducationOptions'] = \App\Models\MasterEducation::where('is_active', true)->orderBy('sort_order')->orderBy('name')->get();
+        $data['partnerDietOptions'] = \App\Models\MasterDiet::where('is_active', true)->orderBy('sort_order')->orderBy('label')->get();
+        $data['preferredMaritalStatusId'] = $criteria !== null ? ($criteria->preferred_marital_status_id ?? null) : ($suggestions['preferred_marital_status_id'] ?? null);
+        $data['neverMarriedMaritalStatusId'] = \App\Models\MasterMaritalStatus::where('key', 'never_married')->where('is_active', true)->value('id');
+        $data['partnerProfileWithChildren'] = $criteria !== null ? ($criteria->partner_profile_with_children ?? null) : null;
+        $data['extendedAttrs'] = DB::table('profile_extended_attributes')
+            ->where('profile_id', $profile->id)
+            ->first();
     }
 
     private function hydratePhysicalAddressContext(Request $request, MatrimonyProfile $profile): void
@@ -379,7 +532,7 @@ class OnboardingController extends Controller
         if (! $user) {
             return null;
         }
-        $profile = $user->matrimonyProfile;
+        $profile = MatrimonyProfile::query()->where('user_id', $user->id)->first();
         if ($profile) {
             return $profile;
         }

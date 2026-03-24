@@ -4,8 +4,11 @@
     'value' => null,
     'showAdditionalNotes' => false,
     'showTemplates' => true,
+    'profile' => null,
 ])
 @php
+    use App\Models\MatrimonyProfile;
+    use App\Services\AboutMeQuickTemplateService;
     use Illuminate\Support\Str;
     $en = old($namePrefix, $value ?? new \stdClass());
     if (is_object($en)) {
@@ -24,12 +27,18 @@
     $baseName = $namePrefix !== '' ? $namePrefix.'[' : '';
     $endName = $namePrefix !== '' ? ']' : '';
     $uid = Str::random(10);
-    $aboutTpl = trans('profile.about_me_quick_templates');
-    $aboutTpl = is_array($aboutTpl) ? $aboutTpl : [];
+    $aboutTpl = [];
+    if ($showTemplates && $profile instanceof MatrimonyProfile) {
+        $aboutTpl = app(AboutMeQuickTemplateService::class)->resolvedAboutTemplatesForProfile($profile);
+    }
+    if (count($aboutTpl) === 0) {
+        $aboutTpl = trans('profile.about_me_quick_templates');
+        $aboutTpl = is_array($aboutTpl) ? $aboutTpl : [];
+    }
     $expTpl = trans('profile.expectations_quick_templates');
     $expTpl = is_array($expTpl) ? $expTpl : [];
     $templatePayload = ['about' => $aboutTpl, 'expectations' => $expTpl];
-    $chipCls = 'inline-flex items-center rounded-full border border-indigo-200 dark:border-indigo-700 bg-indigo-50 dark:bg-indigo-950/40 px-3 py-1 text-xs font-medium text-indigo-800 dark:text-indigo-200 hover:bg-indigo-100 dark:hover:bg-indigo-900/50 transition-colors cursor-pointer';
+    $chipCls = 'inline-flex max-w-none shrink-0 items-center whitespace-nowrap rounded-full border border-indigo-200 bg-indigo-50 px-3 py-1.5 text-xs font-medium text-indigo-800 hover:bg-indigo-100 dark:border-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-200 dark:hover:bg-indigo-900/50 cursor-pointer transition-colors';
 @endphp
 @if ($hasId && $idVal)
     <input type="hidden" name="{{ $baseName }}id{{ $endName }}" value="{{ $idVal }}">
@@ -43,7 +52,7 @@
     <div class="space-y-3">
         <label class="block text-sm font-medium text-gray-800 dark:text-gray-200" for="narrative-about-{{ $uid }}">{{ __('profile.narrative_intro_label') }}</label>
         @if ($showTemplates && count($aboutTpl) > 0)
-            <div class="flex flex-wrap gap-2">
+            <div class="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1 [scrollbar-width:thin]">
                 @foreach ($aboutTpl as $idx => $tpl)
                     @php $label = is_array($tpl) ? ($tpl['label'] ?? '#'.($idx + 1)) : (string) $tpl; @endphp
                     <button

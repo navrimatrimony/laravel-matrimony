@@ -75,7 +75,7 @@ body.upload-landscape .upload-gallery-col {
 <div style="min-height: 80vh; background: linear-gradient(135deg, #fdf2f8 0%, #f5f3ff 50%, #eff6ff 100%); padding: 40px 16px;">
     @if (!empty($fromOnboarding))
         <div style="max-width: 520px; margin: 0 auto 16px auto; display: flex; flex-wrap: wrap; gap: 10px; align-items: center;">
-            <a href="{{ route('matrimony.onboarding.show', ['step' => 5]) }}"
+            <a href="{{ route('matrimony.onboarding.show', ['step' => 7]) }}"
                style="display: inline-flex; align-items: center; gap: 8px; padding: 12px 18px; background: #ffffff; border: 1px solid #e5e7eb; border-radius: 12px; color: #374151; font-weight: 700; font-size: 14px; text-decoration: none; box-shadow: 0 2px 8px rgba(0,0,0,0.06);">
                 ← {{ __('onboarding.photo_flow_edit_step5') }}
             </a>

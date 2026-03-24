@@ -457,11 +457,18 @@
         {{-- Profile completeness: only when viewing your own profile --}}
         <div>
             <div class="flex justify-between items-center mb-1">
-                <span class="text-sm font-medium text-gray-700 dark:text-gray-300">{{ __('profile.profile_completeness') }}</span>
+                <span class="text-sm font-medium text-gray-700 dark:text-gray-300">{{ __('profile.profile_completeness') }} (Core)</span>
                 <span class="text-sm font-bold text-gray-900 dark:text-gray-100">{{ $completenessPct }}%</span>
             </div>
             <div class="w-full bg-gray-200 rounded-full h-2.5 dark:bg-gray-600">
                 <div class="bg-indigo-600 h-2.5 rounded-full transition-all duration-300" style="width: {{ $completenessPct }}%;"></div>
+            </div>
+            <div class="flex justify-between items-center mt-2 mb-1">
+                <span class="text-xs font-medium text-gray-600 dark:text-gray-400">Detailed coverage</span>
+                <span class="text-xs font-semibold text-gray-800 dark:text-gray-200">{{ $completenessDetailedPct ?? 0 }}%</span>
+            </div>
+            <div class="w-full bg-gray-200 rounded-full h-2 dark:bg-gray-600">
+                <div class="bg-teal-600 h-2 rounded-full transition-all duration-300" style="width: {{ $completenessDetailedPct ?? 0 }}%;"></div>
             </div>
         </div>
         @endif
@@ -827,7 +834,20 @@
 <div class="mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
     <p class="text-xs font-medium text-stone-500 dark:text-stone-400 mb-2">{{ __('Children') }}</p>
     @foreach($profile->children as $child)
-        <p class="font-medium text-base">{{ $child->child_name ?: '—' }}{{ $child->age ? ', ' . $child->age . ' yrs' : '' }}{{ $child->gender ? ' (' . $child->gender . ')' : '' }}</p>
+        @php
+            $parts = [];
+            $parts[] = $child->child_name ?: __('Child');
+            if (!empty($child->age)) {
+                $parts[] = $child->age . ' yrs';
+            }
+            if (!empty($child->gender)) {
+                $parts[] = strtolower((string) $child->gender);
+            }
+            if ($child->childLivingWith?->label) {
+                $parts[] = __('Living with') . ': ' . $child->childLivingWith->label;
+            }
+        @endphp
+        <p class="font-medium text-base">{{ implode(' · ', array_filter($parts)) }}</p>
     @endforeach
 </div>
 @endif

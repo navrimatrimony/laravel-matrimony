@@ -16,8 +16,12 @@
     }
     $options[] = ['label' => 'Above 7 feet', 'value' => 214];
 
-    $selectedCm = 136;
-    if ($heightCm === null || $heightCm === '' || $heightCm < 137) {
+    // Default when unset: 5'4" (64 in → 163 cm). "Below 4'6"" (136) only when stored value is in that bucket.
+    $defaultCm = 163;
+    $selectedCm = $defaultCm;
+    if ($heightCm === null || $heightCm === '') {
+        $selectedCm = $defaultCm;
+    } elseif ($heightCm < 137) {
         $selectedCm = 136;
     } elseif ($heightCm > 213) {
         $selectedCm = 214;

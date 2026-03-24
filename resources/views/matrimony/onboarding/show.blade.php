@@ -7,6 +7,8 @@
         3 => ['title' => __('onboarding.step3_title'), 'sub' => __('onboarding.step3_sub')],
         4 => ['title' => __('onboarding.step4_title'), 'sub' => __('onboarding.step4_sub')],
         5 => ['title' => __('onboarding.step5_title'), 'sub' => __('onboarding.step5_sub')],
+        6 => ['title' => __('onboarding.step6_title'), 'sub' => __('onboarding.step6_sub')],
+        7 => ['title' => __('onboarding.step7_title'), 'sub' => __('onboarding.step7_sub')],
     ];
     $head = $labels[$step] ?? ['title' => '', 'sub' => ''];
     $pct = (int) round(($step / max(1, (int) ($totalSteps ?? 5))) * 100);
@@ -42,6 +44,10 @@
                 @include('matrimony.onboarding.steps.step4')
             @elseif ($step === 5)
                 @include('matrimony.onboarding.steps.step5')
+            @elseif ($step === 6)
+                @include('matrimony.onboarding.steps.step6')
+            @elseif ($step === 7)
+                @include('matrimony.onboarding.steps.step7')
             @endif
         </div>
 

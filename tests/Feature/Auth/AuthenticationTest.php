@@ -16,7 +16,7 @@ test('users can authenticate using the login screen', function () {
     ]);
 
     $response = $this->post('/login', [
-        'mobile' => $user->mobile,
+        'login' => $user->mobile,
         'password' => 'password',
     ]);
 
@@ -30,11 +30,39 @@ test('users can not authenticate with invalid password', function () {
     ]);
 
     $this->post('/login', [
-        'mobile' => $user->mobile,
+        'login' => $user->mobile,
         'password' => 'wrong-password',
     ]);
 
     $this->assertGuest();
+});
+
+test('users can authenticate using email in single login field', function () {
+    $user = User::factory()->create([
+        'email' => 'singlefield@example.com',
+    ]);
+
+    $response = $this->post('/login', [
+        'login' => $user->email,
+        'password' => 'password',
+    ]);
+
+    $this->assertAuthenticated();
+    $response->assertRedirect(route('matrimony.onboarding.show', ['step' => 2], absolute: false));
+});
+
+test('users can authenticate using username in single login field', function () {
+    $user = User::factory()->create([
+        'name' => 'SingleFieldUser',
+    ]);
+
+    $response = $this->post('/login', [
+        'login' => 'SingleFieldUser',
+        'password' => 'password',
+    ]);
+
+    $this->assertAuthenticated();
+    $response->assertRedirect(route('matrimony.onboarding.show', ['step' => 2], absolute: false));
 });
 
 test('users can logout', function () {

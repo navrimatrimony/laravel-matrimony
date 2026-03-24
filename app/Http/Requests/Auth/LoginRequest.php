@@ -2,9 +2,11 @@
 
 namespace App\Http\Requests\Auth;
 
+use App\Models\User;
 use Illuminate\Auth\Events\Lockout;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
@@ -27,7 +29,7 @@ class LoginRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'mobile' => ['required', 'string', 'max:20'],
+            'login' => ['required', 'string', 'max:191'],
             'password' => ['required', 'string'],
         ];
     }
@@ -41,21 +43,11 @@ class LoginRequest extends FormRequest
     {
         $this->ensureIsNotRateLimited();
 
-        $mobileDigits = preg_replace('/\D/', '', $this->input('mobile', ''));
-
-        if (strlen($mobileDigits) !== 10) {
+        if (! $this->attemptByLoginInput()) {
             RateLimiter::hit($this->throttleKey());
 
             throw ValidationException::withMessages([
-                'mobile' => __('otp.enter_valid_10_digit_mobile'),
-            ]);
-        }
-
-        if (! Auth::attempt(['mobile' => $mobileDigits, 'password' => $this->input('password')], $this->boolean('remember'))) {
-            RateLimiter::hit($this->throttleKey());
-
-            throw ValidationException::withMessages([
-                'mobile' => trans('auth.failed'),
+                'login' => trans('auth.failed'),
             ]);
         }
 
@@ -78,7 +70,7 @@ class LoginRequest extends FormRequest
         $seconds = RateLimiter::availableIn($this->throttleKey());
 
         throw ValidationException::withMessages([
-            'mobile' => trans('auth.throttle', [
+            'login' => trans('auth.throttle', [
                 'seconds' => $seconds,
                 'minutes' => ceil($seconds / 60),
             ]),
@@ -90,8 +82,43 @@ class LoginRequest extends FormRequest
      */
     public function throttleKey(): string
     {
-        $mobileDigits = preg_replace('/\D/', '', $this->string('mobile'));
+        $value = trim((string) $this->string('login'));
 
-        return Str::transliterate(Str::lower($mobileDigits).'|'.$this->ip());
+        return Str::transliterate(Str::lower($value).'|'.$this->ip());
+    }
+
+    protected function attemptByLoginInput(): bool
+    {
+        $rawLogin = trim((string) $this->input('login', ''));
+        $password = (string) $this->input('password');
+
+        if ($rawLogin === '') {
+            return false;
+        }
+
+        $mobileDigits = preg_replace('/\D/', '', $rawLogin);
+        if (strlen($mobileDigits) === 10) {
+            return Auth::attempt(['mobile' => $mobileDigits, 'password' => $password], $this->boolean('remember'));
+        }
+
+        if (filter_var($rawLogin, FILTER_VALIDATE_EMAIL)) {
+            return Auth::attempt(['email' => Str::lower($rawLogin), 'password' => $password], $this->boolean('remember'));
+        }
+
+        $normalized = Str::lower($rawLogin);
+        $candidates = User::query()
+            ->whereRaw('LOWER(name) = ?', [$normalized])
+            ->limit(5)
+            ->get();
+
+        foreach ($candidates as $candidate) {
+            if (Hash::check($password, $candidate->password)) {
+                Auth::login($candidate, $this->boolean('remember'));
+
+                return true;
+            }
+        }
+
+        return false;
     }
 }

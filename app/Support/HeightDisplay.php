@@ -29,6 +29,27 @@ final class HeightDisplay
     }
 
     /**
+     * e.g. 175 → 5'9"
+     */
+    public static function formatFeetInches(int $cm): string
+    {
+        if ($cm < 1) {
+            return (string) $cm.' cm';
+        }
+        [$ft, $in] = self::cmToFeetInches($cm);
+
+        return sprintf("%d'%d\"", $ft, $in);
+    }
+
+    /**
+     * e.g. 165 - 175 cm as 5'5" - 5'9"
+     */
+    public static function formatFeetInchesRange(int $minCm, int $maxCm): string
+    {
+        return self::formatFeetInches($minCm).' - '.self::formatFeetInches($maxCm);
+    }
+
+    /**
      * @return array{0: int, 1: int} feet, inches (whole inches)
      */
     public static function cmToFeetInches(int $cm): array

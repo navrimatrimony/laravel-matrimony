@@ -748,7 +748,7 @@ class MatrimonyProfileController extends Controller
             'familyType',
             'incomeCurrency',
             'horoscope',
-            'children',
+            'children.childLivingWith',
             'educationHistory',
             'career',
             'addresses.village',
@@ -856,8 +856,10 @@ class MatrimonyProfileController extends Controller
             ViewTrackingService::maybeTriggerViewBack($viewer->matrimonyProfile, $profile);
         }
 
-        // Profile completeness (from service, passed to view)
-        $completenessPct = ProfileCompletenessService::percentage($profile);
+        // Profile completeness (core mandatory + detailed section coverage)
+        $completion = ProfileCompletenessService::breakdown($profile);
+        $completenessPct = $completion['core'];
+        $completenessDetailedPct = $completion['detailed'];
 
         // Day-18: Calculate individual boolean visibility flags (Blade Purity Law compliance)
         $visibleFields = ProfileFieldConfigurationService::getVisibleFieldKeys();
@@ -979,6 +981,7 @@ class MatrimonyProfileController extends Controller
                 'preferredCasteIds' => $preferredCasteIds,
                 'preferredDistrictIds' => $preferredDistrictIds,
                 'completenessPct' => $completenessPct,
+                'completenessDetailedPct' => $completenessDetailedPct,
                 'profilePhotoVisible' => $profilePhotoVisible,
                 'dateOfBirthVisible' => $dateOfBirthVisible,
                 'maritalStatusVisible' => $maritalStatusVisible,

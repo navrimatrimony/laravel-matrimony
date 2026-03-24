@@ -64,6 +64,12 @@
             syncPartnerChildrenBlock();
         })();
     </script>
+    @php
+        $compactPartnerPref = (bool) ($compactPartnerPref ?? false);
+        $rangeCardClass = $compactPartnerPref ? 'p-3 space-y-1.5' : 'p-4 space-y-2';
+        $rangeSliderHeightClass = $compactPartnerPref ? 'h-8' : 'h-10';
+        $rangeInputHeightClass = $compactPartnerPref ? 'h-8' : 'h-10';
+    @endphp
     <div class="space-y-4">
         <style>
             .partner-pref-dual-range { pointer-events: none; }
@@ -73,15 +79,17 @@
             .partner-pref-dual-range::-moz-range-track { height: 8px; background: transparent; }
         </style>
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4 items-stretch">
-            <div class="rounded-xl border-2 border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800/60 p-4 space-y-2 shadow-sm min-w-0">
+            <div class="rounded-xl border-2 border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800/60 {{ $rangeCardClass }} shadow-sm min-w-0">
             <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">{{ __('wizard.preferred_age_range') }}</label>
-            <p class="text-xs text-gray-500 dark:text-gray-400">{{ __('wizard.preferred_age_range_hint') }}</p>
+            @if (! $compactPartnerPref)
+                <p class="text-xs text-gray-500 dark:text-gray-400">{{ __('wizard.preferred_age_range_hint') }}</p>
+            @endif
             <p id="partner-age-range-label" class="text-base font-semibold text-indigo-700 dark:text-indigo-300 tabular-nums" aria-live="polite">{{ $ageMinInit }} – {{ $ageMaxInit }} {{ __('wizard.years') }}</p>
-            <div class="partner-age-slider relative h-10 px-0.5" data-age-absolute-min="18" data-age-absolute-max="80">
+            <div class="partner-age-slider relative {{ $rangeSliderHeightClass }} px-0.5" data-age-absolute-min="18" data-age-absolute-max="80">
                 <div class="absolute left-0 right-0 top-1/2 h-2 -translate-y-1/2 rounded-full bg-gray-200 dark:bg-gray-600 pointer-events-none"></div>
                 <div id="partner-age-range-fill" class="absolute top-1/2 h-2 -translate-y-1/2 rounded-full bg-indigo-500 pointer-events-none" style="left: 0%; width: 0%"></div>
-                <input type="range" id="partner-age-range-min" class="partner-pref-dual-range absolute inset-x-0 top-0 z-[2] h-10 w-full cursor-pointer appearance-none bg-transparent" min="18" max="80" step="1" value="{{ $ageMinInit }}" aria-label="{{ __('wizard.age_min') }}">
-                <input type="range" id="partner-age-range-max" class="partner-pref-dual-range absolute inset-x-0 top-0 z-[3] h-10 w-full cursor-pointer appearance-none bg-transparent" min="18" max="80" step="1" value="{{ $ageMaxInit }}" aria-label="{{ __('wizard.age_max') }}">
+                <input type="range" id="partner-age-range-min" class="partner-pref-dual-range absolute inset-x-0 top-0 z-[2] {{ $rangeInputHeightClass }} w-full cursor-pointer appearance-none bg-transparent" min="18" max="80" step="1" value="{{ $ageMinInit }}" aria-label="{{ __('wizard.age_min') }}">
+                <input type="range" id="partner-age-range-max" class="partner-pref-dual-range absolute inset-x-0 top-0 z-[3] {{ $rangeInputHeightClass }} w-full cursor-pointer appearance-none bg-transparent" min="18" max="80" step="1" value="{{ $ageMaxInit }}" aria-label="{{ __('wizard.age_max') }}">
             </div>
             <input type="hidden" name="preferred_age_min" id="partner-age-min-hidden" value="{{ $ageMinInit }}">
             <input type="hidden" name="preferred_age_max" id="partner-age-max-hidden" value="{{ $ageMaxInit }}">
@@ -161,18 +169,20 @@
                 })();
             </script>
             </div>
-            <div class="rounded-xl border-2 border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800/60 p-4 space-y-2 shadow-sm min-w-0">
+            <div class="rounded-xl border-2 border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800/60 {{ $rangeCardClass }} shadow-sm min-w-0">
                 <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">{{ __('wizard.preferred_height_range') }}</label>
-                @if(!empty($showHeightHint))
+                @if(!empty($showHeightHint) && ! $compactPartnerPref)
                     <p class="text-xs text-indigo-600 dark:text-indigo-400">{{ __('wizard.suggested_from_profile') }}</p>
                 @endif
-                <p class="text-xs text-gray-500 dark:text-gray-400">{{ __('wizard.preferred_height_range_hint') }}</p>
+                @if (! $compactPartnerPref)
+                    <p class="text-xs text-gray-500 dark:text-gray-400">{{ __('wizard.preferred_height_range_hint') }}</p>
+                @endif
                 <p id="partner-height-range-label" class="text-base font-semibold text-indigo-700 dark:text-indigo-300 tabular-nums leading-snug" aria-live="polite">{{ \App\Support\HeightDisplay::formatCmRange($heightMinInit, $heightMaxInit) }}</p>
-                <div class="partner-height-slider relative h-10 px-0.5" data-height-abs-min="{{ $heightSliderMin }}" data-height-abs-max="{{ $heightSliderMax }}">
+                <div class="partner-height-slider relative {{ $rangeSliderHeightClass }} px-0.5" data-height-abs-min="{{ $heightSliderMin }}" data-height-abs-max="{{ $heightSliderMax }}">
                     <div class="absolute left-0 right-0 top-1/2 h-2 -translate-y-1/2 rounded-full bg-gray-200 dark:bg-gray-600 pointer-events-none"></div>
                     <div id="partner-height-range-fill" class="absolute top-1/2 h-2 -translate-y-1/2 rounded-full bg-indigo-500 pointer-events-none" style="left: 0%; width: 0%"></div>
-                    <input type="range" id="partner-height-range-min" class="partner-pref-dual-range absolute inset-x-0 top-0 z-[2] h-10 w-full cursor-pointer appearance-none bg-transparent" min="{{ $heightSliderMin }}" max="{{ $heightSliderMax }}" step="1" value="{{ $heightMinInit }}" aria-label="{{ __('wizard.height_range_min') }}">
-                    <input type="range" id="partner-height-range-max" class="partner-pref-dual-range absolute inset-x-0 top-0 z-[3] h-10 w-full cursor-pointer appearance-none bg-transparent" min="{{ $heightSliderMin }}" max="{{ $heightSliderMax }}" step="1" value="{{ $heightMaxInit }}" aria-label="{{ __('wizard.height_range_max') }}">
+                    <input type="range" id="partner-height-range-min" class="partner-pref-dual-range absolute inset-x-0 top-0 z-[2] {{ $rangeInputHeightClass }} w-full cursor-pointer appearance-none bg-transparent" min="{{ $heightSliderMin }}" max="{{ $heightSliderMax }}" step="1" value="{{ $heightMinInit }}" aria-label="{{ __('wizard.height_range_min') }}">
+                    <input type="range" id="partner-height-range-max" class="partner-pref-dual-range absolute inset-x-0 top-0 z-[3] {{ $rangeInputHeightClass }} w-full cursor-pointer appearance-none bg-transparent" min="{{ $heightSliderMin }}" max="{{ $heightSliderMax }}" step="1" value="{{ $heightMaxInit }}" aria-label="{{ __('wizard.height_range_max') }}">
                 </div>
                 <input type="hidden" name="preferred_height_min_cm" id="partner-height-min-hidden" value="{{ $heightMinInit }}">
                 <input type="hidden" name="preferred_height_max_cm" id="partner-height-max-hidden" value="{{ $heightMaxInit }}">

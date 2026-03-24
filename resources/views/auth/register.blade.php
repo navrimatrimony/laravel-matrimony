@@ -1,16 +1,14 @@
 <x-guest-layout>
+    <x-slot name="aboveCard">
+        <div class="text-center text-sm text-gray-600 dark:text-gray-400">
+            <a href="{{ url('/') }}" class="underline hover:text-gray-900 dark:hover:text-gray-100">Home</a>
+            <span class="mx-1 text-gray-400 dark:text-gray-500" aria-hidden="true">|</span>
+            <a href="{{ route('login') }}" class="underline hover:text-gray-900 dark:hover:text-gray-100">Already have an account? Login here</a>
+        </div>
+    </x-slot>
+
     <form id="register-form" method="POST" action="{{ route('register') }}">
         @csrf
-        {{-- Navigation links for usability --}}
-<div class="mt-6 text-center text-sm text-gray-600">
-    <a href="{{ url('/') }}" class="underline hover:text-gray-900">
-        Home
-    </a>
-    |
-    <a href="{{ route('login') }}" class="underline hover:text-gray-900">
-        Already have an account? Login here
-    </a>
-</div>
 
         <!-- Registrant name (account) -->
         <div>

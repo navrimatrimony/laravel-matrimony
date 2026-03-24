@@ -21,4 +21,9 @@ class ProfileChild extends Model
     {
         return $this->belongsTo(MatrimonyProfile::class, 'profile_id');
     }
+
+    public function childLivingWith()
+    {
+        return $this->belongsTo(MasterChildLivingWith::class, 'child_living_with_id');
+    }
 }

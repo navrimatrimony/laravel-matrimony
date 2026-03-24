@@ -4,6 +4,7 @@
     <x-profile.about-me-narrative
         :namePrefix="$namePrefix"
         :value="$extendedAttrs ?? null"
+        :profile="$profile ?? null"
         :showAdditionalNotes="false"
         :showTemplates="true"
     />

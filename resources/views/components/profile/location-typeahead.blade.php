@@ -111,18 +111,23 @@
                 @if ($label)
                     <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{{ $label }}</label>
                 @endif
-                <div class="flex gap-1.5 items-start">
+                <div class="flex gap-1.5 items-center">
                     <div class="flex-1 min-w-0 relative">
                         <input type="text"
                                id="{{ $inputId }}"
-                               class="location-typeahead-input w-full rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-3 py-2.5 h-[42px]"
+                               class="location-typeahead-input box-border h-11 w-full rounded border border-gray-300 px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100"
                                value="{{ $value }}"
                                placeholder="{{ $placeholder }}"
                                autocomplete="off">
                         <div id="{{ $resultsId }}" class="location-typeahead-results border border-t-0 border-gray-300 dark:border-gray-600 rounded-b max-h-48 overflow-y-auto hidden"></div>
                     </div>
                     @if ($showGps)
-                        <button type="button" class="location-gps-btn shrink-0 mt-0.5 inline-flex items-center justify-center w-11 h-[42px] rounded border border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 text-lg hover:bg-gray-100 dark:hover:bg-gray-600" title="{{ __('wizard.use_current_location') }}" aria-label="{{ __('wizard.use_current_location') }}">📍</button>
+                        <button type="button" class="location-gps-btn box-border inline-flex h-11 w-11 shrink-0 items-center justify-center rounded border border-gray-300 bg-gray-50 text-blue-600 hover:bg-gray-100 dark:border-gray-600 dark:bg-gray-700 dark:text-blue-400 dark:hover:bg-gray-600" title="{{ __('wizard.use_current_location') }}" aria-label="{{ __('wizard.use_current_location') }}">
+                            {{-- Google Maps–style teardrop pin --}}
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="h-5 w-5" aria-hidden="true">
+                                <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/>
+                            </svg>
+                        </button>
                     @endif
                 </div>
                 @if ($showGps)
@@ -134,18 +139,22 @@
         @if ($label)
             <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{{ $label }}</label>
         @endif
-        <div class="flex gap-1.5 items-start">
+        <div class="flex gap-1.5 items-center">
             <div class="flex-1 min-w-0 relative">
                 <input type="text"
                        id="{{ $inputId }}"
-                       class="location-typeahead-input w-full rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-3 py-2.5 h-[42px]"
+                       class="location-typeahead-input box-border h-11 w-full rounded border border-gray-300 px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100"
                        value="{{ $value }}"
                        placeholder="{{ $placeholder }}"
                        autocomplete="off">
                 <div id="{{ $resultsId }}" class="location-typeahead-results border border-t-0 border-gray-300 dark:border-gray-600 rounded-b max-h-48 overflow-y-auto hidden"></div>
             </div>
             @if ($showGps)
-                <button type="button" class="location-gps-btn shrink-0 mt-0.5 inline-flex items-center justify-center w-11 h-[42px] rounded border border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 text-lg hover:bg-gray-100 dark:hover:bg-gray-600" title="{{ __('wizard.use_current_location') }}" aria-label="{{ __('wizard.use_current_location') }}">📍</button>
+                <button type="button" class="location-gps-btn box-border inline-flex h-11 w-11 shrink-0 items-center justify-center rounded border border-gray-300 bg-gray-50 text-blue-600 hover:bg-gray-100 dark:border-gray-600 dark:bg-gray-700 dark:text-blue-400 dark:hover:bg-gray-600" title="{{ __('wizard.use_current_location') }}" aria-label="{{ __('wizard.use_current_location') }}">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="h-5 w-5" aria-hidden="true">
+                        <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/>
+                    </svg>
+                </button>
             @endif
         </div>
         @if ($showGps)

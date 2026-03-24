@@ -137,10 +137,10 @@ Route::middleware('auth')->group(function () {
         ->name('matrimony.onboarding.complete');
     Route::get('/matrimony/onboarding/{step}', [OnboardingController::class, 'show'])
         ->name('matrimony.onboarding.show')
-        ->where('step', '[2-5]');
+        ->where('step', '[2-7]');
     Route::post('/matrimony/onboarding/{step}', [OnboardingController::class, 'store'])
         ->name('matrimony.onboarding.store')
-        ->where('step', '[2-5]');
+        ->where('step', '[2-7]');
 
     Route::get('/matrimony/profile/wizard', [ProfileWizardController::class, 'index'])
         ->name('matrimony.profile.wizard');

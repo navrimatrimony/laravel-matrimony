@@ -65,6 +65,12 @@
         $currencyIdRaw = $profile->income_currency_id ?? null;
     }
     $defaultCurrencyId = $currencyIdRaw ?: (collect($currencies)->firstWhere('is_default', true)?->id ?? $currencies->first()?->id);
+    $selectedCurrency = collect($currencies)->firstWhere('id', $defaultCurrencyId);
+    $currencyDisplayLabel = '—';
+    if ($selectedCurrency) {
+        $sym = trim((string) ($selectedCurrency->symbol ?? ''));
+        $currencyDisplayLabel = trim($sym.' '.($selectedCurrency->code ?? ''));
+    }
 
     $amountDisplay = function($val) {
         if ($val === null || $val === '') return '';
@@ -91,7 +97,9 @@
 
     $chipCls = 'rounded-xl border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-700/60 px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 focus:ring-2 focus:ring-rose-500/40 focus:border-rose-400 outline-none min-w-0 cursor-pointer';
     $amountCls = 'rounded-xl border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 px-4 py-2.5 text-sm font-medium text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:ring-2 focus:ring-rose-500/40 focus:border-rose-400 outline-none transition-shadow';
-    $currencyChipCls = 'rounded-full border-2 border-amber-300 dark:border-amber-600 bg-gradient-to-br from-amber-50 to-amber-100/80 dark:from-amber-900/40 dark:to-amber-800/30 px-4 py-2 text-sm font-semibold text-amber-800 dark:text-amber-200 focus:ring-2 focus:ring-amber-400/50 outline-none cursor-pointer appearance-none min-w-[5.5rem] shadow-sm';
+    // Invisible overlay select: visible label is plain green text (no pill); avoids native <select> width quirks.
+    $currencySelectOverlayCls = 'income-currency-select absolute inset-0 z-10 h-full min-h-[2.25rem] w-full cursor-pointer opacity-0 appearance-none border-0 bg-transparent p-0 outline-none focus:ring-0 disabled:cursor-not-allowed disabled:opacity-50';
+    $currencyReadonlyCls = 'inline-flex shrink-0 items-center whitespace-nowrap text-sm font-semibold text-emerald-600 dark:text-emerald-400';
     $privacyLabelText = $prefix === 'income' ? 'Keep my income private' : 'Keep family income private';
 @endphp
 <div class="income-engine w-full rounded-2xl border border-gray-200/80 dark:border-gray-600/80 bg-white dark:bg-gray-800/60 shadow-md shadow-gray-200/50 dark:shadow-none overflow-hidden">
@@ -99,68 +107,71 @@
         <h3 class="text-sm font-semibold text-gray-800 dark:text-gray-200">{{ $label }}</h3>
     </div>
     <div class="p-4 pt-2">
-        {{-- One-line engine: 100% width, no trailing gap --}}
-        <div class="flex flex-wrap items-center gap-2 sm:gap-3 w-full">
-            {{-- Period: flex so text is fully visible --}}
-            <div class="flex-1 min-w-[5rem]">
+        {{-- One-line engine: period + value type share one width; .is-range shrinks both for range inputs --}}
+        <div class="group income-engine-controls-row flex flex-wrap items-center gap-2 sm:gap-3 w-full {{ $valueTypeRaw === 'range' ? 'is-range' : '' }}">
+            {{-- Period: same width as value type (income-control-col) --}}
+            <div class="income-control-col w-36 min-w-0 shrink-0 transition-[width,max-width] duration-200 sm:w-40 group-[.is-range]:w-[6.75rem] group-[.is-range]:max-w-[6.75rem] sm:group-[.is-range]:w-28 sm:group-[.is-range]:max-w-[7rem]">
                 @if(!$readOnly)
-                    <select name="{{ $n('period') }}" class="{{ $chipCls }} w-full" {{ $disabled ? 'disabled' : '' }} aria-label="Period">
+                    <select name="{{ $n('period') }}" class="{{ $chipCls }} w-full min-w-0 max-w-full" {{ $disabled ? 'disabled' : '' }} aria-label="Period">
                         @foreach($periodOptions as $opt)
                             <option value="{{ $opt['value'] }}" {{ (string)$periodRaw === (string)$opt['value'] ? 'selected' : '' }}>{{ $opt['label'] }}</option>
                         @endforeach
                     </select>
                 @else
-                    <span class="inline-flex items-center rounded-xl border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-700/60 px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-200">{{ collect($periodOptions)->firstWhere('value', $periodRaw)['label'] ?? $periodRaw ?? '—' }}</span>
+                    <span class="inline-flex w-full min-w-0 max-w-full items-center truncate rounded-xl border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-700/60 px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-200">{{ collect($periodOptions)->firstWhere('value', $periodRaw)['label'] ?? $periodRaw ?? '—' }}</span>
                 @endif
                 @if($err('period'))<p class="text-red-600 dark:text-red-400 text-xs mt-1">{{ $err('period') }}</p>@endif
             </div>
 
-            {{-- Value type: flex so "Prefer not to say" etc visible --}}
-            <div class="flex-1 min-w-[8rem]">
+            {{-- Value type: same width as period --}}
+            <div class="income-control-col w-36 min-w-0 shrink-0 transition-[width,max-width] duration-200 sm:w-40 group-[.is-range]:w-[6.75rem] group-[.is-range]:max-w-[6.75rem] sm:group-[.is-range]:w-28 sm:group-[.is-range]:max-w-[7rem]">
                 @if(!$readOnly)
-                    <select name="{{ $n('value_type') }}" class="{{ $chipCls }} income-value-type-select w-full" data-engine="{{ $prefix }}" {{ $disabled ? 'disabled' : '' }} aria-label="Value type">
+                    <select name="{{ $n('value_type') }}" class="{{ $chipCls }} income-value-type-select w-full min-w-0 max-w-full" data-engine="{{ $prefix }}" {{ $disabled ? 'disabled' : '' }} aria-label="Value type">
                         @foreach($valueTypeOptions as $opt)
                             <option value="{{ $opt['value'] }}" {{ (string)$valueTypeRaw === (string)$opt['value'] ? 'selected' : '' }}>{{ $opt['label'] }}</option>
                         @endforeach
                     </select>
                 @else
-                    <span class="inline-flex items-center rounded-xl border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-700/60 px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-200">{{ collect($valueTypeOptions)->firstWhere('value', $valueTypeRaw)['label'] ?? $valueTypeRaw ?? '—' }}</span>
+                    <span class="inline-flex w-full min-w-0 max-w-full items-center truncate rounded-xl border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-700/60 px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-200">{{ collect($valueTypeOptions)->firstWhere('value', $valueTypeRaw)['label'] ?? $valueTypeRaw ?? '—' }}</span>
                 @endif
                 @if($err('value_type'))<p class="text-red-600 dark:text-red-400 text-xs mt-1">{{ $err('value_type') }}</p>@endif
             </div>
 
-            {{-- Amount: takes remaining space so line is 100% filled --}}
-            <div class="income-amount-area flex flex-wrap items-center gap-2 min-w-0 flex-[2]" data-engine="{{ $prefix }}">
-                <div class="income-amount-single flex-1 min-w-[6rem] transition-opacity duration-200" data-show="exact,approximate" style="{{ in_array($valueTypeRaw, ['exact','approximate'], true) ? '' : 'display:none!important' }}">
-                    <input type="text" inputmode="numeric" name="{{ $n('amount') }}" value="{{ $amountDisplayFormatted }}" placeholder="Amount" class="{{ $amountCls }} w-full min-w-0 income-amount-indian" data-raw="{{ $amountDisplay($amountVal) }}" {{ $disabled ? 'disabled' : '' }} aria-label="Amount" autocomplete="off">
+            {{-- Amount + currency: one unit so the currency pill never sits far from the number and wrap stays clean. --}}
+            <div class="flex min-w-0 flex-[2] flex-wrap items-center gap-2">
+                <div class="income-amount-area flex min-w-0 flex-1 flex-wrap items-center gap-2" data-engine="{{ $prefix }}">
+                    <div class="income-amount-single min-w-0 flex-1 basis-[8rem] transition-opacity duration-200" data-show="exact,approximate" style="{{ in_array($valueTypeRaw, ['exact','approximate'], true) ? '' : 'display:none!important' }}">
+                        <input type="text" inputmode="numeric" name="{{ $n('amount') }}" value="{{ $amountDisplayFormatted }}" placeholder="Amount" class="{{ $amountCls }} w-full min-w-0 income-amount-indian" data-raw="{{ $amountDisplay($amountVal) }}" {{ $disabled ? 'disabled' : '' }} aria-label="Amount" autocomplete="off">
+                    </div>
+                    {{-- Compact row vs period/value; dash minimal gap; inputs capped but min-w for Indian-format digits --}}
+                    <div class="income-amount-range flex min-w-0 max-w-[min(100%,17.5rem)] flex-1 basis-[8rem] items-center gap-1 transition-opacity duration-200 sm:max-w-[18.5rem]" data-show="range" style="{{ $valueTypeRaw === 'range' ? '' : 'display:none!important' }}">
+                        <input type="text" inputmode="numeric" name="{{ $n('min_amount') }}" value="{{ $minAmountDisplayFormatted }}" placeholder="50,000" class="{{ $amountCls }} income-amount-indian min-w-[5.25rem] max-w-[8.5rem] flex-1" data-raw="{{ $amountDisplay($minAmountVal) }}" {{ $disabled ? 'disabled' : '' }} aria-label="Minimum amount" autocomplete="off">
+                        <span class="shrink-0 select-none px-0 text-xs font-medium leading-none text-gray-400 dark:text-gray-500" aria-hidden="true">—</span>
+                        <input type="text" inputmode="numeric" name="{{ $n('max_amount') }}" value="{{ $maxAmountDisplayFormatted }}" placeholder="75,000" class="{{ $amountCls }} income-amount-indian min-w-[5.25rem] max-w-[8.5rem] flex-1" data-raw="{{ $amountDisplay($maxAmountVal) }}" {{ $disabled ? 'disabled' : '' }} aria-label="Maximum amount" autocomplete="off">
+                    </div>
+                    <div class="income-amount-undisclosed flex-shrink-0 transition-opacity duration-200" data-show="undisclosed" style="{{ $valueTypeRaw === 'undisclosed' ? '' : 'display:none!important' }}">
+                        <span class="text-sm italic text-gray-400 dark:text-gray-500">No amount</span>
+                    </div>
                 </div>
-                <div class="income-amount-range inline-flex items-center gap-2 flex-1 min-w-[10rem] transition-opacity duration-200" data-show="range" style="{{ $valueTypeRaw === 'range' ? '' : 'display:none!important' }}">
-                    <input type="text" inputmode="numeric" name="{{ $n('min_amount') }}" value="{{ $minAmountDisplayFormatted }}" placeholder="50,000" class="{{ $amountCls }} flex-1 min-w-0 income-amount-indian" data-raw="{{ $amountDisplay($minAmountVal) }}" {{ $disabled ? 'disabled' : '' }} aria-label="Minimum amount" autocomplete="off">
-                    <span class="text-gray-400 dark:text-gray-500 font-medium select-none flex-shrink-0" aria-hidden="true">—</span>
-                    <input type="text" inputmode="numeric" name="{{ $n('max_amount') }}" value="{{ $maxAmountDisplayFormatted }}" placeholder="75,000" class="{{ $amountCls }} flex-1 min-w-0 income-amount-indian" data-raw="{{ $amountDisplay($maxAmountVal) }}" {{ $disabled ? 'disabled' : '' }} aria-label="Maximum amount" autocomplete="off">
-                </div>
-                <div class="income-amount-undisclosed flex-shrink-0 transition-opacity duration-200" data-show="undisclosed" style="{{ $valueTypeRaw === 'undisclosed' ? '' : 'display:none!important' }}">
-                    <span class="text-sm text-gray-400 dark:text-gray-500 italic">No amount</span>
+                {{-- Currency: green text + icon only; invisible overlay <select> for native picker (no wide pill). --}}
+                <div class="group relative inline-flex max-w-full flex-shrink-0 items-center self-center rounded-sm py-0.5 focus-within:ring-2 focus-within:ring-emerald-500/45 focus-within:ring-offset-1 dark:focus-within:ring-offset-gray-800">
+                    @if(!$readOnly)
+                        <select name="{{ $n('currency_id') }}" class="{{ $currencySelectOverlayCls }}" {{ $disabled ? 'disabled' : '' }} aria-label="Currency" title="Change currency">
+                            @foreach($currencies as $c)
+                                @php $sym = trim((string) ($c->symbol ?? '')); @endphp
+                                <option value="{{ $c->id }}" {{ (string)$defaultCurrencyId === (string)$c->id ? 'selected' : '' }}>{{ $sym }} {{ $c->code }}</option>
+                            @endforeach
+                        </select>
+                        <span class="income-currency-label pointer-events-none whitespace-nowrap text-sm font-semibold text-emerald-600 dark:text-emerald-400" aria-hidden="true">{{ $currencyDisplayLabel }}</span>
+                    @else
+                        <span class="{{ $currencyReadonlyCls }}">{{ $currencyDisplayLabel }}</span>
+                    @endif
+                    @if($err('currency_id'))<p class="mt-1 text-xs text-red-600 dark:text-red-400">{{ $err('currency_id') }}</p>@endif
                 </div>
             </div>
             @if($err('amount'))<p class="text-red-600 dark:text-red-400 text-xs mt-1 w-full">{{ $err('amount') }}</p>@endif
             @if($err('min_amount'))<p class="text-red-600 dark:text-red-400 text-xs mt-1 w-full">{{ $err('min_amount') }}</p>@endif
             @if($err('max_amount'))<p class="text-red-600 dark:text-red-400 text-xs mt-1 w-full">{{ $err('max_amount') }}</p>@endif
-
-            {{-- Currency: fixed share so pill is visible --}}
-            <div class="flex-1 min-w-[5.5rem]">
-                @if(!$readOnly)
-                    <select name="{{ $n('currency_id') }}" class="{{ $currencyChipCls }} w-full" {{ $disabled ? 'disabled' : '' }} aria-label="Currency">
-                        @foreach($currencies as $c)
-                            <option value="{{ $c->id }}" {{ (string)$defaultCurrencyId === (string)$c->id ? 'selected' : '' }}>{{ $c->symbol }} {{ $c->code }}</option>
-                        @endforeach
-                    </select>
-                @else
-                    @php $cur = collect($currencies)->firstWhere('id', $defaultCurrencyId); @endphp
-                    <span class="inline-flex items-center rounded-full border-2 border-amber-300 dark:border-amber-600 bg-gradient-to-br from-amber-50 to-amber-100/80 dark:from-amber-900/40 dark:to-amber-800/30 px-4 py-2 text-sm font-semibold text-amber-800 dark:text-amber-200">{{ $cur ? $cur->symbol . ' ' . $cur->code : '—' }}</span>
-                @endif
-                @if($err('currency_id'))<p class="text-red-600 dark:text-red-400 text-xs mt-1">{{ $err('currency_id') }}</p>@endif
-            </div>
         </div>
 
         {{-- Privacy: खालच्या ओळीत --}}
@@ -203,8 +214,28 @@
             }
         });
     }
-    valueTypeSelect.addEventListener('change', toggle);
+    var controlsRow = block.querySelector('.income-engine-controls-row');
+    function setRangeMode() {
+        if (!controlsRow) return;
+        var vt = (valueTypeSelect.value || '').trim().toLowerCase();
+        controlsRow.classList.toggle('is-range', vt === 'range');
+    }
+    function applyValueType() {
+        toggle();
+        setRangeMode();
+    }
+    valueTypeSelect.addEventListener('change', applyValueType);
     toggle();
+    setRangeMode();
+
+    var currencySelect = block.querySelector('select.income-currency-select');
+    var currencyLabel = block.querySelector('.income-currency-label');
+    if (currencySelect && currencyLabel) {
+        currencySelect.addEventListener('change', function() {
+            var opt = currencySelect.options[currencySelect.selectedIndex];
+            currencyLabel.textContent = (opt && opt.text ? opt.text : '').trim();
+        });
+    }
 
     function indianFormat(numStr) {
         var n = String(numStr).replace(/\D/g, '');
