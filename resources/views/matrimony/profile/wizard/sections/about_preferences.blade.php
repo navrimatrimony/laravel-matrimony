@@ -767,7 +767,7 @@
         <div>
             <label class="inline-flex items-center gap-2 text-sm text-gray-600 dark:text-gray-300">
                 <input type="checkbox" name="preferred_intercaste" value="1" class="rounded border-gray-300 dark:border-gray-600"
-                    {{ old('preferred_intercaste') ? 'checked' : '' }}>
+                    {{ old('preferred_intercaste', $interestedInIntercaste ?? false) ? 'checked' : '' }}>
                 <span>{{ __('wizard.open_to_intercaste') }}</span>
             </label>
         </div>

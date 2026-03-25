@@ -19,17 +19,16 @@ use Laravel\Sanctum\HasApiTokens;
 | 👉 User = authentication only
 | 👉 Matrimony data कधीही इथे ठेवायचा नाही
 */
-class User extends Authenticatable
+class User extends Authenticatable implements MustVerifyEmail
 {
     use HasApiTokens, HasFactory, Notifiable;
-	
 
     /*
     |--------------------------------------------------------------------------
     | Mass Assignable Fields
     |--------------------------------------------------------------------------
     */
-	    /*
+    /*
     |--------------------------------------------------------------------------
     | Fillable fields
     |--------------------------------------------------------------------------
@@ -73,7 +72,7 @@ class User extends Authenticatable
     |--------------------------------------------------------------------------
     | profiles.user_id → users.id
     */
-        /*
+    /*
     |--------------------------------------------------------------------------
     | Relationship: User → MatrimonyProfile
     |--------------------------------------------------------------------------
@@ -118,7 +117,7 @@ class User extends Authenticatable
      */
     public function isAnyAdmin(): bool
     {
-        return !is_null($this->admin_role) || $this->is_admin === true;
+        return ! is_null($this->admin_role) || $this->is_admin === true;
     }
 
     /**
@@ -157,5 +156,4 @@ class User extends Authenticatable
 
         return in_array($this->admin_role, $roles, true);
     }
-
 }

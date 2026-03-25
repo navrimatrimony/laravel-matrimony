@@ -181,6 +181,7 @@ return [
     'preferred_location_taluka_not_in_district' => 'One or more talukas do not belong to the selected districts.',
     'hold_ctrl_multiple' => 'Hold Ctrl (Cmd on Mac) to select multiple castes.',
     'open_to_intercaste' => 'Open to intercaste matches',
+    'open_to_intercaste_short' => 'Intercaste OK',
 
     // Marital / children
     'spouse_death_year' => 'Spouse death year',

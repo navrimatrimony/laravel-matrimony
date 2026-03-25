@@ -275,7 +275,7 @@ class OnboardingFlowTest extends TestCase
         $response = $this->actingAs($user)->get(route('matrimony.profile.show', $profile->id));
 
         $response->assertOk();
-        $response->assertSee('Detailed coverage', false);
+        $response->assertSee(__('profile.profile_completeness'), false);
     }
 
     public function test_onboarding_complete_redirects_to_profiles_index(): void

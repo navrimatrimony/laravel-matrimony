@@ -33,5 +33,14 @@ return [
     'verification_tags' => 'सत्यापन टॅग',
     'assigned_active_tags' => 'नियुक्त सक्रिय टॅग',
     'no_active_tags_assigned' => 'कोणतेही सक्रिय टॅग नाहीत.',
+    'kyc_review' => 'ओळखपत्र / KYC तपासणी',
+    'kyc_pending_intro' => 'सदस्याने ओळखपत्र अपलोड केले आहे. प्रोफाइल फोटोशी तुलना करून मंजूर किंवा नाकार करा.',
+    'kyc_view_document' => 'ओळखपत्र पहा',
+    'kyc_approve' => 'KYC मंजूर',
+    'kyc_reject' => 'KYC नाकार',
+    'kyc_reject_note_label' => 'नकाराचे कारण (आवश्यक, किमान १० अक्षरे)',
+    'kyc_optional_note' => 'ऐच्छिक नोंद (सबमिशनवर जतन)',
+    'kyc_approved' => 'KYC मंजूर म्हणून नोंदवले.',
+    'kyc_rejected' => 'KYC नाकारले. सदस्य पुन्हा अपलोड करू शकतो.',
+    'kyc_not_pending' => 'ही सबमिशन प्रलंबित नाही.',
 ];
-

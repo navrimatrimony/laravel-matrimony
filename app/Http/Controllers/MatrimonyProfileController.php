@@ -2,13 +2,17 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\FieldRegistry;
 use App\Models\MatrimonyProfile;
 use App\Models\ProfilePhoto;
 use App\Models\Shortlist;
+use App\Services\ExtendedFieldService;
 use App\Services\ProfileCompletenessService;
 use App\Services\ProfileFieldConfigurationService;
+use App\Services\ProfileShowReadService;
 use App\Services\ViewTrackingService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Schema;
 
 /*
 |--------------------------------------------------------------------------
@@ -776,6 +780,9 @@ class MatrimonyProfileController extends Controller
             'state',
             'country',
             'profession',
+            'workingWithType',
+            'motherTongue',
+            'marriages',
             'seriousIntent',
             'user',
         ])->findOrFail($matrimony_profile_id);
@@ -785,6 +792,18 @@ class MatrimonyProfileController extends Controller
         $preferredReligionIds = \Illuminate\Support\Facades\DB::table('profile_preferred_religions')->where('profile_id', $profile->id)->pluck('religion_id')->all();
         $preferredCasteIds = \Illuminate\Support\Facades\DB::table('profile_preferred_castes')->where('profile_id', $profile->id)->pluck('caste_id')->all();
         $preferredDistrictIds = \Illuminate\Support\Facades\DB::table('profile_preferred_districts')->where('profile_id', $profile->id)->pluck('district_id')->all();
+        $preferredMasterEducationIds = Schema::hasTable('profile_preferred_master_education')
+            ? \Illuminate\Support\Facades\DB::table('profile_preferred_master_education')->where('profile_id', $profile->id)->pluck('master_education_id')->all()
+            : [];
+        $preferredDietIds = Schema::hasTable('profile_preferred_diets')
+            ? \Illuminate\Support\Facades\DB::table('profile_preferred_diets')->where('profile_id', $profile->id)->pluck('diet_id')->all()
+            : [];
+        $preferredProfessionIds = Schema::hasTable('profile_preferred_professions')
+            ? \Illuminate\Support\Facades\DB::table('profile_preferred_professions')->where('profile_id', $profile->id)->pluck('profession_id')->all()
+            : [];
+        $preferredWorkingWithTypeIds = Schema::hasTable('profile_preferred_working_with_types')
+            ? \Illuminate\Support\Facades\DB::table('profile_preferred_working_with_types')->where('profile_id', $profile->id)->pluck('working_with_type_id')->all()
+            : [];
 
         // 🔒 GUARD: Guest users are NOT allowed to view single profiles
         if (! auth()->check()) {
@@ -856,20 +875,18 @@ class MatrimonyProfileController extends Controller
             ViewTrackingService::maybeTriggerViewBack($viewer->matrimonyProfile, $profile);
         }
 
-        // Profile completeness (core mandatory + detailed section coverage)
+        // Detailed section coverage for own-profile show (core % not shown — redundant post-registration)
         $completion = ProfileCompletenessService::breakdown($profile);
-        $completenessPct = $completion['core'];
         $completenessDetailedPct = $completion['detailed'];
 
-        // Day-18: Calculate individual boolean visibility flags (Blade Purity Law compliance)
-        $visibleFields = ProfileFieldConfigurationService::getVisibleFieldKeys();
-        $profilePhotoVisible = in_array('profile_photo', $visibleFields, true);
-        $dateOfBirthVisible = in_array('date_of_birth', $visibleFields, true);
-        $maritalStatusVisible = in_array('marital_status', $visibleFields, true);
-        $educationVisible = in_array('education', $visibleFields, true);
-        $locationVisible = in_array('location', $visibleFields, true);
-        $casteVisible = in_array('caste', $visibleFields, true);
-        $heightVisible = in_array('height_cm', $visibleFields, true);
+        // Profile show: full stored biodata for every viewer (parity with wizard / DB; no field hiding).
+        $profilePhotoVisible = true;
+        $dateOfBirthVisible = true;
+        $maritalStatusVisible = true;
+        $educationVisible = true;
+        $locationVisible = true;
+        $casteVisible = true;
+        $heightVisible = true;
 
         // Match explanation data (rule-based comparison)
         $matchData = null;
@@ -877,25 +894,11 @@ class MatrimonyProfileController extends Controller
             $matchData = self::calculateMatchExplanation($viewer->matrimonyProfile, $profile);
         }
 
-        $canViewContact = \App\Services\ContactVisibilityPolicyService::canViewContact(
-            $profile,
-            $viewer->matrimonyProfile ?? null
-        );
+        $canViewContact = true;
 
-        $extendedValues = \App\Services\ExtendedFieldService::getValuesForProfile($profile);
-        // Phase-4: Only show extended fields that are enabled in registry (visibility)
-        $visibleExtendedKeys = \App\Models\FieldRegistry::where('field_type', 'EXTENDED')
-            ->where(function ($q) {
-                $q->where('is_enabled', true)->orWhereNull('is_enabled');
-            })
-            ->pluck('field_key')
-            ->flip()
-            ->all();
-        $extendedValues = array_intersect_key($extendedValues, $visibleExtendedKeys);
-        $extendedMeta = \App\Models\FieldRegistry::where('field_type', 'EXTENDED')
-            ->where(function ($q) {
-                $q->where('is_enabled', true)->orWhereNull('is_enabled');
-            })
+        $extendedValues = ExtendedFieldService::getValuesForProfile($profile);
+        $extendedMeta = FieldRegistry::where('field_type', 'EXTENDED')
+            ->whereIn('field_key', array_keys($extendedValues))
             ->pluck('display_label', 'field_key')
             ->toArray();
 
@@ -915,7 +918,7 @@ class MatrimonyProfileController extends Controller
         $visibilitySettings = \Illuminate\Support\Facades\DB::table('profile_visibility_settings')
             ->where('profile_id', $profile->id)
             ->first();
-        $enableRelativesSection = optional($visibilitySettings)->enable_relatives_section ?? true;
+        $enableRelativesSection = true;
 
         $profilePropertySummary = \Illuminate\Support\Facades\DB::table('profile_property_summary')
             ->where('profile_id', $profile->id)
@@ -944,23 +947,12 @@ class MatrimonyProfileController extends Controller
             }
         }
 
-        // Photo privacy (blur + access request) based on per-profile visibility settings.
-        // show_photo_to meanings:
-        // - all: viewers can see photos
-        // - premium: photos stay locked (no unlock in this release)
-        // - accepted_interest: photos unlock only after viewer's contact access is accepted
-        $showPhotoTo = optional($visibilitySettings)->show_photo_to;
-        $photoViewAllowed = $isOwnProfile;
-        if (! $isOwnProfile) {
-            $showPhotoTo = $showPhotoTo ?? 'all';
-            $photoViewAllowed = match ($showPhotoTo) {
-                'all' => true,
-                'premium' => false,
-                'accepted_interest' => (is_array($contactRequestState) && (($contactRequestState['state'] ?? '') === 'accepted')),
-                default => true,
-            };
-        }
-        $photoLocked = ! $photoViewAllowed && ! $isOwnProfile;
+        // Profile show: always show gallery / primary photo (no blur lock for other viewers).
+        $showPhotoTo = optional($visibilitySettings)->show_photo_to ?? 'all';
+        $photoViewAllowed = true;
+        $photoLocked = false;
+
+        $verificationPanel = ProfileShowReadService::buildVerificationPanel($profile, $viewer, $isOwnProfile);
 
         return view(
             'matrimony.profile.show',
@@ -980,7 +972,10 @@ class MatrimonyProfileController extends Controller
                 'preferredReligionIds' => $preferredReligionIds,
                 'preferredCasteIds' => $preferredCasteIds,
                 'preferredDistrictIds' => $preferredDistrictIds,
-                'completenessPct' => $completenessPct,
+                'preferredMasterEducationIds' => $preferredMasterEducationIds,
+                'preferredDietIds' => $preferredDietIds,
+                'preferredProfessionIds' => $preferredProfessionIds,
+                'preferredWorkingWithTypeIds' => $preferredWorkingWithTypeIds,
                 'completenessDetailedPct' => $completenessDetailedPct,
                 'profilePhotoVisible' => $profilePhotoVisible,
                 'dateOfBirthVisible' => $dateOfBirthVisible,
@@ -1000,6 +995,7 @@ class MatrimonyProfileController extends Controller
                 'canSendContactRequest' => $canSendContactRequest,
                 'photoLocked' => $photoLocked,
                 'photoLockMode' => $showPhotoTo ?? 'all',
+                'verificationPanel' => $verificationPanel,
             ]
         );
     }

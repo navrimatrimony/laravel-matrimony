@@ -4,6 +4,7 @@ use App\Http\Controllers\AbuseReportController;
 use App\Http\Controllers\Admin\AdminCapabilityController;
 use App\Http\Controllers\Admin\AdminCasteController;
 use App\Http\Controllers\Admin\AdminIntakeController;
+use App\Http\Controllers\Admin\AdminKycController;
 use App\Http\Controllers\Admin\AdminProfileTagController;
 use App\Http\Controllers\Admin\AdminReligionController;
 use App\Http\Controllers\Admin\AdminSeriousIntentController;
@@ -26,8 +27,10 @@ use App\Http\Controllers\Internal\Admin\CityAliasAdminController;
 use App\Http\Controllers\Internal\Admin\LocationSuggestionAdminController;
 use App\Http\Controllers\Internal\CurrentLocationController;
 use App\Http\Controllers\MatrimonyProfileController;
+use App\Http\Controllers\MatrimonyVerificationEmailController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\OnboardingController;
+use App\Http\Controllers\ProfileVerificationController;
 use App\Http\Controllers\ProfileWizardController;
 use App\Http\Controllers\ShortlistController;
 use App\Http\Controllers\UserSettingsController;
@@ -193,6 +196,17 @@ Route::middleware('auth')->group(function () {
     // 🔒 SSOT: MatrimonyProfile route MUST use matrimony_profile_id
     Route::get('/profile/{matrimony_profile_id}', [MatrimonyProfileController::class, 'show'])
         ->name('matrimony.profile.show');
+
+    Route::get('/matrimony/verification/email', [MatrimonyVerificationEmailController::class, 'show'])
+        ->name('matrimony.verification.email');
+    Route::post('/matrimony/verification/email', [MatrimonyVerificationEmailController::class, 'sendVerificationLink'])
+        ->middleware('throttle:6,1')
+        ->name('matrimony.verification.email.send');
+    Route::get('/matrimony/profile/{matrimony_profile_id}/verification/kyc', [ProfileVerificationController::class, 'showKyc'])
+        ->name('matrimony.verification.kyc');
+    Route::post('/matrimony/profile/{matrimony_profile_id}/verification/kyc', [ProfileVerificationController::class, 'storeKyc'])
+        ->middleware('throttle:10,1')
+        ->name('matrimony.profile.verification.kyc.store');
 
     /*
     | Interests
@@ -373,6 +387,13 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
 
     Route::post('/profiles/{profile}/reject-image', [AdminController::class, 'rejectImage'])
         ->name('profiles.reject-image');
+
+    Route::get('/profiles/{profile}/kyc/{submission}/file', [AdminKycController::class, 'stream'])
+        ->name('profiles.kyc.file');
+    Route::post('/profiles/{profile}/kyc/{submission}/approve', [AdminKycController::class, 'approve'])
+        ->name('profiles.kyc.approve');
+    Route::post('/profiles/{profile}/kyc/{submission}/reject', [AdminKycController::class, 'reject'])
+        ->name('profiles.kyc.reject');
 
     Route::post('/profiles/{profile}/override-visibility', [AdminController::class, 'overrideVisibility'])
         ->name('profiles.override-visibility');

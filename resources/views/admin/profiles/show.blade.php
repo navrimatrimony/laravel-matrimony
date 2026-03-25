@@ -193,6 +193,40 @@
         </div>
     </div>
 
+    @if (! empty($pendingKyc ?? null))
+    <div class="mb-6 bg-white dark:bg-gray-800 shadow rounded-lg p-6 border-2 border-indigo-200 dark:border-indigo-800">
+        <h3 class="text-lg font-semibold text-gray-800 dark:text-gray-100 mb-2">{{ __('admin.kyc_review') }}</h3>
+        <p class="text-sm text-gray-600 dark:text-gray-400 mb-4">{{ __('admin.kyc_pending_intro') }}</p>
+        <div class="flex flex-wrap gap-4 mb-4">
+            @if ($matrimonyProfile->profile_photo)
+                <div>
+                    <p class="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">{{ __('profile.profile_photo') }}</p>
+                    <img src="{{ asset('uploads/matrimony_photos/'.$matrimonyProfile->profile_photo) }}" alt="" class="h-32 w-32 rounded-lg object-cover border border-gray-200 dark:border-gray-600" />
+                </div>
+            @endif
+            <div class="flex flex-col gap-2">
+                <a href="{{ route('admin.profiles.kyc.file', [$matrimonyProfile, $pendingKyc]) }}" target="_blank" rel="noopener" class="inline-flex items-center justify-center rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700">
+                    {{ __('admin.kyc_view_document') }}
+                </a>
+            </div>
+        </div>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <form method="POST" action="{{ route('admin.profiles.kyc.approve', [$matrimonyProfile, $pendingKyc]) }}" class="space-y-2">
+                @csrf
+                <label class="block text-xs text-gray-600 dark:text-gray-400">{{ __('admin.kyc_optional_note') }}</label>
+                <textarea name="admin_note" rows="2" class="w-full rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-sm px-3 py-2"></textarea>
+                <button type="submit" class="w-full rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700">{{ __('admin.kyc_approve') }}</button>
+            </form>
+            <form method="POST" action="{{ route('admin.profiles.kyc.reject', [$matrimonyProfile, $pendingKyc]) }}" class="space-y-2">
+                @csrf
+                <label class="block text-xs text-gray-600 dark:text-gray-400">{{ __('admin.kyc_reject_note_label') }}</label>
+                <textarea name="admin_note" required minlength="10" rows="3" class="w-full rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-sm px-3 py-2"></textarea>
+                <button type="submit" class="w-full rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700">{{ __('admin.kyc_reject') }}</button>
+            </form>
+        </div>
+    </div>
+    @endif
+
     <div class="mb-6 bg-white dark:bg-gray-800 shadow rounded-lg p-6">
         <h3 class="text-lg font-semibold text-gray-800 dark:text-gray-100 mb-4">{{ __('admin.verification_tags') }}</h3>
 

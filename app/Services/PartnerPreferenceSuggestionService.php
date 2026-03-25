@@ -251,9 +251,9 @@ class PartnerPreferenceSuggestionService
 
         // Income: prefer normalized annual amount from income engine; fallback to legacy annual_income.
         $income = null;
-        if (!empty($profile->income_normalized_annual_amount)) {
+        if (! empty($profile->income_normalized_annual_amount)) {
             $income = (float) $profile->income_normalized_annual_amount;
-        } elseif (!empty($profile->annual_income)) {
+        } elseif (! empty($profile->annual_income)) {
             $income = (float) $profile->annual_income;
         }
         if ($income !== null) {
@@ -261,17 +261,17 @@ class PartnerPreferenceSuggestionService
             $out['preferred_income_max'] = null;
         }
 
-        if (!empty($profile->city_id)) {
+        if (! empty($profile->city_id)) {
             $out['preferred_city_id'] = (int) $profile->city_id;
-        } elseif (!empty($profile->native_city_id)) {
+        } elseif (! empty($profile->native_city_id)) {
             $out['preferred_city_id'] = (int) $profile->native_city_id;
         }
 
-        if (!empty($profile->religion_id)) {
+        if (! empty($profile->religion_id)) {
             $out['preferred_religion_ids'] = [(int) $profile->religion_id];
         }
 
-        if (!empty($profile->caste_id)) {
+        if (! empty($profile->caste_id)) {
             $out['preferred_caste_ids'] = [(int) $profile->caste_id];
         }
 
@@ -279,5 +279,104 @@ class PartnerPreferenceSuggestionService
 
         return $out;
     }
-}
 
+    /**
+     * Merge saved DB partner preference row + pivot selections with engine defaults for any missing slots (UI load only).
+     * Income min/max are never filled from the income suggestion — only preserved when already saved.
+     *
+     * @return array{
+     *   criteria: object,
+     *   preferredReligionIds: array<int, int>,
+     *   preferredCasteIds: array<int, int>,
+     *   preferredCountryIds: array<int, int>,
+     *   preferredStateIds: array<int, int>,
+     *   preferredDistrictIds: array<int, int>,
+     *   preferredTalukaIds: array<int, int>,
+     *   preferredDietIds: array<int, int>,
+     * }
+     */
+    public static function mergePartnerPreferencesForDisplay(
+        MatrimonyProfile $profile,
+        ?object $criteria,
+        array $religionIds,
+        array $casteIds,
+        array $countryIds,
+        array $stateIds,
+        array $districtIds,
+        array $talukaIds,
+        array $dietIds,
+    ): array {
+        $s = self::suggestForProfile($profile);
+
+        $row = $criteria !== null
+            ? json_decode(json_encode($criteria), true)
+            : [];
+        if (! is_array($row)) {
+            $row = [];
+        }
+
+        $age = self::defaultPreferredAgeRange($profile);
+        if ($age !== null) {
+            if (($row['preferred_age_min'] ?? null) === null) {
+                $row['preferred_age_min'] = $age['min'];
+            }
+            if (($row['preferred_age_max'] ?? null) === null) {
+                $row['preferred_age_max'] = $age['max'];
+            }
+        }
+
+        $height = self::defaultPreferredHeightRangeCm($profile);
+        if ($height !== null) {
+            if (($row['preferred_height_min_cm'] ?? null) === null) {
+                $row['preferred_height_min_cm'] = $height['min'];
+            }
+            if (($row['preferred_height_max_cm'] ?? null) === null) {
+                $row['preferred_height_max_cm'] = $height['max'];
+            }
+        }
+
+        $row['preferred_income_min'] = $row['preferred_income_min'] ?? null;
+        $row['preferred_income_max'] = $row['preferred_income_max'] ?? null;
+
+        if (($row['preferred_marital_status_id'] ?? null) === null) {
+            $row['preferred_marital_status_id'] = self::defaultPreferredMaritalStatusId($profile);
+        }
+
+        $normalize = static fn (array $ids): array => array_values(array_unique(array_filter(array_map('intval', $ids))));
+
+        $religionIds = $normalize($religionIds);
+        $casteIds = $normalize($casteIds);
+        $countryIds = $normalize($countryIds);
+        $stateIds = $normalize($stateIds);
+        $districtIds = $normalize($districtIds);
+        $talukaIds = $normalize($talukaIds);
+        $dietIds = $normalize($dietIds);
+
+        if ($religionIds === []) {
+            $religionIds = $normalize($s['preferred_religion_ids'] ?? []);
+        }
+        if ($casteIds === []) {
+            $casteIds = $normalize($s['preferred_caste_ids'] ?? []);
+        }
+        if ($countryIds === [] && $stateIds === [] && $districtIds === [] && $talukaIds === []) {
+            $countryIds = $normalize($s['preferred_country_ids'] ?? []);
+            $stateIds = $normalize($s['preferred_state_ids'] ?? []);
+            $districtIds = $normalize($s['preferred_district_ids'] ?? []);
+            $talukaIds = $normalize($s['preferred_taluka_ids'] ?? []);
+        }
+        if ($dietIds === []) {
+            $dietIds = $normalize($s['preferred_diet_ids'] ?? []);
+        }
+
+        return [
+            'criteria' => (object) $row,
+            'preferredReligionIds' => $religionIds,
+            'preferredCasteIds' => $casteIds,
+            'preferredCountryIds' => $countryIds,
+            'preferredStateIds' => $stateIds,
+            'preferredDistrictIds' => $districtIds,
+            'preferredTalukaIds' => $talukaIds,
+            'preferredDietIds' => $dietIds,
+        ];
+    }
+}

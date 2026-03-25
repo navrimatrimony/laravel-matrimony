@@ -180,6 +180,7 @@ return [
     'preferred_location_taluka_not_in_district' => 'एक किंवा अधिक तालुके निवडलेल्या जिल्ह्यांशी जुळत नाहीत.',
     'hold_ctrl_multiple' => 'अनेक जाती निवडण्यासाठी Ctrl (Mac वर Cmd) दाबून ठेवा.',
     'open_to_intercaste' => 'आंतरजातीय जुळणीसाठी खुले',
+    'open_to_intercaste_short' => 'आंतरजातीय ठीक',
 
     // Marital / children
     'spouse_death_year' => 'पती/पत्नी मृत्यू वर्ष',

@@ -263,6 +263,10 @@ class ProfileWizardController extends Controller
             throw $e;
         }
 
+        if ($section === 'about-preferences') {
+            \App\Services\ProfilePartnerCommunityFlagService::syncIntercasteIntentFromRequest((int) $profile->id, $request);
+        }
+
         if ($result['conflict_detected'] ?? false) {
             return redirect()->route('matrimony.profile.wizard.section', array_merge(['section' => $section], $this->partnerPrefQuery($request)))
                 ->with('warning', 'Some changes could not be applied due to conflicts.')
@@ -655,49 +659,37 @@ class ProfileWizardController extends Controller
                     : [];
 
                 $suggestions = \App\Services\PartnerPreferenceSuggestionService::suggestForProfile($profile);
-                if (! $criteria && empty($preferredReligionIds) && empty($preferredCasteIds) && empty($preferredDistrictIds)
+
+                $wasCompletelyEmpty = ! $criteria && empty($preferredReligionIds) && empty($preferredCasteIds) && empty($preferredDistrictIds)
                     && empty($preferredCountryIds) && empty($preferredStateIds) && empty($preferredTalukaIds)
                     && empty($preferredMasterEducationIds) && empty($preferredWorkingWithTypeIds) && empty($preferredProfessionIds)
-                    && empty($preferredDietIds)) {
-                    $criteria = (object) [
-                        'preferred_age_min' => $suggestions['preferred_age_min'],
-                        'preferred_age_max' => $suggestions['preferred_age_max'],
-                        'preferred_height_min_cm' => $suggestions['preferred_height_min_cm'] ?? null,
-                        'preferred_height_max_cm' => $suggestions['preferred_height_max_cm'] ?? null,
-                        'preferred_income_min' => $suggestions['preferred_income_min'],
-                        'preferred_income_max' => $suggestions['preferred_income_max'],
-                        'preferred_education' => $suggestions['preferred_education'],
-                        'preferred_city_id' => $suggestions['preferred_city_id'],
-                        'preferred_marital_status_id' => $suggestions['preferred_marital_status_id'] ?? null,
-                        /** UI default "No preference" — null; not persisted until user saves. */
-                        'preferred_profile_managed_by' => null,
-                    ];
-                    $preferredReligionIds = $suggestions['preferred_religion_ids'] ?? [];
-                    $preferredCasteIds = $suggestions['preferred_caste_ids'] ?? [];
-                    $preferredCountryIds = $suggestions['preferred_country_ids'] ?? [];
-                    $preferredStateIds = $suggestions['preferred_state_ids'] ?? [];
-                    $preferredDistrictIds = $suggestions['preferred_district_ids'] ?? [];
-                    $preferredTalukaIds = $suggestions['preferred_taluka_ids'] ?? [];
-                    $preferredDietIds = $suggestions['preferred_diet_ids'] ?? [];
-                    $data['preferencePreset'] = $suggestions['preference_preset'] ?? 'balanced';
-                } else {
-                    $data['preferencePreset'] = 'custom';
-                }
+                    && empty($preferredDietIds);
 
-                // Defaults for empty partner-preference fields only (saved DB values always win; no auto-save).
-                if (empty($preferredDietIds)) {
-                    $preferredDietIds = $suggestions['preferred_diet_ids'] ?? [];
-                }
-                if (
-                    empty($preferredCountryIds) && empty($preferredStateIds)
-                    && empty($preferredDistrictIds) && empty($preferredTalukaIds)
-                ) {
-                    $preferredCountryIds = $suggestions['preferred_country_ids'] ?? [];
-                    $preferredStateIds = $suggestions['preferred_state_ids'] ?? [];
-                    $preferredDistrictIds = $suggestions['preferred_district_ids'] ?? [];
-                    $preferredTalukaIds = $suggestions['preferred_taluka_ids'] ?? [];
-                }
+                $merged = \App\Services\PartnerPreferenceSuggestionService::mergePartnerPreferencesForDisplay(
+                    $profile,
+                    $criteria,
+                    $preferredReligionIds,
+                    $preferredCasteIds,
+                    $preferredCountryIds,
+                    $preferredStateIds,
+                    $preferredDistrictIds,
+                    $preferredTalukaIds,
+                    $preferredDietIds
+                );
+                $criteria = $merged['criteria'];
+                $preferredReligionIds = $merged['preferredReligionIds'];
+                $preferredCasteIds = $merged['preferredCasteIds'];
+                $preferredCountryIds = $merged['preferredCountryIds'];
+                $preferredStateIds = $merged['preferredStateIds'];
+                $preferredDistrictIds = $merged['preferredDistrictIds'];
+                $preferredTalukaIds = $merged['preferredTalukaIds'];
+                $preferredDietIds = $merged['preferredDietIds'];
+
+                $data['preferencePreset'] = $wasCompletelyEmpty ? ($suggestions['preference_preset'] ?? 'balanced') : 'custom';
+
                 $base = $suggestions;
+                $base['preferred_income_min'] = null;
+                $base['preferred_income_max'] = null;
                 if (! empty($base['preferred_city_id'])) {
                     $cityName = \App\Models\City::where('id', $base['preferred_city_id'])->value('name');
                     if ($cityName) {
@@ -791,15 +783,13 @@ class ProfileWizardController extends Controller
 
                 $data['preferredMaritalStatusId'] = old(
                     'preferred_marital_status_id',
-                    $criteria !== null
-                        ? ($criteria->preferred_marital_status_id ?? null)
-                        : ($suggestions['preferred_marital_status_id'] ?? null)
+                    $criteria->preferred_marital_status_id ?? null
                 );
 
                 $data['neverMarriedMaritalStatusId'] = \App\Models\MasterMaritalStatus::where('key', 'never_married')->where('is_active', true)->value('id');
                 $data['partnerProfileWithChildren'] = old(
                     'partner_profile_with_children',
-                    $criteria !== null ? ($criteria->partner_profile_with_children ?? null) : null
+                    $criteria->partner_profile_with_children ?? null
                 );
 
                 $data['allReligions'] = \App\Models\Religion::where('is_active', true)->orderBy('label')->get();
@@ -812,6 +802,7 @@ class ProfileWizardController extends Controller
                 )->all();
                 $data['marriageTypePreferences'] = \App\Models\MasterMarriageTypePreference::where('is_active', true)->orderBy('sort_order')->get();
                 $data['allMaritalStatuses'] = \App\Models\MasterMaritalStatus::where('is_active', true)->orderBy('label')->get();
+                $data['interestedInIntercaste'] = \App\Services\ProfilePartnerCommunityFlagService::interestedInIntercaste($profile->id);
                 break;
             case 'photo':
                 break;

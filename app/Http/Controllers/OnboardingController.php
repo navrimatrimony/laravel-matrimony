@@ -152,6 +152,9 @@ class OnboardingController extends Controller
                     throw new \RuntimeException('Invalid onboarding step');
                 }
                 app(MutationService::class)->applyManualSnapshot($profile, $snapshot, (int) $user->id, 'manual');
+                if ($step === 7) {
+                    \App\Services\ProfilePartnerCommunityFlagService::syncIntercasteIntentFromRequest((int) $profile->id, $request);
+                }
             });
         } catch (ValidationException $e) {
             $redirectStep = $this->onboardingStepForValidationErrors($e->errors(), $step);
@@ -403,35 +406,37 @@ class OnboardingController extends Controller
             : [];
 
         $suggestions = \App\Services\PartnerPreferenceSuggestionService::suggestForProfile($profile);
-        if (! $criteria && empty($preferredReligionIds) && empty($preferredCasteIds) && empty($preferredDistrictIds)
+
+        $wasCompletelyEmpty = ! $criteria && empty($preferredReligionIds) && empty($preferredCasteIds) && empty($preferredDistrictIds)
             && empty($preferredCountryIds) && empty($preferredStateIds) && empty($preferredTalukaIds)
             && empty($preferredMasterEducationIds) && empty($preferredWorkingWithTypeIds) && empty($preferredProfessionIds)
-            && empty($preferredDietIds)) {
-            $criteria = (object) [
-                'preferred_age_min' => $suggestions['preferred_age_min'],
-                'preferred_age_max' => $suggestions['preferred_age_max'],
-                'preferred_height_min_cm' => $suggestions['preferred_height_min_cm'] ?? null,
-                'preferred_height_max_cm' => $suggestions['preferred_height_max_cm'] ?? null,
-                'preferred_income_min' => $suggestions['preferred_income_min'],
-                'preferred_income_max' => $suggestions['preferred_income_max'],
-                'preferred_education' => $suggestions['preferred_education'],
-                'preferred_city_id' => $suggestions['preferred_city_id'],
-                'preferred_marital_status_id' => $suggestions['preferred_marital_status_id'] ?? null,
-                'preferred_profile_managed_by' => null,
-            ];
-            $preferredReligionIds = $suggestions['preferred_religion_ids'] ?? [];
-            $preferredCasteIds = $suggestions['preferred_caste_ids'] ?? [];
-            $preferredCountryIds = $suggestions['preferred_country_ids'] ?? [];
-            $preferredStateIds = $suggestions['preferred_state_ids'] ?? [];
-            $preferredDistrictIds = $suggestions['preferred_district_ids'] ?? [];
-            $preferredTalukaIds = $suggestions['preferred_taluka_ids'] ?? [];
-            $preferredDietIds = $suggestions['preferred_diet_ids'] ?? [];
-            $data['preferencePreset'] = $suggestions['preference_preset'] ?? 'balanced';
-        } else {
-            $data['preferencePreset'] = 'custom';
-        }
+            && empty($preferredDietIds);
+
+        $merged = \App\Services\PartnerPreferenceSuggestionService::mergePartnerPreferencesForDisplay(
+            $profile,
+            $criteria,
+            $preferredReligionIds,
+            $preferredCasteIds,
+            $preferredCountryIds,
+            $preferredStateIds,
+            $preferredDistrictIds,
+            $preferredTalukaIds,
+            $preferredDietIds
+        );
+        $criteria = $merged['criteria'];
+        $preferredReligionIds = $merged['preferredReligionIds'];
+        $preferredCasteIds = $merged['preferredCasteIds'];
+        $preferredCountryIds = $merged['preferredCountryIds'];
+        $preferredStateIds = $merged['preferredStateIds'];
+        $preferredDistrictIds = $merged['preferredDistrictIds'];
+        $preferredTalukaIds = $merged['preferredTalukaIds'];
+        $preferredDietIds = $merged['preferredDietIds'];
+
+        $data['preferencePreset'] = $wasCompletelyEmpty ? ($suggestions['preference_preset'] ?? 'balanced') : 'custom';
 
         $base = $suggestions;
+        $base['preferred_income_min'] = null;
+        $base['preferred_income_max'] = null;
         if (! empty($base['preferred_city_id'])) {
             $cityName = \App\Models\City::where('id', $base['preferred_city_id'])->value('name');
             if ($cityName) {
@@ -463,12 +468,13 @@ class OnboardingController extends Controller
         $data['allDistricts'] = \App\Models\District::orderBy('name')->get();
         $data['masterEducationOptions'] = \App\Models\MasterEducation::where('is_active', true)->orderBy('sort_order')->orderBy('name')->get();
         $data['partnerDietOptions'] = \App\Models\MasterDiet::where('is_active', true)->orderBy('sort_order')->orderBy('label')->get();
-        $data['preferredMaritalStatusId'] = $criteria !== null ? ($criteria->preferred_marital_status_id ?? null) : ($suggestions['preferred_marital_status_id'] ?? null);
+        $data['preferredMaritalStatusId'] = $criteria->preferred_marital_status_id ?? null;
         $data['neverMarriedMaritalStatusId'] = \App\Models\MasterMaritalStatus::where('key', 'never_married')->where('is_active', true)->value('id');
-        $data['partnerProfileWithChildren'] = $criteria !== null ? ($criteria->partner_profile_with_children ?? null) : null;
+        $data['partnerProfileWithChildren'] = $criteria->partner_profile_with_children ?? null;
         $data['extendedAttrs'] = DB::table('profile_extended_attributes')
             ->where('profile_id', $profile->id)
             ->first();
+        $data['interestedInIntercaste'] = \App\Services\ProfilePartnerCommunityFlagService::interestedInIntercaste($profile->id);
     }
 
     private function hydratePhysicalAddressContext(Request $request, MatrimonyProfile $profile): void

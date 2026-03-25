@@ -1,6 +1,7 @@
 @props([
     'profile',
     'profilePhotoVisible' => true,
+    'galleryPhotos' => null,
     'photoLocked' => false,
     'photoLockMode' => 'all',
     'interestAlreadySent' => false,
@@ -11,7 +12,6 @@
     'heightVisible' => true,
     'locationVisible' => true,
     'educationVisible' => true,
-    'verificationItems' => [],
     'hideOverlayIdentity' => false,
 ])
 
@@ -26,7 +26,7 @@
         }
     }
     $chips = [];
-    if ($age !== null && ($dateOfBirthVisible ?? true)) {
+    if ($age !== null && ($dateOfBirthVisible ?? true) && ($hideOverlayIdentity ?? false)) {
         $chips[] = __('profile.show_age_years', ['age' => $age]);
     }
     if (($profile->height_cm ?? 0) > 0 && ($heightVisible ?? true)) {
@@ -46,7 +46,7 @@
         $eduChip = \App\Support\ProfileDisplayCopy::formatEducationPhrase($profile->highest_education);
         $chips[] = $eduChip !== null ? \Illuminate\Support\Str::limit($eduChip, 48) : \Illuminate\Support\Str::limit($profile->highest_education, 48);
     }
-    if ($profile->maritalStatus && ($profile->maritalStatus->label ?? '') !== '') {
+    if ($profile->maritalStatus && ($profile->maritalStatus->label ?? '') !== '' && ($hideOverlayIdentity ?? false)) {
         $chips[] = $profile->maritalStatus->label;
     }
     $chips = array_values(array_filter(array_slice($chips, 0, 5)));
@@ -85,12 +85,25 @@
 
     $metaRaw = trim((string) ($profile->gender?->label ?? $profile->user?->gender ?? ''));
     $metaLine = $metaRaw !== '' ? \Illuminate\Support\Str::title(mb_strtolower($metaRaw)) : '';
-    $trustItems = is_array($verificationItems) ? array_values(array_filter($verificationItems)) : [];
-    $formattedNameOverlay = \App\Support\ProfileDisplayCopy::formatPersonName($profile->full_name);
-    $overlayFirstName = preg_split('/\s+/u', trim($formattedNameOverlay), 2)[0] ?? $formattedNameOverlay;
-    $overlayCityShort = $profile->city?->name
-        ?? $profile->district?->name
-        ?? '';
+
+    $galleryItems = collect($galleryPhotos ?? [])->filter(function ($p) {
+        return ! empty($p->file_path);
+    })->values();
+    $primaryPhotoUrl = $profile->profile_photo ? asset('uploads/matrimony_photos/'.$profile->profile_photo) : null;
+
+    $albumPhotoUrls = [];
+    if ($primaryPhotoUrl) {
+        $albumPhotoUrls[] = $primaryPhotoUrl;
+    }
+    foreach ($galleryItems as $p) {
+        $albumPhotoUrls[] = asset('uploads/matrimony_photos/'.$p->file_path);
+    }
+    $albumPhotoUrls = array_values(array_unique($albumPhotoUrls));
+    $albumTotal = count($albumPhotoUrls);
+    $extraCount = max(0, $albumTotal - 1);
+    $isSinglePhoto = $albumTotal <= 1;
+    $canBrowseAlbum = ! $photoLocked && $albumTotal > 1;
+    $showLockedTeaser = $photoLocked && $albumTotal > 1;
 @endphp
 
 @php
@@ -99,59 +112,118 @@
 
 <div {{ $attributes->merge(['class' => 'group/hero overflow-hidden rounded-3xl lg:rounded-2xl bg-white shadow-[0_6px_24px_-8px_rgba(28,25,23,0.11)] ring-1 ring-stone-200/60 transition-[box-shadow,ring-color] duration-300 ease-out dark:bg-gray-900 dark:shadow-[0_8px_28px_-10px_rgba(0,0,0,0.32)] dark:ring-gray-700/70 lg:hover:shadow-[0_12px_36px_-12px_rgba(28,25,23,0.14)] lg:hover:ring-stone-300/55 dark:lg:hover:ring-gray-600/65']) }}>
     @if ($profilePhotoVisible)
-        <div class="relative aspect-[4/5] max-h-[24rem] w-full overflow-hidden bg-stone-100 dark:bg-gray-800 landscape:max-h-[min(52vh,20rem)] md:max-h-[22rem] lg:max-h-[12.5rem] xl:max-h-[13.5rem]">
-            @if ($profile->profile_photo)
+        <div
+            class="relative aspect-[4/5] max-h-[24rem] w-full overflow-hidden bg-stone-100 dark:bg-gray-800 landscape:max-h-[min(52vh,20rem)] md:max-h-[22rem] lg:max-h-[12.5rem] xl:max-h-[13.5rem]"
+            x-data="{ currentPhoto: 0, photos: @js($albumPhotoUrls), count: {{ $albumTotal }} }"
+        >
+            @php
+                $genderKey = $profile->gender?->key ?? $profile->gender;
+                $placeholderSrc = $genderKey === 'male'
+                    ? asset('images/placeholders/male-profile.svg')
+                    : ($genderKey === 'female' ? asset('images/placeholders/female-profile.svg') : asset('images/placeholders/default-profile.svg'));
+            @endphp
+            @if ($albumTotal > 0)
                 <img
-                    src="{{ asset('uploads/matrimony_photos/'.$profile->profile_photo) }}"
+                    :src="photos[currentPhoto]"
                     alt=""
                     class="h-full w-full object-cover transition duration-500 ease-out group-hover/hero:scale-[1.02] motion-reduce:transition-none motion-reduce:group-hover/hero:scale-100"
-                    style="{{ $photoLocked ? 'filter: blur(10px); transform: scale(1.04);' : '' }}"
                 />
             @else
-                @php
-                    $genderKey = $profile->gender?->key ?? $profile->gender;
-                    $placeholderSrc = $genderKey === 'male'
-                        ? asset('images/placeholders/male-profile.svg')
-                        : ($genderKey === 'female' ? asset('images/placeholders/female-profile.svg') : asset('images/placeholders/default-profile.svg'));
-                @endphp
-                <img src="{{ $placeholderSrc }}" alt="" class="h-full w-full object-cover transition duration-500 ease-out group-hover/hero:scale-[1.02] motion-reduce:transition-none motion-reduce:group-hover/hero:scale-100" style="{{ $photoLocked ? 'filter: blur(10px);' : '' }}" />
+                <img src="{{ $placeholderSrc }}" alt="" class="h-full w-full object-cover transition duration-500 ease-out group-hover/hero:scale-[1.02] motion-reduce:transition-none motion-reduce:group-hover/hero:scale-100" />
             @endif
             <div class="pointer-events-none absolute inset-x-0 bottom-0 h-[62%] bg-gradient-to-t {{ ($hideOverlayIdentity ?? false) ? 'from-stone-950/35 via-stone-900/12 to-transparent dark:from-black/40 dark:via-stone-950/10' : 'from-black/92 via-black/55 to-transparent dark:from-black/95 dark:via-black/60' }}" aria-hidden="true"></div>
             @if (!($hideOverlayIdentity ?? false))
-            {{-- Identity on photo: name + age primary; city secondary (stronger contrast, same data) --}}
-            <div class="absolute inset-x-0 bottom-0 z-10 space-y-1.5 px-4 pb-4 pt-16 sm:space-y-2 sm:px-5 sm:pb-5 sm:pt-[4.25rem]">
-                <p class="text-xl font-bold leading-[1.12] tracking-tight text-white drop-shadow-[0_2px_14px_rgba(0,0,0,0.88)] sm:text-2xl sm:font-extrabold sm:leading-[1.1]">
-                    <span class="text-white">{{ $overlayFirstName }}</span>@if ($age !== null && ($dateOfBirthVisible ?? true))<span class="font-semibold text-white/90">, {{ $age }}</span>@endif
-                </p>
-                @if ($overlayCityShort !== '' && ($locationVisible ?? true))
-                    <p class="text-[12px] font-medium leading-snug tracking-wide text-white/85 drop-shadow-[0_1px_10px_rgba(0,0,0,0.75)]">{{ $overlayCityShort }}</p>
-                @elseif ($metaLine !== '')
-                    <p class="text-[11px] font-medium tracking-wide text-white/75 drop-shadow-md">{{ $metaLine }}</p>
+            {{-- Photo overlay: marital + age one line at bottom (no name / no city) --}}
+            <div class="absolute inset-x-0 bottom-0 z-10 px-4 pb-4 pt-12 sm:px-5 sm:pb-5 sm:pt-14">
+                @php
+                    $overlayMarital = ($profile->maritalStatus && ($profile->maritalStatus->label ?? '') !== '') ? (string) $profile->maritalStatus->label : '';
+                    $overlayAgeLine = ($age !== null && ($dateOfBirthVisible ?? true)) ? (string) __('profile.show_age_years', ['age' => $age]) : '';
+                @endphp
+                @if ($overlayMarital !== '' || $overlayAgeLine !== '')
+                    <p class="text-sm font-semibold leading-snug text-white drop-shadow-[0_2px_12px_rgba(0,0,0,0.88)] sm:text-base">
+                        @if ($overlayMarital !== '')
+                            <span class="font-bold">{{ $overlayMarital }}</span>
+                        @endif
+                        @if ($overlayMarital !== '' && $overlayAgeLine !== '')
+                            <span class="mx-1.5 text-white/85" aria-hidden="true">·</span>
+                        @endif
+                        @if ($overlayAgeLine !== '')
+                            <span class="tabular-nums text-white/95">{{ $overlayAgeLine }}</span>
+                        @endif
+                    </p>
                 @endif
             </div>
             @endif
             @if ($photoLocked)
-                <div class="absolute inset-0 z-20 flex items-center justify-center bg-black/30 px-4 backdrop-blur-[2px]">
-                    <div class="max-w-xs text-center text-white">
-                        <p class="mb-3 text-sm font-semibold">{{ __('profile.profile_photo') }} — private</p>
+                <div class="absolute inset-0 z-20 flex items-center justify-center bg-black/24 px-4">
+                    <div class="max-w-xs rounded-xl border border-white/25 bg-black/35 px-4 py-3 text-center text-white backdrop-blur-[2px]">
+                        <p class="mb-1 text-sm font-semibold">{{ __('profile.profile_photo') }} — private album</p>
+                        @if ($extraCount > 0)
+                            <p class="mb-3 text-xs text-white/85">This profile has {{ $extraCount }} more photo{{ $extraCount > 1 ? 's' : '' }}. Full album is restricted.</p>
+                        @endif
                         @if (($photoLockMode ?? 'all') === 'premium')
                             @if (! $contactRequestDisabled && $contactRequestState !== null && auth()->check())
-                                <button type="button" @click="$root.openRequestModal = true" class="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-medium text-white shadow-sm">{{ __('Request Contact') }}</button>
+                                <button type="button" @click="$root.openRequestModal = true" class="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-medium text-white shadow-sm">{{ __('View full album') }}</button>
                             @endif
                         @else
                             @if (! $interestAlreadySent && auth()->check())
                                 <form method="POST" action="{{ route('interests.send', $profile) }}" class="inline">@csrf
-                                    <button type="submit" class="rounded-xl bg-rose-600 px-4 py-2 text-sm font-medium text-white shadow-sm">{{ __('Send Interest') }}</button>
+                                    <button type="submit" class="rounded-xl bg-rose-600 px-4 py-2 text-sm font-medium text-white shadow-sm">{{ __('Unlock album') }}</button>
                                 </form>
                             @endif
                         @endif
                     </div>
                 </div>
             @endif
+
+            @if ($albumTotal > 1)
+                <div class="absolute left-3 top-3 z-20 inline-flex items-center gap-1 rounded-full border border-white/50 bg-white/80 px-2.5 py-1 text-[11px] font-semibold text-stone-700 shadow-sm backdrop-blur dark:border-gray-600/70 dark:bg-gray-900/80 dark:text-stone-100">
+                    @if ($showLockedTeaser)
+                        <span>🔒 Album locked</span>
+                    @else
+                        <span>Album</span>
+                    @endif
+                </div>
+                <div class="absolute bottom-3 left-1/2 z-20 -translate-x-1/2 rounded-full border border-white/40 bg-black/45 px-2.5 py-1 text-[11px] font-semibold text-white shadow-sm backdrop-blur">
+                    @if ($showLockedTeaser)
+                        Album locked • <span x-text="`${currentPhoto + 1} of ${count}`"></span>
+                    @else
+                        <span x-text="`${currentPhoto + 1} of ${count}`"></span>
+                    @endif
+                </div>
+            @endif
+
+            @if ($albumTotal > 1)
+                <button
+                    type="button"
+                    class="absolute left-3 bottom-11 z-20 rounded-full border border-white/35 bg-black/35 p-2 text-white shadow-md backdrop-blur transition hover:bg-black/50 disabled:cursor-not-allowed disabled:opacity-40"
+                    @click="if ({{ $canBrowseAlbum ? 'true' : 'false' }}) { currentPhoto = (currentPhoto - 1 + count) % count }"
+                    @if (!$canBrowseAlbum) disabled @endif
+                    aria-label="Previous photo"
+                >
+                    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.25" d="M15 19l-7-7 7-7"/></svg>
+                </button>
+                <button
+                    type="button"
+                    class="absolute right-3 bottom-11 z-20 rounded-full border border-white/35 bg-black/35 p-2 text-white shadow-md backdrop-blur transition hover:bg-black/50 disabled:cursor-not-allowed disabled:opacity-40"
+                    @click="if ({{ $canBrowseAlbum ? 'true' : 'false' }}) { currentPhoto = (currentPhoto + 1) % count }"
+                    @if (!$canBrowseAlbum) disabled @endif
+                    aria-label="Next photo"
+                >
+                    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.25" d="M9 5l7 7-7 7"/></svg>
+                </button>
+            @endif
+
+            @if ($showLockedTeaser)
+                <div class="pointer-events-none absolute right-3 top-12 z-10">
+                    <div class="relative h-16 w-12 rotate-6 rounded-lg border border-white/35 bg-white/20 shadow-sm backdrop-blur-sm"></div>
+                    <div class="absolute -left-6 top-1 h-16 w-12 -rotate-6 rounded-lg border border-white/25 bg-white/15 shadow-sm backdrop-blur-sm"></div>
+                </div>
+            @endif
         </div>
     @else
         <div class="bg-gradient-to-br from-stone-50 to-stone-100/90 px-5 py-7 dark:from-gray-800 dark:to-gray-900 sm:px-6">
-            <h2 class="text-2xl font-semibold leading-tight tracking-tight text-stone-900 dark:text-stone-100 sm:text-[1.65rem]">{{ \App\Support\ProfileDisplayCopy::formatPersonName($profile->full_name) }}</h2>
+            <h2 class="text-2xl font-extrabold uppercase leading-tight tracking-tight text-stone-900 dark:text-stone-100 sm:text-3xl break-words">{{ \App\Support\ProfileDisplayCopy::formatPersonName($profile->full_name) }}</h2>
             @if ($summaryLine !== '')
                 <p class="mt-2 line-clamp-2 text-sm font-medium leading-snug text-stone-700 dark:text-stone-300">{{ $summaryLine }}</p>
             @endif
@@ -166,22 +238,6 @@
             <div class="flex flex-wrap gap-1.5 lg:gap-1.5">
                 @foreach ($chips as $chip)
                     <span class="{{ $chipClass }}">{{ $chip }}</span>
-                @endforeach
-            </div>
-        </div>
-    @endif
-
-    @if (count($trustItems) > 0)
-        <div class="border-t border-stone-200/80 bg-white px-4 py-3 dark:border-gray-700/80 dark:bg-gray-950/90 sm:px-5 lg:px-3 lg:py-1.5">
-            <p class="mb-2 lg:mb-1 text-[11px] font-semibold text-stone-500 dark:text-stone-400">{{ __('profile.show_hero_trust_heading') }}</p>
-            <div class="flex flex-wrap gap-x-3 gap-y-2 lg:gap-x-2 lg:gap-y-1">
-                @foreach ($trustItems as $item)
-                    <span class="inline-flex min-w-0 max-w-full items-center gap-1.5 text-xs font-medium text-stone-800 dark:text-stone-200">
-                        <span class="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-900/50 dark:text-emerald-300" aria-hidden="true">
-                            <svg class="h-2.5 w-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>
-                        </span>
-                        <span class="break-words leading-snug">{{ $item['label'] ?? '' }}</span>
-                    </span>
                 @endforeach
             </div>
         </div>

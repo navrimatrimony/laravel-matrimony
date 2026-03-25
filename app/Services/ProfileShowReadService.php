@@ -4,10 +4,13 @@ namespace App\Services;
 
 use App\Models\AdminSetting;
 use App\Models\MatrimonyProfile;
+use App\Models\ProfileKycSubmission;
 use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 /**
  * Read-only helpers for the public profile show page (browse, verification list, similar profiles).
@@ -60,11 +63,169 @@ class ProfileShowReadService
                 $items[] = ['key' => 'mobile', 'label' => __('profile.show_verify_mobile')];
             }
         }
-        if (($profile->profile_photo ?? '') !== '' && $profile->photo_approved === true) {
-            $items[] = ['key' => 'photo', 'label' => __('profile.show_verify_photo')];
+
+        $primaryContact = self::primaryProfileContactRow($profile);
+        if (self::isWhatsappVerificationShown($user, $primaryContact)) {
+            $items[] = ['key' => 'whatsapp', 'label' => __('profile.show_verify_whatsapp')];
+        }
+
+        if ($profile->id && Schema::hasTable('profile_kyc_submissions')) {
+            $kycOk = DB::table('profile_kyc_submissions')
+                ->where('matrimony_profile_id', $profile->id)
+                ->where('status', ProfileKycSubmission::STATUS_APPROVED)
+                ->exists();
+            if ($kycOk) {
+                $items[] = ['key' => 'kyc', 'label' => __('profile.show_verify_kyc')];
+            }
+        }
+
+        if ($profile->id && Schema::hasTable('profile_verification_tag') && Schema::hasTable('verification_tags')) {
+            $tagRows = DB::table('profile_verification_tag')
+                ->join('verification_tags', 'profile_verification_tag.verification_tag_id', '=', 'verification_tags.id')
+                ->where('profile_verification_tag.matrimony_profile_id', $profile->id)
+                ->whereNull('profile_verification_tag.deleted_at')
+                ->whereNull('verification_tags.deleted_at')
+                ->orderBy('verification_tags.name')
+                ->select(['verification_tags.id', 'verification_tags.name'])
+                ->get();
+            foreach ($tagRows as $row) {
+                $items[] = [
+                    'key' => 'verification_tag_'.$row->id,
+                    'label' => (string) $row->name,
+                ];
+            }
         }
 
         return $items;
+    }
+
+    /**
+     * One list: verified rows first (elsewhere), unverified below in red (owner only).
+     * Each unverified row links to its own centralized engine (email page, mobile-verify, KYC page).
+     *
+     * @return array{verified: array<int, array{key: string, label: string}>, unverified: array<int, array{key: string, label: string, verify_url: string}>}
+     */
+    public static function buildVerificationPanel(MatrimonyProfile $profile, ?User $viewer, bool $isOwnProfile): array
+    {
+        $user = $profile->user;
+        $isOwner = $isOwnProfile && $viewer && $user && (int) $viewer->id === (int) $user->id;
+
+        if (! $isOwner) {
+            $verified = [];
+            foreach (self::buildVerificationItems($profile, $user) as $item) {
+                $verified[] = ['key' => $item['key'], 'label' => $item['label']];
+            }
+
+            return ['verified' => $verified, 'unverified' => []];
+        }
+
+        $verified = [];
+        $unverified = [];
+
+        $primaryContact = self::primaryProfileContactRow($profile);
+
+        $kycApproved = false;
+        if ($profile->id && Schema::hasTable('profile_kyc_submissions')) {
+            $kycApproved = DB::table('profile_kyc_submissions')
+                ->where('matrimony_profile_id', $profile->id)
+                ->where('status', ProfileKycSubmission::STATUS_APPROVED)
+                ->exists();
+        }
+
+        if ($user?->email_verified_at) {
+            $verified[] = ['key' => 'email', 'label' => __('profile.show_verify_email')];
+        } else {
+            $unverified[] = [
+                'key' => 'email',
+                'label' => __('profile.verify_row_email'),
+                'verify_url' => route('matrimony.verification.email'),
+            ];
+        }
+
+        if ($user?->mobile_verified_at) {
+            $verified[] = ['key' => 'mobile', 'label' => __('profile.show_verify_mobile')];
+        } else {
+            $unverified[] = [
+                'key' => 'mobile',
+                'label' => __('profile.verify_row_mobile'),
+                'verify_url' => route('mobile.verify'),
+            ];
+        }
+
+        if (self::isWhatsappVerificationShown($user, $primaryContact)) {
+            $verified[] = ['key' => 'whatsapp', 'label' => __('profile.show_verify_whatsapp')];
+        }
+
+        if ($kycApproved) {
+            $verified[] = ['key' => 'kyc', 'label' => __('profile.show_verify_kyc')];
+        } else {
+            $unverified[] = [
+                'key' => 'kyc',
+                'label' => __('profile.verify_row_kyc'),
+                'verify_url' => route('matrimony.verification.kyc', $profile->id),
+            ];
+        }
+
+        if ($profile->id && Schema::hasTable('profile_verification_tag') && Schema::hasTable('verification_tags')) {
+            $tagRows = DB::table('profile_verification_tag')
+                ->join('verification_tags', 'profile_verification_tag.verification_tag_id', '=', 'verification_tags.id')
+                ->where('profile_verification_tag.matrimony_profile_id', $profile->id)
+                ->whereNull('profile_verification_tag.deleted_at')
+                ->whereNull('verification_tags.deleted_at')
+                ->orderBy('verification_tags.name')
+                ->select(['verification_tags.id', 'verification_tags.name'])
+                ->get();
+            foreach ($tagRows as $row) {
+                $verified[] = [
+                    'key' => 'verification_tag_'.$row->id,
+                    'label' => (string) $row->name,
+                ];
+            }
+        }
+
+        return ['verified' => $verified, 'unverified' => $unverified];
+    }
+
+    private static function primaryProfileContactRow(MatrimonyProfile $profile): ?object
+    {
+        if (! $profile->id || ! Schema::hasTable('profile_contacts')) {
+            return null;
+        }
+
+        return DB::table('profile_contacts')
+            ->where('profile_id', $profile->id)
+            ->where('is_primary', true)
+            ->first();
+    }
+
+    /**
+     * WhatsApp: primary contact prefers WhatsApp and (account mobile OTP verified OR contact row marked verified).
+     */
+    private static function isWhatsappVerificationShown(?User $user, ?object $primaryContact): bool
+    {
+        if (! $primaryContact || ! self::primaryContactPrefersWhatsapp($primaryContact)) {
+            return false;
+        }
+        $mobileOk = $user && $user->mobile_verified_at;
+        $contactRowVerified = (bool) ($primaryContact->verified_status ?? false);
+
+        return $mobileOk || $contactRowVerified;
+    }
+
+    private static function primaryContactPrefersWhatsapp(object $row): bool
+    {
+        $pref = $row->contact_preference ?? null;
+        if ($pref === 'whatsapp') {
+            return true;
+        }
+        if ($pref !== null && $pref !== '') {
+            return false;
+        }
+        if (Schema::hasColumn('profile_contacts', 'is_whatsapp')) {
+            return (bool) ($row->is_whatsapp ?? false);
+        }
+
+        return false;
     }
 
     /**

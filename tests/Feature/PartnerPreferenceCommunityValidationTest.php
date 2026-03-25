@@ -1,9 +1,14 @@
 <?php
 
 use App\Models\Caste;
+use App\Models\MatrimonyProfile;
 use App\Models\Religion;
 use App\Services\PartnerPreferenceSnapshotBuilder;
+use App\Services\ProfilePartnerCommunityFlagService;
+use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Request;
+
+uses(RefreshDatabase::class);
 
 test('partner preference rejects caste not belonging to selected religions', function () {
     $rA = Religion::firstOrCreate(['key' => 'tmp_partner_a'], ['label' => 'Tmp A', 'is_active' => true]);
@@ -44,4 +49,16 @@ test('partner preference accepts caste belonging to selected religions', functio
 
     $row = PartnerPreferenceSnapshotBuilder::validateAndBuildRow($req);
     expect($row['preferred_caste_ids'])->toContain($cA->id);
+});
+
+test('profile partner community flag syncs intercaste intent', function () {
+    $profile = MatrimonyProfile::factory()->create();
+
+    $off = Request::create('/test', 'POST', []);
+    ProfilePartnerCommunityFlagService::syncIntercasteIntentFromRequest($profile->id, $off);
+    expect(ProfilePartnerCommunityFlagService::interestedInIntercaste($profile->id))->toBeFalse();
+
+    $on = Request::create('/test', 'POST', ['preferred_intercaste' => '1']);
+    ProfilePartnerCommunityFlagService::syncIntercasteIntentFromRequest($profile->id, $on);
+    expect(ProfilePartnerCommunityFlagService::interestedInIntercaste($profile->id))->toBeTrue();
 });

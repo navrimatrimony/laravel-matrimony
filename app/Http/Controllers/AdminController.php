@@ -3,33 +3,35 @@
 namespace App\Http\Controllers;
 
 use App\Models\AbuseReport;
+use App\Models\AdminSetting;
 use App\Models\ConflictRecord;
+use App\Models\FieldRegistry;
 use App\Models\Interest;
 use App\Models\MatrimonyProfile;
+use App\Models\ProfileFieldConfig;
+use App\Models\ProfileKycSubmission;
 use App\Models\Shortlist;
 use App\Models\User;
-use App\Models\AdminSetting;
-use App\Models\ProfileFieldConfig;
-use App\Models\FieldRegistry;
 use App\Models\VerificationTag;
 use App\Notifications\ImageRejectedNotification;
-use App\Services\ViewTrackingService;
 use App\Notifications\ProfileSoftDeletedNotification;
 use App\Notifications\ProfileSuspendedNotification;
 use App\Notifications\ProfileUnsuspendedNotification;
 use App\Services\AuditLogService;
 use App\Services\ConflictDetectionService;
 use App\Services\ConflictResolutionService;
-use App\Services\OcrMode;
-use App\Services\OcrModeDetectionService;
-use App\Services\OcrGovernanceService;
 use App\Services\ExtendedFieldDependencyService;
 use App\Services\ExtendedFieldService;
+use App\Services\FieldValueHistoryService;
+use App\Services\OcrGovernanceService;
+use App\Services\OcrMode;
+use App\Services\OcrModeDetectionService;
 use App\Services\ProfileCompletenessService;
 use App\Services\ProfileFieldLockService;
 use App\Services\ProfileLifecycleService;
-use App\Services\FieldValueHistoryService;
+use App\Services\ViewTrackingService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\Rule;
 
 /*
@@ -57,6 +59,7 @@ class AdminController extends Controller
         if ($extendedFields !== []) {
             $snapshot['extended_fields'] = $extendedFields;
         }
+
         return $snapshot;
     }
 
@@ -68,6 +71,7 @@ class AdminController extends Controller
         $perPage = (int) $request->input('per_page', 15);
         $perPage = $perPage >= 1 && $perPage <= 100 ? $perPage : 15;
         $profiles = MatrimonyProfile::withTrashed()->with(['country', 'state', 'district', 'taluka', 'city'])->latest()->paginate($perPage)->withQueryString();
+
         return view('admin.profiles.index', compact('profiles'));
     }
 
@@ -105,13 +109,13 @@ class AdminController extends Controller
             ->exists();
 
         $inShortlist = false;
-        if (!$isOwnProfile && $user->matrimonyProfile) {
+        if (! $isOwnProfile && $user->matrimonyProfile) {
             $inShortlist = Shortlist::where('owner_profile_id', $user->matrimonyProfile->id)
                 ->where('shortlisted_profile_id', $profile->id)
                 ->exists();
         }
 
-        if (!$isOwnProfile && $user->matrimonyProfile) {
+        if (! $isOwnProfile && $user->matrimonyProfile) {
             ViewTrackingService::recordView($user->matrimonyProfile, $profile);
             ViewTrackingService::maybeTriggerViewBack($user->matrimonyProfile, $profile);
         }
@@ -122,7 +126,7 @@ class AdminController extends Controller
             'db_caste' => $profile->caste,
             'pct' => \App\Services\ProfileCompletenessService::percentage($profile),
         ]);
-        
+
         // STEP D: INTERNAL CHECK - Log enabled & mandatory inputs
         \Log::info('D_INPUTS', [
             'mandatory' => \App\Models\FieldRegistry::where('field_type', 'CORE')->where('is_mandatory', true)->pluck('field_key')->values(),
@@ -132,7 +136,7 @@ class AdminController extends Controller
                 \App\Services\ProfileFieldConfigurationService::getEnabledFieldKeys()
             )),
         ]);
-        
+
         // Profile completeness (from service, passed to view)
         $completenessPct = ProfileCompletenessService::percentage($profile);
 
@@ -159,6 +163,15 @@ class AdminController extends Controller
             ->orderBy('name')
             ->get();
 
+        $pendingKyc = null;
+        if (Schema::hasTable('profile_kyc_submissions')) {
+            $pendingKyc = ProfileKycSubmission::query()
+                ->where('matrimony_profile_id', $profile->id)
+                ->where('status', ProfileKycSubmission::STATUS_PENDING)
+                ->orderByDesc('id')
+                ->first();
+        }
+
         return view('admin.profiles.show', [
             'matrimonyProfile' => $profile,
             'isOwnProfile' => $isOwnProfile,
@@ -171,6 +184,7 @@ class AdminController extends Controller
             'fieldHistory' => $fieldHistory,
             'assignedTags' => $assignedTags,
             'activeVerificationTags' => $activeVerificationTags,
+            'pendingKyc' => $pendingKyc,
             'religions' => $religions,
             'castes' => $castes,
             'subCastes' => $subCastes,
@@ -350,13 +364,13 @@ class AdminController extends Controller
     public function updateLifecycleState(Request $request, MatrimonyProfile $profile): \Illuminate\Http\RedirectResponse
     {
         // Day-7: super_admin only
-        if (!$request->user()->hasAdminRole(['super_admin'])) {
+        if (! $request->user()->hasAdminRole(['super_admin'])) {
             abort(403, 'This action requires super_admin role');
         }
 
         // Day-7: Reason is mandatory
         $request->validate([
-            'lifecycle_state' => ['required', 'string', 'in:' . implode(',', ProfileLifecycleService::getStates())],
+            'lifecycle_state' => ['required', 'string', 'in:'.implode(',', ProfileLifecycleService::getStates())],
             'reason' => ['required', 'string', 'min:10'],
         ]);
 
@@ -372,7 +386,7 @@ class AdminController extends Controller
             false
         );
 
-        return redirect()->route('admin.profiles.show', $profile->id)->with('success', 'Lifecycle state updated to ' . $request->lifecycle_state);
+        return redirect()->route('admin.profiles.show', $profile->id)->with('success', 'Lifecycle state updated to '.$request->lifecycle_state);
     }
 
     /**
@@ -385,6 +399,7 @@ class AdminController extends Controller
         $probability = max(0, min(100, $probability));
         $delayMin = (int) AdminSetting::getValue('view_back_delay_min', '0');
         $delayMax = (int) AdminSetting::getValue('view_back_delay_max', '0');
+
         return view('admin.view-back-settings.index', [
             'viewBackEnabled' => $enabled,
             'viewBackProbability' => $probability,
@@ -440,6 +455,7 @@ class AdminController extends Controller
     public function demoSearchSettings()
     {
         $visible = AdminSetting::getBool('demo_profiles_visible_in_search', true);
+
         return view('admin.demo-search-settings.index', [
             'demoProfilesVisibleInSearch' => $visible,
         ]);
@@ -481,6 +497,7 @@ class AdminController extends Controller
         $maxPerProfile = (int) AdminSetting::getValue('photo_max_per_profile', '5');
         $maxUploadMb = (int) AdminSetting::getValue('photo_max_upload_mb', '8');
         $maxEdgePx = (int) AdminSetting::getValue('photo_max_edge_px', '1200');
+
         return view('admin.photo-approval-settings.index', [
             'photoApprovalRequired' => $required,
             'photoPrimaryRequired' => $primaryRequired,
@@ -509,11 +526,12 @@ class AdminController extends Controller
         $highThreshold = (float) AdminSetting::getValue('intake_confidence_high_threshold', '0.85');
         $autoApplyJson = AdminSetting::getValue('intake_auto_apply_fields', '[]');
         $autoApplyFields = json_decode($autoApplyJson, true);
-        if (!is_array($autoApplyFields)) {
+        if (! is_array($autoApplyFields)) {
             $autoApplyFields = [];
         }
         $retentionDays = (int) AdminSetting::getValue('intake_file_retention_days', '90');
         $keepParsedJson = AdminSetting::getBool('intake_keep_parsed_json_after_purge', true);
+
         return view('admin.intake-settings.index', [
             'dailyLimit' => max(0, $daily),
             'monthlyLimit' => max(0, $monthly),
@@ -608,7 +626,7 @@ class AdminController extends Controller
             'update_intake_settings',
             'AdminSetting',
             null,
-            "intake_max_daily_per_user={$daily}, intake_max_monthly_per_user={$monthly}, intake_max_pdf_mb={$maxPdfMb}, intake_max_pdf_pages={$maxPdfPages}, intake_max_images_per_intake={$maxImagesPerIntake}, intake_global_daily_cap={$globalDailyCap}, intake_auto_parse_enabled={$autoParse}, intake_active_parser={$activeParser}, intake_ocr_provider={$ocrProvider}, intake_ocr_language_hint={$ocrLanguage}, intake_parse_retry_limit={$retryLimit}, intake_confidence_high_threshold={$highThreshold}, intake_auto_apply_fields=" . implode(',', $autoApplyFiltered) . ", intake_require_admin_before_attach={$requireAdminBeforeAttach}, intake_file_retention_days={$fileRetentionDays}, intake_keep_parsed_json_after_purge={$keepParsedJson}",
+            "intake_max_daily_per_user={$daily}, intake_max_monthly_per_user={$monthly}, intake_max_pdf_mb={$maxPdfMb}, intake_max_pdf_pages={$maxPdfPages}, intake_max_images_per_intake={$maxImagesPerIntake}, intake_global_daily_cap={$globalDailyCap}, intake_auto_parse_enabled={$autoParse}, intake_active_parser={$activeParser}, intake_ocr_provider={$ocrProvider}, intake_ocr_language_hint={$ocrLanguage}, intake_parse_retry_limit={$retryLimit}, intake_confidence_high_threshold={$highThreshold}, intake_auto_apply_fields=".implode(',', $autoApplyFiltered).", intake_require_admin_before_attach={$requireAdminBeforeAttach}, intake_file_retention_days={$fileRetentionDays}, intake_keep_parsed_json_after_purge={$keepParsedJson}",
             false
         );
 
@@ -660,6 +678,7 @@ class AdminController extends Controller
     {
         $redirectAfterRegister = AdminSetting::getBool('redirect_to_mobile_verify_after_registration', true);
         $mode = AdminSetting::getValue('mobile_verification_mode', 'off');
+
         return view('admin.mobile-verification-settings.index', [
             'redirectAfterRegister' => $redirectAfterRegister,
             'mobileVerificationMode' => $mode,
@@ -684,6 +703,7 @@ class AdminController extends Controller
             "redirect_after_register={$redirect}, mode={$mode}",
             false
         );
+
         return redirect()->route('admin.mobile-verification-settings.index')
             ->with('success', 'Registration & mobile verification settings updated.');
     }
@@ -703,6 +723,7 @@ class AdminController extends Controller
     public function profileFieldConfigIndex()
     {
         $fieldConfigs = ProfileFieldConfig::orderBy('field_key')->get();
+
         return view('admin.profile-field-config.index', [
             'fieldConfigs' => $fieldConfigs,
         ]);
@@ -717,6 +738,7 @@ class AdminController extends Controller
             ->orderBy('category')
             ->orderBy('display_order')
             ->get();
+
         return view('admin.field-registry.index', ['fields' => $fields]);
     }
 
@@ -729,6 +751,7 @@ class AdminController extends Controller
             ->orderBy('category')
             ->orderBy('display_order')
             ->get();
+
         return view('admin.field-registry.extended.index', ['fields' => $fields]);
     }
 
@@ -740,6 +763,7 @@ class AdminController extends Controller
         $extendedFields = FieldRegistry::where('field_type', 'EXTENDED')
             ->orderBy('field_key')
             ->get();
+
         return view('admin.field-registry.extended.create', ['extendedFields' => $extendedFields]);
     }
 
@@ -767,7 +791,7 @@ class AdminController extends Controller
         $depType = $validated['dependency_type'] ?? null;
         $depValue = $validated['dependency_value'] ?? null;
         if ($parentKey !== null) {
-            $tempField = new FieldRegistry();
+            $tempField = new FieldRegistry;
             $tempField->field_key = $validated['field_key'];
             $tempField->field_type = 'EXTENDED';
             ExtendedFieldDependencyService::validateDependency(
@@ -808,10 +832,11 @@ class AdminController extends Controller
      */
     public function archiveFieldRegistry(FieldRegistry $field): \Illuminate\Http\RedirectResponse
     {
-        if (!auth()->check() || !auth()->user()->is_admin) {
+        if (! auth()->check() || ! auth()->user()->is_admin) {
             abort(403, 'Admin access required');
         }
         $field->update(['is_archived' => true]);
+
         return redirect()->back()->with('success', 'Field archived. Existing profile values unchanged.');
     }
 
@@ -820,10 +845,11 @@ class AdminController extends Controller
      */
     public function unarchiveFieldRegistry(FieldRegistry $field): \Illuminate\Http\RedirectResponse
     {
-        if (!auth()->check() || !auth()->user()->is_admin) {
+        if (! auth()->check() || ! auth()->user()->is_admin) {
             abort(403, 'Admin access required');
         }
         $field->update(['is_archived' => false]);
+
         return redirect()->back()->with('success', 'Field unarchived.');
     }
 
@@ -844,7 +870,7 @@ class AdminController extends Controller
 
         foreach ($request->input('fields', []) as $row) {
             $field = FieldRegistry::find($row['id']);
-            if (!$field || $field->field_type !== 'EXTENDED') {
+            if (! $field || $field->field_type !== 'EXTENDED') {
                 continue;
             }
             $displayOrder = (int) $row['display_order'];
@@ -919,10 +945,10 @@ class AdminController extends Controller
                 $fieldChanges = [];
                 foreach ($updates as $key => $value) {
                     if ($value !== $original[$key]) {
-                        $fieldChanges[] = "{$key}: " . ($original[$key] ? 'true' : 'false') . " → " . ($value ? 'true' : 'false');
+                        $fieldChanges[] = "{$key}: ".($original[$key] ? 'true' : 'false').' → '.($value ? 'true' : 'false');
                     }
                 }
-                $changes[] = $field->field_key . ' (' . implode(', ', $fieldChanges) . ')';
+                $changes[] = $field->field_key.' ('.implode(', ', $fieldChanges).')';
             }
         }
 
@@ -932,7 +958,7 @@ class AdminController extends Controller
                 'profile_field_config_update',
                 'profile_field_configs',
                 null,
-                "Updated {$updatedCount} field(s). Changes: " . implode('; ', $changes) . ". Reason: {$request->reason}",
+                "Updated {$updatedCount} field(s). Changes: ".implode('; ', $changes).". Reason: {$request->reason}",
                 false
             );
         }
@@ -949,6 +975,7 @@ class AdminController extends Controller
         $request->validate(['user_id' => 'required|integer|min:1']);
         $user = User::findOrFail($request->user_id);
         $notifications = $user->notifications()->orderByDesc('created_at')->paginate(50)->withQueryString();
+
         return view('admin.notifications.user', [
             'targetUser' => $user,
             'notifications' => $notifications,
@@ -962,7 +989,7 @@ class AdminController extends Controller
     public function updateProfile(Request $request, MatrimonyProfile $profile)
     {
         // Guard: Admin only
-        if (!auth()->check() || !auth()->user()->is_admin) {
+        if (! auth()->check() || ! auth()->user()->is_admin) {
             abort(403, 'Admin access required');
         }
 
@@ -1048,7 +1075,7 @@ class AdminController extends Controller
         }
 
         $request->validate($validationRules);
-        
+
         // STEP 1: REQUEST PAYLOAD (SINGLE RUN) - BEFORE any logic
         \Log::info('STEP1_REQUEST', [
             'has' => request()->has('caste'),
@@ -1056,18 +1083,18 @@ class AdminController extends Controller
             'value' => request()->input('caste'),
             'all' => request()->all(),
         ]);
-        
+
         foreach ($editableFields as $field) {
             if ($request->exists($field)) {
                 $newValue = $request->input($field);
                 $oldValue = $originalData[$field] ?? null;
-                
+
                 // Normalize for comparison (trim whitespace, treat empty as null)
                 $newValue = is_string($newValue) ? trim($newValue) : $newValue;
                 $newValue = $newValue === '' ? null : $newValue;
                 $oldValue = is_string($oldValue) ? trim($oldValue) : $oldValue;
                 $oldValue = $oldValue === '' ? null : $oldValue;
-                
+
                 if ($newValue != $oldValue) {
                     $updateData[$field] = $newValue;
                     $editedFields[] = $field;
@@ -1089,14 +1116,14 @@ class AdminController extends Controller
         }
 
         // Day-6: Overwrite protection - authority-aware (equal/higher can edit locked)
-        if (!empty($editedFields)) {
+        if (! empty($editedFields)) {
             ProfileFieldLockService::assertNotLocked($profile, $editedFields, $admin);
         }
-        if (!empty($changedExtendedKeys)) {
+        if (! empty($changedExtendedKeys)) {
             ProfileFieldLockService::assertNotLocked($profile, $changedExtendedKeys, $admin);
         }
 
-        if (!empty($editedFields)) {
+        if (! empty($editedFields)) {
             // Merge with existing admin_edited_fields
             $existingAdminEditedFields = $profile->admin_edited_fields ?? [];
             $mergedAdminEditedFields = array_unique(array_merge($existingAdminEditedFields, $editedFields));
@@ -1119,7 +1146,7 @@ class AdminController extends Controller
                 'primary_contact_number',
             ];
             $editedCritical = array_intersect($editedFields, $identityCriticalFields);
-            if ($profile->serious_intent_id !== null && !empty($editedCritical)) {
+            if ($profile->serious_intent_id !== null && ! empty($editedCritical)) {
                 foreach ($editedCritical as $fieldKey) {
                     if (ConflictRecord::where('profile_id', $profile->id)->where('field_name', $fieldKey)->where('resolution_status', 'PENDING')->exists()) {
                         continue;
@@ -1138,6 +1165,7 @@ class AdminController extends Controller
                     ]);
                 }
                 ProfileLifecycleService::syncLifecycleFromPendingConflicts($profile);
+
                 return redirect()
                     ->route('admin.profiles.show', $profile)
                     ->with('warning', 'Identity-critical field(s) changed under serious intent. Conflict(s) created; profile not updated. Resolve via Conflict Records.');
@@ -1166,7 +1194,7 @@ class AdminController extends Controller
             }
 
             ProfileFieldLockService::applyLocks($profile, $editedFields, 'CORE', $admin);
-        } elseif (!empty($changedExtendedKeys)) {
+        } elseif (! empty($changedExtendedKeys)) {
             $snapshot = $this->buildAdminSnapshot($profile, [
                 'edited_by' => $admin->id,
                 'edited_at' => now(),
@@ -1187,12 +1215,12 @@ class AdminController extends Controller
         );
 
         // Phase-5B: Extended fields applied inside MutationService::applyManualSnapshot (same transaction)
-        if (!empty($changedExtendedKeys)) {
+        if (! empty($changedExtendedKeys)) {
             ProfileFieldLockService::applyLocks($profile, $changedExtendedKeys, 'EXTENDED', $admin);
         }
 
-        $message = !empty($editedFields)
-            ? 'Profile updated successfully. Edited fields: ' . implode(', ', $editedFields)
+        $message = ! empty($editedFields)
+            ? 'Profile updated successfully. Edited fields: '.implode(', ', $editedFields)
             : 'Profile updated successfully. Extended fields saved.';
 
         return redirect()
@@ -1206,16 +1234,16 @@ class AdminController extends Controller
      */
     public function detectConflicts(Request $request, MatrimonyProfile $profile)
     {
-        if (!auth()->check() || !auth()->user()->is_admin) {
+        if (! auth()->check() || ! auth()->user()->is_admin) {
             abort(403, 'Admin access required');
         }
 
         $proposedCore = $request->input('proposed_core', []);
         $proposedExtended = $request->input('proposed_extended', []);
-        if (!is_array($proposedCore)) {
+        if (! is_array($proposedCore)) {
             $proposedCore = [];
         }
-        if (!is_array($proposedExtended)) {
+        if (! is_array($proposedExtended)) {
             $proposedExtended = [];
         }
 
@@ -1236,6 +1264,7 @@ class AdminController extends Controller
             ->where('resolution_status', 'PENDING')
             ->orderByDesc('detected_at')
             ->paginate(50);
+
         return view('admin.conflict-records.index', compact('records'));
     }
 
@@ -1246,6 +1275,7 @@ class AdminController extends Controller
     {
         $profile = MatrimonyProfile::find($record->profile_id);
         $canResolve = $record->resolution_status === 'PENDING' && auth()->user()?->hasAdminRole(['super_admin', 'data_admin']);
+
         return view('admin.conflict-records.show', compact('record', 'profile', 'canResolve'));
     }
 
@@ -1255,6 +1285,7 @@ class AdminController extends Controller
     public function conflictRecordsCreate()
     {
         $profiles = MatrimonyProfile::withTrashed()->orderBy('id')->get(['id', 'full_name']);
+
         return view('admin.conflict-records.create', compact('profiles'));
     }
 
@@ -1272,7 +1303,7 @@ class AdminController extends Controller
             'source' => ['required', 'in:OCR,USER,ADMIN,MATCHMAKER,SYSTEM'],
         ]);
 
-        if (!ConflictRecord::where('profile_id', $request->profile_id)->where('field_name', $request->field_name)->where('resolution_status', 'PENDING')->exists()) {
+        if (! ConflictRecord::where('profile_id', $request->profile_id)->where('field_name', $request->field_name)->where('resolution_status', 'PENDING')->exists()) {
             ConflictRecord::create([
                 'profile_id' => $request->profile_id,
                 'field_name' => $request->field_name,
@@ -1294,12 +1325,13 @@ class AdminController extends Controller
      */
     public function conflictRecordApprove(Request $request, ConflictRecord $record)
     {
-        if (!$request->user()->hasAdminRole(['super_admin', 'data_admin'])) {
+        if (! $request->user()->hasAdminRole(['super_admin', 'data_admin'])) {
             abort(403, 'This action requires super_admin or data_admin role');
         }
 
         $request->validate(['resolution_reason' => ['required', 'string', 'min:10']]);
         ConflictResolutionService::approveConflict($record, $request->user(), $request->resolution_reason);
+
         return redirect()->route('admin.conflict-records.show', $record)->with('success', 'Conflict approved.');
     }
 
@@ -1309,12 +1341,13 @@ class AdminController extends Controller
      */
     public function conflictRecordReject(Request $request, ConflictRecord $record)
     {
-        if (!$request->user()->hasAdminRole(['super_admin', 'data_admin'])) {
+        if (! $request->user()->hasAdminRole(['super_admin', 'data_admin'])) {
             abort(403, 'This action requires super_admin or data_admin role');
         }
 
         $request->validate(['resolution_reason' => ['required', 'string', 'min:10']]);
         ConflictResolutionService::rejectConflict($record, $request->user(), $request->resolution_reason);
+
         return redirect()->route('admin.conflict-records.show', $record)->with('success', 'Conflict rejected.');
     }
 
@@ -1324,12 +1357,13 @@ class AdminController extends Controller
      */
     public function conflictRecordOverride(Request $request, ConflictRecord $record)
     {
-        if (!$request->user()->hasAdminRole(['super_admin', 'data_admin'])) {
+        if (! $request->user()->hasAdminRole(['super_admin', 'data_admin'])) {
             abort(403, 'This action requires super_admin or data_admin role');
         }
 
         $request->validate(['resolution_reason' => ['required', 'string', 'min:10']]);
         ConflictResolutionService::overrideConflict($record, $request->user(), $request->resolution_reason);
+
         return redirect()->route('admin.conflict-records.show', $record)->with('success', 'Conflict overridden.');
     }
 
@@ -1339,7 +1373,7 @@ class AdminController extends Controller
      */
     public function ocrSimulation()
     {
-        if (!auth()->check() || !auth()->user()->is_admin) {
+        if (! auth()->check() || ! auth()->user()->is_admin) {
             abort(403, 'Admin access required');
         }
 
@@ -1356,12 +1390,12 @@ class AdminController extends Controller
      */
     public function ocrSimulationExecute(Request $request)
     {
-        if (!auth()->check() || !auth()->user()->is_admin) {
+        if (! auth()->check() || ! auth()->user()->is_admin) {
             abort(403, 'Admin access required');
         }
 
         $request->validate([
-            'ocr_mode' => ['required', 'string', 'in:' . implode(',', OcrMode::all())],
+            'ocr_mode' => ['required', 'string', 'in:'.implode(',', OcrMode::all())],
             'profile_id' => ['nullable', 'exists:matrimony_profiles,id'],
             'proposed_core' => ['nullable', 'array'],
             'proposed_extended' => ['nullable', 'array'],
@@ -1411,7 +1445,7 @@ class AdminController extends Controller
                 'field_modes' => $fieldModes,
                 'conflicts_created' => count($createdConflicts),
             ])
-            ->with('success', 'OCR governance simulation complete. ' . count($createdConflicts) . ' conflict(s) created (if any).');
+            ->with('success', 'OCR governance simulation complete. '.count($createdConflicts).' conflict(s) created (if any).');
     }
 
     /**
@@ -1420,7 +1454,7 @@ class AdminController extends Controller
     public function unlockProfileField(Request $request, MatrimonyProfile $profile)
     {
         // Day-7: super_admin only
-        if (!$request->user()->hasAdminRole(['super_admin'])) {
+        if (! $request->user()->hasAdminRole(['super_admin'])) {
             abort(403, 'This action requires super_admin role');
         }
 

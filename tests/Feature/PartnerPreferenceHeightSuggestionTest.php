@@ -80,3 +80,22 @@ test('missing member marital status yields null preferred marital suggestion', f
 
     expect(PartnerPreferenceSuggestionService::defaultPreferredMaritalStatusId($p))->toBeNull();
 });
+
+test('merge display does not inject income from suggestion', function () {
+    $profile = MatrimonyProfile::factory()->create([
+        'annual_income' => 1_000_000,
+    ]);
+    $m = PartnerPreferenceSuggestionService::mergePartnerPreferencesForDisplay(
+        $profile,
+        null,
+        [],
+        [],
+        [],
+        [],
+        [],
+        [],
+        []
+    );
+    expect($m['criteria']->preferred_income_min)->toBeNull();
+    expect($m['criteria']->preferred_income_max)->toBeNull();
+});

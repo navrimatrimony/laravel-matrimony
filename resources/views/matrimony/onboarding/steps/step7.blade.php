@@ -8,6 +8,7 @@
     $selectedMaritalStatus = old('preferred_marital_status_id', $preferredMaritalStatusId ?? null);
     $selectedReligionIds = collect(old('preferred_religion_ids', $preferredReligionIds ?? []))->map(fn ($id) => (int) $id)->all();
     $selectedCasteIds = collect(old('preferred_caste_ids', $preferredCasteIds ?? []))->map(fn ($id) => (int) $id)->all();
+    $interestedInIntercaste = old('preferred_intercaste', $interestedInIntercaste ?? false);
     $selectedDistrictIds = collect(old('preferred_district_ids', $preferredDistrictIds ?? []))->map(fn ($id) => (int) $id)->all();
     if (empty($selectedDistrictIds) && ! empty($profile?->district_id)) {
         $selectedDistrictIds = [(int) $profile->district_id];
@@ -117,6 +118,13 @@
                     <button type="button" data-edit-toggle="edit-community" class="text-xs font-semibold text-indigo-600 dark:text-indigo-400">Edit</button>
                 </div>
                 <div id="edit-community" class="hidden mt-3 pt-3 border-t border-gray-200 dark:border-gray-700 space-y-3">
+                    <div>
+                        <label class="inline-flex items-center gap-2 text-xs text-gray-700 dark:text-gray-200">
+                            <input type="checkbox" name="preferred_intercaste" value="1" class="rounded border-gray-300 dark:border-gray-600 text-indigo-600"
+                                {{ $interestedInIntercaste ? 'checked' : '' }}>
+                            <span>{{ __('wizard.open_to_intercaste') }}</span>
+                        </label>
+                    </div>
                     <div>
                         <label class="block text-xs text-gray-500 mb-1">Religion</label>
                         <div class="flex flex-wrap gap-2">

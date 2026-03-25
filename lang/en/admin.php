@@ -33,5 +33,14 @@ return [
     'verification_tags' => 'Verification Tags',
     'assigned_active_tags' => 'Assigned active tags',
     'no_active_tags_assigned' => 'No active tags assigned.',
+    'kyc_review' => 'ID / KYC review',
+    'kyc_pending_intro' => 'The member uploaded an ID document. Compare it with the profile photo, then approve or reject.',
+    'kyc_view_document' => 'View ID document',
+    'kyc_approve' => 'Approve KYC',
+    'kyc_reject' => 'Reject KYC',
+    'kyc_reject_note_label' => 'Reason for rejection (required, min 10 characters)',
+    'kyc_optional_note' => 'Optional note (stored on the submission)',
+    'kyc_approved' => 'KYC marked as approved.',
+    'kyc_rejected' => 'KYC marked as rejected. The member can upload again.',
+    'kyc_not_pending' => 'This submission is not pending review.',
 ];
-
