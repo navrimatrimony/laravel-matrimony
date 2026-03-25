@@ -19,13 +19,37 @@
         <div class="border rounded-lg p-4 mb-3 {{ $n->read_at ? 'bg-gray-50' : 'bg-white border-l-4 border-l-indigo-500' }}">
             <div class="flex justify-between items-start gap-2">
                 <div>
-                    <a href="{{ route('notifications.show', $n->id) }}" class="block font-medium {{ $n->read_at ? 'text-gray-700' : 'text-gray-900' }}">
-                        {{ $n->data['message'] ?? 'Notification' }}
-                    </a>
+                    @if (($n->data['type'] ?? '') === 'chat_message' && ! empty($n->data['conversation_id']))
+                        <a
+                            href="{{ route('chat.show', ['conversation' => $n->data['conversation_id']]) }}"
+                            data-notification-id="{{ $n->id }}"
+                            data-chat-conversation="{{ $n->data['conversation_id'] }}"
+                            class="block font-medium {{ $n->read_at ? 'text-gray-700' : 'text-gray-900' }}"
+                        >
+                            <span class="font-semibold">{{ $n->data['sender_name'] ?? 'Someone' }}</span>
+                            <span class="text-gray-700">sent you a message</span>
+                            @if (! empty($n->data['message_preview']))
+                                <span class="mt-1 block text-sm text-gray-600">{{ $n->data['message_preview'] }}</span>
+                            @endif
+                        </a>
+                    @else
+                        <a href="{{ route('notifications.show', $n->id) }}" class="block font-medium {{ $n->read_at ? 'text-gray-700' : 'text-gray-900' }}">
+                            {{ $n->data['message'] ?? 'Notification' }}
+                        </a>
+                    @endif
                     <p class="text-sm text-gray-500 mt-1">{{ $n->created_at->diffForHumans() }}</p>
                 </div>
                 <div class="flex items-center gap-2 shrink-0">
-                    <a href="{{ route('notifications.show', $n->id) }}" class="text-indigo-600 text-sm hover:underline">Open</a>
+                    @if (($n->data['type'] ?? '') === 'chat_message' && ! empty($n->data['conversation_id']))
+                        <a
+                            href="{{ route('chat.show', ['conversation' => $n->data['conversation_id']]) }}"
+                            data-notification-id="{{ $n->id }}"
+                            data-chat-conversation="{{ $n->data['conversation_id'] }}"
+                            class="text-indigo-600 text-sm hover:underline"
+                        >Open chat</a>
+                    @else
+                        <a href="{{ route('notifications.show', $n->id) }}" class="text-indigo-600 text-sm hover:underline">Open</a>
+                    @endif
                     @if (!$n->read_at)
                         <form method="POST" action="{{ route('notifications.mark-read', $n->id) }}" class="inline">
                             @csrf
@@ -41,4 +65,36 @@
 
     <div class="mt-4">{{ $notifications->links() }}</div>
 </div>
+
+@auth
+<script>
+(function () {
+    const csrf = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+    if (!csrf) return;
+
+    function markRead(id) {
+        return fetch(`{{ url('/notifications') }}/${id}/mark-read`, {
+            method: 'POST',
+            headers: {
+                'X-CSRF-TOKEN': csrf,
+                'X-Requested-With': 'XMLHttpRequest',
+                'Accept': 'application/json'
+            },
+            credentials: 'same-origin'
+        }).catch(() => {});
+    }
+
+    document.addEventListener('click', function (e) {
+        const a = e.target.closest('a[data-notification-id][data-chat-conversation]');
+        if (!a) return;
+        e.preventDefault();
+        const id = a.getAttribute('data-notification-id');
+        const href = a.getAttribute('href');
+        markRead(id).finally(() => {
+            window.location.href = href;
+        });
+    });
+})();
+</script>
+@endauth
 @endsection

@@ -32,6 +32,7 @@ use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\OnboardingController;
 use App\Http\Controllers\ProfileVerificationController;
 use App\Http\Controllers\ProfileWizardController;
+use App\Http\Controllers\ChatController;
 use App\Http\Controllers\ShortlistController;
 use App\Http\Controllers\UserSettingsController;
 use App\Http\Controllers\WhoViewedController;
@@ -272,6 +273,17 @@ Route::middleware('auth')->group(function () {
     Route::post('/contact-requests/{contact_request}/approve', [ContactInboxController::class, 'approve'])->name('contact-requests.approve');
     Route::post('/contact-requests/{contact_request}/reject', [ContactInboxController::class, 'reject'])->name('contact-requests.reject');
     Route::post('/contact-grants/{contact_grant}/revoke', [ContactInboxController::class, 'revoke'])->name('contact-grants.revoke');
+
+    /*
+    | Chat (governed messaging)
+    */
+    Route::get('/chat', [ChatController::class, 'index'])->name('chat.index');
+    Route::get('/chat/{conversation}', [ChatController::class, 'show'])->name('chat.show');
+    Route::post('/chat/start/{matrimony_profile}', [ChatController::class, 'start'])->name('chat.start');
+    Route::post('/chat/{conversation}/messages/text', [ChatController::class, 'sendText'])->name('chat.messages.text');
+    Route::post('/chat/{conversation}/messages/image', [ChatController::class, 'sendImage'])->name('chat.messages.image');
+    Route::post('/chat/{conversation}/read', [ChatController::class, 'read'])->name('chat.read');
+    Route::get('/chat/messages/{message}/image', [ChatController::class, 'image'])->name('chat.messages.image.show');
 
     /*
     | Abuse Reports (User action)

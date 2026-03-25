@@ -241,6 +241,44 @@
 
             </div>
 
+            {{-- New Messages widget --}}
+            <div class="mb-6 bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 border-l-4 border-emerald-500 border border-gray-200 dark:border-gray-700">
+                <div class="flex items-center justify-between gap-4 mb-4">
+                    <div class="min-w-0">
+                        <h3 class="text-lg font-bold text-gray-900 dark:text-gray-100">नवे संदेश</h3>
+                        <p class="text-sm text-gray-600 dark:text-gray-400">Unread: <span class="font-semibold text-emerald-700 dark:text-emerald-300">{{ $chatUnreadCount ?? 0 }}</span></p>
+                    </div>
+                    <a href="{{ route('chat.index') }}" class="shrink-0 text-sm font-semibold text-emerald-700 dark:text-emerald-300 hover:underline">सर्व chats पहा →</a>
+                </div>
+
+                @if (($chatUnreadCount ?? 0) > 0 && !empty($recentUnreadChats) && $recentUnreadChats->isNotEmpty())
+                    <div class="space-y-3">
+                        @foreach ($recentUnreadChats as $row)
+                            @php
+                                $other = $row['other'] ?? null;
+                                $photo = $other?->profile_photo_url ?? asset('images/placeholders/default-profile.svg');
+                                $name = $other?->full_name ?: ('Profile #' . ($other?->id ?? ''));
+                                $preview = trim((string) ($row['preview'] ?? ''));
+                            @endphp
+                            <a href="{{ route('chat.show', ['conversation' => $row['conversation']->id]) }}" class="block rounded-lg border border-gray-200 dark:border-gray-700 px-4 py-3 hover:bg-emerald-50/60 dark:hover:bg-emerald-950/20">
+                                <div class="flex items-center gap-3">
+                                    <img src="{{ $photo }}" alt="" class="h-10 w-10 rounded-full object-cover ring-1 ring-black/10" />
+                                    <div class="min-w-0 flex-1">
+                                        <div class="flex items-center justify-between gap-2">
+                                            <p class="truncate font-semibold text-gray-900 dark:text-gray-100">{{ $name }}</p>
+                                            <p class="shrink-0 text-xs text-gray-500 dark:text-gray-400">{{ optional($row['sent_at'])->diffForHumans() }}</p>
+                                        </div>
+                                        <p class="mt-0.5 truncate text-sm text-gray-600 dark:text-gray-300">{{ $preview }}</p>
+                                    </div>
+                                </div>
+                            </a>
+                        @endforeach
+                    </div>
+                @else
+                    <p class="text-sm text-gray-500 dark:text-gray-400">नवे संदेश नाहीत.</p>
+                @endif
+            </div>
+
             {{-- Recent Interests Preview --}}
             <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
                 

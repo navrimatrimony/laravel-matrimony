@@ -27,6 +27,84 @@
                 class="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100">{{ old('reason') }}</textarea>
         </div>
 
+        <div class="p-4 border border-gray-200 dark:border-gray-600 rounded-lg">
+            <h2 class="text-lg font-semibold text-gray-800 dark:text-gray-100 mb-4">Messaging policy (Chat)</h2>
+
+            <div class="grid gap-6 md:grid-cols-2">
+                <div class="space-y-3">
+                    <label class="flex items-center gap-2">
+                        <input type="hidden" name="allow_messaging" value="0">
+                        <input type="checkbox" name="allow_messaging" value="1" {{ ($current['allow_messaging'] ?? true) ? 'checked' : '' }}>
+                        <span class="text-sm font-medium">Messaging enabled</span>
+                    </label>
+
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Messaging Mode</label>
+                        <select name="messaging_mode" class="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100">
+                            <option value="free_chat_with_reply_gate" {{ ($current['messaging_mode'] ?? 'free_chat_with_reply_gate') === 'free_chat_with_reply_gate' ? 'selected' : '' }}>Free chat with reply gate</option>
+                            <option value="contact_request_required" {{ ($current['messaging_mode'] ?? '') === 'contact_request_required' ? 'selected' : '' }}>Contact request required</option>
+                        </select>
+                    </div>
+
+                    <label class="flex items-center gap-2">
+                        <input type="hidden" name="allow_image_messages" value="0">
+                        <input type="checkbox" name="allow_image_messages" value="1" {{ ($current['allow_image_messages'] ?? true) ? 'checked' : '' }}>
+                        <span class="text-sm font-medium">Allow image messages</span>
+                    </label>
+
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Image messages available for</label>
+                        <select name="image_messages_audience" class="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100">
+                            <option value="paid_only" {{ ($current['image_messages_audience'] ?? 'paid_only') === 'paid_only' ? 'selected' : '' }}>Paid users only (default)</option>
+                            <option value="all" {{ ($current['image_messages_audience'] ?? '') === 'all' ? 'selected' : '' }}>Free + Paid (everyone)</option>
+                        </select>
+                        <p class="text-xs text-gray-500 mt-1">Paid check is via entitlement key <code>chat_image_messages</code>.</p>
+                    </div>
+                </div>
+
+                <div class="space-y-3">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Consecutive message limit without reply</label>
+                        <input type="number" name="max_consecutive_messages_without_reply" value="{{ old('max_consecutive_messages_without_reply', $current['max_consecutive_messages_without_reply'] ?? 2) }}" min="1" max="20"
+                            class="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Cooling period (hours)</label>
+                        <input type="number" name="reply_gate_cooling_hours" value="{{ old('reply_gate_cooling_hours', $current['reply_gate_cooling_hours'] ?? 24) }}" min="1" max="720"
+                            class="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100">
+                    </div>
+                </div>
+            </div>
+
+            <div class="mt-6 grid gap-6 md:grid-cols-2">
+                <div class="space-y-3">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Sender daily limit</label>
+                        <input type="number" name="max_messages_per_day_per_sender" value="{{ old('max_messages_per_day_per_sender', $current['max_messages_per_day_per_sender'] ?? 20) }}" min="1" max="500"
+                            class="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Sender weekly limit</label>
+                        <input type="number" name="max_messages_per_week_per_sender" value="{{ old('max_messages_per_week_per_sender', $current['max_messages_per_week_per_sender'] ?? 100) }}" min="1" max="5000"
+                            class="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100">
+                    </div>
+                </div>
+
+                <div class="space-y-3">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Sender monthly limit</label>
+                        <input type="number" name="max_messages_per_month_per_sender" value="{{ old('max_messages_per_month_per_sender', $current['max_messages_per_month_per_sender'] ?? 300) }}" min="1" max="20000"
+                            class="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">New conversations per day</label>
+                        <input type="number" name="max_new_conversations_per_day" value="{{ old('max_new_conversations_per_day', $current['max_new_conversations_per_day'] ?? 10) }}" min="1" max="500"
+                            class="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100">
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <div class="grid gap-6 md:grid-cols-2">
             <div class="p-4 border border-gray-200 dark:border-gray-600 rounded-lg">
                 <h2 class="text-lg font-semibold text-gray-800 dark:text-gray-100 mb-4">Contact request mode</h2>

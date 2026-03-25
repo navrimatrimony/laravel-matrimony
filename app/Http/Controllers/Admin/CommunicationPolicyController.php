@@ -26,6 +26,19 @@ class CommunicationPolicyController extends Controller
     {
         $validator = Validator::make($request->all(), [
             'reason' => 'required|string|min:10|max:500',
+
+            // Messaging policy (chat)
+            'allow_messaging' => 'boolean',
+            'messaging_mode' => 'required|string|in:free_chat_with_reply_gate,contact_request_required',
+            'max_consecutive_messages_without_reply' => 'required|integer|min:1|max:20',
+            'reply_gate_cooling_hours' => 'required|integer|min:1|max:720',
+            'max_messages_per_day_per_sender' => 'required|integer|min:1|max:500',
+            'max_messages_per_week_per_sender' => 'required|integer|min:1|max:5000',
+            'max_messages_per_month_per_sender' => 'required|integer|min:1|max:20000',
+            'max_new_conversations_per_day' => 'required|integer|min:1|max:500',
+            'allow_image_messages' => 'boolean',
+            'image_messages_audience' => 'required|string|in:paid_only,all',
+
             'contact_request_mode' => 'required|string|in:mutual_only,direct_allowed,disabled',
             'reject_cooldown_days' => 'required|integer|min:7|max:365',
             'pending_expiry_days' => 'required|integer|min:1|max:30',
@@ -49,6 +62,18 @@ class CommunicationPolicyController extends Controller
         $current = CommunicationPolicyService::getCurrentForAdmin();
 
         $updates = [
+            // Messaging policy (chat)
+            'allow_messaging' => $request->boolean('allow_messaging'),
+            'messaging_mode' => $request->input('messaging_mode'),
+            'max_consecutive_messages_without_reply' => (string) $request->input('max_consecutive_messages_without_reply'),
+            'reply_gate_cooling_hours' => (string) $request->input('reply_gate_cooling_hours'),
+            'max_messages_per_day_per_sender' => (string) $request->input('max_messages_per_day_per_sender'),
+            'max_messages_per_week_per_sender' => (string) $request->input('max_messages_per_week_per_sender'),
+            'max_messages_per_month_per_sender' => (string) $request->input('max_messages_per_month_per_sender'),
+            'max_new_conversations_per_day' => (string) $request->input('max_new_conversations_per_day'),
+            'allow_image_messages' => $request->boolean('allow_image_messages'),
+            'image_messages_audience' => (string) $request->input('image_messages_audience', 'paid_only'),
+
             'contact_request_mode' => $request->input('contact_request_mode'),
             'reject_cooldown_days' => (string) $request->input('reject_cooldown_days'),
             'pending_expiry_days' => (string) $request->input('pending_expiry_days'),

@@ -622,6 +622,16 @@
                     @endif
                 @endif
 
+                <form method="POST" action="{{ route('chat.start', ['matrimony_profile' => $profile->id]) }}" class="w-full">
+                    @csrf
+                    <button type="submit" class="inline-flex w-full items-center justify-center gap-2 rounded-2xl border border-indigo-200/90 bg-white px-3 py-2.5 text-sm font-semibold text-indigo-800 shadow-sm ring-1 ring-indigo-100/70 transition hover:bg-indigo-50/90 dark:border-indigo-800/60 dark:bg-gray-800 dark:text-indigo-200 dark:ring-indigo-900/35 dark:hover:bg-indigo-950/25">
+                        <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-indigo-100 text-indigo-700 dark:bg-indigo-950/50 dark:text-indigo-300" aria-hidden="true">
+                            <svg class="h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 12.76c0 1.6 1.123 2.95 2.63 3.217.42.074.797.31 1.046.66l.85 1.19c.34.477.99.596 1.48.272l2.155-1.43c.33-.219.73-.29 1.11-.2 1.04.246 2.17.246 3.21 0 .38-.09.78-.02 1.11.2l2.155 1.43c.49.324 1.14.205 1.48-.272l.85-1.19c.249-.35.626-.586 1.046-.66 1.507-.267 2.63-1.618 2.63-3.217V6.99c0-1.86-1.51-3.37-3.37-3.37H5.62c-1.86 0-3.37 1.51-3.37 3.37v5.77Z"/></svg>
+                        </span>
+                        {{ __('Chat') }}
+                    </button>
+                </form>
+
                 @isset($inShortlist)
                     @if ($inShortlist)
                         <form method="POST" action="{{ route('shortlist.destroy', $profile) }}" class="w-full">

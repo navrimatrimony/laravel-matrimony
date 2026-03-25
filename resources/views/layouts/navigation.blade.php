@@ -117,6 +117,30 @@
         {{ __('Blocked') }}
     </x-nav-link>
 
+    @php
+        $chatUnreadCount = 0;
+        $mp = auth()->user()->matrimonyProfile;
+        if ($mp) {
+            $chatUnreadCount = \Illuminate\Support\Facades\DB::table('messages')
+                ->where('receiver_profile_id', $mp->id)
+                ->whereNull('read_at')
+                ->count();
+        }
+    @endphp
+
+    <x-nav-link :href="route('chat.index')"
+                :active="request()->routeIs('chat.*')"
+                class="relative">
+        <span class="inline-flex items-center gap-2">
+            <svg class="h-4 w-4 text-gray-500 dark:text-gray-300" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.7" stroke="currentColor" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 12.76c0 1.6 1.123 2.95 2.63 3.217.42.074.797.31 1.046.66l.85 1.19c.34.477.99.596 1.48.272l2.155-1.43c.33-.219.73-.29 1.11-.2 1.04.246 2.17.246 3.21 0 .38-.09.78-.02 1.11.2l2.155 1.43c.49.324 1.14.205 1.48-.272l.85-1.19c.249-.35.626-.586 1.046-.66 1.507-.267 2.63-1.618 2.63-3.217V6.99c0-1.86-1.51-3.37-3.37-3.37H5.62c-1.86 0-3.37 1.51-3.37 3.37v5.77Z"/></svg>
+            <span>{{ __('Chat') }}</span>
+        </span>
+        <span
+            id="chat-badge"
+            class="absolute -top-1 -right-2 inline-flex items-center justify-center px-1.5 py-0.5 text-xs font-bold leading-none text-white bg-red-600 rounded-full {{ $chatUnreadCount > 0 ? 'animate-pulse' : 'hidden' }}"
+        >{{ $chatUnreadCount > 99 ? '99+' : $chatUnreadCount }}</span>
+    </x-nav-link>
+
     {{-- Notifications with unread badge --}}
     <x-nav-link :href="route('notifications.index')" 
                 :active="request()->routeIs('notifications.*')"
@@ -303,6 +327,16 @@
             >{{ $unreadNotificationCount > 99 ? '99+' : $unreadNotificationCount }}</span>
         @endif
     </x-responsive-nav-link>
+
+    <x-responsive-nav-link :href="route('chat.index')" class="relative inline-flex items-center">
+        {{ __('Chat') }}
+        @if($chatUnreadCount > 0)
+            <span
+                id="chat-badge-mobile"
+                class="ml-2 inline-flex items-center justify-center px-1.5 py-0.5 text-xs font-bold leading-none text-white bg-red-600 rounded-full"
+            >{{ $chatUnreadCount > 99 ? '99+' : $chatUnreadCount }}</span>
+        @endif
+    </x-responsive-nav-link>
 @endauth
 
 @if (auth()->check() && auth()->user()->is_admin === true)
@@ -370,6 +404,8 @@
     const POLL_INTERVAL = 30000; // 30 seconds
     const badge = document.getElementById('notification-badge');
     const badgeMobile = document.getElementById('notification-badge-mobile');
+    const chatBadge = document.getElementById('chat-badge');
+    const chatBadgeMobile = document.getElementById('chat-badge-mobile');
 
     function updateNotificationCount() {
         fetch('{{ route("notifications.unread-count") }}', {
@@ -412,8 +448,34 @@
     }
 
     // Start polling after page load
-    if (badge || badgeMobile) {
+    function updateChatCount() {
+        fetch('{{ route("chat.index") }}?unread_only=1', {
+            method: 'GET',
+            headers: {
+                'Accept': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest'
+            },
+            credentials: 'same-origin'
+        })
+        .then(r => r.json())
+        .then(data => {
+            const count = data.count || 0;
+            const displayCount = count > 99 ? '99+' : count;
+            if (chatBadge) {
+                chatBadge.textContent = displayCount;
+                if (count > 0) chatBadge.classList.remove('hidden'); else chatBadge.classList.add('hidden');
+            }
+            if (chatBadgeMobile) {
+                chatBadgeMobile.textContent = displayCount;
+                chatBadgeMobile.style.display = count > 0 ? 'inline-flex' : 'none';
+            }
+        })
+        .catch(() => {});
+    }
+
+    if (badge || badgeMobile || chatBadge || chatBadgeMobile) {
         setInterval(updateNotificationCount, POLL_INTERVAL);
+        setInterval(updateChatCount, POLL_INTERVAL);
     }
 })();
 </script>

@@ -4,9 +4,12 @@ namespace App\Http\Controllers;
 
 use App\Models\Interest;
 use App\Models\MatrimonyProfile;
+use App\Models\Message;
+use App\Models\Conversation;
 use App\Models\Shortlist;
 use App\Services\ProfileCompletenessService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 /*
 |--------------------------------------------------------------------------
@@ -69,6 +72,60 @@ class DashboardController extends Controller
             ->limit(3)
             ->get();
 
+        // Chat widget: unread count + top 3 recent unread conversations (lightweight)
+        $chatUnreadCount = DB::table('messages')
+            ->where('receiver_profile_id', $myProfileId)
+            ->whereNull('read_at')
+            ->count();
+
+        $recentUnread = collect();
+        if ($chatUnreadCount > 0) {
+            $rows = DB::table('messages')
+                ->select('conversation_id', DB::raw('MAX(id) as last_unread_id'), DB::raw('MAX(sent_at) as last_unread_at'))
+                ->where('receiver_profile_id', $myProfileId)
+                ->whereNull('read_at')
+                ->groupBy('conversation_id')
+                ->orderByDesc('last_unread_at')
+                ->limit(3)
+                ->get();
+
+            $messageIds = $rows->pluck('last_unread_id')->filter()->values()->all();
+            $messagesById = Message::query()->whereIn('id', $messageIds)->get()->keyBy('id');
+
+            $conversationIds = $rows->pluck('conversation_id')->values()->all();
+            $conversationsById = Conversation::query()->whereIn('id', $conversationIds)->get()->keyBy('id');
+
+            $otherIds = [];
+            foreach ($conversationsById as $c) {
+                $otherIds[] = (int) ((int) $c->profile_one_id === (int) $myProfileId ? $c->profile_two_id : $c->profile_one_id);
+            }
+            $othersById = MatrimonyProfile::query()->whereIn('id', array_values(array_unique($otherIds)))->get()->keyBy('id');
+
+            $recentUnread = $rows->map(function ($r) use ($myProfileId, $messagesById, $conversationsById, $othersById) {
+                $c = $conversationsById->get((int) $r->conversation_id);
+                $m = $messagesById->get((int) $r->last_unread_id);
+                if (! $c || ! $m) {
+                    return null;
+                }
+                $otherId = (int) ((int) $c->profile_one_id === (int) $myProfileId ? $c->profile_two_id : $c->profile_one_id);
+                $other = $othersById->get($otherId);
+
+                $preview = '';
+                if (($m->message_type ?? 'text') === 'image') {
+                    $preview = ($m->body_text ?? '') !== '' ? ('📷 ' . $m->body_text) : '📷 Image';
+                } else {
+                    $preview = (string) ($m->body_text ?? '');
+                }
+
+                return [
+                    'conversation' => $c,
+                    'other' => $other,
+                    'preview' => $preview,
+                    'sent_at' => $m->sent_at,
+                ];
+            })->filter()->values();
+        }
+
         return view('dashboard', [
             'hasProfile' => true,
             'profile' => $profile,
@@ -83,6 +140,8 @@ class DashboardController extends Controller
             'completenessPercentage' => $completenessPercentage,
             'recentReceivedInterests' => $recentReceivedInterests,
             'recentSentInterests' => $recentSentInterests,
+            'chatUnreadCount' => (int) $chatUnreadCount,
+            'recentUnreadChats' => $recentUnread,
         ]);
     }
 }

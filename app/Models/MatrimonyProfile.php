@@ -253,6 +253,28 @@ class MatrimonyProfile extends Model
     }
 
     /**
+     * Profile photo URL for UI (chat/inbox/etc).
+     * Uses `profile_photo` column (primary photo filename) when present.
+     */
+    public function getProfilePhotoUrlAttribute(): string
+    {
+        $file = trim((string) ($this->profile_photo ?? ''));
+        if ($file !== '') {
+            return asset('uploads/matrimony_photos/' . ltrim($file, '/'));
+        }
+
+        $genderKey = $this->gender?->key ?? $this->gender_id ?? $this->user?->gender ?? null;
+        if ($genderKey === 'male') {
+            return asset('images/placeholders/male-profile.svg');
+        }
+        if ($genderKey === 'female') {
+            return asset('images/placeholders/female-profile.svg');
+        }
+
+        return asset('images/placeholders/default-profile.svg');
+    }
+
+    /**
      * Profile photo gallery (sorted + primary first in UI ordering).
      */
     public function photos()
