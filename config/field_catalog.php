@@ -23,12 +23,10 @@ return [
         'siblings',
         'relatives',
         'alliance',
-        'location',
         'property',
         'horoscope',
         'about-me',
         'about-preferences',
-        'contacts',
         'photo',
     ],
 
@@ -38,7 +36,6 @@ return [
     */
     'minimal_wizard_sections' => [
         'basic-info',
-        'contacts',
     ],
 
     /*
@@ -53,12 +50,10 @@ return [
         'siblings' => 'wizard.siblings',
         'relatives' => 'wizard.extended_family',
         'alliance' => 'wizard.alliance',
-        'location' => 'wizard.location',
         'property' => 'wizard.property',
         'horoscope' => 'wizard.horoscope',
         'about-me' => 'wizard.about_me',
         'about-preferences' => 'wizard.partner_preferences',
-        'contacts' => 'wizard.contacts',
         'photo' => 'wizard.photo',
     ],
 
@@ -81,7 +76,8 @@ return [
         'weight_kg' => 'physical',
         'spectacles_lens' => 'physical',
         'physical_condition' => 'physical',
-        'primary_contact_number' => 'contacts',
+        // Contact info is captured inside Basic info (no separate "Contacts" wizard step).
+        'primary_contact_number' => 'basic-info',
         'highest_education' => 'education-career',
         'specialization' => 'education-career',
         'occupation_title' => 'education-career',

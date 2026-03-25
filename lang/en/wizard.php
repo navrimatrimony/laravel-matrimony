@@ -84,6 +84,7 @@ return [
     'select_district' => 'Select district',
     'add_district' => 'Add district',
     'remove_district' => 'Remove this district',
+    'add_more' => 'Add more',
     'willing_to_relocate' => 'Willing to relocate',
     'willing_to_relocate_hint' => 'Turn this on if you are open to moving for the right match. It applies to your partner preference for location.',
     'partner_pref_profile_diet_heading' => 'Profile manager & diet',

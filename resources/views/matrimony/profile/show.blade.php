@@ -326,7 +326,7 @@
         {{-- Similar profiles: render when $similarProfiles (or equivalent) is passed from the controller --}}
     </aside>
 
-    <div class="flex min-w-0 w-full flex-1 flex-col lg:min-w-0 lg:border-l lg:border-stone-200/55 lg:bg-white/40 dark:lg:border-gray-700/65 dark:lg:bg-transparent">
+    <div class="flex min-w-0 w-full lg:w-auto flex-1 flex-col lg:min-w-0 lg:border-l lg:border-stone-200/55 lg:bg-white/40 dark:lg:border-gray-700/65 dark:lg:bg-transparent">
 @php
     $incomeService = app(\App\Services\IncomeEngineService::class);
     $profileArr = $profile->toArray();
@@ -1683,9 +1683,25 @@
                 </header>
                 <div class="space-y-3">
                     @foreach($filteredExtended as $label => $value)
+                        @php
+                            // Some extended fields store multi-values (arrays). Escaping raw arrays crashes rendering.
+                            $displayValue = $value;
+                            if (is_array($displayValue)) {
+                                $parts = [];
+                                foreach ($displayValue as $v) {
+                                    if ($v === null || $v === '') {
+                                        continue;
+                                    }
+                                    $parts[] = is_scalar($v) ? (string) $v : json_encode($v);
+                                }
+                                $displayValue = implode(', ', $parts);
+                            } elseif (is_object($displayValue)) {
+                                $displayValue = method_exists($displayValue, '__toString') ? (string) $displayValue : json_encode($displayValue);
+                            }
+                        @endphp
                         <div class="rounded-xl border border-stone-100/95 bg-white/90 px-4 py-3.5 shadow-sm dark:border-gray-700/70 dark:bg-gray-800/55">
                             <p class="text-[11px] font-semibold uppercase tracking-wide text-stone-500 dark:text-stone-400">{{ $extendedMeta[$label] ?? $label }}</p>
-                            <p class="mt-1 text-base font-semibold text-stone-900 dark:text-stone-100">{{ $value }}</p>
+                            <p class="mt-1 text-base font-semibold text-stone-900 dark:text-stone-100">{{ $displayValue }}</p>
                         </div>
                     @endforeach
                 </div>

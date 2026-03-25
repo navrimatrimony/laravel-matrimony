@@ -83,6 +83,7 @@ return [
     'select_district' => 'जिल्हा निवडा',
     'add_district' => 'जिल्हा जोडा',
     'remove_district' => 'हे जिल्हा काढा',
+    'add_more' => 'अजून जोडा',
     'willing_to_relocate' => 'स्थलांतरास तयार',
     'willing_to_relocate_hint' => 'योग्य जुळणीसाठी स्थलांतर करायला तयार असाल तर हे चालू करा. हे भागीदाराच्या ठिकाण पसंतीशी संबंधित आहे.',
     'partner_pref_profile_diet_heading' => 'प्रोफाइल व्यवस्थापन आणि आहार',

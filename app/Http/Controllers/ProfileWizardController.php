@@ -30,12 +30,10 @@ class ProfileWizardController extends Controller
         'siblings',
         'relatives',
         'alliance',
-        'location',
         'property',
         'horoscope',
         'about-me',
         'about-preferences',
-        'contacts',
         'photo',
     ];
 
@@ -80,6 +78,14 @@ class ProfileWizardController extends Controller
         // Legacy: personal-family was split into education-career + family-details; redirect old links
         if ($section === 'personal-family') {
             return redirect()->route('matrimony.profile.wizard.section', ['section' => 'education-career'], 301);
+        }
+        // Legacy: location tab removed — location is captured within each relevant section.
+        if ($section === 'location') {
+            return redirect()->route('matrimony.profile.wizard.section', ['section' => 'basic-info'], 301);
+        }
+        // Legacy: contacts tab removed — contact is captured within Basic info.
+        if ($section === 'contacts') {
+            return redirect()->route('matrimony.profile.wizard.section', ['section' => 'basic-info'], 301);
         }
         // Legacy: marriages tab removed — marital engine lives under Basic info.
         if ($section === 'marriages') {
@@ -191,6 +197,14 @@ class ProfileWizardController extends Controller
         if ($section === 'marriages') {
             return redirect()->route('matrimony.profile.wizard.section', ['section' => 'basic-info'])
                 ->with('info', __('wizard.marriages_location_removed'));
+        }
+        // Legacy: location section removed — do not accept POST here.
+        if ($section === 'location') {
+            return redirect()->route('matrimony.profile.wizard.section', ['section' => 'basic-info']);
+        }
+        // Legacy: contacts section removed — do not accept POST here.
+        if ($section === 'contacts') {
+            return redirect()->route('matrimony.profile.wizard.section', ['section' => 'basic-info']);
         }
 
         $allowed = $this->getAllowedSectionKeys();

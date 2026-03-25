@@ -25,7 +25,7 @@ class FieldCatalogService
             return;
         }
         self::$sectionOrder = config('field_catalog.section_order', []);
-        self::$minimalSections = config('field_catalog.minimal_wizard_sections', ['basic-info', 'contacts']);
+        self::$minimalSections = config('field_catalog.minimal_wizard_sections', ['basic-info']);
         self::$sectionLabels = config('field_catalog.section_labels', []);
         self::$fieldToSection = config('field_catalog.field_to_section', []);
     }

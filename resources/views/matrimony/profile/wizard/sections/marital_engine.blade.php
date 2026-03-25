@@ -161,7 +161,7 @@
                         <label class="block text-xs text-gray-600 dark:text-gray-400 mb-0.5 truncate">{{ __('wizard.age') }} <span class="text-red-500">*</span></label>
                         <input type="number" :name="(namePrefix ? 'snapshot[children][' : 'children[') + index + '][age]'" min="1" max="120" class="w-full max-w-full min-w-0 rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-1 sm:px-2 py-2 text-sm h-[42px]" x-model.number="child.age" placeholder="{{ __('wizard.age') }}">
                     </div>
-                    <div class="min-w-0 flex-1 basis-0">
+                    <div class="min-w-0 w-[9.5rem] sm:w-[12rem] shrink-0">
                         <label class="block text-xs text-gray-600 dark:text-gray-400 mb-0.5 truncate">{{ __('wizard.living_with') }}</label>
                         <select :name="(namePrefix ? 'snapshot[children][' : 'children[') + index + '][child_living_with_id]'" class="w-full max-w-full min-w-0 rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-1 sm:px-2 py-2 text-xs sm:text-sm h-[42px]" x-model="child.child_living_with_id">
                             <option value="">{{ __('wizard.select') }}</option>
@@ -170,19 +170,23 @@
                             @endforeach
                         </select>
                     </div>
-                    <div class="shrink-0 min-w-0 flex items-end pt-0 border-0 sm:pl-1">
-                        <div class="flex flex-nowrap items-center gap-x-2 sm:gap-x-3 min-w-0 max-w-full">
+                    <div class="min-w-0 flex-1 flex items-end pt-0 border-0 sm:pl-1">
+                        <div class="flex w-full min-w-0 items-center justify-between gap-x-3">
                             <input type="hidden" :name="(namePrefix ? 'snapshot[children][' : 'children[') + index + '][id]'" :value="child.id || ''">
                             <input type="hidden" :name="(namePrefix ? 'snapshot[children][' : 'children[') + index + '][sort_order]'" :value="index">
-                            <button type="button"
-                                    @click="addChild()"
-                                    class="text-sm font-medium text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-300 underline-offset-2 hover:underline">
-                                + {{ __('wizard.add') }}
+                            <button
+                                type="button"
+                                @click="addChild()"
+                                class="text-sm font-medium text-indigo-600 underline-offset-2 hover:text-indigo-800 hover:underline dark:text-indigo-400 dark:hover:text-indigo-300"
+                            >
+                                + {{ __('wizard.add_more') }}
                             </button>
-                            <button type="button"
-                                    @click="removeChild(index)"
-                                    class="text-sm font-medium text-rose-700 dark:text-rose-400 hover:text-rose-900 dark:hover:text-rose-300 underline-offset-2 hover:underline whitespace-nowrap">
-                                {{ __('wizard.remove_entry') }}
+                            <button
+                                type="button"
+                                @click="removeChild(index)"
+                                class="text-sm font-medium text-rose-700 underline-offset-2 hover:text-rose-900 hover:underline dark:text-rose-400 dark:hover:text-rose-300"
+                            >
+                                {{ __('common.remove') }}
                             </button>
                         </div>
                     </div>

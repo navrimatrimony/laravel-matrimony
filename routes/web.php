@@ -40,6 +40,17 @@ use App\Models\Caste;
 use App\Models\SubCaste;
 use Illuminate\Support\Facades\Route;
 
+use App\Http\Controllers\Payments\PayuController;
+
+/*
+|--------------------------------------------------------------------------
+| PayU
+|--------------------------------------------------------------------------
+*/
+Route::post('/payments/payu/success', [PayuController::class, 'success'])->name('payu.success');
+Route::post('/payments/payu/failure', [PayuController::class, 'failure'])->name('payu.failure');
+Route::post('/payments/payu/webhook', [PayuController::class, 'webhook'])->name('payu.webhook');
+
 /*
 |--------------------------------------------------------------------------
 | Public Routes
