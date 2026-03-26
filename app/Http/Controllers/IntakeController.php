@@ -782,13 +782,17 @@ class IntakeController extends Controller
         $canCas = $casteLabel !== '' && $casteLabel !== $ph && $casteLabel !== $ph2;
         $canSub = $subLabel !== '' && $subLabel !== $ph && $subLabel !== $ph2;
 
+        $existingReligionId = is_numeric($intakeProfile->religion_id ?? null) ? (int) $intakeProfile->religion_id : null;
+        $existingCasteId = is_numeric($intakeProfile->caste_id ?? null) ? (int) $intakeProfile->caste_id : null;
+        $existingSubCasteId = is_numeric($intakeProfile->sub_caste_id ?? null) ? (int) $intakeProfile->sub_caste_id : null;
+
         $resolved = $resolver->resolve(
             $canRel ? $relLabel : null,
             $canCas ? $casteLabel : null,
             $canSub ? $subLabel : null,
-            $intakeProfile->religion_id,
-            $intakeProfile->caste_id,
-            $intakeProfile->sub_caste_id
+            $existingReligionId,
+            $existingCasteId,
+            $existingSubCasteId
         );
 
         $thr = 0.86;

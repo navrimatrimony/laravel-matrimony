@@ -9,13 +9,20 @@ use App\Models\District;
 use App\Models\FieldRegistry;
 use App\Models\MasterBloodGroup;
 use App\Models\MasterComplexion;
+use App\Models\MasterDiet;
+use App\Models\MasterDrinkingStatus;
 use App\Models\MasterFamilyType;
 use App\Models\MasterGender;
 use App\Models\MasterIncomeCurrency;
 use App\Models\MasterMaritalStatus;
+use App\Models\MasterMotherTongue;
 use App\Models\MasterPhysicalBuild;
+use App\Models\MasterSmokingStatus;
 use App\Models\MatrimonyProfile;
+use App\Models\Profession;
 use App\Models\Religion;
+use App\Models\WorkingWithType;
+use Illuminate\Support\Facades\DB;
 use App\Models\State;
 use App\Models\SubCaste;
 use App\Models\Taluka;
@@ -199,18 +206,17 @@ class DemoProfileDefaultsService
     public static function fullAttributesForDemoProfile(int $index = 0, ?string $genderOverride = null): array
     {
         $gender = self::resolveGender($genderOverride);
-        $fullName = self::generateFullName($gender, self::randomCaste(), $index);
         $dob = self::randomDobDemo();
         $heightCm = random_int(155, 182);
         $weightKg = random_int(50, 85);
-        $hierarchy = self::locationHierarchyForDemo();
+        $loc = self::locationHierarchyForShowcaseFromRealUsers();
         $profilePhoto = self::randomDemoPhoto($gender);
 
         $genderId = MasterGender::where('key', $gender)->where('is_active', true)->value('id');
         $maritalId = MasterMaritalStatus::where('key', 'never_married')->where('is_active', true)->value('id')
             ?? MasterMaritalStatus::where('is_active', true)->inRandomOrder()->value('id');
 
-        $religion = Religion::where('is_active', true)->inRandomOrder()->first();
+        $religion = self::pickAllowedShowcaseReligion();
         $religionId = $religion?->id;
         $casteId = null;
         $subCasteId = null;
@@ -229,8 +235,41 @@ class DemoProfileDefaultsService
         $familyTypeId = MasterFamilyType::where('is_active', true)->inRandomOrder()->value('id');
         $incomeCurrencyId = MasterIncomeCurrency::where('is_active', true)->inRandomOrder()->value('id');
 
-        $educations = ['B.Com', 'B.E.', 'B.Tech', 'M.Com', 'M.B.A.', 'B.Sc', 'M.Sc', 'B.A.', 'M.A.', 'Graduate', 'Post Graduate', 'Professional'];
-        $occupations = ['Software Engineer', 'Accountant', 'Teacher', 'Doctor', 'Business', 'Bank Officer', 'Government Employee', 'Private Job', 'Consultant'];
+        $fullName = self::generateFullNameForReligion($gender, $religion, $index);
+        // Rule: 50% showcase profiles should have only first name (no surname).
+        if (random_int(1, 100) <= 50) {
+            $parts = preg_split('/\s+/u', trim($fullName), 2);
+            $firstOnly = trim((string) ($parts[0] ?? ''));
+            if ($firstOnly !== '') {
+                $fullName = $firstOnly;
+            }
+        }
+
+        $educations = [
+            'B.Com', 'B.E.', 'B.Tech', 'M.Com', 'M.B.A.', 'B.Sc', 'M.Sc', 'B.A.', 'M.A.',
+            'Graduate', 'Post Graduate', 'Professional',
+            // Keep some school-level entries for realism; constraints below prevent mismatched occupations.
+            'HSC', 'SSC', 'Below SSC',
+        ];
+        [$highestEducation, $occupationTitle] = self::pickEducationAndOccupation($educations);
+
+        // Showcase realism rule: ~80% of female profiles should be non-working (no job/income fields).
+        $isFemale = ($gender === 'female');
+        $isNonWorking = $isFemale && (random_int(1, 100) <= 80);
+
+        $dietId = self::pickDietIdForReligion($religion);
+        $smokingStatusId = self::pickSmokingStatusIdForReligion($religion);
+        $drinkingStatusId = self::pickDrinkingStatusIdForReligion($religion);
+
+        $motherTongueId = self::pickMotherTongueIdForReligion($religion);
+
+        [$workingWithTypeId, $professionId] = self::pickWorkingWithAndProfessionIds();
+        if ($isNonWorking) {
+            $occupationTitle = null;
+            $workingWithTypeId = null;
+            $professionId = null;
+        }
+
         $companies = ['IT Company', 'Bank', 'School', 'Hospital', 'Private Ltd', 'Self Employed', 'MNC', 'State Govt'];
         $fatherNames = ['Ramesh', 'Suresh', 'Rajesh', 'Mahesh', 'Vijay', 'Sunil', 'Prakash', 'Anil', 'Dilip', 'Sanjay'];
         $motherNames = ['Sunita', 'Lata', 'Kavita', 'Anita', 'Meera', 'Poonam', 'Seema', 'Rekha', 'Vandana', 'Priya'];
@@ -241,10 +280,13 @@ class DemoProfileDefaultsService
         $annualIncome = (string) (random_int(3, 50) * 100000);
         $familyIncome = (string) (random_int(5, 80) * 100000);
 
-        $workStateId = $hierarchy['state_id'] ?? null;
-        $workCityId = $hierarchy['city_id'] ?? null;
+        // Location rules (requested):
+        // 1) Only pick districts that exist among real (non-demo) users.
+        // 2) Residence should be in the district "town" (city), not a village.
+        $spectaclesLens = ['no', 'spectacles', 'contact_lens', 'both'][array_rand(['no', 'spectacles', 'contact_lens', 'both'])];
+        $physicalCondition = ['none', 'prefer_not_to_say'][array_rand(['none', 'prefer_not_to_say'])];
 
-        return array_merge($hierarchy, [
+        return array_merge($loc ?? [], [
             'full_name' => $fullName,
             'gender_id' => $genderId,
             'date_of_birth' => $dob,
@@ -254,39 +296,445 @@ class DemoProfileDefaultsService
             'religion_id' => $religionId,
             'caste_id' => $casteId,
             'sub_caste_id' => $subCasteId,
-            'highest_education' => $educations[array_rand($educations)],
-            'address_line' => $addressLine,
-            'birth_city_id' => $hierarchy['city_id'] ?? null,
-            'birth_taluka_id' => $hierarchy['taluka_id'] ?? null,
-            'birth_district_id' => $hierarchy['district_id'] ?? null,
-            'birth_state_id' => $hierarchy['state_id'] ?? null,
-            'native_city_id' => $hierarchy['city_id'] ?? null,
-            'native_taluka_id' => $hierarchy['taluka_id'] ?? null,
-            'native_district_id' => $hierarchy['district_id'] ?? null,
-            'native_state_id' => $hierarchy['state_id'] ?? null,
+            'mother_tongue_id' => $motherTongueId,
+            'highest_education' => $highestEducation,
             'height_cm' => $heightCm,
             'weight_kg' => $weightKg,
             'profile_photo' => $profilePhoto,
             'complexion_id' => $complexionId,
             'physical_build_id' => $physicalBuildId,
             'blood_group_id' => $bloodGroupId,
+            'spectacles_lens' => $spectaclesLens,
+            'physical_condition' => $physicalCondition,
             'family_type_id' => $familyTypeId,
             'income_currency_id' => $incomeCurrencyId,
+            'diet_id' => $dietId,
+            'smoking_status_id' => $smokingStatusId,
+            'drinking_status_id' => $drinkingStatusId,
             'is_suspended' => false,
             'photo_approved' => true,
             'is_demo' => true,
             'specialization' => ['Commerce', 'Computer Science', 'Arts', 'Science', 'Management'][array_rand(['Commerce', 'Computer Science', 'Arts', 'Science', 'Management'])],
-            'occupation_title' => $occupations[array_rand($occupations)],
-            'company_name' => $companies[array_rand($companies)],
-            'annual_income' => $annualIncome,
+            'occupation_title' => $occupationTitle,
+            'working_with_type_id' => $workingWithTypeId,
+            'profession_id' => $professionId,
+            'company_name' => $isNonWorking ? null : $companies[array_rand($companies)],
+            'annual_income' => $isNonWorking ? null : $annualIncome,
             'family_income' => $familyIncome,
             'father_name' => $fatherNames[array_rand($fatherNames)] . ' ' . explode(' ', $fullName)[0],
             'father_occupation' => ['Retired', 'Business', 'Government', 'Private Job'][array_rand(['Retired', 'Business', 'Government', 'Private Job'])],
             'mother_name' => $motherNames[array_rand($motherNames)] . ' ' . explode(' ', $fullName)[0],
             'mother_occupation' => ['Homemaker', 'Teacher', 'Retired', 'Private Job'][array_rand(['Homemaker', 'Teacher', 'Retired', 'Private Job'])],
-            'work_city_id' => $workCityId,
-            'work_state_id' => $workStateId,
         ]);
+    }
+
+    /**
+     * Showcase constraint: allow only Hindu / Buddhist / Muslim religions.
+     */
+    private static function pickAllowedShowcaseReligion(): ?Religion
+    {
+        // Prefer canonical keys first.
+        $religion = Religion::query()
+            ->where('is_active', true)
+            ->whereIn('key', ['hindu', 'buddhist', 'buddhism', 'muslim', 'islam'])
+            ->inRandomOrder()
+            ->first();
+
+        if ($religion) {
+            return $religion;
+        }
+
+        // Fallback on labels if keys differ across environments.
+        return Religion::query()
+            ->where('is_active', true)
+            ->where(function ($q) {
+                $q->whereRaw('LOWER(COALESCE(`label`, "")) like ?', ['%hindu%'])
+                    ->orWhereRaw('LOWER(COALESCE(`label`, "")) like ?', ['%buddh%'])
+                    ->orWhereRaw('LOWER(COALESCE(`label`, "")) like ?', ['%muslim%']);
+            })
+            ->inRandomOrder()
+            ->first();
+    }
+
+    /**
+     * Demo "step 6" + "step 7" parity:
+     * - extended_narrative (about me + expectations)
+     * - preferences (partner preference criteria + pivots via MutationService)
+     *
+     * @return array{extended_narrative: list<array<string, mixed>>, preferences: array<string, mixed>}
+     */
+    public static function postCreateSnapshotForDemoProfile(MatrimonyProfile $profile): array
+    {
+        $age = null;
+        if ($profile->date_of_birth) {
+            try {
+                $dob = $profile->date_of_birth instanceof \Carbon\CarbonInterface
+                    ? $profile->date_of_birth
+                    : \Carbon\Carbon::parse((string) $profile->date_of_birth);
+                $age = $dob->age;
+            } catch (\Throwable $e) {
+                $age = null;
+            }
+        }
+
+        $prefAgeMin = $age !== null ? max(18, (int) $age - 3) : null;
+        $prefAgeMax = $age !== null ? min(80, (int) $age + 5) : null;
+
+        $height = is_numeric($profile->height_cm) ? (int) $profile->height_cm : null;
+        $prefHeightMin = $height !== null ? max(1, $height - 10) : null;
+        $prefHeightMax = $height !== null ? ($height + 10) : null;
+
+        $about = [];
+        $occ = trim((string) ($profile->occupation_title ?? ''));
+        $edu = trim((string) ($profile->highest_education ?? ''));
+        if ($occ !== '') {
+            $about[] = "Working as {$occ}.";
+        }
+        if ($edu !== '') {
+            $about[] = "Education: {$edu}.";
+        }
+        if ($about === []) {
+            $about[] = 'I value family and clear communication.';
+        }
+
+        $dietId = $profile->diet_id ? (int) $profile->diet_id : null;
+        $religionId = $profile->religion_id ? (int) $profile->religion_id : null;
+        $workingWithTypeId = $profile->working_with_type_id ? (int) $profile->working_with_type_id : null;
+        $professionId = $profile->profession_id ? (int) $profile->profession_id : null;
+
+        return [
+            'extended_narrative' => [[
+                'id' => null,
+                'narrative_about_me' => trim(implode(' ', $about)),
+                'narrative_expectations' => 'Looking for a respectful, family-oriented match. Prefer honest and calm communication.',
+                'additional_notes' => null,
+            ]],
+            'preferences' => [
+                'preferred_age_min' => $prefAgeMin,
+                'preferred_age_max' => $prefAgeMax,
+                'preferred_height_min_cm' => $prefHeightMin,
+                'preferred_height_max_cm' => $prefHeightMax,
+                'preferred_income_min' => null,
+                'preferred_income_max' => null,
+                'preferred_education' => null,
+                'preferred_city_id' => null,
+                'willing_to_relocate' => null,
+                'marriage_type_preference_id' => null,
+                'preferred_marital_status_id' => null,
+                'partner_profile_with_children' => 'no',
+                'preferred_profile_managed_by' => 'self',
+                'preferred_religion_ids' => $religionId ? [$religionId] : [],
+                'preferred_caste_ids' => [],
+                'preferred_country_ids' => [],
+                'preferred_state_ids' => [],
+                'preferred_district_ids' => [],
+                'preferred_taluka_ids' => [],
+                'preferred_master_education_ids' => [],
+                'preferred_working_with_type_ids' => $workingWithTypeId ? [$workingWithTypeId] : [],
+                'preferred_profession_ids' => $professionId ? [$professionId] : [],
+                'preferred_diet_ids' => $dietId ? [$dietId] : [],
+            ],
+        ];
+    }
+
+    private static function generateFullNameForReligion(string $gender, ?Religion $religion, int $index = 0): string
+    {
+        $g = $gender === 'female' ? 'female' : 'male';
+        $key = strtolower(trim((string) ($religion?->key ?? '')));
+
+        // Keep names respectful, non-controversial, and consistent with religion where possible.
+        // Falls back to a neutral pan-Indian pool when religion key is unknown.
+        $pools = [
+            'jain' => [
+                'male' => ['Amit', 'Sanket', 'Nirav', 'Kunal', 'Rakesh', 'Nikhil', 'Jay', 'Harsh'],
+                'female' => ['Riya', 'Jinal', 'Palak', 'Nidhi', 'Khushi', 'Aanchal', 'Neha', 'Komal'],
+            ],
+            'muslim' => [
+                'male' => ['Ayaan', 'Arman', 'Faisal', 'Imran', 'Naved', 'Salman', 'Zaid', 'Irfan'],
+                'female' => ['Aisha', 'Sara', 'Zara', 'Noor', 'Hiba', 'Sana', 'Alia', 'Mehak'],
+            ],
+            'christian' => [
+                'male' => ['Brian', 'Kevin', 'Jason', 'Mark', 'Ryan', 'Andrew', 'Joseph', 'Daniel'],
+                'female' => ['Maria', 'Angel', 'Anna', 'Rita', 'Sophia', 'Eliza', 'Daisy', 'Grace'],
+            ],
+            'sikh' => [
+                'male' => ['Gurpreet', 'Harpreet', 'Jaspreet', 'Manpreet', 'Sukhdeep', 'Amrit', 'Navdeep', 'Harman'],
+                'female' => ['Gurleen', 'Harleen', 'Jasleen', 'Manpreet', 'Sukhpreet', 'Amrit', 'Navleen', 'Harmanpreet'],
+            ],
+            'hindu' => [
+                'male' => ['Aditya', 'Rahul', 'Rohan', 'Vikram', 'Karan', 'Siddharth', 'Dev', 'Arjun'],
+                'female' => ['Priya', 'Ananya', 'Kavya', 'Meera', 'Shreya', 'Aditi', 'Divya', 'Sneha'],
+            ],
+            'buddhist' => [
+                'male' => ['Rahul', 'Sagar', 'Akash', 'Nilesh', 'Prashant', 'Amol', 'Vivek', 'Swapnil'],
+                'female' => ['Anita', 'Kavita', 'Pradnya', 'Komal', 'Rekha', 'Seema', 'Vandana', 'Poonam'],
+            ],
+        ];
+
+        $neutral = [
+            'male' => ['Aditya', 'Rahul', 'Rohan', 'Sagar', 'Nikhil', 'Amit', 'Kunal', 'Vivek'],
+            'female' => ['Priya', 'Ananya', 'Riya', 'Neha', 'Kavya', 'Aditi', 'Sneha', 'Komal'],
+        ];
+
+        $pool = $pools[$key][$g] ?? $neutral[$g];
+        $first = $pool[array_rand($pool)];
+
+        // Add a light last-name-style suffix to look like a full name without implying religion/caste.
+        $last = ['Patil', 'Sharma', 'Jadhav', 'Kulkarni', 'Deshmukh', 'Gupta', 'Rao', 'Singh'][array_rand(['Patil', 'Sharma', 'Jadhav', 'Kulkarni', 'Deshmukh', 'Gupta', 'Rao', 'Singh'])];
+        $full = trim($first . ' ' . $last);
+
+        if ($full === '' || mb_strlen($full) > 255) {
+            return 'Showcase Profile ' . ($index + 1);
+        }
+        return $full;
+    }
+
+    /**
+     * @param list<string> $educationOptions
+     * @return array{0: string, 1: string}
+     */
+    private static function pickEducationAndOccupation(array $educationOptions): array
+    {
+        $education = $educationOptions[array_rand($educationOptions)];
+        $e = strtolower(trim($education));
+
+        $isSchoolLevel = in_array($e, ['below ssc', 'ssc', 'hsc'], true)
+            || str_contains($e, 'below')
+            || str_contains($e, 'ssc')
+            || str_contains($e, 'hsc');
+
+        // Default pool (safe, common roles).
+        $base = ['Accountant', 'Teacher', 'Business', 'Bank Officer', 'Government Employee', 'Private Job', 'Consultant', 'Software Engineer'];
+
+        // Restrict for school-level education (avoid "Doctor", avoid overly specialized roles).
+        if ($isSchoolLevel) {
+            $allowed = ['Business', 'Private Job', 'Government Employee', 'Consultant', 'Accountant'];
+            return [$education, $allowed[array_rand($allowed)]];
+        }
+
+        // For higher education, allow doctor sometimes, but not always.
+        $allowed = array_merge($base, ['Doctor']);
+        $occupation = $allowed[array_rand($allowed)];
+        return [$education, $occupation];
+    }
+
+    private static function pickDietIdForReligion(?Religion $religion): ?int
+    {
+        $key = strtolower(trim((string) ($religion?->key ?? '')));
+        $active = MasterDiet::query()->where('is_active', true)->orderBy('sort_order')->get(['id', 'key', 'label']);
+        if ($active->isEmpty()) {
+            return null;
+        }
+
+        // Guardrail: Jain → vegetarian only (avoid non-veg by construction).
+        if ($key === 'jain') {
+            $vegKeys = ['veg', 'vegetarian', 'pure_veg'];
+            foreach ($active as $row) {
+                if (in_array(strtolower((string) $row->key), $vegKeys, true)) {
+                    return (int) $row->id;
+                }
+            }
+            foreach ($active as $row) {
+                $label = strtolower((string) $row->label);
+                if (str_contains($label, 'veg') || str_contains($label, 'vegetarian')) {
+                    return (int) $row->id;
+                }
+            }
+            return null;
+        }
+
+        // Otherwise pick any active (keeps variety).
+        return (int) $active->random()->id;
+    }
+
+    private static function pickMotherTongueIdForReligion(?Religion $religion): ?int
+    {
+        $key = strtolower(trim((string) ($religion?->key ?? '')));
+        $active = MasterMotherTongue::query()->where('is_active', true)->orderBy('sort_order')->get(['id', 'key', 'label']);
+        if ($active->isEmpty()) {
+            return null;
+        }
+
+        // Light preference mapping (best-effort). Falls back to random active.
+        $preferredKeys = match ($key) {
+            'jain' => ['gujarati', 'marathi', 'hindi'],
+            'hindu' => ['marathi', 'hindi', 'gujarati'],
+            'muslim' => ['urdu', 'hindi', 'marathi'],
+            'sikh' => ['punjabi', 'hindi'],
+            'christian' => ['english', 'hindi', 'marathi'],
+            default => [],
+        };
+
+        foreach ($preferredKeys as $pk) {
+            foreach ($active as $row) {
+                if (strtolower((string) $row->key) === $pk) {
+                    return (int) $row->id;
+                }
+            }
+        }
+
+        return (int) $active->random()->id;
+    }
+
+    /**
+     * @return array{0: int|null, 1: int|null} working_with_type_id, profession_id
+     */
+    private static function pickWorkingWithAndProfessionIds(): array
+    {
+        $prof = Profession::query()->where('is_active', true)->inRandomOrder()->first();
+        if ($prof) {
+            return [$prof->working_with_type_id ? (int) $prof->working_with_type_id : null, (int) $prof->id];
+        }
+
+        $ww = WorkingWithType::query()->where('is_active', true)->inRandomOrder()->first();
+        return [$ww?->id ? (int) $ww->id : null, null];
+    }
+
+    /**
+     * Location rule-set for showcase profiles:
+     * - pick only districts that have at least one real (non-demo) profile
+     * - set residence in the district "town" using cities table (not villages)
+     *
+     * Returns hierarchy keys for MatrimonyProfile core columns:
+     * country_id/state_id/district_id/taluka_id/city_id + work_state_id/work_city_id (aligned)
+     *
+     * @return array{country_id:int|null,state_id:int|null,district_id:int|null,taluka_id:int|null,city_id:int|null,work_state_id:int|null,work_city_id:int|null}|null
+     */
+    private static function locationHierarchyForShowcaseFromRealUsers(): ?array
+    {
+        static $eligibleDistrictIds = null;
+        if ($eligibleDistrictIds === null) {
+            $eligibleDistrictIds = DB::table('matrimony_profiles')
+                ->where('is_demo', false)
+                ->whereNull('deleted_at')
+                ->whereNotNull('district_id')
+                ->pluck('district_id')
+                ->map(fn ($v) => (int) $v)
+                ->filter()
+                ->unique()
+                ->values()
+                ->all();
+        }
+        if (empty($eligibleDistrictIds)) {
+            return null;
+        }
+
+        // Try a few times to find a district with a usable "town" city.
+        for ($attempt = 0; $attempt < 12; $attempt++) {
+            $districtId = $eligibleDistrictIds[array_rand($eligibleDistrictIds)];
+            $district = \App\Models\District::query()->find($districtId);
+            if (! $district) {
+                continue;
+            }
+
+            $stateId = $district->state_id ? (int) $district->state_id : null;
+            $countryId = null;
+            if ($stateId) {
+                $countryId = (int) (\App\Models\State::query()->where('id', $stateId)->value('country_id') ?? 0) ?: null;
+            }
+
+            // Strict rule: choose only district-city match (जिल्ह्याचं गाव).
+            $districtName = strtolower(trim((string) ($district->name ?? '')));
+
+            $candidate = DB::table('cities')
+                ->join('talukas', 'cities.taluka_id', '=', 'talukas.id')
+                ->where('talukas.district_id', $districtId)
+                ->whereNotNull('cities.name')
+                ->select('cities.id as city_id', 'cities.name as city_name', 'cities.taluka_id as taluka_id')
+                ->get();
+
+            if ($candidate->isEmpty()) {
+                continue;
+            }
+
+            $picked = null;
+            foreach ($candidate as $row) {
+                $name = strtolower(trim((string) ($row->city_name ?? '')));
+                if ($name !== '' && $districtName !== '' && $name === $districtName) {
+                    $picked = $row;
+                    break;
+                }
+            }
+
+            // No strict district-city match for this district => skip district.
+            if ($picked === null) {
+                continue;
+            }
+
+            $talukaId = isset($picked->taluka_id) ? (int) $picked->taluka_id : null;
+            $cityId = isset($picked->city_id) ? (int) $picked->city_id : null;
+            if (! $cityId || ! $talukaId) {
+                continue;
+            }
+
+            return [
+                'country_id' => $countryId,
+                'state_id' => $stateId,
+                'district_id' => (int) $districtId,
+                'taluka_id' => $talukaId,
+                'city_id' => $cityId,
+                // Align work location to residence for showcase realism (no village).
+                'work_state_id' => $stateId,
+                'work_city_id' => $cityId,
+            ];
+        }
+
+        return null;
+    }
+    private static function pickSmokingStatusIdForReligion(?Religion $religion): ?int
+    {
+        $key = strtolower(trim((string) ($religion?->key ?? '')));
+        $active = MasterSmokingStatus::query()->where('is_active', true)->orderBy('sort_order')->get(['id', 'key', 'label']);
+        if ($active->isEmpty()) {
+            return null;
+        }
+
+        // Jain → never/none
+        if ($key === 'jain') {
+            $preferredKeys = ['no', 'never', 'non_smoker', 'does_not_smoke'];
+            foreach ($active as $row) {
+                if (in_array(strtolower((string) $row->key), $preferredKeys, true)) {
+                    return (int) $row->id;
+                }
+            }
+            foreach ($active as $row) {
+                $label = strtolower((string) $row->label);
+                if (str_contains($label, 'no') || str_contains($label, 'never') || str_contains($label, 'non')) {
+                    return (int) $row->id;
+                }
+            }
+            return (int) $active->first()->id;
+        }
+
+        return (int) $active->random()->id;
+    }
+
+    private static function pickDrinkingStatusIdForReligion(?Religion $religion): ?int
+    {
+        $key = strtolower(trim((string) ($religion?->key ?? '')));
+        $active = MasterDrinkingStatus::query()->where('is_active', true)->orderBy('sort_order')->get(['id', 'key', 'label']);
+        if ($active->isEmpty()) {
+            return null;
+        }
+
+        // Jain → never/none
+        if ($key === 'jain') {
+            $preferredKeys = ['no', 'never', 'non_drinker', 'does_not_drink'];
+            foreach ($active as $row) {
+                if (in_array(strtolower((string) $row->key), $preferredKeys, true)) {
+                    return (int) $row->id;
+                }
+            }
+            foreach ($active as $row) {
+                $label = strtolower((string) $row->label);
+                if (str_contains($label, 'no') || str_contains($label, 'never') || str_contains($label, 'non')) {
+                    return (int) $row->id;
+                }
+            }
+            return (int) $active->first()->id;
+        }
+
+        return (int) $active->random()->id;
     }
 
     /**

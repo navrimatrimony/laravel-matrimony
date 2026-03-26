@@ -78,6 +78,26 @@
                     @foreach ($profiles as $matrimonyProfile)
                         <div class="bg-white text-gray-900 border border-gray-200 rounded-lg p-4 mb-4 flex justify-between items-center">
 
+                        @php
+                            $genderKey = strtolower(trim((string) ($matrimonyProfile->gender?->key ?? '')));
+                            $genderLabel = trim((string) ($matrimonyProfile->gender?->label ?? ''));
+                            if ($genderLabel === '' && $genderKey !== '') {
+                                $genderLabel = ucfirst($genderKey);
+                            }
+                            if ($genderLabel === '') {
+                                $genderLabel = '—';
+                            }
+
+                            $ageText = null;
+                            if ($matrimonyProfile->date_of_birth) {
+                                $ageText = \Carbon\Carbon::parse($matrimonyProfile->date_of_birth)->age . ' ' . __('search.years_short');
+                            }
+
+                            $talukaName = trim((string) ($matrimonyProfile->taluka?->name ?? ''));
+                            $districtName = trim((string) ($matrimonyProfile->district?->name ?? ''));
+                            $stateName = trim((string) ($matrimonyProfile->state?->name ?? ''));
+                        @endphp
+
                         <div class="flex items-center gap-4">
 
 
@@ -94,10 +114,9 @@
     @else
         {{-- Gender-based placeholder fallback (UI only) --}}
         @php
-            $gender = $matrimonyProfile->gender ?? null;
-            if ($gender === 'male') {
+            if ($genderKey === 'male') {
                 $placeholderSrc = asset('images/placeholders/male-profile.svg');
-            } elseif ($gender === 'female') {
+            } elseif ($genderKey === 'female') {
                 $placeholderSrc = asset('images/placeholders/female-profile.svg');
             } else {
                 $placeholderSrc = asset('images/placeholders/default-profile.svg');
@@ -116,22 +135,17 @@
 
 <div>
     <p class="font-semibold text-lg">{{ $matrimonyProfile->full_name }}</p>
-    <p class="text-sm text-gray-600">
-    <span class="text-sm text-gray-600">
-        {{-- Gender --}}
-        {{ ucfirst($matrimonyProfile->gender) }}
-
-        {{-- Age (calculated from DOB) --}}
-        @if ($matrimonyProfile->date_of_birth)
-            | {{ \Carbon\Carbon::parse($matrimonyProfile->date_of_birth)->age }} {{ __('search.years_short') }}
+    <div class="mt-1 flex flex-wrap items-center gap-2 text-xs text-gray-600">
+        <span class="rounded-full bg-gray-100 px-2 py-0.5">{{ $genderLabel }}</span>
+        @if ($ageText)
+            <span class="rounded-full bg-gray-100 px-2 py-0.5">{{ $ageText }}</span>
         @endif
-
-        {{-- Location --}}
-        @if ($matrimonyProfile->location)
-            | {{ ucfirst($matrimonyProfile->location) }}
-        @endif
-    </span>
-</p>
+    </div>
+    <p class="mt-1.5 text-[11px] font-mono tracking-wide text-indigo-700">
+        Taluka: {{ $talukaName !== '' ? $talukaName : '—' }} |
+        District: {{ $districtName !== '' ? $districtName : '—' }} |
+        State: {{ $stateName !== '' ? $stateName : '—' }}
+    </p>
 
 </div>
 

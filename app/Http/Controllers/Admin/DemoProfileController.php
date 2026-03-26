@@ -8,6 +8,7 @@ use App\Models\User;
 use App\Services\DemoProfileDefaultsService;
 use App\Services\ExtendedFieldService;
 use App\Services\FieldValueHistoryService;
+use App\Services\MutationService;
 use App\Services\ProfileCompletenessService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -46,6 +47,9 @@ class DemoProfileController extends Controller
 
         $genderOverride = $request->filled('gender') ? $request->gender : null;
         $attrs = DemoProfileDefaultsService::fullAttributesForDemoProfile(0, $genderOverride);
+        if (empty($attrs['district_id'] ?? null) || empty($attrs['city_id'] ?? null)) {
+            return back()->with('error', 'Cannot create showcase profile: no eligible district/city found from real-user districts.');
+        }
         $attrs['user_id'] = $demoUser->id;
         $attrs['is_demo'] = true;
         $attrs['is_suspended'] = false;
@@ -54,6 +58,7 @@ class DemoProfileController extends Controller
         self::setLifecycleActive($profile);
         self::addPrimaryContact($profile);
         self::autofillExtendedAndHistory($profile);
+        self::applyWizardLikeNarrativeAndPreferences($profile, (int) ($request->user()?->id ?? 0));
         self::recordHistoryForDemo($profile);
 
         return redirect()
@@ -93,6 +98,9 @@ class DemoProfileController extends Controller
                 continue;
             }
             $attrs = DemoProfileDefaultsService::fullAttributesForDemoProfile($i, $genderOverride);
+            if (empty($attrs['district_id'] ?? null) || empty($attrs['city_id'] ?? null)) {
+                continue;
+            }
             $attrs['user_id'] = $user->id;
             $attrs['is_demo'] = true;
             $attrs['is_suspended'] = false;
@@ -100,6 +108,7 @@ class DemoProfileController extends Controller
             self::setLifecycleActive($profile);
             self::addPrimaryContact($profile);
             self::autofillExtendedAndHistory($profile);
+            self::applyWizardLikeNarrativeAndPreferences($profile, (int) ($request->user()?->id ?? 0));
             self::recordHistoryForDemo($profile);
             $created++;
         }
@@ -172,6 +181,27 @@ class DemoProfileController extends Controller
             }
             FieldValueHistoryService::record($profile->id, $fieldKey, 'CORE', null, $newVal, FieldValueHistoryService::CHANGED_BY_SYSTEM);
         }
+    }
+
+    /**
+     * Ensure demo profiles look like "Step 1–7" completion (excluding location/address for now):
+     * - about-me narrative (profile_extended_attributes)
+     * - partner preferences (profile_preference_criteria + pivots)
+     */
+    private static function applyWizardLikeNarrativeAndPreferences(MatrimonyProfile $profile, int $actorUserId): void
+    {
+        $snapshot = DemoProfileDefaultsService::postCreateSnapshotForDemoProfile($profile->fresh());
+
+        // Apply in one snapshot so MutationService syncs tables consistently.
+        app(MutationService::class)->applyManualSnapshot(
+            $profile->fresh(),
+            [
+                'extended_narrative' => $snapshot['extended_narrative'] ?? [],
+                'preferences' => $snapshot['preferences'] ?? [],
+            ],
+            $actorUserId > 0 ? $actorUserId : 0,
+            'manual'
+        );
     }
 
     /**

@@ -7,6 +7,7 @@ use App\Models\MatrimonyProfile;
 use App\Models\Message;
 use App\Services\Chat\ChatConversationService;
 use App\Services\Chat\ChatMessageModerationService;
+use App\Services\Chat\ChatTemplateSuggestionService;
 use App\Services\Chat\ChatMessageService;
 use App\Services\Chat\ChatPolicyService;
 use App\Services\CommunicationPolicyService;
@@ -99,7 +100,8 @@ class ChatController extends Controller
             $awaitingMe = false;
             $awaitingThem = false;
             if ($last) {
-                $awaitingMe = ((int) $last->sender_profile_id !== (int) $me->id) && ((int) ($unreadByConversation[$c->id] ?? 0) > 0);
+                // "Awaiting my reply" should mean: the other participant spoke last (even if I've read it).
+                $awaitingMe = ((int) $last->sender_profile_id !== (int) $me->id);
                 $awaitingThem = ((int) $last->sender_profile_id === (int) $me->id);
             }
 
@@ -267,6 +269,9 @@ class ChatController extends Controller
             }
         }
 
+        $chatTemplateSuggestions = app(ChatTemplateSuggestionService::class)
+            ->getSuggestionGroupsForConversation($other);
+
         return view('chat.show', [
             'me' => $me,
             'viewerProfileId' => (int) $me->id,
@@ -277,6 +282,7 @@ class ChatController extends Controller
             'canSendDecision' => $canSend,
             'imagePolicy' => $imagePolicy,
             'showcaseTag' => $showcaseTag,
+            'chatTemplateSuggestions' => $chatTemplateSuggestions,
         ]);
     }
 

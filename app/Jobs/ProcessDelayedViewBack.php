@@ -4,7 +4,6 @@ namespace App\Jobs;
 
 use App\Models\MatrimonyProfile;
 use App\Models\ProfileView;
-use App\Notifications\ProfileViewedNotification;
 use App\Services\ViewTrackingService;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -72,10 +71,7 @@ class ProcessDelayedViewBack implements ShouldQueue
             'viewed_profile_id' => $realProfile->id,
         ]);
 
-        // Notify real user
-        $realOwner = $realProfile->user;
-        if ($realOwner) {
-            $realOwner->notify(new ProfileViewedNotification($demoProfile, true));
-        }
+        // Notify real user (with dedup guard from service).
+        ViewTrackingService::notifyProfileViewIfEligible($realProfile->user, $demoProfile, true);
     }
 }

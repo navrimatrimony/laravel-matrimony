@@ -144,6 +144,23 @@
                         </div>
                     </div>
 
+                    @if ($canSendDecision->allowed ?? false)
+                        <div id="chat-template-starters" class="mb-3" data-test="chat-template-starters">
+                            <p class="mb-2 text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">प्रोफाइलवर आधारित सुचवलेले संदेश</p>
+                            <div class="flex flex-wrap gap-1.5" role="tablist" aria-label="संदेश प्रकार">
+                                @foreach ($chatTemplateSuggestions ?? [] as $catKey => $cat)
+                                    <button
+                                        type="button"
+                                        data-chat-cat="{{ $catKey }}"
+                                        class="chat-cat-chip inline-flex items-center rounded-full border border-gray-200 bg-white px-2.5 py-1 text-[11px] font-semibold text-gray-700 transition hover:bg-gray-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 dark:border-gray-600 dark:bg-gray-900 dark:text-gray-200 dark:hover:bg-gray-800"
+                                    >{{ $cat['label'] ?? $catKey }}</button>
+                                @endforeach
+                            </div>
+                            <div id="chat-template-pills" class="mt-2 flex flex-wrap gap-1.5" aria-live="polite"></div>
+                        </div>
+                        <script type="application/json" id="chat-template-groups-json">{!! json_encode($chatTemplateSuggestions ?? [], JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT) !!}</script>
+                    @endif
+
                     {{-- Main composer (single row, WhatsApp-style) --}}
                     <div class="flex items-end gap-2">
                         <button
@@ -164,7 +181,7 @@
 
                         <form method="POST" action="{{ route('chat.messages.text', ['conversation' => $conversation->id]) }}" class="flex flex-1 items-end gap-2" onsubmit="const b=this.querySelector('button[type=submit]'); if(b){ b.disabled=true; b.setAttribute('aria-busy','true'); }">
                             @csrf
-                            <textarea name="body_text" rows="2" placeholder="Type a message..." class="w-full min-w-0 resize-none rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100 disabled:cursor-not-allowed disabled:opacity-70" @disabled(!($canSendDecision->allowed ?? false))></textarea>
+                            <textarea id="chat-message-body" name="body_text" rows="2" placeholder="Type a message..." class="w-full min-w-0 resize-none rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100 disabled:cursor-not-allowed disabled:opacity-70" @disabled(!($canSendDecision->allowed ?? false))></textarea>
                             <button type="submit" class="shrink-0 rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50" @disabled(!($canSendDecision->allowed ?? false))>
                                 Send
                             </button>
@@ -406,5 +423,72 @@
     }, 700);
 })();
 </script>
+@if ($canSendDecision->allowed ?? false)
+<script>
+(function () {
+    const jsonEl = document.getElementById('chat-template-groups-json');
+    const container = document.getElementById('chat-template-starters');
+    const pillsWrap = document.getElementById('chat-template-pills');
+    const textarea = document.getElementById('chat-message-body');
+    if (!jsonEl || !container || !pillsWrap || !textarea) {
+        return;
+    }
+    let groups = {};
+    try {
+        groups = JSON.parse(jsonEl.textContent || '{}');
+    } catch (e) {
+        return;
+    }
+    const keys = Object.keys(groups);
+    if (!keys.length) {
+        return;
+    }
+    let activeCat = keys[0];
+    const inactive = 'chat-cat-chip inline-flex items-center rounded-full border border-gray-200 bg-white px-2.5 py-1 text-[11px] font-semibold text-gray-700 transition hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-900 dark:text-gray-200 dark:hover:bg-gray-800';
+    const active = 'chat-cat-chip inline-flex items-center rounded-full border border-indigo-500 bg-indigo-50 px-2.5 py-1 text-[11px] font-semibold text-indigo-800 ring-1 ring-indigo-200 dark:bg-indigo-950/40 dark:text-indigo-100 dark:ring-indigo-800';
+
+    function pillClass() {
+        return 'max-w-full cursor-pointer rounded-xl border border-gray-200 bg-gray-50 px-2.5 py-1.5 text-left text-[11px] leading-snug text-gray-800 shadow-sm hover:border-indigo-300 hover:bg-white dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 dark:hover:border-indigo-500';
+    }
+
+    function renderPills() {
+        const g = groups[activeCat];
+        pillsWrap.innerHTML = '';
+        if (!g || !g.items) {
+            return;
+        }
+        g.items.forEach(function (text) {
+            const b = document.createElement('button');
+            b.type = 'button';
+            b.className = pillClass();
+            b.textContent = text;
+            b.addEventListener('click', function () {
+                textarea.value = text;
+                textarea.focus();
+            });
+            pillsWrap.appendChild(b);
+        });
+    }
+
+    function syncChips() {
+        container.querySelectorAll('[data-chat-cat]').forEach(function (btn) {
+            const k = btn.getAttribute('data-chat-cat');
+            btn.className = (k === activeCat) ? active : inactive;
+        });
+    }
+
+    container.querySelectorAll('[data-chat-cat]').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            activeCat = btn.getAttribute('data-chat-cat');
+            syncChips();
+            renderPills();
+        });
+    });
+
+    syncChips();
+    renderPills();
+})();
+</script>
+@endif
 @endsection
 

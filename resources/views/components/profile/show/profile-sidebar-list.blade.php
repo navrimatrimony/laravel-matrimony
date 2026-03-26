@@ -11,13 +11,15 @@
                 @php
                     $peer = $p instanceof \App\Models\MatrimonyProfile ? $p : null;
                     if (!$peer) continue;
-                    $peer->loadMissing(['district', 'state']);
-                    $line = \App\Services\ProfileShowReadService::compactSummaryLine($peer);
+                    $peer->loadMissing(['taluka', 'district', 'state']);
                     $thumb = \App\Services\ProfileShowReadService::photoThumbUrl($peer);
                     $age = null;
                     if ($peer->date_of_birth) {
                         try { $age = \Carbon\Carbon::parse($peer->date_of_birth)->age; } catch (\Throwable) { $age = null; }
                     }
+                    $talukaName = trim((string) ($peer->taluka?->name ?? ''));
+                    $districtName = trim((string) ($peer->district?->name ?? ''));
+                    $stateName = trim((string) ($peer->state?->name ?? ''));
                 @endphp
                 <li>
                     <a href="{{ route('matrimony.profile.show', $peer->id) }}" class="group flex items-center gap-3 rounded-2xl px-2 py-2 transition-colors hover:bg-stone-50/90 dark:hover:bg-gray-800/70">
@@ -25,7 +27,12 @@
                         <div class="min-w-0 flex-1">
                             <p class="truncate text-sm font-semibold text-stone-900 group-hover:text-rose-700 dark:text-stone-100 dark:group-hover:text-rose-300">{{ $peer->full_name }}</p>
                             <p class="truncate text-[11px] leading-tight text-stone-500 dark:text-stone-400">
-                                @if ($age !== null){{ $age }} yrs • @endif{{ $line }}
+                                @if ($age !== null){{ $age }} yrs @endif
+                            </p>
+                            <p class="mt-0.5 truncate text-[10px] font-mono tracking-wide text-indigo-700 dark:text-indigo-300">
+                                Taluka: {{ $talukaName !== '' ? $talukaName : '—' }} |
+                                District: {{ $districtName !== '' ? $districtName : '—' }} |
+                                State: {{ $stateName !== '' ? $stateName : '—' }}
                             </p>
                         </div>
                     </a>

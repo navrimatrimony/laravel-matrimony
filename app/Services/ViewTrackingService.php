@@ -6,6 +6,7 @@ use App\Jobs\ProcessDelayedViewBack;
 use App\Models\Block;
 use App\Models\MatrimonyProfile;
 use App\Models\ProfileView;
+use App\Models\User;
 use App\Notifications\ProfileViewedNotification;
 
 /*
@@ -19,6 +20,9 @@ use App\Notifications\ProfileViewedNotification;
 */
 class ViewTrackingService
 {
+    /** Prevent repeat "profile viewed" notifications from same viewer within this window. */
+    private const PROFILE_VIEW_NOTIFY_DEDUP_MINUTES = 10;
+
     /**
      * Record a profile view (viewer → viewed) and notify viewed's user.
      * Skip if viewer = viewed (self) or blocked. No notification for self.
@@ -26,6 +30,10 @@ class ViewTrackingService
     public static function recordView(MatrimonyProfile $viewer, MatrimonyProfile $viewed): void
     {
         if ($viewer->id === $viewed->id) {
+            return;
+        }
+        // Admin profile views should not create "viewed your profile" notifications.
+        if (($viewer->user?->is_admin ?? false) === true) {
             return;
         }
         if (self::isBlocked($viewer->id, $viewed->id)) {
@@ -37,10 +45,7 @@ class ViewTrackingService
             'viewed_profile_id' => $viewed->id,
         ]);
 
-        $owner = $viewed->user;
-        if ($owner) {
-            $owner->notify(new ProfileViewedNotification($viewer, false));
-        }
+        self::notifyProfileViewIfEligible($viewed->user, $viewer, false);
     }
 
     /**
@@ -50,6 +55,10 @@ class ViewTrackingService
     public static function maybeTriggerViewBack(MatrimonyProfile $viewer, MatrimonyProfile $viewed): void
     {
         if ($viewer->id === $viewed->id) {
+            return;
+        }
+        // Admin manual profile checks should never trigger showcase view-back side effects.
+        if (($viewer->user?->is_admin ?? false) === true) {
             return;
         }
         if (self::isBlocked($viewer->id, $viewed->id)) {
@@ -113,10 +122,43 @@ class ViewTrackingService
             'viewed_profile_id' => $realProfile->id,
         ]);
 
-        $realOwner = $realProfile->user;
-        if ($realOwner) {
-            $realOwner->notify(new ProfileViewedNotification($demoProfile, true));
+        self::notifyProfileViewIfEligible($realProfile->user, $demoProfile, true);
+    }
+
+    /**
+     * Send profile-view notification only when not recently sent by same viewer.
+     */
+    public static function notifyProfileViewIfEligible(?User $owner, MatrimonyProfile $viewerProfile, bool $isViewBack): void
+    {
+        if (! $owner) {
+            return;
         }
+        if (! self::shouldSendProfileViewNotification($owner, (int) $viewerProfile->id)) {
+            return;
+        }
+
+        $owner->notify(new ProfileViewedNotification($viewerProfile, $isViewBack));
+    }
+
+    private static function shouldSendProfileViewNotification(User $owner, int $viewerProfileId): bool
+    {
+        $since = now()->subMinutes(self::PROFILE_VIEW_NOTIFY_DEDUP_MINUTES);
+        $recent = $owner->notifications()
+            ->where('type', ProfileViewedNotification::class)
+            ->where('created_at', '>=', $since)
+            ->get(['data']);
+
+        foreach ($recent as $notification) {
+            $data = is_array($notification->data) ? $notification->data : [];
+            if (($data['type'] ?? null) !== 'profile_viewed') {
+                continue;
+            }
+            if ((int) ($data['viewer_profile_id'] ?? 0) === $viewerProfileId) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     /**

@@ -870,7 +870,7 @@ class MatrimonyProfileController extends Controller
                 ->exists();
         }
 
-        if (! $isOwnProfile && $viewer->matrimonyProfile) {
+        if (! $isOwnProfile && $viewer->matrimonyProfile && ! ($viewer->is_admin ?? false)) {
             ViewTrackingService::recordView($viewer->matrimonyProfile, $profile);
             ViewTrackingService::maybeTriggerViewBack($viewer->matrimonyProfile, $profile);
         }
