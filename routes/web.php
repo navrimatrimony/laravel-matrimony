@@ -16,6 +16,9 @@ use App\Http\Controllers\Admin\LocationSuggestionWebController;
 use App\Http\Controllers\Admin\OcrPatternController;
 use App\Http\Controllers\Admin\SubCasteAdminController;
 use App\Http\Controllers\Admin\TranslationController;
+use App\Http\Controllers\Admin\ShowcaseChatDebugController;
+use App\Http\Controllers\Admin\ShowcaseChatSettingsController;
+use App\Http\Controllers\Admin\ShowcaseConversationController;
 use App\Http\Controllers\AdminController;
 use App\Http\Controllers\BlockController;
 use App\Http\Controllers\ContactInboxController;
@@ -502,6 +505,20 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
     Route::post('/demo-profile', [DemoProfileController::class, 'store'])->name('demo-profile.store');
     Route::get('/demo-profile/bulk-create', [DemoProfileController::class, 'bulkCreate'])->name('demo-profile.bulk-create');
     Route::post('/demo-profiles/bulk', [DemoProfileController::class, 'bulkStore'])->name('demo-profile.bulk-store');
+
+    /*
+    | Showcase Chat Orchestration (production-safe)
+    */
+    Route::get('/showcase-chat-settings', [ShowcaseChatSettingsController::class, 'index'])->name('showcase-chat-settings.index');
+    Route::get('/showcase-chat-settings/{profile}', [ShowcaseChatSettingsController::class, 'show'])->name('showcase-chat-settings.show');
+    Route::put('/showcase-chat-settings/{profile}', [ShowcaseChatSettingsController::class, 'update'])->name('showcase-chat-settings.update');
+
+    Route::get('/showcase-conversations', [ShowcaseConversationController::class, 'index'])->name('showcase-conversations.index');
+    Route::get('/showcase-chat/debug/{conversation}', [ShowcaseChatDebugController::class, 'show'])->name('showcase-chat.debug');
+    Route::get('/showcase-conversations/{conversation}', [ShowcaseConversationController::class, 'show'])->name('showcase-conversations.show');
+    Route::post('/showcase-conversations/{conversation}/pause', [ShowcaseConversationController::class, 'pause'])->name('showcase-conversations.pause');
+    Route::post('/showcase-conversations/{conversation}/resume', [ShowcaseConversationController::class, 'resume'])->name('showcase-conversations.resume');
+    Route::post('/showcase-conversations/{conversation}/reply', [ShowcaseConversationController::class, 'replyAsShowcase'])->name('showcase-conversations.reply');
 
     /*
     | Verification Tags

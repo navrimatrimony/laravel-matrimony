@@ -2,6 +2,7 @@
     'message',
     'isMine' => false,
     'senderPhotoUrl' => null,
+    'viewerProfileId' => 0,
 ])
 
 @php
@@ -10,9 +11,11 @@
         : 'bg-white text-gray-900 ring-gray-200/70 dark:bg-gray-800 dark:text-gray-100 dark:ring-gray-700/70';
     $wrap = $isMine ? 'justify-end' : 'justify-start';
     $avatarUrl = $senderPhotoUrl ?: asset('images/placeholders/default-profile.svg');
+    $mod = app(\App\Services\Chat\ChatMessageModerationService::class);
+    $display = $mod->bodyTextForViewer($message, (int) $viewerProfileId, false);
 @endphp
 
-<div class="flex {{ $wrap }}">
+<div class="flex {{ $wrap }}" data-message-id="{{ (int) ($message->id ?? 0) }}">
     @if (! $isMine)
         <img src="{{ $avatarUrl }}" alt="Sender photo" class="mr-2 h-8 w-8 shrink-0 rounded-full object-cover ring-1 ring-black/10" />
     @endif
@@ -29,18 +32,17 @@
                 <div class="hidden mt-2 text-xs text-gray-500 dark:text-gray-400">प्रतिमा उपलब्ध नाही</div>
             </a>
             @if (($message->body_text ?? '') !== '')
-                <p class="mt-2 whitespace-pre-wrap break-words text-sm">{{ $message->body_text }}</p>
+                <p class="mt-2 whitespace-pre-wrap break-words text-sm">{{ $display['text'] }}</p>
             @endif
         @else
-            <p class="whitespace-pre-wrap break-words text-sm">{{ $message->body_text }}</p>
+            <p class="whitespace-pre-wrap break-words text-sm">{{ $display['text'] }}</p>
         @endif
 
         <div class="mt-1 flex items-center justify-end gap-2 text-[11px] text-gray-500 dark:text-gray-400">
-            <span class="tabular-nums">{{ optional($message->sent_at)->format('H:i') }}</span>
+            <span class="tabular-nums" title="{{ $message->sent_at?->toIso8601String() }}">{{ $message->sent_at?->timezone(config('app.timezone'))->format('H:i') }}</span>
             @if ($isMine)
                 <span>{{ ($message->delivery_status ?? 'sent') === \App\Models\Message::DELIVERY_READ ? 'Read' : 'Sent' }}</span>
             @endif
         </div>
     </div>
 </div>
-

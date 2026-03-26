@@ -10,24 +10,66 @@
             <h1 class="mt-1 truncate text-xl font-bold text-gray-900 dark:text-gray-100">
                 {{ $other->full_name ?: ('Profile #' . $other->id) }}
             </h1>
+            @if (!empty($showcaseTag))
+                <div class="mt-1 flex items-center gap-2">
+                    <span class="inline-flex items-center rounded-full bg-indigo-50 px-2 py-0.5 text-[11px] font-bold text-indigo-700 ring-1 ring-indigo-200 dark:bg-indigo-950/30 dark:text-indigo-200 dark:ring-indigo-800/60">
+                        AI Assisted Replies
+                    </span>
+                    <span id="showcase-presence" class="hidden text-xs text-gray-500 dark:text-gray-400">Online</span>
+                    <span id="showcase-typing" class="hidden text-xs font-semibold text-gray-600 dark:text-gray-300">typing…</span>
+                </div>
+            @endif
             </div>
         </div>
         <a href="{{ route('matrimony.profile.show', ['matrimony_profile_id' => $other->id]) }}" class="text-sm font-semibold text-indigo-600 hover:text-indigo-700">View profile</a>
     </div>
 
-    @if (session('error'))
+        @if (session('error'))
         <div class="mt-4 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800 dark:border-rose-900/40 dark:bg-rose-950/30 dark:text-rose-200">
             {{ session('error') }}
         </div>
     @endif
+    @if ($errors->any())
+        <div class="mt-4 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800 dark:border-rose-900/40 dark:bg-rose-950/30 dark:text-rose-200">
+            {{ $errors->first() }}
+        </div>
+    @endif
+
+    @php
+        $gateCodesForUpgrade = ['reply_gate_limit', 'reply_gate_cooldown', 'daily_limit', 'weekly_limit', 'monthly_limit'];
+        $policyCode = (string) ($canSendDecision->code ?? '');
+        $showChatUpgradeCta = !($canSendDecision->allowed ?? false) && in_array($policyCode, $gateCodesForUpgrade, true);
+        $upgradeUrl = trim((string) config('communication.chat_upgrade_cta_url', ''));
+        if ($upgradeUrl === '') {
+            $upgradeUrl = route('dashboard');
+        }
+    @endphp
 
     @if (!($canSendDecision->allowed ?? false))
-        <div class="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-900/40 dark:bg-amber-950/25 dark:text-amber-100">
-            <p class="font-semibold">Messaging restricted</p>
-            <p class="mt-1">{{ $canSendDecision->humanMessage }}</p>
-            @if ($canSendDecision->lockedUntil)
-                <p class="mt-1 text-xs opacity-80">तुम्ही पुन्हा संदेश पाठवू शकता: {{ \Carbon\Carbon::parse($canSendDecision->lockedUntil)->format('M j, Y H:i') }}</p>
-            @endif
+        <div class="mt-4 overflow-hidden rounded-2xl border border-amber-200/90 bg-gradient-to-br from-amber-50 via-white to-amber-50/80 shadow-sm dark:border-amber-900/50 dark:from-amber-950/40 dark:via-gray-900 dark:to-amber-950/30">
+            <div class="flex flex-col gap-3 px-4 py-4 sm:flex-row sm:items-start sm:justify-between sm:gap-6">
+                <div class="min-w-0 flex gap-3">
+                    <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-100 text-amber-800 ring-1 ring-amber-200/80 dark:bg-amber-900/50 dark:text-amber-100 dark:ring-amber-800/60" aria-hidden="true">
+                        <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none"><path d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                    </div>
+                    <div class="min-w-0">
+                        <p class="text-sm font-bold text-amber-950 dark:text-amber-100">संदेश पाठवता येणार नाहीत (मर्यादा)</p>
+                        <p class="mt-1 text-sm leading-relaxed text-amber-950/90 dark:text-amber-50/95">{{ $canSendDecision->humanMessage }}</p>
+                        @if ($canSendDecision->lockedUntil)
+                            <p class="mt-2 text-xs font-medium text-amber-900/80 dark:text-amber-200/80">पुन्हा पाठवू शकता: <span class="tabular-nums">{{ \Carbon\Carbon::parse($canSendDecision->lockedUntil)->timezone(config('app.timezone'))->format('M j, Y H:i') }}</span></p>
+                        @endif
+                    </div>
+                </div>
+                @if ($showChatUpgradeCta)
+                    <div class="flex shrink-0 flex-col gap-2 sm:max-w-[14rem] sm:text-right">
+                        <p class="text-xs leading-snug text-amber-950/85 dark:text-amber-100/85">Premium सदस्यांना जास्त संदेश, फोटो शेअरिंग आणि इतर फायदे मिळतात.</p>
+                        <a href="{{ $upgradeUrl }}" class="inline-flex items-center justify-center rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm ring-1 ring-indigo-500/30 transition hover:bg-indigo-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 dark:ring-offset-gray-900">
+                            Premium पहा / अपग्रेड
+                        </a>
+                        <span class="text-[11px] text-amber-900/65 dark:text-amber-200/65">किंवा समोरील व्यक्तीचा reply येईपर्यंत प्रतीक्षा करा.</span>
+                    </div>
+                @endif
+            </div>
         </div>
     @endif
 
@@ -60,6 +102,7 @@
                                 'message' => $m,
                                 'isMine' => ((int) $m->sender_profile_id === (int) $me->id),
                                 'senderPhotoUrl' => $m->senderProfile?->profile_photo_url,
+                                'viewerProfileId' => (int) ($viewerProfileId ?? $me->id),
                             ])
                         @endforeach
                     @endif
@@ -70,7 +113,7 @@
                     @endif
                 </div>
 
-                <div class="border-t border-gray-200 px-4 py-4 dark:border-gray-700 bg-white/95 dark:bg-gray-900/95 sticky bottom-0">
+                <div class="relative min-h-[7.5rem] border-t border-gray-200 px-4 py-4 dark:border-gray-700 bg-white/95 dark:bg-gray-900/95 sticky bottom-0">
                     {{-- Image composer (hidden input; UI shown only after file selected) --}}
                     <form id="image-form" method="POST" action="{{ route('chat.messages.image', ['conversation' => $conversation->id]) }}" enctype="multipart/form-data" class="hidden">
                         @csrf
@@ -119,7 +162,7 @@
                             @endif
                         </button>
 
-                        <form method="POST" action="{{ route('chat.messages.text', ['conversation' => $conversation->id]) }}" class="flex flex-1 items-end gap-2">
+                        <form method="POST" action="{{ route('chat.messages.text', ['conversation' => $conversation->id]) }}" class="flex flex-1 items-end gap-2" onsubmit="const b=this.querySelector('button[type=submit]'); if(b){ b.disabled=true; b.setAttribute('aria-busy','true'); }">
                             @csrf
                             <textarea name="body_text" rows="2" placeholder="Type a message..." class="w-full min-w-0 resize-none rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100 disabled:cursor-not-allowed disabled:opacity-70" @disabled(!($canSendDecision->allowed ?? false))></textarea>
                             <button type="submit" class="shrink-0 rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50" @disabled(!($canSendDecision->allowed ?? false))>
@@ -127,6 +170,15 @@
                             </button>
                         </form>
                     </div>
+
+                    @if ($showChatUpgradeCta && !($canSendDecision->allowed ?? false))
+                        <div class="absolute inset-0 z-10 flex flex-col items-center justify-center gap-2 rounded-b-2xl bg-white/85 px-3 py-4 text-center shadow-[inset_0_1px_0_0_rgba(0,0,0,0.04)] backdrop-blur-[2px] dark:bg-gray-950/90" role="region" aria-label="संदेश मर्यादा">
+                            <a href="{{ $upgradeUrl }}" class="inline-flex items-center justify-center rounded-xl bg-indigo-600 px-5 py-2.5 text-sm font-bold text-white shadow-md ring-1 ring-indigo-500/25 transition hover:bg-indigo-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 dark:ring-offset-gray-950">
+                                Premium पहा / अपग्रेड
+                            </a>
+                            <p class="max-w-sm text-[11px] leading-relaxed text-gray-600 dark:text-gray-300">मर्यादा संपेपर्यंत प्रतीक्षा किंवा Premium सदस्य होऊन जास्त संदेश व सुविधा वापरा.</p>
+                        </div>
+                    @endif
 
                     {{-- Premium upsell (free users only) --}}
                     <div id="premium-modal" class="hidden fixed inset-0 z-50">
@@ -145,7 +197,7 @@
                                     <div class="flex items-start gap-2"><span class="mt-0.5 text-amber-500">✓</span><span>Instant unlock after upgrade</span></div>
                                 </div>
                                 <div class="mt-5 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end">
-                                    <a href="{{ url('/') }}" class="inline-flex items-center justify-center rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-700">Upgrade to Premium</a>
+                                    <a href="{{ $upgradeUrl }}" class="inline-flex items-center justify-center rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-700">Upgrade to Premium</a>
                                     <button type="button" id="premium-later" class="inline-flex items-center justify-center rounded-xl border border-gray-300 bg-white px-4 py-2 text-sm font-semibold text-gray-800 shadow-sm hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-950 dark:text-gray-200 dark:hover:bg-gray-900">Not now</button>
                                 </div>
                                 <p class="mt-3 text-[11px] text-gray-500 dark:text-gray-400">Secure payment • Instant unlock</p>
@@ -242,7 +294,7 @@
         });
     }
 
-    let lastId = {{ (int) ($messages->last()?->id ?? 0) }};
+    let lastId = {{ (int) ($messages->max('id') ?? 0) }};
     let hadAny = lastId > 0;
     let inFlight = false;
 
@@ -281,12 +333,36 @@
             if (!res.ok) return;
             const data = await res.json();
             const html = data.html || [];
+            if (data.showcase && typeof data.showcase === 'object') {
+                const online = !!data.showcase.online;
+                const typing = !!data.showcase.typing;
+                const p = document.getElementById('showcase-presence');
+                const t = document.getElementById('showcase-typing');
+                if (p) {
+                    p.textContent = online ? 'Online' : 'Offline';
+                    p.classList.toggle('hidden', false);
+                    p.classList.toggle('text-emerald-600', online);
+                    p.classList.toggle('dark:text-emerald-400', online);
+                }
+                if (t) {
+                    t.classList.toggle('hidden', !typing);
+                }
+            }
             if (html.length > 0) {
                 const wasBottom = atBottom();
-                for (const chunk of html) {
+                const ids = Array.isArray(data.message_ids) ? data.message_ids : [];
+                for (let i = 0; i < html.length; i++) {
+                    const chunk = html[i];
+                    const id = ids[i];
+                    if (id && scroller.querySelector('[data-message-id="' + String(id) + '"]')) {
+                        continue;
+                    }
                     const wrap = document.createElement('div');
                     wrap.innerHTML = chunk;
-                    scroller.appendChild(wrap.firstElementChild);
+                    const node = wrap.firstElementChild;
+                    if (node) {
+                        scroller.appendChild(node);
+                    }
                 }
                 if (typeof data.last_id === 'number' && data.last_id > lastId) {
                     lastId = data.last_id;

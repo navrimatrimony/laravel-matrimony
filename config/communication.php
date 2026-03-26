@@ -91,4 +91,10 @@ return [
         'discuss_marriage_timeline' => 'Discuss marriage timeline',
         'other' => 'Other',
     ],
+
+    /*
+    | Chat restriction banner: "Upgrade" button target. Empty = app dashboard.
+    | Example: COMMUNICATION_CHAT_UPGRADE_URL=https://example.com/pricing
+    */
+    'chat_upgrade_cta_url' => env('COMMUNICATION_CHAT_UPGRADE_URL', ''),
 ];

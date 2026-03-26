@@ -6,10 +6,13 @@ use App\Models\Conversation;
 use App\Models\MatrimonyProfile;
 use App\Models\Message;
 use App\Services\Chat\ChatConversationService;
+use App\Services\Chat\ChatMessageModerationService;
 use App\Services\Chat\ChatMessageService;
 use App\Services\Chat\ChatPolicyService;
 use App\Services\CommunicationPolicyService;
 use App\Services\UserEntitlementService;
+use App\Services\ShowcaseChat\ShowcaseConversationTagService;
+use App\Services\ShowcaseChat\ShowcaseOrchestrationService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -90,11 +93,7 @@ class ChatController extends Controller
 
             $preview = '';
             if ($last) {
-                if (($last->message_type ?? 'text') === Message::TYPE_IMAGE) {
-                    $preview = ($last->body_text ?? '') !== '' ? ('📷 ' . $last->body_text) : '📷 Image';
-                } else {
-                    $preview = (string) ($last->body_text ?? '');
-                }
+                $preview = $this->previewLineForMessage($last, $me);
             }
 
             $awaitingMe = false;
@@ -112,6 +111,9 @@ class ChatController extends Controller
                 'last_preview' => $preview,
                 'awaiting_me' => $awaitingMe,
                 'awaiting_them' => $awaitingThem,
+                'showcase_tag' => ($other && ($other->is_demo ?? false))
+                    ? app(ShowcaseConversationTagService::class)->shouldShowTagForConversation($c, $me, $other)
+                    : false,
             ];
         });
 
@@ -184,11 +186,12 @@ class ChatController extends Controller
             abort(404);
         }
 
+        $showcaseTag = app(ShowcaseConversationTagService::class)->shouldShowTagForConversation($conversation, $me, $other);
+
         $sinceId = $request->wantsJson() ? (int) $request->query('since_id', 0) : 0;
         if ($request->wantsJson()) {
             $q = Message::query()
                 ->where('conversation_id', $conversation->id)
-                ->orderBy('sent_at', 'asc')
                 ->orderBy('id', 'asc');
             if ($sinceId > 0) {
                 $q->where('id', '>', $sinceId);
@@ -199,19 +202,35 @@ class ChatController extends Controller
             // Mark newly visible messages as read for current user.
             $this->messages->markConversationRead($me, $conversation);
 
+            // Showcase demo: presence/typing ticks (orchestration). Admin debug & manual reply tone live under
+            // admin routes (ShowcaseChatDebugController, ShowcaseConversationController::replyAsShowcase); not user-facing.
+            $showcaseStatus = null;
+            if (($other->is_demo ?? false) && $showcaseTag) {
+                try {
+                    $showcaseStatus = app(ShowcaseOrchestrationService::class)->tickConversation($conversation, $other, $me);
+                } catch (\Throwable $e) {
+                    $showcaseStatus = ['online' => false, 'typing' => false];
+                }
+            }
+
             $html = [];
+            $messageIds = [];
             foreach ($new as $m) {
+                $messageIds[] = (int) $m->id;
                 $html[] = view('chat.partials.message-bubble', [
                     'message' => $m,
                     'isMine' => ((int) $m->sender_profile_id === (int) $me->id),
                     'senderPhotoUrl' => $m->senderProfile?->profile_photo_url,
+                    'viewerProfileId' => (int) $me->id,
                 ])->render();
             }
 
             return response()->json([
                 'count' => $new->count(),
                 'last_id' => $new->last()?->id,
+                'message_ids' => $messageIds,
                 'html' => $html,
+                'showcase' => $showcaseStatus,
             ]);
         }
 
@@ -250,12 +269,14 @@ class ChatController extends Controller
 
         return view('chat.show', [
             'me' => $me,
+            'viewerProfileId' => (int) $me->id,
             'conversation' => $conversation,
             'other' => $other,
             'messages' => $messages,
             'paginator' => $page,
             'canSendDecision' => $canSend,
             'imagePolicy' => $imagePolicy,
+            'showcaseTag' => $showcaseTag,
         ]);
     }
 
@@ -280,8 +301,17 @@ class ChatController extends Controller
             'body_text' => 'required|string|max:2000',
         ]);
 
+        $body = (string) $request->input('body_text');
+        $mod = app(ChatMessageModerationService::class);
+        $decision = $mod->moderate($body);
+        if (in_array($decision['severity'], ['block', 'warn'], true)) {
+            throw ValidationException::withMessages([
+                'body_text' => $decision['user_safe_message'],
+            ]);
+        }
+
         try {
-            $this->messages->sendTextMessage($me, $other, $conversation, (string) $request->input('body_text'));
+            $this->messages->sendTextMessage($me, $other, $conversation, $body);
         } catch (ValidationException $e) {
             $errors = $e->errors();
             $msg = $errors['policy'][0] ?? $errors['body_text'][0] ?? $e->getMessage();
@@ -313,11 +343,22 @@ class ChatController extends Controller
             'caption' => 'nullable|string|max:500',
         ]);
 
+        $caption = trim((string) $request->input('caption'));
+        if ($caption !== '') {
+            $mod = app(ChatMessageModerationService::class);
+            $decision = $mod->moderate($caption);
+            if (in_array($decision['severity'], ['block', 'warn'], true)) {
+                throw ValidationException::withMessages([
+                    'caption' => $decision['user_safe_message'],
+                ]);
+            }
+        }
+
         try {
             $this->messages->sendImageMessage($me, $other, $conversation, $request->file('image'), $request->input('caption'));
         } catch (ValidationException $e) {
             $errors = $e->errors();
-            $msg = $errors['policy'][0] ?? $errors['image'][0] ?? $e->getMessage();
+            $msg = $errors['policy'][0] ?? $errors['image'][0] ?? $errors['caption'][0] ?? $e->getMessage();
             return back()->with('error', $msg)->withErrors($errors);
         }
 
@@ -353,4 +394,22 @@ class ChatController extends Controller
     }
 
     // unread counts handled via grouped query in index()
+
+    protected function previewLineForMessage(Message $last, MatrimonyProfile $me): string
+    {
+        $mod = app(ChatMessageModerationService::class);
+        if (($last->message_type ?? Message::TYPE_TEXT) === Message::TYPE_IMAGE) {
+            $caption = trim((string) ($last->body_text ?? ''));
+            if ($caption === '') {
+                return '📷 Image';
+            }
+            $disp = $mod->bodyTextForViewer($last, (int) $me->id, false);
+
+            return '📷 '.$disp['text'];
+        }
+
+        $disp = $mod->bodyTextForViewer($last, (int) $me->id, false);
+
+        return (string) ($disp['text'] ?? '');
+    }
 }

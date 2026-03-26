@@ -8,6 +8,7 @@ use App\Models\Message;
 use App\Models\MessageParticipantState;
 use App\Notifications\NewChatMessageNotification;
 use App\Services\UserEntitlementService;
+use App\Services\ShowcaseChat\ShowcaseOrchestrationService;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
@@ -22,9 +23,10 @@ class ChatMessageService
 
     public function getMessagesPaginated(Conversation $conversation, int $perPage = 30): LengthAwarePaginator
     {
+        // Order by id (insert order) so the thread stays chronological even if sent_at ever skews.
         return Message::query()
             ->where('conversation_id', $conversation->id)
-            ->orderBy('sent_at', 'desc')
+            ->orderByDesc('id')
             ->paginate($perPage);
     }
 
@@ -168,6 +170,17 @@ class ChatMessageService
                         messagePreview: $message->body_text,
                         messageId: (int) $message->id,
                     ));
+                });
+            }
+
+            // Showcase orchestration (read/typing/reply scheduling) after commit.
+            if (($receiver->is_demo ?? false) === true) {
+                DB::afterCommit(function () use ($message) {
+                    try {
+                        app(ShowcaseOrchestrationService::class)->onIncomingMessage($message);
+                    } catch (\Throwable $e) {
+                        // Must not break normal messaging flow.
+                    }
                 });
             }
 

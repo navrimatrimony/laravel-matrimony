@@ -53,7 +53,14 @@
                                 <img src="{{ $photo }}" alt="{{ $title }}" class="h-11 w-11 shrink-0 rounded-full object-cover ring-1 ring-black/10" />
                                 <div class="min-w-0 flex-1">
                                     <div class="flex items-center justify-between gap-2">
-                                        <p class="truncate text-sm {{ $unread > 0 ? 'font-extrabold text-gray-900 dark:text-gray-100' : 'font-semibold text-gray-900 dark:text-gray-100' }}">{{ $title }}</p>
+                                        <div class="min-w-0 flex items-center gap-2">
+                                            <p class="truncate text-sm {{ $unread > 0 ? 'font-extrabold text-gray-900 dark:text-gray-100' : 'font-semibold text-gray-900 dark:text-gray-100' }}">{{ $title }}</p>
+                                            @if (!empty($item['showcase_tag']))
+                                                <span class="shrink-0 rounded-full bg-indigo-50 px-2 py-0.5 text-[10px] font-bold text-indigo-700 ring-1 ring-indigo-200 dark:bg-indigo-950/30 dark:text-indigo-200 dark:ring-indigo-800/60">
+                                                    AI Assisted Replies
+                                                </span>
+                                            @endif
+                                        </div>
                                         <p class="shrink-0 text-[11px] text-gray-500 dark:text-gray-400 tabular-nums">
                                             @if ($c->last_message_at)
                                                 {{ $c->last_message_at->isToday() ? $c->last_message_at->format('H:i') : $c->last_message_at->format('M j') }}
