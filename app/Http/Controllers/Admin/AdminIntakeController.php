@@ -95,8 +95,14 @@ class AdminIntakeController extends Controller
         ]);
 
         $hasManualPrepared = app(IntakeManualOcrPreparedService::class)->exists($intake);
-        if (($intake->raw_ocr_text === null || $intake->raw_ocr_text === '') && ! $hasManualPrepared) {
-            Log::warning('AdminIntakeController::reparse() early return: raw_ocr_text empty', ['intake_id' => $intake->id]);
+        $rawBlank = ($intake->raw_ocr_text === null || $intake->raw_ocr_text === '');
+        $active = app(\App\Services\Parsing\ParserStrategyResolver::class)->resolveActiveMode();
+        $isAiVision = $active === \App\Services\Parsing\ParserStrategyResolver::MODE_AI_VISION_EXTRACT_V1;
+
+        // Only block reparse when we have no parse input at all.
+        // For ai_vision_extract_v1, raw_ocr_text may be blank and that's OK as long as the file exists.
+        if ($rawBlank && ! $hasManualPrepared && ! $isAiVision) {
+            Log::warning('AdminIntakeController::reparse() early return: raw_ocr_text empty (non-ai-vision mode)', ['intake_id' => $intake->id]);
 
             return redirect()
                 ->route('admin.biodata-intakes.show', $intake)

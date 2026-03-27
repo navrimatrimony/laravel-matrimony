@@ -55,4 +55,10 @@ return [
         'model' => env('OPENAI_MODEL', 'gpt-4o-mini'),
     ],
 
+    'sarvam' => [
+        // Sarvam Document Intelligence API key (header: api-subscription-key)
+        'subscription_key' => env('SARVAM_API_SUBSCRIPTION_KEY'),
+        'base_url' => env('SARVAM_API_BASE_URL', 'https://api.sarvam.ai'),
+    ],
+
 ];

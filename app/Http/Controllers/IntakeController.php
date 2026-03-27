@@ -9,6 +9,7 @@ use App\Services\IntakeApprovalService;
 use App\Services\IntakeManualOcrPreparedService;
 use App\Services\MutationService;
 use App\Services\OcrService;
+use App\Services\Parsing\ParserStrategyResolver;
 use App\Services\Preview\PreviewSectionMapper;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
@@ -224,6 +225,17 @@ class IntakeController extends Controller
         $mapper = new PreviewSectionMapper;
         $sections = $mapper->map($data);
 
+        // Raw text panel: stored OCR, transient OCR for preview, or cached AI vision parse input (never mutates raw_ocr_text).
+        $previewRaw = $this->resolvePreviewRawParseInputText($intake);
+        $rawOcrTextForPreview = $previewRaw['text'];
+        $previewRawTextSource = $previewRaw['source'];
+        $rawOcrTextForSuggestions = $previewRawTextSource === 'ai_vision_unavailable' ? '' : $rawOcrTextForPreview;
+
+        // Preview-only hints (siblings/relatives/taluka): prefer stored OCR; if blank and parse used AI vision cache, use that text (never persisted).
+        $rawTextForPreviewEnhancements = trim((string) ($intake->raw_ocr_text ?? '')) !== ''
+            ? (string) ($intake->raw_ocr_text ?? '')
+            : ((($previewRawTextSource ?? '') === 'ai_vision_cache') ? $rawOcrTextForPreview : '');
+
         // Display: use approval_snapshot_json['core'] for form values when present, else parsed_json (already in sections).
         if (! empty($intake->approval_snapshot_json) && is_array($intake->approval_snapshot_json)
             && isset($intake->approval_snapshot_json['core']) && is_array($intake->approval_snapshot_json['core'])) {
@@ -374,7 +386,7 @@ class IntakeController extends Controller
         ];
         $suggestionMap = [];
         $coreDataForSuggestion = $sections['core']['data'] ?? [];
-        $rawOcrText = $intake->raw_ocr_text ?? '';
+        $rawOcrText = $rawOcrTextForSuggestions;
         $suggestionEngine = app(\App\Services\Ocr\OcrSuggestionEngine::class);
         $placeholderNotFound = \App\Services\Ocr\OcrSuggestionEngine::PLACEHOLDER_NOT_FOUND;
         $placeholderSelectRequired = \App\Services\Ocr\OcrSuggestionEngine::PLACEHOLDER_SELECT_REQUIRED;
@@ -533,7 +545,10 @@ class IntakeController extends Controller
         // --- Physical section safety-net (height + complexion only, additive, SSOT-safe) ---
         // काही deployments मध्ये AI-first parser जुन्या version ने चालू असू शकतो (queue worker reload न झालेला),
         // म्हणून preview साठी raw_ocr_text वरून minimum fallback काढून coreData मध्ये फक्त missing असतील तेव्हाच भरतो.
-        $rawOcrTextForPhysical = $intake->raw_ocr_text ?? '';
+        $rawOcrTextForPhysical = (string) ($intake->raw_ocr_text ?? '');
+        if ($rawOcrTextForPhysical === '' && ($previewRawTextSource ?? '') === 'ai_vision_cache') {
+            $rawOcrTextForPhysical = $rawOcrTextForPreview;
+        }
         if ($rawOcrTextForPhysical !== '') {
             // Height fallback: handle normal आणि थोडे garbled cases (फूट/कूट + इंच).
             if (empty($coreData['height_cm'])) {
@@ -605,6 +620,9 @@ class IntakeController extends Controller
         // Preview-only: default mother_tongue_id = Marathi when biodata looks predominantly Marathi and mother_tongue_id is empty.
         if (empty($coreData['mother_tongue_id'] ?? null) && empty($intakeProfile->mother_tongue_id ?? null)) {
             $rawText = (string) ($intake->raw_ocr_text ?? '');
+            if ($rawText === '' && ($previewRawTextSource ?? '') === 'ai_vision_cache') {
+                $rawText = $rawOcrTextForPreview;
+            }
             if ($rawText !== '') {
                 // If app locale is Marathi OR there's at least one Devanagari char, assume Marathi.
                 $locale = app()->getLocale();
@@ -886,7 +904,7 @@ class IntakeController extends Controller
         $childrenData = $sections['children']['data'] ?? [];
         $hasChildrenData = count($childrenData) > 0;
         if (($maritalStatusId === null || $maritalStatusId === '') && $hasChildrenData) {
-            $rawText = $intake->raw_ocr_text ?? '';
+            $rawText = $rawTextForPreviewEnhancements;
             if (preg_match('/घटस्फोट|divorce|divorced|separated/i', $rawText)) {
                 $ms = $maritalStatuses->first(fn ($s) => ($s->key ?? '') === 'divorced');
                 if ($ms) {
@@ -1007,7 +1025,7 @@ class IntakeController extends Controller
                 }
             }
             if (! $hasChulate) {
-                $raw = (string) ($intake->raw_ocr_text ?? '');
+                $raw = $rawTextForPreviewEnhancements;
                 if ($raw !== '' && mb_strpos($raw, 'चुलते') !== false) {
                     $lines = preg_split("/\r\n|\r|\n/u", $raw) ?: [];
                     $inChulate = false;
@@ -1125,7 +1143,7 @@ class IntakeController extends Controller
         }
         // Ensure one explicit Maternal address (Ajol) row from raw OCR when missing.
         if ($profileRelativesMaternalFamily->where('relation_type', 'maternal_address_ajol')->isEmpty()) {
-            $rawAjolText = (string) ($intake->raw_ocr_text ?? '');
+            $rawAjolText = $rawTextForPreviewEnhancements;
             if ($rawAjolText !== '') {
                 // आजोळ block नंतरच्या ओळी split करून, पहिली खऱ्या अर्थाने "पत्ता" असलेली line शोध.
                 if (preg_match('/आजोळ[^\r\n]*(.*)$/um', $rawAjolText, $mHead)) {
@@ -1164,7 +1182,7 @@ class IntakeController extends Controller
         // दाजी = बहिणीचा नवरा: merge into sibling panel (first sister's spouse) so it saves in the same place
         $profileSiblings = $this->mergeDajiIntoSiblings($profileSiblings, $dajiRows);
         // Raw OCR मधून उरलेली माहिती (भाऊचा पत्ता/नोकरी, बहिणीचं नाव) siblings मध्ये भरा — additive only.
-        $profileSiblings = $this->enrichSiblingsFromRawText($profileSiblings, (string) ($intake->raw_ocr_text ?? ''));
+        $profileSiblings = $this->enrichSiblingsFromRawText($profileSiblings, $rawTextForPreviewEnhancements);
         $profile_property_summary = $snapshot['property_summary'] ?? null;
         $profile_property_assets = collect($snapshot['property_assets'] ?? []);
         $profile_horoscope_data = is_array($horoscopeRow) ? (object) $horoscopeRow : $horoscopeRow;
@@ -1303,7 +1321,7 @@ class IntakeController extends Controller
             }
             // Global fallback: जर addresses[0] मधे taluka रिकामा असेल पण raw_ocr_text मधे "ता. X" असेल आणि तो address मध्ये नसेल, तर insert कर.
             if ($talukaText === '') {
-                $rawOcr = (string) ($intake->raw_ocr_text ?? '');
+                $rawOcr = $rawTextForPreviewEnhancements;
                 if (
                     $rawOcr !== '' &&
                     mb_strpos($addrLine, 'ता.') === false &&
@@ -1428,6 +1446,8 @@ class IntakeController extends Controller
 
         return view('intake.preview', compact(
             'intake',
+            'rawOcrTextForPreview',
+            'previewRawTextSource',
             'ocrPresetFeedback',
             'ocrDebugMeta',
             'ocrDriverCapability',
@@ -2572,6 +2592,55 @@ class IntakeController extends Controller
     private function forgetIntakeParseOcrDebugCache(BiodataIntake $intake): void
     {
         Cache::forget('intake.parse_ocr_debug.'.$intake->id);
+        Cache::forget('intake.parse_input_debug.'.$intake->id);
+        Cache::forget('intake.parse_input_text.'.$intake->id);
+    }
+
+    /**
+     * Text shown in the preview "raw text" panel: stored OCR, transient OCR, or cached AI vision parse input.
+     * Does not read DB raw_ocr_text for AI mode beyond display rules; never persists AI extract here.
+     *
+     * @return array{text: string, source: 'ai_vision_cache'|'ai_vision_unavailable'|'stored_ocr'|'ocr_transient'|'empty'}
+     */
+    private function resolvePreviewRawParseInputText(BiodataIntake $intake): array
+    {
+        $resolver = app(ParserStrategyResolver::class);
+        $mode = $resolver->normalizeMode($intake->parser_version ?: $resolver->resolveActiveMode());
+
+        if ($mode === ParserStrategyResolver::MODE_AI_VISION_EXTRACT_V1) {
+            $cached = Cache::get('intake.parse_input_text.'.$intake->id);
+            if (is_string($cached) && trim($cached) !== '') {
+                return ['text' => $cached, 'source' => 'ai_vision_cache'];
+            }
+
+            $dbg = Cache::get('intake.parse_input_debug.'.$intake->id);
+            $msg = __('intake.preview_parse_input_ai_unavailable');
+            if (is_array($dbg)
+                && ($dbg['parse_input_source'] ?? '') === 'ai_vision_extract_v1'
+                && ! empty($dbg['ok'])
+                && ! empty($dbg['text_quality_ok'] ?? true)) {
+                $msg = __('intake.preview_parse_input_ai_cache_missing');
+            }
+
+            return ['text' => $msg, 'source' => 'ai_vision_unavailable'];
+        }
+
+        $stored = (string) ($intake->raw_ocr_text ?? '');
+        if (trim($stored) !== '') {
+            return ['text' => $stored, 'source' => 'stored_ocr'];
+        }
+
+        try {
+            $ocrResolved = app(OcrService::class)->resolveParseInputText($intake);
+            $transient = (string) ($ocrResolved['text'] ?? '');
+            if (trim($transient) !== '') {
+                return ['text' => $transient, 'source' => 'ocr_transient'];
+            }
+        } catch (\Throwable $e) {
+            // keep empty
+        }
+
+        return ['text' => '', 'source' => 'empty'];
     }
 
     /**
@@ -2586,13 +2655,19 @@ class IntakeController extends Controller
             return null;
         }
 
+        // Always show which mode is active/effective for clarity.
+        $resolver = app(\App\Services\Parsing\ParserStrategyResolver::class);
+        $base = [
+            'active_parser_mode' => $resolver->resolveActiveMode(),
+            'intake_parser_version' => $intake->parser_version ? $resolver->normalizeMode($intake->parser_version) : null,
+        ];
+
         $manualSvc = app(IntakeManualOcrPreparedService::class);
         $upload = session('intake_ocr_debug_meta');
         $manualSession = session('intake_manual_ocr_debug_'.$intake->id);
 
-        $base = [];
         if (is_array($upload) && (int) ($upload['intake_id'] ?? 0) === (int) $intake->id) {
-            $base = $upload;
+            $base = array_merge($base, $upload);
         }
         if (is_array($manualSession) && (int) ($manualSession['intake_id'] ?? 0) === (int) $intake->id) {
             $base = array_merge($base, $manualSession);
@@ -2640,9 +2715,54 @@ class IntakeController extends Controller
             }
         }
 
+        // When parse cache is missing (e.g. legacy/broken intakes), still expose which file exists on disk
+        // so preview does not show "—" for paths when we can resolve them.
+        if (empty($base['final_ocr_input_path']) || empty($base['original_absolute_path'])) {
+            $manualOnDisk = $manualSvc->exists($intake);
+            if ($manualOnDisk) {
+                $base['ocr_source_type_effective'] = 'manual_prepared_image_path';
+                $base['final_ocr_input_path'] = $manualSvc->absolutePath($intake);
+                $base['original_absolute_path'] = $manualSvc->absolutePath($intake);
+                $base['original_storage_relative'] = $manualSvc->relativePath($intake);
+            } else {
+                $src = app(OcrService::class)->resolveEffectiveOcrSource($intake);
+                if (is_array($src)) {
+                    $base['ocr_source_type_effective'] = $src['source_field'] ?? 'file_path';
+                    $base['final_ocr_input_path'] = $src['absolute_path'] ?? null;
+                    $base['original_absolute_path'] = $src['absolute_path'] ?? null;
+                    $base['original_storage_relative'] = $src['relative_path'] ?? null;
+                }
+            }
+        }
+
         $quality = Cache::get('intake.parse_ocr_quality.'.$intake->id);
         if (is_array($quality) && $quality !== []) {
             $base['ocr_quality'] = $quality;
+        }
+
+        $parseInput = Cache::get('intake.parse_input_debug.'.$intake->id);
+        if (is_array($parseInput) && $parseInput !== []) {
+            $base['parse_input_source'] = $parseInput['parse_input_source'] ?? null;
+            foreach ([
+                'extraction', 'provider', 'model', 'source_field', 'relative_path', 'absolute_path', 'ok', 'reason',
+                'text_quality_ok', 'text_quality_reason', 'text_chars', 'text_non_space_chars', 'text_lines', 'text_alpha_ratio',
+                'sarvam_job_id', 'sarvam_job_state',
+                'original_image_width', 'original_image_height', 'ai_request_image_width', 'ai_request_image_height',
+                'ai_request_payload_enhanced', 'ai_request_orientation_corrected', 'vision_detail', 'extracted_text_line_count',
+            ] as $k) {
+                if (! array_key_exists($k, $parseInput)) {
+                    continue;
+                }
+                $v = $parseInput[$k];
+                if ($v === null || $v === '') {
+                    continue;
+                }
+                $base['parse_input_'.$k] = $v;
+            }
+            // Show file path even if OCR debug cache is absent.
+            if (empty($base['final_ocr_input_path']) && ! empty($parseInput['absolute_path'])) {
+                $base['final_ocr_input_path'] = $parseInput['absolute_path'];
+            }
         }
 
         if ($base === [] && ! $manualSvc->exists($intake)) {

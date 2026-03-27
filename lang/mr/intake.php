@@ -57,6 +57,10 @@ return [
     // Preview screen – structured sections
     'raw_text_heading' => 'संपूर्ण बायोडाटा मजकूर',
     'raw_text_help' => 'खाली तुमच्या बायोडाटामधून काढलेला संपूर्ण मजकूर दिसतो. वरच्या सर्व फील्ड्स ही या मजकुरावरून तयार झाली आहेत. जर काही महत्वाची माहिती फील्ड्समध्ये नसेल तर ती इथे नक्की दिसेल — कृपया नीट तपासा.',
+    'preview_parse_input_ai_intro' => 'खालील मजकूर बायोडाट्यातून काढला गेला आणि पार्सिंगसाठी वापरला गेला. स्रोत: AI vision extraction (तात्पुरता parse input; संचयित OCR फील्ड नाही).',
+    'preview_parse_input_ai_unavailable' => 'AI vision ने काढलेला parse input मजकूर उपलब्ध नाही (कॅश रिकामा किंवा कालबाह्य). यशस्वी parse नंतर पुन्हा उघडा किंवा Reparse वापरा.',
+    'preview_parse_input_ai_cache_missing' => 'extraction यशस्वी असूनही preview कॅशमध्ये मजकूर सापडला नाही. Reparse करून पहा किंवा कायम राहिल्यास सपोर्टशी संपर्क करा.',
+    'preview_parse_input_ocr_transient_note' => 'दाखवलेला मजकूर या preview साठी फाइलवरून (OCR) काढला आहे; संचयित OCR रिकामा असू शकतो.',
     'relatives_help' => 'नातेवाईकांची माहिती जोडा. सर्व फील्ड्स पर्यायी आहेत.',
     'siblings_heading' => 'भावंडे',
     'siblings_help' => 'भावंडांची (भाऊ / बहीण) माहिती जोडा. सर्व फील्ड्स पर्यायी आहेत.',

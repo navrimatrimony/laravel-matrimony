@@ -24,6 +24,7 @@ class ParserStrategyResolver
     public const MODE_AI_FIRST_V1 = 'ai_first_v1';
     public const MODE_AI_FIRST_V2 = 'ai_first_v2';
     public const MODE_HYBRID_V1 = 'hybrid_v1';
+    public const MODE_AI_VISION_EXTRACT_V1 = 'ai_vision_extract_v1';
 
     /**
      * Normalize raw admin setting or legacy value to canonical mode.
@@ -57,6 +58,9 @@ class ParserStrategyResolver
         if ($value === self::MODE_HYBRID_V1) {
             return self::MODE_HYBRID_V1;
         }
+        if ($value === self::MODE_AI_VISION_EXTRACT_V1) {
+            return self::MODE_AI_VISION_EXTRACT_V1;
+        }
 
         // Unknown: safe fallback to rules_only
         Log::warning('Unknown intake_active_parser; falling back to rules_only', [
@@ -71,6 +75,12 @@ class ParserStrategyResolver
      */
     public function resolveActiveMode(): string
     {
+        // Test-only override to avoid DB dependency in minimal sqlite setups.
+        $override = (string) config('intake.testing_active_parser', '');
+        if ($override !== '') {
+            return $this->normalizeMode($override);
+        }
+
         $raw = AdminSetting::getValue('intake_active_parser', self::MODE_RULES_ONLY);
 
         return $this->normalizeMode($raw);
@@ -100,6 +110,9 @@ class ParserStrategyResolver
         return match ($mode) {
             self::MODE_AI_FIRST_V1, self::MODE_AI_FIRST_V2 => app(AiFirstBiodataParser::class),
             self::MODE_HYBRID_V1 => app(HybridBiodataParser::class),
+            // ai_vision_extract_v1 changes the parse INPUT; prefer the existing AI-first parser for text→SSOT,
+            // with its built-in rules fallback (no schema guesses).
+            self::MODE_AI_VISION_EXTRACT_V1 => app(AiFirstBiodataParser::class),
             default => app(RulesOnlyBiodataParser::class),
         };
     }

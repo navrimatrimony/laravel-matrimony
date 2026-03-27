@@ -35,6 +35,8 @@
         <div class="mb-3 rounded border-2 border-dashed border-amber-600 bg-amber-50 dark:bg-amber-950/40 p-3 text-xs font-mono text-amber-950 dark:text-amber-100" role="region" aria-label="OCR debug">
             <p class="font-bold mb-2 text-sm">{{ __('intake.ocr_debug_block_title') }}</p>
             <ul class="space-y-1 list-disc list-inside">
+                <li>Active parser mode: {{ $ocrDebugMeta['active_parser_mode'] ?? '—' }}</li>
+                <li>Intake parser_version: {{ $ocrDebugMeta['intake_parser_version'] ?? '—' }}</li>
                 <li>UI preset: {{ $ocrDebugMeta['ui_preprocessing_preset'] ?? '—' }}</li>
                 <li>Resolved preset: {{ $ocrDebugMeta['preset_resolved'] ?? '—' }}</li>
                 <li>Preprocess used: {{ ! empty($ocrDebugMeta['preprocess_used']) ? 'yes' : 'no' }}</li>
@@ -45,6 +47,40 @@
                 <li>Driver: {{ $ocrDebugMeta['driver'] ?? '—' }}</li>
                 <li>Applied steps: {{ implode(', ', $ocrDebugMeta['applied_steps'] ?? []) }}</li>
                 <li>{{ __('intake.ocr_debug_effective_source') }}: {{ $ocrDebugMeta['ocr_source_type_effective'] ?? '—' }}</li>
+                @if (! empty($ocrDebugMeta['parse_input_source']))
+                    <li>Parse input source: {{ $ocrDebugMeta['parse_input_source'] }}</li>
+                    <li>AI extract ok: {{ ! empty($ocrDebugMeta['parse_input_ok']) ? 'yes' : 'no' }}</li>
+                    <li>Extraction provider/model: {{ $ocrDebugMeta['parse_input_provider'] ?? '—' }} / {{ $ocrDebugMeta['parse_input_model'] ?? '—' }}</li>
+                    <li>AI source field: {{ $ocrDebugMeta['parse_input_source_field'] ?? '—' }}</li>
+                    <li>AI source path: {{ $ocrDebugMeta['parse_input_relative_path'] ?? '—' }}</li>
+                    <li>AI text quality ok: {{ ! empty($ocrDebugMeta['parse_input_text_quality_ok']) ? 'yes' : 'no' }}</li>
+                    <li>AI text chars/lines: {{ $ocrDebugMeta['parse_input_text_chars'] ?? '—' }} / {{ $ocrDebugMeta['parse_input_text_lines'] ?? '—' }}</li>
+                    <li>AI text alpha ratio: {{ $ocrDebugMeta['parse_input_text_alpha_ratio'] ?? '—' }}</li>
+                    @if (array_key_exists('parse_input_vision_detail', $ocrDebugMeta))
+                        <li>Vision detail: {{ $ocrDebugMeta['parse_input_vision_detail'] }}</li>
+                    @endif
+                    @if (! empty($ocrDebugMeta['parse_input_original_image_width']) || ! empty($ocrDebugMeta['parse_input_original_image_height']))
+                        <li>Source image WxH: {{ $ocrDebugMeta['parse_input_original_image_width'] ?? '—' }}×{{ $ocrDebugMeta['parse_input_original_image_height'] ?? '—' }}</li>
+                    @endif
+                    @if (! empty($ocrDebugMeta['parse_input_ai_request_image_width']) || ! empty($ocrDebugMeta['parse_input_ai_request_image_height']))
+                        <li>AI request payload WxH: {{ $ocrDebugMeta['parse_input_ai_request_image_width'] ?? '—' }}×{{ $ocrDebugMeta['parse_input_ai_request_image_height'] ?? '—' }}</li>
+                    @endif
+                    @if (array_key_exists('parse_input_ai_request_payload_enhanced', $ocrDebugMeta))
+                        <li>AI request payload enhanced (upscale/orient): {{ ! empty($ocrDebugMeta['parse_input_ai_request_payload_enhanced']) || ! empty($ocrDebugMeta['parse_input_ai_request_orientation_corrected']) ? 'yes' : 'no' }}</li>
+                    @endif
+                    @if (! empty($ocrDebugMeta['parse_input_extracted_text_line_count']))
+                        <li>Extracted line count (post-sanitize): {{ $ocrDebugMeta['parse_input_extracted_text_line_count'] }}</li>
+                    @endif
+                    @if (! empty($ocrDebugMeta['parse_input_text_quality_reason']))
+                        <li>AI text quality reason: {{ $ocrDebugMeta['parse_input_text_quality_reason'] }}</li>
+                    @endif
+                    @if (! empty($ocrDebugMeta['parse_input_sarvam_job_id']))
+                        <li>Sarvam job: {{ $ocrDebugMeta['parse_input_sarvam_job_id'] }} ({{ $ocrDebugMeta['parse_input_sarvam_job_state'] ?? '—' }})</li>
+                    @endif
+                    @if (! empty($ocrDebugMeta['parse_input_reason']))
+                        <li>AI extract reason: {{ $ocrDebugMeta['parse_input_reason'] }}</li>
+                    @endif
+                @endif
                 <li>{{ __('intake.ocr_debug_parse_uses_manual') }}: {{ ! empty($ocrDebugMeta['parse_uses_manual_prepared']) ? 'yes' : 'no' }}</li>
                 @if (! empty($ocrDebugMeta['manual_prepared_storage_relative']))
                     <li>{{ __('intake.ocr_debug_manual_path') }}: {{ $ocrDebugMeta['manual_prepared_storage_relative'] }}</li>
@@ -348,12 +384,22 @@
                         </ul>
                     </div>
                 @endif
-                <p class="text-xs text-gray-600 dark:text-gray-400 mb-2 shrink-0">{{ __('intake.raw_text_help') }}</p>
+                @if (($previewRawTextSource ?? '') === 'ai_vision_cache')
+                    <p class="text-xs text-sky-900 dark:text-sky-100 mb-2 shrink-0 rounded border border-sky-200 dark:border-sky-800 bg-sky-50 dark:bg-sky-950/35 px-2 py-1.5 leading-snug">{{ __('intake.preview_parse_input_ai_intro') }}</p>
+                    <p class="text-xs text-gray-600 dark:text-gray-400 mb-2 shrink-0">{{ __('intake.raw_text_help') }}</p>
+                @elseif (($previewRawTextSource ?? '') === 'ai_vision_unavailable')
+                    <p class="text-xs text-amber-800 dark:text-amber-200 mb-2 shrink-0 rounded border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/30 px-2 py-1.5">{{ __('intake.preview_parse_input_ai_unavailable') }}</p>
+                @else
+                    <p class="text-xs text-gray-600 dark:text-gray-400 mb-2 shrink-0">{{ __('intake.raw_text_help') }}</p>
+                @endif
+                @if (($previewRawTextSource ?? '') === 'ocr_transient')
+                    <p class="text-xs text-gray-500 dark:text-gray-500 mb-2 shrink-0">{{ __('intake.preview_parse_input_ocr_transient_note') }}</p>
+                @endif
                 @if (! empty($manualPreparedExists))
                     <p class="text-xs text-amber-700 dark:text-amber-300 mb-2 shrink-0 font-medium">{{ __('intake.manual_crop_parse_note') }}</p>
                 @endif
                 <div class="intake-preview-scroll-panel rounded border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-900/40 p-3 text-xs text-gray-800 dark:text-gray-100 whitespace-pre-wrap leading-relaxed font-mono">
-                    {{ $intake->raw_ocr_text ?? '' }}
+                    {{ $rawOcrTextForPreview ?? ($intake->raw_ocr_text ?? '') }}
                 </div>
             </div>
             {{-- Right: Parsed JSON --}}

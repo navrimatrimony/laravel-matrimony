@@ -57,6 +57,10 @@ return [
     // Preview screen – structured sections
     'raw_text_heading' => 'Raw biodata text (full)',
     'raw_text_help' => 'Below is the full text extracted from your biodata. All structured fields above are derived from this text. Review if anything important is missing from the fields.',
+    'preview_parse_input_ai_intro' => 'Below is the text extracted from your biodata and used for parsing. Source: AI vision extraction (transient parse input; not the stored OCR field).',
+    'preview_parse_input_ai_unavailable' => 'AI vision parse input text is not available (cache empty or expired). Open this preview again after a successful parse, or use Reparse to refresh.',
+    'preview_parse_input_ai_cache_missing' => 'Parse input text was not found in preview cache even though extraction previously succeeded. Try Reparse to refresh, or contact support if this persists.',
+    'preview_parse_input_ocr_transient_note' => 'Shown text is computed for this preview from your file (OCR); stored OCR text may be empty.',
     'relatives_help' => 'Add extended family members. All fields are optional.',
     'siblings_heading' => 'Siblings',
     'siblings_help' => 'Add sibling details (brothers & sisters). All fields are optional.',

@@ -127,6 +127,7 @@
                             <option value="rules_only" {{ $normalizedActiveParser === 'rules_only' ? 'selected' : '' }}>Rules only</option>
                             <option value="ai_first_v1" {{ $normalizedActiveParser === 'ai_first_v1' ? 'selected' : '' }}>AI first (SSOT)</option>
                             <option value="ai_first_v2" {{ $normalizedActiveParser === 'ai_first_v2' ? 'selected' : '' }}>AI first (SSOT v2)</option>
+                            <option value="ai_vision_extract_v1" {{ $normalizedActiveParser === 'ai_vision_extract_v1' ? 'selected' : '' }}>AI Vision Extract (Direct File → AI → parsed_json)</option>
                             <option value="hybrid_v1" {{ $normalizedActiveParser === 'hybrid_v1' ? 'selected' : '' }}>Hybrid (rules + AI)</option>
                         </select>
                     </div>

@@ -5,6 +5,7 @@ namespace App\Services\Parsing\Parsers;
 use App\Services\BiodataParserService;
 use App\Services\ExternalAiParsingService;
 use App\Services\Parsing\Contracts\BiodataParserInterface;
+use App\Services\Parsing\ParsedJsonSsotNormalizer;
 use Illuminate\Support\Facades\Log;
 
 /**
@@ -24,7 +25,9 @@ class AiFirstBiodataParser implements BiodataParserInterface
     public function parse(string $rawText, array $context = []): array
     {
         $parserMode = $context['parser_mode'] ?? 'ai_first_v1';
-        $useV2 = $parserMode === 'ai_first_v2';
+        // ai_vision_extract_v1 uses a vision/transcription step to get higher-quality text;
+        // it should then use the same stricter schema prompt as ai_first_v2.
+        $useV2 = in_array($parserMode, ['ai_first_v2', 'ai_vision_extract_v1'], true);
 
         // Attempt AI parse first (v1 or v2 based on admin setting).
         try {
@@ -39,10 +42,22 @@ class AiFirstBiodataParser implements BiodataParserInterface
                 // deterministic, high-quality rules fallback for critical
                 // family core + primary contacts. Merge rules-only output
                 // for those fields when AI either omits them or leaves null.
-                $rules = $this->rulesParser->parse($rawText, $context);
+                $rules = null;
+                try {
+                    $rules = $this->rulesParser->parse($rawText, $context);
+                } catch (\Throwable $e) {
+                    // Rules parser is a deterministic enhancement, not a hard dependency for AI-first modes.
+                    // If it fails (e.g. missing master-data tables in some environments), keep the AI output.
+                    Log::warning('Rules-only fallback failed during AI-first parse; continuing with AI result', [
+                        'error' => $e->getMessage(),
+                        'intake_id' => $context['intake_id'] ?? null,
+                        'parser_mode' => $parserMode,
+                    ]);
+                    $rules = null;
+                }
 
                 $aiCore = $aiResult['core'] ?? [];
-                $rulesCore = $rules['core'] ?? [];
+                $rulesCore = is_array($rules) ? ($rules['core'] ?? []) : [];
 
                 $fieldsToMerge = [
                     'birth_time',
@@ -91,7 +106,7 @@ class AiFirstBiodataParser implements BiodataParserInterface
                 // contacts (which already place the primary number first and
                 // mark it as type=primary).
                 $aiContacts = $aiResult['contacts'] ?? [];
-                $rulesContacts = $rules['contacts'] ?? [];
+                $rulesContacts = is_array($rules) ? ($rules['contacts'] ?? []) : [];
                 if ((! is_array($aiContacts) || count($aiContacts) === 0) && is_array($rulesContacts) && count($rulesContacts) > 0) {
                     $aiResult['contacts'] = $rulesContacts;
                 }
@@ -101,19 +116,21 @@ class AiFirstBiodataParser implements BiodataParserInterface
                 $aiRelatives = $aiResult['relatives'] ?? null;
                 $aiCareer = $aiResult['career_history'] ?? null;
                 $aiHoroscope = $aiResult['horoscope'] ?? null;
-                $rulesSiblings = $rules['siblings'] ?? [];
-                $rulesRelatives = $rules['relatives'] ?? [];
-                $rulesCareer = $rules['career_history'] ?? [];
-                $rulesHoroscope = $rules['horoscope'] ?? [];
+                $rulesSiblings = is_array($rules) ? ($rules['siblings'] ?? []) : [];
+                $rulesRelatives = is_array($rules) ? ($rules['relatives'] ?? []) : [];
+                $rulesCareer = is_array($rules) ? ($rules['career_history'] ?? []) : [];
+                $rulesHoroscope = is_array($rules) ? ($rules['horoscope'] ?? []) : [];
 
                 if (! is_array($aiSiblings) || count($aiSiblings) === 0) {
                     if (! empty($rulesSiblings)) {
                         $aiResult['siblings'] = $rulesSiblings;
                     }
                 }
-                // Relatives: ALWAYS prefer high-precision rules parser when it produced any rows.
+                // Relatives: prefer rules parser only when AI produced no rows or low-quality relative rows.
                 if (! empty($rulesRelatives)) {
-                    $aiResult['relatives'] = $rulesRelatives;
+                    if (! is_array($aiRelatives) || count($aiRelatives) === 0 || ! $this->isUsableRelatives($aiRelatives)) {
+                        $aiResult['relatives'] = $rulesRelatives;
+                    }
                 }
                 if (! $this->isUsableCareerHistory($aiCareer) && ! empty($rulesCareer)) {
                     $aiResult['career_history'] = $rulesCareer;
@@ -122,10 +139,10 @@ class AiFirstBiodataParser implements BiodataParserInterface
                     $aiResult['horoscope'] = $rulesHoroscope;
                 }
 
-                // Confidence map: prefer the richer, path-based rules confidence map
-                // over the placeholder AI confidence map.
-                if (isset($rules['confidence_map']) && is_array($rules['confidence_map'])) {
-                    $aiResult['confidence_map'] = $rules['confidence_map'];
+                // Confidence map: merge AI + rules so AI-only fields keep scores and both contribute where present.
+                if (is_array($rules) && isset($rules['confidence_map']) && is_array($rules['confidence_map'])) {
+                    $aiCm = is_array($aiResult['confidence_map'] ?? null) ? $aiResult['confidence_map'] : [];
+                    $aiResult['confidence_map'] = ParsedJsonSsotNormalizer::mergeConfidenceMaps($aiCm, $rules['confidence_map']);
                 }
 
                 // Final SSOT shape and LAST-MILE caste/sub_caste split.
@@ -150,6 +167,8 @@ class AiFirstBiodataParser implements BiodataParserInterface
                 // Final horoscope sanitization: ensure devak/kuldaivat/gotra never contain junk in ai_first output.
                 $result['horoscope'] = $this->sanitizeHoroscopeRows($result['horoscope'] ?? []);
 
+                $result = ParsedJsonSsotNormalizer::normalize($result);
+
                 return $result;
             }
         } catch (\Throwable $e) {
@@ -167,6 +186,24 @@ class AiFirstBiodataParser implements BiodataParserInterface
     private const VALID_BLOOD_GROUPS = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'];
 
     /**
+     * Non-empty career field value (rejects literal "null" strings and whitespace).
+     */
+    private function careerTokenNonempty(mixed $value): bool
+    {
+        if ($value === null) {
+            return false;
+        }
+        if (! is_string($value)) {
+            return true;
+        }
+        if (ParsedJsonSsotNormalizer::isNullLikeString($value)) {
+            return false;
+        }
+
+        return trim($value) !== '';
+    }
+
+    /**
      * True if career_history has at least one row with a meaningful job_title, company, or location.
      */
     private function isUsableCareerHistory(mixed $career): bool
@@ -181,7 +218,7 @@ class AiFirstBiodataParser implements BiodataParserInterface
             $job = $row['job_title'] ?? $row['role'] ?? null;
             $company = $row['company'] ?? $row['employer'] ?? null;
             $loc = $row['location'] ?? null;
-            if ((is_string($job) && trim($job) !== '') || (is_string($company) && trim($company) !== '') || (is_string($loc) && trim($loc) !== '')) {
+            if ($this->careerTokenNonempty($job) || $this->careerTokenNonempty($company) || $this->careerTokenNonempty($loc)) {
                 return true;
             }
         }

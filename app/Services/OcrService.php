@@ -331,8 +331,67 @@ class OcrService
             ];
         }
 
+        $stored = (string) ($intake->raw_ocr_text ?? '');
+
+        // If upload-time OCR text is missing/blank (common when Tesseract was misconfigured at upload time),
+        // re-run OCR at parse-time using the best available stored artifact. SSOT preserved: raw_ocr_text remains immutable.
+        if (trim($stored) === '') {
+            $src = $this->resolveEffectiveOcrSource($intake);
+            if ($src !== null) {
+                $ext = strtolower(pathinfo($intake->original_filename ?? $src['relative_path'], PATHINFO_EXTENSION));
+                $isImage = in_array($ext, ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp'], true);
+                $isPdf = $ext === 'pdf';
+
+                if (($isImage || $isPdf) && is_file($src['absolute_path']) && is_readable($src['absolute_path'])) {
+                    try {
+                        // Parse-time re-OCR should not apply preprocessing presets unless explicitly asked.
+                        $text = $this->extractTextFromPath($src['relative_path'], $intake->original_filename, 'off');
+                    } catch (\Throwable $e) {
+                        $text = '';
+                    }
+
+                    $dbg = $this->getLastExtractTextFromPathDebug();
+                    if (! is_array($dbg)) {
+                        $dbg = [
+                            'kind' => $isPdf ? 'pdf' : 'image',
+                            'final_ocr_input_path' => $src['absolute_path'],
+                        ];
+                    }
+
+                    $dbg['ocr_source_type'] = $src['source_field'];
+                    $dbg['ocr_source_relative_path'] = $src['relative_path'];
+                    $dbg['ocr_pipeline'] = ($dbg['preprocess_used'] ?? false) ? 'rerun_auto_preprocessed' : 'rerun_direct_tesseract';
+                    $dbg['fallback_ocr_used'] = true;
+                    $dbg['note'] = 'Parse-time OCR re-run because stored raw_ocr_text was blank (SSOT preserved).';
+
+                    $normalized = OcrNormalize::normalizeRawTextForParsing($text);
+                    $processed = $this->ocrPostProcessor->process($normalized);
+                    $enhanced = $this->domainIntelligence->enhance($processed);
+
+                    if (config('app.debug')) {
+                        $dbg['domain_intelligence_applied'] = $enhanced !== $processed;
+                    }
+
+                    return [
+                        'text' => $enhanced,
+                        'ocr_debug' => $dbg,
+                    ];
+                }
+            }
+
+            return [
+                'text' => '',
+                'ocr_debug' => [
+                    'kind' => 'missing_source',
+                    'ocr_source_type' => 'none',
+                    'fallback_ocr_used' => false,
+                    'skipped_reason' => 'raw_ocr_blank_and_no_source_file_found',
+                ],
+            ];
+        }
+
         $processed = $this->ocrPostProcessor->process(
-            OcrNormalize::normalizeRawTextForParsing($intake->raw_ocr_text ?? '')
+            OcrNormalize::normalizeRawTextForParsing($stored)
         );
 
         $enhanced = $this->domainIntelligence->enhance($processed);
@@ -356,6 +415,41 @@ class OcrService
             'text' => $enhanced,
             'ocr_debug' => $ocrDebug,
         ];
+    }
+
+    /**
+     * Resolve which on-disk file should be used for OCR when we must read bytes.
+     *
+     * Precedence:
+     * 1) manual prepared (handled earlier in resolveParseInputText)
+     * 2) stored_file_path
+     * 3) file_path
+     *
+     * @return array{source_field: string, relative_path: string, absolute_path: string}|null
+     */
+    public function resolveEffectiveOcrSource(BiodataIntake $intake): ?array
+    {
+        $storedRel = is_scalar($intake->stored_file_path ?? null) ? trim((string) $intake->stored_file_path) : '';
+        $uploadRel = is_scalar($intake->file_path ?? null) ? trim((string) $intake->file_path) : '';
+
+        foreach ([
+            'stored_file_path' => $storedRel,
+            'file_path' => $uploadRel,
+        ] as $field => $rel) {
+            if ($rel === '') {
+                continue;
+            }
+            $abs = storage_path('app/private/'.$rel);
+            if (is_file($abs) && is_readable($abs)) {
+                return [
+                    'source_field' => $field,
+                    'relative_path' => $rel,
+                    'absolute_path' => $abs,
+                ];
+            }
+        }
+
+        return null;
     }
 
     /**
@@ -387,7 +481,12 @@ class OcrService
 
             // For now we only support local Tesseract; future providers can be plugged in here.
             $ocr = new TesseractOCR($fullPath);
-            $ocr->executable(config('services.tesseract.path'));
+            $exe = trim((string) config('services.tesseract.path'));
+            // If TESSERACT_PATH points to a missing/invalid binary (common on local Windows installs),
+            // fall back to default executable resolution (PATH).
+            if ($exe !== '' && is_file($exe)) {
+                $ocr->executable($exe);
+            }
             // OEM 1 = LSTM only; PSM 6 = uniform block of text (typical biodata layout).
             $ocr->oem(1);
             $ocr->psm(6);

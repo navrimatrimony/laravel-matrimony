@@ -187,6 +187,9 @@ class ExternalAiParsingService
             . 'Recognise common Marathi labels: नाव, उंची, वर्ण/रंग, रक्त गट, जन्मतारीख, जात, उपजात, धर्म, लग्नस्थिती, '
             . 'नाडी (आध्य/मध्य/अंत्य), गण (देव/मनुष्य/राक्षस), चरण, रास/राशी, नक्षत्र, देवक, कुलदैवत, गोत्र, '
             . 'वडील, आई, भाऊ, बहीण, दाजी (sister\'s husband), मामा, आजोळ (maternal), पत्ता, नोकरी, शिक्षण. '
+            . 'CRITICAL: Use JSON null for unknown/missing fields. Never output the word "null" as a string. '
+            . 'Never copy section titles or bare labels (e.g. "शिक्षण", "रास", "नाव") as if they were field values. '
+            . 'Copy names, numbers, dates, and places exactly as written—do not "fix" spellings or invent missing data. '
             . 'Return ONLY valid JSON. No markdown, no code fences, no explanations.';
 
         $schema = <<<'SCHEMA'
@@ -216,8 +219,8 @@ class ExternalAiParsingService
   },
   "contacts": [{"type": "primary|other", "number": "string", "label": "string or null"}],
   "children": [{"name": "string or null", "birth_year": "number or null", "gender": "string or null"}],
-  "education_history": [{"degree": "string", "institution": "string or null", "year": "number or null"}],
-  "career_history": [{"job_title": "string", "company": "string or null", "location": "string or null"}],
+  "education_history": [{"degree": "string (qualification e.g. B.E., HSC)", "specialization": "string or null (branch/stream only, e.g. Computer Engineering)", "institution": "string or null (school/college name only)", "year": "number or null"}],
+  "career_history": [{"job_title": "string or null", "company": "string or null", "location": "string or null"}],
   "addresses": [{"type": "string or null", "address_line": "string", "city": "string or null", "district": "string or null"}],
   "siblings": [{"relation_type": "brother|sister", "name": "string or null", "occupation": "string or null", "address_line": "string or null", "contact_number": "string or null", "notes": "string or null", "spouse": {"name": "string or null", "address_line": "string or null", "occupation_title": "string or null", "contact_number": "string or null"}}],
   "relatives": [{"relation_type": "string (e.g. mama, mami, daji, maternal_uncle)", "name": "string or null", "occupation": "string or null", "address_line": "string or null", "contact_number": "string or null", "notes": "string or null"}],
@@ -237,8 +240,11 @@ SCHEMA;
             . "(4) नाडी आध्य/आद्य → nadi=adi; मध्य → madhyam; अंत्य → anty. "
             . "(5) गण देव/मनुष्य/राक्षस → gan=deva/manushya/rakshasa. "
             . "(6) दाजी = sister\'s husband: put in siblings[].spouse for the matching sister. "
-            . "(7) If unsure, set null and confidence 0.0. Never invent phone numbers or income. "
-            . "(8) Return ONLY JSON, no backticks.\n\nSchema:\n" . $schema . "\n\nBiodata text:\n\n" . $rawText;
+            . "(7) If unsure, use JSON null (not the string \"null\") and confidence 0.0. Never invent phone numbers or income. "
+            . "(8) Education: degree = course/qualification; specialization = branch/stream if explicitly separate; institution = college/school name only—do not put the full शिक्षण line into one field if distinct parts exist. "
+            . "(9) Horoscope: rashi/nakshatra/devak/kuldaivat/gotra must be only the actual value tokens, not labels like \"रास\" or \"नक्षत्र\" alone. "
+            . "(10) Strip decorative symbols from caste/jāt strings (e.g. stray % from tables) but keep the caste text itself. "
+            . "(11) Return ONLY JSON, no backticks.\n\nSchema:\n" . $schema . "\n\nBiodata text:\n\n" . $rawText;
 
         try {
             $response = Http::withHeaders([

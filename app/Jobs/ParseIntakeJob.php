@@ -5,6 +5,7 @@ namespace App\Jobs;
 use App\Models\AdminSetting;
 use App\Models\BiodataIntake;
 use App\Services\IntakeManualOcrPreparedService;
+use App\Services\AiVisionExtractionService;
 use App\Services\Ocr\OcrQualityEvaluator;
 use App\Services\OcrService;
 use App\Services\Parsing\ParserStrategyResolver;
@@ -76,12 +77,14 @@ class ParseIntakeJob implements ShouldQueue
         $mode = $resolver->resolveActiveMode();
 
         $manualPreparedExists = app(IntakeManualOcrPreparedService::class)->exists($intake);
+        $storedOcrBlank = trim((string) ($intake->raw_ocr_text ?? '')) === '';
 
         // Smart caching — avoid re-parsing identical content for same parser_version.
         // Bypass cache when forceRecompute is true (e.g. admin reparse) so updated parser runs.
         // Bypass when manual crop exists (parse input is not the same as upload-time content_hash).
+        // Also bypass when stored upload-time OCR text is blank (we may re-run OCR at parse-time).
         $canonicalVersion = $resolver->normalizeMode($intake->parser_version ?: $mode);
-        if (!$this->forceRecompute && !$manualPreparedExists && $intake->content_hash && $canonicalVersion) {
+        if (!$this->forceRecompute && !$manualPreparedExists && !$storedOcrBlank && $intake->content_hash && $canonicalVersion) {
             $cached = BiodataIntake::where('id', '!=', $intake->id)
                 ->where('content_hash', $intake->content_hash)
                 ->where('parser_version', $canonicalVersion)
@@ -109,8 +112,70 @@ class ParseIntakeJob implements ShouldQueue
         $ocr = app(OcrService::class);
         $qualityEvaluator = app(OcrQualityEvaluator::class);
 
-        $resolved = $ocr->resolveParseInputText($intake);
-        $raw = $resolved['text'];
+        $resolved = null;
+        $raw = '';
+        $parseInputDebug = null;
+
+        if ($mode === ParserStrategyResolver::MODE_AI_VISION_EXTRACT_V1) {
+            $ai = app(AiVisionExtractionService::class);
+            $aiRes = $ai->extractTextForIntake($intake);
+            $raw = (string) ($aiRes['text'] ?? '');
+            $qualityGate = $ai->evaluateExtractedTextQuality($raw);
+            $parseInputDebug = [
+                'parse_input_source' => 'ai_vision_extract_v1',
+                'extraction' => $aiRes['meta']['extraction'] ?? null,
+                'provider' => $aiRes['meta']['provider'] ?? null,
+                'model' => $aiRes['meta']['model'] ?? null,
+                'source_field' => $aiRes['meta']['source_field'] ?? null,
+                'relative_path' => $aiRes['meta']['relative_path'] ?? null,
+                'absolute_path' => $aiRes['meta']['absolute_path'] ?? null,
+                'ok' => (bool) ($aiRes['meta']['ok'] ?? false),
+                'reason' => $aiRes['meta']['reason'] ?? null,
+                'text_quality_ok' => (bool) ($qualityGate['ok'] ?? false),
+                'text_quality_reason' => $qualityGate['reason'] ?? null,
+                'text_chars' => $qualityGate['chars'] ?? null,
+                'text_non_space_chars' => $qualityGate['non_space_chars'] ?? null,
+                'text_lines' => $qualityGate['lines'] ?? null,
+                'text_alpha_ratio' => $qualityGate['alpha_ratio'] ?? null,
+                'sarvam_job_id' => $aiRes['meta']['job_id'] ?? null,
+                'sarvam_job_state' => $aiRes['meta']['job_state'] ?? null,
+                'original_image_width' => $aiRes['meta']['original_image_width'] ?? null,
+                'original_image_height' => $aiRes['meta']['original_image_height'] ?? null,
+                'ai_request_image_width' => $aiRes['meta']['ai_request_image_width'] ?? null,
+                'ai_request_image_height' => $aiRes['meta']['ai_request_image_height'] ?? null,
+                'ai_request_payload_enhanced' => $aiRes['meta']['ai_request_payload_enhanced'] ?? null,
+                'ai_request_orientation_corrected' => $aiRes['meta']['ai_request_orientation_corrected'] ?? null,
+                'vision_detail' => $aiRes['meta']['vision_detail'] ?? null,
+                'extracted_text_line_count' => $aiRes['meta']['extracted_text_line_count'] ?? null,
+            ];
+
+            if (trim($raw) === '') {
+                $intake->update([
+                    'parse_status' => 'error',
+                    'last_error' => $parseInputDebug['reason'] ? (string) $parseInputDebug['reason'] : 'ai_vision_extract_failed',
+                    'parse_duration_ms' => 0,
+                    'ai_calls_used' => 1,
+                ]);
+                Cache::put('intake.parse_input_debug.'.$intake->id, $parseInputDebug, now()->addDays(7));
+
+                return;
+            }
+            if (empty($qualityGate['ok'])) {
+                $intake->update([
+                    'parse_status' => 'error',
+                    'last_error' => (string) ($qualityGate['reason'] ?? 'ai_vision_text_unusable'),
+                    'parse_duration_ms' => 0,
+                    'ai_calls_used' => 1,
+                ]);
+                Cache::put('intake.parse_input_debug.'.$intake->id, $parseInputDebug, now()->addDays(7));
+
+                return;
+            }
+        } else {
+            $resolved = $ocr->resolveParseInputText($intake);
+            $raw = $resolved['text'];
+        }
+
         $ocrQuality = $qualityEvaluator->evaluate($raw);
 
         $retryConfig = config('ocr.auto_retry', []);
@@ -139,14 +204,24 @@ class ParseIntakeJob implements ShouldQueue
 
         Cache::put('intake.parse_ocr_quality.'.$intake->id, $ocrQuality, now()->addDays(7));
 
-        if (is_array($resolved['ocr_debug'] ?? null)) {
+        if ($mode === ParserStrategyResolver::MODE_AI_VISION_EXTRACT_V1) {
+            Cache::put('intake.parse_input_debug.'.$intake->id, $parseInputDebug, now()->addDays(7));
+            // Transient preview-only: text used as parser input (not persisted; not raw_ocr_text).
+            Cache::put('intake.parse_input_text.'.$intake->id, $raw, now()->addDays(7));
+        } elseif (is_array($resolved['ocr_debug'] ?? null)) {
             Cache::put('intake.parse_ocr_debug.'.$intake->id, $resolved['ocr_debug'], now()->addDays(7));
         }
 
-        if (config('app.debug') && is_array($resolved['ocr_debug'] ?? null)) {
-            Log::info('ParseIntakeJob: parse OCR source', array_merge($resolved['ocr_debug'], [
-                'ocr_quality' => $ocrQuality,
-            ]));
+        if (config('app.debug')) {
+            if ($mode === ParserStrategyResolver::MODE_AI_VISION_EXTRACT_V1 && is_array($parseInputDebug)) {
+                Log::info('ParseIntakeJob: parse input source (ai vision)', array_merge($parseInputDebug, [
+                    'ocr_quality' => $ocrQuality,
+                ]));
+            } elseif (is_array($resolved['ocr_debug'] ?? null)) {
+                Log::info('ParseIntakeJob: parse OCR source', array_merge($resolved['ocr_debug'], [
+                    'ocr_quality' => $ocrQuality,
+                ]));
+            }
         }
 
         $parsed = null;
