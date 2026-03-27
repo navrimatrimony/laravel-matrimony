@@ -39,10 +39,11 @@ return [
     | Env: INTAKE_AI_VISION_MODEL
     */
     'ai_vision_extract' => [
-        // Provider used by ai_vision_extract_v1.
+        // Provider used by ai_vision_extract_v1 when AdminSetting `intake_ai_vision_provider` is empty.
+        // Admin can override per deployment via Admin → Intake engine settings (AI Vision).
         // Default must preserve existing project expectation (OpenAI-first).
         'provider' => env('INTAKE_AI_VISION_PROVIDER', 'openai'),
-        // Sarvam Document Intelligence params.
+        // Sarvam Document Intelligence params. Requires PHP ext-zip (ZipArchive): image→ZIP upload and ZIP output download.
         'sarvam_language' => env('INTAKE_SARVAM_DOC_LANG', 'mr-IN'),
         'sarvam_output_format' => env('INTAKE_SARVAM_DOC_FORMAT', 'md'), // md|html|json
         // Keep polling bounded; ParseIntakeJob is synchronous.

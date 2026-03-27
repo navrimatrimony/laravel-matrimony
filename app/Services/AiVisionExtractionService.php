@@ -2,9 +2,12 @@
 
 namespace App\Services;
 
+use App\Models\AdminSetting;
 use App\Models\BiodataIntake;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Lang;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
 use Smalot\PdfParser\Parser as PdfParser;
 use ZipArchive;
 
@@ -21,12 +24,183 @@ use ZipArchive;
 class AiVisionExtractionService
 {
     /**
+     * Prompt contract for OpenAI vision transcription.
+     * Exposed for focused regression tests so critical constraints do not regress.
+     *
+     * @return array{system: string, user: string}
+     */
+    public static function openAiVisionTranscriptionPrompt(): array
+    {
+        $system = 'You are a PURE DOCUMENT TEXT TRANSCRIBER for Marathi + English matrimony biodata. '
+            .'You are not an image describer, not a formatter, and not a parser. '
+            .'Transcribe ONLY visible written document text. Preserve original wording, separators, punctuation, and line order. '
+            .'Preserve separators exactly as printed, including forms like ":-", ":", "-", ".", "/", "(", ")" and spacing around them. '
+            .'Do not normalize punctuation, do not rewrite, do not translate, do not expand abbreviations, do not correct spelling, and do not infer missing text. '
+            .'Ignore all non-text visual elements: photos, portraits, faces, clothing, pose, logos, stamps, watermarks, borders, ornaments, decorative/background graphics. '
+            .'For two-column or side-by-side sections: never collapse both columns into one ambiguous running line. '
+            .'If exact side-by-side spacing is difficult, output columns as separate blocks one below the other while preserving each column content and separators faithfully. '
+            .'Output plain text only. No markdown, no JSON, no base64, no commentary, no added headings, no preamble, no footer.';
+
+        $user = 'Return only the faithful raw transcription text from the biodata document.';
+
+        return ['system' => $system, 'user' => $user];
+    }
+
+    /**
+     * Which backend performs AI vision transcription for `ai_vision_extract_v1`.
+     * Resolution: AdminSetting `intake_ai_vision_provider` → config(`intake.ai_vision_extract.provider`) → `openai`.
+     *
+     * @return array{provider: string, provider_source: string}
+     */
+    public function resolveExtractionProvider(): array
+    {
+        $raw = AdminSetting::getValue('intake_ai_vision_provider', '');
+        $raw = is_string($raw) ? trim($raw) : '';
+        if ($raw === 'openai' || $raw === 'sarvam') {
+            return ['provider' => $raw, 'provider_source' => 'admin_setting'];
+        }
+        if ($raw !== '') {
+            Log::warning('AiVisionExtractionService: invalid intake_ai_vision_provider; falling back to config', ['value' => $raw]);
+        }
+
+        $cfg = strtolower(trim((string) config('intake.ai_vision_extract.provider', 'openai')));
+        if ($cfg === 'sarvam' || $cfg === 'openai') {
+            return ['provider' => $cfg, 'provider_source' => 'config_env'];
+        }
+
+        return ['provider' => 'openai', 'provider_source' => 'default'];
+    }
+
+    /**
+     * Human-readable single-line summary for UI/debug when AI extraction fails (not OCR).
+     *
+     * @param  array<string, mixed>  $meta
+     */
+    public static function failureDetailForUi(array $meta): string
+    {
+        $reason = (string) ($meta['reason'] ?? '');
+        $provider = (string) ($meta['provider'] ?? 'unknown');
+        $parts = [];
+
+        $parts[] = __('intake.ai_extraction_failed_provider', ['provider' => $provider]);
+
+        if ($reason !== '') {
+            $rk = 'intake.ai_extraction_reason.'.$reason;
+            $parts[] = Lang::has($rk) ? __($rk) : $reason;
+        }
+
+        if (! empty($meta['status'])) {
+            $parts[] = 'HTTP '.(string) $meta['status'];
+        }
+
+        if (! empty($meta['job_error_message'])) {
+            $parts[] = (string) $meta['job_error_message'];
+        }
+
+        if (! empty($meta['job_state'])) {
+            $parts[] = 'job_state='.(string) $meta['job_state'];
+        }
+
+        if (! empty($meta['error'])) {
+            $parts[] = (string) $meta['error'];
+        }
+
+        if (! empty($meta['response_body_snippet'])) {
+            $parts[] = Str::limit((string) $meta['response_body_snippet'], 400, '…');
+        }
+
+        return implode(' — ', array_filter($parts));
+    }
+
+    /**
+     * @param  array<string, mixed>  $qualityGate  evaluateExtractedTextQuality result
+     */
+    public static function qualityFailureDetailForUi(array $qualityGate): string
+    {
+        $code = (string) ($qualityGate['reason'] ?? '');
+
+        return __('intake.ai_extraction_quality_failed', [
+            'code' => $code,
+            'chars' => (int) ($qualityGate['chars'] ?? 0),
+            'lines' => (int) ($qualityGate['lines'] ?? 0),
+        ]);
+    }
+
+    /**
+     * Labels the raw parse-input panel when parser mode is ai_vision_extract_v1 (success path).
+     *
+     * @param  array<string, mixed>  $parseInputDebug  intake.parse_input_debug.* cache payload
+     * @return array{heading_key: string, params: array<string, string>}
+     */
+    public static function provenanceForPreview(array $parseInputDebug): array
+    {
+        $extraction = $parseInputDebug['extraction'] ?? null;
+        $provider = $parseInputDebug['provider'] ?? null;
+        $providerSource = (string) ($parseInputDebug['provider_source'] ?? '');
+        $psKey = 'intake.provider_source_'.$providerSource;
+        $providerSourceLabel = $providerSource !== ''
+            ? (Lang::has($psKey) ? (string) __($psKey) : $providerSource)
+            : (string) __('intake.provider_source_default');
+
+        if ($extraction === 'pdf_text_extract_local' || $provider === 'pdfparser') {
+            return [
+                'heading_key' => 'intake.preview_source_pdf_text_local',
+                'params' => [
+                    'provider_source' => $providerSourceLabel,
+                ],
+            ];
+        }
+
+        if ($provider === 'sarvam') {
+            return [
+                'heading_key' => 'intake.preview_source_sarvam',
+                'params' => [
+                    'provider_source' => $providerSourceLabel,
+                ],
+            ];
+        }
+
+        if ($provider === 'openai' && $extraction === 'ai_vision_transcribe') {
+            $model = (string) ($parseInputDebug['model'] ?? '');
+            if ($model === '') {
+                $model = '—';
+            }
+
+            return [
+                'heading_key' => 'intake.preview_source_openai_vision',
+                'params' => [
+                    'provider_source' => $providerSourceLabel,
+                    'model' => $model,
+                ],
+            ];
+        }
+
+        return [
+            'heading_key' => 'intake.preview_source_ai_generic',
+            'params' => [
+                'provider' => (string) ($provider ?? '—'),
+                'provider_source' => $providerSourceLabel,
+            ],
+        ];
+    }
+
+    private static function httpBodySnippet(?string $body): ?string
+    {
+        if (! is_string($body) || trim($body) === '') {
+            return null;
+        }
+
+        return Str::limit(trim($body), 500, '…');
+    }
+
+    /**
      * @return array{text: string, meta: array<string, mixed>}
      */
     public function extractTextForIntake(BiodataIntake $intake): array
     {
-        // Default must preserve existing OpenAI-first project setup unless explicitly overridden.
-        $provider = (string) config('intake.ai_vision_extract.provider', 'openai');
+        $resolved = $this->resolveExtractionProvider();
+        $provider = $resolved['provider'];
+        $providerSource = $resolved['provider_source'];
 
         // Resolve effective source path precedence:
         // 1) manual prepared image (if exists)
@@ -53,6 +227,8 @@ class AiVisionExtractionService
                     'source_field' => $sourceField,
                     'relative_path' => $rel,
                     'absolute_path' => $abs,
+                    'provider' => $provider,
+                    'provider_source' => $providerSource,
                 ],
             ];
         }
@@ -62,14 +238,17 @@ class AiVisionExtractionService
                 'source_field' => $sourceField,
                 'relative_path' => $rel,
                 'absolute_path' => $abs,
+                'provider' => $provider,
+                'provider_source' => $providerSource,
             ]);
         }
 
-        // Legacy fallback: OpenAI vision (kept for compatibility if someone explicitly selects it).
         return $this->extractViaOpenAiVision($abs, $intake->original_filename ?? basename($rel), [
             'source_field' => $sourceField,
             'relative_path' => $rel,
             'absolute_path' => $abs,
+            'provider' => $provider,
+            'provider_source' => $providerSource,
         ]);
     }
 
@@ -311,6 +490,18 @@ class AiVisionExtractionService
                 ];
             }
 
+            // Sarvam flow packages non-PDF inputs as ZIP and reads API output as ZIP; requires ext-zip.
+            if (! class_exists('ZipArchive', false)) {
+                return [
+                    'text' => '',
+                    'meta' => array_merge($sourceMeta, [
+                        'ok' => false,
+                        'reason' => 'sarvam_zip_extension_missing',
+                        'provider' => 'sarvam',
+                    ]),
+                ];
+            }
+
             $lang = (string) config('intake.ai_vision_extract.sarvam_language', 'mr-IN');
             $format = (string) config('intake.ai_vision_extract.sarvam_output_format', 'md');
             if (! in_array($format, ['md', 'html', 'json'], true)) {
@@ -338,6 +529,7 @@ class AiVisionExtractionService
                         'ok' => false,
                         'reason' => 'sarvam_initialise_non_2xx',
                         'status' => $jobResp->status(),
+                        'response_body_snippet' => self::httpBodySnippet($jobResp->body()),
                         'provider' => 'sarvam',
                     ]),
                 ];
@@ -421,6 +613,7 @@ class AiVisionExtractionService
                         'ok' => false,
                         'reason' => 'sarvam_get_upload_links_non_2xx',
                         'status' => $uplResp->status(),
+                        'response_body_snippet' => self::httpBodySnippet($uplResp->body()),
                         'provider' => 'sarvam',
                         'job_id' => $jobId,
                     ]),
@@ -467,7 +660,10 @@ class AiVisionExtractionService
                 ];
             }
 
-            $put = Http::withBody($bytes, 'application/octet-stream')->timeout(60)->put($uploadUrl);
+            // Azure Blob Storage Put Blob requires this header for block uploads (presigned URLs omit it from signature scope).
+            $put = Http::withHeaders([
+                'x-ms-blob-type' => 'BlockBlob',
+            ])->withBody($bytes, 'application/octet-stream')->timeout(60)->put($uploadUrl);
             if (! $put->successful()) {
                 if ($cleanupZip) {
                     @unlink($cleanupZip);
@@ -481,6 +677,7 @@ class AiVisionExtractionService
                         'ok' => false,
                         'reason' => 'sarvam_upload_put_failed',
                         'status' => $put->status(),
+                        'response_body_snippet' => self::httpBodySnippet($put->body()),
                         'provider' => 'sarvam',
                         'job_id' => $jobId,
                     ]),
@@ -507,6 +704,7 @@ class AiVisionExtractionService
                         'ok' => false,
                         'reason' => 'sarvam_start_non_2xx',
                         'status' => $startResp->status(),
+                        'response_body_snippet' => self::httpBodySnippet($startResp->body()),
                         'provider' => 'sarvam',
                         'job_id' => $jobId,
                     ]),
@@ -556,6 +754,7 @@ class AiVisionExtractionService
                         'ok' => false,
                         'reason' => 'sarvam_download_links_non_2xx',
                         'status' => $dl->status(),
+                        'response_body_snippet' => self::httpBodySnippet($dl->body()),
                         'provider' => 'sarvam',
                         'job_id' => $jobId,
                         'job_state' => $state,
@@ -772,18 +971,9 @@ class AiVisionExtractionService
             $detail = 'high';
         }
 
-        $system = 'You are a strict transcription engine for printed documents (Marathi and English may appear). '
-            .'This is extraction only, not interpretation or parsing. '
-            .'Output ONLY the text that is visibly printed on the document. '
-            .'Follow the reading order on the page from top to bottom, left to right. '
-            .'Preserve line breaks and spacing as closely as the image allows. '
-            .'Copy every character, digit, symbol, punctuation mark, and separator exactly as shown. '
-            .'Do not normalize spelling, do not correct typos, do not expand abbreviations, do not translate, '
-            .'do not paraphrase, do not summarize, do not classify fields, and do not add missing words. '
-            .'If something is unclear, transcribe the visible shapes as faithfully as possible; do not invent a plausible replacement. '
-            .'Output plain text only. No JSON, no markdown, no headings, no commentary, no preamble or footer.';
-
-        $user = 'Transcribe the document image. Plain text only. No preamble before the text and no notes after.';
+        $prompt = self::openAiVisionTranscriptionPrompt();
+        $system = $prompt['system'];
+        $user = $prompt['user'];
 
         $imageUrlPayload = ['url' => $dataUrl, 'detail' => $detail];
         $userContent = [
@@ -820,6 +1010,7 @@ class AiVisionExtractionService
                         'ok' => false,
                         'reason' => 'openai_non_2xx',
                         'status' => $resp->status(),
+                        'response_body_snippet' => self::httpBodySnippet($resp->body()),
                         'provider' => 'openai',
                         'model' => $model,
                         'vision_detail' => $detail,

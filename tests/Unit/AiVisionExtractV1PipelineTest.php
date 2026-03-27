@@ -5,12 +5,15 @@ namespace Tests\Unit;
 use App\Models\BiodataIntake;
 use App\Services\AiVisionExtractionService;
 use App\Services\Parsing\ParserStrategyResolver;
+use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
 class AiVisionExtractV1PipelineTest extends TestCase
 {
+    use RefreshDatabase;
+
     public function test_openai_provider_extraction_then_ai_first_parse_produces_ssot_without_touching_raw_ocr_text(): void
     {
         config()->set('intake.testing_active_parser', 'ai_vision_extract_v1');

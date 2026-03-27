@@ -115,14 +115,41 @@
 
     @elseif(in_array($parseStatus, ['failed', 'error'], true))
 
+        @php
+            $lastErr = (string) ($intake->last_error ?? '');
+            $isAiTranscriptionFailure = (is_array($parseInputDebug ?? null)
+                && (($parseInputDebug['parse_input_source'] ?? '') === 'ai_vision_extract_v1'))
+                || str_starts_with($lastErr, 'sarvam_')
+                || str_starts_with($lastErr, 'openai_')
+                || str_starts_with($lastErr, 'ai_vision');
+        @endphp
         <div class="bg-white dark:bg-gray-800 rounded shadow p-6 border border-red-300">
             <h1 class="text-2xl font-bold text-red-600 mb-4">
                 ❌ Parsing Failed
             </h1>
 
-            <p class="text-gray-700 dark:text-gray-300">
-                OCR parsing मध्ये त्रुटी आली आहे.
-            </p>
+            @if ($isAiTranscriptionFailure)
+                <p class="text-gray-700 dark:text-gray-300 font-medium">
+                    {{ __('intake.parse_failed_ai_transcription') }}
+                </p>
+                @if (!empty($parseInputDebug['failure_detail'] ?? null))
+                    <p class="mt-3 text-sm text-gray-800 dark:text-gray-200 whitespace-pre-wrap break-words font-mono bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-900 rounded p-3">{{ $parseInputDebug['failure_detail'] }}</p>
+                @endif
+                @if (!empty($parseInputDebug['quality_failure_detail'] ?? null))
+                    <p class="mt-3 text-sm text-gray-800 dark:text-gray-200 whitespace-pre-wrap break-words font-mono bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900 rounded p-3">{{ $parseInputDebug['quality_failure_detail'] }}</p>
+                @endif
+                @if (!empty($parseInputTextPreview))
+                    <p class="mt-3 text-xs font-semibold text-gray-600 dark:text-gray-400">{{ __('intake.parse_failed_ai_extracted_text_note') }}</p>
+                    <pre class="mt-1 text-xs text-gray-800 dark:text-gray-200 whitespace-pre-wrap break-words max-h-64 overflow-auto bg-gray-50 dark:bg-gray-900/60 border border-gray-200 dark:border-gray-700 rounded p-3">{{ $parseInputTextPreview }}</pre>
+                @endif
+            @else
+                <p class="text-gray-700 dark:text-gray-300">
+                    {{ __('intake.parse_failed_ocr_pipeline') }}
+                </p>
+            @endif
+            @if (!empty($intake->last_error))
+                <p class="mt-3 text-xs text-gray-500 dark:text-gray-400 font-mono break-all">{{ __('intake.parse_failed_last_error_code') }}: {{ $intake->last_error }}</p>
+            @endif
             <a href="{{ route('intake.index') }}" class="mt-4 inline-block px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700">My biodata uploads</a>
         </div>
 

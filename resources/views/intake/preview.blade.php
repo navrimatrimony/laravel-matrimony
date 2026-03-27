@@ -50,7 +50,8 @@
                 @if (! empty($ocrDebugMeta['parse_input_source']))
                     <li>Parse input source: {{ $ocrDebugMeta['parse_input_source'] }}</li>
                     <li>AI extract ok: {{ ! empty($ocrDebugMeta['parse_input_ok']) ? 'yes' : 'no' }}</li>
-                    <li>Extraction provider/model: {{ $ocrDebugMeta['parse_input_provider'] ?? '—' }} / {{ $ocrDebugMeta['parse_input_model'] ?? '—' }}</li>
+                    <li>AI extraction provider (transcription): {{ $ocrDebugMeta['parse_input_provider'] ?? '—' }} @if (! empty($ocrDebugMeta['parse_input_provider_source'])) (source: {{ $ocrDebugMeta['parse_input_provider_source'] }}) @endif</li>
+                    <li>Extraction model (if applicable): {{ $ocrDebugMeta['parse_input_model'] ?? '—' }}</li>
                     <li>AI source field: {{ $ocrDebugMeta['parse_input_source_field'] ?? '—' }}</li>
                     <li>AI source path: {{ $ocrDebugMeta['parse_input_relative_path'] ?? '—' }}</li>
                     <li>AI text quality ok: {{ ! empty($ocrDebugMeta['parse_input_text_quality_ok']) ? 'yes' : 'no' }}</li>
@@ -78,7 +79,16 @@
                         <li>Sarvam job: {{ $ocrDebugMeta['parse_input_sarvam_job_id'] }} ({{ $ocrDebugMeta['parse_input_sarvam_job_state'] ?? '—' }})</li>
                     @endif
                     @if (! empty($ocrDebugMeta['parse_input_reason']))
-                        <li>AI extract reason: {{ $ocrDebugMeta['parse_input_reason'] }}</li>
+                        <li>AI extract reason (code): {{ $ocrDebugMeta['parse_input_reason'] }}</li>
+                    @endif
+                    @if (! empty($ocrDebugMeta['parse_input_failure_detail']))
+                        <li>AI transcription failure (detail): {{ $ocrDebugMeta['parse_input_failure_detail'] }}</li>
+                    @endif
+                    @if (! empty($ocrDebugMeta['parse_input_quality_failure_detail']))
+                        <li>AI text quality gate: {{ $ocrDebugMeta['parse_input_quality_failure_detail'] }}</li>
+                    @endif
+                    @if (! empty($ocrDebugMeta['parse_input_response_body_snippet']))
+                        <li>Provider HTTP body (snippet): {{ $ocrDebugMeta['parse_input_response_body_snippet'] }}</li>
                     @endif
                 @endif
                 <li>{{ __('intake.ocr_debug_parse_uses_manual') }}: {{ ! empty($ocrDebugMeta['parse_uses_manual_prepared']) ? 'yes' : 'no' }}</li>
@@ -384,12 +394,12 @@
                         </ul>
                     </div>
                 @endif
-                @if (($previewRawTextSource ?? '') === 'ai_vision_cache')
-                    <p class="text-xs text-sky-900 dark:text-sky-100 mb-2 shrink-0 rounded border border-sky-200 dark:border-sky-800 bg-sky-50 dark:bg-sky-950/35 px-2 py-1.5 leading-snug">{{ __('intake.preview_parse_input_ai_intro') }}</p>
-                    <p class="text-xs text-gray-600 dark:text-gray-400 mb-2 shrink-0">{{ __('intake.raw_text_help') }}</p>
-                @elseif (($previewRawTextSource ?? '') === 'ai_vision_unavailable')
-                    <p class="text-xs text-amber-800 dark:text-amber-200 mb-2 shrink-0 rounded border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/30 px-2 py-1.5">{{ __('intake.preview_parse_input_ai_unavailable') }}</p>
-                @else
+                @if (!empty($previewParseProvenance['heading_key'] ?? null))
+                    <p class="text-xs text-sky-900 dark:text-sky-100 mb-2 shrink-0 rounded border border-sky-200 dark:border-sky-800 bg-sky-50 dark:bg-sky-950/35 px-2 py-1.5 leading-snug font-medium">{{ __($previewParseProvenance['heading_key'], $previewParseProvenance['params'] ?? []) }}</p>
+                @endif
+                @if (($previewRawTextSource ?? '') === 'ai_vision_unavailable')
+                    <p class="text-xs text-amber-800 dark:text-amber-200 mb-2 shrink-0 rounded border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/30 px-2 py-1.5 whitespace-pre-wrap">{{ $rawOcrTextForPreview ?? '' }}</p>
+                @elseif (($previewRawTextSource ?? '') !== 'empty')
                     <p class="text-xs text-gray-600 dark:text-gray-400 mb-2 shrink-0">{{ __('intake.raw_text_help') }}</p>
                 @endif
                 @if (($previewRawTextSource ?? '') === 'ocr_transient')

@@ -520,6 +520,7 @@ class AdminController extends Controller
         $globalDailyCap = (int) AdminSetting::getValue('intake_global_daily_cap', '0');
         $autoParse = AdminSetting::getBool('intake_auto_parse_enabled', true);
         $activeParser = AdminSetting::getValue('intake_active_parser', 'rules_only');
+        $aiVisionProvider = (string) AdminSetting::getValue('intake_ai_vision_provider', '');
         $ocrProvider = AdminSetting::getValue('intake_ocr_provider', 'tesseract');
         $ocrLanguage = AdminSetting::getValue('intake_ocr_language_hint', 'mixed');
         $retryLimit = (int) AdminSetting::getValue('intake_parse_retry_limit', '3');
@@ -541,6 +542,7 @@ class AdminController extends Controller
             'globalDailyCap' => max(0, $globalDailyCap),
             'autoParseEnabled' => $autoParse,
             'activeParser' => $activeParser,
+            'intakeAiVisionProvider' => $aiVisionProvider,
             'ocrProvider' => $ocrProvider,
             'ocrLanguageHint' => $ocrLanguage,
             'parseRetryLimit' => max(0, $retryLimit),
@@ -566,6 +568,7 @@ class AdminController extends Controller
             'intake_global_daily_cap' => 'required|integer|min:0|max:10000',
             'intake_auto_parse_enabled' => 'nullable|in:0,1',
             'intake_active_parser' => 'required|string|in:rules_only,ai_first_v1,ai_first_v2,ai_vision_extract_v1,hybrid_v1',
+            'intake_ai_vision_provider' => ['nullable', 'string', Rule::in(['', 'openai', 'sarvam'])],
             'intake_ocr_provider' => 'required|string|in:tesseract,cloud_vision,off',
             'intake_ocr_language_hint' => 'required|string|in:mr,en,mixed',
             'intake_parse_retry_limit' => 'required|integer|min:0|max:5',
@@ -585,6 +588,7 @@ class AdminController extends Controller
         $globalDailyCap = (string) $request->input('intake_global_daily_cap', 0);
         $autoParse = $request->has('intake_auto_parse_enabled') ? '1' : '0';
         $activeParser = (string) $request->input('intake_active_parser', 'rules_only');
+        $aiVisionProvider = (string) $request->input('intake_ai_vision_provider', '');
         $ocrProvider = (string) $request->input('intake_ocr_provider', 'tesseract');
         $ocrLanguage = (string) $request->input('intake_ocr_language_hint', 'mixed');
         $retryLimit = (string) $request->input('intake_parse_retry_limit', 3);
@@ -612,6 +616,7 @@ class AdminController extends Controller
         AdminSetting::setValue('intake_global_daily_cap', $globalDailyCap);
         AdminSetting::setValue('intake_auto_parse_enabled', $autoParse);
         AdminSetting::setValue('intake_active_parser', $activeParser);
+        AdminSetting::setValue('intake_ai_vision_provider', $aiVisionProvider);
         AdminSetting::setValue('intake_ocr_provider', $ocrProvider);
         AdminSetting::setValue('intake_ocr_language_hint', $ocrLanguage);
         AdminSetting::setValue('intake_parse_retry_limit', $retryLimit);
@@ -626,7 +631,7 @@ class AdminController extends Controller
             'update_intake_settings',
             'AdminSetting',
             null,
-            "intake_max_daily_per_user={$daily}, intake_max_monthly_per_user={$monthly}, intake_max_pdf_mb={$maxPdfMb}, intake_max_pdf_pages={$maxPdfPages}, intake_max_images_per_intake={$maxImagesPerIntake}, intake_global_daily_cap={$globalDailyCap}, intake_auto_parse_enabled={$autoParse}, intake_active_parser={$activeParser}, intake_ocr_provider={$ocrProvider}, intake_ocr_language_hint={$ocrLanguage}, intake_parse_retry_limit={$retryLimit}, intake_confidence_high_threshold={$highThreshold}, intake_auto_apply_fields=".implode(',', $autoApplyFiltered).", intake_require_admin_before_attach={$requireAdminBeforeAttach}, intake_file_retention_days={$fileRetentionDays}, intake_keep_parsed_json_after_purge={$keepParsedJson}",
+            "intake_max_daily_per_user={$daily}, intake_max_monthly_per_user={$monthly}, intake_max_pdf_mb={$maxPdfMb}, intake_max_pdf_pages={$maxPdfPages}, intake_max_images_per_intake={$maxImagesPerIntake}, intake_global_daily_cap={$globalDailyCap}, intake_auto_parse_enabled={$autoParse}, intake_active_parser={$activeParser}, intake_ai_vision_provider={$aiVisionProvider}, intake_ocr_provider={$ocrProvider}, intake_ocr_language_hint={$ocrLanguage}, intake_parse_retry_limit={$retryLimit}, intake_confidence_high_threshold={$highThreshold}, intake_auto_apply_fields=".implode(',', $autoApplyFiltered).", intake_require_admin_before_attach={$requireAdminBeforeAttach}, intake_file_retention_days={$fileRetentionDays}, intake_keep_parsed_json_after_purge={$keepParsedJson}",
             false
         );
 

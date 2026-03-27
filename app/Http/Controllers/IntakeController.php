@@ -8,6 +8,7 @@ use App\Models\BiodataIntake;
 use App\Services\IntakeApprovalService;
 use App\Services\IntakeManualOcrPreparedService;
 use App\Services\MutationService;
+use App\Services\AiVisionExtractionService;
 use App\Services\OcrService;
 use App\Services\Parsing\ParserStrategyResolver;
 use App\Services\Preview\PreviewSectionMapper;
@@ -229,6 +230,7 @@ class IntakeController extends Controller
         $previewRaw = $this->resolvePreviewRawParseInputText($intake);
         $rawOcrTextForPreview = $previewRaw['text'];
         $previewRawTextSource = $previewRaw['source'];
+        $previewParseProvenance = $previewRaw['provenance'] ?? ['heading_key' => 'intake.preview_source_unknown', 'params' => []];
         $rawOcrTextForSuggestions = $previewRawTextSource === 'ai_vision_unavailable' ? '' : $rawOcrTextForPreview;
 
         // Preview-only hints (siblings/relatives/taluka): prefer stored OCR; if blank and parse used AI vision cache, use that text (never persisted).
@@ -1448,6 +1450,7 @@ class IntakeController extends Controller
             'intake',
             'rawOcrTextForPreview',
             'previewRawTextSource',
+            'previewParseProvenance',
             'ocrPresetFeedback',
             'ocrDebugMeta',
             'ocrDriverCapability',
@@ -2600,7 +2603,7 @@ class IntakeController extends Controller
      * Text shown in the preview "raw text" panel: stored OCR, transient OCR, or cached AI vision parse input.
      * Does not read DB raw_ocr_text for AI mode beyond display rules; never persists AI extract here.
      *
-     * @return array{text: string, source: 'ai_vision_cache'|'ai_vision_unavailable'|'stored_ocr'|'ocr_transient'|'empty'}
+     * @return array{text: string, source: 'ai_vision_cache'|'ai_vision_unavailable'|'stored_ocr'|'ocr_transient'|'empty', provenance: array{heading_key: string, params?: array<string, string>}}
      */
     private function resolvePreviewRawParseInputText(BiodataIntake $intake): array
     {
@@ -2609,38 +2612,97 @@ class IntakeController extends Controller
 
         if ($mode === ParserStrategyResolver::MODE_AI_VISION_EXTRACT_V1) {
             $cached = Cache::get('intake.parse_input_text.'.$intake->id);
-            if (is_string($cached) && trim($cached) !== '') {
-                return ['text' => $cached, 'source' => 'ai_vision_cache'];
-            }
-
             $dbg = Cache::get('intake.parse_input_debug.'.$intake->id);
-            $msg = __('intake.preview_parse_input_ai_unavailable');
-            if (is_array($dbg)
-                && ($dbg['parse_input_source'] ?? '') === 'ai_vision_extract_v1'
-                && ! empty($dbg['ok'])
-                && ! empty($dbg['text_quality_ok'] ?? true)) {
-                $msg = __('intake.preview_parse_input_ai_cache_missing');
+            $dbg = is_array($dbg) ? $dbg : [];
+
+            if (is_string($cached) && trim($cached) !== '') {
+                return [
+                    'text' => $cached,
+                    'source' => 'ai_vision_cache',
+                    'provenance' => AiVisionExtractionService::provenanceForPreview($dbg),
+                ];
             }
 
-            return ['text' => $msg, 'source' => 'ai_vision_unavailable'];
+            $msg = $this->buildAiVisionUnavailablePanelMessage($dbg, $intake);
+            if ($msg === '') {
+                $msg = __('intake.preview_parse_input_ai_unavailable');
+                if ($dbg !== []
+                    && ($dbg['parse_input_source'] ?? '') === 'ai_vision_extract_v1'
+                    && ! empty($dbg['ok'])
+                    && ! empty($dbg['text_quality_ok'] ?? true)) {
+                    $msg = __('intake.preview_parse_input_ai_cache_missing');
+                }
+            }
+
+            return [
+                'text' => $msg,
+                'source' => 'ai_vision_unavailable',
+                'provenance' => [
+                    'heading_key' => 'intake.preview_ai_transcription_unavailable_title',
+                    'params' => [],
+                ],
+            ];
         }
 
         $stored = (string) ($intake->raw_ocr_text ?? '');
         if (trim($stored) !== '') {
-            return ['text' => $stored, 'source' => 'stored_ocr'];
+            return [
+                'text' => $stored,
+                'source' => 'stored_ocr',
+                'provenance' => [
+                    'heading_key' => 'intake.preview_source_stored_ocr',
+                    'params' => [],
+                ],
+            ];
         }
 
         try {
             $ocrResolved = app(OcrService::class)->resolveParseInputText($intake);
             $transient = (string) ($ocrResolved['text'] ?? '');
             if (trim($transient) !== '') {
-                return ['text' => $transient, 'source' => 'ocr_transient'];
+                return [
+                    'text' => $transient,
+                    'source' => 'ocr_transient',
+                    'provenance' => [
+                        'heading_key' => 'intake.preview_source_ocr_parse_input',
+                        'params' => [],
+                    ],
+                ];
             }
         } catch (\Throwable $e) {
             // keep empty
         }
 
-        return ['text' => '', 'source' => 'empty'];
+        return [
+            'text' => '',
+            'source' => 'empty',
+            'provenance' => [
+                'heading_key' => 'intake.preview_source_empty',
+                'params' => [],
+            ],
+        ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $dbg
+     */
+    private function buildAiVisionUnavailablePanelMessage(array $dbg, BiodataIntake $intake): string
+    {
+        $parts = [];
+        if ($dbg !== []) {
+            if (! empty($dbg['failure_detail'])) {
+                $parts[] = (string) $dbg['failure_detail'];
+            }
+            if (! empty($dbg['quality_failure_detail'])) {
+                $parts[] = (string) $dbg['quality_failure_detail'];
+            }
+        }
+        $le = trim((string) ($intake->last_error ?? ''));
+        if ($le !== '' && $parts === []) {
+            $parts[] = __('intake.preview_ai_transcription_failed_code', ['code' => $le]);
+        }
+
+        return implode("\n\n", array_filter($parts));
     }
 
     /**
@@ -2743,18 +2805,23 @@ class IntakeController extends Controller
         $parseInput = Cache::get('intake.parse_input_debug.'.$intake->id);
         if (is_array($parseInput) && $parseInput !== []) {
             $base['parse_input_source'] = $parseInput['parse_input_source'] ?? null;
-            foreach ([
-                'extraction', 'provider', 'model', 'source_field', 'relative_path', 'absolute_path', 'ok', 'reason',
+            $parseInputKeys = [
+                'extraction', 'provider', 'provider_source', 'model', 'source_field', 'relative_path', 'absolute_path', 'ok', 'reason',
+                'http_status', 'response_body_snippet', 'job_error_message', 'extraction_error', 'failure_detail', 'quality_failure_detail',
                 'text_quality_ok', 'text_quality_reason', 'text_chars', 'text_non_space_chars', 'text_lines', 'text_alpha_ratio',
                 'sarvam_job_id', 'sarvam_job_state',
                 'original_image_width', 'original_image_height', 'ai_request_image_width', 'ai_request_image_height',
                 'ai_request_payload_enhanced', 'ai_request_orientation_corrected', 'vision_detail', 'extracted_text_line_count',
-            ] as $k) {
+            ];
+            foreach ($parseInputKeys as $k) {
                 if (! array_key_exists($k, $parseInput)) {
                     continue;
                 }
                 $v = $parseInput[$k];
-                if ($v === null || $v === '') {
+                if ($v === null) {
+                    continue;
+                }
+                if ($v === '' && ! in_array($k, ['failure_detail', 'quality_failure_detail', 'response_body_snippet'], true)) {
                     continue;
                 }
                 $base['parse_input_'.$k] = $v;
@@ -3017,7 +3084,16 @@ class IntakeController extends Controller
             ? $profile->pending_intake_suggestions_json
             : [];
 
-        return view('intake.status', compact('intake', 'ocrPresetFeedback', 'profile', 'pendingSuggestions'));
+        $parseInputDebug = Cache::get('intake.parse_input_debug.'.$intake->id);
+        if (! is_array($parseInputDebug)) {
+            $parseInputDebug = null;
+        }
+        $parseInputTextPreview = Cache::get('intake.parse_input_text.'.$intake->id);
+        if (! is_string($parseInputTextPreview)) {
+            $parseInputTextPreview = null;
+        }
+
+        return view('intake.status', compact('intake', 'ocrPresetFeedback', 'profile', 'pendingSuggestions', 'parseInputDebug', 'parseInputTextPreview'));
     }
 
     /**

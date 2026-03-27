@@ -125,12 +125,17 @@ class ParseIntakeJob implements ShouldQueue
                 'parse_input_source' => 'ai_vision_extract_v1',
                 'extraction' => $aiRes['meta']['extraction'] ?? null,
                 'provider' => $aiRes['meta']['provider'] ?? null,
+                'provider_source' => $aiRes['meta']['provider_source'] ?? null,
                 'model' => $aiRes['meta']['model'] ?? null,
                 'source_field' => $aiRes['meta']['source_field'] ?? null,
                 'relative_path' => $aiRes['meta']['relative_path'] ?? null,
                 'absolute_path' => $aiRes['meta']['absolute_path'] ?? null,
                 'ok' => (bool) ($aiRes['meta']['ok'] ?? false),
                 'reason' => $aiRes['meta']['reason'] ?? null,
+                'http_status' => $aiRes['meta']['status'] ?? null,
+                'response_body_snippet' => $aiRes['meta']['response_body_snippet'] ?? null,
+                'job_error_message' => $aiRes['meta']['job_error_message'] ?? null,
+                'extraction_error' => $aiRes['meta']['error'] ?? null,
                 'text_quality_ok' => (bool) ($qualityGate['ok'] ?? false),
                 'text_quality_reason' => $qualityGate['reason'] ?? null,
                 'text_chars' => $qualityGate['chars'] ?? null,
@@ -147,6 +152,8 @@ class ParseIntakeJob implements ShouldQueue
                 'ai_request_orientation_corrected' => $aiRes['meta']['ai_request_orientation_corrected'] ?? null,
                 'vision_detail' => $aiRes['meta']['vision_detail'] ?? null,
                 'extracted_text_line_count' => $aiRes['meta']['extracted_text_line_count'] ?? null,
+                'failure_detail' => empty($aiRes['meta']['ok']) ? AiVisionExtractionService::failureDetailForUi($aiRes['meta']) : null,
+                'quality_failure_detail' => empty($qualityGate['ok']) ? AiVisionExtractionService::qualityFailureDetailForUi($qualityGate) : null,
             ];
 
             if (trim($raw) === '') {
@@ -160,6 +167,11 @@ class ParseIntakeJob implements ShouldQueue
 
                 return;
             }
+
+            // Preview/debug: exact text extracted before parser (even if quality gate fails later).
+            Cache::put('intake.parse_input_debug.'.$intake->id, $parseInputDebug, now()->addDays(7));
+            Cache::put('intake.parse_input_text.'.$intake->id, $raw, now()->addDays(7));
+
             if (empty($qualityGate['ok'])) {
                 $intake->update([
                     'parse_status' => 'error',
@@ -205,9 +217,7 @@ class ParseIntakeJob implements ShouldQueue
         Cache::put('intake.parse_ocr_quality.'.$intake->id, $ocrQuality, now()->addDays(7));
 
         if ($mode === ParserStrategyResolver::MODE_AI_VISION_EXTRACT_V1) {
-            Cache::put('intake.parse_input_debug.'.$intake->id, $parseInputDebug, now()->addDays(7));
-            // Transient preview-only: text used as parser input (not persisted; not raw_ocr_text).
-            Cache::put('intake.parse_input_text.'.$intake->id, $raw, now()->addDays(7));
+            // parse_input_debug / parse_input_text cached immediately after non-empty AI extraction (before quality gate).
         } elseif (is_array($resolved['ocr_debug'] ?? null)) {
             Cache::put('intake.parse_ocr_debug.'.$intake->id, $resolved['ocr_debug'], now()->addDays(7));
         }

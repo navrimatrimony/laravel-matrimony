@@ -114,6 +114,17 @@
                     When off, uploads are created in "uploaded" state and can be parsed later from admin tools.
                 </p>
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div class="md:col-span-3">
+                        <label class="block font-medium text-gray-700 dark:text-gray-200 mb-1">AI Vision transcription provider</label>
+                        <select name="intake_ai_vision_provider" class="w-full max-w-md rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-2 py-1">
+                            <option value="" {{ ($intakeAiVisionProvider ?? '') === '' ? 'selected' : '' }}>Default (from .env / config)</option>
+                            <option value="openai" {{ ($intakeAiVisionProvider ?? '') === 'openai' ? 'selected' : '' }}>OpenAI</option>
+                            <option value="sarvam" {{ ($intakeAiVisionProvider ?? '') === 'sarvam' ? 'selected' : '' }}>Sarvam</option>
+                        </select>
+                        <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                            Used only when <strong>Active parser</strong> is <strong>AI Vision Extract</strong>. This chooses which service transcribes the biodata file (separate from parser mode). Empty = use <code class="text-xs bg-gray-200 dark:bg-gray-600 px-1 rounded">INTAKE_AI_VISION_PROVIDER</code> / config.
+                        </p>
+                    </div>
                     <div>
                         <label class="block font-medium text-gray-700 dark:text-gray-200 mb-1">Active parser</label>
                         @php
