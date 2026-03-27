@@ -27,6 +27,8 @@ class IntakeControlledFieldNormalizer
         $out['education_history'] = $this->normalizeEducationRows(is_array($out['education_history'] ?? null) ? $out['education_history'] : []);
         $out['career_history'] = $this->normalizeCareerRows(is_array($out['career_history'] ?? null) ? $out['career_history'] : []);
         [$out['relatives'], $out['relatives_sectioned']] = $this->normalizeRelativesRows(is_array($out['relatives'] ?? null) ? $out['relatives'] : []);
+        $out['relatives_parents_family'] = $this->flattenSectionedRelatives($out['relatives_sectioned']['paternal'] ?? []);
+        $out['relatives_maternal_family'] = $this->flattenSectionedRelatives($out['relatives_sectioned']['maternal'] ?? []);
 
         $matchedCount = 0;
         $unmatchedCritical = [];
@@ -183,6 +185,26 @@ class IntakeControlledFieldNormalizer
         }
 
         return [$normalized, $sectioned];
+    }
+
+    /**
+     * @param  array<string, array<int, array<string,mixed>>>  $section
+     * @return array<int,array<string,mixed>>
+     */
+    private function flattenSectionedRelatives(array $section): array
+    {
+        $out = [];
+        foreach ($section as $rows) {
+            if (! is_array($rows)) {
+                continue;
+            }
+            foreach ($rows as $r) {
+                if (is_array($r)) {
+                    $out[] = $r;
+                }
+            }
+        }
+        return $out;
     }
 
     public function normalizeEducationRows(array $rows): array

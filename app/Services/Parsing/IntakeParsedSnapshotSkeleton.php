@@ -25,6 +25,8 @@ class IntakeParsedSnapshotSkeleton
             'addresses' => [],
             'siblings' => [],
             'relatives' => [],
+            'relatives_parents_family' => [],
+            'relatives_maternal_family' => [],
             'relatives_sectioned' => $this->relativeSectionDefaults(),
             'alliance_networks' => [],
             'property_summary' => [],

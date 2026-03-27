@@ -54,7 +54,7 @@ class PreviewSectionMapper
     ];
 
     /** Section keys that store a single value (string/null) rather than array. */
-    private const SCALAR_SECTIONS = ['property_summary', 'narrative'];
+    private const SCALAR_SECTIONS = [];
 
     public function map(array $parsedJson): array
     {

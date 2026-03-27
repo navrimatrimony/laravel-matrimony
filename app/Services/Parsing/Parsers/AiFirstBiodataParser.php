@@ -161,6 +161,8 @@ class AiFirstBiodataParser implements BiodataParserInterface
                 $result['horoscope'] = $this->sanitizeHoroscopeRows($result['horoscope'] ?? []);
 
                 $result = ParsedJsonSsotNormalizer::normalize($result);
+                // CRITICAL: enforce full canonical skeleton AFTER all normalization.
+                $result = $this->ensureSsotShape($result);
 
                 return $result;
             }

@@ -8,6 +8,7 @@ use App\Services\IntakeManualOcrPreparedService;
 use App\Services\AiVisionExtractionService;
 use App\Services\Ocr\OcrQualityEvaluator;
 use App\Services\OcrService;
+use App\Services\Parsing\IntakeParsedSnapshotSkeleton;
 use App\Services\Parsing\ParserStrategyResolver;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -91,8 +92,9 @@ class ParseIntakeJob implements ShouldQueue
                 ->where('parse_status', 'parsed')
                 ->first();
             if ($cached && ! empty($cached->parsed_json)) {
+                $ensured = app(IntakeParsedSnapshotSkeleton::class)->ensure((array) $cached->parsed_json);
                 $intake->update([
-                    'parsed_json' => $cached->parsed_json,
+                    'parsed_json' => $ensured,
                     'parse_status' => 'parsed',
                     'parser_version' => $canonicalVersion,
                 ]);
@@ -274,7 +276,7 @@ class ParseIntakeJob implements ShouldQueue
         }
 
         // At this point parsers are already required to return SSOT-compatible shape.
-        $ssot = $parsed;
+        $ssot = app(IntakeParsedSnapshotSkeleton::class)->ensure($parsed);
 
         $intake->update([
             'parsed_json' => $ssot,
