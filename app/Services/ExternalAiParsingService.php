@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Services\Parsing\IntakeParsedSnapshotSkeleton;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
@@ -18,6 +19,11 @@ use Illuminate\Support\Facades\Log;
  */
 class ExternalAiParsingService
 {
+    public function __construct(
+        private IntakeParsedSnapshotSkeleton $skeleton,
+    ) {
+    }
+
     /**
      * Attempt to parse raw biodata text into SSOT structure via AI.
      *
@@ -150,7 +156,7 @@ class ExternalAiParsingService
                 $decoded['confidence_map'] = [];
             }
 
-            return $decoded;
+            return $this->skeleton->ensure($decoded);
         } catch (\Throwable $e) {
             Log::warning('ExternalAiParsingService: AI request failed.', ['message' => $e->getMessage()]);
             return null;
@@ -189,51 +195,17 @@ class ExternalAiParsingService
             . 'वडील, आई, भाऊ, बहीण, दाजी (sister\'s husband), मामा, आजोळ (maternal), पत्ता, नोकरी, शिक्षण. '
             . 'CRITICAL: Use JSON null for unknown/missing fields. Never output the word "null" as a string. '
             . 'Never copy section titles or bare labels (e.g. "शिक्षण", "रास", "नाव") as if they were field values. '
+            . 'For controlled-option style fields (religion/caste/sub_caste/marital_status/complexion/blood_group etc), extract raw labels conservatively; do not force dropdown decisions. '
+            . 'If a line combines community tokens (religion + caste + sub_caste), split only when explicit and unambiguous; otherwise keep conservative raw values. '
+            . 'For person names in siblings/relatives/parents, preserve honorifics/prefixes exactly when present (e.g. श्री., सौ., डॉ.); do not strip them. '
+            . 'If multiple relatives share the same relation (e.g. multiple मामा/चुलते/आत्या), keep each person as a separate row; never collapse into one. '
             . 'Copy names, numbers, dates, and places exactly as written—do not "fix" spellings or invent missing data. '
             . 'Return ONLY valid JSON. No markdown, no code fences, no explanations.';
 
-        $schema = <<<'SCHEMA'
-{
-  "core": {
-    "full_name": "string or null",
-    "date_of_birth": "YYYY-MM-DD or null",
-    "birth_time": "string or null",
-    "birth_place": "string or null",
-    "gender": "male|female or null",
-    "religion": "string or null",
-    "caste": "string or null",
-    "sub_caste": "string or null",
-    "marital_status": "string or null",
-    "height_cm": number or null,
-    "complexion": "string or null (e.g. गोरा, सावळा, निमगोरा)",
-    "annual_income": number or null,
-    "family_income": number or null,
-    "primary_contact_number": "string or null",
-    "father_name": "string or null",
-    "father_occupation": "string or null",
-    "mother_name": "string or null",
-    "mother_occupation": "string or null",
-    "brother_count": number or null,
-    "sister_count": number or null,
-    "other_relatives_text": "string or null (इतर नातेवाईक / आडनाव / गाव etc)"
-  },
-  "contacts": [{"type": "primary|other", "number": "string", "label": "string or null"}],
-  "children": [{"name": "string or null", "birth_year": "number or null", "gender": "string or null"}],
-  "education_history": [{"degree": "string (qualification e.g. B.E., HSC)", "specialization": "string or null (branch/stream only, e.g. Computer Engineering)", "institution": "string or null (school/college name only)", "year": "number or null"}],
-  "career_history": [{"job_title": "string or null", "company": "string or null", "location": "string or null"}],
-  "addresses": [{"type": "string or null", "address_line": "string", "city": "string or null", "district": "string or null"}],
-  "siblings": [{"relation_type": "brother|sister", "name": "string or null", "occupation": "string or null", "address_line": "string or null", "contact_number": "string or null", "notes": "string or null", "spouse": {"name": "string or null", "address_line": "string or null", "occupation_title": "string or null", "contact_number": "string or null"}}],
-  "relatives": [{"relation_type": "string (e.g. mama, mami, daji, maternal_uncle)", "name": "string or null", "occupation": "string or null", "address_line": "string or null", "contact_number": "string or null", "notes": "string or null"}],
-  "property_summary": [],
-  "property_assets": [],
-  "horoscope": [{"rashi": "string or null", "nakshatra": "string or null", "nadi": "adi|madhyam|anty or null", "gan": "deva|manushya|rakshasa or null", "charan": number 1-4 or null, "devak": "string or null", "kuldaivat": "string or null", "gotra": "string or null", "blood_group": "A+/A-/B+/B-/AB+/AB-/O+/O- or null"}],
-  "preferences": [],
-  "extended_narrative": {"narrative_about_me": "string or null", "narrative_expectations": "string or null", "additional_notes": "string or null"},
-  "confidence_map": {"field_name": number 0-1}
-}
-SCHEMA;
-
-        $user = 'Extract the following biodata into this EXACT JSON schema. '
+        // Keep AI output compact: include ONLY keys you found; omit null/unknown fields.
+        // Backend assembles full canonical skeleton via IntakeParsedSnapshotSkeleton.
+        $user = 'Extract the following biodata into a compact JSON payload. '
+            . 'Include only keys you actually found; omit unknown keys instead of filling nulls. '
             . "Rules: (1) Marathi dates like १२/०३/१९९६ or 12/03/1996 → YYYY-MM-DD. "
             . "(2) Height in feet/inch (फूट/इंच) → convert to height_cm (1 ft = 30.48 cm, 1 inch = 2.54 cm). "
             . "(3) Blood group: accept B+, B+ve, B positive → B+; similar for A, AB, O. "
@@ -244,7 +216,12 @@ SCHEMA;
             . "(8) Education: degree = course/qualification; specialization = branch/stream if explicitly separate; institution = college/school name only—do not put the full शिक्षण line into one field if distinct parts exist. "
             . "(9) Horoscope: rashi/nakshatra/devak/kuldaivat/gotra must be only the actual value tokens, not labels like \"रास\" or \"नक्षत्र\" alone. "
             . "(10) Strip decorative symbols from caste/jāt strings (e.g. stray % from tables) but keep the caste text itself. "
-            . "(11) Return ONLY JSON, no backticks.\n\nSchema:\n" . $schema . "\n\nBiodata text:\n\n" . $rawText;
+            . "(11) Do not output guessed *_id values; extract raw textual labels only and keep them conservative when ambiguous. "
+            . "(12) Preserve honorifics like श्री./सौ./डॉ. in person names when present. "
+            . "(13) For repeated same-relation relatives, output multiple array entries (do not merge). "
+            . "(14) Return ONLY JSON, no backticks.\n\n"
+            . "Top-level keys you MAY use (only include those you found): core, contacts, children, marriages, siblings, relatives, education_history, career_history, addresses, property_summary, property_assets, horoscope, preferences, extended_narrative, confidence_map.\n\n"
+            . "Biodata text:\n\n" . $rawText;
 
         try {
             $response = Http::withHeaders([
@@ -304,7 +281,7 @@ SCHEMA;
                 $decoded['confidence_map'] = [];
             }
 
-            return $decoded;
+            return $this->skeleton->ensure($decoded);
         } catch (\Throwable $e) {
             Log::warning('ExternalAiParsingService: AI v2 request failed.', ['message' => $e->getMessage()]);
             return null;

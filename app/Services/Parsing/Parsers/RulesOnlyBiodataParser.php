@@ -3,6 +3,7 @@
 namespace App\Services\Parsing\Parsers;
 
 use App\Services\BiodataParserService;
+use App\Services\Parsing\IntakeParsedSnapshotSkeleton;
 use App\Services\Parsing\Contracts\BiodataParserInterface;
 
 /**
@@ -15,6 +16,7 @@ class RulesOnlyBiodataParser implements BiodataParserInterface
 {
     public function __construct(
         protected BiodataParserService $inner,
+        protected IntakeParsedSnapshotSkeleton $skeleton,
     ) {
     }
 
@@ -33,50 +35,7 @@ class RulesOnlyBiodataParser implements BiodataParserInterface
      */
     private function ensureSsotShape(array $parsed): array
     {
-        $defaults = [
-            'core' => [],
-            'contacts' => [],
-            'children' => [],
-            'education_history' => [],
-            'career_history' => [],
-            'addresses' => [],
-            'relatives' => [],
-            'siblings' => [],
-            'property_summary' => [],
-            'property_assets' => [],
-            'horoscope' => [],
-            'preferences' => [],
-            'extended_narrative' => [
-                'narrative_about_me' => null,
-                'narrative_expectations' => null,
-                'additional_notes' => null,
-            ],
-            'confidence_map' => [],
-        ];
-
-        // Merge defaults without overwriting non-null structured sections.
-        foreach ($defaults as $key => $default) {
-            if (!array_key_exists($key, $parsed) || $parsed[$key] === null) {
-                $parsed[$key] = $default;
-            }
-        }
-
-        // Make sure extended_narrative always has the 3 expected keys.
-        if (!is_array($parsed['extended_narrative'])) {
-            $parsed['extended_narrative'] = $defaults['extended_narrative'];
-        } else {
-            $parsed['extended_narrative'] = array_merge(
-                $defaults['extended_narrative'],
-                $parsed['extended_narrative']
-            );
-        }
-
-        // Confidence map should always be an array.
-        if (!is_array($parsed['confidence_map'])) {
-            $parsed['confidence_map'] = [];
-        }
-
-        return $parsed;
+        return $this->skeleton->ensure($parsed);
     }
 }
 

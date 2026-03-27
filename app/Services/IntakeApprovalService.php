@@ -47,11 +47,9 @@ if ($intake->approved_by_user === true) {
             $approvalSnapshot = [];
         }
 
-        // Phase-5: Normalize controlled-option fields inside snapshot (non-destructive).
-        // This ensures OCR/AI free-text for horoscope-backed masters is mapped to canonical *_id
-        // before the immutable approval_snapshot_json is stored and before MutationService runs.
-        $approvalSnapshot = app(\App\Services\ControlledOptionNormalizer::class)
-            ->normalizeIntakeHoroscopeSnapshot($approvalSnapshot);
+        // Phase-5: Normalize full snapshot controlled fields deterministically (non-destructive).
+        $approvalSnapshot = app(\App\Services\Parsing\IntakeControlledFieldNormalizer::class)
+            ->normalizeSnapshot($approvalSnapshot);
 
         // Ensure full_name never contains parser noise "तपासा" (form title leak) before apply.
         if (isset($approvalSnapshot['core']['full_name']) && is_string($approvalSnapshot['core']['full_name'])) {

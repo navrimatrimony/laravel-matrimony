@@ -1949,44 +1949,8 @@ class MutationService
      */
     private function normalizeIntakeCoreForApply(array $core): array
     {
-        $out = $core;
-        $engine = app(\App\Services\ControlledOptions\ControlledOptionEngine::class);
-
-        $resolve = function (string $fieldKey, string $textKey, string $idKey) use ($engine, &$out): void {
-            if (isset($out[$idKey]) && is_numeric($out[$idKey])) {
-                return;
-            }
-            $raw = $out[$textKey] ?? null;
-            if ($raw === null || trim((string) $raw) === '') {
-                return;
-            }
-            $res = $engine->resolveKey($fieldKey, trim((string) $raw));
-            if ($res['matched'] && $res['id'] !== null) {
-                $out[$idKey] = $res['id'];
-            }
-        };
-
-        $resolve('core.religion', 'religion', 'religion_id');
-        $resolve('core.caste', 'caste', 'caste_id');
-        $resolve('core.sub_caste', 'sub_caste', 'sub_caste_id');
-        $resolve('physical.complexion', 'complexion', 'complexion_id');
-
-        if (! isset($out['mother_tongue_id']) || ! is_numeric($out['mother_tongue_id'])) {
-            $raw = $out['mother_tongue'] ?? null;
-            if ($raw !== null && trim((string) $raw) !== '') {
-                $v = trim((string) $raw);
-                $id = DB::table('master_mother_tongues')->where('is_active', true)
-                    ->where(function ($q) use ($v) {
-                        $q->where('label', $v)->orWhere('key', $v);
-                    })
-                    ->value('id');
-                if ($id !== null) {
-                    $out['mother_tongue_id'] = (int) $id;
-                }
-            }
-        }
-
-        return $out;
+        return app(\App\Services\Parsing\IntakeControlledFieldNormalizer::class)
+            ->normalizeCore($core);
     }
 
     private function normalizeValue(mixed $value): mixed

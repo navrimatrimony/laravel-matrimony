@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Services\ControlledOptions\ControlledOptionEngine;
 use Illuminate\Support\Facades\App;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 
 /**
  * Phase-5: Controlled Option Normalizer (SSOT compliant).
@@ -18,6 +19,24 @@ use Illuminate\Support\Facades\DB;
  */
 class ControlledOptionNormalizer
 {
+    /** @var array<string,string> */
+    private const CORE_FIELD_TO_ENGINE_KEY = [
+        'gender' => 'core.gender',
+        'religion' => 'core.religion',
+        'caste' => 'core.caste',
+        'sub_caste' => 'core.sub_caste',
+        'marital_status' => 'core.marital_status',
+        'complexion' => 'physical.complexion',
+        'blood_group' => 'physical.blood_group',
+        'physical_build' => 'physical.physical_build',
+        'mother_tongue' => 'core.mother_tongue',
+        'diet' => 'lifestyle.diet',
+        'smoking_status' => 'lifestyle.smoking_status',
+        'drinking_status' => 'lifestyle.drinking_status',
+        'family_type' => 'family.family_type',
+        'income_currency' => 'income.income_currency',
+    ];
+
     /**
      * Normalize a single controlled-option value against a master table.
      *
@@ -398,6 +417,178 @@ class ControlledOptionNormalizer
         $mr = ($mr !== $baseKey) ? $mr : $default;
 
         return ['en' => $en, 'mr' => $mr];
+    }
+
+    /**
+     * Deterministic controlled-option resolver for intake/core usage.
+     * Matching order: exact label -> exact key -> explicit aliases -> deterministic normalized variant.
+     *
+     * @return array{matched: bool, id: int|null, key: string|null, label: string|null, note: string}
+     */
+    public function resolveControlledCoreValue(string $logicalField, ?string $rawValue): array
+    {
+        $raw = trim((string) ($rawValue ?? ''));
+        if ($raw === '') {
+            return ['matched' => false, 'id' => null, 'key' => null, 'label' => null, 'note' => 'empty'];
+        }
+
+        $engineKey = self::CORE_FIELD_TO_ENGINE_KEY[$logicalField] ?? null;
+        if ($engineKey !== null) {
+            try {
+                $engine = app(ControlledOptionEngine::class);
+                $res = $engine->resolveKey($engineKey, $raw);
+                if (! empty($res['matched']) && ! empty($res['id'])) {
+                    return [
+                        'matched' => true,
+                        'id' => (int) $res['id'],
+                        'key' => isset($res['key']) ? (string) $res['key'] : null,
+                        'label' => isset($res['label']) ? (string) $res['label'] : null,
+                        'note' => 'engine_match',
+                    ];
+                }
+            } catch (\Throwable) {
+                // In lightweight test environments master tables may be absent.
+            }
+        }
+
+        // explicit alias map (small, reviewable; no fuzzy)
+        $alias = $this->aliasMapForLogicalField($logicalField);
+        if ($alias !== []) {
+            $token = $this->deterministicToken($raw);
+            if (isset($alias[$token])) {
+                $row = $this->findActiveMasterExact($this->masterTableForLogicalField($logicalField), $alias[$token]);
+                if ($row !== null) {
+                    return ['matched' => true, 'id' => (int) $row['id'], 'key' => (string) $row['key'], 'label' => (string) $row['label'], 'note' => 'alias_key_match'];
+                }
+            }
+        }
+
+        // deterministic direct lookup by exact label/key variants
+        $table = $this->masterTableForLogicalField($logicalField);
+        if ($table !== null) {
+            $row = $this->findActiveMasterExact($table, $raw);
+            if ($row !== null) {
+                return ['matched' => true, 'id' => (int) $row['id'], 'key' => (string) $row['key'], 'label' => (string) $row['label'], 'note' => 'exact_master_match'];
+            }
+        }
+
+        return ['matched' => false, 'id' => null, 'key' => null, 'label' => null, 'note' => 'unmatched'];
+    }
+
+    /**
+     * Deterministic active master lookup by exact label/key and normalized exact variants.
+     *
+     * @return array{id:int,key:string,label:string}|null
+     */
+    public function findActiveMasterExact(?string $table, string $rawValue): ?array
+    {
+        if ($table === null || trim($rawValue) === '') {
+            return null;
+        }
+        if (! \Illuminate\Support\Facades\Schema::hasTable($table)) {
+            return null;
+        }
+        $v = trim($rawValue);
+        $vNorm = $this->deterministicToken($v);
+
+        $rows = DB::table($table)
+            ->where('is_active', true)
+            ->get(['id', 'key', 'label']);
+
+        foreach ($rows as $row) {
+            $k = trim((string) ($row->key ?? ''));
+            $l = trim((string) ($row->label ?? ''));
+            if ($k === $v || $l === $v) {
+                return ['id' => (int) $row->id, 'key' => $k, 'label' => $l];
+            }
+        }
+        foreach ($rows as $row) {
+            $kNorm = $this->deterministicToken((string) ($row->key ?? ''));
+            $lNorm = $this->deterministicToken((string) ($row->label ?? ''));
+            if ($kNorm !== '' && $kNorm === $vNorm) {
+                return ['id' => (int) $row->id, 'key' => (string) $row->key, 'label' => (string) $row->label];
+            }
+            if ($lNorm !== '' && $lNorm === $vNorm) {
+                return ['id' => (int) $row->id, 'key' => (string) $row->key, 'label' => (string) $row->label];
+            }
+        }
+
+        return null;
+    }
+
+    private function masterTableForLogicalField(string $logicalField): ?string
+    {
+        return match ($logicalField) {
+            'gender' => 'master_genders',
+            'religion' => 'religions',
+            'caste' => 'castes',
+            'sub_caste' => 'sub_castes',
+            'marital_status' => 'master_marital_statuses',
+            'complexion' => 'master_complexions',
+            'blood_group' => 'master_blood_groups',
+            'physical_build' => 'master_physical_builds',
+            'mother_tongue' => 'master_mother_tongues',
+            'diet' => 'master_diets',
+            'smoking_status' => 'master_smoking_statuses',
+            'drinking_status' => 'master_drinking_statuses',
+            'family_type' => 'master_family_types',
+            'income_currency' => 'master_income_currencies',
+            default => null,
+        };
+    }
+
+    /**
+     * @return array<string,string> token => canonical_key
+     */
+    private function aliasMapForLogicalField(string $logicalField): array
+    {
+        return match ($logicalField) {
+            'gender' => [
+                'male' => 'male', 'm' => 'male', 'पुरुष' => 'male', 'वर' => 'male',
+                'female' => 'female', 'f' => 'female', 'स्त्री' => 'female', 'महिला' => 'female', 'वधू' => 'female',
+            ],
+            'marital_status' => [
+                'unmarried' => 'unmarried', 'single' => 'unmarried', 'अविवाहित' => 'unmarried',
+                'married' => 'married', 'विवाहित' => 'married',
+                'divorced' => 'divorced', 'घटस्फोटित' => 'divorced',
+                'widowed' => 'widowed', 'विधवा' => 'widowed', 'विधुर' => 'widowed',
+            ],
+            'religion' => [
+                'hindu' => 'hindu', 'हिंदू' => 'hindu', 'हिंदु' => 'hindu',
+                'muslim' => 'muslim', 'मुस्लिम' => 'muslim',
+                'christian' => 'christian', 'ख्रिश्चन' => 'christian',
+                'jain' => 'jain', 'जैन' => 'jain',
+                'buddhist' => 'buddhist', 'बौद्ध' => 'buddhist',
+                'sikh' => 'sikh', 'शीख' => 'sikh',
+            ],
+            'blood_group' => [
+                'a+' => 'a_positive', 'apositive' => 'a_positive', 'a+ve' => 'a_positive', 'a positive' => 'a_positive',
+                'a-' => 'a_negative', 'anegative' => 'a_negative', 'a-ve' => 'a_negative', 'a negative' => 'a_negative',
+                'b+' => 'b_positive', 'bpositive' => 'b_positive', 'b+ve' => 'b_positive', 'b positive' => 'b_positive',
+                'b-' => 'b_negative', 'bnegative' => 'b_negative', 'b-ve' => 'b_negative', 'b negative' => 'b_negative',
+                'ab+' => 'ab_positive', 'abpositive' => 'ab_positive', 'ab+ve' => 'ab_positive', 'ab positive' => 'ab_positive',
+                'ab-' => 'ab_negative', 'abnegative' => 'ab_negative', 'ab-ve' => 'ab_negative', 'ab negative' => 'ab_negative',
+                'o+' => 'o_positive', 'opositive' => 'o_positive', 'o+ve' => 'o_positive', 'o positive' => 'o_positive',
+                'o-' => 'o_negative', 'onegative' => 'o_negative', 'o-ve' => 'o_negative', 'o negative' => 'o_negative',
+            ],
+            'complexion' => [
+                'गोरा' => 'fair', 'fair' => 'fair',
+                'निमगोरा' => 'wheatish', 'गव्हाळ' => 'wheatish', 'wheatish' => 'wheatish',
+                'सावळा' => 'dusky', 'dusky' => 'dusky',
+            ],
+            default => [],
+        };
+    }
+
+    private function deterministicToken(string $value): string
+    {
+        $v = trim(Str::lower($value));
+        if ($v === '') {
+            return '';
+        }
+        $v = str_replace(['_', '-', '/', '(', ')', ':', '.'], ' ', $v);
+        $v = preg_replace('/\s+/u', ' ', $v) ?? $v;
+        return trim($v);
     }
 }
 

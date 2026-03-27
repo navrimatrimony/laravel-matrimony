@@ -4,6 +4,8 @@ namespace App\Services\Parsing\Parsers;
 
 use App\Services\BiodataParserService;
 use App\Services\ExternalAiParsingService;
+use App\Services\Parsing\IntakeParsedSnapshotSkeleton;
+use App\Services\Parsing\IntakeControlledFieldNormalizer;
 use App\Services\Parsing\Contracts\BiodataParserInterface;
 use App\Services\Parsing\ParsedJsonSsotNormalizer;
 use Illuminate\Support\Facades\Log;
@@ -19,6 +21,8 @@ class AiFirstBiodataParser implements BiodataParserInterface
     public function __construct(
         protected ExternalAiParsingService $ai,
         protected RulesOnlyBiodataParser $rulesParser,
+        protected IntakeControlledFieldNormalizer $intakeControlledFieldNormalizer,
+        protected IntakeParsedSnapshotSkeleton $skeleton,
     ) {
     }
 
@@ -145,24 +149,13 @@ class AiFirstBiodataParser implements BiodataParserInterface
                     $aiResult['confidence_map'] = ParsedJsonSsotNormalizer::mergeConfidenceMaps($aiCm, $rules['confidence_map']);
                 }
 
-                // Final SSOT shape and LAST-MILE caste/sub_caste split.
+                // Final SSOT shape then deterministic intake controlled-field normalization.
                 $result = $this->ensureSsotShape($aiResult);
+                $result = $this->intakeControlledFieldNormalizer->normalizeSnapshot($result);
 
                 // Clear education institution / career location when AI mis-parsed horoscope terms (devak/gotra).
                 $result['education_history'] = BiodataParserService::sanitizeEducationInstitutionFromDevakStatic($result['education_history'] ?? []);
                 $result['career_history'] = BiodataParserService::sanitizeCareerLocationFromGotraStatic($result['career_history'] ?? []);
-
-                $core = $result['core'] ?? [];
-                if (
-                    isset($core['caste']) &&
-                    is_string($core['caste']) &&
-                    mb_strpos($core['caste'], 'मराठा') !== false &&
-                    preg_match('/([0-9०-९]+\s*कुळी)/u', $core['caste'], $m)
-                ) {
-                    $core['sub_caste'] = trim($m[1]);
-                    $core['caste'] = 'मराठा';
-                }
-                $result['core'] = $core;
 
                 // Final horoscope sanitization: ensure devak/kuldaivat/gotra never contain junk in ai_first output.
                 $result['horoscope'] = $this->sanitizeHoroscopeRows($result['horoscope'] ?? []);
@@ -322,47 +315,7 @@ class AiFirstBiodataParser implements BiodataParserInterface
      */
     private function ensureSsotShape(array $parsed): array
     {
-        $defaults = [
-            'core' => [],
-            'contacts' => [],
-            'children' => [],
-            'education_history' => [],
-            'career_history' => [],
-            'addresses' => [],
-            'relatives' => [],
-            'siblings' => [],
-            'property_summary' => [],
-            'property_assets' => [],
-            'horoscope' => [],
-            'preferences' => [],
-            'extended_narrative' => [
-                'narrative_about_me' => null,
-                'narrative_expectations' => null,
-                'additional_notes' => null,
-            ],
-            'confidence_map' => [],
-        ];
-
-        foreach ($defaults as $key => $default) {
-            if (!array_key_exists($key, $parsed) || $parsed[$key] === null) {
-                $parsed[$key] = $default;
-            }
-        }
-
-        if (!is_array($parsed['extended_narrative'])) {
-            $parsed['extended_narrative'] = $defaults['extended_narrative'];
-        } else {
-            $parsed['extended_narrative'] = array_merge(
-                $defaults['extended_narrative'],
-                $parsed['extended_narrative']
-            );
-        }
-
-        if (!is_array($parsed['confidence_map'])) {
-            $parsed['confidence_map'] = [];
-        }
-
-        return $parsed;
+        return $this->skeleton->ensure($parsed);
     }
 }
 

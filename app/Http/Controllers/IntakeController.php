@@ -646,12 +646,12 @@ class IntakeController extends Controller
         // Normalize horoscope text → master IDs so form dropdowns show correct selection (nakshatra_id, rashi_id, gan_id, nadi_id).
         $horoscopeData = $sections['horoscope']['data'] ?? [];
         if (is_array($horoscopeData) && ! empty($horoscopeData)) {
-            $snapshotForNorm = ['horoscope' => isset($horoscopeData[0]) ? $horoscopeData : [$horoscopeData]];
-            $snapshotForNorm = app(\App\Services\ControlledOptionNormalizer::class)->normalizeIntakeHoroscopeSnapshot($snapshotForNorm);
-            if (! empty($snapshotForNorm['horoscope'])) {
-                $sections['horoscope']['data'] = $snapshotForNorm['horoscope'];
+            $rows = isset($horoscopeData[0]) ? $horoscopeData : [$horoscopeData];
+            $rows = app(\App\Services\Parsing\IntakeControlledFieldNormalizer::class)->normalizeHoroscopeRows($rows);
+            if (! empty($rows)) {
+                $sections['horoscope']['data'] = $rows;
                 // Copy blood_group from horoscope to core when core has none, so physical engine can resolve blood_group_id.
-                $firstHoroscope = is_array($snapshotForNorm['horoscope'][0]) ? $snapshotForNorm['horoscope'][0] : (array) $snapshotForNorm['horoscope'][0];
+                $firstHoroscope = is_array($rows[0]) ? $rows[0] : (array) $rows[0];
                 $hg = $firstHoroscope['blood_group'] ?? null;
                 if (is_scalar($hg) && trim((string) $hg) !== '' && (empty($coreData['blood_group']) || trim((string) $coreData['blood_group']) === '')) {
                     $sanitized = \App\Services\BiodataParserService::sanitizeBloodGroupValue(trim((string) $hg));
@@ -678,51 +678,8 @@ class IntakeController extends Controller
             'caste_label' => '',
             'subcaste_label' => '',
         ];
-        // हे $intakeProfile = (object) [...] नंतर आणि foreach loop आधी टाक
-        $complexionLabel = is_scalar($coreData['complexion'] ?? null) ? trim((string) $coreData['complexion']) : '';
-        if ($complexionLabel !== '') {
-            $search = mb_strtolower($complexionLabel);
-            $guessedKey = null;
-            if (str_contains($search, 'खूप गोरा')) {
-                $guessedKey = 'very_fair';
-            } elseif (str_contains($search, 'गोरा')) {
-                $guessedKey = 'fair';
-            }
-            if ($guessedKey === null && (str_contains($search, 'निमगोरा') || str_contains($search, 'निमगोडा') || str_contains($search, 'निमगोट') || str_contains($search, 'गव्हाळ'))) {
-                $guessedKey = 'wheatish';
-            }
-            if ($guessedKey === null && (str_contains($search, 'सावळ') || str_contains($search, 'दुस्की') || str_contains($search, 'गडद'))) {
-                $guessedKey = 'dusky';
-            }
-            if ($guessedKey === null && (str_contains($search, 'काळा') || str_contains($search, 'काळी'))) {
-                $guessedKey = 'dark';
-            }
-
-            $cx = \App\Models\MasterComplexion::where('is_active', true)
-                ->where(function ($q) use ($complexionLabel, $guessedKey) {
-                    $q->where('label', $complexionLabel)
-                        ->orWhere('key', $complexionLabel);
-                    if ($guessedKey !== null) {
-                        $q->orWhere('key', $guessedKey);
-                    }
-                })
-                ->first();
-            if ($cx) {
-                $coreData['complexion_id'] = $cx->id;
-            }
-        }
-        $bloodLabel = is_scalar($coreData['blood_group'] ?? null) ? trim((string) $coreData['blood_group']) : '';
-        if ($bloodLabel !== '') {
-            $bg = \App\Models\MasterBloodGroup::where('is_active', true)
-                ->where(function ($q) use ($bloodLabel) {
-                    $q->where('label', $bloodLabel)
-                        ->orWhere('key', $bloodLabel);
-                })
-                ->first();
-            if ($bg) {
-                $coreData['blood_group_id'] = $bg->id;
-            }
-        }
+        // Centralized deterministic controlled-field normalization (no fuzzy/contains-based dropdown forcing).
+        $coreData = app(\App\Services\Parsing\IntakeControlledFieldNormalizer::class)->normalizeCore($coreData);
         // Copy every other key from parsed core so form/engines see 100% of biodata (e.g. primary_contact_number, father_name, mother_name, height_cm, annual_income, birth_place string).
         foreach ($coreData as $k => $v) {
             if (! property_exists($intakeProfile, $k)) {
@@ -731,18 +688,8 @@ class IntakeController extends Controller
         }
         // Updated coreData should also flow back into $sections so blade includes (e.g. physical-engine via :values="$coreData") see complexion_id, blood_group_id, etc.
         $sections['core']['data'] = $coreData;
-        // Resolve gender_id from text if needed (OCR often has "Male"/"Female").
-        if (empty($intakeProfile->gender_id) && ! empty($coreData['gender'])) {
-            $genderText = is_scalar($coreData['gender']) ? trim((string) $coreData['gender']) : '';
-            if ($genderText !== '') {
-                $g = \App\Models\MasterGender::where('is_active', true)
-                    ->where(function ($q) use ($genderText) {
-                        $q->where('key', 'like', $genderText)->orWhere('label', 'like', $genderText);
-                    })->first();
-                if ($g) {
-                    $intakeProfile->gender_id = $g->id;
-                }
-            }
+        if (empty($intakeProfile->gender_id) && ! empty($coreData['gender_id'])) {
+            $intakeProfile->gender_id = $coreData['gender_id'];
         }
         $intakeProfile->birthPlaceDisplay = '';
         if (! empty($intakeProfile->birth_city_id)) {
@@ -1861,12 +1808,8 @@ class IntakeController extends Controller
             }
         }
 
-        // Normalize core on intake save (not on apply): resolve text → *_id so stored snapshot is wizard-ready and apply is 1:1.
-        if (isset($out['core']) && is_array($out['core'])) {
-            $out['core'] = $this->normalizeIntakeCoreForStorage($out['core']);
-        }
-
-        return $out;
+        // Centralized deterministic controlled-field normalization for full snapshot.
+        return app(\App\Services\Parsing\IntakeControlledFieldNormalizer::class)->normalizeSnapshot($out);
     }
 
     /**
@@ -1875,42 +1818,8 @@ class IntakeController extends Controller
      */
     private function normalizeIntakeCoreForStorage(array $core): array
     {
-        $out = $core;
-        $engine = app(\App\Services\ControlledOptions\ControlledOptionEngine::class);
-
-        $resolve = function (string $fieldKey, string $textKey, string $idKey) use ($engine, &$out): void {
-            if (isset($out[$idKey]) && is_numeric($out[$idKey])) {
-                return;
-            }
-            $raw = $out[$textKey] ?? null;
-            if ($raw === null || trim((string) $raw) === '') {
-                return;
-            }
-            $res = $engine->resolveKey($fieldKey, trim((string) $raw));
-            if ($res['matched'] && $res['id'] !== null) {
-                $out[$idKey] = $res['id'];
-            }
-        };
-
-        $resolve('core.religion', 'religion', 'religion_id');
-        $resolve('core.caste', 'caste', 'caste_id');
-        $resolve('core.sub_caste', 'sub_caste', 'sub_caste_id');
-        $resolve('physical.complexion', 'complexion', 'complexion_id');
-
-        if (! isset($out['mother_tongue_id']) || ! is_numeric($out['mother_tongue_id'])) {
-            $raw = $out['mother_tongue'] ?? null;
-            if ($raw !== null && trim((string) $raw) !== '') {
-                $v = trim((string) $raw);
-                $id = DB::table('master_mother_tongues')->where('is_active', true)
-                    ->where(function ($q) use ($v) {
-                        $q->where('label', $v)->orWhere('key', $v);
-                    })
-                    ->value('id');
-                if ($id !== null) {
-                    $out['mother_tongue_id'] = (int) $id;
-                }
-            }
-        }
+        $out = app(\App\Services\Parsing\IntakeControlledFieldNormalizer::class)
+            ->normalizeCore($core);
 
         // Map income-engine keys to profile columns so stored snapshot has annual_income / family_income (apply and edit show same).
         if ((! isset($out['annual_income']) || $out['annual_income'] === '' || $out['annual_income'] === null) && isset($out['income_normalized_annual_amount']) && is_numeric($out['income_normalized_annual_amount'])) {
