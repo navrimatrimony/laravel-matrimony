@@ -741,8 +741,18 @@ class MutationService
                 $proposedCore = $this->normalizeIntakeCoreForApply($proposedCore);
 
                 // ——— Step 5: CORE field apply (FieldRegistry-driven) ———
+                $intakePseudoContactCoreKeys = [
+                    'primary_contact_number', 'primary_contact_number_2', 'primary_contact_number_3',
+                    'primary_contact_whatsapp', 'primary_contact_whatsapp_2', 'primary_contact_whatsapp_3',
+                    // Parent extra slots: stored as profile_contacts (same relation) during intake, not duplicate core columns.
+                    'father_contact_2', 'father_contact_3', 'mother_contact_2', 'mother_contact_3',
+                ];
                 foreach ($coreFieldKeys as $fieldKey) {
                     if (! array_key_exists($fieldKey, $proposedCore)) {
+                        continue;
+                    }
+                    // Intake: phones are applied only via profile_contacts merge (never as fake core columns / never auto-primary).
+                    if (in_array($fieldKey, $intakePseudoContactCoreKeys, true)) {
                         continue;
                     }
                     if (in_array($fieldKey, $conflictFieldNames, true)) {
@@ -821,8 +831,13 @@ class MutationService
                     $profile->save();
                 }
 
-                // ——— Step 6: Contact sync (snapshot key: contacts → profile_contacts) ———
-                $contactConflict = $this->syncContactsFromSnapshot($profile, $snapshot['contacts'] ?? []);
+                // ——— Step 6: Contact sync (intake: strict merge — no primary replace, no row deletes, extras preserved) ———
+                $contactConflict = $this->syncContactsFromIntakeApply(
+                    $profile,
+                    is_array($snapshot['contacts'] ?? null) ? $snapshot['contacts'] : [],
+                    is_array($auditSnapshot['core'] ?? null) ? $auditSnapshot['core'] : [],
+                    is_array($auditSnapshot['siblings'] ?? null) ? $auditSnapshot['siblings'] : []
+                );
                 if ($contactConflict) {
                     $conflictRecords[] = $contactConflict;
                     $conflictFieldNames[] = $contactConflict->field_name;
@@ -1051,6 +1066,335 @@ class MutationService
         $this->syncEntityDiff($profile, 'profile_contacts', $proposed);
 
         return $contactConflict;
+    }
+
+    /**
+     * Intake apply only: append profile_contacts from intake without replacing an existing primary row,
+     * without deleting existing contacts, and without marking intake numbers as verified primary.
+     * Conflicting primary candidates → ConflictRecord + pending_intake_suggestions_json.contacts.
+     *
+     * @param  array<int, mixed>  $proposedContacts
+     * @param  array<string, mixed>  $auditCore  Full intake core (before strip) for extra phone slots
+     * @param  array<int, mixed>  $auditSiblings
+     */
+    private function syncContactsFromIntakeApply(
+        MatrimonyProfile $profile,
+        array $proposedContacts,
+        array $auditCore,
+        array $auditSiblings,
+    ): ?ConflictRecord {
+        if (! Schema::hasTable('profile_contacts')) {
+            return null;
+        }
+
+        $profile->refresh();
+        $profile->loadMissing('user');
+
+        $existing = DB::table('profile_contacts')->where('profile_id', $profile->id)->get();
+        $existingPrimary = $existing->first(function ($r) {
+            return ! empty($r->is_primary);
+        });
+
+        $knownDigits = $this->collectKnownPhoneDigitsForIntakeContactMerge($profile, $existing);
+        $suggestionContactRows = [];
+
+        $intakePrimaryDigits = $this->intakePrimaryPhoneCandidateDigits($proposedContacts, $auditCore);
+        $existingPrimaryDigits = '';
+        if ($existingPrimary !== null) {
+            $existingPrimaryDigits = $this->normalizePhoneDigitsForDedupe($existingPrimary->phone_number ?? null);
+        }
+
+        $contactConflict = null;
+        if ($existingPrimaryDigits !== '' && $intakePrimaryDigits !== '' && $intakePrimaryDigits !== $existingPrimaryDigits) {
+            if (! $this->hasPendingConflictForField($profile->id, 'primary_contact_number')) {
+                $contactConflict = ConflictRecord::create([
+                    'profile_id' => $profile->id,
+                    'field_name' => 'primary_contact_number',
+                    'field_type' => 'CORE',
+                    'old_value' => $existingPrimaryDigits,
+                    'new_value' => $intakePrimaryDigits,
+                    'source' => 'SYSTEM',
+                    'detected_at' => now(),
+                    'resolution_status' => 'PENDING',
+                ]);
+            }
+            foreach ($proposedContacts as $row) {
+                if (is_array($row)) {
+                    $suggestionContactRows[] = $row;
+                }
+            }
+            $suggestionContactRows[] = [
+                'relation_type' => 'self',
+                'phone_number' => $intakePrimaryDigits,
+                'contact_name' => 'Self',
+                'intake_note' => 'proposed_primary_from_intake',
+            ];
+        } elseif ($existingPrimaryDigits === '' && $intakePrimaryDigits !== '') {
+            $suggestionContactRows[] = [
+                'relation_type' => 'self',
+                'phone_number' => $intakePrimaryDigits,
+                'contact_name' => 'Self',
+                'intake_note' => 'candidate_primary_pending_verification',
+            ];
+        }
+
+        $candidates = [];
+        foreach ($proposedContacts as $row) {
+            if (is_array($row)) {
+                $candidates[] = $row;
+            }
+        }
+        $this->appendIntakeCorePhoneCandidates($candidates, $auditCore);
+        $this->appendIntakeSiblingExtraPhoneCandidates($candidates, $auditSiblings);
+
+        foreach ($candidates as $raw) {
+            if (! is_array($raw)) {
+                continue;
+            }
+            $relationKey = $this->inferIntakeContactRelationKey($raw);
+            $phoneRaw = $raw['phone_number'] ?? $raw['number'] ?? $raw['phone'] ?? null;
+            $digits = $this->normalizePhoneDigitsForDedupe($phoneRaw);
+            if ($digits === '') {
+                continue;
+            }
+            if (isset($knownDigits[$digits])) {
+                continue;
+            }
+
+            $row = $raw;
+            $row['phone_number'] = $digits;
+            $row['relation_type'] = $relationKey;
+            $row['is_primary'] = false;
+            if (trim((string) ($row['contact_name'] ?? '')) === '') {
+                $row['contact_name'] = $this->defaultContactNameForRelationKey($relationKey);
+            }
+
+            $mapped = $this->mapSnapshotRowToTable('profile_contacts', $row);
+            $mapped['is_primary'] = false;
+            $mapped['phone_number'] = $digits;
+            if (($mapped['contact_name'] ?? '') === '') {
+                $mapped['contact_name'] = $this->defaultContactNameForRelationKey($relationKey);
+            }
+
+            $this->insertIntakeProfileContactRow($profile, $mapped, $knownDigits);
+        }
+
+        if ($suggestionContactRows !== []) {
+            $this->mergePendingIntakeSuggestionsIntoProfile($profile, ['contacts' => array_values($suggestionContactRows)]);
+        }
+
+        return $contactConflict;
+    }
+
+    private function normalizePhoneDigitsForDedupe(mixed $phone): string
+    {
+        $d = preg_replace('/\D/', '', (string) ($phone ?? ''));
+        if ($d === '') {
+            return '';
+        }
+        if (strlen($d) > 10) {
+            $d = substr($d, -10);
+        }
+        if (strlen($d) !== 10) {
+            return '';
+        }
+
+        return $d;
+    }
+
+    /**
+     * @param  \Illuminate\Support\Collection<int, object>|\Illuminate\Support\Collection<int, \stdClass>  $existingRows
+     * @return array<string, true>
+     */
+    private function collectKnownPhoneDigitsForIntakeContactMerge(MatrimonyProfile $profile, $existingRows): array
+    {
+        $set = [];
+        foreach ($existingRows as $r) {
+            $d = $this->normalizePhoneDigitsForDedupe($r->phone_number ?? null);
+            if ($d !== '') {
+                $set[$d] = true;
+            }
+        }
+        foreach (['father_contact_1', 'father_contact_2', 'father_contact_3', 'mother_contact_1', 'mother_contact_2', 'mother_contact_3'] as $k) {
+            $d = $this->normalizePhoneDigitsForDedupe($profile->getAttribute($k));
+            if ($d !== '') {
+                $set[$d] = true;
+            }
+        }
+
+        return $set;
+    }
+
+    private function intakePrimaryPhoneCandidateDigits(array $proposedContacts, array $auditCore): string
+    {
+        $fromCore = $this->normalizePhoneDigitsForDedupe($auditCore['primary_contact_number'] ?? null);
+        if ($fromCore !== '') {
+            return $fromCore;
+        }
+        foreach ($proposedContacts as $row) {
+            if (! is_array($row)) {
+                continue;
+            }
+            if (! empty($row['is_primary']) || strtolower(trim((string) ($row['type'] ?? ''))) === 'primary') {
+                $d = $this->normalizePhoneDigitsForDedupe($row['phone_number'] ?? $row['number'] ?? null);
+                if ($d !== '') {
+                    return $d;
+                }
+            }
+        }
+        foreach ($proposedContacts as $row) {
+            if (! is_array($row)) {
+                continue;
+            }
+            if ($this->inferIntakeContactRelationKey($row) === 'self') {
+                $d = $this->normalizePhoneDigitsForDedupe($row['phone_number'] ?? $row['number'] ?? null);
+                if ($d !== '') {
+                    return $d;
+                }
+            }
+        }
+
+        return '';
+    }
+
+    private function inferIntakeContactRelationKey(array $row): string
+    {
+        $rt = strtolower(trim((string) ($row['relation_type'] ?? '')));
+        if (in_array($rt, ['brother', 'sister', 'siblings'], true)) {
+            return 'sibling';
+        }
+        if ($rt !== '') {
+            return $rt;
+        }
+        $lab = strtolower(trim((string) ($row['label'] ?? '')));
+        if (in_array($lab, ['self', 'father', 'mother', 'spouse', 'sibling', 'guardian', 'other'], true)) {
+            return $lab;
+        }
+        $typ = strtolower(trim((string) ($row['type'] ?? '')));
+        if ($typ === 'primary') {
+            return 'self';
+        }
+
+        return 'self';
+    }
+
+    private function defaultContactNameForRelationKey(string $relationKey): string
+    {
+        return match ($relationKey) {
+            'father' => 'Father',
+            'mother' => 'Mother',
+            'spouse' => 'Spouse',
+            'sibling' => 'Sibling',
+            'guardian' => 'Guardian',
+            'other' => 'Contact',
+            default => 'Self',
+        };
+    }
+
+    /**
+     * @param  array<int, mixed>  $candidates
+     * @param  array<string, mixed>  $auditCore
+     */
+    private function appendIntakeCorePhoneCandidates(array &$candidates, array $auditCore): void
+    {
+        $primaryRaw = $auditCore['primary_contact_number'] ?? null;
+        if ($primaryRaw !== null && trim((string) $primaryRaw) !== '') {
+            $candidates[] = [
+                'phone_number' => trim((string) $primaryRaw),
+                'relation_type' => 'self',
+                'contact_name' => 'Self',
+            ];
+        }
+        $extras = [
+            ['keys' => ['primary_contact_number_2', 'primary_contact_number_3'], 'relation' => 'self', 'name' => 'Self'],
+            ['keys' => ['father_contact_1', 'father_contact_2', 'father_contact_3'], 'relation' => 'father', 'name' => 'Father'],
+            ['keys' => ['mother_contact_1', 'mother_contact_2', 'mother_contact_3'], 'relation' => 'mother', 'name' => 'Mother'],
+        ];
+        foreach ($extras as $group) {
+            foreach ($group['keys'] as $key) {
+                $raw = $auditCore[$key] ?? null;
+                if ($raw === null || trim((string) $raw) === '') {
+                    continue;
+                }
+                $candidates[] = [
+                    'phone_number' => trim((string) $raw),
+                    'relation_type' => $group['relation'],
+                    'contact_name' => $group['name'],
+                ];
+            }
+        }
+    }
+
+    /**
+     * @param  array<int, mixed>  $candidates
+     * @param  array<int, mixed>  $auditSiblings
+     */
+    private function appendIntakeSiblingExtraPhoneCandidates(array &$candidates, array $auditSiblings): void
+    {
+        foreach ($auditSiblings as $s) {
+            if (! is_array($s)) {
+                continue;
+            }
+            $name = trim((string) ($s['name'] ?? ''));
+            $label = $name !== '' ? $name : 'Sibling';
+            $nums = [
+                $s['contact_number_2'] ?? null,
+                $s['contact_number_3'] ?? null,
+            ];
+            foreach ($nums as $raw) {
+                if ($raw === null || trim((string) $raw) === '') {
+                    continue;
+                }
+                $candidates[] = [
+                    'phone_number' => trim((string) $raw),
+                    'relation_type' => 'sibling',
+                    'contact_name' => $label,
+                ];
+            }
+        }
+    }
+
+    /**
+     * @param  array<string, mixed>  $mapped  Output of mapSnapshotRowToTable for profile_contacts
+     * @param  array<string, true>  $knownDigits
+     */
+    private function insertIntakeProfileContactRow(MatrimonyProfile $profile, array $mapped, array &$knownDigits): void
+    {
+        $digits = $this->normalizePhoneDigitsForDedupe($mapped['phone_number'] ?? null);
+        if ($digits === '' || isset($knownDigits[$digits])) {
+            return;
+        }
+
+        $mapped['phone_number'] = $digits;
+        $mapped['is_primary'] = false;
+        $mapped['profile_id'] = $profile->id;
+        if (Schema::hasColumn('profile_contacts', 'verified_status')
+            && (! array_key_exists('verified_status', $mapped) || $mapped['verified_status'] === null)) {
+            $mapped['verified_status'] = false;
+        }
+        if (! isset($mapped['visibility_rule']) || trim((string) $mapped['visibility_rule']) === '') {
+            $mapped['visibility_rule'] = 'unlock_only';
+        }
+
+        $allowedColumns = array_fill_keys(Schema::getColumnListing('profile_contacts'), true);
+        $insert = array_merge($mapped, [
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        unset($insert['id']);
+        $insert = array_intersect_key($insert, $allowedColumns);
+
+        DB::table('profile_contacts')->insert($insert);
+        $knownDigits[$digits] = true;
+
+        $this->writeProfileChangeHistory(
+            $profile->id,
+            'profile_contacts',
+            null,
+            'insert',
+            null,
+            json_encode($insert)
+        );
     }
 
     /**
@@ -2109,12 +2453,8 @@ class MutationService
             }
         }
 
-        if (! empty($snapshot['contacts']) && is_array($snapshot['contacts'])) {
-            if (DB::table('profile_contacts')->where('profile_id', $profile->id)->exists()) {
-                $suggestions['contacts'] = $snapshot['contacts'];
-                $snapshot['contacts'] = [];
-            }
-        }
+        // Intake contacts: merged in MutationService::syncContactsFromIntakeApply (append-only + suggestions).
+        // Do not strip snapshot['contacts'] here — that previously blocked all intake numbers when any DB row existed.
 
         foreach (self::ENTITY_SYNC_ORDER as $snapshotKey) {
             $table = self::SNAPSHOT_KEY_TO_TABLE[$snapshotKey] ?? null;

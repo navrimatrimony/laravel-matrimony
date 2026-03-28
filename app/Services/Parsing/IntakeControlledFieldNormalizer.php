@@ -15,12 +15,12 @@ class IntakeControlledFieldNormalizer
     public function __construct(
         private ControlledOptionNormalizer $controlled,
         private IntakeParsedSnapshotSkeleton $skeleton,
-    ) {
-    }
+    ) {}
 
     public function normalizeSnapshot(array $snapshot): array
     {
         $out = $this->skeleton->ensure($snapshot);
+        $out = $this->migrateLegacyAiSnapshot($out);
         $out['core'] = $this->normalizeCore(is_array($out['core'] ?? null) ? $out['core'] : []);
         $out['horoscope'] = $this->normalizeHoroscopeRows(is_array($out['horoscope'] ?? null) ? $out['horoscope'] : []);
         $out['contacts'] = $this->normalizeContacts(is_array($out['contacts'] ?? null) ? $out['contacts'] : []);
@@ -29,6 +29,8 @@ class IntakeControlledFieldNormalizer
         [$out['relatives'], $out['relatives_sectioned']] = $this->normalizeRelativesRows(is_array($out['relatives'] ?? null) ? $out['relatives'] : []);
         $out['relatives_parents_family'] = $this->flattenSectionedRelatives($out['relatives_sectioned']['paternal'] ?? []);
         $out['relatives_maternal_family'] = $this->flattenSectionedRelatives($out['relatives_sectioned']['maternal'] ?? []);
+        $this->fillParentNamesFromRelatives($out);
+        $this->reconcilePrimaryContactVersusRelatives($out);
 
         $matchedCount = 0;
         $unmatchedCritical = [];
@@ -48,6 +50,24 @@ class IntakeControlledFieldNormalizer
         ]);
 
         return $out;
+    }
+
+    /**
+     * Re-apply canonical core/contact/horoscope mapping after ParsedJsonSsotNormalizer (AI path).
+     * Idempotent; does not re-bucket relatives.
+     *
+     * @param  array<string, mixed>  $snapshot
+     * @return array<string, mixed>
+     */
+    public function finalizePostSsotSnapshot(array $snapshot): array
+    {
+        $snapshot = $this->migrateLegacyAiSnapshot($snapshot);
+        $snapshot['contacts'] = $this->normalizeContacts(is_array($snapshot['contacts'] ?? null) ? $snapshot['contacts'] : []);
+        $snapshot['horoscope'] = $this->normalizeHoroscopeRows(is_array($snapshot['horoscope'] ?? null) ? $snapshot['horoscope'] : []);
+        $this->fillParentNamesFromRelatives($snapshot);
+        $this->reconcilePrimaryContactVersusRelatives($snapshot);
+
+        return $snapshot;
     }
 
     public function normalizeCore(array $core): array
@@ -110,12 +130,38 @@ class IntakeControlledFieldNormalizer
             if ($bg !== null && trim($bg) !== '') {
                 $normalizedRows[$i]['blood_group'] = $bg;
             }
+            $bw = $row['birth_weekday'] ?? null;
+            if (is_string($bw)) {
+                $normalizedRows[$i]['birth_weekday'] = BiodataParserService::sanitizeBirthWeekdayStrict($bw);
+            }
+            $nv = $normalizedRows[$i]['navras_name'] ?? null;
+            if (is_string($nv) && $nv !== '') {
+                $normalizedRows[$i]['navras_name'] = BiodataParserService::sanitizeNavrasDisplayText($nv);
+            }
+            $rv = $normalizedRows[$i]['rashi'] ?? null;
+            if (is_string($rv) && $rv !== '') {
+                $normalizedRows[$i]['rashi'] = BiodataParserService::sanitizeRashiDisplayText($rv);
+            }
+            foreach (['nakshatra', 'nadi', 'gan', 'yoni'] as $hk) {
+                $hv = $normalizedRows[$i][$hk] ?? null;
+                if (is_string($hv) && $hv !== '') {
+                    $h = BiodataParserService::stripResidualHtmlTagsFromString($hv);
+                    $h = trim(preg_replace('/\s+/u', ' ', $h) ?? '');
+                    $h = trim(preg_replace('/[\)\]\'\"]+$/u', '', $h) ?? '');
+                    $normalizedRows[$i][$hk] = $h === '' ? null : $h;
+                }
+            }
         }
+
         return $normalizedRows;
     }
 
     public function normalizeContacts(array $rows): array
     {
+        if ($this->isAssociativeList($rows)) {
+            $vals = array_values($rows);
+            $rows = (isset($vals[0]) && is_array($vals[0])) ? $vals : [];
+        }
         foreach ($rows as $i => $row) {
             if (! is_array($row)) {
                 continue;
@@ -123,7 +169,18 @@ class IntakeControlledFieldNormalizer
             if (empty($row['phone_number']) && ! empty($row['number'])) {
                 $rows[$i]['phone_number'] = $row['number'];
             }
+            if (empty($rows[$i]['phone_number']) && ! empty($row['phone'])) {
+                $rows[$i]['phone_number'] = $row['phone'];
+                $rows[$i]['number'] = $row['phone'];
+            }
+            if (empty($row['relation_type']) && ! empty($row['label'])) {
+                $rows[$i]['relation_type'] = $row['label'];
+            }
+            if (! isset($row['type']) && ! empty($row['is_primary'])) {
+                $rows[$i]['type'] = 'primary';
+            }
         }
+
         return $rows;
     }
 
@@ -204,6 +261,7 @@ class IntakeControlledFieldNormalizer
                 }
             }
         }
+
         return $out;
     }
 
@@ -220,6 +278,7 @@ class IntakeControlledFieldNormalizer
                 }
             }
         }
+
         return $rows;
     }
 
@@ -229,6 +288,21 @@ class IntakeControlledFieldNormalizer
             if (! is_array($row)) {
                 continue;
             }
+            if (! empty($row['role']) && empty($row['occupation_title'])) {
+                $rows[$i]['occupation_title'] = $row['role'];
+            }
+            if (! empty($row['job_title']) && empty($row['occupation_title'])) {
+                $rows[$i]['occupation_title'] = $row['job_title'];
+            }
+            if (! empty($row['company']) && empty($row['company_name'])) {
+                $rows[$i]['company_name'] = $row['company'];
+            }
+            if (! empty($row['employer']) && empty($row['company_name'])) {
+                $rows[$i]['company_name'] = $row['employer'];
+            }
+            if (! empty($row['location']) && empty($row['work_location_text'])) {
+                $rows[$i]['work_location_text'] = is_string($row['location']) ? $row['location'] : null;
+            }
             if (empty($row['employment_type_id']) && ! empty($row['employment_type'])) {
                 $m = $this->controlled->findActiveMasterExact('master_employment_types', (string) $row['employment_type']);
                 if ($m !== null) {
@@ -236,7 +310,350 @@ class IntakeControlledFieldNormalizer
                 }
             }
         }
+
         return $rows;
+    }
+
+    /**
+     * Map common AI / legacy keys into wizard-aligned core and contacts (additive; removes only migrated aliases).
+     *
+     * @param  array<string, mixed>  $snapshot
+     * @return array<string, mixed>
+     */
+    private function migrateLegacyAiSnapshot(array $snapshot): array
+    {
+        if (! isset($snapshot['core']) || ! is_array($snapshot['core'])) {
+            return $snapshot;
+        }
+        $core = &$snapshot['core'];
+        foreach (['full_name', 'father_name', 'mother_name', 'father_occupation', 'mother_occupation', 'address_line', 'primary_contact_number', 'highest_education', 'birth_place', 'other_relatives_text', 'marital_status', 'religion', 'caste', 'sub_caste'] as $k) {
+            if (! empty($core[$k]) && is_string($core[$k])) {
+                $core[$k] = trim(preg_replace('/\s+/u', ' ', BiodataParserService::stripIntakeHtmlNoise($core[$k])) ?? '');
+                if ($core[$k] === '') {
+                    $core[$k] = null;
+                }
+            }
+        }
+        if (! empty($core['other_relatives_text']) && is_string($core['other_relatives_text'])) {
+            $core['other_relatives_text'] = BiodataParserService::pruneOtherRelativesNarrative($core['other_relatives_text']);
+        }
+        // Canonical: AI/legacy `name` → `full_name`, then drop alias (never leave both).
+        if (! empty($core['name'])) {
+            if (empty($core['full_name'])) {
+                $core['full_name'] = is_string($core['name']) ? trim($core['name']) : $core['name'];
+            }
+            unset($core['name']);
+        } elseif (array_key_exists('name', $core)) {
+            unset($core['name']);
+        }
+        // Canonical: `birth_date` → `date_of_birth`, then drop alias.
+        if (! empty($core['birth_date'])) {
+            if (empty($core['date_of_birth'])) {
+                $core['date_of_birth'] = $core['birth_date'];
+            }
+            unset($core['birth_date']);
+        } elseif (array_key_exists('birth_date', $core)) {
+            unset($core['birth_date']);
+        }
+        if (! empty($core['job'])) {
+            $job = trim((string) $core['job']);
+            unset($core['job']);
+            if ($job !== '') {
+                if (empty($core['occupation_title'])) {
+                    $core['occupation_title'] = $job;
+                }
+                $ch = $snapshot['career_history'] ?? [];
+                if (! is_array($ch)) {
+                    $ch = [];
+                }
+                if ($ch === []) {
+                    $snapshot['career_history'] = [[
+                        'occupation_title' => $job,
+                        'company_name' => null,
+                        'work_location_text' => null,
+                        'role' => $job,
+                    ]];
+                } elseif (isset($ch[0]) && is_array($ch[0])) {
+                    if (empty($ch[0]['occupation_title']) && empty($ch[0]['company_name']) && empty($ch[0]['job_title'])) {
+                        $ch[0]['occupation_title'] = $job;
+                        $ch[0]['role'] = $ch[0]['role'] ?? $job;
+                        $snapshot['career_history'] = $ch;
+                    }
+                }
+            }
+        }
+        $contacts = $snapshot['contacts'] ?? null;
+        if ($contacts instanceof \stdClass) {
+            $contacts = json_decode(json_encode($contacts, JSON_UNESCAPED_UNICODE), true);
+        }
+        $contactAddressFromContacts = null;
+        if (is_array($contacts) && isset($contacts['address'])) {
+            $ca = $contacts['address'];
+            if (is_string($ca) && trim($ca) !== '') {
+                $contactAddressFromContacts = trim($ca);
+            }
+        }
+        if ($contacts !== null && ! is_array($contacts)) {
+            $snapshot['contacts'] = [];
+        } elseif (is_array($contacts) && $contacts !== [] && $this->isAssociativeList($contacts)) {
+            $vals = array_values($contacts);
+            if (isset($vals[0]) && is_array($vals[0])) {
+                $snapshot['contacts'] = $vals;
+            } else {
+                $phoneRaw = trim((string) ($contacts['phone'] ?? $contacts['phone_number'] ?? $contacts['number'] ?? $contacts['mobile'] ?? ''));
+                $digits = preg_replace('/\D/', '', $phoneRaw);
+                if (strlen($digits) >= 10) {
+                    $norm = strlen($digits) > 10 ? substr($digits, -10) : $digits;
+                    $snapshot['contacts'] = [[
+                        'type' => 'primary',
+                        'label' => 'self',
+                        'phone' => $norm,
+                        'phone_number' => $norm,
+                        'number' => $norm,
+                        'relation_type' => 'self',
+                        'is_primary' => true,
+                    ]];
+                } else {
+                    $snapshot['contacts'] = [];
+                }
+            }
+        }
+        foreach (['addresses', 'education_history'] as $listKey) {
+            $list = $snapshot[$listKey] ?? null;
+            if (is_array($list) && $this->isAssociativeList($list)) {
+                $v = array_values($list);
+                $snapshot[$listKey] = $v;
+            }
+        }
+        if (! empty($snapshot['addresses']) && is_array($snapshot['addresses'])) {
+            foreach ($snapshot['addresses'] as $ai => $addr) {
+                if (! is_array($addr)) {
+                    continue;
+                }
+                if (! empty($addr['raw']) && empty($addr['address_line'])) {
+                    $snapshot['addresses'][$ai]['address_line'] = is_string($addr['raw']) ? $addr['raw'] : null;
+                }
+            }
+        }
+        $addrs = $snapshot['addresses'] ?? [];
+        $addrsEmpty = ! is_array($addrs) || $addrs === [] || ! $this->addressListHasAnyLine($addrs);
+        if ($addrsEmpty && $contactAddressFromContacts !== null && $contactAddressFromContacts !== '') {
+            $snapshot['addresses'] = [[
+                'address_line' => $contactAddressFromContacts,
+                'raw' => $contactAddressFromContacts,
+                'type' => 'current',
+            ]];
+        }
+
+        return $snapshot;
+    }
+
+    /**
+     * @param  array<int, mixed>  $addrs
+     */
+    private function addressListHasAnyLine(array $addrs): bool
+    {
+        foreach ($addrs as $addr) {
+            if (! is_array($addr)) {
+                continue;
+            }
+            foreach (['address_line', 'raw'] as $k) {
+                if (! empty($addr[$k]) && is_string($addr[$k]) && trim($addr[$k]) !== '') {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    private function isAssociativeList(array $arr): bool
+    {
+        if ($arr === []) {
+            return false;
+        }
+
+        return array_keys($arr) !== range(0, count($arr) - 1);
+    }
+
+    /**
+     * @param  array<string, mixed>  $snapshot
+     */
+    private function reconcilePrimaryContactVersusRelatives(array &$snapshot): void
+    {
+        $primary = preg_replace('/\D/', '', (string) ($snapshot['core']['primary_contact_number'] ?? ''));
+        if (strlen($primary) < 10) {
+            return;
+        }
+        if (strlen($primary) > 10) {
+            $primary = substr($primary, -10);
+        }
+        $relFlip = $this->relativePhoneNumbersFlip($snapshot);
+        if (! isset($relFlip[$primary])) {
+            return;
+        }
+        $replacement = null;
+        foreach ($snapshot['contacts'] ?? [] as $row) {
+            if (! is_array($row)) {
+                continue;
+            }
+            $ph = preg_replace('/\D/', '', (string) ($row['phone_number'] ?? $row['number'] ?? $row['phone'] ?? ''));
+            if (strlen($ph) > 10) {
+                $ph = substr($ph, -10);
+            }
+            if (strlen($ph) < 10 || isset($relFlip[$ph])) {
+                continue;
+            }
+            $isSelf = (($row['relation_type'] ?? '') === 'self')
+                || (($row['label'] ?? '') === 'self')
+                || (($row['type'] ?? '') === 'primary');
+            if ($isSelf) {
+                $replacement = $ph;
+                break;
+            }
+        }
+        if ($replacement === null) {
+            foreach ($snapshot['contacts'] ?? [] as $row) {
+                if (! is_array($row)) {
+                    continue;
+                }
+                $ph = preg_replace('/\D/', '', (string) ($row['phone_number'] ?? $row['number'] ?? $row['phone'] ?? ''));
+                if (strlen($ph) > 10) {
+                    $ph = substr($ph, -10);
+                }
+                if (strlen($ph) >= 10 && ! isset($relFlip[$ph])) {
+                    $replacement = $ph;
+                    break;
+                }
+            }
+        }
+        if ($replacement !== null) {
+            $snapshot['core']['primary_contact_number'] = $replacement;
+        }
+    }
+
+    /**
+     * Safe fallback: fill father/mother from sectioned relatives when core is empty.
+     *
+     * @param  array<string, mixed>  $snapshot
+     */
+    private function fillParentNamesFromRelatives(array &$snapshot): void
+    {
+        $core = &$snapshot['core'];
+        if (! is_array($core)) {
+            return;
+        }
+        $fatherNeed = empty($core['father_name']) || ! is_string($core['father_name']) || trim($core['father_name']) === '';
+        $motherNeed = empty($core['mother_name']) || ! is_string($core['mother_name']) || trim($core['mother_name']) === '';
+
+        if ($fatherNeed) {
+            $name = $this->firstParentNameFromRelativeRows(array_merge(
+                $this->rowsMatchingParentHint(is_array($snapshot['relatives'] ?? null) ? $snapshot['relatives'] : [], true),
+                is_array($snapshot['relatives_parents_family'] ?? null) ? $snapshot['relatives_parents_family'] : [],
+            ));
+            if ($name !== null && $name !== '') {
+                $core['father_name'] = $name;
+            }
+        }
+        if ($motherNeed) {
+            $name = $this->firstParentNameFromRelativeRows(array_merge(
+                $this->rowsMatchingParentHint(is_array($snapshot['relatives'] ?? null) ? $snapshot['relatives'] : [], false),
+                is_array($snapshot['relatives_maternal_family'] ?? null) ? $snapshot['relatives_maternal_family'] : [],
+            ));
+            if ($name !== null && $name !== '') {
+                $core['mother_name'] = $name;
+            }
+        }
+    }
+
+    /**
+     * @param  array<int, array<string, mixed>>  $relatives
+     * @return array<int, array<string, mixed>>
+     */
+    private function rowsMatchingParentHint(array $relatives, bool $father): array
+    {
+        $out = [];
+        foreach ($relatives as $r) {
+            if (! is_array($r)) {
+                continue;
+            }
+            $rel = trim((string) ($r['relation_type'] ?? $r['relation'] ?? ''));
+            $notes = trim((string) ($r['notes'] ?? $r['raw_note'] ?? ''));
+            $hay = $rel.' '.$notes;
+            if ($father) {
+                if (mb_strpos($hay, 'वडील') !== false || mb_strpos($hay, 'वडिल') !== false || mb_strpos($hay, 'पिता') !== false || stripos($hay, 'father') !== false) {
+                    $out[] = $r;
+                }
+            } else {
+                if (mb_strpos($hay, 'आई') !== false || mb_strpos($hay, 'माता') !== false || mb_strpos($hay, 'माते') !== false || stripos($hay, 'mother') !== false) {
+                    $out[] = $r;
+                }
+            }
+        }
+
+        return $out;
+    }
+
+    /**
+     * @param  array<int, array<string, mixed>>  $rows
+     */
+    private function firstParentNameFromRelativeRows(array $rows): ?string
+    {
+        foreach ($rows as $r) {
+            if (! is_array($r)) {
+                continue;
+            }
+            $name = trim((string) ($r['name'] ?? ''));
+            if ($name === '') {
+                $notes = trim((string) ($r['notes'] ?? $r['raw_note'] ?? ''));
+                $name = $this->extractHonorificNameFromNotes($notes);
+            }
+            $name = $this->preserveHonorificName($name);
+            if ($name !== '' && mb_strlen($name) >= 2) {
+                return $name;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * @param  array<string, mixed>  $snapshot
+     * @return array<string, bool>
+     */
+    private function relativePhoneNumbersFlip(array $snapshot): array
+    {
+        $phones = [];
+        $add = function (?string $p) use (&$phones): void {
+            $d = preg_replace('/\D/', '', (string) $p);
+            if (strlen($d) >= 10) {
+                $phones[substr($d, -10)] = true;
+            }
+        };
+        foreach (['relatives', 'relatives_parents_family', 'relatives_maternal_family'] as $key) {
+            foreach ($snapshot[$key] ?? [] as $r) {
+                if (! is_array($r)) {
+                    continue;
+                }
+                $add($r['contact_number'] ?? null);
+                if (! empty($r['notes']) && is_string($r['notes'])) {
+                    if (preg_match_all('/\b([6-9]\d{9})\b/u', $r['notes'], $m)) {
+                        foreach ($m[1] as $x) {
+                            $add($x);
+                        }
+                    }
+                }
+                if (! empty($r['raw_note']) && is_string($r['raw_note'])) {
+                    if (preg_match_all('/\b([6-9]\d{9})\b/u', $r['raw_note'], $m)) {
+                        foreach ($m[1] as $x) {
+                            $add($x);
+                        }
+                    }
+                }
+            }
+        }
+
+        return $phones;
     }
 
     private function resolveCoreField(array &$core, string $textKey, string $idKey): void
@@ -248,9 +665,16 @@ class IntakeControlledFieldNormalizer
         if ($raw === '') {
             return;
         }
-        $resolved = $this->controlled->resolveControlledCoreValue($textKey, $raw);
-        if (! empty($resolved['matched']) && ! empty($resolved['id'])) {
-            $core[$idKey] = (int) $resolved['id'];
+        $compressed = trim(preg_replace('/\s+/u', ' ', $raw) ?? '');
+        $trimPunct = trim($compressed, " \t.:;।,|");
+        $candidates = array_values(array_unique(array_filter([$raw, $compressed, $trimPunct], fn ($s) => $s !== '')));
+        foreach ($candidates as $candidate) {
+            $resolved = $this->controlled->resolveControlledCoreValue($textKey, $candidate);
+            if (! empty($resolved['matched']) && ! empty($resolved['id'])) {
+                $core[$idKey] = (int) $resolved['id'];
+
+                return;
+            }
         }
     }
 
@@ -263,6 +687,7 @@ class IntakeControlledFieldNormalizer
         $sanitized = BiodataParserService::sanitizeBloodGroupValue($raw);
         if ($sanitized !== null && $sanitized !== '') {
             $core['blood_group'] = $sanitized;
+
             return $core;
         }
 
@@ -288,6 +713,7 @@ class IntakeControlledFieldNormalizer
         if (preg_match('/^\s*(\d{1,2})\s*-\s*(\d{1,2})\s*$/u', $text, $m)) {
             return round((((int) $m[1]) * 12 + (int) $m[2]) * 2.54, 2);
         }
+
         return null;
     }
 
@@ -318,6 +744,7 @@ class IntakeControlledFieldNormalizer
                 }
             }
         }
+
         return $core;
     }
 
@@ -329,6 +756,7 @@ class IntakeControlledFieldNormalizer
         }
         // Keep prefixes exactly; only collapse accidental OCR multi-spaces.
         $n = preg_replace('/\s+/u', ' ', $n) ?? $n;
+
         return trim($n);
     }
 
@@ -337,6 +765,7 @@ class IntakeControlledFieldNormalizer
         if (preg_match('/\b(श्री\.?|सौ\.?|डॉ\.?)\s*[^\n,()]+/u', $notes, $m)) {
             return trim((string) $m[0]);
         }
+
         return '';
     }
 
@@ -370,7 +799,7 @@ class IntakeControlledFieldNormalizer
         if (str_contains($r, 'paternal')) {
             return ['side' => 'paternal', 'key' => 'other'];
         }
+
         return ['side' => 'other', 'key' => 'other'];
     }
 }
-
