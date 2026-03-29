@@ -27,6 +27,7 @@ class BiodataIntake extends Model
         'matrimony_profile_id',
         'intake_status',
         'parse_status',
+        'last_error',
         'parsed_json',
         'approved_by_user',
         'approved_at',

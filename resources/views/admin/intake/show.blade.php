@@ -59,10 +59,20 @@
                 <form method="POST"
                       action="{{ route('admin.biodata-intakes.reparse', $intake) }}">
                     @csrf
-                    <button type="submit" class="btn btn-warning">
-                        Re-parse with current parser
+                    <button type="submit" class="btn btn-warning" title="Parse only; reuses cached or fingerprint/historical text — no new vision API call.">
+                        Re-parse (no new AI extraction)
                     </button>
                 </form>
+                @if (! empty($showAdminReextractAction))
+                    <form method="POST"
+                          action="{{ route('admin.biodata-intakes.re-extract', $intake) }}"
+                          onsubmit="return confirm('Run paid vision extraction again for this intake?');">
+                        @csrf
+                        <button type="submit" class="btn btn-secondary">
+                            Re-extract (vision again)
+                        </button>
+                    </form>
+                @endif
 
                 <form method="POST" action="{{ route('admin.biodata-intakes.apply', $intake) }}">
                     @csrf

@@ -37,10 +37,16 @@ TXT;
         $this->assertArrayHasKey('father_name', $core);
         $this->assertStringContainsString('राजेंद्र भाऊराव पाटील', $core['father_name']);
 
+        $this->assertNull($core['primary_contact_number'] ?? null, 'primary phone is registration-controlled, not biodata OCR');
+
         $contacts = $parsed['contacts'];
         $this->assertNotEmpty($contacts);
-        $primary = $contacts[0];
-        $this->assertSame('9145206745', $primary['number'] ?? $primary['phone_number'] ?? null);
+        $nums = array_map(fn ($c) => (string) ($c['number'] ?? $c['phone_number'] ?? ''), $contacts);
+        $this->assertContains('9145206745', $nums);
+        foreach ($contacts as $c) {
+            $this->assertFalse((bool) ($c['is_primary'] ?? false));
+            $this->assertSame('alternate', $c['type'] ?? null);
+        }
     }
 
     public function test_bhahi_nahi_line_does_not_create_sister_sibling_row(): void

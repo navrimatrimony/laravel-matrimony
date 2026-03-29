@@ -5,6 +5,8 @@ namespace App\Jobs;
 use App\Models\AdminSetting;
 use App\Models\BiodataIntake;
 use App\Services\AiVisionExtractionService;
+use App\Services\Intake\IntakeExtractionReuseResolver;
+use App\Services\Intake\IntakeParseInputSelectionTrace;
 use App\Services\IntakeManualOcrPreparedService;
 use App\Services\Ocr\OcrQualityEvaluator;
 use App\Services\OcrService;
@@ -32,6 +34,10 @@ use Illuminate\Support\Facades\Log;
 |
 | When forceRecompute is true (e.g. admin reparse), content_hash cache is
 | bypassed so updated parser code runs and parsed_json is recomputed.
+| Reparse entry points set a short-lived cache flag so paid vision extraction
+| is skipped (parse-input-only); text comes from intake.parse_input_text cache,
+| fingerprint reuse, or raw_ocr_text fallback. Manual crop saves still dispatch
+| without that flag so file→text can run again when needed.
 |
 */
 class ParseIntakeJob implements ShouldQueue
@@ -133,70 +139,192 @@ class ParseIntakeJob implements ShouldQueue
 
         if ($useAiVisionExtraction) {
             $ai = app(AiVisionExtractionService::class);
-            $aiRes = $ai->extractTextForIntake($intake);
-            $raw = (string) ($aiRes['text'] ?? '');
-            $qualityGate = $ai->evaluateExtractedTextQuality($raw);
-            $parseInputDebug = [
-                'parse_input_source' => 'ai_vision_extract_v1',
-                'extraction' => $aiRes['meta']['extraction'] ?? null,
-                'provider' => $aiRes['meta']['provider'] ?? null,
-                'provider_source' => $aiRes['meta']['provider_source'] ?? null,
-                'model' => $aiRes['meta']['model'] ?? null,
-                'source_field' => $aiRes['meta']['source_field'] ?? null,
-                'relative_path' => $aiRes['meta']['relative_path'] ?? null,
-                'absolute_path' => $aiRes['meta']['absolute_path'] ?? null,
-                'ok' => (bool) ($aiRes['meta']['ok'] ?? false),
-                'reason' => $aiRes['meta']['reason'] ?? null,
-                'http_status' => $aiRes['meta']['status'] ?? null,
-                'response_body_snippet' => $aiRes['meta']['response_body_snippet'] ?? null,
-                'job_error_message' => $aiRes['meta']['job_error_message'] ?? null,
-                'extraction_error' => $aiRes['meta']['error'] ?? null,
-                'text_quality_ok' => (bool) ($qualityGate['ok'] ?? false),
-                'text_quality_reason' => $qualityGate['reason'] ?? null,
-                'text_chars' => $qualityGate['chars'] ?? null,
-                'text_non_space_chars' => $qualityGate['non_space_chars'] ?? null,
-                'text_lines' => $qualityGate['lines'] ?? null,
-                'text_alpha_ratio' => $qualityGate['alpha_ratio'] ?? null,
-                'sarvam_job_id' => $aiRes['meta']['job_id'] ?? null,
-                'sarvam_job_state' => $aiRes['meta']['job_state'] ?? null,
-                'original_image_width' => $aiRes['meta']['original_image_width'] ?? null,
-                'original_image_height' => $aiRes['meta']['original_image_height'] ?? null,
-                'ai_request_image_width' => $aiRes['meta']['ai_request_image_width'] ?? null,
-                'ai_request_image_height' => $aiRes['meta']['ai_request_image_height'] ?? null,
-                'ai_request_payload_enhanced' => $aiRes['meta']['ai_request_payload_enhanced'] ?? null,
-                'ai_request_orientation_corrected' => $aiRes['meta']['ai_request_orientation_corrected'] ?? null,
-                'vision_detail' => $aiRes['meta']['vision_detail'] ?? null,
-                'extracted_text_line_count' => $aiRes['meta']['extracted_text_line_count'] ?? null,
-                'failure_detail' => empty($aiRes['meta']['ok']) ? AiVisionExtractionService::failureDetailForUi($aiRes['meta']) : null,
-                'quality_failure_detail' => empty($qualityGate['ok']) ? AiVisionExtractionService::qualityFailureDetailForUi($qualityGate) : null,
-            ];
+            $reuseResolver = app(IntakeExtractionReuseResolver::class);
+            $parseInputOnly = $reuseResolver->consumeParseInputOnlyFlag((int) $intake->id);
+            $forceFreshPaidExtraction = $reuseResolver->consumeForceFreshPaidExtractionFlag((int) $intake->id);
+            $resolvedProv = $ai->resolveExtractionProvider();
+            $provider = (string) ($resolvedProv['provider'] ?? 'openai');
 
-            if (trim($raw) === '') {
+            $aiRes = [
+                'text' => '',
+                'meta' => [
+                    'ok' => true,
+                    'provider' => $provider,
+                    'provider_source' => $resolvedProv['provider_source'] ?? null,
+                    'reason' => null,
+                ],
+            ];
+            $raw = '';
+            $extractionReused = false;
+            $reusedFrom = null;
+            $reusedSourceIntakeId = null;
+            $textProvenance = null;
+            $identityEvidenceScore = null;
+            $candidatesSummary = [];
+            $winnerQualityPre = null;
+            $calledPaidExtract = false;
+
+            $parseResolved = $reuseResolver->resolvePaidVisionInput(
+                $intake,
+                $provider,
+                $ai,
+                $parseInputOnly,
+                $forceFreshPaidExtraction,
+            );
+            $candidatesSummary = $parseResolved['candidates_summary'] ?? [];
+            $identityEvidenceScore = $parseResolved['identity_evidence_score'];
+            $textProvenance = $parseResolved['text_provenance'];
+            $winnerQualityPre = $parseResolved['winner_quality_score'];
+
+            if (! empty($parseResolved['call_paid_api']) && ! $parseInputOnly) {
+                $aiRes = $ai->extractTextForIntake($intake);
+                $calledPaidExtract = true;
+                $raw = (string) ($aiRes['text'] ?? '');
+                $extractionReused = false;
+                $reusedFrom = null;
+                $reusedSourceIntakeId = null;
+                $textProvenance = 'paid_vision_api_response';
+            } else {
+                $raw = (string) ($parseResolved['text'] ?? '');
+                $extractionReused = trim($raw) !== '' && empty($parseResolved['call_paid_api']);
+                $reusedFrom = $parseResolved['reused_from'];
+                $reusedSourceIntakeId = $parseResolved['reused_source_intake_id'];
+            }
+
+            if ($parseInputOnly && trim($raw) === '') {
+                $parseInputDebug = IntakeParseInputSelectionTrace::mergeLearningFields([
+                    'parse_input_source' => 'ai_vision_extract_v1',
+                    'parse_input_only_job' => true,
+                    'extraction_reused' => false,
+                    'force_fresh_paid_extraction_requested' => $forceFreshPaidExtraction,
+                    'provider' => $provider,
+                    'reason' => 'parse_only_no_extraction_text',
+                ], null, null, null, null, $candidatesSummary, $forceFreshPaidExtraction);
                 $intake->update([
                     'parse_status' => 'error',
-                    'last_error' => $parseInputDebug['reason'] ? (string) $parseInputDebug['reason'] : 'ai_vision_extract_failed',
+                    'last_error' => 'parse_only_no_extraction_text',
                     'parse_duration_ms' => 0,
-                    'ai_calls_used' => 1,
+                    'ai_calls_used' => 0,
                 ]);
                 Cache::put('intake.parse_input_debug.'.$intake->id, $parseInputDebug, now()->addDays(7));
 
                 return;
             }
 
-            // Preview/debug: exact text extracted before parser (even if quality gate fails later).
+            $qualityGate = $ai->evaluateExtractedTextQuality($raw);
+
+            if (empty($qualityGate['ok']) && ! $parseInputOnly && $extractionReused && ! $calledPaidExtract) {
+                Log::warning('ParseIntakeJob: reuse candidate failed quality gate; running paid vision extraction', [
+                    'intake_id' => $intake->id,
+                ]);
+                $extractionReused = false;
+                $reusedFrom = null;
+                $reusedSourceIntakeId = null;
+                $textProvenance = null;
+                $identityEvidenceScore = null;
+                $aiRes = $ai->extractTextForIntake($intake);
+                $calledPaidExtract = true;
+                $raw = (string) ($aiRes['text'] ?? '');
+                $textProvenance = 'paid_vision_api_response';
+                $qualityGate = $ai->evaluateExtractedTextQuality($raw);
+            }
+
+            $meta = $aiRes['meta'] ?? [];
+            $winnerSourceKey = $calledPaidExtract ? 'paid_vision_api' : $reusedFrom;
+            $winnerQuality = $calledPaidExtract
+                ? $reuseResolver->scoreExtractedText($raw)
+                : ($winnerQualityPre ?? $reuseResolver->scoreExtractedText($raw));
+
+            $parseInputDebug = [
+                'parse_input_source' => 'ai_vision_extract_v1',
+                'parse_input_only_job' => $parseInputOnly,
+                'force_fresh_paid_extraction_requested' => $forceFreshPaidExtraction,
+                'extraction_reused' => $extractionReused,
+                'extraction_reused_from' => $reusedFrom,
+                'reused_source_intake_id' => $reusedSourceIntakeId,
+                'text_provenance' => $textProvenance,
+                'identity_evidence_score' => $identityEvidenceScore,
+                'paid_extraction_api_called' => $calledPaidExtract,
+                'extraction' => $meta['extraction'] ?? null,
+                'provider' => $meta['provider'] ?? $provider,
+                'provider_source' => $meta['provider_source'] ?? null,
+                'model' => $meta['model'] ?? null,
+                'source_field' => $meta['source_field'] ?? null,
+                'relative_path' => $meta['relative_path'] ?? null,
+                'absolute_path' => $meta['absolute_path'] ?? null,
+                'ok' => (bool) ($meta['ok'] ?? false),
+                'reason' => $meta['reason'] ?? null,
+                'http_status' => $meta['status'] ?? null,
+                'response_body_snippet' => $meta['response_body_snippet'] ?? null,
+                'job_error_message' => $meta['job_error_message'] ?? null,
+                'extraction_error' => $meta['error'] ?? null,
+                'text_quality_ok' => (bool) ($qualityGate['ok'] ?? false),
+                'text_quality_reason' => $qualityGate['reason'] ?? null,
+                'text_chars' => $qualityGate['chars'] ?? null,
+                'text_non_space_chars' => $qualityGate['non_space_chars'] ?? null,
+                'text_lines' => $qualityGate['lines'] ?? null,
+                'text_alpha_ratio' => $qualityGate['alpha_ratio'] ?? null,
+                'sarvam_job_id' => $meta['job_id'] ?? null,
+                'sarvam_job_state' => $meta['job_state'] ?? null,
+                'original_image_width' => $meta['original_image_width'] ?? null,
+                'original_image_height' => $meta['original_image_height'] ?? null,
+                'ai_request_image_width' => $meta['ai_request_image_width'] ?? null,
+                'ai_request_image_height' => $meta['ai_request_image_height'] ?? null,
+                'ai_request_payload_enhanced' => $meta['ai_request_payload_enhanced'] ?? null,
+                'ai_request_orientation_corrected' => $meta['ai_request_orientation_corrected'] ?? null,
+                'vision_detail' => $meta['vision_detail'] ?? null,
+                'extracted_text_line_count' => $meta['extracted_text_line_count'] ?? null,
+                'failure_detail' => empty($meta['ok']) && $calledPaidExtract ? AiVisionExtractionService::failureDetailForUi($meta) : null,
+                'quality_failure_detail' => empty($qualityGate['ok']) ? AiVisionExtractionService::qualityFailureDetailForUi($qualityGate) : null,
+            ];
+            $parseInputDebug = IntakeParseInputSelectionTrace::mergeLearningFields(
+                $parseInputDebug,
+                $winnerSourceKey,
+                $winnerQuality,
+                $identityEvidenceScore,
+                $textProvenance,
+                $candidatesSummary,
+                $forceFreshPaidExtraction,
+            );
+
+            if (trim($raw) === '') {
+                $intake->update([
+                    'parse_status' => 'error',
+                    'last_error' => $parseInputDebug['reason'] ? (string) $parseInputDebug['reason'] : 'ai_vision_extract_failed',
+                    'parse_duration_ms' => 0,
+                    'ai_calls_used' => $calledPaidExtract ? 1 : 0,
+                ]);
+                Cache::put('intake.parse_input_debug.'.$intake->id, $parseInputDebug, now()->addDays(7));
+
+                return;
+            }
+
             Cache::put('intake.parse_input_debug.'.$intake->id, $parseInputDebug, now()->addDays(7));
-            Cache::put('intake.parse_input_text.'.$intake->id, $raw, now()->addDays(7));
+            $longLivedParseInputCache = $calledPaidExtract
+                || $reusedFrom === 'identity_fingerprint_cache'
+                || $reusedFrom === 'intake_parse_input_cache'
+                || $reusedFrom === 'historical_intake_raw_ocr';
+            $reuseResolver->putCachedParseInputText((int) $intake->id, $raw, $longLivedParseInputCache);
 
             if (empty($qualityGate['ok'])) {
                 $intake->update([
                     'parse_status' => 'error',
                     'last_error' => (string) ($qualityGate['reason'] ?? 'ai_vision_text_unusable'),
                     'parse_duration_ms' => 0,
-                    'ai_calls_used' => 1,
+                    'ai_calls_used' => $calledPaidExtract ? 1 : 0,
                 ]);
                 Cache::put('intake.parse_input_debug.'.$intake->id, $parseInputDebug, now()->addDays(7));
 
                 return;
+            }
+
+            if ($calledPaidExtract && trim($raw) !== '') {
+                $reuseResolver->recordSuccessfulPaidExtraction(
+                    $intake,
+                    $provider,
+                    $raw,
+                    $reuseResolver->scoreExtractedText($raw),
+                );
             }
         } else {
             $resolved = $ocr->resolveParseInputText($intake);

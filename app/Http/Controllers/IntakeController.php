@@ -6,11 +6,13 @@ use App\Jobs\ParseIntakeJob;
 use App\Models\AdminSetting;
 use App\Models\BiodataIntake;
 use App\Services\AiVisionExtractionService;
+use App\Services\Intake\IntakeExtractionReuseResolver;
 use App\Services\IntakeApprovalService;
 use App\Services\IntakeManualOcrPreparedService;
 use App\Services\MutationService;
 use App\Services\OcrService;
 use App\Services\Parsing\ParserStrategyResolver;
+use App\Services\Parsing\ProviderResolver;
 use App\Services\Preview\PreviewSectionMapper;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
@@ -1393,6 +1395,8 @@ class IntakeController extends Controller
             && $manualCropEligible
             && ! $manualPreparedExists;
 
+        $showIntakeReextractAction = app(ProviderResolver::class)->parseJobUsesAiVisionExtraction();
+
         return view('intake.preview', compact(
             'intake',
             'rawOcrTextForPreview',
@@ -1407,6 +1411,7 @@ class IntakeController extends Controller
             'autoCropSuggestion',
             'ocrQualityEvaluation',
             'showOcrLowQualityWarning',
+            'showIntakeReextractAction',
             'sections',
             'confidenceMap',
             'criticalFields',
@@ -1504,12 +1509,49 @@ class IntakeController extends Controller
                 ->with('error', __('intake.reparse_requires_ocr_or_manual'));
         }
 
-        $this->forgetIntakeParseOcrDebugCache($intake);
+        $this->forgetIntakeParseOcrDebugCache($intake, true);
+        IntakeExtractionReuseResolver::flagNextParseJobAsParseInputOnly((int) $intake->id);
         $intake->update(['parse_status' => 'pending']);
         ParseIntakeJob::dispatch($intake->id, true);
 
         return redirect()->route('intake.index')
             ->with('success', 'पुन्हा पार्स चालू केले. काही सेकंदांनी या intake चे प्रिव्ह्यू पुन्हा उघडा — अद्ययावत माहिती दिसेल.');
+    }
+
+    /**
+     * Allow a fresh paid vision extraction for this intake (does not use parse-input-only).
+     * Clears transient parse-input cache so the job can call the vision API again when configured.
+     */
+    public function reExtract(BiodataIntake $intake)
+    {
+        $isOwner = (int) $intake->uploaded_by === (int) auth()->id();
+        $isAdmin = auth()->user()?->isAnyAdmin() ?? false;
+        if (! $isOwner && ! $isAdmin) {
+            abort(403, __('intake.only_preview_own'));
+        }
+        if ($intake->approved_by_user) {
+            return redirect()->route('intake.preview', $intake)
+                ->with('info', 'या intake चे अप्रूव्हल झाले आहे; पुन्हा एक्सट्रॅक्ट करता येत नाही.');
+        }
+        $manualPreparedSvc = app(IntakeManualOcrPreparedService::class);
+        $hasStoredOcr = $intake->raw_ocr_text !== null && trim((string) $intake->raw_ocr_text) !== '';
+        $usesVisionExtract = app(ProviderResolver::class)->parseJobUsesAiVisionExtraction();
+        if (! $hasStoredOcr && ! $manualPreparedSvc->exists($intake) && ! $usesVisionExtract) {
+            return redirect()->route('intake.preview', $intake)
+                ->with('error', __('intake.reparse_requires_ocr_or_manual'));
+        }
+        if (! $usesVisionExtract) {
+            return redirect()->route('intake.preview', $intake)
+                ->with('error', __('intake.reextract_requires_ai_vision_mode'));
+        }
+
+        $this->forgetIntakeParseOcrDebugCache($intake, false);
+        IntakeExtractionReuseResolver::flagNextParseJobAsReExtract((int) $intake->id);
+        $intake->update(['parse_status' => 'pending']);
+        ParseIntakeJob::dispatch($intake->id, true);
+
+        return redirect()->route('intake.index')
+            ->with('success', __('intake.reextract_dispatched_success'));
     }
 
     /**
@@ -2501,11 +2543,13 @@ class IntakeController extends Controller
     /**
      * Forget cached parse-time OCR debug so preview does not show a stale effective OCR source after manual save, clear, or reparse.
      */
-    private function forgetIntakeParseOcrDebugCache(BiodataIntake $intake): void
+    private function forgetIntakeParseOcrDebugCache(BiodataIntake $intake, bool $preserveParseInputText = false): void
     {
         Cache::forget('intake.parse_ocr_debug.'.$intake->id);
         Cache::forget('intake.parse_input_debug.'.$intake->id);
-        Cache::forget('intake.parse_input_text.'.$intake->id);
+        if (! $preserveParseInputText) {
+            Cache::forget('intake.parse_input_text.'.$intake->id);
+        }
     }
 
     /**

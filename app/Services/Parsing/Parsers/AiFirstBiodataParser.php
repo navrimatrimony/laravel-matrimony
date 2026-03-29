@@ -129,6 +129,9 @@ class AiFirstBiodataParser implements BiodataParserInterface
                     && (string) $aiPrimary === (string) $rulesFatherPh) {
                     $aiResult['core']['primary_contact_number'] = null;
                 }
+                if ($aiPrimary !== null && $aiPrimary !== '' && BiodataParserService::isPhoneExcludedSuchakHeaderStatic($rawText, (string) $aiPrimary)) {
+                    $aiResult['core']['primary_contact_number'] = null;
+                }
 
                 $aiResult = $this->mergeHoroscopeFromRulesWhenAiJunk($aiResult, $rules);
 

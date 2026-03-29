@@ -339,13 +339,21 @@
     <p class="text-gray-500 dark:text-gray-500 text-xs mb-4">डावीकडे रॉ बायोडाटा, उजवीकडे पार्स केलेला JSON. खाली फॉर्म भरून अप्रूव्ह करा.</p>
 
     <div class="mb-6 flex flex-wrap items-center gap-3">
-        <form method="POST" action="{{ route('intake.reparse', $intake) }}" class="inline" onsubmit="return confirm('पार्स पुन्हा चालवायचा आहे? पृष्ठ रिफ्रेश केल्यावर अद्ययावत माहिती (उंची, धर्म/जात इ.) दिसेल.');">
+        <form method="POST" action="{{ route('intake.reparse', $intake) }}" class="inline" onsubmit="return confirm(@json(__('intake.reparse_confirm')));">
             @csrf
-            <button type="submit" class="px-3 py-1.5 text-sm border border-amber-500 text-amber-700 dark:text-amber-400 dark:border-amber-400 rounded hover:bg-amber-50 dark:hover:bg-amber-900/20">
-                पार्स पुन्हा चालवा (नवीन नियम लागू)
+            <button type="submit" class="px-3 py-1.5 text-sm border border-amber-500 text-amber-700 dark:text-amber-400 dark:border-amber-400 rounded hover:bg-amber-50 dark:hover:bg-amber-900/20" title="{{ __('intake.reparse_button_help') }}">
+                {{ __('intake.reparse_button') }}
             </button>
         </form>
-        <span class="text-xs text-gray-500 dark:text-gray-400">— जर Religion/Caste/Height इ. चुकीचे दिसत असतील तर हे बटण दाबा, नंतर पृष्ठ रिफ्रेश करा.</span>
+        @if (! empty($showIntakeReextractAction))
+            <form method="POST" action="{{ route('intake.re-extract', $intake) }}" class="inline" onsubmit="return confirm(@json(__('intake.reextract_confirm')));">
+                @csrf
+                <button type="submit" class="px-3 py-1.5 text-sm border border-violet-500 text-violet-700 dark:text-violet-300 dark:border-violet-400 rounded hover:bg-violet-50 dark:hover:bg-violet-900/20" title="{{ __('intake.reextract_button_help') }}">
+                    {{ __('intake.reextract_button') }}
+                </button>
+            </form>
+        @endif
+        <span class="text-xs text-gray-500 dark:text-gray-400">— {{ __('intake.reparse_hint') }}</span>
     </div>
 
     <form id="intake-preview-form" method="POST" action="{{ route('intake.approve', $intake) }}" class="space-y-8">

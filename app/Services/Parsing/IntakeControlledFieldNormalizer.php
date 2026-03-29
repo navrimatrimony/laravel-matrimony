@@ -232,12 +232,15 @@ class IntakeControlledFieldNormalizer
             $bucket = $this->relativeBucketFor($relation);
             $side = $bucket['side'];
             $key = $bucket['key'];
+            $sectionEntry = ($side === 'maternal' && $key === 'ajol')
+                ? BiodataParserService::buildAjolSectionedRelativeRow($entry)
+                : $entry;
             if ($side === 'maternal') {
-                $sectioned['maternal'][$key][] = $entry;
+                $sectioned['maternal'][$key][] = $sectionEntry;
             } elseif ($side === 'paternal') {
-                $sectioned['paternal'][$key][] = $entry;
+                $sectioned['paternal'][$key][] = $sectionEntry;
             } else {
-                $sectioned['other'][] = $entry;
+                $sectioned['other'][] = $sectionEntry;
             }
         }
 

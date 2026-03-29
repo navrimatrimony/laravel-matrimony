@@ -115,6 +115,22 @@ class OcrNormalize
         $value = trim($value);
         $value = self::normalizeDigits($value);
 
+        // Pattern: "8 ऑगस्ट 1997" / "08 ऑगस्ट 1997" (Marathi month name, Latin script)
+        $marathiMonthToNum = [
+            'जानेवारी' => '01', 'फेब्रुवारी' => '02', 'मार्च' => '03', 'एप्रिल' => '04',
+            'मे' => '05', 'जून' => '06', 'जुलै' => '07', 'ऑगस्ट' => '08',
+            'सप्टेंबर' => '09', 'ऑक्टोबर' => '10', 'नोव्हेंबर' => '11', 'डिसेंबर' => '12',
+        ];
+        $monthAlt = implode('|', array_map(static fn (string $k): string => preg_quote($k, '/'), array_keys($marathiMonthToNum)));
+        if (preg_match('/(\d{1,2})\s+('.$monthAlt.')\s+(\d{4})/u', $value, $m)) {
+            $month = $marathiMonthToNum[$m[2]] ?? null;
+            if ($month !== null) {
+                $day = str_pad($m[1], 2, '0', STR_PAD_LEFT);
+
+                return $m[3].'-'.$month.'-'.$day;
+            }
+        }
+
         // Pattern: "08-Aug 1983" or "08-Aug-1983"
         if (preg_match('/(\d{1,2})[\-\s]+([A-Za-z]{3})[\-\s]+(\d{4})/i', $value, $m)) {
             $monthMap = [

@@ -132,6 +132,11 @@ class ProviderResolver
      */
     public function parseJobUsesAiVisionExtraction(): bool
     {
+        $test = config('intake.testing_parse_job_uses_ai_vision');
+        if ($test !== null && $test !== '') {
+            return filter_var($test, FILTER_VALIDATE_BOOLEAN);
+        }
+
         $mode = strtolower(trim(str_replace(' ', '_', (string) AdminSetting::getValue('intake_active_parser', ''))));
         if ($mode === ParserStrategyResolver::MODE_AI_VISION_EXTRACT_V1) {
             return true;

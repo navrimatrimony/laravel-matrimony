@@ -6,9 +6,13 @@ use App\Http\Controllers\Controller;
 use App\Jobs\ParseIntakeJob;
 use App\Models\AdminSetting;
 use App\Models\BiodataIntake;
+use App\Services\Intake\IntakeExtractionReuseResolver;
 use App\Services\IntakeApprovalService;
 use App\Services\IntakeManualOcrPreparedService;
+use App\Services\Parsing\ParserStrategyResolver;
+use App\Services\Parsing\ProviderResolver;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 
 /*
@@ -45,8 +49,9 @@ class AdminIntakeController extends Controller
     public function showBiodataIntake(BiodataIntake $intake)
     {
         $intake->load(['uploadedByUser:id,name,email', 'profile:id,full_name']);
+        $showAdminReextractAction = app(ProviderResolver::class)->parseJobUsesAiVisionExtraction();
 
-        return view('admin.intake.show', compact('intake'));
+        return view('admin.intake.show', compact('intake', 'showAdminReextractAction'));
     }
 
     /**
@@ -112,12 +117,49 @@ class AdminIntakeController extends Controller
         $intake->parse_status = 'pending';
         $intake->save();
 
+        IntakeExtractionReuseResolver::flagNextParseJobAsParseInputOnly((int) $intake->id);
         ParseIntakeJob::dispatch($intake->id, true);
         Log::info('AdminIntakeController::reparse() dispatch called', ['intake_id' => $intake->id]);
 
         return redirect()
             ->route('admin.biodata-intakes.show', $intake)
             ->with('success', 'Re-parse job dispatched. Refresh after a few seconds.');
+    }
+
+    /**
+     * Dispatch parse with a fresh paid vision extraction (skips parse-input-only and transient reuse).
+     */
+    public function reExtract(BiodataIntake $intake)
+    {
+        $hasManualPrepared = app(IntakeManualOcrPreparedService::class)->exists($intake);
+        $rawBlank = ($intake->raw_ocr_text === null || $intake->raw_ocr_text === '');
+        $usesVisionExtract = app(ProviderResolver::class)->parseJobUsesAiVisionExtraction();
+
+        if ($rawBlank && ! $hasManualPrepared && ! $usesVisionExtract) {
+            return redirect()
+                ->route('admin.biodata-intakes.show', $intake)
+                ->with('error', 'Cannot re-extract: raw OCR text is empty.');
+        }
+        if (! $usesVisionExtract) {
+            return redirect()
+                ->route('admin.biodata-intakes.show', $intake)
+                ->with('error', 'Re-extract is only available when the parse job uses AI vision extraction.');
+        }
+
+        Cache::forget('intake.parse_ocr_debug.'.$intake->id);
+        Cache::forget('intake.parse_input_debug.'.$intake->id);
+        Cache::forget('intake.parse_input_text.'.$intake->id);
+
+        $intake->parse_status = 'pending';
+        $intake->save();
+
+        IntakeExtractionReuseResolver::flagNextParseJobAsReExtract((int) $intake->id);
+        ParseIntakeJob::dispatch($intake->id, true);
+        Log::info('AdminIntakeController::reExtract() dispatch called', ['intake_id' => $intake->id]);
+
+        return redirect()
+            ->route('admin.biodata-intakes.show', $intake)
+            ->with('success', 'Re-extract job dispatched (fresh vision extraction). Refresh after a few seconds.');
     }
 
     /**

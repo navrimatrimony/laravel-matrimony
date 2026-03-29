@@ -84,4 +84,26 @@ return [
         'vision_detail' => env('INTAKE_AI_VISION_DETAIL', 'high'),
         'vision_max_tokens' => (int) env('INTAKE_AI_VISION_MAX_TOKENS', 4096),
     ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Paid vision extraction reuse (cache + historical peer raw_ocr_text read)
+    |--------------------------------------------------------------------------
+    | Fingerprint cache: best text per provider+identity for duplicate uploads.
+    | Historical peers: other intakes’ immutable raw_ocr_text (never rewritten).
+    | Use Redis/database cache in production for durability across restarts.
+    */
+    'paid_extraction_reuse' => [
+        'parse_input_cache_ttl_days_paid' => (int) env('INTAKE_PARSE_INPUT_CACHE_DAYS_PAID', 365),
+        'parse_input_cache_ttl_days_default' => (int) env('INTAKE_PARSE_INPUT_CACHE_DAYS_DEFAULT', 7),
+        'fingerprint_best_ttl_days' => (int) env('INTAKE_PAID_FINGERPRINT_CACHE_DAYS', 365),
+        'historical_peer_query_limit' => (int) env('INTAKE_PAID_HISTORICAL_PEER_LIMIT', 40),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Test-only: force ParseIntakeJob paid-vision path (mirrors testing_active_parser)
+    |--------------------------------------------------------------------------
+    */
+    'testing_parse_job_uses_ai_vision' => env('INTAKE_TESTING_PARSE_JOB_USES_AI_VISION'),
 ];
