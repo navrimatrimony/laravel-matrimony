@@ -14,13 +14,14 @@ use App\Http\Controllers\Admin\GovernanceDashboardController;
 use App\Http\Controllers\Admin\HomepageImageController;
 use App\Http\Controllers\Admin\LocationSuggestionWebController;
 use App\Http\Controllers\Admin\OcrPatternController;
-use App\Http\Controllers\Admin\SubCasteAdminController;
-use App\Http\Controllers\Admin\TranslationController;
 use App\Http\Controllers\Admin\ShowcaseChatDebugController;
 use App\Http\Controllers\Admin\ShowcaseChatSettingsController;
 use App\Http\Controllers\Admin\ShowcaseConversationController;
+use App\Http\Controllers\Admin\SubCasteAdminController;
+use App\Http\Controllers\Admin\TranslationController;
 use App\Http\Controllers\AdminController;
 use App\Http\Controllers\BlockController;
+use App\Http\Controllers\ChatController;
 use App\Http\Controllers\ContactInboxController;
 use App\Http\Controllers\ContactRequestController;
 use App\Http\Controllers\DashboardController;
@@ -33,9 +34,10 @@ use App\Http\Controllers\MatrimonyProfileController;
 use App\Http\Controllers\MatrimonyVerificationEmailController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\OnboardingController;
+use App\Http\Controllers\Payments\PayuController;
+use App\Http\Controllers\ProfileContactVerificationController;
 use App\Http\Controllers\ProfileVerificationController;
 use App\Http\Controllers\ProfileWizardController;
-use App\Http\Controllers\ChatController;
 use App\Http\Controllers\ShortlistController;
 use App\Http\Controllers\UserSettingsController;
 use App\Http\Controllers\WhoViewedController;
@@ -43,8 +45,6 @@ use App\Models\BiodataIntake;
 use App\Models\Caste;
 use App\Models\SubCaste;
 use Illuminate\Support\Facades\Route;
-
-use App\Http\Controllers\Payments\PayuController;
 
 /*
 |--------------------------------------------------------------------------
@@ -109,6 +109,8 @@ Route::middleware('auth')->group(function () {
         ->name('intake.status');
     Route::post('/intake/apply-suggestion/{intake}', [IntakeController::class, 'applyPendingIntakeSuggestion'])
         ->name('intake.apply-suggestion');
+    Route::post('/intake/reject-suggestion/{intake}', [IntakeController::class, 'rejectPendingIntakeSuggestion'])
+        ->name('intake.reject-suggestion');
 
     Route::get('/api/intake-status/{intake}', function (BiodataIntake $intake) {
         return response()->json([
@@ -168,6 +170,19 @@ Route::middleware('auth')->group(function () {
     Route::post('/matrimony/profile/wizard/{section}', [ProfileWizardController::class, 'store'])
         ->name('matrimony.profile.wizard.store')
         ->where('section', 'basic-info|physical|marriages|location|personal-family|education-career|family-details|siblings|relatives|alliance|property|horoscope|about-me|about-preferences|contacts|photo|full');
+
+    Route::post('/matrimony/profile/contacts/{contact}/send-otp', [ProfileContactVerificationController::class, 'sendOtp'])
+        ->middleware(['throttle:6,1'])
+        ->whereNumber('contact')
+        ->name('matrimony.profile.contacts.send-otp');
+    Route::post('/matrimony/profile/contacts/{contact}/verify-otp', [ProfileContactVerificationController::class, 'verifyOtp'])
+        ->middleware(['throttle:12,1'])
+        ->whereNumber('contact')
+        ->name('matrimony.profile.contacts.verify-otp');
+    Route::post('/matrimony/profile/contacts/{contact}/promote-primary', [ProfileContactVerificationController::class, 'promotePrimary'])
+        ->middleware(['throttle:12,1'])
+        ->whereNumber('contact')
+        ->name('matrimony.profile.contacts.promote-primary');
 
     /** GPS → canonical location suggestion (MutationService-only saves; no direct profile writes here). */
     Route::post('/matrimony/internal/location/resolve-current', [CurrentLocationController::class, 'resolve'])

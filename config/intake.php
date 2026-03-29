@@ -3,6 +3,27 @@
 return [
     /*
     |--------------------------------------------------------------------------
+    | Defaults for new intake_processing_mode / intake_primary_ai_provider (UI + ProviderResolver)
+    |--------------------------------------------------------------------------
+    | Used when AdminSetting keys are absent. Env: INTAKE_DEFAULT_PROCESSING_MODE, INTAKE_DEFAULT_PRIMARY_AI_PROVIDER.
+    */
+    'defaults' => [
+        'primary_ai_provider' => env('INTAKE_DEFAULT_PRIMARY_AI_PROVIDER', 'openai'),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Sarvam chat completions (structured SSOT v2 parse — OpenAI-compatible endpoint)
+    |--------------------------------------------------------------------------
+    | Env: SARVAM_CHAT_COMPLETIONS_URL, INTAKE_SARVAM_STRUCTURED_MODEL
+    */
+    'sarvam_structured' => [
+        'chat_completions_url' => env('SARVAM_CHAT_COMPLETIONS_URL', 'https://api.sarvam.ai/v1/chat/completions'),
+        'model' => env('INTAKE_SARVAM_STRUCTURED_MODEL', 'sarvam-m'),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Intake Preview Suggestion Autofill (TEMPORARY UX)
     |--------------------------------------------------------------------------
     | Confidence threshold for auto_prefill. When suggestion confidence >= this

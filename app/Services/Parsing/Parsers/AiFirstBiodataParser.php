@@ -2,6 +2,7 @@
 
 namespace App\Services\Parsing\Parsers;
 
+use App\Services\AiVisionExtractionService;
 use App\Services\BiodataParserService;
 use App\Services\ExternalAiParsingService;
 use App\Services\Parsing\IntakeParsedSnapshotSkeleton;
@@ -28,6 +29,8 @@ class AiFirstBiodataParser implements BiodataParserInterface
 
     public function parse(string $rawText, array $context = []): array
     {
+        $rawText = AiVisionExtractionService::sanitizeTransientParseInputText($rawText);
+
         $parserMode = $context['parser_mode'] ?? 'ai_first_v1';
         // ai_vision_extract_v1 uses a vision/transcription step to get higher-quality text;
         // it should then use the same stricter schema prompt as ai_first_v2.
@@ -75,11 +78,13 @@ class AiFirstBiodataParser implements BiodataParserInterface
                     'marital_status',
                     'full_name',
                     'primary_contact_number',
+                    'father_contact_1',
                     'height_cm',
                     'complexion',
                     'religion',
                     'caste',
                     'sub_caste',
+                    'blood_group',
                     'other_relatives_text',
                 ];
 
@@ -95,6 +100,18 @@ class AiFirstBiodataParser implements BiodataParserInterface
                         if (mb_strpos($aiVal, 'आईचे') !== false || mb_strpos($aiVal, 'आईचे नांव') !== false || mb_strlen(trim($aiVal)) < 10) {
                             $useRules = true;
                         }
+                        if ($this->isTruncatedFatherName($aiVal)) {
+                            $useRules = $rulesHas;
+                        }
+                    }
+                    if ($field === 'full_name' && $aiHas && is_string($aiVal) && $this->isInvalidAiFullName($aiVal) && $rulesHas) {
+                        $useRules = true;
+                    }
+                    if ($field === 'blood_group' && $aiHas && is_string($aiVal) && $rulesHas) {
+                        $rb = BiodataParserService::sanitizeBloodGroupValue($aiVal);
+                        if ($rb === null || $rb === '') {
+                            $useRules = true;
+                        }
                     }
                     if ($field === 'height_cm' && $aiHas && is_numeric($aiVal) && (float) $aiVal > 220) {
                         $useRules = $rulesHas;
@@ -105,6 +122,15 @@ class AiFirstBiodataParser implements BiodataParserInterface
                 }
 
                 $aiResult['core'] = $aiCore;
+                $aiPrimary = $aiCore['primary_contact_number'] ?? null;
+                $rulesPrimary = $rulesCore['primary_contact_number'] ?? null;
+                $rulesFatherPh = $rulesCore['father_contact_1'] ?? null;
+                if (($rulesPrimary === null || $rulesPrimary === '') && $aiPrimary !== null && $rulesFatherPh !== null
+                    && (string) $aiPrimary === (string) $rulesFatherPh) {
+                    $aiResult['core']['primary_contact_number'] = null;
+                }
+
+                $aiResult = $this->mergeHoroscopeFromRulesWhenAiJunk($aiResult, $rules);
 
                 // Contacts: if AI left contacts empty, fall back to rules-only
                 // contacts (which already place the primary number first and
@@ -142,6 +168,9 @@ class AiFirstBiodataParser implements BiodataParserInterface
                 if (! $this->isUsableHoroscope($aiHoroscope) && ! empty($rulesHoroscope)) {
                     $aiResult['horoscope'] = $rulesHoroscope;
                 }
+
+                $aiResult = $this->repairSiblingsAndRelativesFromRules($aiResult, $rules);
+                $this->stripMislabeledPrimaryContactRows($aiResult);
 
                 // Confidence map: merge AI + rules so AI-only fields keep scores and both contribute where present.
                 if (is_array($rules) && isset($rules['confidence_map']) && is_array($rules['confidence_map'])) {
@@ -289,6 +318,149 @@ class AiFirstBiodataParser implements BiodataParserInterface
         return ($goodAddress / $meaningful) >= 0.5;
     }
 
+    private function mergeHoroscopeFromRulesWhenAiJunk(array $aiResult, ?array $rules): array
+    {
+        if (! is_array($rules) || empty($rules['horoscope'][0]) || ! is_array($rules['horoscope'][0])) {
+            return $aiResult;
+        }
+        $r0 = $rules['horoscope'][0];
+        $aiH = $aiResult['horoscope'] ?? null;
+        if (! is_array($aiH) || ! isset($aiH[0]) || ! is_array($aiH[0])) {
+            $aiResult['horoscope'] = $rules['horoscope'];
+
+            return $aiResult;
+        }
+        $a0 = &$aiResult['horoscope'][0];
+        $aiGan = $a0['gan'] ?? null;
+        $sanGan = is_string($aiGan) ? BiodataParserService::sanitizeGanValue($aiGan) : null;
+        if (($sanGan === null || $sanGan === '') && ! empty($r0['gan'])) {
+            $a0['gan'] = $r0['gan'];
+        }
+        $aiBg = $a0['blood_group'] ?? null;
+        $sanBg = BiodataParserService::sanitizeBloodGroupValue($aiBg);
+        if (($sanBg === null || $sanBg === '') && ! empty($r0['blood_group'])) {
+            $a0['blood_group'] = $r0['blood_group'];
+        }
+
+        return $aiResult;
+    }
+
+    private function repairSiblingsAndRelativesFromRules(array $aiResult, ?array $rules): array
+    {
+        if (! is_array($rules)) {
+            return $aiResult;
+        }
+        $aiSib = $aiResult['siblings'] ?? [];
+        if (is_array($aiSib) && $this->hasInvalidAiSiblingRows($aiSib)) {
+            $aiResult['siblings'] = is_array($rules['siblings'] ?? null) ? $rules['siblings'] : [];
+        }
+        $aiRel = $aiResult['relatives'] ?? [];
+        if (is_array($aiRel) && $this->hasHeadingOnlyRelativeRows($aiRel)) {
+            $rulesRel = is_array($rules['relatives'] ?? null) ? $rules['relatives'] : [];
+            if (! empty($rulesRel)) {
+                $aiResult['relatives'] = $rulesRel;
+            } else {
+                $aiResult['relatives'] = array_values(array_filter($aiRel, function ($r) {
+                    if (! is_array($r)) {
+                        return false;
+                    }
+                    $name = trim((string) ($r['name'] ?? ''));
+                    $raw = trim((string) ($r['raw_note'] ?? $r['notes'] ?? ''));
+                    if ($name !== '') {
+                        return true;
+                    }
+
+                    return ! ($raw !== '' && preg_match('/^(?:मुलीचे|मुलाचे|मुलीच्या)\s+(?:चुलते|मामा|मावशी)/u', $raw));
+                }));
+            }
+        }
+
+        return $aiResult;
+    }
+
+    private function hasInvalidAiSiblingRows(array $rows): bool
+    {
+        foreach ($rows as $r) {
+            if (! is_array($r)) {
+                continue;
+            }
+            $n = trim((string) ($r['name'] ?? ''));
+            if ($n === '') {
+                continue;
+            }
+            if (preg_match('/भाऊ\s*\/\s*बहिण|भाऊ\/बहिण/u', $n) && preg_match('/अविवाहित|अविवाहीत/u', $n)) {
+                return true;
+            }
+            if (preg_match('/^बहिण\s*[:\-–—\.]+\s*अविवाहित/u', $n) || preg_match('/^बहीण\s*[:\-–—\.]+\s*अविवाहित/u', $n)) {
+                return true;
+            }
+            if (preg_match('/^अविवाहित$/u', $n) || preg_match('/^अविवाहीत$/u', $n)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function hasHeadingOnlyRelativeRows(array $rows): bool
+    {
+        foreach ($rows as $r) {
+            if (! is_array($r)) {
+                continue;
+            }
+            $name = trim((string) ($r['name'] ?? ''));
+            $raw = trim((string) ($r['raw_note'] ?? $r['notes'] ?? ''));
+            if ($name === '' && $raw !== '' && preg_match('/^(?:मुलीचे|मुलाचे|मुलीच्या)\s+(?:चुलते|मामा|मावशी)/u', $raw)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function stripMislabeledPrimaryContactRows(array &$aiResult): void
+    {
+        $fc = $aiResult['core']['father_contact_1'] ?? null;
+        if ($fc === null || $fc === '' || ! is_array($aiResult['contacts'] ?? null)) {
+            return;
+        }
+        if (! empty($aiResult['core']['primary_contact_number'] ?? null)) {
+            return;
+        }
+        $fcDigits = preg_replace('/\D/', '', (string) $fc);
+        if (strlen($fcDigits) >= 10) {
+            $fcDigits = substr($fcDigits, -10);
+        }
+        $out = [];
+        foreach ($aiResult['contacts'] as $c) {
+            if (! is_array($c)) {
+                $out[] = $c;
+                continue;
+            }
+            $num = preg_replace('/\D/', '', (string) ($c['number'] ?? $c['phone_number'] ?? $c['phone'] ?? ''));
+            if (strlen($num) >= 10) {
+                $num = substr($num, -10);
+            }
+            if ($num === $fcDigits && (($c['label'] ?? '') === 'self' || ($c['is_primary'] ?? false) || ($c['type'] ?? '') === 'primary')) {
+                continue;
+            }
+            $out[] = $c;
+        }
+        $aiResult['contacts'] = $out;
+    }
+
+    private function isTruncatedFatherName(string $v): bool
+    {
+        return (bool) preg_match('/,\s*मो\.?\s*$/u', trim($v));
+    }
+
+    private function isInvalidAiFullName(string $v): bool
+    {
+        $t = trim($v);
+
+        return $t === '' || mb_strlen($t) < 4;
+    }
+
     /**
      * Apply horoscope field sanitization to every row so devak/kuldaivat/gotra never contain junk.
      */
@@ -304,6 +476,7 @@ class AiFirstBiodataParser implements BiodataParserInterface
                     $rows[$i][$field] = BiodataParserService::sanitizeHoroscopeValue(is_string($val) ? $val : (string) $val);
                 }
             }
+            $rows[$i]['gan'] = BiodataParserService::sanitizeGanValue($row['gan'] ?? null);
             $rows[$i]['blood_group'] = BiodataParserService::sanitizeBloodGroupValue($row['blood_group'] ?? null);
         }
         return $rows;

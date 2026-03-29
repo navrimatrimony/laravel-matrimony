@@ -26,6 +26,7 @@ use App\Services\FieldValueHistoryService;
 use App\Services\OcrGovernanceService;
 use App\Services\OcrMode;
 use App\Services\OcrModeDetectionService;
+use App\Services\Parsing\ProviderResolver;
 use App\Services\ProfileCompletenessService;
 use App\Services\ProfileFieldLockService;
 use App\Services\ProfileLifecycleService;
@@ -519,8 +520,12 @@ class AdminController extends Controller
         $maxImagesPerIntake = (int) AdminSetting::getValue('intake_max_images_per_intake', '5');
         $globalDailyCap = (int) AdminSetting::getValue('intake_global_daily_cap', '0');
         $autoParse = AdminSetting::getBool('intake_auto_parse_enabled', true);
-        $activeParser = AdminSetting::getValue('intake_active_parser', 'rules_only');
-        $aiVisionProvider = (string) AdminSetting::getValue('intake_ai_vision_provider', '');
+        $resolver = app(ProviderResolver::class);
+        $processingMode = $resolver->processingMode();
+        $primaryAiProvider = $resolver->primaryAiProvider();
+        $hybridExtractionProvider = $resolver->hybridExtractionProvider();
+        $hybridParserProvider = $resolver->hybridParserProvider();
+        $hybridOcrFallback = $resolver->hybridOcrFallback();
         $ocrProvider = AdminSetting::getValue('intake_ocr_provider', 'tesseract');
         $ocrLanguage = AdminSetting::getValue('intake_ocr_language_hint', 'mixed');
         $retryLimit = (int) AdminSetting::getValue('intake_parse_retry_limit', '3');
@@ -541,8 +546,11 @@ class AdminController extends Controller
             'maxImagesPerIntake' => max(1, $maxImagesPerIntake),
             'globalDailyCap' => max(0, $globalDailyCap),
             'autoParseEnabled' => $autoParse,
-            'activeParser' => $activeParser,
-            'intakeAiVisionProvider' => $aiVisionProvider,
+            'processingMode' => $processingMode,
+            'primaryAiProvider' => $primaryAiProvider,
+            'hybridExtractionProvider' => $hybridExtractionProvider,
+            'hybridParserProvider' => $hybridParserProvider,
+            'hybridOcrFallback' => $hybridOcrFallback,
             'ocrProvider' => $ocrProvider,
             'ocrLanguageHint' => $ocrLanguage,
             'parseRetryLimit' => max(0, $retryLimit),
@@ -567,9 +575,31 @@ class AdminController extends Controller
             'intake_max_images_per_intake' => 'required|integer|min:1|max:10',
             'intake_global_daily_cap' => 'required|integer|min:0|max:10000',
             'intake_auto_parse_enabled' => 'nullable|in:0,1',
-            'intake_active_parser' => 'required|string|in:rules_only,ai_first_v1,ai_first_v2,ai_vision_extract_v1,hybrid_v1',
-            'intake_ai_vision_provider' => ['nullable', 'string', Rule::in(['', 'openai', 'sarvam'])],
-            'intake_ocr_provider' => 'required|string|in:tesseract,cloud_vision,off',
+            'intake_processing_mode' => 'required|string|in:end_to_end,hybrid',
+            'intake_primary_ai_provider' => [
+                Rule::requiredIf(fn () => $request->input('intake_processing_mode') === ProviderResolver::MODE_END_TO_END),
+                'nullable',
+                'string',
+                Rule::in(['openai', 'sarvam']),
+            ],
+            'intake_hybrid_extraction_provider' => [
+                Rule::requiredIf(fn () => $request->input('intake_processing_mode') === ProviderResolver::MODE_HYBRID),
+                'nullable',
+                'string',
+                Rule::in(['openai', 'sarvam', 'tesseract']),
+            ],
+            'intake_hybrid_parser_provider' => [
+                Rule::requiredIf(fn () => $request->input('intake_processing_mode') === ProviderResolver::MODE_HYBRID),
+                'nullable',
+                'string',
+                Rule::in(['openai', 'sarvam']),
+            ],
+            'intake_hybrid_ocr_fallback' => [
+                Rule::requiredIf(fn () => $request->input('intake_processing_mode') === ProviderResolver::MODE_HYBRID),
+                'nullable',
+                'string',
+                Rule::in(['tesseract', 'off']),
+            ],
             'intake_ocr_language_hint' => 'required|string|in:mr,en,mixed',
             'intake_parse_retry_limit' => 'required|integer|min:0|max:5',
             'intake_confidence_high_threshold' => 'required|numeric|min:0.5|max:0.99',
@@ -587,9 +617,44 @@ class AdminController extends Controller
         $maxImagesPerIntake = (string) $request->input('intake_max_images_per_intake', 5);
         $globalDailyCap = (string) $request->input('intake_global_daily_cap', 0);
         $autoParse = $request->has('intake_auto_parse_enabled') ? '1' : '0';
-        $activeParser = (string) $request->input('intake_active_parser', 'rules_only');
-        $aiVisionProvider = (string) $request->input('intake_ai_vision_provider', '');
-        $ocrProvider = (string) $request->input('intake_ocr_provider', 'tesseract');
+        $processingMode = (string) $request->input('intake_processing_mode', ProviderResolver::MODE_END_TO_END);
+        $primaryAiProvider = strtolower(trim((string) $request->input('intake_primary_ai_provider', 'openai')));
+        if (! in_array($primaryAiProvider, ['openai', 'sarvam'], true)) {
+            $primaryAiProvider = 'openai';
+        }
+        $hybridExtraction = strtolower(trim((string) $request->input('intake_hybrid_extraction_provider', 'openai')));
+        if (! in_array($hybridExtraction, ['openai', 'sarvam', 'tesseract'], true)) {
+            $hybridExtraction = 'openai';
+        }
+        $hybridParser = strtolower(trim((string) $request->input('intake_hybrid_parser_provider', 'openai')));
+        if (! in_array($hybridParser, ['openai', 'sarvam'], true)) {
+            $hybridParser = 'openai';
+        }
+        $hybridOcrFallback = strtolower(trim((string) $request->input('intake_hybrid_ocr_fallback', 'tesseract')));
+        if (! in_array($hybridOcrFallback, ['tesseract', 'off'], true)) {
+            $hybridOcrFallback = 'tesseract';
+        }
+
+        $activeParser = '';
+        $aiVisionProvider = '';
+        $ocrProvider = (string) AdminSetting::getValue('intake_ocr_provider', 'tesseract');
+
+        if ($processingMode === ProviderResolver::MODE_END_TO_END) {
+            $activeParser = 'ai_vision_extract_v1';
+            $aiVisionProvider = $primaryAiProvider;
+        } elseif ($processingMode === ProviderResolver::MODE_HYBRID) {
+            $activeParser = 'hybrid_v1';
+            if ($hybridExtraction === 'openai' || $hybridExtraction === 'sarvam') {
+                $aiVisionProvider = $hybridExtraction;
+            } else {
+                $aiVisionProvider = '';
+            }
+            $ocrProvider = $hybridOcrFallback === 'off' ? 'off' : 'tesseract';
+        } else {
+            $processingMode = ProviderResolver::MODE_END_TO_END;
+            $activeParser = 'ai_vision_extract_v1';
+            $aiVisionProvider = $primaryAiProvider;
+        }
         $ocrLanguage = (string) $request->input('intake_ocr_language_hint', 'mixed');
         $retryLimit = (string) $request->input('intake_parse_retry_limit', 3);
         $highThreshold = (string) $request->input('intake_confidence_high_threshold', 0.85);
@@ -615,9 +680,18 @@ class AdminController extends Controller
         AdminSetting::setValue('intake_max_images_per_intake', $maxImagesPerIntake);
         AdminSetting::setValue('intake_global_daily_cap', $globalDailyCap);
         AdminSetting::setValue('intake_auto_parse_enabled', $autoParse);
+        AdminSetting::setValue('intake_processing_mode', $processingMode);
         AdminSetting::setValue('intake_active_parser', $activeParser);
         AdminSetting::setValue('intake_ai_vision_provider', $aiVisionProvider);
-        AdminSetting::setValue('intake_ocr_provider', $ocrProvider);
+        if ($processingMode === ProviderResolver::MODE_END_TO_END) {
+            AdminSetting::setValue('intake_primary_ai_provider', $primaryAiProvider);
+        }
+        if ($processingMode === ProviderResolver::MODE_HYBRID) {
+            AdminSetting::setValue('intake_hybrid_extraction_provider', $hybridExtraction);
+            AdminSetting::setValue('intake_hybrid_parser_provider', $hybridParser);
+            AdminSetting::setValue('intake_hybrid_ocr_fallback', $hybridOcrFallback);
+            AdminSetting::setValue('intake_ocr_provider', $ocrProvider);
+        }
         AdminSetting::setValue('intake_ocr_language_hint', $ocrLanguage);
         AdminSetting::setValue('intake_parse_retry_limit', $retryLimit);
         AdminSetting::setValue('intake_confidence_high_threshold', $highThreshold);
@@ -631,7 +705,7 @@ class AdminController extends Controller
             'update_intake_settings',
             'AdminSetting',
             null,
-            "intake_max_daily_per_user={$daily}, intake_max_monthly_per_user={$monthly}, intake_max_pdf_mb={$maxPdfMb}, intake_max_pdf_pages={$maxPdfPages}, intake_max_images_per_intake={$maxImagesPerIntake}, intake_global_daily_cap={$globalDailyCap}, intake_auto_parse_enabled={$autoParse}, intake_active_parser={$activeParser}, intake_ai_vision_provider={$aiVisionProvider}, intake_ocr_provider={$ocrProvider}, intake_ocr_language_hint={$ocrLanguage}, intake_parse_retry_limit={$retryLimit}, intake_confidence_high_threshold={$highThreshold}, intake_auto_apply_fields=".implode(',', $autoApplyFiltered).", intake_require_admin_before_attach={$requireAdminBeforeAttach}, intake_file_retention_days={$fileRetentionDays}, intake_keep_parsed_json_after_purge={$keepParsedJson}",
+            "intake_max_daily_per_user={$daily}, intake_max_monthly_per_user={$monthly}, intake_max_pdf_mb={$maxPdfMb}, intake_max_pdf_pages={$maxPdfPages}, intake_max_images_per_intake={$maxImagesPerIntake}, intake_global_daily_cap={$globalDailyCap}, intake_auto_parse_enabled={$autoParse}, intake_processing_mode={$processingMode}, intake_primary_ai_provider={$primaryAiProvider}, intake_hybrid_extraction_provider={$hybridExtraction}, intake_hybrid_parser_provider={$hybridParser}, intake_hybrid_ocr_fallback={$hybridOcrFallback}, intake_active_parser={$activeParser}, intake_ai_vision_provider={$aiVisionProvider}, intake_ocr_provider={$ocrProvider}, intake_ocr_language_hint={$ocrLanguage}, intake_parse_retry_limit={$retryLimit}, intake_confidence_high_threshold={$highThreshold}, intake_auto_apply_fields=".implode(',', $autoApplyFiltered).", intake_require_admin_before_attach={$requireAdminBeforeAttach}, intake_file_retention_days={$fileRetentionDays}, intake_keep_parsed_json_after_purge={$keepParsedJson}",
             false
         );
 

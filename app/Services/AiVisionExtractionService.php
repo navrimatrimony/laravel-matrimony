@@ -2,8 +2,8 @@
 
 namespace App\Services;
 
-use App\Models\AdminSetting;
 use App\Models\BiodataIntake;
+use App\Services\Parsing\ProviderResolver;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Lang;
 use Illuminate\Support\Facades\Log;
@@ -37,30 +37,94 @@ class AiVisionExtractionService
             .'Preserve separators exactly as printed, including forms like ":-", ":", "-", ".", "/", "(", ")" and spacing around them. '
             .'Do not normalize punctuation, do not rewrite, do not translate, do not expand abbreviations, do not correct spelling, and do not infer missing text. '
             .'Ignore all non-text visual elements: photos, portraits, faces, clothing, pose, logos, stamps, watermarks, borders, ornaments, decorative/background graphics. '
+            .'Ignore marriage-bureau / vadhu-var suchak / agent / center / broker advertisement text anywhere on the page (printed, stamped, computer-generated, or handwritten). '
+            .'Ignore agency contact blocks that are not part of the candidate biodata fields. '
+            .'Ignore all photos on the biodata; ignore deity images, symbols, decorative graphics, logos, and watermarks—do not describe them. '
+            .'Transcribe only the candidate bride/groom biodata document text (personal, family, horoscope, contact lines that belong to the candidate record). '
             .'For two-column or side-by-side sections: never collapse both columns into one ambiguous running line. '
             .'If exact side-by-side spacing is difficult, output columns as separate blocks one below the other while preserving each column content and separators faithfully. '
             .'Output plain text only. No markdown, no JSON, no base64, no commentary, no added headings, no preamble, no footer.';
 
-        $user = 'Return only the faithful raw transcription text from the biodata document.';
+        $user = 'Return only the faithful raw transcription text from the candidate biodata (ignore bureau/suchak ads and non-biodata imagery).';
 
         return ['system' => $system, 'user' => $user];
     }
 
     /**
-     * Which backend performs AI vision transcription for `ai_vision_extract_v1`.
-     * Resolution: AdminSetting `intake_ai_vision_provider` → config(`intake.ai_vision_extract.provider`) → `openai`.
+     * Deterministic line drops for transient parse input only (never mutates stored raw_ocr_text).
+     * Removes common Sarvam/vision contamination: image descriptions, bureau headers, decorative prose.
+     */
+    public static function sanitizeTransientParseInputText(string $text): string
+    {
+        $text = str_replace(["\r\n", "\r"], "\n", $text);
+        $lines = preg_split('/\R/u', $text) ?: [];
+        $out = [];
+        foreach ($lines as $line) {
+            $t = trim($line);
+            if ($t === '') {
+                $out[] = $line;
+
+                continue;
+            }
+            if (self::isTransientParseInputNoiseLine($t)) {
+                continue;
+            }
+            $out[] = $line;
+        }
+
+        return trim(implode("\n", $out));
+    }
+
+    /**
+     * Single-line heuristic: drop photo/bureau/deity-description prose, not biodata field lines.
+     */
+    public static function isTransientParseInputNoiseLine(string $t): bool
+    {
+        // Photo / scene description (Marathi prose, not labels like मुलीचे नांव).
+        if (preg_match('/(?:एका|एक)\s+महिल(?:े|ा)चा\s+फोटो/u', $t)) {
+            return true;
+        }
+        if (preg_match('/(?:एका|एक)\s+पुरुषाचा\s+फोटो/u', $t)) {
+            return true;
+        }
+        if (preg_match('/हे\s+चित्र/u', $t) && preg_match('/(?:भगवान|देवत|गणेश|देवी)/u', $t)) {
+            return true;
+        }
+        if (preg_match('/फोटो.*दिसत\s*आहे/u', $t) || preg_match('/चित्र.*दिसत\s*आहे/u', $t)) {
+            return true;
+        }
+        // Decorative deity line without biodata labels (long prose ending in "आहे").
+        if (mb_strlen($t) >= 35 && preg_match('/(?:भगवान|गणेश|देवी|देवत)/u', $t)
+            && preg_match('/आहे[.\s]*$/u', $t)
+            && ! preg_match('/[:\-]\s*[^\s]/u', $t)) {
+            return true;
+        }
+        // Bureau / suchak header-only lines (contact lines next to biodata संपर्क are kept elsewhere).
+        if (preg_match('/^वध[ूु]वर\s*सूचक/u', $t)) {
+            return true;
+        }
+        if (preg_match('/सूचक\s*केंद्र/u', $t) && mb_strlen($t) < 80) {
+            return true;
+        }
+        if (preg_match('/^(?:विवाह|लग्न)\s*सूचक/u', $t)) {
+            return true;
+        }
+
+        return false;
+    }
+
+    /**
+     * Which backend performs AI file transcription when the parse job uses AI vision / document intelligence.
+     * Resolution: ProviderResolver (intake_processing_mode + primary or hybrid extraction) → legacy keys → config.
      *
      * @return array{provider: string, provider_source: string}
      */
     public function resolveExtractionProvider(): array
     {
-        $raw = AdminSetting::getValue('intake_ai_vision_provider', '');
-        $raw = is_string($raw) ? trim($raw) : '';
-        if ($raw === 'openai' || $raw === 'sarvam') {
-            return ['provider' => $raw, 'provider_source' => 'admin_setting'];
-        }
-        if ($raw !== '') {
-            Log::warning('AiVisionExtractionService: invalid intake_ai_vision_provider; falling back to config', ['value' => $raw]);
+        $resolver = app(ProviderResolver::class);
+        $p = $resolver->visionTranscriptionProvider();
+        if ($p === ProviderResolver::PROVIDER_OPENAI || $p === ProviderResolver::PROVIDER_SARVAM) {
+            return ['provider' => $p, 'provider_source' => 'admin_setting'];
         }
 
         $cfg = strtolower(trim((string) config('intake.ai_vision_extract.provider', 'openai')));
@@ -306,7 +370,56 @@ class AiVisionExtractionService
             $t = trim($t);
         }
 
+        $t = self::stripEmbeddedBinaryPayloadsFromPlainText($t);
+
         return $t;
+    }
+
+    /**
+     * Remove embedded raster payloads and obvious OCR junk lines from transcription output.
+     * Sarvam (and occasionally other backends) may emit markdown images with data: URLs or huge base64 runs,
+     * which breaks length limits, quality heuristics, and structured extraction.
+     */
+    public static function stripEmbeddedBinaryPayloadsFromPlainText(string $t): string
+    {
+        $t = preg_replace('/!\[[^\]]*\]\(\s*data:image\/[^)]+\)/u', '', $t) ?? $t;
+        $t = preg_replace('/<img\b[^>]*\bsrc=["\']data:image\/[^"\']+["\'][^>]*>/iu', '', $t) ?? $t;
+        $t = preg_replace('/data:image\/[a-zA-Z0-9.+_-]+;base64,\s*[A-Za-z0-9+\/\r\n=]{200,}/u', '', $t) ?? $t;
+
+        $lines = preg_split('/\R/u', $t) ?: [];
+        $out = [];
+        foreach ($lines as $line) {
+            $trim = trim($line);
+            $len = mb_strlen($trim);
+            if ($len < 400) {
+                $out[] = $line;
+
+                continue;
+            }
+            if (preg_match('/[ऀ-ॿ]/u', $trim) === 1) {
+                $out[] = $line;
+
+                continue;
+            }
+            $compact = preg_replace('/\s+/', '', $trim) ?? '';
+            $clen = strlen($compact);
+            if ($clen === 0) {
+                $out[] = $line;
+
+                continue;
+            }
+            preg_match_all('/[A-Za-z0-9+\/=]/', $compact, $mm);
+            $b64ish = count($mm[0] ?? []);
+            $spaces = substr_count($trim, ' ');
+            if (($b64ish / $clen) > 0.94 && $spaces < max(3, (int) ($len / 80))) {
+                continue;
+            }
+            $out[] = $line;
+        }
+        $t = implode("\n", $out);
+        $t = preg_replace('/\n{4,}/u', "\n\n\n", $t) ?? $t;
+
+        return trim($t);
     }
 
     /**
@@ -607,6 +720,7 @@ class AiVisionExtractionService
                 if (! empty($cleanupPreparedPayload)) {
                     @unlink($cleanupPreparedPayload);
                 }
+
                 return [
                     'text' => '',
                     'meta' => array_merge($sourceMeta, [
@@ -629,6 +743,7 @@ class AiVisionExtractionService
                 if (! empty($cleanupPreparedPayload)) {
                     @unlink($cleanupPreparedPayload);
                 }
+
                 return [
                     'text' => '',
                     'meta' => array_merge($sourceMeta, [
@@ -649,6 +764,7 @@ class AiVisionExtractionService
                 if (! empty($cleanupPreparedPayload)) {
                     @unlink($cleanupPreparedPayload);
                 }
+
                 return [
                     'text' => '',
                     'meta' => array_merge($sourceMeta, [
@@ -671,6 +787,7 @@ class AiVisionExtractionService
                 if (! empty($cleanupPreparedPayload)) {
                     @unlink($cleanupPreparedPayload);
                 }
+
                 return [
                     'text' => '',
                     'meta' => array_merge($sourceMeta, [
@@ -810,6 +927,7 @@ class AiVisionExtractionService
             $z = new ZipArchive;
             if ($z->open($zipPath) !== true) {
                 @unlink($zipPath);
+
                 return [
                     'text' => '',
                     'meta' => array_merge($sourceMeta, [
@@ -857,6 +975,21 @@ class AiVisionExtractionService
                 ];
             }
 
+            $text = $this->sanitizeTranscriptionResponse($text);
+
+            if (trim($text) === '') {
+                return [
+                    'text' => '',
+                    'meta' => array_merge($sourceMeta, $payloadPrepMeta, [
+                        'ok' => false,
+                        'reason' => 'sarvam_output_empty_after_sanitize',
+                        'provider' => 'sarvam',
+                        'job_id' => $jobId,
+                        'job_state' => $state,
+                    ]),
+                ];
+            }
+
             return [
                 'text' => $text,
                 'meta' => array_merge($sourceMeta, $payloadPrepMeta, [
@@ -891,6 +1024,7 @@ class AiVisionExtractionService
             $ext = pathinfo($name, PATHINFO_EXTENSION);
             $name = 'document.'.($ext !== '' ? $ext : 'pdf');
         }
+
         return $name;
     }
 
@@ -918,7 +1052,7 @@ class AiVisionExtractionService
             $pdfText = $this->extractTextFromPdf($absolutePath);
             if (trim($pdfText) !== '') {
                 return [
-                    'text' => $pdfText,
+                    'text' => $this->sanitizeTranscriptionResponse($pdfText),
                     'meta' => array_merge($sourceMeta, [
                         'ok' => true,
                         'reason' => null,
@@ -1085,10 +1219,10 @@ class AiVisionExtractionService
             $parser = new PdfParser;
             $pdf = $parser->parseFile($absolutePath);
             $text = $pdf->getText();
+
             return is_string($text) ? trim($text) : '';
         } catch (\Throwable) {
             return '';
         }
     }
 }
-

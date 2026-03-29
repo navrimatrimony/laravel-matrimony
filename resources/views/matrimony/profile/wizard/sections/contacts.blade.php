@@ -1,6 +1,7 @@
 {{-- Phase-5 SSOT: Contacts — self (up to 3 numbers, + adds in-context) + additional contacts (other people, no + on number). --}}
 @php
     $selfContacts = $self_contacts ?? [];
+    $selfContactsSaved = isset($self_contacts) && is_iterable($self_contacts) ? collect($self_contacts)->all() : [];
     $selfCount = count($selfContacts);
     if ($selfCount === 0) { $selfCount = 1; }
 @endphp
@@ -71,6 +72,57 @@
             </div>
         </template>
     </div>
+
+    @if(count($selfContactsSaved) > 0)
+        <div class="mt-4 rounded-lg border border-gray-200 dark:border-gray-700 p-4 space-y-3 bg-white/50 dark:bg-gray-800/40">
+            <h3 class="text-sm font-medium text-gray-800 dark:text-gray-200">{{ __('contact_verify.saved_self_numbers') }}</h3>
+            <ul class="space-y-3 text-sm">
+                @foreach($selfContactsSaved as $scRow)
+                    @php $sc = is_object($scRow) ? (array) $scRow : $scRow; @endphp
+                    @if(! empty($sc['id']))
+                        <li class="flex flex-col gap-2 border-b border-gray-100 dark:border-gray-700 pb-3 last:border-0 last:pb-0">
+                            <div class="flex flex-wrap items-center gap-x-3 gap-y-1">
+                                <span class="font-mono text-gray-900 dark:text-gray-100">{{ $sc['phone_number'] ?? '' }}</span>
+                                @if(! empty($sc['is_primary']))
+                                    <span class="text-xs font-semibold text-emerald-700 dark:text-emerald-300">{{ __('contact_verify.badge_primary') }}</span>
+                                @else
+                                    <span class="text-xs text-gray-500 dark:text-gray-400">{{ __('contact_verify.badge_additional_self') }}</span>
+                                @endif
+                                @if(! empty($sc['verified_status']))
+                                    <span class="text-xs font-semibold text-sky-700 dark:text-sky-300">{{ __('contact_verify.badge_verified') }}</span>
+                                @else
+                                    <span class="text-xs text-amber-700 dark:text-amber-300">{{ __('contact_verify.badge_not_verified') }}</span>
+                                @endif
+                            </div>
+                            @if(empty($sc['verified_status']))
+                                <div class="flex flex-wrap items-end gap-2">
+                                    <form method="POST" action="{{ route('matrimony.profile.contacts.send-otp', ['contact' => $sc['id']]) }}" class="inline">
+                                        @csrf
+                                        <button type="submit" class="px-2 py-1 text-xs rounded bg-gray-200 dark:bg-gray-600 text-gray-900 dark:text-gray-100 hover:opacity-90">{{ __('contact_verify.send_code') }}</button>
+                                    </form>
+                                    <form method="POST" action="{{ route('matrimony.profile.contacts.verify-otp', ['contact' => $sc['id']]) }}" class="inline flex flex-wrap items-center gap-2">
+                                        @csrf
+                                        <input type="text" name="otp" inputmode="numeric" maxlength="6" pattern="[0-9]*" autocomplete="one-time-code" class="w-24 rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 px-2 py-1 text-xs" placeholder="{{ __('contact_verify.otp_placeholder') }}">
+                                        <button type="submit" class="px-2 py-1 text-xs rounded bg-sky-600 text-white hover:bg-sky-700">{{ __('contact_verify.verify') }}</button>
+                                    </form>
+                                </div>
+                            @endif
+                            @if(empty($sc['is_primary']))
+                                @if(! empty($sc['verified_status']))
+                                    <form method="POST" action="{{ route('matrimony.profile.contacts.promote-primary', ['contact' => $sc['id']]) }}" class="inline">
+                                        @csrf
+                                        <button type="submit" class="px-2 py-1 text-xs rounded bg-emerald-600 text-white hover:bg-emerald-700">{{ __('contact_verify.make_primary') }}</button>
+                                    </form>
+                                @else
+                                    <p class="text-xs text-gray-500 dark:text-gray-400">{{ __('contact_verify.verify_before_primary') }}</p>
+                                @endif
+                            @endif
+                        </li>
+                    @endif
+                @endforeach
+            </ul>
+        </div>
+    @endif
 
     {{-- Additional contacts: other people (name, number, relation) — no + on number field. --}}
     <div>

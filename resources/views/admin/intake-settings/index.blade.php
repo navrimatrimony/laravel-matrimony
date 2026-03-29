@@ -113,43 +113,55 @@
                 <p class="text-xs text-gray-500 dark:text-gray-400">
                     When off, uploads are created in "uploaded" state and can be parsed later from admin tools.
                 </p>
-                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div class="md:col-span-3">
-                        <label class="block font-medium text-gray-700 dark:text-gray-200 mb-1">AI Vision transcription provider</label>
-                        <select name="intake_ai_vision_provider" class="w-full max-w-md rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-2 py-1">
-                            <option value="" {{ ($intakeAiVisionProvider ?? '') === '' ? 'selected' : '' }}>Default (from .env / config)</option>
-                            <option value="openai" {{ ($intakeAiVisionProvider ?? '') === 'openai' ? 'selected' : '' }}>OpenAI</option>
-                            <option value="sarvam" {{ ($intakeAiVisionProvider ?? '') === 'sarvam' ? 'selected' : '' }}>Sarvam</option>
+                <div>
+                    <label class="block font-medium text-gray-700 dark:text-gray-200 mb-1">Processing mode</label>
+                    <select name="intake_processing_mode" id="intake_processing_mode" class="w-full max-w-md rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-2 py-1">
+                        <option value="end_to_end" {{ ($processingMode ?? 'end_to_end') === 'end_to_end' ? 'selected' : '' }}>End-to-End</option>
+                        <option value="hybrid" {{ ($processingMode ?? '') === 'hybrid' ? 'selected' : '' }}>Hybrid</option>
+                    </select>
+                    <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                        End-to-End uses one AI provider for both file transcription and structured parsing. Hybrid lets you mix extraction (including Tesseract) and parser provider separately.
+                    </p>
+                </div>
+                @php
+                    $isEndToEnd = ($processingMode ?? 'end_to_end') === 'end_to_end';
+                @endphp
+                <div id="intake-block-end-to-end" class="space-y-2 rounded border border-transparent p-2 -m-2 {{ $isEndToEnd ? '' : 'hidden' }}">
+                    <label class="block font-medium text-gray-700 dark:text-gray-200 mb-1">Primary AI provider</label>
+                    <select name="intake_primary_ai_provider" class="intake-e2e-field w-full max-w-md rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-2 py-1" @disabled(! $isEndToEnd)>
+                        <option value="openai" {{ ($primaryAiProvider ?? 'openai') === 'openai' ? 'selected' : '' }}>OpenAI</option>
+                        <option value="sarvam" {{ ($primaryAiProvider ?? '') === 'sarvam' ? 'selected' : '' }}>Sarvam</option>
+                    </select>
+                    <p class="text-xs text-gray-500 dark:text-gray-400">
+                        The selected provider will be used for both file transcription and structured parsing.
+                    </p>
+                </div>
+                <div id="intake-block-hybrid" class="space-y-3 rounded border border-transparent p-2 -m-2 {{ $isEndToEnd ? 'hidden' : '' }}">
+                    <div>
+                        <label class="block font-medium text-gray-700 dark:text-gray-200 mb-1">File text extraction provider</label>
+                        <select name="intake_hybrid_extraction_provider" class="intake-hybrid-field w-full max-w-md rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-2 py-1" @disabled($isEndToEnd)>
+                            <option value="sarvam" {{ ($hybridExtractionProvider ?? '') === 'sarvam' ? 'selected' : '' }}>Sarvam</option>
+                            <option value="openai" {{ ($hybridExtractionProvider ?? 'openai') === 'openai' ? 'selected' : '' }}>OpenAI</option>
+                            <option value="tesseract" {{ ($hybridExtractionProvider ?? '') === 'tesseract' ? 'selected' : '' }}>Tesseract</option>
                         </select>
-                        <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                            Used only when <strong>Active parser</strong> is <strong>AI Vision Extract</strong>. This chooses which service transcribes the biodata file (separate from parser mode). Empty = use <code class="text-xs bg-gray-200 dark:bg-gray-600 px-1 rounded">INTAKE_AI_VISION_PROVIDER</code> / config.
-                        </p>
                     </div>
                     <div>
-                        <label class="block font-medium text-gray-700 dark:text-gray-200 mb-1">Active parser</label>
-                        @php
-                            // Normalize legacy values (e.g. ai_v1) for display purposes.
-                            $normalizedActiveParser = str_replace(' ', '_', strtolower($activeParser));
-                            if ($normalizedActiveParser === 'ai_v1') {
-                                $normalizedActiveParser = 'ai_first_v1';
-                            }
-                        @endphp
-                        <select name="intake_active_parser" class="w-full rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-2 py-1">
-                            <option value="rules_only" {{ $normalizedActiveParser === 'rules_only' ? 'selected' : '' }}>Rules only</option>
-                            <option value="ai_first_v1" {{ $normalizedActiveParser === 'ai_first_v1' ? 'selected' : '' }}>AI first (SSOT)</option>
-                            <option value="ai_first_v2" {{ $normalizedActiveParser === 'ai_first_v2' ? 'selected' : '' }}>AI first (SSOT v2)</option>
-                            <option value="ai_vision_extract_v1" {{ $normalizedActiveParser === 'ai_vision_extract_v1' ? 'selected' : '' }}>AI Vision Extract (Direct File → AI → parsed_json)</option>
-                            <option value="hybrid_v1" {{ $normalizedActiveParser === 'hybrid_v1' ? 'selected' : '' }}>Hybrid (rules + AI)</option>
+                        <label class="block font-medium text-gray-700 dark:text-gray-200 mb-1">Structured parser provider</label>
+                        <select name="intake_hybrid_parser_provider" class="intake-hybrid-field w-full max-w-md rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-2 py-1" @disabled($isEndToEnd)>
+                            <option value="sarvam" {{ ($hybridParserProvider ?? '') === 'sarvam' ? 'selected' : '' }}>Sarvam</option>
+                            <option value="openai" {{ ($hybridParserProvider ?? 'openai') === 'openai' ? 'selected' : '' }}>OpenAI</option>
                         </select>
                     </div>
                     <div>
-                        <label class="block font-medium text-gray-700 dark:text-gray-200 mb-1">OCR provider</label>
-                        <select name="intake_ocr_provider" class="w-full rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-2 py-1">
-                            <option value="tesseract" {{ $ocrProvider === 'tesseract' ? 'selected' : '' }}>Local Tesseract</option>
-                            <option value="cloud_vision" {{ $ocrProvider === 'cloud_vision' ? 'selected' : '' }}>Cloud OCR (future)</option>
-                            <option value="off" {{ $ocrProvider === 'off' ? 'selected' : '' }}>Off (text only)</option>
+                        <label class="block font-medium text-gray-700 dark:text-gray-200 mb-1">OCR fallback</label>
+                        <select name="intake_hybrid_ocr_fallback" class="intake-hybrid-field w-full max-w-md rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-2 py-1" @disabled($isEndToEnd)>
+                            <option value="tesseract" {{ ($hybridOcrFallback ?? 'tesseract') === 'tesseract' ? 'selected' : '' }}>Tesseract</option>
+                            <option value="off" {{ ($hybridOcrFallback ?? '') === 'off' ? 'selected' : '' }}>Off</option>
                         </select>
+                        <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">Used when extraction is not Sarvam/OpenAI (e.g. Tesseract path).</p>
                     </div>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                         <label class="block font-medium text-gray-700 dark:text-gray-200 mb-1">OCR language hint</label>
                         <select name="intake_ocr_language_hint" class="w-full rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-2 py-1">
@@ -158,15 +170,33 @@
                             <option value="mixed" {{ $ocrLanguageHint === 'mixed' ? 'selected' : '' }}>Marathi + English</option>
                         </select>
                     </div>
-                </div>
-                <div>
-                    <label class="block font-medium text-gray-700 dark:text-gray-200 mb-1">Parse retry limit</label>
-                    <input type="number" name="intake_parse_retry_limit" min="0" max="5" value="{{ $parseRetryLimit }}" class="w-24 rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-2 py-1">
-                    <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                        Maximum number of times the system will retry parsing after an error. 0 = no retries.
-                    </p>
+                    <div>
+                        <label class="block font-medium text-gray-700 dark:text-gray-200 mb-1">Parse retry limit</label>
+                        <input type="number" name="intake_parse_retry_limit" min="0" max="5" value="{{ $parseRetryLimit }}" class="w-24 rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-2 py-1">
+                        <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                            Maximum number of times the system will retry parsing after an error. 0 = no retries.
+                        </p>
+                    </div>
                 </div>
             </div>
+            <script>
+                (function () {
+                    var modeSel = document.getElementById('intake_processing_mode');
+                    var blockE2e = document.getElementById('intake-block-end-to-end');
+                    var blockHyb = document.getElementById('intake-block-hybrid');
+                    if (!modeSel || !blockE2e || !blockHyb) return;
+                    function sync() {
+                        var m = modeSel.value;
+                        var e2e = m === 'end_to_end';
+                        blockE2e.classList.toggle('hidden', !e2e);
+                        blockHyb.classList.toggle('hidden', e2e);
+                        blockE2e.querySelectorAll('.intake-e2e-field').forEach(function (el) { el.disabled = !e2e; });
+                        blockHyb.querySelectorAll('.intake-hybrid-field').forEach(function (el) { el.disabled = e2e; });
+                    }
+                    modeSel.addEventListener('change', sync);
+                    sync();
+                })();
+            </script>
         </div>
 
         <div class="p-4 bg-gray-50 dark:bg-gray-700/30 rounded-lg border border-gray-200 dark:border-gray-600 space-y-3">

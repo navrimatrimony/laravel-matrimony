@@ -1,0 +1,25 @@
+<?php
+
+return [
+    'saved_self_numbers' => 'तुमचे सेव्ह केलेले नंबर (सत्यापन व प्राथमिक)',
+    'badge_primary' => 'प्राथमिक',
+    'badge_additional_self' => 'अतिरिक्त (स्वतः)',
+    'badge_verified' => 'सत्यापित',
+    'badge_not_verified' => 'सत्यापित नाही',
+    'send_code' => 'कोड पाठवा',
+    'otp_placeholder' => '६ अंकी कोड',
+    'verify' => 'सत्यापित करा',
+    'make_primary' => 'प्राथमिक करा',
+    'verify_before_primary' => 'आधी सत्यापित करा, नंतर प्राथमिक करू शकता.',
+    'otp_sent' => 'डीबग मोड असल्यास कोड लॉगमध्ये दिसेल. खाली भरा.',
+    'otp_invalid' => 'चुकीचा किंवा कालबाह्य कोड.',
+    'verified_ok' => 'नंबर सत्यापित झाला.',
+    'promoted_ok' => 'प्राथमिक संपर्क अपडेट झाला.',
+    'unauthorized_profile' => 'हे प्रोफाइल बदलता येत नाही.',
+    'self_relation_missing' => 'संपर्क कॉन्फिगरेशन चूक.',
+    'contact_not_found' => 'संपर्क सापडला नाही.',
+    'only_self' => 'फक्त स्वतःचे नंबर इथे सत्यापित करता येतात.',
+    'only_self_primary' => 'फक्त सत्यापित स्वतःचा नंबर प्राथमिक होऊ शकतो.',
+    'must_verify_first' => 'प्राथमिक करण्यापूर्वी सत्यापन आवश्यक.',
+    'contacts_unavailable' => 'संपर्क उपलब्ध नाहीत.',
+];

@@ -23,6 +23,9 @@ class AiVisionPromptContractTest extends TestCase
         // 3) ignore photos / non-text visuals
         $this->assertStringContainsString('ignore all non-text visual elements', $text);
         $this->assertStringContainsString('photos', $text);
+        $this->assertStringContainsString('marriage-bureau', $text);
+        $this->assertStringContainsString('suchak', $text);
+        $this->assertStringContainsString('deity', $text);
 
         // 4) no markdown / no base64
         $this->assertStringContainsString('no markdown', $text);

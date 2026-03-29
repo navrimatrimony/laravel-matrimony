@@ -4,12 +4,14 @@ namespace App\Jobs;
 
 use App\Models\AdminSetting;
 use App\Models\BiodataIntake;
-use App\Services\IntakeManualOcrPreparedService;
 use App\Services\AiVisionExtractionService;
+use App\Services\IntakeManualOcrPreparedService;
 use App\Services\Ocr\OcrQualityEvaluator;
 use App\Services\OcrService;
+use App\Services\Parsing\IntakeParsedJsonUtf8Sanitizer;
 use App\Services\Parsing\IntakeParsedSnapshotSkeleton;
 use App\Services\Parsing\ParserStrategyResolver;
+use App\Services\Parsing\ProviderResolver;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -39,8 +41,7 @@ class ParseIntakeJob implements ShouldQueue
     public function __construct(
         public int $intakeId,
         public bool $forceRecompute = false
-    ) {
-    }
+    ) {}
 
     /**
      * Execute: parse via BiodataParserService, store SSOT-compliant parsed_json only.
@@ -63,6 +64,7 @@ class ParseIntakeJob implements ShouldQueue
         // Do not reparse approved/locked intakes.
         if ($intake->approved_by_user || $intake->intake_locked) {
             Log::info('ParseIntakeJob::handle() early return: approved or locked', ['intake_id' => $this->intakeId]);
+
             return;
         }
 
@@ -71,6 +73,7 @@ class ParseIntakeJob implements ShouldQueue
                 'intake_id' => $this->intakeId,
                 'parse_status' => $intake->parse_status,
             ]);
+
             return;
         }
 
@@ -85,7 +88,7 @@ class ParseIntakeJob implements ShouldQueue
         // Bypass when manual crop exists (parse input is not the same as upload-time content_hash).
         // Also bypass when stored upload-time OCR text is blank (we may re-run OCR at parse-time).
         $canonicalVersion = $resolver->normalizeMode($intake->parser_version ?: $mode);
-        if (!$this->forceRecompute && !$manualPreparedExists && !$storedOcrBlank && $intake->content_hash && $canonicalVersion) {
+        if (! $this->forceRecompute && ! $manualPreparedExists && ! $storedOcrBlank && $intake->content_hash && $canonicalVersion) {
             $cached = BiodataIntake::where('id', '!=', $intake->id)
                 ->where('content_hash', $intake->content_hash)
                 ->where('parser_version', $canonicalVersion)
@@ -93,6 +96,14 @@ class ParseIntakeJob implements ShouldQueue
                 ->first();
             if ($cached && ! empty($cached->parsed_json)) {
                 $ensured = app(IntakeParsedSnapshotSkeleton::class)->ensure((array) $cached->parsed_json);
+                $utf8Stats = [];
+                $ensured = IntakeParsedJsonUtf8Sanitizer::sanitize($ensured, $utf8Stats);
+                if (($utf8Stats['strings_fixed'] ?? 0) > 0) {
+                    Log::warning('ParseIntakeJob: repaired malformed UTF-8 in cached parsed_json before save', [
+                        'intake_id' => $intake->id,
+                        'strings_fixed' => $utf8Stats['strings_fixed'],
+                    ]);
+                }
                 $intake->update([
                     'parsed_json' => $ensured,
                     'parse_status' => 'parsed',
@@ -118,7 +129,9 @@ class ParseIntakeJob implements ShouldQueue
         $raw = '';
         $parseInputDebug = null;
 
-        if ($mode === ParserStrategyResolver::MODE_AI_VISION_EXTRACT_V1) {
+        $useAiVisionExtraction = app(ProviderResolver::class)->parseJobUsesAiVisionExtraction();
+
+        if ($useAiVisionExtraction) {
             $ai = app(AiVisionExtractionService::class);
             $aiRes = $ai->extractTextForIntake($intake);
             $raw = (string) ($aiRes['text'] ?? '');
@@ -218,14 +231,14 @@ class ParseIntakeJob implements ShouldQueue
 
         Cache::put('intake.parse_ocr_quality.'.$intake->id, $ocrQuality, now()->addDays(7));
 
-        if ($mode === ParserStrategyResolver::MODE_AI_VISION_EXTRACT_V1) {
+        if ($useAiVisionExtraction) {
             // parse_input_debug / parse_input_text cached immediately after non-empty AI extraction (before quality gate).
         } elseif (is_array($resolved['ocr_debug'] ?? null)) {
             Cache::put('intake.parse_ocr_debug.'.$intake->id, $resolved['ocr_debug'], now()->addDays(7));
         }
 
         if (config('app.debug')) {
-            if ($mode === ParserStrategyResolver::MODE_AI_VISION_EXTRACT_V1 && is_array($parseInputDebug)) {
+            if ($useAiVisionExtraction && is_array($parseInputDebug)) {
                 Log::info('ParseIntakeJob: parse input source (ai vision)', array_merge($parseInputDebug, [
                     'ocr_quality' => $ocrQuality,
                 ]));
@@ -277,6 +290,15 @@ class ParseIntakeJob implements ShouldQueue
 
         // At this point parsers are already required to return SSOT-compatible shape.
         $ssot = app(IntakeParsedSnapshotSkeleton::class)->ensure($parsed);
+        // JSON column encoding fails on invalid UTF-8 (OCR/AI); scrub strings only — keep structure.
+        $utf8Stats = [];
+        $ssot = IntakeParsedJsonUtf8Sanitizer::sanitize($ssot, $utf8Stats);
+        if (($utf8Stats['strings_fixed'] ?? 0) > 0) {
+            Log::warning('ParseIntakeJob: repaired malformed UTF-8 in parsed_json before save', [
+                'intake_id' => $intake->id,
+                'strings_fixed' => $utf8Stats['strings_fixed'],
+            ]);
+        }
 
         $intake->update([
             'parsed_json' => $ssot,
@@ -299,6 +321,4 @@ class ParseIntakeJob implements ShouldQueue
             'duration_ms' => $durationMs,
         ]);
     }
-
 }
-

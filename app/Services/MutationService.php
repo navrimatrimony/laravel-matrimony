@@ -683,7 +683,7 @@ class MutationService
                 }
 
                 if (! $profileCreatedInThisTransaction) {
-                    $mergeSuggestions = $this->partitionIntakeSnapshotForExistingProfile($profile, $snapshot, $proposedCore);
+                    $mergeSuggestions = $this->partitionIntakeSnapshotForExistingProfile($profile, $snapshot, $proposedCore, $intakeId);
                     $this->mergePendingIntakeSuggestionsIntoProfile($profile, $mergeSuggestions);
                     $proposedExtended = $snapshot['extended'] ?? [];
                 }
@@ -1019,7 +1019,9 @@ class MutationService
         $existing = DB::table('profile_contacts')->where('profile_id', $profile->id)->get();
         $existingPrimary = $existing->firstWhere('is_primary', true);
 
-        // 1) If more than one proposed contact has is_primary = true, keep only the first as primary, others false.
+        // 1) Dedupe → self primary must be verified → then at most one is_primary=true in the whole list (legacy).
+        $proposed = $this->dedupeProposedProfileContactsByPhoneAndRelation($proposed);
+        $proposed = $this->applyVerifiedOnlyPrimaryRulesToProposedContacts($existing, $proposed);
         $primarySeen = false;
         $proposed = array_map(function ($c) use (&$primarySeen) {
             if (! is_array($c)) {
@@ -2372,6 +2374,309 @@ class MutationService
     }
 
     /**
+     * Wizard / manual snapshot: skip duplicate rows with same 10-digit phone + relation (intake merge already dedupes separately).
+     *
+     * @param  array<int, mixed>  $proposed
+     * @return array<int, mixed>
+     */
+    private function dedupeProposedProfileContactsByPhoneAndRelation(array $proposed): array
+    {
+        $out = [];
+        $seen = [];
+        foreach ($proposed as $row) {
+            if (! is_array($row)) {
+                $out[] = $row;
+
+                continue;
+            }
+            $digits = $this->normalizePhoneDigitsForDedupe($row['phone_number'] ?? $row['number'] ?? null);
+            if ($digits === '') {
+                $out[] = $row;
+
+                continue;
+            }
+            $relKey = 'rt:'.strtolower(trim((string) ($row['relation_type'] ?? '')));
+            if (isset($row['contact_relation_id']) && $row['contact_relation_id'] !== null && $row['contact_relation_id'] !== '') {
+                $relKey = 'rid:'.(int) $row['contact_relation_id'];
+            }
+            $key = $digits.'|'.$relKey;
+            if (isset($seen[$key])) {
+                continue;
+            }
+            $seen[$key] = true;
+            $out[] = $row;
+        }
+
+        return $out;
+    }
+
+    /**
+     * Effective verification for a proposed contact row when merging wizard snapshot with DB.
+     * New rows (no id) are unverified unless snapshot explicitly sets verified_status true.
+     *
+     * @param  \Illuminate\Support\Collection<int|string, object>  $existingById
+     */
+    private function effectiveVerifiedStatusForProposedContactRow(array $row, $existingById): bool
+    {
+        $id = isset($row['id']) ? (int) $row['id'] : null;
+        $dbRow = $id !== null ? $existingById->get($id) : null;
+        if ($dbRow !== null) {
+            $dbVerified = ! empty($dbRow->verified_status);
+            if (! array_key_exists('verified_status', $row)) {
+                return $dbVerified;
+            }
+
+            return $dbVerified || ! empty($row['verified_status']);
+        }
+
+        return ! empty($row['verified_status']);
+    }
+
+    /**
+     * @param  \Illuminate\Support\Collection<int|string, object>  $existingById
+     * @return array{0: bool, 1: bool} [isSelf, verifiedEffective]
+     */
+    private function proposedContactRowSelfAndVerified(array $row, $existingById, int $selfRelationId, bool $enforceVerified): array
+    {
+        $mapped = $this->mapSnapshotRowToTable('profile_contacts', $row);
+        $isSelf = (int) ($mapped['contact_relation_id'] ?? 0) === $selfRelationId;
+        if (! $enforceVerified) {
+            return [$isSelf, true];
+        }
+        $verified = $this->effectiveVerifiedStatusForProposedContactRow($row, $existingById);
+
+        return [$isSelf, $verified];
+    }
+
+    /**
+     * Self contacts: never assign is_primary when verified_status is false (wizard / manual snapshot).
+     * If no verified self is marked primary after sanitization, keep the current verified primary when that row
+     * still appears in the proposal (by id or normalized phone). Unverified primaries are not preserved.
+     *
+     * @param  \Illuminate\Support\Collection<int, object>  $existing
+     * @param  array<int, mixed>  $proposed
+     * @return array<int, mixed>
+     */
+    private function applyVerifiedOnlyPrimaryRulesToProposedContacts($existing, array $proposed): array
+    {
+        if (! Schema::hasTable('profile_contacts')) {
+            return $proposed;
+        }
+        $selfRelationId = $this->resolveSelfContactRelationId();
+        if ($selfRelationId === null) {
+            return $proposed;
+        }
+        $enforceVerified = Schema::hasColumn('profile_contacts', 'verified_status');
+        $existingById = $existing->keyBy('id');
+
+        foreach ($proposed as &$c) {
+            if (! is_array($c)) {
+                continue;
+            }
+            [$isSelf, $verified] = $this->proposedContactRowSelfAndVerified($c, $existingById, $selfRelationId, $enforceVerified);
+            if ($isSelf && $enforceVerified && ! $verified && ! empty($c['is_primary'])) {
+                $c['is_primary'] = false;
+            }
+        }
+        unset($c);
+
+        $primarySeen = false;
+        foreach ($proposed as &$c) {
+            if (! is_array($c) || empty($c['is_primary'])) {
+                continue;
+            }
+            [$isSelf, $verified] = $this->proposedContactRowSelfAndVerified($c, $existingById, $selfRelationId, $enforceVerified);
+            if (! $isSelf) {
+                continue;
+            }
+            if ($enforceVerified && ! $verified) {
+                $c['is_primary'] = false;
+
+                continue;
+            }
+            if ($primarySeen) {
+                $c['is_primary'] = false;
+
+                continue;
+            }
+            $primarySeen = true;
+        }
+        unset($c);
+
+        if ($enforceVerified && ! $primarySeen) {
+            $existingPrimary = $existing->firstWhere('is_primary', true);
+            if ($existingPrimary
+                && (int) ($existingPrimary->contact_relation_id ?? 0) === $selfRelationId
+                && ! empty($existingPrimary->verified_status)) {
+                $epId = (int) $existingPrimary->id;
+                $epDigits = $this->normalizePhoneDigitsForDedupe($existingPrimary->phone_number ?? null);
+                $matched = false;
+                foreach ($proposed as &$c) {
+                    if (! is_array($c)) {
+                        continue;
+                    }
+                    if (isset($c['id']) && (int) $c['id'] === $epId) {
+                        $c['is_primary'] = true;
+                        $matched = true;
+                        break;
+                    }
+                }
+                unset($c);
+                if (! $matched && $epDigits !== '') {
+                    foreach ($proposed as &$c) {
+                        if (! is_array($c)) {
+                            continue;
+                        }
+                        $mapped = $this->mapSnapshotRowToTable('profile_contacts', $c);
+                        if ((int) ($mapped['contact_relation_id'] ?? 0) !== $selfRelationId) {
+                            continue;
+                        }
+                        $pd = $this->normalizePhoneDigitsForDedupe($c['phone_number'] ?? $c['number'] ?? null);
+                        if ($pd === $epDigits) {
+                            $c['is_primary'] = true;
+                            break;
+                        }
+                    }
+                    unset($c);
+                }
+            }
+        }
+
+        return $proposed;
+    }
+
+    private function resolveSelfContactRelationId(): ?int
+    {
+        if (! Schema::hasTable('master_contact_relations')) {
+            return null;
+        }
+        $id = DB::table('master_contact_relations')->where('key', 'self')->value('id');
+
+        return $id !== null ? (int) $id : null;
+    }
+
+    private function assertActingUserOwnsProfile(MatrimonyProfile $profile, int $actingUserId): void
+    {
+        if ((int) $profile->user_id !== (int) $actingUserId) {
+            throw ValidationException::withMessages([
+                'profile' => [__('contact_verify.unauthorized_profile')],
+            ]);
+        }
+    }
+
+    /**
+     * Mark a profile_contacts row as verified (self numbers only). Used after OTP check in controller.
+     */
+    public function markSelfContactVerified(MatrimonyProfile $profile, int $contactId, int $actingUserId): void
+    {
+        $this->assertActingUserOwnsProfile($profile, $actingUserId);
+        if (! Schema::hasTable('profile_contacts') || ! Schema::hasColumn('profile_contacts', 'verified_status')) {
+            return;
+        }
+        $selfId = $this->resolveSelfContactRelationId();
+        if ($selfId === null) {
+            throw ValidationException::withMessages([
+                'contact' => [__('contact_verify.self_relation_missing')],
+            ]);
+        }
+        $row = DB::table('profile_contacts')->where('id', $contactId)->where('profile_id', $profile->id)->first();
+        if (! $row) {
+            throw ValidationException::withMessages([
+                'contact' => [__('contact_verify.contact_not_found')],
+            ]);
+        }
+        if ((int) ($row->contact_relation_id ?? 0) !== $selfId) {
+            throw ValidationException::withMessages([
+                'contact' => [__('contact_verify.only_self')],
+            ]);
+        }
+        if (! empty($row->verified_status)) {
+            return;
+        }
+        $prevSource = $this->historySourceContext;
+        $prevBy = $this->historyChangedByContext;
+        $this->historySourceContext = 'manual';
+        $this->historyChangedByContext = $actingUserId;
+        try {
+            DB::table('profile_contacts')->where('id', $contactId)->update([
+                'verified_status' => true,
+                'updated_at' => now(),
+            ]);
+            $this->writeProfileChangeHistory($profile->id, 'profile_contacts', $contactId, 'verified_status', '0', '1');
+        } finally {
+            $this->historySourceContext = $prevSource;
+            $this->historyChangedByContext = $prevBy;
+        }
+    }
+
+    /**
+     * Demote any other primary self row and set this row primary. Requires verified_status when column exists.
+     */
+    public function promoteVerifiedSelfContactToPrimary(MatrimonyProfile $profile, int $contactId, int $actingUserId): void
+    {
+        $this->assertActingUserOwnsProfile($profile, $actingUserId);
+        if (! Schema::hasTable('profile_contacts')) {
+            throw ValidationException::withMessages([
+                'contact' => [__('contact_verify.contacts_unavailable')],
+            ]);
+        }
+        $selfId = $this->resolveSelfContactRelationId();
+        if ($selfId === null) {
+            throw ValidationException::withMessages([
+                'contact' => [__('contact_verify.self_relation_missing')],
+            ]);
+        }
+        $row = DB::table('profile_contacts')->where('id', $contactId)->where('profile_id', $profile->id)->first();
+        if (! $row) {
+            throw ValidationException::withMessages([
+                'contact' => [__('contact_verify.contact_not_found')],
+            ]);
+        }
+        if ((int) ($row->contact_relation_id ?? 0) !== $selfId) {
+            throw ValidationException::withMessages([
+                'contact' => [__('contact_verify.only_self_primary')],
+            ]);
+        }
+        if (Schema::hasColumn('profile_contacts', 'verified_status') && empty($row->verified_status)) {
+            throw ValidationException::withMessages([
+                'contact' => [__('contact_verify.must_verify_first')],
+            ]);
+        }
+        if (! empty($row->is_primary)) {
+            return;
+        }
+
+        $prevSource = $this->historySourceContext;
+        $prevBy = $this->historyChangedByContext;
+        $this->historySourceContext = 'manual';
+        $this->historyChangedByContext = $actingUserId;
+        try {
+            DB::transaction(function () use ($profile, $contactId): void {
+                $others = DB::table('profile_contacts')
+                    ->where('profile_id', $profile->id)
+                    ->where('id', '!=', $contactId)
+                    ->where('is_primary', true)
+                    ->get();
+                foreach ($others as $er) {
+                    DB::table('profile_contacts')->where('id', $er->id)->update([
+                        'is_primary' => false,
+                        'updated_at' => now(),
+                    ]);
+                    $this->writeProfileChangeHistory($profile->id, 'profile_contacts', (int) $er->id, 'is_primary', '1', '0');
+                }
+                DB::table('profile_contacts')->where('id', $contactId)->update([
+                    'is_primary' => true,
+                    'updated_at' => now(),
+                ]);
+                $this->writeProfileChangeHistory($profile->id, 'profile_contacts', $contactId, 'is_primary', '0', '1');
+            });
+        } finally {
+            $this->historySourceContext = $prevSource;
+            $this->historyChangedByContext = $prevBy;
+        }
+    }
+
+    /**
      * Keys allowed when user explicitly applies a single core value from pending intake suggestions.
      *
      * @return list<string>
@@ -2382,32 +2687,81 @@ class MutationService
     }
 
     /**
-     * Intake apply: strip snapshot/proposed core values that would replace non-empty profile data.
-     * Stores stripped payloads in profile.pending_intake_suggestions_json for optional "Apply" in UI.
+     * Core keys handled by contact / overflow intake paths — do not field-partition (avoid duplicating suggestion vs syncContactsFromIntakeApply).
+     *
+     * @var list<string>
+     */
+    private const INTAKE_CORE_KEYS_EXCLUDED_FROM_FIELD_SUGGESTION_PARTITION = [
+        'primary_contact_number', 'primary_contact_number_2', 'primary_contact_number_3',
+        'primary_contact_whatsapp', 'primary_contact_whatsapp_2', 'primary_contact_whatsapp_3',
+        'father_contact_2', 'father_contact_3', 'mother_contact_2', 'mother_contact_3',
+    ];
+
+    /**
+     * Intake apply: per-field merge for existing profiles — empty profile + intake value applies;
+     * same value → noop; different non-empty → pending suggestion (core + core_field_suggestions), never silent overwrite.
+     * Contact-specific keys are excluded here; see syncContactsFromIntakeApply.
      *
      * @param  array<string, mixed>  $snapshot  Working intake snapshot (modified in place).
      * @param  array<string, mixed>  $proposedCore  Core subset used by apply pipeline (modified in place).
      * @return array<string, mixed>
      */
-    private function partitionIntakeSnapshotForExistingProfile(MatrimonyProfile $profile, array &$snapshot, array &$proposedCore): array
+    private function partitionIntakeSnapshotForExistingProfile(MatrimonyProfile $profile, array &$snapshot, array &$proposedCore, ?int $sourceIntakeId = null): array
     {
         $profile->loadMissing('user');
 
         $suggestions = [
             'core' => [],
+            'core_field_suggestions' => [],
             'extended' => [],
             'entities' => [],
         ];
+
+        // Normalize text→*_id etc. so equality checks match what apply will use (e.g. religion string vs religion_id).
+        $normalizedProposedCore = $this->normalizeIntakeCoreForApply($proposedCore);
 
         foreach (array_keys($proposedCore) as $fieldKey) {
             if (! array_key_exists($fieldKey, $proposedCore)) {
                 continue;
             }
+            if (in_array($fieldKey, self::INTAKE_CORE_KEYS_EXCLUDED_FROM_FIELD_SUGGESTION_PARTITION, true)) {
+                continue;
+            }
+
+            $proposedRaw = $proposedCore[$fieldKey];
+            $proposedNorm = $normalizedProposedCore[$fieldKey] ?? $proposedRaw;
+
+            if ($this->isEmptyIntakeProposedValue($fieldKey, $proposedRaw)) {
+                unset($proposedCore[$fieldKey]);
+                if (isset($snapshot['core']) && is_array($snapshot['core'])) {
+                    unset($snapshot['core'][$fieldKey]);
+                }
+
+                continue;
+            }
+
             $current = $this->getCurrentCoreValue($profile, $fieldKey);
+
             if ($this->isEmptyExistingValueForIntakeMerge($fieldKey, $current)) {
                 continue;
             }
-            $suggestions['core'][$fieldKey] = $proposedCore[$fieldKey];
+
+            if ($this->valuesEqualForIntakeFieldMerge($fieldKey, $current, $proposedNorm)) {
+                unset($proposedCore[$fieldKey]);
+                if (isset($snapshot['core']) && is_array($snapshot['core'])) {
+                    unset($snapshot['core'][$fieldKey]);
+                }
+
+                continue;
+            }
+
+            $suggestions['core'][$fieldKey] = $proposedNorm;
+            $suggestions['core_field_suggestions'][] = [
+                'field' => $fieldKey,
+                'old_value' => $this->scalarToIntakeSuggestionString($current),
+                'new_value' => $this->scalarToIntakeSuggestionString($proposedNorm),
+                'source_intake_id' => $sourceIntakeId,
+            ];
             unset($proposedCore[$fieldKey]);
             if (isset($snapshot['core']) && is_array($snapshot['core'])) {
                 unset($snapshot['core'][$fieldKey]);
@@ -2531,6 +2885,9 @@ class MutationService
                 $out[$k] = $b[$k];
             }
         }
+        if (! empty($b['core_field_suggestions']) && is_array($b['core_field_suggestions'])) {
+            $out['core_field_suggestions'] = array_values(array_merge($out['core_field_suggestions'] ?? [], $b['core_field_suggestions']));
+        }
 
         return $this->pruneEmptySuggestionBuckets($out);
     }
@@ -2630,5 +2987,71 @@ class MutationService
         }
 
         return false;
+    }
+
+    private function isEmptyIntakeProposedValue(string $fieldKey, mixed $v): bool
+    {
+        if ($v === null || $v === '') {
+            return true;
+        }
+        if (is_string($v) && trim($v) === '') {
+            return true;
+        }
+        if (str_ends_with($fieldKey, '_id') && (string) $v !== '' && is_numeric($v) && (int) $v === 0) {
+            return true;
+        }
+
+        return false;
+    }
+
+    /**
+     * Deterministic equality for “same as profile” (Case C noop) after intake normalization.
+     */
+    private function valuesEqualForIntakeFieldMerge(string $fieldKey, mixed $current, mixed $proposed): bool
+    {
+        if ($current instanceof \DateTimeInterface) {
+            $current = $current->format('Y-m-d');
+        }
+        if ($proposed instanceof \DateTimeInterface) {
+            $proposed = $proposed->format('Y-m-d');
+        }
+        if (str_ends_with($fieldKey, '_id')) {
+            return (int) ($current ?? 0) === (int) ($proposed ?? 0);
+        }
+        if (in_array($fieldKey, ['annual_income', 'family_income', 'height_cm'], true)) {
+            if ($current === null && $proposed === null) {
+                return true;
+            }
+            if (! is_numeric($current) || ! is_numeric($proposed)) {
+                return trim((string) ($current ?? '')) === trim((string) ($proposed ?? ''));
+            }
+
+            return round((float) $current, 4) === round((float) $proposed, 4);
+        }
+        if (in_array($fieldKey, ['has_children', 'has_siblings'], true)) {
+            return (int) ($current ?? -1) === (int) ($proposed ?? -1);
+        }
+
+        return trim((string) ($current ?? '')) === trim((string) ($proposed ?? ''));
+    }
+
+    private function scalarToIntakeSuggestionString(mixed $v): string
+    {
+        if ($v === null) {
+            return '';
+        }
+        if ($v instanceof \DateTimeInterface) {
+            return $v->format('Y-m-d');
+        }
+        if (is_array($v)) {
+            $enc = json_encode($v, JSON_UNESCAPED_UNICODE);
+
+            return is_string($enc) ? $enc : '';
+        }
+        if (is_bool($v)) {
+            return $v ? '1' : '0';
+        }
+
+        return trim((string) $v);
     }
 }

@@ -58,6 +58,11 @@ class IntakeMergePreservesFilledFieldsTest extends TestCase
         $this->assertIsArray($pending);
         $this->assertArrayHasKey('core', $pending);
         $this->assertSame('Intake Parsed Name', $pending['core']['full_name'] ?? null);
+        $this->assertIsArray($pending['core_field_suggestions'] ?? null);
+        $diff = collect($pending['core_field_suggestions'])->firstWhere('field', 'full_name');
+        $this->assertNotNull($diff);
+        $this->assertStringContainsString('Profile Original Name', (string) ($diff['old_value'] ?? ''));
+        $this->assertSame('Intake Parsed Name', $diff['new_value'] ?? null);
 
         $intake->refresh();
         $this->assertTrue((bool) $intake->intake_locked);

@@ -5,10 +5,10 @@ namespace App\Http\Controllers;
 use App\Jobs\ParseIntakeJob;
 use App\Models\AdminSetting;
 use App\Models\BiodataIntake;
+use App\Services\AiVisionExtractionService;
 use App\Services\IntakeApprovalService;
 use App\Services\IntakeManualOcrPreparedService;
 use App\Services\MutationService;
-use App\Services\AiVisionExtractionService;
 use App\Services\OcrService;
 use App\Services\Parsing\ParserStrategyResolver;
 use App\Services\Preview\PreviewSectionMapper;
@@ -3083,11 +3083,79 @@ class IntakeController extends Controller
         if ($pending[$scope] === []) {
             unset($pending[$scope]);
         }
+        if ($scope === 'core' && is_array($pending['core_field_suggestions'] ?? null)) {
+            $pending['core_field_suggestions'] = array_values(array_filter(
+                $pending['core_field_suggestions'],
+                static fn ($row) => ! is_array($row) || ($row['field'] ?? '') !== $key
+            ));
+            if ($pending['core_field_suggestions'] === []) {
+                unset($pending['core_field_suggestions']);
+            }
+        }
         $profile->pending_intake_suggestions_json = $pending === [] ? null : $pending;
         $profile->save();
 
         return redirect()
             ->route('intake.status', $intake)
-            ->with('success', __('intake.apply_suggestion_ok', ['field' => $key]));
+            ->with('success', __('intake.suggestion_approved_success'));
+    }
+
+    /**
+     * Discard one pending suggestion without mutating profile biodata.
+     */
+    public function rejectPendingIntakeSuggestion(Request $request, BiodataIntake $intake)
+    {
+        if ((int) $intake->uploaded_by !== (int) auth()->id()) {
+            abort(403, __('intake.only_view_status_own'));
+        }
+
+        $validated = $request->validate([
+            'scope' => ['required', 'in:core,extended'],
+            'field_key' => ['required', 'string', 'max:160'],
+        ]);
+
+        $user = auth()->user();
+        $profile = $user->matrimonyProfile;
+        if (! $profile) {
+            return redirect()
+                ->route('intake.status', $intake)
+                ->with('error', __('intake.apply_suggestion_no_profile'));
+        }
+
+        $pending = $profile->pending_intake_suggestions_json;
+        if (! is_array($pending)) {
+            return redirect()
+                ->route('intake.status', $intake)
+                ->with('error', __('intake.apply_suggestion_none'));
+        }
+
+        $scope = $validated['scope'];
+        $key = $validated['field_key'];
+        $bucket = $pending[$scope] ?? null;
+        if (! is_array($bucket) || ! array_key_exists($key, $bucket)) {
+            return redirect()
+                ->route('intake.status', $intake)
+                ->with('error', __('intake.apply_suggestion_missing'));
+        }
+
+        unset($pending[$scope][$key]);
+        if ($pending[$scope] === []) {
+            unset($pending[$scope]);
+        }
+        if ($scope === 'core' && is_array($pending['core_field_suggestions'] ?? null)) {
+            $pending['core_field_suggestions'] = array_values(array_filter(
+                $pending['core_field_suggestions'],
+                static fn ($row) => ! is_array($row) || ($row['field'] ?? '') !== $key
+            ));
+            if ($pending['core_field_suggestions'] === []) {
+                unset($pending['core_field_suggestions']);
+            }
+        }
+        $profile->pending_intake_suggestions_json = $pending === [] ? null : $pending;
+        $profile->save();
+
+        return redirect()
+            ->route('intake.status', $intake)
+            ->with('success', __('intake.suggestion_rejected_success'));
     }
 }

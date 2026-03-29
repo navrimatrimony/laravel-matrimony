@@ -1,0 +1,25 @@
+<?php
+
+return [
+    'saved_self_numbers' => 'Your saved numbers (verify & primary)',
+    'badge_primary' => 'Primary',
+    'badge_additional_self' => 'Additional (self)',
+    'badge_verified' => 'Verified',
+    'badge_not_verified' => 'Not verified',
+    'send_code' => 'Send code',
+    'otp_placeholder' => '6-digit code',
+    'verify' => 'Verify',
+    'make_primary' => 'Make primary',
+    'verify_before_primary' => 'Verify this number first, then you can make it primary.',
+    'otp_sent' => 'If debug mode is on, the verification code was logged. Enter it below.',
+    'otp_invalid' => 'Invalid or expired code.',
+    'verified_ok' => 'Number verified successfully.',
+    'promoted_ok' => 'Primary contact updated.',
+    'unauthorized_profile' => 'You cannot modify this profile.',
+    'self_relation_missing' => 'Contact configuration error (self relation).',
+    'contact_not_found' => 'That contact was not found.',
+    'only_self' => 'Only your own (self) numbers can be verified here.',
+    'only_self_primary' => 'Only a verified self number can be set as primary.',
+    'must_verify_first' => 'Verify this number before making it primary.',
+    'contacts_unavailable' => 'Contacts are not available.',
+];

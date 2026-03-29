@@ -5,9 +5,9 @@ namespace App\Services\Parsing;
 use App\Models\AdminSetting;
 use App\Models\BiodataIntake;
 use App\Services\Parsing\Contracts\BiodataParserInterface;
-use App\Services\Parsing\Parsers\RulesOnlyBiodataParser;
 use App\Services\Parsing\Parsers\AiFirstBiodataParser;
 use App\Services\Parsing\Parsers\HybridBiodataParser;
+use App\Services\Parsing\Parsers\RulesOnlyBiodataParser;
 use Illuminate\Support\Facades\Log;
 
 /**
@@ -16,14 +16,20 @@ use Illuminate\Support\Facades\Log;
  * Normalizes admin settings to canonical backend modes:
  * - rules_only
  * - ai_first_v1
- * - hybrid_v1
+ * - ai_first_v2
+ * - ai_vision_extract_v1 (end-to-end file→text→JSON; text source from AiVisionExtractionService)
+ * - hybrid_v1 (extraction + structured parser providers from intake_hybrid_* AdminSettings; see ProviderResolver)
  */
 class ParserStrategyResolver
 {
     public const MODE_RULES_ONLY = 'rules_only';
+
     public const MODE_AI_FIRST_V1 = 'ai_first_v1';
+
     public const MODE_AI_FIRST_V2 = 'ai_first_v2';
+
     public const MODE_HYBRID_V1 = 'hybrid_v1';
+
     public const MODE_AI_VISION_EXTRACT_V1 = 'ai_vision_extract_v1';
 
     /**
@@ -117,4 +123,3 @@ class ParserStrategyResolver
         };
     }
 }
-

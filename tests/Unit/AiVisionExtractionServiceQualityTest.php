@@ -32,7 +32,7 @@ class AiVisionExtractionServiceQualityTest extends TestCase
         config()->set('intake.ai_vision_extract.min_extracted_non_space', 10);
         config()->set('intake.ai_vision_extract.min_extracted_lines', 1);
         $svc = app(AiVisionExtractionService::class);
-        $q = $svc->evaluateExtractedTextQuality(str_repeat("###$$$%%% ", 30));
+        $q = $svc->evaluateExtractedTextQuality(str_repeat('###$$$%%% ', 30));
         $this->assertFalse($q['ok']);
         $this->assertSame('ai_vision_text_unusable', $q['reason']);
     }
@@ -58,5 +58,24 @@ class AiVisionExtractionServiceQualityTest extends TestCase
         $this->assertStringNotContainsString('```', $out);
         $this->assertStringContainsString('नाव: राहुल', $out);
     }
-}
 
+    public function test_sanitize_transcription_strips_markdown_data_image_payloads(): void
+    {
+        $svc = app(AiVisionExtractionService::class);
+        $b64 = str_repeat('A', 500);
+        $raw = "नाव: कु. प्रीती\n![Image](data:image/jpeg;base64,".$b64.")\nउंची: 5 फूट";
+        $out = $svc->sanitizeTranscriptionResponse($raw);
+        $this->assertStringContainsString('प्रीती', $out);
+        $this->assertStringNotContainsString('data:image/jpeg;base64', $out);
+        $this->assertStringContainsString('उंची', $out);
+    }
+
+    public function test_strip_embedded_binary_drops_long_base64ish_lines_without_devanagari(): void
+    {
+        $junk = str_repeat('ABCD', 120);
+        $raw = "परिचय पत्र\n".$junk."\nजात: मराठा";
+        $out = AiVisionExtractionService::stripEmbeddedBinaryPayloadsFromPlainText($raw);
+        $this->assertStringContainsString('मराठा', $out);
+        $this->assertStringNotContainsString('ABCDABCD', $out);
+    }
+}

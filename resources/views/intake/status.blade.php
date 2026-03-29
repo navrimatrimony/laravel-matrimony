@@ -23,9 +23,42 @@
             $pendingCore = is_array($pendingSuggestions ?? null) ? ($pendingSuggestions['core'] ?? []) : [];
             $pendingExtended = is_array($pendingSuggestions ?? null) ? ($pendingSuggestions['extended'] ?? []) : [];
             $pendingEntities = is_array($pendingSuggestions ?? null) ? ($pendingSuggestions['entities'] ?? []) : [];
+            $pendingMetaKeys = ['core', 'extended', 'entities', 'core_field_suggestions'];
             $pendingOtherKeys = is_array($pendingSuggestions ?? null)
-                ? array_keys(array_diff_key($pendingSuggestions, array_flip(['core', 'extended', 'entities'])))
+                ? array_keys(array_diff_key($pendingSuggestions, array_flip($pendingMetaKeys)))
                 : [];
+            $coreFieldRows = is_array($pendingSuggestions['core_field_suggestions'] ?? null)
+                ? $pendingSuggestions['core_field_suggestions']
+                : [];
+            $suggestionByField = [];
+            foreach ($coreFieldRows as $row) {
+                if (! is_array($row)) {
+                    continue;
+                }
+                $f = (string) ($row['field'] ?? '');
+                if ($f === '' || isset($suggestionByField[$f])) {
+                    continue;
+                }
+                $suggestionByField[$f] = $row;
+            }
+            $formatSuggestionDisplay = static function ($v): string {
+                if ($v === null) {
+                    return '';
+                }
+                if (is_bool($v)) {
+                    return $v ? '1' : '0';
+                }
+                if (is_scalar($v)) {
+                    return (string) $v;
+                }
+                if (is_array($v)) {
+                    $enc = json_encode($v, JSON_UNESCAPED_UNICODE);
+
+                    return is_string($enc) ? $enc : '';
+                }
+
+                return '';
+            };
         @endphp
 
         <div class="bg-white dark:bg-gray-800 rounded shadow p-6 border border-green-300">
@@ -39,43 +72,97 @@
 
             @if(!empty($pendingCore) || !empty($pendingExtended))
                 <div class="mt-6 rounded-lg border border-amber-200 dark:border-amber-900/50 bg-amber-50 dark:bg-amber-950/30 p-4">
-                    <h2 class="text-sm font-semibold text-amber-900 dark:text-amber-100 mb-2">{{ __('intake.pending_suggestions_title') }}</h2>
-                    <p class="text-sm text-amber-900/90 dark:text-amber-100/90 mb-3">{{ __('intake.pending_suggestions_intro') }}</p>
-                    <ul class="space-y-2 text-sm">
+                    <h2 class="text-sm font-semibold text-amber-900 dark:text-amber-100 mb-2">{{ __('intake.suggested_updates_section_title') }}</h2>
+                    <p class="text-sm text-amber-900/90 dark:text-amber-100/90 mb-3">{{ __('intake.suggested_updates_intro') }}</p>
+                    <ul class="space-y-4 text-sm">
                         @foreach($pendingCore as $fieldKey => $fieldVal)
-                            <li class="flex flex-wrap items-start gap-2 justify-between border-b border-amber-200/60 dark:border-amber-800/40 pb-2">
-                                <div class="min-w-0 flex-1">
-                                    <span class="font-medium text-gray-800 dark:text-gray-200">{{ $fieldKey }}</span>
-                                    <span class="block text-gray-600 dark:text-gray-400 break-words">{{ is_scalar($fieldVal) ? $fieldVal : json_encode($fieldVal) }}</span>
+                            @php
+                                $labelKey = 'intake.core_suggestion_field.'.$fieldKey;
+                                $fieldLabel = trans($labelKey);
+                                if ($fieldLabel === $labelKey) {
+                                    $fieldLabel = $fieldKey;
+                                }
+                                $meta = $suggestionByField[$fieldKey] ?? null;
+                                $oldRaw = is_array($meta) ? ($meta['old_value'] ?? null) : null;
+                                $newRaw = is_array($meta) ? ($meta['new_value'] ?? null) : null;
+                                $oldDisp = $formatSuggestionDisplay($oldRaw);
+                                $newDisp = $formatSuggestionDisplay($newRaw !== null ? $newRaw : $fieldVal);
+                                if ($oldDisp === '') {
+                                    $oldDisp = __('intake.suggested_updates_empty');
+                                }
+                                if ($newDisp === '') {
+                                    $newDisp = __('intake.suggested_updates_empty');
+                                }
+                                $srcId = is_array($meta) ? ($meta['source_intake_id'] ?? null) : null;
+                            @endphp
+                            <li class="border-b border-amber-200/60 dark:border-amber-800/40 pb-4 last:border-b-0 last:pb-0">
+                                <p class="font-medium text-gray-800 dark:text-gray-200">{{ $fieldLabel }}</p>
+                                <div class="mt-1 space-y-1 text-gray-600 dark:text-gray-400">
+                                    <p><span class="text-gray-500 dark:text-gray-500">{{ __('intake.suggested_updates_current') }}:</span> <span class="break-words">{{ $oldDisp }}</span></p>
+                                    <p><span class="text-gray-500 dark:text-gray-500">{{ __('intake.suggested_updates_suggested') }}:</span> <span class="break-words">{{ $newDisp }}</span></p>
                                 </div>
-                                <form method="POST" action="{{ route('intake.apply-suggestion', $intake) }}" class="shrink-0">
-                                    @csrf
-                                    <input type="hidden" name="scope" value="core">
-                                    <input type="hidden" name="field_key" value="{{ $fieldKey }}">
-                                    <button type="submit" class="px-3 py-1.5 rounded-md bg-amber-600 text-white text-xs font-semibold hover:bg-amber-700">
-                                        {{ __('intake.apply_suggestion_button') }}
-                                    </button>
-                                </form>
+                                @if($srcId)
+                                    <p class="mt-1 text-xs text-gray-500 dark:text-gray-500">{{ __('intake.suggested_updates_source_intake', ['id' => $srcId]) }}</p>
+                                @endif
+                                <div class="mt-3 flex flex-wrap gap-2">
+                                    <form method="POST" action="{{ route('intake.apply-suggestion', $intake) }}" class="inline">
+                                        @csrf
+                                        <input type="hidden" name="scope" value="core">
+                                        <input type="hidden" name="field_key" value="{{ $fieldKey }}">
+                                        <button type="submit" class="px-3 py-1.5 rounded-md bg-emerald-600 text-white text-xs font-semibold hover:bg-emerald-700">
+                                            {{ __('intake.approve_suggestion_button') }}
+                                        </button>
+                                    </form>
+                                    <form method="POST" action="{{ route('intake.reject-suggestion', $intake) }}" class="inline">
+                                        @csrf
+                                        <input type="hidden" name="scope" value="core">
+                                        <input type="hidden" name="field_key" value="{{ $fieldKey }}">
+                                        <button type="submit" class="px-3 py-1.5 rounded-md bg-gray-200 text-gray-900 text-xs font-semibold hover:bg-gray-300 dark:bg-gray-700 dark:text-gray-100 dark:hover:bg-gray-600">
+                                            {{ __('intake.reject_suggestion_button') }}
+                                        </button>
+                                    </form>
+                                </div>
                             </li>
                         @endforeach
                         @foreach($pendingExtended as $fieldKey => $fieldVal)
-                            <li class="flex flex-wrap items-start gap-2 justify-between border-b border-amber-200/60 dark:border-amber-800/40 pb-2">
-                                <div class="min-w-0 flex-1">
-                                    <span class="font-medium text-gray-800 dark:text-gray-200">{{ $fieldKey }}</span>
-                                    <span class="block text-gray-600 dark:text-gray-400 break-words">{{ is_scalar($fieldVal) ? $fieldVal : json_encode($fieldVal) }}</span>
+                            @php
+                                $extDisp = $formatSuggestionDisplay($fieldVal);
+                                if ($extDisp === '' && $fieldVal !== 0 && $fieldVal !== 0.0 && $fieldVal !== false) {
+                                    continue;
+                                }
+                                $oldDisp = __('intake.suggested_updates_empty');
+                                $newDisp = $extDisp !== '' ? $extDisp : __('intake.suggested_updates_empty');
+                            @endphp
+                            <li class="border-b border-amber-200/60 dark:border-amber-800/40 pb-4 last:border-b-0 last:pb-0">
+                                <p class="font-medium text-gray-800 dark:text-gray-200">{{ $fieldKey }}</p>
+                                <div class="mt-1 space-y-1 text-gray-600 dark:text-gray-400">
+                                    <p><span class="text-gray-500 dark:text-gray-500">{{ __('intake.suggested_updates_current') }}:</span> <span class="break-words">{{ $oldDisp }}</span></p>
+                                    <p><span class="text-gray-500 dark:text-gray-500">{{ __('intake.suggested_updates_suggested') }}:</span> <span class="break-words">{{ $newDisp }}</span></p>
                                 </div>
-                                <form method="POST" action="{{ route('intake.apply-suggestion', $intake) }}" class="shrink-0">
-                                    @csrf
-                                    <input type="hidden" name="scope" value="extended">
-                                    <input type="hidden" name="field_key" value="{{ $fieldKey }}">
-                                    <button type="submit" class="px-3 py-1.5 rounded-md bg-amber-600 text-white text-xs font-semibold hover:bg-amber-700">
-                                        {{ __('intake.apply_suggestion_button') }}
-                                    </button>
-                                </form>
+                                <div class="mt-3 flex flex-wrap gap-2">
+                                    <form method="POST" action="{{ route('intake.apply-suggestion', $intake) }}" class="inline">
+                                        @csrf
+                                        <input type="hidden" name="scope" value="extended">
+                                        <input type="hidden" name="field_key" value="{{ $fieldKey }}">
+                                        <button type="submit" class="px-3 py-1.5 rounded-md bg-emerald-600 text-white text-xs font-semibold hover:bg-emerald-700">
+                                            {{ __('intake.approve_suggestion_button') }}
+                                        </button>
+                                    </form>
+                                    <form method="POST" action="{{ route('intake.reject-suggestion', $intake) }}" class="inline">
+                                        @csrf
+                                        <input type="hidden" name="scope" value="extended">
+                                        <input type="hidden" name="field_key" value="{{ $fieldKey }}">
+                                        <button type="submit" class="px-3 py-1.5 rounded-md bg-gray-200 text-gray-900 text-xs font-semibold hover:bg-gray-300 dark:bg-gray-700 dark:text-gray-100 dark:hover:bg-gray-600">
+                                            {{ __('intake.reject_suggestion_button') }}
+                                        </button>
+                                    </form>
+                                </div>
                             </li>
                         @endforeach
                     </ul>
                 </div>
+            @else
+                <p class="mt-6 text-sm text-gray-600 dark:text-gray-400">{{ __('intake.no_pending_suggestions') }}</p>
             @endif
 
             @if(!empty($pendingEntities) || !empty($pendingOtherKeys))

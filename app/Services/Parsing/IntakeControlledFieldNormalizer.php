@@ -529,6 +529,8 @@ class IntakeControlledFieldNormalizer
         }
         if ($replacement !== null) {
             $snapshot['core']['primary_contact_number'] = $replacement;
+        } else {
+            $snapshot['core']['primary_contact_number'] = null;
         }
     }
 
@@ -630,6 +632,12 @@ class IntakeControlledFieldNormalizer
                 $phones[substr($d, -10)] = true;
             }
         };
+        $core = $snapshot['core'] ?? [];
+        if (is_array($core)) {
+            foreach (['father_contact_1', 'father_contact_2', 'father_contact_3', 'mother_contact_1', 'mother_contact_2', 'mother_contact_3'] as $ck) {
+                $add($core[$ck] ?? null);
+            }
+        }
         foreach (['relatives', 'relatives_parents_family', 'relatives_maternal_family'] as $key) {
             foreach ($snapshot[$key] ?? [] as $r) {
                 if (! is_array($r)) {
@@ -666,7 +674,9 @@ class IntakeControlledFieldNormalizer
             return;
         }
         $compressed = trim(preg_replace('/\s+/u', ' ', $raw) ?? '');
-        $trimPunct = trim($compressed, " \t.:;।,|");
+        $trimPunct = trim($compressed, " \t.:;,|");
+        $trimPunct = preg_replace('/^[।]+|[।]+$/u', '', $trimPunct) ?? $trimPunct;
+        $trimPunct = trim($trimPunct);
         $candidates = array_values(array_unique(array_filter([$raw, $compressed, $trimPunct], fn ($s) => $s !== '')));
         foreach ($candidates as $candidate) {
             $resolved = $this->controlled->resolveControlledCoreValue($textKey, $candidate);
