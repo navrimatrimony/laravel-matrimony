@@ -92,9 +92,17 @@
     </div>
 
     <div class="bg-gray-800/70 border border-gray-700 rounded-lg p-4 mb-6">
-        <h4 class="text-sm font-semibold text-gray-100 mb-2">Raw OCR text <span class="text-xs font-normal text-gray-400">(what was extracted from PDF/image)</span></h4>
-        <pre class="bg-black/40 p-3 rounded overflow-auto max-h-96 text-xs whitespace-pre-wrap text-gray-100">{{ $intake->raw_ocr_text ?? '(empty)' }}</pre>
+        <h4 class="text-sm font-semibold text-gray-100 mb-2">{{ __('intake.admin_parse_input_heading') }}</h4>
+        <p class="text-xs text-gray-400 mb-2">{{ __('intake.admin_parse_input_subtitle') }}</p>
+        <pre class="bg-black/40 p-3 rounded overflow-auto max-h-96 text-xs whitespace-pre-wrap text-gray-100">{{ $reviewParse['text'] !== '' ? $reviewParse['text'] : '(empty)' }}</pre>
     </div>
+
+    @if (config('app.debug') && config('intake.debug_show_stored_raw_ocr'))
+        <div class="bg-gray-900/80 border border-dashed border-amber-700 rounded-lg p-4 mb-6">
+            <h4 class="text-sm font-semibold text-amber-200 mb-2">{{ __('intake.debug_stored_raw_ocr_heading') }}</h4>
+            <pre class="bg-black/40 p-3 rounded overflow-auto max-h-48 text-xs whitespace-pre-wrap text-gray-200">{{ $intake->raw_ocr_text ?? '(empty)' }}</pre>
+        </div>
+    @endif
 
     <div class="bg-gray-800/70 border border-gray-700 rounded-lg p-4">
         <h4 class="text-sm font-semibold text-gray-100 mb-2">Parsed JSON</h4>

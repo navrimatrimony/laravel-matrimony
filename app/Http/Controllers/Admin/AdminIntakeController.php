@@ -7,6 +7,7 @@ use App\Jobs\ParseIntakeJob;
 use App\Models\AdminSetting;
 use App\Models\BiodataIntake;
 use App\Services\Intake\IntakeExtractionReuseResolver;
+use App\Services\Intake\IntakeReviewParseInputTextResolver;
 use App\Services\IntakeApprovalService;
 use App\Services\IntakeManualOcrPreparedService;
 use App\Services\Parsing\ParserStrategyResolver;
@@ -50,8 +51,9 @@ class AdminIntakeController extends Controller
     {
         $intake->load(['uploadedByUser:id,name,email', 'profile:id,full_name']);
         $showAdminReextractAction = app(ProviderResolver::class)->parseJobUsesAiVisionExtraction();
+        $reviewParse = app(IntakeReviewParseInputTextResolver::class)->resolve($intake);
 
-        return view('admin.intake.show', compact('intake', 'showAdminReextractAction'));
+        return view('admin.intake.show', compact('intake', 'showAdminReextractAction', 'reviewParse'));
     }
 
     /**
@@ -90,7 +92,7 @@ class AdminIntakeController extends Controller
 
     /**
      * Re-parse a single intake using the current active parser version.
-     * Respects content_hash + parser_version cache via ParseIntakeJob.
+     * ParseIntakeJob always recomputes parsed_json from this intake's extract/OCR text (no cross-intake parsed_json reuse).
      */
     public function reparse(BiodataIntake $intake)
     {

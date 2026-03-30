@@ -5993,26 +5993,24 @@ Goal: Make it extremely easy for users to upload any biodata format, while keepi
   - Existing intakes are NOT auto-reparsed unless explicitly triggered.
   - Admin can choose to re-parse individual intakes with the new version.
 
-3.2) Content hashing & AI cache
+3.2) Content hashing & parse input (implementation lock)
 -------------------------------
-- For each uploaded intake, compute a stable hash of the canonicalized content:
-  - PDF: per-page text + layout summary or full text concatenation.
-  - Images: OCR text + basic layout fingerprint.
-  - Text: normalized text (trimmed, normalized whitespace).
-- Before calling AI:
-  - Check if there is an existing parse result with:
-    - same `content_hash`
-    - same `parser_version`
-  - If yes:
-    - Reuse that parse result (no AI call, only cheap DB read).
-  - If no:
-    - Call AI and store result with `content_hash` and `parser_version` for future reuse.
+- For each uploaded intake, compute a stable `content_hash` of the canonicalized upload where applicable
+  (PDF/image/text as described elsewhere). `content_hash` may be used for analytics, dedup hints, or
+  future features — it MUST NOT be used to copy `parsed_json` from another `biodata_intakes` row.
+- **Cross-intake `parsed_json` reuse is forbidden.** `parsed_json` must always be rebuilt by running the
+  configured parser on the **current** intake’s **current** resolved parse-input text for that job.
+- **Transcript / raw-text reuse may be allowed** only for cost optimization (e.g. vision extract cache,
+  fingerprint cache, per-intake `parse_input_text` cache). That reused text must be treated as **this**
+  intake’s parse input for the run; then the parser runs fresh and persists **this** intake’s `parsed_json`.
+- **`approval_snapshot_json` is never copied across intakes** in the parse/reparse job; it remains
+  per-intake user/approval state.
 
-3.3) Deduplication across users
+3.3) Same file across users (structured output)
 -------------------------------
-- If multiple users upload the exact same biodata file (e.g., same family template):
-  - They will share the same cached parse result.
-  - Profile-specific corrections still stored per-intake; cache only stores “first guess” from AI.
+- If multiple users upload the same biodata file, each intake still gets its **own** `parsed_json` from
+  a parse run on that intake’s resolved text (which may reuse **transcript** only, not another row’s
+  structured JSON). Profile-specific corrections remain per intake via `approval_snapshot_json` / apply flow.
 
 ----------------------------------------------------------------------
 4) Admin Controls (Intake Engine Settings)

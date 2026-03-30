@@ -31,6 +31,14 @@ class RulesOnlyBiodataParser implements BiodataParserInterface
     }
 
     /**
+     * Rules-normalized text recovery for DOB (AI-first merge path).
+     */
+    public function recoverDateOfBirthFromNormalizedBiodataText(string $text): ?string
+    {
+        return $this->inner->recoverDateOfBirthFromNormalizedBiodataText($text);
+    }
+
+    /**
      * Ensure all expected top-level keys exist with safe defaults.
      */
     private function ensureSsotShape(array $parsed): array

@@ -5,8 +5,8 @@ namespace App\Http\Controllers;
 use App\Jobs\ParseIntakeJob;
 use App\Models\AdminSetting;
 use App\Models\BiodataIntake;
-use App\Services\AiVisionExtractionService;
 use App\Services\Intake\IntakeExtractionReuseResolver;
+use App\Services\Intake\IntakeReviewParseInputTextResolver;
 use App\Services\IntakeApprovalService;
 use App\Services\IntakeManualOcrPreparedService;
 use App\Services\MutationService;
@@ -14,6 +14,7 @@ use App\Services\OcrService;
 use App\Services\Parsing\ParserStrategyResolver;
 use App\Services\Parsing\ProviderResolver;
 use App\Services\Preview\PreviewSectionMapper;
+use App\Support\IntakeDobTrace;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
@@ -228,17 +229,16 @@ class IntakeController extends Controller
         $mapper = new PreviewSectionMapper;
         $sections = $mapper->map($data);
 
-        // Raw text panel: stored OCR, transient OCR for preview, or cached AI vision parse input (never mutates raw_ocr_text).
-        $previewRaw = $this->resolvePreviewRawParseInputText($intake);
+        // Review text panel: exact string passed to the parser for this intake's parsed_json (DB snapshot, or cache/OCR pipeline matching ParseIntakeJob).
+        $previewRaw = app(IntakeReviewParseInputTextResolver::class)->resolve($intake);
         $rawOcrTextForPreview = $previewRaw['text'];
         $previewRawTextSource = $previewRaw['source'];
         $previewParseProvenance = $previewRaw['provenance'] ?? ['heading_key' => 'intake.preview_source_unknown', 'params' => []];
-        $rawOcrTextForSuggestions = $previewRawTextSource === 'ai_vision_unavailable' ? '' : $rawOcrTextForPreview;
+        $reviewTextIsBiodata = in_array($previewRawTextSource, ['parse_snapshot', 'ai_vision_cache', 'ocr_transient'], true);
+        $rawOcrTextForSuggestions = $reviewTextIsBiodata ? $rawOcrTextForPreview : '';
 
-        // Preview-only hints (siblings/relatives/taluka): prefer stored OCR; if blank and parse used AI vision cache, use that text (never persisted).
-        $rawTextForPreviewEnhancements = trim((string) ($intake->raw_ocr_text ?? '')) !== ''
-            ? (string) ($intake->raw_ocr_text ?? '')
-            : ((($previewRawTextSource ?? '') === 'ai_vision_cache') ? $rawOcrTextForPreview : '');
+        // Preview-only hints (siblings/relatives/taluka): same text as parse input when available (not stored upload OCR).
+        $rawTextForPreviewEnhancements = $reviewTextIsBiodata ? $rawOcrTextForPreview : '';
 
         // Display: use approval_snapshot_json['core'] for form values when present, else parsed_json (already in sections).
         if (! empty($intake->approval_snapshot_json) && is_array($intake->approval_snapshot_json)
@@ -547,12 +547,8 @@ class IntakeController extends Controller
         $sections['core']['data'] = $coreData;
 
         // --- Physical section safety-net (height + complexion only, additive, SSOT-safe) ---
-        // काही deployments मध्ये AI-first parser जुन्या version ने चालू असू शकतो (queue worker reload न झालेला),
-        // म्हणून preview साठी raw_ocr_text वरून minimum fallback काढून coreData मध्ये फक्त missing असतील तेव्हाच भरतो.
-        $rawOcrTextForPhysical = (string) ($intake->raw_ocr_text ?? '');
-        if ($rawOcrTextForPhysical === '' && ($previewRawTextSource ?? '') === 'ai_vision_cache') {
-            $rawOcrTextForPhysical = $rawOcrTextForPreview;
-        }
+        // Parse-input review text वरून minimum fallback — parsed_json सोबतचा मजकूर (stored upload OCR नाही).
+        $rawOcrTextForPhysical = $reviewTextIsBiodata ? $rawOcrTextForPreview : '';
         if ($rawOcrTextForPhysical !== '') {
             // Height fallback: handle normal आणि थोडे garbled cases (फूट/कूट + इंच).
             if (empty($coreData['height_cm'])) {
@@ -623,10 +619,7 @@ class IntakeController extends Controller
 
         // Preview-only: default mother_tongue_id = Marathi when biodata looks predominantly Marathi and mother_tongue_id is empty.
         if (empty($coreData['mother_tongue_id'] ?? null) && empty($intakeProfile->mother_tongue_id ?? null)) {
-            $rawText = (string) ($intake->raw_ocr_text ?? '');
-            if ($rawText === '' && ($previewRawTextSource ?? '') === 'ai_vision_cache') {
-                $rawText = $rawOcrTextForPreview;
-            }
+            $rawText = $reviewTextIsBiodata ? $rawOcrTextForPreview : '';
             if ($rawText !== '') {
                 // If app locale is Marathi OR there's at least one Devanagari char, assume Marathi.
                 $locale = app()->getLocale();
@@ -652,15 +645,6 @@ class IntakeController extends Controller
             $rows = app(\App\Services\Parsing\IntakeControlledFieldNormalizer::class)->normalizeHoroscopeRows($rows);
             if (! empty($rows)) {
                 $sections['horoscope']['data'] = $rows;
-                // Copy blood_group from horoscope to core when core has none, so physical engine can resolve blood_group_id.
-                $firstHoroscope = is_array($rows[0]) ? $rows[0] : (array) $rows[0];
-                $hg = $firstHoroscope['blood_group'] ?? null;
-                if (is_scalar($hg) && trim((string) $hg) !== '' && (empty($coreData['blood_group']) || trim((string) $coreData['blood_group']) === '')) {
-                    $sanitized = \App\Services\BiodataParserService::sanitizeBloodGroupValue(trim((string) $hg));
-                    if ($sanitized !== null) {
-                        $coreData['blood_group'] = $sanitized;
-                    }
-                }
             }
         }
 
@@ -1061,7 +1045,7 @@ class IntakeController extends Controller
         $profileSiblings = $this->mergeParsedSiblingsIntoProfileSiblings($profileSiblings, $siblingRowsFromRelatives);
         $relativesOnly = $this->excludeSiblingRelationsFromRelatives($relativesFromSnapshot);
         $hasSiblings = isset($snapshot['core']['has_siblings']) ? (bool) $snapshot['core']['has_siblings'] : $profileSiblings->isNotEmpty();
-        [$builtPaternal, $builtMaternal, $dajiRows] = $this->partitionAndStructureRelativesForIntake($relativesOnly);
+        [$builtPaternal, $builtMaternal, $dajiRows] = $this->partitionAndStructureRelativesForIntake($relativesOnly, $intake);
 
         // Prefer user-edited relatives_parents_family when it has meaningful names; otherwise fall back to parsed/built relatives.
         if (isset($snapshot['relatives_parents_family']) && is_array($snapshot['relatives_parents_family'])) {
@@ -1270,7 +1254,7 @@ class IntakeController extends Controller
                 }
                 $addrLine = implode(', ', $parts);
             }
-            // Global fallback: जर addresses[0] मधे taluka रिकामा असेल पण raw_ocr_text मधे "ता. X" असेल आणि तो address मध्ये नसेल, तर insert कर.
+            // Global fallback: जर addresses[0] मधे taluka रिकामा असेल पण parse-input मजकुरात "ता. X" असेल आणि तो address मध्ये नसेल, तर insert कर.
             if ($talukaText === '') {
                 $rawOcr = $rawTextForPreviewEnhancements;
                 if (
@@ -1396,6 +1380,27 @@ class IntakeController extends Controller
             && ! $manualPreparedExists;
 
         $showIntakeReextractAction = app(ProviderResolver::class)->parseJobUsesAiVisionExtraction();
+
+        if (IntakeDobTrace::enabled((int) $intake->id)) {
+            $parsedCoreDob = is_array($data['core'] ?? null) ? ($data['core']['date_of_birth'] ?? null) : null;
+            $approvalCoreDob = null;
+            if (! empty($intake->approval_snapshot_json) && is_array($intake->approval_snapshot_json)
+                && isset($intake->approval_snapshot_json['core']) && is_array($intake->approval_snapshot_json['core'])) {
+                $approvalCoreDob = $intake->approval_snapshot_json['core']['date_of_birth'] ?? null;
+            }
+            Log::info('DOB_TRACE_PREVIEW_READ', [
+                'intake_id' => $intake->id,
+                'parsed_json_core_date_of_birth' => $parsedCoreDob,
+                'approval_snapshot_core_date_of_birth' => $approvalCoreDob,
+                'sections_core_date_of_birth' => is_array($sections['core']['data'] ?? null)
+                    ? ($sections['core']['data']['date_of_birth'] ?? null)
+                    : null,
+                'preview_loaded_dob' => is_scalar($intakeProfile->date_of_birth ?? null)
+                    ? trim((string) $intakeProfile->date_of_birth)
+                    : null,
+                'preview_raw_text_has_janma_taarikh' => preg_match('/जन्म\s*तारीख/u', (string) $rawOcrTextForPreview) === 1,
+            ]);
+        }
 
         return view('intake.preview', compact(
             'intake',
@@ -1953,7 +1958,7 @@ class IntakeController extends Controller
      *
      * @return array{0: \Illuminate\Support\Collection, 1: \Illuminate\Support\Collection, 2: array} [paternal, maternal, dajiRows]
      */
-    private function partitionAndStructureRelativesForIntake(array $relatives): array
+    private function partitionAndStructureRelativesForIntake(array $relatives, ?BiodataIntake $intakeForRawAjol = null): array
     {
         $paternal = [];
         $maternal = [];
@@ -2177,7 +2182,13 @@ class IntakeController extends Controller
             }
             // Raw text मध्ये base address पेक्षा जास्त characters असलेली पूर्ण ओळ असेल तर तीच वापर.
             if ($ajolAddress !== null && $ajolAddress !== '') {
-                $raw = (string) ($intake->raw_ocr_text ?? '');
+                $raw = '';
+                if ($intakeForRawAjol !== null) {
+                    $reviewForAjol = app(IntakeReviewParseInputTextResolver::class)->resolve($intakeForRawAjol);
+                    if (in_array($reviewForAjol['source'] ?? '', ['parse_snapshot', 'ai_vision_cache', 'ocr_transient'], true)) {
+                        $raw = (string) ($reviewForAjol['text'] ?? '');
+                    }
+                }
                 if ($raw !== '') {
                     $base = preg_quote($ajolAddress, '/');
                     if (@preg_match("/^{$base}.*$/um", $raw, $mFull)) {
@@ -2550,112 +2561,6 @@ class IntakeController extends Controller
         if (! $preserveParseInputText) {
             Cache::forget('intake.parse_input_text.'.$intake->id);
         }
-    }
-
-    /**
-     * Text shown in the preview "raw text" panel: stored OCR, transient OCR, or cached AI vision parse input.
-     * Does not read DB raw_ocr_text for AI mode beyond display rules; never persists AI extract here.
-     *
-     * @return array{text: string, source: 'ai_vision_cache'|'ai_vision_unavailable'|'stored_ocr'|'ocr_transient'|'empty', provenance: array{heading_key: string, params?: array<string, string>}}
-     */
-    private function resolvePreviewRawParseInputText(BiodataIntake $intake): array
-    {
-        $resolver = app(ParserStrategyResolver::class);
-        $mode = $resolver->normalizeMode($intake->parser_version ?: $resolver->resolveActiveMode());
-
-        if ($mode === ParserStrategyResolver::MODE_AI_VISION_EXTRACT_V1) {
-            $cached = Cache::get('intake.parse_input_text.'.$intake->id);
-            $dbg = Cache::get('intake.parse_input_debug.'.$intake->id);
-            $dbg = is_array($dbg) ? $dbg : [];
-
-            if (is_string($cached) && trim($cached) !== '') {
-                return [
-                    'text' => $cached,
-                    'source' => 'ai_vision_cache',
-                    'provenance' => AiVisionExtractionService::provenanceForPreview($dbg),
-                ];
-            }
-
-            $msg = $this->buildAiVisionUnavailablePanelMessage($dbg, $intake);
-            if ($msg === '') {
-                $msg = __('intake.preview_parse_input_ai_unavailable');
-                if ($dbg !== []
-                    && ($dbg['parse_input_source'] ?? '') === 'ai_vision_extract_v1'
-                    && ! empty($dbg['ok'])
-                    && ! empty($dbg['text_quality_ok'] ?? true)) {
-                    $msg = __('intake.preview_parse_input_ai_cache_missing');
-                }
-            }
-
-            return [
-                'text' => $msg,
-                'source' => 'ai_vision_unavailable',
-                'provenance' => [
-                    'heading_key' => 'intake.preview_ai_transcription_unavailable_title',
-                    'params' => [],
-                ],
-            ];
-        }
-
-        $stored = (string) ($intake->raw_ocr_text ?? '');
-        if (trim($stored) !== '') {
-            return [
-                'text' => $stored,
-                'source' => 'stored_ocr',
-                'provenance' => [
-                    'heading_key' => 'intake.preview_source_stored_ocr',
-                    'params' => [],
-                ],
-            ];
-        }
-
-        try {
-            $ocrResolved = app(OcrService::class)->resolveParseInputText($intake);
-            $transient = (string) ($ocrResolved['text'] ?? '');
-            if (trim($transient) !== '') {
-                return [
-                    'text' => $transient,
-                    'source' => 'ocr_transient',
-                    'provenance' => [
-                        'heading_key' => 'intake.preview_source_ocr_parse_input',
-                        'params' => [],
-                    ],
-                ];
-            }
-        } catch (\Throwable $e) {
-            // keep empty
-        }
-
-        return [
-            'text' => '',
-            'source' => 'empty',
-            'provenance' => [
-                'heading_key' => 'intake.preview_source_empty',
-                'params' => [],
-            ],
-        ];
-    }
-
-    /**
-     * @param  array<string, mixed>  $dbg
-     */
-    private function buildAiVisionUnavailablePanelMessage(array $dbg, BiodataIntake $intake): string
-    {
-        $parts = [];
-        if ($dbg !== []) {
-            if (! empty($dbg['failure_detail'])) {
-                $parts[] = (string) $dbg['failure_detail'];
-            }
-            if (! empty($dbg['quality_failure_detail'])) {
-                $parts[] = (string) $dbg['quality_failure_detail'];
-            }
-        }
-        $le = trim((string) ($intake->last_error ?? ''));
-        if ($le !== '' && $parts === []) {
-            $parts[] = __('intake.preview_ai_transcription_failed_code', ['code' => $le]);
-        }
-
-        return implode("\n\n", array_filter($parts));
     }
 
     /**

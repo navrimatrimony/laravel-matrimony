@@ -27,8 +27,10 @@ class BiodataIntake extends Model
         'matrimony_profile_id',
         'intake_status',
         'parse_status',
+        'parsed_at',
         'last_error',
         'parsed_json',
+        'last_parse_input_text',
         'approved_by_user',
         'approved_at',
         'approval_snapshot_json',
@@ -47,6 +49,7 @@ class BiodataIntake extends Model
         'intake_locked' => 'boolean',
         'parsed_json' => 'array',
         'approval_snapshot_json' => 'array',
+        'parsed_at' => 'datetime',
     ];
 
     protected static function booted(): void

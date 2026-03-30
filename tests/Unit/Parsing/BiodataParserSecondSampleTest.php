@@ -72,9 +72,7 @@ TXT;
 
         $h = $out['horoscope'][0] ?? [];
         $this->assertStringContainsString('वासनिचा वेल', (string) ($h['devak'] ?? ''));
-        $this->assertNotNull($h['blood_group'] ?? null);
-        $this->assertSame('B+', $h['blood_group'] ?? null);
-        $this->assertStringStartsWith('B', (string) $h['blood_group']);
+        $this->assertArrayNotHasKey('blood_group', $h, 'Blood group is core-only (core.blood_group).');
         $this->assertSame('वृश्चिक', $h['rashi'] ?? null);
         $this->assertSame('मृग', $h['nakshatra'] ?? null);
         $this->assertSame('आध्य', $h['nadi'] ?? null);
@@ -111,7 +109,7 @@ TXT;
         $this->assertStringNotContainsString('आईचे नाव', $addr0);
     }
 
-    /** Minimal fixture: composite देवक + रक्त गट must populate core + horoscope blood (regression guard). */
+    /** Minimal fixture: composite देवक + रक्त गट must populate core.blood_group (regression guard). */
     public function test_devak_and_rakt_gat_on_one_line_populates_blood_group(): void
     {
         $out = app(BiodataParserService::class)->parse("देवक :- वासनिचा वेल रक्त गट :- B+ve\n");
@@ -120,7 +118,7 @@ TXT;
         $this->assertNotNull($core['blood_group'] ?? null);
         $this->assertSame('B+', $core['blood_group'] ?? null);
         $h = $out['horoscope'][0] ?? [];
-        $this->assertSame('B+', $h['blood_group'] ?? null);
+        $this->assertArrayNotHasKey('blood_group', $h);
         $this->assertStringContainsString('वासनिचा वेल', (string) ($h['devak'] ?? ''));
     }
 }

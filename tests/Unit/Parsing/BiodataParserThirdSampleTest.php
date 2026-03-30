@@ -41,7 +41,7 @@ TXT;
         $this->assertSame('श्वेताली बाळासाहेब सुंबे', (string) ($core['full_name'] ?? ''));
         $this->assertSame('बाळासाहेब बन्सी सुंबे', (string) ($core['father_name'] ?? ''));
         $this->assertSame('पाटबुंधारे सोसायटी', (string) ($core['father_occupation'] ?? ''));
-        $this->assertSame('नंदा बाळासाहेब सुंबे', (string) ($core['mother_name'] ?? ''));
+        $this->assertSame('सौ. नंदा बाळासाहेब सुंबे', (string) ($core['mother_name'] ?? ''));
         $this->assertSame('गहिणी', (string) ($core['mother_occupation'] ?? ''));
 
         $this->assertNotNull($core['address_line'] ?? null);
@@ -68,7 +68,7 @@ TXT;
         $this->assertNotEmpty($sibs);
         $bro = $sibs[0];
         $this->assertSame('brother', $bro['relation_type'] ?? null);
-        $this->assertSame('सुरज बाळासाहेब सुंबे', (string) ($bro['name'] ?? ''));
+        $this->assertSame('श्री. सुरज बाळासाहेब सुंबे', (string) ($bro['name'] ?? ''));
         $this->assertSame('B.com', (string) ($bro['occupation'] ?? ''));
 
         $sec = $out['relatives_sectioned'] ?? [];
@@ -77,7 +77,7 @@ TXT;
         $this->assertNotEmpty($mama, 'maternal.mama should contain मामा row');
         $this->assertNotEmpty($chulte, 'paternal.chulte should contain चुलते row');
         $this->assertNotNull($mama[0]['name'] ?? null);
-        $this->assertSame('दशरथ बबन गगे', (string) ($mama[0]['name'] ?? ''));
+        $this->assertSame('कै. दशरथ बबन गगे', (string) ($mama[0]['name'] ?? ''));
         $this->assertStringContainsString('आंबी खालसा', (string) ($mama[0]['location'] ?? ''));
         $this->assertStringContainsString('चुलते व्यक्ती', (string) (($chulte[0]['name'] ?? '') ?: ($chulte[0]['raw_note'] ?? '')));
 

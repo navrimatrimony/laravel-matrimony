@@ -275,6 +275,6 @@ TXT;
         $this->assertNull($row['devak'] ?? null, 'AI-first final output must sanitize devak junk');
         $this->assertNull($row['kuldaivat'] ?? null, 'AI-first final output must sanitize kuldaivat junk');
         $this->assertNull($row['gotra'] ?? null, 'AI-first final output must sanitize gotra junk');
-        $this->assertNull($row['blood_group'] ?? null, 'Invalid blood_group (84४७) in horoscope must become null');
+        $this->assertArrayNotHasKey('blood_group', $row, 'blood_group must not appear on horoscope rows (core-only).');
     }
 }

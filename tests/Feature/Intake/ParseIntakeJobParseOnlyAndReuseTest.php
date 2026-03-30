@@ -56,6 +56,8 @@ class ParseIntakeJobParseOnlyAndReuseTest extends TestCase
 
         $intake->refresh();
         $this->assertSame('parsed', $intake->parse_status);
+        $this->assertNotNull($intake->last_parse_input_text);
+        $this->assertStringContainsString('कु. टेस्ट परसे', (string) $intake->last_parse_input_text);
     }
 
     public function test_fingerprint_reuse_skips_paid_extraction_for_second_intake(): void

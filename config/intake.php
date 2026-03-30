@@ -106,4 +106,41 @@ return [
     |--------------------------------------------------------------------------
     */
     'testing_parse_job_uses_ai_vision' => env('INTAKE_TESTING_PARSE_JOB_USES_AI_VISION'),
+
+    /*
+    |--------------------------------------------------------------------------
+    | DOB trace (opt-in): comma-separated biodata_intakes.id values
+    |--------------------------------------------------------------------------
+    | Logs DOB_TRACE_* lines through AiFirst parse, ParseIntakeJob save, preview read.
+    | Env: DOB_TRACE_INTAKE_IDS=4,12
+    */
+    'dob_trace_intake_ids' => array_values(array_filter(array_map(
+        static fn (string $s): int => (int) trim($s),
+        explode(',', (string) env('DOB_TRACE_INTAKE_IDS', ''))
+    ), static fn (int $id): bool => $id > 0)),
+
+    /*
+    |--------------------------------------------------------------------------
+    | DOB parse debug (opt-in): rules-parser before/after normalize + recovery
+    |--------------------------------------------------------------------------
+    | Env: INTAKE_DOB_PARSE_DEBUG=true
+    */
+    'dob_parse_debug' => filter_var(env('INTAKE_DOB_PARSE_DEBUG', false), FILTER_VALIDATE_BOOLEAN),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Hard DOB extraction trace (AiFirst rule): raw_line, normalized_line, extracted_date
+    | Env: INTAKE_DOB_EXTRACTION_TRACE=true
+    |--------------------------------------------------------------------------
+    */
+    'dob_extraction_trace' => filter_var(env('INTAKE_DOB_EXTRACTION_TRACE', false), FILTER_VALIDATE_BOOLEAN),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Developer-only: show immutable upload OCR (raw_ocr_text) on review UIs
+    |--------------------------------------------------------------------------
+    | Requires APP_DEBUG=true. Normal review shows only parse input (same as parser).
+    | Env: INTAKE_DEBUG_SHOW_STORED_RAW_OCR=true
+    */
+    'debug_show_stored_raw_ocr' => filter_var(env('INTAKE_DEBUG_SHOW_STORED_RAW_OCR', false), FILTER_VALIDATE_BOOLEAN),
 ];

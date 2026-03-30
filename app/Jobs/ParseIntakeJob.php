@@ -14,6 +14,7 @@ use App\Services\Parsing\IntakeParsedJsonUtf8Sanitizer;
 use App\Services\Parsing\IntakeParsedSnapshotSkeleton;
 use App\Services\Parsing\ParserStrategyResolver;
 use App\Services\Parsing\ProviderResolver;
+use App\Support\IntakeDobTrace;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -27,17 +28,21 @@ use Illuminate\Support\Facades\Log;
 | ParseIntakeJob — Phase-5 SSOT: parse only, never modify raw_ocr_text
 |--------------------------------------------------------------------------
 |
-| 1) Fetch intake. 2) If parse_status != pending return. 3) Build parse text:
-|    if ocr-manual-prepared/{id}/manual.png exists, OCR that derived file (raw_ocr_text unchanged);
-|    else use normalized raw_ocr_text. 4) Parse via BiodataParserService. 5) Store parsed_json.
+| 1) Fetch intake. 2) If parse_status != pending return. 3) Build parse text ($raw), same resolution as review UI:
+|    AI vision mode: extraction / reuse; else manual-crop OCR or upload OCR via OcrService (raw_ocr_text unchanged).
+| 4) Parse via strategy parser. 5) Store parsed_json and last_parse_input_text (= exact $raw).
 | Do NOT touch raw_ocr_text.
 |
-| When forceRecompute is true (e.g. admin reparse), content_hash cache is
-| bypassed so updated parser code runs and parsed_json is recomputed.
 | Reparse entry points set a short-lived cache flag so paid vision extraction
 | is skipped (parse-input-only); text comes from intake.parse_input_text cache,
 | fingerprint reuse, or raw_ocr_text fallback. Manual crop saves still dispatch
 | without that flag so file→text can run again when needed.
+|
+| LOCKED: Cross-intake parsed_json reuse is forbidden. parsed_json is always the
+| output of $parser->parse($raw, ...) for this intake id, where $raw is this
+| intake's resolved parse input (OCR / vision extract / per-intake cache only).
+| Transcript text may be reused for cost (see IntakeExtractionReuseResolver);
+| structured JSON is never copied from another BiodataIntake row.
 |
 */
 class ParseIntakeJob implements ShouldQueue
@@ -87,43 +92,10 @@ class ParseIntakeJob implements ShouldQueue
         $mode = $resolver->resolveActiveMode();
 
         $manualPreparedExists = app(IntakeManualOcrPreparedService::class)->exists($intake);
-        $storedOcrBlank = trim((string) ($intake->raw_ocr_text ?? '')) === '';
 
-        // Smart caching — avoid re-parsing identical content for same parser_version.
-        // Bypass cache when forceRecompute is true (e.g. admin reparse) so updated parser runs.
-        // Bypass when manual crop exists (parse input is not the same as upload-time content_hash).
-        // Also bypass when stored upload-time OCR text is blank (we may re-run OCR at parse-time).
+        // Never copy parsed_json from another intake (same content_hash / file): always run the parser
+        // on this intake's resolved extract/OCR text so structured output matches reviewable input.
         $canonicalVersion = $resolver->normalizeMode($intake->parser_version ?: $mode);
-        if (! $this->forceRecompute && ! $manualPreparedExists && ! $storedOcrBlank && $intake->content_hash && $canonicalVersion) {
-            $cached = BiodataIntake::where('id', '!=', $intake->id)
-                ->where('content_hash', $intake->content_hash)
-                ->where('parser_version', $canonicalVersion)
-                ->where('parse_status', 'parsed')
-                ->first();
-            if ($cached && ! empty($cached->parsed_json)) {
-                $ensured = app(IntakeParsedSnapshotSkeleton::class)->ensure((array) $cached->parsed_json);
-                $utf8Stats = [];
-                $ensured = IntakeParsedJsonUtf8Sanitizer::sanitize($ensured, $utf8Stats);
-                if (($utf8Stats['strings_fixed'] ?? 0) > 0) {
-                    Log::warning('ParseIntakeJob: repaired malformed UTF-8 in cached parsed_json before save', [
-                        'intake_id' => $intake->id,
-                        'strings_fixed' => $utf8Stats['strings_fixed'],
-                    ]);
-                }
-                $intake->update([
-                    'parsed_json' => $ensured,
-                    'parse_status' => 'parsed',
-                    'parser_version' => $canonicalVersion,
-                ]);
-
-                Log::info('Intake parse reused cached parsed_json', [
-                    'intake_id' => $intake->id,
-                    'parser_version' => $canonicalVersion,
-                ]);
-
-                return;
-            }
-        }
 
         $retryLimit = (int) AdminSetting::getValue('intake_parse_retry_limit', '3');
 
@@ -386,6 +358,18 @@ class ParseIntakeJob implements ShouldQueue
         while ($attempts === 0 || ($attempts < $retryLimit && $parsed === null && $lastException !== null)) {
             $attempts++;
             try {
+                if (config('intake.dob_parse_debug') || IntakeDobTrace::enabled((int) $intake->id)) {
+                    $janma = null;
+                    if (preg_match('/जन्म\s*तारीख[^\n]*/u', $raw, $jm)) {
+                        $janma = $jm[0];
+                    }
+                    Log::info('DOB_PARSE_INPUT', [
+                        'intake_id' => $intake->id,
+                        'raw_byte_length' => strlen($raw),
+                        'janma_line_snippet' => $janma,
+                        'raw_sha256' => hash('sha256', $raw),
+                    ]);
+                }
                 $parsed = $parser->parse($raw, [
                     'intake_id' => $intake->id,
                     'parser_mode' => $mode,
@@ -405,6 +389,7 @@ class ParseIntakeJob implements ShouldQueue
                 'last_error' => $lastException ? substr($lastException->getMessage(), 0, 255) : 'parse_failed',
                 'parse_duration_ms' => $durationMs,
                 'ai_calls_used' => $aiCalls,
+                'last_parse_input_text' => null,
             ]);
 
             Log::error('Intake parse failed', [
@@ -428,9 +413,21 @@ class ParseIntakeJob implements ShouldQueue
             ]);
         }
 
+        if (IntakeDobTrace::enabled((int) $intake->id)) {
+            $core = is_array($ssot['core'] ?? null) ? $ssot['core'] : [];
+            Log::info('DOB_TRACE_PRE_SAVE', [
+                'intake_id' => $intake->id,
+                'final_saved_dob' => $core['date_of_birth'] ?? null,
+                'parse_raw_has_janma_taarikh' => preg_match('/जन्म\s*तारीख/u', $raw) === 1,
+                'parser_mode' => $mode,
+            ]);
+        }
+
         $intake->update([
             'parsed_json' => $ssot,
+            'last_parse_input_text' => $raw,
             'parse_status' => 'parsed',
+            'parsed_at' => now(),
             'parser_version' => $canonicalVersion,
             'parse_duration_ms' => $durationMs,
             'ai_calls_used' => $aiCalls,
@@ -448,5 +445,14 @@ class ParseIntakeJob implements ShouldQueue
             'addresses_count' => is_countable($ssot['addresses'] ?? []) ? count($ssot['addresses']) : 0,
             'duration_ms' => $durationMs,
         ]);
+
+        if (IntakeDobTrace::enabled((int) $intake->id)) {
+            $intake->refresh();
+            $savedCore = is_array($intake->parsed_json['core'] ?? null) ? $intake->parsed_json['core'] : [];
+            Log::info('DOB_TRACE_POST_SAVE', [
+                'intake_id' => $intake->id,
+                'parsed_json_core_date_of_birth' => $savedCore['date_of_birth'] ?? null,
+            ]);
+        }
     }
 }

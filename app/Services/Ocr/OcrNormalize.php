@@ -20,8 +20,53 @@ class OcrNormalize
     }
 
     /**
+     * Replace Marathi month names with English (for DD Month YYYY parsing after digit normalize).
+     * Longest keys first so multi-character month names win over short tokens (e.g. मे).
+     */
+    public static function normalizeMarathiMonthWordsToEnglish(string $text): string
+    {
+        foreach (self::marathiMonthWordToEnglishSorted() as $mr => $en) {
+            $text = str_replace($mr, $en, $text);
+        }
+
+        return $text;
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    private static function marathiMonthWordToEnglishSorted(): array
+    {
+        static $sorted = null;
+        if ($sorted !== null) {
+            return $sorted;
+        }
+        $map = [
+            'फेब्रुवारी' => 'February',
+            'जानेवारी' => 'January',
+            'सप्टेंबर' => 'September',
+            'ऑक्टोबर' => 'October',
+            'नोव्हेंबर' => 'November',
+            'डिसेंबर' => 'December',
+            'एप्रिल' => 'April',
+            'ऑगस्ट' => 'August',
+            'ऑगष्ट' => 'August',
+            'ऑजस्ट' => 'August',
+            'जुलै' => 'July',
+            'जून' => 'June',
+            'मार्च' => 'March',
+            'मे' => 'May',
+        ];
+        uksort($map, static fn (string $a, string $b): int => mb_strlen($b) <=> mb_strlen($a));
+        $sorted = $map;
+
+        return $sorted;
+    }
+
+    /**
      * Normalize blood group values.
      * Examples: "O Positive", "O+ve", "O +", "A+ve" => "O+", "A+"
+     * Marathi OCR: "'बी' पॉझिटिव्ह", "बी पॉझिटिव्ह" => "B+"
      */
     public static function normalizeBloodGroup(?string $value): ?string
     {
@@ -30,6 +75,11 @@ class OcrNormalize
         }
 
         $value = trim($value);
+        $dev = self::canonicalBloodGroupFromDevanagariOrMixed($value);
+        if ($dev !== null) {
+            return $dev;
+        }
+
         $value = strtoupper($value);
 
         // Remove spaces and common suffixes
@@ -59,6 +109,56 @@ class OcrNormalize
         }
 
         return $value;
+    }
+
+    /**
+     * Map Devanagari / quoted / mixed Marathi-English blood tokens to A+, B+, … (wizard canonical).
+     */
+    private static function canonicalBloodGroupFromDevanagariOrMixed(string $value): ?string
+    {
+        $v = trim($value);
+        if ($v === '' || mb_strlen($v) > 64) {
+            return null;
+        }
+
+        $hasPos = (bool) preg_match('/पॉझिटिव्ह|पॉजिटिव्ह|POSITIVE|\+ve|\bPos(?:itive|)\b|[+＋]/ui', $v);
+        $hasNeg = (bool) preg_match('/निगेटिव्ह|नॅगेटिव्ह|NEGATIVE|\-ve|\bNEG\b|[\-−](?!\d)/ui', $v);
+
+        if ($hasPos && $hasNeg) {
+            return null;
+        }
+        $wantNeg = $hasNeg;
+        $wantPos = $hasPos || preg_match('/\bB\s*Positive\b|\bA\s*Positive\b|\bO\s*Positive\b|\bAB\s*Positive\b/ui', $v);
+        if (! $wantPos && ! $wantNeg) {
+            return null;
+        }
+
+        $letter = null;
+        if (preg_match('/एबी|ऐबी/ui', $v)) {
+            $letter = 'AB';
+        } elseif (preg_match('/बी/ui', $v)) {
+            $letter = 'B';
+        } elseif (preg_match('/ओ|ऑ/u', $v)) {
+            $letter = 'O';
+        } elseif (preg_match('/ए/u', $v)) {
+            if (! preg_match('/एबी|ऐबी/u', $v)) {
+                $letter = 'A';
+            }
+        } elseif (preg_match('/\bAB\b/ui', $v)) {
+            $letter = 'AB';
+        } elseif (preg_match('/\bB\b/ui', $v)) {
+            $letter = 'B';
+        } elseif (preg_match('/\bO\b/ui', $v)) {
+            $letter = 'O';
+        } elseif (preg_match('/\bA\b/ui', $v)) {
+            $letter = 'A';
+        }
+
+        if ($letter === null) {
+            return null;
+        }
+
+        return $wantNeg ? $letter.'-' : $letter.'+';
     }
 
     /**
@@ -114,16 +214,52 @@ class OcrNormalize
 
         $value = trim($value);
         $value = self::normalizeDigits($value);
+        $value = self::normalizeMarathiMonthWordsToEnglish($value);
+
+        // Same merged OCR row: "24/10/1998 जन्म वेळ :- रात्री …" — parse only the first dd/mm/yyyy (or d-m-y) token.
+        if (preg_match('/(\d{1,2}[\/.\-]\d{1,2}[\/.\-]\d{4})/u', $value, $m) && strlen($m[1]) < strlen($value)) {
+            $isolated = self::normalizeDate($m[1]);
+            if ($isolated !== null && preg_match('/^\d{4}-\d{2}-\d{2}$/', $isolated)) {
+                return $isolated;
+            }
+        }
+
+        // August-only OCR: month token often varies (ऑ/ऑ + nukta, ZWJ). "…गस्ट" is unique among Marathi months here.
+        if (preg_match('/(\d{1,2})\s+\S*गस्ट\s+(\d{4})/u', $value, $m)) {
+            return $m[2].'-08-'.str_pad($m[1], 2, '0', STR_PAD_LEFT);
+        }
+
+        // Common OCR misread: ऑजस्ट (ज instead of ग) for August.
+        if (preg_match('/(\d{1,2})\s+ऑजस्ट\s+(\d{4})/u', $value, $m)) {
+            return $m[2].'-08-'.str_pad($m[1], 2, '0', STR_PAD_LEFT);
+        }
 
         // Pattern: "8 ऑगस्ट 1997" / "08 ऑगस्ट 1997" (Marathi month name, Latin script)
         $marathiMonthToNum = [
             'जानेवारी' => '01', 'फेब्रुवारी' => '02', 'मार्च' => '03', 'एप्रिल' => '04',
-            'मे' => '05', 'जून' => '06', 'जुलै' => '07', 'ऑगस्ट' => '08',
+            'मे' => '05', 'जून' => '06', 'जुलै' => '07', 'ऑगस्ट' => '08', 'ऑजस्ट' => '08',
             'सप्टेंबर' => '09', 'ऑक्टोबर' => '10', 'नोव्हेंबर' => '11', 'डिसेंबर' => '12',
         ];
         $monthAlt = implode('|', array_map(static fn (string $k): string => preg_quote($k, '/'), array_keys($marathiMonthToNum)));
         if (preg_match('/(\d{1,2})\s+('.$monthAlt.')\s+(\d{4})/u', $value, $m)) {
             $month = $marathiMonthToNum[$m[2]] ?? null;
+            if ($month !== null) {
+                $day = str_pad($m[1], 2, '0', STR_PAD_LEFT);
+
+                return $m[3].'-'.$month.'-'.$day;
+            }
+        }
+
+        // After Marathi→English month replace: "8 August 1997"
+        $fullMonth = 'january|february|march|april|may|june|july|august|september|october|november|december';
+        if (preg_match('/(\d{1,2})\s+('.$fullMonth.')\s+(\d{4})/iu', $value, $m)) {
+            $monthMap = [
+                'january' => '01', 'february' => '02', 'march' => '03', 'april' => '04',
+                'may' => '05', 'june' => '06', 'july' => '07', 'august' => '08',
+                'september' => '09', 'october' => '10', 'november' => '11', 'december' => '12',
+            ];
+            $monKey = strtolower($m[2]);
+            $month = $monthMap[$monKey] ?? null;
             if ($month !== null) {
                 $day = str_pad($m[1], 2, '0', STR_PAD_LEFT);
 

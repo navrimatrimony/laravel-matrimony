@@ -67,5 +67,20 @@ TXT;
         $sisters = array_filter($siblings, fn ($r) => ($r['relation_type'] ?? '') === 'sister');
         $this->assertCount(0, $sisters, 'बहीण नाही should not become a named sister row');
     }
+
+    public function test_dob_on_same_line_as_janma_vel_extracts_iso_only(): void
+    {
+        /** @var BiodataParserService $service */
+        $service = $this->app->make(BiodataParserService::class);
+
+        $rawText = <<<'TXT'
+मुलीचे नाव :- कु. उदाहरण
+जन्म तारीख :- 24/10/1998 जन्म वेळ :- रात्री 09 वा.45 मि.
+TXT;
+
+        $parsed = $service->parse($rawText);
+
+        $this->assertSame('1998-10-24', $parsed['core']['date_of_birth'] ?? null);
+    }
 }
 

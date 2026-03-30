@@ -11,8 +11,10 @@ use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 
 /**
- * Paid AI vision extraction reuse: per-intake cache, global fingerprint cache, historical DB raw_ocr_text.
- * Does not mutate raw_ocr_text. No extra DB columns — historical text is existing raw_ocr_text on peer rows.
+ * Paid AI vision extraction reuse: TEXT only (per-intake parse-input cache, fingerprint cache, peer raw_ocr_text).
+ * Does not mutate raw_ocr_text. ParseIntakeJob always runs the parser on the resolved string for the current
+ * intake and stores that run's parsed_json — never copies another intake's parsed_json or approval_snapshot_json.
+ * Reused transcript is written to this intake's parse-input cache key before parse where applicable.
  */
 class IntakeExtractionReuseResolver
 {

@@ -109,7 +109,7 @@ final class ParsedJsonSsotNormalizer
         $stringRejectLabel = [
             'full_name', 'father_name', 'mother_name', 'birth_place', 'birth_time',
             'religion', 'caste', 'sub_caste', 'marital_status', 'complexion', 'primary_contact_number',
-            'father_occupation', 'mother_occupation', 'other_relatives_text',
+            'father_occupation', 'mother_occupation', 'father_extra_info', 'other_relatives_text',
         ];
 
         foreach ($core as $key => $value) {
@@ -277,9 +277,7 @@ final class ParsedJsonSsotNormalizer
             if (array_key_exists('charan', $row)) {
                 $rows[$i]['charan'] = self::normalizeNumericOrNull($row['charan']);
             }
-            if (array_key_exists('blood_group', $row)) {
-                $rows[$i]['blood_group'] = BiodataParserService::sanitizeBloodGroupValue($row['blood_group']);
-            }
+            unset($rows[$i]['blood_group']);
         }
 
         return $rows;

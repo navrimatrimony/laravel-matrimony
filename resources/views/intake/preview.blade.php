@@ -335,8 +335,8 @@
         @vite(['resources/js/intake-preview-crop.js'])
     @endif
 
-    <p class="text-gray-600 dark:text-gray-400 text-sm mb-2">तुमची माहिती तपासा आणि आवश्यक ते सुधारा. खाली स्क्रोल करून सर्व तपासल्यानंतरच अप्रूव्ह करा.</p>
-    <p class="text-gray-500 dark:text-gray-500 text-xs mb-4">डावीकडे रॉ बायोडाटा, उजवीकडे पार्स केलेला JSON. खाली फॉर्म भरून अप्रूव्ह करा.</p>
+    <p class="text-gray-600 dark:text-gray-400 text-sm mb-2">{{ __('intake.preview_review_intro') }}</p>
+    <p class="text-gray-500 dark:text-gray-500 text-xs mb-4">{{ __('intake.preview_two_column_intro') }}</p>
 
     <div class="mb-6 flex flex-wrap items-center gap-3">
         <form method="POST" action="{{ route('intake.reparse', $intake) }}" class="inline" onsubmit="return confirm(@json(__('intake.reparse_confirm')));">
@@ -384,9 +384,9 @@
             .dark .intake-preview-scroll-panel::-webkit-scrollbar-thumb:hover { background: rgb(107 114 128); }
         </style>
         <section class="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            {{-- Left: Raw biodata text --}}
+            {{-- Left: Parse input text (same string the parser used for parsed_json) --}}
             <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-4 lg:p-5 flex flex-col min-w-0">
-                <h2 class="text-base font-semibold mb-2 border-b border-gray-200 dark:border-gray-600 pb-2 shrink-0">{{ __('intake.raw_text_heading') }}</h2>
+                <h2 class="text-base font-semibold mb-2 border-b border-gray-200 dark:border-gray-600 pb-2 shrink-0">{{ __('intake.parse_input_text_heading') }}</h2>
                 @if(!empty($missingCriticalFields))
                     <div class="mb-2 text-xs text-red-700 dark:text-red-400 shrink-0">
                         <p class="font-semibold mb-1">⚠️ खालील महत्वाच्या फील्डमध्ये मूल्य भरलेले नाही:</p>
@@ -408,7 +408,7 @@
                 @if (($previewRawTextSource ?? '') === 'ai_vision_unavailable')
                     <p class="text-xs text-amber-800 dark:text-amber-200 mb-2 shrink-0 rounded border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/30 px-2 py-1.5 whitespace-pre-wrap">{{ $rawOcrTextForPreview ?? '' }}</p>
                 @elseif (($previewRawTextSource ?? '') !== 'empty')
-                    <p class="text-xs text-gray-600 dark:text-gray-400 mb-2 shrink-0">{{ __('intake.raw_text_help') }}</p>
+                    <p class="text-xs text-gray-600 dark:text-gray-400 mb-2 shrink-0">{{ __('intake.parse_input_text_help') }}</p>
                 @endif
                 @if (($previewRawTextSource ?? '') === 'ocr_transient')
                     <p class="text-xs text-gray-500 dark:text-gray-500 mb-2 shrink-0">{{ __('intake.preview_parse_input_ocr_transient_note') }}</p>
@@ -417,8 +417,14 @@
                     <p class="text-xs text-amber-700 dark:text-amber-300 mb-2 shrink-0 font-medium">{{ __('intake.manual_crop_parse_note') }}</p>
                 @endif
                 <div class="intake-preview-scroll-panel rounded border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-900/40 p-3 text-xs text-gray-800 dark:text-gray-100 whitespace-pre-wrap leading-relaxed font-mono">
-                    {{ $rawOcrTextForPreview ?? ($intake->raw_ocr_text ?? '') }}
+                    {{ $rawOcrTextForPreview ?? '' }}
                 </div>
+                @if (config('app.debug') && config('intake.debug_show_stored_raw_ocr'))
+                    <details class="mt-3 rounded border border-dashed border-amber-400 dark:border-amber-700 bg-amber-50/80 dark:bg-amber-950/30 p-2 text-xs">
+                        <summary class="cursor-pointer font-medium text-amber-900 dark:text-amber-200">{{ __('intake.debug_stored_raw_ocr_heading') }}</summary>
+                        <pre class="mt-2 whitespace-pre-wrap break-words text-gray-800 dark:text-gray-200 max-h-48 overflow-auto">{{ $intake->raw_ocr_text ?? '' }}</pre>
+                    </details>
+                @endif
             </div>
             {{-- Right: Parsed JSON --}}
             <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-4 lg:p-5 flex flex-col min-w-0">

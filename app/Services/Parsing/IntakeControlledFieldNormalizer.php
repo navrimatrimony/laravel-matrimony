@@ -112,6 +112,21 @@ class IntakeControlledFieldNormalizer
                 }
             }
         }
+        foreach (['father_contact_1', 'father_contact_2', 'father_contact_3', 'mother_contact_1', 'mother_contact_2', 'mother_contact_3'] as $ck) {
+            if (! isset($out[$ck]) || $out[$ck] === null || $out[$ck] === '') {
+                continue;
+            }
+            if (! is_string($out[$ck])) {
+                continue;
+            }
+            $d = preg_replace('/\D/u', '', \App\Services\Ocr\OcrNormalize::normalizeDigits($out[$ck]));
+            if (strlen($d) >= 10) {
+                $d = substr($d, -10);
+                if (preg_match('/^[6-9]\d{9}$/', $d)) {
+                    $out[$ck] = $d;
+                }
+            }
+        }
 
         return $out;
     }
@@ -126,10 +141,7 @@ class IntakeControlledFieldNormalizer
             if (! is_array($row)) {
                 continue;
             }
-            $bg = BiodataParserService::sanitizeBloodGroupValue($row['blood_group'] ?? null);
-            if ($bg !== null && trim($bg) !== '') {
-                $normalizedRows[$i]['blood_group'] = $bg;
-            }
+            unset($normalizedRows[$i]['blood_group']);
             $bw = $row['birth_weekday'] ?? null;
             if (is_string($bw)) {
                 $normalizedRows[$i]['birth_weekday'] = BiodataParserService::sanitizeBirthWeekdayStrict($bw);
@@ -329,7 +341,7 @@ class IntakeControlledFieldNormalizer
             return $snapshot;
         }
         $core = &$snapshot['core'];
-        foreach (['full_name', 'father_name', 'mother_name', 'father_occupation', 'mother_occupation', 'address_line', 'primary_contact_number', 'highest_education', 'birth_place', 'other_relatives_text', 'marital_status', 'religion', 'caste', 'sub_caste'] as $k) {
+        foreach (['full_name', 'father_name', 'mother_name', 'father_occupation', 'mother_occupation', 'father_extra_info', 'address_line', 'primary_contact_number', 'highest_education', 'birth_place', 'other_relatives_text', 'marital_status', 'religion', 'caste', 'sub_caste'] as $k) {
             if (! empty($core[$k]) && is_string($core[$k])) {
                 $core[$k] = trim(preg_replace('/\s+/u', ' ', BiodataParserService::stripIntakeHtmlNoise($core[$k])) ?? '');
                 if ($core[$k] === '') {
@@ -339,6 +351,21 @@ class IntakeControlledFieldNormalizer
         }
         if (! empty($core['other_relatives_text']) && is_string($core['other_relatives_text'])) {
             $core['other_relatives_text'] = BiodataParserService::pruneOtherRelativesNarrative($core['other_relatives_text']);
+        }
+        foreach (['father_contact_1', 'father_contact_2', 'father_contact_3', 'mother_contact_1', 'mother_contact_2', 'mother_contact_3'] as $ck) {
+            if (! isset($core[$ck]) || $core[$ck] === null || $core[$ck] === '') {
+                continue;
+            }
+            if (! is_string($core[$ck])) {
+                continue;
+            }
+            $d = preg_replace('/\D/u', '', \App\Services\Ocr\OcrNormalize::normalizeDigits($core[$ck]));
+            if (strlen($d) >= 10) {
+                $d = substr($d, -10);
+                if (preg_match('/^[6-9]\d{9}$/', $d)) {
+                    $core[$ck] = $d;
+                }
+            }
         }
         // Canonical: AI/legacy `name` → `full_name`, then drop alias (never leave both).
         if (! empty($core['name'])) {

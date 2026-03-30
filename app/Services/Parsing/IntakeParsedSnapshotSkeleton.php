@@ -161,6 +161,7 @@ class IntakeParsedSnapshotSkeleton
             'primary_contact_number' => null,
             'father_name' => null,
             'father_occupation' => null,
+            'father_extra_info' => null,
             'father_contact_1' => null,
             'father_contact_2' => null,
             'father_contact_3' => null,
