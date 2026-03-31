@@ -301,7 +301,15 @@ class ExternalAiParsingService
         }
 
         $url = (string) config('intake.sarvam_structured.chat_completions_url', 'https://api.sarvam.ai/v1/chat/completions');
-        $model = (string) config('intake.sarvam_structured.model', 'sarvam-m');
+        $configuredModel = (string) config('intake.sarvam_structured.model', 'sarvam-m');
+        $model = (string) $configuredModel;
+        // Defensive runtime guard (should never trigger when config is correct).
+        if (strtolower(trim($model)) !== 'sarvam-m') {
+            Log::error('Invalid Sarvam structured model configured: '.$model.'. Expected: sarvam-m', [
+                'configured_model' => $configuredModel,
+            ]);
+            $model = 'sarvam-m';
+        }
 
         $system = $this->v2SystemPrompt();
         $user = $this->v2UserPrompt($rawText);

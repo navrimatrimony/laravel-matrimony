@@ -32,89 +32,134 @@
     @endif
 
     @if (config('app.debug') && is_array($ocrDebugMeta ?? null) && config('ocr.preprocessing.debug_expose_derived_notice'))
-        <div class="mb-3 rounded border-2 border-dashed border-amber-600 bg-amber-50 dark:bg-amber-950/40 p-3 text-xs font-mono text-amber-950 dark:text-amber-100" role="region" aria-label="OCR debug">
-            <p class="font-bold mb-2 text-sm">{{ __('intake.ocr_debug_block_title') }}</p>
-            <ul class="space-y-1 list-disc list-inside">
-                <li>Active parser mode: {{ $ocrDebugMeta['active_parser_mode'] ?? '—' }}</li>
-                <li>Intake parser_version: {{ $ocrDebugMeta['intake_parser_version'] ?? '—' }}</li>
-                <li>UI preset: {{ $ocrDebugMeta['ui_preprocessing_preset'] ?? '—' }}</li>
-                <li>Resolved preset: {{ $ocrDebugMeta['preset_resolved'] ?? '—' }}</li>
-                <li>Preprocess used: {{ ! empty($ocrDebugMeta['preprocess_used']) ? 'yes' : 'no' }}</li>
-                <li>Fallback: {{ ! empty($ocrDebugMeta['fallback_used']) ? 'yes' : 'no' }}</li>
-                <li>Skipped reason: {{ $ocrDebugMeta['skipped_preprocessing_reason'] ?? '—' }}</li>
-                <li>Derived kept on disk: {{ ! empty($ocrDebugMeta['derived_kept_on_disk']) ? 'yes' : 'no' }}</li>
-                <li>Final OCR input path: {{ $ocrDebugMeta['final_ocr_input_path'] ?? '—' }}</li>
-                <li>Driver: {{ $ocrDebugMeta['driver'] ?? '—' }}</li>
-                <li>Applied steps: {{ implode(', ', $ocrDebugMeta['applied_steps'] ?? []) }}</li>
-                <li>{{ __('intake.ocr_debug_effective_source') }}: {{ $ocrDebugMeta['ocr_source_type_effective'] ?? '—' }}</li>
-                @if (! empty($ocrDebugMeta['parse_input_source']))
-                    <li>Parse input source: {{ $ocrDebugMeta['parse_input_source'] }}</li>
-                    <li>AI extract ok: {{ ! empty($ocrDebugMeta['parse_input_ok']) ? 'yes' : 'no' }}</li>
-                    <li>AI extraction provider (transcription): {{ $ocrDebugMeta['parse_input_provider'] ?? '—' }} @if (! empty($ocrDebugMeta['parse_input_provider_source'])) (source: {{ $ocrDebugMeta['parse_input_provider_source'] }}) @endif</li>
-                    <li>Extraction model (if applicable): {{ $ocrDebugMeta['parse_input_model'] ?? '—' }}</li>
-                    <li>AI source field: {{ $ocrDebugMeta['parse_input_source_field'] ?? '—' }}</li>
-                    <li>AI source path: {{ $ocrDebugMeta['parse_input_relative_path'] ?? '—' }}</li>
-                    <li>AI text quality ok: {{ ! empty($ocrDebugMeta['parse_input_text_quality_ok']) ? 'yes' : 'no' }}</li>
-                    <li>AI text chars/lines: {{ $ocrDebugMeta['parse_input_text_chars'] ?? '—' }} / {{ $ocrDebugMeta['parse_input_text_lines'] ?? '—' }}</li>
-                    <li>AI text alpha ratio: {{ $ocrDebugMeta['parse_input_text_alpha_ratio'] ?? '—' }}</li>
-                    @if (array_key_exists('parse_input_vision_detail', $ocrDebugMeta))
-                        <li>Vision detail: {{ $ocrDebugMeta['parse_input_vision_detail'] }}</li>
-                    @endif
-                    @if (! empty($ocrDebugMeta['parse_input_original_image_width']) || ! empty($ocrDebugMeta['parse_input_original_image_height']))
-                        <li>Source image WxH: {{ $ocrDebugMeta['parse_input_original_image_width'] ?? '—' }}×{{ $ocrDebugMeta['parse_input_original_image_height'] ?? '—' }}</li>
-                    @endif
-                    @if (! empty($ocrDebugMeta['parse_input_ai_request_image_width']) || ! empty($ocrDebugMeta['parse_input_ai_request_image_height']))
-                        <li>AI request payload WxH: {{ $ocrDebugMeta['parse_input_ai_request_image_width'] ?? '—' }}×{{ $ocrDebugMeta['parse_input_ai_request_image_height'] ?? '—' }}</li>
-                    @endif
-                    @if (array_key_exists('parse_input_ai_request_payload_enhanced', $ocrDebugMeta))
-                        <li>AI request payload enhanced (upscale/orient): {{ ! empty($ocrDebugMeta['parse_input_ai_request_payload_enhanced']) || ! empty($ocrDebugMeta['parse_input_ai_request_orientation_corrected']) ? 'yes' : 'no' }}</li>
-                    @endif
-                    @if (! empty($ocrDebugMeta['parse_input_extracted_text_line_count']))
-                        <li>Extracted line count (post-sanitize): {{ $ocrDebugMeta['parse_input_extracted_text_line_count'] }}</li>
-                    @endif
-                    @if (! empty($ocrDebugMeta['parse_input_text_quality_reason']))
-                        <li>AI text quality reason: {{ $ocrDebugMeta['parse_input_text_quality_reason'] }}</li>
-                    @endif
-                    @if (! empty($ocrDebugMeta['parse_input_sarvam_job_id']))
-                        <li>Sarvam job: {{ $ocrDebugMeta['parse_input_sarvam_job_id'] }} ({{ $ocrDebugMeta['parse_input_sarvam_job_state'] ?? '—' }})</li>
-                    @endif
-                    @if (! empty($ocrDebugMeta['parse_input_reason']))
-                        <li>AI extract reason (code): {{ $ocrDebugMeta['parse_input_reason'] }}</li>
-                    @endif
-                    @if (! empty($ocrDebugMeta['parse_input_failure_detail']))
-                        <li>AI transcription failure (detail): {{ $ocrDebugMeta['parse_input_failure_detail'] }}</li>
-                    @endif
-                    @if (! empty($ocrDebugMeta['parse_input_quality_failure_detail']))
-                        <li>AI text quality gate: {{ $ocrDebugMeta['parse_input_quality_failure_detail'] }}</li>
-                    @endif
-                    @if (! empty($ocrDebugMeta['parse_input_response_body_snippet']))
-                        <li>Provider HTTP body (snippet): {{ $ocrDebugMeta['parse_input_response_body_snippet'] }}</li>
-                    @endif
+        <div class="mb-3 rounded border-2 border-dashed border-emerald-700/80 dark:border-emerald-500/60 bg-emerald-50 dark:bg-emerald-950/35 p-4 text-sm text-emerald-950 dark:text-emerald-100" role="region" aria-label="{{ __('intake.diagnostics_heading') }}">
+            @php
+                $diag = $ocrDebugMeta['diagnostics_summary'] ?? [];
+            @endphp
+            <p class="text-xs font-mono text-emerald-800/90 dark:text-emerald-200/90 mb-3">{{ __('intake.ocr_debug_block_title') }}</p>
+
+            @if (! empty($diag) && is_array($diag))
+                <h2 class="font-bold text-base mb-3 text-emerald-900 dark:text-emerald-50">{{ __('intake.diagnostics_heading') }}</h2>
+                <dl class="grid grid-cols-1 sm:grid-cols-[minmax(8rem,12rem)_1fr] gap-x-4 gap-y-2 not-italic">
+                    <dt class="text-emerald-800/90 dark:text-emerald-300/90 font-medium">{{ __('intake.diagnostics_label_parser_mode') }}</dt>
+                    <dd>{{ $diag['parser_mode_label'] ?? __('intake.diagnostics_not_available') }}</dd>
+                    <dt class="text-emerald-800/90 dark:text-emerald-300/90 font-medium">{{ __('intake.diagnostics_label_autofill_source') }}</dt>
+                    <dd>{{ $diag['autofill_source_label'] ?? __('intake.diagnostics_not_available') }}</dd>
+                    <dt class="text-emerald-800/90 dark:text-emerald-300/90 font-medium">{{ __('intake.diagnostics_label_ai_provider') }}</dt>
+                    <dd>{{ $diag['ai_provider_label'] ?? __('intake.diagnostics_not_used') }}</dd>
+                    <dt class="text-emerald-800/90 dark:text-emerald-300/90 font-medium">{{ __('intake.diagnostics_label_transcript_used') }}</dt>
+                    <dd>{{ $diag['transcript_used_label'] ?? __('intake.diagnostics_not_available') }}</dd>
+                    <dt class="text-emerald-800/90 dark:text-emerald-300/90 font-medium">{{ __('intake.diagnostics_label_fallback_used') }}</dt>
+                    <dd>{{ $diag['fallback_used_label'] ?? __('intake.diagnostics_no') }}</dd>
+                    <dt class="text-emerald-800/90 dark:text-emerald-300/90 font-medium">{{ __('intake.diagnostics_label_fallback_reason') }}</dt>
+                    <dd>{{ $diag['fallback_reason_label'] ?? __('intake.diagnostics_not_available') }}</dd>
+                    <dt class="text-emerald-800/90 dark:text-emerald-300/90 font-medium">{{ __('intake.diagnostics_label_recommended_action') }}</dt>
+                    <dd class="font-medium">{{ $diag['recommended_action_label'] ?? __('intake.diagnostics_action_review_preview') }}</dd>
+                </dl>
+                @if (! empty($ocrDebugMeta['diagnostics_technical_note']))
+                    <p class="mt-3 text-xs text-emerald-800/80 dark:text-emerald-300/80">{{ $ocrDebugMeta['diagnostics_technical_note'] }}</p>
                 @endif
-                <li>{{ __('intake.ocr_debug_parse_uses_manual') }}: {{ ! empty($ocrDebugMeta['parse_uses_manual_prepared']) ? 'yes' : 'no' }}</li>
-                @if (! empty($ocrDebugMeta['manual_prepared_storage_relative']))
-                    <li>{{ __('intake.ocr_debug_manual_path') }}: {{ $ocrDebugMeta['manual_prepared_storage_relative'] }}</li>
-                    <li><a href="{{ route('intake.manual-prepared-image', $intake) }}" class="underline text-amber-900 dark:text-amber-200" target="_blank" rel="noopener">{{ __('intake.ocr_debug_link_manual') }}</a></li>
-                @endif
-                @if (! empty($ocrDebugMeta['ocr_pipeline']))
-                    <li>OCR pipeline (last extract): {{ $ocrDebugMeta['ocr_pipeline'] }}</li>
-                @endif
-                <li>Original WxH / size: {{ $ocrDebugMeta['original_width'] ?? '?' }}×{{ $ocrDebugMeta['original_height'] ?? '?' }} — {{ $ocrDebugMeta['original_filesize'] ?? '?' }} bytes</li>
-                <li>Derived WxH / size: {{ $ocrDebugMeta['derived_width'] ?? '—' }}×{{ $ocrDebugMeta['derived_height'] ?? '—' }} — {{ $ocrDebugMeta['derived_filesize'] ?? '—' }} bytes</li>
-                @if (! empty($ocrDebugMeta['ocr_quality']) && is_array($ocrDebugMeta['ocr_quality']))
-                    <li>OCR quality (parse input): score {{ $ocrDebugMeta['ocr_quality']['score'] ?? '—' }}, low={{ ! empty($ocrDebugMeta['ocr_quality']['is_low']) ? 'yes' : 'no' }}, reasons: {{ implode(', ', $ocrDebugMeta['ocr_quality']['reasons'] ?? []) }}</li>
-                @endif
-            </ul>
-            <p class="mt-2 break-all">Original path: {{ $ocrDebugMeta['original_absolute_path'] ?? '—' }}</p>
-            <p class="mt-1 break-all">Derived path: {{ $ocrDebugMeta['derived_absolute_path'] ?? '—' }}</p>
-            @if (($ocrDebugMeta['kind'] ?? '') === 'image' && $intake->file_path)
-                <p class="mt-2 flex flex-wrap gap-3">
-                    <a href="{{ route('intake.debug.ocr-artifact', ['intake' => $intake, 'which' => 'original']) }}" class="underline text-amber-900 dark:text-amber-200" target="_blank" rel="noopener">{{ __('intake.ocr_debug_link_original') }}</a>
-                    @if (! empty($ocrDebugMeta['derived_absolute_path']) && is_file($ocrDebugMeta['derived_absolute_path']))
-                        <a href="{{ route('intake.debug.ocr-artifact', ['intake' => $intake, 'which' => 'derived']) }}" class="underline text-amber-900 dark:text-amber-200" target="_blank" rel="noopener">{{ __('intake.ocr_debug_link_derived') }}</a>
-                    @endif
-                </p>
             @endif
+
+            <details class="mt-4 rounded border border-emerald-600/40 dark:border-emerald-500/30 bg-white/60 dark:bg-emerald-950/50 p-3 text-xs font-mono">
+                <summary class="cursor-pointer font-semibold text-emerald-900 dark:text-emerald-100 select-none">{{ __('intake.diagnostics_technical_heading') }}</summary>
+                <ul class="mt-3 space-y-1 list-disc list-inside text-emerald-950 dark:text-emerald-100">
+                    @if (! empty($diag['internal_active_parser_mode'] ?? null))
+                        <li>{{ __('intake.diagnostics_internal_active_parser_mode') }}: <code class="break-all">{{ $diag['internal_active_parser_mode'] }}</code></li>
+                    @endif
+                    @if (! empty($diag['internal_parse_input_source'] ?? null))
+                        <li>{{ __('intake.diagnostics_internal_parse_input_source') }}: <code class="break-all">{{ $diag['internal_parse_input_source'] }}</code></li>
+                    @endif
+                    <li>Active parser mode (raw): {{ $ocrDebugMeta['active_parser_mode'] ?? __('intake.diagnostics_not_available') }}</li>
+                    <li>Intake parser_version: {{ $ocrDebugMeta['intake_parser_version'] ?? __('intake.diagnostics_not_available') }}</li>
+                    <li>UI preset: {{ $ocrDebugMeta['ui_preprocessing_preset'] ?? __('intake.diagnostics_not_available') }}</li>
+                    <li>Resolved preset: {{ $ocrDebugMeta['preset_resolved'] ?? __('intake.diagnostics_not_available') }}</li>
+                    <li>Preprocess used: {{ ! empty($ocrDebugMeta['preprocess_used']) ? __('intake.diagnostics_yes') : __('intake.diagnostics_no') }}</li>
+                    <li>Fallback (preprocess): {{ ! empty($ocrDebugMeta['fallback_used']) ? __('intake.diagnostics_yes') : __('intake.diagnostics_no') }}</li>
+                    <li>Skipped reason: {{ $ocrDebugMeta['skipped_preprocessing_reason'] ?? __('intake.diagnostics_not_available') }}</li>
+                    <li>Derived kept on disk: {{ ! empty($ocrDebugMeta['derived_kept_on_disk']) ? __('intake.diagnostics_yes') : __('intake.diagnostics_no') }}</li>
+                    <li>Final OCR input path: <span class="break-all">{{ $ocrDebugMeta['final_ocr_input_path'] ?? __('intake.diagnostics_not_available') }}</span></li>
+                    <li>Driver: {{ $ocrDebugMeta['driver'] ?? __('intake.diagnostics_not_available') }}</li>
+                    <li>Applied steps: {{ implode(', ', $ocrDebugMeta['applied_steps'] ?? []) }}</li>
+                    <li>{{ __('intake.ocr_debug_effective_source') }}: {{ $ocrDebugMeta['ocr_source_type_effective'] ?? __('intake.diagnostics_not_available') }}</li>
+                    @if (! empty($ocrDebugMeta['parse_input_source']))
+                        <li>Parse input source (raw): {{ $ocrDebugMeta['parse_input_source'] }}</li>
+                        @if (! empty($ocrDebugMeta['parse_input_canonical_transcript_source']))
+                            <li>Canonical transcript source (raw): {{ $ocrDebugMeta['parse_input_canonical_transcript_source'] }}</li>
+                        @endif
+                        @if (! empty($ocrDebugMeta['parse_input_fallback_reason']))
+                            <li>Explicit fallback reason (code): {{ $ocrDebugMeta['parse_input_fallback_reason'] }}</li>
+                        @endif
+                        @if (array_key_exists('parse_input_ai_extraction_skipped', $ocrDebugMeta))
+                            <li>AI extraction skipped (re-parse): {{ ! empty($ocrDebugMeta['parse_input_ai_extraction_skipped']) ? __('intake.diagnostics_yes') : __('intake.diagnostics_no') }}</li>
+                        @endif
+                        <li>AI extract ok: {{ ! empty($ocrDebugMeta['parse_input_ok']) ? __('intake.diagnostics_yes') : __('intake.diagnostics_no') }}</li>
+                        <li>AI extraction provider (raw): {{ $ocrDebugMeta['parse_input_provider'] ?? __('intake.diagnostics_not_used') }} @if (! empty($ocrDebugMeta['parse_input_provider_source'])) (source: {{ $ocrDebugMeta['parse_input_provider_source'] }}) @endif</li>
+                        <li>Extraction model: {{ $ocrDebugMeta['parse_input_model'] ?? __('intake.diagnostics_not_available') }}</li>
+                        <li>AI source field: {{ $ocrDebugMeta['parse_input_source_field'] ?? __('intake.diagnostics_not_available') }}</li>
+                        <li>AI source path: <span class="break-all">{{ $ocrDebugMeta['parse_input_relative_path'] ?? __('intake.diagnostics_not_available') }}</span></li>
+                        <li>AI text quality ok: {{ ! empty($ocrDebugMeta['parse_input_text_quality_ok']) ? __('intake.diagnostics_yes') : __('intake.diagnostics_no') }}</li>
+                        <li>AI text chars/lines: {{ $ocrDebugMeta['parse_input_text_chars'] ?? __('intake.diagnostics_not_available') }} / {{ $ocrDebugMeta['parse_input_text_lines'] ?? __('intake.diagnostics_not_available') }}</li>
+                        <li>AI text alpha ratio: {{ $ocrDebugMeta['parse_input_text_alpha_ratio'] ?? __('intake.diagnostics_not_available') }}</li>
+                        @if (array_key_exists('parse_input_vision_detail', $ocrDebugMeta))
+                            <li>Vision detail: {{ $ocrDebugMeta['parse_input_vision_detail'] }}</li>
+                        @endif
+                        @if (! empty($ocrDebugMeta['parse_input_original_image_width']) || ! empty($ocrDebugMeta['parse_input_original_image_height']))
+                            <li>Source image WxH: {{ $ocrDebugMeta['parse_input_original_image_width'] ?? __('intake.diagnostics_not_available') }}×{{ $ocrDebugMeta['parse_input_original_image_height'] ?? __('intake.diagnostics_not_available') }}</li>
+                        @endif
+                        @if (! empty($ocrDebugMeta['parse_input_ai_request_image_width']) || ! empty($ocrDebugMeta['parse_input_ai_request_image_height']))
+                            <li>AI request payload WxH: {{ $ocrDebugMeta['parse_input_ai_request_image_width'] ?? __('intake.diagnostics_not_available') }}×{{ $ocrDebugMeta['parse_input_ai_request_image_height'] ?? __('intake.diagnostics_not_available') }}</li>
+                        @endif
+                        @if (array_key_exists('parse_input_ai_request_payload_enhanced', $ocrDebugMeta))
+                            <li>AI request payload enhanced: {{ ! empty($ocrDebugMeta['parse_input_ai_request_payload_enhanced']) || ! empty($ocrDebugMeta['parse_input_ai_request_orientation_corrected']) ? __('intake.diagnostics_yes') : __('intake.diagnostics_no') }}</li>
+                        @endif
+                        @if (! empty($ocrDebugMeta['parse_input_extracted_text_line_count']))
+                            <li>Extracted line count (post-sanitize): {{ $ocrDebugMeta['parse_input_extracted_text_line_count'] }}</li>
+                        @endif
+                        @if (! empty($ocrDebugMeta['parse_input_text_quality_reason']))
+                            <li>AI text quality reason: {{ $ocrDebugMeta['parse_input_text_quality_reason'] }}</li>
+                        @endif
+                        @if (! empty($ocrDebugMeta['parse_input_sarvam_job_id']))
+                            <li>Sarvam job: {{ $ocrDebugMeta['parse_input_sarvam_job_id'] }} ({{ $ocrDebugMeta['parse_input_sarvam_job_state'] ?? __('intake.diagnostics_not_available') }})</li>
+                        @endif
+                        @if (! empty($ocrDebugMeta['parse_input_reason']))
+                            <li>AI extract reason (code): {{ $ocrDebugMeta['parse_input_reason'] }}</li>
+                        @endif
+                        @if (! empty($ocrDebugMeta['parse_input_failure_detail']))
+                            <li>AI transcription failure (detail): {{ $ocrDebugMeta['parse_input_failure_detail'] }}</li>
+                        @endif
+                        @if (! empty($ocrDebugMeta['parse_input_quality_failure_detail']))
+                            <li>AI text quality gate: {{ $ocrDebugMeta['parse_input_quality_failure_detail'] }}</li>
+                        @endif
+                        @if (! empty($ocrDebugMeta['parse_input_response_body_snippet']))
+                            <li>Provider HTTP body (snippet): {{ $ocrDebugMeta['parse_input_response_body_snippet'] }}</li>
+                        @endif
+                    @endif
+                    <li>{{ __('intake.ocr_debug_parse_uses_manual') }}: {{ ! empty($ocrDebugMeta['parse_uses_manual_prepared']) ? __('intake.diagnostics_yes') : __('intake.diagnostics_no') }}</li>
+                    @if (! empty($ocrDebugMeta['manual_prepared_storage_relative']))
+                        <li>{{ __('intake.ocr_debug_manual_path') }}: {{ $ocrDebugMeta['manual_prepared_storage_relative'] }}</li>
+                        <li><a href="{{ route('intake.manual-prepared-image', $intake) }}" class="underline text-emerald-900 dark:text-emerald-200" target="_blank" rel="noopener">{{ __('intake.ocr_debug_link_manual') }}</a></li>
+                    @endif
+                    @if (! empty($ocrDebugMeta['ocr_pipeline']))
+                        <li>OCR pipeline (last extract): {{ $ocrDebugMeta['ocr_pipeline'] }}</li>
+                    @endif
+                    <li>Original WxH / size: {{ $ocrDebugMeta['original_width'] ?? '?' }}×{{ $ocrDebugMeta['original_height'] ?? '?' }} — {{ $ocrDebugMeta['original_filesize'] ?? '?' }} bytes</li>
+                    <li>Derived WxH / size: {{ $ocrDebugMeta['derived_width'] ?? __('intake.diagnostics_not_available') }}×{{ $ocrDebugMeta['derived_height'] ?? __('intake.diagnostics_not_available') }} — {{ $ocrDebugMeta['derived_filesize'] ?? __('intake.diagnostics_not_available') }} bytes</li>
+                    @if (! empty($ocrDebugMeta['ocr_quality']) && is_array($ocrDebugMeta['ocr_quality']))
+                        <li>OCR quality (parse input): score {{ $ocrDebugMeta['ocr_quality']['score'] ?? __('intake.diagnostics_not_available') }}, low={{ ! empty($ocrDebugMeta['ocr_quality']['is_low']) ? __('intake.diagnostics_yes') : __('intake.diagnostics_no') }}, reasons: {{ implode(', ', $ocrDebugMeta['ocr_quality']['reasons'] ?? []) }}</li>
+                    @endif
+                </ul>
+                <p class="mt-2 break-all text-emerald-950 dark:text-emerald-100">Original path: {{ $ocrDebugMeta['original_absolute_path'] ?? __('intake.diagnostics_not_available') }}</p>
+                <p class="mt-1 break-all text-emerald-950 dark:text-emerald-100">Derived path: {{ $ocrDebugMeta['derived_absolute_path'] ?? __('intake.diagnostics_not_available') }}</p>
+                @if (($ocrDebugMeta['kind'] ?? '') === 'image' && $intake->file_path)
+                    <p class="mt-2 flex flex-wrap gap-3">
+                        <a href="{{ route('intake.debug.ocr-artifact', ['intake' => $intake, 'which' => 'original']) }}" class="underline text-emerald-900 dark:text-emerald-200" target="_blank" rel="noopener">{{ __('intake.ocr_debug_link_original') }}</a>
+                        @if (! empty($ocrDebugMeta['derived_absolute_path']) && is_file($ocrDebugMeta['derived_absolute_path']))
+                            <a href="{{ route('intake.debug.ocr-artifact', ['intake' => $intake, 'which' => 'derived']) }}" class="underline text-emerald-900 dark:text-emerald-200" target="_blank" rel="noopener">{{ __('intake.ocr_debug_link_derived') }}</a>
+                        @endif
+                    </p>
+                @endif
+            </details>
         </div>
     @endif
 

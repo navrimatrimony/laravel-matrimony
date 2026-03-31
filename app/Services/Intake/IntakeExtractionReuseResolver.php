@@ -39,6 +39,23 @@ class IntakeExtractionReuseResolver
         Cache::put(self::CACHE_FLAG_FORCE_FRESH_PAID_EXTRACTION.$intakeId, true, now()->addMinutes(10));
     }
 
+    /**
+     * Non-destructive read for job routing (e.g. skip paid vision vs DB raw_ocr_text re-parse shortcut).
+     * Actual flag is still consumed later in ParseIntakeJob when the AI vision branch runs.
+     */
+    public static function peekParseInputOnlyFlag(int $intakeId): bool
+    {
+        return (bool) Cache::get(self::CACHE_FLAG_PARSE_INPUT_ONLY.$intakeId, false);
+    }
+
+    /**
+     * True when the next job should bypass reuse and call paid vision again (Re-extract action).
+     */
+    public static function peekForceFreshPaidExtractionFlag(int $intakeId): bool
+    {
+        return (bool) Cache::get(self::CACHE_FLAG_FORCE_FRESH_PAID_EXTRACTION.$intakeId, false);
+    }
+
     public function consumeParseInputOnlyFlag(int $intakeId): bool
     {
         return (bool) Cache::pull(self::CACHE_FLAG_PARSE_INPUT_ONLY.$intakeId, false);

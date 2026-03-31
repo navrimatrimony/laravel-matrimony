@@ -194,6 +194,11 @@ class OcrNormalize
             return $m[1] . "'" . $m[2] . '"';
         }
 
+        // Pattern: "5.7 इंच" (feet.inches style common on Marathi biodata OCR)
+        if (preg_match('/(\d+)\.(\d+)\s*इंच/u', $value, $m)) {
+            return $m[1]."'".$m[2].'"';
+        }
+
         // If already in correct format, return as-is
         if (preg_match("/^\d+['']\d+[\"]$/", $value)) {
             return $value;

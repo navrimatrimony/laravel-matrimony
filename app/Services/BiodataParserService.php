@@ -74,7 +74,9 @@ class BiodataParserService
     {
         // Strip BOM if present; rest of the flow expects UTF-8 text and relies on upstream normalization.
         $rawText = preg_replace('/^\x{FEFF}/u', '', $rawText);
+        $tableStructuredHints = [];
         if (stripos($rawText, '<table') !== false) {
+            $tableStructuredHints = \App\Services\Parsing\HtmlMarathiBiodataTableExtractor::extract($rawText);
             $rawText = self::flattenHtmlTableForBiodata($rawText);
         }
         $rawText = self::stripIntakeHtmlNoise($rawText);
@@ -95,6 +97,7 @@ class BiodataParserService
         }
 
         $lines = array_map('trim', explode("\n", $text));
+        $separatedLayoutHints = \App\Services\Parsing\MarathiSeparatedLabelValueExtractor::extract($lines);
         $sections = $this->detectSections($lines);
         $personalText = implode("\n", $sections['PERSONAL'] ?? []);
         $familyText = implode("\n", $sections['FAMILY'] ?? []);
@@ -315,8 +318,13 @@ class BiodataParserService
         $confidence['father_name'] = $fatherName !== null ? self::CONF_DIRECT : self::CONF_MISSING;
         $confidence['mother_name'] = $motherName !== null ? self::CONF_DIRECT : self::CONF_MISSING;
 
-        $brotherCount = $this->extractCount($familyText, ['भाऊ', 'बंधू', 'Brother']) ?? $this->extractCount($text, ['भाऊ', 'बंधू', 'Brother']);
-        $sisterCount = $this->extractCount($familyText, ['बहिण', 'बहीण', 'Sister']) ?? $this->extractCount($text, ['बहिण', 'बहीण', 'Sister']);
+        $brotherCount = $this->extractCount($familyText, ['भाऊ', 'बंधू', 'Brother', 'मुलाचा भाऊ', 'मुलाचे भाऊ'])
+            ?? $this->extractCount($text, ['भाऊ', 'बंधू', 'Brother', 'मुलाचा भाऊ', 'मुलाचे भाऊ']);
+        $sisterCount = $this->extractCount($familyText, ['बहिण', 'बहीण', 'Sister', 'मुलाची बहिण', 'मुलाची बहीण'])
+            ?? $this->extractCount($text, ['बहिण', 'बहीण', 'Sister', 'मुलाची बहिण', 'मुलाची बहीण']);
+        if ($sisterCount === null && preg_match('/मुलाची\s+(?:बहिण|बहीण)\s*[:\s_\-]*(?:नाही|No\b|None|०|0)\b/um', $text)) {
+            $sisterCount = 0;
+        }
         $confidence['brother_count'] = $brotherCount !== null ? self::CONF_REGEX : self::CONF_MISSING;
         $confidence['sister_count'] = $sisterCount !== null ? self::CONF_REGEX : self::CONF_MISSING;
 
@@ -354,10 +362,22 @@ class BiodataParserService
         $siblingAvivahitAmbiguous = $this->isAmbiguousSiblingAvivahitLine($text);
         $siblingCountsLocked = $siblingAvivahitAmbiguous;
         if ($siblingCountsLocked) {
-            $brotherCount = null;
-            $sisterCount = null;
-            $confidence['brother_count'] = self::CONF_MISSING;
-            $confidence['sister_count'] = self::CONF_MISSING;
+            // If the document explicitly declares counts (including "नाही"), keep those numeric signals.
+            $explicitSiblingCountSignal = (bool) preg_match(
+                '/(?:भाऊ|बहिण|बहीण|मुलाची\s+बहिण|मुलाची\s+बहीण|मुलाचा\s+भाऊ|मुलाचे\s+भाऊ)\s*[:\s_\-]*(?:\d+|एक|१|दोन|२|तीन|३|चार|४|पाच|५|सहा|६|नाही|०|0|None|No\b)/um',
+                $text
+            );
+            if (! $explicitSiblingCountSignal) {
+                $brotherCount = null;
+                $sisterCount = null;
+                $confidence['brother_count'] = self::CONF_MISSING;
+                $confidence['sister_count'] = self::CONF_MISSING;
+            }
+        }
+        // Explicit "बहिण :- नाही" style lines should map to zero even when sibling-count locking is enabled.
+        if ($sisterCount === null && preg_match('/(?:मुलाची\s+)?(?:बहिण|बहीण)\s*[:\s_\-]*(?:नाही|None|No\b|०|0)\b/um', $text)) {
+            $sisterCount = 0;
+            $confidence['sister_count'] = self::CONF_REGEX;
         }
 
         $fatherName = $this->stripTrailingMobileFragmentFromPersonLine($fatherName);
@@ -377,11 +397,15 @@ class BiodataParserService
                 ?? $this->extractField($personalText, ['जन्म वार व वेळ', 'जन्मवार आणि वेळ', 'जन्म वार आणि वेळ', 'जन्म वेळ', 'जन्मवेळ', 'Birth time'])
                 ?? $this->extractField($text, ['जन्म वार व वेळ', 'जन्मवार आणि वेळ', 'जन्म वार आणि वेळ', 'जन्म वेळ', 'जन्मवेळ', 'Birth time'])
         );
+        // OCR sometimes keeps leading punctuation: ":- १ वा. २० मि." → normalize should see the time phrase only.
+        if ($birthTimeRaw !== null) {
+            $birthTimeRaw = trim((string) (preg_replace('/^[\s:;\-–—\.]+/u', '', (string) $birthTimeRaw) ?? $birthTimeRaw));
+        }
         $birthTimeNorm = $this->normalizeBirthTime($birthTimeRaw);
         $birthTime = $birthTimeNorm ?? ($birthTimeRaw !== null && $this->looksLikeMarathiBirthTimePhrase($birthTimeRaw) ? trim($birthTimeRaw) : null);
         $birthPlace = $this->rejectIfLabelNoise(
-            $this->extractField($personalText, ['जन्म स्थळ', 'जन्म ठिकाण', 'Birth place'])
-                ?? $this->extractField($text, ['जन्म स्थळ', 'जन्म ठिकाण', 'Birth place'])
+            $this->extractField($personalText, ['जन्मस्थळ', 'जन्म स्थळ', 'जन्म ठिकाण', 'Birth place'])
+                ?? $this->extractField($text, ['जन्मस्थळ', 'जन्म स्थळ', 'जन्म ठिकाण', 'Birth place'])
         );
         if ($birthPlace !== null && trim((string) $birthPlace) !== '') {
             $birthPlace = $this->truncateFieldBeforeInlineSectionLabels($birthPlace, [
@@ -394,7 +418,7 @@ class BiodataParserService
             $birthPlace = null;
         }
         if ($birthPlace === null || trim((string) $birthPlace) === '') {
-            if (preg_match('/जन्म\s*ठिकाण\s*[:\-]+\s*(.+?)(?=\s+(?:वर्ण|गोत्र|शिक्षण|जन्म|रास|नक्षत्र)\s*[:\-]|\R|$)/us', $text, $jbp)) {
+            if (preg_match('/जन्म\s*(?:ठिकाण|स्थळ)\s*[:\-]+\s*(.+?)(?=\s+(?:वर्ण|गोत्र|शिक्षण|जन्म|रास|नक्षत्र)\s*[:\-]|\R|$)/us', $text, $jbp)) {
                 $birthPlace = $this->rejectIfLabelNoise($this->cleanValue(trim($jbp[1])));
             }
         }
@@ -417,7 +441,23 @@ class BiodataParserService
         $nakshatra = $this->rejectIfLabelNoise($this->extractFieldAfterLabels($horoscopeText, ['नक्षत्र']) ?? $this->extractFieldAfterLabels($text, ['नक्षत्र']) ?? $this->extractField($horoscopeText, ['नक्षत्र']) ?? $this->extractField($text, ['नक्षत्र']));
         $nakshatra = $this->truncateFieldBeforeInlineSectionLabels($nakshatra, ['वर्ण', 'गोत्र', 'योनी', 'गण', 'कुलस्वामी', 'रास', 'नाड', 'देवक']);
         $nadiRaw = $this->rejectIfLabelNoise($this->extractField($horoscopeText, ['नाडी', 'नाड २', 'नाड']) ?? $this->extractField($text, ['नाडी', 'नाड २', 'नाड']));
-        $charan = null;
+        $charan = $this->rejectIfLabelNoise(
+            $this->extractFieldAfterLabels($horoscopeText, ['चरण']) ?? $this->extractFieldAfterLabels($text, ['चरण'])
+                ?? $this->extractField($horoscopeText, ['चरण']) ?? $this->extractField($text, ['चरण'])
+        );
+        if (is_string($charan) && $charan !== '') {
+            // Keep common Marathi display form for charan ordinal (e.g. "१ ले", "२ रे") even after digit normalization.
+            $charan = preg_replace_callback('/^([1-4])\s*/u', function ($m) {
+                return match ($m[1]) {
+                    '1' => '१ ',
+                    '2' => '२ ',
+                    '3' => '३ ',
+                    '4' => '४ ',
+                    default => $m[0],
+                };
+            }, trim($charan)) ?? $charan;
+            $charan = trim((string) $charan);
+        }
         $nadi = $nadiRaw !== null ? $this->normalizeNadiValue($nadiRaw) : null;
         $yoni = $this->rejectIfLabelNoise($this->extractFieldAfterLabels($horoscopeText, ['योनी']) ?? $this->extractFieldAfterLabels($text, ['योनी']) ?? $this->extractField($horoscopeText, ['योनी']) ?? $this->extractField($text, ['योनी']));
         $this->applyRashiYoniCompositeSplit($rashi, $yoni);
@@ -457,9 +497,17 @@ class BiodataParserService
         $kulName = $this->rejectHoroscopeJunk($kulName);
         $devak = $this->rejectHoroscopeJunk($devak);
         $navrasName = $this->rejectIfLabelNoise(
-            $this->extractField($horoscopeText, ['नावरस नाव', 'नवरस नाव', 'Navras']) ??
-            $this->extractField($text, ['नावरस नाव', 'नवरस नाव', 'Navras'])
+            $this->extractField($horoscopeText, ['नावरसनांव', 'नावरस नाव', 'नवरस नाव', 'नांवटस नाव', 'Navras']) ??
+            $this->extractField($text, ['नावरसनांव', 'नावरस नाव', 'नवरस नाव', 'नांवटस नाव', 'Navras'])
         );
+        // Navras name can be very short (e.g. "पे"); extractField()->cleanValue() may drop <3-char Marathi tokens.
+        if (($navrasName === null || trim((string) $navrasName) === '')
+            && preg_match('/(?:नावरसनांव|नावरस\s+नाव|नवरस\s+नाव|Navras)\s*[:\-]+\s*([^\n]{1,30})/ui', $text, $nm)) {
+            $cand = trim((string) ($nm[1] ?? ''));
+            $cand = preg_split('/\s+(?:वर्ण|रास|राशी|नक्षत्र|योनी|नाडी|गण)\s*[:\-]/u', $cand, 2)[0] ?? $cand;
+            $cand = trim((string) $cand);
+            $navrasName = $cand !== '' ? $cand : null;
+        }
         if (is_string($navrasName) && $navrasName !== '') {
             $navrasName = self::stripResidualHtmlTagsFromString($navrasName);
             $navrasName = $navrasName === '' ? null : $navrasName;
@@ -473,10 +521,25 @@ class BiodataParserService
             $this->extractField($text, ['जन्मवार', 'जन्म वार', 'Birth day'])
         );
         [$birthWeekday, $birthTime] = $this->refineBirthWeekdayTimeComposite($text, $birthWeekday, $birthTime);
+        if (is_string($birthTime) && $birthTime !== '') {
+            $birthTime = trim((string) preg_replace('/^[\s\-–—•*]+/u', '', $birthTime));
+        }
         $birthWeekday = $this->sanitizeBirthWeekdayField($birthWeekday);
         // Horoscope varna साठी फक्त canonical values ठेवतो; physical complexion साठी वरचं $complexion raw जतन केले आहे.
-        $varnaCandidate = $varnaRaw !== null ? trim(preg_replace('/,\s*$/u', '', trim((string) $varnaRaw)) ?? '') : null;
+        // Prefer horoscope block "वर्ण" over personal complexion.
+        $horoscopeVarnaRaw = $this->extractFieldAfterLabels($horoscopeText, ['वर्ण']) ?? $this->extractField($horoscopeText, ['वर्ण'])
+            ?? $this->extractFieldAfterLabels($text, ['वर्ण']) ?? $this->extractField($text, ['वर्ण']);
+        $varnaCandidate = $horoscopeVarnaRaw !== null ? trim(preg_replace('/,\s*$/u', '', trim((string) $horoscopeVarnaRaw)) ?? '') : null;
         $varna = $this->validateVarna($varnaCandidate === '' ? null : $varnaCandidate);
+        if ($varna === null && $varnaRaw !== null) {
+            $fallbackVarnaCandidate = trim(preg_replace('/,\s*$/u', '', trim((string) $varnaRaw)) ?? '');
+            $varna = $this->validateVarna($fallbackVarnaCandidate === '' ? null : $fallbackVarnaCandidate);
+        }
+        if ($varna === null && preg_match('/वर्ण\s*[:\-]+\s*([^\n]+)/u', $text, $vm)) {
+            $chunk = trim((string) (preg_split('/\s+(?:रास|नक्षत्र|योनी|नाडी|गण|चरण|वश्य|रक्त|इतर\s+नातेवाईक)\s*[:\-]/u', trim($vm[1]))[0] ?? ''));
+            $chunk = trim((string) preg_replace('/,\s*$/u', '', $chunk));
+            $varna = $this->validateVarna($chunk !== '' ? $chunk : null);
+        }
 
         // Additive fallback: parse combined horoscope lines when individual labels missed pieces.
         $this->applyCombinedHoroscopeFallbacks(
@@ -499,7 +562,9 @@ class BiodataParserService
         if (($fatherOccupation === null || trim((string) $fatherOccupation) === '') && $fatherOccFromParen !== null) {
             $fatherOccupation = $fatherOccFromParen;
         }
-        $mama = $this->extractField($familyText, ['मामा']) ?? $this->extractField($text, ['मामा']);
+        $mama = $this->extractAfterLabelMultiline($familyText, 'मामा')
+            ?? $this->extractAfterLabelMultiline($text, 'मामा')
+            ?? $this->extractField($familyText, ['मामा']) ?? $this->extractField($text, ['मामा']);
         $mama = $this->rejectIfLabelNoise($mama);
         $mama = $this->sanitizeCoreMamaField($mama);
         $relatives = $this->rejectIfLabelNoise($this->extractField($familyText, ['इतर पाहुणे', 'नातेसंबंध']) ?? $this->extractField($text, ['इतर पाहुणे', 'नातेसंबंध']));
@@ -647,9 +712,26 @@ class BiodataParserService
         foreach (array_keys($this->collectSuchakHeaderPhonesToExclude($text)) as $sp) {
             $relativePhoneExclude[$sp] = true;
         }
-        // Registration-verified primary phone is system-controlled; never populate from biodata OCR.
+        // Explicit contact label: safe to capture without guessing (do not use footer-only numbers).
         $primaryContact = null;
         $confidence['primary_contact_number'] = self::CONF_MISSING;
+        // Keep this narrow: only set biodata primary when an explicit "संपर्क नंबर" label exists.
+        $contactRaw = $this->extractAfterLabelMultiline($text, 'संपर्क नंबर')
+            ?? $this->extractFieldAfterLabels($text, ['संपर्क नंबर']);
+        if (is_string($contactRaw) && trim($contactRaw) !== '') {
+            $contactRaw = $this->truncateFieldBeforeInlineSectionLabels($contactRaw, [
+                'शिक्षण', 'रक्त', 'वर्ण', 'गोत्र', 'रास', 'नक्षत्र', 'नाडी', 'गण', 'जन्म', 'पत्ता', 'स्थावर', 'स्थायिक', 'अपेक्षा',
+            ]);
+            $candidateDigits = \App\Services\Ocr\OcrNormalize::normalizeDigits($contactRaw) ?? $contactRaw;
+            if (preg_match('/\b([6-9]\d{9})\b/u', (string) $candidateDigits, $cm)) {
+                $digits10 = $cm[1];
+                if (! $this->phoneDigitsAppearOnlyOnFooterOrShopLines($text, $digits10)) {
+                    $primaryContact = $digits10;
+                    $confidence['primary_contact_number'] = self::CONF_DIRECT;
+                    $relativePhoneExclude[$digits10] = true;
+                }
+            }
+        }
 
         $bloodGroupRaw = $this->extractFieldAfterLabels($text, ['रक्तगट', 'रक्‍त गट', 'रक्त गट', 'Blood group'])
             ?? $this->extractField($text, ['रक्तगट', 'रक्‍त गट', 'रक्त गट', 'Blood group']);
@@ -713,6 +795,13 @@ class BiodataParserService
             && trim(preg_replace('/\s+/u', ' ', $residentialAddressLine)) === trim(preg_replace('/\s+/u', ' ', $addressBlock))) {
             $residentialAddressLine = null;
         }
+        $nativePlaceRaw = $this->extractFieldAfterLabels($text, ['मूळचा पत्ता', 'मुळचा पत्ता'])
+            ?? $this->extractField($text, ['मूळचा पत्ता', 'मुळचा पत्ता']);
+        $nativePlaceRaw = $this->truncateFieldBeforeInlineSectionLabels($nativePlaceRaw, [
+            'इतर नातेवाईक', 'नक्षत्र', 'रास', 'चरण', 'वर्ण', 'संपर्क', 'स्थावर', 'स्थायिक', 'अपेक्षा', 'प्रिंट',
+        ]);
+        $nativePlaceRaw = $nativePlaceRaw !== null && trim((string) $nativePlaceRaw) !== ''
+            ? $this->finalizeAddressBlockCandidate(trim((string) $nativePlaceRaw)) : null;
         $confidence['address'] = $addressBlock !== null ? self::CONF_REGEX : self::CONF_MISSING;
 
         // Post-process mother name to split inline occupation like "(गृहिणी)" into a dedicated field.
@@ -750,6 +839,7 @@ class BiodataParserService
             'father_contact_2' => $fatherContactPhone2,
             'father_extra_info' => $fatherMuPoAddressLine,
             'company_name' => null,
+            'work_location_text' => null,
             'occupation_title' => null,
             'serious_intent_id' => null,
             'father_name' => $fatherName,
@@ -778,6 +868,11 @@ class BiodataParserService
             'mama' => $mama,
             'relatives' => $relatives,
         ];
+        // Explicit "बहिण :- नाही" should always map to 0 (do not leave null).
+        if (($core['sister_count'] ?? null) === null
+            && preg_match('/(?:मुलाची\s+)?(?:बहिण|बहीण)\s*[:\s_\-]*(?:नाही|None|No\b|०|0)\b/um', $text)) {
+            $core['sister_count'] = 0;
+        }
         if ($addressBlock !== null && ($core['address_line'] ?? null) === null) {
             $core['address_line'] = $addressBlock;
         }
@@ -817,14 +912,14 @@ class BiodataParserService
         $nokCareerSplit = $this->splitNokariLineCompanyAndSalary($nokariLineCareer);
         $profession = $nokCareerSplit['role_title'] ?? null;
         $companyNameFromNokari = $nokCareerSplit['company_name'];
+        $workLocationFromNokari = $nokCareerSplit['location'] ?? null;
         $profession = $profession ?? $romanized['career'] ?? null;
         $profession = $this->validateCareer($profession);
         if ($profession !== null && $this->valueSmellsLikeHoroscopeOrGotraLeak($profession)) {
             $profession = null;
         }
         if ($profession === null && $companyNameFromNokari !== null) {
-            $profession = $this->validateCareer($companyNameFromNokari)
-                ?? ($this->cleanValue($companyNameFromNokari) ?: null);
+            $profession = $this->validateCareer($companyNameFromNokari);
         }
         $careerHistory = [];
         if ($profession !== null) {
@@ -834,10 +929,24 @@ class BiodataParserService
                 'job_title' => $profession,
                 'employer' => $companyNameFromNokari,
                 'company_name' => $companyNameFromNokari,
+                'location' => is_string($workLocationFromNokari) && trim($workLocationFromNokari) !== '' ? trim($workLocationFromNokari) : null,
                 'from' => null,
                 'to' => null,
             ]];
             $confidence['career'] = self::CONF_DIRECT;
+        } elseif ($companyNameFromNokari !== null && trim((string) $companyNameFromNokari) !== '') {
+            // Employer/company explicit without a separate job title — keep company + location only (no fake role).
+            $careerHistory = [[
+                'role' => null,
+                'occupation_title' => null,
+                'job_title' => null,
+                'employer' => $companyNameFromNokari,
+                'company_name' => $companyNameFromNokari,
+                'location' => is_string($workLocationFromNokari) && trim($workLocationFromNokari) !== '' ? trim($workLocationFromNokari) : null,
+                'from' => null,
+                'to' => null,
+            ]];
+            $confidence['career'] = self::CONF_REGEX;
         } elseif ($gender === 'female') {
             $careerHistory = [];
             $confidence['career'] = self::CONF_MISSING;
@@ -868,11 +977,14 @@ class BiodataParserService
                 $relativePhoneExclude[$norm] = true;
             }
         }
-        if (preg_match_all('/\b([6-9]\d{9})\b/', $text, $allMatches)) {
+        if (preg_match_all('/\b([6-9]\d{9})\b/u', $text, $allMatches)) {
             $seen = [];
             foreach (array_unique($allMatches[1]) as $num) {
                 $normKey = \App\Services\Ocr\OcrNormalize::normalizePhone($num) ?? $num;
                 if (isset($relativePhoneExclude[$normKey])) {
+                    continue;
+                }
+                if ($this->phoneDigitsAppearOnlyOnFooterOrShopLines($text, (string) $num)) {
                     continue;
                 }
                 $normalized = \App\Services\Ocr\OcrNormalize::normalizePhone($num);
@@ -890,13 +1002,59 @@ class BiodataParserService
                 }
             }
         }
+        // If we have an explicit primary contact from biodata, include it as a primary self contact.
+        if ($primaryContact !== null) {
+            $seen = [];
+            foreach ($contacts as $c) {
+                $k = \App\Services\Ocr\OcrNormalize::normalizePhone((string) ($c['number'] ?? $c['phone_number'] ?? '')) ?? '';
+                if ($k !== '') {
+                    $seen[$k] = true;
+                }
+            }
+            if (! isset($seen[$primaryContact])) {
+                array_unshift($contacts, [
+                    'type' => 'self',
+                    'label' => 'self',
+                    'number' => $primaryContact,
+                    'phone_number' => $primaryContact,
+                    'relation_type' => '',
+                    'contact_name' => '',
+                    'is_primary' => true,
+                ]);
+            }
+        }
+
+        // If no dedicated mobile row exists, but an address/family line contains a valid mobile, keep it as a contact.
+        if (! isset($tableStructuredHints['primary_contact']) || trim((string) ($tableStructuredHints['primary_contact'] ?? '')) === '') {
+            $addrPhone = $this->extractSelfPhoneFromAddressContext($text);
+            if ($addrPhone !== null && ! $this->phoneDigitsAppearOnlyOnFooterOrShopLines($text, $addrPhone)) {
+                $seen = [];
+                foreach ($contacts as $c) {
+                    $k = \App\Services\Ocr\OcrNormalize::normalizePhone((string) ($c['number'] ?? $c['phone_number'] ?? '')) ?? '';
+                    if ($k !== '') {
+                        $seen[$k] = true;
+                    }
+                }
+                if (! isset($seen[$addrPhone])) {
+                    $contacts[] = [
+                        'type' => 'alternate',
+                        'label' => 'self',
+                        'number' => $addrPhone,
+                        'phone_number' => $addrPhone,
+                        'relation_type' => '',
+                        'contact_name' => '',
+                        'is_primary' => false,
+                    ];
+                }
+            }
+        }
 
         // ——— OPTIONAL: Property ———
         $propertySummary = null;
         $propertyAssets = [];
         if ($this->hasAnyKeyword($text, self::PROPERTY_TRIGGER)) {
             $propertySummary = $this->extractPropertySummaryBlock($text);
-            $propertySummary = $propertySummary ?? $this->extractField($text, ['स्थायिक मालमत्ता', 'शेती', 'जमीन', 'Property']);
+            $propertySummary = $propertySummary ?? $this->extractField($text, ['स्थावर मिळकत', 'स्थायिक मालमत्ता', 'शेती', 'जमीन', 'Property']);
             $propertyAssets = [];
             $confidence['property'] = $propertySummary !== null ? self::CONF_REGEX : self::CONF_AI;
         } else {
@@ -945,6 +1103,7 @@ class BiodataParserService
                 'gotra' => $gotra,
                 'navras_name' => $navrasName,
                 'birth_weekday' => $birthWeekday,
+                'varna' => $varna,
             ];
 
             // Only push if at least one non-null/non-empty textual field is present.
@@ -985,64 +1144,14 @@ class BiodataParserService
             $confidence['preferences'] = self::CONF_MISSING;
         }
 
-        // ——— AI FALLBACK for low-confidence or ambiguous ———
-        $coreKeys = [
-            'sub_caste',
-            'marital_status',
-            'annual_income',
-            'family_income',
-            'primary_contact_number',
-            'serious_intent_id',
-            'father_name',
-            'mother_name',
-            'brother_count',
-            'sister_count',
-            'height_cm',
-            'highest_education',
-        ];
-        foreach ($coreKeys as $k) {
-            if (! array_key_exists($k, $confidence)) {
-                $confidence[$k] = isset($core[$k]) && $core[$k] !== null && $core[$k] !== '' ? self::CONF_REGEX : self::CONF_MISSING;
-            }
-        }
-
-        $needsAi = false;
-        foreach ($coreKeys as $k) {
-            if (($confidence[$k] ?? 0) < 0.6 && ($core[$k] ?? null) === null) {
-                $needsAi = true;
-                break;
-            }
-        }
-        if ($needsAi) {
-            $aiResult = $this->aiParseFragment($text);
-            $aiCore = $aiResult['core'] ?? [];
-            $aiConf = $aiResult['confidence_map'] ?? [];
-            foreach ($coreKeys as $k) {
-                if ($k === 'primary_contact_number') {
-                    continue;
-                }
-                if ($siblingCountsLocked && ($k === 'brother_count' || $k === 'sister_count')) {
-                    continue;
-                }
-                $existingConf = (float) ($confidence[$k] ?? 0);
-                if ($existingConf >= self::CONF_THRESHOLD_NO_OVERWRITE) {
-                    continue;
-                }
-                $aiVal = $aiCore[$k] ?? null;
-                $aiC = (float) ($aiConf[$k] ?? 0);
-                if ($aiVal !== null && $aiVal !== '' && $aiC >= 0.75) {
-                    $core[$k] = $aiVal;
-                    $confidence[$k] = self::CONF_AI;
-                }
-            }
-        }
-        if ($siblingCountsLocked) {
-            $core['brother_count'] = null;
-            $core['sister_count'] = null;
-        }
-
         // ——— FAMILY STRUCTURES: siblings, relatives, and refined career roles ———
-        $familyStructures = $this->extractFamilyStructures($this->expandMamaChulteOnSameLine($text), $siblingCountsLocked);
+        $tableHasOtherRelativesRow = isset($tableStructuredHints['other_relatives_text'])
+            && trim((string) $tableStructuredHints['other_relatives_text']) !== '';
+        $familyStructures = $this->extractFamilyStructures(
+            $this->expandMamaChulteOnSameLine($text),
+            $siblingCountsLocked,
+            $tableHasOtherRelativesRow
+        );
 
         // Prefer more precise sibling counts derived from structured rows when available (unless locked).
         $siblings = $familyStructures['siblings'] ?? [];
@@ -1075,7 +1184,9 @@ class BiodataParserService
         if (($familyStructures['core_overrides']['mother_occupation'] ?? null) !== null && ($core['mother_occupation'] ?? null) === null) {
             $core['mother_occupation'] = $this->sanitizeCoreOccupation($familyStructures['core_overrides']['mother_occupation']);
         }
-        if (($familyStructures['core_overrides']['mother_name'] ?? null) !== null) {
+        $htmlWillSupplyMotherName = isset($tableStructuredHints['mother_name'])
+            && trim((string) $tableStructuredHints['mother_name']) !== '';
+        if (! $htmlWillSupplyMotherName && ($familyStructures['core_overrides']['mother_name'] ?? null) !== null) {
             $core['mother_name'] = $familyStructures['core_overrides']['mother_name'];
         }
 
@@ -1090,28 +1201,148 @@ class BiodataParserService
             } elseif (! empty($careerHistory[0]['company'])) {
                 $core['company_name'] = $careerHistory[0]['company'];
             }
+            if (empty($core['work_location_text']) && ! empty($careerHistory[0]['location'])) {
+                $core['work_location_text'] = is_string($careerHistory[0]['location']) ? trim((string) $careerHistory[0]['location']) : null;
+            } elseif (empty($core['work_location_text']) && ! empty($careerHistory[0]['work_location_text'])) {
+                $core['work_location_text'] = is_string($careerHistory[0]['work_location_text']) ? trim((string) $careerHistory[0]['work_location_text']) : null;
+            }
             $core['occupation_title'] = $careerHistory[0]['occupation_title']
                 ?? $careerHistory[0]['job_title']
                 ?? $careerHistory[0]['role']
-                ?? $careerHistory[0]['company_name']
-                ?? $careerHistory[0]['company']
-                ?? $core['company_name']
                 ?? null;
         }
 
         $relativesRows = $familyStructures['relatives'] ?? [];
+        // Legacy core.relatives is a noisy summary string; when structured relatives[] exist, drop core.relatives.
+        if (! empty($relativesRows)) {
+            $core['relatives'] = null;
+        }
 
-        if (! empty($familyStructures['other_relatives_text'] ?? null) && is_string($familyStructures['other_relatives_text'])) {
+        if (! $tableHasOtherRelativesRow
+            && ! empty($familyStructures['other_relatives_text'] ?? null)
+            && is_string($familyStructures['other_relatives_text'])) {
             $core['other_relatives_text'] = $familyStructures['other_relatives_text'];
         }
 
+        $htmlStructuredFieldLocks = [];
+
+        // Structured-first: HTML table is final truth; separated layout fills only gaps (respect locks).
+        $this->mergeHtmlTableStructuredHints(
+            $core,
+            $tableStructuredHints,
+            $contacts,
+            $careerHistory,
+            $relativesRows,
+            $educationHistory,
+            $propertySummary,
+            $addressBlock,
+            $residentialAddressLine,
+            $text,
+            $siblings,
+            $horoscope,
+            $htmlStructuredFieldLocks
+        );
+
+        $this->mergeMarathiSeparatedLayoutHints(
+            $core,
+            $separatedLayoutHints,
+            $contacts,
+            $careerHistory,
+            $relativesRows,
+            $educationHistory,
+            $htmlStructuredFieldLocks
+        );
+
+        if (! empty($htmlStructuredFieldLocks['contacts'])
+            && isset($tableStructuredHints['primary_contact'])
+            && trim((string) $tableStructuredHints['primary_contact']) !== '') {
+            $this->applyHtmlTablePrimaryContactAsAuthoritative(
+                $contacts,
+                (string) $tableStructuredHints['primary_contact'],
+                $text
+            );
+        }
+
+        $this->applyGenderFromCandidateFullNameHonorific($core);
+
+        // AI fallback only for unlocked fields (never overwrites HTML/table extractions).
+        $coreKeys = [
+            'sub_caste',
+            'marital_status',
+            'annual_income',
+            'family_income',
+            'primary_contact_number',
+            'serious_intent_id',
+            'father_name',
+            'mother_name',
+            'brother_count',
+            'sister_count',
+            'height_cm',
+            'highest_education',
+        ];
+        foreach ($coreKeys as $k) {
+            if (! array_key_exists($k, $confidence)) {
+                $confidence[$k] = isset($core[$k]) && $core[$k] !== null && $core[$k] !== '' ? self::CONF_REGEX : self::CONF_MISSING;
+            }
+        }
+        $needsAi = false;
+        foreach ($coreKeys as $k) {
+            if (($confidence[$k] ?? 0) < 0.6 && ($core[$k] ?? null) === null) {
+                $needsAi = true;
+                break;
+            }
+        }
+        if ($needsAi) {
+            $aiResult = $this->aiParseFragment($text);
+            $aiCore = $aiResult['core'] ?? [];
+            $aiConf = $aiResult['confidence_map'] ?? [];
+            foreach ($coreKeys as $k) {
+                if ($k === 'primary_contact_number') {
+                    continue;
+                }
+                if (isset($htmlStructuredFieldLocks[$k]) && $htmlStructuredFieldLocks[$k]) {
+                    continue;
+                }
+                if ($siblingCountsLocked && ($k === 'brother_count' || $k === 'sister_count')) {
+                    continue;
+                }
+                $existingConf = (float) ($confidence[$k] ?? 0);
+                if ($existingConf >= self::CONF_THRESHOLD_NO_OVERWRITE) {
+                    continue;
+                }
+                $aiVal = $aiCore[$k] ?? null;
+                $aiC = (float) ($aiConf[$k] ?? 0);
+                if ($aiVal !== null && $aiVal !== '' && $aiC >= 0.75) {
+                    $core[$k] = $aiVal;
+                    $confidence[$k] = self::CONF_AI;
+                }
+            }
+        }
+        if ($siblingCountsLocked) {
+            $core['brother_count'] = null;
+            $core['sister_count'] = null;
+        }
+
         // Marathi-safe caste/sub_caste: "NN कुळी/क्‌ळी मराठा" → sub_caste = "NN कुळी", caste = "मराठा". No mojibake.
-        if (($core['sub_caste'] ?? null) === null && isset($core['caste']) && is_string($core['caste'])) {
+        if (! isset($htmlStructuredFieldLocks['caste']) && ($core['sub_caste'] ?? null) === null && isset($core['caste']) && is_string($core['caste'])) {
             if (preg_match('/([0-9०-९]+\s*(?:कुळी|क्‌ळी|क[\x{094D}\x{200C}\s]*ळी|कळी))/u', $core['caste'], $m) && mb_strpos($core['caste'], 'मराठा') !== false) {
                 $normalized = preg_replace('/(?:क्‌ळी|क[\x{094D}\x{200C}\s]*ळी|कळी)/u', 'कुळी', $m[1]);
                 $core['sub_caste'] = trim($normalized);
                 $core['caste'] = 'मराठा';
             }
+        }
+
+        // Last pass: HTML table snapshot wins over any late OCR/body/footer bleed (addresses, other_relatives, horoscope, contacts).
+        if (\App\Services\Parsing\HtmlMarathiBiodataTableExtractor::isStructuredTableHints($tableStructuredHints)) {
+            $this->finalizeStructuredHtmlTableSnapshot(
+                $tableStructuredHints,
+                $core,
+                $addressBlock,
+                $residentialAddressLine,
+                $contacts,
+                $horoscope,
+                $text
+            );
         }
 
         // Build simple path-based confidence map for key fields.
@@ -1184,12 +1415,19 @@ class BiodataParserService
 
         $coreOut = $core;
         $siblingsOut = $siblings;
-        if ($siblingCountsLocked) {
+        $explicitSiblingCountSignal = (bool) preg_match(
+            '/(?:भाऊ|बहिण|बहीण|मुलाची\s+बहिण|मुलाची\s+बहीण|मुलाचा\s+भाऊ|मुलाचे\s+भाऊ)\s*[:\s_\-]*(?:\d+|एक|१|दोन|२|तीन|३|चार|४|पाच|५|सहा|६|नाही|०|0|None|No\b)/um',
+            $text
+        );
+        if ($siblingCountsLocked && ! $explicitSiblingCountSignal) {
             $coreOut['brother_count'] = null;
             $coreOut['sister_count'] = null;
             $coreOut['has_siblings'] = null;
             $siblingsOut = [];
         }
+
+        $this->filterContactsRemoveFooterShopNumbers($contacts, $text);
+        $relativesRows = $this->filterRelativeRowsDropSectionPseudoHeaders($relativesRows);
 
         return [
             'core' => $coreOut,
@@ -1197,7 +1435,19 @@ class BiodataParserService
             'children' => $children,
             'education_history' => $educationHistory,
             'career_history' => $careerHistory,
-            'addresses' => $this->buildAddressesArray($addressBlock, $residentialAddressLine ?? null),
+            'addresses' => $this->buildAddressesArray($addressBlock, $residentialAddressLine ?? null, $nativePlaceRaw ?? null),
+            'birth_place' => (($coreOut['birth_place_text'] ?? $coreOut['birth_place'] ?? null) !== null && trim((string) ($coreOut['birth_place_text'] ?? $coreOut['birth_place'])) !== '')
+                ? [
+                    'address_line' => (string) ($coreOut['birth_place_text'] ?? $coreOut['birth_place']),
+                    'raw' => (string) ($coreOut['birth_place_text'] ?? $coreOut['birth_place']),
+                ]
+                : null,
+            'native_place' => ($nativePlaceRaw !== null && trim((string) $nativePlaceRaw) !== '')
+                ? [
+                    'address_line' => trim((string) $nativePlaceRaw),
+                    'raw' => trim((string) $nativePlaceRaw),
+                ]
+                : null,
             'property_summary' => $propertySummary,
             'property_assets' => $propertyAssets,
             'horoscope' => $horoscope,
@@ -1239,7 +1489,8 @@ class BiodataParserService
         $text = implode("\n", $lines);
 
         $text = preg_replace('/^\s*[«*•]+\s*/mu', '', $text);
-        $text = preg_replace('/^\s*[0-9]{1,2}[.\-]\s*/mu', '', $text);
+        // Line-start list markers "1. ", "2- "; do not strip "5.7 इंच" / decimal measurements (digit after the dot).
+        $text = preg_replace('/^\s*[0-9]{1,2}[.\-](?!\d)\s*/mu', '', $text);
 
         $text = preg_replace('/[ \t]+/', ' ', $text);
 
@@ -1629,10 +1880,11 @@ class BiodataParserService
      */
     private function extractFatherNameAndPhoneFromVadilancheNaavLine(string $text): array
     {
-        if (! preg_match('/वडिलांचे\s*(?:नाव|नांव)\s*[:\-]?\s*([^\n]+)/u', $text, $m)) {
+        if (! preg_match('/वडिलांचे\s*(?:नाव|नांव)\s*[:\-]?\s*(.+)/us', $text, $m)) {
             return [null, null];
         }
         $rest = trim($m[1]);
+        $rest = trim(preg_replace('/\s+/u', ' ', $rest) ?? $rest);
         $rest = preg_replace('/^[:\-–—]\s*/u', '', $rest);
         $rest = trim($rest);
         $phone = null;
@@ -1800,7 +2052,19 @@ class BiodataParserService
                 $sections['HOROSCOPE'][] = $line;
             } elseif (mb_strpos($line, 'मु.पो.') !== false || mb_strpos($line, 'ता.') !== false || mb_strpos($line, 'जि.') !== false || mb_strpos($line, 'संपर्क') !== false) {
                 $sections['CONTACT'][] = $line;
-            } elseif (mb_strpos($line, 'जन्म') !== false || mb_strpos($line, 'उंची') !== false || mb_strpos($line, 'शिक्षण') !== false || mb_strpos($line, 'गोत्र') !== false || mb_strpos($line, 'कुलदैवत') !== false || mb_strpos($line, 'कुळस्वामी') !== false || mb_strpos($line, 'कुलस्वामी') !== false || mb_strpos($line, 'वर्ण') !== false) {
+            } elseif (mb_strpos($line, 'वर्ण') !== false) {
+                // Horoscope varna (वैश्य/क्षत्रिय/…) must stay in HOROSCOPE scope; complexion "वर्ण: गोरा" stays PERSONAL.
+                if (preg_match('/वर्ण\s*[:\-]+\s*(.+)$/u', $line, $vm)) {
+                    $vOnly = trim((string) preg_replace('/\s+(?:रास|नक्षत्र|योनी|नाडी|गण|चरण|वश्य|रक्त)\s*[:\-].*$/u', '', trim($vm[1])));
+                    $vOnly = trim((string) preg_replace('/,\s*$/u', '', $vOnly));
+                    if ($this->validateVarna($vOnly !== '' ? $vOnly : null) !== null) {
+                        $sections['HOROSCOPE'][] = $line;
+
+                        continue;
+                    }
+                }
+                $sections['PERSONAL'][] = $line;
+            } elseif (mb_strpos($line, 'जन्म') !== false || mb_strpos($line, 'उंची') !== false || mb_strpos($line, 'शिक्षण') !== false || mb_strpos($line, 'गोत्र') !== false || mb_strpos($line, 'कुलदैवत') !== false || mb_strpos($line, 'कुळस्वामी') !== false || mb_strpos($line, 'कुलस्वामी') !== false) {
                 $sections['PERSONAL'][] = $line;
             } else {
                 $sections['OTHER'][] = $line;
@@ -3253,11 +3517,36 @@ class BiodataParserService
             return null;
         }
         $v = trim($value);
+        if (\function_exists('normalizer_normalize')) {
+            $n = normalizer_normalize($v, \Normalizer::FORM_C);
+            if (is_string($n) && $n !== '') {
+                $v = $n;
+            }
+        }
+        $v = trim((string) preg_replace('/^[\-\s]+/u', '', $v));
+        $v = trim(preg_replace('/\s+/u', ' ', $v) ?? '');
         if (mb_strlen($v) > 40 || mb_strpos($v, 'नोकरी') !== false || preg_match('/\d{10}/', $v)) {
             return null;
         }
+        // Horoscope varna is a small closed set; reject complexion words like "गोरा".
+        if (preg_match('/^(?:गोरा|सावळा|काळा|कृष्ण|फेऱ|फेस)/u', $v)) {
+            return null;
+        }
+        // Allow common OCR alternates for the four varnas (same canonical output).
+        if (preg_match('/^वैश्य$/u', $v)) {
+            return 'वैश्य';
+        }
+        if (preg_match('/^क्षत्रिय$/u', $v)) {
+            return 'क्षत्रिय';
+        }
+        if (preg_match('/^ब्राह्मण$/u', $v)) {
+            return 'ब्राह्मण';
+        }
+        if (preg_match('/^शूद्र$/u', $v)) {
+            return 'शूद्र';
+        }
 
-        return $v;
+        return null;
     }
 
     /** Known labels that must not be captured as field values (wrong assignment). */
@@ -3300,6 +3589,1566 @@ class BiodataParserService
         }
 
         return false;
+    }
+
+    /**
+     * HTML &lt;table&gt; rows → structured hints (runs before separated + inline-derived core). Priority: table → separated → heuristics.
+     *
+     * @param  array<string, mixed>  $core
+     * @param  array<string, string>  $hints
+     * @param  list<array<string, mixed>>  $contacts
+     * @param  list<array<string, mixed>>  $careerHistory
+     * @param  list<array<string, mixed>>  $relativesRows
+     * @param  list<array<string, mixed>>  $educationHistory
+     * @param  list<array<string, mixed>>  $horoscope
+     * @param  array<string, true>  $htmlStructuredFieldLocks  Fields set from HTML table — OCR/separated/AI must not overwrite.
+     */
+    private function mergeHtmlTableStructuredHints(
+        array &$core,
+        array $hints,
+        array &$contacts,
+        array &$careerHistory,
+        array &$relativesRows,
+        array &$educationHistory,
+        ?string &$propertySummary,
+        ?string &$addressBlock,
+        ?string &$residentialAddressLine,
+        string $text,
+        array &$siblings,
+        array &$horoscope,
+        array &$htmlStructuredFieldLocks
+    ): void {
+        if (! \App\Services\Parsing\HtmlMarathiBiodataTableExtractor::isStructuredTableHints($hints)) {
+            return;
+        }
+        unset($hints[\App\Services\Parsing\HtmlMarathiBiodataTableExtractor::STRUCTURED_MARKER]);
+
+        $fill = fn (?string $cur): bool => $cur === null || trim((string) $cur) === ''
+            || $this->isLikelyLabelOnlyValue((string) $cur);
+
+        $rejectFatherNoise = static function (string $v): bool {
+            if (preg_match('/मुलाची\s*आई/u', $v)) {
+                return true;
+            }
+            if (preg_match('/^मुलाचे\s*भाऊ$/u', trim($v))) {
+                return true;
+            }
+
+            return false;
+        };
+        $rejectMotherNoise = static function (string $v): bool {
+            return (bool) preg_match('/मुलाचे\s*वडील/u', $v);
+        };
+
+        if (isset($hints['full_name'])) {
+            $cand = trim($hints['full_name']);
+            $cur = (string) ($core['full_name'] ?? '');
+            if ($this->shouldForceReplaceHtmlTablePersonName($cur, $cand, 'full_name')) {
+                $v = $this->validateFullName($this->cleanValue($cand));
+                if ($v !== null) {
+                    $core['full_name'] = $v;
+                }
+            }
+        }
+
+        if (isset($hints['date_of_birth'])) {
+            $cand = trim($hints['date_of_birth']);
+            $cur = (string) ($core['date_of_birth'] ?? '');
+            if ($this->shouldApplyStructuredTableHint($cur, $cand, 'date_of_birth')) {
+                $raw = $this->rejectBirthDateRawWithoutDigits(
+                    $this->truncateDobRawAtBirthTimeLabel($cand)
+                );
+                if ($raw !== null) {
+                    $dob = \App\Services\Ocr\OcrNormalize::normalizeDate($raw);
+                    if ($dob === $raw) {
+                        $dob = $this->normalizeDate($raw);
+                    }
+                    if ($dob !== null && preg_match('/^\d{4}-\d{2}-\d{2}$/', (string) $dob)) {
+                        $core['date_of_birth'] = $dob;
+                    }
+                }
+            }
+        }
+
+        if (isset($hints['birth_place'])) {
+            $cand = trim($hints['birth_place']);
+            $cur = (string) ($core['birth_place'] ?? '');
+            if ($this->shouldApplyStructuredTableHint($cur, $cand, 'birth_place')) {
+                $v = $this->rejectIfLabelNoise($this->cleanValue($cand));
+                if ($v !== null && ! $this->valueSmellsLikeHoroscopeOrGotraLeak($v)) {
+                    $core['birth_place'] = $v;
+                    $core['birth_place_text'] = $v;
+                }
+            }
+        }
+
+        if (isset($hints['birth_time'])) {
+            $cand = trim($hints['birth_time']);
+            $cur = (string) ($core['birth_time'] ?? '');
+            if ($this->shouldApplyStructuredTableHint($cur, $cand, 'birth_time')) {
+                $bt = $this->normalizeBirthTime($cand);
+                if ($bt !== null) {
+                    $core['birth_time'] = $bt;
+                }
+            }
+        }
+
+        if (isset($hints['height'])) {
+            $cand = trim($hints['height']);
+            if ($this->shouldApplyStructuredTableHint((string) ($core['height'] ?? ''), $cand, 'height')
+                || (($core['height_cm'] ?? null) === null && $cand !== '')) {
+                $heightNorm = \App\Services\Ocr\OcrNormalize::normalizeHeight($cand);
+                $cm = $this->normalizeHeight($heightNorm ?? $cand);
+                if ($cm !== null && $cm > 0) {
+                    $core['height_cm'] = $cm;
+                    $core['height'] = $this->formatHeightFeetInchesDisplay($cm, $cand, $heightNorm);
+                }
+            }
+        }
+
+        if (isset($hints['complexion'])) {
+            $cand = trim($hints['complexion']);
+            $cur = (string) ($core['complexion'] ?? '');
+            if ($this->shouldApplyStructuredTableHint($cur, $cand, 'complexion')) {
+                $v = $this->rejectBleededPhysicalComplexion($this->rejectIfLabelNoise($this->cleanValue($cand)));
+                if ($v !== null && $v !== '') {
+                    $core['complexion'] = $v;
+                }
+            }
+        }
+
+        if (isset($hints['blood_group'])) {
+            $cand = trim($hints['blood_group']);
+            $cur = (string) ($core['blood_group'] ?? '');
+            if ($this->shouldApplyStructuredTableHint($cur, $cand, 'blood_group')) {
+                $raw = $this->cleanValue($cand);
+                $bg = \App\Services\Ocr\OcrNormalize::normalizeBloodGroup($raw);
+                if ($bg) {
+                    $bg = \App\Services\Ocr\OcrNormalize::applyBaselinePatterns('blood_group', $bg);
+                }
+                if ($bg === $raw) {
+                    $bg = $this->normalizeBloodGroup($raw);
+                }
+                $bg = $this->validateBloodGroupStrict($bg);
+                if ($bg !== null) {
+                    $core['blood_group'] = $bg;
+                }
+            }
+        }
+
+        $mergedEdu = false;
+        if (isset($hints['highest_education'])) {
+            $cand = trim($hints['highest_education']);
+            $cur = (string) ($core['highest_education'] ?? '');
+            if ($this->shouldApplyStructuredTableHint($cur, $cand, 'highest_education')) {
+                $v = $this->cleanValue($cand);
+                if (! $this->valueSmellsLikeHoroscopeOrGotraLeak($v)) {
+                    $v = $this->validateEducation($v) ?? ($fill($cur) && mb_strlen($v) >= 3 ? $v : null);
+                    if ($v !== null) {
+                        $core['highest_education'] = $v;
+                        $mergedEdu = true;
+                    }
+                }
+            }
+        }
+        if ($mergedEdu && ! empty($core['highest_education'])) {
+            $educationHistory = [[
+                'degree' => $this->stripTrailingEducationNoise((string) $core['highest_education']),
+                'institution' => null,
+                'year' => null,
+            ]];
+        }
+
+        if (isset($hints['occupation_raw'])) {
+            $cand = trim($hints['occupation_raw']);
+            if ($cand !== ''
+                && (($core['occupation_title'] ?? null) === null && $careerHistory === [])
+                && $this->shouldApplyStructuredTableHint('', $cand, 'occupation_raw')) {
+                $v = $this->cleanValue($cand);
+                $v = $this->validateCareer($v) ?? ($v !== '' ? $v : null);
+                if ($v !== null && ! $this->valueSmellsLikeHoroscopeOrGotraLeak($v)) {
+                    $careerHistory = [[
+                        'role' => $v,
+                        'occupation_title' => $v,
+                        'job_title' => $v,
+                        'employer' => null,
+                        'company_name' => null,
+                        'from' => null,
+                        'to' => null,
+                    ]];
+                    $core['occupation_title'] = $v;
+                }
+            }
+        }
+
+        if (isset($hints['kuldaivat'])) {
+            $cand = trim($hints['kuldaivat']);
+            $cur = (string) ($core['kuldaivat'] ?? '');
+            if ($this->shouldApplyStructuredTableHint($cur, $cand, 'kuldaivat')) {
+                $v = $this->rejectIfLabelNoise($this->cleanValue($cand));
+                if ($v !== null && ! $this->valueSmellsLikeHoroscopeOrGotraLeak($v)) {
+                    $core['kuldaivat'] = $v;
+                }
+            }
+        }
+
+        if (isset($hints['gotra'])) {
+            $cand = trim($hints['gotra']);
+            $cur = (string) ($core['gotra'] ?? '');
+            if ($this->shouldApplyStructuredTableHint($cur, $cand, 'gotra')) {
+                $v = $this->rejectIfLabelNoise($this->cleanValue($cand));
+                if ($v !== null) {
+                    $core['gotra'] = $this->balanceTrailingParenthesesInGotra($v);
+                }
+            }
+        }
+
+        if (isset($hints['devak'])) {
+            $cand = trim($hints['devak']);
+            $cur = (string) ($core['devak'] ?? '');
+            if ($this->shouldApplyStructuredTableHint($cur, $cand, 'devak')) {
+                $v = $this->rejectHoroscopeJunk($this->rejectIfLabelNoise($this->cleanValue($cand)));
+                if ($v !== null && trim($v) !== '' && trim($v) !== 'देव') {
+                    $core['devak'] = $v;
+                }
+            }
+        }
+
+        if (isset($hints['caste'])) {
+            $cand = trim($hints['caste']);
+            $cur = (string) ($core['caste'] ?? '');
+            if ($this->shouldApplyStructuredTableHint($cur, $cand, 'caste')) {
+                $v = $this->validateCaste($this->normalizeCasteValue($this->cleanValue($cand)));
+                if ($v !== null) {
+                    $core['caste'] = $v;
+                }
+            }
+        }
+
+        $fatherCur = (string) ($core['father_name'] ?? '');
+        if (isset($hints['father_name'])) {
+            $cand = trim(preg_replace('/\s+/u', ' ', trim($hints['father_name'])) ?? '');
+            if ($this->shouldForceReplaceHtmlTablePersonName($fatherCur, $cand, 'father_name')
+                || $this->separatedLayoutParentFieldLooksSwapped($fatherCur, 'father')) {
+                if (! $rejectFatherNoise($cand)) {
+                    $fatherOccFromHint = null;
+                    $rawFather = $cand;
+                    if ($rawFather !== '' && preg_match('/\(([^)]+)\)\s*$/u', $rawFather, $fpm)) {
+                        $inner = $this->cleanValue(trim($fpm[1]));
+                        if ($inner !== '' && ! $this->isMaritalStatusOccupationLeak($inner)) {
+                            $fatherOccFromHint = $inner;
+                        }
+                        $rawFather = trim(preg_replace('/\s*\([^)]+\)\s*$/u', '', $rawFather));
+                    }
+                    [$fn, $fph] = $this->extractFatherNameAndPhoneFromVadilancheNaavLine('वडिलांचे नांव :- '.$rawFather);
+                    $raw = $fn !== null ? $fn : $this->rejectIfLabelNoise($this->cleanValue($rawFather));
+                    if ($raw !== null) {
+                        $v = $this->stripTrailingMobileFragmentFromPersonLine($raw);
+                        $v = $v !== null ? $this->cleanPersonName($v) : null;
+                        $v = $this->validateFatherName($v);
+                        if ($v !== null) {
+                            $core['father_name'] = $v;
+                        }
+                    }
+                    if ($fatherOccFromHint !== null && ($core['father_occupation'] ?? null) === null) {
+                        $core['father_occupation'] = $this->sanitizeCoreOccupation($fatherOccFromHint);
+                    }
+                    if ($fph !== null && preg_match('/^[6-9]\d{9}$/', $fph)) {
+                        $core['father_contact_1'] = $core['father_contact_1'] ?? $fph;
+                        $this->fatherContactSlotsMergePhone($contacts, $fph);
+                    }
+                }
+            }
+        }
+
+        if (isset($hints['mother_name'])) {
+            $cand = trim(preg_replace('/\s+/u', ' ', trim($hints['mother_name'])) ?? '');
+            $motherCur = (string) ($core['mother_name'] ?? '');
+            if ($this->shouldForceReplaceHtmlTablePersonName($motherCur, $cand, 'mother_name')
+                || $this->separatedLayoutParentFieldLooksSwapped($motherCur, 'mother')) {
+                if (! $rejectMotherNoise($cand)) {
+                    $motherOccFromHint = null;
+                    $rawMom = $this->rejectIfLabelNoise($this->cleanValue($cand));
+                    if ($rawMom !== null && preg_match('/\(([^)]+)\)\s*$/u', $rawMom, $momPm)) {
+                        $inner = $this->cleanValue(trim($momPm[1]));
+                        if ($inner !== '' && ! $this->isMaritalStatusOccupationLeak($inner)) {
+                            $motherOccFromHint = $inner;
+                        }
+                        $rawMom = trim(preg_replace('/\s*\([^)]+\)\s*$/u', '', $rawMom));
+                    }
+                    $v = $this->stripTrailingMobileFragmentFromPersonLine($rawMom);
+                    $v = $v !== null ? $this->cleanPersonName($v) : null;
+                    $v = $this->validateMotherName($v);
+                    if ($v !== null) {
+                        $core['mother_name'] = $v;
+                    }
+                    if ($motherOccFromHint !== null && ($core['mother_occupation'] ?? null) === null) {
+                        $core['mother_occupation'] = $this->sanitizeCoreOccupation($motherOccFromHint);
+                    }
+                }
+            }
+        }
+
+        if (isset($hints['address_native'])) {
+            $cand = trim($hints['address_native']);
+            $addr = $this->finalizeAddressBlockCandidate($this->cleanValue($cand));
+            if ($addr !== null && $addr !== '') {
+                $residentialAddressLine = $addr;
+            }
+        }
+
+        if (isset($hints['address_current'])) {
+            $cand = trim($hints['address_current']);
+            $addr = $this->finalizeAddressBlockCandidate($this->cleanValue($cand));
+            if ($addr !== null && $addr !== '') {
+                $addressBlock = $addr;
+                $core['address_line'] = $addr;
+            }
+        }
+
+        if (isset($hints['primary_contact'])) {
+            $blob = trim($hints['primary_contact']);
+            if ($blob !== '') {
+                $this->applyHtmlTablePrimaryContactAsAuthoritative($contacts, $blob, $text);
+            }
+        }
+
+        if (isset($hints['property_summary'])) {
+            $cand = trim($hints['property_summary']);
+            $cur = (string) ($propertySummary ?? '');
+            if (($this->hasAnyKeyword($text, self::PROPERTY_TRIGGER) || $fill($cur))
+                && $this->shouldApplyStructuredTableHint($cur, $cand, 'property_summary')) {
+                if (! $this->otherRelativesTextLooksPolluted($cand)) {
+                    $propertySummary = $this->cleanValue($cand);
+                }
+            }
+        }
+
+        if (isset($hints['other_relatives_text'])) {
+            $cand = trim($hints['other_relatives_text']);
+            $t = $this->rejectIfLabelNoise($this->cleanValue($cand));
+            if ($t !== null && $t !== '' && ! $this->isLikelyLabelOnlyValue($t)
+                && ! $this->otherRelativesOcrFallbackHardReject($t)
+                && ! $this->otherRelativesTextLooksPolluted($t)) {
+                // HTML row is authoritative: replace OCR/footer-concatenated junk.
+                $core['other_relatives_text'] = $t;
+            }
+        }
+
+        $this->mergeHtmlTableSiblingHints($siblings, $hints);
+
+        $appendRelIfMissing = function (string $relationType, string $note) use (&$relativesRows): void {
+            foreach ($relativesRows as $r) {
+                if (($r['relation_type'] ?? '') === $relationType) {
+                    return;
+                }
+            }
+            $note = trim(preg_replace('/\s+/u', ' ', $note) ?? '');
+            if ($note === '' || $this->isLikelyLabelOnlyValue($note)) {
+                return;
+            }
+            $relativesRows[] = [
+                'relation_type' => $relationType,
+                'name' => null,
+                'address_line' => null,
+                'location' => null,
+                'occupation' => null,
+                'contact_number' => null,
+                'raw_note' => $this->relativeRawNoteCleanup($note, $relationType),
+            ];
+        };
+
+        if (isset($hints['mama_note'])) {
+            $appendRelIfMissing('मामा', $hints['mama_note']);
+        }
+        if (isset($hints['atya_note'])) {
+            $appendRelIfMissing('आत्या', $hints['atya_note']);
+        }
+        if (isset($hints['ajol_note'])) {
+            $appendRelIfMissing('आजोळ', $hints['ajol_note']);
+        }
+
+        $this->mergeHtmlTableHoroscopeHints($horoscope, $hints, $core);
+        $this->applyHtmlTableStructuredFieldLocks($hints, $core, $htmlStructuredFieldLocks);
+        $this->patchSiblingNamesHonorificSpacing($siblings);
+        $this->patchRelativeRowNamesWhenStubOrShort($relativesRows);
+    }
+
+    /**
+     * Mark core fields supplied by HTML table so OCR / separated layout / AI cannot overwrite them.
+     *
+     * @param  array<string, string>  $hints
+     * @param  array<string, mixed>  $core
+     * @param  array<string, true>  $htmlStructuredFieldLocks
+     */
+    private function applyHtmlTableStructuredFieldLocks(array $hints, array $core, array &$htmlStructuredFieldLocks): void
+    {
+        $scalar = [
+            'full_name', 'date_of_birth', 'birth_place', 'birth_time', 'father_name', 'mother_name',
+            'caste', 'other_relatives_text', 'blood_group', 'highest_education', 'complexion',
+            'gotra', 'devak', 'kuldaivat', 'property_summary',
+        ];
+        foreach ($scalar as $k) {
+            if (! isset($hints[$k]) || trim((string) $hints[$k]) === '') {
+                continue;
+            }
+            if (($core[$k] ?? null) !== null && trim((string) $core[$k]) !== '') {
+                $htmlStructuredFieldLocks[$k] = true;
+            }
+        }
+        if (isset($hints['height']) && ($core['height_cm'] ?? null) !== null) {
+            $htmlStructuredFieldLocks['height_cm'] = true;
+        }
+        if (isset($hints['occupation_raw']) && ($core['occupation_title'] ?? null) !== null && trim((string) $core['occupation_title']) !== '') {
+            $htmlStructuredFieldLocks['occupation_title'] = true;
+        }
+        if (isset($hints['address_current']) && ($core['address_line'] ?? null) !== null && trim((string) $core['address_line']) !== '') {
+            $htmlStructuredFieldLocks['address_line'] = true;
+        }
+        if (isset($hints['address_native']) && trim((string) $hints['address_native']) !== '') {
+            $htmlStructuredFieldLocks['residential_address_hint'] = true;
+        }
+        if (isset($hints['primary_contact']) && trim((string) $hints['primary_contact']) !== '') {
+            $htmlStructuredFieldLocks['contacts'] = true;
+        }
+        foreach ($hints as $hk => $_v) {
+            if (is_string($hk) && str_starts_with($hk, 'horoscope_') && trim((string) $_v) !== '') {
+                $htmlStructuredFieldLocks['horoscope'] = true;
+                break;
+            }
+        }
+        if (($core['varna'] ?? null) !== null && trim((string) $core['varna']) !== '' && isset($hints['horoscope_varna'])) {
+            $htmlStructuredFieldLocks['varna'] = true;
+        }
+        foreach (['mama_note', 'atya_note', 'ajol_note'] as $rn) {
+            if (isset($hints[$rn]) && trim((string) $hints[$rn]) !== '') {
+                $htmlStructuredFieldLocks['relatives_rows_notes'] = true;
+
+                break;
+            }
+        }
+        if (isset($hints['mama_note']) && trim((string) $hints['mama_note']) !== '') {
+            $htmlStructuredFieldLocks['mama'] = true;
+        }
+    }
+
+    /**
+     * Table मोबाईल नंबर row is authoritative: drop footer-only numbers not also present in the table cell, then add numbers from the cell.
+     *
+     * @param  list<array<string, mixed>>  $contacts
+     */
+    private function applyHtmlTablePrimaryContactAsAuthoritative(array &$contacts, string $blob, string $fullText): void
+    {
+        $blob = trim($blob);
+        if ($blob === '') {
+            return;
+        }
+        $blobNorm = \App\Services\Ocr\OcrNormalize::normalizeDigits($blob);
+        $blobPhones = [];
+        if (preg_match_all('/\b([6-9]\d{9})\b/u', $blobNorm, $bm)) {
+            $blobPhones = array_values(array_unique($bm[1]));
+        }
+        $blobPhoneSet = array_fill_keys($blobPhones, true);
+        $out = [];
+        foreach ($contacts as $c) {
+            $pn = \App\Services\Ocr\OcrNormalize::normalizePhone((string) ($c['number'] ?? $c['phone_number'] ?? '')) ?? '';
+            if ($pn !== '' && str_contains($blobNorm, $pn)) {
+                $out[] = $c;
+
+                continue;
+            }
+            if ($pn !== '' && $this->phoneDigitsAppearOnlyOnFooterOrShopLines($fullText, $pn)) {
+                continue;
+            }
+            if ($pn !== '' && $this->contactLineLooksLikeShopOrTypingFooter($fullText, $pn)) {
+                continue;
+            }
+            // Table cell is final truth: drop OCR-scanned numbers that are not listed in the मोबाईल row.
+            if ($blobPhones !== [] && $pn !== '' && ! isset($blobPhoneSet[$pn])) {
+                continue;
+            }
+            $out[] = $c;
+        }
+        $contacts = $out;
+        $this->appendAlternateContactsFromSeparatedHintBlob($contacts, $blob);
+    }
+
+    /** Strong reject list for OCR-derived other_relatives (HTML path uses separate gate). */
+    private function otherRelativesOcrFallbackHardReject(string $value): bool
+    {
+        $v = trim($value);
+
+        return (bool) preg_match(
+            '/राशी|नक्षत्र|कुंडली|स्वामी|ग्रह|॥|कॉम्प्युटर|संपर्क\s*:|B-0|टायपिंग|टायप|Computer|Typing|जन्म\s*तारीख|जन्म\s*लग्न|लग्न\s*कुंडली|बायोडेटा|Biodata|Print\s+Shop|प्रिंट|मुद्रण/ui',
+            $v
+        ) || preg_match('/[\x{0C80}-\x{0CFF}]/u', $v);
+    }
+
+    /**
+     * True if the only lines containing this phone match shop/typing/footer heuristics.
+     *
+     * @param  array<int, string>  $lines
+     */
+    private function contactLineLooksLikeShopOrTypingFooter(string $fullText, string $digits10): bool
+    {
+        if (! preg_match('/^[6-9]\d{9}$/', $digits10)) {
+            return false;
+        }
+        $norm = \App\Services\Ocr\OcrNormalize::normalizeDigits($fullText);
+        foreach (preg_split('/\R/u', $norm) ?: [] as $ln) {
+            if (! str_contains((string) $ln, $digits10)) {
+                continue;
+            }
+            if (preg_match('/कॉम्प्युटर|टायपिंग|टायप|Computer|Typing|B-0|संपर्क\s*:|Shop|Print|प्रिंट|मुद्रण/ui', $ln)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Apply horoscope label/value pairs from HTML table rows (ordered cells; avoids legend bleed into values).
+     *
+     * @param  array<string, string>  $hints
+     * @param  array<string, mixed>  $core
+     * @param  list<array<string, mixed>>  $horoscope
+     */
+    private function mergeHtmlTableHoroscopeHints(array &$horoscope, array $hints, array &$core): void
+    {
+        $hasHtmlHoroscopeHints = false;
+        foreach (array_keys($hints) as $hk) {
+            if (is_string($hk) && str_starts_with($hk, 'horoscope_') && trim((string) ($hints[$hk] ?? '')) !== '') {
+                $hasHtmlHoroscopeHints = true;
+
+                break;
+            }
+        }
+        if ($hasHtmlHoroscopeHints) {
+            foreach (['rashi', 'nadi', 'gan'] as $ck) {
+                if (isset($core[$ck]) && $this->isLegendToken((string) $core[$ck])) {
+                    $core[$ck] = null;
+                }
+            }
+            if ($horoscope !== []) {
+                $rk = &$horoscope[0];
+                foreach (['rashi', 'nakshatra', 'nadi', 'gan', 'yoni', 'charan', 'navras_name', 'vairavarga'] as $fk) {
+                    $vv = $rk[$fk] ?? null;
+                    if ($vv !== null && $this->isLegendToken((string) $vv)) {
+                        $rk[$fk] = null;
+                    }
+                }
+            }
+        }
+
+        $map = [
+            'horoscope_nakshatra' => 'nakshatra',
+            'horoscope_charan' => 'charan',
+            'horoscope_nadi' => 'nadi',
+            'horoscope_yoni' => 'yoni',
+            'horoscope_gan' => 'gan',
+            'horoscope_rashi' => 'rashi',
+            'horoscope_swami' => 'navras_name',
+            'horoscope_vairavarga' => 'vairavarga',
+        ];
+
+        $patch = [];
+        foreach ($map as $hintKey => $rowKey) {
+            if (! isset($hints[$hintKey])) {
+                continue;
+            }
+            $raw = trim(self::stripResidualHtmlTagsFromString(trim((string) $hints[$hintKey])));
+            if ($raw === '' || $this->horoscopeHtmlValueLooksLikeLegendBleed($raw)) {
+                continue;
+            }
+            if ($rowKey === 'rashi') {
+                $v = $this->rejectHoroscopeJunk(self::sanitizeRashiDisplayText($raw));
+            } elseif ($rowKey === 'nakshatra' || $rowKey === 'yoni') {
+                $v = $this->rejectHoroscopeJunk($raw);
+            } elseif ($rowKey === 'nadi') {
+                $nadiRaw = $this->rejectHoroscopeJunk($raw);
+                $v = $nadiRaw !== null ? ($this->normalizeNadiValue($nadiRaw) ?? $nadiRaw) : null;
+                $v = $this->rejectHoroscopeJunk($v);
+            } elseif ($rowKey === 'gan') {
+                $v = self::sanitizeGanValue($raw);
+            } elseif ($rowKey === 'charan') {
+                $v = trim((string) $raw);
+                $v = $v === '' ? null : $v;
+            } else {
+                $v = $this->rejectHoroscopeJunk($raw);
+            }
+            if ($v !== null && $v !== '') {
+                $patch[$rowKey] = $v;
+            }
+        }
+
+        if (isset($hints['horoscope_varna'])) {
+            $vv = trim((string) $hints['horoscope_varna']);
+            $vv = $vv === '' ? null : $this->validateVarna($this->cleanValue($vv));
+            if ($vv !== null) {
+                $core['varna'] = $vv;
+            }
+        }
+
+        if ($patch === []) {
+            return;
+        }
+
+        if ($horoscope === []) {
+            $horoscope = [[
+                'rashi_id' => null,
+                'nakshatra_id' => null,
+                'gan_id' => null,
+                'nadi_id' => null,
+                'yoni_id' => null,
+                'mangal_dosh_type_id' => null,
+                'rashi' => null,
+                'nakshatra' => null,
+                'charan' => null,
+                'nadi' => null,
+                'gan' => null,
+                'yoni' => null,
+                'devak' => null,
+                'kuldaivat' => null,
+                'gotra' => null,
+                'navras_name' => null,
+                'birth_weekday' => null,
+                'vairavarga' => null,
+            ]];
+        }
+
+        $row = &$horoscope[0];
+        foreach ($patch as $k => $v) {
+            $row[$k] = $v;
+        }
+
+        // Keep core scalar horoscope fields aligned with structured table row (OCR may have legend bleed).
+        $sync = $horoscope[0];
+        foreach (['rashi', 'nadi', 'gan'] as $hk) {
+            if (isset($sync[$hk]) && $sync[$hk] !== null && trim((string) $sync[$hk]) !== '') {
+                $core[$hk] = $sync[$hk];
+            }
+        }
+    }
+
+    /**
+     * After AI / caste / separated layout: re-apply structured HTML table fields so OCR/footer never wins.
+     *
+     * @param  array<string, string>  $tableHints
+     * @param  array<string, mixed>  $core
+     * @param  list<array<string, mixed>>  $contacts
+     * @param  list<array<string, mixed>>  $horoscope
+     */
+    private function finalizeStructuredHtmlTableSnapshot(
+        array $tableHints,
+        array &$core,
+        ?string &$addressBlock,
+        ?string &$residentialAddressLine,
+        array &$contacts,
+        array &$horoscope,
+        string $text
+    ): void {
+        $hints = $tableHints;
+        unset($hints[\App\Services\Parsing\HtmlMarathiBiodataTableExtractor::STRUCTURED_MARKER]);
+
+        if (isset($hints['address_current'])) {
+            $addr = $this->finalizeAddressBlockCandidate($this->cleanValue(trim((string) $hints['address_current'])));
+            if ($addr !== null && $addr !== '') {
+                $addressBlock = $addr;
+                $core['address_line'] = $addr;
+            }
+        }
+        if (isset($hints['address_native'])) {
+            $addrN = $this->finalizeAddressBlockCandidate($this->cleanValue(trim((string) $hints['address_native'])));
+            if ($addrN !== null && $addrN !== '') {
+                $residentialAddressLine = $addrN;
+            }
+        }
+
+        if (isset($hints['other_relatives_text'])) {
+            $t = $this->rejectIfLabelNoise($this->cleanValue(trim((string) $hints['other_relatives_text'])));
+            if ($t !== null && $t !== '' && ! $this->isLikelyLabelOnlyValue($t)
+                && ! $this->otherRelativesOcrFallbackHardReject($t)) {
+                $core['other_relatives_text'] = $t;
+            }
+        }
+
+        if (isset($hints['primary_contact']) && trim((string) $hints['primary_contact']) !== '') {
+            $this->rebuildContactsFromHtmlMobileBlobOnly($contacts, trim((string) $hints['primary_contact']));
+        }
+
+        $this->mergeHtmlTableHoroscopeHints($horoscope, $hints, $core);
+    }
+
+    /**
+     * @param  list<array<string, mixed>>  $contacts
+     */
+    private function rebuildContactsFromHtmlMobileBlobOnly(array &$contacts, string $blob): void
+    {
+        $blob = trim($blob);
+        if ($blob === '') {
+            return;
+        }
+        $blobNorm = \App\Services\Ocr\OcrNormalize::normalizeDigits($blob);
+        if (! preg_match_all('/\b([6-9]\d{9})\b/u', $blobNorm, $m) || $m[1] === []) {
+            $contacts = [];
+
+            return;
+        }
+        $contacts = [];
+        $this->appendAlternateContactsFromSeparatedHintBlob($contacts, $blobNorm);
+    }
+
+    /** True when HTML cell value is another column header (legend bleed), not the real field value. */
+    private function horoscopeHtmlValueLooksLikeLegendBleed(string $value): bool
+    {
+        return $this->isLegendToken($value);
+    }
+
+    /**
+     * Horoscope grid label tokens that must never be stored as the field value (same-row value only).
+     */
+    private function isLegendToken(?string $value): bool
+    {
+        if ($value === null || trim($value) === '') {
+            return false;
+        }
+        $t = trim($value);
+
+        return (bool) preg_match('/^(नक्षत्र|चरण|नाडी|योनी|गण|रास|राशी|स्वामी|वर्ण|वैरवर्ग|मांगलिक)$/u', $t);
+    }
+
+    /**
+     * Drop phone numbers that appear only on printer/shop/footer lines (not biodata body lines).
+     */
+    private function phoneDigitsAppearOnlyOnFooterOrShopLines(string $text, string $digits10): bool
+    {
+        if (! preg_match('/^[6-9]\d{9}$/', $digits10)) {
+            return false;
+        }
+        $normText = \App\Services\Ocr\OcrNormalize::normalizeDigits($text);
+        $lines = array_values(array_filter(array_map('trim', preg_split('/\R/u', (string) $normText) ?: [])));
+        $matching = [];
+        foreach ($lines as $i => $ln) {
+            $lnNorm = \App\Services\Ocr\OcrNormalize::normalizeDigits($ln);
+            if ($lnNorm !== null && str_contains((string) $lnNorm, $digits10)) {
+                $matching[] = ['i' => $i, 'line' => $ln];
+            }
+        }
+        if ($matching === []) {
+            return false;
+        }
+        $n = count($lines);
+        foreach ($matching as $m) {
+            $ln = $m['line'];
+            if ($this->lineLooksLikePrintFooterOrShopContact($ln)) {
+                continue;
+            }
+            $idx = $m['i'];
+            if ($n >= 4 && $idx >= $n - 3 && mb_strlen($ln) <= 52 && preg_match('/^[०-९0-9\s\/\-\(\)\.\,]+$/u', $ln)) {
+                if (preg_match('/मोबाईल|मोबाइल|Mobile|संपर्क|Contact|Phone|नंबर/ui', $ln)) {
+                    return false;
+                }
+
+                continue;
+            }
+
+            return false;
+        }
+
+        return true;
+    }
+
+    private function lineLooksLikePrintFooterOrShopContact(string $line): bool
+    {
+        $t = trim($line);
+        if ($t === '') {
+            return false;
+        }
+
+        return (bool) preg_match(
+            '/प्रिंट|Print\s+Shop|Print|शॉप|Shop\s+Contact|Shop|Contact\s*No|डिझाइन|डिझाईन|विवाह\s*संस्था|Footer|फुटर|Copyright|जॉब|कार्ड|Digital|Offset|Lamination|Visiting\s*Card|मुद्रण|फोटो\s*स्टुडिओ|Studio|Design\s*By|कॉम्प्युटर|Computer|टायपिंग|Typing/ui',
+            $t
+        );
+    }
+
+    /**
+     * Final pass: drop alternates whose digits appear only on printer/shop/footer lines (late merge can reintroduce them).
+     *
+     * @param  list<array<string, mixed>>  $contacts
+     */
+    private function filterContactsRemoveFooterShopNumbers(array &$contacts, string $text): void
+    {
+        $out = [];
+        foreach ($contacts as $c) {
+            $raw = (string) ($c['number'] ?? $c['phone_number'] ?? '');
+            $digits = preg_replace('/\D/u', '', $raw);
+            if ($digits !== '' && strlen($digits) >= 10) {
+                $digits = substr($digits, -10);
+                if ($this->phoneDigitsAppearOnlyOnFooterShopLines($text, $digits)) {
+                    continue;
+                }
+            }
+            $out[] = $c;
+        }
+        $contacts = $out;
+    }
+
+    /**
+     * True when every line containing this 10-digit number looks like a print/shop/footer line.
+     */
+    private function phoneDigitsAppearOnlyOnFooterShopLines(string $text, string $digits10): bool
+    {
+        if (! preg_match('/^[6-9]\d{9}$/', $digits10)) {
+            return false;
+        }
+        $normText = \App\Services\Ocr\OcrNormalize::normalizeDigits($text);
+        $lines = array_values(array_filter(array_map('trim', preg_split('/\R/u', (string) $normText) ?: [])));
+        $saw = false;
+        foreach ($lines as $ln) {
+            $lnNorm = \App\Services\Ocr\OcrNormalize::normalizeDigits($ln);
+            if ($lnNorm === null || ! str_contains((string) $lnNorm, $digits10)) {
+                continue;
+            }
+            $saw = true;
+            if (! $this->lineLooksLikePrintFooterOrShopContact($ln)) {
+                return false;
+            }
+        }
+
+        return $saw;
+    }
+
+    /**
+     * @param  list<array<string, mixed>>  $relatives
+     * @return list<array<string, mixed>>
+     */
+    private function filterRelativeRowsDropSectionPseudoHeaders(array $relatives): array
+    {
+        if ($relatives === []) {
+            return $relatives;
+        }
+
+        return array_values(array_filter($relatives, function (array $r): bool {
+            $notes = trim((string) preg_replace('/^[\s\-–—•*]+/u', '', (string) ($r['notes'] ?? '')));
+            // Notes-only: relation_type may be canonical "आजोळ"/"मामा" and must not be mistaken for a heading.
+            if ($this->isRelativeSectionHeadingNotes($notes)) {
+                return false;
+            }
+
+            return true;
+        }));
+    }
+
+    private function fatherContactSlotsMergePhone(array &$contacts, string $digits10): void
+    {
+        if (! preg_match('/^[6-9]\d{9}$/', $digits10)) {
+            return;
+        }
+        $seen = [];
+        foreach ($contacts as $c) {
+            $k = (string) ($c['number'] ?? $c['phone_number'] ?? '');
+            if ($k !== '') {
+                $seen[\App\Services\Ocr\OcrNormalize::normalizePhone($k) ?? $k] = true;
+            }
+        }
+        $norm = \App\Services\Ocr\OcrNormalize::normalizePhone($digits10);
+        if ($norm !== null && ! isset($seen[$norm])) {
+            $contacts[] = [
+                'type' => 'alternate',
+                'label' => 'parent',
+                'number' => $norm,
+                'phone_number' => $norm,
+                'relation_type' => '',
+                'contact_name' => '',
+                'is_primary' => false,
+            ];
+        }
+    }
+
+    private function valueIsHonorificOnlyStub(string $value): bool
+    {
+        $t = trim($value);
+        if ($t === '') {
+            return true;
+        }
+        if ($this->valueIsStubName($t)) {
+            return true;
+        }
+        if (preg_match('/^(?:कु\.?|चि\.?|श्री\.?|सौ\.?|श्रीमती\.?|कै\.?|डॉ\.?)\s*$/u', $t)) {
+            return true;
+        }
+        if (mb_strlen($t) <= 3 && preg_match('/^(?:कु|चि|श्री|सौ|कै)$/u', $t)) {
+            return true;
+        }
+
+        return false;
+    }
+
+    private function otherRelativesTextLooksPolluted(?string $value): bool
+    {
+        if ($value === null || trim($value) === '') {
+            return false;
+        }
+        $v = trim($value);
+        if (mb_strlen($v) > 900) {
+            return true;
+        }
+        if (substr_count($v, "\n") > 15) {
+            return true;
+        }
+        if (preg_match('/राशी|रास\s*[:\-]|नक्षत्र\s*[:\-]|नाडी\s*[:\-]|गोत्र\s*[:\-]|ग्रह|कुलस्वामी|योनी\s*[:\-]|मांगलिक|ज्योतिष|कुंडली|प्रिंट|Print|Shop|डिझाइन|जॉब|विवाह\s*संस्था|डिझाईन|Footer|फुटर|Copyright|बायोडेटा|Biodata/ui', $v)) {
+            return true;
+        }
+        if (preg_match('/[\x{0C80}-\x{0CFF}]/u', $v)) {
+            return true;
+        }
+
+        return false;
+    }
+
+    private function educationFieldLooksPolluted(?string $value): bool
+    {
+        if ($value === null || trim($value) === '') {
+            return false;
+        }
+        $v = trim($value);
+        if (preg_match('/जन्म\s*तारीख|जन्मवार|वेळ\s*[:\-]|\d{1,2}[\/\.-]\d{1,2}[\/\.-]\d{2,4}/u', $v)) {
+            return true;
+        }
+        if ($this->valueSmellsLikeHoroscopeOrGotraLeak($v)) {
+            return true;
+        }
+
+        return false;
+    }
+
+    /**
+     * Prefer a clean structured table/slot value over missing, label-shaped, or polluted OCR fallback.
+     */
+    private function shouldApplyStructuredTableHint(string $current, string $candidate, string $fieldKind): bool
+    {
+        $cand = trim($candidate);
+        if ($cand === '' || $this->rejectIfLabelNoise($cand) === null) {
+            return false;
+        }
+        $cur = trim($current);
+        if ($cur === '' || $this->isLikelyLabelOnlyValue($cur)) {
+            return true;
+        }
+
+        if (in_array($fieldKind, ['full_name', 'father_name', 'mother_name'], true)) {
+            if ($this->valueIsHonorificOnlyStub($cur)) {
+                return true;
+            }
+            if ($this->preferStructuredPersonNameOverPollutedCandidate($cur, $cand)) {
+                return true;
+            }
+        }
+
+        if ($fieldKind === 'highest_education' && $this->educationFieldLooksPolluted($cur)) {
+            return $this->validateEducation($this->cleanValue($cand)) !== null
+                || (mb_strlen($cand) >= 3 && ! $this->educationFieldLooksPolluted($cand));
+        }
+
+        if ($fieldKind === 'other_relatives_text' && $this->otherRelativesTextLooksPolluted($cur) && ! $this->otherRelativesTextLooksPolluted($cand)) {
+            return true;
+        }
+
+        if ($fieldKind === 'blood_group') {
+            return self::sanitizeBloodGroupValue($cur) === null;
+        }
+
+        if (in_array($fieldKind, ['birth_place', 'address_current', 'address_native', 'complexion'], true)
+            && mb_strlen($cand) > mb_strlen($cur) + 4 && $this->valueSmellsLikeHoroscopeOrGotraLeak($cur)) {
+            return true;
+        }
+
+        return false;
+    }
+
+    private function preferStructuredPersonNameOverPollutedCandidate(string $current, string $candidateRaw): bool
+    {
+        if ($this->valueIsHonorificOnlyStub($current)) {
+            return ! $this->valueIsHonorificOnlyStub($candidateRaw);
+        }
+        $c = trim($current);
+        $d = trim($candidateRaw);
+        if (mb_strlen($d) > mb_strlen($c) + 6 && preg_match('/\s+/u', $d) && ! preg_match('/\s+/u', $c)) {
+            return true;
+        }
+
+        return false;
+    }
+
+    /**
+     * Strict stub: lone honorific token with no name tail (invalid as stored person field).
+     */
+    private function valueIsStubName(string $value): bool
+    {
+        $t = trim(preg_replace('/\s+/u', ' ', $value) ?? '');
+        if ($t === '') {
+            return true;
+        }
+
+        return (bool) preg_match('/^(?:श्री\.?|सौ\.?|कु\.?|चि\.?|श्रीमती\.?|कै\.?|डॉ\.?)$/u', $t);
+    }
+
+    /**
+     * HTML table person fields: always prefer structured cell when current is stub, label-like, shorter, or already failing validation.
+     *
+     * @param  'full_name'|'father_name'|'mother_name'  $kind
+     */
+    private function shouldForceReplaceHtmlTablePersonName(string $current, string $candidate, string $kind): bool
+    {
+        $cand = trim($candidate);
+        if ($cand === '' || $this->rejectIfLabelNoise($cand) === null) {
+            return false;
+        }
+        if ($this->shouldApplyStructuredTableHint($current, $cand, $kind)) {
+            return true;
+        }
+        $cur = trim($current);
+        if ($this->valueIsStubName($cur)) {
+            return true;
+        }
+        if ($this->isLikelyLabelOnlyValue($cur)) {
+            return true;
+        }
+        if ($this->valueIsHonorificOnlyStub($cur)) {
+            return true;
+        }
+        if ($cur !== '' && mb_strlen($cand) > mb_strlen($cur)) {
+            return true;
+        }
+        if ($kind === 'father_name') {
+            $pc = $this->cleanPersonName($cand);
+            if ($pc !== null && $this->validateFatherName($cur) === null && $this->validateFatherName($pc) !== null) {
+                return true;
+            }
+        }
+        if ($kind === 'mother_name') {
+            $pc = $this->cleanPersonName($cand);
+            if ($pc !== null && $this->validateMotherName($cur) === null && $this->validateMotherName($pc) !== null) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Candidate full_name honorific overrides label-based gender inference (कु. female, चि. male).
+     *
+     * @param  array<string, mixed>  $core
+     */
+    private function applyGenderFromCandidateFullNameHonorific(array &$core): void
+    {
+        $fn = trim((string) ($core['full_name'] ?? ''));
+        if ($fn === '') {
+            return;
+        }
+        if (preg_match('/^कु\./u', $fn)) {
+            $core['gender'] = 'female';
+
+            return;
+        }
+        if (preg_match('/^चि\./u', $fn)) {
+            $core['gender'] = 'male';
+        }
+    }
+
+    /**
+     * @param  list<array<string, mixed>>  $siblings
+     */
+    private function patchSiblingNamesHonorificSpacing(array &$siblings): void
+    {
+        foreach ($siblings as $i => $row) {
+            $n = trim((string) ($row['name'] ?? ''));
+            if ($n === '') {
+                continue;
+            }
+            if (preg_match('/^(चि\.|कु\.|श्री\.|सौ\.|कै\.|श्रीमती\.)(?=\S[^\s])/u', $n)) {
+                $n = preg_replace('/^(चि\.|कु\.|श्री\.|सौ\.|कै\.|श्रीमती\.)/u', '$1 ', $n);
+                $siblings[$i]['name'] = trim(preg_replace('/\s+/u', ' ', $n) ?? '');
+            }
+        }
+    }
+
+    /**
+     * HTML table भाऊ / बहिण rows override OCR sibling lines for that gender (structured-first).
+     *
+     * @param  list<array<string, mixed>>  $siblings
+     * @param  array<string, string>  $hints
+     */
+    private function mergeHtmlTableSiblingHints(array &$siblings, array $hints): void
+    {
+        foreach (['sibling_brother_line' => 'brother', 'sibling_sister_line' => 'sister'] as $hintKey => $rel) {
+            if (! isset($hints[$hintKey]) || trim((string) $hints[$hintKey]) === '') {
+                continue;
+            }
+            $blob = trim((string) $hints[$hintKey]);
+            $siblings = array_values(array_filter($siblings, fn ($s) => ($s['relation_type'] ?? '') !== $rel));
+            foreach (preg_split('/\R+/u', $blob) ?: [] as $ln) {
+                $ln = trim((string) $ln);
+                if ($ln === '') {
+                    continue;
+                }
+                foreach ($this->splitSiblingEnumeratorChunksFromLine($ln) as $chunk) {
+                    $chunk = trim((string) $chunk);
+                    if ($chunk === '') {
+                        continue;
+                    }
+                    $parsed = $this->parseSiblingRichValue($chunk, $rel);
+                    $row = ['relation_type' => $rel, 'contact_number' => null];
+                    foreach (['name', 'marital_status', 'occupation', 'address_line', 'notes'] as $fk) {
+                        if (($parsed[$fk] ?? null) !== null && trim((string) $parsed[$fk]) !== '') {
+                            $row[$fk] = $parsed[$fk];
+                        }
+                    }
+                    if (($row['name'] ?? null) !== null && trim((string) $row['name']) !== '') {
+                        $n = $this->cleanPersonName((string) $row['name'], true);
+                        $row['name'] = $n !== null && $n !== '' ? $n : (string) $row['name'];
+                    }
+                    if (trim((string) ($row['name'] ?? '')) !== '') {
+                        $siblings[] = $row;
+                    }
+                }
+            }
+        }
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function splitSiblingEnumeratorChunksFromLine(string $line): array
+    {
+        $line = trim($line);
+        if ($line === '') {
+            return [];
+        }
+        if (preg_match('/[\d०-९]{1,2}\s*\)\s*(?:(?:अविवाहित|अविवाहीत)[\-–—]?\s*)?(?:चि\.|कु\.|श्री\.|सौ\.|कै\.|श्रीमती\.)/u', $line)) {
+            $parts = preg_split(
+                '/(?=[\d०-९]{1,2}\s*\)\s*(?:(?:अविवाहित|अविवाहीत)[\-–—]?\s*)?(?:चि\.|कु\.|श्री\.|सौ\.|कै\.|श्रीमती\.))/u',
+                $line
+            ) ?: [];
+            $out = [];
+            foreach ($parts as $p) {
+                $p = trim((string) $p);
+                if ($p === '') {
+                    continue;
+                }
+                $p = preg_replace('/^[\d०-९]{1,2}\s*\)\s*(?:(?:अविवाहित|अविवाहीत)[\-–—]?\s*)?/u', '', $p);
+                $p = trim((string) $p);
+                if ($p !== '' && preg_match('/चि\.|कु\.|श्री\.|सौ\.|कै\.|श्रीमती\./u', $p)) {
+                    $out[] = $p;
+                }
+            }
+
+            return $out !== [] ? $out : [$line];
+        }
+
+        return [$line];
+    }
+
+    /**
+     * Decompose one भाऊ/बहिण cell: honorific + name vs (degree) vs (अविवाहीत) vs रा./जि. address tail.
+     *
+     * @return array{name: ?string, marital_status: ?string, occupation: ?string, address_line: ?string, notes: ?string}
+     */
+    private function parseSiblingRichValue(string $value, string $relationType): array
+    {
+        $out = ['name' => null, 'marital_status' => null, 'occupation' => null, 'address_line' => null, 'notes' => null];
+        $v = trim(preg_replace('/\s+/u', ' ', $value) ?? '');
+        if ($v === '') {
+            return $out;
+        }
+        $v = trim((string) preg_replace('/^[\d०-९]{1,2}\s*\)\s*(?:(?:अविवाहित|अविवाहीत)[\-–—]?\s*)+/u', '', $v));
+
+        if (preg_match('/^(सौ\.|सौं\.)/u', $v)) {
+            $out['marital_status'] = 'married';
+        }
+
+        $occChunks = [];
+        $foundUnmarried = false;
+        $work = preg_replace_callback('/\(\s*([^)]{1,200})\s*\)/u', function (array $m) use (&$occChunks, &$foundUnmarried): string {
+            $inner = trim($m[1]);
+            if (preg_match('/^अविवाहीत|अविवाहित$/u', $inner)) {
+                $foundUnmarried = true;
+
+                return ' ';
+            }
+            if ($inner !== '' && (
+                preg_match('/^(?:B\.|M\.|BE|ME|B\.Com|B\.Sc|M\.Sc|B\.E|B\.Tech|MBA|BAMS|MBBS|B\.A|LL\.B)/ui', $inner)
+                || preg_match('/Year|Appear|Sem|Horti|Mech|Elect|Computer|II|III|IV|Horti/ui', $inner)
+                || (preg_match('/^[A-Za-z0-9.\s\-]{2,100}$/u', $inner) && ! preg_match('/^[अ-ह]/u', $inner))
+            )) {
+                $occChunks[] = $inner;
+            }
+
+            return ' ';
+        }, $v);
+        $work = trim(preg_replace('/\s+/u', ' ', (string) $work) ?? '');
+        if ($foundUnmarried) {
+            $out['marital_status'] = 'unmarried';
+        }
+        if ($occChunks !== []) {
+            $out['occupation'] = implode(' ', $occChunks);
+        }
+
+        if (preg_match('/^(.*?)[,，]?\s*((?:रा\.|मु\.?\s*पो\.|जि\.|ता\.).+)$/us', $work, $am)) {
+            $namePart = trim($am[1]);
+            $addrPart = trim($am[2]);
+            if ($namePart !== '' && mb_strlen($addrPart) >= 4) {
+                $out['address_line'] = $addrPart;
+                $work = $namePart;
+            }
+        }
+
+        $out['name'] = $this->honorificPreserveInvariant($work);
+
+        return $out;
+    }
+
+    /**
+     * @param  array<string, mixed>  $row
+     * @return array<string, mixed>
+     */
+    private function applySiblingRichDecompositionToRow(array $row): array
+    {
+        $name = trim((string) ($row['name'] ?? ''));
+        if ($name === '') {
+            return $row;
+        }
+        $rel = (string) ($row['relation_type'] ?? '');
+        if ($rel !== 'brother' && $rel !== 'sister') {
+            return $row;
+        }
+        if (($row['address_line'] ?? null) !== null && trim((string) $row['address_line']) !== '') {
+            return $row;
+        }
+        if (! preg_match('/\(|\)|रा\.|मु\.?\s*पो\.|जि\.|अविवाहीत|अविवाहित|B\.|M\.|Com|Year|Appear/ui', $name)) {
+            return $row;
+        }
+        $parsed = $this->parseSiblingRichValue($name, $rel);
+        if (($parsed['name'] ?? null) !== null && trim((string) $parsed['name']) !== '') {
+            $cn = $this->cleanPersonName((string) $parsed['name'], true);
+            $row['name'] = $cn !== null && $cn !== '' ? $cn : (string) $parsed['name'];
+        }
+        foreach (['occupation', 'address_line', 'marital_status', 'notes'] as $k) {
+            if (($parsed[$k] ?? null) !== null && trim((string) $parsed[$k]) !== '') {
+                if ($k === 'occupation' && ! empty($row['occupation'])) {
+                    continue;
+                }
+                $row[$k] = $parsed[$k];
+            }
+        }
+
+        return $row;
+    }
+
+    /**
+     * @param  list<array<string, mixed>>  $relativesRows
+     */
+    private function patchRelativeRowNamesWhenStubOrShort(array &$relativesRows): void
+    {
+        foreach ($relativesRows as $i => $row) {
+            $n = trim((string) ($row['name'] ?? ''));
+            $rn = trim((string) ($row['raw_note'] ?? ''));
+            if ($rn === '') {
+                continue;
+            }
+            $firstLine = trim((string) (preg_split("/\R/u", $rn)[0] ?? $rn));
+            if ($firstLine === '') {
+                continue;
+            }
+            $mustPatch = $this->valueIsStubName($n)
+                || ($n !== '' && $this->valueIsHonorificOnlyStub($n))
+                || ($n !== '' && mb_strlen($firstLine) > mb_strlen($n) + 4);
+            if (! $mustPatch) {
+                continue;
+            }
+            $cand = $this->honorificPreserveInvariant($firstLine);
+            $cand = $this->cleanupRelativePersonNameFragment($this->cleanPersonName($cand, true));
+            if ($cand !== null && $cand !== '' && ! $this->valueIsStubName($cand)) {
+                $relativesRows[$i]['name'] = $cand;
+            }
+        }
+    }
+
+    /**
+     * Two-phase Marathi OCR: vertical label block then aligned value block. Fills missing/bad core fields only.
+     *
+     * @param  array<string, mixed>  $core
+     * @param  array<string, mixed>|null  $hints
+     * @param  list<array<string, mixed>>  $contacts
+     * @param  list<array<string, mixed>>  $careerHistory
+     * @param  list<array<string, mixed>>  $relativesRows
+     * @param  list<array<string, mixed>>  $educationHistory
+     * @param  array<string, true>  $htmlStructuredFieldLocks  Fields already set from HTML table — must not overwrite.
+     */
+    private function mergeMarathiSeparatedLayoutHints(
+        array &$core,
+        ?array $hints,
+        array &$contacts,
+        array &$careerHistory,
+        array &$relativesRows,
+        array &$educationHistory,
+        array $htmlStructuredFieldLocks = []
+    ): void {
+        if ($hints === null || ($hints['_separated_layout'] ?? '') !== '1') {
+            return;
+        }
+        unset($hints['_separated_layout']);
+
+        $locked = static function (array $locks, string $k): bool {
+            return isset($locks[$k]) && $locks[$k];
+        };
+
+        $fill = fn (?string $cur): bool => $cur === null || trim((string) $cur) === ''
+            || $this->isLikelyLabelOnlyValue((string) $cur);
+
+        $rejectFatherNoise = static function (string $v): bool {
+            if (preg_match('/मुलाची\s*आई/u', $v)) {
+                return true;
+            }
+            if (preg_match('/^मुलाचे\s*भाऊ$/u', trim($v))) {
+                return true;
+            }
+
+            return false;
+        };
+        $rejectMotherNoise = static function (string $v): bool {
+            return (bool) preg_match('/मुलाचे\s*वडील/u', $v);
+        };
+
+        if (! $locked($htmlStructuredFieldLocks, 'full_name') && isset($hints['full_name']) && $fill((string) ($core['full_name'] ?? ''))) {
+            $v = $this->validateFullName($this->cleanValue($hints['full_name']));
+            if ($v !== null) {
+                $core['full_name'] = $v;
+            }
+        }
+
+        if (! $locked($htmlStructuredFieldLocks, 'date_of_birth') && isset($hints['date_of_birth']) && $fill((string) ($core['date_of_birth'] ?? ''))) {
+            $raw = $this->rejectBirthDateRawWithoutDigits(
+                $this->truncateDobRawAtBirthTimeLabel(trim($hints['date_of_birth']))
+            );
+            if ($raw !== null) {
+                $dob = \App\Services\Ocr\OcrNormalize::normalizeDate($raw);
+                if ($dob === $raw) {
+                    $dob = $this->normalizeDate($raw);
+                }
+                if ($dob !== null && preg_match('/^\d{4}-\d{2}-\d{2}$/', (string) $dob)) {
+                    $core['date_of_birth'] = $dob;
+                }
+            }
+        }
+
+        if (! $locked($htmlStructuredFieldLocks, 'height_cm') && isset($hints['height'])
+            && (($core['height_cm'] ?? null) === null || $fill((string) ($core['height'] ?? '')))) {
+            $raw = trim($hints['height']);
+            $heightNorm = \App\Services\Ocr\OcrNormalize::normalizeHeight($raw);
+            $cm = $this->normalizeHeight($heightNorm ?? $raw);
+            if ($cm !== null && $cm > 0) {
+                $core['height_cm'] = $cm;
+                $core['height'] = $this->formatHeightFeetInchesDisplay($cm, $raw, $heightNorm);
+            }
+        }
+
+        if (! $locked($htmlStructuredFieldLocks, 'blood_group') && isset($hints['blood_group']) && $fill((string) ($core['blood_group'] ?? ''))) {
+            $raw = $this->cleanValue($hints['blood_group']);
+            $bg = \App\Services\Ocr\OcrNormalize::normalizeBloodGroup($raw);
+            if ($bg) {
+                $bg = \App\Services\Ocr\OcrNormalize::applyBaselinePatterns('blood_group', $bg);
+            }
+            if ($bg === $raw) {
+                $bg = $this->normalizeBloodGroup($raw);
+            }
+            $bg = $this->validateBloodGroupStrict($bg);
+            if ($bg !== null) {
+                $core['blood_group'] = $bg;
+            }
+        }
+
+        $mergedEducationFromHint = false;
+        if (! $locked($htmlStructuredFieldLocks, 'highest_education') && isset($hints['highest_education']) && $fill((string) ($core['highest_education'] ?? ''))) {
+            $v = $this->cleanValue($hints['highest_education']);
+            if (! $this->valueSmellsLikeHoroscopeOrGotraLeak($v)) {
+                $v = $this->validateEducation($v);
+                if ($v !== null) {
+                    $core['highest_education'] = $v;
+                    $mergedEducationFromHint = true;
+                }
+            }
+        }
+        if ($mergedEducationFromHint && ! empty($core['highest_education'])) {
+            $educationHistory = [[
+                'degree' => $this->stripTrailingEducationNoise((string) $core['highest_education']),
+                'institution' => null,
+                'year' => null,
+            ]];
+        }
+
+        $occHint = $hints['occupation_raw'] ?? ($hints['overflow_occupation'] ?? null);
+        if (! $locked($htmlStructuredFieldLocks, 'occupation_title') && is_string($occHint) && $occHint !== ''
+            && ($core['occupation_title'] ?? null) === null
+            && $careerHistory === []) {
+            $v = $this->cleanValue($occHint);
+            $v = $this->validateCareer($v) ?? ($v !== '' ? $v : null);
+            if ($v !== null && ! $this->valueSmellsLikeHoroscopeOrGotraLeak($v)) {
+                $careerHistory = [[
+                    'role' => $v,
+                    'occupation_title' => $v,
+                    'job_title' => $v,
+                    'employer' => null,
+                    'company_name' => null,
+                    'from' => null,
+                    'to' => null,
+                ]];
+                $core['occupation_title'] = $v;
+            }
+        }
+
+        $fatherCur = (string) ($core['father_name'] ?? '');
+        $fatherCandSep = isset($hints['father_name']) ? trim((string) $hints['father_name']) : '';
+        if (! $locked($htmlStructuredFieldLocks, 'father_name') && isset($hints['father_name']) && ($fill($fatherCur) || $this->separatedLayoutParentFieldLooksSwapped($fatherCur, 'father')
+            || ($fatherCandSep !== '' && $this->preferStructuredPersonNameOverPollutedCandidate($fatherCur, $fatherCandSep)))) {
+            $raw = $this->rejectIfLabelNoise(trim($hints['father_name']));
+            if ($raw !== null && ! $rejectFatherNoise($raw)) {
+                $v = $this->stripTrailingMobileFragmentFromPersonLine($raw);
+                $v = $v !== null ? $this->cleanPersonName($v) : null;
+                $v = $this->validateFatherName($v);
+                if ($v !== null) {
+                    $core['father_name'] = $v;
+                }
+            }
+        }
+
+        $motherCur = (string) ($core['mother_name'] ?? '');
+        $motherCandSep = isset($hints['mother_name']) ? trim((string) $hints['mother_name']) : '';
+        if (! $locked($htmlStructuredFieldLocks, 'mother_name') && isset($hints['mother_name']) && ($fill($motherCur) || $this->separatedLayoutParentFieldLooksSwapped($motherCur, 'mother')
+            || ($motherCandSep !== '' && $this->preferStructuredPersonNameOverPollutedCandidate($motherCur, $motherCandSep)))) {
+            $raw = $this->rejectIfLabelNoise(trim($hints['mother_name']));
+            if ($raw !== null && ! $rejectMotherNoise($raw)) {
+                $v = $this->stripTrailingMobileFragmentFromPersonLine($raw);
+                $v = $v !== null ? $this->cleanPersonName($v) : null;
+                $v = $this->validateMotherName($v);
+                if ($v !== null) {
+                    $core['mother_name'] = $v;
+                }
+            }
+        }
+
+        if (! $locked($htmlStructuredFieldLocks, 'mama') && isset($hints['mama_note']) && $fill((string) ($core['mama'] ?? ''))) {
+            $raw = $this->rejectIfLabelNoise($this->cleanValue($hints['mama_note']));
+            $m = $raw !== null ? $this->sanitizeCoreMamaField($raw) : null;
+            if ($m !== null && $m !== '') {
+                $core['mama'] = $m;
+            }
+        }
+
+        $appendRelNote = function (string $relationType, string $note) use (&$relativesRows): void {
+            $note = trim(preg_replace('/\s+/u', ' ', $note) ?? '');
+            if ($note === '' || $this->isLikelyLabelOnlyValue($note)) {
+                return;
+            }
+            $relativesRows[] = [
+                'relation_type' => $relationType,
+                'name' => null,
+                'address_line' => null,
+                'location' => null,
+                'occupation' => null,
+                'contact_number' => null,
+                'raw_note' => $this->relativeRawNoteCleanup($note, $relationType),
+            ];
+        };
+
+        if (! $locked($htmlStructuredFieldLocks, 'relatives_rows_notes') && isset($hints['siblings_note'])) {
+            $appendRelNote('brother', $hints['siblings_note']);
+        }
+        if (! $locked($htmlStructuredFieldLocks, 'relatives_rows_notes') && isset($hints['atya_note'])) {
+            $appendRelNote('आत्या', $hints['atya_note']);
+        }
+        if (! $locked($htmlStructuredFieldLocks, 'other_relatives_text') && isset($hints['overflow_relatives']) && is_string($hints['overflow_relatives'])) {
+            foreach (preg_split("/\R/u", $hints['overflow_relatives']) ?: [] as $ln) {
+                $ln = trim((string) $ln);
+                if ($ln !== '') {
+                    $appendRelNote('other', $ln);
+                }
+            }
+        }
+
+        if (! $locked($htmlStructuredFieldLocks, 'other_relatives_text') && isset($hints['other_relatives_text'])) {
+            $t = $this->rejectIfLabelNoise($this->cleanValue($hints['other_relatives_text']));
+            if ($t !== null && $t !== '' && ! $this->isLikelyLabelOnlyValue($t)) {
+                $core['other_relatives_text'] = $t;
+            }
+        }
+
+        $phoneBlob = trim(implode("\n", array_filter([
+            $hints['primary_contact'] ?? '',
+            $hints['overflow_contact'] ?? '',
+        ], fn ($s) => is_string($s) && $s !== '')));
+        if ($phoneBlob !== '' && ! $locked($htmlStructuredFieldLocks, 'contacts')) {
+            $this->appendAlternateContactsFromSeparatedHintBlob($contacts, $phoneBlob);
+        }
+    }
+
+    private function separatedLayoutParentFieldLooksSwapped(string $current, string $slot): bool
+    {
+        $t = trim($current);
+        if ($t === '') {
+            return false;
+        }
+        if ($slot === 'father') {
+            return (bool) preg_match('/मुलाची\s*आई/u', $t)
+                || $t === 'मुलाची आई'
+                || (bool) preg_match('/^आईचे\s+(?:नाव|नांव)$/u', $t)
+                || (bool) preg_match('/^मुलाचे\s*(?:भाऊ|मामा)\s*$/u', $t);
+        }
+        if ($slot === 'mother') {
+            return (bool) preg_match('/मुलाचे\s*वडील/u', $t)
+                || $t === 'मुलाचे वडील'
+                || (bool) preg_match('/^वडिलांचे\s+(?:नाव|नांव)$/u', $t)
+                || (bool) preg_match('/^मुलाचे\s*भाऊ\s*$/u', $t)
+                || (bool) preg_match('/^मुलाचे\s*मामा\s*$/u', $t);
+        }
+
+        return false;
+    }
+
+    /**
+     * @param  list<array<string, mixed>>  $contacts
+     */
+    private function appendAlternateContactsFromSeparatedHintBlob(array &$contacts, string $blob): void
+    {
+        if (! preg_match_all('/\b([6-9]\d{9})\b/', $blob, $m)) {
+            return;
+        }
+        $seen = [];
+        foreach ($contacts as $c) {
+            $raw = (string) ($c['number'] ?? $c['phone_number'] ?? '');
+            if ($raw !== '') {
+                $k = \App\Services\Ocr\OcrNormalize::normalizePhone($raw) ?? $raw;
+                $seen[$k] = true;
+            }
+        }
+        foreach (array_unique($m[1]) as $num) {
+            $norm = \App\Services\Ocr\OcrNormalize::normalizePhone((string) $num);
+            if ($norm === null || isset($seen[$norm])) {
+                continue;
+            }
+            $seen[$norm] = true;
+            $contacts[] = [
+                'type' => 'alternate',
+                'label' => 'other',
+                'number' => $norm,
+                'phone_number' => $norm,
+                'relation_type' => '',
+                'contact_name' => '',
+                'is_primary' => false,
+            ];
+        }
     }
 
     /** Reject DOB raw text that contains no digits (avoid treating labels as dates). */
@@ -3491,7 +5340,7 @@ class BiodataParserService
     /**
      * @return list<array{address_line: string, raw: string, type: string}>
      */
-    private function buildAddressesArray(?string $primary, ?string $residential): array
+    private function buildAddressesArray(?string $primary, ?string $residential, ?string $native = null): array
     {
         $out = [];
         if ($primary !== null && trim($primary) !== '') {
@@ -3506,6 +5355,14 @@ class BiodataParserService
                 'address_line' => $residential,
                 'raw' => $residential,
                 'type' => 'residential',
+            ];
+        }
+        if ($native !== null && trim($native) !== '') {
+            $n = trim($native);
+            $out[] = [
+                'address_line' => $n,
+                'raw' => $n,
+                'type' => 'native',
             ];
         }
 
@@ -3680,6 +5537,13 @@ class BiodataParserService
 
         foreach ($labels as $label) {
             $tok = $this->siblingCountLabelRegexFragment($label);
+            // Some biodata writes "मुलाची बहिण" / "मुलाचा भाऊ" — allow that optional prefix without changing meaning.
+            if ($label === 'बहिण' || $label === 'बहीण') {
+                $tok = '(?:मुलाची\s+)?'.$tok;
+            }
+            if ($label === 'भाऊ') {
+                $tok = '(?:मुलाचा\s+|मुलाचे\s+)?'.$tok;
+            }
             // Marathi number words (table OCR: "भाऊ :- दोन- अविवाहीत - 1) चि.…")
             if (preg_match('/'.$tok.'\s*[:\-]?\s*(दोन|तीन|चार|पाच|सहा)\b/u', $text, $wm)) {
                 $marathiNum = ['दोन' => 2, 'तीन' => 3, 'चार' => 4, 'पाच' => 5, 'सहा' => 6];
@@ -4061,6 +5925,7 @@ class BiodataParserService
         // Dots after honorifics (श्री., कै., चि., …) must not truncate the name at the first period.
         if (! $preserveRelativeFullName) {
             if (preg_match('/^(?:कु\.|कुं\.|चि\.|कै\.|श्रीमती\.|श्रीमती|श्री\.|सौ\.|सौं\.)\s/u', $v)
+                || preg_match('/^(?:कु\.|चि\.|श्री\.|सौ\.|कै\.|श्रीमती\.)(?=\S)/u', $v)
                 || preg_match('/कै\.|डॉ\./u', $v)) {
                 $preserveRelativeFullName = true;
             }
@@ -4134,6 +5999,114 @@ class BiodataParserService
     }
 
     /**
+     * "मुलाचे भाऊ" blocks where each line is वहिनी/भाऊ (सौ./श्री.) with optional trailing location after comma.
+     * Scoped: only when section label is brother-specific and the line matches an explicit slash pair (not global slash parsing).
+     *
+     * @return list<array<string, mixed>>
+     */
+    private function extractMulacheBhauVahiniPairSiblings(string $text): array
+    {
+        $text = preg_replace('/[\x{200B}\x{200C}\x{FEFF}]/u', '', $text);
+        if (! preg_match(
+            '/मुलाचे\s+भाऊ\s*[:\-–—]*\s*(.*?)(?=\R\s*(?:मुलाची\s+(?:बहिण|बहीण)|मामा\s*[:\-]|वडिलांचे|आईचे|संपर्क|इतर\s+नातेवाईक|अपेक्षा)|\R\s*मुलाचे\s+(?!भाऊ\s*[:\-–—])|$)/su',
+            $text,
+            $m
+        )) {
+            return [];
+        }
+        $body = trim((string) ($m[1] ?? ''));
+        if ($body === '' || mb_strpos($body, '/') === false || mb_strpos($body, 'श्री.') === false) {
+            return [];
+        }
+
+        $out = [];
+        foreach (preg_split('/\R+/u', $body) ?: [] as $rawLine) {
+            $line = trim((string) $rawLine);
+            if ($line === '') {
+                continue;
+            }
+            foreach ($this->splitMulacheBhauSlashPairSegments($line) as $seg) {
+                $row = $this->parseMulacheBhauVahiniSlashPairSegment(trim((string) $seg));
+                if ($row !== null) {
+                    $out[] = $row;
+                }
+            }
+        }
+
+        return $out;
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function splitMulacheBhauSlashPairSegments(string $line): array
+    {
+        $line = trim($line);
+        if ($line === '') {
+            return [];
+        }
+        // Rare: two numbered entries fused on one physical line.
+        if (preg_match_all('/[\d०-९]+\s*\)\s*.+\//u', $line) > 1) {
+            $parts = preg_split('/(?=[\d०-९]+\s*\)\s*)/u', $line) ?: [];
+            $parts = array_values(array_filter(array_map('trim', $parts), fn ($p) => $p !== '' && mb_strpos((string) $p, '/') !== false));
+
+            return $parts !== [] ? $parts : [$line];
+        }
+
+        return [$line];
+    }
+
+    /**
+     * One segment: optional enumerator, सौ.* / श्री.* [, location].
+     *
+     * @return array<string, mixed>|null
+     */
+    private function parseMulacheBhauVahiniSlashPairSegment(string $line): ?array
+    {
+        $line = trim($line);
+        if ($line === '' || mb_strpos($line, '/') === false) {
+            return null;
+        }
+        if (! preg_match('/^(?:[\d०-९]+\s*\)\s*)?(.+?)\s*\/\s*([^,]+?)(?:\s*,\s*(.+))?$/u', $line, $pm)) {
+            return null;
+        }
+        $female = trim((string) ($pm[1] ?? ''));
+        $male = trim((string) ($pm[2] ?? ''));
+        $loc = isset($pm[3]) ? trim((string) $pm[3]) : null;
+        if ($loc === '') {
+            $loc = null;
+        }
+        // Narrow trigger: explicit वहिनी-style + brother (श्री./डॉ.) — avoids unrelated slashes elsewhere.
+        if (! preg_match('/^(?:सौ\.|सौं\.|कु\.)/u', $female)) {
+            return null;
+        }
+        if (! preg_match('/^(?:श्री\.|डॉ\.)/u', $male)) {
+            return null;
+        }
+        $brotherName = $this->cleanPersonName($male, true);
+        $vahiniName = $this->cleanPersonName($female, true);
+        if ($brotherName === null || trim($brotherName) === '' || ! $this->isMeaningfulSiblingName($brotherName, 'brother')) {
+            return null;
+        }
+        if ($vahiniName === null || trim($vahiniName) === '') {
+            return null;
+        }
+        $row = [
+            'relation_type' => 'brother',
+            'name' => $brotherName,
+            'marital_status' => 'married',
+            'contact_number' => null,
+            'occupation' => null,
+            'spouse' => ['name' => $vahiniName],
+        ];
+        if ($loc !== null && $loc !== '') {
+            $row['address_line'] = $loc;
+        }
+
+        return $row;
+    }
+
+    /**
      * Drop comma-separated fragments that are clearly another biodata section, not "other relatives" narrative.
      */
     public static function pruneOtherRelativesNarrative(?string $text): ?string
@@ -4143,7 +6116,7 @@ class BiodataParserService
         }
         $parts = preg_split('/\s*,\s*/u', $text) ?: [];
         $out = [];
-        $junk = '/^(?:नोकरी|संपर्क|शिक्षण|व्यवसाय|जात|उंची|ऊंची|पत्ता|धर्म|गोत्र|रक्त|रास|नक्षत्र|जन्म|मुलाचे|मुलीचे|Contact|Address|Mobile|Phone|DOB|Package|Salary)\b/ui';
+        $junk = '/^(?:अपेक्षा|नोकरी|संपर्क|शिक्षण|व्यवसाय|जात|उंची|ऊंची|पत्ता|धर्म|गोत्र|रक्त|रास|नक्षत्र|जन्म|मुलाचे|मुलीचे|Contact|Address|Mobile|Phone|DOB|Package|Salary)\b/ui';
         foreach ($parts as $p) {
             $p = trim($p);
             if ($p === '') {
@@ -4156,6 +6129,7 @@ class BiodataParserService
         }
         $s = trim(implode(', ', $out));
         $s = trim(preg_replace('/\s+/u', ' ', $s) ?? '');
+        $s = trim((string) preg_replace('/^[\s\-–—•*]+/u', '', $s));
 
         return $s === '' ? null : $s;
     }
@@ -4231,7 +6205,7 @@ class BiodataParserService
         return $r;
     }
 
-    private function extractFamilyStructures(string $text, bool $skipSiblingRows = false): array
+    private function extractFamilyStructures(string $text, bool $skipSiblingRows = false, bool $suppressOtherRelativesTextFromOcr = false): array
     {
         $lines = array_values(array_filter(array_map('trim', explode("\n", $text)), fn ($l) => $l !== ''));
 
@@ -4259,6 +6233,7 @@ class BiodataParserService
                 if (preg_match('/भाऊ\s*[\/｜|]\s*बहिण|भाऊ\s*[\/｜|]\s*बहीण|भाऊ\/बहिण|भाऊ\/बहीण/u', $line) && preg_match('/अविवाहित|अविवाहीत/u', $line) && ! preg_match('/श्री\.|सौ\.|कु\./u', $line)) {
                     continue;
                 }
+                $sectionUnmarried = preg_match('/अविवाहित|अविवाहीत/u', $line) === 1;
                 $namePart = trim($em[1]);
                 $phone = null;
                 if (preg_match('/\(\s*([6-9]\d{9})\s*\)/u', $namePart, $pm)) {
@@ -4289,10 +6264,12 @@ class BiodataParserService
                                 'name' => $name,
                                 'contact_number' => $phone,
                                 'occupation' => $parenOcc,
+                                'marital_status' => $sectionUnmarried ? 'unmarried' : null,
                             ];
                         }
                     }
                 } else {
+                    $namePart = preg_replace('/^(चि\.|कु\.|श्री\.|डॉ\.)(?=\S)/u', '$1 ', $namePart) ?? $namePart;
                     $namePart = $this->stripSiblingEnumeratorAndMaritalPrefix($namePart);
                     [$namePart, $parenOcc] = $this->stripSiblingParenDegreeFromNamePart($namePart);
                     $name = $this->cleanPersonName($namePart);
@@ -4303,6 +6280,7 @@ class BiodataParserService
                             'name' => $name,
                             'contact_number' => $phone,
                             'occupation' => $parenOcc,
+                            'marital_status' => $sectionUnmarried ? 'unmarried' : null,
                         ];
                     }
                 }
@@ -4344,7 +6322,7 @@ class BiodataParserService
             }
 
             // Brother: "चि." (Chiranjeevi) prefix without explicit "भाऊ" (e.g. "चि. प्रज्योत सुभाष पानसरे (B.SC Horti)")
-            if (preg_match('/^चि\.\s+(.+?)(?:\s*\(([^)]+)\))?\s*$/u', $line, $m)) {
+            if (preg_match('/^चि\.\s*(.+?)(?:\s*\(([^)]+)\))?\s*$/u', $line, $m)) {
                 $namePart = trim($m[1]);
                 $occupation = isset($m[2]) ? trim($m[2]) : null;
                 $name = $this->cleanPersonName($namePart);
@@ -4371,6 +6349,7 @@ class BiodataParserService
                     continue;
                 }
 
+                $sectionUnmarried = preg_match('/अविवाहित|अविवाहीत/u', $line) === 1;
                 $namePart = trim((string) ($sm[2] ?? ''));
                 $needsNext = $namePart !== '' && ! preg_match('/श्री\.|सौ\.|कु\.|कै\./u', $namePart) && mb_strlen(preg_replace('/\s+/u', '', $namePart) ?? '') <= 2;
                 if ($needsNext && isset($lines[$idx + 1])) {
@@ -4391,6 +6370,7 @@ class BiodataParserService
                         'name' => $name,
                         'contact_number' => null,
                         'occupation' => $sisterOcc,
+                        'marital_status' => $sectionUnmarried ? 'unmarried' : null,
                     ];
                 }
 
@@ -4412,6 +6392,7 @@ class BiodataParserService
                 if (isset($lines[$idx + 1])) {
                     $combined .= ' '.trim($lines[$idx + 1]);
                 }
+                $sectionUnmarried = preg_match('/अविवाहित|अविवाहीत/u', $combined) === 1;
 
                 $combined = trim($combined);
                 $namePart = preg_replace('/^\s*ब[ही]ण\s*[0-9०-९]*\s*[:\-–—]*\s*/u', '', $combined);
@@ -4428,8 +6409,16 @@ class BiodataParserService
                         'name' => $name,
                         'contact_number' => null,
                         'occupation' => null,
+                        'marital_status' => $sectionUnmarried ? 'unmarried' : null,
                     ];
                 }
+            }
+        }
+
+        if (! $skipSiblingRows) {
+            $mulacheBhau = $this->extractMulacheBhauVahiniPairSiblings($text);
+            if ($mulacheBhau !== []) {
+                $siblings = array_merge($siblings, $mulacheBhau);
             }
         }
 
@@ -4442,6 +6431,7 @@ class BiodataParserService
             return $row;
         }, $siblings);
         $siblings = $this->dedupeSiblingRows($siblings);
+        $siblings = array_map(fn (array $r): array => $this->applySiblingRichDecompositionToRow($r), $siblings);
 
         // --- RELATIVES (grouped summary rows) + Other Relatives (आडनाव/गाव) → other_relatives_text ---
         $currentType = null;
@@ -4507,7 +6497,18 @@ class BiodataParserService
                 $inOtherRelatives = true;
                 $firstLine = preg_replace('/^.*?इतर\s+(?:नातेवाईक|पाहुणे)\s*[:-]\s*/u', '', $line);
                 $otherRelativesBuffer = [trim($firstLine)];
+            } elseif ($inOtherRelatives && preg_match('/^\s*अपेक्षा\s*[:\-]/u', trim($line))) {
+                // Do not absorb preferences into other_relatives_text.
+                $inOtherRelatives = false;
+                continue;
             } elseif ($inOtherRelatives && (preg_match('/^\s*Contact\.?\s*No\.?/ui', $line) || preg_match('/मोबाइल|Mobile\s*[:.-]/ui', $line))) {
+                $inOtherRelatives = false;
+            } elseif ($inOtherRelatives && (
+                preg_match('/^(?:\s*[\-–—•*]+\s*)?(?:नक्षत्र|रास|राशी|चरण|योनी|नाडी|नाड|गण|वैरवर्ग|वश्य|नावरस|नावरसनांव)\s*[:\-]/u', trim($line))
+                || $this->lineLooksLikePrintFooterOrShopContact($line)
+                || $this->valueSmellsLikeHoroscopeOrGotraLeak($line)
+            )) {
+                // Stop other_relatives_text at horoscope/footer blocks; never bleed structured values.
                 $inOtherRelatives = false;
             } elseif ($currentType === 'आजोळ' && preg_match('/^(?:मु\.?\s*पो\.?|मु\.|पो\.|ता\.|जि\.|रा\.)/u', trim($line))) {
                 // Continuation line: "कै. … (आजोबा)" on previous line, address on next line (avoid boundary flush).
@@ -4552,11 +6553,15 @@ class BiodataParserService
                 $otherRelativesText = self::pruneOtherRelativesNarrative($otherRelativesText);
             }
         }
+        if ($suppressOtherRelativesTextFromOcr) {
+            $otherRelativesText = null;
+        }
 
         $relatives = $this->splitRelativeRowsByEnumerators($relatives);
         $relatives = $this->splitRelativeRowsBySlashPersonBoundaries($relatives);
         $relatives = $this->splitRelativeRowsByCommaSeparatedChulute($relatives);
         $relatives = $this->splitRelativeRowsByShri($relatives);
+        $relatives = $this->mergeRelativeParenContinuationRows($relatives);
         $relatives = array_values(array_filter($relatives, function ($r) {
             return $this->isMeaningfulRelativeNote((string) ($r['notes'] ?? ''));
         }));
@@ -5142,7 +7147,7 @@ class BiodataParserService
      */
     private function splitNokariLineCompanyAndSalary(?string $line): array
     {
-        $out = ['company_name' => null, 'role_title' => null, 'salary_paren' => null];
+        $out = ['company_name' => null, 'role_title' => null, 'salary_paren' => null, 'location' => null];
         if ($line === null || trim($line) === '') {
             return $out;
         }
@@ -5158,7 +7163,16 @@ class BiodataParserService
 
             return $out;
         }
-        $out['role_title'] = $line !== '' ? $line : null;
+        // Common pattern: "Company, Location" → company_name + location.
+        $lineClean = trim((string) (preg_replace('/\s*\.$/u', '', $line) ?? $line));
+        if (preg_match('/^([^,]{2,120}),\s*(.+)$/u', $lineClean, $cm)) {
+            $out['company_name'] = trim($cm[1]) !== '' ? trim($cm[1]) : null;
+            $out['location'] = trim($cm[2]) !== '' ? trim($cm[2]) : null;
+            $out['role_title'] = $out['company_name'] ?? $lineClean;
+        } else {
+            $out['role_title'] = $lineClean !== '' ? $lineClean : null;
+            $out['company_name'] = $lineClean !== '' ? $lineClean : null;
+        }
 
         return $out;
     }
@@ -5673,6 +7687,42 @@ class BiodataParserService
             $addressLine = $this->trimRelativeStructuredAddressField($addressLine);
             $location = $this->trimRelativeStructuredAddressField($location);
             $locOut = $addressLine ?? ($location !== null && $location !== '' ? $location : null);
+            // Paren continuation OCR: "(निवृत्त ...\nनगरपरिषद)" may fail the early श्री.(...) capture; recover occupation from any paren fragment.
+            if (($occupation === null || trim((string) $occupation) === '') && is_string($notes) && $notes !== '') {
+                if (preg_match('/\(\s*([^)]{3,300})/u', $notes, $pm2)) {
+                    $frag2 = trim((string) $pm2[1]);
+                    $frag2 = preg_split('/\b(?:मो\.|मोबाईल|मोबाइल|Mobile)\b/ui', $frag2, 2)[0] ?? $frag2;
+                    $frag2 = trim((string) $frag2);
+                    if ($frag2 !== '' && preg_match('/निवृत्त|निरीक्षक|इन्स्पेक्टर|अधिकारी|नगरपरिषद/u', $frag2)) {
+                        $cls2 = $this->classifyRelativeParenFragment($frag2);
+                        if ($cls2['occupation'] !== null && $cls2['occupation'] !== '') {
+                            $occupation = $cls2['occupation'];
+                        }
+                    }
+                }
+                if (preg_match('/\(\s*([^)]{3,250})\s*\)?/u', $notes, $pm)) {
+                    $frag = trim((string) $pm[1]);
+                    if ($frag !== '') {
+                        $frag = preg_split('/\b(?:मो\.|मोबाईल|मोबाइल|Mobile)\b/ui', $frag, 2)[0] ?? $frag;
+                        $frag = trim((string) $frag);
+                        $cls = $this->classifyRelativeParenFragment($frag);
+                        if ($cls['occupation'] !== null && $cls['occupation'] !== '') {
+                            $occupation = $cls['occupation'];
+                        }
+                    }
+                }
+            }
+            if (($occupation === null || trim((string) $occupation) === '') && is_string($notes) && $notes !== '') {
+                if (preg_match('/(निवृत्त[^\\n]*)/u', $notes, $om)) {
+                    $occN = trim((string) $om[1]);
+                    $occN = preg_split('/\b(?:मो\.|मोबाईल|मोबाइल|Mobile|रा\.|मु\.?\s*पो\.?|ता\.|जि\.)\b/ui', $occN, 2)[0] ?? $occN;
+                    $occN = trim((string) $occN);
+                    $occN = trim($occN, " \t\n\r\0\x0B()。.,，");
+                    if ($occN !== '') {
+                        $occupation = $occN;
+                    }
+                }
+            }
             $out[] = [
                 'relation_type' => $relType,
                 'name' => $name,
@@ -5740,11 +7790,62 @@ class BiodataParserService
         return $t === '' ? null : $t;
     }
 
+    /**
+     * Merge "paren continuation" relative rows: when a row ends with an open "(" fragment and next row is only the continuation/closing.
+     *
+     * @param  array<int, array<string, mixed>>  $relatives
+     * @return array<int, array<string, mixed>>
+     */
+    private function mergeRelativeParenContinuationRows(array $relatives): array
+    {
+        $out = [];
+        $n = count($relatives);
+        for ($i = 0; $i < $n; $i++) {
+            $row = $relatives[$i];
+            $notes = $row['notes'] ?? '';
+            if (! is_string($notes)) {
+                $out[] = $row;
+                continue;
+            }
+            $notesT = trim($notes);
+            $next = $relatives[$i + 1] ?? null;
+            if ($next !== null && ($row['relation_type'] ?? null) === ($next['relation_type'] ?? null)) {
+                $nextNotes = $next['notes'] ?? '';
+                if (is_string($nextNotes)) {
+                    $nn = trim($nextNotes);
+                    $open = substr_count($notesT, '(');
+                    $close = substr_count($notesT, ')');
+                    $nextLooksLikeParenTail = ($nn !== ''
+                        && ! preg_match('/^(?:श्री\.|सौ\.|कै\.|श्रीमती\.)/u', $nn)
+                        && mb_strlen($nn) <= 220
+                        && str_contains($nn, ')'));
+                    if ($open > $close && $nextLooksLikeParenTail) {
+                        $row['notes'] = trim($notesT.' '.$nn);
+                        $out[] = $row;
+                        $i++;
+                        continue;
+                    }
+                }
+            }
+            $out[] = $row;
+        }
+
+        return $out;
+    }
+
+    /**
+     * If sibling.occupation looks like a pure qualification token (degree) not a job title, move it to notes.
+     *
+     * @param  array<string, mixed>  $row
+     * @return array<string, mixed>
+     */
+    // NOTE: sibling qualification tokens currently remain in siblings[].occupation for backward compatibility.
+
     private function isRelativeSectionHeadingNotes(string $notes): bool
     {
-        $t = trim($notes);
+        $t = trim((string) preg_replace('/^[\s\-–—•*]+/u', '', trim($notes)));
 
-        return (bool) preg_match('/^(?:मुलीचे|मुलाचे|मुलीच्या)\s+(?:चुलते|मामा|मावशी|मावस\s+मामा|आईचे\s+मामा)\s*$/u', $t)
+        return (bool) preg_match('/^(?:मुलीचे|मुलाचे|मुलाची|मुलीच्या)\s+(?:चुलते|मामा|आत्या|मावशी|मावस\s+मामा|आईचे\s+मामा)(?:\s*[:\-–—]+)?\s*$/u', $t)
             || (bool) preg_match('/^आजोळ\s*[\-–—]?\s*\(\s*मामा\s*\)\s*$/u', $t)
             || (bool) preg_match('/^(?:मामा|मावशी|आत्या|चулते)\s*(?::\s*-\s*|:\s*[:\-–—]*\s*)$/u', $t)
             || (bool) preg_match('/^आजोळ\s*(?::\s*-\s*|:\s*)?\s*$/u', $t)
@@ -5759,6 +7860,9 @@ class BiodataParserService
             return null;
         }
         $t = trim($mama);
+        // Stop bleed from later sections (इतर नातेवाईक, horoscope grid, footer).
+        $t = preg_split('/\s+(?:इतर\s+नातेवाईक|नक्षत्र|रास|चरण|वर्ण|वश्य|योनी|गण|नाडी|प्रिंट|Print)\s*[:\-]/u', $t, 2)[0] ?? $t;
+        $t = trim((string) $t);
         if (preg_match('/^\)\s*[:\-–—]/u', $t)) {
             return null;
         }
@@ -5769,7 +7873,7 @@ class BiodataParserService
             return null;
         }
 
-        return $mama;
+        return $t;
     }
 
     /**
@@ -6334,6 +8438,38 @@ class BiodataParserService
         return null;
     }
 
+    /**
+     * Extract a candidate "self" phone when embedded in address/family context (e.g. "पत्ता ... मो. ९८६०४४६१०९").
+     * Must not treat relative phones as self phones; this is only used when there is no authoritative mobile row.
+     */
+    private function extractSelfPhoneFromAddressContext(string $text): ?string
+    {
+        $lines = preg_split('/\R+/u', $text) ?: [];
+        foreach ($lines as $ln) {
+            $t = trim((string) $ln);
+            if ($t === '') {
+                continue;
+            }
+            // Address-like line with mobile marker.
+            if (! (preg_match('/पत्ता/u', $t) || preg_match('/संपर्क/u', $t))) {
+                continue;
+            }
+            if (! preg_match('/मो\.|मोबाईल|मोबाइल|Mobile/ui', $t)) {
+                continue;
+            }
+            // Avoid relative headings.
+            if (preg_match('/^(?:चुलते|मामा|आत्या|मावशी|दाजी|भाऊ|बहिण|बहीण)\b/u', $t)) {
+                continue;
+            }
+            $digits = \App\Services\Ocr\OcrNormalize::normalizeDigits($t);
+            if ($digits !== null && preg_match('/\b([6-9]\d{9})\b/u', $digits, $m)) {
+                return (string) $m[1];
+            }
+        }
+
+        return null;
+    }
+
     /** Cut merged OCR blobs before mother/sibling/relative headings accidentally concatenated into residence. */
     private function trimCandidateAddressBlockAtFamilySections(string $addr): string
     {
@@ -6375,6 +8511,8 @@ class BiodataParserService
         if ($v === '') {
             return null;
         }
+        // If OCR merges blood group into education line: "B.Com (Chennai) रक्तगट :- B+" → keep education only.
+        $v = preg_split('/\s+(?:रक्त\s*गट|रक्तगट|Blood\s*group)\b/ui', $v, 2)[0] ?? $v;
         $v = preg_replace('/\s*\.\s*[\-–—]+\s*$/u', '', $v) ?? $v;
         $v = preg_replace('/[\s\-–—•·]+$/u', '', $v) ?? $v;
         $v = trim(preg_replace('/\s+/u', ' ', $v) ?? '');
@@ -6385,7 +8523,11 @@ class BiodataParserService
     /** Extract multi-line block after "स्थायिक मालमत्ता" (or similar) until next section. */
     private function extractPropertySummaryBlock(string $text): ?string
     {
-        if (preg_match('/स्थायिक\s*मालमत्ता\s*[:\-]?\s*(.+?)(?=\n\s*\n|\nकौटुंबिक|\nअपेक्षा|\nसंपर्क|$)/us', $text, $m)) {
+        if (preg_match(
+            '/(?:स्थायिक\s*मालमत्ता|स्थावर\s*मिळकत)\s*[:\-]?\s*(.+?)(?=\n\s*(?:मूळचा\s+पत्ता|मुळचा\s+पत्ता|इतर\s+नातेवाईक|नक्षत्र|रास|चरण|वर्ण|वश्य|प्रिंट|Print|कौटुंबिक|अपेक्षा|संपर्क)|\n\s*\n|\nकौटुंबिक|\nअपेक्षा|\nसंपर्क|$)/us',
+            $text,
+            $m
+        )) {
             return trim(preg_replace('/\s+/', ' ', $m[1]));
         }
 

@@ -24,7 +24,21 @@
                 <tbody class="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
                     @foreach ($intakes as $intake)
                         <tr class="hover:bg-gray-50 dark:hover:bg-gray-700/50">
-                            <td class="px-4 py-2 text-sm text-gray-900 dark:text-gray-100">{{ $intake->id }}</td>
+                            <td class="px-4 py-2 text-sm text-gray-900 dark:text-gray-100">
+                                <div>
+                                    {{ $intake->id }}
+                                    @php
+                                        $fn = trim((string) ($intake->original_filename ?? ''));
+                                        $fp = trim((string) ($intake->file_path ?? ''));
+                                        $fallback = $fp !== '' ? basename($fp) : '';
+                                        $display = $fn !== '' ? $fn : ($fallback !== '' ? $fallback : '—');
+                                    @endphp
+                                    <div class="mt-1 text-xs text-gray-500 dark:text-gray-400" title="{{ $display }}">
+                                        <span class="font-medium text-gray-600 dark:text-gray-300">File:</span>
+                                        <span class="truncate inline-block max-w-[260px] align-bottom">{{ $display }}</span>
+                                    </div>
+                                </div>
+                            </td>
                             <td class="px-4 py-2 text-sm text-gray-900 dark:text-gray-100">
                                 <span>{{ $intake->uploadedByUser?->name ?? '—' }}</span>
                                 @if ($intake->uploadedByUser?->email)

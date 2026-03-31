@@ -33,10 +33,10 @@ use Illuminate\Support\Facades\Log;
 | 4) Parse via strategy parser. 5) Store parsed_json and last_parse_input_text (= exact $raw).
 | Do NOT touch raw_ocr_text.
 |
-| Reparse entry points set a short-lived cache flag so paid vision extraction
-| is skipped (parse-input-only); text comes from intake.parse_input_text cache,
-| fingerprint reuse, or raw_ocr_text fallback. Manual crop saves still dispatch
-| without that flag so file→text can run again when needed.
+| Canonical transcript: last_parse_input_text (DB) + optional parse_input_text cache; re-parse uses these first
+| in ai_vision_extract_v1 mode — never raw_ocr_text unless explicit_fallback_raw_ocr_text (metadata).
+| Re-extract: force_fresh_paid_extraction → AiVisionExtractionService only (no raw_ocr shortcut).
+| Manual crop: forceRecompute without parse_input_only → normal OCR/vision resolution.
 |
 | LOCKED: Cross-intake parsed_json reuse is forbidden. parsed_json is always the
 | output of $parser->parse($raw, ...) for this intake id, where $raw is this
@@ -106,12 +106,108 @@ class ParseIntakeJob implements ShouldQueue
         $resolved = null;
         $raw = '';
         $parseInputDebug = null;
+        $reparseEarlyResolved = false;
+
+        $reuseResolver = app(IntakeExtractionReuseResolver::class);
+
+        $pendingParseInputOnly = IntakeExtractionReuseResolver::peekParseInputOnlyFlag((int) $intake->id);
+        $pendingForceFreshPaidExtraction = IntakeExtractionReuseResolver::peekForceFreshPaidExtractionFlag((int) $intake->id);
+
+        $reparseParseInputOnly = $this->forceRecompute
+            && $pendingParseInputOnly
+            && ! $pendingForceFreshPaidExtraction;
 
         $useAiVisionExtraction = app(ProviderResolver::class)->parseJobUsesAiVisionExtraction();
 
-        if ($useAiVisionExtraction) {
+        if ($reparseParseInputOnly) {
+            if ($useAiVisionExtraction) {
+                $canonicalDb = trim((string) ($intake->last_parse_input_text ?? ''));
+                $cached = $reuseResolver->getCachedParseInputText((int) $intake->id);
+                $canonicalCache = is_string($cached) ? trim($cached) : '';
+                $canonical = $canonicalDb !== '' ? $canonicalDb : $canonicalCache;
+                $canonicalSourceKey = $canonicalDb !== '' ? 'last_parse_input_text' : ($canonicalCache !== '' ? 'parse_input_text_cache' : null);
+
+                if ($canonical !== '') {
+                    $raw = $canonical;
+                    $reparseEarlyResolved = true;
+                    $reuseResolver->consumeParseInputOnlyFlag((int) $intake->id);
+                    $parseInputDebug = [
+                        'parse_input_source' => 'canonical_transcript_reparse',
+                        'canonical_transcript_source' => $canonicalSourceKey,
+                        'parse_input_only_job' => true,
+                        'ok' => true,
+                        'text_quality_ok' => true,
+                        'ai_extraction_skipped' => true,
+                        'reason' => 'reparse_uses_stored_canonical_transcript',
+                        'provider' => null,
+                        'provider_source' => 'not_applicable',
+                    ];
+                    Cache::put('intake.parse_input_debug.'.$intake->id, $parseInputDebug, now()->addDays(7));
+                } elseif (trim((string) ($intake->raw_ocr_text ?? '')) !== '') {
+                    $resolved = $ocr->buildParseInputFromDbRawOcr($intake);
+                    $raw = $resolved['text'];
+                    $reparseEarlyResolved = true;
+                    $reuseResolver->consumeParseInputOnlyFlag((int) $intake->id);
+                    $parseInputDebug = [
+                        'parse_input_source' => 'explicit_fallback_raw_ocr_text',
+                        'parse_input_only_job' => true,
+                        'fallback_reason' => 'no_canonical_transcript_for_reparse',
+                        'ok' => true,
+                        'text_quality_ok' => true,
+                        'ai_extraction_skipped' => true,
+                        'reason' => 'explicit_raw_ocr_fallback_after_missing_canonical',
+                        'provider' => null,
+                        'provider_source' => 'explicit_fallback',
+                    ];
+                    Cache::put('intake.parse_input_debug.'.$intake->id, $parseInputDebug, now()->addDays(7));
+                } else {
+                    $reuseResolver->consumeParseInputOnlyFlag((int) $intake->id);
+                    $intake->update([
+                        'parse_status' => 'error',
+                        'last_error' => 'reparse_no_canonical_or_raw_ocr',
+                        'parse_duration_ms' => 0,
+                    ]);
+                    Cache::put('intake.parse_input_debug.'.$intake->id, [
+                        'parse_input_source' => 'reparse_unavailable',
+                        'parse_input_only_job' => true,
+                        'ok' => false,
+                        'reason' => 'no_canonical_transcript_no_raw_ocr',
+                    ], now()->addDays(7));
+
+                    return;
+                }
+            } else {
+                if (trim((string) ($intake->raw_ocr_text ?? '')) === '') {
+                    $reuseResolver->consumeParseInputOnlyFlag((int) $intake->id);
+                    $intake->update([
+                        'parse_status' => 'error',
+                        'last_error' => 'reparse_no_raw_ocr',
+                        'parse_duration_ms' => 0,
+                    ]);
+                    Cache::put('intake.parse_input_debug.'.$intake->id, [
+                        'parse_input_source' => 'reparse_unavailable',
+                        'parse_input_only_job' => true,
+                        'ok' => false,
+                        'reason' => 'no_raw_ocr_text_non_ai_mode',
+                    ], now()->addDays(7));
+
+                    return;
+                }
+                $resolved = $ocr->buildParseInputFromDbRawOcr($intake);
+                $raw = $resolved['text'];
+                $reparseEarlyResolved = true;
+                $reuseResolver->consumeParseInputOnlyFlag((int) $intake->id);
+                $parseInputDebug = [
+                    'parse_input_source' => 'raw_ocr_text_column',
+                    'force_recompute' => true,
+                    'parse_input_only_job' => true,
+                    'ok' => true,
+                    'text_quality_ok' => true,
+                ];
+                Cache::put('intake.parse_input_debug.'.$intake->id, $parseInputDebug, now()->addDays(7));
+            }
+        } elseif ($useAiVisionExtraction) {
             $ai = app(AiVisionExtractionService::class);
-            $reuseResolver = app(IntakeExtractionReuseResolver::class);
             $parseInputOnly = $reuseResolver->consumeParseInputOnlyFlag((int) $intake->id);
             $forceFreshPaidExtraction = $reuseResolver->consumeForceFreshPaidExtractionFlag((int) $intake->id);
             $resolvedProv = $ai->resolveExtractionProvider();
@@ -260,6 +356,8 @@ class ParseIntakeJob implements ShouldQueue
             );
 
             if (trim($raw) === '') {
+                $parseInputDebug['parse_input_source'] = 'ai_vision_extract_failed';
+                $parseInputDebug['ok'] = false;
                 $intake->update([
                     'parse_status' => 'error',
                     'last_error' => $parseInputDebug['reason'] ? (string) $parseInputDebug['reason'] : 'ai_vision_extract_failed',
@@ -279,6 +377,8 @@ class ParseIntakeJob implements ShouldQueue
             $reuseResolver->putCachedParseInputText((int) $intake->id, $raw, $longLivedParseInputCache);
 
             if (empty($qualityGate['ok'])) {
+                $parseInputDebug['parse_input_source'] = 'ai_vision_text_quality_failed';
+                $parseInputDebug['ok'] = false;
                 $intake->update([
                     'parse_status' => 'error',
                     'last_error' => (string) ($qualityGate['reason'] ?? 'ai_vision_text_unusable'),
@@ -306,7 +406,8 @@ class ParseIntakeJob implements ShouldQueue
         $ocrQuality = $qualityEvaluator->evaluate($raw);
 
         $retryConfig = config('ocr.auto_retry', []);
-        if ($manualPreparedExists
+        if (! $reparseEarlyResolved
+            && $manualPreparedExists
             && ($retryConfig['enabled'] ?? false)
             && ($ocrQuality['score'] ?? 0) < (float) ($retryConfig['quality_threshold'] ?? 0.6)) {
             $maxAttempts = max(0, (int) ($retryConfig['max_attempts'] ?? 0));

@@ -119,8 +119,12 @@ final class OcrHtmlTableFlattener
     private static function isSeparatorCell(string $c): bool
     {
         $t = trim($c);
+        if ($t === '' || $t === ':-' || $t === ':–' || $t === ':—') {
+            return $t !== '';
+        }
 
-        return $t !== '' && preg_match('/^:?\s*-+\s*$/u', $t) === 1;
+        return preg_match('/^:?\s*-+\s*$/u', $t) === 1
+            || preg_match('/^:?\s*[–—]\s*$/u', $t) === 1;
     }
 
     private static function innerText(\DOMElement $el): string

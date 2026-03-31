@@ -19,7 +19,9 @@ return [
     */
     'sarvam_structured' => [
         'chat_completions_url' => env('SARVAM_CHAT_COMPLETIONS_URL', 'https://api.sarvam.ai/v1/chat/completions'),
-        'model' => env('INTAKE_SARVAM_STRUCTURED_MODEL', 'sarvam-m'),
+        // Allowed Sarvam structured model(s): locked to Sarvam M only.
+        // Do NOT allow env overrides here: cross-provider models like "bulbul-v3" are invalid for this flow.
+        'model' => 'sarvam-m',
     ],
 
     /*

@@ -61,10 +61,18 @@ class IntakeParsedSnapshotSkeleton
         }
         $out['core'] = array_replace($this->coreDefaults(), $out['core']);
 
-        foreach (['contacts', 'children', 'marriages', 'education_history', 'career_history', 'addresses', 'siblings', 'relatives', 'property_summary', 'property_assets', 'horoscope', 'preferences', 'alliance_networks'] as $arrKey) {
+        foreach (['contacts', 'children', 'marriages', 'education_history', 'career_history', 'addresses', 'siblings', 'relatives', 'property_assets', 'horoscope', 'preferences', 'alliance_networks'] as $arrKey) {
             if (! is_array($out[$arrKey] ?? null)) {
                 $out[$arrKey] = [];
             }
+        }
+        // property_summary may be a scalar string from rules parser; do not coerce to [].
+        if (! array_key_exists('property_summary', $out) || $out['property_summary'] === null) {
+            $out['property_summary'] = $defaults['property_summary'] ?? [];
+        } elseif (is_string($out['property_summary'])) {
+            // keep string for intake preview / scalar merge paths
+        } elseif (! is_array($out['property_summary'])) {
+            $out['property_summary'] = [];
         }
         foreach (['birth_place', 'native_place'] as $objKey) {
             if (isset($out[$objKey]) && $out[$objKey] !== null && ! is_array($out[$objKey])) {

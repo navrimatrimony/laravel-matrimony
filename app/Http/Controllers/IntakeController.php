@@ -14,6 +14,7 @@ use App\Services\OcrService;
 use App\Services\Parsing\ParserStrategyResolver;
 use App\Services\Parsing\ProviderResolver;
 use App\Services\Preview\PreviewSectionMapper;
+use App\Support\IntakePreviewDiagnosticsPresenter;
 use App\Support\IntakeDobTrace;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
@@ -2670,6 +2671,8 @@ class IntakeController extends Controller
                 'sarvam_job_id', 'sarvam_job_state',
                 'original_image_width', 'original_image_height', 'ai_request_image_width', 'ai_request_image_height',
                 'ai_request_payload_enhanced', 'ai_request_orientation_corrected', 'vision_detail', 'extracted_text_line_count',
+                'canonical_transcript_source', 'fallback_reason', 'ai_extraction_skipped',
+                'extraction_reused', 'paid_extraction_api_called', 'parse_input_only_job',
             ];
             foreach ($parseInputKeys as $k) {
                 if (! array_key_exists($k, $parseInput)) {
@@ -2695,6 +2698,10 @@ class IntakeController extends Controller
         }
 
         $base['intake_id'] = (int) $intake->id;
+
+        $diag = IntakePreviewDiagnosticsPresenter::summarize($intake, $base);
+        $base['diagnostics_summary'] = $diag['summary'];
+        $base['diagnostics_technical_note'] = $diag['technical_note'];
 
         return $base;
     }

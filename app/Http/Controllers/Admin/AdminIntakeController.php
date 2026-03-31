@@ -12,6 +12,7 @@ use App\Services\IntakeApprovalService;
 use App\Services\IntakeManualOcrPreparedService;
 use App\Services\Parsing\ParserStrategyResolver;
 use App\Services\Parsing\ProviderResolver;
+use App\Support\IntakePreviewDiagnosticsPresenter;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
@@ -53,7 +54,58 @@ class AdminIntakeController extends Controller
         $showAdminReextractAction = app(ProviderResolver::class)->parseJobUsesAiVisionExtraction();
         $reviewParse = app(IntakeReviewParseInputTextResolver::class)->resolve($intake);
 
-        return view('admin.intake.show', compact('intake', 'showAdminReextractAction', 'reviewParse'));
+        // Display-only diagnostics: use existing cached parse_input_debug + current parser mode resolution.
+        $active = app(ParserStrategyResolver::class)->resolveActiveMode();
+        $mode = app(ParserStrategyResolver::class)->normalizeMode($intake->parser_version ?: $active);
+        $dbg = Cache::get('intake.parse_input_debug.'.$intake->id);
+        $dbg = is_array($dbg) ? $dbg : [];
+        $ocrQuality = Cache::get('intake.parse_ocr_quality.'.$intake->id);
+        $ocrQuality = is_array($ocrQuality) ? $ocrQuality : [];
+
+        $diagnosticsUnavailableReason = null;
+        $meta = [];
+        $diagnostics = null;
+
+        if ($dbg !== []) {
+            $meta = [
+                'active_parser_mode' => $mode,
+                'parse_input_source' => (string) ($dbg['parse_input_source'] ?? ''),
+                'parse_input_provider' => (string) ($dbg['provider'] ?? ''),
+                'parse_input_provider_source' => (string) ($dbg['provider_source'] ?? ''),
+                'parse_input_ok' => (bool) ($dbg['ok'] ?? false),
+                'parse_input_ai_extraction_skipped' => (bool) ($dbg['ai_extraction_skipped'] ?? false),
+                'parse_input_canonical_transcript_source' => (string) ($dbg['canonical_transcript_source'] ?? ''),
+                'parse_input_fallback_reason' => (string) ($dbg['fallback_reason'] ?? ''),
+                'parse_input_extraction_reused' => $dbg['extraction_reused'] ?? null,
+                'parse_input_extraction_reused_from' => (string) ($dbg['extraction_reused_from'] ?? ''),
+                'parse_input_reused_source_intake_id' => $dbg['reused_source_intake_id'] ?? null,
+                'parse_input_paid_extraction_api_called' => (bool) ($dbg['paid_extraction_api_called'] ?? false),
+                'parse_input_parse_input_only_job' => (bool) ($dbg['parse_input_only_job'] ?? false),
+                'parse_input_text_quality_ok' => $dbg['text_quality_ok'] ?? null,
+                'parse_input_text_chars' => $dbg['text_chars'] ?? null,
+                'parse_input_text_lines' => $dbg['text_lines'] ?? null,
+                'parse_input_reason' => (string) ($dbg['reason'] ?? ''),
+                'parse_input_source_field' => (string) ($dbg['source_field'] ?? ''),
+                'ocr_source_type_effective' => 'cache_only_admin_view',
+            ];
+
+            $diagnostics = IntakePreviewDiagnosticsPresenter::summarize($intake, $meta);
+        } else {
+            $diagnosticsUnavailableReason = 'Diagnostics unavailable (parse_input_debug cache missing/expired for this intake).';
+        }
+
+        return view('admin.intake.show', compact(
+            'intake',
+            'showAdminReextractAction',
+            'reviewParse',
+            'dbg',
+            'ocrQuality',
+            'meta',
+            'diagnostics',
+            'diagnosticsUnavailableReason',
+            'active',
+            'mode',
+        ));
     }
 
     /**

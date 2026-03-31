@@ -418,6 +418,42 @@ class OcrService
     }
 
     /**
+     * Re-parse (forceRecompute): use only immutable {@see BiodataIntake::$raw_ocr_text} from the DB —
+     * same normalize → post-process → domain pipeline as normal stored-text parsing.
+     * Skips manual-crop OCR, vision reuse/cache, and parse-time file OCR.
+     *
+     * @return array{text: string, ocr_debug: array<string, mixed>}
+     */
+    public function buildParseInputFromDbRawOcr(BiodataIntake $intake): array
+    {
+        $stored = (string) ($intake->raw_ocr_text ?? '');
+        $processed = $this->ocrPostProcessor->process(
+            OcrNormalize::normalizeRawTextForParsing($stored)
+        );
+        $enhanced = $this->domainIntelligence->enhance($processed);
+        $domainApplied = $enhanced !== $processed;
+
+        $ocrDebug = [
+            'kind' => 'stored_text',
+            'ocr_source_type' => 'raw_ocr_text_column',
+            'ocr_pipeline' => 'reparse_raw_ocr_text_only',
+            'original_storage_relative' => $intake->file_path,
+            'manual_prepared_storage_relative' => null,
+            'final_ocr_input_path' => null,
+            'note' => 'Re-parse uses DB raw_ocr_text only (no manual OCR, no vision cache).',
+            'intake_id' => $intake->id,
+        ];
+        if (config('app.debug')) {
+            $ocrDebug['domain_intelligence_applied'] = $domainApplied;
+        }
+
+        return [
+            'text' => $enhanced,
+            'ocr_debug' => $ocrDebug,
+        ];
+    }
+
+    /**
      * Resolve which on-disk file should be used for OCR when we must read bytes.
      *
      * Precedence:

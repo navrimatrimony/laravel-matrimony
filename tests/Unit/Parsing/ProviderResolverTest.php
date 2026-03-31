@@ -67,4 +67,22 @@ class ProviderResolverTest extends TestCase
         $r = app(ProviderResolver::class);
         $this->assertSame(ProviderResolver::MODE_HYBRID, $r->processingMode());
     }
+
+    /**
+     * Admin intake-settings "File text extraction provider" writes intake_ai_vision_provider;
+     * vision transcription must read the same key when primary is unset.
+     */
+    public function test_intake_ai_vision_provider_sarvam_matches_runtime_vision_transcription(): void
+    {
+        AdminSetting::setValue('intake_processing_mode', 'end_to_end');
+        AdminSetting::setValue('intake_primary_ai_provider', '');
+        AdminSetting::setValue('intake_ai_vision_provider', 'sarvam');
+        AdminSetting::setValue('intake_active_parser', 'ai_vision_extract_v1');
+
+        $r = app(ProviderResolver::class);
+        $this->assertSame('sarvam', $r->visionTranscriptionProvider());
+
+        $resolved = app(\App\Services\AiVisionExtractionService::class)->resolveExtractionProvider();
+        $this->assertSame('sarvam', $resolved['provider']);
+    }
 }

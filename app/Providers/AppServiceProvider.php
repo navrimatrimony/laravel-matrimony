@@ -5,6 +5,7 @@ namespace App\Providers;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\View;
@@ -25,6 +26,16 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        // Guard against misconfiguration: Sarvam structured parser must use Sarvam M only.
+        $envSarvamStructured = strtolower(trim((string) env('INTAKE_SARVAM_STRUCTURED_MODEL', '')));
+        if ($envSarvamStructured !== '' && $envSarvamStructured !== 'sarvam-m') {
+            Log::error('Invalid Sarvam structured model configured: '.$envSarvamStructured.'. Expected: sarvam-m');
+        }
+        $cfgSarvamStructured = strtolower(trim((string) config('intake.sarvam_structured.model', 'sarvam-m')));
+        if ($cfgSarvamStructured !== 'sarvam-m') {
+            Log::error('Invalid Sarvam structured model in config: '.$cfgSarvamStructured.'. Expected: sarvam-m');
+        }
+
         RateLimiter::for('location-gps', function (Request $request) {
             return Limit::perMinute(2)->by($request->user()?->id ?: $request->ip());
         });

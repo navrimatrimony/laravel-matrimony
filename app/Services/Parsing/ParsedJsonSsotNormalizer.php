@@ -223,7 +223,7 @@ final class ParsedJsonSsotNormalizer
             if (! is_array($row)) {
                 continue;
             }
-            foreach (['relation_type', 'name', 'occupation', 'address_line', 'contact_number', 'notes'] as $f) {
+            foreach (['relation_type', 'name', 'occupation', 'address_line', 'contact_number', 'notes', 'marital_status'] as $f) {
                 if (array_key_exists($f, $row)) {
                     $rows[$i][$f] = self::normalizeNullableString($row[$f], false);
                 }
@@ -275,7 +275,9 @@ final class ParsedJsonSsotNormalizer
                 $rows[$i][$f] = $v;
             }
             if (array_key_exists('charan', $row)) {
-                $rows[$i]['charan'] = self::normalizeNumericOrNull($row['charan']);
+                $ch = $row['charan'];
+                $num = self::normalizeNumericOrNull($ch);
+                $rows[$i]['charan'] = $num !== null ? $num : self::normalizeNullableString($ch, true);
             }
             unset($rows[$i]['blood_group']);
         }
