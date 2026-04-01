@@ -13,10 +13,10 @@ class BiodataParserIntakeAccuracyTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_female_gender_inferred_from_ku_honorific(): void
+    public function test_female_gender_from_explicit_ling_label_only(): void
     {
         $service = $this->app->make(BiodataParserService::class);
-        $raw = "मुलीचे नाव :- कु. प्रीती राजेंद्र पाटील\nवडिलांचे नाव :- श्री. राजेंद्र पाटील";
+        $raw = "मुलीचे नाव :- कु. प्रीती राजेंद्र पाटील\nलिंग :- स्त्री\nवडिलांचे नाव :- श्री. राजेंद्र पाटील";
         $parsed = $service->parse($raw);
         $this->assertSame('female', $parsed['core']['gender'] ?? null);
     }

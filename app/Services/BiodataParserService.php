@@ -74,10 +74,18 @@ class BiodataParserService
     {
         // Strip BOM if present; rest of the flow expects UTF-8 text and relies on upstream normalization.
         $rawText = preg_replace('/^\x{FEFF}/u', '', $rawText);
+        // Keep HTML for structured table hints before any tag stripping.
+        $htmlSourceForHints = $rawText;
         $tableStructuredHints = [];
-        if (stripos($rawText, '<table') !== false) {
-            $tableStructuredHints = \App\Services\Parsing\HtmlMarathiBiodataTableExtractor::extract($rawText);
-            $rawText = self::flattenHtmlTableForBiodata($rawText);
+        if (stripos($htmlSourceForHints, '<table') !== false) {
+            $tableStructuredHints = \App\Services\Parsing\HtmlMarathiBiodataTableExtractor::extract($htmlSourceForHints);
+            $htmlSourceForHints = self::flattenHtmlTableForBiodata($htmlSourceForHints);
+        }
+        $rawText = $htmlSourceForHints;
+        // Table OCR: join adjacent <td> cells so "label : value" survives strip_tags (minimal pre-process).
+        if (preg_match('/<\/td>/iu', $rawText) || preg_match('/<td\b/iu', $rawText)) {
+            $rawText = preg_replace('/<\/td>\s*<td>/u', ' : ', $rawText);
+            $rawText = strip_tags($rawText);
         }
         $rawText = self::stripIntakeHtmlNoise($rawText);
         // SSOT Day-27: Apply baseline normalization (Devanagari digits + noise removal)
@@ -569,10 +577,8 @@ class BiodataParserService
         $mama = $this->sanitizeCoreMamaField($mama);
         $relatives = $this->rejectIfLabelNoise($this->extractField($familyText, ['इतर पाहुणे', 'नातेसंबंध']) ?? $this->extractField($text, ['इतर पाहुणे', 'नातेसंबंध']));
 
-        $gender = $this->extractExplicitGender($text) ?? ($romanized['gender'] ?? null);
-        if ($gender === null) {
-            $gender = $this->inferGender($text);
-        }
+        // Gender: explicit लिंग / Gender / Sex / "gender: male" only — no honorific or section-title inference.
+        $gender = $this->extractExplicitGender($text);
         // Religion / caste / sub-caste: support combined patterns like "जात २- हिंदु- 96 कुळी मराठा"
         $religion = $this->extractField($text, ['धर्म', 'Religion']);
         $religion = $religion ?? $romanized['religion'] ?? null;
@@ -1055,7 +1061,8 @@ class BiodataParserService
         if ($this->hasAnyKeyword($text, self::PROPERTY_TRIGGER)) {
             $propertySummary = $this->extractPropertySummaryBlock($text);
             $propertySummary = $propertySummary ?? $this->extractField($text, ['स्थावर मिळकत', 'स्थायिक मालमत्ता', 'शेती', 'जमीन', 'Property']);
-            $propertyAssets = [];
+            $propertySummary = $this->sanitizePropertySummaryHardStop($propertySummary);
+            $propertyAssets = $this->buildMinimalPropertyAssetsFromSummary($propertySummary);
             $confidence['property'] = $propertySummary !== null ? self::CONF_REGEX : self::CONF_AI;
         } else {
             $confidence['property'] = self::CONF_MISSING;
@@ -1263,8 +1270,6 @@ class BiodataParserService
             );
         }
 
-        $this->applyGenderFromCandidateFullNameHonorific($core);
-
         // AI fallback only for unlocked fields (never overwrites HTML/table extractions).
         $coreKeys = [
             'sub_caste',
@@ -1345,6 +1350,8 @@ class BiodataParserService
             );
         }
 
+        $relativesRows = $this->filterRelativeRowsDropSectionPseudoHeaders($relativesRows);
+
         // Build simple path-based confidence map for key fields.
         $confidenceMap = [];
         $addConf = function (string $path, float $value) use (&$confidenceMap): void {
@@ -1402,12 +1409,13 @@ class BiodataParserService
             $addConf('career_history.0.company', self::CONF_REGEX);
         }
 
-        // Merge with existing scalar confidence values and relation confidences.
+        // Merge with existing scalar confidence values and relation confidences (drop stale relatives.* paths if any).
         $confidenceMap = array_merge(
             $confidenceMap,
             array_map(fn ($v) => (float) $v, $confidence),
             $relationsConfidence
         );
+        $confidenceMap = $this->pruneConfidenceMapStaleRelativePaths($confidenceMap, $relativesRows);
 
         $educationHistory = $this->sanitizeEducationInstitutionFromDevak($educationHistory);
         $careerHistory = $this->sanitizeCareerLocationFromGotra($careerHistory);
@@ -1427,7 +1435,13 @@ class BiodataParserService
         }
 
         $this->filterContactsRemoveFooterShopNumbers($contacts, $text);
-        $relativesRows = $this->filterRelativeRowsDropSectionPseudoHeaders($relativesRows);
+
+        if ($propertySummary !== null && trim((string) $propertySummary) !== '') {
+            $builtAssets = $this->buildMinimalPropertyAssetsFromSummary($propertySummary);
+            if ($builtAssets !== []) {
+                $propertyAssets = $builtAssets;
+            }
+        }
 
         return [
             'core' => $coreOut,
@@ -3919,7 +3933,7 @@ class BiodataParserService
             if (($this->hasAnyKeyword($text, self::PROPERTY_TRIGGER) || $fill($cur))
                 && $this->shouldApplyStructuredTableHint($cur, $cand, 'property_summary')) {
                 if (! $this->otherRelativesTextLooksPolluted($cand)) {
-                    $propertySummary = $this->cleanValue($cand);
+                    $propertySummary = $this->sanitizePropertySummaryHardStop($this->cleanValue($cand));
                 }
             }
         }
@@ -3937,7 +3951,7 @@ class BiodataParserService
 
         $this->mergeHtmlTableSiblingHints($siblings, $hints);
 
-        $appendRelIfMissing = function (string $relationType, string $note) use (&$relativesRows): void {
+        $appendRelIfMissing = function (string $relationType, string $note) use (&$relativesRows, &$core): void {
             foreach ($relativesRows as $r) {
                 if (($r['relation_type'] ?? '') === $relationType) {
                     return;
@@ -3946,6 +3960,14 @@ class BiodataParserService
             $note = trim(preg_replace('/\s+/u', ' ', $note) ?? '');
             if ($note === '' || $this->isLikelyLabelOnlyValue($note)) {
                 return;
+            }
+            // Avoid duplicating core.mama in relatives[] when the HTML note matches core extraction.
+            if ($relationType === 'मामा' && isset($core['mama']) && is_string($core['mama']) && trim($core['mama']) !== '') {
+                $sanN = $this->sanitizeCoreMamaField($note);
+                $sanC = $this->sanitizeCoreMamaField(trim($core['mama']));
+                if ($sanN !== null && $sanC !== null && $sanN === $sanC) {
+                    return;
+                }
             }
             $relativesRows[] = [
                 'relation_type' => $relationType,
@@ -4367,7 +4389,26 @@ class BiodataParserService
         }
 
         return (bool) preg_match(
-            '/प्रिंट|Print\s+Shop|Print|शॉप|Shop\s+Contact|Shop|Contact\s*No|डिझाइन|डिझाईन|विवाह\s*संस्था|Footer|फुटर|Copyright|जॉब|कार्ड|Digital|Offset|Lamination|Visiting\s*Card|मुद्रण|फोटो\s*स्टुडिओ|Studio|Design\s*By|कॉम्प्युटर|Computer|टायपिंग|Typing/ui',
+            '/प्रिंट|Print\s+Shop|Print|शॉप|Shop\s+Contact|Shop|Contact\s*No|डिझाइन|डिझाईन|विवाह\s*संस्था|Footer|फुटर|Copyright|जॉब|कार्ड|Digital|Offset|Lamination|Visiting\s*Card|मुद्रण|फोटो\s*स्टुडिओ|Studio|Design\s*By|कॉम्प्युटर|कॉम्पुटर|Computer|टायपिंग|टायपींग|Typing|समर्थ|स्वामी\s*समर्थ/ui',
+            $t
+        );
+    }
+
+    /**
+     * Footer lines like "… कॉम्पुटर टायपींग … संपर्क : ९६०४…" — match even when generic Print/Shop tokens are absent.
+     */
+    private function lineLooksLikeTypingOrComputerCenterFooter(string $line): bool
+    {
+        $t = trim($line);
+        if ($t === '' || ! preg_match('/[6-9]\d{9}|[६-९][०-९]{9}/u', \App\Services\Ocr\OcrNormalize::normalizeDigits($t) ?? $t)) {
+            return false;
+        }
+        if (! preg_match('/संपर्क|Contact|Phone|नंबर|Mobile|मोबाइल/ui', $t)) {
+            return false;
+        }
+
+        return (bool) preg_match(
+            '/कॉम्प्युटर|कॉम्पुटर|Computer|टायपिंग|टायपींग|Typing|टाइप|प्रिंट|Print|मुद्रण|Shop|शॉप|डिझाइन|डिझाईन|Offset|Digital|समर्थ\s*कॉम्प|स्वामी\s*समर्थ/ui',
             $t
         );
     }
@@ -4386,6 +4427,9 @@ class BiodataParserService
             if ($digits !== '' && strlen($digits) >= 10) {
                 $digits = substr($digits, -10);
                 if ($this->phoneDigitsAppearOnlyOnFooterShopLines($text, $digits)) {
+                    continue;
+                }
+                if ($this->phoneDigitsAppearOnlyOnTypingComputerFooterLines($text, $digits)) {
                     continue;
                 }
             }
@@ -4420,6 +4464,58 @@ class BiodataParserService
     }
 
     /**
+     * True when every line containing this number looks like a typing/computer-center footer contact line.
+     */
+    private function phoneDigitsAppearOnlyOnTypingComputerFooterLines(string $text, string $digits10): bool
+    {
+        if (! preg_match('/^[6-9]\d{9}$/', $digits10)) {
+            return false;
+        }
+        $normText = \App\Services\Ocr\OcrNormalize::normalizeDigits($text);
+        $lines = array_values(array_filter(array_map('trim', preg_split('/\R/u', (string) $normText) ?: [])));
+        $saw = false;
+        foreach ($lines as $ln) {
+            $lnNorm = \App\Services\Ocr\OcrNormalize::normalizeDigits($ln);
+            if ($lnNorm === null || ! str_contains((string) $lnNorm, $digits10)) {
+                continue;
+            }
+            $saw = true;
+            if (! $this->lineLooksLikeTypingOrComputerCenterFooter($ln)) {
+                return false;
+            }
+        }
+
+        return $saw;
+    }
+
+    /**
+     * Drop confidence_map keys like relatives.3.relation_type when relatives[] was shortened after filtering.
+     *
+     * @param  array<string, float>  $confidenceMap
+     * @param  list<array<string, mixed>>  $relativesRows
+     * @return array<string, float>
+     */
+    private function pruneConfidenceMapStaleRelativePaths(array $confidenceMap, array $relativesRows): array
+    {
+        if ($confidenceMap === []) {
+            return $confidenceMap;
+        }
+        $maxIdx = count($relativesRows) - 1;
+        $out = [];
+        foreach ($confidenceMap as $path => $val) {
+            if (preg_match('/^relatives\.(\d+)\./', (string) $path, $m)) {
+                $i = (int) $m[1];
+                if ($i > $maxIdx) {
+                    continue;
+                }
+            }
+            $out[$path] = $val;
+        }
+
+        return $out;
+    }
+
+    /**
      * @param  list<array<string, mixed>>  $relatives
      * @return list<array<string, mixed>>
      */
@@ -4430,7 +4526,11 @@ class BiodataParserService
         }
 
         return array_values(array_filter($relatives, function (array $r): bool {
-            $notes = trim((string) preg_replace('/^[\s\-–—•*]+/u', '', (string) ($r['notes'] ?? '')));
+            $name = trim((string) ($r['name'] ?? ''));
+            if ($name !== '' && $this->isRelativeSectionHeadingNotes($name)) {
+                return false;
+            }
+            $notes = trim((string) preg_replace('/^[\s\-–—•*]+/u', '', (string) ($r['notes'] ?? $r['raw_note'] ?? '')));
             // Notes-only: relation_type may be canonical "आजोळ"/"मामा" and must not be mistaken for a heading.
             if ($this->isRelativeSectionHeadingNotes($notes)) {
                 return false;
@@ -4635,27 +4735,6 @@ class BiodataParserService
         }
 
         return false;
-    }
-
-    /**
-     * Candidate full_name honorific overrides label-based gender inference (कु. female, चि. male).
-     *
-     * @param  array<string, mixed>  $core
-     */
-    private function applyGenderFromCandidateFullNameHonorific(array &$core): void
-    {
-        $fn = trim((string) ($core['full_name'] ?? ''));
-        if ($fn === '') {
-            return;
-        }
-        if (preg_match('/^कु\./u', $fn)) {
-            $core['gender'] = 'female';
-
-            return;
-        }
-        if (preg_match('/^चि\./u', $fn)) {
-            $core['gender'] = 'male';
-        }
     }
 
     /**
@@ -5434,13 +5513,13 @@ class BiodataParserService
     }
 
     /**
-     * Explicit लिंग / Gender label in document (takes precedence over heuristic inferGender).
+     * Explicit लिंग / Gender / Sex / "gender: male|female" in document only (no honorific inference).
      *
      * @return 'male'|'female'|null
      */
     private function extractExplicitGender(string $text): ?string
     {
-        if (preg_match('/लिंग\s*[:\-]?\s*(पुरुष|स्त्री|पुरूष)/u', $text, $m)) {
+        if (preg_match('/लिंग\s*[:\-–—]*\s*(पुरुष|स्त्री|पुरूष)/u', $text, $m)) {
             $g = trim($m[1] ?? '');
             if ($g === 'स्त्री' || mb_strpos($g, 'स्त्री') === 0) {
                 return 'female';
@@ -5455,6 +5534,15 @@ class BiodataParserService
                 return 'female';
             }
             if (preg_match('/male|पुरुष/i', $g)) {
+                return 'male';
+            }
+        }
+        if (preg_match('/\bgender\s*[:\-]\s*(male|female)\b/ui', $text, $m)) {
+            $g = mb_strtolower(trim($m[1] ?? ''));
+            if ($g === 'female') {
+                return 'female';
+            }
+            if ($g === 'male') {
                 return 'male';
             }
         }
@@ -7845,7 +7933,7 @@ class BiodataParserService
     {
         $t = trim((string) preg_replace('/^[\s\-–—•*]+/u', '', trim($notes)));
 
-        return (bool) preg_match('/^(?:मुलीचे|मुलाचे|मुलाची|मुलीच्या)\s+(?:चुलते|मामा|आत्या|मावशी|मावस\s+मामा|आईचे\s+मामा)(?:\s*[:\-–—]+)?\s*$/u', $t)
+        return (bool) preg_match('/^(?:मुलीचे|मुलाचे|मुलाची|मुलीच्या)\s+(?:चुलते|मामा|भाऊ|आत्या|मावशी|मावस\s+मामा|आईचे\s+मामा)(?:\s*[:\-–—]+)?\s*$/u', $t)
             || (bool) preg_match('/^आजोळ\s*[\-–—]?\s*\(\s*मामा\s*\)\s*$/u', $t)
             || (bool) preg_match('/^(?:मामा|मावशी|आत्या|चулते)\s*(?::\s*-\s*|:\s*[:\-–—]*\s*)$/u', $t)
             || (bool) preg_match('/^आजोळ\s*(?::\s*-\s*|:\s*)?\s*$/u', $t)
@@ -8270,75 +8358,6 @@ class BiodataParserService
         return preg_match('/वैवाहिक\s*स्थिती|Marital\s*status/u', $text) === 1;
     }
 
-    private function inferGender(string $text): ?string
-    {
-        if (preg_match('/मुलीचे\s*नाव/u', $text) || preg_match('/वधूचे\s*नाव/u', $text)) {
-            return 'female';
-        }
-
-        if (preg_match('/मुलाचे\s*नाव/u', $text)) {
-            return 'male';
-        }
-
-        // Clear bride/groom wording (word-boundary style for Devanagari).
-        if (preg_match('/(?:^|[^\p{L}])मुलगी(?:[^\p{L}]|$)/u', $text)) {
-            return 'female';
-        }
-        if (preg_match('/(?:^|[^\p{L}])मुलगा(?:[^\p{L}]|$)/u', $text)) {
-            return 'male';
-        }
-
-        // मुलाचे बालपण / मुलाचे चुलते etc. -> boy's biodata
-        if (preg_match('/मुलाचे\s*(बालपण|चुलते|मामा|भाऊ)/u', $text)) {
-            return 'male';
-        }
-        if (preg_match('/मुलीचे\s*(बालपण|चुलते|मामा|भाऊ)/u', $text)) {
-            return 'female';
-        }
-
-        // Honorifics: कु. = Kumari (female), चि. = Chiranjeevi (male), कुमारी = female, श्री = male (before name)
-        if (preg_match('/\bकु\./u', $text) || preg_match('/[:\-]\s*कु\./u', $text)) {
-            return 'female';
-        }
-        if (preg_match('/\bकुमारी\b/u', $text)) {
-            return 'female';
-        }
-        if (preg_match('/\bचि\./u', $text) || preg_match('/[:\-]\s*चि\./u', $text)) {
-            return 'male';
-        }
-        // श्री before name (e.g. "नाव :- श्री. राजेंद्र") = male; avoid matching only in female context
-        if (preg_match('/नाव\s*[:\-]\s*श्री\./u', $text) || preg_match('/मुलाचे\s*नाव.*श्री/u', $text)) {
-            return 'male';
-        }
-
-        // English label: Gender: Female / Sex: Male
-        if (preg_match('/(?:Gender|Sex)\s*[:\-]*\s*(\w+)/ui', $text, $m)) {
-            $g = trim($m[1] ?? '');
-            if (stripos($g, 'female') !== false || $g === 'F') {
-                return 'female';
-            }
-            if (stripos($g, 'male') !== false || $g === 'M') {
-                return 'male';
-            }
-        }
-
-        // Standalone English / Marathi words (case-insensitive for English)
-        if (preg_match('/\bfemale\b/ui', $text)) {
-            return 'female';
-        }
-        if (preg_match('/\bmale\b/ui', $text)) {
-            return 'male';
-        }
-        if (preg_match('/\bस्त्री\b/u', $text)) {
-            return 'female';
-        }
-        if (preg_match('/\bपुरुष\b/u', $text)) {
-            return 'male';
-        }
-
-        return null;
-    }
-
     /**
      * @param  string  $text  Lines to scan (often CONTACT slice or full doc)
      * @param  string|null  $fullDocument  Full biodata; used when $text omits "पत्ता :" lines (section detection quirk)
@@ -8523,8 +8542,9 @@ class BiodataParserService
     /** Extract multi-line block after "स्थायिक मालमत्ता" (or similar) until next section. */
     private function extractPropertySummaryBlock(string $text): ?string
     {
+        // Hard stop at the next labeled row (कुलदैवत/जात/देवक/parent names) so property does not swallow the table.
         if (preg_match(
-            '/(?:स्थायिक\s*मालमत्ता|स्थावर\s*मिळकत)\s*[:\-]?\s*(.+?)(?=\n\s*(?:मूळचा\s+पत्ता|मुळचा\s+पत्ता|इतर\s+नातेवाईक|नक्षत्र|रास|चरण|वर्ण|वश्य|प्रिंट|Print|कौटुंबिक|अपेक्षा|संपर्क)|\n\s*\n|\nकौटुंबिक|\nअपेक्षा|\nसंपर्क|$)/us',
+            '/(?:स्थायिक\s*मालमत्ता|स्थावर\s*मिळकत)\s*[:\-]?\s*(.+?)(?=\n\s*(?:मूळचा\s+पत्ता|मुळचा\s+पत्ता|कुलदैवत|जात|देवक|वडिलांचे\s*नाव|वडिलांचे\s*नांव|वडीलांचे\s*नाव|आईचे\s*नाव|आईचं\s*नाव|इतर\s+नातेवाईक|नक्षत्र|रास|चरण|वर्ण|वश्य|प्रिंट|Print|कौटुंबिक|अपेक्षा|संपर्क)|\n\s*\n|\nकौटुंबिक|\nअपेक्षा|\nसंपर्क|$)/us',
             $text,
             $m
         )) {
@@ -8532,6 +8552,56 @@ class BiodataParserService
         }
 
         return null;
+    }
+
+    /** Safety net: strip trailing bleed when OCR merges the next label into the property line. */
+    private function sanitizePropertySummaryHardStop(?string $property): ?string
+    {
+        if ($property === null || trim($property) === '') {
+            return $property;
+        }
+        $p = trim(preg_replace('/\s+/u', ' ', $property) ?? '');
+        $p = preg_replace('/^[\s\-–—•*]+/u', '', $p) ?? '';
+        $p = preg_replace('/^-\s+/u', '', $p) ?? '';
+        $p = trim($p);
+        $p = preg_replace('/(कुलदैवत|जात|देवक|वडिलांचे|आईचे).*$/u', '', $p) ?? '';
+        $p = trim($p);
+
+        return $p === '' ? null : $p;
+    }
+
+    /**
+     * Minimal property_assets[] row from free-text summary (existing wizard keys only; no valuation / type IDs).
+     *
+     * @return list<array<string, mixed>>
+     */
+    private function buildMinimalPropertyAssetsFromSummary(?string $summary): array
+    {
+        if ($summary === null || trim($summary) === '') {
+            return [];
+        }
+        $s = trim(preg_replace('/\s+/u', ' ', $summary) ?? '');
+        if (! preg_match('/Flat\b|फ्लॅट|फ्लाट|Apartment|अपार्टमेंट|Coimbatore|कोयंबटूर|–\s*\d{3}\s*\d{3}|पिन\s*[:\-]?\s*\d{5,6}/ui', $s)) {
+            return [];
+        }
+        $loc = $s;
+        if (preg_match('/(Flat\b[\s\S]+)$/ui', $s, $m)) {
+            $loc = trim($m[1]);
+        } elseif (preg_match('/(फ्लॅट[\s\S]+)$/u', $s, $m)) {
+            $loc = trim($m[1]);
+        }
+
+        return [[
+            'id' => null,
+            'asset_type_id' => null,
+            'location' => $loc,
+            'estimated_value' => null,
+            'ownership_type_id' => null,
+            'city_id' => null,
+            'taluka_id' => null,
+            'district_id' => null,
+            'state_id' => null,
+        ]];
     }
 
     private function hasAnyKeyword(string $text, array $keywords): bool

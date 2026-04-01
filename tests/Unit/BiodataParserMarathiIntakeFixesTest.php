@@ -421,6 +421,7 @@ TXT;
         $raw = <<<HTML
 <table>
 <tr><td>मुलीचे नांव</td><td>:-</td><td>कु. अंजली रामचंद्र कदम</td></tr>
+<tr><td>लिंग</td><td>:-</td><td>स्त्री</td></tr>
 <tr><td>जन्म तारीख</td><td>:-</td><td>१५/०५/१९९५</td></tr>
 <tr><td>जन्म स्थळ</td><td>:-</td><td>पुणे</td></tr>
 <tr><td>जन्मवेळ</td><td>:-</td><td>दुपारी १:२० मि.</td></tr>
@@ -505,12 +506,13 @@ HTML;
         $this->assertSame('गृहिणी', (string) ($core['mother_occupation'] ?? ''));
     }
 
-    public function test_html_table_ku_prefix_forces_female_gender(): void
+    public function test_html_table_explicit_ling_stri_maps_female_gender(): void
     {
         $service = $this->app->make(BiodataParserService::class);
         $raw = <<<HTML
 <table>
 <tr><td>मुलीचे नांव</td><td>:-</td><td>कु. काजल रामचंद्र कदम</td></tr>
+<tr><td>लिंग</td><td>:-</td><td>स्त्री</td></tr>
 </table>
 HTML;
         $parsed = $service->parse($raw);
