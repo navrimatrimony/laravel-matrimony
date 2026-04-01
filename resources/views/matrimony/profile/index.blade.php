@@ -417,8 +417,8 @@
                         @endphp
 
                         <div class="mb-4 flex flex-col overflow-hidden rounded-xl border border-gray-200 bg-white text-gray-900 shadow-sm dark:border-gray-700 dark:bg-gray-900/40 dark:text-gray-100 sm:flex-row sm:items-stretch">
-                            {{-- Photo: full-height left block on desktop; compact strip on mobile --}}
-                            <div class="relative h-36 w-full shrink-0 overflow-hidden bg-gray-100 dark:bg-gray-800 sm:h-auto sm:w-44 sm:min-h-[11rem] md:w-48 sm:self-stretch">
+                            {{-- Photo: full-height left block on desktop; portrait ratio on mobile (avoid thin strip) --}}
+                            <div class="relative aspect-[3/4] w-full shrink-0 overflow-hidden bg-gray-100 dark:bg-gray-800 sm:aspect-auto sm:h-auto sm:w-44 sm:min-h-[11rem] md:w-48 sm:self-stretch">
                                 @if ($hasApprovedPhoto)
                                     <img
                                         src="{{ asset('uploads/matrimony_photos/'.$matrimonyProfile->profile_photo) }}"
