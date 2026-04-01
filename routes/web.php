@@ -34,6 +34,8 @@ use App\Http\Controllers\MatrimonyProfileController;
 use App\Http\Controllers\MatrimonyVerificationEmailController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\OnboardingController;
+use App\Http\Controllers\ProfileHideController;
+use App\Http\Controllers\ProfilePhotoReportController;
 use App\Http\Controllers\Payments\PayuController;
 use App\Http\Controllers\ProfileContactVerificationController;
 use App\Http\Controllers\ProfileVerificationController;
@@ -321,6 +323,12 @@ Route::middleware('auth')->group(function () {
     */
     Route::post('/abuse-reports/{matrimony_profile}', [AbuseReportController::class, 'store'])
         ->name('abuse-reports.store');
+
+    Route::post('/hidden-profiles/{matrimony_profile_id}', [ProfileHideController::class, 'store'])
+        ->name('hidden-profiles.store');
+
+    Route::post('/profile-photo-reports/{matrimony_profile_id}', [ProfilePhotoReportController::class, 'store'])
+        ->name('profile-photo-reports.store');
 
     /*
     | Notifications (Day-10 — R5)

@@ -17,6 +17,7 @@ return Application::configure(basePath: dirname(__DIR__))
         ]);
         $middleware->appendToGroup('web', [
             \App\Http\Middleware\SetLocaleFromQuery::class,
+            \App\Http\Middleware\UpdateUserLastSeen::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

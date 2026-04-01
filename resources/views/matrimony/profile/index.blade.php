@@ -445,7 +445,104 @@
 
                             <div class="flex min-w-0 flex-1 flex-col gap-4 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5">
                                 <div class="min-w-0 flex-1 space-y-1.5">
-                                    <p class="font-semibold text-lg text-gray-900 dark:text-gray-100 truncate">{{ $matrimonyProfile->full_name ?: '—' }}</p>
+                                    @php
+                                        $isListingOwnProfile = auth()->check()
+                                            && auth()->user()->matrimonyProfile
+                                            && (int) auth()->user()->matrimonyProfile->id === (int) $matrimonyProfile->id;
+                                        $chipFirstName = \Illuminate\Support\Str::before(trim((string) ($matrimonyProfile->full_name ?? '')), ' ');
+                                        $chipFirstName = $chipFirstName !== '' ? $chipFirstName : 'Profile';
+                                    @endphp
+                                    {{-- Row 1: name + menu --}}
+                                    <div class="flex items-start justify-between gap-3">
+                                        <p class="min-w-0 flex-1 truncate font-semibold text-lg text-gray-900 dark:text-gray-100">{{ $matrimonyProfile->full_name ?: '—' }}</p>
+                                        @auth
+                                            @if (! $isListingOwnProfile)
+                                                <details class="relative shrink-0" data-search-card-menu>
+                                                    <summary class="flex cursor-pointer list-none items-center justify-center rounded-full p-1.5 text-gray-500 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800 [&::-webkit-details-marker]:hidden" aria-label="{{ __('search.card_actions_menu') }}">
+                                                        <span class="flex flex-col gap-0.5" aria-hidden="true">
+                                                            <span class="block h-1 w-1 rounded-full bg-current"></span>
+                                                            <span class="block h-1 w-1 rounded-full bg-current"></span>
+                                                            <span class="block h-1 w-1 rounded-full bg-current"></span>
+                                                        </span>
+                                                    </summary>
+                                                    <div class="absolute right-0 z-20 mt-1 w-64 max-w-[calc(100vw-2rem)] rounded-xl border border-gray-200 bg-white p-2 shadow-lg dark:border-gray-700 dark:bg-gray-900">
+                                                        @if (auth()->user()->matrimonyProfile)
+                                                            <form method="POST" action="{{ route('blocks.store', $matrimonyProfile) }}" onsubmit="return confirm(@json(__('search.confirm_block_profile')));">
+                                                                @csrf
+                                                                <button type="submit" class="w-full rounded-lg px-3 py-2 text-left text-sm text-gray-800 hover:bg-gray-100 dark:text-gray-100 dark:hover:bg-gray-800">{{ __('search.action_block_profile') }}</button>
+                                                            </form>
+                                                            <form method="POST" action="{{ route('hidden-profiles.store', $matrimonyProfile) }}" class="mt-2 border-t border-gray-200 pt-2 dark:border-gray-700" onsubmit="return confirm(@json(__('search.confirm_hide_profile')));">
+                                                                @csrf
+                                                                <button type="submit" class="w-full rounded-lg px-3 py-2 text-left text-sm text-gray-800 hover:bg-gray-100 dark:text-gray-100 dark:hover:bg-gray-800">{{ __('search.action_hide_profile') }}</button>
+                                                            </form>
+                                                        @endif
+                                                        <div class="@if(auth()->user()->matrimonyProfile) mt-2 border-t border-gray-200 pt-2 dark:border-gray-700 @endif">
+                                                            <p class="mb-1 px-1 text-xs font-medium text-gray-600 dark:text-gray-400">{{ __('search.action_report_profile') }}</p>
+                                                            <form method="POST" action="{{ route('abuse-reports.store', $matrimonyProfile) }}" class="space-y-2">
+                                                                @csrf
+                                                                <textarea
+                                                                    name="reason"
+                                                                    rows="2"
+                                                                    required
+                                                                    minlength="10"
+                                                                    maxlength="2000"
+                                                                    placeholder="{{ __('search.report_reason_placeholder') }}"
+                                                                    class="w-full resize-y rounded-lg border border-gray-300 bg-white px-2 py-1.5 text-xs text-gray-900 placeholder:text-gray-400 dark:border-gray-600 dark:bg-gray-950 dark:text-gray-100"
+                                                                ></textarea>
+                                                                <button type="submit" class="w-full rounded-lg bg-rose-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-rose-700">{{ __('search.submit_report') }}</button>
+                                                            </form>
+                                                        </div>
+                                                        @if (! $isListingOwnProfile && $matrimonyProfile->reportable_photo_summary)
+                                                            <div class="mt-2 border-t border-gray-200 pt-2 dark:border-gray-700">
+                                                                <p class="mb-1 px-1 text-xs font-medium text-gray-600 dark:text-gray-400">{{ __('search.action_report_photo') }}</p>
+                                                                <form method="POST" action="{{ route('profile-photo-reports.store', $matrimonyProfile) }}" class="space-y-2">
+                                                                    @csrf
+                                                                    <input type="hidden" name="profile_photo_id" value="{{ $matrimonyProfile->reportable_photo_summary['profile_photo_id'] }}">
+                                                                    <textarea
+                                                                        name="reason"
+                                                                        rows="2"
+                                                                        required
+                                                                        minlength="10"
+                                                                        maxlength="2000"
+                                                                        placeholder="{{ __('search.photo_report_reason_placeholder') }}"
+                                                                        class="w-full resize-y rounded-lg border border-gray-300 bg-white px-2 py-1.5 text-xs text-gray-900 placeholder:text-gray-400 dark:border-gray-600 dark:bg-gray-950 dark:text-gray-100"
+                                                                    ></textarea>
+                                                                    <button type="submit" class="w-full rounded-lg bg-amber-700 px-3 py-1.5 text-xs font-semibold text-white hover:bg-amber-800">{{ __('search.submit_photo_report') }}</button>
+                                                                </form>
+                                                            </div>
+                                                        @endif
+                                                    </div>
+                                                </details>
+                                            @endif
+                                        @endauth
+                                    </div>
+                                    {{-- Row 2: online (truthful) + compatibility --}}
+                                    <div class="flex flex-wrap items-center gap-2 text-xs">
+                                        @if ($matrimonyProfile->online_status_summary)
+                                            @if (($matrimonyProfile->online_status_summary['is_online'] ?? false))
+                                                <span class="inline-flex max-w-full items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[11px] font-semibold text-emerald-900 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-100">
+                                                    <span class="h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-500" aria-hidden="true"></span>
+                                                    <span>{{ $matrimonyProfile->online_status_summary['label'] ?? '' }}</span>
+                                                </span>
+                                            @else
+                                                <span class="inline-flex max-w-full items-center rounded-full border border-gray-200 bg-gray-50 px-2.5 py-1 text-[11px] font-medium text-gray-700 dark:border-gray-600 dark:bg-gray-800/80 dark:text-gray-200">
+                                                    {{ $matrimonyProfile->online_status_summary['label'] ?? '' }}
+                                                </span>
+                                            @endif
+                                        @endif
+                                        @if ($matrimonyProfile->compatibility_summary && ! $isListingOwnProfile)
+                                            <span
+                                                class="inline-flex max-w-full items-center gap-1 rounded-full border border-violet-200 bg-violet-50 px-2.5 py-1 text-[11px] font-semibold text-violet-800 dark:border-violet-800 dark:bg-violet-950/40 dark:text-violet-200"
+                                                title="{{ $matrimonyProfile->compatibility_summary['label'] ?? '' }}"
+                                            >
+                                                <span aria-hidden="true">❤</span>
+                                                <span class="min-w-0 truncate">
+                                                    You &amp; {{ $chipFirstName }} match · {{ $matrimonyProfile->compatibility_summary['matched_count'] }}/{{ $matrimonyProfile->compatibility_summary['total_count'] }}
+                                                </span>
+                                            </span>
+                                        @endif
+                                    </div>
+                                    {{-- Row 3: gender / age / height / marital --}}
                                     <div class="flex flex-wrap items-center gap-1.5 text-xs text-gray-600 dark:text-gray-400">
                                         <span class="rounded-full bg-gray-100 dark:bg-gray-800 px-2 py-0.5">{{ $genderLabel }}</span>
                                         @if ($ageText)
@@ -854,6 +951,19 @@
                                 });
                             })();
                         }
+
+                        document.querySelectorAll('[data-search-card-menu]').forEach(function (el) {
+                            el.addEventListener('toggle', function () {
+                                if (!el.open) {
+                                    return;
+                                }
+                                document.querySelectorAll('[data-search-card-menu]').forEach(function (other) {
+                                    if (other !== el) {
+                                        other.open = false;
+                                    }
+                                });
+                            });
+                        });
                     });
                 </script>
 

@@ -7,6 +7,7 @@ use App\Models\City;
 use App\Models\Country;
 use App\Models\District;
 use App\Models\FieldRegistry;
+use App\Models\HiddenProfile;
 use App\Models\MasterMaritalStatus;
 use App\Models\MatrimonyProfile;
 use App\Models\Profession;
@@ -17,6 +18,7 @@ use App\Models\Shortlist;
 use App\Models\State;
 use App\Models\SubCaste;
 use App\Models\Taluka;
+use App\Models\User;
 use App\Services\ExtendedFieldService;
 use App\Services\ProfileCompletenessService;
 use App\Services\ProfileFieldConfigurationService;
@@ -1148,12 +1150,16 @@ class MatrimonyProfileController extends Controller
             });
         }
 
-        // Exclude blocked profiles (either direction) when viewer has profile
+        // Exclude blocked profiles (either direction) and viewer-hidden profiles when viewer has profile
         $myId = auth()->user()?->matrimonyProfile?->id;
         if ($myId) {
             $blockedIds = ViewTrackingService::getBlockedProfileIds($myId);
-            if ($blockedIds->isNotEmpty()) {
-                $query->whereNotIn('id', $blockedIds);
+            $hiddenIds = HiddenProfile::query()
+                ->where('owner_profile_id', $myId)
+                ->pluck('hidden_profile_id');
+            $excludeIds = $blockedIds->merge($hiddenIds)->unique()->values();
+            if ($excludeIds->isNotEmpty()) {
+                $query->whereNotIn('id', $excludeIds);
             }
         }
 
@@ -1203,8 +1209,35 @@ class MatrimonyProfileController extends Controller
             'subCaste',
             'profession',
             'seriousIntent',
-            'user:id,email_verified_at',
+            'user:id,email_verified_at,last_seen_at',
+            'photos' => function ($q) {
+                $q->select('id', 'profile_id', 'file_path', 'is_primary', 'approved_status')
+                    ->where('approved_status', 'approved');
+            },
         ])->paginate($perPage)->withQueryString();
+
+        $viewerProfile = auth()->user()?->matrimonyProfile;
+        $profiles->setCollection($profiles->getCollection()->map(function (MatrimonyProfile $listedProfile) use ($viewerProfile) {
+            $listedProfile->compatibility_summary = null;
+            $listedProfile->online_status_summary = self::buildOnlineStatusSummaryForUser($listedProfile->user);
+            $listedProfile->reportable_photo_summary = self::buildReportablePhotoSummary($listedProfile);
+
+            if ($viewerProfile && (int) $listedProfile->id !== (int) $viewerProfile->id) {
+                $matchData = self::calculateMatchExplanation($viewerProfile, $listedProfile);
+                $matchedCount = (int) ($matchData['matchedCount'] ?? 0);
+                $totalCount = (int) ($matchData['totalCount'] ?? 0);
+                $label = $matchedCount >= 3
+                    ? 'Strong match'
+                    : ($matchedCount >= 1 ? 'Good match' : 'Explore match');
+                $listedProfile->compatibility_summary = [
+                    'matched_count' => $matchedCount,
+                    'total_count' => $totalCount,
+                    'label' => $label,
+                ];
+            }
+
+            return $listedProfile;
+        }));
 
         // Lookup lists for filter controls (read-only; same keys as request inputs above)
         $locationLookups = $this->buildProfileSearchLocationLookups($request);
@@ -1260,6 +1293,78 @@ class MatrimonyProfileController extends Controller
             'sort'
         ), $locationLookups));
 
+    }
+
+    /**
+     * Truthful presence label from user.last_seen_at (runtime-only for listing cards).
+     *
+     * @return array{is_online: bool, label: string}|null
+     */
+    private static function buildOnlineStatusSummaryForUser(?User $user): ?array
+    {
+        if ($user === null || $user->last_seen_at === null) {
+            return null;
+        }
+
+        $ls = $user->last_seen_at;
+        $onlineThresholdMinutes = 5;
+        if ($ls->greaterThanOrEqualTo(now()->subMinutes($onlineThresholdMinutes))) {
+            return ['is_online' => true, 'label' => 'Online now'];
+        }
+
+        $m = (int) floor($ls->diffInMinutes(now()));
+
+        if ($m < 60) {
+            $n = max(1, $m);
+            $label = $n === 1
+                ? "Online {$n} minute ago"
+                : "Online {$n} minutes ago";
+
+            return ['is_online' => false, 'label' => $label];
+        }
+
+        if ($m < 1440) {
+            $n = (int) max(1, floor($m / 60));
+            $label = $n === 1
+                ? "Online {$n} hour ago"
+                : "Online {$n} hours ago";
+
+            return ['is_online' => false, 'label' => $label];
+        }
+
+        $n = (int) max(1, floor($m / 1440));
+        $label = $n === 1
+            ? "Online {$n} day ago"
+            : "Online {$n} days ago";
+
+        return ['is_online' => false, 'label' => $label];
+    }
+
+    /**
+     * Gallery row id for the photo shown on the search card (approved only).
+     *
+     * @return array{profile_photo_id: int, file_path: string}|null
+     */
+    private static function buildReportablePhotoSummary(MatrimonyProfile $listedProfile): ?array
+    {
+        $path = trim((string) ($listedProfile->profile_photo ?? ''));
+        if ($path === '' || $listedProfile->photo_approved === false) {
+            return null;
+        }
+
+        $photos = $listedProfile->relationLoaded('photos') ? $listedProfile->photos : collect();
+        $record = $photos->firstWhere('file_path', $path)
+            ?? $photos->firstWhere('is_primary', true)
+            ?? $photos->first();
+
+        if ($record === null) {
+            return null;
+        }
+
+        return [
+            'profile_photo_id' => (int) $record->id,
+            'file_path' => (string) $record->file_path,
+        ];
     }
 
     /**
