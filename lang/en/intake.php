@@ -57,6 +57,26 @@ return [
     'reject_suggestion_button' => 'Reject',
     'no_pending_suggestions' => 'No pending field suggestions from biodata.',
 
+    'suggestions_review_intro_title' => 'About these review items',
+    'suggestions_review_intro' => 'Your existing profile information was preserved when you approved this biodata. What you see below is optional: supported items can be applied or dismissed here; other items are kept safely for reference and are not changed unless you update them elsewhere.',
+
+    'suggested_updates_you_can_review' => 'Suggested updates you can review now',
+    'suggestions_action_available_label' => 'You can approve or reject these from this page',
+
+    'suggestions_no_actionable_but_stored' => 'No directly reviewable suggestions are pending right now.',
+
+    'stored_review_items_title' => 'Stored review items',
+    'stored_review_items_intro' => 'These groups were not merged automatically from this screen or cannot be applied here yet. Nothing here replaces your profile data on its own.',
+    'stored_review_items_entities_label' => 'Lists and records',
+    'stored_review_items_groups_label' => 'Other saved groups',
+    'stored_review_items_safe_note' => 'They remain stored with your account and are not auto-overwritten.',
+
+    'extended_suggestion_field' => [
+    ],
+
+    'pending_suggestion_group' => [
+    ],
+
     'core_suggestion_field' => [
         'full_name' => 'Full name / पूर्ण नाव',
         'gender_id' => 'Gender',

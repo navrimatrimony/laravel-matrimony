@@ -150,6 +150,12 @@ return [
 
     'partner_pref_submenu_label' => 'Partner preferences',
     'partner_pref_workspace_intro' => 'Pick one topic at a time. Your choices stay in the form until you save.',
+    'partner_preferences_trust_note' => 'These preferences help match quality. You can change them anytime; they do not silently change your own profile details.',
+    'partner_pref_location_microcopy' => 'Location filters narrow which regions you prefer for a partner.',
+    'partner_pref_community_microcopy' => 'These choices describe a preferred partner, not your own profile identity.',
+    'partner_pref_education_microcopy' => 'Education and career filters apply to who you hope to meet.',
+    'partner_pref_lifestyle_microcopy' => 'Lifestyle choices here are partner preferences only.',
+    'partner_pref_family_microcopy' => 'Family-related preferences affect matching, not your profile facts.',
     'partner_pref_section_basics' => 'Basics — marriage, age, height',
     'partner_pref_section_community' => 'Community — religion & caste',
     'partner_pref_section_location' => 'Location — countries to talukas',

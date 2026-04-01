@@ -57,6 +57,26 @@ return [
     'reject_suggestion_button' => 'नाकारा',
     'no_pending_suggestions' => 'बायोडेट्यातून प्रलंबित फील्ड सूचना नाहीत.',
 
+    'suggestions_review_intro_title' => 'या पुनर्तपासाबद्दल',
+    'suggestions_review_intro' => 'तुम्ही बायोडेटा मंजूर केला तेव्हा तुमची विद्यमान प्रोफाइल माहिती जशाच्या तशी ठेवली गेली. खालील पर्यायी आहेत: समर्थित गोष्टी इथून मंजूर किंवा नाकारता येतात; इतर गोष्टी संदर्भासाठी सुरक्षित ठेवल्या आहेत आणि तुम्ही दुसरीकडे बदलल्याशिवाय बदलत नाहीत.',
+
+    'suggested_updates_you_can_review' => 'आत्ता पुनर्तपासासाठी सूचित अपडेट्स',
+    'suggestions_action_available_label' => 'या पृष्ठावरून मंजूर किंवा नाकारू शकता',
+
+    'suggestions_no_actionable_but_stored' => 'सध्या थेट पुनर्तपासासाठी प्रलंबित सूचना नाहीत.',
+
+    'stored_review_items_title' => 'साठवलेले पुनर्तपास आयटम',
+    'stored_review_items_intro' => 'हे गट या स्क्रीनवरून आपोआप मर्ज झाले नाहीत किंवा इथून लागू करता येत नाहीत. हे तुमच्या प्रोफाइल डेटाला स्वतःहून बदलत नाहीत.',
+    'stored_review_items_entities_label' => 'याद्या आणि नोंदी',
+    'stored_review_items_groups_label' => 'इतर साठवलेले गट',
+    'stored_review_items_safe_note' => 'हे तुमच्या खात्यासोबत साठवले आहेत आणि आपोआप पुनर्लेखित होत नाहीत.',
+
+    'extended_suggestion_field' => [
+    ],
+
+    'pending_suggestion_group' => [
+    ],
+
     'core_suggestion_field' => [
         'full_name' => 'पूर्ण नाव',
         'gender_id' => 'लिंग',

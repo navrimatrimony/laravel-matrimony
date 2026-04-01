@@ -5,7 +5,7 @@
     <div class="flex items-center justify-between mb-4">
         <div>
             <h1 class="text-2xl font-bold text-gray-100">Admin Intake Page</h1>
-            <p class="text-gray-400 text-sm">Phase-5 Admin Intake Sandbox</p>
+            <p class="text-gray-400 text-sm">Review biodata intake, attachment, and apply governance.</p>
         </div>
         <a href="{{ route('admin.biodata-intakes.index') }}" class="text-sm text-gray-300 hover:text-white underline">← Back to intakes</a>
     </div>
@@ -18,6 +18,11 @@
     @if (session('error'))
         <div class="mb-3 px-4 py-2 rounded bg-red-600/10 border border-red-500 text-red-200 text-sm">
             {{ session('error') }}
+        </div>
+    @endif
+    @if (session('warning'))
+        <div class="mb-3 px-4 py-2 rounded bg-amber-600/10 border border-amber-500 text-amber-100 text-sm">
+            {{ session('warning') }}
         </div>
     @endif
     @if ($errors->any())
@@ -190,6 +195,28 @@
 
                 <div class="border border-gray-700/70 rounded-lg p-3">
                     <div class="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">Profile action</div>
+                    @php
+                        $ar = $applyReadiness ?? [];
+                        $ready = (bool) ($ar['can_admin_apply'] ?? false);
+                        $missing = [];
+                        if (! ($ar['user_approved'] ?? false)) {
+                            $missing[] = 'user approval';
+                        }
+                        if (! ($ar['attached_profile'] ?? false)) {
+                            $missing[] = 'attached profile';
+                        }
+                        if (! ($ar['has_snapshot'] ?? false)) {
+                            $missing[] = 'approval snapshot';
+                        }
+                        if (! ($ar['admin_required'] ?? false)) {
+                            $missing[] = 'admin apply mode enabled in settings';
+                        }
+                    @endphp
+                    @if ($ready)
+                        <p class="mb-2 text-[11px] text-emerald-200/90">All preconditions for admin apply are met. Submitting will run the approval pipeline.</p>
+                    @else
+                        <p class="mb-2 text-[11px] text-amber-200/80">Not ready: {{ $missing === [] ? 'check intake state and settings.' : 'missing: '.implode(', ', $missing).'.' }}</p>
+                    @endif
                     <form method="POST" action="{{ route('admin.biodata-intakes.apply', $intake) }}">
                         @csrf
                         <button type="submit" class="w-full inline-flex items-center justify-center px-3 py-2 rounded bg-emerald-600 hover:bg-emerald-700 text-xs font-semibold text-white">
@@ -212,6 +239,111 @@
                 </div>
             </div>
         </div>
+    </div>
+
+    @php
+        $govProfile = $attachedProfile ?? $intake->profile;
+        $govPendingConflicts = (int) ($pendingConflictCount ?? 0);
+        $govSuggestionsPresent = (bool) ($pendingSuggestionsPresent ?? false);
+        $govSuggestionsCount = (int) ($pendingSuggestionsCount ?? 0);
+        $govRequireAdmin = (bool) ($requireAdminBeforeAttach ?? false);
+        $govReadiness = $applyReadiness ?? [];
+        $mutationResult = session('mutation_result');
+        $mutationResult = is_array($mutationResult) ? $mutationResult : null;
+    @endphp
+    <div class="bg-gray-800/70 border border-gray-700 rounded-xl p-6 mb-6">
+        <h2 class="text-sm font-semibold text-gray-100 mb-1">Governance Status</h2>
+        <p class="text-xs text-gray-400 mb-4">Read-only apply and conflict context for this intake.</p>
+        <dl class="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4 text-sm">
+            <div>
+                <dt class="text-xs font-semibold text-gray-400 uppercase tracking-wide">Attached profile</dt>
+                <dd class="mt-1 text-gray-100">
+                    @if ($govProfile)
+                        <div><span class="font-mono text-gray-300">#{{ $govProfile->id }}</span> — {{ $govProfile->full_name ?? '—' }}</div>
+                        <div class="text-xs text-gray-400 mt-0.5">Lifecycle: <span class="text-gray-200">{{ $govProfile->lifecycle_state ?? '—' }}</span></div>
+                    @else
+                        <span class="text-gray-400">Not attached</span>
+                    @endif
+                </dd>
+            </div>
+            <div>
+                <dt class="text-xs font-semibold text-gray-400 uppercase tracking-wide">User approval</dt>
+                <dd class="mt-1 text-gray-100">
+                    {{ ! empty($intake->approved_by_user) ? 'Approved' : 'Not approved' }}
+                    @if (! empty($intake->approved_at))
+                        <span class="text-xs text-gray-400 block mt-0.5">{{ $intake->approved_at instanceof \Illuminate\Support\Carbon ? $intake->approved_at->toDateTimeString() : (string) $intake->approved_at }}</span>
+                    @endif
+                </dd>
+            </div>
+            <div>
+                <dt class="text-xs font-semibold text-gray-400 uppercase tracking-wide">Snapshot readiness</dt>
+                <dd class="mt-1 text-gray-100">{{ ! empty($govReadiness['has_snapshot']) ? 'Present' : 'Missing' }}</dd>
+            </div>
+            <div>
+                <dt class="text-xs font-semibold text-gray-400 uppercase tracking-wide">Admin apply mode</dt>
+                <dd class="mt-1 text-gray-100">{{ $govRequireAdmin ? 'Admin required before apply' : 'Not required' }}</dd>
+            </div>
+            <div class="md:col-span-2">
+                <dt class="text-xs font-semibold text-gray-400 uppercase tracking-wide">Pending conflicts (attached profile)</dt>
+                <dd class="mt-1">
+                    @if ($govPendingConflicts > 0)
+                        <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold border border-amber-500/60 text-amber-100 bg-amber-600/20">{{ $govPendingConflicts }} pending</span>
+                        @if (! empty($recentPendingConflicts) && $recentPendingConflicts->isNotEmpty())
+                            <div class="mt-2 text-[11px] text-gray-400">
+                                Recent:
+                                @foreach ($recentPendingConflicts as $rc)
+                                    <a href="{{ route('admin.conflict-records.show', $rc) }}" class="text-amber-200/90 hover:underline mr-2">#{{ $rc->id }}</a>
+                                @endforeach
+                            </div>
+                        @endif
+                    @else
+                        <span class="text-gray-300">0</span>
+                    @endif
+                </dd>
+            </div>
+            <div class="md:col-span-2">
+                <dt class="text-xs font-semibold text-gray-400 uppercase tracking-wide">Pending suggestions (profile)</dt>
+                <dd class="mt-1 text-gray-100">
+                    @if ($govSuggestionsPresent)
+                        Present — {{ $govSuggestionsCount }} non-empty bucket(s)
+                    @else
+                        None
+                    @endif
+                </dd>
+            </div>
+        </dl>
+        <div class="mt-5 pt-4 border-t border-gray-700/70">
+            <div class="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">Apply readiness</div>
+            <ul class="space-y-1 text-xs text-gray-300">
+                <li><span class="text-gray-500">User approved:</span> {{ ! empty($govReadiness['user_approved']) ? 'yes' : 'no' }}</li>
+                <li><span class="text-gray-500">Attached profile:</span> {{ ! empty($govReadiness['attached_profile']) ? 'yes' : 'no' }}</li>
+                <li><span class="text-gray-500">Approval snapshot:</span> {{ ! empty($govReadiness['has_snapshot']) ? 'yes' : 'no' }}</li>
+                <li><span class="text-gray-500">Admin apply required:</span> {{ ! empty($govReadiness['admin_required']) ? 'yes' : 'no' }}</li>
+                <li class="pt-1 font-semibold {{ ! empty($govReadiness['can_admin_apply']) ? 'text-emerald-200' : 'text-amber-200' }}">
+                    {{ ! empty($govReadiness['can_admin_apply']) ? 'Ready to apply' : 'Not ready to apply' }}
+                </li>
+            </ul>
+        </div>
+        @if ($mutationResult)
+            <div class="mt-5 pt-4 border-t border-gray-700/70">
+                <div class="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">Last apply result</div>
+                <ul class="text-xs text-gray-300 space-y-1">
+                    <li><span class="text-gray-500">Mutation success:</span> {{ ! empty($mutationResult['mutation_success']) ? 'yes' : 'no' }}</li>
+                    <li><span class="text-gray-500">Conflict detected:</span> {{ ! empty($mutationResult['conflict_detected']) ? 'yes' : 'no' }}</li>
+                    <li><span class="text-gray-500">Blocked:</span> {{ isset($mutationResult['blocked']) && $mutationResult['blocked'] !== null && $mutationResult['blocked'] !== '' ? (string) $mutationResult['blocked'] : '—' }}</li>
+                    <li><span class="text-gray-500">Already applied:</span> {{ ! empty($mutationResult['already_applied']) ? 'yes' : 'no' }}</li>
+                </ul>
+                <div class="mt-3 flex flex-wrap gap-2">
+                    @if (! empty($mutationResult['conflict_detected']) && $govProfile)
+                        <a href="{{ route('admin.conflict-records.index') }}" class="inline-flex items-center px-3 py-1.5 rounded border border-amber-600/50 text-amber-100 text-xs font-semibold hover:bg-amber-600/10">Open pending conflicts</a>
+                    @endif
+                    @if (! empty($mutationResult['mutation_success']) && $govProfile)
+                        <a href="{{ route('admin.profiles.show', $govProfile->id) }}" class="inline-flex items-center px-3 py-1.5 rounded border border-emerald-600/50 text-emerald-100 text-xs font-semibold hover:bg-emerald-600/10">Open attached profile</a>
+                    @endif
+                    <a href="{{ route('intake.preview', $intake) }}" target="_blank" class="inline-flex items-center px-3 py-1.5 rounded border border-gray-600 text-gray-200 text-xs font-semibold hover:bg-gray-700/50">Open user preview</a>
+                </div>
+            </div>
+        @endif
     </div>
 
     <div class="bg-gray-900/40 border border-gray-700 rounded-xl p-5 mb-6">

@@ -1907,34 +1907,10 @@
         foreach ($allRows as $r) {
             $statusCounts[$r['status']]++;
         }
-        $totalEvaluated = max(1, $matchData['totalCount'] ?? 0);
-        $ratio = ($matchData['matchedCount'] ?? 0) / $totalEvaluated;
-        if (($matchData['totalCount'] ?? 0) === 0) {
-            $verdictTitle = 'Partial match - limited comparable data';
-            $verdictTone = 'Some preferences are still open.';
-            $verdictClass = 'border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-200';
-        } elseif ($ratio >= 0.75 && $statusCounts['mismatch'] <= 1) {
-            $verdictTitle = 'Strong match - most key basics align';
-            $verdictTone = 'This looks promising for next-step discussion.';
-            $verdictClass = 'border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950/30 dark:text-emerald-200';
-        } elseif ($ratio >= 0.5 || $statusCounts['close'] >= 2) {
-            $verdictTitle = 'Good match - key basics align';
-            $verdictTone = 'Good fit overall, with a few differences.';
-            $verdictClass = 'border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950/30 dark:text-emerald-200';
-        } elseif ($ratio >= 0.25) {
-            $verdictTitle = 'Partial match - some important preferences differ';
-            $verdictTone = 'Can still be discussed if priorities are flexible.';
-            $verdictClass = 'border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-200';
-        } else {
-            $verdictTitle = 'Low match - major preferences differ';
-            $verdictTone = 'Proceed only if both sides are open to discussion.';
-            $verdictClass = 'border-red-200 bg-red-50 text-red-800 dark:border-red-900 dark:bg-red-950/30 dark:text-red-200';
-        }
-
-        $chipPriority = ['location', 'age', 'highest_education', 'marital_status', 'caste'];
+        $chipPriority = ['location', 'age', 'highest_education', 'marital_status_id', 'caste_id'];
         $chipMap = [];
         foreach ($matchData['matches'] as $m) {
-            $statusLabel = $m['matched'] ? 'Match' : 'Needs attention';
+            $statusLabel = $m['matched'] ? 'Aligned' : 'Different';
             $chipMap[$m['field']] = [
                 'label' => $m['label'],
                 'tone' => $m['matched'] ? 'match' : 'mismatch',
@@ -1953,7 +1929,7 @@
     <div class="mb-4 flex items-center justify-between gap-4 border-b border-stone-200 pb-4 dark:border-gray-700">
         <div>
             <h3 class="text-lg font-semibold text-stone-900 dark:text-stone-100">{{ __('How does your profile match with theirs?') }}</h3>
-            <p class="text-sm text-stone-600 dark:text-stone-400">{{ __('Comparison based on preferences and information.') }}</p>
+            <p class="text-sm text-stone-600 dark:text-stone-400">Comparison based on shared profile information (no score).</p>
         </div>
         <div class="hidden items-center gap-3 sm:flex">
             <div class="text-center">
@@ -1966,11 +1942,6 @@
                 <p class="mt-1 text-[11px] font-medium text-stone-600 dark:text-stone-300">{{ $yourSideLabel }}</p>
             </div>
         </div>
-    </div>
-
-    <div class="mb-4 rounded-xl border px-4 py-3 {{ $verdictClass }}">
-        <p class="text-sm font-semibold">{{ $verdictTitle }}</p>
-        <p class="mt-0.5 text-xs opacity-90">{{ $verdictTone }}</p>
     </div>
 
     <div class="mb-4 grid grid-cols-2 gap-2 md:grid-cols-4">
@@ -1987,7 +1958,7 @@
             <p class="text-base font-semibold text-stone-900 dark:text-stone-100">{{ $statusCounts['open'] }}</p>
         </div>
         <div class="rounded-lg border border-stone-200 bg-stone-50 px-3 py-2 dark:border-gray-700 dark:bg-gray-800/70">
-            <p class="text-[11px] uppercase tracking-wide text-stone-500 dark:text-stone-400">Best aligned</p>
+            <p class="text-[11px] uppercase tracking-wide text-stone-500 dark:text-stone-400">Exact row matches</p>
             <p class="text-base font-semibold text-stone-900 dark:text-stone-100">{{ $statusCounts['match'] }}</p>
         </div>
     </div>
@@ -2095,12 +2066,13 @@
                 </p>
             </div>
         @else
-            <a 
-                href="#"
-                @click.prevent="showReportForm = !showReportForm"
+            <button
+                type="button"
+                @click="showReportForm = !showReportForm"
+                class="bg-transparent p-0 border-0 font-inherit"
                 style="color:#6b7280; text-decoration:underline; font-size:0.875rem; cursor:pointer;">
                 {{ __('Report profile for abuse') }}
-            </a>
+            </button>
 
             <div x-show="showReportForm" x-transition style="margin-top:1rem; max-width:500px;">
                 <form method="POST" action="{{ route('abuse-reports.store', $profile) }}" style="border:1px solid #ccc; padding:1rem;">

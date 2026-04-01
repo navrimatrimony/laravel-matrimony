@@ -62,9 +62,9 @@
                 </div>
                 @if ($showChatUpgradeCta)
                     <div class="flex shrink-0 flex-col gap-2 sm:max-w-[14rem] sm:text-right">
-                        <p class="text-xs leading-snug text-amber-950/85 dark:text-amber-100/85">Premium सदस्यांना जास्त संदेश, फोटो शेअरिंग आणि इतर फायदे मिळतात.</p>
+                        <p class="text-xs leading-snug text-amber-950/85 dark:text-amber-100/85">Some features may be restricted based on access rules.</p>
                         <a href="{{ $upgradeUrl }}" class="inline-flex items-center justify-center rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm ring-1 ring-indigo-500/30 transition hover:bg-indigo-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 dark:ring-offset-gray-900">
-                            Premium पहा / अपग्रेड
+                            View access details
                         </a>
                         <span class="text-[11px] text-amber-900/65 dark:text-amber-200/65">किंवा समोरील व्यक्तीचा reply येईपर्यंत प्रतीक्षा करा.</span>
                     </div>
@@ -167,7 +167,7 @@
                             type="button"
                             id="attach-btn"
                             class="relative inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-gray-200 bg-white text-gray-700 shadow-sm hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-950 dark:text-gray-200 dark:hover:bg-gray-900 disabled:cursor-not-allowed disabled:opacity-70"
-                            title="{{ ($imagePolicy['allowed'] ?? false) ? 'Send photo' : 'Send photo (Premium)' }}"
+                            title="{{ ($imagePolicy['allowed'] ?? false) ? 'Send photo' : 'Send photo (access required)' }}"
                             @disabled(!($canSendDecision->allowed ?? false))
                         >
                             {{-- paperclip --}}
@@ -191,9 +191,9 @@
                     @if ($showChatUpgradeCta && !($canSendDecision->allowed ?? false))
                         <div class="absolute inset-0 z-10 flex flex-col items-center justify-center gap-2 rounded-b-2xl bg-white/85 px-3 py-4 text-center shadow-[inset_0_1px_0_0_rgba(0,0,0,0.04)] backdrop-blur-[2px] dark:bg-gray-950/90" role="region" aria-label="संदेश मर्यादा">
                             <a href="{{ $upgradeUrl }}" class="inline-flex items-center justify-center rounded-xl bg-indigo-600 px-5 py-2.5 text-sm font-bold text-white shadow-md ring-1 ring-indigo-500/25 transition hover:bg-indigo-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 dark:ring-offset-gray-950">
-                                Premium पहा / अपग्रेड
+                                View access details
                             </a>
-                            <p class="max-w-sm text-[11px] leading-relaxed text-gray-600 dark:text-gray-300">मर्यादा संपेपर्यंत प्रतीक्षा किंवा Premium सदस्य होऊन जास्त संदेश व सुविधा वापरा.</p>
+                            <p class="max-w-sm text-[11px] leading-relaxed text-gray-600 dark:text-gray-300">Wait until the limit resets, or review access options if available.</p>
                         </div>
                     @endif
 
@@ -205,19 +205,19 @@
                                 <div class="flex items-start justify-between gap-4">
                                     <div>
                                         <p class="text-sm font-semibold text-gray-900 dark:text-gray-100">Send photos in chat</p>
-                                        <p class="mt-1 text-xs text-gray-600 dark:text-gray-300">This is a Premium feature. Upgrade to unlock photo sharing.</p>
+                                        <p class="mt-1 text-xs text-gray-600 dark:text-gray-300">Photo sharing is restricted by current access rules.</p>
                                     </div>
                                     <button type="button" id="premium-close" class="rounded-xl px-2 py-1 text-sm font-semibold text-gray-600 hover:bg-gray-50 hover:text-gray-900 dark:text-gray-300 dark:hover:bg-gray-900/60 dark:hover:text-white">✕</button>
                                 </div>
                                 <div class="mt-4 grid gap-2 text-sm text-gray-800 dark:text-gray-200">
                                     <div class="flex items-start gap-2"><span class="mt-0.5 text-amber-500">✓</span><span>Share biodata / family photos to build trust faster</span></div>
-                                    <div class="flex items-start gap-2"><span class="mt-0.5 text-amber-500">✓</span><span>Instant unlock after upgrade</span></div>
+                                    <div class="flex items-start gap-2"><span class="mt-0.5 text-amber-500">✓</span><span>Availability depends on policy and entitlements</span></div>
                                 </div>
                                 <div class="mt-5 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end">
-                                    <a href="{{ $upgradeUrl }}" class="inline-flex items-center justify-center rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-700">Upgrade to Premium</a>
+                                    <a href="{{ $upgradeUrl }}" class="inline-flex items-center justify-center rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-700">View access details</a>
                                     <button type="button" id="premium-later" class="inline-flex items-center justify-center rounded-xl border border-gray-300 bg-white px-4 py-2 text-sm font-semibold text-gray-800 shadow-sm hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-950 dark:text-gray-200 dark:hover:bg-gray-900">Not now</button>
                                 </div>
-                                <p class="mt-3 text-[11px] text-gray-500 dark:text-gray-400">Secure payment • Instant unlock</p>
+                                <p class="mt-3 text-[11px] text-gray-500 dark:text-gray-400">Access changes only when rules allow it.</p>
                             </div>
                         </div>
                     </div>

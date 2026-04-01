@@ -7270,3 +7270,1759 @@ Success criteria:
 ############################################################
 END OF NEXT-DAY PLAN (Intake direct DB form)
 ############################################################
+
+====================
+DAY-37 PLANNING — Conflict + Intake Apply Governance UX Hardening
+Project: navrimatrimony/laravel-matrimony
+Planning mode: SSOT day entry
+Status: Planning only (NOT prompt, NOT implementation instructions)
+
+DAY GOAL
+Admin intake apply flow आणि conflict review flow governance-clear, decision-clear, आणि SSOT-safe करणे.
+या दिवशी backend mutation rules बदलायचे नाहीत.
+या दिवशी DB schema बदलायची नाही.
+या दिवशी MutationService authority बदलायची नाही.
+या दिवशी blind admin actions कमी करून safe review-first UX तयार करायची.
+
+WHY DAY-37 IS THE CORRECT NEXT DAY (VERIFIED)
+Latest verified repo reality:
+1) Admin biodata intake flow exists in:
+   - app/Http/Controllers/Admin/AdminIntakeController.php
+   - resources/views/admin/intake/show.blade.php
+2) Admin conflict review flow exists in:
+   - routes/web.php → admin.conflict-records.*
+   - resources/views/admin/conflict-records/index.blade.php
+   - resources/views/admin/conflict-records/show.blade.php
+3) Mutation pipeline already exists in:
+   - app/Services/MutationService.php
+4) MutationService already handles:
+   - duplicate detection
+   - conflict detection
+   - field lock conflict handling
+   - pending intake suggestions merge
+   - lifecycle transition
+   - profile_change_history write path
+5) Therefore, the gap is not “missing mutation backend”.
+   The gap is “governance visibility and admin decision UX”.
+
+VERIFIED CURRENT PROBLEM STATEMENT
+A) Admin intake page currently has apply action, but governance outcome visibility is weak.
+B) Conflict pages exist, but intake apply flow and conflict review flow are not tightly stitched as one safe admin journey.
+C) MutationService already protects data integrity, but admin UI does not surface enough decision context before/after apply.
+D) This creates operator risk, not SSOT logic failure.
+
+DAY-37 SCOPE
+IN SCOPE
+1) Admin intake page governance context hardening
+2) Admin intake apply readiness visibility
+3) Apply result clarity after admin action
+4) Conflict list review UX hardening
+5) Conflict detail decision clarity hardening
+
+OUT OF SCOPE
+1) No DB migration
+2) No schema change
+3) No conflict semantics rewrite
+4) No MutationService algorithm rewrite
+5) No new subscription logic
+6) No search engine change
+7) No recommendation engine work
+8) No partner preference expansion in this day
+
+FILES IN VERIFIED SCOPE
+1) routes/web.php
+2) app/Http/Controllers/Admin/AdminIntakeController.php
+3) app/Http/Controllers/AdminController.php
+4) resources/views/admin/intake/show.blade.php
+5) resources/views/admin/conflict-records/index.blade.php
+6) resources/views/admin/conflict-records/show.blade.php
+
+DAY-37 EXACT WORK ITEMS
+
+WORK ITEM 1 — Admin Intake Page Governance Status Panel
+Target:
+- resources/views/admin/intake/show.blade.php
+- possibly minimal support from AdminIntakeController.php
+
+What must be shown using real data only:
+1) Attached profile basic summary
+   - profile id
+   - profile full name
+   - lifecycle_state
+2) Intake readiness state
+   - approved_by_user
+   - approved_at
+   - approval_snapshot_json present/missing
+   - attached to profile yes/no
+3) Admin apply requirement state
+   - whether admin approval is required for apply path
+4) Conflict context for attached profile
+   - pending conflict count
+5) Suggestion context for attached profile
+   - pending_intake_suggestions_json present/absent
+6) Last apply result, if available from current flow/session
+   - mutation_success
+   - conflict_detected
+   - blocked
+   - already_applied
+
+Intent:
+Admin should understand current governance state without opening multiple screens.
+
+WORK ITEM 2 — Apply Section Hardening on Admin Intake Page
+Target:
+- resources/views/admin/intake/show.blade.php
+- possibly AdminIntakeController.php for better flash/result shaping only
+
+What must improve:
+1) Apply action should not look blindly “ready” when preconditions are not met
+2) Apply preconditions must be visibly explained
+   - user approved?
+   - attached profile exists?
+   - approval snapshot exists?
+   - admin apply needed by setting?
+3) After apply:
+   - if successful and no conflict → exact success state
+   - if conflicts generated → exact warning state
+   - if blocked by profile conflict_pending → exact blocked state
+   - if already applied → exact idempotent info state
+4) Page should show next safe action after result
+   - open conflicts
+   - open profile
+   - open preview
+   depending on actual result
+
+Intent:
+Admin action should become explainable, not trial-and-error.
+
+WORK ITEM 3 — Conflict List Page Review-First Hardening
+Target:
+- resources/views/admin/conflict-records/index.blade.php
+- minimal AdminController support only if required
+
+What must improve:
+1) Summary strip/cards at top for:
+   - pending
+   - approved
+   - rejected
+2) Pending rows must visually stand out more than resolved rows
+3) “View / Review” should become the primary review path
+4) Existing inline approve/reject/override may remain, but should not dominate the UX
+5) Old/new value readability should improve
+6) Profile context already present should remain visible
+
+Intent:
+Conflict page should become a proper queue, not just a raw table.
+
+WORK ITEM 4 — Conflict Detail Page Decision Semantics Clarity
+Target:
+- resources/views/admin/conflict-records/show.blade.php
+
+What must improve:
+1) Explicit explanation block:
+   - Approve = accept proposed new value
+   - Reject = keep current existing value
+   - Override = admin exception path with reason
+2) Resolution status visibility must be stronger
+3) Lifecycle state visibility must be stronger
+4) Existing side-by-side diff must remain
+5) Resolved record context (resolved_at / reason) should be clearer if already present
+
+Intent:
+Admin must understand decision meaning before submitting.
+
+WORK ITEM 5 — Controller Read-Side Support Only
+Target:
+- app/Http/Controllers/Admin/AdminIntakeController.php
+- app/Http/Controllers/AdminController.php
+
+Allowed changes:
+1) Read-side data loading for UI context
+2) Flash/result shaping for clarity
+3) Safe counts / booleans for view rendering
+
+Disallowed changes:
+1) No direct profile mutation addition
+2) No mutation logic extraction from MutationService
+3) No bypass of conflict system
+4) No hidden auto-resolution logic
+
+DAY-37 SSOT SAFETY RULES
+1) All profile mutation authority must remain where it currently is
+2) No silent overwrite
+3) No direct profile update shortcuts introduced
+4) No fake pre-checks that override true backend result
+5) No new hidden business logic in Blade
+6) No controller-side mutation drift
+
+DAY-37 ACCEPTANCE CRITERIA
+Day-37 is complete only if:
+1) Admin intake page shows governance state clearly
+2) Apply action is no longer blind
+3) Apply result is easy to understand
+4) Conflict list is easier to review safely
+5) Conflict detail page explains resolution meaning clearly
+6) No mutation semantics changed
+7) No DB schema changed
+8) No new SSOT violation introduced
+9) Existing tests still pass, or failures are proven unrelated
+10) Changed files are limited and reversible
+
+DAY-37 EXPECTED OUTPUT AFTER IMPLEMENTATION
+1) Modified file list
+2) What changed in each file
+3) Verification results
+4) Screenshots of:
+   - admin intake show page
+   - conflict list page
+   - conflict detail page
+5) Confirmation that MutationService behavior was not changed
+
+DAY-37 RISK NOTES
+1) Biggest risk is accidental controller logic drift into mutation behavior
+2) Biggest UI risk is showing misleading “ready/apply” state
+3) Biggest SSOT risk is adding convenience behavior that silently changes data
+4) Therefore this day must remain strictly read-side + UX-hardening dominant
+
+DAY-37 COMPLETION DEFINITION
+This day is complete when admin governance experience becomes operationally safe and clear, while backend data mutation authority remains unchanged.
+-------------------
+DAY-38 PLANNING — Pending Intake Suggestions Review UX + Partner Preferences Completeness Audit
+Project: navrimatrimony/laravel-matrimony
+Planning mode: SSOT day entry
+Status: Planning only (NOT prompt, NOT implementation instructions)
+
+DAY GOAL
+Pending intake suggestions visible, understandable, reviewable, आणि safely actionable करणे.
+त्याच वेळी partner preferences flow end-to-end पूर्ण आहे का हे strict audit करून, फक्त verified missing wiring complete करणे.
+या दिवशी backend mutation authority बदलायची नाही.
+या दिवशी DB schema बदलायची नाही.
+या दिवशी new matching/recommendation logic add करायची नाही.
+
+WHY DAY-38 IS THE CORRECT NEXT DAY (VERIFIED)
+Latest verified repo reality:
+1) MutationService already contains pending suggestion generation and merge behavior for existing profiles.
+2) MutationService already partitions incoming intake data so non-empty existing values are not silently overwritten.
+3) User-side intake suggestion routes already exist in routes/web.php:
+   - intake.apply-suggestion
+   - intake.reject-suggestion
+4) Wizard surface already includes about-preferences section in routes/web.php.
+5) MutationService already contains preferences sync path:
+   - profile_preference_criteria
+   - profile_preferred_* pivot sync
+6) Therefore:
+   - suggestion governance data already exists
+   - preference backend grounding already exists
+   - the next logical gap is visibility + completion audit, not schema invention
+
+VERIFIED CURRENT PROBLEM STATEMENT
+A) Pending suggestions are already a backend governance concept, but their UX visibility/completeness is not yet confirmed as production-ready.
+B) Partner preferences are already structurally present in backend paths, but full UI/controller parity is not yet proven complete.
+C) Search and matching should not be expanded until suggestions + preferences are safely visible and reliable.
+
+DAY-38 SCOPE
+IN SCOPE
+1) Pending intake suggestions current-state audit
+2) Pending suggestion review UX hardening
+3) Suggestion apply/reject flow clarity
+4) Partner preferences field completeness audit
+5) Partner preferences wiring completion only where already supported by current backend
+
+OUT OF SCOPE
+1) No DB migration
+2) No schema change
+3) No recommendation engine
+4) No subscription logic
+5) No search ranking expansion
+6) No new preference schema invention
+7) No MutationService semantics rewrite
+8) No broad UI redesign outside suggestion/preference flow
+
+FILES IN VERIFIED SCOPE
+Known verified scope anchors:
+1) routes/web.php
+2) app/Http/Controllers/IntakeController.php
+3) app/Http/Controllers/ProfileWizardController.php
+4) app/Http/Controllers/MatrimonyProfileController.php
+5) app/Services/MutationService.php
+
+Additional files allowed only after exact path verification from latest code:
+6) Actual intake preview / approval / suggestion Blade file(s)
+7) Actual about-preferences Blade file(s)
+8) Any actual helper/service used by preference load/save path
+
+DAY-38 EXACT WORK ITEMS
+
+WORK ITEM 1 — Pending Intake Suggestions Shape Audit
+Target:
+- app/Services/MutationService.php
+- any verified controller/view that reads pending suggestions
+
+What must be verified exactly:
+1) Which suggestion buckets can currently be generated
+   - core
+   - core_field_suggestions
+   - extended
+   - entities
+   - birth_place
+   - native_place
+   - contacts
+   - preferences
+   - extended_narrative
+   - other_relatives_text
+2) Which of these are currently visible in UI
+3) Which are currently actionable
+4) Which are stored but invisible
+5) Which are visible but confusing / incomplete
+
+Intent:
+This day must start from real storage/flow shape, not assumptions.
+
+WORK ITEM 2 — User-Facing Pending Suggestion Review Section
+Target:
+- actual verified intake preview / approval / suggestion Blade(s)
+- IntakeController methods only if needed for read-side shaping
+
+What must improve:
+1) If pending suggestions exist, user must see a dedicated review section
+2) Section must clearly explain:
+   - these values were not auto-overwritten
+   - existing profile data was preserved
+   - user may choose whether to apply or reject suggestions
+3) Suggestions must be grouped in a readable way using actual current buckets
+4) Supported suggestion types must expose explicit actions:
+   - apply
+   - reject
+5) Unsupported but stored types must not be faked as editable
+6) No raw JSON confusion on user-facing surface
+
+Intent:
+Suggestion governance must become understandable and safe.
+
+WORK ITEM 3 — Suggestion Apply/Reject Flow Clarity
+Target:
+- app/Http/Controllers/IntakeController.php
+- actual suggestion review Blade(s)
+
+What must improve:
+1) Result messages after apply/reject must be exact and understandable
+2) Remaining suggestions state must update correctly after action
+3) Flow must not imply bulk overwrite if current backend only supports targeted apply
+4) Current governed path must remain intact
+
+Disallowed:
+1) No new mutation bypass
+2) No silent auto-merge
+3) No broad controller-side overwrite logic
+
+WORK ITEM 4 — Partner Preferences End-to-End Audit
+Target:
+- routes/web.php
+- app/Http/Controllers/ProfileWizardController.php
+- app/Http/Controllers/MatrimonyProfileController.php
+- app/Services/MutationService.php
+- actual verified about-preferences Blade(s)
+
+What must be audited exactly:
+For each currently supported category, classify one of:
+- COMPLETE
+- PARTIAL
+- WIRED IN BACKEND ONLY
+- MISSING
+
+Audit categories only if actually present in codebase:
+1) age range
+2) height range
+3) income range
+4) education preferences
+5) profession preferences
+6) working-with preferences
+7) diet preferences
+8) religion preferences
+9) caste preferences
+10) location preferences
+11) marital-status preference
+12) partner with children preference
+13) profile managed by preference
+14) relocate / settled city preference if present
+
+Intent:
+Search/matching cannot be trusted until preference completeness is verified.
+
+WORK ITEM 5 — Complete Only Verified Missing Preference Wiring
+Target:
+- actual verified controller/view files in preference path
+
+Allowed completion work:
+1) load missing saved values into view
+2) persist already-supported preference fields through existing save path
+3) render already-backed multi-selects that are currently missing in UI
+4) fix missing validation/binding for already-supported fields
+5) ensure reopened page shows saved preference values back correctly
+
+Disallowed:
+1) No new preference DB fields
+2) No invented preference dimensions
+3) No new ranking logic
+4) No schema drift
+
+Intent:
+Complete what already exists, do not invent what is not verified.
+
+WORK ITEM 6 — User Trust Copy for Suggestions and Preferences
+Target:
+- relevant verified Blade files only
+
+What must improve:
+1) Suggestions section should explain preservation of existing data
+2) Preferences section should explain that saved preferences help improve match quality
+3) Copy must remain short, non-technical, and non-marketing
+4) No JSON/schema jargon on user-facing pages
+
+Intent:
+Users should understand why suggestions exist and how preferences help.
+
+DAY-38 SSOT SAFETY RULES
+1) Suggestion apply/reject must remain governed and explicit
+2) Existing profile values must never be silently overwritten
+3) MutationService remains single mutation authority
+4) No controller-side convenience overwrite path
+5) No backend semantics change unless a tiny verified bug forces a minimal fix
+6) No unsupported suggestion type should be faked as supported
+
+DAY-38 ACCEPTANCE CRITERIA
+Day-38 is complete only if:
+1) Pending suggestion types are fully audited from code reality
+2) Suggestion review UI clearly surfaces supported suggestions
+3) Apply/reject behavior is understandable and safe
+4) Partner preferences completeness is audited with zero assumptions
+5) Only verified missing preference wiring is completed
+6) No schema change is introduced
+7) No direct profile mutation path is introduced
+8) No silent overwrite is introduced
+9) Existing tests still pass, or failures are proven unrelated
+10) Changed files remain limited and reversible
+
+DAY-38 EXPECTED OUTPUT AFTER IMPLEMENTATION
+1) Modified file list
+2) Suggestion type audit table
+3) Preference completeness audit table
+4) What changed in each file
+5) Verification results
+6) Screenshots of:
+   - pending suggestion review UI
+   - about-preferences UI
+   - saved preference reload state
+
+DAY-38 RISK NOTES
+1) Biggest risk is pretending unsupported suggestion buckets are actionable
+2) Biggest SSOT risk is introducing shortcut mutation behavior through controller/UI
+3) Biggest UX risk is showing suggestions without clear explanation
+4) Biggest product risk is assuming preferences are complete without proving save/load/display parity
+
+DAY-38 COMPLETION DEFINITION
+This day is complete when pending intake suggestions become safely reviewable and partner preferences become verifiably complete enough to support the next search/filter day without assumptions.
+
+======
+DAY-39 PLANNING — Search + Filter + Trust Surface Hardening
+Project: navrimatrimony/laravel-matrimony
+Planning mode: SSOT day entry
+Status: Planning only (NOT prompt, NOT implementation instructions)
+
+DAY GOAL
+Current search/listing flow strictly audit करून, फक्त verified existing search/filter capabilities production-grade करणे.
+त्यासोबत trust signals listing आणि profile discovery surface वर स्पष्ट करणे.
+या दिवशी recommendation engine बनवायचा नाही.
+या दिवशी subscription gating बनवायची नाही.
+या दिवशी DB schema बदलायची नाही.
+या दिवशी fake AI score / fake ranking दाखवायची नाही.
+
+WHY DAY-39 IS THE CORRECT NEXT DAY (VERIFIED)
+Latest verified repo reality:
+1) Search/list route already exists:
+   - routes/web.php → /profiles
+2) Search/list controller path already exists:
+   - app/Http/Controllers/MatrimonyProfileController.php → index()
+3) Current verified search filters already implemented in index():
+   - caste_id
+   - city_id
+   - age_from / age_to (derived via date_of_birth)
+   - height_from / height_to
+   - marital_status_id / marital_status
+   - education
+4) Search query already enforces:
+   - lifecycle active / null
+   - not suspended
+   - completeness gate
+   - demo visibility setting
+   - block exclusion
+5) Profile show already surfaces trust-related data:
+   - verificationPanel
+   - seriousIntent
+   - contact request state
+   - shortlist state
+   - conflict pending state for own profile
+6) Therefore:
+   - search base exists
+   - trust data exists
+   - next gap is filter completeness + listing trust clarity + UX hardening
+
+VERIFIED CURRENT PROBLEM STATEMENT
+A) Search base exists, but it is not yet proven as polished matrimonial discovery experience.
+B) Existing verified filters need parity audit between controller logic and actual UI surface.
+C) Trust signals exist on profile/show side, but listing/search surface may not yet be using them clearly.
+D) Search should be hardened before subscription and recommendation layers are built on top.
+
+DAY-39 SCOPE
+IN SCOPE
+1) Search/list current-state audit
+2) Filter UI vs controller parity audit
+3) Verified missing search/filter wiring completion
+4) Listing trust-signal hardening using already existing data
+5) Profile discovery UX clarity improvement
+
+OUT OF SCOPE
+1) No DB migration
+2) No schema change
+3) No recommendation engine
+4) No AI matching score
+5) No subscription paywall logic
+6) No ranking engine invention beyond simple deterministic verified improvements
+7) No MutationService changes unless tiny unrelated bug fix is forced
+8) No broad homepage redesign
+
+FILES IN VERIFIED SCOPE
+Known verified scope anchors:
+1) routes/web.php
+2) app/Http/Controllers/MatrimonyProfileController.php
+
+Additional files allowed only after exact path verification from latest code:
+3) resources/views/matrimony/profile/index.blade.php
+4) any partial/Blade used for listing cards or filter form
+5) resources/views/matrimony/profile/show.blade.php (only if trust-signal parity needs tiny safe support)
+6) any helper/service actually used by listing UI
+
+DAY-39 EXACT WORK ITEMS
+
+WORK ITEM 1 — Search/List Current Reality Audit
+Target:
+- routes/web.php
+- app/Http/Controllers/MatrimonyProfileController.php
+- actual verified profile listing Blade(s)
+
+What must be verified exactly:
+1) Which filters exist in controller
+2) Which filters are actually visible in UI
+3) Which filters are visible in UI but not wired
+4) Which filters are wired in backend but not surfaced in UI
+5) Which trust signals already exist in listing card data
+6) Which trust signals exist only on profile show page
+
+Intent:
+This day must start from real parity check, not assumptions.
+
+WORK ITEM 2 — Filter UI / Controller Parity Completion
+Target:
+- actual verified listing Blade(s)
+- MatrimonyProfileController.php only if tiny read-side additions are needed
+
+Verified current controller support already known:
+1) caste_id
+2) city_id
+3) age_from / age_to
+4) height_from / height_to
+5) marital_status_id / marital_status
+6) education
+
+What this work item must do:
+1) Ensure all already-supported filters are actually visible and usable in UI
+2) Ensure request names match controller expectations exactly
+3) Ensure selected filter values persist after search
+4) Ensure reset/clear path is understandable
+5) Ensure filter form does not expose unsupported fields
+
+Disallowed:
+1) No invented filters with no backend support
+2) No hidden query param drift
+3) No guessing about unsupported preference-aware filters
+
+Intent:
+User should be able to use all verified supported filters cleanly.
+
+WORK ITEM 3 — Search Result Card Trust Signals Hardening
+Target:
+- actual verified listing Blade/card partial(s)
+
+Use only already existing verified data where actually loaded/available or safely loadable:
+Possible trust signals only if verified in actual data path:
+1) serious intent
+2) verification state/panel summary
+3) profile completeness signal
+4) location clarity
+5) marital status clarity
+6) education clarity
+7) profile photo presence / primary photo clarity
+
+What must improve:
+1) Search cards should help users judge seriousness and trust faster
+2) Trust signals should be concise and scannable
+3) No fake badges
+4) No inference-based claims
+5) No exposing private/contact data
+
+Intent:
+Listing should become trust-led, not just field dump.
+
+WORK ITEM 4 — Search Result Quality UX Hardening
+Target:
+- actual verified listing Blade(s)
+- possibly minimal read-side additions in controller
+
+What must improve:
+1) Empty state clarity
+2) Active filters visibility
+3) Better search result scan-ability
+4) Better distinction between strong-profile cards and weak-profile cards using already existing factual signals
+5) Pagination state should preserve filters correctly
+
+Disallowed:
+1) No algorithmic ranking invention
+2) No “best match score” if not already grounded in current code
+3) No recommendation copy pretending curation exists
+
+Intent:
+Discovery UX should feel reliable and readable.
+
+WORK ITEM 5 — Deterministic Safe Sorting Audit
+Target:
+- MatrimonyProfileController.php
+- actual listing UI if sorting exists
+
+What must be verified:
+1) Is any user-facing sort control already present?
+2) Is latest() the current only sort?
+3) Is there any verified existing deterministic sort option already supported?
+
+Only if clearly supported and safe:
+- add simple explicit sort choices such as latest / basic trust-first / profile completeness-first
+BUT ONLY if:
+a) data is already available
+b) semantics are fully deterministic
+c) no fake ranking is introduced
+
+If not clearly supportable with zero ambiguity:
+DO NOT implement sorting changes on this day.
+
+Intent:
+No invented ranking. Only deterministic, explainable ordering if already safely possible.
+
+WORK ITEM 6 — Trust Surface Parity with Profile Show
+Target:
+- actual listing Blade(s)
+- resources/views/matrimony/profile/show.blade.php only if tiny consistency support is needed
+- MatrimonyProfileController.php only if verified read data needs to be passed safely
+
+What must be checked:
+1) Which trust cues users see on listing
+2) Which trust cues users see only after opening full profile
+3) Which small, factual trust cues can safely be promoted to listing surface
+
+Examples only if already grounded:
+- verified status summary
+- serious intent label
+- profile completeness indicator
+- basic visibility-safe lifecycle/trust hints
+
+Intent:
+Users should not have to open every profile just to see basic trust quality.
+
+DAY-39 SSOT SAFETY RULES
+1) No fake badge or unsupported trust claim
+2) No exposing contact/private data in listing
+3) No invented ranking score
+4) No direct profile mutation
+5) No schema changes
+6) No filter field should be shown unless its backend support is verified
+7) Listing must remain based on actual stored/profile-readable data only
+
+DAY-39 ACCEPTANCE CRITERIA
+Day-39 is complete only if:
+1) Search/list current reality is fully audited
+2) Already-supported filters are surfaced cleanly in UI
+3) Filter request names and controller wiring are fully aligned
+4) Listing cards show clearer factual trust signals
+5) Search results are easier to scan and judge
+6) No fake ranking or recommendation logic is introduced
+7) No schema change is introduced
+8) No SSOT violation is introduced
+9) Existing tests still pass, or failures are proven unrelated
+10) Changed files remain limited and reversible
+
+DAY-39 EXPECTED OUTPUT AFTER IMPLEMENTATION
+1) Modified file list
+2) Search/filter audit table
+3) Filter parity table
+4) Trust-signal audit table
+5) What changed in each file
+6) Verification results
+7) Screenshots of:
+   - search filter UI
+   - result cards
+   - empty state / filtered state
+
+DAY-39 RISK NOTES
+1) Biggest risk is showing filters that are not truly wired
+2) Biggest product risk is inventing match-score style UI before recommendation layer exists
+3) Biggest trust risk is displaying unverifiable badge language
+4) Biggest UX risk is cluttering result cards with too much data
+
+DAY-39 COMPLETION DEFINITION
+This day is complete when profile discovery becomes clearer, safer, and more trustworthy using only verified current capabilities, preparing the codebase for the next monetization/recommendation phases without assumptions.
+================
+DAY-40 PLANNING — Subscription + Entitlement Layer Audit and Controlled Product Surface Hardening
+Project: navrimatrimony/laravel-matrimony
+Planning mode: SSOT day entry
+Status: Planning only (NOT prompt, NOT implementation instructions)
+
+DAY GOAL
+Project मधील payment / entitlement groundwork strictly audit करून, subscription-ready product surface तयार करण्यासाठी verified gaps ओळखणे आणि फक्त current verified foundation वर आधारित smallest-safe completion करणे.
+या दिवशी recommendation engine करायचा नाही.
+या दिवशी search rewrite करायचा नाही.
+या दिवशी DB schema बदलायची नाही.
+या दिवशी fake premium logic add करायची नाही.
+या दिवशी payment success/failure routes असल्यामुळे full subscription complete आहे असे गृहीत धरायचे नाही.
+
+WHY DAY-40 IS THE CORRECT NEXT DAY (VERIFIED)
+Latest verified repo reality:
+1) routes/web.php मध्ये PayU routes already exist:
+   - /payments/payu/success
+   - /payments/payu/failure
+   - /payments/payu/webhook
+2) Earlier verified migration/status output showed entitlement-related DB groundwork already exists:
+   - user_entitlements table present
+3) Search/filter and trust surface hardening logically come before monetization enforcement
+4) Recommendation layer should come after discoverability + monetization clarity
+5) Therefore the next logical day is:
+   subscription/entitlement audit + product-surface hardening
+
+VERIFIED CURRENT PROBLEM STATEMENT
+A) Payment route presence alone does not prove full subscription product completeness.
+B) Entitlement schema presence alone does not prove actual enforcement coverage.
+C) Before recommendation and premium packaging, product must know:
+   - what is free
+   - what is gated
+   - what is paid
+   - where entitlement is checked
+D) This must be audited and normalized without assumptions.
+
+DAY-40 SCOPE
+IN SCOPE
+1) Payment + entitlement current-state audit
+2) Identify actual subscription-related controllers/services/models/views/routes
+3) Identify what user actions are already gated or gate-ready
+4) Identify missing product surface for entitlement clarity
+5) Complete only verified missing surface/wiring if it already has backend grounding
+
+OUT OF SCOPE
+1) No DB migration
+2) No schema change
+3) No fake subscription plans
+4) No recommendation engine
+5) No ranking engine
+6) No new pricing invention unless already present in repo/admin settings
+7) No broad UX redesign outside entitlement surface
+8) No unverified payment business logic changes
+
+FILES IN EXPECTED SCOPE (VERIFY EXACTLY BEFORE ACTION)
+Known verified scope anchors:
+1) routes/web.php
+2) Earlier migration output indicates entitlement-related DB presence
+3) Payment controller path in routes/web.php:
+   - app/Http/Controllers/Payments/PayuController.php
+
+Additional files allowed only after exact verification from latest code:
+4) any entitlement-related controller/service/model
+5) any user_entitlements read/write path
+6) any billing/subscription/admin settings view if present
+7) any contact/chat/request gating service if entitlement checks already exist there
+
+DAY-40 EXACT WORK ITEMS
+
+WORK ITEM 1 — Payment + Entitlement Current Reality Audit
+Target:
+- routes/web.php
+- exact verified payment controller/service/model files
+- any exact verified entitlement files
+
+What must be verified exactly:
+1) What payment flow currently exists
+2) Whether PayU flow is only callback handling or full purchase flow
+3) Whether user_entitlements is actively used anywhere
+4) Which user actions currently depend on entitlement, if any
+5) Whether admin settings define subscription-related toggles
+6) Whether plans/products are already modelled anywhere
+7) Whether receipts/status/history UI exists anywhere
+
+Intent:
+This day must begin by replacing assumptions with exact repo reality.
+
+WORK ITEM 2 — Gated Action Inventory
+Target:
+- routes/controllers/services actually involved in user actions
+
+What must be audited exactly:
+Which actions in the current product are likely monetizable and whether they already have any verified gate:
+1) contact request
+2) contact reveal / grants
+3) chat start / reply
+4) shortlist
+5) profile visibility boost or trust add-ons, if any
+6) showcase / premium communication surfaces, if relevant and verified
+7) profile viewing limits, if any
+8) who-viewed-me, if any gating exists
+
+For each action classify:
+- UNGATED
+- GATED IN CODE
+- PARTIALLY GATED
+- GATE-READY FOUNDATION ONLY
+- NOT APPLICABLE
+
+Intent:
+Entitlement layer must be attached to actual product actions, not abstract tables only.
+
+WORK ITEM 3 — Subscription Product Surface Audit
+Target:
+- actual verified views/routes/controllers only
+
+What must be verified:
+1) Is there any visible subscription/plan page today?
+2) Is there any “upgrade” CTA today?
+3) Is there any billing history/payment status page today?
+4) Is there any explanation to users about what paid access unlocks?
+5) Is there any admin surface to manage entitlement behavior?
+
+Intent:
+Need to know whether backend exists but user-facing product is missing.
+
+WORK ITEM 4 — Minimal Controlled Completion (ONLY IF VERIFIED BACKING EXISTS)
+Allowed only if audit proves current backend grounding exists.
+
+Possible valid completion work:
+1) Add missing user-facing status surface for existing entitlement state
+2) Add clear messaging around locked vs unlocked feature states
+3) Add simple upgrade CTA placeholders only if actual purchase route/service already exists
+4) Add billing/payment result visibility if callbacks already store usable status
+5) Add admin-readable entitlement status context where already supported
+
+Disallowed:
+1) No invented subscription plan catalog
+2) No fake pricing
+3) No fake upgrade funnel with no backend support
+4) No entitlement write shortcuts
+5) No schema-driven plan design unless already present in repo
+
+Intent:
+Only surface what is real and ready.
+
+WORK ITEM 5 — Enforcement Path Audit
+Target:
+- exact verified service/controller call sites
+
+What must be checked:
+1) Where should entitlement be enforced in current architecture?
+2) Where is it already enforced?
+3) Where is the current biggest gap between intended gate and actual gate?
+4) Whether enforcement is centralized or scattered
+5) Whether a small read-side/helper consolidation is needed for future days
+
+Important:
+This day is primarily audit + surface hardening.
+Do NOT introduce broad enforcement rewrites unless a tiny deterministic improvement is clearly safe.
+
+Intent:
+Prepare for a future monetization day without breaking current flows.
+
+WORK ITEM 6 — Trust-Safe Messaging Around Paid Access
+Target:
+- actual verified user-facing gated surfaces only
+
+What must improve if grounded:
+1) User should understand why an action is unavailable
+2) User should understand whether the block is:
+   - governance rule
+   - verification rule
+   - entitlement rule
+3) Messages must not confuse safety policy with paid policy
+4) No manipulative upsell language
+5) No false urgency
+
+Intent:
+Premium logic must remain clear, respectful, and factual.
+
+DAY-40 SSOT SAFETY RULES
+1) No direct business-logic invention without code evidence
+2) No pricing assumptions
+3) No plan assumptions
+4) No payment-status assumptions
+5) No hidden entitlement writes
+6) No new schema
+7) No mutation of profile data through subscription work
+8) Safety/governance restrictions must stay independent from monetization logic
+
+DAY-40 ACCEPTANCE CRITERIA
+Day-40 is complete only if:
+1) Payment + entitlement current reality is fully audited
+2) Gated action inventory is classified with zero assumptions
+3) Subscription product surface gaps are clearly identified
+4) Only verified grounded entitlement surface improvements are made
+5) No fake plan/pricing/paywall logic is introduced
+6) No schema change is introduced
+7) No SSOT violation is introduced
+8) Existing tests still pass, or failures are proven unrelated
+9) Changed files remain limited and reversible
+10) The codebase becomes ready for a later dedicated entitlement-enforcement completion day
+
+DAY-40 EXPECTED OUTPUT AFTER IMPLEMENTATION
+1) Modified file list
+2) Payment/entitlement audit table
+3) Gated action inventory table
+4) Subscription product surface audit table
+5) What changed in each file
+6) Verification results
+7) Screenshots, if applicable, of:
+   - any locked state
+   - any entitlement status surface
+   - any payment/subscription result surface
+
+DAY-40 RISK NOTES
+1) Biggest risk is assuming payment routes mean full subscription implementation
+2) Biggest product risk is mixing governance restrictions with monetization restrictions
+3) Biggest trust risk is showing upgrade CTAs without actual backing
+4) Biggest architecture risk is scattering entitlement checks further instead of clarifying current state
+
+DAY-40 COMPLETION DEFINITION
+This day is complete when the project has a verified, assumption-free understanding of its payment/entitlement reality and only those monetization surfaces that already have real backend grounding are made clearer and safer.
+================
+DAY-41 PLANNING — Matching Readiness Audit + Deterministic Recommendation Foundation
+Project: navrimatrimony/laravel-matrimony
+Planning mode: SSOT day entry
+Status: Planning only (NOT prompt, NOT implementation instructions)
+
+DAY GOAL
+Recommendation/matching layer build करण्यापूर्वी project matching-ready आहे का हे strictly audit करणे, आणि recommendation engine साठी deterministic, explainable, SSOT-safe foundation तयार करणे.
+या दिवशी fake AI matching करू नये.
+या दिवशी DB schema बदलू नये.
+या दिवशी opaque score invent करू नये.
+या दिवशी direct profile mutation काहीही करू नये.
+
+WHY DAY-41 IS THE CORRECT NEXT DAY (VERIFIED)
+Latest verified repo reality:
+1) Partner preference backend groundwork already exists in MutationService:
+   - profile_preference_criteria sync
+   - preferred religion/caste/location/education/diet/profession/working-with pivots
+2) Search/list foundation already exists in:
+   - app/Http/Controllers/MatrimonyProfileController.php → index()
+3) Profile show already contains a simple rule-based match explanation function:
+   - calculateMatchExplanation(...)
+4) Direct repo search did NOT surface a dedicated recommendation/matching service/controller/ranking engine in current verified code search.
+5) Therefore:
+   - recommendation full engine is not yet a clearly surfaced product subsystem
+   - but matching ingredients already exist
+   - next logical day is matching-readiness audit + foundation planning/initial deterministic layer
+
+VERIFIED CURRENT PROBLEM STATEMENT
+A) Preferences, search, and trust surfaces exist in pieces, but a dedicated recommendation foundation is not yet visibly unified.
+B) Profile show has a local rule-based comparison concept, but it is not yet a governed discovery/recommendation subsystem.
+C) Before “India’s best matchmaking website” grade recommendations, project must prove:
+   - what inputs are trustworthy
+   - what mutuality rules exist
+   - which fields are deterministic enough for ranking
+   - which fields should never be used until normalized/stable
+D) This day must convert scattered matching ingredients into a verified foundation, not an assumed engine.
+
+DAY-41 SCOPE
+IN SCOPE
+1) Matching-readiness audit
+2) Verified matching inputs inventory
+3) Deterministic recommendation foundation design using existing verified data only
+4) Identification of which current fields are safe / unsafe for future recommendation use
+5) Optional minimal extraction/refactor of already existing match explanation logic if clearly useful and safely scoped
+
+OUT OF SCOPE
+1) No DB migration
+2) No schema change
+3) No AI recommendation engine
+4) No opaque score or black-box ranking
+5) No subscription/business packaging changes
+6) No broad search rewrite
+7) No profile mutation changes
+8) No preference schema expansion
+
+FILES IN EXPECTED SCOPE (VERIFY EXACTLY BEFORE ACTION)
+Known verified scope anchors:
+1) app/Http/Controllers/MatrimonyProfileController.php
+2) routes/web.php
+3) app/Services/MutationService.php
+
+Additional files allowed only after exact verification from latest code:
+4) any preference loading helpers/services
+5) any listing/search Blade/controller paths already used
+6) any trust/verification read services involved in discovery
+7) any existing profile completeness / read services relevant to recommendation safety
+
+DAY-41 EXACT WORK ITEMS
+
+WORK ITEM 1 — Matching Inputs Audit
+Target:
+- app/Http/Controllers/MatrimonyProfileController.php
+- app/Services/MutationService.php
+- any verified read-side services feeding profile discovery
+
+What must be classified exactly:
+For each candidate input, mark one of:
+- SAFE FOR MATCHING NOW
+- PARTIAL / NEEDS NORMALIZATION
+- AVAILABLE BUT SHOULD NOT DRIVE MATCHING YET
+- NOT VERIFIED
+
+Candidate inputs to audit only if already present in code:
+1) age / DOB-derived age
+2) height
+3) religion
+4) caste / sub-caste
+5) location hierarchy
+6) education
+7) profession / working with
+8) diet
+9) marital status
+10) partner with children preference
+11) serious intent
+12) verification status
+13) profile completeness
+14) photo presence
+15) activity/recency only if actually available in current code
+16) blocked / visibility restrictions
+17) lifecycle state
+
+Intent:
+Recommendation logic cannot start until inputs are classified by trustworthiness.
+
+WORK ITEM 2 — Mutual Preference Readiness Audit
+Target:
+- current preference storage/read paths
+- current search/list and profile show logic
+
+What must be verified exactly:
+1) Which preferences are stored in a structured way
+2) Which preferences can be compared one-way
+3) Which preferences can already support mutual-fit logic
+4) Which preference categories are too incomplete to use for ranking
+5) Which categories are strong candidates for:
+   - exact match
+   - soft match
+   - exclude / no-rank use
+
+Intent:
+Matching should use mutual structure, not one-sided assumptions.
+
+WORK ITEM 3 — Existing Match Explanation Logic Audit
+Target:
+- app/Http/Controllers/MatrimonyProfileController.php → calculateMatchExplanation(...)
+
+What must be verified:
+1) Which fields current profile-show explanation compares
+2) Whether current logic is technically correct against actual normalized fields
+3) Whether any current comparisons are weak/inconsistent
+4) Whether this logic should stay profile-show only
+5) Whether a small deterministic shared matcher/read service should be introduced later
+
+Important:
+This day is audit-first.
+Refactor only if clearly safe and small.
+
+Intent:
+Existing rule-based comparison should become a trustworthy seed, not a hidden accidental matcher.
+
+WORK ITEM 4 — Recommendation Foundation Rules Definition
+Target:
+- planning + optional tiny code extraction if proven useful
+
+Define a deterministic future-safe recommendation foundation using only verified signals.
+
+Expected rule buckets:
+1) Hard eligibility rules
+   - visibility
+   - lifecycle
+   - suspension
+   - block exclusions
+2) Hard compatibility filters
+   - mutual disqualifiers only if truly present
+3) Strong positive signals
+   - structured preference exact matches
+   - trust / verification / serious intent
+4) Soft positive signals
+   - location proximity
+   - education/profession alignment
+   - profile completeness
+5) Signals that must NOT yet be used for recommendation ranking
+   - anything not normalized
+   - anything inferred
+   - anything unsupported in current code
+
+Intent:
+By end of this day, matching foundation should be explicit and explainable.
+
+WORK ITEM 5 — Minimal Deterministic Matching Surface (ONLY IF SAFELY GROUNDED)
+Allowed only if audit proves a tiny safe implementation is justified.
+
+Possible safe outputs:
+1) improve profile-show match explanation correctness and clarity
+2) centralize existing rule-based explanation into a read-side helper/service
+3) create a deterministic reusable comparison layer for future list/recommendation use
+
+Disallowed:
+1) no “Top Matches” feature unless current repo clearly supports safe implementation
+2) no hidden ranking score
+3) no mutual-fit percentage invention
+4) no AI-generated compatibility explanation
+
+Intent:
+Only lay foundation. Do not over-ship the engine.
+
+WORK ITEM 6 — Matching Safety Boundaries Documentation in Code
+Target:
+- wherever tiny read-side helper is created or updated
+
+What must be explicit:
+1) age must remain derived from DOB, not stored
+2) recommendation inputs must use normalized structured data only
+3) no inference-based gender or attribute guessing
+4) blocked/suspended/invisible profiles must not leak into recommendation candidates
+5) verification/trust signals must be factual, not promotional
+
+Intent:
+Future recommendation implementation should have guardrails from day one.
+
+DAY-41 SSOT SAFETY RULES
+1) No schema change
+2) No inferred attributes
+3) No fake recommendation score
+4) No AI/opaque matching
+5) No profile mutation side-effects
+6) No use of unnormalized data as strong recommendation signal
+7) No visibility/governance bypass for recommendation candidates
+
+DAY-41 ACCEPTANCE CRITERIA
+Day-41 is complete only if:
+1) Matching inputs are audited and classified with zero assumptions
+2) Mutual preference readiness is clearly mapped
+3) Existing rule-based match explanation is audited for correctness
+4) A deterministic recommendation foundation is defined using only verified data
+5) Optional code changes remain tiny, read-side only, and reversible
+6) No fake ranking or unsupported recommendation UI is introduced
+7) No schema change is introduced
+8) No SSOT violation is introduced
+9) Existing tests still pass, or failures are proven unrelated
+10) The codebase becomes ready for a later dedicated recommendation implementation day
+
+DAY-41 EXPECTED OUTPUT AFTER IMPLEMENTATION
+1) Modified file list, if any
+2) Matching input audit table
+3) Mutual preference readiness table
+4) Existing match explanation audit notes
+5) Deterministic recommendation foundation summary
+6) Verification results
+7) Screenshots only if any visible match explanation UI was improved
+
+DAY-41 RISK NOTES
+1) Biggest risk is building recommendation logic on incomplete or weak inputs
+2) Biggest trust risk is inventing compatibility scores users may believe are authoritative
+3) Biggest SSOT risk is using non-normalized or inferred data in matching
+4) Biggest product risk is shipping “recommendations” before mutual preference and trust signals are stable
+
+DAY-41 COMPLETION DEFINITION
+This day is complete when the project has an assumption-free, deterministic, explainable matching foundation defined from current verified code reality, making future recommendation work safe and disciplined.
+=================
+DAY-42 PLANNING — Homepage / Public Conversion / Brand Trust Surface Hardening
+Project: navrimatrimony/laravel-matrimony
+Planning mode: SSOT day entry
+Status: Planning only (NOT prompt, NOT implementation instructions)
+
+DAY GOAL
+Public-facing homepage, conversion flow, आणि brand trust surface production-grade करणे.
+या दिवशी backend mutation logic हात लावायची नाही.
+या दिवशी DB schema बदलायची नाही.
+या दिवशी fake marketing claims करायचे नाहीत.
+या दिवशी public entry experience असा तयार करायचा की:
+- first-time visitor ला लगेच website purpose समजेल
+- trust लगेच build होईल
+- serious matchmaking positioning स्पष्ट होईल
+- signup / onboarding direction clean मिळेल
+- Marathi-first and parent-friendly clarity मिळेल
+
+WHY DAY-42 IS THE CORRECT NEXT DAY (VERIFIED)
+Latest verified repo reality:
+1) routes/web.php मध्ये root route `/` अजून direct `welcome` view return करते.
+2) Admin homepage image management routes already exist:
+   - admin/homepage-images
+3) Project मध्ये strong internal foundations already exist:
+   - intake governance
+   - profile wizard
+   - trust features (verification, serious intent, abuse/block, contact request governance)
+   - search/listing
+   - monetization groundwork
+   - matching readiness planning
+4) Therefore:
+   internal product strength build झाल्यानंतर public conversion layer हा next logical day आहे.
+
+VERIFIED CURRENT PROBLEM STATEMENT
+A) Product foundation strong असू शकते, पण public homepage weak असेल तर user acquisition weak राहते.
+B) Root public entry अभी generic/temporary welcome surface वर अडकलेली असू शकते.
+C) Trust, safety, seriousness, Marathi-local positioning, and parent usability हे public layer वर स्पष्ट दिसणे आवश्यक आहे.
+D) Public conversion day हा growth + trust + onboarding quality साठी स्वतंत्र day असणे आवश्यक आहे.
+
+DAY-42 SCOPE
+IN SCOPE
+1) Current public homepage reality audit
+2) Root route + actual welcome/home Blade audit
+3) Public brand/trust/conversion surface design completion
+4) Verified existing homepage image/admin assets usage audit
+5) Clear CTA funnel toward register / onboarding / browse / trust exploration
+6) Parent-friendly and Marathi-first messaging hardening
+
+OUT OF SCOPE
+1) No DB migration
+2) No schema change
+3) No subscription pricing invention
+4) No recommendation engine build
+5) No intake parser change
+6) No mutation logic change
+7) No fake testimonials / fake counters / fake success numbers
+8) No massive unrelated redesign across authenticated product
+
+FILES IN EXPECTED SCOPE (VERIFY EXACTLY BEFORE ACTION)
+Known verified scope anchors:
+1) routes/web.php
+2) admin homepage image routes exist in routes/web.php
+
+Additional files allowed only after exact verification from latest code:
+3) actual root public Blade file used by `/`
+4) any public layout/partial used by welcome/homepage
+5) any homepage image loading/controller/view files
+6) registration/login entry views only if tiny CTA alignment is needed
+7) any translation/public content files if they truly drive homepage text
+
+DAY-42 EXACT WORK ITEMS
+
+WORK ITEM 1 — Public Homepage Current Reality Audit
+Target:
+- routes/web.php
+- actual Blade returned by `/`
+- any public layout/partials used by root page
+
+What must be verified exactly:
+1) Which view root route currently renders
+2) Whether homepage is:
+   - placeholder
+   - generic Laravel welcome
+   - partially customized
+   - already custom but incomplete
+3) Whether homepage images admin system is actually used on public surface
+4) What CTAs are currently present
+5) Whether trust signals are currently present
+6) Whether language/branding is currently aligned with product direction
+
+Intent:
+This day must start with exact public entry reality, not assumptions.
+
+WORK ITEM 2 — Core Homepage Message Architecture
+Target:
+- actual homepage Blade(s)
+- any translation/content files actually used
+
+Homepage must clearly communicate:
+1) What this product is
+   - serious matrimony / matchmaking platform
+2) For whom it is
+   - brides, grooms, families, parents
+3) Why it is trustworthy
+   - governed profiles
+   - review/approval discipline
+   - verification/trust/safety features already grounded in product
+4) What user should do next
+   - register
+   - complete profile
+   - browse profiles
+5) Why this is not a casual chat product
+   - serious intent / trust-first positioning if already grounded in product reality
+
+Important:
+Only use factual product claims already supported by codebase.
+No fake numbers.
+No fake “India’s No.1” claim.
+No fake success-story counts.
+
+Intent:
+Homepage must become high-clarity, not hype-heavy.
+
+WORK ITEM 3 — Hero Section + CTA Funnel Hardening
+Target:
+- actual homepage Blade(s)
+
+What must improve:
+1) Strong hero heading
+2) One-line value proposition
+3) Primary CTA
+4) Secondary CTA
+5) If already grounded, support separate user journeys:
+   - create profile
+   - family/parent-friendly path
+   - browse trusted profiles
+6) CTA destination must be real current routes only
+
+Disallowed:
+1) No CTA to non-existent flow
+2) No fake download-app flow if app flow does not exist
+3) No pricing CTA if subscription UI is not ready
+
+Intent:
+Visitor must know exactly where to go in one glance.
+
+WORK ITEM 4 — Trust Surface for Public Visitors
+Target:
+- actual homepage Blade(s)
+
+Use only verified existing product strengths, such as:
+1) governed profile process
+2) verification / trust indicators
+3) serious intent positioning
+4) safety/moderation/governance surfaces
+5) controlled contact / request flow
+6) structured profile completeness / biodata intake support, only if appropriate and factual
+
+What must improve:
+1) Trust should be visible before signup
+2) Public page should reduce fear of fake/incomplete profiles
+3) Parent/family audience should feel the system is disciplined
+
+Disallowed:
+1) No unverifiable trust claims
+2) No fake “100% verified” language unless actually true
+3) No security claim that codebase does not support
+
+Intent:
+Build trust using real governance features already in product.
+
+WORK ITEM 5 — Public Conversion Sections Audit and Completion
+Target:
+- actual homepage Blade(s)
+
+Audit which of these sections exist and complete only what is truly needed:
+1) how it works
+2) trust/safety section
+3) for parents/families section
+4) profile quality / seriousness section
+5) CTA repeat near bottom
+6) footer with essential links
+
+For each section classify:
+- PRESENT AND GOOD
+- PRESENT BUT WEAK
+- MISSING BUT NEEDED
+- NOT NEEDED TODAY
+
+Intent:
+Homepage should become structured and conversion-ready, not just decorative.
+
+WORK ITEM 6 — Homepage Image/Admin Asset Integration Audit
+Target:
+- actual homepage image loading path
+- any verified homepage image controller/view integration
+
+What must be verified:
+1) Are admin-managed homepage images already wired to public page?
+2) If yes, is usage correct?
+3) If no, is there already enough code grounding to wire them cleanly now?
+4) Are fallback assets handled safely?
+
+Allowed:
+- clean usage of already existing homepage-images system if verified
+Disallowed:
+- inventing a whole CMS or asset system
+- adding schema or storage redesign
+
+Intent:
+Use existing asset management if real and ready.
+
+WORK ITEM 7 — Marathi-First + Parent-Friendly Clarity
+Target:
+- actual homepage content files/Blade only
+
+What must improve:
+1) Language tone should fit target audience
+2) Parents/families should feel included, not excluded
+3) Serious matrimonial intent should be clearer than modern-dating ambiguity
+4) Copy must remain short, readable, and culturally natural
+
+Important:
+Do not over-localize into clutter.
+Do not make copy too long.
+Do not mix unsupported religious/community claims.
+
+Intent:
+Homepage should feel culturally aligned and practical.
+
+WORK ITEM 8 — Route and Entry Consistency
+Target:
+- routes/web.php
+- actual homepage Blade and CTA routes
+
+What must be verified:
+1) Root page CTA targets are real
+2) register/login/onboarding/profile routes used by homepage are correct
+3) no 404 CTA remains
+4) authenticated user behavior on homepage is sensible if applicable
+
+Intent:
+No beautiful homepage with broken journey.
+
+DAY-42 SSOT SAFETY RULES
+1) No fake marketing claims
+2) No non-existent feature promises
+3) No schema changes
+4) No mutation logic changes
+5) No hidden business logic in views
+6) All CTAs must point to real verified routes
+7) Trust language must map to real existing product behavior only
+
+DAY-42 ACCEPTANCE CRITERIA
+Day-42 is complete only if:
+1) Public homepage current reality is fully audited
+2) Root entry page becomes product-accurate and trust-first
+3) CTA flow is real and clean
+4) Homepage explains product clearly to both individuals and families
+5) Trust surfaces are factual and visible
+6) Existing homepage image/admin groundwork is used correctly if available
+7) No fake claims are introduced
+8) No schema change is introduced
+9) No SSOT violation is introduced
+10) Changed files remain limited and reversible
+
+DAY-42 EXPECTED OUTPUT AFTER IMPLEMENTATION
+1) Modified file list
+2) Homepage section audit table
+3) CTA route verification table
+4) Trust-claim verification summary
+5) What changed in each file
+6) Verification results
+7) Screenshots of:
+   - full homepage
+   - hero section
+   - trust section
+   - CTA section
+   - mobile view if available
+
+DAY-42 RISK NOTES
+1) Biggest risk is making homepage prettier but still strategically vague
+2) Biggest trust risk is over-claiming verification/safety
+3) Biggest product risk is pointing users to incomplete flows
+4) Biggest growth risk is not addressing parent/family audience clearly enough
+
+DAY-42 COMPLETION DEFINITION
+This day is complete when the public homepage becomes a truthful, high-trust, culturally aligned conversion surface that accurately represents the actual product and directs users into real next steps without confusion.
+-----------------
+DAY-43 PLANNING — Integrated QA + Stabilization + Production Readiness Sweep
+Project: navrimatrimony/laravel-matrimony
+Planning mode: SSOT day entry
+Status: Planning only (NOT prompt, NOT implementation instructions)
+
+DAY GOAL
+Day-37 to Day-42 मध्ये जे implement झाले आहे त्याचा integrated end-to-end QA sweep करणे, regressions पकडणे, production blockers identify करणे, आणि फक्त smallest-safe stabilization fixes करणे.
+या दिवशी new feature build करायची नाही.
+या दिवशी DB schema बदलायची नाही.
+या दिवशी architecture drift करायचा नाही.
+या दिवशी “polish” च्या नावाखाली unrelated redesign करायचा नाही.
+
+WHY DAY-43 IS THE CORRECT NEXT DAY
+Current completed sequence:
+1) Day-37 — conflict + intake apply governance UX
+2) Day-38 — pending suggestions + partner preferences clarity
+3) Day-39 — search/filter + trust surface hardening
+4) Day-40 — entitlement truth layer / payment surface honesty
+5) Day-41 — matching-readiness + deterministic comparison foundation
+6) Day-42 — homepage / public conversion / brand trust surface
+
+Therefore:
+Next logical step is not more feature sprawl.
+Next logical step is:
+- full journey QA
+- regression detection
+- route/copy/state consistency
+- production readiness sweep
+
+VERIFIED CURRENT RISK AREAS AFTER MULTI-DAY CHANGES
+A) Homepage hero search was rewired and must be verified end-to-end against `/profiles`
+B) Search/listing filters were changed and must be verified against real URLs and pagination
+C) Intake governance pages changed and must be checked after real apply/review flows
+D) Suggestion UX changed but live data was limited, so fallback states and supported/unsupported states need QA
+E) Payment/entitlement copy was corrected, but chat gating language and callback surfaces need integrated review
+F) Profile show comparison text changed and must be checked for factuality and no-score behavior
+G) Dead or stale copied language / placeholders may still remain outside touched files
+
+DAY-43 SCOPE
+IN SCOPE
+1) Integrated end-to-end journey audit
+2) Regression sweep for Day-37 to Day-42 touched areas
+3) Route/CTA consistency audit
+4) Copy/trust-claim audit in touched surfaces
+5) Fallback/empty-state audit
+6) Smallest-safe stabilization fixes only where proven by QA
+
+OUT OF SCOPE
+1) No DB migration
+2) No schema change
+3) No new feature invention
+4) No recommendation engine implementation
+5) No subscription plan system build
+6) No large refactor
+7) No redesign outside proven UX breakage
+8) No broad localization rewrite
+
+EXPECTED VERIFIED FILE AREAS TO REVIEW
+1) routes/web.php
+2) resources/views/welcome.blade.php
+3) app/Http/Controllers/MatrimonyProfileController.php
+4) resources/views/matrimony/profile/index.blade.php
+5) resources/views/matrimony/profile/show.blade.php
+6) app/Http/Controllers/Admin/AdminIntakeController.php
+7) app/Http/Controllers/AdminController.php
+8) resources/views/admin/intake/show.blade.php
+9) resources/views/admin/conflict-records/index.blade.php
+10) resources/views/admin/conflict-records/show.blade.php
+11) resources/views/intake/status.blade.php
+12) resources/views/matrimony/profile/wizard/sections/about_preferences.blade.php
+13) app/Http/Controllers/Payments/PayuController.php
+14) resources/views/chat/show.blade.php
+
+DAY-43 EXACT WORK ITEMS
+
+WORK ITEM 1 — End-to-End Journey Matrix
+Create and verify a real journey matrix for these flows:
+
+A) Public visitor journey
+- `/`
+- Register / Login CTA
+- Hero search → `/profiles`
+- Open profile page
+
+B) Authenticated profile journey
+- dashboard
+- profile wizard
+- about-preferences
+- profile search
+- profile show
+
+C) Intake governance journey
+- intake upload/preview/approval/status
+- admin biodata intake show
+- admin apply
+- conflict review list
+- conflict detail
+
+D) Communication journey
+- contact request
+- contact inbox / approve / reject if applicable
+- chat show
+- chat image entitlement message surface
+
+For each journey classify:
+- PASS
+- PASS WITH MINOR ISSUE
+- FAIL
+- NOT TESTABLE WITH CURRENT DATA
+
+Intent:
+Need exact reality, not assumptions.
+
+WORK ITEM 2 — Homepage QA Sweep
+Target:
+- `/`
+- `resources/views/welcome.blade.php`
+- `routes/web.php`
+
+Check:
+1) All prominent CTAs go to real routes
+2) Hero search submits real query keys
+3) Search from homepage produces expected `/profiles?...` URL
+4) No dead `#` links remain in key conversion areas
+5) No fake stats/awards/trust claims remain
+6) Homepage images load or gracefully fallback
+7) Guest/auth state header logic is correct
+8) Mobile layout remains usable
+
+Allowed fixes:
+- broken route target
+- stale placeholder text
+- malformed query key
+- bad conditional rendering
+Do not redesign again.
+
+WORK ITEM 3 — Search / Listing Regression Sweep
+Target:
+- `MatrimonyProfileController`
+- `matrimony/profile/index.blade.php`
+- `matrimony/profile/show.blade.php`
+
+Check:
+1) Each visible filter actually works
+2) Legacy marital status compatibility still works
+3) Active filter chips remain accurate
+4) Clear filters works
+5) Pagination preserves filters
+6) Empty state works
+7) Trust cues are factual only
+8) Profile show comparison has no overall score and no misleading verdict
+
+Allowed fixes:
+- incorrect selected-value persistence
+- broken chip labels
+- broken query append behavior
+- misleading trust copy
+No new ranking logic.
+
+WORK ITEM 4 — Intake / Conflict Governance Regression Sweep
+Target:
+- admin intake page
+- conflict list
+- conflict detail
+- intake status page
+
+Check:
+1) Governance Status card renders correctly on:
+   - unattached intake
+   - approved intake
+   - attached intake if data exists
+2) Apply readiness messaging is accurate
+3) Mutation result summary displays without errors
+4) Conflict list summary counts render
+5) Conflict detail explanation box renders
+6) Suggestion review page handles:
+   - no suggestions
+   - actionable suggestions
+   - stored-only suggestions
+   if data exists
+7) No unsupported suggestion bucket shows Apply/Reject
+
+Allowed fixes:
+- null handling
+- empty-state copy
+- conditional rendering bugs
+- minor label mismatch
+No mutation path changes.
+
+WORK ITEM 5 — Payment / Entitlement / Chat Surface QA
+Target:
+- `PayuController`
+- `chat/show.blade.php`
+- any current route/view touched in Day-40
+
+Check:
+1) PayU success/failure user messaging is factual
+2) No page implies entitlement auto-grant
+3) Chat locked-state copy is truthful
+4) Governance restriction vs access restriction copy is not mixed
+5) No fake upgrade funnel remains
+
+Allowed fixes:
+- copy mismatch
+- bad redirect target
+- stale label
+No premium system invention.
+
+WORK ITEM 6 — Production Readiness Cleanup Sweep
+Target:
+repo-wide review limited to small proven issues
+
+Check for:
+1) obvious stale placeholder copy in touched areas
+2) temporary CTA remnants
+3) copied competitor language still present in touched surfaces
+4) obvious comment leftovers that should not ship
+5) route-safe link consistency
+6) missing fallback text for empty images / empty cards
+
+Allowed fixes:
+- smallest safe copy cleanup
+- remove stale placeholder
+- link correction
+- conditional fallback correction
+
+Disallowed:
+- broad content rewrite
+- giant visual redesign
+- speculative cleanup in untouched modules
+
+WORK ITEM 7 — Final Stabilization Acceptance Table
+Prepare a final table after QA:
+For each area mark:
+- READY
+- READY WITH MINOR FOLLOW-UP
+- BLOCKED
+- NOT TESTED
+
+Areas:
+1) Homepage / public conversion
+2) Register / login entry
+3) Profile wizard
+4) Preferences
+5) Search / listing
+6) Profile show
+7) Intake preview / status
+8) Admin intake governance
+9) Conflict review
+10) Contact / chat
+11) Entitlement messaging
+
+Intent:
+This becomes the true production-readiness checkpoint after Day-42.
+
+DAY-43 SSOT SAFETY RULES
+1) No schema change
+2) No new feature implementation beyond proven stabilization need
+3) No direct profile mutation additions
+4) No fake trust/verification/entitlement claims
+5) No unsupported suggestion actions
+6) No recommendation or scoring invention
+7) No architecture drift
+8) Smallest safe fix only
+
+DAY-43 ACCEPTANCE CRITERIA
+Day-43 is complete only if:
+1) End-to-end journey matrix is filled with real outcomes
+2) Critical regressions are fixed
+3) No new feature creep is introduced
+4) All Day-37 to Day-42 touched areas are QA-reviewed
+5) Public and authenticated key journeys are route-safe
+6) Copy/trust surfaces are factual
+7) Tests still pass
+8) Changed files remain limited and reversible
+
+DAY-43 EXPECTED OUTPUT AFTER IMPLEMENTATION
+1) Modified file list
+2) Journey matrix
+3) Regression findings list
+4) Stabilization fixes list
+5) Final readiness table
+6) Verification results
+7) Screenshots for any corrected blocker states
+
+DAY-43 RISK NOTES
+1) Biggest risk is shipping many individually-correct changes that do not work smoothly together
+2) Biggest trust risk is a stale copied phrase or dead CTA surviving in one edge area
+3) Biggest UX risk is fallback/empty-state inconsistency
+4) Biggest technical risk is introducing new fixes that reopen earlier stabilized flows
+
+DAY-43 COMPLETION DEFINITION
+This day is complete when the project’s newly improved public, user, admin, governance, search, trust, and communication surfaces work coherently together with no critical regression and no SSOT violation.
+===============

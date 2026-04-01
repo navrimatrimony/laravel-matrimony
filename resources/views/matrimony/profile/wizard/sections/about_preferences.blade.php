@@ -131,6 +131,8 @@
     </div>
 
     <p class="text-sm text-gray-600 dark:text-gray-400 -mt-1">{{ __('wizard.partner_pref_workspace_intro') }}</p>
+    {{-- Day-38: trust copy only; request keys and save flow unchanged. --}}
+    <p class="text-xs text-gray-500 dark:text-gray-400 -mt-1">{{ __('wizard.partner_preferences_trust_note') }}</p>
     <p class="text-xs font-medium text-indigo-600 dark:text-indigo-400">{{ __('wizard.partner_pref_section_' . $activePref) }}</p>
 
     <div class="space-y-4 {{ $activePref !== 'basics' ? 'hidden' : '' }}">
@@ -139,6 +141,7 @@
 
     <div class="rounded-xl border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800/60 p-4 space-y-4 mt-6 {{ $activePref !== 'location' ? 'hidden' : '' }}" id="partner-pref-location-section">
         <h3 class="text-base font-semibold text-gray-900 dark:text-gray-100 border-b border-gray-200 dark:border-gray-700 pb-2">{{ __('wizard.partner_location_heading') }}</h3>
+        <p class="text-xs text-gray-500 dark:text-gray-400 -mt-2 mb-1">{{ __('wizard.partner_pref_location_microcopy') }}</p>
         <div class="rounded-lg border border-indigo-200/90 dark:border-indigo-500/35 bg-indigo-50/80 dark:bg-indigo-950/30 p-3 sm:p-4 shadow-sm">
             <label class="flex items-start gap-3 cursor-pointer">
                 <input type="checkbox" name="willing_to_relocate" value="1"
@@ -189,6 +192,7 @@
     </div>
 
     <div class="{{ $activePref !== 'education' ? 'hidden' : '' }}">
+        <p class="text-xs text-gray-500 dark:text-gray-400 mb-2">{{ __('wizard.partner_pref_education_microcopy') }}</p>
         @include('matrimony.profile.wizard.partials.partner_preferences_education_career')
     </div>
 
@@ -744,6 +748,7 @@
     <div class="space-y-4 {{ $activePref !== 'community' ? 'hidden' : '' }}">
     <div class="rounded-xl border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800/60 p-4 space-y-4 mt-6">
         <h3 class="text-base font-semibold text-gray-900 dark:text-gray-100 border-b border-gray-200 dark:border-gray-700 pb-2">{{ __('wizard.community') }}</h3>
+        <p class="text-xs text-gray-500 dark:text-gray-400 -mt-2 mb-1">{{ __('wizard.partner_pref_community_microcopy') }}</p>
         <div>
             <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">{{ __('wizard.preferred_religions') }}</label>
             <div class="flex flex-wrap gap-2" id="partner-community-religion-chips">
@@ -915,9 +920,11 @@
     </div>
 
     <div class="rounded-xl border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800/60 p-4 space-y-4 mt-6 {{ $activePref !== 'lifestyle' ? 'hidden' : '' }}">
+        <p class="text-xs text-gray-500 dark:text-gray-400 mb-2">{{ __('wizard.partner_pref_lifestyle_microcopy') }}</p>
         @include('matrimony.profile.wizard.partials.partner_pref_lifestyle_diet')
     </div>
     <div class="rounded-xl border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800/60 p-4 space-y-4 mt-6 {{ $activePref !== 'family' ? 'hidden' : '' }}">
+        <p class="text-xs text-gray-500 dark:text-gray-400 mb-2">{{ __('wizard.partner_pref_family_microcopy') }}</p>
         @include('matrimony.profile.wizard.partials.partner_pref_family_managed')
     </div>
 

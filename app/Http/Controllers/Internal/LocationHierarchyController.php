@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Internal;
 
 use App\Http\Controllers\Controller;
+use App\Models\City;
 use App\Models\District;
 use App\Models\State;
 use App\Models\Taluka;
@@ -103,6 +104,25 @@ class LocationHierarchyController extends Controller
         return response()->json([
             'success' => true,
             'data' => $talukas,
+        ]);
+    }
+
+    /**
+     * Cities for a taluka (search filter dropdowns).
+     */
+    public function cities(Request $request): JsonResponse
+    {
+        $request->validate([
+            'taluka_id' => ['required', 'integer', 'exists:talukas,id'],
+        ]);
+
+        $cities = City::where('taluka_id', $request->integer('taluka_id'))
+            ->orderBy('name')
+            ->get(['id', 'name', 'taluka_id']);
+
+        return response()->json([
+            'success' => true,
+            'data' => $cities,
         ]);
     }
 }

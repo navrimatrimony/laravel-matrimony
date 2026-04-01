@@ -44,6 +44,7 @@ use App\Http\Controllers\WhoViewedController;
 use App\Models\BiodataIntake;
 use App\Models\Caste;
 use App\Models\SubCaste;
+use App\Services\HomepageImageService;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -61,13 +62,24 @@ Route::post('/payments/payu/webhook', [PayuController::class, 'webhook'])->name(
 |--------------------------------------------------------------------------
 */
 Route::get('/', function () {
-    return view('welcome');
+    $homepageImages = app(HomepageImageService::class)->allPaths();
+    $castes = Caste::query()
+        ->where(function ($q) {
+            $q->where('is_active', true)->orWhereNull('is_active');
+        })
+        ->orderBy('label_en')
+        ->orderBy('label')
+        ->get();
+
+    return view('welcome', compact('homepageImages', 'castes'));
 });
 
-// Phase-5 Day-20: Temporary test route — remove before production
-Route::get('/phase5-test', function () {
-    return 'Phase5 test ready';
-});
+// Local-only smoke route (not exposed in production)
+if (app()->environment('local')) {
+    Route::get('/phase5-test', function () {
+        return 'Phase5 test ready';
+    });
+}
 
 /*
 |--------------------------------------------------------------------------

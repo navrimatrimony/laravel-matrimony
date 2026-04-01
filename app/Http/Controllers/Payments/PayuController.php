@@ -9,13 +9,14 @@ class PayuController extends Controller
 {
     public function success(Request $request)
     {
-        // PayU कडून आलेला data
+        // NOTE: A payment callback alone does not grant any entitlement.
         $data = $request->all();
 
-        // debug साठी
         \Log::info('PayU Success:', $data);
 
-        return "Payment Successful ✅";
+        return redirect()
+            ->route('dashboard')
+            ->with('info', 'Payment callback received. Access changes only after a valid entitlement is granted.');
     }
 
     public function failure(Request $request)
@@ -24,7 +25,9 @@ class PayuController extends Controller
 
         \Log::info('PayU Failure:', $data);
 
-        return "Payment Failed ❌";
+        return redirect()
+            ->route('dashboard')
+            ->with('error', 'Payment failed or was not completed.');
     }
 
     public function webhook(Request $request)

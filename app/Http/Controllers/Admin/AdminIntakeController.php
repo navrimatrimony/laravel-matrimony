@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Jobs\ParseIntakeJob;
 use App\Models\AdminSetting;
 use App\Models\BiodataIntake;
+use App\Models\ConflictRecord;
 use App\Services\Intake\IntakeExtractionReuseResolver;
 use App\Services\Intake\IntakeReviewParseInputTextResolver;
 use App\Services\IntakeApprovalService;
@@ -50,7 +51,7 @@ class AdminIntakeController extends Controller
      */
     public function showBiodataIntake(BiodataIntake $intake)
     {
-        $intake->load(['uploadedByUser:id,name,email', 'profile:id,full_name']);
+        $intake->load(['uploadedByUser:id,name,email', 'profile:id,full_name,lifecycle_state,pending_intake_suggestions_json']);
         $showAdminReextractAction = app(ProviderResolver::class)->parseJobUsesAiVisionExtraction();
         $reviewParse = app(IntakeReviewParseInputTextResolver::class)->resolve($intake);
 
@@ -94,6 +95,50 @@ class AdminIntakeController extends Controller
             $diagnosticsUnavailableReason = 'Diagnostics unavailable (parse_input_debug cache missing/expired for this intake).';
         }
 
+        $attachedProfile = $intake->profile;
+        $pendingConflictCount = 0;
+        $recentPendingConflicts = collect();
+        if ($attachedProfile) {
+            $pendingConflictCount = ConflictRecord::query()
+                ->where('profile_id', $attachedProfile->id)
+                ->where('resolution_status', 'PENDING')
+                ->count();
+            $recentPendingConflicts = ConflictRecord::query()
+                ->where('profile_id', $attachedProfile->id)
+                ->where('resolution_status', 'PENDING')
+                ->orderByDesc('detected_at')
+                ->limit(5)
+                ->get();
+        }
+
+        $suggestionsJson = $attachedProfile?->pending_intake_suggestions_json;
+        $pendingSuggestionsCount = 0;
+        if ($attachedProfile && is_array($suggestionsJson) && $suggestionsJson !== []) {
+            foreach ($suggestionsJson as $bucket) {
+                if (is_array($bucket)) {
+                    if ($bucket !== []) {
+                        $pendingSuggestionsCount++;
+                    }
+                } elseif ($bucket !== null && trim((string) $bucket) !== '') {
+                    $pendingSuggestionsCount++;
+                }
+            }
+        }
+        $pendingSuggestionsPresent = $pendingSuggestionsCount > 0;
+
+        $requireAdminBeforeAttach = AdminSetting::getBool('intake_require_admin_before_attach', false);
+        $snapshotOk = ! empty($intake->approval_snapshot_json) && is_array($intake->approval_snapshot_json);
+        $applyReadiness = [
+            'user_approved' => (bool) $intake->approved_by_user,
+            'attached_profile' => (bool) $intake->matrimony_profile_id,
+            'has_snapshot' => $snapshotOk,
+            'admin_required' => $requireAdminBeforeAttach,
+            'can_admin_apply' => (bool) $intake->approved_by_user
+                && (bool) $intake->matrimony_profile_id
+                && $requireAdminBeforeAttach
+                && $snapshotOk,
+        ];
+
         return view('admin.intake.show', compact(
             'intake',
             'showAdminReextractAction',
@@ -105,6 +150,13 @@ class AdminIntakeController extends Controller
             'diagnosticsUnavailableReason',
             'active',
             'mode',
+            'attachedProfile',
+            'pendingConflictCount',
+            'recentPendingConflicts',
+            'pendingSuggestionsPresent',
+            'pendingSuggestionsCount',
+            'requireAdminBeforeAttach',
+            'applyReadiness',
         ));
     }
 
@@ -249,9 +301,26 @@ class AdminIntakeController extends Controller
 
         $result = app(IntakeApprovalService::class)->approve($intake, (int) auth()->id(), $intake->approval_snapshot_json);
 
-        return redirect()
+        $redirect = redirect()
             ->route('admin.biodata-intakes.show', $intake)
-            ->with('success', 'Intake apply pipeline triggered.')
             ->with('mutation_result', $result);
+
+        if (($result['already_applied'] ?? false) === true) {
+            return $redirect->with('success', 'Intake was already applied earlier. No new mutation was performed.');
+        }
+
+        if (($result['blocked'] ?? null) === 'profile_conflict_pending') {
+            return $redirect->with('error', 'Apply blocked: attached profile already has pending conflicts. Resolve them before applying this intake.');
+        }
+
+        if (($result['conflict_detected'] ?? false) === true) {
+            return $redirect->with('warning', 'Intake apply completed, but conflicts were created and must be reviewed before final trust-safe completion.');
+        }
+
+        if (($result['mutation_success'] ?? false) === true) {
+            return $redirect->with('success', 'Intake applied to profile successfully.');
+        }
+
+        return $redirect->with('success', 'Intake apply pipeline triggered.');
     }
 }

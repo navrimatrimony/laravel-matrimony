@@ -59,6 +59,10 @@
 
                 return '';
             };
+            $hasActionable = $pendingCore !== [] || $pendingExtended !== [];
+            $entityKeyList = is_array($pendingEntities) ? array_keys($pendingEntities) : [];
+            $hasStoredItems = ($entityKeyList !== []) || ($pendingOtherKeys !== []);
+            $hasAnyReviewMaterial = $hasActionable || $hasStoredItems;
         @endphp
 
         <div class="bg-white dark:bg-gray-800 rounded shadow p-6 border border-green-300">
@@ -70,10 +74,18 @@
                 तुमची माहिती यशस्वीरित्या सेव्ह झाली आहे.
             </p>
 
-            @if(!empty($pendingCore) || !empty($pendingExtended))
+            @if($hasAnyReviewMaterial)
+                <div class="mt-6 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/40 p-4">
+                    <h2 class="text-sm font-semibold text-slate-900 dark:text-slate-100 mb-2">{{ __('intake.suggestions_review_intro_title') }}</h2>
+                    <p class="text-sm text-slate-700 dark:text-slate-300">{{ __('intake.suggestions_review_intro') }}</p>
+                </div>
+            @endif
+
+            @if($hasActionable)
                 <div class="mt-6 rounded-lg border border-amber-200 dark:border-amber-900/50 bg-amber-50 dark:bg-amber-950/30 p-4">
-                    <h2 class="text-sm font-semibold text-amber-900 dark:text-amber-100 mb-2">{{ __('intake.suggested_updates_section_title') }}</h2>
-                    <p class="text-sm text-amber-900/90 dark:text-amber-100/90 mb-3">{{ __('intake.suggested_updates_intro') }}</p>
+                    <h2 class="text-sm font-semibold text-amber-900 dark:text-amber-100">{{ __('intake.suggested_updates_you_can_review') }}</h2>
+                    <p class="mt-1 text-xs font-medium text-amber-800 dark:text-amber-200/90">{{ __('intake.suggestions_action_available_label') }}</p>
+                    <p class="text-sm text-amber-900/90 dark:text-amber-100/90 mt-2 mb-3">{{ __('intake.suggested_updates_intro') }}</p>
                     <ul class="space-y-4 text-sm">
                         @foreach($pendingCore as $fieldKey => $fieldVal)
                             @php
@@ -130,11 +142,16 @@
                                 if ($extDisp === '' && $fieldVal !== 0 && $fieldVal !== 0.0 && $fieldVal !== false) {
                                     continue;
                                 }
+                                $extLabelKey = 'intake.extended_suggestion_field.'.$fieldKey;
+                                $extFieldLabel = __($extLabelKey);
+                                if ($extFieldLabel === $extLabelKey) {
+                                    $extFieldLabel = $fieldKey;
+                                }
                                 $oldDisp = __('intake.suggested_updates_empty');
                                 $newDisp = $extDisp !== '' ? $extDisp : __('intake.suggested_updates_empty');
                             @endphp
                             <li class="border-b border-amber-200/60 dark:border-amber-800/40 pb-4 last:border-b-0 last:pb-0">
-                                <p class="font-medium text-gray-800 dark:text-gray-200">{{ $fieldKey }}</p>
+                                <p class="font-medium text-gray-800 dark:text-gray-200">{{ $extFieldLabel }}</p>
                                 <div class="mt-1 space-y-1 text-gray-600 dark:text-gray-400">
                                     <p><span class="text-gray-500 dark:text-gray-500">{{ __('intake.suggested_updates_current') }}:</span> <span class="break-words">{{ $oldDisp }}</span></p>
                                     <p><span class="text-gray-500 dark:text-gray-500">{{ __('intake.suggested_updates_suggested') }}:</span> <span class="break-words">{{ $newDisp }}</span></p>
@@ -161,20 +178,48 @@
                         @endforeach
                     </ul>
                 </div>
-            @else
+            @elseif($hasStoredItems)
+                <p class="mt-6 text-sm text-amber-900/90 dark:text-amber-100/90">{{ __('intake.suggestions_no_actionable_but_stored') }}</p>
+            @elseif(!$hasAnyReviewMaterial)
                 <p class="mt-6 text-sm text-gray-600 dark:text-gray-400">{{ __('intake.no_pending_suggestions') }}</p>
             @endif
 
-            @if(!empty($pendingEntities) || !empty($pendingOtherKeys))
+            {{-- Day-38: only core/extended scopes are actionable via intake.apply-suggestion / intake.reject-suggestion. --}}
+            @if($hasStoredItems)
                 <div class="mt-4 rounded-lg border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-900/40 p-4 text-sm text-gray-700 dark:text-gray-300">
-                    <p class="font-medium mb-1">{{ __('intake.pending_suggestions_other_title') }}</p>
-                    <p class="text-gray-600 dark:text-gray-400 mb-2">{{ __('intake.pending_suggestions_other_body') }}</p>
-                    @if(!empty($pendingEntities))
-                        <p class="text-xs font-mono text-gray-500 dark:text-gray-500">{{ implode(', ', array_keys($pendingEntities)) }}</p>
+                    <h2 class="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-1">{{ __('intake.stored_review_items_title') }}</h2>
+                    <p class="text-gray-600 dark:text-gray-400 mb-3">{{ __('intake.stored_review_items_intro') }}</p>
+                    @if($entityKeyList !== [])
+                        <p class="text-xs font-semibold text-gray-800 dark:text-gray-200 mb-2">{{ __('intake.stored_review_items_entities_label') }}</p>
+                        <div class="flex flex-wrap gap-2">
+                            @foreach($entityKeyList as $groupKey)
+                                @php
+                                    $entGroupKey = 'intake.pending_suggestion_group.'.$groupKey;
+                                    $entGroupLabel = __($entGroupKey);
+                                    if ($entGroupLabel === $entGroupKey) {
+                                        $entGroupLabel = $groupKey;
+                                    }
+                                @endphp
+                                <span class="inline-flex items-center rounded-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-2.5 py-0.5 text-xs text-gray-800 dark:text-gray-200">{{ $entGroupLabel }}</span>
+                            @endforeach
+                        </div>
                     @endif
-                    @if(!empty($pendingOtherKeys))
-                        <p class="text-xs font-mono text-gray-500 dark:text-gray-500 mt-1">{{ implode(', ', $pendingOtherKeys) }}</p>
+                    @if($pendingOtherKeys !== [])
+                        <p class="text-xs font-semibold text-gray-800 dark:text-gray-200 {{ $entityKeyList !== [] ? 'mt-4' : '' }} mb-2">{{ __('intake.stored_review_items_groups_label') }}</p>
+                        <div class="flex flex-wrap gap-2">
+                            @foreach($pendingOtherKeys as $groupKey)
+                                @php
+                                    $othGroupKey = 'intake.pending_suggestion_group.'.$groupKey;
+                                    $othGroupLabel = __($othGroupKey);
+                                    if ($othGroupLabel === $othGroupKey) {
+                                        $othGroupLabel = $groupKey;
+                                    }
+                                @endphp
+                                <span class="inline-flex items-center rounded-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-2.5 py-0.5 text-xs text-gray-800 dark:text-gray-200">{{ $othGroupLabel }}</span>
+                            @endforeach
+                        </div>
                     @endif
+                    <p class="mt-3 text-xs text-gray-500 dark:text-gray-500">{{ __('intake.stored_review_items_safe_note') }}</p>
                 </div>
             @endif
 

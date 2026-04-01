@@ -128,7 +128,7 @@ class IntakeSuggestionApprovalUiTest extends TestCase
             ->assertOk()
             ->getContent();
 
-        $this->assertStringContainsString(e(__('intake.suggested_updates_section_title')), $html);
+        $this->assertStringContainsString(e(__('intake.suggested_updates_you_can_review')), $html);
         $this->assertStringContainsString('A', $html);
         $this->assertStringContainsString('B', $html);
         $this->assertStringContainsString(e(__('intake.approve_suggestion_button')), $html);

@@ -1339,12 +1339,21 @@ class AdminController extends Controller
      */
     public function conflictRecordsIndex()
     {
+        $pendingCount = ConflictRecord::where('resolution_status', 'PENDING')->count();
+        $approvedCount = ConflictRecord::where('resolution_status', 'APPROVED')->count();
+        $rejectedCount = ConflictRecord::where('resolution_status', 'REJECTED')->count();
+
         $records = ConflictRecord::with('profile')
             ->where('resolution_status', 'PENDING')
             ->orderByDesc('detected_at')
             ->paginate(50);
 
-        return view('admin.conflict-records.index', compact('records'));
+        return view('admin.conflict-records.index', compact(
+            'records',
+            'pendingCount',
+            'approvedCount',
+            'rejectedCount',
+        ));
     }
 
     /**

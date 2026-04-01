@@ -149,6 +149,12 @@ return [
 
     'partner_pref_submenu_label' => 'भागीदार पसंती',
     'partner_pref_workspace_intro' => 'एकावेळी एक विषय निवडा. जतन करेपर्यंत निवडी फॉर्ममध्ये राहतात.',
+    'partner_preferences_trust_note' => 'ही प्राधान्ये जुळणी सुधारतात. तुम्ही कधीही बदलू शकता; तुमच्या स्वतःच्या प्रोफाइल तपशीलांना आपोआप बदलत नाहीत.',
+    'partner_pref_location_microcopy' => 'ठिकाण निवडी भागीदारासाठी पसंतीचे प्रदेश कमी-जास्त दाखवतात.',
+    'partner_pref_community_microcopy' => 'ही निवडी पसंतीच्या भागीदाराबद्दल आहेत, तुमच्या स्वतःच्या प्रोफाइल ओळखीबद्दल नाहीत.',
+    'partner_pref_education_microcopy' => 'शिक्षण आणि करिअर गाळणी तुम्हाला भेटू इच्छिणाऱ्या व्यक्तीसाठी आहे.',
+    'partner_pref_lifestyle_microcopy' => 'इथली जीवनशैली निवडी फक्त भागीदार प्राधान्ये आहेत.',
+    'partner_pref_family_microcopy' => 'कुटुंबाशी संबंधित प्राधान्ये जुळणीवर परिणाम करतात, प्रोफाइल तथ्यांवर नाहीत.',
     'partner_pref_section_basics' => 'मूलभूत — लग्न, वय, उंची',
     'partner_pref_section_community' => 'समुदाय — धर्म आणि जात',
     'partner_pref_section_location' => 'स्थान — देश ते तालुका',

@@ -17,11 +17,27 @@
         <div class="mb-4 px-4 py-2 rounded bg-red-50 dark:bg-red-900/30 text-red-800 dark:text-red-200 text-sm">{{ $errors->first() }}</div>
     @endif
 
+    <section class="mb-6 p-4 rounded-lg border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/20">
+        <h2 class="text-sm font-semibold text-blue-900 dark:text-blue-100 mb-2">What each resolution means</h2>
+        <ul class="text-sm text-blue-900/90 dark:text-blue-100/90 space-y-1 list-disc list-inside">
+            <li><strong>Approve</strong> — accept the proposed new value and store it on the profile.</li>
+            <li><strong>Reject</strong> — keep the current existing value; discard the proposed change for this conflict.</li>
+            <li><strong>Override</strong> — admin exception with a recorded reason (governed path; use only when policy allows).</li>
+        </ul>
+    </section>
+
     {{-- Profile context --}}
     <section class="mb-6 p-4 rounded-lg bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600">
         <h2 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Profile context</h2>
         @if($profile)
-            <p class="text-sm text-gray-800 dark:text-gray-200"><strong>ID:</strong> <a href="{{ route('admin.profiles.show', $profile->id) }}" class="text-indigo-600 dark:text-indigo-400 hover:underline">{{ $profile->id }}</a> · <strong>Name:</strong> {{ $profile->full_name ?? '—' }} · <strong>Lifecycle:</strong> {{ $profile->lifecycle_state ?? '—' }}</p>
+            <p class="text-sm text-gray-800 dark:text-gray-200">
+                <strong>ID:</strong> <a href="{{ route('admin.profiles.show', $profile->id) }}" class="text-indigo-600 dark:text-indigo-400 hover:underline">{{ $profile->id }}</a>
+                · <strong>Name:</strong> {{ $profile->full_name ?? '—' }}
+            </p>
+            <p class="text-sm mt-2">
+                <span class="text-gray-600 dark:text-gray-400">Lifecycle state:</span>
+                <span class="ml-1 inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-gray-200 dark:bg-gray-600 text-gray-900 dark:text-gray-100">{{ $profile->lifecycle_state ?? '—' }}</span>
+            </p>
         @else
             <p class="text-sm text-gray-500">Profile not found (ID: {{ $record->profile_id }})</p>
         @endif
@@ -43,21 +59,24 @@
     </section>
 
     {{-- Resolution status --}}
-    <section class="mb-6">
-        <p class="text-sm text-gray-600 dark:text-gray-400"><strong>Resolution status:</strong>
-            <span class="px-2 py-0.5 rounded text-xs font-medium
+    <section class="mb-6 p-4 rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800/50">
+        <h2 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Resolution status</h2>
+        <p class="text-sm text-gray-800 dark:text-gray-200">
+            <span class="px-2 py-0.5 rounded text-xs font-semibold
                 @if($record->resolution_status === 'PENDING') bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-200
                 @elseif($record->resolution_status === 'APPROVED') bg-emerald-100 dark:bg-emerald-900/30 text-emerald-800 dark:text-emerald-200
                 @elseif($record->resolution_status === 'REJECTED') bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-200
                 @else bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300
                 @endif">{{ $record->resolution_status }}</span>
-            @if($record->resolution_status !== 'PENDING' && $record->resolved_at)
-                · Resolved: {{ $record->resolved_at->format('Y-m-d H:i') }}
-                @if($record->resolution_reason)
-                    · Reason: {{ Str::limit($record->resolution_reason, 100) }}
-                @endif
-            @endif
         </p>
+        @if($record->resolution_status !== 'PENDING')
+            @if($record->resolved_at)
+                <p class="text-sm text-gray-600 dark:text-gray-400 mt-2"><strong class="text-gray-700 dark:text-gray-300">Resolved at:</strong> {{ $record->resolved_at->format('Y-m-d H:i') }}</p>
+            @endif
+            @if($record->resolution_reason)
+                <p class="text-sm text-gray-600 dark:text-gray-400 mt-2"><strong class="text-gray-700 dark:text-gray-300">Resolution reason:</strong> {{ $record->resolution_reason }}</p>
+            @endif
+        @endif
     </section>
 
     {{-- Resolution form (only when PENDING) --}}

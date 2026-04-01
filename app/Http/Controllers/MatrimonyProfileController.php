@@ -2,10 +2,21 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Caste;
+use App\Models\City;
+use App\Models\Country;
+use App\Models\District;
 use App\Models\FieldRegistry;
+use App\Models\MasterMaritalStatus;
 use App\Models\MatrimonyProfile;
+use App\Models\Profession;
 use App\Models\ProfilePhoto;
+use App\Models\Religion;
+use App\Models\SeriousIntent;
 use App\Models\Shortlist;
+use App\Models\State;
+use App\Models\SubCaste;
+use App\Models\Taluka;
 use App\Services\ExtendedFieldService;
 use App\Services\ProfileCompletenessService;
 use App\Services\ProfileFieldConfigurationService;
@@ -1011,7 +1022,7 @@ class MatrimonyProfileController extends Controller
     */
     public function index(Request $request)
     {
-        $query = MatrimonyProfile::latest();
+        $query = MatrimonyProfile::query();
 
         // Day 7: Only active profiles searchable; NULL treated as active (backward compat)
         $query->where(function ($q) {
@@ -1029,15 +1040,37 @@ class MatrimonyProfileController extends Controller
         // Helper: check if field is enabled and searchable
         $isSearchable = fn (string $fieldKey) => in_array($fieldKey, $enabledSearchableFields, true);
 
+        // Religion filter (only if searchable)
+        if ($isSearchable('religion_id') && $request->filled('religion_id')) {
+            $query->where('religion_id', $request->input('religion_id'));
+        }
+
         // Caste filter (only if searchable) — normalized: use caste_id
         if ($isSearchable('caste') && $request->filled('caste_id')) {
             $query->where('caste_id', $request->input('caste_id'));
         }
 
-        // Phase-4 Day-8: Location hierarchy filters (only if searchable)
+        // Sub-caste filter (only if searchable)
+        if ($isSearchable('sub_caste_id') && $request->filled('sub_caste_id')) {
+            $query->where('sub_caste_id', $request->input('sub_caste_id'));
+        }
+
+        // Phase-6: Location hierarchy filters (only if searchable)
         if ($isSearchable('location')) {
+            if ($request->filled('country_id')) {
+                $query->where('country_id', (int) $request->country_id);
+            }
+            if ($request->filled('state_id')) {
+                $query->where('state_id', (int) $request->state_id);
+            }
+            if ($request->filled('district_id')) {
+                $query->where('district_id', (int) $request->district_id);
+            }
+            if ($request->filled('taluka_id')) {
+                $query->where('taluka_id', (int) $request->taluka_id);
+            }
             if ($request->filled('city_id')) {
-                $query->where('city_id', $request->city_id);
+                $query->where('city_id', (int) $request->city_id);
             }
         }
 
@@ -1079,6 +1112,31 @@ class MatrimonyProfileController extends Controller
             $query->where('highest_education', $request->input('education'));
         }
 
+        // Profession filter (only if searchable)
+        if ($isSearchable('profession_id') && $request->filled('profession_id')) {
+            $query->where('profession_id', $request->input('profession_id'));
+        }
+
+        // Serious intent filter (only if searchable)
+        if ($isSearchable('serious_intent_id') && $request->filled('serious_intent_id')) {
+            $query->where('serious_intent_id', $request->input('serious_intent_id'));
+        }
+
+        // Photo-only filter (truthful: uses core profile_photo + photo_approved flag)
+        if ($request->boolean('has_photo')) {
+            $query->whereNotNull('profile_photo')
+                ->where(function ($q) {
+                    $q->whereNull('photo_approved')->orWhere('photo_approved', 1);
+                });
+        }
+
+        // Verified-only filter (truthful: email verification only)
+        if ($request->boolean('verified_only')) {
+            $query->whereHas('user', function ($q) {
+                $q->whereNotNull('email_verified_at');
+            });
+        }
+
         // 70% completeness or admin override (search visibility only)
         $query->whereRaw(ProfileCompletenessService::sqlSearchVisible('matrimony_profiles'));
 
@@ -1099,15 +1157,226 @@ class MatrimonyProfileController extends Controller
             }
         }
 
+        $sort = (string) $request->input('sort', 'latest');
+        $allowedSorts = ['latest', 'age_asc', 'age_desc', 'height_asc', 'height_desc'];
+        if (! in_array($sort, $allowedSorts, true)) {
+            $sort = 'latest';
+        }
+
+        switch ($sort) {
+            case 'age_asc':
+                // Younger first: more recent date_of_birth first; nulls last
+                $query->orderByRaw('CASE WHEN date_of_birth IS NULL THEN 1 ELSE 0 END ASC')
+                    ->orderBy('date_of_birth', 'desc');
+                break;
+            case 'age_desc':
+                // Older first: older date_of_birth first; nulls last
+                $query->orderByRaw('CASE WHEN date_of_birth IS NULL THEN 1 ELSE 0 END ASC')
+                    ->orderBy('date_of_birth', 'asc');
+                break;
+            case 'height_asc':
+                $query->orderByRaw('CASE WHEN height_cm IS NULL THEN 1 ELSE 0 END ASC')
+                    ->orderBy('height_cm', 'asc');
+                break;
+            case 'height_desc':
+                $query->orderByRaw('CASE WHEN height_cm IS NULL THEN 1 ELSE 0 END ASC')
+                    ->orderBy('height_cm', 'desc');
+                break;
+            case 'latest':
+            default:
+                $query->latest();
+                break;
+        }
+
         $perPage = (int) $request->input('per_page', 15);
         $perPage = $perPage >= 1 && $perPage <= 100 ? $perPage : 15;
-        $profiles = $query->with(['country', 'state', 'district', 'taluka', 'city'])->paginate($perPage)->withQueryString();
+        $profiles = $query->with([
+            'country',
+            'state',
+            'district',
+            'taluka',
+            'city',
+            'gender',
+            'maritalStatus',
+            'religion',
+            'caste',
+            'subCaste',
+            'profession',
+            'seriousIntent',
+            'user:id,email_verified_at',
+        ])->paginate($perPage)->withQueryString();
 
-        // Phase-4 Day-8: Pass location data for search filters
-        $cities = \App\Models\City::all();
+        // Lookup lists for filter controls (read-only; same keys as request inputs above)
+        $locationLookups = $this->buildProfileSearchLocationLookups($request);
+        $religions = Religion::query()
+            ->where(function ($q) {
+                $q->where('is_active', true)->orWhereNull('is_active');
+            })
+            ->orderBy('label_en')
+            ->orderBy('label')
+            ->get();
+        $castes = Caste::query()
+            ->where(function ($q) {
+                $q->where('is_active', true)->orWhereNull('is_active');
+            })
+            ->orderBy('label_en')
+            ->orderBy('label')
+            ->get();
+        $subCastes = SubCaste::query()
+            ->where('is_active', true)
+            ->where('status', 'approved')
+            ->orderBy('label_en')
+            ->orderBy('label')
+            ->get();
+        $professions = Profession::query()
+            ->where('is_active', true)
+            ->orderBy('sort_order')
+            ->orderBy('name')
+            ->get();
+        $seriousIntents = SeriousIntent::query()
+            ->orderBy('name')
+            ->get();
+        $maritalStatuses = MasterMaritalStatus::query()
+            ->where('is_active', true)
+            ->orderBy('id')
+            ->get();
 
-        return view('matrimony.profile.index', compact('profiles', 'cities'));
+        $resolvedMaritalStatusId = $request->input('marital_status_id');
+        if (! $resolvedMaritalStatusId && $request->filled('marital_status')) {
+            $resolvedMaritalStatusId = $request->input('marital_status') === 'single'
+                ? MasterMaritalStatus::where('key', 'never_married')->value('id')
+                : MasterMaritalStatus::where('key', $request->input('marital_status'))->value('id');
+        }
 
+        return view('matrimony.profile.index', array_merge(compact(
+            'profiles',
+            'religions',
+            'castes',
+            'subCastes',
+            'professions',
+            'seriousIntents',
+            'maritalStatuses',
+            'resolvedMaritalStatusId',
+            'sort'
+        ), $locationLookups));
+
+    }
+
+    /**
+     * Minimal location dropdown data for /profiles search (Phase-6).
+     *
+     * @return array<string, mixed>
+     */
+    private function buildProfileSearchLocationLookups(Request $request): array
+    {
+        $hintCountry = $request->filled('country_id') ? (int) $request->country_id : null;
+        $hintState = $request->filled('state_id') ? (int) $request->state_id : null;
+        $hintDistrict = $request->filled('district_id') ? (int) $request->district_id : null;
+        $hintTaluka = $request->filled('taluka_id') ? (int) $request->taluka_id : null;
+        $hintCity = $request->filled('city_id') ? (int) $request->city_id : null;
+
+        if ($hintCity) {
+            $cityRow = City::query()->with('taluka.district.state')->find($hintCity);
+            if ($cityRow?->taluka) {
+                $hintTaluka = $hintTaluka ?? (int) $cityRow->taluka_id;
+                $d = $cityRow->taluka->district;
+                if ($d) {
+                    $hintDistrict = $hintDistrict ?? (int) $d->id;
+                    $s = $d->state;
+                    if ($s) {
+                        $hintState = $hintState ?? (int) $s->id;
+                        $hintCountry = $hintCountry ?? (int) $s->country_id;
+                    }
+                }
+            }
+        } elseif ($hintTaluka) {
+            $t = Taluka::query()->with('district.state')->find($hintTaluka);
+            if ($t?->district) {
+                $hintDistrict = $hintDistrict ?? (int) $t->district_id;
+                $s = $t->district->state;
+                if ($s) {
+                    $hintState = $hintState ?? (int) $s->id;
+                    $hintCountry = $hintCountry ?? (int) $s->country_id;
+                }
+            }
+        } elseif ($hintDistrict) {
+            $d = District::query()->with('state')->find($hintDistrict);
+            if ($d?->state) {
+                $hintState = $hintState ?? (int) $d->state_id;
+                $hintCountry = $hintCountry ?? (int) $d->state->country_id;
+            }
+        } elseif ($hintState) {
+            $s = State::query()->find($hintState);
+            if ($s) {
+                $hintCountry = $hintCountry ?? (int) $s->country_id;
+            }
+        }
+
+        $displayCountryId = $request->filled('country_id') ? (int) $request->country_id : $hintCountry;
+        $displayStateId = $request->filled('state_id') ? (int) $request->state_id : $hintState;
+        $displayDistrictId = $request->filled('district_id') ? (int) $request->district_id : $hintDistrict;
+        $displayTalukaId = $request->filled('taluka_id') ? (int) $request->taluka_id : $hintTaluka;
+        $displayCityId = $request->filled('city_id') ? (int) $request->city_id : $hintCity;
+
+        $listCountryId = $hintCountry;
+        $listStateId = $hintState;
+        $listDistrictId = $hintDistrict;
+        $listTalukaId = $hintTaluka;
+
+        $countries = Country::query()->orderBy('name')->get();
+
+        $states = collect();
+        if ($listCountryId) {
+            $states = State::query()->where('country_id', $listCountryId)->orderBy('name')->get();
+        } elseif ($listStateId) {
+            $st = State::query()->find($listStateId);
+            if ($st) {
+                $states = State::query()->where('country_id', $st->country_id)->orderBy('name')->get();
+            }
+        }
+
+        $districts = collect();
+        if ($listStateId) {
+            $districts = District::query()->where('state_id', $listStateId)->orderBy('name')->get();
+        } elseif ($listDistrictId) {
+            $d = District::query()->find($listDistrictId);
+            if ($d) {
+                $districts = District::query()->where('state_id', $d->state_id)->orderBy('name')->get();
+            }
+        }
+
+        $talukas = collect();
+        if ($listDistrictId) {
+            $talukas = Taluka::query()->where('district_id', $listDistrictId)->orderBy('name')->get();
+        } elseif ($listTalukaId) {
+            $t = Taluka::query()->find($listTalukaId);
+            if ($t) {
+                $talukas = Taluka::query()->where('district_id', $t->district_id)->orderBy('name')->get();
+            }
+        }
+
+        $cities = collect();
+        if ($listTalukaId) {
+            $cities = City::query()->where('taluka_id', $listTalukaId)->orderBy('name')->get();
+        } elseif ($hintCity) {
+            $c = City::query()->find($hintCity);
+            if ($c) {
+                $cities = City::query()->where('taluka_id', $c->taluka_id)->orderBy('name')->get();
+            }
+        }
+
+        return [
+            'countries' => $countries,
+            'states' => $states,
+            'districts' => $districts,
+            'talukas' => $talukas,
+            'cities' => $cities,
+            'locationDisplayCountryId' => $displayCountryId,
+            'locationDisplayStateId' => $displayStateId,
+            'locationDisplayDistrictId' => $displayDistrictId,
+            'locationDisplayTalukaId' => $displayTalukaId,
+            'locationDisplayCityId' => $displayCityId,
+        ];
     }
 
     /**
@@ -1123,11 +1392,11 @@ class MatrimonyProfileController extends Controller
         $matches = [];
         $commonGround = [];
 
-        // Define comparison fields (preferences to check) — location handled separately via hierarchy (labels are translation keys)
+        // Define comparison fields (deterministic, stored values only) — location handled separately via hierarchy.
         $preferenceFields = [
             'highest_education' => ['label' => 'Education', 'icon' => '🎓'],
-            'caste' => ['label' => 'Caste', 'icon' => '🗣️'],
-            'marital_status' => ['label' => 'Marital Status', 'icon' => '💑'],
+            'caste_id' => ['label' => 'Caste', 'icon' => '🗣️'],
+            'marital_status_id' => ['label' => 'Marital status', 'icon' => '💑'],
         ];
 
         // Location comparison (hierarchy: city_id = exact match, state_id = partial)
@@ -1144,14 +1413,14 @@ class MatrimonyProfileController extends Controller
             }
             $matches[] = [
                 'field' => 'location',
-                'label' => __('Location'),
+                'label' => 'Location',
                 'icon' => '📍',
                 'matched' => $locationMatched,
             ];
             if ($locationMatched) {
                 $commonGround[] = [
                     'field' => 'location',
-                    'label' => __('Location'),
+                    'label' => 'Location',
                     'icon' => '📍',
                     'value' => $viewedProfile->city_id ? ($viewedProfile->city?->name ?? '—') : ($viewedProfile->state?->name ?? '—'),
                 ];
@@ -1168,14 +1437,14 @@ class MatrimonyProfileController extends Controller
             if ($ageDiff <= 5) {
                 $matches[] = [
                     'field' => 'age',
-                    'label' => __('Age'),
+                    'label' => 'Age',
                     'icon' => '🎂',
                     'matched' => true,
                 ];
             } else {
                 $matches[] = [
                     'field' => 'age',
-                    'label' => __('Age'),
+                    'label' => 'Age',
                     'icon' => '🎂',
                     'matched' => false,
                 ];
@@ -1184,26 +1453,40 @@ class MatrimonyProfileController extends Controller
 
         // Compare other preference fields
         foreach ($preferenceFields as $fieldKey => $fieldInfo) {
-            $viewerValue = $viewerProfile->$fieldKey;
-            $viewedValue = $viewedProfile->$fieldKey;
+            $viewerValue = $viewerProfile->getAttribute($fieldKey);
+            $viewedValue = $viewedProfile->getAttribute($fieldKey);
 
-            if ($viewerValue && $viewedValue) {
-                $isMatch = strtolower(trim($viewerValue)) === strtolower(trim($viewedValue));
+            if ($viewerValue !== null && $viewerValue !== '' && $viewedValue !== null && $viewedValue !== '') {
+                $isMatch = false;
+                if ($fieldKey === 'highest_education') {
+                    $isMatch = strcasecmp(trim((string) $viewerValue), trim((string) $viewedValue)) === 0;
+                } else {
+                    $isMatch = (int) $viewerValue === (int) $viewedValue;
+                }
 
                 $matches[] = [
                     'field' => $fieldKey,
-                    'label' => __($fieldInfo['label']),
+                    'label' => $fieldInfo['label'],
                     'icon' => $fieldInfo['icon'],
                     'matched' => $isMatch,
                 ];
 
                 // Add to common ground if matched
                 if ($isMatch) {
+                    $displayValue = (string) $viewedValue;
+                    if ($fieldKey === 'caste_id') {
+                        $displayValue = (string) ($viewedProfile->caste?->display_label ?? $displayValue);
+                    } elseif ($fieldKey === 'marital_status_id') {
+                        $displayValue = (string) ($viewedProfile->maritalStatus?->label ?? $displayValue);
+                    } elseif ($fieldKey === 'highest_education') {
+                        $displayValue = (string) $viewedValue;
+                    }
+
                     $commonGround[] = [
                         'field' => $fieldKey,
-                        'label' => __($fieldInfo['label']),
+                        'label' => $fieldInfo['label'],
                         'icon' => $fieldInfo['icon'],
-                        'value' => $viewedValue,
+                        'value' => $displayValue,
                     ];
                 }
             }

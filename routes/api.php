@@ -21,6 +21,7 @@ Route::get('/internal/location/search', [LocationSearchController::class, 'searc
 Route::get('/internal/location/states', [LocationHierarchyController::class, 'states']);
 Route::get('/internal/location/districts', [LocationHierarchyController::class, 'districts']);
 Route::get('/internal/location/talukas', [LocationHierarchyController::class, 'talukas']);
+Route::get('/internal/location/cities', [LocationHierarchyController::class, 'cities']);
 Route::post('/internal/location/suggest', [LocationSuggestionController::class, 'store']);
 
 /*
