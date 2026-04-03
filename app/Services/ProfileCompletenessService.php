@@ -176,7 +176,8 @@ class ProfileCompletenessService
                 return "(CASE WHEN {$table}.gender_id IS NOT NULL THEN 1 ELSE 0 END)";
 
             case 'date_of_birth':
-                return "(CASE WHEN {$table}.date_of_birth IS NOT NULL AND {$table}.date_of_birth != '' THEN 1 ELSE 0 END)";
+                // DATE vs '' compare breaks MySQL 8 strict mode (HY000/1525); NULL is the only empty state for DATE.
+                return "(CASE WHEN {$table}.date_of_birth IS NOT NULL THEN 1 ELSE 0 END)";
 
             case 'marital_status':
             case 'marital_status_id':

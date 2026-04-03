@@ -280,6 +280,7 @@ If duplicate detected:
 • No silent merge  
 • Trigger conflict workflow  
 • lifecycle_state = conflict_pending  
+
 ############################################################
 PHASE-5 SSOT ADDENDUM
 DUPLICATE DETECTION REFINEMENT — SHARED CONTACT NUMBER CASE
@@ -2735,6 +2736,3028 @@ Any deviation from this patch = SSOT violation.
 ============================================================
 END OF SSOT v1.1 STRUCTURAL PATCH
 ============================================================
+############################################################
+PHASE-5 SSOT v1.2 — MODULAR ARCHITECTURE GOVERNANCE PATCH
+(GOVERNED MODULAR MONOLITH FREEZE)
+############################################################
+
+Status:
+OFFICIAL APPEND PATCH
+
+Authority:
+This patch extends Phase-5 SSOT architecture governance.
+It clarifies codebase organization, module boundaries,
+dependency rules, lifecycle architecture enforcement,
+and future extraction discipline.
+
+This patch does NOT weaken or override existing Phase-5 laws.
+It only removes architectural ambiguity.
+
+============================================================
+1️⃣ PURPOSE OF THIS PATCH
+============================================================
+
+This patch exists to freeze the final architectural direction
+for laravel-matrimony during Phase-5 and beyond,
+so that future development remains:
+
+• confusion-free
+• repair-friendly
+• developer-scope-friendly
+• governance-safe
+• extraction-ready without architecture drift
+
+This patch is required because the codebase now includes:
+- user-facing website flows
+- admin operational flows
+- intake pipeline flows
+- governed mutation flows
+- normalized profile entities
+- engagement and unlock foundations
+
+Without explicit architectural boundaries,
+future contributors may introduce:
+
+❌ random folder growth
+❌ controller-heavy business logic
+❌ direct cross-feature coupling
+❌ unsafe admin shortcuts
+❌ premature microservice split
+❌ governance drift
+
+This patch freezes the intended structure
+before large-scale refactor or expansion continues.
+
+============================================================
+2️⃣ NON-GOALS (EXPLICITLY NOT AUTHORIZED)
+============================================================
+
+This patch does NOT authorize:
+
+❌ separate repos for backend / admin / frontend in current phase
+❌ microservices split in current phase
+❌ physical database rename / table prefix refactor in current phase
+❌ replacement of MutationService authority
+❌ event-driven replacement of core mutation ordering
+❌ direct inter-module profile mutation shortcuts
+❌ bypass of lifecycle governance
+❌ schema drift outside already-governed SSOT process
+
+This patch is a codebase organization and governance patch,
+NOT a permission for uncontrolled restructuring.
+
+============================================================
+3️⃣ FINAL ARCHITECTURE DECISION (FROZEN)
+============================================================
+
+The official architecture for this project is:
+
+GOVERNED MODULAR MONOLITH
+
+Meaning:
+
+• one repository
+• one primary application
+• one primary database
+• one SSOT authority
+• bounded internal modules
+• governed mutation core
+• optional future extraction only after explicit SSOT approval
+
+This decision is final for current phase.
+
+No contributor may reinterpret current architecture as:
+
+❌ free-form monolith
+❌ plugin-like uncontrolled module sprawl
+❌ service-per-feature microservice architecture
+❌ separate admin app by default
+❌ separate frontend repo by default
+
+Until a future SSOT patch explicitly says otherwise,
+the project remains a governed modular monolith.
+
+============================================================
+4️⃣ CORE LAW REMAINS SUPREME
+============================================================
+
+Nothing in this patch changes the supremacy of existing laws:
+
+• No direct update() calls on profile data
+• All critical mutations through MutationService
+• No silent overwrite
+• No JSON blob storage for structured entities
+• Conflict records mandatory where required
+• Intake raw text immutable
+• Age never stored as profile core age
+• Lifecycle states strictly governed
+• Zero data loss remains mandatory
+
+If any modularization idea conflicts with these laws,
+the modularization idea is invalid.
+
+Core data governance remains above architecture convenience.
+
+============================================================
+5️⃣ OFFICIAL MODULE BOUNDARIES (FROZEN)
+============================================================
+
+The project is officially divided into the following
+logical bounded modules:
+
+A) Core/Governance
+B) Profile
+C) Intake
+D) Engagement
+E) Admin
+F) PublicSite
+G) MemberApp
+H) Infrastructure
+
+These are LOGICAL module boundaries inside one codebase.
+
+They do NOT imply separate deployables in current phase.
+
+------------------------------------------------------------
+A) Core/Governance
+------------------------------------------------------------
+
+Responsible for:
+
+• MutationService authority
+• lifecycle transition governance
+• conflict detection / conflict enforcement
+• duplicate detection governance
+• field lock enforcement
+• profile_change_history guarantees
+• SSOT invariant enforcement
+• canonical field registry / governance helpers
+• transaction boundary discipline
+
+This is the most protected layer.
+
+------------------------------------------------------------
+B) Profile
+------------------------------------------------------------
+
+Responsible for:
+
+• matrimony_profiles domain model
+• profile core fields
+• contacts
+• children
+• education
+• career
+• addresses
+• relatives
+• property
+• horoscope
+• legal cases
+• preferences
+• extended narrative
+• profile read/edit flows
+
+This module owns profile domain shape,
+but does NOT bypass Core/Governance.
+
+------------------------------------------------------------
+C) Intake
+------------------------------------------------------------
+
+Responsible for:
+
+• biodata uploads
+• OCR / AI extraction
+• parsed preview shaping
+• confidence mapping
+• user review flow
+• approval flow
+• intake lock/finalization
+• apply-to-profile orchestration through governed mutation
+
+Intake may prepare data,
+but Intake must never directly mutate profile data
+outside governed mutation authority.
+
+------------------------------------------------------------
+D) Engagement
+------------------------------------------------------------
+
+Responsible for:
+
+• interest
+• shortlist
+• block / don’t show again
+• who viewed
+• contact request
+• contact access / unlock logs
+• report profile / report photo
+• engagement counters / non-core interaction data
+
+Engagement data is separate from profile identity data.
+
+------------------------------------------------------------
+E) Admin
+------------------------------------------------------------
+
+Responsible for:
+
+• moderation surfaces
+• intake review surfaces
+• conflict review / resolution surfaces
+• duplicate review surfaces
+• settings / governance controls
+• admin audit visibility
+• admin operational tools
+
+Admin is NOT a bypass layer.
+Admin actions remain governed.
+
+------------------------------------------------------------
+F) PublicSite
+------------------------------------------------------------
+
+Responsible for:
+
+• public marketing pages
+• public informational content
+• landing pages
+• non-auth product presentation surfaces
+
+PublicSite must not contain private member logic
+or admin operational logic.
+
+------------------------------------------------------------
+G) MemberApp
+------------------------------------------------------------
+
+Responsible for:
+
+• authenticated user profile flows
+• wizard / edit / view profile flows
+• search / browse / discovery flows
+• contact / engagement user flows
+• account-facing product UX
+
+This is the main logged-in matrimony product surface.
+
+------------------------------------------------------------
+H) Infrastructure
+------------------------------------------------------------
+
+Responsible for:
+
+• OCR provider adapters
+• AI provider adapters
+• file/image/pdf handling
+• storage integrations
+• notifications infrastructure
+• queue / job infrastructure
+• external service adapters
+
+Infrastructure must not become the place
+for domain rules or mutation governance.
+
+============================================================
+6️⃣ DEPENDENCY LAW (NON-NEGOTIABLE)
+============================================================
+
+The following dependency rules are frozen:
+
+• Profile must not directly depend on Intake internals
+• Intake must not directly mutate profile data
+• Admin must not bypass governance services
+• Engagement must not rewrite profile identity data
+• PublicSite must not own member domain rules
+• MemberApp must not own mutation governance
+• Infrastructure must not contain business truth
+• Shared reuse must happen through Core/Shared or defined contracts only
+
+Meaning:
+
+Module boundaries are real governance boundaries,
+not just folder labels.
+
+Cross-module convenience shortcuts are prohibited
+if they bypass the intended authority flow.
+
+============================================================
+7️⃣ STATE MACHINE CLARIFICATION (ARCHITECTURE-LEVEL FREEZE)
+============================================================
+
+Lifecycle governance is hereby explicitly recognized
+as an architecture primitive.
+
+Meaning:
+
+• lifecycle_state is a true governed state machine
+• no implicit transitions allowed
+• no controller-side freestyle state changes allowed
+• no listener/job/UI may secretly change lifecycle_state
+• lifecycle transitions must remain inside governed services only
+
+Lifecycle architecture is not a UI concern.
+It is not a route concern.
+It is not a convenience concern.
+
+It is a protected domain-governance concern.
+
+============================================================
+8️⃣ EVENTS / LISTENERS RULE
+============================================================
+
+Events and listeners are allowed,
+but only within strict boundaries.
+
+ALLOWED USES:
+
+• notifications
+• audit fan-out after commit
+• engagement counters
+• async refresh tasks
+• reporting hooks
+• non-critical side effects
+
+NOT ALLOWED:
+
+❌ lifecycle truth changes through listeners
+❌ conflict generation being dependent on listeners
+❌ critical mutation ordering spread across listeners
+❌ history guarantees delegated to listeners
+❌ core transaction truth delegated to event chains
+
+Rule:
+
+Core mutation truth must remain in governed orchestration.
+Events may react after truth is committed,
+but may not become the truth source.
+
+============================================================
+9️⃣ CONTRACT / INTERFACE RULE
+============================================================
+
+Interfaces / contracts are encouraged only where justified.
+
+MANDATORY OR STRONGLY RECOMMENDED FOR:
+
+• external providers
+• OCR adapters
+• AI extraction adapters
+• notification gateways
+• stable module boundaries where multiple implementations may exist
+
+NOT REQUIRED FOR:
+
+• every internal service
+• every query/helper
+• simple domain classes with one implementation
+• artificial abstraction for its own sake
+
+Architecture must remain clean,
+not over-engineered.
+
+============================================================
+🔟 DATABASE OWNERSHIP RULE (LOGICAL, NOT PHYSICAL)
+============================================================
+
+Module ownership of tables is LOGICAL in current phase.
+
+This patch does NOT authorize physical renaming
+of canonical SSOT tables.
+
+Existing canonical table names remain valid and unchanged.
+
+Examples of logical ownership:
+
+Profile-owned:
+- matrimony_profiles
+- profile_contacts
+- profile_children
+- profile_education
+- profile_career
+- profile_addresses
+- profile_photos
+- profile_relatives
+- profile_visibility_settings
+- profile_property_summary
+- profile_property_assets
+- profile_horoscope_data
+- profile_preferences
+- profile_legal_cases
+- profile_extended_attributes
+
+Governance-owned:
+- conflict_records
+- profile_field_locks
+- profile_change_history
+- admin_audit_logs
+- mutation_log
+
+Intake-owned:
+- biodata_intakes
+- bulk_intake_batches (if/when implemented under SSOT)
+
+Engagement-owned:
+- contact_unlock_policy
+- contact_access_log
+- unlock_rules_engine
+- user_engagement_stats
+- contact request / grant tables if implemented
+- profile view logging tables if implemented
+
+Rule:
+
+Logical ownership must be clear in code and documentation,
+but physical rename/prefix migration is NOT allowed in this phase.
+
+============================================================
+1️⃣1️⃣ PHYSICAL DB PREFIX / TABLE RENAME RULE
+============================================================
+
+The idea of module-based table prefixes
+(e.g. p_, i_, e_) is recognized as conceptually useful,
+but is DEFERRED for current project phase.
+
+Therefore:
+
+• no physical table prefix refactor now
+• no rename of canonical SSOT tables now
+• no migration-heavy naming cleanup now
+
+Reason:
+
+Current project already has governed schema,
+existing migrations, existing relations,
+existing foreign keys, and current SSOT references.
+
+In this phase,
+architectural clarity must come from
+logical boundaries and ownership maps,
+not risky physical renaming.
+
+Any future physical naming migration requires:
+
+• separate dedicated SSOT patch
+• explicit migration plan
+• rollback plan
+• relation impact audit
+• code reference audit
+• data safety verification
+
+Without that, table rename is forbidden.
+
+============================================================
+1️⃣2️⃣ FUTURE EXTRACTION RULE
+============================================================
+
+Future extraction is allowed only in a controlled way.
+
+Potential future candidates may include:
+
+• admin app separation
+• mobile API surface separation
+• OCR / AI worker extraction
+• notification worker extraction
+
+But these are future options only.
+
+Before any extraction is allowed,
+the following must already be true:
+
+• module boundaries stable
+• contracts stable
+• mutation governance preserved
+• lifecycle governance preserved
+• no direct DB integrity loss risk introduced
+• explicit SSOT approval written
+
+No contributor may extract a module into a new repo/service
+based only on convenience preference.
+
+============================================================
+1️⃣3️⃣ ADOPTED / REJECTED MATRIX
+============================================================
+
+ADOPTED NOW:
+
+• governed modular monolith
+• explicit module boundaries
+• lifecycle as explicit state machine
+• events/listeners for side effects only
+• logical database ownership map
+• selective contracts/interfaces where justified
+
+REJECTED / DEFERRED FOR CURRENT PHASE:
+
+• separate repos by default
+• microservices by default
+• physical DB prefix refactor
+• table rename cleanup
+• event-driven core mutation
+• interface-for-everything architecture
+• governance bypass for admin convenience
+
+============================================================
+1️⃣4️⃣ AUTHORITATIVE INTERPRETATION RULE
+============================================================
+
+Only rules explicitly adopted in this patch are binding.
+
+The following are NOT authoritative by themselves:
+
+• discussion notes
+• verbal explanations
+• AI suggestions
+• architecture examples
+• comparisons to WordPress / plugin systems
+• external best-practice discussions
+
+Such materials may inspire decisions,
+but they are not binding until written in SSOT.
+
+============================================================
+1️⃣5️⃣ FREEZE CLAUSE
+============================================================
+
+Until a future SSOT patch explicitly overrides this section:
+
+• project architecture remains governed modular monolith
+• module boundaries remain binding
+• MutationService supremacy remains unchanged
+• lifecycle state machine discipline remains unchanged
+• events remain side-effect-only for core truth
+• logical DB ownership remains the approved separation method
+• physical table rename/prefix refactor remains forbidden
+• separate repo/service extraction remains forbidden by default
+
+Any deviation from this patch
+is considered an SSOT violation.
+
+############################################################
+END OF PHASE-5 SSOT v1.2 MODULAR ARCHITECTURE GOVERNANCE PATCH
+############################################################
+
+
+############################################################
+PHASE-5 SSOT v1.3 — CODEBASE STRUCTURE AND SURFACE SEGREGATION PATCH
+(SAME REPOSITORY, SEPARATE SURFACES FREEZE)
+############################################################
+
+Status:
+OFFICIAL APPEND PATCH
+
+Authority:
+This patch extends the modular architecture governance patch.
+It defines how codebase structure must be organized
+inside the same repository and same Laravel application.
+
+This patch clarifies route segregation, controller segregation,
+view segregation, front-end entry segregation,
+and service organization discipline.
+
+This patch does NOT authorize separate repositories.
+This patch defines safe internal separation inside one codebase.
+
+============================================================
+1️⃣ PURPOSE OF THIS PATCH
+============================================================
+
+This patch exists to ensure that backend logic,
+admin operational interfaces,
+public website surfaces,
+member-facing product surfaces,
+and API surfaces do not become mixed together
+inside the same codebase.
+
+The goal is to make the project:
+
+• easier to repair
+• easier to navigate
+• easier to delegate by scope
+• safer for admin changes
+• safer for user-facing UX changes
+• more stable for future extraction planning
+
+Without this patch, future contributors may create:
+
+❌ mixed route files
+❌ shared controllers doing unrelated work
+❌ admin and member Blade logic in the same templates
+❌ public marketing pages coupled to member product flows
+❌ front-end bundle confusion
+❌ service-folder sprawl with unclear ownership
+
+This patch freezes the approved internal separation model.
+
+============================================================
+2️⃣ FINAL DECISION
+============================================================
+
+The project shall remain:
+
+• one repository
+• one Laravel application
+• one governed codebase
+
+But inside that one codebase,
+the following application surfaces must remain clearly separated:
+
+A) PublicSite surface
+B) MemberApp surface
+C) Admin surface
+D) API surface
+E) Console / maintenance surface
+
+These are SURFACE boundaries,
+not separate deployables in current phase.
+
+============================================================
+3️⃣ ROUTE SEGREGATION RULE
+============================================================
+
+Route files must be separated by surface.
+
+Approved direction:
+
+• public web routes
+• member web routes
+• admin web routes
+• member/mobile API routes
+• admin API routes (if/when needed)
+• console or maintenance route definitions where applicable
+
+The project must not continue growing
+through one mixed route file per transport layer
+if that file becomes a dumping ground.
+
+Meaning:
+
+❌ admin flows should not be buried among public/member routes
+❌ member routes should not be mixed with public marketing routes
+❌ API routes should not be treated as a miscellaneous overflow zone
+❌ temporary migration/debug route files must not become permanent architecture
+
+Rule:
+
+Routes must reflect surface ownership clearly.
+
+If a contributor cannot identify whether a route belongs to
+PublicSite, MemberApp, Admin, or API within seconds,
+the route organization is failing SSOT clarity.
+
+============================================================
+4️⃣ CONTROLLER SEGREGATION RULE
+============================================================
+
+Controllers must be organized by application surface.
+
+Approved separation principle:
+
+• Public controllers
+• Member controllers
+• Admin controllers
+• API controllers
+
+A controller must not become a mixed-responsibility entrypoint.
+
+Examples of prohibited controller growth:
+
+❌ one controller serving both admin and member behavior
+❌ one controller containing marketing pages + authenticated flows
+❌ one controller owning both moderation logic and user-facing UX logic
+❌ controller-side business orchestration that belongs in governed services/actions
+
+Rule:
+
+Controllers are transport/surface coordinators only.
+
+They may validate input, call the correct action/service,
+shape response output, and return the correct view/API payload.
+
+They must not become the long-term home of:
+
+❌ lifecycle truth
+❌ mutation governance
+❌ conflict enforcement
+❌ cross-module orchestration shortcuts
+❌ hidden admin bypass logic
+
+============================================================
+5️⃣ VIEW / TEMPLATE SEGREGATION RULE
+============================================================
+
+Blade templates or equivalent server-rendered UI assets
+must be organized by surface ownership.
+
+Approved separation principle:
+
+• public views
+• member views
+• admin views
+• shared components only when truly surface-neutral
+
+This is required because admin UX and member UX
+have different responsibilities, risk levels, and design goals.
+
+Rule:
+
+PublicSite templates must not carry private member logic.
+Admin templates must not be mixed into member templates.
+Member product templates must not become the dumping ground
+for reusable admin fragments.
+
+Shared components are allowed only where the component is:
+
+• truly surface-neutral
+• not governance-sensitive
+• not admin-only disguised as shared
+• not member-only disguised as shared
+
+If a component contains admin assumptions,
+it is not a shared component.
+
+============================================================
+6️⃣ FRONT-END ENTRY SEGREGATION RULE
+============================================================
+
+Front-end entrypoints must reflect surface boundaries.
+
+Approved direction:
+
+• public entry
+• member entry
+• admin entry
+
+This applies to:
+
+• JavaScript entry files
+• CSS entry files
+• front-end build declarations
+• page-specific bundles where needed
+
+Rule:
+
+Admin bundle growth must not affect public/member bundle clarity.
+Public marketing assets must not be coupled to member product behavior.
+Member product assets must not accidentally import admin dependencies.
+
+The objective is not premature complexity.
+The objective is to prevent asset-layer confusion.
+
+============================================================
+7️⃣ SERVICE ORGANIZATION RULE
+============================================================
+
+Flat growth inside generic service folders is not acceptable
+as a long-term architecture direction.
+
+Service classes, actions, queries, builders, parsers,
+or orchestration classes must gradually move toward
+clear module ownership.
+
+Approved principle:
+
+• governance-related logic belongs with governance ownership
+• intake-related logic belongs with intake ownership
+• engagement-related logic belongs with engagement ownership
+• surface-only helpers must not become hidden domain services
+• infrastructure adapters must not be placed beside domain truth casually
+
+This patch does NOT require immediate mass relocation,
+but it freezes the intended future organization rule.
+
+Meaning:
+
+Existing flat structure may temporarily continue,
+but no contributor may justify permanent architecture
+based on historical flatness.
+
+============================================================
+8️⃣ SURFACE VS DOMAIN RULE
+============================================================
+
+This distinction is mandatory:
+
+Surface layer is NOT domain layer.
+
+Surface layer includes:
+
+• routes
+• controllers
+• requests
+• views/templates
+• API response formatting
+• UI-specific helpers
+
+Domain / governed layer includes:
+
+• MutationService authority
+• lifecycle rules
+• conflict rules
+• duplicate logic
+• intake application logic
+• engagement truth
+• policy enforcement
+• cross-entity orchestration
+
+Rule:
+
+Surface concerns may call governed actions/services,
+but may not redefine governed truth.
+
+This protects the project from UI-driven architecture drift.
+
+============================================================
+9️⃣ ADMIN SURFACE RULE
+============================================================
+
+Admin is a separate internal surface,
+not a privileged exception to SSOT.
+
+Therefore:
+
+• admin routes must remain visibly separate
+• admin controllers must remain visibly separate
+• admin views must remain visibly separate
+• admin actions must still use governed services
+• admin convenience must never justify governance bypass
+
+Admin may expose powerful tools,
+but those tools remain subject to
+MutationService, lifecycle discipline,
+conflict discipline, and SSOT invariants.
+
+No contributor may implement:
+
+❌ hidden admin shortcuts
+❌ direct database update paths for convenience
+❌ admin-only bypass of conflict creation where conflict is mandatory
+❌ admin-only lifecycle freestyle transitions
+
+============================================================
+🔟 PUBLICSITE RULE
+============================================================
+
+PublicSite is a distinct presentation surface.
+
+Its responsibilities are limited to:
+
+• landing pages
+• SEO pages
+• informational pages
+• public navigation
+• public trust-building content
+• public lead/introduction surfaces
+
+PublicSite must not become the host for:
+
+❌ member product logic
+❌ admin tools
+❌ private search/discovery internals
+❌ governed profile mutation flows
+
+PublicSite may link into authenticated experiences,
+but must not absorb those responsibilities.
+
+============================================================
+1️⃣1️⃣ MEMBERAPP RULE
+============================================================
+
+MemberApp is the authenticated matrimony product surface.
+
+Its responsibilities include:
+
+• profile creation/edit/view
+• search/browse/discovery
+• preferences handling
+• engagement actions
+• account-facing flows
+• subscription-facing product UX (when implemented)
+
+MemberApp owns user experience,
+but does not own governance truth.
+
+Meaning:
+
+• profile edit screens do not define mutation policy
+• search screens do not define visibility law
+• contact flows do not define unlock truth
+• UI cannot become the authority on lifecycle or conflict resolution
+
+============================================================
+1️⃣2️⃣ API SURFACE RULE
+============================================================
+
+API is a delivery surface,
+not a separate truth system.
+
+This applies to:
+
+• mobile APIs
+• member APIs
+• admin APIs if added
+• async endpoints where applicable
+
+Rule:
+
+The API surface must reuse the same governed domain truth
+as web/member/admin surfaces.
+
+The project must not drift into:
+
+❌ one truth for Blade/web
+❌ another truth for mobile/API
+❌ admin exceptions only in internal endpoints
+❌ duplicate lifecycle logic inside serializers/resources/controllers
+
+Same SSOT truth.
+Multiple delivery surfaces.
+
+============================================================
+1️⃣3️⃣ CONSOLE / MAINTENANCE RULE
+============================================================
+
+Console commands, maintenance routes, migration helpers,
+debug tools, and operational scripts are support surfaces only.
+
+They must not become shadow application surfaces.
+
+Rule:
+
+Any operational helper introduced for migration, repair,
+backfill, inspection, or debugging must be:
+
+• clearly scoped
+• clearly temporary if temporary
+• clearly governed if persistent
+• not treated as an unreviewed permanent mutation path
+
+Temporary operational convenience must not harden into
+an undocumented production architecture path.
+
+============================================================
+1️⃣4️⃣ SHARED COMPONENT RULE
+============================================================
+
+Shared code is allowed,
+but “shared” must not become a hiding place for ambiguity.
+
+Allowed shared categories include:
+
+• UI-neutral shared components
+• shared enums / DTOs / value objects
+• shared formatting primitives
+• shared infrastructure helpers
+• shared contracts where justified
+
+Not allowed:
+
+❌ dumping unrelated helpers into “shared”
+❌ hiding admin-specific UI inside shared components
+❌ hiding member-specific workflow logic inside shared utilities
+❌ bypassing module ownership by calling everything “common”
+
+If something is surface-specific or module-specific,
+it must stay owned there.
+
+============================================================
+1️⃣5️⃣ FOLDER MIGRATION DISCIPLINE
+============================================================
+
+The project is not required to perform one giant folder refactor
+in a single unsafe step.
+
+Approved discipline:
+
+• refactor incrementally
+• preserve behavior first
+• move with ownership clarity
+• do not rename/move unrelated files casually
+• prefer smallest safe structural change
+• keep SSOT rules intact during moves
+
+This patch freezes direction,
+not reckless large-bang execution.
+
+============================================================
+1️⃣6️⃣ DEVELOPER SCOPE / PERMISSION CLARITY RULE
+============================================================
+
+One major purpose of this structure is scoped work delegation.
+
+Therefore:
+
+A contributor working on one surface or one module
+should be able to work with reduced accidental impact.
+
+Examples of valid scoped work:
+
+• admin intake review surface only
+• member search UX only
+• public landing pages only
+• infrastructure provider adapter only
+• engagement reporting flow only
+
+This structure exists partly to support safer delegation,
+code review clarity, and permission-aware development.
+
+============================================================
+1️⃣7️⃣ ADOPTED STRUCTURAL DIRECTION
+============================================================
+
+The following direction is adopted:
+
+• same repository
+• same Laravel application
+• separated internal surfaces
+• separated route ownership
+• separated controller ownership
+• separated view ownership
+• separated front-end entry ownership
+• gradual service/module ownership cleanup
+• no mixed-surface dumping ground architecture
+
+============================================================
+1️⃣8️⃣ REJECTED / FORBIDDEN STRUCTURAL DRIFT
+============================================================
+
+The following structural drift is rejected:
+
+• mixed admin/member/public controllers by convenience
+• mixed Blade folders without surface clarity
+• flat permanent service sprawl as accepted architecture
+• API as separate truth system
+• maintenance/debug paths becoming hidden production mutation paths
+• public/member/admin bundle confusion
+• temporary route hacks becoming permanent architecture
+
+============================================================
+1️⃣9️⃣ FREEZE CLAUSE
+============================================================
+
+Until a future SSOT patch explicitly overrides this section:
+
+• same repository remains the approved structure
+• same Laravel application remains the approved structure
+• surfaces must remain clearly separated internally
+• route segregation remains mandatory
+• controller segregation remains mandatory
+• template segregation remains mandatory
+• front-end entry segregation remains mandatory
+• service ownership cleanup remains the approved direction
+• admin remains governed, not exempt
+• API remains a delivery surface, not a separate truth system
+
+Any deviation from this patch
+is considered an SSOT violation.
+
+############################################################
+END OF PHASE-5 SSOT v1.3 CODEBASE STRUCTURE AND SURFACE SEGREGATION PATCH
+############################################################
+
+
+############################################################
+PHASE-5 SSOT v1.4 — GOVERNANCE EXECUTION BOUNDARY PATCH
+(MUTATION AUTHORITY, LIFECYCLE AUTHORITY, CONFLICT AUTHORITY FREEZE)
+############################################################
+
+Status:
+OFFICIAL APPEND PATCH
+
+Authority:
+This patch extends Phase-5 architectural governance
+by freezing the execution boundaries for critical data truth.
+
+This patch defines:
+- where mutation truth is allowed
+- where lifecycle truth is allowed
+- where conflict truth is allowed
+- where duplicate truth is allowed
+- where history/audit guarantees are enforced
+- what controllers/jobs/listeners/admin tools must never do directly
+
+This patch does NOT weaken any prior SSOT law.
+It makes authority boundaries explicit and binding.
+
+============================================================
+1️⃣ PURPOSE OF THIS PATCH
+============================================================
+
+This patch exists because architecture separation alone
+is not sufficient unless execution authority is also frozen.
+
+A codebase may appear modular,
+yet still become dangerous if contributors introduce:
+
+❌ controller-side profile writes
+❌ listener-side lifecycle changes
+❌ admin-only bypass updates
+❌ job-based mutation shortcuts
+❌ partial history recording
+❌ duplicate/conflict logic scattered across features
+❌ surface-layer ownership of domain truth
+
+This patch prevents that drift
+by defining the only allowed authority paths
+for critical domain truth.
+
+============================================================
+2️⃣ FINAL EXECUTION DECISION
+============================================================
+
+Critical project truth must remain governed.
+
+This means:
+
+• profile mutation truth is governed
+• lifecycle truth is governed
+• conflict truth is governed
+• duplicate truth is governed
+• history truth is governed
+• intake apply truth is governed
+
+These truths are NOT owned by:
+
+❌ controllers
+❌ Blade/UI layers
+❌ request classes
+❌ listeners
+❌ queue jobs
+❌ admin convenience tools
+❌ API resources/serializers
+❌ front-end flows
+
+Surface layers may invoke governed execution,
+but may not become governed execution.
+
+============================================================
+3️⃣ MUTATION AUTHORITY RULE
+============================================================
+
+MutationService remains the supreme mutation authority
+for governed profile data and other SSOT-critical profile mutations.
+
+Meaning:
+
+• direct update() style mutation on governed profile data is forbidden
+• direct controller-side profile persistence is forbidden
+• direct listener/job/admin mutation shortcuts are forbidden
+• critical profile writes must pass through governed mutation orchestration
+• multi-entity synchronization must remain inside governed mutation flow
+• silent overwrite remains forbidden
+• zero data loss protection remains mandatory
+
+If a change modifies governed profile truth,
+that change must pass through the approved governed mutation boundary.
+
+No convenience reason may override this rule.
+
+============================================================
+4️⃣ WHAT COUNTS AS GOVERNED PROFILE TRUTH
+============================================================
+
+The following categories are governed truth
+unless explicitly exempted by future SSOT patch:
+
+• matrimony profile core fields
+• contact data
+• children data
+• education data
+• career data
+• address data
+• relatives data
+• photo-related governed metadata
+• horoscope data
+• legal case data
+• preference data
+• profile narrative / extended attributes where SSOT-governed
+• lifecycle_state
+• visibility-related governed truth
+• conflict-related protected fields
+• fields protected by lock/conflict rules
+
+If a contributor is unsure whether a field is governed,
+the safe assumption is:
+
+TREAT IT AS GOVERNED
+until SSOT explicitly states otherwise.
+
+============================================================
+5️⃣ LIFECYCLE AUTHORITY RULE
+============================================================
+
+Lifecycle truth is a protected authority boundary.
+
+Therefore:
+
+• lifecycle_state may only change through governed lifecycle-aware services
+• no controller may set lifecycle_state directly
+• no listener may silently change lifecycle_state
+• no admin helper may freestyle lifecycle transitions
+• no job may bypass lifecycle transition rules
+• no UI flow may define lifecycle truth
+
+Lifecycle transitions must remain:
+
+• explicit
+• validated
+• traceable
+• policy-compliant
+• consistent with state-machine discipline
+
+Lifecycle is not an implementation detail.
+It is protected domain truth.
+
+============================================================
+6️⃣ CONFLICT AUTHORITY RULE
+============================================================
+
+Conflict creation, conflict preservation,
+and conflict-safe application of protected changes
+must remain inside governed authority.
+
+Therefore:
+
+• protected field collisions must not be silently merged
+• conflict-required scenarios must not bypass conflict creation
+• admin convenience must not skip mandatory conflict records
+• listeners/jobs/controllers must not invent alternate conflict paths
+• conflict handling must remain traceable and reviewable
+
+If SSOT says a category requires conflict handling,
+then conflict handling is mandatory.
+
+No contributor may replace protected conflict flow
+with “latest write wins” behavior.
+
+============================================================
+7️⃣ DUPLICATE AUTHORITY RULE
+============================================================
+
+Duplicate detection and duplicate-governed handling
+must remain part of governed orchestration
+where SSOT requires it.
+
+Therefore:
+
+• duplicate-sensitive flows must not skip duplicate checks casually
+• duplicate checks must not be scattered inconsistently across surfaces
+• admin tools must not silently bypass duplicate-aware handling
+• intake apply flow must respect duplicate-governed logic where applicable
+
+Duplicate logic may evolve,
+but duplicate authority must remain governed and centralized.
+
+============================================================
+8️⃣ HISTORY / AUDIT GUARANTEE RULE
+============================================================
+
+Protected mutation history is not optional.
+
+Where profile_change_history, audit logs,
+or equivalent trace records are required by SSOT,
+they must be produced through governed execution paths.
+
+Therefore:
+
+• history creation must not depend on UI behavior
+• history creation must not depend on front-end honesty
+• history creation must not be delegated to optional listeners
+• history creation must not be skipped for admin convenience
+• protected writes must remain traceable
+
+Rule:
+
+If the mutation is protected,
+its traceability is protected too.
+
+============================================================
+9️⃣ CONTROLLER BOUNDARY RULE
+============================================================
+
+Controllers are not mutation authorities.
+
+Controllers may:
+
+• validate/request input
+• authorize user/admin access
+• call governed actions/services
+• format response/view payload
+• redirect or respond
+
+Controllers may NOT:
+
+❌ perform governed persistence directly
+❌ define lifecycle transitions directly
+❌ create alternate conflict logic
+❌ skip governed orchestration “just for this one flow”
+❌ act as long-term homes for business truth
+
+A controller that directly owns protected truth
+is violating this patch.
+
+============================================================
+🔟 REQUEST / FORM / VALIDATION BOUNDARY RULE
+============================================================
+
+Request classes, validation classes,
+form objects, or similar helpers are input-boundary helpers only.
+
+They may:
+
+• validate shape
+• normalize safe input forms
+• reject invalid payloads
+
+They may NOT:
+
+❌ define lifecycle truth
+❌ define conflict truth
+❌ define duplicate truth
+❌ become hidden mutation engines
+❌ decide protected overwrite rules
+
+Validation is not governance.
+
+============================================================
+1️⃣1️⃣ LISTENER / EVENT BOUNDARY RULE
+============================================================
+
+Listeners are reaction mechanisms,
+not primary truth authorities.
+
+Therefore listeners may:
+
+• notify
+• fan out non-critical side effects
+• trigger reporting hooks
+• update non-critical counters
+• perform async non-core follow-ups
+
+Listeners may NOT:
+
+❌ become required for protected mutation success
+❌ own lifecycle transitions
+❌ own mandatory conflict generation
+❌ own mandatory history guarantees
+❌ own protected data truth
+❌ replace governed orchestration order
+
+If disabling a listener would corrupt protected truth,
+the architecture is violating this patch.
+
+============================================================
+1️⃣2️⃣ JOB / QUEUE BOUNDARY RULE
+============================================================
+
+Jobs and queue workers may execute heavy or async work,
+but may not become freestyle mutation authorities.
+
+Jobs may:
+
+• process OCR
+• process AI extraction
+• perform notifications
+• run async reporting/indexing work
+• execute governed workflows when explicitly designed to do so
+
+Jobs may NOT:
+
+❌ bypass MutationService for governed profile writes
+❌ invent hidden lifecycle transitions
+❌ perform admin-only shortcut persistence
+❌ skip required history/conflict guarantees
+❌ create unreviewed alternate mutation pipelines
+
+Asynchronous execution does not weaken governance.
+
+============================================================
+1️⃣3️⃣ ADMIN ACTION BOUNDARY RULE
+============================================================
+
+Admin tooling is powerful,
+but not exempt from governed execution.
+
+Therefore:
+
+• admin review tools may inspect truth
+• admin tools may trigger governed actions
+• admin tools may resolve through approved authority paths
+• admin tools may expose privileged workflows where SSOT allows
+
+But admin tools may NOT:
+
+❌ directly update protected profile truth by bypass
+❌ skip required conflict creation where mandatory
+❌ skip lifecycle rules for convenience
+❌ skip history recording for convenience
+❌ create secret mutation behavior unavailable to governance review
+
+Admin privilege is not authority override.
+
+============================================================
+1️⃣4️⃣ INTAKE APPLY BOUNDARY RULE
+============================================================
+
+Intake upload, OCR, parsing, preview shaping,
+approval, and review are intake responsibilities.
+
+But final application of intake-derived governed truth
+must pass through governed mutation authority.
+
+Meaning:
+
+• OCR success is not profile truth
+• parser output is not profile truth
+• preview JSON is not profile truth
+• approved intake is not automatic mutation authority by itself
+• final apply must still obey mutation/conflict/lifecycle/history discipline
+
+This rule protects the project from
+“parser output became truth automatically” drift.
+
+============================================================
+1️⃣5️⃣ DUPLICATED EXECUTION PATH RULE
+============================================================
+
+The project must avoid multiple hidden execution paths
+for the same protected truth category.
+
+Examples of prohibited drift:
+
+❌ web flow uses governed mutation, admin flow uses direct model update
+❌ member flow creates history, API flow forgets history
+❌ one intake path creates conflict, another silently overwrites
+❌ one lifecycle transition goes through policy, another hardcodes status
+
+Rule:
+
+For each protected truth category,
+there should be one approved governed authority path,
+not multiple convenience paths.
+
+============================================================
+1️⃣6️⃣ AFTER-COMMIT SIDE EFFECT RULE
+============================================================
+
+After protected truth is committed,
+side effects may occur.
+
+Examples may include:
+
+• notifications
+• analytics/event logging
+• engagement counters
+• refresh/index tasks
+• reporting hooks
+• downstream async processing
+
+But these remain secondary.
+
+Rule:
+
+Truth first.
+Side effects after.
+
+Protected truth must not depend on optional post-commit behavior.
+
+============================================================
+1️⃣7️⃣ TRACEABILITY RULE
+============================================================
+
+Every governed mutation path must remain understandable.
+
+A reviewer should be able to answer:
+
+• where did the mutation enter?
+• where was lifecycle validated?
+• where was conflict handled?
+• where was duplicate logic applied?
+• where was history recorded?
+• where was final truth committed?
+
+If these answers are scattered in hidden UI flows,
+listeners, or ad hoc helper methods,
+the architecture is violating this patch.
+
+============================================================
+1️⃣8️⃣ AUTHORITY CONCENTRATION RULE
+============================================================
+
+Concentrating protected truth authority
+is a feature, not a weakness.
+
+This project intentionally prefers:
+
+• fewer governed mutation entrypoints
+• explicit lifecycle transition ownership
+• explicit conflict ownership
+• explicit duplicate ownership
+• explicit traceability
+
+This is preferable to
+many convenient but inconsistent mutation paths.
+
+============================================================
+1️⃣9️⃣ ADOPTED AUTHORITY MODEL
+============================================================
+
+The following model is adopted:
+
+• MutationService (or approved governed mutation layer) owns protected mutation truth
+• governed lifecycle-aware service owns lifecycle truth
+• governed conflict-aware layer owns conflict truth
+• governed duplicate-aware layer owns duplicate handling where required
+• governed history/audit layer owns protected trace guarantees
+• surface layers call authority, but do not replace authority
+
+============================================================
+2️⃣0️⃣ REJECTED EXECUTION DRIFT
+============================================================
+
+The following are rejected:
+
+• controller-owned protected persistence
+• listener-owned lifecycle truth
+• job-owned governance bypass
+• admin-only secret write paths
+• validation-layer overwrite policy
+• UI-defined truth rules
+• optional history for protected writes
+• scattered duplicate/conflict handling
+• parser output becoming truth without governed apply
+
+============================================================
+2️⃣1️⃣ FREEZE CLAUSE
+============================================================
+
+Until a future SSOT patch explicitly overrides this section:
+
+• MutationService authority remains binding
+• lifecycle authority remains governed
+• conflict authority remains governed
+• duplicate authority remains governed
+• protected history/audit guarantees remain mandatory
+• controllers remain non-authoritative
+• listeners remain non-authoritative for core truth
+• jobs remain non-authoritative for protected truth unless explicitly governed
+• admin remains governed, not exempt
+• intake apply remains governed, not automatic truth
+
+Any deviation from this patch
+is considered an SSOT violation.
+
+############################################################
+END OF PHASE-5 SSOT v1.4 GOVERNANCE EXECUTION BOUNDARY PATCH
+############################################################
+
+
+############################################################
+PHASE-5 SSOT v1.5 — REFACTOR ROLLOUT AND SAFE MIGRATION DISCIPLINE PATCH
+(NO BIG-BANG REFACTOR / SMALLEST SAFE CHANGE FREEZE)
+############################################################
+
+Status:
+OFFICIAL APPEND PATCH
+
+Authority:
+This patch defines how major structural refactor,
+module separation work, surface segregation work,
+and governed architecture rollout must be executed safely.
+
+This patch exists to prevent architecture-improving work
+from becoming stability-destroying work.
+
+This patch applies to:
+- folder moves
+- class relocation
+- route segregation
+- controller segregation
+- view segregation
+- service ownership cleanup
+- governance hardening refactors
+- architecture cleanup related to Phase-5 modularization
+
+============================================================
+1️⃣ PURPOSE OF THIS PATCH
+============================================================
+
+This patch exists because even correct architecture decisions
+can damage the project if executed recklessly.
+
+The project must not attempt architectural cleanup
+through uncontrolled large-bang refactor behavior such as:
+
+❌ moving too many files at once
+❌ renaming unrelated files together
+❌ changing structure and behavior in the same unsafe step
+❌ mixing governance refactor with feature delivery randomly
+❌ introducing hidden breakage in routes/views/controllers
+❌ performing mass cleanup without verification discipline
+❌ using “architecture improvement” as justification for risky drift
+
+This patch freezes the approved rollout discipline.
+
+============================================================
+2️⃣ FINAL ROLLOUT DECISION
+============================================================
+
+All major refactor work under Phase-5 modular architecture
+must follow:
+
+SMALLEST SAFE CHANGE FIRST
+
+Meaning:
+
+• preserve behavior before improving elegance
+• refactor in bounded steps
+• separate structural move from logic change where possible
+• verify after each bounded step
+• stop drift before it spreads
+• prefer sequence over spectacle
+
+The project explicitly rejects
+“one giant cleanup PR/patch” as the default method
+for architecture refactor.
+
+============================================================
+3️⃣ NO BIG-BANG REFACTOR RULE
+============================================================
+
+The following are forbidden unless a future SSOT patch
+explicitly approves an exceptional case:
+
+❌ giant file move + logic rewrite + route rewrite in one step
+❌ controller rewrite + service rewrite + UI rewrite in one step
+❌ module split + DB naming cleanup + API rewrite in one step
+❌ broad search/replace architecture edits without bounded review
+❌ “we will fix fallout later” refactor planning
+
+Rule:
+
+If a refactor cannot be understood, verified,
+and rolled back in bounded form,
+it is too large for the current phase.
+
+============================================================
+4️⃣ MOVE-ONLY VS BEHAVIOR-CHANGE RULE
+============================================================
+
+Contributors must distinguish between:
+
+A) structural moves
+B) behavior changes
+
+A structural move includes:
+
+• folder relocation
+• namespace cleanup
+• route file relocation without semantic change
+• Blade/view relocation without semantic change
+• controller regrouping without behavior change
+• service class ownership relocation without logic change
+
+A behavior change includes:
+
+• mutation logic change
+• lifecycle rule change
+• conflict handling change
+• visibility/search behavior change
+• parser behavior change
+• approval/apply behavior change
+• authorization/policy behavior change
+• UI interaction/flow change that affects business outcome
+
+Rule:
+
+Where possible,
+structural move and behavior change must not be mixed
+inside the same unsafe step.
+
+============================================================
+5️⃣ GOVERNANCE-FIRST REFACTOR RULE
+============================================================
+
+If any structural refactor touches SSOT-critical areas,
+governance clarity must come before broad relocation.
+
+Meaning:
+
+Before wide refactor continues,
+the project must first freeze:
+
+• authority boundaries
+• lifecycle discipline
+• conflict discipline
+• mutation discipline
+• admin non-bypass discipline
+• surface segregation direction
+
+This is why governance patches come before execution work.
+
+No contributor may claim
+“we will define the rules after refactor”.
+
+============================================================
+6️⃣ EXACT SCOPE RULE
+============================================================
+
+Each refactor step must have a sharply defined scope.
+
+A valid refactor step should be describable as:
+
+• move only admin routes into segregated route ownership
+• separate member vs admin controllers for one feature area
+• isolate intake views from admin generic templates
+• relocate one service cluster to governed ownership folder
+• introduce one surface-specific front-end entry split
+• harden one governed execution boundary
+
+An invalid refactor step sounds like:
+
+❌ reorganize whole app
+❌ clean architecture everywhere
+❌ fix all folders
+❌ rewrite services properly
+❌ modularize everything in one pass
+
+Rule:
+
+If scope is vague,
+execution will become unsafe.
+
+============================================================
+7️⃣ NO UNRELATED FILE EDIT RULE
+============================================================
+
+Architecture refactor does not authorize touching unrelated files.
+
+Therefore:
+
+• no unrelated style changes
+• no unrelated formatting sweeps
+• no unrelated naming cleanup
+• no unrelated feature tweaks
+• no opportunistic changes “while we are here”
+• no hidden bugfix bundles mixed casually into structural work
+
+This rule exists to preserve review clarity.
+
+A refactor should not become impossible to review
+because unrelated edits were mixed in.
+
+============================================================
+8️⃣ VERIFICATION AFTER EACH STEP RULE
+============================================================
+
+Every bounded refactor step must include verification.
+
+Verification may include, as applicable:
+
+• route loading verification
+• page rendering verification
+• admin surface verification
+• member flow verification
+• intake preview/apply verification
+• governed mutation verification
+• lifecycle integrity verification
+• test execution where available
+• artisan command verification where applicable
+
+Rule:
+
+A structural step is not complete
+until its affected behavior has been rechecked.
+
+============================================================
+9️⃣ ROLLBACK CLARITY RULE
+============================================================
+
+Every significant refactor step
+must be easy to undo if needed.
+
+Meaning:
+
+• bounded change sets
+• no accidental mega-diff
+• no hidden coupled edits
+• no unexplained namespace explosions
+• no move chain that cannot be traced backward
+
+If rollback is unclear,
+the step is too large or too messy.
+
+============================================================
+🔟 ORDER OF EXECUTION RULE
+============================================================
+
+Approved high-level execution order is:
+
+1. governance freeze
+2. surface segregation freeze
+3. execution boundary freeze
+4. bounded structural cleanup
+5. ownership-based relocation
+6. selective behavior hardening
+7. optional future extraction preparation
+
+Meaning:
+
+Do not start with premature extraction.
+Do not start with aesthetic cleanup.
+Do not start with DB renaming.
+Do not start with folder beauty over authority clarity.
+
+Authority first.
+Structure second.
+Polish later.
+
+============================================================
+1️⃣1️⃣ ROUTE REFACTOR DISCIPLINE
+============================================================
+
+When route segregation is performed,
+it must be done with minimal behavior drift.
+
+Approved pattern:
+
+• preserve route behavior first
+• preserve middleware intent first
+• preserve authorization intent first
+• preserve naming/URL compatibility where required
+• relocate by surface ownership gradually
+
+Do not use route segregation
+as an excuse to silently alter product behavior.
+
+============================================================
+1️⃣2️⃣ CONTROLLER REFACTOR DISCIPLINE
+============================================================
+
+When controller segregation is performed:
+
+• keep controllers thin
+• avoid injecting new business truth into controllers
+• move orchestration toward governed services/actions
+• preserve existing authorized behavior unless explicitly changing it
+• separate by surface and responsibility, not by arbitrary aesthetics
+
+The objective is clarity and safety,
+not controller churn for its own sake.
+
+============================================================
+1️⃣3️⃣ VIEW / TEMPLATE REFACTOR DISCIPLINE
+============================================================
+
+When views/templates are reorganized:
+
+• preserve rendered behavior first
+• preserve user/admin journey continuity first
+• avoid mixing template relocation with unrelated design rewrite
+• move by surface ownership
+• keep shared components truly shared
+• do not hide admin/member logic in shared templates
+
+UI cleanup may happen later,
+but structural clarity must not break current flows.
+
+============================================================
+1️⃣4️⃣ SERVICE / MODULE RELOCATION DISCIPLINE
+============================================================
+
+When services/actions/queries/builders/parsers are relocated:
+
+• relocate by ownership
+• avoid logic rewrites during relocation where possible
+• preserve public entrypoints temporarily if needed
+• deprecate gradually if transitional shims are required
+• keep governed truth stable during movement
+
+A service move must not accidentally become
+a mutation rule rewrite.
+
+============================================================
+1️⃣5️⃣ BEHAVIOR CHANGE DISCIPLINE
+============================================================
+
+If behavior change is intentionally included,
+it must be declared as behavior change,
+not disguised as cleanup.
+
+Examples:
+
+• lifecycle transition hardening
+• conflict creation tightening
+• intake apply rule correction
+• visibility enforcement correction
+• duplicate handling correction
+• admin action restriction hardening
+
+Rule:
+
+Behavior-changing refactor must be explicit,
+scoped, and verified.
+
+============================================================
+1️⃣6️⃣ TEMPORARY TRANSITIONAL CODE RULE
+============================================================
+
+Temporary transitional code is allowed only when necessary,
+but it must remain disciplined.
+
+Allowed only if it:
+
+• reduces rollout risk
+• preserves compatibility during bounded migration
+• is clearly temporary
+• does not bypass SSOT laws
+• does not create hidden second truth systems
+
+Not allowed:
+
+❌ indefinite transitional duplication
+❌ silent fallback behavior that weakens governance
+❌ undocumented alias paths
+❌ hidden old/new mixed mutation behavior
+
+Temporary code must not become permanent ambiguity.
+
+============================================================
+1️⃣7️⃣ DOCUMENTED OWNERSHIP RULE
+============================================================
+
+As refactor progresses,
+ownership clarity must improve.
+
+Meaning:
+
+• route ownership should become clearer
+• controller ownership should become clearer
+• module ownership should become clearer
+• service ownership should become clearer
+• surface boundaries should become clearer
+
+If a refactor step makes ownership less clear,
+it is moving in the wrong direction.
+
+============================================================
+1️⃣8️⃣ TEST / CHECK DISCIPLINE RULE
+============================================================
+
+Where tests exist or can safely validate behavior,
+they should be used as guardrails.
+
+Where tests do not fully exist,
+manual verification discipline becomes mandatory.
+
+Refactor confidence must come from:
+• bounded scope
+• explicit verification
+• traceability
+• rollback readiness
+
+Not from optimism.
+
+============================================================
+1️⃣9️⃣ DELIVERY DISCIPLINE RULE
+============================================================
+
+Architecture refactor should be delivered in reviewable units.
+
+A good unit is:
+
+• small enough to review carefully
+• meaningful enough to reduce confusion
+• safe enough to verify
+• isolated enough to roll back
+
+The project rejects architecture work
+that is technically impressive
+but operationally unreviewable.
+
+============================================================
+2️⃣0️⃣ ADOPTED SAFE REFACTOR MODEL
+============================================================
+
+The following refactor model is adopted:
+
+• SSOT first
+• bounded steps
+• smallest safe change
+• move-only where possible
+• explicit behavior change when needed
+• verify after each step
+• avoid unrelated edits
+• keep rollback simple
+• preserve governance during movement
+
+============================================================
+2️⃣1️⃣ REJECTED REFACTOR BEHAVIOR
+============================================================
+
+The following are rejected:
+
+• cleanup everything at once
+• move and rewrite everything together
+• architecture by broad search/replace
+• verification-later mindset
+• mixing unrelated edits into refactor
+• structure-first while authority remains undefined
+• permanent ambiguity through transitional hacks
+• “this is too big to review properly” delivery
+
+============================================================
+2️⃣2️⃣ FREEZE CLAUSE
+============================================================
+
+Until a future SSOT patch explicitly overrides this section:
+
+• big-bang architecture refactor remains forbidden
+• smallest safe change remains the default
+• move-only vs behavior-change distinction remains mandatory
+• verification after each bounded step remains mandatory
+• unrelated edits remain forbidden in structural refactor
+• rollback clarity remains mandatory
+• incremental modularization remains the approved rollout method
+
+Any deviation from this patch
+is considered an SSOT violation.
+
+############################################################
+END OF PHASE-5 SSOT v1.5 REFACTOR ROLLOUT AND SAFE MIGRATION DISCIPLINE PATCH
+############################################################
+
+############################################################
+PHASE-5 SSOT v1.6 — MODULE OWNERSHIP MAP AND CANONICAL RESPONSIBILITY PATCH
+(CANONICAL OWNERSHIP FREEZE)
+############################################################
+
+Status:
+OFFICIAL APPEND PATCH
+
+Authority:
+This patch defines canonical ownership of entities,
+tables, feature responsibilities, and future code placement direction
+inside the governed modular monolith.
+
+This patch exists to remove ambiguity such as:
+- which module owns which truth
+- where new code should belong
+- which module may read vs mutate vs orchestrate
+- which surface may expose a feature
+- which boundaries must remain protected
+
+This patch does NOT authorize physical database renaming.
+This patch defines LOGICAL ownership only.
+
+============================================================
+1️⃣ PURPOSE OF THIS PATCH
+============================================================
+
+This patch exists because modular architecture is not complete
+until ownership is explicit.
+
+Without explicit ownership,
+future contributors may introduce:
+
+❌ feature logic in the wrong module
+❌ duplicate ownership of the same truth
+❌ admin code owning domain truth
+❌ intake code behaving like profile truth owner
+❌ engagement flows rewriting identity data
+❌ infrastructure adapters leaking into domain ownership
+❌ unclear file placement for new work
+
+This patch freezes the canonical ownership map.
+
+============================================================
+2️⃣ OWNERSHIP PRINCIPLE
+============================================================
+
+Each protected truth category must have:
+
+• one canonical owner
+• one governed mutation authority where required
+• one clear placement direction for future code
+• one reviewable responsibility boundary
+
+A module may expose, coordinate, or read another module’s truth
+only through approved boundaries.
+
+No truth category should have
+multiple casual owners.
+
+============================================================
+3️⃣ OFFICIAL MODULE OWNERS
+============================================================
+
+The canonical module owners are:
+
+A) Core/Governance
+B) Profile
+C) Intake
+D) Engagement
+E) Admin
+F) PublicSite
+G) MemberApp
+H) Infrastructure
+
+These owners are logical responsibility owners.
+They are not separate deployables in current phase.
+
+============================================================
+4️⃣ CORE/GOVERNANCE — CANONICAL OWNERSHIP
+============================================================
+
+Core/Governance canonically owns:
+
+• MutationService authority
+• lifecycle transition rules
+• conflict handling rules
+• duplicate-governed protection rules
+• field lock rules
+• protected overwrite rules
+• audit/history guarantees for protected writes
+• canonical field governance
+• mutation traceability discipline
+• protected transaction ordering
+• SSOT invariant enforcement
+
+Core/Governance does NOT own UI surfaces.
+
+Core/Governance may be called by other modules,
+but may not be bypassed where governance applies.
+
+Examples of Governance-owned truth artifacts include:
+• lifecycle_state governance
+• conflict_records ownership logic
+• profile_change_history guarantee logic
+• profile_field_locks governance logic
+• mutation_log / equivalent governed trace logic
+• protected rule evaluation helpers
+
+============================================================
+5️⃣ PROFILE — CANONICAL OWNERSHIP
+============================================================
+
+Profile canonically owns profile identity truth and profile domain shape.
+
+This includes:
+
+• matrimony_profiles
+• profile core identity fields
+• profile_contacts
+• profile_children
+• profile_education
+• profile_career
+• profile_addresses
+• profile_relatives
+• profile_photos governed metadata
+• profile_visibility_settings governed visibility truth
+• profile_property_summary
+• profile_property_assets
+• profile_horoscope_data
+• profile_preferences
+• profile_legal_cases
+• profile_extended_attributes or equivalent governed narrative/profile detail tables
+
+Profile owns the structure and meaning
+of profile-related data.
+
+However:
+
+Profile does NOT bypass Governance.
+Profile does NOT self-authorize protected overwrite.
+Profile does NOT define lifecycle freestyle.
+Profile does NOT own conflict bypass authority.
+
+============================================================
+6️⃣ INTAKE — CANONICAL OWNERSHIP
+============================================================
+
+Intake canonically owns biodata ingestion pipeline truth.
+
+This includes:
+
+• biodata_intakes
+• intake upload metadata
+• OCR extraction artifacts
+• AI extraction artifacts
+• raw transcription handling
+• parsed preview payload shaping
+• confidence mapping
+• intake review status
+• intake approval/review workflow
+• intake parsing retries / extraction retries
+• intake-origin diagnostics
+• intake batch orchestration if introduced later under SSOT
+
+Intake owns intake pipeline truth.
+
+But Intake does NOT own final profile truth.
+
+Therefore:
+
+• OCR output is Intake-owned intermediate truth
+• parser output is Intake-owned intermediate truth
+• preview JSON is Intake-owned intermediate truth
+• approved intake is still not equivalent to direct profile mutation authority
+
+Final application into governed profile truth
+must pass through governed mutation authority.
+
+============================================================
+7️⃣ ENGAGEMENT — CANONICAL OWNERSHIP
+============================================================
+
+Engagement canonically owns interaction truth
+that is distinct from profile identity truth.
+
+This includes:
+
+• interests
+• shortlists
+• blocks / don’t show again
+• profile views
+• contact requests
+• contact access / unlock logs
+• report profile / report photo flows
+• engagement counters
+• non-core interaction analytics if governed under this module
+• recommendation inputs derived from interaction behavior if/when added under SSOT
+
+Engagement owns interaction history and interaction behavior,
+but does NOT own profile identity truth.
+
+Therefore:
+
+• Engagement may read profile truth
+• Engagement may reference profile visibility truth
+• Engagement may enforce interaction policies through approved boundaries
+
+But Engagement may NOT:
+• rewrite profile identity data casually
+• redefine lifecycle truth
+• bypass governance for protected fields
+
+============================================================
+8️⃣ ADMIN — CANONICAL OWNERSHIP
+============================================================
+
+Admin canonically owns operational and moderation surfaces.
+
+This includes:
+
+• moderation screens
+• intake review screens
+• conflict resolution screens
+• duplicate review screens
+• settings/governance control surfaces
+• admin dashboards
+• admin inspection tools
+• admin visibility into audit/governed traces
+• admin operational workflows allowed by SSOT
+
+Admin owns operational presentation and privileged orchestration surfaces.
+
+Admin does NOT own protected truth itself.
+
+Therefore:
+
+• Admin may inspect
+• Admin may trigger approved governed actions
+• Admin may resolve through approved workflows
+
+But Admin may NOT:
+• become a second mutation authority
+• become a second lifecycle authority
+• become a bypass around conflict rules
+• become a bypass around protected history guarantees
+
+============================================================
+9️⃣ PUBLICSITE — CANONICAL OWNERSHIP
+============================================================
+
+PublicSite canonically owns public-facing marketing and informational presentation.
+
+This includes:
+
+• landing pages
+• informational pages
+• public trust-building content
+• public SEO content
+• public navigation and presentation
+• public introduction or lead capture surfaces if allowed by product scope
+
+PublicSite does NOT own authenticated matrimony product truth.
+
+PublicSite does NOT own:
+• member search logic
+• admin tooling
+• protected profile mutation
+• engagement truth
+• lifecycle truth
+
+============================================================
+🔟 MEMBERAPP — CANONICAL OWNERSHIP
+============================================================
+
+MemberApp canonically owns authenticated user-facing product experience.
+
+This includes:
+
+• profile create/edit/view screens
+• browse/search/discovery screens
+• member preferences screens
+• engagement action screens
+• account-facing product UX
+• user journey orchestration across approved product flows
+• subscription-facing member product UX if introduced later under SSOT
+
+MemberApp owns user experience orchestration,
+but does NOT own governance truth.
+
+MemberApp may expose profile editing flows,
+but does not define protected overwrite policy.
+
+MemberApp may expose search/discovery,
+but does not define lifecycle eligibility truth.
+
+MemberApp may expose contact flows,
+but does not define unlock truth by itself.
+
+============================================================
+1️⃣1️⃣ INFRASTRUCTURE — CANONICAL OWNERSHIP
+============================================================
+
+Infrastructure canonically owns external and technical adapter responsibilities.
+
+This includes:
+
+• OCR provider adapters
+• AI provider adapters
+• file storage adapters
+• image/pdf/document processing utilities
+• queue infrastructure
+• notification gateway integrations
+• external vendor communication code
+• technical integration helpers
+
+Infrastructure does NOT own domain truth.
+
+Infrastructure may transport data,
+process files,
+or connect external services,
+but it must not become the final authority on:
+
+• lifecycle truth
+• conflict truth
+• protected mutation truth
+• duplicate-governed truth
+• profile identity meaning
+
+============================================================
+1️⃣2️⃣ CANONICAL TABLE OWNERSHIP MAP
+============================================================
+
+Logical canonical ownership map is frozen as follows.
+
+Profile-owned tables / truth areas:
+• matrimony_profiles
+• profile_contacts
+• profile_children
+• profile_education
+• profile_career
+• profile_addresses
+• profile_relatives
+• profile_photos
+• profile_visibility_settings
+• profile_property_summary
+• profile_property_assets
+• profile_horoscope_data
+• profile_preferences
+• profile_legal_cases
+• profile_extended_attributes
+
+Governance-owned tables / truth areas:
+• conflict_records
+• profile_field_locks
+• profile_change_history
+• mutation_log
+• admin_audit_logs
+• lifecycle-governance support records if introduced later under SSOT
+
+Intake-owned tables / truth areas:
+• biodata_intakes
+• OCR/transcription/extraction support records if introduced later under SSOT
+• bulk_intake_batches if introduced later under SSOT
+
+Engagement-owned tables / truth areas:
+• profile views tables if implemented
+• shortlist tables if implemented
+• interest tables if implemented
+• block / don’t-show-again tables if implemented
+• contact request / unlock / access logging tables if implemented
+• interaction reporting tables if implemented
+
+Admin-owned persistent truth is limited.
+Admin primarily owns surfaces and approved workflows,
+not a separate protected truth store.
+
+============================================================
+1️⃣3️⃣ READ / WRITE / ORCHESTRATE DISTINCTION
+============================================================
+
+Ownership also implies operation discipline.
+
+A module may:
+
+A) own truth
+B) read truth
+C) orchestrate truth through approved authority
+D) expose UI/API for truth
+
+These are not the same.
+
+Examples:
+
+• Intake may prepare data, but not directly own final profile mutation
+• Admin may review and trigger, but not bypass governance
+• MemberApp may expose profile edit UX, but not define overwrite truth
+• Engagement may reference profile visibility, but not redefine profile identity
+• Infrastructure may process OCR, but not define acceptance truth
+
+Rule:
+
+Reading or exposing a truth category
+does not equal owning it.
+
+============================================================
+1️⃣4️⃣ NEW CODE PLACEMENT RULE
+============================================================
+
+Any new file, class, action, query, controller, view,
+or helper introduced after this patch
+must be placed according to canonical ownership first.
+
+Questions that must be answered before placement:
+
+• Which module owns this truth?
+• Is this surface code or domain code?
+• Is this governed truth or only presentation support?
+• Is this a provider adapter or a business rule?
+• Is this orchestration or final authority?
+
+Wrong placement is an architecture problem,
+even if the code “works”.
+
+============================================================
+1️⃣5️⃣ CROSS-MODULE COORDINATION RULE
+============================================================
+
+Cross-module coordination is allowed only when ownership remains clear.
+
+Examples of valid coordination:
+
+• Intake calls governed apply path for approved profile mutation
+• MemberApp calls profile/governance-backed edit flow
+• Admin invokes governed conflict resolution workflow
+• Engagement reads approved visibility truth before action
+• Infrastructure provides OCR/AI results to Intake
+
+Examples of invalid coordination:
+
+❌ Intake writing profile truth directly
+❌ Admin redefining lifecycle policy directly
+❌ Engagement changing profile identity fields directly
+❌ Infrastructure deciding acceptance/governance truth directly
+❌ PublicSite carrying authenticated member business logic
+
+============================================================
+1️⃣6️⃣ SURFACE OWNERSHIP VS TRUTH OWNERSHIP RULE
+============================================================
+
+A surface may expose a feature
+without owning its truth.
+
+Examples:
+
+• Admin surface may expose conflict resolution,
+  but Governance owns conflict truth rules
+• MemberApp may expose profile edit forms,
+  but Governance/Profile own mutation truth
+• PublicSite may expose public profile presentation later if allowed,
+  but does not own underlying profile identity truth
+• API may deliver search results,
+  but does not own lifecycle eligibility truth
+
+This distinction is mandatory.
+
+============================================================
+1️⃣7️⃣ CANONICAL RESPONSIBILITY TEST
+============================================================
+
+If uncertainty exists,
+the following test must be applied:
+
+1. What truth is being changed or interpreted?
+2. Which module canonically owns that truth?
+3. Is the code surface-only, orchestration, or final authority?
+4. Does the proposed placement preserve traceability?
+5. Does the proposed placement preserve SSOT governance?
+
+If these questions cannot be answered cleanly,
+the placement is not yet acceptable.
+
+============================================================
+1️⃣8️⃣ ADOPTED OWNERSHIP MODEL
+============================================================
+
+The following ownership model is adopted:
+
+• Governance owns protected rules and authority boundaries
+• Profile owns profile identity truth shape
+• Intake owns ingestion pipeline truth
+• Engagement owns interaction truth
+• Admin owns privileged operational surfaces
+• PublicSite owns public presentation
+• MemberApp owns authenticated product presentation
+• Infrastructure owns technical adapters and external integrations
+
+============================================================
+1️⃣9️⃣ REJECTED OWNERSHIP DRIFT
+============================================================
+
+The following ownership drift is rejected:
+
+• Admin owning core truth directly
+• Intake owning final profile truth
+• Engagement owning identity truth
+• Infrastructure owning business truth
+• PublicSite absorbing member product logic
+• MemberApp absorbing governance authority
+• duplicate ownership of the same protected truth category
+• “temporary” file placement becoming permanent ambiguity
+
+============================================================
+2️⃣0️⃣ FREEZE CLAUSE
+============================================================
+
+Until a future SSOT patch explicitly overrides this section:
+
+• canonical module ownership remains binding
+• logical table ownership map remains binding
+• new code placement must follow canonical ownership
+• read/expose/orchestrate distinctions remain mandatory
+• cross-module coordination must preserve ownership clarity
+• Admin remains a surface owner, not a truth owner
+• Intake remains an ingestion owner, not final profile truth owner
+• Infrastructure remains an adapter owner, not governance owner
+
+Any deviation from this patch
+is considered an SSOT violation.
+
+############################################################
+END OF PHASE-5 SSOT v1.6 MODULE OWNERSHIP MAP AND CANONICAL RESPONSIBILITY PATCH
+############################################################
+
+############################################################
+PHASE-5 SSOT v1.7 — IMPLEMENTATION GATE, REVIEW CHECKLIST,
+AND REFACTOR ACCEPTANCE PATCH
+(REFRACTOR READINESS / REVIEW / DONE-STATE FREEZE)
+############################################################
+
+Status:
+OFFICIAL APPEND PATCH
+
+Authority:
+This patch defines the mandatory execution gate,
+review checklist, acceptance criteria,
+and done-state requirements for Phase-5 modular refactor work.
+
+This patch applies to:
+- structural refactor
+- module separation work
+- surface segregation work
+- governance hardening work
+- ownership-based file relocation
+- route/controller/view segregation
+- governed execution boundary hardening
+
+This patch exists to prevent:
+- starting refactor without readiness
+- merging unsafe refactor steps
+- unclear review standards
+- false “done” claims
+- architecture drift hidden behind partial cleanup
+
+============================================================
+1️⃣ PURPOSE OF THIS PATCH
+============================================================
+
+This patch exists because good architecture direction
+still fails if execution readiness is weak,
+review discipline is weak,
+or acceptance criteria are vague.
+
+Without a formal implementation gate,
+future contributors may:
+
+❌ start structural work before governance is clear
+❌ merge refactor that is only partially safe
+❌ claim completion without verification
+❌ move files without ownership clarity
+❌ mix unfinished transition state into production paths
+❌ leave hidden SSOT violations under “cleanup in progress”
+
+This patch freezes the rules
+for when refactor work may start,
+how it must be reviewed,
+and when it may be considered complete.
+
+============================================================
+2️⃣ REFACTOR START GATE
+============================================================
+
+No modular refactor step may begin
+unless the following are already clear for that step:
+
+• exact scope
+• exact affected files or ownership area
+• whether it is move-only or behavior-changing
+• affected surface/module
+• affected governance implications
+• expected verification method
+• rollback feasibility
+
+If these are not clear,
+the step is not ready.
+
+Rule:
+
+Refactor readiness is mandatory.
+“Start first, define later” is forbidden.
+
+============================================================
+3️⃣ REQUIRED PRE-EXECUTION QUESTIONS
+============================================================
+
+Before any bounded refactor step starts,
+the following questions must be answerable:
+
+1. What exact problem is this step solving?
+2. Is this structural-only or behavior-changing?
+3. Which module/surface owns this step?
+4. Does this touch governed truth?
+5. Does this touch lifecycle/conflict/history/mutation boundaries?
+6. Which routes/controllers/views/services are affected?
+7. How will success be verified?
+8. How can this step be rolled back if needed?
+9. What must explicitly NOT change in this step?
+10. Does this create any temporary transition code?
+
+If these questions are not answerable,
+the refactor step is not SSOT-ready.
+
+============================================================
+4️⃣ EXACT SCOPE DECLARATION RULE
+============================================================
+
+Every refactor step must have an exact declared scope.
+
+That declaration must make clear:
+
+• what is in scope
+• what is out of scope
+• what behavior must remain unchanged
+• what behavior is intentionally changing, if any
+• which files or ownership areas are being touched
+• what category of risk is introduced
+
+Examples of acceptable scope declarations:
+
+• separate admin intake routes from mixed web route ownership
+• move one intake service cluster under intake ownership without logic change
+• split member and admin controllers for one feature area only
+• harden one lifecycle transition path through governed authority only
+• relocate shared Blade fragments into correct surface ownership
+
+Examples of unacceptable scope declarations:
+
+❌ modularize intake
+❌ clean routes
+❌ improve architecture
+❌ fix services structure
+❌ reorganize app
+
+============================================================
+5️⃣ MOVE-ONLY ACCEPTANCE GATE
+============================================================
+
+If a refactor step is declared move-only,
+then the following must remain true unless explicitly stated otherwise:
+
+• no business rule change
+• no mutation rule change
+• no lifecycle rule change
+• no conflict rule change
+• no authorization rule change
+• no search/visibility behavior change
+• no hidden route behavior change
+• no hidden admin behavior change
+
+If any of the above changes,
+the step is not move-only anymore
+and must be reviewed as behavior-changing work.
+
+============================================================
+6️⃣ BEHAVIOR-CHANGING ACCEPTANCE GATE
+============================================================
+
+If a refactor step intentionally changes behavior,
+that fact must be explicit.
+
+The review must state:
+
+• exactly what behavior changes
+• why the change is required
+• which SSOT rule supports the change
+• what risk exists
+• how the new behavior is verified
+• what downstream surfaces may be affected
+
+No contributor may hide business or governance change
+inside “refactor” wording.
+
+============================================================
+7️⃣ GOVERNANCE SENSITIVITY GATE
+============================================================
+
+Any step touching the following is governance-sensitive:
+
+• MutationService paths
+• lifecycle transitions
+• conflict creation/resolution paths
+• duplicate-governed flows
+• profile_change_history guarantees
+• protected overwrite rules
+• intake apply authority
+• admin privileged mutation triggers
+• protected profile tables/entities
+
+Governance-sensitive steps require stricter review discipline.
+
+Such steps must be reviewed with special attention to:
+
+• authority boundaries
+• traceability
+• zero data loss risk
+• SSOT compliance
+• hidden bypass prevention
+
+============================================================
+8️⃣ REVIEW CHECKLIST (MANDATORY)
+============================================================
+
+Every bounded refactor step must be reviewed against this checklist:
+
+A. Scope Clarity
+• Is the step scope exact and limited?
+• Is in-scope vs out-of-scope clear?
+
+B. Ownership Clarity
+• Is the target ownership correct?
+• Does placement match module/surface ownership?
+
+C. Governance Safety
+• Does this preserve MutationService authority?
+• Does this preserve lifecycle discipline?
+• Does this preserve conflict discipline?
+• Does this preserve history/audit guarantees?
+
+D. Surface Safety
+• Does this preserve admin/member/public/API separation?
+• Does this avoid mixed-surface drift?
+
+E. Execution Safety
+• Is this move-only or behavior-changing as declared?
+• Are unrelated edits avoided?
+
+F. Verification
+• Was affected behavior actually rechecked?
+• Are route/view/controller/service outcomes still valid?
+
+G. Rollback Clarity
+• Could this step be undone cleanly if needed?
+
+If these questions cannot be reviewed cleanly,
+the step is not ready to accept.
+
+============================================================
+9️⃣ SSOT VIOLATION DETECTION CHECKLIST
+============================================================
+
+A refactor step must be rejected
+if it introduces any of the following:
+
+❌ direct update()/save path on governed profile truth
+❌ controller-owned protected mutation logic
+❌ listener/job-owned lifecycle truth
+❌ admin-only bypass of conflict/history rules
+❌ mixed admin/member/public ownership confusion
+❌ intake path that becomes direct profile truth authority
+❌ infrastructure code owning business truth
+❌ hidden alternate mutation path
+❌ route/controller/view placement that weakens surface clarity
+❌ transitional hacks that become second truth systems
+
+One serious violation is enough
+to reject the step.
+
+============================================================
+🔟 TRANSITIONAL STATE REVIEW RULE
+============================================================
+
+Temporary transition states are allowed only if controlled.
+
+If a step introduces temporary compatibility code,
+review must confirm:
+
+• why it is needed
+• what risk it reduces
+• that it does not weaken SSOT laws
+• that it does not create shadow truth paths
+• that it has a future removal path
+
+Temporary duplication is not automatically acceptable.
+
+============================================================
+1️⃣1️⃣ “DONE” DEFINITION RULE
+============================================================
+
+A bounded refactor step is “done” only when:
+
+• declared scope is completed
+• no unintended behavior drift is detected
+• affected surfaces still function as intended
+• ownership is clearer than before
+• SSOT compliance is preserved
+• verification has been completed
+• rollback path remains understandable
+• no hidden alternate truth path was introduced
+
+“Files moved” alone does NOT mean done.
+“Build passes” alone does NOT mean done.
+“Looks cleaner” alone does NOT mean done.
+
+============================================================
+1️⃣2️⃣ ACCEPTANCE CRITERIA FOR STRUCTURAL STEPS
+============================================================
+
+A structural-only step may be accepted only if:
+
+• ownership clarity improved
+• affected routes still resolve correctly
+• affected controllers still map correctly
+• affected views still render correctly
+• namespace/import changes are consistent
+• no governance-sensitive behavior changed unintentionally
+• no unrelated files were casually altered
+
+============================================================
+1️⃣3️⃣ ACCEPTANCE CRITERIA FOR GOVERNANCE-HARDENING STEPS
+============================================================
+
+A governance-hardening step may be accepted only if:
+
+• protected authority became more explicit, not less
+• MutationService supremacy remained intact
+• lifecycle truth became safer, not more scattered
+• conflict handling became safer, not bypassable
+• history/audit guarantees remained intact or improved
+• intake apply truth remained governed
+• admin remained governed, not exempt
+
+============================================================
+1️⃣4️⃣ ACCEPTANCE CRITERIA FOR SURFACE SEGREGATION STEPS
+============================================================
+
+A surface-segregation step may be accepted only if:
+
+• admin/member/public/API ownership became clearer
+• no mixed-surface controller ambiguity remains in touched scope
+• no mixed-surface view ambiguity remains in touched scope
+• front-end entry ownership became clearer if touched
+• no user/admin route confusion remains in touched scope
+• no hidden cross-surface dependency was introduced
+
+============================================================
+1️⃣5️⃣ REJECTION CRITERIA
+============================================================
+
+A step must be rejected if any of the following are true:
+
+• scope is vague
+• ownership is unclear
+• verification is missing
+• rollback is unclear
+• unrelated edits are mixed in
+• behavior changed without declaration
+• governance boundaries weakened
+• transitional duplication created shadow truth
+• surface boundaries became less clear
+• reviewers cannot explain the actual effect of the step
+
+If review understanding is weak,
+acceptance is unsafe.
+
+============================================================
+1️⃣6️⃣ PHASE-WISE ACCEPTANCE RULE
+============================================================
+
+The modular refactor must be accepted in bounded units,
+not as one giant declaration of completion.
+
+Meaning:
+
+• one route segregation unit can be accepted
+• one controller split unit can be accepted
+• one intake ownership cleanup unit can be accepted
+• one governance-hardening unit can be accepted
+• one shared-component cleanup unit can be accepted
+
+But the whole refactor is not “done”
+until each bounded accepted unit is done safely.
+
+============================================================
+1️⃣7️⃣ POST-STEP VERIFICATION RULE
+============================================================
+
+After each accepted step,
+a short post-step verification conclusion must be possible:
+
+• what changed
+• what did not change
+• what was verified
+• what risk remains
+• what future step still depends on this
+
+If this summary cannot be produced,
+the step is too unclear.
+
+============================================================
+1️⃣8️⃣ CANONICAL REVIEW STANDARD
+============================================================
+
+The official review standard is:
+
+clarity over speed,
+safety over elegance,
+traceability over cleverness,
+bounded progress over impressive diff size.
+
+This project does not treat architecture refactor
+as a place for uncontrolled experimentation.
+
+============================================================
+1️⃣9️⃣ ADOPTED ACCEPTANCE MODEL
+============================================================
+
+The following acceptance model is adopted:
+
+• readiness before execution
+• exact scope declaration
+• move-only vs behavior-change clarity
+• governance-sensitive review where needed
+• mandatory verification
+• rollback clarity
+• bounded acceptance
+• explicit done-state
+• rejection of hidden drift
+
+============================================================
+2️⃣0️⃣ FREEZE CLAUSE
+============================================================
+
+Until a future SSOT patch explicitly overrides this section:
+
+• refactor start gate remains mandatory
+• pre-execution questions remain mandatory
+• exact scope declaration remains mandatory
+• review checklist remains mandatory
+• SSOT violation detection remains mandatory
+• “done” requires verified clarity, not appearance
+• bounded acceptance remains the approved method
+• unclear or under-reviewed refactor remains unacceptable
+
+Any deviation from this patch
+is considered an SSOT violation.
+
+############################################################
+END OF PHASE-5 SSOT v1.7 IMPLEMENTATION GATE, REVIEW CHECKLIST,
+AND REFACTOR ACCEPTANCE PATCH
+############################################################
+
 
 
 ============================================================
