@@ -196,7 +196,7 @@ $test6Results = [
     'User_isDataAdmin_exists' => method_exists(User::class, 'isDataAdmin') ? 'PASS' : 'FAIL',
     'User_isAuditor_exists' => method_exists(User::class, 'isAuditor') ? 'PASS' : 'FAIL',
     'ProfileFieldLockService_removeLock_exists' => method_exists(ProfileFieldLockService::class, 'removeLock') ? 'PASS' : 'FAIL',
-    'AdminController_unlockProfileField_exists' => method_exists(\App\Http\Controllers\AdminController::class, 'unlockProfileField') ? 'PASS' : 'FAIL',
+    'AdminProfileModerationController_unlockProfileField_exists' => method_exists(\App\Http\Controllers\Admin\AdminProfileModerationController::class, 'unlockProfileField') ? 'PASS' : 'FAIL',
 ];
 
 foreach ($test6Results as $test => $result) {
