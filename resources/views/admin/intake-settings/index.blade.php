@@ -200,42 +200,16 @@
         </div>
 
         <div class="p-4 bg-gray-50 dark:bg-gray-700/30 rounded-lg border border-gray-200 dark:border-gray-600 space-y-3">
-            <p class="font-semibold text-sm text-gray-800 dark:text-gray-100">Confidence &amp; auto-apply policy</p>
+            <p class="font-semibold text-sm text-gray-800 dark:text-gray-100">Confidence-based review highlighting</p>
             <div class="space-y-4 text-sm">
                 <div>
                     <label class="block font-medium text-gray-700 dark:text-gray-200 mb-1">High confidence threshold</label>
                     <input type="number" step="0.01" name="intake_confidence_high_threshold" min="0.5" max="0.99" value="{{ number_format($confidenceHighThreshold, 2) }}" class="w-28 rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-2 py-1">
                     <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                        Fields with confidence below this value will be highlighted for review.
+                        This threshold is used only to highlight low-confidence fields during preview. It does not change how values are written to profiles or how governed approval and mutation run.
                     </p>
-                </div>
-                <div>
-                    <p class="block font-medium text-gray-700 dark:text-gray-200 mb-1">Fields allowed for auto-apply</p>
-                    <p class="text-xs text-gray-500 dark:text-gray-400 mb-2">
-                        Only these core fields may be auto-prefilled when confidence is high. Contact fields are always manual.
-                    </p>
-                    @php
-                        $fieldLabels = [
-                            'full_name' => 'Full name',
-                            'date_of_birth' => 'Date of birth',
-                            'gender' => 'Gender',
-                            'religion' => 'Religion',
-                            'caste' => 'Caste',
-                            'sub_caste' => 'Sub caste',
-                            'marital_status' => 'Marital status',
-                        ];
-                    @endphp
-                    <div class="grid grid-cols-1 md:grid-cols-3 gap-2">
-                        @foreach ($fieldLabels as $key => $label)
-                            <label class="inline-flex items-center gap-2">
-                                <input type="checkbox" name="intake_auto_apply_fields[]" value="{{ $key }}" {{ in_array($key, $autoApplyFields, true) ? 'checked' : '' }} class="rounded border-gray-300 dark:border-gray-600 dark:bg-gray-700">
-                                <span class="text-gray-800 dark:text-gray-100">{{ $label }}</span>
-                            </label>
-                        @endforeach
-                        <label class="inline-flex items-center gap-2 opacity-70 cursor-not-allowed">
-                            <input type="checkbox" disabled checked class="rounded border-gray-300 dark:border-gray-600 dark:bg-gray-700">
-                            <span class="text-gray-800 dark:text-gray-100">Primary contact number (manual review only)</span>
-                        </label>
+                    <div class="mt-2 text-xs text-gray-500 dark:text-gray-400">
+                        This setting is used only for operator guidance in preview screens. All profile updates still go through governed mutation and approval flows.
                     </div>
                 </div>
             </div>

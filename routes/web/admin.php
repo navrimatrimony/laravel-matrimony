@@ -3,23 +3,27 @@
 use App\Http\Controllers\AbuseReportController;
 use App\Http\Controllers\Admin\AdminCapabilityController;
 use App\Http\Controllers\Admin\AdminCasteController;
-use App\Http\Controllers\Admin\AdminFieldRegistryController;
-use App\Http\Controllers\Admin\AdminOcrSimulationController;
 use App\Http\Controllers\Admin\AdminConflictRecordController;
-use App\Http\Controllers\Admin\AdminUserNotificationsController;
-use App\Http\Controllers\Admin\AdminProfileModerationController;
-use App\Http\Controllers\Admin\AdminSettingsController;
+use App\Http\Controllers\Admin\AdminFieldRegistryController;
 use App\Http\Controllers\Admin\AdminIntakeController;
 use App\Http\Controllers\Admin\AdminKycController;
+use App\Http\Controllers\Admin\AdminOcrSimulationController;
+use App\Http\Controllers\Admin\AdminProfileModerationController;
 use App\Http\Controllers\Admin\AdminProfileTagController;
 use App\Http\Controllers\Admin\AdminReligionController;
 use App\Http\Controllers\Admin\AdminSeriousIntentController;
+use App\Http\Controllers\Admin\AdminSettingsController;
+use App\Http\Controllers\Admin\AdminSuggestionReviewController;
+use App\Http\Controllers\Admin\AdminUserNotificationsController;
 use App\Http\Controllers\Admin\AdminVerificationTagController;
 use App\Http\Controllers\Admin\DemoProfileController;
 use App\Http\Controllers\Admin\GovernanceDashboardController;
 use App\Http\Controllers\Admin\HomepageImageController;
+use App\Http\Controllers\Admin\IntakeReviewController;
 use App\Http\Controllers\Admin\LocationSuggestionWebController;
+use App\Http\Controllers\Admin\MatchBoostController;
 use App\Http\Controllers\Admin\OcrPatternController;
+use App\Http\Controllers\Admin\PlanController;
 use App\Http\Controllers\Admin\ShowcaseChatDebugController;
 use App\Http\Controllers\Admin\ShowcaseChatSettingsController;
 use App\Http\Controllers\Admin\ShowcaseConversationController;
@@ -295,6 +299,15 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
     Route::get('/mobile-verification-settings', [AdminSettingsController::class, 'mobileVerificationSettings'])->name('mobile-verification-settings.index');
     Route::post('/mobile-verification-settings', [AdminSettingsController::class, 'updateMobileVerificationSettings'])->name('mobile-verification-settings.update');
 
+    Route::get('/plans', [PlanController::class, 'index'])->name('plans.index');
+    Route::get('/plans/create', [PlanController::class, 'create'])->name('plans.create');
+    Route::post('/plans', [PlanController::class, 'store'])->name('plans.store');
+    Route::get('/plans/{plan}/edit', [PlanController::class, 'edit'])->name('plans.edit');
+    Route::put('/plans/{plan}', [PlanController::class, 'update'])->name('plans.update');
+
+    Route::get('/match-boost', [MatchBoostController::class, 'edit'])->name('match-boost.edit');
+    Route::put('/match-boost', [MatchBoostController::class, 'update'])->name('match-boost.update');
+
     Route::get('/profile-field-config', [AdminSettingsController::class, 'profileFieldConfigIndex'])->name('profile-field-config.index');
     Route::post('/profile-field-config', [AdminSettingsController::class, 'profileFieldConfigUpdate'])->name('profile-field-config.update');
 
@@ -315,6 +328,18 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
     Route::post('/homepage-images/clear', [HomepageImageController::class, 'clear'])->name('homepage-images.clear');
 
     /*
+    | Pending intake suggestions queue (profile-centric; no intake attachment required)
+    */
+    Route::prefix('intake')->name('intake.')->group(function () {
+        Route::get('/', [IntakeReviewController::class, 'index'])->name('index');
+        Route::get('/{profile}', [IntakeReviewController::class, 'show'])->name('show');
+        Route::post('/{profile}/approve', [IntakeReviewController::class, 'approve'])->name('approve');
+        Route::post('/{profile}/reject', [IntakeReviewController::class, 'reject'])->name('reject');
+        Route::post('/{profile}/approve-all', [IntakeReviewController::class, 'approveAll'])->name('approve-all');
+        Route::post('/{profile}/clear', [IntakeReviewController::class, 'clearAll'])->name('clear');
+    });
+
+    /*
     | Phase-4 Day-4: Biodata Intake Sandbox & Attach (admin only)
     */
     Route::get('/biodata-intakes', [AdminIntakeController::class, 'biodataIntakesIndex'])->name('biodata-intakes.index');
@@ -323,6 +348,8 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
     Route::post('/biodata-intakes/{intake}/reparse', [AdminIntakeController::class, 'reparse'])->name('biodata-intakes.reparse');
     Route::post('/biodata-intakes/{intake}/re-extract', [AdminIntakeController::class, 'reExtract'])->name('biodata-intakes.re-extract');
     Route::post('/biodata-intakes/{intake}/apply', [AdminIntakeController::class, 'applyToProfile'])->name('biodata-intakes.apply');
+    Route::get('/biodata-intakes/{intake}/suggestions-review', [AdminSuggestionReviewController::class, 'show'])->name('suggestions.review');
+    Route::post('/biodata-intakes/{intake}/suggestions-review/apply', [AdminSuggestionReviewController::class, 'apply'])->name('suggestions.review.apply');
 
     /*
     | Conflict Records (Phase-3 Day-4/5 — list, create, resolve)

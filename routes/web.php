@@ -3,12 +3,22 @@
 use App\Models\Caste;
 use App\Models\SubCaste;
 use Illuminate\Support\Facades\Route;
+use App\Http\Controllers\PlansController;
+
+Route::get('/plans', [PlansController::class, 'index'])->name('plans.index');
+Route::post('/subscribe/{plan}', [PlansController::class, 'subscribe'])
+    ->middleware('auth')
+    ->name('plans.subscribe');
 
 /*
 |--------------------------------------------------------------------------
 | Web routes — Phase 1 surface loaders
 |--------------------------------------------------------------------------
 | Order: public → member → admin → auth (same as pre-split), then legacy web JSON.
+| Admin intake suggestion queue: routes/web/admin.php → prefix admin/intake (names admin.intake.*).
+| Member matches: routes/web/member.php → GET /matches, GET /profiles/{id}/matches.
+| Member plans: routes/web/member.php → GET /plans, POST /subscribe/{plan}; admin: routes/web/admin.php → /admin/plans.
+| Match boost: routes/web/admin.php → GET/PUT /admin/match-boost; MatchingService applies boosts after base score.
 |--------------------------------------------------------------------------
 */
 

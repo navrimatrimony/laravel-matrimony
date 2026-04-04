@@ -8,6 +8,7 @@ use App\Models\Interest;
 use App\Models\MatrimonyProfile;
 use App\Models\ProfileKycSubmission;
 use App\Models\Shortlist;
+use App\Models\User;
 use App\Models\VerificationTag;
 use App\Notifications\ImageRejectedNotification;
 use App\Notifications\ProfileSoftDeletedNotification;
@@ -23,6 +24,7 @@ use App\Services\ProfileFieldLockService;
 use App\Services\ProfileLifecycleService;
 use App\Services\ViewTrackingService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\Rule;
 
@@ -125,6 +127,8 @@ class AdminProfileModerationController extends Controller
         // Day 8: Field value history (read-only)
         $fieldHistory = FieldValueHistoryService::getHistoryForProfile($profile);
 
+        $phase5MutationLog = $this->recentProfileChangeHistoryForProfile((int) $profile->id, 15);
+
         $assignedTags = VerificationTag::query()
             ->select('verification_tags.*')
             ->join('profile_verification_tag', 'verification_tags.id', '=', 'profile_verification_tag.verification_tag_id')
@@ -158,6 +162,7 @@ class AdminProfileModerationController extends Controller
             'fieldLocks' => $fieldLocks,
             'lifecycleAllowedTargets' => $lifecycleAllowedTargets,
             'fieldHistory' => $fieldHistory,
+            'phase5MutationLog' => $phase5MutationLog,
             'assignedTags' => $assignedTags,
             'activeVerificationTags' => $activeVerificationTags,
             'pendingKyc' => $pendingKyc,
@@ -501,5 +506,47 @@ class AdminProfileModerationController extends Controller
 
         return redirect()->route('admin.profiles.show', $profile->id)
             ->withErrors(['field_key' => 'Field is not locked or does not exist.']);
+    }
+
+    /**
+     * Read-only: recent rows from profile_change_history for admin profile show.
+     *
+     * @return list<array{changed_at:mixed,field_name:string,old_value:?string,new_value:?string,source:?string,actor:?string}>
+     */
+    private function recentProfileChangeHistoryForProfile(int $profileId, int $limit): array
+    {
+        if (! Schema::hasTable('profile_change_history')) {
+            return [];
+        }
+
+        $limit = max(1, min(20, $limit));
+
+        $rows = DB::table('profile_change_history')
+            ->where('profile_id', $profileId)
+            ->orderByDesc('changed_at')
+            ->limit($limit)
+            ->get(['field_name', 'old_value', 'new_value', 'source', 'changed_by', 'changed_at']);
+
+        if ($rows->isEmpty()) {
+            return [];
+        }
+
+        $ids = $rows->pluck('changed_by')->filter()->unique()->values()->all();
+        $names = $ids === []
+            ? []
+            : User::query()->whereIn('id', $ids)->pluck('name', 'id')->all();
+
+        return $rows->map(static function ($r) use ($names): array {
+            $by = $r->changed_by;
+
+            return [
+                'changed_at' => $r->changed_at,
+                'field_name' => (string) $r->field_name,
+                'old_value' => $r->old_value !== null ? (string) $r->old_value : null,
+                'new_value' => $r->new_value !== null ? (string) $r->new_value : null,
+                'source' => $r->source !== null ? (string) $r->source : null,
+                'actor' => $by ? (string) ($names[$by] ?? ('user #'.$by)) : null,
+            ];
+        })->all();
     }
 }

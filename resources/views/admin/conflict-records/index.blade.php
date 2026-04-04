@@ -5,6 +5,7 @@
     $pendingCount = (int) ($pendingCount ?? 0);
     $approvedCount = (int) ($approvedCount ?? 0);
     $rejectedCount = (int) ($rejectedCount ?? 0);
+    $fieldLabelMap = $fieldLabelMap ?? [];
 @endphp
 <div class="bg-white dark:bg-gray-800 shadow rounded-lg p-6">
     <div class="flex justify-between items-center mb-6">
@@ -63,18 +64,25 @@
                                 <a href="{{ route('admin.profiles.show', $record->profile_id) }}" class="text-indigo-600 dark:text-indigo-400 hover:underline font-medium">{{ $record->profile_id }}</a>
                                 @if($record->relationLoaded('profile') && $record->profile)
                                     <div class="text-gray-500 dark:text-gray-400 text-xs mt-0.5">({{ Str::limit($record->profile->full_name ?? '', 24) }})</div>
+                                    @if(filled($record->profile->lifecycle_state ?? null))
+                                        <span class="mt-1 inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wide bg-slate-200 dark:bg-slate-600 text-slate-800 dark:text-slate-100" title="Lifecycle">{{ $record->profile->lifecycle_state }}</span>
+                                    @endif
                                 @endif
                             </td>
                             <td class="px-4 py-3 text-sm align-top">
-                                <span class="font-semibold text-gray-900 dark:text-gray-100">{{ $record->field_name }}</span>
+                                @php
+                                    $fl = $fieldLabelMap[$record->field_type.'|'.$record->field_name] ?? Str::headline(str_replace('_', ' ', $record->field_name));
+                                @endphp
+                                <span class="font-semibold text-gray-900 dark:text-gray-100 leading-snug">{{ $fl }}</span>
+                                <div class="text-[11px] text-gray-400 dark:text-gray-500 font-mono mt-0.5">{{ $record->field_name }}</div>
                             </td>
                             <td class="px-4 py-3 text-sm text-gray-600 dark:text-gray-400 align-top">{{ $record->field_type }}</td>
                             <td class="px-4 py-3 text-sm text-gray-600 dark:text-gray-400 align-top">{{ $record->source }}</td>
                             <td class="px-4 py-3 text-sm max-w-[180px] align-top">
-                                <span class="inline-block px-2 py-1 rounded bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-200 text-xs break-words leading-relaxed">{{ $record->old_value ?? '—' }}</span>
+                                <span class="inline-block px-2 py-1 rounded bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-200 text-xs break-words leading-relaxed">{{ Str::limit($record->old_value ?? '—', 120) }}</span>
                             </td>
                             <td class="px-4 py-3 text-sm max-w-[180px] align-top">
-                                <span class="inline-block px-2 py-1 rounded bg-emerald-100 dark:bg-emerald-900/30 text-emerald-800 dark:text-emerald-200 text-xs break-words leading-relaxed">{{ $record->new_value ?? '—' }}</span>
+                                <span class="inline-block px-2 py-1 rounded bg-emerald-100 dark:bg-emerald-900/30 text-emerald-800 dark:text-emerald-200 text-xs break-words leading-relaxed">{{ Str::limit($record->new_value ?? '—', 120) }}</span>
                             </td>
                             <td class="px-4 py-3 text-sm align-top">
                                 <span class="px-2 py-0.5 rounded text-xs font-medium

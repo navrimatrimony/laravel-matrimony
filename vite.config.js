@@ -11,6 +11,7 @@ export default defineConfig({
                 'resources/js/profile/location-typeahead.js',
                 'resources/js/profile/about-me-narrative.js',
                 'resources/js/intake-preview-crop.js',
+                'resources/js/admin/suggestions-review.js',
             ],
             refresh: true,
         }),

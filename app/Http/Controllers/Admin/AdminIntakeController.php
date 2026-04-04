@@ -7,6 +7,8 @@ use App\Jobs\ParseIntakeJob;
 use App\Models\AdminSetting;
 use App\Models\BiodataIntake;
 use App\Models\ConflictRecord;
+use App\Models\MatrimonyProfile;
+use App\Services\ExtendedFieldService;
 use App\Services\Intake\IntakeExtractionReuseResolver;
 use App\Services\Intake\IntakeReviewParseInputTextResolver;
 use App\Services\IntakeApprovalService;
@@ -96,35 +98,47 @@ class AdminIntakeController extends Controller
         }
 
         $attachedProfile = $intake->profile;
-        $pendingConflictCount = 0;
-        $recentPendingConflicts = collect();
+
+        $pendingConflictsForProfile = collect();
         if ($attachedProfile) {
-            $pendingConflictCount = ConflictRecord::query()
-                ->where('profile_id', $attachedProfile->id)
-                ->where('resolution_status', 'PENDING')
-                ->count();
-            $recentPendingConflicts = ConflictRecord::query()
+            $pendingConflictsForProfile = ConflictRecord::query()
                 ->where('profile_id', $attachedProfile->id)
                 ->where('resolution_status', 'PENDING')
                 ->orderByDesc('detected_at')
-                ->limit(5)
-                ->get();
+                ->get(['id', 'field_name', 'detected_at']);
         }
+        $pendingConflictCount = $pendingConflictsForProfile->count();
+        $recentPendingConflicts = $pendingConflictsForProfile->take(5);
+        $pendingConflictFieldNames = $pendingConflictsForProfile
+            ->pluck('field_name')
+            ->map(static fn ($f) => (string) $f)
+            ->unique()
+            ->values()
+            ->all();
 
         $suggestionsJson = $attachedProfile?->pending_intake_suggestions_json;
-        $pendingSuggestionsCount = 0;
-        if ($attachedProfile && is_array($suggestionsJson) && $suggestionsJson !== []) {
-            foreach ($suggestionsJson as $bucket) {
-                if (is_array($bucket)) {
-                    if ($bucket !== []) {
-                        $pendingSuggestionsCount++;
-                    }
-                } elseif ($bucket !== null && trim((string) $bucket) !== '') {
-                    $pendingSuggestionsCount++;
-                }
-            }
+        $suggestionsPayload = is_array($suggestionsJson) ? $suggestionsJson : null;
+        $profileForSuggestionContext = $attachedProfile;
+        if ($attachedProfile !== null && $suggestionsPayload !== null && $suggestionsPayload !== []) {
+            $profileForSuggestionContext = MatrimonyProfile::query()->whereKey($attachedProfile->id)->first()
+                ?? $attachedProfile;
         }
-        $pendingSuggestionsPresent = $pendingSuggestionsCount > 0;
+
+        $pendingSuggestionsAdminSummary = $this->buildPendingIntakeSuggestionsAdminSummary(
+            $suggestionsPayload,
+            $profileForSuggestionContext,
+            $pendingConflictFieldNames,
+        );
+        $pendingSuggestionsCount = $pendingSuggestionsAdminSummary['non_empty_bucket_count'];
+        $pendingSuggestionsPresent = $pendingSuggestionsAdminSummary['has_any'];
+
+        $pendingSuggestionsAdminSummary['review_strip'] = [
+            'non_empty_bucket_count' => (int) $pendingSuggestionsAdminSummary['non_empty_bucket_count'],
+            'core_field_suggestion_row_count' => (int) ($pendingSuggestionsAdminSummary['buckets']['core_field_suggestions']['item_count'] ?? 0),
+            'pending_conflict_count' => $pendingConflictCount,
+            'profile_attached' => (bool) $attachedProfile,
+            'member_suggestion_page_available' => true,
+        ];
 
         $requireAdminBeforeAttach = AdminSetting::getBool('intake_require_admin_before_attach', false);
         $snapshotOk = ! empty($intake->approval_snapshot_json) && is_array($intake->approval_snapshot_json);
@@ -155,6 +169,7 @@ class AdminIntakeController extends Controller
             'recentPendingConflicts',
             'pendingSuggestionsPresent',
             'pendingSuggestionsCount',
+            'pendingSuggestionsAdminSummary',
             'requireAdminBeforeAttach',
             'applyReadiness',
         ));
@@ -322,5 +337,323 @@ class AdminIntakeController extends Controller
         }
 
         return $redirect->with('success', 'Intake apply pipeline triggered.');
+    }
+
+    /** @var list<string> */
+    private const ADMIN_INTAKE_PROFILE_SCALAR_KEYS = [
+        'full_name', 'gender_id', 'date_of_birth', 'birth_time', 'marital_status_id',
+        'religion_id', 'caste_id', 'sub_caste_id', 'highest_education',
+        'country_id', 'state_id', 'district_id', 'taluka_id', 'city_id',
+        'address_line', 'height_cm', 'weight_kg', 'profile_photo',
+        'complexion_id', 'physical_build_id', 'blood_group_id',
+        'spectacles_lens', 'physical_condition', 'family_type_id', 'income_currency_id',
+        'father_name', 'father_occupation', 'mother_name', 'mother_occupation',
+        'specialization', 'occupation_title', 'company_name', 'work_location_text',
+        'other_relatives_text', 'birth_place_text',
+    ];
+
+    /**
+     * Read-only summary of profile.pending_intake_suggestions_json for admin intake show (no writes).
+     *
+     * @param  array<string, mixed>|null  $payload
+     * @param  list<string>  $pendingConflictFieldNames
+     * @return array{
+     *     has_any: bool,
+     *     non_empty_bucket_count: int,
+     *     buckets: array<string, array{
+     *         key: string,
+     *         label: string,
+     *         exists: bool,
+     *         item_count: int,
+     *         preview: mixed
+     *     }>
+     * }
+     */
+    private function buildPendingIntakeSuggestionsAdminSummary(
+        ?array $payload,
+        ?MatrimonyProfile $profile,
+        array $pendingConflictFieldNames,
+    ): array {
+        $order = [
+            'core' => 'Core',
+            'core_field_suggestions' => 'Core field suggestions',
+            'extended' => 'Extended fields',
+            'entities' => 'Entities',
+            'birth_place' => 'Birth place',
+            'native_place' => 'Native place',
+            'preferences' => 'Preferences',
+            'extended_narrative' => 'Extended narrative',
+            'other_relatives_text' => 'Other relatives text',
+        ];
+
+        $buckets = [];
+        foreach (array_keys($order) as $key) {
+            $buckets[$key] = [
+                'key' => $key,
+                'label' => $order[$key],
+                'exists' => false,
+                'item_count' => 0,
+                'preview' => null,
+            ];
+        }
+
+        if ($payload === null || $payload === []) {
+            return [
+                'has_any' => false,
+                'non_empty_bucket_count' => 0,
+                'buckets' => $buckets,
+            ];
+        }
+
+        $extendedProfileValues = [];
+        if ($profile !== null && isset($payload['extended']) && is_array($payload['extended']) && $payload['extended'] !== []) {
+            $extendedProfileValues = ExtendedFieldService::getValuesForProfile($profile);
+        }
+
+        foreach (array_keys($order) as $key) {
+            if (! array_key_exists($key, $payload)) {
+                continue;
+            }
+            $raw = $payload[$key];
+            $entry = &$buckets[$key];
+
+            if ($key === 'core') {
+                if (is_array($raw) && $raw !== []) {
+                    $entry['item_count'] = count($raw);
+                    $entry['exists'] = $entry['item_count'] > 0;
+                    $pairs = [];
+                    $n = 0;
+                    foreach ($raw as $k => $v) {
+                        if ($n >= 40) {
+                            break;
+                        }
+                        $fk = (string) $k;
+                        $valuePreview = $this->adminSuggestionPreviewScalar($v, 240);
+                        $profPreview = $this->adminProfileScalarPreviewForField($profile, $fk);
+                        $pairs[] = [
+                            'key' => $fk,
+                            'value' => $valuePreview,
+                            'profile_value_preview' => $profPreview,
+                            'badge' => $this->adminSuggestionPairStateBadge($profPreview, $valuePreview, $fk, $pendingConflictFieldNames),
+                        ];
+                        $n++;
+                    }
+                    $entry['preview'] = ['type' => 'key_value', 'pairs' => $pairs];
+                }
+            } elseif ($key === 'core_field_suggestions') {
+                if (is_array($raw) && $raw !== []) {
+                    $rows = [];
+                    foreach ($raw as $row) {
+                        if (! is_array($row)) {
+                            continue;
+                        }
+                        $field = (string) ($row['field'] ?? '');
+                        $oldPreview = $this->adminSuggestionPreviewScalar($row['old_value'] ?? null, 240);
+                        $newPreview = $this->adminSuggestionPreviewScalar($row['new_value'] ?? null, 240);
+                        $mappedPreview = $this->adminProfileScalarPreviewForField($profile, $field);
+                        $currentDisplay = $mappedPreview ?? $oldPreview;
+                        $currentForHint = trim($mappedPreview ?? $oldPreview);
+                        $rows[] = [
+                            'field' => $field,
+                            'old_value' => $oldPreview,
+                            'new_value' => $newPreview,
+                            'current_profile_value' => $currentDisplay,
+                            'hint' => $this->adminCoreFieldSuggestionHint(
+                                $field,
+                                $currentForHint,
+                                $newPreview,
+                                $pendingConflictFieldNames,
+                            ),
+                        ];
+                    }
+                    $entry['item_count'] = count($rows);
+                    $entry['exists'] = $entry['item_count'] > 0;
+                    $entry['preview'] = ['type' => 'core_field_rows', 'rows' => $rows];
+                }
+            } elseif ($key === 'extended') {
+                if (is_array($raw) && $raw !== []) {
+                    $entry['item_count'] = count($raw);
+                    $entry['exists'] = true;
+                    $pairs = [];
+                    $n = 0;
+                    foreach ($raw as $k => $v) {
+                        if ($n >= 40) {
+                            break;
+                        }
+                        $ek = (string) $k;
+                        $valuePreview = $this->adminSuggestionPreviewScalar($v, 240);
+                        $hasStored = array_key_exists($ek, $extendedProfileValues);
+                        $profPreview = $hasStored
+                            ? $this->adminSuggestionPreviewScalar($extendedProfileValues[$ek] ?? null, 240)
+                            : null;
+                        $pairs[] = [
+                            'key' => $ek,
+                            'value' => $valuePreview,
+                            'profile_value_preview' => $profPreview,
+                            'badge' => $this->adminSuggestionPairStateBadge($hasStored ? $profPreview : null, $valuePreview, $ek, $pendingConflictFieldNames),
+                        ];
+                        $n++;
+                    }
+                    $entry['preview'] = ['type' => 'key_value', 'pairs' => $pairs];
+                }
+            } elseif ($key === 'entities') {
+                if (is_array($raw) && $raw !== []) {
+                    $sections = [];
+                    foreach ($raw as $entityKey => $section) {
+                        if ($section === null) {
+                            continue;
+                        }
+                        if (is_array($section) && $section !== []) {
+                            $sections[] = [
+                                'name' => (string) $entityKey,
+                                'row_count' => $this->adminEntitySectionRowCount($section),
+                            ];
+                        }
+                    }
+                    $entry['item_count'] = count($sections);
+                    $entry['exists'] = $entry['item_count'] > 0;
+                    $entry['preview'] = ['type' => 'entity_sections', 'sections' => $sections];
+                }
+            } elseif (in_array($key, ['birth_place', 'native_place', 'preferences', 'extended_narrative'], true)) {
+                if (is_array($raw) && $raw !== []) {
+                    $entry['exists'] = true;
+                    $entry['item_count'] = 1;
+                    $enc = json_encode($raw, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
+                    $entry['preview'] = [
+                        'type' => 'json',
+                        'text' => is_string($enc) ? $enc : '{}',
+                    ];
+                }
+            } elseif ($key === 'other_relatives_text') {
+                $s = trim((string) $raw);
+                if ($s !== '') {
+                    $entry['exists'] = true;
+                    $entry['item_count'] = 1;
+                    $entry['preview'] = [
+                        'type' => 'text',
+                        'text' => strlen($s) > 2000 ? substr($s, 0, 2000).'…' : $s,
+                    ];
+                }
+            }
+            unset($entry);
+        }
+
+        $nonEmpty = 0;
+        foreach ($buckets as $b) {
+            if (! empty($b['exists'])) {
+                $nonEmpty++;
+            }
+        }
+
+        return [
+            'has_any' => $nonEmpty > 0,
+            'non_empty_bucket_count' => $nonEmpty,
+            'buckets' => $buckets,
+        ];
+    }
+
+    private function adminProfileScalarPreviewForField(?MatrimonyProfile $profile, string $fieldKey): ?string
+    {
+        if ($profile === null || ! in_array($fieldKey, self::ADMIN_INTAKE_PROFILE_SCALAR_KEYS, true)) {
+            return null;
+        }
+        if (! array_key_exists($fieldKey, $profile->getAttributes())) {
+            return null;
+        }
+
+        return $this->adminSuggestionPreviewScalar($profile->getAttribute($fieldKey), 500);
+    }
+
+    /**
+     * @param  list<string>  $pendingConflictFieldNames
+     */
+    private function adminCoreFieldSuggestionHint(
+        string $field,
+        string $currentForLogic,
+        string $newPreview,
+        array $pendingConflictFieldNames,
+    ): string {
+        $cur = trim($currentForLogic);
+        $new = trim($newPreview);
+        if ($cur === '' && $new !== '') {
+            return 'Likely safe fill';
+        }
+        if ($cur !== '' && $new !== '' && $cur !== $new) {
+            return 'Review overwrite';
+        }
+        if ($pendingConflictFieldNames !== [] && in_array($field, $pendingConflictFieldNames, true)) {
+            return 'Check conflict record';
+        }
+
+        return 'Value changed';
+    }
+
+    /**
+     * @param  list<string>  $pendingConflictFieldNames
+     */
+    private function adminSuggestionPairStateBadge(
+        ?string $profilePreview,
+        string $suggestionPreview,
+        string $fieldKey,
+        array $pendingConflictFieldNames,
+    ): ?string {
+        $p = trim((string) ($profilePreview ?? ''));
+        $s = trim($suggestionPreview);
+        if ($profilePreview !== null) {
+            if ($p === '' && $s !== '') {
+                return 'empty → incoming';
+            }
+            if ($p !== '' && $s !== '' && $p !== $s) {
+                return 'existing → suggestion';
+            }
+        }
+        if ($pendingConflictFieldNames !== [] && in_array($fieldKey, $pendingConflictFieldNames, true)) {
+            return 'review';
+        }
+
+        return null;
+    }
+
+    private function adminEntitySectionRowCount(array $section): int
+    {
+        if ($section === []) {
+            return 0;
+        }
+        if (array_is_list($section)) {
+            return count($section);
+        }
+        foreach ($section as $v) {
+            if (! is_array($v)) {
+                return 1;
+            }
+        }
+
+        return count($section);
+    }
+
+    private function adminSuggestionPreviewScalar(mixed $v, int $maxLen): string
+    {
+        if ($v === null) {
+            return '';
+        }
+        if (is_bool($v)) {
+            return $v ? 'true' : 'false';
+        }
+        if (is_scalar($v)) {
+            $s = trim((string) $v);
+
+            return strlen($s) > $maxLen ? substr($s, 0, $maxLen).'…' : $s;
+        }
+        if ($v instanceof \DateTimeInterface) {
+            return $v->format('Y-m-d H:i:s');
+        }
+        if (is_array($v)) {
+            $enc = json_encode($v, JSON_UNESCAPED_UNICODE);
+            $s = is_string($enc) ? $enc : '';
+
+            return strlen($s) > $maxLen ? substr($s, 0, $maxLen).'…' : $s;
+        }
+
+        return '';
     }
 }

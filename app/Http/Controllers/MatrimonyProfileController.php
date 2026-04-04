@@ -8,6 +8,7 @@ use App\Models\Country;
 use App\Models\District;
 use App\Models\FieldRegistry;
 use App\Models\HiddenProfile;
+use App\Models\Interest;
 use App\Models\MasterMaritalStatus;
 use App\Models\MatrimonyProfile;
 use App\Models\Profession;
@@ -23,9 +24,11 @@ use App\Services\ExtendedFieldService;
 use App\Services\ProfileCompletenessService;
 use App\Services\ProfileFieldConfigurationService;
 use App\Services\ProfileShowReadService;
+use App\Services\SubscriptionService;
 use App\Services\ViewTrackingService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Schema;
+use Symfony\Component\HttpKernel\Exception\HttpException;
 
 /*
 |--------------------------------------------------------------------------
@@ -884,6 +887,13 @@ class MatrimonyProfileController extends Controller
         }
 
         if (! $isOwnProfile && $viewer->matrimonyProfile && ! ($viewer->is_admin ?? false)) {
+            try {
+                app(SubscriptionService::class)->assertWithinProfileViewLimit($viewer);
+            } catch (HttpException $e) {
+                return redirect()
+                    ->route('matrimony.profiles.index')
+                    ->with('error', $e->getMessage());
+            }
             ViewTrackingService::recordView($viewer->matrimonyProfile, $profile);
             ViewTrackingService::maybeTriggerViewBack($viewer->matrimonyProfile, $profile);
         }
@@ -907,7 +917,26 @@ class MatrimonyProfileController extends Controller
             $matchData = self::calculateMatchExplanation($viewer->matrimonyProfile, $profile);
         }
 
-        $canViewContact = true;
+        $interestAllowsContact = false;
+        if (! $isOwnProfile && $viewer->matrimonyProfile) {
+            $vp = (int) $viewer->matrimonyProfile->id;
+            $interestAllowsContact = Interest::query()
+                ->where('status', 'accepted')
+                ->where(function ($q) use ($vp, $profile) {
+                    $q->where(function ($q2) use ($vp, $profile) {
+                        $q2->where('sender_profile_id', $vp)
+                            ->where('receiver_profile_id', (int) $profile->id);
+                    })->orWhere(function ($q2) use ($vp, $profile) {
+                        $q2->where('sender_profile_id', (int) $profile->id)
+                            ->where('receiver_profile_id', $vp);
+                    });
+                })
+                ->exists();
+        }
+
+        $subscriptionSvc = app(SubscriptionService::class);
+        $canViewContact = $isOwnProfile
+            || ($interestAllowsContact && $subscriptionSvc->canViewContactNumber($viewer));
 
         $extendedValues = ExtendedFieldService::getValuesForProfile($profile);
         $extendedMeta = FieldRegistry::where('field_type', 'EXTENDED')
@@ -960,6 +989,10 @@ class MatrimonyProfileController extends Controller
             }
         }
 
+        if (! empty($contactGrantReveal) && ! $subscriptionSvc->canViewContactNumber($viewer)) {
+            $contactGrantReveal = null;
+        }
+
         // Profile show: always show gallery / primary photo (no blur lock for other viewers).
         $showPhotoTo = optional($visibilitySettings)->show_photo_to ?? 'all';
         $photoViewAllowed = true;
@@ -1006,6 +1039,7 @@ class MatrimonyProfileController extends Controller
                 'contactRequestDisabled' => $contactRequestDisabled,
                 'contactGrantReveal' => $contactGrantReveal,
                 'canSendContactRequest' => $canSendContactRequest,
+                'interestAllowsContact' => $interestAllowsContact,
                 'photoLocked' => $photoLocked,
                 'photoLockMode' => $showPhotoTo ?? 'all',
                 'verificationPanel' => $verificationPanel,

@@ -1,11 +1,16 @@
 @extends('layouts.admin')
 
 @section('content')
+@php
+    $fieldDisplayLabel = $fieldDisplayLabel ?? Str::headline(str_replace('_', ' ', $record->field_name));
+    $latestIntake = $latestIntake ?? null;
+    $recentMutationLog = $recentMutationLog ?? [];
+@endphp
 <div class="bg-white dark:bg-gray-800 shadow rounded-lg p-6 max-w-4xl mx-auto">
     <div class="flex justify-between items-start mb-6">
         <div>
             <h1 class="text-2xl font-bold text-gray-800 dark:text-gray-100">Conflict #{{ $record->id }}</h1>
-            <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">Field: {{ $record->field_name }} ({{ $record->field_type }}) · Source: {{ $record->source }} · Detected: {{ $record->detected_at?->format('Y-m-d H:i') ?? '—' }}</p>
+            <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">{{ $fieldDisplayLabel }} <span class="text-gray-400">({{ $record->field_type }})</span> · Source: {{ $record->source }} · Detected: {{ $record->detected_at?->format('Y-m-d H:i') ?? '—' }}</p>
         </div>
         <a href="{{ route('admin.conflict-records.index') }}" class="px-4 py-2 bg-gray-500 hover:bg-gray-600 text-white rounded-md text-sm">← Back to list</a>
     </div>
@@ -17,6 +22,61 @@
         <div class="mb-4 px-4 py-2 rounded bg-red-50 dark:bg-red-900/30 text-red-800 dark:text-red-200 text-sm">{{ $errors->first() }}</div>
     @endif
 
+    <section class="mb-4 p-4 rounded-lg border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-700/40">
+        <h2 class="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-3">Conflict context</h2>
+        <dl class="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2 text-sm text-gray-800 dark:text-gray-200">
+            <div class="sm:col-span-2">
+                <dt class="text-gray-500 dark:text-gray-400 text-xs">Profile</dt>
+                <dd>
+                    @if($profile)
+                        <a href="{{ route('admin.profiles.show', $profile->id) }}" class="text-indigo-600 dark:text-indigo-400 hover:underline font-medium">#{{ $profile->id }}</a>
+                        <span class="text-gray-600 dark:text-gray-300"> — {{ $profile->full_name ?? '—' }}</span>
+                        @if(filled($profile->lifecycle_state ?? null))
+                            <span class="ml-2 inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold uppercase bg-slate-200 dark:bg-slate-600 text-slate-800 dark:text-slate-100">{{ $profile->lifecycle_state }}</span>
+                        @endif
+                    @else
+                        <span class="text-gray-500">Not found (ID {{ $record->profile_id }})</span>
+                    @endif
+                </dd>
+            </div>
+            @if($latestIntake)
+                <div class="sm:col-span-2">
+                    <dt class="text-gray-500 dark:text-gray-400 text-xs">Intake</dt>
+                    <dd><a href="{{ route('admin.biodata-intakes.show', $latestIntake) }}" class="text-indigo-600 dark:text-indigo-400 hover:underline text-sm">Latest biodata intake #{{ $latestIntake->id }}</a> <span class="text-gray-400 text-xs">(most recent linked to this profile)</span></dd>
+                </div>
+            @endif
+            <div>
+                <dt class="text-gray-500 dark:text-gray-400 text-xs">Field</dt>
+                <dd><span class="font-medium">{{ $fieldDisplayLabel }}</span> <span class="text-gray-400 dark:text-gray-500 text-xs font-mono">· {{ $record->field_name }}</span></dd>
+            </div>
+            <div>
+                <dt class="text-gray-500 dark:text-gray-400 text-xs">Resolution</dt>
+                <dd>
+                    <span class="px-2 py-0.5 rounded text-xs font-semibold
+                        @if($record->resolution_status === 'PENDING') bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-200
+                        @elseif($record->resolution_status === 'APPROVED') bg-emerald-100 dark:bg-emerald-900/30 text-emerald-800 dark:text-emerald-200
+                        @elseif($record->resolution_status === 'REJECTED') bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-200
+                        @else bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300
+                        @endif">{{ $record->resolution_status }}</span>
+                </dd>
+            </div>
+            <div class="sm:col-span-2">
+                <dt class="text-gray-500 dark:text-gray-400 text-xs">Current value</dt>
+                <dd class="text-xs break-words whitespace-pre-wrap rounded border border-red-200/80 dark:border-red-900/50 bg-red-50/80 dark:bg-red-900/20 px-2 py-1.5 mt-0.5">{{ Str::limit($record->old_value ?? '—', 2000) }}</dd>
+            </div>
+            <div class="sm:col-span-2">
+                <dt class="text-gray-500 dark:text-gray-400 text-xs">Proposed value</dt>
+                <dd class="text-xs break-words whitespace-pre-wrap rounded border border-emerald-200/80 dark:border-emerald-900/50 bg-emerald-50/80 dark:bg-emerald-900/20 px-2 py-1.5 mt-0.5">{{ Str::limit($record->new_value ?? '—', 2000) }}</dd>
+            </div>
+        </dl>
+    </section>
+
+    <section class="mb-6 p-3 rounded-lg border border-amber-200/80 dark:border-amber-800/60 bg-amber-50/60 dark:bg-amber-900/15">
+        <p class="text-xs text-amber-950/90 dark:text-amber-100/90 leading-relaxed">
+            Some conflicts reflect a proposed change that cannot be applied as a simple field swap—for example when governance blocks overwrites, a field is locked after user edit, or the system detected a duplicate or policy clash. This screen does not classify the underlying cause; use profile state, field registry locks, and the recent mutation log below for context.
+        </p>
+    </section>
+
     <section class="mb-6 p-4 rounded-lg border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/20">
         <h2 class="text-sm font-semibold text-blue-900 dark:text-blue-100 mb-2">What each resolution means</h2>
         <ul class="text-sm text-blue-900/90 dark:text-blue-100/90 space-y-1 list-disc list-inside">
@@ -26,22 +86,38 @@
         </ul>
     </section>
 
-    {{-- Profile context --}}
-    <section class="mb-6 p-4 rounded-lg bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600">
-        <h2 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Profile context</h2>
-        @if($profile)
-            <p class="text-sm text-gray-800 dark:text-gray-200">
-                <strong>ID:</strong> <a href="{{ route('admin.profiles.show', $profile->id) }}" class="text-indigo-600 dark:text-indigo-400 hover:underline">{{ $profile->id }}</a>
-                · <strong>Name:</strong> {{ $profile->full_name ?? '—' }}
-            </p>
-            <p class="text-sm mt-2">
-                <span class="text-gray-600 dark:text-gray-400">Lifecycle state:</span>
-                <span class="ml-1 inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-gray-200 dark:bg-gray-600 text-gray-900 dark:text-gray-100">{{ $profile->lifecycle_state ?? '—' }}</span>
-            </p>
-        @else
-            <p class="text-sm text-gray-500">Profile not found (ID: {{ $record->profile_id }})</p>
-        @endif
-    </section>
+    @if(count($recentMutationLog) > 0)
+        <section class="mb-6">
+            <h2 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Recent Phase-5 mutation log</h2>
+            <p class="text-xs text-gray-500 dark:text-gray-400 mb-2">Read-only: last {{ count($recentMutationLog) }} row(s) from <code class="text-[11px]">profile_change_history</code> for this profile (newest first).</p>
+            <div class="overflow-x-auto rounded border border-gray-200 dark:border-gray-600">
+                <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700 text-xs">
+                    <thead class="bg-gray-50 dark:bg-gray-700/80">
+                        <tr>
+                            <th class="px-2 py-2 text-left font-medium text-gray-600 dark:text-gray-300 whitespace-nowrap">Changed</th>
+                            <th class="px-2 py-2 text-left font-medium text-gray-600 dark:text-gray-300">Field</th>
+                            <th class="px-2 py-2 text-left font-medium text-gray-600 dark:text-gray-300">Old</th>
+                            <th class="px-2 py-2 text-left font-medium text-gray-600 dark:text-gray-300">New</th>
+                            <th class="px-2 py-2 text-left font-medium text-gray-600 dark:text-gray-300 whitespace-nowrap">Source</th>
+                            <th class="px-2 py-2 text-left font-medium text-gray-600 dark:text-gray-300 whitespace-nowrap">Actor</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-gray-200 dark:divide-gray-700 bg-white dark:bg-gray-800">
+                        @foreach ($recentMutationLog as $row)
+                            <tr class="align-top">
+                                <td class="px-2 py-1.5 text-gray-600 dark:text-gray-400 whitespace-nowrap">{{ \Illuminate\Support\Carbon::parse($row['changed_at'])->format('Y-m-d H:i') }}</td>
+                                <td class="px-2 py-1.5 font-mono text-[11px] text-gray-800 dark:text-gray-200">{{ Str::limit($row['field_name'], 48) }}</td>
+                                <td class="px-2 py-1.5 text-gray-700 dark:text-gray-300 break-words max-w-[140px]">{{ Str::limit($row['old_value'] ?? '—', 80) }}</td>
+                                <td class="px-2 py-1.5 text-gray-700 dark:text-gray-300 break-words max-w-[140px]">{{ Str::limit($row['new_value'] ?? '—', 80) }}</td>
+                                <td class="px-2 py-1.5 text-gray-600 dark:text-gray-400 whitespace-nowrap">{{ $row['source'] ?? '—' }}</td>
+                                <td class="px-2 py-1.5 text-gray-600 dark:text-gray-400 whitespace-nowrap">{{ $row['actor'] ?? '—' }}</td>
+                            </tr>
+                        @endforeach
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    @endif
 
     {{-- Side-by-side diff --}}
     <section class="mb-6">

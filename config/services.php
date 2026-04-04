@@ -56,9 +56,11 @@ return [
     ],
 
     'sarvam' => [
-        // Sarvam Document Intelligence API key (header: api-subscription-key)
+        // Sarvam API (header: api-subscription-key); used for optional match-boost chat completions.
         'subscription_key' => env('SARVAM_API_SUBSCRIPTION_KEY'),
         'base_url' => env('SARVAM_API_BASE_URL', 'https://api.sarvam.ai'),
+        'chat_model' => env('SARVAM_CHAT_MODEL', 'sarvam-105b'),
+        'timeout' => (int) env('SARVAM_HTTP_TIMEOUT', 20),
     ],
 
 ];

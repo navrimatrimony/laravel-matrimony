@@ -622,7 +622,8 @@
 
     {{-- Field Value History (Day 6) — read-only, no edit/delete --}}
     <section class="mt-8" aria-label="Field value history">
-        <h2 class="text-lg font-semibold text-gray-800 dark:text-gray-100 mb-4">Field Value History (Day 6)</h2>
+        <h2 class="text-lg font-semibold text-gray-800 dark:text-gray-100 mb-1">Field Value History (Day 6)</h2>
+        <p class="text-xs text-gray-500 dark:text-gray-400 mb-4 max-w-3xl">Day-6 field history from the field-value history surface (admin/user edits and related events). It is <strong class="font-medium text-gray-600 dark:text-gray-300">not</strong> the same list as Phase-5 <code class="text-[10px] bg-gray-100 dark:bg-gray-700 px-1 rounded">profile_change_history</code> below.</p>
         @if (isset($fieldHistory) && $fieldHistory->isNotEmpty())
             <div class="overflow-x-auto">
                 <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
@@ -652,6 +653,43 @@
             </div>
         @else
             <p class="text-sm text-gray-500 dark:text-gray-400">No history recorded yet.</p>
+        @endif
+    </section>
+
+    @php $phase5MutationLog = $phase5MutationLog ?? []; @endphp
+    <section class="mt-8 border-t border-gray-200 dark:border-gray-700 pt-8" aria-label="Phase-5 mutation log">
+        <h2 class="text-lg font-semibold text-gray-800 dark:text-gray-100 mb-1">Phase-5 Mutation Log</h2>
+        <p class="text-xs text-gray-500 dark:text-gray-400 mb-2">Governed writes recorded in <code class="text-[10px] bg-gray-100 dark:bg-gray-700 px-1 rounded">profile_change_history</code>.</p>
+        <p class="text-xs text-gray-500 dark:text-gray-400 mb-4 max-w-3xl">This is the primary governed mutation audit trail used along intake apply paths, conflict resolution, and other MutationService-governed updates. It is separate from Day-6 field history above; entries are not expected to match row-for-row.</p>
+        @if (count($phase5MutationLog) > 0)
+            <div class="overflow-x-auto rounded border border-gray-200 dark:border-gray-600">
+                <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700 text-sm">
+                    <thead class="bg-gray-50 dark:bg-gray-700/80">
+                        <tr>
+                            <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase whitespace-nowrap">Changed At</th>
+                            <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Field</th>
+                            <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Old Value</th>
+                            <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">New Value</th>
+                            <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase whitespace-nowrap">Source</th>
+                            <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase whitespace-nowrap">Actor</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-gray-200 dark:divide-gray-700 bg-white dark:bg-gray-800">
+                        @foreach ($phase5MutationLog as $row)
+                            <tr class="align-top">
+                                <td class="px-3 py-2 text-gray-600 dark:text-gray-400 text-xs whitespace-nowrap">{{ \Illuminate\Support\Carbon::parse($row['changed_at'])->format('Y-m-d H:i') }}</td>
+                                <td class="px-3 py-2 text-gray-900 dark:text-gray-100 font-mono text-xs">{{ Str::limit($row['field_name'] ?? '', 56) }}</td>
+                                <td class="px-3 py-2 text-gray-700 dark:text-gray-300 text-xs break-words max-w-[160px]">{{ Str::limit($row['old_value'] ?? '—', 80) }}</td>
+                                <td class="px-3 py-2 text-gray-700 dark:text-gray-300 text-xs break-words max-w-[160px]">{{ Str::limit($row['new_value'] ?? '—', 80) }}</td>
+                                <td class="px-3 py-2 text-gray-600 dark:text-gray-400 text-xs whitespace-nowrap">{{ $row['source'] ?? '—' }}</td>
+                                <td class="px-3 py-2 text-gray-600 dark:text-gray-400 text-xs whitespace-nowrap">{{ $row['actor'] ?? '—' }}</td>
+                            </tr>
+                        @endforeach
+                    </tbody>
+                </table>
+            </div>
+        @else
+            <p class="text-sm text-gray-500 dark:text-gray-400">No rows in profile_change_history for this profile yet.</p>
         @endif
     </section>
 </div>

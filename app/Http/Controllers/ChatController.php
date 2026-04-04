@@ -7,16 +7,18 @@ use App\Models\MatrimonyProfile;
 use App\Models\Message;
 use App\Services\Chat\ChatConversationService;
 use App\Services\Chat\ChatMessageModerationService;
-use App\Services\Chat\ChatTemplateSuggestionService;
 use App\Services\Chat\ChatMessageService;
 use App\Services\Chat\ChatPolicyService;
+use App\Services\Chat\ChatTemplateSuggestionService;
 use App\Services\CommunicationPolicyService;
-use App\Services\UserEntitlementService;
 use App\Services\ShowcaseChat\ShowcaseConversationTagService;
 use App\Services\ShowcaseChat\ShowcaseOrchestrationService;
+use App\Services\SubscriptionService;
+use App\Services\UserEntitlementService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
+use Symfony\Component\HttpKernel\Exception\HttpException;
 
 class ChatController extends Controller
 {
@@ -40,6 +42,7 @@ class ChatController extends Controller
                 ->where('receiver_profile_id', $me->id)
                 ->whereNull('read_at')
                 ->count();
+
             return response()->json(['count' => (int) $count]);
         }
 
@@ -130,6 +133,7 @@ class ChatController extends Controller
             if ($activeFilter === 'awaiting_them') {
                 return (bool) ($it['awaiting_them'] ?? false);
             }
+
             return true;
         })->values();
 
@@ -142,6 +146,7 @@ class ChatController extends Controller
             }
             $ta = $a['conversation']->last_message_at?->getTimestamp() ?? 0;
             $tb = $b['conversation']->last_message_at?->getTimestamp() ?? 0;
+
             return $tb <=> $ta;
         })->values();
 
@@ -259,7 +264,9 @@ class ChatController extends Controller
             $audience = (string) ($cfg['image_messages_audience'] ?? 'paid_only');
             if ($audience === 'paid_only') {
                 $u = $user;
-                $isPaid = $u && ($u->isAnyAdmin() || UserEntitlementService::userHasEntitlement($u, UserEntitlementService::ENTITLEMENT_CHAT_IMAGE_MESSAGES));
+                $isPaid = $u && ($u->isAnyAdmin()
+                    || UserEntitlementService::userHasEntitlement($u, UserEntitlementService::ENTITLEMENT_CHAT_IMAGE_MESSAGES)
+                    || app(SubscriptionService::class)->canUseChatImages($u));
                 if (! $isPaid) {
                     $imagePolicy = [
                         'allowed' => false,
@@ -317,10 +324,17 @@ class ChatController extends Controller
         }
 
         try {
+            app(SubscriptionService::class)->assertWithinChatSendLimit($user);
+        } catch (HttpException $e) {
+            return back()->with('error', $e->getMessage());
+        }
+
+        try {
             $this->messages->sendTextMessage($me, $other, $conversation, $body);
         } catch (ValidationException $e) {
             $errors = $e->errors();
             $msg = $errors['policy'][0] ?? $errors['body_text'][0] ?? $e->getMessage();
+
             return back()->with('error', $msg)->withErrors($errors);
         }
 
@@ -360,11 +374,20 @@ class ChatController extends Controller
             }
         }
 
+        $u = $user;
+        $canImg = $u && ($u->isAnyAdmin()
+            || UserEntitlementService::userHasEntitlement($u, UserEntitlementService::ENTITLEMENT_CHAT_IMAGE_MESSAGES)
+            || app(SubscriptionService::class)->canUseChatImages($u));
+        if (! $canImg) {
+            return back()->with('error', __('subscriptions.feature_locked'));
+        }
+
         try {
             $this->messages->sendImageMessage($me, $other, $conversation, $request->file('image'), $request->input('caption'));
         } catch (ValidationException $e) {
             $errors = $e->errors();
             $msg = $errors['policy'][0] ?? $errors['image'][0] ?? $errors['caption'][0] ?? $e->getMessage();
+
             return back()->with('error', $msg)->withErrors($errors);
         }
 

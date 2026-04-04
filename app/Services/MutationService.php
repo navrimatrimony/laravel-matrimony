@@ -8,6 +8,7 @@ use App\Models\FieldRegistry;
 use App\Models\MatrimonyProfile;
 use App\Models\ProfileExtendedField;
 use App\Models\User;
+use App\Services\Core\ConflictPolicy;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
@@ -161,7 +162,7 @@ class MutationService
                         $duplicateResult = app(DuplicateDetectionService::class)->detectFromSnapshot($snapshot, $profile->user_id);
                         if ($duplicateResult->isDuplicate && $duplicateResult->existingProfileId !== null && (int) $duplicateResult->existingProfileId !== (int) $profile->id) {
                             if (! $this->hasPendingConflictForField($profile->id, 'duplicate_detection')) {
-                                ConflictRecord::create([
+                                ConflictPolicy::create([
                                     'profile_id' => $profile->id,
                                     'field_name' => 'duplicate_detection',
                                     'field_type' => 'CORE',
@@ -190,7 +191,7 @@ class MutationService
                                 continue;
                             }
                             if (ProfileFieldLockService::isLocked($profile, $fieldKey) && ! $this->hasPendingConflictForField($profile->id, $fieldKey)) {
-                                $conflictRecords[] = ConflictRecord::create([
+                                $conflictRecords[] = ConflictPolicy::create([
                                     'profile_id' => $profile->id,
                                     'field_name' => $fieldKey,
                                     'field_type' => 'CORE',
@@ -213,7 +214,7 @@ class MutationService
                             }
                             if (ProfileFieldLockService::isLocked($profile, $fieldKey) && ! $this->hasPendingConflictForField($profile->id, $fieldKey)) {
                                 $current = ExtendedFieldService::getValuesForProfile($profile)[$fieldKey] ?? null;
-                                $conflictRecords[] = ConflictRecord::create([
+                                $conflictRecords[] = ConflictPolicy::create([
                                     'profile_id' => $profile->id,
                                     'field_name' => $fieldKey,
                                     'field_type' => 'EXTENDED',
@@ -636,7 +637,7 @@ class MutationService
                         Log::info('MutationService::applyApprovedIntake SAME_USER duplicate — applying to existing profile', ['profileId' => $existingProfileId]);
                     } else {
                         if ($existingProfile && ! $this->hasPendingConflictForField($existingProfile->id, 'duplicate_detection')) {
-                            ConflictRecord::create([
+                            ConflictPolicy::create([
                                 'profile_id' => $existingProfile->id,
                                 'field_name' => 'duplicate_detection',
                                 'field_type' => 'CORE',
@@ -723,7 +724,7 @@ class MutationService
                         continue;
                     }
                     if (ProfileFieldLockService::isLocked($profile, $fieldKey) && ! $this->hasPendingConflictForField($profile->id, $fieldKey)) {
-                        $conflictRecords[] = ConflictRecord::create([
+                        $conflictRecords[] = ConflictPolicy::create([
                             'profile_id' => $profile->id,
                             'field_name' => $fieldKey,
                             'field_type' => 'CORE',
@@ -746,7 +747,7 @@ class MutationService
                     }
                     if (ProfileFieldLockService::isLocked($profile, $fieldKey) && ! $this->hasPendingConflictForField($profile->id, $fieldKey)) {
                         $current = ExtendedFieldService::getValuesForProfile($profile)[$fieldKey] ?? null;
-                        $conflictRecords[] = ConflictRecord::create([
+                        $conflictRecords[] = ConflictPolicy::create([
                             'profile_id' => $profile->id,
                             'field_name' => $fieldKey,
                             'field_type' => 'EXTENDED',
@@ -1097,7 +1098,7 @@ class MutationService
             $existingPhone = trim((string) ($existingPrimary->phone_number ?? ''));
             $proposedPhone = trim((string) ($proposedPrimary['phone_number'] ?? ''));
             if ($existingPhone !== '' && $proposedPhone !== '' && $existingPhone !== $proposedPhone && $createConflictRecord && ! $this->hasPendingConflictForField($profile->id, 'primary_contact_number')) {
-                $contactConflict = ConflictRecord::create([
+                $contactConflict = ConflictPolicy::create([
                     'profile_id' => $profile->id,
                     'field_name' => 'primary_contact_number',
                     'field_type' => 'CORE',
@@ -1160,7 +1161,7 @@ class MutationService
         $contactConflict = null;
         if ($existingPrimaryDigits !== '' && $intakePrimaryDigits !== '' && $intakePrimaryDigits !== $existingPrimaryDigits) {
             if (! $this->hasPendingConflictForField($profile->id, 'primary_contact_number')) {
-                $contactConflict = ConflictRecord::create([
+                $contactConflict = ConflictPolicy::create([
                     'profile_id' => $profile->id,
                     'field_name' => 'primary_contact_number',
                     'field_type' => 'CORE',

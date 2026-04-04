@@ -4,6 +4,8 @@ namespace App\Models;
 
 use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
@@ -92,6 +94,26 @@ class User extends Authenticatable implements MustVerifyEmail
     public function matrimonyProfile()
     {
         return $this->hasOne(\App\Models\MatrimonyProfile::class);
+    }
+
+    public function subscriptions(): HasMany
+    {
+        return $this->hasMany(Subscription::class);
+    }
+
+    /**
+     * Latest active subscription row (by starts_at), if any.
+     */
+    public function activeSubscription(): HasOne
+    {
+        return $this->hasOne(Subscription::class)
+            ->ofMany(
+                ['starts_at' => 'max'],
+                fn ($q) => $q->where('status', Subscription::STATUS_ACTIVE)
+                    ->where(function ($qq) {
+                        $qq->whereNull('ends_at')->orWhere('ends_at', '>', now());
+                    })
+            );
     }
 
     /**

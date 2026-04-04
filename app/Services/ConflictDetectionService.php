@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\ConflictRecord;
 use App\Models\FieldRegistry;
 use App\Models\MatrimonyProfile;
+use App\Services\Core\ConflictPolicy;
 
 /**
  * Phase-3 Day-13 / Phase-5: Conflict detection with Escalation Matrix.
@@ -46,7 +47,6 @@ class ConflictDetectionService
      *
      * @param  array<string, mixed>  $proposedCore
      * @param  array<string, mixed>  $proposedExtended
-     * @return ConflictDetectionResult
      */
     public static function detectResult(
         MatrimonyProfile $profile,
@@ -61,7 +61,7 @@ class ConflictDetectionService
         $coreFieldKeys = self::getCoreFieldKeysFromRegistry();
 
         foreach ($coreFieldKeys as $fieldKey) {
-            if (!array_key_exists($fieldKey, $proposedCore)) {
+            if (! array_key_exists($fieldKey, $proposedCore)) {
                 continue;
             }
             if (ProfileFieldLockService::isLocked($profile, $fieldKey)) {
@@ -69,11 +69,11 @@ class ConflictDetectionService
             }
             $current = self::getCurrentCoreValue($profile, $fieldKey);
             $proposed = self::normalize($proposedCore[$fieldKey]);
-            if (!self::valuesDiffer($current, $proposed)) {
+            if (! self::valuesDiffer($current, $proposed)) {
                 continue;
             }
 
-            if (self::isDynamicField($fieldKey) && !$seriousIntentActive) {
+            if (self::isDynamicField($fieldKey) && ! $seriousIntentActive) {
                 continue;
             }
 
@@ -87,7 +87,7 @@ class ConflictDetectionService
                 continue;
             }
 
-            $created[] = ConflictRecord::create([
+            $created[] = ConflictPolicy::create([
                 'profile_id' => $profile->id,
                 'field_name' => $fieldKey,
                 'field_type' => 'CORE',
@@ -117,7 +117,7 @@ class ConflictDetectionService
                 if (ConflictRecord::where('profile_id', $profile->id)->where('field_name', $fieldKey)->where('resolution_status', 'PENDING')->exists()) {
                     continue;
                 }
-                $created[] = ConflictRecord::create([
+                $created[] = ConflictPolicy::create([
                     'profile_id' => $profile->id,
                     'field_name' => $fieldKey,
                     'field_type' => 'EXTENDED',
@@ -175,6 +175,7 @@ class ConflictDetectionService
             });
         }
         $keys = $query->pluck('field_key')->values()->all();
+
         return $keys !== [] ? $keys : self::FALLBACK_CORE_KEYS;
     }
 
@@ -204,6 +205,7 @@ class ConflictDetectionService
                 ->where('is_primary', true)
                 ->value('phone_number');
         }
+
         return $profile->getAttribute($fieldKey);
     }
 
@@ -213,6 +215,7 @@ class ConflictDetectionService
             return null;
         }
         $s = is_string($value) ? trim($value) : (string) $value;
+
         return $s === '' ? null : $s;
     }
 

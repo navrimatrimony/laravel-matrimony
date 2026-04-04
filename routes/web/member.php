@@ -9,10 +9,12 @@ use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\IntakeController;
 use App\Http\Controllers\InterestController;
 use App\Http\Controllers\Internal\CurrentLocationController;
+use App\Http\Controllers\MatchController;
 use App\Http\Controllers\MatrimonyProfileController;
 use App\Http\Controllers\MatrimonyVerificationEmailController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\OnboardingController;
+use App\Http\Controllers\PlansController;
 use App\Http\Controllers\ProfileContactVerificationController;
 use App\Http\Controllers\ProfileHideController;
 use App\Http\Controllers\ProfilePhotoReportController;
@@ -103,6 +105,9 @@ Route::middleware('auth')->group(function () {
     Route::get('/settings/security', [UserSettingsController::class, 'security'])
         ->name('user.settings.security');
 
+    Route::get('/plans', [PlansController::class, 'index'])->name('plans.index');
+    Route::post('/subscribe/{plan}', [PlansController::class, 'subscribe'])->name('plans.subscribe');
+
     /*
     | Matrimony Profile (Phase-5B: wizard is the only create path; create/store disallowed — Point 5)
     */
@@ -182,6 +187,9 @@ Route::middleware('auth')->group(function () {
     /*
     | Matrimony Profiles (View / Search)
     */
+    Route::get('/matches', [MatchController::class, 'myMatches'])->name('matches.index');
+    Route::get('/profiles/{matrimony_profile_id}/matches', [MatchController::class, 'show'])->name('matches.show');
+
     Route::get('/profiles', [MatrimonyProfileController::class, 'index'])
         ->name('matrimony.profiles.index');
 

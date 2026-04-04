@@ -6,6 +6,7 @@ use App\Models\BiodataIntake;
 use App\Models\OcrCorrectionLog;
 use App\Models\OcrCorrectionPattern;
 use App\Models\OcrPatternConflict;
+use App\Services\Intake\IntakePipelineService;
 use App\Services\Ocr\OcrNormalize;
 use Illuminate\Support\Facades\DB;
 
@@ -31,34 +32,24 @@ class IntakeApprovalService
         }
 
         // Phase-5C: If already approved but not yet applied → allow apply trigger
-if ($intake->approved_by_user === true) {
+        if ($intake->approved_by_user === true) {
 
-    if ($intake->intake_locked === true || $intake->intake_status === 'applied') {
-        throw new \RuntimeException('Intake is already fully applied.');
-    }
+            if ($intake->intake_locked === true || $intake->intake_status === 'applied') {
+                throw new \RuntimeException('Intake is already fully applied.');
+            }
 
-    // Already approved but not applied → directly trigger apply pipeline
-    return app(\App\Services\MutationService::class)
-        ->applyApprovedIntake($intake->id);
-}
+            // Already approved but not applied → directly trigger apply pipeline
+            return app(\App\Services\MutationService::class)
+                ->applyApprovedIntake($intake->id);
+        }
 
         $approvalSnapshot = $snapshot !== null ? $snapshot : $intake->parsed_json;
-        if (!is_array($approvalSnapshot)) {
+        if (! is_array($approvalSnapshot)) {
             $approvalSnapshot = [];
         }
 
         // Phase-5: Normalize full snapshot controlled fields deterministically (non-destructive).
-        $approvalSnapshot = app(\App\Services\Parsing\IntakeControlledFieldNormalizer::class)
-            ->normalizeSnapshot($approvalSnapshot);
-
-        // Ensure full_name never contains parser noise "तपासा" (form title leak) before apply.
-        if (isset($approvalSnapshot['core']['full_name']) && is_string($approvalSnapshot['core']['full_name'])) {
-            $cleaned = preg_replace('/\s*तपासा\s*/u', ' ', $approvalSnapshot['core']['full_name']);
-            $cleaned = preg_replace('/\s+/u', ' ', trim($cleaned));
-            if ($cleaned !== $approvalSnapshot['core']['full_name']) {
-                $approvalSnapshot['core']['full_name'] = $cleaned;
-            }
-        }
+        $approvalSnapshot = app(IntakePipelineService::class)->normalizeApprovedSnapshot($approvalSnapshot);
 
         $manualEdits = 0;
         $autoFilled = 0;
@@ -77,8 +68,8 @@ if ($intake->approved_by_user === true) {
                     $manualEdits++;
 
                     $log = OcrCorrectionLog::create([
-                        'intake_id'     => $intake->id,
-                        'field_key'     => $field,
+                        'intake_id' => $intake->id,
+                        'field_key' => $field,
                         'original_value' => $normalizedOld,
                         'corrected_value' => $normalizedNew,
                     ]);
@@ -127,9 +118,10 @@ if ($intake->approved_by_user === true) {
 
         // Direct form→DB path: pass snapshot in memory so MutationService writes profile + intake in one transaction (no save-then-read).
         $metrics = $snapshot !== null ? ['manual_edits' => $manualEdits, 'auto_filled' => $autoFilled] : null;
+
         return app(\App\Services\MutationService::class)
             ->applyApprovedIntake($intake->id, $snapshot !== null ? $approvalSnapshot : null, $metrics);
-        
+
     }
 
     private function normalizeForComparison($value): ?string
@@ -181,6 +173,7 @@ if ($intake->approved_by_user === true) {
                     'is_active' => true,
                     'updated_at' => now(),
                 ]);
+
                 return;
             }
             // Conflict: do not overwrite; record for review (no silent overwrite)
@@ -192,6 +185,7 @@ if ($intake->approved_by_user === true) {
             $conflict->existing_corrected_value = $existing->corrected_value;
             $conflict->observation_count = max((int) $conflict->observation_count, $count);
             $conflict->save();
+
             return;
         }
 

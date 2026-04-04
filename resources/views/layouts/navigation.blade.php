@@ -71,6 +71,18 @@
 </x-nav-link>
 
 @auth
+    <x-nav-link :href="route('plans.index')" :active="request()->routeIs('plans.*')">
+        {{ __('subscriptions.nav_plans') }}
+    </x-nav-link>
+    @if (auth()->user()->matrimonyProfile)
+        <x-nav-link :href="route('matches.index')"
+                    :active="request()->routeIs('matches.*')">
+            {{ __('matching.nav_matches') }}
+        </x-nav-link>
+    @endif
+@endauth
+
+@auth
     <x-dropdown align="right" width="56">
         <x-slot name="trigger">
             <button class="inline-flex items-center px-3 py-2 lg:py-1.5 lg:px-2.5 border border-transparent text-sm leading-4 font-medium rounded-md text-gray-500 dark:text-gray-400 bg-white dark:bg-gray-800 hover:text-gray-700 dark:hover:text-gray-300 focus:outline-none transition ease-in-out duration-150">
@@ -281,6 +293,16 @@
         {{ __('Search Profiles') }}
     </x-responsive-nav-link>
 
+@auth
+    <x-responsive-nav-link :href="route('plans.index')">
+        {{ __('subscriptions.nav_plans') }}
+    </x-responsive-nav-link>
+    @if (auth()->user()->matrimonyProfile)
+        <x-responsive-nav-link :href="route('matches.index')">
+            {{ __('matching.nav_matches') }}
+        </x-responsive-nav-link>
+    @endif
+@endauth
 
 @auth
     <details class="px-2">

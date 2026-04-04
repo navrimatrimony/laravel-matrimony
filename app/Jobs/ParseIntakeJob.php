@@ -7,11 +7,10 @@ use App\Models\BiodataIntake;
 use App\Services\AiVisionExtractionService;
 use App\Services\Intake\IntakeExtractionReuseResolver;
 use App\Services\Intake\IntakeParseInputSelectionTrace;
+use App\Services\Intake\IntakePipelineService;
 use App\Services\IntakeManualOcrPreparedService;
 use App\Services\Ocr\OcrQualityEvaluator;
 use App\Services\OcrService;
-use App\Services\Parsing\IntakeParsedJsonUtf8Sanitizer;
-use App\Services\Parsing\IntakeParsedSnapshotSkeleton;
 use App\Services\Parsing\ParserStrategyResolver;
 use App\Services\Parsing\ProviderResolver;
 use App\Support\IntakeDobTrace;
@@ -503,10 +502,8 @@ class ParseIntakeJob implements ShouldQueue
         }
 
         // At this point parsers are already required to return SSOT-compatible shape.
-        $ssot = app(IntakeParsedSnapshotSkeleton::class)->ensure($parsed);
-        // JSON column encoding fails on invalid UTF-8 (OCR/AI); scrub strings only — keep structure.
         $utf8Stats = [];
-        $ssot = IntakeParsedJsonUtf8Sanitizer::sanitize($ssot, $utf8Stats);
+        $ssot = app(IntakePipelineService::class)->finalizeParsedSnapshotForStorage($parsed, $utf8Stats);
         if (($utf8Stats['strings_fixed'] ?? 0) > 0) {
             Log::warning('ParseIntakeJob: repaired malformed UTF-8 in parsed_json before save', [
                 'intake_id' => $intake->id,

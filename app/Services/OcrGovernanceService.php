@@ -4,23 +4,24 @@ namespace App\Services;
 
 use App\Models\ConflictRecord;
 use App\Models\MatrimonyProfile;
+use App\Services\Core\ConflictPolicy;
 
 /**
  * Phase-3 Day-14: OCR Mode-Based Governance Service (Structure Only).
- * 
+ *
  * NO OCR ENGINE HERE — This is governance decision logic only.
- * 
+ *
  * Decides what action to take for OCR-proposed field values:
  * - ALLOW: Field can be populated (no conflict, no lock)
  * - SKIP: Field must be skipped (locked, cannot overwrite)
  * - CREATE_CONFLICT: Conflict detected, create ConflictRecord
- * 
+ *
  * Authority order enforced:
  *   Admin > User > Matchmaker > OCR/System
- * 
+ *
  * OCR/System (rank 99) is lowest authority.
  * Locked fields (edited by human) cannot be overwritten by OCR.
- * 
+ *
  * This service does NOT mutate profile data.
  * It only returns governance decisions.
  */
@@ -37,7 +38,7 @@ class OcrGovernanceService
 
     /**
      * Determine governance decision for a field based on OCR mode.
-     * 
+     *
      * Mode behavior:
      * - MODE_1_FIRST_CREATION: ALLOW (no existing data, no conflicts)
      * - MODE_2_EXISTING_PROFILE: CREATE_CONFLICT if values differ, else ALLOW
@@ -48,7 +49,7 @@ class OcrGovernanceService
      * @param  string  $fieldKey  Field key
      * @param  mixed  $proposedValue  Proposed value from OCR
      * @param  string  $fieldType  'CORE' or 'EXTENDED'
-     * @return string  Decision constant (DECISION_*)
+     * @return string Decision constant (DECISION_*)
      */
     public static function decide(
         string $mode,
@@ -94,16 +95,15 @@ class OcrGovernanceService
 
     /**
      * Apply governance decisions for multiple fields (bulk decision).
-     * 
+     *
      * Returns map: field_key => decision_constant
-     * 
+     *
      * This method does NOT mutate profile data.
      * It only returns governance decisions.
      *
-     * @param  MatrimonyProfile|null  $profile
      * @param  array<string, mixed>  $proposedCore  Proposed CORE field values
      * @param  array<string, mixed>  $proposedExtended  Proposed EXTENDED field values
-     * @return array<string, string>  Map: field_key => decision_constant
+     * @return array<string, string> Map: field_key => decision_constant
      */
     public static function decideBulk(
         ?MatrimonyProfile $profile,
@@ -129,18 +129,18 @@ class OcrGovernanceService
 
     /**
      * Execute governance decisions (create conflicts where needed).
-     * 
+     *
      * This method:
      * - Creates ConflictRecord entries for CREATE_CONFLICT decisions
      * - Does NOT mutate profile data
      * - Does NOT auto-populate fields
-     * 
+     *
      * Returns array of created ConflictRecord instances.
      *
      * @param  MatrimonyProfile|null  $profile  Profile (null = new profile, conflicts not created)
      * @param  array<string, mixed>  $proposedCore  Proposed CORE values
      * @param  array<string, mixed>  $proposedExtended  Proposed EXTENDED values
-     * @return ConflictRecord[]  Created conflict records
+     * @return ConflictRecord[] Created conflict records
      */
     public static function executeDecisions(
         ?MatrimonyProfile $profile,
@@ -158,25 +158,25 @@ class OcrGovernanceService
         // Process CORE fields
         foreach ($proposedCore as $fieldKey => $proposedValue) {
             $decision = $decisions[$fieldKey] ?? self::DECISION_SKIP;
-            
+
             if ($decision === self::DECISION_CREATE_CONFLICT) {
                 // SSOT: Deduplication — skip if PENDING conflict already exists for this profile+field
                 $existingPending = \App\Models\ConflictRecord::where('profile_id', $profile->id)
                     ->where('field_name', $fieldKey)
                     ->where('resolution_status', 'PENDING')
                     ->exists();
-                
+
                 if ($existingPending) {
                     continue; // Skip creating duplicate PENDING conflict
                 }
-                
+
                 $current = self::getCurrentValue($profile, $fieldKey, 'CORE');
                 $current = self::normalize($current);
                 $proposed = self::normalize($proposedValue);
-                
+
                 // Double-check values actually differ after normalization (safety guard)
                 if (self::valuesDiffer($current, $proposed)) {
-                    $created[] = ConflictRecord::create([
+                    $created[] = ConflictPolicy::create([
                         'profile_id' => $profile->id,
                         'field_name' => $fieldKey,
                         'field_type' => 'CORE',
@@ -194,25 +194,25 @@ class OcrGovernanceService
         $currentExtended = ExtendedFieldService::getValuesForProfile($profile);
         foreach ($proposedExtended as $fieldKey => $proposedValue) {
             $decision = $decisions[$fieldKey] ?? self::DECISION_SKIP;
-            
+
             if ($decision === self::DECISION_CREATE_CONFLICT) {
                 // SSOT: Deduplication — skip if PENDING conflict already exists for this profile+field
                 $existingPending = \App\Models\ConflictRecord::where('profile_id', $profile->id)
                     ->where('field_name', $fieldKey)
                     ->where('resolution_status', 'PENDING')
                     ->exists();
-                
+
                 if ($existingPending) {
                     continue; // Skip creating duplicate PENDING conflict
                 }
-                
+
                 $current = $currentExtended[$fieldKey] ?? null;
                 $proposed = self::normalize($proposedValue);
                 $current = self::normalize($current);
-                
+
                 // Double-check values actually differ after normalization (safety guard)
                 if (self::valuesDiffer($current, $proposed)) {
-                    $created[] = ConflictRecord::create([
+                    $created[] = ConflictPolicy::create([
                         'profile_id' => $profile->id,
                         'field_name' => $fieldKey,
                         'field_type' => 'EXTENDED',
@@ -231,11 +231,6 @@ class OcrGovernanceService
 
     /**
      * Get current value for a field (CORE or EXTENDED).
-     *
-     * @param  MatrimonyProfile  $profile
-     * @param  string  $fieldKey
-     * @param  string  $fieldType
-     * @return mixed
      */
     private static function getCurrentValue(MatrimonyProfile $profile, string $fieldKey, string $fieldType): mixed
     {
@@ -243,19 +238,18 @@ class OcrGovernanceService
             if ($fieldKey === 'gender_id') {
                 return $profile->getAttribute('gender_id');
             }
+
             return $profile->getAttribute($fieldKey);
         }
 
         // EXTENDED
         $extended = ExtendedFieldService::getValuesForProfile($profile);
+
         return $extended[$fieldKey] ?? null;
     }
 
     /**
      * Normalize value (trim, empty string → null).
-     *
-     * @param  mixed  $value
-     * @return ?string
      */
     private static function normalize(mixed $value): ?string
     {
@@ -263,15 +257,12 @@ class OcrGovernanceService
             return null;
         }
         $s = is_string($value) ? trim($value) : (string) $value;
+
         return $s === '' ? null : $s;
     }
 
     /**
      * Check if two values differ.
-     *
-     * @param  ?string  $a
-     * @param  ?string  $b
-     * @return bool
      */
     private static function valuesDiffer(?string $a, ?string $b): bool
     {

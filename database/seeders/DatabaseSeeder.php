@@ -2,12 +2,8 @@
 
 namespace Database\Seeders;
 
-use App\Models\User;
 use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
-use Database\Seeders\TestAdminRolesSeeder;
-use Database\Seeders\FieldRegistryCoreSeeder;
-
 
 class DatabaseSeeder extends Seeder
 {
@@ -17,23 +13,22 @@ class DatabaseSeeder extends Seeder
      * Seed the application's database.
      */
     public function run(): void
-{
-    
+    {
 
-    $this->call([
-        FieldRegistryCoreSeeder::class,
-        ReligionCasteSubCasteSeeder::class,
-        MasterLookupSeeder::class,
-        MasterMotherTongueDietLifestyleSeeder::class,
-        NakshatraPadaRashiRuleSeeder::class,
-        NakshatraAttributesSeeder::class,
-        AshtakootaMasterSeeder::class,
-        MasterEducationOccupationSeeder::class,
-        EducationSeeder::class,
-        EducationCareerTemporarySeeder::class,
-        TestAdminRolesSeeder::class,
-        GeoSeeder::class,
-    ]);
-}
-
+        $this->call([
+            FieldRegistryCoreSeeder::class,
+            ReligionCasteSubCasteSeeder::class,
+            MasterLookupSeeder::class,
+            MasterMotherTongueDietLifestyleSeeder::class,
+            NakshatraPadaRashiRuleSeeder::class,
+            NakshatraAttributesSeeder::class,
+            AshtakootaMasterSeeder::class,
+            MasterEducationOccupationSeeder::class,
+            EducationSeeder::class,
+            EducationCareerTemporarySeeder::class,
+            TestAdminRolesSeeder::class,
+            GeoSeeder::class,
+            SubscriptionPlansSeeder::class,
+        ]);
+    }
 }

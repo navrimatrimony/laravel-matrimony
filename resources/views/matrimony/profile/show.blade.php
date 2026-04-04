@@ -1637,6 +1637,9 @@
                     @endif
                 @elseif ($canViewContact)
                     {{ $primaryContactPhone }}
+                @elseif (!empty($interestAllowsContact))
+                    <span class="text-amber-800 dark:text-amber-200">{{ __('subscriptions.contact_premium_required') }}</span>
+                    <a href="{{ route('plans.index') }}" class="mt-2 inline-block text-sm font-semibold text-indigo-600 hover:text-indigo-800 dark:text-indigo-400 dark:hover:text-indigo-300">{{ __('subscriptions.nav_plans') }}</a>
                 @else
                     {{ __('Contact details will be available after interest acceptance.') }}
                 @endif
@@ -1644,7 +1647,11 @@
         </div>
         @if (!$isOwnProfile && !$canViewContact)
             <div class="mt-3 rounded-lg border border-stone-200/90 bg-stone-50/90 px-3 py-2.5 text-xs leading-relaxed text-stone-600 dark:border-gray-600 dark:bg-gray-800/50 dark:text-stone-400">
-                <strong>{{ __('Contact policy:') }}</strong> {{ __('Contact number is shared only after the other person accepts your interest. We do not reveal contact without mutual interest.') }}
+                @if (!empty($interestAllowsContact))
+                    <strong>{{ __('subscriptions.nav_plans') }}:</strong> {{ __('subscriptions.contact_premium_required') }}
+                @else
+                    <strong>{{ __('Contact policy:') }}</strong> {{ __('Contact number is shared only after the other person accepts your interest. We do not reveal contact without mutual interest.') }}
+                @endif
             </div>
         @endif
     </section>

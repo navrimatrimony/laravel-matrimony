@@ -31,16 +31,17 @@ class ProfilePreferenceMatchService
     public const STRICT_MUST_MATCH = 'must_match';
 
     /**
+     * @param  array<string, mixed>|null  $targetPreferencesOverride  Same shape as loadTargetPreferences(); skips DB when provided (batch matching).
      * @return array<string, mixed>
      */
-    public static function build(MatrimonyProfile $viewerProfile, MatrimonyProfile $targetProfile): array
+    public static function build(MatrimonyProfile $viewerProfile, MatrimonyProfile $targetProfile, ?array $targetPreferencesOverride = null): array
     {
         $viewerProfile->loadMissing([
             'gender', 'maritalStatus', 'religion', 'caste', 'subCaste', 'diet', 'profession',
             'country', 'state', 'district', 'taluka', 'city',
         ]);
 
-        $pref = self::loadTargetPreferences($targetProfile->id);
+        $pref = $targetPreferencesOverride ?? self::loadTargetPreferences($targetProfile->id);
         $criteria = $pref['criteria'];
 
         $groups = [

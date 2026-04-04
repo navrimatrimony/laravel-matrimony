@@ -305,7 +305,8 @@
                 <dt class="text-xs font-semibold text-gray-400 uppercase tracking-wide">Pending suggestions (profile)</dt>
                 <dd class="mt-1 text-gray-100">
                     @if ($govSuggestionsPresent)
-                        Present — {{ $govSuggestionsCount }} non-empty bucket(s)
+                        <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold border border-sky-500/50 text-sky-100 bg-sky-600/20">{{ $govSuggestionsCount }} non-empty bucket(s)</span>
+                        <span class="block mt-1 text-[11px] text-gray-400">See <strong class="text-gray-300">Pending Suggestions Summary</strong> below for per-bucket detail.</span>
                     @else
                         None
                     @endif
@@ -344,6 +345,150 @@
                 </div>
             </div>
         @endif
+    </div>
+
+    @php
+        $sugSum = $pendingSuggestionsAdminSummary ?? ['has_any' => false, 'non_empty_bucket_count' => 0, 'buckets' => [], 'review_strip' => []];
+        $sugBuckets = is_array($sugSum['buckets'] ?? null) ? $sugSum['buckets'] : [];
+        $reviewStrip = is_array($sugSum['review_strip'] ?? null) ? $sugSum['review_strip'] : [];
+    @endphp
+    <div class="bg-gray-800/70 border border-gray-700 rounded-xl p-6 mb-6">
+        <h2 class="text-sm font-semibold text-gray-100 mb-1">Pending Suggestions Summary</h2>
+        <p class="text-xs text-gray-400 mb-3">Read-only view of <code class="text-gray-500">pending_intake_suggestions_json</code> on the attached profile (Phase-5 merge / partition). Empty buckets are omitted below.</p>
+
+        <div class="mb-4 flex flex-wrap gap-2 text-[11px]" aria-label="Suggestion review summary">
+            <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md border border-gray-600 bg-gray-900/50 text-gray-200">
+                <span class="text-gray-500">Non-empty buckets</span>
+                <span class="font-semibold text-gray-100">{{ (int) ($reviewStrip['non_empty_bucket_count'] ?? 0) }}</span>
+            </span>
+            <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md border border-gray-600 bg-gray-900/50 text-gray-200">
+                <span class="text-gray-500">Core field suggestion rows</span>
+                <span class="font-semibold text-gray-100">{{ (int) ($reviewStrip['core_field_suggestion_row_count'] ?? 0) }}</span>
+            </span>
+            <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md border {{ ($reviewStrip['pending_conflict_count'] ?? 0) > 0 ? 'border-amber-600/60 bg-amber-900/20 text-amber-100' : 'border-gray-600 bg-gray-900/50 text-gray-200' }}">
+                <span class="{{ ($reviewStrip['pending_conflict_count'] ?? 0) > 0 ? 'text-amber-200/80' : 'text-gray-500' }}">Pending conflicts</span>
+                <span class="font-semibold">{{ (int) ($reviewStrip['pending_conflict_count'] ?? 0) }}</span>
+            </span>
+            <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md border border-gray-600 bg-gray-900/50 text-gray-200">
+                <span class="text-gray-500">Attached profile</span>
+                <span class="font-semibold">{{ !empty($reviewStrip['profile_attached']) ? 'Yes' : 'No' }}</span>
+            </span>
+            <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md border border-gray-600 bg-gray-900/50 text-gray-200">
+                <span class="text-gray-500">Member suggestion page</span>
+                <span class="font-semibold">{{ !empty($reviewStrip['member_suggestion_page_available']) ? 'Available' : '—' }}</span>
+            </span>
+        </div>
+
+        <div class="mb-4 p-3 rounded-lg border border-gray-700/80 bg-gray-900/40 text-[11px] text-gray-400 leading-relaxed">
+            Deferred suggestions were not auto-applied because they would replace existing data or need human review. They are not the same as conflict records—if conflicts are listed above, review them separately before trusting apply outcomes.
+        </div>
+
+        @if (!($sugSum['has_any'] ?? false))
+            <p class="text-sm text-gray-400">No pending suggestion buckets on the attached profile.</p>
+        @else
+            <ul class="space-y-3">
+                @foreach ($sugBuckets as $b)
+                    @if (empty($b['exists']))
+                        @continue
+                    @endif
+                    @php
+                        $p = $b['preview'] ?? null;
+                        $ptype = is_array($p) ? ($p['type'] ?? '') : '';
+                    @endphp
+                    <li class="border border-gray-700/80 rounded-lg bg-gray-900/30 overflow-hidden">
+                        <div class="flex flex-wrap items-center justify-between gap-2 px-3 py-2 border-b border-gray-700/60">
+                            <span class="text-sm font-medium text-gray-100">{{ $b['label'] ?? $b['key'] ?? '—' }}</span>
+                            <span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold border border-gray-600 text-gray-200 bg-gray-700/60">{{ (int) ($b['item_count'] ?? 0) }} items</span>
+                        </div>
+                        <details class="group">
+                            <summary class="cursor-pointer select-none px-3 py-2 text-xs text-sky-300/90 hover:text-sky-200 list-none flex items-center gap-2">
+                                <span class="text-gray-500 group-open:hidden">Show preview ▾</span>
+                                <span class="text-gray-500 hidden group-open:inline">Hide preview ▴</span>
+                            </summary>
+                            <div class="px-3 pb-3 pt-1 border-t border-gray-700/40 text-xs text-gray-300">
+                                @if ($ptype === 'key_value' && !empty($p['pairs']) && is_array($p['pairs']))
+                                    <dl class="space-y-2 max-h-64 overflow-y-auto">
+                                        @foreach ($p['pairs'] as $pair)
+                                            <div class="border-b border-gray-700/30 pb-2 last:border-0">
+                                                <div class="flex flex-wrap items-center gap-2 mb-0.5">
+                                                    <dt class="font-mono text-gray-300 text-[11px] shrink-0">{{ $pair['key'] ?? '—' }}</dt>
+                                                    @if (!empty($pair['badge']))
+                                                        <span class="inline-flex px-1.5 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wide border border-sky-600/50 text-sky-200 bg-sky-900/30">{{ $pair['badge'] }}</span>
+                                                    @endif
+                                                </div>
+                                                <dd class="text-gray-200 break-words whitespace-pre-wrap text-[11px] pl-0">
+                                                    <span class="text-gray-500">Incoming:</span> {{ $pair['value'] ?? '—' }}
+                                                    @if (array_key_exists('profile_value_preview', $pair) && $pair['profile_value_preview'] !== null && $pair['profile_value_preview'] !== '')
+                                                        <span class="block mt-0.5 text-gray-500">Profile now: <span class="text-gray-300">{{ $pair['profile_value_preview'] }}</span></span>
+                                                    @endif
+                                                </dd>
+                                            </div>
+                                        @endforeach
+                                    </dl>
+                                @elseif ($ptype === 'core_field_rows' && !empty($p['rows']) && is_array($p['rows']))
+                                    <div class="overflow-x-auto max-h-[28rem] overflow-y-auto">
+                                        <table class="min-w-full text-left text-[11px] border border-gray-700/60 rounded-md overflow-hidden">
+                                            <thead class="bg-gray-900/80 text-gray-400 uppercase tracking-wide">
+                                                <tr>
+                                                    <th class="px-2 py-2 font-medium">Field</th>
+                                                    <th class="px-2 py-2 font-medium">Current</th>
+                                                    <th class="px-2 py-2 font-medium">Incoming</th>
+                                                    <th class="px-2 py-2 font-medium whitespace-nowrap">Hint</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody class="divide-y divide-gray-700/50 text-gray-200">
+                                                @foreach ($p['rows'] as $row)
+                                                    <tr class="align-top bg-gray-900/20">
+                                                        <td class="px-2 py-2 font-mono text-gray-300">{{ $row['field'] !== '' ? $row['field'] : '—' }}</td>
+                                                        <td class="px-2 py-2 break-words max-w-[14rem] whitespace-pre-wrap">{{ ($row['current_profile_value'] ?? '') !== '' ? Str::limit($row['current_profile_value'], 160) : '—' }}</td>
+                                                        <td class="px-2 py-2 break-words max-w-[14rem] whitespace-pre-wrap">{{ ($row['new_value'] ?? '') !== '' ? Str::limit($row['new_value'], 160) : '—' }}</td>
+                                                        <td class="px-2 py-2 text-amber-100/90 whitespace-nowrap">{{ $row['hint'] ?? '—' }}</td>
+                                                    </tr>
+                                                @endforeach
+                                            </tbody>
+                                        </table>
+                                        <p class="mt-2 text-[10px] text-gray-500">Hints are operator-only labels from simple rules (fill vs overwrite vs conflict field overlap); they do not change server behavior.</p>
+                                    </div>
+                                @elseif ($ptype === 'entity_sections' && !empty($p['sections']) && is_array($p['sections']))
+                                    <p class="text-gray-400 mb-2 text-[11px]">Deferred entity sections (counts from suggestion payload only):</p>
+                                    <ul class="flex flex-wrap gap-1.5">
+                                        @foreach ($p['sections'] as $sec)
+                                            @php
+                                                $secName = is_array($sec) ? ($sec['name'] ?? '') : (string) $sec;
+                                                $secCount = is_array($sec) && isset($sec['row_count']) ? (int) $sec['row_count'] : null;
+                                            @endphp
+                                            <li class="px-2 py-1 rounded border border-gray-600 text-gray-200 font-mono text-[11px]">
+                                                {{ $secName !== '' ? $secName : '—' }}@if ($secCount !== null)<span class="text-gray-500"> ({{ $secCount }} {{ $secCount === 1 ? 'row' : 'rows' }})</span>@endif
+                                            </li>
+                                        @endforeach
+                                    </ul>
+                                @elseif ($ptype === 'json' && isset($p['text']))
+                                    <pre class="text-[11px] font-mono text-gray-200 bg-gray-950/60 p-2 rounded border border-gray-700 max-h-64 overflow-auto whitespace-pre-wrap break-words">{{ $p['text'] }}</pre>
+                                @elseif ($ptype === 'text' && isset($p['text']))
+                                    <p class="text-gray-200 whitespace-pre-wrap break-words">{{ $p['text'] }}</p>
+                                @else
+                                    <p class="text-gray-500 italic">No preview available for this bucket.</p>
+                                @endif
+                            </div>
+                        </details>
+                    </li>
+                @endforeach
+            </ul>
+        @endif
+
+        <div class="mt-6 pt-4 border-t border-gray-700/70">
+            <h3 class="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">Related views</h3>
+            <p class="text-[11px] text-gray-500 mb-2">Task-oriented shortcuts (read-only unless noted). Member links may require acting as the uploader.</p>
+            <div class="flex flex-wrap gap-2">
+                <a href="{{ route('intake.status', $intake) }}" target="_blank" rel="noopener noreferrer" class="inline-flex items-center px-3 py-1.5 rounded border border-teal-500/50 text-teal-100 text-xs font-semibold hover:bg-teal-600/15">Open member suggestion page →</a>
+                @if ($govProfile)
+                    <a href="{{ route('admin.profiles.show', $govProfile->id) }}" class="inline-flex items-center px-3 py-1.5 rounded border border-indigo-500/50 text-indigo-100 text-xs font-semibold hover:bg-indigo-600/15">Open attached profile →</a>
+                    <a href="{{ route('admin.suggestions.review', $intake) }}" class="inline-flex items-center px-3 py-1.5 rounded border border-violet-500/50 text-violet-100 text-xs font-semibold hover:bg-violet-600/15">Admin suggestion review →</a>
+                @endif
+                <a href="{{ route('admin.conflict-records.index') }}" class="inline-flex items-center px-3 py-1.5 rounded border border-amber-600/50 text-amber-100 text-xs font-semibold hover:bg-amber-600/10">Open pending conflicts@if ($govPendingConflicts > 0) ({{ $govPendingConflicts }})@endif →</a>
+                <a href="{{ route('admin.governance-dashboard') }}" class="inline-flex items-center px-3 py-1.5 rounded border border-gray-600 text-gray-200 text-xs font-semibold hover:bg-gray-700/50">Open governance dashboard →</a>
+            </div>
+        </div>
     </div>
 
     <div class="bg-gray-900/40 border border-gray-700 rounded-xl p-5 mb-6">

@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\ConflictRecord;
 use App\Models\MatrimonyProfile;
 use App\Models\User;
+use App\Services\Core\ConflictPolicy;
 use App\Support\AdminProfileEditResult;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
@@ -169,7 +170,7 @@ class AdminProfileEditGovernanceService
                     }
                     $oldVal = ($originalData[$fieldKey] ?? $profile->$fieldKey) === '' ? null : (string) ($originalData[$fieldKey] ?? $profile->$fieldKey ?? null);
                     $newVal = isset($updateData[$fieldKey]) ? ($updateData[$fieldKey] === '' ? null : (string) $updateData[$fieldKey]) : null;
-                    ConflictRecord::create([
+                    ConflictPolicy::create([
                         'profile_id' => $profile->id,
                         'field_name' => $fieldKey,
                         'field_type' => 'CORE',

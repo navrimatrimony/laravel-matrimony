@@ -6,16 +6,16 @@ use App\Jobs\ParseIntakeJob;
 use App\Models\AdminSetting;
 use App\Models\BiodataIntake;
 use App\Services\Intake\IntakeExtractionReuseResolver;
+use App\Services\Intake\IntakePipelineService;
 use App\Services\Intake\IntakeReviewParseInputTextResolver;
 use App\Services\IntakeApprovalService;
 use App\Services\IntakeManualOcrPreparedService;
 use App\Services\MutationService;
 use App\Services\OcrService;
-use App\Services\Parsing\ParserStrategyResolver;
 use App\Services\Parsing\ProviderResolver;
 use App\Services\Preview\PreviewSectionMapper;
-use App\Support\IntakePreviewDiagnosticsPresenter;
 use App\Support\IntakeDobTrace;
+use App\Support\IntakePreviewDiagnosticsPresenter;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
@@ -1857,7 +1857,7 @@ class IntakeController extends Controller
         }
 
         // Centralized deterministic controlled-field normalization for full snapshot.
-        return app(\App\Services\Parsing\IntakeControlledFieldNormalizer::class)->normalizeSnapshot($out);
+        return app(IntakePipelineService::class)->normalizeSnapshotForStorage($out);
     }
 
     /**

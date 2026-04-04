@@ -1,0 +1,28 @@
+<?php
+
+return [
+    'title' => 'Match boost',
+    'intro' => 'Tune rule-based boosts, premium tier extras, and optional Sarvam AI scoring. Changes apply to new match computations; pair results are cached briefly.',
+    'saved' => 'Match boost settings saved.',
+    'api_note_title' => 'Sarvam API key',
+    'api_note_body' => 'Set your subscription key in .env. AI is skipped when the key is empty or the request fails.',
+    'ai_section' => 'AI boost (optional)',
+    'use_ai' => 'Enable AI compatibility score (Sarvam)',
+    'ai_provider' => 'Provider',
+    'ai_provider_none' => 'None',
+    'ai_model' => 'Model name',
+    'boost_active_weight' => 'Active user boost (candidate)',
+    'active_within_days' => 'Active if last seen within (days)',
+    'hint_active' => 'Added when the matched profile’s account was recently active.',
+    'boost_premium_weight' => 'Paid plan boost (all non-free tiers)',
+    'hint_premium' => 'Applied for Basic, Silver, and Gold effective plans.',
+    'boost_similarity_weight' => 'Similarity boost',
+    'hint_similarity' => 'Once per pair: same profession, same city, or same state.',
+    'boost_gold_extra' => 'Gold tier extra',
+    'boost_silver_extra' => 'Silver tier extra',
+    'max_boost_limit' => 'Max total boost points',
+    'hint_max' => 'Caps the sum of rule + AI boost added to the base score (final match score never exceeds 100).',
+    'save' => 'Save settings',
+    'nav' => 'Match boost',
+    'only_sarvam' => 'Only Sarvam is supported for AI match boost.',
+];
