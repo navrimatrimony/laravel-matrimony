@@ -542,7 +542,7 @@ class OnboardingController extends Controller
         if ($profile) {
             return $profile;
         }
-        $manualActivation = \App\Services\AdminSettingService::isManualProfileActivationRequired();
+        $manualActivation = \App\Services\Admin\AdminSettingService::isManualProfileActivationRequired();
         $genderId = null;
         if (! empty($user->gender)) {
             $genderId = \App\Models\MasterGender::where('key', $user->gender)->where('is_active', true)->value('id');

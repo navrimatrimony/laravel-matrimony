@@ -87,7 +87,7 @@ class ManualSnapshotBuilderService
             $file = $request->file('profile_photo');
             $filename = time().'_'.basename($file->getClientOriginalName());
             $file->move(public_path('uploads/matrimony_photos'), $filename);
-            $photoApprovalRequired = \App\Services\AdminSettingService::isPhotoApprovalRequired();
+            $photoApprovalRequired = \App\Services\Admin\AdminSettingService::isPhotoApprovalRequired();
             $core['profile_photo'] = $filename;
             $core['photo_approved'] = ! $photoApprovalRequired;
             $core['photo_rejected_at'] = null;

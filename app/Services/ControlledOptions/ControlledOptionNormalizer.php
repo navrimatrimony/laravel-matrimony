@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Services;
+namespace App\Services\ControlledOptions;
 
 use App\Services\ControlledOptions\ControlledOptionEngine;
 use Illuminate\Support\Facades\App;

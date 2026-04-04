@@ -291,7 +291,7 @@ class MatrimonyProfileController extends Controller
 
         $galleryPhotos = $galleryPhotosQuery->get();
 
-        $photoApprovalRequired = \App\Services\AdminSettingService::isPhotoApprovalRequired();
+        $photoApprovalRequired = \App\Services\Admin\AdminSettingService::isPhotoApprovalRequired();
         $photoMaxPerProfile = (int) \App\Models\AdminSetting::getValue('photo_max_per_profile', '5');
 
         $currentPhotoCount = $galleryPhotos->count();
@@ -451,7 +451,7 @@ class MatrimonyProfileController extends Controller
             return redirect()->back()->with('error', $e->getMessage());
         }
 
-        $photoApprovalRequired = \App\Services\AdminSettingService::isPhotoApprovalRequired();
+        $photoApprovalRequired = \App\Services\Admin\AdminSettingService::isPhotoApprovalRequired();
         $photoApproved = ! $photoApprovalRequired;
 
         $approvedStatus = $photoApproved ? 'approved' : 'pending';

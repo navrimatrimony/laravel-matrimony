@@ -2,7 +2,7 @@
 
 use App\Http\Controllers\Payments\PayuController;
 use App\Models\Caste;
-use App\Services\HomepageImageService;
+use App\Services\Admin\HomepageImageService;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -35,7 +35,7 @@ Route::get('/', function () {
         ->orderBy('label')
         ->get();
 
-    return view('welcome', compact('homepageImages', 'castes'));
+    return view('public.welcome', compact('homepageImages', 'castes'));
 });
 
 // Local-only smoke route (not exposed in production)

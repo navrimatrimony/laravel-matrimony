@@ -65,9 +65,9 @@ class AppServiceProvider extends ServiceProvider
         |----------------------------------------------------------------------
         | Provides admin capability variables to layouts.admin.
         */
-        View::composer('welcome', function ($view) {
+        View::composer('public.welcome', function ($view) {
             try {
-                $service = app(\App\Services\HomepageImageService::class);
+                $service = app(\App\Services\Admin\HomepageImageService::class);
                 $urls = [];
                 foreach (array_keys(\App\Models\HomepageSectionImage::SECTIONS) as $key) {
                     $urls[$key] = $service->url($key);

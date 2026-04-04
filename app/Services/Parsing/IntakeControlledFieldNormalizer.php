@@ -3,7 +3,7 @@
 namespace App\Services\Parsing;
 
 use App\Services\BiodataParserService;
-use App\Services\ControlledOptionNormalizer;
+use App\Services\ControlledOptions\ControlledOptionNormalizer;
 use Illuminate\Support\Facades\Log;
 
 /**

@@ -1,32 +1,25 @@
-@extends(request()->routeIs('admin.*') ? 'layouts.admin' : 'layouts.app')
+@extends('layouts.app')
 
 @section('content')
-<div class="{{ request()->routeIs('admin.*') ? 'bg-white dark:bg-gray-800 shadow rounded-lg p-6' : 'max-w-6xl mx-auto py-8 px-4 sm:px-6' }}" x-data="{ adminEditMode: @js(auth()->check() && auth()->user()->is_admin === true && request()->has('admin_edit')), openRequestModal: false }">
-    @if (request()->routeIs('admin.*'))
-        <h1 class="text-2xl font-bold text-gray-800 dark:text-gray-100 mb-1">Admin — Profile #{{ $profile->id }}</h1>
-        <p class="text-sm text-gray-500 dark:text-gray-400 mb-6">{{ $profile->full_name ?? '—' }}@if (!empty($profile->is_demo)) <span class="inline-block ml-2 px-2 py-0.5 text-xs font-semibold bg-sky-100 dark:bg-sky-900/40 text-sky-700 dark:text-sky-300 rounded">Showcase</span>@endif</p>
-    @else
-        <h1 class="text-lg font-semibold tracking-tight text-gray-900 dark:text-gray-100 mb-4 lg:mb-5 lg:text-xl xl:text-2xl">Matrimony Profile</h1>
-        @if (($isOwnProfile ?? false) && auth()->check() && auth()->user()->is_admin !== true)
-            <div class="mb-6">
-                <a href="{{ route('matrimony.profile.edit') }}"
-                   class="inline-flex items-center px-5 py-2.5 rounded-md bg-red-600 text-white hover:bg-red-700 transition font-medium text-sm">
-                    {{ __('Edit Profile') }}
-                </a>
-            </div>
-        @endif
+<div class="max-w-6xl mx-auto py-8 px-4 sm:px-6" x-data="{ adminEditMode: @js(auth()->check() && auth()->user()->is_admin === true && request()->has('admin_edit')), openRequestModal: false }">
+    <h1 class="text-lg font-semibold tracking-tight text-gray-900 dark:text-gray-100 mb-4 lg:mb-5 lg:text-xl xl:text-2xl">Matrimony Profile</h1>
+    @if (($isOwnProfile ?? false) && auth()->check() && auth()->user()->is_admin !== true)
+        <div class="mb-6">
+            <a href="{{ route('matrimony.profile.edit') }}"
+               class="inline-flex items-center px-5 py-2.5 rounded-md bg-red-600 text-white hover:bg-red-700 transition font-medium text-sm">
+                {{ __('Edit Profile') }}
+            </a>
+        </div>
     @endif
 
-    @if (! request()->routeIs('admin.*'))
-        @if (session('success'))
-            <div class="mb-4 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-100">{{ session('success') }}</div>
-        @endif
-        @if (session('info'))
-            <div class="mb-4 rounded-lg border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-900 dark:border-sky-800 dark:bg-sky-950/40 dark:text-sky-100">{{ session('info') }}</div>
-        @endif
-        @if (session('error'))
-            <div class="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-900 dark:border-red-800 dark:bg-red-950/40 dark:text-red-100">{{ session('error') }}</div>
-        @endif
+    @if (session('success'))
+        <div class="mb-4 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-100">{{ session('success') }}</div>
+    @endif
+    @if (session('info'))
+        <div class="mb-4 rounded-lg border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-900 dark:border-sky-800 dark:bg-sky-950/40 dark:text-sky-100">{{ session('info') }}</div>
+    @endif
+    @if (session('error'))
+        <div class="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-900 dark:border-red-800 dark:bg-red-950/40 dark:text-red-100">{{ session('error') }}</div>
     @endif
 
 @if (($profile->lifecycle_state ?? null) === 'conflict_pending' && ($hasBlockingConflicts ?? false))
@@ -372,7 +365,7 @@
         <div class="min-w-0 flex-1 flex flex-col px-5 lg:px-5 lg:pb-2 lg:pl-6 lg:pr-5 xl:px-6 xl:pl-8">
         <div class="space-y-4">
 
-        @if (($isOwnProfile ?? false) && !request()->routeIs('admin.*'))
+        @if (($isOwnProfile ?? false))
         @php
             $detailedPct = (int) round((float) ($completenessDetailedPct ?? 0));
             $detailedPct = max(0, min(100, $detailedPct));
@@ -484,10 +477,10 @@
     $heroDisplayName = \App\Support\ProfileDisplayCopy::formatPersonName((string) ($profile->full_name ?? ''));
 @endphp
             <div class="min-w-0">
-            @if (! request()->routeIs('admin.*') && $heroDisplayName !== '')
+            @if ($heroDisplayName !== '')
                 <h2 class="mb-4 text-2xl font-extrabold uppercase leading-tight tracking-tight text-stone-900 dark:text-stone-50 sm:text-3xl break-words [word-break:break-word]">{{ $heroDisplayName }}</h2>
             @endif
-            <div class="space-y-3 rounded-xl bg-stone-50/50 px-3 py-3.5 ring-1 ring-stone-100/80 dark:bg-stone-900/25 dark:ring-stone-800/60 sm:px-3.5 @if (!request()->routeIs('admin.*') && !($isOwnProfile ?? false)) lg:grid lg:grid-cols-2 lg:gap-x-8 lg:gap-y-2 lg:space-y-0 @endif">
+            <div class="space-y-3 rounded-xl bg-stone-50/50 px-3 py-3.5 ring-1 ring-stone-100/80 dark:bg-stone-900/25 dark:ring-stone-800/60 sm:px-3.5 @if (!($isOwnProfile ?? false)) lg:grid lg:grid-cols-2 lg:gap-x-8 lg:gap-y-2 lg:space-y-0 @endif">
                 @if ($scanRow1Text !== '')
                 <div class="flex items-start gap-3">
                     <span class="mt-0.5 inline-flex h-4 w-4 shrink-0 text-rose-500/75 dark:text-rose-400/90" aria-hidden="true">
@@ -534,7 +527,7 @@
         </div>
         </div>
 
-        @if (! request()->routeIs('admin.*') && ! ($isOwnProfile ?? false) && auth()->check())
+        @if (! ($isOwnProfile ?? false) && auth()->check())
             @php
                 $crState = 'none';
                 $crRequest = null;
@@ -660,7 +653,7 @@
                     </button>
                 </form>
             </aside>
-        @elseif (! request()->routeIs('admin.*') && ! ($isOwnProfile ?? false))
+        @elseif (! ($isOwnProfile ?? false))
             <aside class="flex w-full shrink-0 flex-col justify-center gap-2 border-t border-stone-200/80 bg-stone-50/60 px-4 py-4 dark:border-gray-700/70 dark:bg-gray-900/50 lg:mt-0 lg:w-36 lg:border-l lg:border-t-0 lg:px-3 lg:py-6" aria-label="{{ __('profile.decision_zone_label') }}">
                 <p class="text-[10px] font-semibold uppercase tracking-[0.2em] text-stone-400">{{ __('profile.hero_actions_rail_title') }}</p>
                 <a href="{{ route('login') }}" class="inline-flex w-full items-center justify-center rounded-2xl border border-rose-200 bg-white px-3 py-2.5 text-sm font-semibold text-rose-800 shadow-sm dark:border-rose-900/50 dark:bg-gray-800 dark:text-rose-200">{{ __('Login') }}</a>
@@ -668,7 +661,7 @@
         @endif
         </div>
 
-        @if (! request()->routeIs('admin.*') && ! ($isOwnProfile ?? false))
+        @if (! ($isOwnProfile ?? false))
             <div class="border-b border-stone-200/85 bg-gradient-to-r from-rose-50/80 via-white to-white px-5 py-6 dark:border-gray-700/80 dark:from-rose-950/20 dark:via-gray-900 dark:to-gray-900 lg:px-8">
                 @if (auth()->check())
                     @if (session('success'))
@@ -777,7 +770,7 @@
         @endphp
 
         {{-- About me spotlight: directly under “Like this profile” / interest strip (or first fold for own profile) --}}
-        @if (! request()->routeIs('admin.*') && $hasAboutBody)
+        @if ($hasAboutBody)
             <div class="px-5 pb-2 pt-2 lg:px-8 lg:pb-3 lg:pt-4">
                 <article
                     class="relative overflow-hidden rounded-2xl border border-stone-200/70 bg-gradient-to-br from-white via-rose-50/40 to-amber-50/25 px-5 py-6 shadow-[0_12px_48px_-16px_rgba(190,24,93,0.12)] ring-1 ring-rose-100/50 dark:border-rose-900/25 dark:from-gray-900 dark:via-rose-950/30 dark:to-gray-900 dark:ring-rose-900/20 sm:px-7 sm:py-8"
@@ -1515,22 +1508,7 @@
 </div>
 @endif
 
-@if (request()->routeIs('admin.*') && ($hasAboutBody || $detailExpectations !== ''))
-<div class="mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
-    <h3 class="mb-3 border-b border-stone-200/75 border-l-2 border-l-rose-400/70 pb-2.5 pl-3 text-base font-semibold tracking-tight text-stone-900 dark:border-gray-700/75 dark:border-l-rose-500/45 dark:text-stone-100">{{ __('About & expectations') }}</h3>
-    @if ($detailNarrative !== '')
-        <p class="text-xs font-medium text-stone-500 dark:text-stone-400">{{ __('About me') }}</p>
-        <p class="font-medium text-base whitespace-pre-wrap">{{ $extendedAttributes->narrative_about_me }}</p>
-    @elseif ($detailAboutFallback !== '')
-        <p class="text-xs font-medium text-stone-500 dark:text-stone-400">{{ __('About me') }}</p>
-        <p class="text-sm leading-relaxed text-stone-800 dark:text-stone-100 whitespace-pre-wrap">{{ $detailAboutFallback }}</p>
-    @endif
-    @if ($detailExpectations !== '')
-        <p class="text-xs font-medium text-stone-500 dark:text-stone-400 mt-2">{{ __('Expectations') }}</p>
-        <p class="font-medium text-base whitespace-pre-wrap">{{ $extendedAttributes->narrative_expectations }}</p>
-    @endif
-</div>
-@elseif (! request()->routeIs('admin.*') && $detailExpectations !== '')
+@if ($detailExpectations !== '')
 <div class="relative overflow-hidden rounded-2xl border border-stone-200/75 bg-gradient-to-br from-white via-amber-50/25 to-rose-50/20 shadow-[0_14px_44px_-20px_rgba(190,24,93,0.1)] ring-1 ring-amber-100/50 dark:border-amber-900/20 dark:from-gray-900 dark:via-amber-950/10 dark:to-rose-950/15">
     <section class="relative px-5 py-6 sm:px-7 sm:py-7" aria-labelledby="profile-expectations-only-heading">
         <header class="mb-4 flex flex-wrap items-center gap-3">

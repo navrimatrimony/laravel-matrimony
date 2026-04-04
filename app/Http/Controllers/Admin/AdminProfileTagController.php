@@ -5,7 +5,7 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\MatrimonyProfile;
 use App\Models\VerificationTag;
-use App\Services\TagAssignmentService;
+use App\Services\Admin\TagAssignmentService;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
 

@@ -131,7 +131,7 @@ class MutationService
         try {
             DB::transaction(function () use ($profile, $snapshot, $isAdmin, $mode, &$hadConflicts): void {
                 $proposedCore = $snapshot['core'] ?? [];
-                $proposedExtended = $snapshot['extended'] ?? [];
+                $proposedExtended = $this->proposedExtendedForManualSnapshotConflictDetection($snapshot);
                 $conflictRecords = [];
                 $conflictFieldNames = [];
 
@@ -455,6 +455,26 @@ class MutationService
     }
 
     /**
+     * Proposed extended key-value payload for ConflictDetectionService inside applyManualSnapshot only.
+     * KV applies later via `extended_fields`; some callers still pass legacy `extended`. When both arrays are
+     * non-empty, array_replace(extended, extended_fields) matches overlapping keys to the applied snapshot.
+     *
+     * @param  array<string, mixed>  $snapshot
+     * @return array<string, mixed>
+     */
+    private function proposedExtendedForManualSnapshotConflictDetection(array $snapshot): array
+    {
+        $extended = (isset($snapshot['extended']) && is_array($snapshot['extended'])) ? $snapshot['extended'] : [];
+        $extendedFields = (isset($snapshot['extended_fields']) && is_array($snapshot['extended_fields'])) ? $snapshot['extended_fields'] : [];
+
+        if ($extended !== []) {
+            return $extendedFields !== [] ? array_replace($extended, $extendedFields) : $extended;
+        }
+
+        return $extendedFields;
+    }
+
+    /**
      * Phase-5 Day-20: Entry point for intake-driven mutation (alias for applyApprovedIntake).
      * 1) Duplicate detection 2) Conflict detection 3) Field lock 4) Core apply 5) Contact sync
      * 6) Entity sync 7) History write 8) Lifecycle transition 9) intake_locked=true 10) intake_status=applied
@@ -688,6 +708,9 @@ class MutationService
                     $proposedExtended = $snapshot['extended'] ?? [];
                 }
 
+                // ——— Canonical controlled core (text → *_id): MUST run before conflict + field-lock so evaluation matches apply ———
+                $proposedCore = $this->normalizeIntakeCoreForApply($proposedCore);
+
                 // ——— Step 3: Field-level conflict detection (ConflictDetectionService owns escalation) ———
                 $conflictResult = ConflictDetectionService::detectResult($profile, $proposedCore, $proposedExtended);
                 $conflictRecords = $conflictResult->conflictRecords;
@@ -737,9 +760,6 @@ class MutationService
                     }
                 }
 
-                // ——— Step 4.5: Normalize intake core (text → IDs) so wizard shows religion/caste/complexion correctly ———
-                $proposedCore = $this->normalizeIntakeCoreForApply($proposedCore);
-
                 // ——— Step 5: CORE field apply (FieldRegistry-driven) ———
                 $intakePseudoContactCoreKeys = [
                     'primary_contact_number', 'primary_contact_number_2', 'primary_contact_number_3',
@@ -783,7 +803,8 @@ class MutationService
                 }
                 $profile->save();
 
-                // ——— Step 5.5: Birth place / Native place (snapshot → profile columns; applyApprovedIntake path) ———
+                // ——— Step 5.5: Birth / native place → profile columns (only when snapshot still has place — same gate as merge partition) ———
+                // Values: prefer $proposedCore IDs (post-normalizeIntakeCoreForApply); fallback snapshot slice if core has no hierarchy.
                 $tableName = $profile->getTable();
                 $hasAnyPlaceValue = static function (array $place): bool {
                     foreach (['city_id', 'taluka_id', 'district_id', 'state_id'] as $k) {
@@ -796,7 +817,13 @@ class MutationService
                 };
                 $placeUpdated = false;
                 if (isset($snapshot['birth_place']) && is_array($snapshot['birth_place']) && $hasAnyPlaceValue($snapshot['birth_place'])) {
-                    $bp = $snapshot['birth_place'];
+                    $birthFromCore = [
+                        'city_id' => isset($proposedCore['birth_city_id']) ? (int) $proposedCore['birth_city_id'] : null,
+                        'taluka_id' => isset($proposedCore['birth_taluka_id']) ? (int) $proposedCore['birth_taluka_id'] : null,
+                        'district_id' => isset($proposedCore['birth_district_id']) ? (int) $proposedCore['birth_district_id'] : null,
+                        'state_id' => isset($proposedCore['birth_state_id']) ? (int) $proposedCore['birth_state_id'] : null,
+                    ];
+                    $bp = $hasAnyPlaceValue($birthFromCore) ? $birthFromCore : $snapshot['birth_place'];
                     if (Schema::hasColumn($tableName, 'birth_city_id')) {
                         $profile->birth_city_id = isset($bp['city_id']) ? (int) $bp['city_id'] : null;
                     }
@@ -812,7 +839,13 @@ class MutationService
                     $placeUpdated = true;
                 }
                 if (isset($snapshot['native_place']) && is_array($snapshot['native_place']) && $hasAnyPlaceValue($snapshot['native_place'])) {
-                    $np = $snapshot['native_place'];
+                    $nativeFromCore = [
+                        'city_id' => isset($proposedCore['native_city_id']) ? (int) $proposedCore['native_city_id'] : null,
+                        'taluka_id' => isset($proposedCore['native_taluka_id']) ? (int) $proposedCore['native_taluka_id'] : null,
+                        'district_id' => isset($proposedCore['native_district_id']) ? (int) $proposedCore['native_district_id'] : null,
+                        'state_id' => isset($proposedCore['native_state_id']) ? (int) $proposedCore['native_state_id'] : null,
+                    ];
+                    $np = $hasAnyPlaceValue($nativeFromCore) ? $nativeFromCore : $snapshot['native_place'];
                     if (Schema::hasColumn($tableName, 'native_city_id')) {
                         $profile->native_city_id = isset($np['city_id']) ? (int) $np['city_id'] : null;
                     }
@@ -835,7 +868,7 @@ class MutationService
                 $contactConflict = $this->syncContactsFromIntakeApply(
                     $profile,
                     is_array($snapshot['contacts'] ?? null) ? $snapshot['contacts'] : [],
-                    is_array($auditSnapshot['core'] ?? null) ? $auditSnapshot['core'] : [],
+                    is_array($proposedCore) ? $proposedCore : [],
                     is_array($auditSnapshot['siblings'] ?? null) ? $auditSnapshot['siblings'] : []
                 );
                 if ($contactConflict) {
@@ -859,6 +892,9 @@ class MutationService
                         continue;
                     }
                     if ($snapshotKey === 'horoscope' && Schema::hasTable('profile_horoscope_data')) {
+                        // Intake approval snapshot is not normalized in normalizeApprovalSnapshot(); match preview/full normalizeSnapshot horoscope path.
+                        $proposed = app(\App\Services\Parsing\IntakeControlledFieldNormalizer::class)
+                            ->normalizeHoroscopeRows($proposed);
                         $this->syncHoroscopeUpsert($profile, $proposed);
 
                         continue;
@@ -884,6 +920,21 @@ class MutationService
                 if (Schema::hasTable('profile_extended_attributes') && is_array($extendedNarrative)) {
                     $row = isset($extendedNarrative[0]) ? $extendedNarrative[0] : $extendedNarrative;
                     $this->syncExtendedAttributesUpsert($profile, $row);
+                }
+
+                // ——— Step 8b: Extended KV (profile_extended_fields) — same source as $proposedExtended / partition; skip conflicted fields (like core apply) ———
+                if (isset($snapshot['extended']) && is_array($snapshot['extended']) && $snapshot['extended'] !== []
+                    && Schema::hasTable('profile_extended_fields')) {
+                    $extendedToApply = [];
+                    foreach ($snapshot['extended'] as $ek => $ev) {
+                        if (in_array((string) $ek, $conflictFieldNames, true)) {
+                            continue;
+                        }
+                        $extendedToApply[(string) $ek] = $ev;
+                    }
+                    if ($extendedToApply !== []) {
+                        $this->applyExtendedFieldsFromSnapshot($profile, $extendedToApply);
+                    }
                 }
 
                 Log::info('MutationService::applyApprovedIntake before lifecycle transition', ['profileId' => $profile->id]);
@@ -1076,7 +1127,7 @@ class MutationService
      * Conflicting primary candidates → ConflictRecord + pending_intake_suggestions_json.contacts.
      *
      * @param  array<int, mixed>  $proposedContacts
-     * @param  array<string, mixed>  $auditCore  Full intake core (before strip) for extra phone slots
+     * @param  array<string, mixed>  $auditCore  Canonical core (same as Step 5: post-normalizeIntakeCoreForApply) for primary/extra phone slots
      * @param  array<int, mixed>  $auditSiblings
      */
     private function syncContactsFromIntakeApply(

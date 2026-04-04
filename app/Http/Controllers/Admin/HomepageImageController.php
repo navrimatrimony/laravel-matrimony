@@ -4,7 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\HomepageSectionImage;
-use App\Services\HomepageImageService;
+use App\Services\Admin\HomepageImageService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 

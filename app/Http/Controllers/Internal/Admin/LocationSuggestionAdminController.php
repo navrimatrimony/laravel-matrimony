@@ -4,7 +4,7 @@ namespace App\Http\Controllers\Internal\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\LocationSuggestion;
-use App\Services\LocationSuggestionApprovalService;
+use App\Services\Admin\LocationSuggestionApprovalService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 

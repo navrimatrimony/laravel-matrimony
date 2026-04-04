@@ -4,7 +4,6 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\AbuseReport;
-use App\Models\ConflictRecord;
 use App\Models\Interest;
 use App\Models\MatrimonyProfile;
 use App\Models\ProfileKycSubmission;
@@ -14,9 +13,10 @@ use App\Notifications\ImageRejectedNotification;
 use App\Notifications\ProfileSoftDeletedNotification;
 use App\Notifications\ProfileSuspendedNotification;
 use App\Notifications\ProfileUnsuspendedNotification;
+use App\Services\AdminProfileEditGovernanceService;
+use App\Services\AdminProfileSoftDeleteService;
 use App\Services\AuditLogService;
 use App\Services\ConflictDetectionService;
-use App\Services\ExtendedFieldService;
 use App\Services\FieldValueHistoryService;
 use App\Services\ProfileCompletenessService;
 use App\Services\ProfileFieldLockService;
@@ -35,21 +35,9 @@ class AdminProfileModerationController extends Controller
 {
     private const REASON_RULES = ['required', 'string', 'min:10'];
 
-    /**
-     * Phase-5B: Build admin snapshot (same structure as manual). Only include changed core + optional extended.
-     * No DB write. Used with MutationService::applyManualSnapshot(..., 'admin').
-     */
-    private function buildAdminSnapshot(MatrimonyProfile $profile, array $coreOverrides, array $extendedFields = []): array
-    {
-        $snapshot = [
-            'core' => $coreOverrides,
-        ];
-        if ($extendedFields !== []) {
-            $snapshot['extended_fields'] = $extendedFields;
-        }
-
-        return $snapshot;
-    }
+    public function __construct(
+        private readonly AdminProfileEditGovernanceService $adminProfileEditGovernance,
+    ) {}
 
     /**
      * Admin profiles list (all profiles, includes suspended/trashed).
@@ -186,7 +174,7 @@ class AdminProfileModerationController extends Controller
     {
         $request->validate(['reason' => self::REASON_RULES]);
 
-        $snapshot = $this->buildAdminSnapshot($profile, ['is_suspended' => true]);
+        $snapshot = $this->adminProfileEditGovernance->buildAdminSnapshot($profile, ['is_suspended' => true]);
         app(\App\Services\MutationService::class)->applyManualSnapshot($profile, $snapshot, (int) $request->user()->id, 'admin');
 
         AuditLogService::log(
@@ -213,7 +201,7 @@ class AdminProfileModerationController extends Controller
     {
         $request->validate(['reason' => self::REASON_RULES]);
 
-        $snapshot = $this->buildAdminSnapshot($profile, ['is_suspended' => false]);
+        $snapshot = $this->adminProfileEditGovernance->buildAdminSnapshot($profile, ['is_suspended' => false]);
         app(\App\Services\MutationService::class)->applyManualSnapshot($profile, $snapshot, (int) $request->user()->id, 'admin');
 
         AuditLogService::log(
@@ -240,11 +228,10 @@ class AdminProfileModerationController extends Controller
     {
         $request->validate(['reason' => self::REASON_RULES]);
 
-        $profileId = $profile->id;
-        $owner = $profile->user;
-        $isDemo = (bool) ($profile->is_demo ?? false);
-
-        $profile->delete();
+        $result = AdminProfileSoftDeleteService::perform($profile);
+        $profileId = $result['profile_id'];
+        $owner = $result['owner'];
+        $isDemo = $result['is_demo'];
 
         AuditLogService::log(
             $request->user(),
@@ -269,7 +256,7 @@ class AdminProfileModerationController extends Controller
     {
         $request->validate(['reason' => self::REASON_RULES]);
 
-        $snapshot = $this->buildAdminSnapshot($profile, [
+        $snapshot = $this->adminProfileEditGovernance->buildAdminSnapshot($profile, [
             'photo_approved' => true,
             'photo_rejected_at' => null,
             'photo_rejection_reason' => null,
@@ -295,7 +282,7 @@ class AdminProfileModerationController extends Controller
     {
         $request->validate(['reason' => self::REASON_RULES]);
 
-        $snapshot = $this->buildAdminSnapshot($profile, [
+        $snapshot = $this->adminProfileEditGovernance->buildAdminSnapshot($profile, [
             'photo_approved' => false,
             'photo_rejected_at' => now(),
             'photo_rejection_reason' => $request->reason,
@@ -327,7 +314,7 @@ class AdminProfileModerationController extends Controller
     {
         $request->validate(['reason' => self::REASON_RULES]);
 
-        $snapshot = $this->buildAdminSnapshot($profile, [
+        $snapshot = $this->adminProfileEditGovernance->buildAdminSnapshot($profile, [
             'visibility_override' => true,
             'visibility_override_reason' => $request->reason,
         ]);
@@ -389,58 +376,19 @@ class AdminProfileModerationController extends Controller
         }
 
         $admin = auth()->user();
-        // Phase-5: Resolve string lookups to *_id when form sends key (e.g. marital_status => single)
-        if ($request->has('marital_status') && ! $request->has('marital_status_id')) {
-            $key = $request->input('marital_status') === 'single' ? 'never_married' : $request->input('marital_status');
-            $id = \App\Models\MasterMaritalStatus::where('key', $key)->value('id');
-            if ($id) {
-                $request->merge(['marital_status_id' => $id]);
-            }
-        }
-        $originalData = $profile->only([
-            'full_name', 'date_of_birth', 'marital_status_id', 'highest_education', 'location',
-            'religion_id', 'caste_id', 'sub_caste_id', 'height_cm',
-            'complexion_id', 'blood_group_id', 'physical_build_id', 'weight_kg', 'spectacles_lens', 'physical_condition',
-        ]);
-        $editedFields = [];
 
-        // Track which fields were actually changed (Phase-5: *_id for master lookups)
-        $updateData = [];
-        $editableFields = [
-            'full_name', 'date_of_birth', 'marital_status_id', 'highest_education', 'location',
-            'religion_id', 'caste_id', 'sub_caste_id', 'height_cm',
-            'complexion_id', 'blood_group_id', 'physical_build_id', 'weight_kg', 'spectacles_lens', 'physical_condition',
-        ];
+        $this->adminProfileEditGovernance->mergeMaritalStatusFromLegacyRequest($request);
+        $originalData = $this->adminProfileEditGovernance->buildOriginalCoreSnapshot($profile);
+        $hasCoreFieldChanges = $this->adminProfileEditGovernance->hasCoreFieldChanges($request, $originalData);
 
-        // Check if any CORE fields are being edited (before validation)
-        $hasCoreFieldChanges = false;
-        foreach ($editableFields as $field) {
-            if ($request->exists($field)) {
-                $newValue = $request->input($field);
-                $oldValue = $originalData[$field] ?? null;
-                $newValue = is_string($newValue) ? trim($newValue) : $newValue;
-                $newValue = $newValue === '' ? null : $newValue;
-                $oldValue = is_string($oldValue) ? trim($oldValue) : $oldValue;
-                $oldValue = $oldValue === '' ? null : $oldValue;
-                if ((string) $newValue !== (string) $oldValue) {
-                    $hasCoreFieldChanges = true;
-                    break;
-                }
-            }
-        }
-
-        // Validate edit reason (mandatory for all updates)
         $validationRules = [
             'edit_reason' => self::REASON_RULES,
         ];
 
-        // Only validate CORE fields if they're being edited
-        // This allows EXTENDED-only updates without requiring CORE field validation
-        // SSOT: CORE vs EXTENDED separation - EXTENDED saves don't require CORE validation
         if ($hasCoreFieldChanges) {
             $validationRules['full_name'] = 'required|string|max:255';
             $validationRules['date_of_birth'] = 'nullable|date';
-            $validationRules['marital_status_id'] = ['nullable', \Illuminate\Validation\Rule::exists('master_marital_statuses', 'id')->where(fn ($q) => $q->where('is_active', true))];
+            $validationRules['marital_status_id'] = ['nullable', Rule::exists('master_marital_statuses', 'id')->where(fn ($q) => $q->where('is_active', true))];
             $validationRules['highest_education'] = 'nullable|string|max:255';
             $validationRules['location'] = 'nullable|string|max:255';
             $validationRules['religion_id'] = ['nullable', 'exists:religions,id'];
@@ -471,156 +419,24 @@ class AdminProfileModerationController extends Controller
 
         $request->validate($validationRules);
 
-        // STEP 1: REQUEST PAYLOAD (SINGLE RUN) - BEFORE any logic
-        \Log::info('STEP1_REQUEST', [
-            'has' => request()->has('caste'),
-            'exists' => request()->exists('caste'),
-            'value' => request()->input('caste'),
-            'all' => request()->all(),
-        ]);
+        $result = $this->adminProfileEditGovernance->applyAfterValidation($request, $profile, $admin, $originalData);
 
-        foreach ($editableFields as $field) {
-            if ($request->exists($field)) {
-                $newValue = $request->input($field);
-                $oldValue = $originalData[$field] ?? null;
-
-                // Normalize for comparison (trim whitespace, treat empty as null)
-                $newValue = is_string($newValue) ? trim($newValue) : $newValue;
-                $newValue = $newValue === '' ? null : $newValue;
-                $oldValue = is_string($oldValue) ? trim($oldValue) : $oldValue;
-                $oldValue = $oldValue === '' ? null : $oldValue;
-
-                if ($newValue != $oldValue) {
-                    $updateData[$field] = $newValue;
-                    $editedFields[] = $field;
-                }
-            }
-        }
-
-        // Day-6.2: Only treat actually-changed EXTENDED fields as overwrite attempts
-        $hasExtendedFields = $request->has('extended_fields') && is_array($request->input('extended_fields'));
-        $changedExtendedKeys = $hasExtendedFields
-            ? ExtendedFieldService::getChangedExtendedFieldKeys($profile, $request->input('extended_fields'))
-            : [];
-
-        if (empty($editedFields) && empty($changedExtendedKeys)) {
+        if ($result->status === 'error') {
             return redirect()
                 ->back()
                 ->withInput()
-                ->with('error', 'No changes detected. Please modify at least one field.');
+                ->with('error', $result->message);
         }
 
-        // Day-6: Overwrite protection - authority-aware (equal/higher can edit locked)
-        if (! empty($editedFields)) {
-            ProfileFieldLockService::assertNotLocked($profile, $editedFields, $admin);
+        if ($result->status === 'warning') {
+            return redirect()
+                ->route('admin.profiles.show', $profile)
+                ->with('warning', $result->message);
         }
-        if (! empty($changedExtendedKeys)) {
-            ProfileFieldLockService::assertNotLocked($profile, $changedExtendedKeys, $admin);
-        }
-
-        if (! empty($editedFields)) {
-            // Merge with existing admin_edited_fields
-            $existingAdminEditedFields = $profile->admin_edited_fields ?? [];
-            $mergedAdminEditedFields = array_unique(array_merge($existingAdminEditedFields, $editedFields));
-
-            $updateData['edited_by'] = $admin->id;
-            $updateData['edited_at'] = now();
-            $updateData['edit_reason'] = $request->input('edit_reason');
-            $updateData['edited_source'] = 'admin';
-            $updateData['admin_edited_fields'] = $mergedAdminEditedFields;
-
-            // Manual-edit escalation: serious_intent + identity-critical field change → conflict, no update (Phase-5: *_id)
-            $identityCriticalFields = [
-                'full_name',
-                'date_of_birth',
-                'gender_id',
-                'religion_id',
-                'caste_id',
-                'sub_caste_id',
-                'marital_status_id',
-                'primary_contact_number',
-            ];
-            $editedCritical = array_intersect($editedFields, $identityCriticalFields);
-            if ($profile->serious_intent_id !== null && ! empty($editedCritical)) {
-                foreach ($editedCritical as $fieldKey) {
-                    if (ConflictRecord::where('profile_id', $profile->id)->where('field_name', $fieldKey)->where('resolution_status', 'PENDING')->exists()) {
-                        continue;
-                    }
-                    $oldVal = ($originalData[$fieldKey] ?? $profile->$fieldKey) === '' ? null : (string) ($originalData[$fieldKey] ?? $profile->$fieldKey ?? null);
-                    $newVal = isset($updateData[$fieldKey]) ? ($updateData[$fieldKey] === '' ? null : (string) $updateData[$fieldKey]) : null;
-                    ConflictRecord::create([
-                        'profile_id' => $profile->id,
-                        'field_name' => $fieldKey,
-                        'field_type' => 'CORE',
-                        'old_value' => $oldVal,
-                        'new_value' => $newVal,
-                        'source' => 'ADMIN',
-                        'detected_at' => now(),
-                        'resolution_status' => 'PENDING',
-                    ]);
-                }
-                ProfileLifecycleService::syncLifecycleFromPendingConflicts($profile);
-
-                return redirect()
-                    ->route('admin.profiles.show', $profile)
-                    ->with('warning', 'Identity-critical field(s) changed under serious intent. Conflict(s) created; profile not updated. Resolve via Conflict Records.');
-            }
-
-            // Phase-5B: All core updates via MutationService (source=admin, profile_change_history)
-            $extendedInput = $hasExtendedFields ? $request->input('extended_fields') : [];
-            $snapshot = $this->buildAdminSnapshot($profile, $updateData, is_array($extendedInput) ? $extendedInput : []);
-            app(\App\Services\MutationService::class)->applyManualSnapshot($profile, $snapshot, (int) $admin->id, 'admin');
-
-            $profile->refresh();
-
-            if (in_array('caste_id', $editedFields) || in_array('caste', $editedFields)) {
-                $casteValue = $updateData['caste_id'] ?? $updateData['caste'] ?? null;
-                if ($casteValue !== null && (is_string($casteValue) ? trim($casteValue) !== '' : true)) {
-                    \Log::info('B_AFTER_ADD', [
-                        'db_caste' => $profile->caste,
-                        'pct' => \App\Services\ProfileCompletenessService::percentage($profile),
-                    ]);
-                } else {
-                    \Log::info('C_AFTER_REMOVE', [
-                        'db_caste' => $profile->caste,
-                        'pct' => \App\Services\ProfileCompletenessService::percentage($profile),
-                    ]);
-                }
-            }
-
-            ProfileFieldLockService::applyLocks($profile, $editedFields, 'CORE', $admin);
-        } elseif (! empty($changedExtendedKeys)) {
-            $snapshot = $this->buildAdminSnapshot($profile, [
-                'edited_by' => $admin->id,
-                'edited_at' => now(),
-                'edit_reason' => $request->input('edit_reason'),
-                'edited_source' => 'admin',
-            ], $request->input('extended_fields'));
-            app(\App\Services\MutationService::class)->applyManualSnapshot($profile, $snapshot, (int) $admin->id, 'admin');
-        }
-
-        // Create audit log entry
-        AuditLogService::log(
-            $admin,
-            'profile_edit',
-            'MatrimonyProfile',
-            $profile->id,
-            $request->input('edit_reason'),
-            $profile->is_demo ?? false
-        );
-
-        // Phase-5B: Extended fields applied inside MutationService::applyManualSnapshot (same transaction)
-        if (! empty($changedExtendedKeys)) {
-            ProfileFieldLockService::applyLocks($profile, $changedExtendedKeys, 'EXTENDED', $admin);
-        }
-
-        $message = ! empty($editedFields)
-            ? 'Profile updated successfully. Edited fields: '.implode(', ', $editedFields)
-            : 'Profile updated successfully. Extended fields saved.';
 
         return redirect()
             ->route('admin.profiles.show', $profile)
-            ->with('success', $message);
+            ->with('success', $result->message);
     }
 
     /**

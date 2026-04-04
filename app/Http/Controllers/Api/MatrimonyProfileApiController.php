@@ -223,7 +223,7 @@ public function update(Request $request)
             $filename
         );
 
-        $photoApprovalRequired = \App\Services\AdminSettingService::isPhotoApprovalRequired();
+        $photoApprovalRequired = \App\Services\Admin\AdminSettingService::isPhotoApprovalRequired();
         $photoApproved = !$photoApprovalRequired;
 
         $snapshot = [

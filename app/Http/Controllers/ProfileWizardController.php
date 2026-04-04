@@ -320,7 +320,7 @@ class ProfileWizardController extends Controller
         if ($profile) {
             return $profile;
         }
-        $manualActivation = \App\Services\AdminSettingService::isManualProfileActivationRequired();
+        $manualActivation = \App\Services\Admin\AdminSettingService::isManualProfileActivationRequired();
         $genderId = null;
         if (! empty($user->gender)) {
             $genderId = \App\Models\MasterGender::where('key', $user->gender)->where('is_active', true)->value('id');
@@ -1625,7 +1625,7 @@ class ProfileWizardController extends Controller
         $filename = time().'_'.basename($file->getClientOriginalName());
         $file->move(public_path('uploads/matrimony_photos'), $filename);
 
-        $photoApprovalRequired = \App\Services\AdminSettingService::isPhotoApprovalRequired();
+        $photoApprovalRequired = \App\Services\Admin\AdminSettingService::isPhotoApprovalRequired();
         $photoApproved = ! $photoApprovalRequired;
 
         return [

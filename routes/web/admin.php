@@ -4,7 +4,9 @@ use App\Http\Controllers\AbuseReportController;
 use App\Http\Controllers\Admin\AdminCapabilityController;
 use App\Http\Controllers\Admin\AdminCasteController;
 use App\Http\Controllers\Admin\AdminFieldRegistryController;
-use App\Http\Controllers\Admin\AdminOperationalController;
+use App\Http\Controllers\Admin\AdminOcrSimulationController;
+use App\Http\Controllers\Admin\AdminConflictRecordController;
+use App\Http\Controllers\Admin\AdminUserNotificationsController;
 use App\Http\Controllers\Admin\AdminProfileModerationController;
 use App\Http\Controllers\Admin\AdminSettingsController;
 use App\Http\Controllers\Admin\AdminIntakeController;
@@ -159,9 +161,9 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
     /*
     | Day-14: OCR mode simulation (governance testing only, no OCR engine)
     */
-    Route::get('/ocr-simulation', [AdminOperationalController::class, 'ocrSimulation'])
+    Route::get('/ocr-simulation', [AdminOcrSimulationController::class, 'ocrSimulation'])
         ->name('ocr-simulation.index');
-    Route::post('/ocr-simulation/execute', [AdminOperationalController::class, 'ocrSimulationExecute'])
+    Route::post('/ocr-simulation/execute', [AdminOcrSimulationController::class, 'ocrSimulationExecute'])
         ->name('ocr-simulation.execute');
 
     /*
@@ -305,8 +307,8 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
     Route::post('/field-registry/{field}/archive', [AdminFieldRegistryController::class, 'archiveFieldRegistry'])->name('field-registry.archive');
     Route::post('/field-registry/{field}/unarchive', [AdminFieldRegistryController::class, 'unarchiveFieldRegistry'])->name('field-registry.unarchive');
 
-    Route::get('/notifications', [AdminOperationalController::class, 'userNotificationsIndex'])->name('notifications.index');
-    Route::get('/notifications/user', [AdminOperationalController::class, 'userNotificationsShow'])->name('notifications.user.show');
+    Route::get('/notifications', [AdminUserNotificationsController::class, 'userNotificationsIndex'])->name('notifications.index');
+    Route::get('/notifications/user', [AdminUserNotificationsController::class, 'userNotificationsShow'])->name('notifications.user.show');
 
     Route::get('/homepage-images', [HomepageImageController::class, 'index'])->name('homepage-images.index');
     Route::post('/homepage-images', [HomepageImageController::class, 'store'])->name('homepage-images.store');
@@ -325,11 +327,11 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
     /*
     | Conflict Records (Phase-3 Day-4/5 — list, create, resolve)
     */
-    Route::get('/conflict-records', [AdminOperationalController::class, 'conflictRecordsIndex'])->name('conflict-records.index');
-    Route::get('/conflict-records/create', [AdminOperationalController::class, 'conflictRecordsCreate'])->name('conflict-records.create');
-    Route::get('/conflict-records/{record}', [AdminOperationalController::class, 'conflictRecordShow'])->name('conflict-records.show');
-    Route::post('/conflict-records', [AdminOperationalController::class, 'conflictRecordsStore'])->name('conflict-records.store');
-    Route::post('/conflict-records/{record}/approve', [AdminOperationalController::class, 'conflictRecordApprove'])->name('conflict-records.approve');
-    Route::post('/conflict-records/{record}/reject', [AdminOperationalController::class, 'conflictRecordReject'])->name('conflict-records.reject');
-    Route::post('/conflict-records/{record}/override', [AdminOperationalController::class, 'conflictRecordOverride'])->name('conflict-records.override');
+    Route::get('/conflict-records', [AdminConflictRecordController::class, 'conflictRecordsIndex'])->name('conflict-records.index');
+    Route::get('/conflict-records/create', [AdminConflictRecordController::class, 'conflictRecordsCreate'])->name('conflict-records.create');
+    Route::get('/conflict-records/{record}', [AdminConflictRecordController::class, 'conflictRecordShow'])->name('conflict-records.show');
+    Route::post('/conflict-records', [AdminConflictRecordController::class, 'conflictRecordsStore'])->name('conflict-records.store');
+    Route::post('/conflict-records/{record}/approve', [AdminConflictRecordController::class, 'conflictRecordApprove'])->name('conflict-records.approve');
+    Route::post('/conflict-records/{record}/reject', [AdminConflictRecordController::class, 'conflictRecordReject'])->name('conflict-records.reject');
+    Route::post('/conflict-records/{record}/override', [AdminConflictRecordController::class, 'conflictRecordOverride'])->name('conflict-records.override');
 });
