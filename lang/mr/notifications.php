@@ -34,6 +34,7 @@ return [
     'daily_limit_reached' => 'आजच्या संपर्क विनंत्यांची मर्यादा पूर्ण झाली आहे. कृपया उद्या पुन्हा प्रयत्न करा.',
     'select_at_least_one_contact_method' => 'किमान एक संपर्क पद्धत निवडा.',
     'only_receiver_can_approve' => 'फक्त रिसीव्हरच ही विनंती मंजूर करू शकतो.',
+    'wrong_contact_request_type' => 'ही क्रिया या विनंतीसाठी लागू होत नाही.',
     'request_no_longer_pending' => 'ही विनंती आता प्रलंबित नाही.',
     'request_expired' => 'ही विनंती कालबाह्य झाली आहे.',
     'select_at_least_one_scope_to_grant' => 'मंजूर करण्यासाठी किमान एक स्कोप निवडा.',
@@ -44,4 +45,3 @@ return [
     'only_receiver_can_revoke' => 'फक्त रिसीव्हरच प्रवेश रद्द करू शकतो.',
     'access_already_revoked' => 'प्रवेश आधीच रद्द केला आहे.',
 ];
-

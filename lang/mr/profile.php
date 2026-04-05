@@ -161,4 +161,12 @@ return [
     'profile_overview_band' => 'प्रोफाइल विहंगावलोकन',
     'scan_lives_in' => 'राहतो/राहते',
     'cta_interested' => 'रुची आहे',
+    'photos_upload_to_unlock_more' => 'अधिक प्रोफाइल अनलॉक करण्यासाठी तुमचा फोटो अपलोड करा.',
+    'photos_upgrade_to_view_all' => 'सर्व फोटो पाहण्यासाठी प्लॅन अपग्रेड करा.',
+    'photo_overlay_premium_required' => 'प्रीमियम आवश्यक',
+    'photo_overlay_upload_to_unlock' => 'अनलॉक करण्यासाठी फोटो अपलोड करा',
+    'photo_overlay_cta_plans' => 'प्लॅन पहा',
+    'photo_overlay_cta_upload' => 'फोटो जोडा',
+    'photo_overlay_sub_premium' => 'सर्व फोटो पेड प्लॅनसह पहा.',
+    'photo_overlay_sub_upload' => 'फोटो असलेले सदस्य अधिक स्पष्ट पूर्वावलोकन पाहतात.',
 ];

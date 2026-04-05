@@ -10,6 +10,7 @@ return [
     'blocked_unblock_to_send' => 'तुम्ही हा प्रोफाइल ब्लॉक केला आहे. इच्छा पाठवण्यासाठी अनब्लॉक करा.',
     'sender_cannot_send_current_state' => 'सध्याच्या स्थितीत तुमची प्रोफाइल इच्छा पाठवू शकत नाही.',
     'sender_must_be_70_complete' => 'इच्छा पाठवण्यासाठी तुमची प्रोफाइल किमान 70% पूर्ण असावी.',
+    'daily_limit_reached' => 'दैनिक इच्छा मर्यादा पूर्ण झाली. अधिक पाठवण्यासाठी प्लॅन अपग्रेड करा.',
     'interest_sent_successfully' => 'इच्छा यशस्वीरीत्या पाठवली.',
     'interest_already_processed' => 'ही इच्छा आधीच प्रक्रियेत आहे.',
     'receiver_must_be_70_complete_accept' => 'इच्छा स्वीकारण्यासाठी तुमची प्रोफाइल किमान 70% पूर्ण असावी.',
@@ -18,4 +19,3 @@ return [
     'interest_rejected' => 'इच्छा नाकारली.',
     'interest_withdrawn_successfully' => 'इच्छा यशस्वीरीत्या मागे घेतली.',
 ];
-

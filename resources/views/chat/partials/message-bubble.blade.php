@@ -3,6 +3,7 @@
     'isMine' => false,
     'senderPhotoUrl' => null,
     'viewerProfileId' => 0,
+    'readLockedForIncoming' => false,
 ])
 
 @php
@@ -12,7 +13,10 @@
     $wrap = $isMine ? 'justify-end' : 'justify-start';
     $avatarUrl = $senderPhotoUrl ?: asset('images/placeholders/default-profile.svg');
     $mod = app(\App\Services\Chat\ChatMessageModerationService::class);
-    $display = $mod->bodyTextForViewer($message, (int) $viewerProfileId, false);
+    $lockedIncoming = $readLockedForIncoming && ! $isMine;
+    $display = $lockedIncoming
+        ? ['text' => (string) __('chat_ui.read_locked_body')]
+        : $mod->bodyTextForViewer($message, (int) $viewerProfileId, false);
 @endphp
 
 <div class="flex {{ $wrap }}" data-message-id="{{ (int) ($message->id ?? 0) }}">
@@ -21,7 +25,17 @@
     @endif
 
     <div class="max-w-[85%] rounded-2xl px-4 py-2 shadow-sm ring-1 {{ $bubble }}">
-        @if (($message->message_type ?? 'text') === \App\Models\Message::TYPE_IMAGE && $message->image_path)
+        @if ($lockedIncoming)
+            <button
+                type="button"
+                class="w-full cursor-pointer rounded-xl text-left transition hover:bg-gray-50/80 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 dark:hover:bg-gray-700/40"
+                data-open-upgrade-lock-modal="upgrade-modal-chat-read"
+                aria-label="{{ __('upgrade_nudge.chat_read_aria') }}"
+            >
+                <p class="whitespace-pre-wrap break-words text-sm italic text-gray-600 dark:text-gray-300">{{ $display['text'] }}</p>
+                <p class="mt-2 text-xs font-semibold text-indigo-600 dark:text-indigo-400">{{ __('subscriptions.pricing_cta_upgrade') }} →</p>
+            </button>
+        @elseif (($message->message_type ?? 'text') === \App\Models\Message::TYPE_IMAGE && $message->image_path)
             <a href="{{ route('chat.messages.image.show', ['message' => $message->id]) }}" target="_blank" rel="noopener" class="block">
                 <img
                     src="{{ route('chat.messages.image.show', ['message' => $message->id]) }}"

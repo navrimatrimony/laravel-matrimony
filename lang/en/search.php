@@ -74,6 +74,7 @@ return [
     'sort_age_desc' => 'Age: high to low',
     'sort_height_asc' => 'Height: low to high',
     'sort_height_desc' => 'Height: high to low',
+    'sort_discover' => 'Discover (fewer repeats)',
     'card_actions_menu' => 'Profile actions',
     'confirm_block_profile' => 'Block this profile? You can manage blocks from your account later.',
     'action_block_profile' => 'Block profile',
@@ -92,4 +93,3 @@ return [
     'photo_report_already_open' => 'You already have an open report for this photo.',
     'photo_report_submitted' => 'Photo report submitted. Thank you.',
 ];
-

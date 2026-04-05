@@ -114,6 +114,11 @@
         {{ __('Contact Requests') }}
     </x-nav-link>
 
+    <x-nav-link :href="route('mediation-inbox.index')"
+                :active="request()->routeIs('mediation-inbox.*') || request()->routeIs('mediation-requests.*')">
+        {{ __('mediation.nav_link') }}
+    </x-nav-link>
+
     <x-nav-link :href="route('shortlist.index')" 
                 :active="request()->routeIs('shortlist.index')">
         {{ __('Shortlist') }}
@@ -325,6 +330,10 @@
     </x-responsive-nav-link>
     <x-responsive-nav-link :href="route('contact-inbox.index')">
         {{ __('Contact Requests') }}
+    </x-responsive-nav-link>
+
+    <x-responsive-nav-link :href="route('mediation-inbox.index')">
+        {{ __('mediation.nav_link') }}
     </x-responsive-nav-link>
 
     <x-responsive-nav-link :href="route('shortlist.index')">

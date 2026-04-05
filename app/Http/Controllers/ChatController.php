@@ -86,7 +86,9 @@ class ChatController extends Controller
             ->get()
             ->keyBy('id');
 
-        $items = $list->map(function (Conversation $c) use ($me, $unreadByConversation, $othersById, $lastMessagesById) {
+        $viewerCanReadIncoming = $this->messages->viewerCanReadReceivedChat($me);
+
+        $items = $list->map(function (Conversation $c) use ($me, $unreadByConversation, $othersById, $lastMessagesById, $viewerCanReadIncoming) {
             $otherId = (int) ((int) $c->profile_one_id === (int) $me->id ? $c->profile_two_id : $c->profile_one_id);
             /** @var MatrimonyProfile|null $other */
             $other = $othersById->get($otherId);
@@ -97,7 +99,7 @@ class ChatController extends Controller
 
             $preview = '';
             if ($last) {
-                $preview = $this->previewLineForMessage($last, $me);
+                $preview = $this->previewLineForMessage($last, $me, $viewerCanReadIncoming);
             }
 
             $awaitingMe = false;
@@ -196,6 +198,8 @@ class ChatController extends Controller
         $showcaseTag = app(ShowcaseConversationTagService::class)->shouldShowTagForConversation($conversation, $me, $other);
 
         $sinceId = $request->wantsJson() ? (int) $request->query('since_id', 0) : 0;
+        $readLockedForIncoming = ! $this->messages->viewerCanReadReceivedChat($me);
+
         if ($request->wantsJson()) {
             $q = Message::query()
                 ->where('conversation_id', $conversation->id)
@@ -206,8 +210,9 @@ class ChatController extends Controller
             $new = $q->limit(50)->get();
             $new->loadMissing(['senderProfile']);
 
-            // Mark newly visible messages as read for current user.
-            $this->messages->markConversationRead($me, $conversation);
+            if (! $readLockedForIncoming) {
+                $this->messages->markConversationRead($me, $conversation);
+            }
 
             // Showcase demo: presence/typing ticks (orchestration). Admin debug & manual reply tone live under
             // admin routes (ShowcaseChatDebugController, ShowcaseConversationController::replyAsShowcase); not user-facing.
@@ -229,6 +234,7 @@ class ChatController extends Controller
                     'isMine' => ((int) $m->sender_profile_id === (int) $me->id),
                     'senderPhotoUrl' => $m->senderProfile?->profile_photo_url,
                     'viewerProfileId' => (int) $me->id,
+                    'readLockedForIncoming' => $readLockedForIncoming,
                 ])->render();
             }
 
@@ -245,8 +251,9 @@ class ChatController extends Controller
         $messages = $page->getCollection()->reverse()->values(); // oldest->newest for UI
         $messages->loadMissing(['senderProfile']);
 
-        // Mark as read for current participant.
-        $this->messages->markConversationRead($me, $conversation);
+        if (! $readLockedForIncoming) {
+            $this->messages->markConversationRead($me, $conversation);
+        }
 
         $canSend = $this->policy->canSendMessage($me, $other, $conversation);
 
@@ -290,6 +297,7 @@ class ChatController extends Controller
             'imagePolicy' => $imagePolicy,
             'showcaseTag' => $showcaseTag,
             'chatTemplateSuggestions' => $chatTemplateSuggestions,
+            'readLockedForIncoming' => $readLockedForIncoming,
         ]);
     }
 
@@ -406,7 +414,9 @@ class ChatController extends Controller
             abort(403);
         }
 
-        $this->messages->markConversationRead($me, $conversation);
+        if ($this->messages->viewerCanReadReceivedChat($me)) {
+            $this->messages->markConversationRead($me, $conversation);
+        }
 
         return back();
     }
@@ -424,8 +434,12 @@ class ChatController extends Controller
 
     // unread counts handled via grouped query in index()
 
-    protected function previewLineForMessage(Message $last, MatrimonyProfile $me): string
+    protected function previewLineForMessage(Message $last, MatrimonyProfile $me, bool $viewerCanReadIncoming = true): string
     {
+        if ((int) $last->sender_profile_id !== (int) $me->id && ! $viewerCanReadIncoming) {
+            return (string) __('chat_ui.read_locked_preview');
+        }
+
         $mod = app(ChatMessageModerationService::class);
         if (($last->message_type ?? Message::TYPE_TEXT) === Message::TYPE_IMAGE) {
             $caption = trim((string) ($last->body_text ?? ''));

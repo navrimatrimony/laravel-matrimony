@@ -1,10 +1,14 @@
 <?php
 
-use App\Models\ContactRequest;
 use App\Models\Interest;
 use App\Models\MatrimonyProfile;
+use App\Models\Plan;
+use App\Models\PlanPrice;
 use App\Models\User;
 use App\Services\ContactRequestService;
+use App\Services\SubscriptionService;
+use Database\Seeders\PlanStandardFeatureKeysSeeder;
+use Database\Seeders\SubscriptionPlansSeeder;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -52,6 +56,9 @@ test('contact request is blocked until receiver accepts interest (no mutual requ
 });
 
 test('contact request works after accepted interest only + reveals only primary phone', function () {
+    $this->seed(SubscriptionPlansSeeder::class);
+    $this->seed(PlanStandardFeatureKeysSeeder::class);
+
     $senderProfile = MatrimonyProfile::factory()->create([
         'lifecycle_state' => 'active',
     ]);
@@ -72,6 +79,24 @@ test('contact request works after accepted interest only + reveals only primary 
     $receiverUser = $receiverProfile->user ?: User::factory()->create(['gender' => 'Male']);
     $senderProfile->update(['user_id' => $senderUser->id]);
     $receiverProfile->update(['user_id' => $receiverUser->id]);
+
+    DB::table('profile_visibility_settings')->insert([
+        'profile_id' => $receiverProfile->id,
+        'visibility_scope' => 'public',
+        'show_photo_to' => 'all',
+        'show_contact_to' => 'unlock_only',
+        'hide_from_blocked_users' => true,
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+
+    $plan = Plan::query()->where('slug', 'silver')->firstOrFail();
+    $price = PlanPrice::query()
+        ->where('plan_id', $plan->id)
+        ->where('is_visible', true)
+        ->orderBy('sort_order')
+        ->firstOrFail();
+    app(SubscriptionService::class)->subscribe($senderUser, $plan, null, $price->id);
 
     // Sender interest accepted by receiver. No reverse interest created.
     Interest::create([
@@ -111,4 +136,3 @@ test('contact request works after accepted interest only + reveals only primary 
     $response->assertDontSee('Email:');
     $response->assertDontSee('WhatsApp:');
 });
-

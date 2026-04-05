@@ -5,6 +5,8 @@ namespace App\Services;
 use App\Models\Interest;
 use App\Models\Message;
 use App\Models\Plan;
+use App\Models\PlanPrice;
+use App\Models\PlanTerm;
 use App\Models\ProfileView;
 use App\Models\Subscription;
 use App\Models\User;
@@ -29,32 +31,122 @@ class SubscriptionService
     /** "1" = may send chat images (in addition to communication policy). */
     public const FEATURE_CHAT_IMAGE_MESSAGES = 'chat_image_messages';
 
-    public function subscribe(User $user, Plan $plan): Subscription
-    {
+    public function subscribe(
+        User $user,
+        Plan $plan,
+        ?int $planTermId = null,
+        ?int $planPriceId = null,
+        ?string $couponCode = null,
+    ): Subscription {
         if (! $plan->is_active) {
             throw new HttpException(422, __('subscriptions.plan_inactive'));
         }
 
-        return DB::transaction(function () use ($user, $plan) {
+        $couponSvc = app(CouponService::class);
+        $rawCoupon = trim((string) ($couponCode ?? ''));
+
+        return DB::transaction(function () use ($user, $plan, $planTermId, $planPriceId, $rawCoupon, $couponSvc) {
             $now = now();
             Subscription::query()
                 ->where('user_id', $user->id)
                 ->where('status', Subscription::STATUS_ACTIVE)
                 ->update(['status' => Subscription::STATUS_CANCELLED, 'updated_at' => $now]);
 
+            $visiblePrices = PlanPrice::query()
+                ->where('plan_id', $plan->id)
+                ->where('is_visible', true)
+                ->orderBy('sort_order')
+                ->get();
+
+            $planTerm = null;
+            $planPrice = null;
             $duration = (int) $plan->duration_days;
+            $coupon = null;
+
+            if ($visiblePrices->isNotEmpty()) {
+                if ($planPriceId === null) {
+                    throw new HttpException(422, __('subscriptions.pick_billing_period'));
+                }
+                $planPrice = $visiblePrices->firstWhere('id', $planPriceId);
+                if (! $planPrice) {
+                    throw new HttpException(422, __('subscriptions.invalid_billing_period'));
+                }
+                $duration = (int) $planPrice->duration_days;
+                if ($rawCoupon !== '') {
+                    $coupon = $couponSvc->lockCouponByCode($rawCoupon);
+                    if (! $coupon) {
+                        throw new HttpException(422, __('subscriptions.coupon_invalid'));
+                    }
+                    $couponSvc->assertLockedCouponForCheckout(
+                        $coupon,
+                        (int) $plan->id,
+                        (float) $planPrice->final_price,
+                        (string) $planPrice->duration_type
+                    );
+                }
+            } else {
+                $visibleTerms = PlanTerm::query()
+                    ->where('plan_id', $plan->id)
+                    ->where('is_visible', true)
+                    ->orderBy('sort_order')
+                    ->get();
+
+                if ($visibleTerms->isNotEmpty()) {
+                    if ($planTermId === null) {
+                        throw new HttpException(422, __('subscriptions.pick_billing_period'));
+                    }
+                    $planTerm = $visibleTerms->firstWhere('id', $planTermId);
+                    if (! $planTerm) {
+                        throw new HttpException(422, __('subscriptions.invalid_billing_period'));
+                    }
+                    $duration = (int) $planTerm->duration_days;
+                    if ($rawCoupon !== '') {
+                        $coupon = $couponSvc->lockCouponByCode($rawCoupon);
+                        if (! $coupon) {
+                            throw new HttpException(422, __('subscriptions.coupon_invalid'));
+                        }
+                        $couponSvc->assertLockedCouponForCheckout(
+                            $coupon,
+                            (int) $plan->id,
+                            (float) $planTerm->final_price,
+                            (string) $planTerm->billing_key
+                        );
+                    }
+                } elseif ($rawCoupon !== '') {
+                    $coupon = $couponSvc->lockCouponByCode($rawCoupon);
+                    if (! $coupon) {
+                        throw new HttpException(422, __('subscriptions.coupon_invalid'));
+                    }
+                    $couponSvc->assertLockedCouponForCheckout(
+                        $coupon,
+                        (int) $plan->id,
+                        (float) $plan->final_price,
+                        null
+                    );
+                }
+            }
+
             $endsAt = null;
             if ($duration > 0) {
                 $endsAt = $now->copy()->addDays($duration);
             }
 
-            return Subscription::query()->create([
+            $sub = Subscription::query()->create([
                 'user_id' => $user->id,
                 'plan_id' => $plan->id,
+                'plan_term_id' => $planTerm?->id,
+                'plan_price_id' => $planPrice?->id,
+                'coupon_id' => $coupon?->id,
                 'starts_at' => $now,
                 'ends_at' => $endsAt,
                 'status' => Subscription::STATUS_ACTIVE,
             ]);
+
+            if ($coupon) {
+                $couponSvc->incrementRedemption($coupon);
+            }
+
+            return $sub;
         });
     }
 
@@ -70,20 +162,22 @@ class SubscriptionService
             ->first();
     }
 
-    public function getActivePlan(User $user): Plan
+    public function getActivePlan(?User $user = null): Plan
     {
-        $sub = $this->getActiveSubscription($user);
-        if ($sub) {
-            return $sub->plan()->with('features')->firstOrFail();
+        if ($user !== null) {
+            $sub = $this->getActiveSubscription($user);
+            if ($sub) {
+                return $sub->plan()->with('features')->firstOrFail();
+            }
         }
 
         return $this->defaultFreePlan();
     }
 
     /**
-     * Effective plan for limits (subscription or default free).
+     * Effective plan for limits (subscription or default free). Guest users resolve to default free / fallback.
      */
-    public function getEffectivePlan(User $user): Plan
+    public function getEffectivePlan(?User $user = null): Plan
     {
         return $this->getActivePlan($user);
     }
@@ -102,7 +196,7 @@ class SubscriptionService
 
         return match ($feature) {
             'chat' => $this->getFeatureLimit($user, self::FEATURE_DAILY_CHAT_SEND_LIMIT) !== 0,
-            'interest' => $this->getFeatureLimit($user, self::FEATURE_MONTHLY_INTEREST_SEND_LIMIT) !== 0,
+            'interest' => app(InterestSendLimitService::class)->effectiveDailyLimit($user) !== 0,
             'profile_views' => $this->getFeatureLimit($user, self::FEATURE_DAILY_PROFILE_VIEW_LIMIT) !== 0,
             'contact_number', 'see_contact' => $this->truthyFeature($plan, self::FEATURE_CONTACT_NUMBER_ACCESS),
             'chat_images' => $this->truthyFeature($plan, self::FEATURE_CHAT_IMAGE_MESSAGES),
@@ -157,20 +251,7 @@ class SubscriptionService
 
     public function assertWithinInterestLimit(User $user): void
     {
-        if ($user->isAnyAdmin()) {
-            return;
-        }
-        $lim = $this->getFeatureLimit($user, self::FEATURE_MONTHLY_INTEREST_SEND_LIMIT);
-        if ($lim === -1) {
-            return;
-        }
-        if ($lim === 0) {
-            throw new HttpException(403, __('subscriptions.interest_locked'));
-        }
-        $used = $this->countInterestsThisMonth($user);
-        if ($used >= $lim) {
-            throw new HttpException(403, __('subscriptions.interest_monthly_limit'));
-        }
+        app(InterestSendLimitService::class)->assertCanSend($user);
     }
 
     public function assertWithinProfileViewLimit(User $user): void
@@ -250,7 +331,32 @@ class SubscriptionService
             return $p->loadMissing('features');
         }
 
-        return Plan::query()->where('is_active', true)->orderBy('sort_order')->firstOrFail()->loadMissing('features');
+        $any = Plan::query()->where('is_active', true)->orderBy('sort_order')->first();
+        if ($any) {
+            return $any->loadMissing('features');
+        }
+
+        return $this->syntheticFallbackPlan();
+    }
+
+    /**
+     * When no plan rows exist yet (migrations without seed), avoid ModelNotFoundException / 404 on public pages.
+     */
+    private function syntheticFallbackPlan(): Plan
+    {
+        $plan = new Plan([
+            'name' => 'Free',
+            'slug' => 'free',
+            'price' => 0,
+            'discount_percent' => null,
+            'duration_days' => 0,
+            'is_active' => true,
+            'sort_order' => 0,
+            'highlight' => false,
+        ]);
+        $plan->setRelation('features', collect());
+
+        return $plan;
     }
 
     private function truthyFeature(Plan $plan, string $key): bool

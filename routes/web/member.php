@@ -12,9 +12,10 @@ use App\Http\Controllers\Internal\CurrentLocationController;
 use App\Http\Controllers\MatchController;
 use App\Http\Controllers\MatrimonyProfileController;
 use App\Http\Controllers\MatrimonyVerificationEmailController;
+use App\Http\Controllers\MediationInboxController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\OnboardingController;
-use App\Http\Controllers\PlansController;
+use App\Http\Controllers\ProfileContactActionController;
 use App\Http\Controllers\ProfileContactVerificationController;
 use App\Http\Controllers\ProfileHideController;
 use App\Http\Controllers\ProfilePhotoReportController;
@@ -104,9 +105,6 @@ Route::middleware('auth')->group(function () {
 
     Route::get('/settings/security', [UserSettingsController::class, 'security'])
         ->name('user.settings.security');
-
-    Route::get('/plans', [PlansController::class, 'index'])->name('plans.index');
-    Route::post('/subscribe/{plan}', [PlansController::class, 'subscribe'])->name('plans.subscribe');
 
     /*
     | Matrimony Profile (Phase-5B: wizard is the only create path; create/store disallowed — Point 5)
@@ -261,6 +259,18 @@ Route::middleware('auth')->group(function () {
     Route::post('/contact-requests/{contact_request}/approve', [ContactInboxController::class, 'approve'])->name('contact-requests.approve');
     Route::post('/contact-requests/{contact_request}/reject', [ContactInboxController::class, 'reject'])->name('contact-requests.reject');
     Route::post('/contact-grants/{contact_grant}/revoke', [ContactInboxController::class, 'revoke'])->name('contact-grants.revoke');
+
+    Route::get('/mediation-inbox', [MediationInboxController::class, 'index'])->name('mediation-inbox.index');
+    Route::post('/mediation-requests/{mediation_request}/respond', [MediationInboxController::class, 'respond'])
+        ->middleware('throttle:30,1')
+        ->name('mediation-requests.respond');
+
+    Route::post('/matrimony/profile/{matrimony_profile}/contact-reveal', [ProfileContactActionController::class, 'revealContact'])
+        ->middleware('throttle:30,1')
+        ->name('matrimony.profile.contact-reveal');
+    Route::post('/matrimony/profile/{matrimony_profile}/mediator-request', [ProfileContactActionController::class, 'mediatorRequest'])
+        ->middleware('throttle:15,1')
+        ->name('matrimony.profile.mediator-request');
 
     /*
     | Chat (governed messaging)

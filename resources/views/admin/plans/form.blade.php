@@ -31,12 +31,12 @@
             </div>
             <div>
                 <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Price (₹)</label>
-                <input type="number" name="price" value="{{ old('price', $plan->price) }}" required min="0" step="0.01"
+                <input type="number" name="price" value="{{ old('price', $plan->price ?? '') }}" required min="0" step="0.01"
                     class="w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white shadow-sm" />
             </div>
             <div>
                 <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Discount %</label>
-                <input type="number" name="discount_percent" value="{{ old('discount_percent', $plan->discount_percent) }}" min="0" max="100"
+                <input type="number" name="discount_percent" value="{{ old('discount_percent', $plan->discount_percent ?? '') }}" min="0" max="100" step="1"
                     placeholder="None"
                     class="w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white shadow-sm" />
             </div>
@@ -64,6 +64,49 @@
                 <span class="text-sm text-gray-700 dark:text-gray-300">{{ __('subscriptions.highlight_plan') }}</span>
             </label>
         </div>
+
+        @if ($isEdit && strtolower((string) $plan->slug) !== 'free')
+            <div class="rounded-lg border border-indigo-200 dark:border-indigo-900 bg-indigo-50/50 dark:bg-indigo-950/20 p-4 space-y-4">
+                <h2 class="text-lg font-semibold text-gray-800 dark:text-gray-100">{{ __('subscriptions.admin_billing_periods_title') }}</h2>
+                <p class="text-xs text-gray-600 dark:text-gray-400">{{ __('subscriptions.admin_billing_periods_intro') }}</p>
+                <div class="space-y-4">
+                    @foreach (\App\Models\PlanTerm::billingKeys() as $billingKey)
+                        @php
+                            $termRow = $plan->terms->firstWhere('billing_key', $billingKey);
+                        @endphp
+                        <div class="rounded-md border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 p-3 grid grid-cols-1 sm:grid-cols-12 gap-3 items-end">
+                            <div class="sm:col-span-3">
+                                <span class="block text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-1">{{ __('subscriptions.billing_'.$billingKey) }}</span>
+                                <span class="text-xs text-gray-500 dark:text-gray-500">{{ __('subscriptions.duration_days', ['count' => \App\Models\PlanTerm::durationDaysFor($billingKey)]) }}</span>
+                            </div>
+                            <div class="sm:col-span-3">
+                                <label class="block text-xs font-medium text-gray-600 dark:text-gray-300 mb-1">Price (₹)</label>
+                                <input type="number" name="terms[{{ $billingKey }}][price]" min="0" step="0.01" required
+                                    value="{{ old('terms.'.$billingKey.'.price', $termRow?->price ?? '0') }}"
+                                    class="w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white text-sm" />
+                            </div>
+                            <div class="sm:col-span-3">
+                                <label class="block text-xs font-medium text-gray-600 dark:text-gray-300 mb-1">Discount %</label>
+                                <input type="number" name="terms[{{ $billingKey }}][discount_percent]" min="0" max="100" step="1"
+                                    value="{{ old('terms.'.$billingKey.'.discount_percent', $termRow?->discount_percent ?? '') }}"
+                                    placeholder="—"
+                                    class="w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white text-sm" />
+                            </div>
+                            <div class="sm:col-span-3 flex items-center">
+                                <input type="hidden" name="terms[{{ $billingKey }}][is_visible]" value="0" />
+                                <label class="inline-flex items-center gap-2 cursor-pointer text-sm text-gray-700 dark:text-gray-300">
+                                    <input type="checkbox" name="terms[{{ $billingKey }}][is_visible]" value="1" class="rounded border-gray-300"
+                                        @checked((string) old('terms.'.$billingKey.'.is_visible', $termRow?->is_visible ? '1' : '0') === '1') />
+                                    <span>{{ __('subscriptions.admin_billing_show_public') }}</span>
+                                </label>
+                            </div>
+                        </div>
+                    @endforeach
+                </div>
+            </div>
+        @elseif (! $isEdit)
+            <p class="text-sm text-gray-600 dark:text-gray-400">{{ __('subscriptions.admin_billing_after_create') }}</p>
+        @endif
 
         <div>
             <h2 class="text-lg font-semibold text-gray-800 dark:text-gray-100 mb-2">Feature limits</h2>

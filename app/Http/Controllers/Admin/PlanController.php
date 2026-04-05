@@ -5,7 +5,10 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\Plan;
 use App\Models\PlanFeature;
+use App\Models\PlanPrice;
+use App\Models\PlanTerm;
 use App\Services\SubscriptionService;
+use App\Support\PlanFeatureKeys;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 
@@ -47,6 +50,9 @@ class PlanController extends Controller
 
         $plan = Plan::query()->create($data);
         $this->syncFeatures($plan, $features);
+        if (strtolower((string) $plan->slug) !== 'free') {
+            PlanTerm::syncDefaultsForPlan($plan);
+        }
 
         return redirect()
             ->route('admin.plans.edit', $plan)
@@ -55,7 +61,7 @@ class PlanController extends Controller
 
     public function edit(Plan $plan)
     {
-        $plan->load('features');
+        $plan->load(['features', 'terms']);
         $defaultFeatures = $this->defaultFeatureTemplate();
         $merged = [];
         $byKey = $plan->features->keyBy('key');
@@ -84,8 +90,18 @@ class PlanController extends Controller
         $data = $this->validatedPlanData($request, $plan->id);
         $features = $this->normalizeFeatureRows($request->input('features', []));
 
+        if (strtolower((string) $data['slug']) !== 'free') {
+            $request->validate($this->termValidationRules());
+        }
+
         $plan->update($data);
         $this->syncFeatures($plan, $features);
+
+        if (strtolower((string) $plan->slug) !== 'free') {
+            $this->syncPlanTerms($plan, $request);
+        } else {
+            PlanTerm::query()->where('plan_id', $plan->id)->delete();
+        }
 
         return redirect()
             ->route('admin.plans.edit', $plan)
@@ -95,11 +111,53 @@ class PlanController extends Controller
     /**
      * @return array<string, mixed>
      */
+    private function termValidationRules(): array
+    {
+        $rules = [];
+        foreach (PlanTerm::billingKeys() as $key) {
+            $rules["terms.$key.price"] = ['required', 'numeric', 'min:0'];
+            $rules["terms.$key.discount_percent"] = ['nullable', 'numeric', 'min:0', 'max:100'];
+            $rules["terms.$key.is_visible"] = ['sometimes', 'boolean'];
+        }
+
+        return $rules;
+    }
+
+    private function syncPlanTerms(Plan $plan, Request $request): void
+    {
+        foreach (PlanTerm::billingKeys() as $key) {
+            $price = (float) $request->input("terms.$key.price", 0);
+            $rawD = $request->input("terms.$key.discount_percent");
+            $disc = ($rawD === '' || $rawD === null)
+                ? null
+                : max(0, min(100, (int) round((float) $rawD)));
+            $visible = $request->boolean("terms.$key.is_visible");
+
+            PlanTerm::query()->updateOrCreate(
+                ['plan_id' => $plan->id, 'billing_key' => $key],
+                [
+                    'duration_days' => PlanTerm::durationDaysFor($key),
+                    'price' => $price,
+                    'discount_percent' => $disc,
+                    'is_visible' => $visible,
+                    'sort_order' => PlanTerm::defaultSortOrder($key),
+                ]
+            );
+        }
+
+        PlanPrice::syncFromPlanTerms($plan->fresh('terms'));
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
     private function validatedPlanData(Request $request, ?int $ignoreId = null): array
     {
         $rawDiscount = $request->input('discount_percent');
         $request->merge([
-            'discount_percent' => ($rawDiscount === '' || $rawDiscount === null) ? null : (int) $rawDiscount,
+            'discount_percent' => ($rawDiscount === '' || $rawDiscount === null)
+                ? null
+                : max(0, min(100, (int) round((float) $rawDiscount))),
         ]);
 
         $slugRule = Rule::unique('plans', 'slug');
@@ -111,7 +169,7 @@ class PlanController extends Controller
             'name' => ['required', 'string', 'max:120'],
             'slug' => ['required', 'string', 'max:64', 'regex:/^[a-z0-9]+(?:-[a-z0-9]+)*$/', $slugRule],
             'price' => ['required', 'numeric', 'min:0'],
-            'discount_percent' => ['nullable', 'integer', 'min:0', 'max:100'],
+            'discount_percent' => ['nullable', 'numeric', 'min:0', 'max:100'],
             'duration_days' => ['required', 'integer', 'min:0'],
             'sort_order' => ['nullable', 'integer', 'min:0', 'max:65535'],
             'is_active' => ['sometimes', 'boolean'],
@@ -184,12 +242,18 @@ class PlanController extends Controller
      */
     private function defaultFeatureTemplate(): array
     {
-        return [
+        $rows = [
             ['key' => SubscriptionService::FEATURE_DAILY_CHAT_SEND_LIMIT, 'value' => ''],
             ['key' => SubscriptionService::FEATURE_MONTHLY_INTEREST_SEND_LIMIT, 'value' => ''],
             ['key' => SubscriptionService::FEATURE_DAILY_PROFILE_VIEW_LIMIT, 'value' => ''],
             ['key' => SubscriptionService::FEATURE_CONTACT_NUMBER_ACCESS, 'value' => ''],
             ['key' => SubscriptionService::FEATURE_CHAT_IMAGE_MESSAGES, 'value' => ''],
         ];
+
+        foreach (PlanFeatureKeys::all() as $key) {
+            $rows[] = ['key' => $key, 'value' => ''];
+        }
+
+        return $rows;
     }
 }

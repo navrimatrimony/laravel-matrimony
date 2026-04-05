@@ -30,6 +30,7 @@ class ContactInboxController extends Controller
 
         $pending = ContactRequest::with(['sender.matrimonyProfile'])
             ->where('receiver_id', $user->id)
+            ->where('type', ContactRequest::TYPE_CONTACT)
             ->where('status', ContactRequest::STATUS_PENDING)
             ->where(function ($q) {
                 $q->whereNull('expires_at')->orWhere('expires_at', '>', now());
@@ -38,7 +39,7 @@ class ContactInboxController extends Controller
             ->get();
 
         $activeGrants = ContactGrant::with(['contactRequest.sender.matrimonyProfile'])
-            ->whereHas('contactRequest', fn ($q) => $q->where('receiver_id', $user->id))
+            ->whereHas('contactRequest', fn ($q) => $q->where('receiver_id', $user->id)->where('type', ContactRequest::TYPE_CONTACT))
             ->whereNull('revoked_at')
             ->where('valid_until', '>', now())
             ->orderByDesc('created_at')

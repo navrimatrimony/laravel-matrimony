@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Facades\Artisan;
 
 class Plan extends Model
 {
@@ -27,6 +28,20 @@ class Plan extends Model
         'highlight' => 'boolean',
     ];
 
+    protected static function booted(): void
+    {
+        static::saved(function () {
+            if (app()->runningUnitTests()) {
+                return;
+            }
+            try {
+                Artisan::call('view:clear');
+            } catch (\Throwable) {
+                // Non-fatal: pricing is always read from DB via accessors.
+            }
+        });
+    }
+
     public function features(): HasMany
     {
         return $this->hasMany(PlanFeature::class, 'plan_id');
@@ -37,19 +52,42 @@ class Plan extends Model
         return $this->hasMany(Subscription::class, 'plan_id');
     }
 
+    public function terms(): HasMany
+    {
+        return $this->hasMany(PlanTerm::class)->orderBy('sort_order');
+    }
+
+    public function visibleTerms(): HasMany
+    {
+        return $this->terms()->where('is_visible', true);
+    }
+
+    public function planPrices(): HasMany
+    {
+        return $this->hasMany(PlanPrice::class)->orderBy('sort_order');
+    }
+
+    public function visiblePlanPrices(): HasMany
+    {
+        return $this->hasMany(PlanPrice::class)
+            ->where('is_visible', true)
+            ->orderBy('sort_order');
+    }
+
     /**
-     * Final price after admin discount (not stored; avoids drift).
+     * Final price after discount_percent (computed only; never stored in DB).
      */
     public function getFinalPriceAttribute(): float
     {
         $base = (float) $this->price;
         $d = (int) ($this->discount_percent ?? 0);
-        if ($d <= 0) {
-            return round($base, 2);
-        }
-        $d = min(100, max(0, $d));
+        if ($this->discount_percent && $d > 0) {
+            $d = min(100, max(0, $d));
 
-        return round($base * (1 - $d / 100), 2);
+            return round($base * (1 - ($d / 100)), 2);
+        }
+
+        return round($base, 2);
     }
 
     public function hasActiveDiscount(): bool

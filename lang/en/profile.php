@@ -166,4 +166,12 @@ return [
     /** Scan-friendly residence line */
     'scan_lives_in' => 'Lives in',
     'cta_interested' => 'Interested',
+    'photos_upload_to_unlock_more' => 'Upload your photo to unlock more profiles.',
+    'photos_upgrade_to_view_all' => 'Upgrade to view all photos.',
+    'photo_overlay_premium_required' => 'Premium required',
+    'photo_overlay_upload_to_unlock' => 'Upload your photo to unlock',
+    'photo_overlay_cta_plans' => 'View plans',
+    'photo_overlay_cta_upload' => 'Add your photo',
+    'photo_overlay_sub_premium' => 'See every photo with a paid plan.',
+    'photo_overlay_sub_upload' => 'Members with a photo unlock clearer previews.',
 ];

@@ -3,12 +3,6 @@
 use App\Models\Caste;
 use App\Models\SubCaste;
 use Illuminate\Support\Facades\Route;
-use App\Http\Controllers\PlansController;
-
-Route::get('/plans', [PlansController::class, 'index'])->name('plans.index');
-Route::post('/subscribe/{plan}', [PlansController::class, 'subscribe'])
-    ->middleware('auth')
-    ->name('plans.subscribe');
 
 /*
 |--------------------------------------------------------------------------
@@ -17,7 +11,7 @@ Route::post('/subscribe/{plan}', [PlansController::class, 'subscribe'])
 | Order: public → member → admin → auth (same as pre-split), then legacy web JSON.
 | Admin intake suggestion queue: routes/web/admin.php → prefix admin/intake (names admin.intake.*).
 | Member matches: routes/web/member.php → GET /matches, GET /profiles/{id}/matches.
-| Member plans: routes/web/member.php → GET /plans, POST /subscribe/{plan}; admin: routes/web/admin.php → /admin/plans.
+| Member plans: GET /plans + POST /subscribe/{plan} registered below (public catalog; subscribe requires auth).
 | Match boost: routes/web/admin.php → GET/PUT /admin/match-boost; MatchingService applies boosts after base score.
 |--------------------------------------------------------------------------
 */
@@ -26,6 +20,14 @@ require __DIR__.'/web/public.php';
 require __DIR__.'/web/member.php';
 require __DIR__.'/web/admin.php';
 require __DIR__.'/auth.php';
+
+use App\Http\Controllers\PlansController;
+
+Route::get('/plans', [PlansController::class, 'index'])->name('plans.index');
+Route::post('/plans/coupon/validate', [PlansController::class, 'validateCoupon'])->name('plans.coupon.validate');
+Route::post('/subscribe/{plan}', [PlansController::class, 'subscribe'])
+    ->middleware('auth')
+    ->name('plans.subscribe');
 
 // Temporary debug route — Phase-5 Day-12 verification. Remove before production.
 

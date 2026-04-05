@@ -34,6 +34,7 @@ return [
     'daily_limit_reached' => 'Daily limit for contact requests reached. Try again tomorrow.',
     'select_at_least_one_contact_method' => 'Select at least one contact method.',
     'only_receiver_can_approve' => 'Only the receiver can approve this request.',
+    'wrong_contact_request_type' => 'This action does not apply to this request.',
     'request_no_longer_pending' => 'Request is no longer pending.',
     'request_expired' => 'Request has expired.',
     'select_at_least_one_scope_to_grant' => 'Select at least one scope to grant.',
@@ -44,4 +45,3 @@ return [
     'only_receiver_can_revoke' => 'Only the receiver can revoke access.',
     'access_already_revoked' => 'Access is already revoked.',
 ];
-

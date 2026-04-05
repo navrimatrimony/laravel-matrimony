@@ -3,13 +3,21 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
-use Illuminate\Http\Request;
 use App\Models\Interest;
 use App\Models\MatrimonyProfile;
+use App\Services\InterestPriorityService;
+use App\Services\InterestSendLimitService;
 use App\Services\ProfileLifecycleService;
+use Illuminate\Http\Request;
+use Symfony\Component\HttpKernel\Exception\HttpException;
 
 class InterestApiController extends Controller
 {
+    public function __construct(
+        private readonly InterestSendLimitService $interestSendLimit,
+        private readonly InterestPriorityService $interestPriority,
+    ) {}
+
     /**
      * Send interest to a matrimony profile
      */
@@ -18,7 +26,7 @@ class InterestApiController extends Controller
         $user = $request->user();
 
         // Guard: MatrimonyProfile must exist
-        if (!$user || !$user->matrimonyProfile) {
+        if (! $user || ! $user->matrimonyProfile) {
             return response()->json([
                 'success' => false,
                 'message' => 'Please create your matrimony profile first.',
@@ -42,7 +50,7 @@ class InterestApiController extends Controller
         }
 
         // Safety check
-        if (!$senderProfile || !$receiverProfile) {
+        if (! $senderProfile || ! $receiverProfile) {
             return response()->json([
                 'success' => false,
                 'message' => 'Matrimony profile missing.',
@@ -50,7 +58,7 @@ class InterestApiController extends Controller
         }
 
         // Day 7: Sender lifecycle — Archived/Suspended/Demo-Hidden cannot send interest
-        if (!ProfileLifecycleService::canInitiateInteraction($senderProfile)) {
+        if (! ProfileLifecycleService::canInitiateInteraction($senderProfile)) {
             return response()->json([
                 'success' => false,
                 'message' => 'Your profile cannot send interest in its current state.',
@@ -58,7 +66,7 @@ class InterestApiController extends Controller
         }
 
         // Day 7: Archived/Suspended/Demo-Hidden → interest blocked (receiver)
-        if (!ProfileLifecycleService::canReceiveInterest($receiverProfile)) {
+        if (! ProfileLifecycleService::canReceiveInterest($receiverProfile)) {
             return response()->json([
                 'success' => false,
                 'message' => 'You cannot send interest to this profile.',
@@ -81,12 +89,24 @@ class InterestApiController extends Controller
             ], 409);
         }
 
+        try {
+            $this->interestSendLimit->assertCanSend($user);
+        } catch (HttpException $e) {
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage(),
+            ], $e->getStatusCode());
+        }
+
         // Create new interest
         $interest = Interest::create([
             'sender_profile_id' => $senderProfile->id,
             'receiver_profile_id' => $receiverProfile->id,
             'status' => 'pending',
+            'priority_score' => $this->interestPriority->baseScoreForSender($user),
         ]);
+
+        $this->interestSendLimit->recordSuccessfulSend($user);
 
         return response()->json([
             'success' => true,
@@ -102,7 +122,7 @@ class InterestApiController extends Controller
     {
         $user = $request->user();
 
-        if (!$user || !$user->matrimonyProfile) {
+        if (! $user || ! $user->matrimonyProfile) {
             return response()->json([
                 'success' => false,
                 'message' => 'Please create your matrimony profile first.',
@@ -131,7 +151,7 @@ class InterestApiController extends Controller
     {
         $user = $request->user();
 
-        if (!$user || !$user->matrimonyProfile) {
+        if (! $user || ! $user->matrimonyProfile) {
             return response()->json([
                 'success' => false,
                 'message' => 'Please create your matrimony profile first.',
@@ -142,7 +162,7 @@ class InterestApiController extends Controller
 
         $receivedInterests = Interest::with('senderProfile')
             ->where('receiver_profile_id', $myProfileId)
-            ->latest()
+            ->receivedInboxOrder()
             ->get();
 
         return response()->json([
@@ -160,7 +180,7 @@ class InterestApiController extends Controller
     {
         $user = request()->user();
 
-        if (!$user || !$user->matrimonyProfile) {
+        if (! $user || ! $user->matrimonyProfile) {
             return response()->json([
                 'success' => false,
                 'message' => 'Please create your matrimony profile first.',
@@ -169,7 +189,7 @@ class InterestApiController extends Controller
 
         $interest = Interest::find($id);
 
-        if (!$interest) {
+        if (! $interest) {
             return response()->json([
                 'success' => false,
                 'message' => 'Interest not found.',
@@ -210,7 +230,7 @@ class InterestApiController extends Controller
     {
         $user = request()->user();
 
-        if (!$user || !$user->matrimonyProfile) {
+        if (! $user || ! $user->matrimonyProfile) {
             return response()->json([
                 'success' => false,
                 'message' => 'Please create your matrimony profile first.',
@@ -219,7 +239,7 @@ class InterestApiController extends Controller
 
         $interest = Interest::find($id);
 
-        if (!$interest) {
+        if (! $interest) {
             return response()->json([
                 'success' => false,
                 'message' => 'Interest not found.',
@@ -260,7 +280,7 @@ class InterestApiController extends Controller
     {
         $user = request()->user();
 
-        if (!$user || !$user->matrimonyProfile) {
+        if (! $user || ! $user->matrimonyProfile) {
             return response()->json([
                 'success' => false,
                 'message' => 'Please create your matrimony profile first.',
@@ -269,7 +289,7 @@ class InterestApiController extends Controller
 
         $interest = Interest::find($id);
 
-        if (!$interest) {
+        if (! $interest) {
             return response()->json([
                 'success' => false,
                 'message' => 'Interest not found.',

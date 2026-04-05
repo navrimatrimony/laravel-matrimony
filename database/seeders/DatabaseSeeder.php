@@ -29,6 +29,7 @@ class DatabaseSeeder extends Seeder
             TestAdminRolesSeeder::class,
             GeoSeeder::class,
             SubscriptionPlansSeeder::class,
+            PlanStandardFeatureKeysSeeder::class,
         ]);
     }
 }

@@ -146,8 +146,9 @@ class ProfileCompletenessService
         $t = $table;
 
         if (empty($enabledMandatoryFields)) {
-            // Fallback: if no enabled mandatory fields configured, return condition that always passes
-            return "({$t}.visibility_override = 1)";
+            // No enabled mandatory fields in DB (fresh install / empty profile_field_configs / all mandatory disabled).
+            // MUST NOT require visibility_override — that hid every profile except admin-forced ones.
+            return '(1 = 1)';
         }
 
         $fieldConditions = [];

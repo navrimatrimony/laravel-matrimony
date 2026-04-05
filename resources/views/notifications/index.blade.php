@@ -32,6 +32,10 @@
                                 <span class="mt-1 block text-sm text-gray-600">{{ $n->data['message_preview'] }}</span>
                             @endif
                         </a>
+                    @elseif (in_array(($n->data['type'] ?? ''), ['mediation_request_received', 'mediation_request_response'], true))
+                        <a href="{{ route('mediation-inbox.index') }}" class="block font-medium {{ $n->read_at ? 'text-gray-700' : 'text-gray-900' }}">
+                            {{ $n->data['message'] ?? 'Mediation' }}
+                        </a>
                     @else
                         <a href="{{ route('notifications.show', $n->id) }}" class="block font-medium {{ $n->read_at ? 'text-gray-700' : 'text-gray-900' }}">
                             {{ $n->data['message'] ?? 'Notification' }}
@@ -47,6 +51,8 @@
                             data-chat-conversation="{{ $n->data['conversation_id'] }}"
                             class="text-indigo-600 text-sm hover:underline"
                         >Open chat</a>
+                    @elseif (in_array(($n->data['type'] ?? ''), ['mediation_request_received', 'mediation_request_response'], true))
+                        <a href="{{ route('mediation-inbox.index') }}" class="text-indigo-600 text-sm hover:underline">Open</a>
                     @else
                         <a href="{{ route('notifications.show', $n->id) }}" class="text-indigo-600 text-sm hover:underline">Open</a>
                     @endif

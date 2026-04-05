@@ -101,6 +101,11 @@ class User extends Authenticatable implements MustVerifyEmail
         return $this->hasMany(Subscription::class);
     }
 
+    public function featureUsages(): HasMany
+    {
+        return $this->hasMany(UserFeatureUsage::class);
+    }
+
     /**
      * Latest active subscription row (by starts_at), if any.
      */

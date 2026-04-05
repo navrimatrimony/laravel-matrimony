@@ -7,8 +7,11 @@ use App\Models\MatrimonyProfile;
 use App\Models\Message;
 use App\Models\MessageParticipantState;
 use App\Notifications\NewChatMessageNotification;
-use App\Services\UserEntitlementService;
+use App\Services\EntitlementService;
 use App\Services\ShowcaseChat\ShowcaseOrchestrationService;
+use App\Services\SubscriptionService;
+use App\Services\UserEntitlementService;
+use App\Support\PlanFeatureKeys;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
@@ -19,7 +22,38 @@ class ChatMessageService
 {
     public function __construct(
         protected ChatPolicyService $policy,
+        protected EntitlementService $entitlements,
+        protected SubscriptionService $subscriptions,
     ) {}
+
+    /**
+     * Whether this profile's user may read bodies (and images) of messages they received.
+     *
+     * If the active plan has no {@see PlanFeatureKeys::CHAT_CAN_READ} row, reading is allowed
+     * (legacy plans). When the key exists, {@see EntitlementService::hasFeature} must pass.
+     */
+    public function viewerCanReadReceivedChat(MatrimonyProfile $viewer): bool
+    {
+        $viewer->loadMissing('user');
+        $user = $viewer->user;
+        if (! $user) {
+            return false;
+        }
+        if ($user->isAnyAdmin()) {
+            return true;
+        }
+
+        $plan = $this->subscriptions->getActivePlan($user);
+        $plan->loadMissing('features');
+        $planDefinesReadGate = $plan->features->contains(
+            fn ($f) => (string) $f->key === PlanFeatureKeys::CHAT_CAN_READ
+        );
+        if (! $planDefinesReadGate) {
+            return true;
+        }
+
+        return $this->entitlements->hasFeature((int) $user->id, PlanFeatureKeys::CHAT_CAN_READ);
+    }
 
     public function getMessagesPaginated(Conversation $conversation, int $perPage = 30): LengthAwarePaginator
     {
@@ -81,6 +115,10 @@ class ChatMessageService
 
     public function markConversationRead(MatrimonyProfile $reader, Conversation $conversation): void
     {
+        if (! $this->viewerCanReadReceivedChat($reader)) {
+            return;
+        }
+
         DB::transaction(function () use ($reader, $conversation) {
             $latest = Message::query()
                 ->where('conversation_id', $conversation->id)
@@ -206,6 +244,11 @@ class ChatMessageService
             abort(404);
         }
 
+        if ((int) $message->receiver_profile_id === (int) $viewer->id
+            && ! $this->viewerCanReadReceivedChat($viewer)) {
+            abort(403);
+        }
+
         if (! Storage::disk('local')->exists($message->image_path)) {
             abort(404);
         }
@@ -213,4 +256,3 @@ class ChatMessageService
         return Storage::disk('local')->response($message->image_path);
     }
 }
-

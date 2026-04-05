@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\Schema;
 
 /**
  * Admin-editable translation overrides.
@@ -15,6 +16,10 @@ class Translation extends Model
 
     public static function loadIntoTranslator(string $locale): void
     {
+        if (! Schema::hasTable('translations')) {
+            return;
+        }
+
         $rows = static::where('locale', $locale)->get(['key', 'value']);
         if ($rows->isEmpty()) {
             return;

@@ -4,12 +4,24 @@
 <div class="py-8 max-w-4xl mx-auto px-4">
     <h1 class="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-4">{{ __('who_viewed.title') }}</h1>
 
-    @if ($uniqueCount === 0)
-        <p class="text-gray-600 dark:text-gray-400 mb-6">{{ __('who_viewed.none_last_30_days') }}</p>
+    @if ($whoViewedLocked ?? false)
+        <p class="text-gray-600 dark:text-gray-400 mb-6">{{ __('who_viewed.locked_html') }}</p>
+    @elseif ($uniqueCount === 0)
+        <p class="text-gray-600 dark:text-gray-400 mb-6">
+            @if (($windowDays ?? null) === null)
+                {{ __('who_viewed.none_all_time') }}
+            @else
+                {{ __('who_viewed.none_in_window', ['days' => $windowDays]) }}
+            @endif
+        </p>
     @else
         <p class="text-gray-700 dark:text-gray-300 mb-6">
             <span class="font-semibold">{{ $uniqueCount }}</span>
-            {{ trans_choice('who_viewed.people_viewed_last_30_days', $uniqueCount, ['count' => $uniqueCount]) }}
+            @if (($windowDays ?? null) === null)
+                {{ trans_choice('who_viewed.people_viewed_all_time', $uniqueCount, ['count' => $uniqueCount]) }}
+            @else
+                {{ trans_choice('who_viewed.people_viewed_in_window', $uniqueCount, ['count' => $uniqueCount, 'days' => $windowDays]) }}
+            @endif
         </p>
 
         <div class="space-y-4">
@@ -45,4 +57,3 @@
     @endif
 </div>
 @endsection
-

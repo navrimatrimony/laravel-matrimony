@@ -20,9 +20,12 @@ use App\Models\State;
 use App\Models\SubCaste;
 use App\Models\Taluka;
 use App\Models\User;
+use App\Services\ContactAccessService;
 use App\Services\ExtendedFieldService;
 use App\Services\ProfileCompletenessService;
 use App\Services\ProfileFieldConfigurationService;
+use App\Services\ProfilePhotoAccessService;
+use App\Services\ProfileRotationService;
 use App\Services\ProfileShowReadService;
 use App\Services\SubscriptionService;
 use App\Services\ViewTrackingService;
@@ -46,6 +49,11 @@ use Symfony\Component\HttpKernel\Exception\HttpException;
 
 class MatrimonyProfileController extends Controller
 {
+    public function __construct(
+        protected ContactAccessService $contactAccessService,
+        protected ProfilePhotoAccessService $profilePhotoAccessService,
+    ) {}
+
     /**
      * Phase-5B: Build snapshot (same schema as approval_snapshot_json) from request + profile.
      * Only includes keys present in request (or in overrides). No DB write.
@@ -934,9 +942,9 @@ class MatrimonyProfileController extends Controller
                 ->exists();
         }
 
-        $subscriptionSvc = app(SubscriptionService::class);
-        $canViewContact = $isOwnProfile
-            || ($interestAllowsContact && $subscriptionSvc->canViewContactNumber($viewer));
+        $visibilitySettings = \Illuminate\Support\Facades\DB::table('profile_visibility_settings')
+            ->where('profile_id', $profile->id)
+            ->first();
 
         $extendedValues = ExtendedFieldService::getValuesForProfile($profile);
         $extendedMeta = FieldRegistry::where('field_type', 'EXTENDED')
@@ -957,9 +965,6 @@ class MatrimonyProfileController extends Controller
                 ->get();
         }
 
-        $visibilitySettings = \Illuminate\Support\Facades\DB::table('profile_visibility_settings')
-            ->where('profile_id', $profile->id)
-            ->first();
         $enableRelativesSection = true;
 
         $profilePropertySummary = \Illuminate\Support\Facades\DB::table('profile_property_summary')
@@ -989,9 +994,23 @@ class MatrimonyProfileController extends Controller
             }
         }
 
-        if (! empty($contactGrantReveal) && ! $subscriptionSvc->canViewContactNumber($viewer)) {
+        // Contact gating: EntitlementService (contact_unlock, contact_view_limit) + usage + visibility — see ContactAccessService.
+        $contactAccess = $isOwnProfile
+            ? ContactAccessService::neutralForOwner()
+            : $this->contactAccessService->resolveViewerContext(
+                $viewer,
+                $profile,
+                $interestAllowsContact,
+                $visibilitySettings,
+                $contactGrantReveal,
+            );
+
+        if (! ($contactAccess['has_contact_unlock'] ?? false)) {
             $contactGrantReveal = null;
         }
+
+        $canViewContact = $isOwnProfile
+            || (trim((string) ($contactAccess['paid_contact_phone'] ?? '')) !== '');
 
         // Profile show: always show gallery / primary photo (no blur lock for other viewers).
         $showPhotoTo = optional($visibilitySettings)->show_photo_to ?? 'all';
@@ -999,6 +1018,27 @@ class MatrimonyProfileController extends Controller
         $photoLocked = false;
 
         $verificationPanel = ProfileShowReadService::buildVerificationPanel($profile, $viewer, $isOwnProfile);
+
+        $galleryPhotos = collect();
+        if ($profilePhotoVisible) {
+            $galleryQuery = ProfilePhoto::query()
+                ->where('profile_id', $profile->id)
+                ->where('is_primary', false)
+                ->where('approved_status', 'approved');
+            if (Schema::hasColumn('profile_photos', 'sort_order')) {
+                $galleryQuery->orderBy('sort_order')->orderBy('id');
+            } else {
+                $galleryQuery->orderByDesc('created_at')->orderBy('id');
+            }
+            $galleryPhotos = $galleryQuery->take(12)->get();
+        }
+
+        $photoAlbumPresentation = $this->profilePhotoAccessService->buildAlbumPresentation(
+            $authUser,
+            $profile,
+            $isOwnProfile,
+            $galleryPhotos
+        );
 
         return view(
             'matrimony.profile.show',
@@ -1033,6 +1073,7 @@ class MatrimonyProfileController extends Controller
                 'matchData' => $matchData,
                 'canViewContact' => $canViewContact,
                 'primaryContactPhone' => $primaryContactPhone,
+                'contactAccess' => $contactAccess,
                 'hasBlockingConflicts' => $hasBlockingConflicts,
                 'conflictRecords' => $conflictRecords,
                 'contactRequestState' => $contactRequestState,
@@ -1043,6 +1084,8 @@ class MatrimonyProfileController extends Controller
                 'photoLocked' => $photoLocked,
                 'photoLockMode' => $showPhotoTo ?? 'all',
                 'verificationPanel' => $verificationPanel,
+                'galleryPhotos' => $galleryPhotos,
+                'photoAlbumPresentation' => $photoAlbumPresentation,
             ]
         );
     }
@@ -1186,6 +1229,7 @@ class MatrimonyProfileController extends Controller
 
         // Exclude blocked profiles (either direction) and viewer-hidden profiles when viewer has profile
         $myId = auth()->user()?->matrimonyProfile?->id;
+        $viewerUserId = auth()->id();
         if ($myId) {
             $blockedIds = ViewTrackingService::getBlockedProfileIds($myId);
             $hiddenIds = HiddenProfile::query()
@@ -1198,34 +1242,50 @@ class MatrimonyProfileController extends Controller
         }
 
         $sort = (string) $request->input('sort', 'latest');
-        $allowedSorts = ['latest', 'age_asc', 'age_desc', 'height_asc', 'height_desc'];
+        $allowedSorts = ['latest', 'age_asc', 'age_desc', 'height_asc', 'height_desc', 'discover'];
         if (! in_array($sort, $allowedSorts, true)) {
             $sort = 'latest';
         }
 
-        switch ($sort) {
-            case 'age_asc':
-                // Younger first: more recent date_of_birth first; nulls last
-                $query->orderByRaw('CASE WHEN date_of_birth IS NULL THEN 1 ELSE 0 END ASC')
-                    ->orderBy('date_of_birth', 'desc');
-                break;
-            case 'age_desc':
-                // Older first: older date_of_birth first; nulls last
-                $query->orderByRaw('CASE WHEN date_of_birth IS NULL THEN 1 ELSE 0 END ASC')
-                    ->orderBy('date_of_birth', 'asc');
-                break;
-            case 'height_asc':
-                $query->orderByRaw('CASE WHEN height_cm IS NULL THEN 1 ELSE 0 END ASC')
-                    ->orderBy('height_cm', 'asc');
-                break;
-            case 'height_desc':
-                $query->orderByRaw('CASE WHEN height_cm IS NULL THEN 1 ELSE 0 END ASC')
-                    ->orderBy('height_cm', 'desc');
-                break;
-            case 'latest':
-            default:
-                $query->latest();
-                break;
+        if ($sort === 'discover' && (! $myId || ! ProfileRotationService::isEnabled())) {
+            $sort = 'latest';
+        }
+
+        if ($sort === 'discover' && $myId && ProfileRotationService::isEnabled()) {
+            ProfileRotationService::applyDiscoverScope($query, (int) $myId, $viewerUserId);
+        }
+
+        if ($sort === 'discover' && $myId && ProfileRotationService::isEnabled()) {
+            ProfileRotationService::applyDiscoverOrdering(
+                $query,
+                (int) $myId,
+                ProfileRotationService::stableSeedForSession()
+            );
+        } else {
+            switch ($sort) {
+                case 'age_asc':
+                    // Younger first: more recent date_of_birth first; nulls last
+                    $query->orderByRaw('CASE WHEN date_of_birth IS NULL THEN 1 ELSE 0 END ASC')
+                        ->orderBy('date_of_birth', 'desc');
+                    break;
+                case 'age_desc':
+                    // Older first: older date_of_birth first; nulls last
+                    $query->orderByRaw('CASE WHEN date_of_birth IS NULL THEN 1 ELSE 0 END ASC')
+                        ->orderBy('date_of_birth', 'asc');
+                    break;
+                case 'height_asc':
+                    $query->orderByRaw('CASE WHEN height_cm IS NULL THEN 1 ELSE 0 END ASC')
+                        ->orderBy('height_cm', 'asc');
+                    break;
+                case 'height_desc':
+                    $query->orderByRaw('CASE WHEN height_cm IS NULL THEN 1 ELSE 0 END ASC')
+                        ->orderBy('height_cm', 'desc');
+                    break;
+                case 'latest':
+                default:
+                    $query->latest();
+                    break;
+            }
         }
 
         $perPage = (int) $request->input('per_page', 15);

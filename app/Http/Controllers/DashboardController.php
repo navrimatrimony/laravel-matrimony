@@ -2,13 +2,12 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Conversation;
 use App\Models\Interest;
 use App\Models\MatrimonyProfile;
 use App\Models\Message;
-use App\Models\Conversation;
 use App\Models\Shortlist;
 use App\Services\ProfileCompletenessService;
-use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
 /*
@@ -31,7 +30,7 @@ class DashboardController extends Controller
         $user = auth()->user();
 
         // No profile case - view handles this with empty data
-        if (!$user->matrimonyProfile) {
+        if (! $user->matrimonyProfile) {
             return view('dashboard', [
                 'hasProfile' => false,
             ]);
@@ -61,7 +60,7 @@ class DashboardController extends Controller
         // Recent Interests (Last 3 received)
         $recentReceivedInterests = Interest::with('senderProfile.gender')
             ->where('receiver_profile_id', $myProfileId)
-            ->latest()
+            ->receivedInboxOrder()
             ->limit(3)
             ->get();
 
@@ -112,7 +111,7 @@ class DashboardController extends Controller
 
                 $preview = '';
                 if (($m->message_type ?? 'text') === 'image') {
-                    $preview = ($m->body_text ?? '') !== '' ? ('📷 ' . $m->body_text) : '📷 Image';
+                    $preview = ($m->body_text ?? '') !== '' ? ('📷 '.$m->body_text) : '📷 Image';
                 } else {
                     $preview = (string) ($m->body_text ?? '');
                 }

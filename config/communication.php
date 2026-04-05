@@ -49,6 +49,13 @@ return [
     'contact_request_mode' => env('COMMUNICATION_CONTACT_REQUEST_MODE', 'mutual_only'), // mutual_only | direct_allowed | disabled
 
     /*
+    | When true, using a paid contact reveal (contact_view credit) on a profile requires an
+    | assisted matchmaking row (type=mediator) from the viewer to that profile with status interested.
+    | Contact grants from the standard contact-request flow are unaffected.
+    */
+    'paid_contact_reveal_requires_matchmaking_interested' => env('COMMUNICATION_PAID_REVEAL_REQUIRES_MATCHMAKING_INTERESTED', true),
+
+    /*
     | Days after reject before sender can request same receiver again. Range 7–365.
     */
     'reject_cooldown_days' => (int) env('COMMUNICATION_REJECT_COOLDOWN_DAYS', 90),

@@ -259,6 +259,9 @@
                                             <option value="age_desc" {{ $resolvedSort === 'age_desc' ? 'selected' : '' }}>{{ __('search.sort_age_desc') }}</option>
                                             <option value="height_asc" {{ $resolvedSort === 'height_asc' ? 'selected' : '' }}>{{ __('search.sort_height_asc') }}</option>
                                             <option value="height_desc" {{ $resolvedSort === 'height_desc' ? 'selected' : '' }}>{{ __('search.sort_height_desc') }}</option>
+                                            @auth
+                                            <option value="discover" {{ $resolvedSort === 'discover' ? 'selected' : '' }}>{{ __('search.sort_discover') }}</option>
+                                            @endauth
                                         </select>
                                     </div>
                                     <div class="min-w-0 sm:min-w-[6rem]">
@@ -348,6 +351,7 @@
                                         'age_desc' => __('search.sort_age_desc'),
                                         'height_asc' => __('search.sort_height_asc'),
                                         'height_desc' => __('search.sort_height_desc'),
+                                        'discover' => __('search.sort_discover'),
                                     ];
                                     $chips[] = ['k' => 'Sort', 'v' => $sortChipLabels[$resolvedSort] ?? $resolvedSort];
                                 }

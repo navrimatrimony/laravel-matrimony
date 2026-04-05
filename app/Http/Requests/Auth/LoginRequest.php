@@ -106,6 +106,24 @@ class LoginRequest extends FormRequest
         }
 
         $normalized = Str::lower($rawLogin);
+
+        // e.g. "super_admin_test" → matches super_admin_test@example.com (test accounts / username-style login)
+        if ($normalized !== '' && ! str_contains($rawLogin, '@')) {
+            $byLocalPart = User::query()
+                ->whereNotNull('email')
+                ->whereRaw('LOWER(email) LIKE ?', [$normalized.'@%'])
+                ->limit(5)
+                ->get();
+            if ($byLocalPart->count() === 1) {
+                $only = $byLocalPart->first();
+                if (Hash::check($password, $only->password)) {
+                    Auth::login($only, $this->boolean('remember'));
+
+                    return true;
+                }
+            }
+        }
+
         $candidates = User::query()
             ->whereRaw('LOWER(name) = ?', [$normalized])
             ->limit(5)

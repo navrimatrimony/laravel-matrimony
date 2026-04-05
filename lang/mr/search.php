@@ -74,6 +74,7 @@ return [
     'sort_age_desc' => 'वय: जास्त ते कमी',
     'sort_height_asc' => 'उंची: कमी ते जास्त',
     'sort_height_desc' => 'उंची: जास्त ते कमी',
+    'sort_discover' => 'शोध (कमी पुनरावृत्ती)',
     'card_actions_menu' => 'प्रोफाइल क्रिया',
     'confirm_block_profile' => 'हे प्रोफाइल ब्लॉक करायचे? नंतर खात्यातून ब्लॉक व्यवस्थापित करू शकता.',
     'action_block_profile' => 'प्रोफाइल ब्लॉक करा',
@@ -92,4 +93,3 @@ return [
     'photo_report_already_open' => 'या फोटोसाठी तुमची उघड नोंद आधीच आहे.',
     'photo_report_submitted' => 'फोटो नोंद पाठवली. धन्यवाद.',
 ];
-

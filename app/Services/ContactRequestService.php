@@ -9,7 +9,6 @@ use App\Models\User;
 use App\Notifications\ContactGrantRevokedNotification;
 use App\Notifications\ContactRequestAcceptedNotification;
 use App\Notifications\ContactRequestExpiredNotification;
-use App\Notifications\ContactRequestReceivedNotification;
 use App\Notifications\ContactRequestRejectedNotification;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -69,6 +68,7 @@ class ContactRequestService
         // Avoid duplicate *outgoing* pending request.
         $openPending = ContactRequest::where('sender_id', $sender->id)
             ->where('receiver_id', $receiver->id)
+            ->where('type', ContactRequest::TYPE_CONTACT)
             ->where('status', ContactRequest::STATUS_PENDING)
             ->where(function ($q) {
                 $q->whereNull('expires_at')->orWhere('expires_at', '>', now());
@@ -89,7 +89,7 @@ class ContactRequestService
         }
 
         $maxPerDay = $this->config['max_requests_per_day_per_sender'] ?? null;
-        if ($maxPerDay !== null && $this->countRequestsTodayBySender($sender) >= $maxPerDay) {
+        if ($maxPerDay !== null && $this->countContactRequestsTodayBySender($sender) >= $maxPerDay) {
             return false;
         }
 
@@ -103,20 +103,23 @@ class ContactRequestService
     {
         $row = ContactRequest::where('sender_id', $sender->id)
             ->where('receiver_id', $receiver->id)
+            ->where('type', ContactRequest::TYPE_CONTACT)
             ->where('status', ContactRequest::STATUS_REJECTED)
             ->whereNotNull('cooldown_ends_at')
             ->where('cooldown_ends_at', '>', now())
             ->orderByDesc('cooldown_ends_at')
             ->first();
+
         return $row?->cooldown_ends_at;
     }
 
     /**
-     * Count contact requests created today by sender.
+     * Count type=contact requests created today by sender (mediator rows excluded).
      */
-    public function countRequestsTodayBySender(User $sender): int
+    public function countContactRequestsTodayBySender(User $sender): int
     {
         return ContactRequest::where('sender_id', $sender->id)
+            ->where('type', ContactRequest::TYPE_CONTACT)
             ->whereDate('created_at', today())
             ->count();
     }
@@ -133,6 +136,7 @@ class ContactRequestService
         // Prevent duplicate *outgoing* pending request from same sender→receiver.
         $openPending = ContactRequest::where('sender_id', $sender->id)
             ->where('receiver_id', $receiver->id)
+            ->where('type', ContactRequest::TYPE_CONTACT)
             ->where('status', ContactRequest::STATUS_PENDING)
             ->where(function ($q) {
                 $q->whereNull('expires_at')->orWhere('expires_at', '>', now());
@@ -162,7 +166,7 @@ class ContactRequestService
         }
 
         $maxPerDay = $this->config['max_requests_per_day_per_sender'] ?? null;
-        if ($maxPerDay !== null && $this->countRequestsTodayBySender($sender) >= $maxPerDay) {
+        if ($maxPerDay !== null && $this->countContactRequestsTodayBySender($sender) >= $maxPerDay) {
             throw ValidationException::withMessages(['contact_request' => __('notifications.daily_limit_reached')]);
         }
 
@@ -177,6 +181,7 @@ class ContactRequestService
 
         return DB::transaction(function () use ($sender, $receiver, $reason, $otherReasonText, $requested_scopes, $expiresAt) {
             return ContactRequest::create([
+                'type' => ContactRequest::TYPE_CONTACT,
                 'sender_id' => $sender->id,
                 'receiver_id' => $receiver->id,
                 'reason' => $reason,
@@ -193,6 +198,9 @@ class ContactRequestService
      */
     public function approve(ContactRequest $request, User $receiver, array $grantedScopes, string $durationKey): ContactGrant
     {
+        if (! $request->isContactType()) {
+            throw ValidationException::withMessages(['request' => __('notifications.wrong_contact_request_type')]);
+        }
         if ($request->receiver_id !== $receiver->id) {
             throw ValidationException::withMessages(['request' => __('notifications.only_receiver_can_approve')]);
         }
@@ -225,6 +233,7 @@ class ContactRequestService
 
         $grant = DB::transaction(function () use ($request, $grantedScopes, $validUntil) {
             $request->update(['status' => ContactRequest::STATUS_ACCEPTED]);
+
             return ContactGrant::create([
                 'contact_request_id' => $request->id,
                 'granted_scopes' => $grantedScopes,
@@ -233,6 +242,7 @@ class ContactRequestService
         });
         $this->audit($request, $grant, 'approved', $request->receiver_id, ['granted_scopes' => $grantedScopes]);
         $request->sender->notify(new ContactRequestAcceptedNotification($grant));
+
         return $grant;
     }
 
@@ -241,6 +251,9 @@ class ContactRequestService
      */
     public function reject(ContactRequest $request, User $receiver): void
     {
+        if (! $request->isContactType()) {
+            throw ValidationException::withMessages(['request' => __('notifications.wrong_contact_request_type')]);
+        }
         if ($request->receiver_id !== $receiver->id) {
             throw ValidationException::withMessages(['request' => __('notifications.only_receiver_can_reject')]);
         }
@@ -264,6 +277,9 @@ class ContactRequestService
      */
     public function cancel(ContactRequest $request, User $sender): void
     {
+        if (! $request->isContactType()) {
+            throw ValidationException::withMessages(['request' => __('notifications.only_pending_can_be_cancelled')]);
+        }
         if ($request->sender_id !== $sender->id) {
             throw ValidationException::withMessages(['request' => __('notifications.only_sender_can_cancel')]);
         }
@@ -279,6 +295,9 @@ class ContactRequestService
     public function revokeGrant(ContactGrant $grant, User $receiver): void
     {
         $request = $grant->contactRequest;
+        if (! $request || ! $request->isContactType()) {
+            throw ValidationException::withMessages(['grant' => __('notifications.wrong_contact_request_type')]);
+        }
         if ($request->receiver_id !== $receiver->id) {
             throw ValidationException::withMessages(['grant' => __('notifications.only_receiver_can_revoke')]);
         }
@@ -301,6 +320,7 @@ class ContactRequestService
     {
         $request = ContactRequest::where('sender_id', $sender->id)
             ->where('receiver_id', $receiver->id)
+            ->where('type', ContactRequest::TYPE_CONTACT)
             ->where('status', ContactRequest::STATUS_ACCEPTED)
             ->first();
         if (! $request) {
@@ -310,6 +330,7 @@ class ContactRequestService
         if (! $grant || ! $grant->isValid()) {
             return null;
         }
+
         return $grant;
     }
 
@@ -322,6 +343,7 @@ class ContactRequestService
     {
         $request = ContactRequest::where('sender_id', $sender->id)
             ->where('receiver_id', $receiver->id)
+            ->where('type', ContactRequest::TYPE_CONTACT)
             ->orderByDesc('created_at')
             ->first();
 
@@ -336,8 +358,10 @@ class ContactRequestService
                 $request->update(['status' => ContactRequest::STATUS_EXPIRED]);
                 $this->audit($request, null, 'expired', null, []);
                 $request->sender->notify(new ContactRequestExpiredNotification($request));
+
                 return ['state' => 'expired', 'request' => $request->fresh(), 'grant' => null, 'cooldown_ends_at' => null];
             }
+
             return ['state' => 'pending', 'request' => $request, 'grant' => null, 'cooldown_ends_at' => null];
         }
 
@@ -346,6 +370,7 @@ class ContactRequestService
             if (! $grant || ! $grant->isValid()) {
                 return ['state' => 'revoked', 'request' => $request, 'grant' => $grant, 'cooldown_ends_at' => null];
             }
+
             return ['state' => 'accepted', 'request' => $request, 'grant' => $grant, 'cooldown_ends_at' => null];
         }
 

@@ -1,7 +1,7 @@
 @extends('layouts.app')
 
 @section('content')
-<div class="max-w-6xl mx-auto py-8 px-4 sm:px-6" x-data="{ adminEditMode: @js(auth()->check() && auth()->user()->is_admin === true && request()->has('admin_edit')), openRequestModal: false }">
+<div class="max-w-6xl mx-auto py-8 px-4 sm:px-6" x-data="{ adminEditMode: @js(auth()->check() && auth()->user()->is_admin === true && request()->has('admin_edit')), openRequestModal: false, showContactUpgradeModal: false }">
     <h1 class="text-lg font-semibold tracking-tight text-gray-900 dark:text-gray-100 mb-4 lg:mb-5 lg:text-xl xl:text-2xl">Matrimony Profile</h1>
     @if (($isOwnProfile ?? false) && auth()->check() && auth()->user()->is_admin !== true)
         <div class="mb-6">
@@ -279,26 +279,15 @@
     <div class="flex w-full flex-col gap-6 lg:flex-row lg:items-stretch lg:gap-0 lg:overflow-hidden lg:rounded-2xl lg:border lg:border-stone-200/65 lg:bg-white lg:shadow-[0_4px_28px_-8px_rgba(28,25,23,0.1)] lg:ring-1 lg:ring-stone-200/45 dark:lg:border-gray-700/75 dark:lg:bg-gray-900/95 dark:lg:shadow-[0_4px_32px_-10px_rgba(0,0,0,0.42)] dark:lg:ring-gray-700/55">
     <aside class="w-full space-y-6 lg:sticky lg:top-24 lg:w-[318px] lg:max-w-[330px] lg:shrink-0 lg:space-y-4 lg:border-b lg:border-stone-200/60 lg:bg-gradient-to-b lg:from-stone-50/50 lg:to-stone-50/20 lg:p-4 dark:lg:border-gray-700/70 dark:lg:from-gray-900/50 dark:lg:to-gray-900/30 xl:w-[336px]">
         @php
-            $galleryPhotos = collect();
-            if ($profilePhotoVisible) {
-                $galleryPhotosQuery = \App\Models\ProfilePhoto::query()
-                    ->where('profile_id', $profile->id)
-                    ->where('is_primary', false);
-
-                if (\Illuminate\Support\Facades\Schema::hasColumn('profile_photos', 'sort_order')) {
-                    $galleryPhotosQuery->orderBy('sort_order')->orderBy('id');
-                } else {
-                    $galleryPhotosQuery->orderByDesc('created_at')->orderBy('id');
-                }
-
-                $galleryPhotos = $galleryPhotosQuery->take(12)->get();
-            }
+            $galleryPhotos = $galleryPhotos ?? collect();
+            $photoAlbumPresentation = $photoAlbumPresentation ?? ['slots' => [], 'message_key' => null, 'tier' => 'own_profile'];
         @endphp
         <div class="group lg:overflow-hidden lg:rounded-xl lg:ring-1 lg:ring-stone-200/55 lg:transition-[box-shadow,ring-color] lg:duration-300 lg:ease-out dark:lg:ring-gray-600/55 lg:hover:shadow-[0_10px_36px_-14px_rgba(28,25,23,0.14)] lg:hover:ring-stone-300/65 dark:lg:hover:ring-gray-500/60">
         <x-profile.show.hero-card
             class="w-full !shadow-none !ring-0 lg:!rounded-xl"
             :profile="$profile"
             :profilePhotoVisible="$profilePhotoVisible"
+            :photoAlbumPresentation="$photoAlbumPresentation"
             :galleryPhotos="$galleryPhotos"
             :photoLocked="$photoLocked"
             :photoLockMode="$photoLockMode ?? 'all'"
@@ -311,6 +300,11 @@
             :educationVisible="$educationVisible"
         />
         </div>
+        @if (! empty($photoAlbumPresentation['message_key'] ?? null))
+            <p class="mt-3 text-sm text-stone-700 dark:text-stone-200 bg-stone-100/90 dark:bg-gray-800/90 px-3 py-2 rounded-lg border border-stone-200/80 dark:border-gray-600" role="status">
+                {{ __($photoAlbumPresentation['message_key']) }}
+            </p>
+        @endif
         @if ($profilePhotoVisible && $isOwnProfile && $profile->profile_photo && $profile->photo_approved === false && empty($profile->photo_rejected_at))
             <p class="mt-3 text-sm text-amber-800 dark:text-amber-200 bg-amber-50 dark:bg-amber-900/30 px-3 py-2 rounded-lg border border-amber-200/80 dark:border-amber-800">{{ __('dashboard.photo_under_review') }}</p>
         @endif
@@ -556,7 +550,7 @@
                     </div>
                 </div>
 
-                @if (! $contactRequestDisabled && $contactRequestState !== null)
+                @if (! $contactRequestDisabled && $contactRequestState !== null && ($contactAccess['show_contact_request_rail'] ?? true))
                     @if ($crState === 'none' || ($crState === 'expired' && ! $cooldownEndsAt) || $crState === 'cancelled')
                         @if ($canSendContactRequest ?? false)
                             <button
@@ -612,6 +606,25 @@
                         @endif
                     @elseif ($crState === 'revoked')
                         <p class="rounded-2xl border border-stone-200 bg-stone-100 px-3 py-2 text-center text-xs text-stone-600 dark:border-gray-600 dark:bg-gray-800 dark:text-stone-400">{{ __('Contact no longer available') }}</p>
+                    @endif
+                @endif
+
+                @if (! ($isOwnProfile ?? false) && ($contactAccess['show_mediator_cta'] ?? false))
+                    @if ($contactAccess['needs_upgrade_for_mediator'] ?? false)
+                        <button
+                            type="button"
+                            class="inline-flex w-full items-center justify-center gap-2 rounded-2xl border border-amber-200/90 bg-amber-50 px-3 py-2.5 text-xs font-semibold text-amber-900 shadow-sm dark:border-amber-800/60 dark:bg-amber-950/40 dark:text-amber-100"
+                            @click="$root.showContactUpgradeModal = true"
+                        >
+                            {{ __('contact_access.mediator_heading') }} — {{ __('contact_access.upgrade_plans') }}
+                        </button>
+                    @else
+                        <form method="POST" action="{{ route('matrimony.profile.mediator-request', $profile) }}" class="w-full">
+                            @csrf
+                            <button type="submit" class="inline-flex w-full items-center justify-center gap-2 rounded-2xl border border-violet-200/90 bg-white px-3 py-2.5 text-xs font-semibold text-violet-900 shadow-sm ring-1 ring-violet-100/80 transition hover:bg-violet-50/90 dark:border-violet-800/60 dark:bg-gray-800 dark:text-violet-200 dark:ring-violet-900/40">
+                                {{ __('contact_access.mediator_submit') }}
+                            </button>
+                        </form>
                     @endif
                 @endif
 
@@ -692,7 +705,7 @@
                     </div>
                 </div>
 
-                @if (auth()->check() && ! $contactRequestDisabled && $contactRequestState !== null)
+                @if (auth()->check() && ! $contactRequestDisabled && $contactRequestState !== null && ($contactAccess['show_contact_request_rail'] ?? true))
                     @php
                         $reasons = config('communication.request_reasons', []);
                     @endphp
@@ -1635,8 +1648,39 @@
                     @else
                         {{ __('No contact number added.') }}
                     @endif
+                @elseif ($contactAccess['blocked'] ?? false)
+                    <button type="button" class="group w-full rounded-xl text-left transition hover:bg-stone-50/90 dark:hover:bg-stone-800/30 -m-1 p-1" @click="$root.showContactUpgradeModal = true">
+                        <span class="block text-amber-800 dark:text-amber-200">{{ __('contact_access.unlock_required') }}</span>
+                        <span class="mt-2 block text-sm font-bold text-indigo-600 dark:text-indigo-400 group-hover:text-indigo-700 dark:group-hover:text-indigo-300">{{ __('subscriptions.pricing_cta_upgrade') }} →</span>
+                    </button>
+                @elseif (($contactAccess['show_no_one_copy'] ?? false) && ! ($canViewContact ?? false))
+                    <span class="text-stone-700 dark:text-stone-200">{{ __('contact_access.owner_restricted_contact') }}</span>
                 @elseif ($canViewContact)
-                    {{ $primaryContactPhone }}
+                    {{ $contactAccess['paid_contact_phone'] ?? $primaryContactPhone }}
+                @elseif ($contactAccess['show_paid_reveal_button'] ?? false)
+                    <span class="block text-sm font-medium text-stone-600 dark:text-stone-400">{{ __('contact_access.reveal_uses_credit') }}</span>
+                    @if (($contactAccess['contact_view_remaining'] ?? null) !== null)
+                        <p class="mt-1 text-xs text-stone-500 dark:text-stone-400">{{ __('contact_access.credits_remaining', ['count' => $contactAccess['contact_view_remaining']]) }}</p>
+                    @else
+                        <p class="mt-1 text-xs text-stone-500 dark:text-stone-400">{{ __('contact_access.credits_unlimited') }}</p>
+                    @endif
+                    <form method="POST" action="{{ route('matrimony.profile.contact-reveal', $profile) }}" class="mt-3">
+                        @csrf
+                        <button type="submit" class="inline-flex items-center justify-center rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-emerald-700">{{ __('contact_access.reveal_button') }}</button>
+                    </form>
+                @elseif (!empty($interestAllowsContact) && ($contactAccess['paid_reveal_blocked_pending_matchmaking'] ?? false))
+                    <span class="block text-sm font-medium text-stone-700 dark:text-stone-200">{{ __('contact_access.reveal_blocked_matchmaking') }}</span>
+                    @if (($contactAccess['show_mediator_cta'] ?? false) && !($contactAccess['needs_upgrade_for_mediator'] ?? false))
+                        <p class="mt-2 text-xs text-stone-500 dark:text-stone-400">{{ __('contact_access.mediator_body') }}</p>
+                    @endif
+                @elseif (!empty($interestAllowsContact) && ($contactAccess['no_contact_credits_left'] ?? false))
+                    <button type="button" class="group w-full rounded-xl text-left transition hover:bg-stone-50/90 dark:hover:bg-stone-800/30 -m-1 p-1" @click="$root.showContactUpgradeModal = true">
+                        <span class="block font-semibold text-amber-800 dark:text-amber-200">{{ __('contact_access.no_credits_left') }}</span>
+                        <p class="mt-2 text-sm text-stone-600 dark:text-stone-400">{{ __('contact_access.reveal_blocked_credits') }}</p>
+                        <span class="mt-2 block text-sm font-bold text-indigo-600 dark:text-indigo-400 group-hover:text-indigo-700 dark:group-hover:text-indigo-300">{{ __('subscriptions.pricing_cta_upgrade') }} →</span>
+                    </button>
+                @elseif (!empty($interestAllowsContact) && ($contactAccess['visibility_case'] ?? '') === 'request_only')
+                    {{ __('Contact details can be requested using the Request Contact action after interest is accepted.') }}
                 @elseif (!empty($interestAllowsContact))
                     <span class="text-amber-800 dark:text-amber-200">{{ __('subscriptions.contact_premium_required') }}</span>
                     <a href="{{ route('plans.index') }}" class="mt-2 inline-block text-sm font-semibold text-indigo-600 hover:text-indigo-800 dark:text-indigo-400 dark:hover:text-indigo-300">{{ __('subscriptions.nav_plans') }}</a>
@@ -1645,7 +1689,7 @@
                 @endif
             </p>
         </div>
-        @if (!$isOwnProfile && !$canViewContact)
+        @if (!$isOwnProfile && !$canViewContact && !($contactAccess['blocked'] ?? false) && !($contactAccess['show_no_one_copy'] ?? false))
             <div class="mt-3 rounded-lg border border-stone-200/90 bg-stone-50/90 px-3 py-2.5 text-xs leading-relaxed text-stone-600 dark:border-gray-600 dark:bg-gray-800/50 dark:text-stone-400">
                 @if (!empty($interestAllowsContact))
                     <strong>{{ __('subscriptions.nav_plans') }}:</strong> {{ __('subscriptions.contact_premium_required') }}
@@ -2081,5 +2125,15 @@
     </div>{{-- gap-8 wrapper around bordered panel --}}
 
 </div>{{-- space-y-8 profile body --}}
+
+    <div x-show="$root.showContactUpgradeModal" x-cloak x-transition.opacity class="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-4" style="display: none;" @click.self="$root.showContactUpgradeModal = false">
+        <div class="relative mx-auto w-full max-w-sm rounded-2xl bg-white p-5 pt-6 shadow-2xl dark:bg-gray-900" @click.stop>
+            <button type="button" class="absolute right-2.5 top-2.5 rounded-lg p-1.5 text-stone-500 transition hover:bg-stone-100 dark:text-stone-400 dark:hover:bg-gray-800" @click="$root.showContactUpgradeModal = false" aria-label="{{ __('upgrade_nudge.close') }}">✕</button>
+            <h3 class="pr-8 text-base font-bold text-gray-900 dark:text-gray-100">{{ __('contact_access.upgrade_modal_title') }}</h3>
+            <p class="mt-2 text-sm leading-relaxed text-gray-600 dark:text-gray-400">{{ __('upgrade_nudge.contact') }}</p>
+            <a href="{{ route('plans.index') }}" class="mt-5 flex w-full items-center justify-center rounded-xl bg-indigo-600 px-4 py-3 text-sm font-bold text-white shadow-md transition hover:bg-indigo-700">{{ __('subscriptions.pricing_cta_upgrade') }}</a>
+            <button type="button" class="mt-3 w-full text-center text-sm font-semibold text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200" @click="$root.showContactUpgradeModal = false">{{ __('upgrade_nudge.close') }}</button>
+        </div>
+    </div>
 </div>{{-- max-w-6xl / x-data root --}}
 @endsection

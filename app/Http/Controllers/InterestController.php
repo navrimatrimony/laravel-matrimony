@@ -8,9 +8,10 @@ use App\Models\MatrimonyProfile;
 use App\Notifications\InterestAcceptedNotification;
 use App\Notifications\InterestRejectedNotification;
 use App\Notifications\InterestSentNotification;
+use App\Services\InterestPriorityService;
+use App\Services\InterestSendLimitService;
 use App\Services\ProfileCompletenessService;
 use App\Services\ProfileLifecycleService;
-use App\Services\SubscriptionService;
 use Symfony\Component\HttpKernel\Exception\HttpException;
 
 /*
@@ -26,6 +27,11 @@ use Symfony\Component\HttpKernel\Exception\HttpException;
 
 class InterestController extends Controller
 {
+    public function __construct(
+        private readonly InterestSendLimitService $interestSendLimit,
+        private readonly InterestPriorityService $interestPriority,
+    ) {}
+
     /*
     |--------------------------------------------------------------------------
     | Send Interest
@@ -103,13 +109,13 @@ class InterestController extends Controller
             return back()->with('error', __('interest.cannot_send_to_profile'));
         }
 
-        // Subscription: monthly interest limit (new sends only)
+        // Daily interest send quota via entitlements + user_feature_usage (new sends only)
         $alreadySent = Interest::where('sender_profile_id', $senderProfile->id)
             ->where('receiver_profile_id', $receiverProfile->id)
             ->exists();
         if (! $alreadySent) {
             try {
-                app(SubscriptionService::class)->assertWithinInterestLimit($authUser);
+                $this->interestSendLimit->assertCanSend($authUser);
             } catch (HttpException $e) {
                 return back()->with('error', $e->getMessage());
             }
@@ -123,10 +129,12 @@ class InterestController extends Controller
             ],
             [
                 'status' => 'pending',
+                'priority_score' => $this->interestPriority->baseScoreForSender($authUser),
             ]
         );
 
         if ($interest->wasRecentlyCreated) {
+            $this->interestSendLimit->recordSuccessfulSend($authUser);
             $receiverOwner = $receiverProfile->user;
             if ($receiverOwner) {
                 $receiverOwner->notify(new InterestSentNotification($senderProfile));
@@ -188,7 +196,7 @@ class InterestController extends Controller
 
         $receivedInterests = Interest::with('senderProfile.gender')
             ->where('receiver_profile_id', $myProfileId)
-            ->latest()
+            ->receivedInboxOrder()
             ->get();
 
         return view('interests.received', compact('receivedInterests'));

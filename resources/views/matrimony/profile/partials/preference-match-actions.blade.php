@@ -1,4 +1,7 @@
 {{-- Primary profile actions (single include — top summary card on public profile). --}}
+@php
+    $contactAccess = $contactAccess ?? ['show_contact_request_rail' => true];
+@endphp
 @if (auth()->check() && !$isOwnProfile)
     @if (session('success'))
         <p class="mb-3 text-center text-sm text-emerald-700 dark:text-emerald-300">{{ session('success') }}</p>
@@ -22,7 +25,7 @@
         @endif
 
         {{-- Day-32: Request Contact (button states + modal) --}}
-        @if (!$contactRequestDisabled && $contactRequestState !== null)
+        @if (!$contactRequestDisabled && $contactRequestState !== null && ($contactAccess['show_contact_request_rail'] ?? true))
             @php
                 $crState = $contactRequestState['state'] ?? 'none';
                 $crRequest = $contactRequestState['request'] ?? null;

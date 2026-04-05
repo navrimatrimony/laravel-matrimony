@@ -10,6 +10,8 @@ return [
     'blocked_unblock_to_send' => 'You have blocked this profile. Unblock to send interest.',
     'sender_cannot_send_current_state' => 'Your profile cannot send interest in its current state.',
     'sender_must_be_70_complete' => 'Your profile must be at least 70% complete to send interest.',
+    'daily_limit_reached' => 'Daily interest limit reached. Upgrade to send more.',
+
     'interest_sent_successfully' => 'Interest sent successfully.',
     'interest_already_processed' => 'This interest is already processed.',
     'receiver_must_be_70_complete_accept' => 'Your profile must be at least 70% complete to accept interest.',
@@ -18,4 +20,3 @@ return [
     'interest_rejected' => 'Interest rejected.',
     'interest_withdrawn_successfully' => 'Interest withdrawn successfully.',
 ];
-

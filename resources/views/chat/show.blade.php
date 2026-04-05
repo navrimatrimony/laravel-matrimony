@@ -103,6 +103,7 @@
                                 'isMine' => ((int) $m->sender_profile_id === (int) $me->id),
                                 'senderPhotoUrl' => $m->senderProfile?->profile_photo_url,
                                 'viewerProfileId' => (int) ($viewerProfileId ?? $me->id),
+                                'readLockedForIncoming' => (bool) ($readLockedForIncoming ?? false),
                             ])
                         @endforeach
                     @endif
@@ -225,6 +226,23 @@
             </div>
         </section>
     </div>
+
+    {{-- Minimal upgrade popup: read-locked incoming messages --}}
+    <div
+        id="upgrade-modal-chat-read"
+        class="hidden fixed inset-0 z-[70] flex items-end justify-center sm:items-center sm:p-4"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="upgrade-modal-chat-read-title"
+    >
+        <div class="upgrade-lock-popup-backdrop absolute inset-0 bg-black/50" data-upgrade-lock-close></div>
+        <div class="relative z-10 mx-4 mb-6 w-full max-w-sm rounded-2xl border border-gray-200 bg-white p-5 shadow-2xl dark:border-gray-700 dark:bg-gray-900 sm:mb-0">
+            <h2 id="upgrade-modal-chat-read-title" class="text-base font-bold text-gray-900 dark:text-gray-100">{{ __('subscriptions.pricing_cta_upgrade') }}</h2>
+            <p class="mt-2 text-sm leading-relaxed text-gray-600 dark:text-gray-300">{{ __('upgrade_nudge.chat_read') }}</p>
+            <a href="{{ route('plans.index') }}" class="mt-5 flex w-full items-center justify-center rounded-xl bg-indigo-600 px-4 py-3 text-sm font-bold text-white shadow-md transition hover:bg-indigo-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 dark:ring-offset-gray-900">{{ __('subscriptions.pricing_cta_upgrade') }}</a>
+            <button type="button" class="mt-3 w-full text-center text-sm font-semibold text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200" data-upgrade-lock-close>{{ __('upgrade_nudge.close') }}</button>
+        </div>
+    </div>
 </div>
 
 <script>
@@ -263,6 +281,34 @@
     if (premiumBackdrop) premiumBackdrop.addEventListener('click', closePremium);
     if (premiumClose) premiumClose.addEventListener('click', closePremium);
     if (premiumLater) premiumLater.addEventListener('click', closePremium);
+
+    const readUpgradeModal = document.getElementById('upgrade-modal-chat-read');
+    function openReadUpgradeModal() {
+        if (!readUpgradeModal) return;
+        readUpgradeModal.classList.remove('hidden');
+        document.body.classList.add('overflow-hidden');
+    }
+    function closeReadUpgradeModal() {
+        if (!readUpgradeModal) return;
+        readUpgradeModal.classList.add('hidden');
+        document.body.classList.remove('overflow-hidden');
+    }
+    if (readUpgradeModal) {
+        readUpgradeModal.querySelectorAll('[data-upgrade-lock-close]').forEach((el) => {
+            el.addEventListener('click', closeReadUpgradeModal);
+        });
+    }
+    if (scroller) {
+        scroller.addEventListener('click', (e) => {
+            const opener = e.target.closest('[data-open-upgrade-lock-modal]');
+            if (!opener) return;
+            e.preventDefault();
+            const id = opener.getAttribute('data-open-upgrade-lock-modal');
+            if (id === 'upgrade-modal-chat-read') {
+                openReadUpgradeModal();
+            }
+        });
+    }
 
     function clearSelectedImage() {
         if (previewRow) previewRow.classList.add('hidden');

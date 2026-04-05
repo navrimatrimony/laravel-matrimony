@@ -14,9 +14,11 @@
     'canSendContactRequest' => false,
     'inShortlist' => false,
     'contactGrantReveal' => null,
+    'contactAccess' => null,
 ])
 
 @php
+    $contactAccess = $contactAccess ?? ['show_contact_request_rail' => true];
     $profile->loadMissing(['city', 'district', 'state', 'maritalStatus', 'religion', 'caste', 'profession', 'incomeCurrency', 'familyIncomeCurrency']);
     $age = null;
     if ($dateOfBirthVisible && ($profile->date_of_birth ?? '') !== '') {
@@ -116,6 +118,7 @@
                 'canSendContactRequest' => $canSendContactRequest,
                 'inShortlist' => $inShortlist,
                 'contactGrantReveal' => $contactGrantReveal,
+                'contactAccess' => $contactAccess,
             ])
         </div>
     @endif

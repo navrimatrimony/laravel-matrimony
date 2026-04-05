@@ -4,7 +4,9 @@ namespace Database\Seeders;
 
 use App\Models\Plan;
 use App\Models\PlanFeature;
+use App\Models\PlanTerm;
 use App\Services\SubscriptionService;
+use App\Support\PlanFeatureKeys;
 use Illuminate\Database\Seeder;
 
 class SubscriptionPlansSeeder extends Seeder
@@ -22,10 +24,12 @@ class SubscriptionPlansSeeder extends Seeder
                 'highlight' => false,
                 'features' => [
                     SubscriptionService::FEATURE_DAILY_CHAT_SEND_LIMIT => '5',
+                    PlanFeatureKeys::INTEREST_SEND_LIMIT => '3',
                     SubscriptionService::FEATURE_MONTHLY_INTEREST_SEND_LIMIT => '3',
                     SubscriptionService::FEATURE_DAILY_PROFILE_VIEW_LIMIT => '50',
                     SubscriptionService::FEATURE_CONTACT_NUMBER_ACCESS => '0',
                     SubscriptionService::FEATURE_CHAT_IMAGE_MESSAGES => '0',
+                    PlanFeatureKeys::PHOTO_FULL_ACCESS => '0',
                 ],
             ],
             [
@@ -38,10 +42,12 @@ class SubscriptionPlansSeeder extends Seeder
                 'highlight' => false,
                 'features' => [
                     SubscriptionService::FEATURE_DAILY_CHAT_SEND_LIMIT => '25',
+                    PlanFeatureKeys::INTEREST_SEND_LIMIT => '15',
                     SubscriptionService::FEATURE_MONTHLY_INTEREST_SEND_LIMIT => '15',
                     SubscriptionService::FEATURE_DAILY_PROFILE_VIEW_LIMIT => '200',
                     SubscriptionService::FEATURE_CONTACT_NUMBER_ACCESS => '1',
                     SubscriptionService::FEATURE_CHAT_IMAGE_MESSAGES => '0',
+                    PlanFeatureKeys::PHOTO_FULL_ACCESS => '1',
                 ],
             ],
             [
@@ -54,10 +60,12 @@ class SubscriptionPlansSeeder extends Seeder
                 'highlight' => false,
                 'features' => [
                     SubscriptionService::FEATURE_DAILY_CHAT_SEND_LIMIT => '100',
+                    PlanFeatureKeys::INTEREST_SEND_LIMIT => '50',
                     SubscriptionService::FEATURE_MONTHLY_INTEREST_SEND_LIMIT => '50',
                     SubscriptionService::FEATURE_DAILY_PROFILE_VIEW_LIMIT => '-1',
                     SubscriptionService::FEATURE_CONTACT_NUMBER_ACCESS => '1',
                     SubscriptionService::FEATURE_CHAT_IMAGE_MESSAGES => '1',
+                    PlanFeatureKeys::PHOTO_FULL_ACCESS => '1',
                 ],
             ],
             [
@@ -70,10 +78,31 @@ class SubscriptionPlansSeeder extends Seeder
                 'highlight' => true,
                 'features' => [
                     SubscriptionService::FEATURE_DAILY_CHAT_SEND_LIMIT => '-1',
+                    PlanFeatureKeys::INTEREST_SEND_LIMIT => '-1',
                     SubscriptionService::FEATURE_MONTHLY_INTEREST_SEND_LIMIT => '-1',
                     SubscriptionService::FEATURE_DAILY_PROFILE_VIEW_LIMIT => '-1',
                     SubscriptionService::FEATURE_CONTACT_NUMBER_ACCESS => '1',
                     SubscriptionService::FEATURE_CHAT_IMAGE_MESSAGES => '1',
+                    PlanFeatureKeys::PHOTO_FULL_ACCESS => '1',
+                ],
+            ],
+            [
+                'name' => 'Platinum',
+                'slug' => 'platinum',
+                'price' => 7999,
+                'discount_percent' => null,
+                'duration_days' => 30,
+                'sort_order' => 50,
+                'highlight' => false,
+                'features' => [
+                    SubscriptionService::FEATURE_DAILY_CHAT_SEND_LIMIT => '-1',
+                    PlanFeatureKeys::INTEREST_SEND_LIMIT => '-1',
+                    SubscriptionService::FEATURE_MONTHLY_INTEREST_SEND_LIMIT => '-1',
+                    SubscriptionService::FEATURE_DAILY_PROFILE_VIEW_LIMIT => '-1',
+                    SubscriptionService::FEATURE_CONTACT_NUMBER_ACCESS => '1',
+                    SubscriptionService::FEATURE_CHAT_IMAGE_MESSAGES => '1',
+                    PlanFeatureKeys::PHOTO_FULL_ACCESS => '1',
+                    PlanFeatureKeys::PRIORITY_LISTING => '1',
                 ],
             ],
         ];
@@ -95,6 +124,8 @@ class SubscriptionPlansSeeder extends Seeder
                     'value' => (string) $value,
                 ]);
             }
+
+            PlanTerm::syncDefaultsForPlan($plan->fresh());
         }
     }
 }
