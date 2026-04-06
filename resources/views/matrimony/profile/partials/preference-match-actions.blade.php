@@ -3,12 +3,7 @@
     $contactAccess = $contactAccess ?? ['show_contact_request_rail' => false];
 @endphp
 @if (auth()->check() && !$isOwnProfile)
-    @if (session('success'))
-        <p class="mb-3 text-center text-sm text-emerald-700 dark:text-emerald-300">{{ session('success') }}</p>
-    @endif
-    @if (session('error'))
-        <p class="mb-3 text-center text-sm text-red-600 dark:text-red-400">{{ session('error') }}</p>
-    @endif
+    {{-- Flash messages: layouts.app only (avoid duplicate banners with profile show + hero strip) --}}
 
     <div class="flex flex-col gap-2.5 sm:flex-row sm:flex-wrap sm:justify-center sm:gap-3">
         @if ($interestAlreadySent)

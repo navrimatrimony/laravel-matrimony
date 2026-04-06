@@ -479,4 +479,143 @@ class FeatureUsageService
     {
         return app(SubscriptionService::class)->canUseChatImages($user);
     }
+
+    /**
+     * Member dashboard / layout: used vs plan limit per quota (display-only; gates use {@see canUse} / domain services).
+     *
+     * @return array{bypass: bool, rows: list<array{key: string, label: string, period: string, used: int, limit: int|null, remaining: int|null, locked: bool, is_unlimited: bool}>}|null
+     */
+    public function getDashboardUsageSummary(User $user): ?array
+    {
+        if (! $user->matrimonyProfile) {
+            return null;
+        }
+
+        if ($this->shouldBypassUsageLimits($user)) {
+            return [
+                'bypass' => true,
+                'rows' => [],
+            ];
+        }
+
+        $subs = app(SubscriptionService::class);
+        $usageSvc = app(UserFeatureUsageService::class);
+        $interestSvc = app(InterestSendLimitService::class);
+
+        $contact = $this->getContactViewUsageSnapshot($user);
+        $contactLimit = $contact['is_unlimited'] ? -1 : (int) $contact['limit'];
+
+        $rows = [
+            $this->dashboardUsageRow(
+                'contact_reveals',
+                __('dashboard.usage_row_contact_reveals'),
+                'monthly',
+                (int) $contact['used'],
+                $contactLimit,
+            ),
+            $this->dashboardUsageRow(
+                'chat_sends',
+                __('dashboard.usage_row_chat_sends'),
+                'daily',
+                $usageSvc->getUsage(
+                    (int) $user->id,
+                    self::FEATURE_CHAT_SEND_LIMIT,
+                    UserFeatureUsage::PERIOD_DAILY,
+                ),
+                $subs->getFeatureLimit($user, SubscriptionService::FEATURE_CHAT_SEND_LIMIT),
+            ),
+            $this->dashboardUsageRow(
+                'profile_opens',
+                __('dashboard.usage_row_profile_opens'),
+                'daily',
+                $usageSvc->getUsage(
+                    (int) $user->id,
+                    self::FEATURE_DAILY_PROFILE_VIEW_LIMIT,
+                    UserFeatureUsage::PERIOD_DAILY,
+                ),
+                $subs->getFeatureLimit($user, SubscriptionService::FEATURE_DAILY_PROFILE_VIEW_LIMIT),
+            ),
+            $this->dashboardUsageRow(
+                'interest_sends',
+                __('dashboard.usage_row_interest_sends'),
+                'daily',
+                $usageSvc->getUsage(
+                    (int) $user->id,
+                    UserFeatureUsageKeys::INTEREST_SEND_LIMIT,
+                    UserFeatureUsage::PERIOD_DAILY,
+                ),
+                $interestSvc->effectiveDailyLimit($user),
+            ),
+            $this->dashboardUsageRow(
+                'mediator_requests',
+                __('dashboard.usage_row_mediator_requests'),
+                'monthly',
+                $usageSvc->getUsage(
+                    (int) $user->id,
+                    UserFeatureUsageKeys::MEDIATOR_REQUEST,
+                    UserFeatureUsage::PERIOD_MONTHLY,
+                ),
+                $this->effectiveMediatorMonthlyLimitForDashboard($user, $subs),
+            ),
+        ];
+
+        return [
+            'bypass' => false,
+            'rows' => $rows,
+        ];
+    }
+
+    /**
+     * @return array{key: string, label: string, period: string, used: int, limit: int|null, remaining: int|null, locked: bool, is_unlimited: bool}
+     */
+    private function dashboardUsageRow(
+        string $key,
+        string $label,
+        string $period,
+        int $used,
+        int $limit,
+    ): array {
+        $locked = $limit === 0;
+        $unlimited = $limit === -1;
+
+        return [
+            'key' => $key,
+            'label' => $label,
+            'period' => $period,
+            'used' => $used,
+            'limit' => $unlimited ? null : $limit,
+            'remaining' => $unlimited ? null : max(0, $limit - $used),
+            'locked' => $locked,
+            'is_unlimited' => $unlimited,
+        ];
+    }
+
+    /**
+     * Mediator quota for dashboard: same product rule as {@see ContactAccessService::resolveViewerContext}
+     * when {@code has_contact_unlock} is false — contact reveal cap 0 ⇒ mediator shows as unavailable (0),
+     * not the raw {@see PlanFeatureKeys::MEDIATOR_REQUESTS_PER_MONTH} on the plan row.
+     */
+    private function effectiveMediatorMonthlyLimitForDashboard(User $user, SubscriptionService $subs): int
+    {
+        $contactCap = $subs->getFeatureLimit($user, PlanFeatureKeys::CONTACT_VIEW_LIMIT);
+        if ($contactCap === 0) {
+            return 0;
+        }
+
+        return $this->parseNumericLimitFromEntitlement((int) $user->id, PlanFeatureKeys::MEDIATOR_REQUESTS_PER_MONTH);
+    }
+
+    /**
+     * Same parsing as {@see ContactAccessService::parseNumericLimit} for mediator monthly cap.
+     */
+    private function parseNumericLimitFromEntitlement(int $userId, string $featureKey): int
+    {
+        $raw = app(EntitlementService::class)->getValue($userId, $featureKey, '0');
+        $s = strtolower(trim((string) $raw));
+        if ($s === '' || $s === '-1' || $s === 'unlimited') {
+            return -1;
+        }
+
+        return max(0, (int) $raw);
+    }
 }

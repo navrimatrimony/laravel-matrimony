@@ -148,6 +148,8 @@
                 </div>
             </div>
 
+            @include('partials.plan-usage-summary', ['variant' => 'full'])
+
             {{-- Statistics Cards with SVG Icons --}}
             <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 mb-6">
                 

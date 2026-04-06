@@ -68,6 +68,20 @@ class AppServiceProvider extends ServiceProvider
 
         /*
         |----------------------------------------------------------------------
+        | Plan usage summary (member layouts — dashboard strip + full card)
+        |----------------------------------------------------------------------
+        */
+        View::composer(['layouts.app', 'dashboard'], function ($view) {
+            $planUsageSummary = null;
+            if (auth()->check() && auth()->user()->matrimonyProfile) {
+                $planUsageSummary = app(\App\Services\FeatureUsageService::class)
+                    ->getDashboardUsageSummary(auth()->user());
+            }
+            $view->with('planUsageSummary', $planUsageSummary);
+        });
+
+        /*
+        |----------------------------------------------------------------------
         | Admin Layout View Composer (SSOT — capability resolution)
         |----------------------------------------------------------------------
         | Provides admin capability variables to layouts.admin.

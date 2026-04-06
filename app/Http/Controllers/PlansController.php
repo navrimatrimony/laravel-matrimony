@@ -39,12 +39,13 @@ class PlansController extends Controller
 
         $effectivePlan = $subscriptions->getEffectivePlan($user);
 
-        $pricingSlugs = ['silver', 'gold', 'platinum'];
+        // All active non-free plans (admin-created tiers like "test" must appear). Order by sort_order + id.
         $pricingPlans = $plans
-            ->filter(fn (Plan $p) => in_array(strtolower((string) $p->slug), $pricingSlugs, true))
-            ->sortBy(function (Plan $p) use ($pricingSlugs) {
-                return array_search(strtolower((string) $p->slug), $pricingSlugs, true);
-            })
+            ->filter(fn (Plan $p) => strtolower((string) $p->slug) !== 'free')
+            ->sortBy([
+                ['sort_order', 'asc'],
+                ['id', 'asc'],
+            ])
             ->values();
 
         $unreadMessagesCount = 0;

@@ -47,15 +47,7 @@
         </div>
     @endif
 
-    @if (session('success'))
-        <div class="mb-4 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-100">{{ session('success') }}</div>
-    @endif
-    @if (session('info'))
-        <div class="mb-4 rounded-lg border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-900 dark:border-sky-800 dark:bg-sky-950/40 dark:text-sky-100">{{ session('info') }}</div>
-    @endif
-    @if (session('error'))
-        <div class="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-900 dark:border-red-800 dark:bg-red-950/40 dark:text-red-100">{{ session('error') }}</div>
-    @endif
+    {{-- success/info/error flash: layouts.app only (dismissible + auto-hide) — avoids triple duplicate banners on this page --}}
 
     @if (($isOwnProfile ?? false) && auth()->check() && $userId !== null && $featureUsage->canUse((int) $userId, 'who_viewed_me_access'))
         <div class="mb-4 rounded-lg border border-stone-200/90 bg-white p-4 text-center shadow-sm dark:border-gray-700 dark:bg-gray-800/60">
@@ -739,14 +731,6 @@
 
         @if (! ($isOwnProfile ?? false))
             <div class="border-b border-stone-200/85 bg-gradient-to-r from-rose-50/80 via-white to-white px-5 py-6 dark:border-gray-700/80 dark:from-rose-950/20 dark:via-gray-900 dark:to-gray-900 lg:px-8">
-                @if (auth()->check())
-                    @if (session('success'))
-                        <div class="mb-3 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-900 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-100">{{ session('success') }}</div>
-                    @endif
-                    @if (session('error'))
-                        <div class="mb-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-900 dark:border-red-800 dark:bg-red-950/40 dark:text-red-100">{{ session('error') }}</div>
-                    @endif
-                @endif
                 <div class="flex flex-col items-stretch gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <div class="min-w-0">
                         <p class="text-xs font-semibold uppercase tracking-[0.18em] text-rose-600/90 dark:text-rose-400/90">{{ __('profile.hero_interest_prompt') }}</p>
@@ -2270,12 +2254,6 @@
     <hr style="margin-top:2rem; margin-bottom:1.5rem;">
     
     <div x-data="{ showReportForm: false }">
-        @if (session('success'))
-            <p style="color:green; margin-bottom:1rem;">{{ session('success') }}</p>
-        @endif
-        @if (session('error'))
-            <p style="color:red; margin-bottom:1rem;">{{ session('error') }}</p>
-        @endif
         @if ($errors->any())
             <div style="color:red; margin-bottom:1rem;">
                 <ul>

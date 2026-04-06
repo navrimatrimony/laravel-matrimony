@@ -44,5 +44,20 @@ return [
     'verified' => 'Verified',
     'verify_mobile' => 'Verify mobile',
     'otp_verification' => 'OTP verification',
-];
 
+    'usage_section_title' => 'Plan usage',
+    'usage_section_subtitle' => 'How much of your current plan limits you have used.',
+    'usage_strip_title' => 'Plan usage',
+    'usage_period_daily' => 'today',
+    'usage_period_monthly' => 'this month',
+    'usage_row_contact_reveals' => 'Contact reveals',
+    'usage_row_chat_sends' => 'Chat messages sent',
+    'usage_row_profile_opens' => 'Profile opens',
+    'usage_row_interest_sends' => 'Interests sent',
+    'usage_row_mediator_requests' => 'Mediator requests',
+    'usage_remaining' => ':n left',
+    'usage_unlimited' => 'Unlimited',
+    'usage_not_included' => 'Not in your plan',
+    'usage_bypass' => 'Plan limits do not apply to your account.',
+    'usage_upgrade_plan' => 'Plans & upgrades',
+];

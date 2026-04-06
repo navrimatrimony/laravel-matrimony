@@ -44,5 +44,20 @@ return [
     'verified' => 'सत्यापित',
     'verify_mobile' => 'मोबाईल सत्यापन',
     'otp_verification' => 'OTP सत्यापन',
-];
 
+    'usage_section_title' => 'प्लॅन वापर',
+    'usage_section_subtitle' => 'सध्याच्या प्लॅनमधील मर्यादेतून किती वापरले आहे.',
+    'usage_strip_title' => 'प्लॅन वापर',
+    'usage_period_daily' => 'आज',
+    'usage_period_monthly' => 'या महिन्यात',
+    'usage_row_contact_reveals' => 'संपर्क दाखवणे',
+    'usage_row_chat_sends' => 'पाठवलेले चॅट संदेश',
+    'usage_row_profile_opens' => 'प्रोफाइल उघडणे',
+    'usage_row_interest_sends' => 'पाठवलेल्या इच्छा',
+    'usage_row_mediator_requests' => 'मध्यस्थ विनंत्या',
+    'usage_remaining' => ':n शिल्लक',
+    'usage_unlimited' => 'अमर्याद',
+    'usage_not_included' => 'तुमच्या प्लॅनमध्ये नाही',
+    'usage_bypass' => 'तुमच्यासाठी प्लॅन मर्यादा लागू होत नाहीत.',
+    'usage_upgrade_plan' => 'प्लॅन व अपग्रेड',
+];
