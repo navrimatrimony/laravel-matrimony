@@ -4,49 +4,11 @@
 @php
     $featureUsage = app(\App\Services\FeatureUsageService::class);
     $userId = auth()->id();
-
-    $chatUsed = 0;
-    $contactUsed = 0;
-    $chatLimit = 0;
-    $contactLimit = 0;
-    $chatLeft = null;
-    $contactLeft = null;
-
-    if (auth()->check()) {
-        $authUser = auth()->user();
-        $usageSvc = app(\App\Services\UserFeatureUsageService::class);
-        $subSvc = app(\App\Services\SubscriptionService::class);
-
-        $chatUsed = $usageSvc->getUsage(
-            (int) $authUser->id,
-            \App\Services\FeatureUsageService::FEATURE_CHAT_SEND_LIMIT,
-            \App\Models\UserFeatureUsage::PERIOD_DAILY,
-        );
-        $contactUsed = $usageSvc->getUsage(
-            (int) $authUser->id,
-            \App\Support\UserFeatureUsageKeys::CONTACT_VIEW_LIMIT,
-            \App\Models\UserFeatureUsage::PERIOD_MONTHLY,
-        );
-
-        $chatLimit = $subSvc->getFeatureLimit($authUser, \App\Services\SubscriptionService::FEATURE_CHAT_SEND_LIMIT);
-        $contactLimit = $subSvc->getFeatureLimit($authUser, \App\Support\PlanFeatureKeys::CONTACT_VIEW_LIMIT);
-
-        if ($chatLimit === -1) {
-            $chatLeft = null;
-        } elseif ($chatLimit === 0) {
-            $chatLeft = 0;
-        } else {
-            $chatLeft = max(0, $chatLimit - $chatUsed);
-        }
-
-        if ($contactLimit === -1) {
-            $contactLeft = null;
-        } elseif ($contactLimit === 0) {
-            $contactLeft = 0;
-        } else {
-            $contactLeft = max(0, $contactLimit - $contactUsed);
-        }
-    }
+    $cu = $contactUsageSnapshot ?? ['used' => 0, 'limit' => 0, 'remaining' => 0, 'is_unlimited' => false];
+    $contactUsed = $cu['used'];
+    $isUnlimited = (bool) ($cu['is_unlimited'] ?? false);
+    $contactLimit = $cu['limit'];
+    $contactRemaining = $cu['remaining'];
 @endphp
 <div class="max-w-6xl mx-auto py-8 px-4 sm:px-6" x-data="{ adminEditMode: @js(auth()->check() && auth()->user()->is_admin === true && request()->has('admin_edit')), openRequestModal: false, showContactUpgradeModal: false }">
     @if ($userId !== null && ! $featureUsage->canUse((int) $userId, 'who_viewed_me_access') && ($isOwnProfile ?? false))
@@ -639,7 +601,7 @@
                     </div>
                 </div>
 
-                @if (! $contactRequestDisabled && $contactRequestState !== null && ($contactAccess['show_contact_request_rail'] ?? true))
+                @if (! $contactRequestDisabled && $contactRequestState !== null && ($contactAccess['show_contact_request_rail'] ?? false))
                     @if ($crState === 'none' || ($crState === 'expired' && ! $cooldownEndsAt) || $crState === 'cancelled')
                         @if ($canSendContactRequest ?? false)
                             <button
@@ -669,7 +631,7 @@
                         @endif
                     @elseif ($crState === 'accepted' && $crGrant)
                         <a
-                            href="{{ route('matrimony.profile.show', $profile) }}#contact-reveal"
+                            href="{{ route('matrimony.profile.show', $profile) }}#profile-contact-panel"
                             class="inline-flex w-full items-center justify-center gap-2 rounded-2xl border border-emerald-200/90 bg-emerald-600 px-3 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-700 dark:border-emerald-700 dark:bg-emerald-700"
                         >
                             <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/20" aria-hidden="true">
@@ -806,7 +768,7 @@
                     </div>
                 </div>
 
-                @if (auth()->check() && ! $contactRequestDisabled && $contactRequestState !== null && ($contactAccess['show_contact_request_rail'] ?? true))
+                @if (auth()->check() && ! $contactRequestDisabled && $contactRequestState !== null && ($contactAccess['show_contact_request_rail'] ?? false))
                     @php
                         $reasons = config('communication.request_reasons', []);
                     @endphp
@@ -850,7 +812,7 @@
                             <p class="text-sm"><span class="text-gray-500">Email:</span> {{ $contactGrantReveal['email'] }}</p>
                         @endif
                         @if (! empty($contactGrantReveal['phone']))
-                            @if ($userId !== null && $featureUsage->canUse((int) $userId, 'contact_view_limit'))
+                            @if ($userId !== null && $featureUsage->canUse((int) $userId, \App\Services\FeatureUsageService::FEATURE_CONTACT_VIEW_LIMIT))
                                 <p class="text-sm"><span class="text-gray-500">Phone:</span> {{ $contactGrantReveal['phone'] }}</p>
                             @else
                                 @php
@@ -1739,38 +1701,31 @@
 @endif
 
 @if (auth()->check())
-    <div class="mb-4 rounded-lg border border-gray-200 bg-gray-50 p-3 dark:border-gray-600 dark:bg-gray-800/50">
-        <div class="flex flex-wrap justify-between gap-3 text-sm">
-            <div>
-                💬 {{ __('Chat') }}:
-                <span class="{{ ($chatLeft !== null && $chatLeft <= 3) ? 'font-semibold text-red-600 dark:text-red-400' : 'text-gray-700 dark:text-gray-300' }}">
-                    @if ($chatLimit === -1)
-                        {{ $chatUsed }} / ∞
-                    @else
-                        {{ $chatUsed }} / {{ $chatLimit }}
-                    @endif
-                </span>
-            </div>
-            <div>
-                📞 Contacts:
-                <span class="{{ ($contactLeft !== null && $contactLeft <= 2) ? 'font-semibold text-red-600 dark:text-red-400' : 'text-gray-700 dark:text-gray-300' }}">
-                    @if ($contactLimit === -1)
-                        {{ $contactUsed }} / ∞
-                    @else
-                        {{ $contactUsed }} / {{ $contactLimit }}
-                    @endif
-                </span>
-            </div>
-        </div>
-        @if (($chatLeft !== null && $chatLeft <= 3) || ($contactLeft !== null && $contactLeft <= 2))
-            <div class="mt-1 text-xs text-red-500 dark:text-red-400">
-                ⚠️ Your limits are almost over. Upgrade to continue.
-            </div>
+    <div id="contact-usage-strip" class="mb-4 rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-gray-600 dark:bg-gray-800/50">
+        @if ($isUnlimited)
+            <p class="text-sm text-gray-800 dark:text-gray-200">
+                {{ __('profile.usage_contacts_used_line', ['used' => $contactUsed, 'limit' => '∞']) }}
+            </p>
+            <p class="mt-1 text-sm text-gray-600 dark:text-gray-400">
+                {{ __('profile.usage_contacts_remaining_unlimited') }}
+            </p>
+        @else
+            <p class="text-sm {{ (is_numeric($contactLimit) && $contactLimit > 0 && is_numeric($contactRemaining) && $contactRemaining <= 2) ? 'font-semibold text-amber-800 dark:text-amber-200' : 'text-gray-800 dark:text-gray-200' }}">
+                {{ __('profile.usage_contacts_used_line', ['used' => $contactUsed, 'limit' => $contactLimit]) }}
+            </p>
+            <p class="mt-1 text-sm text-gray-600 dark:text-gray-400">
+                {{ __('profile.usage_contacts_remaining_line', ['remaining' => $contactRemaining]) }}
+            </p>
+            @if (is_numeric($contactLimit) && $contactLimit > 0 && is_numeric($contactRemaining) && $contactRemaining <= 2)
+                <p class="mt-2 text-xs text-amber-700 dark:text-amber-300">
+                    {{ __('profile.usage_contacts_low_warning') }}
+                </p>
+            @endif
         @endif
     </div>
 @endif
 
-<div class="relative overflow-hidden rounded-2xl border border-stone-200/75 bg-gradient-to-br from-white via-stone-50/80 to-emerald-50/20 shadow-[0_14px_44px_-20px_rgba(5,150,105,0.1)] ring-1 ring-stone-100/70 dark:border-stone-700/80 dark:from-gray-900 dark:via-stone-900/90 dark:to-emerald-950/15">
+<div id="profile-contact-panel" class="relative overflow-hidden rounded-2xl border border-stone-200/75 bg-gradient-to-br from-white via-stone-50/80 to-emerald-50/20 shadow-[0_14px_44px_-20px_rgba(5,150,105,0.1)] ring-1 ring-stone-100/70 dark:border-stone-700/80 dark:from-gray-900 dark:via-stone-900/90 dark:to-emerald-950/15">
     <section class="relative px-5 py-6 sm:px-7 sm:py-7" aria-labelledby="profile-contact-heading">
         <header class="mb-4 flex flex-wrap items-center gap-3">
             <span class="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-700 text-white shadow-md shadow-emerald-600/20 dark:from-emerald-600 dark:to-teal-900" aria-hidden="true">
@@ -1791,54 +1746,130 @@
                     @endif
                 </div>
             @else
+                <div id="profile-contact-reveal-root">
                 @php
-                    $contactSectionUserId = auth()->id();
-                    $contactSectionFeatureUsage = app(\App\Services\FeatureUsageService::class);
                     $contactMaskedDigits = preg_replace('/\D/', '', (string) ($profile->primary_contact_number ?? $profile->phone ?? ''));
                     $masked = strlen($contactMaskedDigits) >= 4
                         ? substr($contactMaskedDigits, 0, 4) . 'XXXX'
                         : 'XXXX';
                 @endphp
 
-                {{-- CASE 1: ALREADY UNLOCKED (server-resolved number; do not use canUse after unlock) --}}
-                @if (! empty($contactAccess['paid_contact_phone']))
-                    <div class="text-center">
-                        <p class="text-xl font-bold text-stone-900 dark:text-stone-100">
-                            {{ $contactAccess['paid_contact_phone'] }}
-                        </p>
-                        <p class="text-green-600 text-sm mt-2 dark:text-green-400">
-                            ✅ {{ __('contact_access.contact_unlocked_banner') }}
+                {{-- CASE 1: Already unlocked (paid reveal / grant) — phone + email per {@see ContactAccessService::resolveViewerContext} --}}
+                @if (! empty($contactAccess['paid_contact_phone']) || ! empty($contactAccess['paid_contact_email']))
+                    <div class="text-center space-y-2">
+                        @if (! empty($contactAccess['paid_contact_phone']))
+                            <p class="text-xl font-bold text-stone-900 dark:text-stone-100">
+                                {{ $contactAccess['paid_contact_phone'] }}
+                            </p>
+                        @endif
+                        @if (! empty($contactAccess['paid_contact_email']))
+                            <p class="text-sm text-stone-800 dark:text-stone-200 break-all">
+                                <span class="text-stone-500 dark:text-stone-400">{{ __('Email') }}:</span>
+                                {{ $contactAccess['paid_contact_email'] }}
+                            </p>
+                        @endif
+                        <p class="text-green-600 text-sm font-medium dark:text-green-400">
+                            {{ __('contact_access.contact_unlocked_banner') }}
                         </p>
                     </div>
-                {{-- CASE 2: USER CAN UNLOCK (has credits; POST still enforces interest / visibility / matchmaking rules) --}}
-                @elseif ($contactSectionUserId && $contactSectionFeatureUsage->canUse((int) $contactSectionUserId, 'contact_view_limit'))
-                    <form method="POST" action="{{ route('matrimony.profile.contact-reveal', $profile) }}">
+                @elseif (($contactAccess['needs_upgrade'] ?? false))
+                    <div class="text-center">
+                        <p class="text-xl font-bold tracking-wider text-stone-900 dark:text-stone-100">
+                            {{ $masked }} <span class="text-stone-400" aria-hidden="true">🔒</span>
+                        </p>
+                        <p class="text-sm text-gray-500 mt-2 dark:text-gray-400">
+                            {{ __('contact_access.unlock_required') }}
+                        </p>
+                        <a href="{{ route('plans.index') }}"
+                            class="mt-3 inline-flex items-center justify-center rounded-lg bg-indigo-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 dark:focus:ring-offset-gray-900">
+                            {{ __('contact_access.upgrade_plan_button') }}
+                        </a>
+                    </div>
+                @elseif (($contactAccess['show_no_one_copy'] ?? false))
+                    <div class="text-center">
+                        <p class="text-xl font-bold tracking-wider text-stone-900 dark:text-stone-100">
+                            {{ $masked }} <span class="text-stone-400" aria-hidden="true">🔒</span>
+                        </p>
+                        <p class="text-sm text-gray-600 mt-2 dark:text-gray-400">
+                            {{ __('contact_access.owner_restricted_contact') }}
+                        </p>
+                    </div>
+                @elseif (($contactAccess['paid_reveal_blocked_pending_matchmaking'] ?? false))
+                    <div class="text-center">
+                        <p class="text-xl font-bold tracking-wider text-stone-900 dark:text-stone-100">
+                            {{ $masked }} <span class="text-stone-400" aria-hidden="true">🔒</span>
+                        </p>
+                        <p class="text-sm text-amber-800 mt-2 dark:text-amber-200">
+                            {{ __('contact_access.reveal_blocked_matchmaking') }}
+                        </p>
+                    </div>
+                @elseif (($contactAccess['reveal_blocked_reason'] ?? null) === 'interest')
+                    <div class="text-center">
+                        <p class="text-xl font-bold tracking-wider text-stone-900 dark:text-stone-100">
+                            {{ $masked }} <span class="text-stone-400" aria-hidden="true">🔒</span>
+                        </p>
+                        <p class="text-sm text-gray-600 mt-2 dark:text-gray-400">
+                            {{ __('contact_access.reveal_blocked_interest_ui') }}
+                        </p>
+                    </div>
+                @elseif (($contactAccess['reveal_blocked_reason'] ?? null) === 'premium')
+                    <div class="text-center">
+                        <p class="text-xl font-bold tracking-wider text-stone-900 dark:text-stone-100">
+                            {{ $masked }} <span class="text-stone-400" aria-hidden="true">🔒</span>
+                        </p>
+                        <p class="text-sm text-gray-600 mt-2 dark:text-gray-400">
+                            {{ __('contact_access.reveal_blocked_premium_ui') }}
+                        </p>
+                        <a href="{{ route('plans.index') }}"
+                            class="mt-3 inline-flex items-center justify-center rounded-lg bg-indigo-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-indigo-700">
+                            {{ __('contact_access.upgrade_plan_button') }}
+                        </a>
+                    </div>
+                @elseif (($contactAccess['reveal_blocked_reason'] ?? null) === 'no_contact')
+                    <div class="text-center text-sm text-gray-600 dark:text-gray-400">
+                        {{ __('contact_access.no_contact_on_profile') }}
+                    </div>
+                {{-- CASE: Paid reveal allowed + quota — same rules as POST {@see ProfileContactActionController::revealContact} --}}
+                @elseif (($contactAccess['show_paid_reveal_button'] ?? false) && ($canUseContact ?? false))
+                    <form id="contact-reveal-form"
+                        method="POST"
+                        action="{{ route('matrimony.profile.contact-reveal', $profile) }}"
+                        class="text-center"
+                        data-label-unlocked-banner="{{ e(__('contact_access.contact_unlocked_banner')) }}"
+                        data-label-email-prefix="{{ e(__('Email')) }}">
                         @csrf
-                        <div class="text-center">
-                            <p class="text-xl font-bold tracking-wider text-stone-900 dark:text-stone-100">
-                                {{ $masked }} 🔒
-                            </p>
-                            <button type="submit"
-                                class="mt-3 px-5 py-2 bg-pink-500 text-white rounded-lg hover:bg-pink-600 dark:bg-pink-600 dark:hover:bg-pink-500">
-                                {{ __('contact_access.unlock_contact_button') }}
-                            </button>
-                        </div>
+                        <p class="text-xl font-bold tracking-wider text-stone-900 dark:text-stone-100">
+                            {{ $masked }} <span class="text-stone-400" aria-hidden="true">🔒</span>
+                        </p>
+                        <button type="submit"
+                            class="mt-3 px-5 py-2 bg-pink-500 text-white rounded-lg hover:bg-pink-600 dark:bg-pink-600 dark:hover:bg-pink-500 font-medium disabled:opacity-60 disabled:cursor-not-allowed">
+                            {{ __('contact_access.view_contact_button') }}
+                        </button>
                     </form>
-                {{-- CASE 3: NO CREDITS OR GUEST --}}
+                @elseif ($canUseContact ?? false)
+                    <div class="text-center">
+                        <p class="text-xl font-bold tracking-wider text-stone-900 dark:text-stone-100">
+                            {{ $masked }} <span class="text-stone-400" aria-hidden="true">🔒</span>
+                        </p>
+                        <p class="text-sm text-gray-500 mt-2 dark:text-gray-400">
+                            {{ __('contact_access.reveal_not_allowed') }}
+                        </p>
+                    </div>
                 @else
                     <div class="text-center">
                         <p class="text-xl font-bold tracking-wider text-stone-900 dark:text-stone-100">
-                            {{ $masked }} 🔒
+                            {{ $masked }} <span class="text-stone-400" aria-hidden="true">🔒</span>
                         </p>
                         <p class="text-sm text-gray-500 mt-2 dark:text-gray-400">
                             {{ __('contact_access.no_contact_credits_left_ui') }}
                         </p>
                         <a href="{{ route('plans.index') }}"
-                            class="mt-3 inline-block px-5 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 dark:bg-purple-600 dark:hover:bg-purple-500">
-                            {{ __('contact_access.upgrade_now') }}
+                            class="mt-3 inline-flex items-center justify-center rounded-lg bg-indigo-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 dark:focus:ring-offset-gray-900">
+                            {{ __('contact_access.upgrade_plan_button') }}
                         </a>
                     </div>
                 @endif
+                </div>{{-- #profile-contact-reveal-root --}}
             @endif
         </div>
     </section>
@@ -2303,4 +2334,86 @@
         </div>
     </div>
 </div>{{-- max-w-6xl / x-data root --}}
+
+@if (! ($isOwnProfile ?? false) && auth()->check() && ($contactAccess['show_paid_reveal_button'] ?? false) && ($canUseContact ?? false))
+<script>
+(function () {
+    function escHtml(s) {
+        var d = document.createElement('div');
+        d.textContent = s == null ? '' : String(s);
+        return d.innerHTML;
+    }
+    var form = document.getElementById('contact-reveal-form');
+    if (!form) return;
+    form.addEventListener('submit', async function (e) {
+        e.preventDefault();
+        var btn = form.querySelector('button[type="submit"]');
+        var root = document.getElementById('profile-contact-reveal-root');
+        var usage = document.getElementById('contact-usage-strip');
+        var prevErr = form.querySelector('[data-contact-reveal-err]');
+        if (prevErr) prevErr.remove();
+        btn.disabled = true;
+        try {
+            var token = document.querySelector('meta[name="csrf-token"]');
+            token = token ? token.getAttribute('content') : '';
+            var res = await fetch(form.action, {
+                method: 'POST',
+                headers: {
+                    'Accept': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'X-CSRF-TOKEN': token,
+                    'X-Contact-Reveal': '1'
+                },
+                body: new FormData(form),
+                credentials: 'same-origin'
+            });
+            var data = await res.json().catch(function () { return {}; });
+            if (!res.ok) {
+                var err = document.createElement('div');
+                err.setAttribute('data-contact-reveal-err', '1');
+                err.className = 'mb-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-900 dark:border-red-800 dark:bg-red-950/40 dark:text-red-100';
+                err.textContent = data.message || @json(__('contact_access.reveal_not_allowed'));
+                form.insertBefore(err, form.firstChild);
+                return;
+            }
+            var html = '<div class="mb-3 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-900 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-100" role="status">' + escHtml(data.message) + '</div>';
+            html += '<div class="text-center space-y-2">';
+            if (data.phone) {
+                html += '<p class="text-xl font-bold text-stone-900 dark:text-stone-100">' + escHtml(data.phone) + '</p>';
+            }
+            if (data.email) {
+                var lp = form.getAttribute('data-label-email-prefix') || 'Email';
+                html += '<p class="text-sm text-stone-800 dark:text-stone-200 break-all"><span class="text-stone-500 dark:text-stone-400">' + escHtml(lp) + ':</span> ' + escHtml(data.email) + '</p>';
+            }
+            var ub = form.getAttribute('data-label-unlocked-banner');
+            if (ub) {
+                html += '<p class="text-green-600 text-sm font-medium dark:text-green-400">' + escHtml(ub) + '</p>';
+            }
+            html += '</div>';
+            if (root) root.innerHTML = html;
+            if (usage && data.contact_usage) {
+                var u = data.contact_usage;
+                var line1Cls = u.low_warning ? 'text-sm font-semibold text-amber-800 dark:text-amber-200' : 'text-sm text-gray-800 dark:text-gray-200';
+                var uhtml = '<p class="' + line1Cls + '">' + escHtml(u.line1) + '</p>';
+                uhtml += '<p class="mt-1 text-sm text-gray-600 dark:text-gray-400">' + escHtml(u.line2) + '</p>';
+                if (u.low_warning && u.low_warning_text) {
+                    uhtml += '<p class="mt-2 text-xs text-amber-700 dark:text-amber-300">' + escHtml(u.low_warning_text) + '</p>';
+                }
+                usage.innerHTML = uhtml;
+            }
+        } catch (err) {
+            if (root) {
+                var net = document.createElement('div');
+                net.className = 'rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-900';
+                net.textContent = @json(__('contact_access.reveal_not_allowed'));
+                root.innerHTML = '';
+                root.appendChild(net);
+            }
+        } finally {
+            btn.disabled = false;
+        }
+    });
+})();
+</script>
+@endif
 @endsection

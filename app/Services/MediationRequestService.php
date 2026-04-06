@@ -17,6 +17,7 @@ class MediationRequestService
 {
     public function __construct(
         protected ContactAccessService $contactAccess,
+        protected ContactRevealPolicyService $contactRevealPolicy,
     ) {}
 
     /**
@@ -48,6 +49,13 @@ class MediationRequestService
             ->where('status', MediationRequest::STATUS_PENDING)
             ->exists()) {
             throw new InvalidArgumentException(__('mediation.duplicate_pending'));
+        }
+
+        $visibility = DB::table('profile_visibility_settings')
+            ->where('profile_id', $subjectProfile->id)
+            ->first();
+        if (! $this->contactRevealPolicy->allowsMediatorPath($subjectProfile, $visibility)) {
+            throw new InvalidArgumentException(__('contact_access.mediator_not_available'));
         }
 
         $compatibilityHint = __('mediation.compatibility_hint_placeholder');

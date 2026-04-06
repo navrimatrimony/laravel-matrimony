@@ -71,6 +71,8 @@ class ProcessDelayedViewBack implements ShouldQueue
             'viewed_profile_id' => $realProfile->id,
         ]);
 
+        ViewTrackingService::consumeDailyProfileViewUsageForViewer($demoProfile);
+
         // Notify real user (with dedup guard from service).
         ViewTrackingService::notifyProfileViewIfEligible($realProfile->user, $demoProfile, true);
     }

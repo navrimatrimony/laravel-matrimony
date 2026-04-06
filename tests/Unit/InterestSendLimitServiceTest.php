@@ -3,7 +3,9 @@
 namespace Tests\Unit;
 
 use App\Models\User;
+use App\Models\UserFeatureUsage;
 use App\Services\EntitlementService;
+use App\Services\FeatureUsageService;
 use App\Services\InterestSendLimitService;
 use App\Services\SubscriptionService;
 use App\Services\UserFeatureUsageService;
@@ -33,7 +35,9 @@ class InterestSendLimitServiceTest extends TestCase
         $subscriptions = $this->createMock(SubscriptionService::class);
 
         $usage = app(UserFeatureUsageService::class);
-        $svc = new InterestSendLimitService($entitlements, $usage, $subscriptions);
+        $featureUsage = $this->createMock(FeatureUsageService::class);
+        $featureUsage->method('shouldBypassUsageLimits')->willReturn(false);
+        $svc = new InterestSendLimitService($entitlements, $usage, $subscriptions, $featureUsage);
 
         $svc->assertCanSend($user);
         $svc->recordSuccessfulSend($user);
@@ -59,7 +63,9 @@ class InterestSendLimitServiceTest extends TestCase
         $subscriptions = $this->createMock(SubscriptionService::class);
 
         $usage = app(UserFeatureUsageService::class);
-        $svc = new InterestSendLimitService($entitlements, $usage, $subscriptions);
+        $featureUsage = $this->createMock(FeatureUsageService::class);
+        $featureUsage->method('shouldBypassUsageLimits')->willReturn(false);
+        $svc = new InterestSendLimitService($entitlements, $usage, $subscriptions, $featureUsage);
 
         $svc->recordSuccessfulSend($user);
 
@@ -68,6 +74,7 @@ class InterestSendLimitServiceTest extends TestCase
             DB::table('user_feature_usages')
                 ->where('user_id', $user->id)
                 ->where('feature_key', UserFeatureUsageKeys::INTEREST_SEND_LIMIT)
+                ->where('period', UserFeatureUsage::PERIOD_DAILY)
                 ->whereDate('period_start', $day)
                 ->whereDate('period_end', $day)
                 ->where('used_count', 1)

@@ -18,6 +18,7 @@ class InterestSendLimitService
         private readonly EntitlementService $entitlements,
         private readonly UserFeatureUsageService $usage,
         private readonly SubscriptionService $subscriptions,
+        private readonly FeatureUsageService $featureUsage,
     ) {}
 
     /**
@@ -25,7 +26,7 @@ class InterestSendLimitService
      */
     public function assertCanSend(User $user): void
     {
-        if ($user->isAnyAdmin()) {
+        if ($this->featureUsage->shouldBypassUsageLimits($user)) {
             return;
         }
 
@@ -53,7 +54,7 @@ class InterestSendLimitService
      */
     public function recordSuccessfulSend(User $user): void
     {
-        if ($user->isAnyAdmin()) {
+        if ($this->featureUsage->shouldBypassUsageLimits($user)) {
             return;
         }
 
@@ -72,7 +73,7 @@ class InterestSendLimitService
      */
     public function effectiveDailyLimit(User $user): int
     {
-        if ($user->isAnyAdmin()) {
+        if ($this->featureUsage->shouldBypassUsageLimits($user)) {
             return -1;
         }
 

@@ -129,6 +129,11 @@ return [
     'partner_prefs_section_kicker' => 'What they seek',
     'horoscope_section_kicker' => 'Panchang & kundali',
     'contact_section_kicker' => 'Reach them',
+
+    'usage_contacts_used_line' => 'Contacts used: :used / :limit',
+    'usage_contacts_remaining_line' => 'Remaining: :remaining',
+    'usage_contacts_remaining_unlimited' => 'Remaining: Unlimited',
+    'usage_contacts_low_warning' => 'You are running low on contact credits. Upgrade your plan to unlock more.',
     'additional_section_kicker' => 'Extra fields',
     'show_hero_trust_heading' => 'Trust & verification',
     'show_verify_email' => 'Email verified',

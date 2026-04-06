@@ -14,7 +14,6 @@ use App\Services\CommunicationPolicyService;
 use App\Services\FeatureUsageService;
 use App\Services\ShowcaseChat\ShowcaseConversationTagService;
 use App\Services\ShowcaseChat\ShowcaseOrchestrationService;
-use App\Services\SubscriptionService;
 use App\Services\UserEntitlementService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -274,9 +273,9 @@ class ChatController extends Controller
             $audience = (string) ($cfg['image_messages_audience'] ?? 'paid_only');
             if ($audience === 'paid_only') {
                 $u = $user;
-                $isPaid = $u && ($u->isAnyAdmin()
+                $isPaid = $u && ($this->featureUsage->shouldBypassUsageLimits($u)
                     || UserEntitlementService::userHasEntitlement($u, UserEntitlementService::ENTITLEMENT_CHAT_IMAGE_MESSAGES)
-                    || app(SubscriptionService::class)->canUseChatImages($u));
+                    || $this->featureUsage->subscriptionAllowsChatImages($u));
                 if (! $isPaid) {
                     $imagePolicy = [
                         'allowed' => false,
@@ -386,9 +385,9 @@ class ChatController extends Controller
         }
 
         $u = $user;
-        $canImg = $u && ($u->isAnyAdmin()
+        $canImg = $u && ($this->featureUsage->shouldBypassUsageLimits($u)
             || UserEntitlementService::userHasEntitlement($u, UserEntitlementService::ENTITLEMENT_CHAT_IMAGE_MESSAGES)
-            || app(SubscriptionService::class)->canUseChatImages($u));
+            || $this->featureUsage->subscriptionAllowsChatImages($u));
         if (! $canImg) {
             return back()->with('error', __('subscriptions.feature_locked'));
         }

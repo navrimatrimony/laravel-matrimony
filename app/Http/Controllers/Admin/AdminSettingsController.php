@@ -7,6 +7,7 @@ use App\Models\AdminSetting;
 use App\Models\ProfileFieldConfig;
 use App\Services\AuditLogService;
 use App\Services\Parsing\ProviderResolver;
+use App\Services\SettingService;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 
@@ -492,5 +493,42 @@ class AdminSettingsController extends Controller
 
         return redirect()->route('admin.profile-field-config.index')
             ->with('success', "Updated {$updatedCount} field configuration(s).");
+    }
+
+    /**
+     * App-wide toggles (admin bypass mode, …) via {@see SettingService} / {@see AdminSetting}.
+     */
+    public function appSettings(SettingService $settings): \Illuminate\View\View
+    {
+        $raw = $settings->get('admin_bypass_mode');
+        $adminBypassMode = $raw === null
+            ? (bool) config('app.admin_bypass_mode', false)
+            : filter_var($raw, FILTER_VALIDATE_BOOLEAN);
+
+        return view('admin.app-settings.index', [
+            'adminBypassMode' => $adminBypassMode,
+        ]);
+    }
+
+    public function updateAppSettings(Request $request, SettingService $settings): \Illuminate\Http\RedirectResponse
+    {
+        $request->validate([
+            'admin_bypass_mode' => 'nullable|in:0,1',
+        ]);
+
+        $on = $request->boolean('admin_bypass_mode');
+        $settings->set('admin_bypass_mode', $on);
+
+        AuditLogService::log(
+            $request->user(),
+            'update_app_settings',
+            'AdminSetting',
+            null,
+            'admin_bypass_mode='.($on ? '1' : '0'),
+            false
+        );
+
+        return redirect()->route('admin.app-settings.index')
+            ->with('success', 'App settings updated.');
     }
 }

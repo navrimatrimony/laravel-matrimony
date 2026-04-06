@@ -287,6 +287,9 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
     Route::get('/translations/create', [TranslationController::class, 'create'])->name('translations.create');
     Route::post('/translations', [TranslationController::class, 'store'])->name('translations.store');
 
+    Route::get('/app-settings', [AdminSettingsController::class, 'appSettings'])->name('app-settings.index');
+    Route::post('/app-settings', [AdminSettingsController::class, 'updateAppSettings'])->name('app-settings.update');
+
     Route::get('/view-back-settings', [AdminSettingsController::class, 'viewBackSettings'])->name('view-back-settings.index');
     Route::post('/view-back-settings', [AdminSettingsController::class, 'updateViewBackSettings'])->name('view-back-settings.update');
 

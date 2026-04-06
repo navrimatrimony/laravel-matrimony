@@ -40,4 +40,26 @@ class ContactAccessVisibilityCaseTest extends TestCase
             $svc->resolveVisibilityCase($p, (object) ['show_contact_to' => 'accepted_interest'])
         );
     }
+
+    public function test_everyone_is_paid_allowed(): void
+    {
+        $svc = app(ContactAccessService::class);
+        $p = new MatrimonyProfile(['contact_unlock_mode' => 'after_interest_accepted']);
+
+        $this->assertSame(
+            ContactAccessService::CASE_PAID_ALLOWED,
+            $svc->resolveVisibilityCase($p, (object) ['show_contact_to' => 'everyone'])
+        );
+    }
+
+    public function test_no_one_is_case_no_one(): void
+    {
+        $svc = app(ContactAccessService::class);
+        $p = new MatrimonyProfile(['contact_unlock_mode' => 'after_interest_accepted']);
+
+        $this->assertSame(
+            ContactAccessService::CASE_NO_ONE,
+            $svc->resolveVisibilityCase($p, (object) ['show_contact_to' => 'no_one'])
+        );
+    }
 }

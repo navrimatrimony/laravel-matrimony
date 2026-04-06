@@ -123,4 +123,16 @@ return [
         'store' => env('APP_MAINTENANCE_STORE', 'database'),
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Admin usage bypass (FeatureUsageService)
+    |--------------------------------------------------------------------------
+    |
+    | When true, users with is_admin may skip quota consumption / limits where
+    | {@see \App\Services\FeatureUsageService} is the gate. Default: real mode (false).
+    |
+    */
+
+    'admin_bypass_mode' => (bool) env('ADMIN_BYPASS_MODE', false),
+
 ];

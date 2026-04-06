@@ -80,15 +80,17 @@ test('contact request works after accepted interest only + reveals only primary 
     $senderProfile->update(['user_id' => $senderUser->id]);
     $receiverProfile->update(['user_id' => $receiverUser->id]);
 
-    DB::table('profile_visibility_settings')->insert([
-        'profile_id' => $receiverProfile->id,
-        'visibility_scope' => 'public',
-        'show_photo_to' => 'all',
-        'show_contact_to' => 'unlock_only',
-        'hide_from_blocked_users' => true,
-        'created_at' => now(),
-        'updated_at' => now(),
-    ]);
+    DB::table('profile_visibility_settings')->updateOrInsert(
+        ['profile_id' => $receiverProfile->id],
+        [
+            'visibility_scope' => 'public',
+            'show_photo_to' => 'all',
+            'show_contact_to' => 'unlock_only',
+            'hide_from_blocked_users' => true,
+            'updated_at' => now(),
+            'created_at' => now(),
+        ]
+    );
 
     $plan = Plan::query()->where('slug', 'silver')->firstOrFail();
     $price = PlanPrice::query()

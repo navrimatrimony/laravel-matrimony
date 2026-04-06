@@ -27,18 +27,17 @@ class ViewTrackingService
     /**
      * Record a profile view (viewer → viewed) and notify viewed's user.
      * Skip if viewer = viewed (self) or blocked. No notification for self.
+     *
+     * When this returns true, the caller must call {@see consumeDailyProfileViewUsageForViewer}
+     * (or equivalent {@see FeatureUsageService::consume}) so quota stays aligned with {@code profile_views}.
      */
-    public static function recordView(MatrimonyProfile $viewer, MatrimonyProfile $viewed): void
+    public static function recordView(MatrimonyProfile $viewer, MatrimonyProfile $viewed): bool
     {
         if ($viewer->id === $viewed->id) {
-            return;
-        }
-        // Admin profile views should not create "viewed your profile" notifications.
-        if (($viewer->user?->is_admin ?? false) === true) {
-            return;
+            return false;
         }
         if (self::isBlocked($viewer->id, $viewed->id)) {
-            return;
+            return false;
         }
 
         ProfileView::create([
@@ -47,6 +46,8 @@ class ViewTrackingService
         ]);
 
         self::notifyProfileViewIfEligible($viewed->user, $viewer, false);
+
+        return true;
     }
 
     /**
@@ -56,10 +57,6 @@ class ViewTrackingService
     public static function maybeTriggerViewBack(MatrimonyProfile $viewer, MatrimonyProfile $viewed): void
     {
         if ($viewer->id === $viewed->id) {
-            return;
-        }
-        // Admin manual profile checks should never trigger showcase view-back side effects.
-        if (($viewer->user?->is_admin ?? false) === true) {
             return;
         }
         if (self::isBlocked($viewer->id, $viewed->id)) {
@@ -123,7 +120,30 @@ class ViewTrackingService
             'viewed_profile_id' => $realProfile->id,
         ]);
 
+        self::consumeDailyProfileViewUsageForViewer($demoProfile);
+
         self::notifyProfileViewIfEligible($realProfile->user, $demoProfile, true);
+    }
+
+    /**
+     * After a {@link ProfileView} row is inserted for {@code viewer_profile_id}, increment
+     * {@code user_feature_usages} for {@see FeatureUsageService::FEATURE_DAILY_PROFILE_VIEW_LIMIT} (real users only).
+     * Skips demo profiles; quota increments via {@see FeatureUsageService::consume} (respects admin bypass mode).
+     */
+    public static function consumeDailyProfileViewUsageForViewer(MatrimonyProfile $viewer): void
+    {
+        $user = $viewer->user;
+        if (! $user) {
+            return;
+        }
+        if ($viewer->is_demo ?? false) {
+            return;
+        }
+
+        app(FeatureUsageService::class)->consume(
+            (int) $user->id,
+            FeatureUsageService::FEATURE_DAILY_PROFILE_VIEW_LIMIT
+        );
     }
 
     /**

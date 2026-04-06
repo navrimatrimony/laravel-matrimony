@@ -1,6 +1,6 @@
 {{-- Primary profile actions (single include — top summary card on public profile). --}}
 @php
-    $contactAccess = $contactAccess ?? ['show_contact_request_rail' => true];
+    $contactAccess = $contactAccess ?? ['show_contact_request_rail' => false];
 @endphp
 @if (auth()->check() && !$isOwnProfile)
     @if (session('success'))
@@ -25,7 +25,7 @@
         @endif
 
         {{-- Day-32: Request Contact (button states + modal) --}}
-        @if (!$contactRequestDisabled && $contactRequestState !== null && ($contactAccess['show_contact_request_rail'] ?? true))
+        @if (!$contactRequestDisabled && $contactRequestState !== null && ($contactAccess['show_contact_request_rail'] ?? false))
             @php
                 $crState = $contactRequestState['state'] ?? 'none';
                 $crRequest = $contactRequestState['request'] ?? null;
@@ -58,7 +58,7 @@
                         @endif
                     </div>
                 @elseif ($crState === 'accepted' && $crGrant)
-                    <a href="{{ route('matrimony.profile.show', $profile) }}#contact-reveal" class="inline-flex min-h-[2.75rem] w-full items-center justify-center rounded-xl bg-emerald-700 px-5 py-2.5 text-center text-sm font-semibold text-white shadow-md hover:bg-emerald-800 sm:w-auto sm:min-w-[11rem]">{{ __('View Contact') }}</a>
+                    <a href="{{ route('matrimony.profile.show', $profile) }}#profile-contact-panel" class="inline-flex min-h-[2.75rem] w-full items-center justify-center rounded-xl bg-emerald-700 px-5 py-2.5 text-center text-sm font-semibold text-white shadow-md hover:bg-emerald-800 sm:w-auto sm:min-w-[11rem]">{{ __('View Contact') }}</a>
                 @elseif ($crState === 'rejected')
                     <span class="inline-flex min-h-[2.75rem] w-full items-center justify-center rounded-xl bg-red-600 px-4 py-2 text-sm font-semibold text-white shadow-sm sm:w-auto">{{ __('Request Rejected') }}</span>
                     @if ($cooldownEndsAt)

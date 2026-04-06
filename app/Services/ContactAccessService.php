@@ -14,11 +14,10 @@ use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
 
 /**
- * Contact access via {@see EntitlementService} + {@see UserFeatureUsageService}.
+ * Contact visibility + unlock persistence ({@see UserContactRevealLog}).
  *
- * Eligibility: {@see EntitlementService::hasFeature}(userId, {@see PlanFeatureKeys::CONTACT_UNLOCK}) — if false, viewer is blocked (upgrade).
- * Quota: {@see EntitlementService::getValue}(userId, {@see PlanFeatureKeys::CONTACT_VIEW_LIMIT}, '0') vs {@see UserFeatureUsageService::getUsage}(userId, {@see UserFeatureUsageKeys::CONTACT_VIEW_LIMIT}).
- * Reveal charge: {@see UserFeatureUsageService::incrementUsage} only once per viewer+profile+calendar month ({@see UserContactRevealLog}).
+ * Monthly contact quota: {@see FeatureUsageService::canUse}(..., {@see FeatureUsageService::FEATURE_CONTACT_VIEW_LIMIT}) — do not duplicate limit math here.
+ * Reveal charge: {@see FeatureUsageService::consume}(..., {@see FeatureUsageService::FEATURE_CONTACT_VIEW_LIMIT}) once per new viewer+profile+month (deduped via log).
  *
  * Visibility: paid_allowed (reveal/credits; may require assisted matchmaking "interested" — see config), request_only ({@see ContactRequestService}), no_one (mediator emphasis).
  */
@@ -33,6 +32,8 @@ class ContactAccessService
     public function __construct(
         protected EntitlementService $entitlements,
         protected UserFeatureUsageService $usage,
+        protected FeatureUsageService $featureUsage,
+        protected ContactRevealPolicyService $contactRevealPolicy,
     ) {}
 
     /**
@@ -63,6 +64,8 @@ class ContactAccessService
             'needs_upgrade' => false,
             'needs_upgrade_for_mediator' => false,
             'paid_contact_phone' => null,
+            'paid_contact_email' => null,
+            'reveal_blocked_reason' => null,
             'plans_url' => route('plans.index'),
             'paid_reveal_blocked_pending_matchmaking' => false,
         ];
@@ -83,9 +86,10 @@ class ContactAccessService
         $uid = (int) $viewer->id;
         $plansUrl = route('plans.index');
 
-        if ($viewer->isAnyAdmin()) {
-            $case = $this->resolveVisibilityCase($targetProfile, $visibilitySettings);
+        if ($this->featureUsage->shouldBypassUsageLimits($viewer)) {
+            $case = $this->contactRevealPolicy->resolveVisibilityCase($targetProfile, $visibilitySettings);
             $phone = trim((string) ($targetProfile->primary_contact_number ?? ''));
+            $email = $this->revealedEmailForTarget($targetProfile);
 
             return [
                 'has_contact_unlock' => true,
@@ -108,19 +112,24 @@ class ContactAccessService
                 'needs_upgrade' => false,
                 'needs_upgrade_for_mediator' => false,
                 'paid_contact_phone' => $phone !== '' ? $phone : null,
+                'paid_contact_email' => $email,
+                'reveal_blocked_reason' => null,
                 'plans_url' => $plansUrl,
                 'already_revealed_this_month' => true,
                 'paid_reveal_blocked_pending_matchmaking' => false,
             ];
         }
 
-        $hasUnlock = $this->entitlements->hasFeature($uid, PlanFeatureKeys::CONTACT_UNLOCK);
+        // Must match {@see FeatureUsageService::canUse}(..., FEATURE_CONTACT_VIEW_LIMIT): subscription plan limit ≠ 0 (entitlement row for contact_unlock may be missing while plan_features still grants contact_view_limit).
+        $hasUnlock = $this->planGrantsContactRevealFromSubscription($viewer);
 
         if (! $hasUnlock) {
+            $case = $this->contactRevealPolicy->resolveVisibilityCase($targetProfile, $visibilitySettings);
+
             return [
                 'has_contact_unlock' => false,
                 'blocked' => true,
-                'visibility_case' => null,
+                'visibility_case' => $case,
                 'allows_direct_contact_reveal' => false,
                 'contact_view_limit' => 0,
                 'contact_view_used' => 0,
@@ -133,19 +142,27 @@ class ContactAccessService
                 'has_mediator_credit' => false,
                 'show_contact_request_rail' => false,
                 'show_paid_reveal_button' => false,
-                'show_mediator_cta' => false,
-                'show_no_one_copy' => false,
+                'show_mediator_cta' => $this->contactRevealPolicy->allowsMediatorPath($targetProfile, $visibilitySettings),
+                'show_no_one_copy' => $case === self::CASE_NO_ONE,
                 'needs_upgrade' => true,
-                'needs_upgrade_for_mediator' => false,
+                'needs_upgrade_for_mediator' => true,
                 'paid_contact_phone' => null,
+                'paid_contact_email' => null,
+                'reveal_blocked_reason' => null,
                 'plans_url' => $plansUrl,
                 'paid_reveal_blocked_pending_matchmaking' => false,
             ];
         }
 
-        $case = $this->resolveVisibilityCase($targetProfile, $visibilitySettings);
+        $case = $this->contactRevealPolicy->resolveVisibilityCase($targetProfile, $visibilitySettings);
 
-        $cvLimit = $this->parseNumericLimit($uid, PlanFeatureKeys::CONTACT_VIEW_LIMIT);
+        $mayRevealForPaid = $this->contactRevealPolicy->viewerMaySeePaidRevealButton(
+            $interestAllowsContact,
+            $visibilitySettings,
+            $targetProfile
+        );
+
+        $cvLimit = $this->featureUsage->getPlanFeatureLimit($viewer, PlanFeatureKeys::CONTACT_VIEW_LIMIT);
         $cvUsed = $this->usage->getUsage($uid, UserFeatureUsageKeys::CONTACT_VIEW_LIMIT);
         $cvRemaining = $this->remaining($cvLimit, $cvUsed);
 
@@ -153,8 +170,7 @@ class ContactAccessService
         $medUsed = $this->usage->getUsage($uid, UserFeatureUsageKeys::MEDIATOR_REQUEST);
         $medRemaining = $this->remaining($medLimit, $medUsed);
 
-        // Limit 0 or used >= limit => no credits (plan may still include contact_unlock).
-        $hasCvCredit = $cvLimit === -1 || ($cvLimit > 0 && $cvUsed < $cvLimit);
+        $hasCvCredit = $this->featureUsage->canUse($uid, FeatureUsageService::FEATURE_CONTACT_VIEW_LIMIT);
 
         $hasMedCredit = $medLimit === -1 || ($medLimit > 0 && $medUsed < $medLimit);
 
@@ -165,7 +181,7 @@ class ContactAccessService
 
         $alreadyRevealedThisMonth = $this->hasRevealedThisMonth($uid, $targetProfile->id, $periodStart);
 
-        $paidRevealNeedsMatchmaking = (bool) config('communication.paid_contact_reveal_requires_matchmaking_interested', true);
+        $paidRevealNeedsMatchmaking = $this->contactRevealPolicy->requiresMatchmakingInterestedForPaidReveal($visibilitySettings);
         $matchmakingInterestedOk = ! $paidRevealNeedsMatchmaking || $this->viewerHasMatchmakingInterested($viewer, $targetProfile);
 
         $grantPhone = null;
@@ -175,11 +191,23 @@ class ContactAccessService
                 $grantPhone = null;
             }
         }
+        $grantEmail = null;
+        if (! empty($contactGrantReveal['email'])) {
+            $grantEmail = trim((string) $contactGrantReveal['email']);
+            if ($grantEmail === '') {
+                $grantEmail = null;
+            }
+        }
 
         $paidPhone = null;
+        $paidEmail = null;
         $showPaidReveal = false;
         $showRequestRail = false;
         $showNoOne = false;
+
+        $primaryPhone = trim((string) ($targetProfile->primary_contact_number ?? ''));
+        $profileEmail = $this->revealedEmailForTarget($targetProfile);
+        $hasAnyContactPayload = $primaryPhone !== '' || $profileEmail !== null;
 
         if ($case === self::CASE_NO_ONE) {
             $showNoOne = true;
@@ -187,43 +215,55 @@ class ContactAccessService
         } elseif ($case === self::CASE_REQUEST_ONLY) {
             $showRequestRail = true;
         } else {
-            // paid_allowed: show number only after billed reveal (or unlimited grant path below)
-            if ($interestAllowsContact && $alreadyRevealedThisMonth) {
-                $primary = trim((string) ($targetProfile->primary_contact_number ?? ''));
-                $paidPhone = $primary !== '' ? $primary : null;
-            } elseif ($interestAllowsContact && $hasCvCredit && $matchmakingInterestedOk) {
-                $primary = trim((string) ($targetProfile->primary_contact_number ?? ''));
-                if ($primary !== '') {
-                    $showPaidReveal = true;
-                }
+            // paid_allowed: show number/email only after billed reveal (or grant path below)
+            if ($mayRevealForPaid && $alreadyRevealedThisMonth) {
+                $paidPhone = $primaryPhone !== '' ? $primaryPhone : null;
+                $paidEmail = $profileEmail;
+            } elseif ($mayRevealForPaid && $hasCvCredit && $matchmakingInterestedOk && $hasAnyContactPayload) {
+                $showPaidReveal = true;
             }
         }
 
-        if ($grantPhone !== null) {
+        if ($grantPhone !== null || $grantEmail !== null) {
             $paidPhone = $grantPhone;
+            $paidEmail = $grantEmail;
             $showPaidReveal = false;
         }
 
+        $revealBlockedReason = $this->contactRevealPolicy->paidRevealBlockedReason(
+            $interestAllowsContact,
+            $viewer,
+            $visibilitySettings,
+            $targetProfile
+        );
+        if ($case === self::CASE_PAID_ALLOWED && $mayRevealForPaid && ! $revealBlockedReason && ! $hasAnyContactPayload) {
+            $revealBlockedReason = 'no_contact';
+        }
+
         $noContactCreditsLeft = $case === self::CASE_PAID_ALLOWED
-            && $interestAllowsContact
+            && $mayRevealForPaid
             && ! $alreadyRevealedThisMonth
             && $grantPhone === null
+            && $grantEmail === null
             && ! $hasCvCredit
-            && trim((string) ($targetProfile->primary_contact_number ?? '')) !== '';
+            && $hasAnyContactPayload;
 
         $paidRevealBlockedByMatchmaking = $case === self::CASE_PAID_ALLOWED
-            && $interestAllowsContact
+            && $mayRevealForPaid
             && $hasCvCredit
             && ! $matchmakingInterestedOk
             && $grantPhone === null
+            && $grantEmail === null
             && ! $alreadyRevealedThisMonth
-            && trim((string) ($targetProfile->primary_contact_number ?? '')) !== '';
+            && $hasAnyContactPayload;
+
+        $showMediatorCta = $this->contactRevealPolicy->allowsMediatorPath($targetProfile, $visibilitySettings);
 
         return [
             'has_contact_unlock' => true,
             'blocked' => false,
             'visibility_case' => $case,
-            'allows_direct_contact_reveal' => $case === self::CASE_PAID_ALLOWED && $interestAllowsContact,
+            'allows_direct_contact_reveal' => $case === self::CASE_PAID_ALLOWED && $mayRevealForPaid,
             'contact_view_limit' => $cvLimit,
             'contact_view_used' => $cvUsed,
             'contact_view_remaining' => $cvRemaining,
@@ -235,11 +275,13 @@ class ContactAccessService
             'has_mediator_credit' => $hasMedCredit,
             'show_contact_request_rail' => $showRequestRail,
             'show_paid_reveal_button' => $showPaidReveal,
-            'show_mediator_cta' => true,
+            'show_mediator_cta' => $showMediatorCta,
             'show_no_one_copy' => $showNoOne,
             'needs_upgrade' => false,
             'needs_upgrade_for_mediator' => ! $hasMedCredit,
             'paid_contact_phone' => $paidPhone,
+            'paid_contact_email' => $paidEmail,
+            'reveal_blocked_reason' => $revealBlockedReason,
             'plans_url' => $plansUrl,
             'already_revealed_this_month' => $alreadyRevealedThisMonth,
             'paid_reveal_blocked_pending_matchmaking' => $paidRevealBlockedByMatchmaking,
@@ -250,43 +292,51 @@ class ContactAccessService
      * Validates paid reveal, creates {@see UserContactRevealLog} when needed; does not increment usage.
      * Call {@see FeatureUsageService::consume}(..., {@see FeatureUsageService::FEATURE_CONTACT_VIEW_LIMIT}) in the same DB transaction when {@code consume_credit} is true.
      *
-     * @return array{phone: string, consume_credit: bool}
+     * @return array{phone: string, email: ?string, consume_credit: bool}
      *
      * @throws InvalidArgumentException
      */
     public function performPaidContactRevealBilling(User $viewer, MatrimonyProfile $targetProfile, ?object $visibilitySettings): array
     {
         $uid = (int) $viewer->id;
-        if ($viewer->isAnyAdmin()) {
-            $p = trim((string) ($targetProfile->primary_contact_number ?? ''));
-            if ($p === '') {
-                throw new InvalidArgumentException(__('contact_access.no_phone_on_profile'));
+        $targetProfile->loadMissing('user');
+        $phone = trim((string) ($targetProfile->primary_contact_number ?? ''));
+        $email = $this->revealedEmailForTarget($targetProfile);
+
+        if ($this->featureUsage->shouldBypassUsageLimits($viewer)) {
+            if ($phone === '' && $email === null) {
+                throw new InvalidArgumentException(__('contact_access.no_contact_on_profile'));
             }
 
-            return ['phone' => $p, 'consume_credit' => false];
+            return ['phone' => $phone, 'email' => $email, 'consume_credit' => false];
         }
 
-        if (! $this->entitlements->hasFeature($uid, PlanFeatureKeys::CONTACT_UNLOCK)) {
+        if (! $this->planGrantsContactRevealFromSubscription($viewer)) {
             throw new InvalidArgumentException(__('contact_access.upgrade_required'));
         }
 
-        $case = $this->resolveVisibilityCase($targetProfile, $visibilitySettings);
+        $case = $this->contactRevealPolicy->resolveVisibilityCase($targetProfile, $visibilitySettings);
         if ($case !== self::CASE_PAID_ALLOWED) {
             throw new InvalidArgumentException(__('contact_access.reveal_not_allowed'));
         }
 
-        $interest = $this->viewerHasAcceptedInterestWith($viewer, $targetProfile);
-        if (! $interest) {
-            throw new InvalidArgumentException(__('contact_access.interest_required'));
+        if ($this->contactRevealPolicy->requiresPremiumViewer($visibilitySettings)
+            && ! $this->contactRevealPolicy->viewerHasPaidSubscription($viewer)) {
+            throw new InvalidArgumentException(__('contact_access.premium_viewer_required'));
         }
 
-        if (config('communication.paid_contact_reveal_requires_matchmaking_interested', true) && ! $this->viewerHasMatchmakingInterested($viewer, $targetProfile)) {
-            throw new InvalidArgumentException(__('contact_access.matchmaking_interested_required'));
+        if ($this->contactRevealPolicy->requiresAcceptedInterest($visibilitySettings)) {
+            if (! $this->viewerHasAcceptedInterestWith($viewer, $targetProfile)) {
+                throw new InvalidArgumentException(__('contact_access.interest_required'));
+            }
+            if ($this->contactRevealPolicy->requiresMatchmakingInterestedForPaidReveal($visibilitySettings)
+                && ! $this->viewerHasMatchmakingInterested($viewer, $targetProfile)) {
+                throw new InvalidArgumentException(__('contact_access.matchmaking_interested_required'));
+            }
         }
 
-        $phone = trim((string) ($targetProfile->primary_contact_number ?? ''));
-        if ($phone === '') {
-            throw new InvalidArgumentException(__('contact_access.no_phone_on_profile'));
+        if ($phone === '' && $email === null) {
+            throw new InvalidArgumentException(__('contact_access.no_contact_on_profile'));
         }
 
         $periodStart = $this->usage->resolvePeriodStart(
@@ -295,14 +345,10 @@ class ContactAccessService
         )->toDateString();
 
         if ($this->hasRevealedThisMonth($uid, $targetProfile->id, $periodStart)) {
-            return ['phone' => $phone, 'consume_credit' => false];
+            return ['phone' => $phone, 'email' => $email, 'consume_credit' => false];
         }
 
-        if (! app(FeatureUsageService::class)->canUse($uid, FeatureUsageService::FEATURE_CONTACT_VIEW_LIMIT)) {
-            throw new InvalidArgumentException(__('contact_access.no_contact_credits'));
-        }
-
-        $limit = $this->parseNumericLimit($uid, PlanFeatureKeys::CONTACT_VIEW_LIMIT);
+        $limit = $this->featureUsage->getPlanFeatureLimit($viewer, PlanFeatureKeys::CONTACT_VIEW_LIMIT);
 
         $log = UserContactRevealLog::query()->firstOrCreate(
             [
@@ -314,15 +360,17 @@ class ContactAccessService
         );
         $consumeCredit = $log->wasRecentlyCreated && $limit !== -1;
 
-        return ['phone' => $phone, 'consume_credit' => $consumeCredit];
+        return ['phone' => $phone, 'email' => $email, 'consume_credit' => $consumeCredit];
     }
 
     /**
      * Consume one contact_view_limit credit and log dedup for this profile/month (usage + log in one transaction).
      *
+     * @return array{phone: string, email: ?string}
+     *
      * @throws InvalidArgumentException
      */
-    public function consumePaidContactReveal(User $viewer, MatrimonyProfile $targetProfile, ?object $visibilitySettings): string
+    public function consumePaidContactReveal(User $viewer, MatrimonyProfile $targetProfile, ?object $visibilitySettings): array
     {
         return DB::transaction(function () use ($viewer, $targetProfile, $visibilitySettings) {
             $result = $this->performPaidContactRevealBilling($viewer, $targetProfile, $visibilitySettings);
@@ -330,7 +378,10 @@ class ContactAccessService
                 app(FeatureUsageService::class)->consume((int) $viewer->id, FeatureUsageService::FEATURE_CONTACT_VIEW_LIMIT);
             }
 
-            return $result['phone'];
+            return [
+                'phone' => $result['phone'],
+                'email' => $result['email'],
+            ];
         });
     }
 
@@ -342,17 +393,24 @@ class ContactAccessService
     public function assertMediatorAllowed(User $viewer): void
     {
         $uid = (int) $viewer->id;
-        if ($viewer->isAnyAdmin()) {
+        if ($this->featureUsage->shouldBypassUsageLimits($viewer)) {
             return;
         }
 
-        if (! $this->entitlements->hasFeature($uid, PlanFeatureKeys::CONTACT_UNLOCK)) {
+        $medLimit = $this->parseNumericLimit($uid, PlanFeatureKeys::MEDIATOR_REQUESTS_PER_MONTH);
+        $contactRevealOk = $this->planGrantsContactRevealFromSubscription($viewer);
+        $hasMediatorFeature = $medLimit !== 0;
+
+        if (! $hasMediatorFeature && ! $contactRevealOk) {
             throw new InvalidArgumentException(__('contact_access.upgrade_required'));
         }
 
-        $limit = $this->parseNumericLimit($uid, PlanFeatureKeys::MEDIATOR_REQUESTS_PER_MONTH);
+        if (! $hasMediatorFeature && $contactRevealOk) {
+            throw new InvalidArgumentException(__('contact_access.no_mediator_credits'));
+        }
+
         $used = $this->usage->getUsage($uid, UserFeatureUsageKeys::MEDIATOR_REQUEST);
-        if ($limit !== -1 && ($limit === 0 || $used >= $limit)) {
+        if ($medLimit !== -1 && $used >= $medLimit) {
             throw new InvalidArgumentException(__('contact_access.no_mediator_credits'));
         }
     }
@@ -362,7 +420,7 @@ class ContactAccessService
      */
     public function incrementMediatorUsage(User $viewer): void
     {
-        if ($viewer->isAnyAdmin()) {
+        if ($this->featureUsage->shouldBypassUsageLimits($viewer)) {
             return;
         }
 
@@ -383,16 +441,7 @@ class ContactAccessService
 
     public function resolveVisibilityCase(MatrimonyProfile $target, ?object $visibilitySettings): string
     {
-        $mode = $target->contact_unlock_mode ?? 'after_interest_accepted';
-        if (in_array($mode, ['never', 'admin_only'], true)) {
-            return self::CASE_NO_ONE;
-        }
-
-        $showTo = $visibilitySettings->show_contact_to ?? 'accepted_interest';
-
-        return $showTo === 'unlock_only'
-            ? self::CASE_REQUEST_ONLY
-            : self::CASE_PAID_ALLOWED;
+        return $this->contactRevealPolicy->resolveVisibilityCase($target, $visibilitySettings);
     }
 
     /**
@@ -443,6 +492,21 @@ class ContactAccessService
     }
 
     /**
+     * True when the viewer's effective plan grants contact reveals (same source as {@see FeatureUsageService::getPlanFeatureLimit}(..., {@see PlanFeatureKeys::CONTACT_VIEW_LIMIT})).
+     * 0 = no access; positive cap or -1 unlimited.
+     */
+    private function planGrantsContactRevealFromSubscription(User $viewer): bool
+    {
+        if ($this->featureUsage->shouldBypassUsageLimits($viewer)) {
+            return true;
+        }
+
+        $lim = $this->featureUsage->getPlanFeatureLimit($viewer, PlanFeatureKeys::CONTACT_VIEW_LIMIT);
+
+        return $lim !== 0;
+    }
+
+    /**
      * -1 = unlimited, 0 = none, n = cap.
      */
     private function parseNumericLimit(int $userId, string $featureKey): int
@@ -466,5 +530,19 @@ class ContactAccessService
         }
 
         return max(0, $limit - $used);
+    }
+
+    /**
+     * Login email for the profile owner (same trust boundary as paid phone reveal). Omits synthetic system addresses.
+     */
+    private function revealedEmailForTarget(MatrimonyProfile $target): ?string
+    {
+        $target->loadMissing('user');
+        $e = trim((string) ($target->user?->email ?? ''));
+        if ($e === '' || str_ends_with($e, '@system.local')) {
+            return null;
+        }
+
+        return $e;
     }
 }

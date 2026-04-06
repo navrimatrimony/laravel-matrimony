@@ -31,16 +31,18 @@ class UserFeatureUsageService
         $startStr = $periodStart->toDateString();
         $endStr = $periodEnd->toDateString();
 
-        return (int) DB::transaction(function () use ($userId, $featureKey, $startStr, $endStr, $d) {
+        return (int) DB::transaction(function () use ($userId, $featureKey, $period, $startStr, $endStr, $d) {
             try {
                 $usage = UserFeatureUsage::query()->updateOrCreate(
                     [
                         'user_id' => $userId,
                         'feature_key' => $featureKey,
+                        'period' => $period,
                         'period_start' => $startStr,
-                        'period_end' => $endStr,
                     ],
-                    []
+                    [
+                        'period_end' => $endStr,
+                    ]
                 );
                 $usage->increment('used_count', $d);
 
@@ -51,8 +53,8 @@ class UserFeatureUsageService
                     $usage = UserFeatureUsage::query()
                         ->where('user_id', $userId)
                         ->where('feature_key', $featureKey)
+                        ->where('period', $period)
                         ->whereDate('period_start', $startStr)
-                        ->whereDate('period_end', $endStr)
                         ->lockForUpdate()
                         ->firstOrFail();
                     $usage->increment('used_count', $d);
@@ -76,8 +78,8 @@ class UserFeatureUsageService
         return (int) UserFeatureUsage::query()
             ->where('user_id', $userId)
             ->where('feature_key', $featureKey)
+            ->where('period', $period)
             ->whereDate('period_start', $periodStart->toDateString())
-            ->whereDate('period_end', $periodEnd->toDateString())
             ->value('used_count') ?? 0;
     }
 

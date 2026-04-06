@@ -26,6 +26,11 @@ class FeatureUsageService
     public const FEATURE_CONTACT_VIEW_LIMIT = 'contact_view_limit';
 
     /**
+     * Daily profile opens (viewer) cap — same key as {@see SubscriptionService::FEATURE_DAILY_PROFILE_VIEW_LIMIT} / {@code user_feature_usages.feature_key}.
+     */
+    public const FEATURE_DAILY_PROFILE_VIEW_LIMIT = 'daily_profile_view_limit';
+
+    /**
      * Who-viewed list access: plan stores window in days as {@see PlanFeatureKeys::WHO_VIEWED_ME_DAYS}
      * (1 / 7 / 999 = unlimited). This string is the public gate key; it does not add a second plan_features row.
      */
@@ -35,10 +40,41 @@ class FeatureUsageService
     public const WHO_VIEWED_UNLIMITED_DAYS_THRESHOLD = 999;
 
     /**
+     * When true, {@see isAdminBypass}, usage limits do not apply for that user.
+     */
+    public function shouldBypassUsageLimits(User $user): bool
+    {
+        return $this->isAdminBypass($user);
+    }
+
+    /**
+     * Real mode: admin is subject to limits. Bypass mode: is_admin skips limits (DB {@see SettingService} or env fallback).
+     */
+    private function adminBypassModeEnabled(): bool
+    {
+        $raw = app(SettingService::class)->get('admin_bypass_mode');
+        if ($raw === null) {
+            return (bool) config('app.admin_bypass_mode', false);
+        }
+
+        return filter_var($raw, FILTER_VALIDATE_BOOLEAN);
+    }
+
+    private function isAdminBypass(User $user): bool
+    {
+        return $user->is_admin === true && $this->adminBypassModeEnabled();
+    }
+
+    /**
      * Check if user can use a feature
      */
     public function canUse(int $userId, string $featureKey): bool
     {
+        $user = User::query()->find($userId);
+        if ($user && $this->isAdminBypass($user)) {
+            return true;
+        }
+
         if ($featureKey === self::FEATURE_CHAT_SEND_LIMIT) {
             return $this->canUseChatSendLimit($userId);
         }
@@ -49,6 +85,10 @@ class FeatureUsageService
 
         if ($featureKey === self::FEATURE_CONTACT_VIEW_LIMIT) {
             return $this->canUseContactViewLimit($userId);
+        }
+
+        if ($featureKey === self::FEATURE_DAILY_PROFILE_VIEW_LIMIT) {
+            return $this->canUseDailyProfileViewLimit($userId);
         }
 
         if ($featureKey === self::FEATURE_WHO_VIEWED_ME_ACCESS) {
@@ -120,6 +160,11 @@ class FeatureUsageService
      */
     public function consume(int $userId, string $featureKey): void
     {
+        $user = User::query()->find($userId);
+        if ($user && $this->isAdminBypass($user)) {
+            return;
+        }
+
         if ($featureKey === self::FEATURE_CHAT_SEND_LIMIT) {
             $this->consumeChatSendLimit($userId);
 
@@ -128,6 +173,12 @@ class FeatureUsageService
 
         if ($featureKey === self::FEATURE_CONTACT_VIEW_LIMIT) {
             $this->consumeContactViewLimit($userId);
+
+            return;
+        }
+
+        if ($featureKey === self::FEATURE_DAILY_PROFILE_VIEW_LIMIT) {
+            $this->consumeDailyProfileViewLimit($userId);
 
             return;
         }
@@ -171,6 +222,7 @@ class FeatureUsageService
                     ->insert([
                         'user_id' => $userId,
                         'feature_key' => $featureKey,
+                        'period' => UserFeatureUsage::PERIOD_ENTITLEMENT,
                         'used_count' => 1,
                         'period_start' => $now,
                         'period_end' => $entitlement->valid_until,
@@ -191,9 +243,6 @@ class FeatureUsageService
         if (! $user) {
             return false;
         }
-        if ($user->isAnyAdmin()) {
-            return true;
-        }
 
         $plan = app(SubscriptionService::class)->getActivePlan($user);
         $plan->loadMissing('features');
@@ -212,9 +261,6 @@ class FeatureUsageService
         $user = User::query()->find($userId);
         if (! $user) {
             return false;
-        }
-        if ($user->isAnyAdmin()) {
-            return true;
         }
 
         $limit = app(SubscriptionService::class)->getFeatureLimit($user, SubscriptionService::FEATURE_CHAT_SEND_LIMIT);
@@ -237,7 +283,7 @@ class FeatureUsageService
     private function consumeChatSendLimit(int $userId): void
     {
         $user = User::query()->find($userId);
-        if (! $user || $user->isAnyAdmin()) {
+        if (! $user) {
             return;
         }
 
@@ -250,7 +296,50 @@ class FeatureUsageService
     }
 
     /**
-     * Contact views: {@see PlanFeatureKeys::CONTACT_UNLOCK} + monthly {@see UserFeatureUsageKeys::CONTACT_VIEW_LIMIT} vs entitlement limit.
+     * Viewer daily profile-browse cap: {@see SubscriptionService::getFeatureLimit}(..., {@see self::FEATURE_DAILY_PROFILE_VIEW_LIMIT}) vs {@link UserFeatureUsageService} daily bucket.
+     */
+    private function canUseDailyProfileViewLimit(int $userId): bool
+    {
+        $user = User::query()->find($userId);
+        if (! $user) {
+            return false;
+        }
+
+        $limit = app(SubscriptionService::class)->getFeatureLimit($user, SubscriptionService::FEATURE_DAILY_PROFILE_VIEW_LIMIT);
+        if ($limit === -1) {
+            return true;
+        }
+        if ($limit === 0) {
+            return false;
+        }
+
+        $used = app(UserFeatureUsageService::class)->getUsage(
+            $userId,
+            self::FEATURE_DAILY_PROFILE_VIEW_LIMIT,
+            UserFeatureUsage::PERIOD_DAILY,
+        );
+
+        return $used < $limit;
+    }
+
+    private function consumeDailyProfileViewLimit(int $userId): void
+    {
+        $user = User::query()->find($userId);
+        if (! $user) {
+            return;
+        }
+
+        app(UserFeatureUsageService::class)->incrementUsage(
+            $userId,
+            self::FEATURE_DAILY_PROFILE_VIEW_LIMIT,
+            1,
+            UserFeatureUsage::PERIOD_DAILY,
+        );
+    }
+
+    /**
+     * Contact views: same cap as {@see self::getPlanFeatureLimit}({@see PlanFeatureKeys::CONTACT_VIEW_LIMIT})
+     * vs monthly {@see UserFeatureUsageKeys::CONTACT_VIEW_LIMIT} usage (SSOT with UI display).
      */
     private function canUseContactViewLimit(int $userId): bool
     {
@@ -258,16 +347,8 @@ class FeatureUsageService
         if (! $user) {
             return false;
         }
-        if ($user->isAnyAdmin()) {
-            return true;
-        }
 
-        $entitlements = app(EntitlementService::class);
-        if (! $entitlements->hasFeature($userId, PlanFeatureKeys::CONTACT_UNLOCK)) {
-            return false;
-        }
-
-        $limit = $this->parseContactViewNumericLimit($userId);
+        $limit = app(SubscriptionService::class)->getFeatureLimit($user, PlanFeatureKeys::CONTACT_VIEW_LIMIT);
         if ($limit === -1) {
             return true;
         }
@@ -284,24 +365,10 @@ class FeatureUsageService
         return $used < $limit;
     }
 
-    /**
-     * -1 = unlimited, 0 = none, n = cap (aligned with {@see ContactAccessService}).
-     */
-    private function parseContactViewNumericLimit(int $userId): int
-    {
-        $raw = app(EntitlementService::class)->getValue($userId, PlanFeatureKeys::CONTACT_VIEW_LIMIT, '0');
-        $s = strtolower(trim((string) $raw));
-        if ($s === '' || $s === '-1' || $s === 'unlimited') {
-            return -1;
-        }
-
-        return max(0, (int) $raw);
-    }
-
     private function consumeContactViewLimit(int $userId): void
     {
         $user = User::query()->find($userId);
-        if (! $user || $user->isAnyAdmin()) {
+        if (! $user) {
             return;
         }
 
@@ -319,7 +386,7 @@ class FeatureUsageService
     public function getWhoViewedMeWindowDays(int $userId): int
     {
         $user = User::query()->find($userId);
-        if ($user && $user->isAnyAdmin()) {
+        if ($user && $this->isAdminBypass($user)) {
             return self::WHO_VIEWED_UNLIMITED_DAYS_THRESHOLD;
         }
 
@@ -334,5 +401,82 @@ class FeatureUsageService
     private function canUseWhoViewedMeAccess(int $userId): bool
     {
         return $this->getWhoViewedMeWindowDays($userId) > 0;
+    }
+
+    // -------------------------------------------------------------------------
+    // Public façade — delegates only (controllers / Blade entry point; SSOT API).
+    // -------------------------------------------------------------------------
+
+    /**
+     * Effective plan limit for a feature key ({@see SubscriptionService::getFeatureLimit}).
+     */
+    public function getPlanFeatureLimit(User $user, string $planFeatureKey): int
+    {
+        return app(SubscriptionService::class)->getFeatureLimit($user, $planFeatureKey);
+    }
+
+    /**
+     * Contact view quota for display — same inputs as {@see self::canUse}(..., {@see self::FEATURE_CONTACT_VIEW_LIMIT}).
+     * CTA must use {@see self::canUse} only; this snapshot is display-only.
+     *
+     * @return array{used: int, limit: int|string, remaining: int|string|null, is_unlimited: bool}
+     */
+    public function getContactViewUsageSnapshot(User $user): array
+    {
+        $limit = $this->getPlanFeatureLimit($user, PlanFeatureKeys::CONTACT_VIEW_LIMIT);
+        $used = $this->getUsageBucketCount(
+            (int) $user->id,
+            UserFeatureUsageKeys::CONTACT_VIEW_LIMIT,
+            UserFeatureUsage::PERIOD_MONTHLY,
+        );
+
+        if ($limit === -1) {
+            return [
+                'used' => $used,
+                'limit' => '∞',
+                'remaining' => 'Unlimited',
+                'is_unlimited' => true,
+            ];
+        }
+
+        return [
+            'used' => $used,
+            'limit' => $limit,
+            'remaining' => max(0, $limit - $used),
+            'is_unlimited' => false,
+        ];
+    }
+
+    /**
+     * Usage for a bucket ({@see UserFeatureUsageService::getUsage}).
+     */
+    public function getUsageBucketCount(int $userId, string $featureKey, string $period): int
+    {
+        return app(UserFeatureUsageService::class)->getUsage($userId, $featureKey, $period);
+    }
+
+    /**
+     * Legacy profile-view gate ({@see SubscriptionService::assertWithinProfileViewLimit}) — uses {@code profile_views} counts.
+     * Prefer {@see self::canUse}({@see self::FEATURE_DAILY_PROFILE_VIEW_LIMIT}) + {@see self::consume} for {@code user_feature_usages}.
+     */
+    public function assertProfileViewLimit(User $user): void
+    {
+        app(SubscriptionService::class)->assertWithinProfileViewLimit($user);
+    }
+
+    /**
+     * Product gate aliases: contact_number, chat, interest, profile_views, chat_images, … ({@see SubscriptionService::hasFeature}).
+     */
+    public function subscriptionFeatureAllows(User $user, string $featureAlias): bool
+    {
+        return app(SubscriptionService::class)->hasFeature($user, $featureAlias);
+    }
+
+    /**
+     * Chat image send allowed by plan ({@see SubscriptionService::canUseChatImages}).
+     */
+    public function subscriptionAllowsChatImages(User $user): bool
+    {
+        return app(SubscriptionService::class)->canUseChatImages($user);
     }
 }

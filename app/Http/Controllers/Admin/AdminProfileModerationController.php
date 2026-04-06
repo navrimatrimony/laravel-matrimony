@@ -94,7 +94,9 @@ class AdminProfileModerationController extends Controller
         }
 
         if (! $isOwnProfile && $user->matrimonyProfile) {
-            ViewTrackingService::recordView($user->matrimonyProfile, $profile);
+            if (ViewTrackingService::recordView($user->matrimonyProfile, $profile)) {
+                ViewTrackingService::consumeDailyProfileViewUsageForViewer($user->matrimonyProfile);
+            }
             ViewTrackingService::maybeTriggerViewBack($user->matrimonyProfile, $profile);
         }
 

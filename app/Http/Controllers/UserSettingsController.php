@@ -60,7 +60,7 @@ class UserSettingsController extends Controller
         $validated = $request->validate([
             'visibility_scope' => 'required|in:public,premium_only,hidden',
             'show_photo_to' => 'required|in:all,premium,accepted_interest',
-            'show_contact_to' => 'required|in:unlock_only,accepted_interest',
+            'show_contact_to' => 'required|in:everyone,premium_only,accepted_interest,unlock_only,no_one',
             'hide_from_blocked_users' => 'required|boolean',
         ]);
 

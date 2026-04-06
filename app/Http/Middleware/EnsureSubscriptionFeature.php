@@ -2,7 +2,7 @@
 
 namespace App\Http\Middleware;
 
-use App\Services\SubscriptionService;
+use App\Services\FeatureUsageService;
 use Closure;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpKernel\Exception\HttpException;
@@ -20,7 +20,7 @@ class EnsureSubscriptionFeature
             abort(403);
         }
 
-        if (! app(SubscriptionService::class)->hasFeature($user, $feature)) {
+        if (! app(FeatureUsageService::class)->subscriptionFeatureAllows($user, $feature)) {
             throw new HttpException(403, __('subscriptions.feature_locked'));
         }
 

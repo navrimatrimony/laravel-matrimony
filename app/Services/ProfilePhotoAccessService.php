@@ -23,6 +23,7 @@ class ProfilePhotoAccessService
     public function __construct(
         private readonly EntitlementService $entitlements,
         private readonly UserFeatureUsageService $usage,
+        private readonly FeatureUsageService $featureUsage,
     ) {}
 
     /**
@@ -46,7 +47,7 @@ class ProfilePhotoAccessService
             ];
         }
 
-        if ($viewer->isAnyAdmin()) {
+        if ($this->featureUsage->shouldBypassUsageLimits($viewer)) {
             return [
                 'slots' => $this->buildSlotsFromSources($subject, $galleryPhotos, allBlur: false),
                 'message_key' => null,

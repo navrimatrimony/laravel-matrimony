@@ -27,11 +27,10 @@ use App\Services\ProfileFieldConfigurationService;
 use App\Services\ProfilePhotoAccessService;
 use App\Services\ProfileRotationService;
 use App\Services\ProfileShowReadService;
-use App\Services\SubscriptionService;
+use App\Services\FeatureUsageService;
 use App\Services\ViewTrackingService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Schema;
-use Symfony\Component\HttpKernel\Exception\HttpException;
 
 /*
 |--------------------------------------------------------------------------
@@ -836,19 +835,16 @@ class MatrimonyProfileController extends Controller
                 ->with('error', __('common.login_required_to_view_matrimony_profiles'));
         }
 
-        $authUser = auth()->user();
+        $user = auth()->user();
 
         // 🔒 Logged-in but no profile
-        if (! $authUser->matrimonyProfile) {
+        if (! $user->matrimonyProfile) {
             return redirect()
                 ->route('matrimony.profile.wizard.section', ['section' => 'basic-info'])
                 ->with('error', __('interest.create_profile_first'));
         }
 
-        $viewer = auth()->user(); // logged-in user
-        $isOwnProfile = $viewer && (
-            $viewer->matrimonyProfile->id === $profile->id
-        );
+        $isOwnProfile = (int) $user->matrimonyProfile->id === (int) $profile->id;
 
         // 🔒 GUARD: Day 7 lifecycle — Archived/Suspended not visible to others (backward compat: is_suspended, trashed)
         if (! $isOwnProfile && ! \App\Services\ProfileLifecycleService::isVisibleToOthers($profile)) {
@@ -856,54 +852,57 @@ class MatrimonyProfileController extends Controller
         }
 
         // 🔒 GUARD: Block excludes profile view (either direction)
-        if (! $isOwnProfile && $viewer->matrimonyProfile) {
-            if (ViewTrackingService::isBlocked($viewer->matrimonyProfile->id, $profile->id)) {
+        if (! $isOwnProfile && $user->matrimonyProfile) {
+            if (ViewTrackingService::isBlocked($user->matrimonyProfile->id, $profile->id)) {
                 abort(404, __('common.profile_not_found'));
             }
         }
 
         // 🔒 GUARD: Phase-4 Day-10 — Women-First Safety visibility policy
-        if (! $isOwnProfile && ! \App\Services\ProfileVisibilityPolicyService::canViewProfile($profile, $viewer)) {
+        if (! $isOwnProfile && ! \App\Services\ProfileVisibilityPolicyService::canViewProfile($profile, $user)) {
             abort(404, __('common.profile_not_found'));
         }
 
         $interestAlreadySent = false;
 
-        if (auth()->check()) {
-            $interestAlreadySent = \App\Models\Interest::where(
-                'sender_profile_id',
-                auth()->user()->matrimonyProfile->id
-            )
-                ->where('receiver_profile_id', $profile->id)
-                ->exists();
-        }
+        $interestAlreadySent = \App\Models\Interest::where(
+            'sender_profile_id',
+            $user->matrimonyProfile->id
+        )
+            ->where('receiver_profile_id', $profile->id)
+            ->exists();
 
         // Check if user has already submitted an open abuse report for this profile
         $hasAlreadyReported = false;
-        if (auth()->check() && ! $isOwnProfile) {
-            $hasAlreadyReported = \App\Models\AbuseReport::where('reporter_user_id', auth()->id())
+        if (! $isOwnProfile) {
+            $hasAlreadyReported = \App\Models\AbuseReport::where('reporter_user_id', $user->id)
                 ->where('reported_profile_id', $profile->id)
                 ->where('status', 'open')
                 ->exists();
         }
 
         $inShortlist = false;
-        if (! $isOwnProfile && $viewer->matrimonyProfile) {
-            $inShortlist = Shortlist::where('owner_profile_id', $viewer->matrimonyProfile->id)
+        if (! $isOwnProfile && $user->matrimonyProfile) {
+            $inShortlist = Shortlist::where('owner_profile_id', $user->matrimonyProfile->id)
                 ->where('shortlisted_profile_id', $profile->id)
                 ->exists();
         }
 
-        if (! $isOwnProfile && $viewer->matrimonyProfile && ! ($viewer->is_admin ?? false)) {
-            try {
-                app(SubscriptionService::class)->assertWithinProfileViewLimit($viewer);
-            } catch (HttpException $e) {
+        if (! $isOwnProfile && $user->matrimonyProfile) {
+            $featureUsage = app(FeatureUsageService::class);
+            $userId = (int) $user->id;
+            $dailyViewKey = FeatureUsageService::FEATURE_DAILY_PROFILE_VIEW_LIMIT;
+
+            if (! $featureUsage->canUse($userId, $dailyViewKey)) {
                 return redirect()
                     ->route('matrimony.profiles.index')
-                    ->with('error', $e->getMessage());
+                    ->with('error', __('subscriptions.profile_view_daily_limit'));
             }
-            ViewTrackingService::recordView($viewer->matrimonyProfile, $profile);
-            ViewTrackingService::maybeTriggerViewBack($viewer->matrimonyProfile, $profile);
+
+            if (ViewTrackingService::recordView($user->matrimonyProfile, $profile)) {
+                $featureUsage->consume($userId, $dailyViewKey);
+            }
+            ViewTrackingService::maybeTriggerViewBack($user->matrimonyProfile, $profile);
         }
 
         // Detailed section coverage for own-profile show (core % not shown — redundant post-registration)
@@ -921,13 +920,13 @@ class MatrimonyProfileController extends Controller
 
         // Match explanation data (rule-based comparison)
         $matchData = null;
-        if (! $isOwnProfile && $viewer->matrimonyProfile) {
-            $matchData = self::calculateMatchExplanation($viewer->matrimonyProfile, $profile);
+        if (! $isOwnProfile && $user->matrimonyProfile) {
+            $matchData = self::calculateMatchExplanation($user->matrimonyProfile, $profile);
         }
 
         $interestAllowsContact = false;
-        if (! $isOwnProfile && $viewer->matrimonyProfile) {
-            $vp = (int) $viewer->matrimonyProfile->id;
+        if (! $isOwnProfile && $user->matrimonyProfile) {
+            $vp = (int) $user->matrimonyProfile->id;
             $interestAllowsContact = Interest::query()
                 ->where('status', 'accepted')
                 ->where(function ($q) use ($vp, $profile) {
@@ -979,26 +978,27 @@ class MatrimonyProfileController extends Controller
         $contactRequestDisabled = true;
         $contactGrantReveal = null; // [ 'phone' => ... ] when viewer has valid grant
         $canSendContactRequest = false;
-        if (auth()->check() && ! $isOwnProfile && $viewer && $viewer->matrimonyProfile) {
+        if (auth()->check() && ! $isOwnProfile && $user->matrimonyProfile) {
             $contactRequestService = app(\App\Services\ContactRequestService::class);
             $contactRequestDisabled = $contactRequestService->isContactRequestDisabled();
             $receiver = $profile->user;
             if ($receiver) {
-                $contactRequestState = $contactRequestService->getSenderState($viewer, $receiver);
-                $canSendContactRequest = $contactRequestService->canSendContactRequest($viewer, $receiver);
+                $contactRequestState = $contactRequestService->getSenderState($user, $receiver);
+                $canSendContactRequest = $contactRequestService->canSendContactRequest($user, $receiver);
                 if (($contactRequestState['state'] ?? '') === 'accepted' && ! empty($contactRequestState['grant']) && $contactRequestState['grant']->isValid()) {
                     // Same resolution as public profile display: primary profile_contacts row, else account mobile.
+                    // Grant UI shows primary phone only (scopes may include email/WhatsApp for ops; not duplicated here).
                     $phone = $profile->primary_contact_number;
                     $contactGrantReveal = $phone !== null && $phone !== '' ? ['phone' => $phone] : null;
                 }
             }
         }
 
-        // Contact gating: EntitlementService (contact_unlock, contact_view_limit) + usage + visibility — see ContactAccessService.
+        // Contact gating: visibility + interest — quota via {@see FeatureUsageService} / {@see ContactAccessService::resolveViewerContext}.
         $contactAccess = $isOwnProfile
             ? ContactAccessService::neutralForOwner()
             : $this->contactAccessService->resolveViewerContext(
-                $viewer,
+                $user,
                 $profile,
                 $interestAllowsContact,
                 $visibilitySettings,
@@ -1009,15 +1009,28 @@ class MatrimonyProfileController extends Controller
             $contactGrantReveal = null;
         }
 
+        // Contact reveal CTA + usage strip: SSOT {@see FeatureUsageService} — same $user id as POST contact-reveal.
+        $featureUsageForContact = app(FeatureUsageService::class);
+        $contactUsageSnapshot = $featureUsageForContact->getContactViewUsageSnapshot($user);
+        $canUseContact = false;
+        if (! $isOwnProfile) {
+            $userId = (int) $user->id;
+            $canUseContact = $featureUsageForContact->canUse(
+                $userId,
+                FeatureUsageService::FEATURE_CONTACT_VIEW_LIMIT
+            );
+        }
+
         $canViewContact = $isOwnProfile
-            || (trim((string) ($contactAccess['paid_contact_phone'] ?? '')) !== '');
+            || (trim((string) ($contactAccess['paid_contact_phone'] ?? '')) !== '')
+            || (trim((string) ($contactAccess['paid_contact_email'] ?? '')) !== '');
 
         // Profile show: always show gallery / primary photo (no blur lock for other viewers).
         $showPhotoTo = optional($visibilitySettings)->show_photo_to ?? 'all';
         $photoViewAllowed = true;
         $photoLocked = false;
 
-        $verificationPanel = ProfileShowReadService::buildVerificationPanel($profile, $viewer, $isOwnProfile);
+        $verificationPanel = ProfileShowReadService::buildVerificationPanel($profile, $user, $isOwnProfile);
 
         $galleryPhotos = collect();
         if ($profilePhotoVisible) {
@@ -1034,7 +1047,7 @@ class MatrimonyProfileController extends Controller
         }
 
         $photoAlbumPresentation = $this->profilePhotoAccessService->buildAlbumPresentation(
-            $authUser,
+            $user,
             $profile,
             $isOwnProfile,
             $galleryPhotos
@@ -1074,6 +1087,8 @@ class MatrimonyProfileController extends Controller
                 'canViewContact' => $canViewContact,
                 'primaryContactPhone' => $primaryContactPhone,
                 'contactAccess' => $contactAccess,
+                'canUseContact' => $canUseContact,
+                'contactUsageSnapshot' => $contactUsageSnapshot,
                 'hasBlockingConflicts' => $hasBlockingConflicts,
                 'conflictRecords' => $conflictRecords,
                 'contactRequestState' => $contactRequestState,

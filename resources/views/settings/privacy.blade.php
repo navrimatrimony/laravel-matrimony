@@ -98,8 +98,11 @@
                             class="mt-2 w-full rounded-md border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
                             required>
                         <option value="" {{ $showContactTo === null ? 'selected' : '' }}>{{ __('Choose...') }}</option>
-                        <option value="unlock_only" {{ $showContactTo === 'unlock_only' ? 'selected' : '' }}>{{ __('Unlocked only') }}</option>
+                        <option value="everyone" {{ $showContactTo === 'everyone' ? 'selected' : '' }}>{{ __('Everyone (plan limits still apply)') }}</option>
+                        <option value="premium_only" {{ $showContactTo === 'premium_only' ? 'selected' : '' }}>{{ __('Paid subscribers only') }}</option>
                         <option value="accepted_interest" {{ $showContactTo === 'accepted_interest' ? 'selected' : '' }}>{{ __('After interest accepted') }}</option>
+                        <option value="unlock_only" {{ $showContactTo === 'unlock_only' ? 'selected' : '' }}>{{ __('Unlocked only') }}</option>
+                        <option value="no_one" {{ $showContactTo === 'no_one' ? 'selected' : '' }}>{{ __('No one') }}</option>
                     </select>
                 </div>
 

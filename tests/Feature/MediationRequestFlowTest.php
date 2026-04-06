@@ -207,15 +207,16 @@ class MediationRequestFlowTest extends TestCase
 
         $this->subscribeUser($sender, 'silver');
 
-        DB::table('profile_visibility_settings')->insert([
-            'profile_id' => $target->id,
-            'visibility_scope' => 'public',
-            'show_photo_to' => 'all',
-            'show_contact_to' => 'accepted_interest',
-            'hide_from_blocked_users' => true,
-            'created_at' => now(),
-            'updated_at' => now(),
-        ]);
+        DB::table('profile_visibility_settings')->updateOrInsert(
+            ['profile_id' => $target->id],
+            [
+                'visibility_scope' => 'public',
+                'show_photo_to' => 'all',
+                'show_contact_to' => 'accepted_interest',
+                'hide_from_blocked_users' => true,
+                'updated_at' => now(),
+            ]
+        );
 
         Interest::create([
             'sender_profile_id' => $senderProfile->id,
@@ -236,8 +237,8 @@ class MediationRequestFlowTest extends TestCase
         $mr = app(MediationRequestService::class)->createFromProfile($sender, $target->fresh());
         app(MediationRequestService::class)->respond($receiver, $mr, 'interested');
 
-        $phone = $access->consumePaidContactReveal($sender, $target->fresh(), $visibility);
-        $this->assertSame('9876501234', $phone);
+        $revealed = $access->consumePaidContactReveal($sender, $target->fresh(), $visibility);
+        $this->assertSame('9876501234', $revealed['phone']);
     }
 
     public function test_mediation_model_fills_profile_ids_when_omitted_on_create(): void
