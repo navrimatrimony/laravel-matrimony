@@ -2,15 +2,24 @@
 
 namespace App\Services;
 
+use App\Models\Interest;
 use App\Models\User;
 use App\Models\UserFeatureUsage;
 use App\Support\PlanFeatureKeys;
 use App\Support\UserFeatureUsageKeys;
+use Illuminate\Support\Carbon;
+use Illuminate\Support\Collection;
 use Symfony\Component\HttpKernel\Exception\HttpException;
 
 /**
- * Daily interest-send quota: {@see EntitlementService::getValue}(..., {@see PlanFeatureKeys::INTEREST_SEND_LIMIT})
- * vs {@see UserFeatureUsageService} bucket {@see UserFeatureUsageKeys::INTEREST_SEND_LIMIT} ({@see UserFeatureUsage::PERIOD_DAILY}).
+ * Interest engine (SSOT): daily **send** quota + plan **incoming view** reveal slots per reset window.
+ *
+ * Send: {@see EntitlementService::getValue}(..., {@see PlanFeatureKeys::INTEREST_SEND_LIMIT})
+ * vs {@see UserFeatureUsageService} ({@see UserFeatureUsageKeys::INTEREST_SEND_LIMIT}, {@see UserFeatureUsage::PERIOD_DAILY}).
+ *
+ * Incoming view: {@see PlanFeatureKeys::INTEREST_VIEW_LIMIT} + {@see PlanFeatureKeys::INTEREST_VIEW_RESET_PERIOD}.
+ * First N pending interests in the current window (by {@see Interest::scopeReceivedInboxOrder}) get full name/photo/profile;
+ * overflow is blurred/locked on {@see routes('interests.received')} and blocked on direct profile open.
  */
 class InterestSendLimitService
 {
@@ -108,5 +117,136 @@ class InterestSendLimitService
         }
 
         return max(0, (int) $s);
+    }
+
+    // -------------------------------------------------------------------------
+    // Incoming interest view (plan limit + reset window; positional unlock)
+    // -------------------------------------------------------------------------
+
+    /**
+     * @param  Collection<int, Interest>  $interests  Typically received inbox, any status
+     * @return array<int, bool> interest id => may see full name, photo, open profile
+     */
+    public function incomingInterestUnlockMap(User $receiver, Collection $interests): array
+    {
+        if ($interests->isEmpty()) {
+            return [];
+        }
+
+        if ($this->featureUsage->shouldBypassUsageLimits($receiver)) {
+            return $interests->mapWithKeys(fn (Interest $i) => [$i->id => true])->all();
+        }
+
+        $limit = $this->resolveInterestViewLimit($receiver);
+        if ($limit < 0) {
+            return $interests->mapWithKeys(fn (Interest $i) => [$i->id => true])->all();
+        }
+
+        $windowStart = $this->interestViewWindowStart($receiver);
+        $receiverProfileId = (int) ($receiver->matrimonyProfile?->id ?? 0);
+        if ($receiverProfileId === 0) {
+            return $interests->mapWithKeys(fn (Interest $i) => [$i->id => false])->all();
+        }
+
+        $allowedIds = Interest::query()
+            ->where('receiver_profile_id', $receiverProfileId)
+            ->where('status', 'pending')
+            ->where('created_at', '>=', $windowStart)
+            ->receivedInboxOrder()
+            ->limit(max(0, $limit))
+            ->pluck('id')
+            ->flip()
+            ->all();
+
+        $out = [];
+        foreach ($interests as $i) {
+            if ($i->status !== 'pending') {
+                $out[(int) $i->id] = true;
+
+                continue;
+            }
+            if ($limit === 0) {
+                $out[(int) $i->id] = false;
+
+                continue;
+            }
+            $out[(int) $i->id] = isset($allowedIds[(int) $i->id]);
+        }
+
+        return $out;
+    }
+
+    public function isIncomingInterestUnlocked(User $receiver, Interest $interest): bool
+    {
+        $map = $this->incomingInterestUnlockMap($receiver, collect([$interest]));
+
+        return $map[(int) $interest->id] ?? false;
+    }
+
+    /**
+     * Start of current weekly / monthly / quarterly window (app timezone).
+     */
+    public function interestViewWindowStart(User $receiver): Carbon
+    {
+        $period = $this->resolveInterestViewResetPeriod($receiver);
+
+        return $this->windowStartForPeriod($period, Carbon::now());
+    }
+
+    /**
+     * @return int 0 = none, &gt;0 = max pending reveals per window, -1 = unlimited
+     */
+    public function effectiveInterestViewLimit(User $receiver): int
+    {
+        if ($this->featureUsage->shouldBypassUsageLimits($receiver)) {
+            return -1;
+        }
+
+        return $this->resolveInterestViewLimit($receiver);
+    }
+
+    /**
+     * @return 'weekly'|'monthly'|'quarterly'
+     */
+    public function interestViewResetPeriodLabel(User $receiver): string
+    {
+        return $this->resolveInterestViewResetPeriod($receiver);
+    }
+
+    private function resolveInterestViewLimit(User $user): int
+    {
+        $uid = (int) $user->id;
+
+        if ($this->entitlements->hasAccess($uid, PlanFeatureKeys::INTEREST_VIEW_LIMIT)) {
+            $raw = $this->entitlements->getValue($uid, PlanFeatureKeys::INTEREST_VIEW_LIMIT, '3');
+
+            return $this->parseLimitString((string) $raw);
+        }
+
+        return $this->subscriptions->getFeatureLimit($user, PlanFeatureKeys::INTEREST_VIEW_LIMIT);
+    }
+
+    /**
+     * @return 'weekly'|'monthly'|'quarterly'
+     */
+    private function resolveInterestViewResetPeriod(User $user): string
+    {
+        $uid = (int) $user->id;
+        $raw = strtolower(trim((string) $this->entitlements->getValue($uid, PlanFeatureKeys::INTEREST_VIEW_RESET_PERIOD, 'monthly')));
+        if (in_array($raw, ['weekly', 'monthly', 'quarterly'], true)) {
+            return $raw;
+        }
+
+        return 'monthly';
+    }
+
+    private function windowStartForPeriod(string $period, Carbon $at): Carbon
+    {
+        return match ($period) {
+            'weekly' => $at->copy()->startOfWeek(Carbon::MONDAY)->startOfDay(),
+            'quarterly' => $at->copy()->startOfQuarter(),
+            'monthly' => $at->copy()->startOfMonth()->startOfDay(),
+            default => $at->copy()->startOfMonth()->startOfDay(),
+        };
     }
 }

@@ -43,7 +43,7 @@
                 <div class="mb-6">
                     <h1 class="text-2xl font-bold">
                     {{ __('search.matrimony_profiles') }}
-                    </h1>
+                </h1>
                     <p class="mt-1 text-sm text-gray-600 dark:text-gray-400">
                         Use filters to narrow profiles by community, age, location, profession, and trust signals.
                     </p>
@@ -99,7 +99,7 @@
 
                             <section class="space-y-3 border-t border-gray-200/70 pt-4 dark:border-gray-700/70">
                                 <h3 class="text-[11px] font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400">{{ __('search.location') }}</h3>
-                                <div>
+                        <div>
                                     <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1" for="search-filter-country">{{ __('search.country') }}</label>
                                     <select id="search-filter-country" name="country_id" class="w-full min-w-0 border border-gray-300 dark:border-gray-600 dark:bg-gray-900 rounded px-3 py-2 text-sm">
                                         <option value="">{{ __('search.any') }}</option>
@@ -107,8 +107,8 @@
                                             <option value="{{ $co->id }}" {{ (string) ($locationDisplayCountryId ?? '') === (string) $co->id ? 'selected' : '' }}>{{ $co->name }}</option>
                                         @endforeach
                                     </select>
-                                </div>
-                                <div>
+                        </div>
+                        <div>
                                     <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1" for="search-filter-state">{{ __('search.state') }}</label>
                                     <select id="search-filter-state" name="state_id" class="w-full min-w-0 border border-gray-300 dark:border-gray-600 dark:bg-gray-900 rounded px-3 py-2 text-sm">
                                         <option value="">{{ __('search.any') }}</option>
@@ -116,8 +116,8 @@
                                             <option value="{{ $st->id }}" {{ (string) ($locationDisplayStateId ?? '') === (string) $st->id ? 'selected' : '' }}>{{ $st->name }}</option>
                                         @endforeach
                                     </select>
-                                </div>
-                                <div>
+                        </div>
+                        <div>
                                     <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1" for="search-filter-district">{{ __('search.district') }}</label>
                                     <select id="search-filter-district" name="district_id" class="w-full min-w-0 border border-gray-300 dark:border-gray-600 dark:bg-gray-900 rounded px-3 py-2 text-sm">
                                         <option value="">{{ __('search.any') }}</option>
@@ -125,8 +125,8 @@
                                             <option value="{{ $d->id }}" {{ (string) ($locationDisplayDistrictId ?? '') === (string) $d->id ? 'selected' : '' }}>{{ $d->name }}</option>
                                         @endforeach
                                     </select>
-                                </div>
-                                <div>
+                        </div>
+                        <div>
                                     <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1" for="search-filter-taluka">{{ __('search.taluka') }}</label>
                                     <select id="search-filter-taluka" name="taluka_id" class="w-full min-w-0 border border-gray-300 dark:border-gray-600 dark:bg-gray-900 rounded px-3 py-2 text-sm">
                                         <option value="">{{ __('search.any') }}</option>
@@ -134,8 +134,8 @@
                                             <option value="{{ $tk->id }}" {{ (string) ($locationDisplayTalukaId ?? '') === (string) $tk->id ? 'selected' : '' }}>{{ $tk->name }}</option>
                                         @endforeach
                                     </select>
-                                </div>
-                                <div>
+                        </div>
+                        <div>
                                     <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1" for="search-filter-city">{{ __('search.city') }}</label>
                                     <select id="search-filter-city" name="city_id" class="w-full min-w-0 border border-gray-300 dark:border-gray-600 dark:bg-gray-900 rounded px-3 py-2 text-sm">
                                         <option value="">{{ __('search.any') }}</option>
@@ -152,22 +152,22 @@
                                     <div>
                                         <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{{ __('search.age_from') }}</label>
                                         <input type="number" name="age_from" value="{{ request('age_from') }}" min="18" max="80" class="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-900 rounded px-3 py-2 text-sm" placeholder="{{ __('search.min_age') }}">
-                                    </div>
-                                    <div>
+                        </div>
+                        <div>
                                         <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{{ __('search.age_to') }}</label>
                                         <input type="number" name="age_to" value="{{ request('age_to') }}" min="18" max="80" class="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-900 rounded px-3 py-2 text-sm" placeholder="{{ __('search.max_age') }}">
                                     </div>
-                                </div>
-                                <div>
+                        </div>
+                        <div>
                                     <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{{ __('search.marital_status') }}</label>
                                     <select name="marital_status_id" class="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-900 rounded px-3 py-2 text-sm">
                                         <option value="">{{ __('search.any') }}</option>
                                         @foreach(($maritalStatuses ?? collect()) as $ms)
                                             <option value="{{ $ms->id }}" {{ (string) $maritalSelectValue === (string) $ms->id ? 'selected' : '' }}>{{ $ms->label }}</option>
                                         @endforeach
-                                    </select>
-                                </div>
-                                <div>
+                            </select>
+                        </div>
+                        <div>
                                     <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{{ __('search.education') }}</label>
                                     <input type="text" name="education" value="{{ request('education') }}" class="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-900 rounded px-3 py-2 text-sm" placeholder="{{ __('search.education_placeholder') }}">
                                 </div>
@@ -267,12 +267,12 @@
                                     <div class="min-w-0 sm:min-w-[6rem]">
                                         <label class="mb-1 block text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400" for="search-per-page">{{ __('search.per_page') }}</label>
                                         <select id="search-per-page" name="per_page" class="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-900" onchange="this.form.requestSubmit()">
-                                            @foreach ([15, 25, 50] as $n)
-                                                <option value="{{ $n }}" {{ (int) request('per_page', 15) === $n ? 'selected' : '' }}>{{ $n }}</option>
-                                            @endforeach
-                                        </select>
-                                    </div>
-                                </div>
+                                @foreach ([15, 25, 50] as $n)
+                                    <option value="{{ $n }}" {{ (int) request('per_page', 15) === $n ? 'selected' : '' }}>{{ $n }}</option>
+                                @endforeach
+                            </select>
+                        </div>
+                    </div>
                             </div>
 
                             @if ($hasResultsChrome)
@@ -369,18 +369,18 @@
                                             </span>
                                         @endforeach
                                     </div>
-                                </div>
+                    </div>
                             @endif
                         @endif
 
-                        @if ($profiles->isEmpty())
+                @if ($profiles->isEmpty())
                             <div class="rounded-lg border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-900/40 px-4 py-6 text-center">
                                 <p class="text-gray-700 dark:text-gray-300 mb-2">{{ __('search.no_profiles_found_detail') }}</p>
                                 <p class="text-sm text-gray-600 dark:text-gray-400 mb-3">Try clearing a filter or widening age / location.</p>
                                 <a href="{{ route('matrimony.profiles.index') }}" class="text-sm font-medium text-indigo-600 dark:text-indigo-400 hover:underline">{{ __('search.clear_filters_try_again') }}</a>
                             </div>
-                        @else
-                            @foreach ($profiles as $matrimonyProfile)
+                @else
+                    @foreach ($profiles as $matrimonyProfile)
                         @php
                             $genderKey = strtolower(trim((string) ($matrimonyProfile->gender?->key ?? '')));
                             $genderLabel = trim((string) ($matrimonyProfile->gender?->label ?? ''));
@@ -424,28 +424,28 @@
                             {{-- Photo: full-height left block on desktop; portrait ratio on mobile (avoid thin strip) --}}
                             <div class="relative aspect-[3/4] w-full shrink-0 overflow-hidden bg-gray-100 dark:bg-gray-800 sm:aspect-auto sm:h-auto sm:w-44 sm:min-h-[11rem] md:w-48 sm:self-stretch">
                                 @if ($hasApprovedPhoto)
-                                    <img
-                                        src="{{ asset('uploads/matrimony_photos/'.$matrimonyProfile->profile_photo) }}"
+        <img
+            src="{{ asset('uploads/matrimony_photos/'.$matrimonyProfile->profile_photo) }}"
                                         alt=""
                                         class="absolute inset-0 h-full w-full object-cover"
-                                    />
-                                @else
-                                    @php
-                                        if ($genderKey === 'male') {
-                                            $placeholderSrc = asset('images/placeholders/male-profile.svg');
-                                        } elseif ($genderKey === 'female') {
-                                            $placeholderSrc = asset('images/placeholders/female-profile.svg');
-                                        } else {
-                                            $placeholderSrc = asset('images/placeholders/default-profile.svg');
-                                        }
-                                    @endphp
-                                    <img
-                                        src="{{ $placeholderSrc }}"
+        />
+    @else
+        @php
+            if ($genderKey === 'male') {
+                $placeholderSrc = asset('images/placeholders/male-profile.svg');
+            } elseif ($genderKey === 'female') {
+                $placeholderSrc = asset('images/placeholders/female-profile.svg');
+            } else {
+                $placeholderSrc = asset('images/placeholders/default-profile.svg');
+            }
+        @endphp
+        <img
+            src="{{ $placeholderSrc }}"
                                         alt=""
                                         class="absolute inset-0 h-full w-full object-cover object-center opacity-95"
-                                    />
-                                @endif
-                            </div>
+        />
+    @endif
+</div>
 
                             <div class="flex min-w-0 flex-1 flex-col gap-4 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5">
                                 <div class="min-w-0 flex-1 space-y-1.5">
@@ -549,7 +549,7 @@
                                     {{-- Row 3: gender / age / height / marital --}}
                                     <div class="flex flex-wrap items-center gap-1.5 text-xs text-gray-600 dark:text-gray-400">
                                         <span class="rounded-full bg-gray-100 dark:bg-gray-800 px-2 py-0.5">{{ $genderLabel }}</span>
-                                        @if ($ageText)
+        @if ($ageText)
                                             <span class="rounded-full bg-gray-100 dark:bg-gray-800 px-2 py-0.5">{{ $ageText }}</span>
                                         @endif
                                         @if ($heightCm)
@@ -557,8 +557,8 @@
                                         @endif
                                         @if ($msLabel !== '')
                                             <span class="rounded-full bg-gray-100 dark:bg-gray-800 px-2 py-0.5">{{ $msLabel }}</span>
-                                        @endif
-                                    </div>
+        @endif
+    </div>
                                     <p class="text-sm text-gray-700 dark:text-gray-300">
                                         <span class="text-gray-500 dark:text-gray-500">{{ __('search.card_location') }}</span>
                                         {{ $locationLine }}
@@ -600,27 +600,27 @@
                                         @if (! $hasApprovedPhoto)
                                             <span class="inline-flex items-center rounded-full border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/40 px-2.5 py-1 text-[11px] font-semibold text-amber-900 dark:text-amber-200">{{ __('search.badge_no_photo') }}</span>
                                         @endif
-                                    </div>
-                                </div>
+</div>
+</div>
 
                                 <div class="flex shrink-0 items-start justify-end sm:items-center sm:self-stretch sm:pl-2">
-                                @auth
-                                    <a
-                                        href="{{ route('matrimony.profile.show', $matrimonyProfile->id) }}"
+    @auth
+        <a
+            href="{{ route('matrimony.profile.show', $matrimonyProfile->id) }}"
                                         class="inline-flex min-w-[9rem] w-full items-center justify-center rounded-lg bg-blue-600 px-4 py-2.5 text-center text-sm font-semibold text-white shadow-sm hover:bg-blue-700 sm:w-auto"
-                                    >
-                                        {{ __('search.view_profile') }}
-                                    </a>
-                                @else
-                                    <a
-                                        href="{{ route('login') }}"
+        >
+            {{ __('search.view_profile') }}
+        </a>
+    @else
+        <a
+            href="{{ route('login') }}"
                                         class="inline-block w-full text-center text-sm font-medium text-gray-500 hover:underline dark:text-gray-400 sm:w-auto"
-                                        title="{{ __('search.login_required_to_view_full_profile') }}"
-                                    >
-                                        {{ __('search.login_to_view_profile') }}
-                                    </a>
-                                @endauth
-                                </div>
+            title="{{ __('search.login_required_to_view_full_profile') }}"
+        >
+            {{ __('search.login_to_view_profile') }}
+        </a>
+    @endauth
+</div>
                             </div>
                         </div>
                     @endforeach

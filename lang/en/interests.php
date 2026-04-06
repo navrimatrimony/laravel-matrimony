@@ -20,5 +20,21 @@ return [
     'withdraw_interest' => 'Withdraw Interest',
     'accept' => 'Accept',
     'reject' => 'Reject',
-];
 
+    'received_subtitle' => 'People who expressed interest in your profile. Reveals follow your plan limit each period.',
+    'interest_view_policy_title' => 'How reveals work',
+    'interest_view_banner' => 'Your plan shows full name, photo, and profile link for up to :count interests per :period (pending, in priority order). After that, new interests stay blurred until the next reset or upgrade.',
+    'interest_view_zero' => 'Your current plan does not include revealed incoming interests. Upgrade to see who sent interest.',
+    'interest_view_window' => 'Current period started :start.',
+    'interest_view_unlimited_plan' => 'Your plan includes unlimited incoming interest reveals.',
+    'upgrade_for_more_reveals' => 'View plans',
+    'from_locked_title' => 'Blurred member',
+    'from_locked_body' => 'This interest is outside your current reveal slots for this period. Upgrade your plan to see their name, photo, and profile.',
+    'unlock_with_membership' => 'Upgrade to reveal',
+    'locked_badge' => 'Locked',
+    'notification_blurred_sender' => 'Someone sent you an interest. Open Received interests to manage your plan reveals.',
+    'profile_open_locked_use_inbox' => 'This profile is not revealed under your current plan. Open Received interests — or upgrade to see full details.',
+    'period_weekly' => 'week',
+    'period_monthly' => 'month',
+    'period_quarterly' => 'quarter',
+];

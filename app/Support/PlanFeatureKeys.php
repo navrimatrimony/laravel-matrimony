@@ -18,6 +18,12 @@ final class PlanFeatureKeys
 
     public const INTEREST_SEND_LIMIT = 'interest_send_limit';
 
+    /** Max pending incoming interests per reset window with full reveal (name, photo, profile); -1 = unlimited. */
+    public const INTEREST_VIEW_LIMIT = 'interest_view_limit';
+
+    /** weekly | monthly | quarterly — window for {@see self::INTEREST_VIEW_LIMIT} ranking. */
+    public const INTEREST_VIEW_RESET_PERIOD = 'interest_view_reset_period';
+
     public const CHAT_SEND_LIMIT = 'chat_send_limit';
 
     public const CHAT_CAN_SEND = 'chat_can_send';
@@ -51,6 +57,8 @@ final class PlanFeatureKeys
         return [
             self::PROFILE_VIEW_LIMIT,
             self::INTEREST_SEND_LIMIT,
+            self::INTEREST_VIEW_LIMIT,
+            self::INTEREST_VIEW_RESET_PERIOD,
             self::CHAT_SEND_LIMIT,
             self::CHAT_CAN_SEND,
             self::CHAT_CAN_READ,

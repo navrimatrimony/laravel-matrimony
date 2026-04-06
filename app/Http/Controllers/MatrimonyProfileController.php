@@ -22,12 +22,13 @@ use App\Models\Taluka;
 use App\Models\User;
 use App\Services\ContactAccessService;
 use App\Services\ExtendedFieldService;
+use App\Services\FeatureUsageService;
+use App\Services\InterestSendLimitService;
 use App\Services\ProfileCompletenessService;
 use App\Services\ProfileFieldConfigurationService;
 use App\Services\ProfilePhotoAccessService;
 use App\Services\ProfileRotationService;
 use App\Services\ProfileShowReadService;
-use App\Services\FeatureUsageService;
 use App\Services\ViewTrackingService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Schema;
@@ -51,6 +52,7 @@ class MatrimonyProfileController extends Controller
     public function __construct(
         protected ContactAccessService $contactAccessService,
         protected ProfilePhotoAccessService $profilePhotoAccessService,
+        protected InterestSendLimitService $interestSendLimitService,
     ) {}
 
     /**
@@ -861,6 +863,20 @@ class MatrimonyProfileController extends Controller
         // 🔒 GUARD: Phase-4 Day-10 — Women-First Safety visibility policy
         if (! $isOwnProfile && ! \App\Services\ProfileVisibilityPolicyService::canViewProfile($profile, $user)) {
             abort(404, __('common.profile_not_found'));
+        }
+
+        // Plan interest-view limit: block direct open when pending incoming interest is outside reveal slots
+        if (! $isOwnProfile) {
+            $incomingPending = Interest::query()
+                ->where('sender_profile_id', $profile->id)
+                ->where('receiver_profile_id', $user->matrimonyProfile->id)
+                ->where('status', 'pending')
+                ->first();
+            if ($incomingPending && ! $this->interestSendLimitService->isIncomingInterestUnlocked($user, $incomingPending)) {
+                return redirect()
+                    ->route('interests.received')
+                    ->with('info', __('interests.profile_open_locked_use_inbox'));
+            }
         }
 
         $interestAlreadySent = false;

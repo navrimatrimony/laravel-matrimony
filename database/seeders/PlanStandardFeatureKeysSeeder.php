@@ -22,6 +22,8 @@ class PlanStandardFeatureKeysSeeder extends Seeder
             PlanFeatureKeys::CHAT_CAN_SEND => '1',
             PlanFeatureKeys::CHAT_CAN_READ => '0',
             PlanFeatureKeys::INTEREST_SEND_LIMIT => '5',
+            PlanFeatureKeys::INTEREST_VIEW_LIMIT => '3',
+            PlanFeatureKeys::INTEREST_VIEW_RESET_PERIOD => 'monthly',
             PlanFeatureKeys::WHO_VIEWED_ME_DAYS => '0',
             PlanFeatureKeys::CONTACT_UNLOCK => '0',
             PlanFeatureKeys::MEDIATOR_REQUESTS_PER_MONTH => '2',
@@ -32,6 +34,7 @@ class PlanStandardFeatureKeysSeeder extends Seeder
             PlanFeatureKeys::WHO_VIEWED_ME_DAYS => '1',
             PlanFeatureKeys::CONTACT_UNLOCK => '1',
             PlanFeatureKeys::CONTACT_VIEW_LIMIT => '10',
+            PlanFeatureKeys::INTEREST_VIEW_LIMIT => '15',
         ]);
 
         $gold = array_merge($silver, [
@@ -39,6 +42,7 @@ class PlanStandardFeatureKeysSeeder extends Seeder
             PlanFeatureKeys::PROFILE_BOOST_PER_WEEK => '1',
             PlanFeatureKeys::CONTACT_VIEW_LIMIT => '30',
             PlanFeatureKeys::MEDIATOR_REQUESTS_PER_MONTH => '5',
+            PlanFeatureKeys::INTEREST_VIEW_LIMIT => '40',
         ]);
 
         $platinum = array_merge($gold, [
@@ -47,6 +51,7 @@ class PlanStandardFeatureKeysSeeder extends Seeder
             PlanFeatureKeys::PRIORITY_LISTING => '1',
             PlanFeatureKeys::CONTACT_VIEW_LIMIT => '-1',
             PlanFeatureKeys::MEDIATOR_REQUESTS_PER_MONTH => '15',
+            PlanFeatureKeys::INTEREST_VIEW_LIMIT => '-1',
         ]);
 
         $bySlug = [

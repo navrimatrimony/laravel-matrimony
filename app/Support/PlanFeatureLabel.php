@@ -15,6 +15,8 @@ final class PlanFeatureLabel
         return match ($key) {
             SubscriptionService::FEATURE_CHAT_SEND_LIMIT => 'Messages/day',
             PlanFeatureKeys::INTEREST_SEND_LIMIT => 'Interests/day',
+            PlanFeatureKeys::INTEREST_VIEW_LIMIT => __('subscriptions.pricing_feature_interest_view_limit'),
+            PlanFeatureKeys::INTEREST_VIEW_RESET_PERIOD => __('subscriptions.pricing_feature_interest_view_reset'),
             SubscriptionService::FEATURE_DAILY_PROFILE_VIEW_LIMIT => __('subscriptions.feature_daily_profile_views'),
             PlanFeatureKeys::CONTACT_VIEW_LIMIT => 'Contact views',
             SubscriptionService::FEATURE_CHAT_IMAGE_MESSAGES => __('subscriptions.feature_chat_images'),
@@ -58,6 +60,15 @@ final class PlanFeatureLabel
 
         if ($key === 'interest_send_limit') {
             return $value == '9999' ? 'Unlimited interests' : $value.'/day';
+        }
+
+        if ($key === PlanFeatureKeys::INTEREST_VIEW_RESET_PERIOD) {
+            return match (strtolower(trim($value))) {
+                'weekly' => __('interests.period_weekly'),
+                'quarterly' => __('interests.period_quarterly'),
+                'monthly' => __('interests.period_monthly'),
+                default => $v,
+            };
         }
 
         return $v;

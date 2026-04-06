@@ -136,6 +136,8 @@ return [
     'pricing_feature_contact_unlock' => 'Contact unlock & reveals',
     'pricing_feature_who_viewed' => 'Who viewed your profile (window)',
     'pricing_feature_mediator' => 'Mediator / assisted requests (per month)',
+    'pricing_feature_interest_view_limit' => 'Incoming interest reveals (per reset period)',
+    'pricing_feature_interest_view_reset' => 'Incoming interest reveal reset',
     'pricing_feature_boost' => 'Profile boost (per week)',
     'pricing_feature_priority' => 'Priority listing in search',
     'pricing_no_paid_plans' => 'Paid plans are not available yet. Please check back soon.',

@@ -160,15 +160,38 @@ class InterestApiController extends Controller
 
         $myProfileId = $user->matrimonyProfile->id;
 
-        $receivedInterests = Interest::with('senderProfile')
+        $receivedInterests = Interest::with(['senderProfile.gender'])
             ->where('receiver_profile_id', $myProfileId)
             ->receivedInboxOrder()
             ->get();
 
+        $unlockById = $this->interestSendLimit->incomingInterestUnlockMap($user, $receivedInterests);
+
+        $receivedPayload = $receivedInterests->map(function (Interest $interest) use ($unlockById) {
+            $revealed = $unlockById[$interest->id] ?? true;
+            $row = $interest->only(['id', 'sender_profile_id', 'receiver_profile_id', 'status', 'priority_score', 'created_at', 'updated_at']);
+            if ($revealed && $interest->senderProfile) {
+                $row['sender_profile'] = $interest->senderProfile->toArray();
+            } elseif ($interest->senderProfile) {
+                $row['sender_profile'] = [
+                    'id' => $interest->senderProfile->id,
+                    'revealed' => false,
+                ];
+            } else {
+                $row['sender_profile'] = null;
+            }
+            $row['incoming_reveal_unlocked'] = $revealed;
+
+            return $row;
+        })->values();
+
         return response()->json([
             'success' => true,
             'data' => [
-                'received' => $receivedInterests,
+                'received' => $receivedPayload,
+                'interest_view_limit' => $this->interestSendLimit->effectiveInterestViewLimit($user),
+                'interest_view_reset_period' => $this->interestSendLimit->interestViewResetPeriodLabel($user),
+                'interest_view_window_start' => $this->interestSendLimit->interestViewWindowStart($user)->toIso8601String(),
             ],
         ]);
     }

@@ -199,7 +199,18 @@ class InterestController extends Controller
             ->receivedInboxOrder()
             ->get();
 
-        return view('interests.received', compact('receivedInterests'));
+        $unlockById = $this->interestSendLimit->incomingInterestUnlockMap($authUser, $receivedInterests);
+        $interestViewLimit = $this->interestSendLimit->effectiveInterestViewLimit($authUser);
+        $interestViewPeriod = $this->interestSendLimit->interestViewResetPeriodLabel($authUser);
+        $interestViewWindowStart = $this->interestSendLimit->interestViewWindowStart($authUser);
+
+        return view('interests.received', compact(
+            'receivedInterests',
+            'unlockById',
+            'interestViewLimit',
+            'interestViewPeriod',
+            'interestViewWindowStart',
+        ));
     }
 
     /*

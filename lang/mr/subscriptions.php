@@ -35,6 +35,8 @@ return [
     'pricing_feature_contact_unlock' => 'संपर्क अनलॉक व प्रकटीकरण',
     'pricing_feature_who_viewed' => 'तुमचे प्रोफाइल कोणी पाहिले (कालावधी)',
     'pricing_feature_mediator' => 'मध्यस्थ / सहाय्य विनंत्या (महिन्याला)',
+    'pricing_feature_interest_view_limit' => 'येणाऱ्या इच्छा उघड (रीसेट कालावधीनुसार)',
+    'pricing_feature_interest_view_reset' => 'येणाऱ्या इच्छा उघडण्याचा रीसेट',
     'pricing_feature_boost' => 'प्रोफाइल बूस्ट (आठड्याला)',
     'pricing_feature_priority' => 'शोधात प्राधान्य सूचीबद्धता',
     'pricing_no_paid_plans' => 'पेड प्लॅन अद्याप उपलब्ध नाहीत. नंतर पुन्हा तपासा.',

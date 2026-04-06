@@ -380,6 +380,7 @@ class SubscriptionService
             self::FEATURE_INTEREST_SEND_LIMIT => 5,
             self::FEATURE_DAILY_PROFILE_VIEW_LIMIT => -1,
             PlanFeatureKeys::CONTACT_VIEW_LIMIT => 0,
+            PlanFeatureKeys::INTEREST_VIEW_LIMIT => 3,
             default => 0,
         };
     }
