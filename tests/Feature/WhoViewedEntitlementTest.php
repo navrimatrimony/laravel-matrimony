@@ -32,7 +32,36 @@ class WhoViewedEntitlementTest extends TestCase
             ->assertJson([
                 'locked' => true,
                 'message' => __('who_viewed.locked_json_message'),
-            ]);
+            ])
+            ->assertJsonPath('teaser_unique_count', 0);
+    }
+
+    public function test_who_viewed_json_locked_includes_teaser_count_when_views_exist(): void
+    {
+        $this->seed(SubscriptionPlansSeeder::class);
+        $this->seed(PlanStandardFeatureKeysSeeder::class);
+
+        $owner = User::factory()->create();
+        $viewerUser = User::factory()->create();
+        $ownerProfile = MatrimonyProfile::factory()->for($owner)->create([
+            'lifecycle_state' => 'active',
+            'is_suspended' => false,
+        ]);
+        $viewerProfile = MatrimonyProfile::factory()->for($viewerUser)->create([
+            'lifecycle_state' => 'active',
+            'is_suspended' => false,
+        ]);
+
+        ProfileView::query()->create([
+            'viewer_profile_id' => $viewerProfile->id,
+            'viewed_profile_id' => $ownerProfile->id,
+        ]);
+
+        $this->actingAs($owner)
+            ->getJson(route('who-viewed.index'))
+            ->assertOk()
+            ->assertJsonPath('locked', true)
+            ->assertJsonPath('teaser_unique_count', 1);
     }
 
     public function test_who_viewed_filters_by_entitlement_window_days(): void

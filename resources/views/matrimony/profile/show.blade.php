@@ -1,7 +1,80 @@
 @extends('layouts.app')
 
 @section('content')
+@php
+    $featureUsage = app(\App\Services\FeatureUsageService::class);
+    $userId = auth()->id();
+
+    $chatUsed = 0;
+    $contactUsed = 0;
+    $chatLimit = 0;
+    $contactLimit = 0;
+    $chatLeft = null;
+    $contactLeft = null;
+
+    if (auth()->check()) {
+        $authUser = auth()->user();
+        $usageSvc = app(\App\Services\UserFeatureUsageService::class);
+        $subSvc = app(\App\Services\SubscriptionService::class);
+
+        $chatUsed = $usageSvc->getUsage(
+            (int) $authUser->id,
+            \App\Services\FeatureUsageService::FEATURE_CHAT_SEND_LIMIT,
+            \App\Models\UserFeatureUsage::PERIOD_DAILY,
+        );
+        $contactUsed = $usageSvc->getUsage(
+            (int) $authUser->id,
+            \App\Support\UserFeatureUsageKeys::CONTACT_VIEW_LIMIT,
+            \App\Models\UserFeatureUsage::PERIOD_MONTHLY,
+        );
+
+        $chatLimit = $subSvc->getFeatureLimit($authUser, \App\Services\SubscriptionService::FEATURE_CHAT_SEND_LIMIT);
+        $contactLimit = $subSvc->getFeatureLimit($authUser, \App\Support\PlanFeatureKeys::CONTACT_VIEW_LIMIT);
+
+        if ($chatLimit === -1) {
+            $chatLeft = null;
+        } elseif ($chatLimit === 0) {
+            $chatLeft = 0;
+        } else {
+            $chatLeft = max(0, $chatLimit - $chatUsed);
+        }
+
+        if ($contactLimit === -1) {
+            $contactLeft = null;
+        } elseif ($contactLimit === 0) {
+            $contactLeft = 0;
+        } else {
+            $contactLeft = max(0, $contactLimit - $contactUsed);
+        }
+    }
+@endphp
 <div class="max-w-6xl mx-auto py-8 px-4 sm:px-6" x-data="{ adminEditMode: @js(auth()->check() && auth()->user()->is_admin === true && request()->has('admin_edit')), openRequestModal: false, showContactUpgradeModal: false }">
+    @if ($userId !== null && ! $featureUsage->canUse((int) $userId, 'who_viewed_me_access') && ($isOwnProfile ?? false))
+        @php
+            $whoViewedTeaserN = \App\Services\ViewTrackingService::countEligibleDistinctViewersForTeaser((int) $profile->id);
+            $whoViewedHeadlineN = $whoViewedTeaserN > 0 ? $whoViewedTeaserN : 5;
+        @endphp
+        <div class="mb-4 rounded-lg bg-gradient-to-r from-pink-500 to-rose-600 p-5 text-center text-white shadow-lg ring-1 ring-white/10">
+            <h3 class="text-lg font-semibold">
+                👀 {{ $whoViewedHeadlineN }} {{ $whoViewedHeadlineN === 1 ? 'person' : 'people' }} viewed your profile
+            </h3>
+
+            <div class="mt-3 flex justify-center gap-2">
+                <div class="h-10 w-10 rounded-full bg-white/30 blur-sm" aria-hidden="true"></div>
+                <div class="h-10 w-10 rounded-full bg-white/30 blur-sm" aria-hidden="true"></div>
+                <div class="h-10 w-10 rounded-full bg-white/30 blur-sm" aria-hidden="true"></div>
+            </div>
+
+            <p class="mt-3 text-sm opacity-90">
+                Unlock to see who is interested in you
+            </p>
+
+            <a href="{{ route('plans.index') }}"
+               class="mt-4 inline-block rounded-full bg-white px-5 py-2 font-semibold text-pink-600 shadow">
+                Upgrade Now
+            </a>
+        </div>
+    @endif
     <h1 class="text-lg font-semibold tracking-tight text-gray-900 dark:text-gray-100 mb-4 lg:mb-5 lg:text-xl xl:text-2xl">Matrimony Profile</h1>
     @if (($isOwnProfile ?? false) && auth()->check() && auth()->user()->is_admin !== true)
         <div class="mb-6">
@@ -20,6 +93,16 @@
     @endif
     @if (session('error'))
         <div class="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-900 dark:border-red-800 dark:bg-red-950/40 dark:text-red-100">{{ session('error') }}</div>
+    @endif
+
+    @if (($isOwnProfile ?? false) && auth()->check() && $userId !== null && $featureUsage->canUse((int) $userId, 'who_viewed_me_access'))
+        <div class="mb-4 rounded-lg border border-stone-200/90 bg-white p-4 text-center shadow-sm dark:border-gray-700 dark:bg-gray-800/60">
+            <a href="{{ route('who-viewed.index') }}"
+               class="inline-flex items-center justify-center gap-2 text-sm font-semibold text-indigo-600 hover:text-indigo-800 dark:text-indigo-400 dark:hover:text-indigo-300">
+                {{ __('nav.who_viewed_me') }}
+                <span aria-hidden="true">→</span>
+            </a>
+        </div>
     @endif
 
 @if (($profile->lifecycle_state ?? null) === 'conflict_pending' && ($hasBlockingConflicts ?? false))
@@ -282,6 +365,9 @@
             $galleryPhotos = $galleryPhotos ?? collect();
             $photoAlbumPresentation = $photoAlbumPresentation ?? ['slots' => [], 'message_key' => null, 'tier' => 'own_profile'];
         @endphp
+		
+		
+		
         <div class="group lg:overflow-hidden lg:rounded-xl lg:ring-1 lg:ring-stone-200/55 lg:transition-[box-shadow,ring-color] lg:duration-300 lg:ease-out dark:lg:ring-gray-600/55 lg:hover:shadow-[0_10px_36px_-14px_rgba(28,25,23,0.14)] lg:hover:ring-stone-300/65 dark:lg:hover:ring-gray-500/60">
         <x-profile.show.hero-card
             class="w-full !shadow-none !ring-0 lg:!rounded-xl"
@@ -473,6 +559,9 @@
             <div class="min-w-0">
             @if ($heroDisplayName !== '')
                 <h2 class="mb-4 text-2xl font-extrabold uppercase leading-tight tracking-tight text-stone-900 dark:text-stone-50 sm:text-3xl break-words [word-break:break-word]">{{ $heroDisplayName }}</h2>
+                @if (! ($isOwnProfile ?? false))
+                    <p class="mt-1 text-xs text-green-600 dark:text-green-400">🟢 Active now • Viewed recently</p>
+                @endif
             @endif
             <div class="space-y-3 rounded-xl bg-stone-50/50 px-3 py-3.5 ring-1 ring-stone-100/80 dark:bg-stone-900/25 dark:ring-stone-800/60 sm:px-3.5 @if (!($isOwnProfile ?? false)) lg:grid lg:grid-cols-2 lg:gap-x-8 lg:gap-y-2 lg:space-y-0 @endif">
                 @if ($scanRow1Text !== '')
@@ -628,15 +717,27 @@
                     @endif
                 @endif
 
-                <form method="POST" action="{{ route('chat.start', ['matrimony_profile' => $profile->id]) }}" class="w-full">
-                    @csrf
-                    <button type="submit" class="inline-flex w-full items-center justify-center gap-2 rounded-2xl border border-indigo-200/90 bg-white px-3 py-2.5 text-sm font-semibold text-indigo-800 shadow-sm ring-1 ring-indigo-100/70 transition hover:bg-indigo-50/90 dark:border-indigo-800/60 dark:bg-gray-800 dark:text-indigo-200 dark:ring-indigo-900/35 dark:hover:bg-indigo-950/25">
-                        <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-indigo-100 text-indigo-700 dark:bg-indigo-950/50 dark:text-indigo-300" aria-hidden="true">
-                            <svg class="h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 12.76c0 1.6 1.123 2.95 2.63 3.217.42.074.797.31 1.046.66l.85 1.19c.34.477.99.596 1.48.272l2.155-1.43c.33-.219.73-.29 1.11-.2 1.04.246 2.17.246 3.21 0 .38-.09.78-.02 1.11.2l2.155 1.43c.49.324 1.14.205 1.48-.272l.85-1.19c.249-.35.626-.586 1.046-.66 1.507-.267 2.63-1.618 2.63-3.217V6.99c0-1.86-1.51-3.37-3.37-3.37H5.62c-1.86 0-3.37 1.51-3.37 3.37v5.77Z"/></svg>
-                        </span>
-                        {{ __('Chat') }}
-                    </button>
-                </form>
+                @if ($userId === null || ! $featureUsage->canUse((int) $userId, 'chat_send_limit'))
+                    <div class="mt-1 w-full text-center">
+                        <p class="text-sm text-gray-500 dark:text-gray-400">
+                            You’ve reached your chat limit
+                        </p>
+                        <a href="{{ route('plans.index') }}"
+                           class="mt-2 inline-block rounded bg-red-500 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-red-600">
+                            Upgrade to continue chatting
+                        </a>
+                    </div>
+                @else
+                    <form method="POST" action="{{ route('chat.start', ['matrimony_profile' => $profile->id]) }}" class="w-full">
+                        @csrf
+                        <button type="submit" class="inline-flex w-full items-center justify-center gap-2 rounded-2xl border border-indigo-200/90 bg-white px-3 py-2.5 text-sm font-semibold text-indigo-800 shadow-sm ring-1 ring-indigo-100/70 transition hover:bg-indigo-50/90 dark:border-indigo-800/60 dark:bg-gray-800 dark:text-indigo-200 dark:ring-indigo-900/35 dark:hover:bg-indigo-950/25">
+                            <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-indigo-100 text-indigo-700 dark:bg-indigo-950/50 dark:text-indigo-300" aria-hidden="true">
+                                <svg class="h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 12.76c0 1.6 1.123 2.95 2.63 3.217.42.074.797.31 1.046.66l.85 1.19c.34.477.99.596 1.48.272l2.155-1.43c.33-.219.73-.29 1.11-.2 1.04.246 2.17.246 3.21 0 .38-.09.78-.02 1.11.2l2.155 1.43c.49.324 1.14.205 1.48-.272l.85-1.19c.249-.35.626-.586 1.046-.66 1.507-.267 2.63-1.618 2.63-3.217V6.99c0-1.86-1.51-3.37-3.37-3.37H5.62c-1.86 0-3.37 1.51-3.37 3.37v5.77Z"/></svg>
+                            </span>
+                            {{ __('Chat') }}
+                        </button>
+                    </form>
+                @endif
 
                 @isset($inShortlist)
                     @if ($inShortlist)
@@ -749,7 +850,15 @@
                             <p class="text-sm"><span class="text-gray-500">Email:</span> {{ $contactGrantReveal['email'] }}</p>
                         @endif
                         @if (! empty($contactGrantReveal['phone']))
-                            <p class="text-sm"><span class="text-gray-500">Phone:</span> {{ $contactGrantReveal['phone'] }}</p>
+                            @if ($userId !== null && $featureUsage->canUse((int) $userId, 'contact_view_limit'))
+                                <p class="text-sm"><span class="text-gray-500">Phone:</span> {{ $contactGrantReveal['phone'] }}</p>
+                            @else
+                                @php
+                                    $grantPhoneDigits = preg_replace('/\D/', '', (string) $contactGrantReveal['phone']);
+                                    $maskedGrantPhone = substr($grantPhoneDigits !== '' ? $grantPhoneDigits : '9876543210', 0, 4) . 'XXXX';
+                                @endphp
+                                <p class="text-sm"><span class="text-gray-500">Phone:</span> {{ $maskedGrantPhone }} 🔒</p>
+                            @endif
                         @endif
                         @if (! empty($contactGrantReveal['whatsapp']))
                             <p class="text-sm"><span class="text-gray-500">WhatsApp:</span> {{ $contactGrantReveal['whatsapp'] }}</p>
@@ -1629,6 +1738,38 @@
 </div>
 @endif
 
+@if (auth()->check())
+    <div class="mb-4 rounded-lg border border-gray-200 bg-gray-50 p-3 dark:border-gray-600 dark:bg-gray-800/50">
+        <div class="flex flex-wrap justify-between gap-3 text-sm">
+            <div>
+                💬 {{ __('Chat') }}:
+                <span class="{{ ($chatLeft !== null && $chatLeft <= 3) ? 'font-semibold text-red-600 dark:text-red-400' : 'text-gray-700 dark:text-gray-300' }}">
+                    @if ($chatLimit === -1)
+                        {{ $chatUsed }} / ∞
+                    @else
+                        {{ $chatUsed }} / {{ $chatLimit }}
+                    @endif
+                </span>
+            </div>
+            <div>
+                📞 Contacts:
+                <span class="{{ ($contactLeft !== null && $contactLeft <= 2) ? 'font-semibold text-red-600 dark:text-red-400' : 'text-gray-700 dark:text-gray-300' }}">
+                    @if ($contactLimit === -1)
+                        {{ $contactUsed }} / ∞
+                    @else
+                        {{ $contactUsed }} / {{ $contactLimit }}
+                    @endif
+                </span>
+            </div>
+        </div>
+        @if (($chatLeft !== null && $chatLeft <= 3) || ($contactLeft !== null && $contactLeft <= 2))
+            <div class="mt-1 text-xs text-red-500 dark:text-red-400">
+                ⚠️ Your limits are almost over. Upgrade to continue.
+            </div>
+        @endif
+    </div>
+@endif
+
 <div class="relative overflow-hidden rounded-2xl border border-stone-200/75 bg-gradient-to-br from-white via-stone-50/80 to-emerald-50/20 shadow-[0_14px_44px_-20px_rgba(5,150,105,0.1)] ring-1 ring-stone-100/70 dark:border-stone-700/80 dark:from-gray-900 dark:via-stone-900/90 dark:to-emerald-950/15">
     <section class="relative px-5 py-6 sm:px-7 sm:py-7" aria-labelledby="profile-contact-heading">
         <header class="mb-4 flex flex-wrap items-center gap-3">
@@ -1641,65 +1782,91 @@
             </div>
         </header>
         <div class="rounded-xl border border-stone-100/95 bg-white/90 px-4 py-3.5 shadow-sm dark:border-gray-700/70 dark:bg-gray-800/55">
-            <p class="text-base font-semibold tracking-tight text-stone-900 dark:text-stone-100">
-                @if ($isOwnProfile)
+            @if ($isOwnProfile)
+                <div class="text-base font-semibold tracking-tight text-stone-900 dark:text-stone-100">
                     @if ($primaryContactPhone)
                         {{ $primaryContactPhone }}
                     @else
                         {{ __('No contact number added.') }}
                     @endif
-                @elseif ($contactAccess['blocked'] ?? false)
-                    <button type="button" class="group w-full rounded-xl text-left transition hover:bg-stone-50/90 dark:hover:bg-stone-800/30 -m-1 p-1" @click="$root.showContactUpgradeModal = true">
-                        <span class="block text-amber-800 dark:text-amber-200">{{ __('contact_access.unlock_required') }}</span>
-                        <span class="mt-2 block text-sm font-bold text-indigo-600 dark:text-indigo-400 group-hover:text-indigo-700 dark:group-hover:text-indigo-300">{{ __('subscriptions.pricing_cta_upgrade') }} →</span>
-                    </button>
-                @elseif (($contactAccess['show_no_one_copy'] ?? false) && ! ($canViewContact ?? false))
-                    <span class="text-stone-700 dark:text-stone-200">{{ __('contact_access.owner_restricted_contact') }}</span>
-                @elseif ($canViewContact)
-                    {{ $contactAccess['paid_contact_phone'] ?? $primaryContactPhone }}
-                @elseif ($contactAccess['show_paid_reveal_button'] ?? false)
-                    <span class="block text-sm font-medium text-stone-600 dark:text-stone-400">{{ __('contact_access.reveal_uses_credit') }}</span>
-                    @if (($contactAccess['contact_view_remaining'] ?? null) !== null)
-                        <p class="mt-1 text-xs text-stone-500 dark:text-stone-400">{{ __('contact_access.credits_remaining', ['count' => $contactAccess['contact_view_remaining']]) }}</p>
-                    @else
-                        <p class="mt-1 text-xs text-stone-500 dark:text-stone-400">{{ __('contact_access.credits_unlimited') }}</p>
-                    @endif
-                    <form method="POST" action="{{ route('matrimony.profile.contact-reveal', $profile) }}" class="mt-3">
+                </div>
+            @else
+                @php
+                    $contactSectionUserId = auth()->id();
+                    $contactSectionFeatureUsage = app(\App\Services\FeatureUsageService::class);
+                    $contactMaskedDigits = preg_replace('/\D/', '', (string) ($profile->primary_contact_number ?? $profile->phone ?? ''));
+                    $masked = strlen($contactMaskedDigits) >= 4
+                        ? substr($contactMaskedDigits, 0, 4) . 'XXXX'
+                        : 'XXXX';
+                @endphp
+
+                {{-- CASE 1: ALREADY UNLOCKED (server-resolved number; do not use canUse after unlock) --}}
+                @if (! empty($contactAccess['paid_contact_phone']))
+                    <div class="text-center">
+                        <p class="text-xl font-bold text-stone-900 dark:text-stone-100">
+                            {{ $contactAccess['paid_contact_phone'] }}
+                        </p>
+                        <p class="text-green-600 text-sm mt-2 dark:text-green-400">
+                            ✅ {{ __('contact_access.contact_unlocked_banner') }}
+                        </p>
+                    </div>
+                {{-- CASE 2: USER CAN UNLOCK (has credits; POST still enforces interest / visibility / matchmaking rules) --}}
+                @elseif ($contactSectionUserId && $contactSectionFeatureUsage->canUse((int) $contactSectionUserId, 'contact_view_limit'))
+                    <form method="POST" action="{{ route('matrimony.profile.contact-reveal', $profile) }}">
                         @csrf
-                        <button type="submit" class="inline-flex items-center justify-center rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-emerald-700">{{ __('contact_access.reveal_button') }}</button>
+                        <div class="text-center">
+                            <p class="text-xl font-bold tracking-wider text-stone-900 dark:text-stone-100">
+                                {{ $masked }} 🔒
+                            </p>
+                            <button type="submit"
+                                class="mt-3 px-5 py-2 bg-pink-500 text-white rounded-lg hover:bg-pink-600 dark:bg-pink-600 dark:hover:bg-pink-500">
+                                {{ __('contact_access.unlock_contact_button') }}
+                            </button>
+                        </div>
                     </form>
-                @elseif (!empty($interestAllowsContact) && ($contactAccess['paid_reveal_blocked_pending_matchmaking'] ?? false))
-                    <span class="block text-sm font-medium text-stone-700 dark:text-stone-200">{{ __('contact_access.reveal_blocked_matchmaking') }}</span>
-                    @if (($contactAccess['show_mediator_cta'] ?? false) && !($contactAccess['needs_upgrade_for_mediator'] ?? false))
-                        <p class="mt-2 text-xs text-stone-500 dark:text-stone-400">{{ __('contact_access.mediator_body') }}</p>
-                    @endif
-                @elseif (!empty($interestAllowsContact) && ($contactAccess['no_contact_credits_left'] ?? false))
-                    <button type="button" class="group w-full rounded-xl text-left transition hover:bg-stone-50/90 dark:hover:bg-stone-800/30 -m-1 p-1" @click="$root.showContactUpgradeModal = true">
-                        <span class="block font-semibold text-amber-800 dark:text-amber-200">{{ __('contact_access.no_credits_left') }}</span>
-                        <p class="mt-2 text-sm text-stone-600 dark:text-stone-400">{{ __('contact_access.reveal_blocked_credits') }}</p>
-                        <span class="mt-2 block text-sm font-bold text-indigo-600 dark:text-indigo-400 group-hover:text-indigo-700 dark:group-hover:text-indigo-300">{{ __('subscriptions.pricing_cta_upgrade') }} →</span>
-                    </button>
-                @elseif (!empty($interestAllowsContact) && ($contactAccess['visibility_case'] ?? '') === 'request_only')
-                    {{ __('Contact details can be requested using the Request Contact action after interest is accepted.') }}
-                @elseif (!empty($interestAllowsContact))
-                    <span class="text-amber-800 dark:text-amber-200">{{ __('subscriptions.contact_premium_required') }}</span>
-                    <a href="{{ route('plans.index') }}" class="mt-2 inline-block text-sm font-semibold text-indigo-600 hover:text-indigo-800 dark:text-indigo-400 dark:hover:text-indigo-300">{{ __('subscriptions.nav_plans') }}</a>
+                {{-- CASE 3: NO CREDITS OR GUEST --}}
                 @else
-                    {{ __('Contact details will be available after interest acceptance.') }}
+                    <div class="text-center">
+                        <p class="text-xl font-bold tracking-wider text-stone-900 dark:text-stone-100">
+                            {{ $masked }} 🔒
+                        </p>
+                        <p class="text-sm text-gray-500 mt-2 dark:text-gray-400">
+                            {{ __('contact_access.no_contact_credits_left_ui') }}
+                        </p>
+                        <a href="{{ route('plans.index') }}"
+                            class="mt-3 inline-block px-5 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 dark:bg-purple-600 dark:hover:bg-purple-500">
+                            {{ __('contact_access.upgrade_now') }}
+                        </a>
+                    </div>
                 @endif
-            </p>
+            @endif
         </div>
-        @if (!$isOwnProfile && !$canViewContact && !($contactAccess['blocked'] ?? false) && !($contactAccess['show_no_one_copy'] ?? false))
-            <div class="mt-3 rounded-lg border border-stone-200/90 bg-stone-50/90 px-3 py-2.5 text-xs leading-relaxed text-stone-600 dark:border-gray-600 dark:bg-gray-800/50 dark:text-stone-400">
-                @if (!empty($interestAllowsContact))
-                    <strong>{{ __('subscriptions.nav_plans') }}:</strong> {{ __('subscriptions.contact_premium_required') }}
-                @else
-                    <strong>{{ __('Contact policy:') }}</strong> {{ __('Contact number is shared only after the other person accepts your interest. We do not reveal contact without mutual interest.') }}
-                @endif
-            </div>
-        @endif
     </section>
 </div>
+
+@if (! $isOwnProfile && auth()->check())
+    <div class="mt-4 rounded-xl border border-stone-200/90 bg-white/90 px-4 py-4 shadow-sm dark:border-gray-700 dark:bg-gray-800/60">
+        <p class="text-sm font-medium text-stone-800 dark:text-stone-100">{{ __('profile.monetization_send_interest_or_message') }}</p>
+        @if ($userId === null || ! $featureUsage->canUse((int) $userId, 'chat_send_limit'))
+            <div class="mt-3 text-center">
+                <p class="text-sm text-gray-500 dark:text-gray-400">
+                    You’ve reached your chat limit
+                </p>
+                <a href="{{ route('plans.index') }}"
+                   class="mt-2 inline-block rounded bg-red-500 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-red-600">
+                    Upgrade to continue chatting
+                </a>
+            </div>
+        @else
+            <form method="POST" action="{{ route('chat.start', ['matrimony_profile' => $profile->id]) }}" class="mt-3 inline-block">
+                @csrf
+                <button type="submit" class="inline-flex items-center rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 dark:focus:ring-offset-gray-900">
+                    {{ __('profile.monetization_send_message') }}
+                </button>
+            </form>
+        @endif
+    </div>
+@endif
 
 @if(!empty($extendedValues))
     @php

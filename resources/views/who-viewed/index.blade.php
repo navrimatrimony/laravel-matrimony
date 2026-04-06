@@ -5,7 +5,32 @@
     <h1 class="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-4">{{ __('who_viewed.title') }}</h1>
 
     @if ($whoViewedLocked ?? false)
-        <p class="text-gray-600 dark:text-gray-400 mb-6">{{ __('who_viewed.locked_html') }}</p>
+        @if (($teaserUniqueCount ?? 0) > 0)
+            <p class="text-gray-700 dark:text-gray-300 mb-3">
+                <span class="font-semibold">{{ $teaserUniqueCount }}</span>
+                {{ trans_choice('who_viewed.teaser_headline', $teaserUniqueCount, ['count' => $teaserUniqueCount]) }}
+            </p>
+            <div class="relative mb-6 overflow-hidden rounded-xl border border-gray-200 bg-gray-50/90 dark:border-gray-700 dark:bg-gray-800/50">
+                <div class="pointer-events-none select-none space-y-3 p-4 blur-md opacity-80" aria-hidden="true">
+                    @for ($i = 0; $i < min(4, max(1, $teaserUniqueCount)); $i++)
+                        <div class="flex items-center gap-3">
+                            <div class="h-14 w-14 shrink-0 rounded-full bg-gray-300 dark:bg-gray-600"></div>
+                            <div class="min-w-0 flex-1 space-y-2">
+                                <div class="h-4 w-40 rounded bg-gray-300 dark:bg-gray-600"></div>
+                                <div class="h-3 w-28 rounded bg-gray-200 dark:bg-gray-700"></div>
+                            </div>
+                        </div>
+                    @endfor
+                </div>
+                <div class="pointer-events-none absolute inset-0 bg-gradient-to-b from-white/30 via-white/70 to-white dark:from-gray-900/20 dark:via-gray-900/75 dark:to-gray-900"></div>
+            </div>
+            <a href="{{ $plansUrl ?? route('plans.index') }}" class="inline-flex items-center justify-center rounded-lg bg-indigo-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 dark:focus:ring-offset-gray-900">
+                {{ __('who_viewed.upgrade_cta') }}
+            </a>
+            <p class="mt-5 text-sm text-gray-600 dark:text-gray-400">{{ __('who_viewed.locked_html') }}</p>
+        @else
+            <p class="text-gray-600 dark:text-gray-400 mb-6">{{ __('who_viewed.locked_html') }}</p>
+        @endif
     @elseif ($uniqueCount === 0)
         <p class="text-gray-600 dark:text-gray-400 mb-6">
             @if (($windowDays ?? null) === null)

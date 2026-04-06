@@ -10,7 +10,7 @@ use Symfony\Component\HttpKernel\Exception\HttpException;
 
 /**
  * Daily interest-send quota: {@see EntitlementService::getValue}(..., {@see PlanFeatureKeys::INTEREST_SEND_LIMIT})
- * vs {@see UserFeatureUsageService} bucket {@see UserFeatureUsageKeys::INTEREST_SEND} ({@see UserFeatureUsage::PERIOD_DAILY}).
+ * vs {@see UserFeatureUsageService} bucket {@see UserFeatureUsageKeys::INTEREST_SEND_LIMIT} ({@see UserFeatureUsage::PERIOD_DAILY}).
  */
 class InterestSendLimitService
 {
@@ -39,7 +39,7 @@ class InterestSendLimitService
 
         $used = $this->usage->getUsage(
             (int) $user->id,
-            UserFeatureUsageKeys::INTEREST_SEND,
+            UserFeatureUsageKeys::INTEREST_SEND_LIMIT,
             UserFeatureUsage::PERIOD_DAILY,
         );
 
@@ -59,7 +59,7 @@ class InterestSendLimitService
 
         $this->usage->incrementUsage(
             (int) $user->id,
-            UserFeatureUsageKeys::INTEREST_SEND,
+            UserFeatureUsageKeys::INTEREST_SEND_LIMIT,
             1,
             UserFeatureUsage::PERIOD_DAILY,
         );
@@ -92,7 +92,7 @@ class InterestSendLimitService
             return $this->parseLimitString((string) $raw);
         }
 
-        return $this->subscriptions->getFeatureLimit($user, SubscriptionService::FEATURE_MONTHLY_INTEREST_SEND_LIMIT);
+        return $this->subscriptions->getFeatureLimit($user, PlanFeatureKeys::INTEREST_SEND_LIMIT);
     }
 
     private function parseLimitString(string $raw): int

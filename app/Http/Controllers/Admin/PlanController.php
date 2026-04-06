@@ -7,6 +7,7 @@ use App\Models\Plan;
 use App\Models\PlanFeature;
 use App\Models\PlanPrice;
 use App\Models\PlanTerm;
+use App\Models\Subscription;
 use App\Services\SubscriptionService;
 use App\Support\PlanFeatureKeys;
 use Illuminate\Http\Request;
@@ -62,25 +63,10 @@ class PlanController extends Controller
     public function edit(Plan $plan)
     {
         $plan->load(['features', 'terms']);
-        $defaultFeatures = $this->defaultFeatureTemplate();
-        $merged = [];
-        $byKey = $plan->features->keyBy('key');
-        foreach ($defaultFeatures as $row) {
-            $k = $row['key'];
-            $merged[] = [
-                'key' => $k,
-                'value' => $byKey->has($k) ? (string) $byKey->get($k)->value : '',
-            ];
-        }
-        foreach ($plan->features as $f) {
-            if (! collect($merged)->contains(fn ($r) => $r['key'] === $f->key)) {
-                $merged[] = ['key' => $f->key, 'value' => (string) $f->value];
-            }
-        }
 
         return view('admin.plans.form', [
             'plan' => $plan,
-            'defaultFeatures' => $merged,
+            'defaultFeatures' => $this->defaultFeatureTemplate(),
             'isEdit' => true,
         ]);
     }
@@ -88,13 +74,14 @@ class PlanController extends Controller
     public function update(Request $request, Plan $plan)
     {
         $data = $this->validatedPlanData($request, $plan->id);
-        $features = $this->normalizeFeatureRows($request->input('features', []));
 
         if (strtolower((string) $data['slug']) !== 'free') {
             $request->validate($this->termValidationRules());
         }
 
         $plan->update($data);
+
+        $features = $this->normalizeFeatureRows($request->input('features', []));
         $this->syncFeatures($plan, $features);
 
         if (strtolower((string) $plan->slug) !== 'free') {
@@ -106,6 +93,42 @@ class PlanController extends Controller
         return redirect()
             ->route('admin.plans.edit', $plan)
             ->with('success', __('subscriptions.plan_saved'));
+    }
+
+    public function destroy(Plan $plan)
+    {
+        if (strtolower((string) $plan->slug) === 'free') {
+            return redirect()
+                ->route('admin.plans.index')
+                ->with('error', __('admin_commerce.plan_delete_free_forbidden'));
+        }
+
+        if (Subscription::query()->where('plan_id', $plan->id)->exists()) {
+            return redirect()
+                ->route('admin.plans.index')
+                ->with('error', __('admin_commerce.plan_delete_has_subscriptions'));
+        }
+
+        $plan->delete();
+
+        return redirect()
+            ->route('admin.plans.index')
+            ->with('success', __('admin_commerce.plan_deleted'));
+    }
+
+    public function toggle(Request $request, Plan $plan)
+    {
+        $request->validate([
+            'field' => ['required', 'string', Rule::in(['is_active', 'highlight'])],
+            'value' => ['required', 'boolean'],
+        ]);
+
+        $field = (string) $request->input('field');
+        $plan->update([$field => $request->boolean('value')]);
+
+        return redirect()
+            ->route('admin.plans.index')
+            ->with('success', __('admin_commerce.plan_toggle_saved'));
     }
 
     /**
@@ -175,8 +198,8 @@ class PlanController extends Controller
             'is_active' => ['sometimes', 'boolean'],
             'highlight' => ['sometimes', 'boolean'],
             'features' => ['nullable', 'array'],
-            'features.*.key' => ['nullable', 'string', 'max:64'],
-            'features.*.value' => ['nullable', 'string', 'max:255'],
+            'features.*.key' => ['nullable', 'string', 'max:120'],
+            'features.*.value' => ['nullable', 'string', 'max:65535'],
         ]);
 
         return [
@@ -227,14 +250,26 @@ class PlanController extends Controller
      */
     private function syncFeatures(Plan $plan, array $rows): void
     {
-        PlanFeature::query()->where('plan_id', $plan->id)->delete();
+        $keys = [];
         foreach ($rows as $row) {
-            PlanFeature::query()->create([
-                'plan_id' => $plan->id,
-                'key' => $row['key'],
-                'value' => $row['value'],
-            ]);
+            $keys[] = $row['key'];
+            PlanFeature::query()->updateOrCreate(
+                [
+                    'plan_id' => $plan->id,
+                    'key' => $row['key'],
+                ],
+                [
+                    'value' => $row['value'],
+                ]
+            );
         }
+        $keys = array_values(array_unique($keys));
+        if ($keys === []) {
+            PlanFeature::query()->where('plan_id', $plan->id)->delete();
+
+            return;
+        }
+        PlanFeature::query()->where('plan_id', $plan->id)->whereNotIn('key', $keys)->delete();
     }
 
     /**
@@ -242,15 +277,16 @@ class PlanController extends Controller
      */
     private function defaultFeatureTemplate(): array
     {
-        $rows = [
-            ['key' => SubscriptionService::FEATURE_DAILY_CHAT_SEND_LIMIT, 'value' => ''],
-            ['key' => SubscriptionService::FEATURE_MONTHLY_INTEREST_SEND_LIMIT, 'value' => ''],
-            ['key' => SubscriptionService::FEATURE_DAILY_PROFILE_VIEW_LIMIT, 'value' => ''],
-            ['key' => SubscriptionService::FEATURE_CONTACT_NUMBER_ACCESS, 'value' => ''],
-            ['key' => SubscriptionService::FEATURE_CHAT_IMAGE_MESSAGES, 'value' => ''],
+        $ordered = [
+            PlanFeatureKeys::CHAT_SEND_LIMIT,
+            PlanFeatureKeys::INTEREST_SEND_LIMIT,
+            SubscriptionService::FEATURE_DAILY_PROFILE_VIEW_LIMIT,
+            PlanFeatureKeys::CONTACT_VIEW_LIMIT,
+            SubscriptionService::FEATURE_CHAT_IMAGE_MESSAGES,
         ];
-
-        foreach (PlanFeatureKeys::all() as $key) {
+        $rest = array_values(array_diff(PlanFeatureKeys::all(), $ordered));
+        $rows = [];
+        foreach (array_merge($ordered, $rest) as $key) {
             $rows[] = ['key' => $key, 'value' => ''];
         }
 

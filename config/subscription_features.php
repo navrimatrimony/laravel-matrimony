@@ -6,9 +6,9 @@
  */
 return [
     'rows' => [
-        ['key' => 'daily_chat_send_limit', 'type' => 'limit', 'label_key' => 'subscriptions.feature_daily_chat'],
-        ['key' => 'monthly_interest_send_limit', 'type' => 'limit', 'label_key' => 'subscriptions.feature_monthly_interests'],
-        ['key' => 'contact_number_access', 'type' => 'truthy', 'label_key' => 'subscriptions.feature_contact'],
+        ['key' => 'chat_send_limit', 'type' => 'limit', 'label_key' => 'subscriptions.feature_daily_chat'],
+        ['key' => 'interest_send_limit', 'type' => 'limit', 'label_key' => 'subscriptions.pricing_feature_interest_daily'],
+        ['key' => 'contact_view_limit', 'type' => 'limit', 'label_key' => 'subscriptions.feature_contact'],
         ['key' => 'daily_profile_view_limit', 'type' => 'limit', 'label_key' => 'subscriptions.feature_daily_profile_views'],
         ['key' => 'chat_image_messages', 'type' => 'truthy', 'label_key' => 'subscriptions.feature_chat_images'],
         ['key' => '_ai_match_boost', 'type' => 'ai_boost', 'label_key' => 'subscriptions.row_ai_boost'],

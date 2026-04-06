@@ -6,9 +6,10 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 /**
- * Per-user feature consumption buckets (e.g. {@see \App\Support\UserFeatureUsageKeys::CONTACT_VIEW}, {@see \App\Support\UserFeatureUsageKeys::MEDIATOR_REQUEST}).
+ * Per-user feature consumption buckets (contact credits, mediator limits, interest sends, etc.).
  *
- * Table name is `user_feature_usage` (singular, existing SSOT). `period_start` / `period_end` bound the bucket (monthly: first–last day of month).
+ * Table `user_feature_usages`. Bucket identity is
+ * (user_id, feature_key, period_start, period_end); {@see UserFeatureUsageService} derives dates from {@see PERIOD_MONTHLY} / {@see PERIOD_DAILY}.
  */
 class UserFeatureUsage extends Model
 {
@@ -16,13 +17,12 @@ class UserFeatureUsage extends Model
 
     public const PERIOD_DAILY = 'daily';
 
-    protected $table = 'user_feature_usage';
+    protected $table = 'user_feature_usages';
 
     protected $fillable = [
         'user_id',
         'feature_key',
         'used_count',
-        'period',
         'period_start',
         'period_end',
     ];

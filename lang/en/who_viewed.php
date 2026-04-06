@@ -5,6 +5,8 @@
  */
 return [
     'title' => 'Who viewed my profile',
+    'teaser_headline' => '{1} person has viewed your profile.|[2,*] :count people have viewed your profile.',
+    'upgrade_cta' => 'Upgrade to see who viewed you',
     'locked_json_message' => 'Upgrade to see who viewed your profile',
     'locked_html' => 'Upgrade your plan to see who viewed your profile.',
     'none_in_window' => 'No one has viewed your profile in the last :days days.',

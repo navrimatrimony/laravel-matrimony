@@ -10,7 +10,7 @@ use Illuminate\Database\Seeder;
 
 /**
  * Idempotent: merges standardized plan_feature rows via updateOrCreate.
- * Does not delete legacy keys (e.g. daily_chat_send_limit) from SubscriptionPlansSeeder.
+ * Merges standardized plan_feature rows via updateOrCreate (canonical keys in {@see PlanFeatureKeys}).
  */
 class PlanStandardFeatureKeysSeeder extends Seeder
 {

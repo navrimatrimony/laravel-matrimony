@@ -12,6 +12,38 @@
         </ul>
     @endif
 
+    @php
+        $featureRowsForForm = [];
+        if (is_array(old('features'))) {
+            foreach (old('features') as $r) {
+                if (! is_array($r)) {
+                    continue;
+                }
+                $featureRowsForForm[] = [
+                    'key' => (string) ($r['key'] ?? ''),
+                    'value' => (string) ($r['value'] ?? ''),
+                ];
+            }
+        }
+        if ($featureRowsForForm === [] && $isEdit) {
+            $plan->loadMissing('features');
+            foreach ($plan->features->sortBy('key')->values() as $f) {
+                $featureRowsForForm[] = ['key' => $f->key, 'value' => (string) $f->value];
+            }
+        }
+        if ($featureRowsForForm === [] && ! $isEdit) {
+            foreach ($defaultFeatures as $row) {
+                $featureRowsForForm[] = [
+                    'key' => (string) ($row['key'] ?? ''),
+                    'value' => (string) ($row['value'] ?? ''),
+                ];
+            }
+        }
+        if ($featureRowsForForm === []) {
+            $featureRowsForForm[] = ['key' => '', 'value' => ''];
+        }
+    @endphp
+
     <form method="POST" action="{{ $isEdit ? route('admin.plans.update', $plan) : route('admin.plans.store') }}" class="space-y-6">
         @csrf
         @if ($isEdit)
@@ -109,26 +141,79 @@
         @endif
 
         <div>
-            <h2 class="text-lg font-semibold text-gray-800 dark:text-gray-100 mb-2">Feature limits</h2>
+            <h2 class="text-lg font-semibold text-gray-800 dark:text-gray-100 mb-1">{{ __('admin_commerce.features_manage_title') }}</h2>
             <p class="text-xs text-gray-500 dark:text-gray-400 mb-3">{{ __('subscriptions.feature_key_hint') }}</p>
-            <div class="space-y-2">
-                @foreach ($defaultFeatures as $idx => $row)
-                    <div class="flex flex-wrap gap-2 items-center">
-                        <input type="text" name="features[{{ $idx }}][key]" value="{{ old('features.'.$idx.'.key', $row['key']) }}" placeholder="key"
+            <div id="plan-feature-rows" class="space-y-2" data-next-index="{{ count($featureRowsForForm) }}">
+                @foreach ($featureRowsForForm as $idx => $row)
+                    <div class="plan-feature-row flex flex-wrap gap-2 items-center rounded-md border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 p-2" data-row>
+                        <input type="text" name="features[{{ $idx }}][key]" value="{{ $row['key'] }}" placeholder="key"
                             class="flex-1 min-w-[12rem] rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white text-sm" />
-                        <input type="text" name="features[{{ $idx }}][value]" value="{{ old('features.'.$idx.'.value', $row['value']) }}" placeholder="value"
+                        <input type="text" name="features[{{ $idx }}][value]" value="{{ $row['value'] }}" placeholder="value"
                             class="flex-1 min-w-[8rem] rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white text-sm" />
+                        <button type="button" class="remove-plan-feature-row text-sm text-red-600 dark:text-red-400 hover:underline shrink-0">
+                            {{ __('admin_commerce.features_delete_row') }}
+                        </button>
                     </div>
                 @endforeach
             </div>
+            <button type="button" id="add-plan-feature-row" class="mt-3 text-sm text-indigo-600 dark:text-indigo-400 hover:underline">
+                {{ __('admin_commerce.features_add_button') }}
+            </button>
         </div>
 
-        <div class="flex gap-3">
+        <div class="flex gap-3 pt-2 border-t border-gray-200 dark:border-gray-600">
             <button type="submit" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded-lg">
-                Save
+                {{ __('admin_commerce.plan_save_changes') }}
             </button>
             <a href="{{ route('admin.plans.index') }}" class="px-4 py-2 text-gray-600 dark:text-gray-400 text-sm">Cancel</a>
         </div>
     </form>
 </div>
+<script>
+(function () {
+    var removeLabel = @json(__('admin_commerce.features_delete_row'));
+    var wrap = document.getElementById('plan-feature-rows');
+    var btn = document.getElementById('add-plan-feature-row');
+    if (!wrap || !btn) return;
+
+    function nextIndex() {
+        var n = parseInt(wrap.getAttribute('data-next-index') || '0', 10);
+        if (isNaN(n)) n = 0;
+        return n;
+    }
+
+    function setNextIndex(i) {
+        wrap.setAttribute('data-next-index', String(i));
+    }
+
+    function rowCount() {
+        return wrap.querySelectorAll('[data-row]').length;
+    }
+
+    btn.addEventListener('click', function () {
+        var i = nextIndex();
+        var row = document.createElement('div');
+        row.className = 'plan-feature-row flex flex-wrap gap-2 items-center rounded-md border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 p-2';
+        row.setAttribute('data-row', '');
+        row.innerHTML =
+            '<input type="text" name="features[' + i + '][key]" value="" placeholder="key" class="flex-1 min-w-[12rem] rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white text-sm" />' +
+            '<input type="text" name="features[' + i + '][value]" value="" placeholder="value" class="flex-1 min-w-[8rem] rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white text-sm" />' +
+            '<button type="button" class="remove-plan-feature-row text-sm text-red-600 dark:text-red-400 hover:underline shrink-0">' + removeLabel + '</button>';
+        wrap.appendChild(row);
+        setNextIndex(i + 1);
+    });
+
+    wrap.addEventListener('click', function (e) {
+        var t = e.target.closest('.remove-plan-feature-row');
+        if (!t || !wrap.contains(t)) return;
+        var row = t.closest('[data-row]');
+        if (!row) return;
+        if (rowCount() > 1) {
+            row.remove();
+            return;
+        }
+        row.querySelectorAll('input').forEach(function (inp) { inp.value = ''; });
+    });
+})();
+</script>
 @endsection

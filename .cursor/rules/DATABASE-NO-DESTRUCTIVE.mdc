@@ -1,0 +1,20 @@
+---
+alwaysApply: true
+---
+
+DATABASE — NO DESTRUCTIVE OPERATIONS (USER MANDATE)
+
+**Permanent, project-wide rule — not limited to payment plans or any single feature.** It applies to every task and every chat session in this repo.
+
+The user explicitly forbids the agent from damaging or emptying their database.
+
+1. NEVER run or suggest running, unless the user clearly and explicitly asks for that exact destructive action:
+   - SQL: `DROP TABLE`, `DROP DATABASE`, `TRUNCATE`, bulk `DELETE` meant to empty a table or wipe data
+   - Artisan: `migrate:fresh`, `db:wipe`, `migrate:reset` / `migrate:refresh` when they would drop data (project already blocks some via provider; still do not bypass or work around)
+   - Any command or script that deletes tables, truncates, or clears production/local business data
+
+2. Safe by default:
+   - Read-only inspection: `SELECT`, counts, `SHOW TABLES`, schema introspection, additive `php artisan migrate` when migrations only add/alter as allowed by PHASE-5
+   - Do not run destructive SQL “to test” or “to clean up” without explicit user approval
+
+3. If the user needs data removed, they must state it plainly (e.g. “delete table X”); until then, preserve all tables and rows.

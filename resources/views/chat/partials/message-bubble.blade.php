@@ -26,15 +26,45 @@
 
     <div class="max-w-[85%] rounded-2xl px-4 py-2 shadow-sm ring-1 {{ $bubble }}">
         @if ($lockedIncoming)
-            <button
-                type="button"
-                class="w-full cursor-pointer rounded-xl text-left transition hover:bg-gray-50/80 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 dark:hover:bg-gray-700/40"
-                data-open-upgrade-lock-modal="upgrade-modal-chat-read"
-                aria-label="{{ __('upgrade_nudge.chat_read_aria') }}"
+            <div
+                class="chat-read-lock-card rounded-xl border border-amber-200/90 bg-gradient-to-br from-amber-50 via-white to-indigo-50/60 p-3 shadow-sm dark:border-amber-800/50 dark:from-amber-950/40 dark:via-gray-900 dark:to-indigo-950/30"
+                role="group"
+                aria-label="{{ __('chat_ui.read_locked_new_message') }}"
             >
-                <p class="whitespace-pre-wrap break-words text-sm italic text-gray-600 dark:text-gray-300">{{ $display['text'] }}</p>
-                <p class="mt-2 text-xs font-semibold text-indigo-600 dark:text-indigo-400">{{ __('subscriptions.pricing_cta_upgrade') }} →</p>
-            </button>
+                <div class="flex items-start gap-2">
+                    <span class="text-lg leading-none" aria-hidden="true">🔒</span>
+                    <div class="min-w-0 flex-1">
+                        <p class="text-xs font-bold uppercase tracking-wide text-amber-800 dark:text-amber-200">
+                            <span class="mr-1.5 inline-flex rounded-md bg-amber-500/15 px-1.5 py-0.5 text-[10px] text-amber-900 dark:bg-amber-400/20 dark:text-amber-100">{{ __('chat_ui.read_lock_premium_badge') }}</span>
+                            {{ __('chat_ui.read_locked_new_message') }}
+                        </p>
+                        <div class="chat-read-lock-blur mt-2 select-none rounded-lg border border-dashed border-gray-200/80 bg-gray-100/80 px-2 py-2 dark:border-gray-600/60 dark:bg-gray-800/50">
+                            <div class="space-y-1.5 opacity-60">
+                                <div class="h-2 w-full rounded bg-gray-300/90 blur-[3px] dark:bg-gray-600/80"></div>
+                                <div class="h-2 w-4/5 rounded bg-gray-300/90 blur-[3px] dark:bg-gray-600/80"></div>
+                                <div class="h-2 w-3/5 rounded bg-gray-300/90 blur-[3px] dark:bg-gray-600/80"></div>
+                            </div>
+                        </div>
+                        <p class="mt-2 text-xs font-medium text-gray-700 dark:text-gray-300">{{ __('chat_ui.read_locked_subline') }}</p>
+                        <div class="mt-3 flex flex-wrap gap-2">
+                            <a
+                                href="{{ route('plans.index') }}"
+                                class="inline-flex items-center justify-center rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 px-3 py-2 text-xs font-bold text-white shadow-md ring-1 ring-indigo-500/30 transition hover:from-indigo-500 hover:to-violet-500"
+                            >
+                                {{ __('chat_ui.read_locked_upgrade_now') }}
+                            </a>
+                            <button
+                                type="button"
+                                class="inline-flex items-center justify-center rounded-xl border border-gray-300 bg-white px-3 py-2 text-xs font-semibold text-gray-800 shadow-sm transition hover:bg-gray-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100 dark:hover:bg-gray-800"
+                                data-open-upgrade-lock-modal="upgrade-modal-chat-read"
+                                aria-label="{{ __('upgrade_nudge.chat_read_aria') }}"
+                            >
+                                {{ __('chat_ui.read_locked_compare_plans') }}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
         @elseif (($message->message_type ?? 'text') === \App\Models\Message::TYPE_IMAGE && $message->image_path)
             <a href="{{ route('chat.messages.image.show', ['message' => $message->id]) }}" target="_blank" rel="noopener" class="block">
                 <img

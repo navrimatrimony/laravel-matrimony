@@ -2,6 +2,8 @@
 
 namespace App\Providers;
 
+use App\Models\Subscription;
+use App\Observers\SubscriptionObserver;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -26,7 +28,9 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        Subscription::observe(SubscriptionObserver::class);
         // Guard against misconfiguration: Sarvam structured parser must use Sarvam M only.
+
         $envSarvamStructured = strtolower(trim((string) env('INTAKE_SARVAM_STRUCTURED_MODEL', '')));
         if ($envSarvamStructured !== '' && $envSarvamStructured !== 'sarvam-m') {
             Log::error('Invalid Sarvam structured model configured: '.$envSarvamStructured.'. Expected: sarvam-m');
@@ -90,5 +94,6 @@ class AppServiceProvider extends ServiceProvider
             $canManageSeriousIntents = $isAdminUser && ($isSuperAdmin || ($adminCapabilities && $adminCapabilities->can_manage_serious_intents));
             $view->with(compact('adminUser', 'isAdminUser', 'isSuperAdmin', 'canManageVerificationTags', 'canManageSeriousIntents'));
         });
+
     }
 }

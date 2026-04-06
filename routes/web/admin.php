@@ -4,6 +4,7 @@ use App\Http\Controllers\AbuseReportController;
 use App\Http\Controllers\Admin\AdminCapabilityController;
 use App\Http\Controllers\Admin\AdminCasteController;
 use App\Http\Controllers\Admin\AdminConflictRecordController;
+use App\Http\Controllers\Admin\AdminCouponController;
 use App\Http\Controllers\Admin\AdminFieldRegistryController;
 use App\Http\Controllers\Admin\AdminIntakeController;
 use App\Http\Controllers\Admin\AdminKycController;
@@ -16,6 +17,8 @@ use App\Http\Controllers\Admin\AdminSettingsController;
 use App\Http\Controllers\Admin\AdminSuggestionReviewController;
 use App\Http\Controllers\Admin\AdminUserNotificationsController;
 use App\Http\Controllers\Admin\AdminVerificationTagController;
+use App\Http\Controllers\Admin\CommerceAnalyticsController;
+use App\Http\Controllers\Admin\CommerceMemberOverrideController;
 use App\Http\Controllers\Admin\DemoProfileController;
 use App\Http\Controllers\Admin\GovernanceDashboardController;
 use App\Http\Controllers\Admin\HomepageImageController;
@@ -304,6 +307,19 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
     Route::post('/plans', [PlanController::class, 'store'])->name('plans.store');
     Route::get('/plans/{plan}/edit', [PlanController::class, 'edit'])->name('plans.edit');
     Route::put('/plans/{plan}', [PlanController::class, 'update'])->name('plans.update');
+    Route::patch('/plans/{plan}/toggle', [PlanController::class, 'toggle'])->name('plans.toggle');
+    Route::delete('/plans/{plan}', [PlanController::class, 'destroy'])->name('plans.destroy');
+
+    Route::prefix('commerce')->name('commerce.')->group(function () {
+        Route::get('analytics', CommerceAnalyticsController::class)->name('analytics.index');
+        Route::resource('coupons', AdminCouponController::class)->except(['show']);
+        Route::get('overrides', [CommerceMemberOverrideController::class, 'index'])->name('overrides.index');
+        Route::post('overrides/lookup', [CommerceMemberOverrideController::class, 'lookup'])->name('overrides.lookup');
+        Route::get('overrides/members/{user}', [CommerceMemberOverrideController::class, 'show'])->name('overrides.show');
+        Route::post('overrides/members/{user}/extend', [CommerceMemberOverrideController::class, 'extendSubscription'])->name('overrides.extend');
+        Route::post('overrides/members/{user}/grant', [CommerceMemberOverrideController::class, 'grantEntitlement'])->name('overrides.grant');
+        Route::post('overrides/members/{user}/revoke', [CommerceMemberOverrideController::class, 'revokeEntitlement'])->name('overrides.revoke');
+    });
 
     Route::get('/match-boost', [MatchBoostController::class, 'edit'])->name('match-boost.edit');
     Route::put('/match-boost', [MatchBoostController::class, 'update'])->name('match-boost.update');

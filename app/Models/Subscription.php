@@ -30,8 +30,39 @@ class Subscription extends Model
         'ends_at' => 'datetime',
     ];
 
+    /**
+     * Marks every active subscription row for this user as cancelled
+     * (history preserved). Optionally skip one subscription id (e.g. the row being saved).
+     *
+     * @return int Rows updated
+     */
+    public static function deactivateActiveSubscriptionsForUserId(int $userId, ?int $exceptSubscriptionId = null): int
+    {
+        $query = static::query()
+            ->where('user_id', $userId)
+            ->where('status', self::STATUS_ACTIVE);
+
+        if ($exceptSubscriptionId !== null) {
+            $query->where('id', '!=', $exceptSubscriptionId);
+        }
+
+        return $query->update([
+            'status' => self::STATUS_CANCELLED,
+            'updated_at' => now(),
+        ]);
+    }
+
     protected static function booted(): void
     {
+        static::saving(function (Subscription $subscription) {
+            if ($subscription->status !== self::STATUS_ACTIVE) {
+                return;
+            }
+
+            $exceptId = $subscription->exists ? (int) $subscription->getKey() : null;
+            static::deactivateActiveSubscriptionsForUserId((int) $subscription->user_id, $exceptId);
+        });
+
         static::created(function (Subscription $subscription) {
             app(EntitlementService::class)
                 ->assignFromSubscription($subscription);

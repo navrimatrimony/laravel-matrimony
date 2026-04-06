@@ -17,7 +17,7 @@ use InvalidArgumentException;
  * Contact access via {@see EntitlementService} + {@see UserFeatureUsageService}.
  *
  * Eligibility: {@see EntitlementService::hasFeature}(userId, {@see PlanFeatureKeys::CONTACT_UNLOCK}) — if false, viewer is blocked (upgrade).
- * Quota: {@see EntitlementService::getValue}(userId, {@see PlanFeatureKeys::CONTACT_VIEW_LIMIT}, '0') vs {@see UserFeatureUsageService::getUsage}(userId, {@see UserFeatureUsageKeys::CONTACT_VIEW}).
+ * Quota: {@see EntitlementService::getValue}(userId, {@see PlanFeatureKeys::CONTACT_VIEW_LIMIT}, '0') vs {@see UserFeatureUsageService::getUsage}(userId, {@see UserFeatureUsageKeys::CONTACT_VIEW_LIMIT}).
  * Reveal charge: {@see UserFeatureUsageService::incrementUsage} only once per viewer+profile+calendar month ({@see UserContactRevealLog}).
  *
  * Visibility: paid_allowed (reveal/credits; may require assisted matchmaking "interested" — see config), request_only ({@see ContactRequestService}), no_one (mediator emphasis).
@@ -146,7 +146,7 @@ class ContactAccessService
         $case = $this->resolveVisibilityCase($targetProfile, $visibilitySettings);
 
         $cvLimit = $this->parseNumericLimit($uid, PlanFeatureKeys::CONTACT_VIEW_LIMIT);
-        $cvUsed = $this->usage->getUsage($uid, UserFeatureUsageKeys::CONTACT_VIEW);
+        $cvUsed = $this->usage->getUsage($uid, UserFeatureUsageKeys::CONTACT_VIEW_LIMIT);
         $cvRemaining = $this->remaining($cvLimit, $cvUsed);
 
         $medLimit = $this->parseNumericLimit($uid, PlanFeatureKeys::MEDIATOR_REQUESTS_PER_MONTH);
@@ -247,11 +247,14 @@ class ContactAccessService
     }
 
     /**
-     * Consume one contact_view credit and log dedup for this profile/month.
+     * Validates paid reveal, creates {@see UserContactRevealLog} when needed; does not increment usage.
+     * Call {@see FeatureUsageService::consume}(..., {@see FeatureUsageService::FEATURE_CONTACT_VIEW_LIMIT}) in the same DB transaction when {@code consume_credit} is true.
+     *
+     * @return array{phone: string, consume_credit: bool}
      *
      * @throws InvalidArgumentException
      */
-    public function consumePaidContactReveal(User $viewer, MatrimonyProfile $targetProfile, ?object $visibilitySettings): string
+    public function performPaidContactRevealBilling(User $viewer, MatrimonyProfile $targetProfile, ?object $visibilitySettings): array
     {
         $uid = (int) $viewer->id;
         if ($viewer->isAnyAdmin()) {
@@ -260,7 +263,7 @@ class ContactAccessService
                 throw new InvalidArgumentException(__('contact_access.no_phone_on_profile'));
             }
 
-            return $p;
+            return ['phone' => $p, 'consume_credit' => false];
         }
 
         if (! $this->entitlements->hasFeature($uid, PlanFeatureKeys::CONTACT_UNLOCK)) {
@@ -292,30 +295,43 @@ class ContactAccessService
         )->toDateString();
 
         if ($this->hasRevealedThisMonth($uid, $targetProfile->id, $periodStart)) {
-            return $phone;
+            return ['phone' => $phone, 'consume_credit' => false];
         }
 
-        $limit = $this->parseNumericLimit($uid, PlanFeatureKeys::CONTACT_VIEW_LIMIT);
-        $used = $this->usage->getUsage($uid, UserFeatureUsageKeys::CONTACT_VIEW);
-        if ($limit !== -1 && ($limit === 0 || $used >= $limit)) {
+        if (! app(FeatureUsageService::class)->canUse($uid, FeatureUsageService::FEATURE_CONTACT_VIEW_LIMIT)) {
             throw new InvalidArgumentException(__('contact_access.no_contact_credits'));
         }
 
-        DB::transaction(function () use ($uid, $targetProfile, $periodStart, $limit) {
-            $log = UserContactRevealLog::query()->firstOrCreate(
-                [
-                    'viewer_user_id' => $uid,
-                    'viewed_profile_id' => $targetProfile->id,
-                    'period_start' => $periodStart,
-                ],
-                []
-            );
-            if ($log->wasRecentlyCreated && $limit !== -1) {
-                $this->usage->incrementUsage($uid, UserFeatureUsageKeys::CONTACT_VIEW);
-            }
-        });
+        $limit = $this->parseNumericLimit($uid, PlanFeatureKeys::CONTACT_VIEW_LIMIT);
 
-        return $phone;
+        $log = UserContactRevealLog::query()->firstOrCreate(
+            [
+                'viewer_user_id' => $uid,
+                'viewed_profile_id' => $targetProfile->id,
+                'period_start' => $periodStart,
+            ],
+            []
+        );
+        $consumeCredit = $log->wasRecentlyCreated && $limit !== -1;
+
+        return ['phone' => $phone, 'consume_credit' => $consumeCredit];
+    }
+
+    /**
+     * Consume one contact_view_limit credit and log dedup for this profile/month (usage + log in one transaction).
+     *
+     * @throws InvalidArgumentException
+     */
+    public function consumePaidContactReveal(User $viewer, MatrimonyProfile $targetProfile, ?object $visibilitySettings): string
+    {
+        return DB::transaction(function () use ($viewer, $targetProfile, $visibilitySettings) {
+            $result = $this->performPaidContactRevealBilling($viewer, $targetProfile, $visibilitySettings);
+            if ($result['consume_credit']) {
+                app(FeatureUsageService::class)->consume((int) $viewer->id, FeatureUsageService::FEATURE_CONTACT_VIEW_LIMIT);
+            }
+
+            return $result['phone'];
+        });
     }
 
     /**

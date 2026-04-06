@@ -169,4 +169,11 @@ return [
     'photo_overlay_cta_upload' => 'फोटो जोडा',
     'photo_overlay_sub_premium' => 'सर्व फोटो पेड प्लॅनसह पहा.',
     'photo_overlay_sub_upload' => 'फोटो असलेले सदस्य अधिक स्पष्ट पूर्वावलोकन पाहतात.',
+    'monetization_who_viewed_teaser_count' => '🔥 :count जणांनी तुमची प्रोफाइल पाहिली',
+    'monetization_who_viewed_teaser_generic' => 'तुमची प्रोफाइल कोणी पाहिली ते पहा',
+    'monetization_who_viewed_sub' => 'ते कोण ते पाहण्यासाठी अपग्रेड करा',
+    'monetization_upgrade_now' => 'आता अपग्रेड करा',
+    'monetization_contact_upgrade_link' => 'अपग्रेड',
+    'monetization_send_interest_or_message' => 'रुची दाखवा किंवा संदेश पाठवा',
+    'monetization_send_message' => 'संदेश पाठवा',
 ];

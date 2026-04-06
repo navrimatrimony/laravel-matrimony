@@ -38,4 +38,7 @@ return [
     'pricing_feature_boost' => 'प्रोफाइल बूस्ट (आठड्याला)',
     'pricing_feature_priority' => 'शोधात प्राधान्य सूचीबद्धता',
     'pricing_no_paid_plans' => 'पेड प्लॅन अद्याप उपलब्ध नाहीत. नंतर पुन्हा तपासा.',
+    'pricing_features_show_more' => 'अधिक वैशिष्ट्ये दाखवा',
+    'pricing_features_show_less' => 'कमी दाखवा',
+    'pricing_features_extended_list' => 'इतर प्लॅन वैशिष्ट्ये',
 ];

@@ -40,4 +40,5 @@ return [
     'only_receiver' => 'Only the recipient can respond to this request.',
     'already_responded' => 'This request has already been answered.',
     'invalid_response' => 'Invalid response.',
+    'missing_profile_ids_for_mediator' => 'Assisted matchmaking requests require both sender and receiver profile ids.',
 ];

@@ -92,6 +92,48 @@ class PlanTerm extends Model
     }
 
     /**
+     * Insert any missing billing_key rows for a paid plan from {@see Plan::price} / {@see Plan::discount_percent}.
+     * Does not change or delete existing {@see PlanTerm} rows.
+     */
+    public static function fillMissingTermsForPlan(Plan $plan): void
+    {
+        if (strtolower((string) $plan->slug) === 'free') {
+            return;
+        }
+
+        $monthly = (float) $plan->price;
+        $disc = $plan->discount_percent;
+        $defs = [
+            [self::BILLING_MONTHLY, 30, $monthly, $disc, true],
+            [self::BILLING_QUARTERLY, 90, round($monthly * 3 * 0.95), null, false],
+            [self::BILLING_HALF_YEARLY, 180, round($monthly * 6 * 0.90), null, false],
+            [self::BILLING_YEARLY, 365, round($monthly * 12 * 0.85), null, false],
+        ];
+
+        foreach ($defs as [$key, $days, $price, $dPct, $visible]) {
+            $exists = static::query()
+                ->where('plan_id', $plan->id)
+                ->where('billing_key', $key)
+                ->exists();
+            if ($exists) {
+                continue;
+            }
+
+            static::query()->create([
+                'plan_id' => $plan->id,
+                'billing_key' => $key,
+                'duration_days' => $days,
+                'price' => $price,
+                'discount_percent' => $dPct,
+                'is_visible' => $visible,
+                'sort_order' => static::defaultSortOrder($key),
+            ]);
+        }
+
+        PlanPrice::syncFromPlanTerms($plan->fresh('terms'));
+    }
+
+    /**
      * Create or update the four billing rows for a paid plan from base monthly list price.
      */
     public static function syncDefaultsForPlan(Plan $plan): void

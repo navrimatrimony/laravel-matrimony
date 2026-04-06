@@ -20,6 +20,7 @@ use Database\Seeders\SubscriptionPlansSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Notification;
+use LogicException;
 use Tests\TestCase;
 
 class MediationRequestFlowTest extends TestCase
@@ -237,5 +238,61 @@ class MediationRequestFlowTest extends TestCase
 
         $phone = $access->consumePaidContactReveal($sender, $target->fresh(), $visibility);
         $this->assertSame('9876501234', $phone);
+    }
+
+    public function test_mediation_model_fills_profile_ids_when_omitted_on_create(): void
+    {
+        [$maleGid, $femaleGid] = $this->seedGenders();
+
+        $sender = User::factory()->create();
+        $receiver = User::factory()->create();
+        $senderProfile = MatrimonyProfile::factory()->for($sender)->create([
+            'gender_id' => $maleGid,
+            'lifecycle_state' => 'active',
+            'is_suspended' => false,
+        ]);
+        $target = MatrimonyProfile::factory()->for($receiver)->create([
+            'gender_id' => $femaleGid,
+            'lifecycle_state' => 'active',
+            'is_suspended' => false,
+        ]);
+
+        $mr = MediationRequest::query()->create([
+            'sender_id' => $sender->id,
+            'receiver_id' => $receiver->id,
+            'subject_profile_id' => $target->id,
+            'status' => MediationRequest::STATUS_PENDING,
+            'meta' => ['initiated_from' => 'test'],
+            'admin_notified_at' => now(),
+        ]);
+
+        $this->assertSame($senderProfile->id, (int) $mr->sender_profile_id);
+        $this->assertSame($target->id, (int) $mr->receiver_profile_id);
+    }
+
+    public function test_mediation_model_cannot_save_without_sender_profile(): void
+    {
+        [$maleGid, $femaleGid] = $this->seedGenders();
+
+        $sender = User::factory()->create();
+        $receiver = User::factory()->create();
+        MatrimonyProfile::factory()->for($receiver)->create([
+            'gender_id' => $femaleGid,
+            'lifecycle_state' => 'active',
+            'is_suspended' => false,
+        ]);
+
+        $target = MatrimonyProfile::query()->where('user_id', $receiver->id)->firstOrFail();
+
+        $this->expectException(LogicException::class);
+
+        MediationRequest::query()->create([
+            'sender_id' => $sender->id,
+            'receiver_id' => $receiver->id,
+            'subject_profile_id' => $target->id,
+            'status' => MediationRequest::STATUS_PENDING,
+            'meta' => [],
+            'admin_notified_at' => now(),
+        ]);
     }
 }

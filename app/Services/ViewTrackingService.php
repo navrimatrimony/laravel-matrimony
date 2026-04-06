@@ -8,6 +8,7 @@ use App\Models\MatrimonyProfile;
 use App\Models\ProfileView;
 use App\Models\User;
 use App\Notifications\ProfileViewedNotification;
+use Illuminate\Support\Facades\DB;
 
 /*
 |--------------------------------------------------------------------------
@@ -186,5 +187,32 @@ class ViewTrackingService
             ->merge(Block::where('blocked_profile_id', $profileId)->pluck('blocker_profile_id'))
             ->unique()
             ->values();
+    }
+
+    /**
+     * Distinct eligible viewers for monetization teaser (blocked excluded; mirrors who-viewed list filters).
+     */
+    public static function countEligibleDistinctViewersForTeaser(int $viewedProfileId): int
+    {
+        $blocked = self::getBlockedProfileIds($viewedProfileId);
+        $vpTable = (new MatrimonyProfile)->getTable();
+        $uTable = (new User)->getTable();
+
+        $q = DB::table('profile_views')
+            ->join("{$vpTable} as vp", 'vp.id', '=', 'profile_views.viewer_profile_id')
+            ->join("{$uTable} as u", 'u.id', '=', 'vp.user_id')
+            ->where('profile_views.viewed_profile_id', $viewedProfileId)
+            ->where(function ($q) {
+                $q->whereNull('u.is_admin')->orWhere('u.is_admin', false);
+            })
+            ->where(function ($q) {
+                $q->whereNull('vp.is_suspended')->orWhere('vp.is_suspended', false);
+            });
+
+        if ($blocked->isNotEmpty()) {
+            $q->whereNotIn('profile_views.viewer_profile_id', $blocked->all());
+        }
+
+        return (int) $q->selectRaw('count(distinct profile_views.viewer_profile_id) as c')->value('c');
     }
 }

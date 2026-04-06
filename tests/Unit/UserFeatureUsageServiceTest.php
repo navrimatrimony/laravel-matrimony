@@ -19,13 +19,13 @@ class UserFeatureUsageServiceTest extends TestCase
         $user = User::factory()->create();
         $svc = app(UserFeatureUsageService::class);
 
-        $this->assertSame(0, $svc->getUsage($user->id, UserFeatureUsageKeys::CONTACT_VIEW));
+        $this->assertSame(0, $svc->getUsage($user->id, UserFeatureUsageKeys::CONTACT_VIEW_LIMIT));
 
-        $this->assertSame(1, $svc->incrementUsage($user->id, UserFeatureUsageKeys::CONTACT_VIEW));
-        $this->assertSame(1, $svc->getUsage($user->id, UserFeatureUsageKeys::CONTACT_VIEW));
+        $this->assertSame(1, $svc->incrementUsage($user->id, UserFeatureUsageKeys::CONTACT_VIEW_LIMIT));
+        $this->assertSame(1, $svc->getUsage($user->id, UserFeatureUsageKeys::CONTACT_VIEW_LIMIT));
 
-        $this->assertSame(3, $svc->incrementUsage($user->id, UserFeatureUsageKeys::CONTACT_VIEW, 2));
-        $this->assertSame(3, $svc->getUsage($user->id, UserFeatureUsageKeys::CONTACT_VIEW));
+        $this->assertSame(3, $svc->incrementUsage($user->id, UserFeatureUsageKeys::CONTACT_VIEW_LIMIT, 2));
+        $this->assertSame(3, $svc->getUsage($user->id, UserFeatureUsageKeys::CONTACT_VIEW_LIMIT));
 
         $this->assertSame(1, UserFeatureUsage::query()->count());
     }
@@ -56,11 +56,11 @@ class UserFeatureUsageServiceTest extends TestCase
         $user = User::factory()->create();
         $svc = app(UserFeatureUsageService::class);
 
-        $svc->incrementUsage($user->id, UserFeatureUsageKeys::CONTACT_VIEW, 1, UserFeatureUsage::PERIOD_DAILY);
-        $this->assertSame(1, $svc->getUsage($user->id, UserFeatureUsageKeys::CONTACT_VIEW, UserFeatureUsage::PERIOD_DAILY));
+        $svc->incrementUsage($user->id, UserFeatureUsageKeys::CONTACT_VIEW_LIMIT, 1, UserFeatureUsage::PERIOD_DAILY);
+        $this->assertSame(1, $svc->getUsage($user->id, UserFeatureUsageKeys::CONTACT_VIEW_LIMIT, UserFeatureUsage::PERIOD_DAILY));
 
         Carbon::setTestNow(Carbon::parse('2026-05-11 08:00:00', config('app.timezone')));
-        $this->assertSame(0, $svc->getUsage($user->id, UserFeatureUsageKeys::CONTACT_VIEW, UserFeatureUsage::PERIOD_DAILY));
+        $this->assertSame(0, $svc->getUsage($user->id, UserFeatureUsageKeys::CONTACT_VIEW_LIMIT, UserFeatureUsage::PERIOD_DAILY));
 
         Carbon::setTestNow();
     }
@@ -71,16 +71,17 @@ class UserFeatureUsageServiceTest extends TestCase
 
         $user = User::factory()->create();
         $svc = app(UserFeatureUsageService::class);
-        $svc->incrementUsage($user->id, UserFeatureUsageKeys::CONTACT_VIEW);
+        $svc->incrementUsage($user->id, UserFeatureUsageKeys::CONTACT_VIEW_LIMIT);
 
         $row = UserFeatureUsage::query()->firstOrFail();
         $this->assertSame('2026-04-01', $row->period_start->format('Y-m-d'));
         $this->assertSame('2026-04-30', $row->period_end->format('Y-m-d'));
 
         Carbon::setTestNow(Carbon::parse('2026-05-10', config('app.timezone')));
-        $svc->incrementUsage($user->id, UserFeatureUsageKeys::CONTACT_VIEW, 1, UserFeatureUsage::PERIOD_DAILY);
+        $svc->incrementUsage($user->id, UserFeatureUsageKeys::CONTACT_VIEW_LIMIT, 1, UserFeatureUsage::PERIOD_DAILY);
         $daily = UserFeatureUsage::query()
-            ->where('period', UserFeatureUsage::PERIOD_DAILY)
+            ->where('feature_key', UserFeatureUsageKeys::CONTACT_VIEW_LIMIT)
+            ->whereColumn('period_start', 'period_end')
             ->firstOrFail();
         $this->assertSame('2026-05-10', $daily->period_start->format('Y-m-d'));
         $this->assertSame('2026-05-10', $daily->period_end->format('Y-m-d'));

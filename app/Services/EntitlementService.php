@@ -39,6 +39,27 @@ class EntitlementService
     }
 
     /**
+     * Re-apply plan feature entitlements from the user's current active subscription (e.g. after admin extends ends_at).
+     */
+    public function resyncFromActiveSubscription(int $userId): void
+    {
+        $sub = Subscription::query()
+            ->where('user_id', $userId)
+            ->where('status', Subscription::STATUS_ACTIVE)
+            ->where(function ($q) {
+                $q->whereNull('ends_at')->orWhere('ends_at', '>', now());
+            })
+            ->orderByDesc('starts_at')
+            ->first();
+
+        if (! $sub) {
+            return;
+        }
+
+        $this->assignFromSubscription($sub);
+    }
+
+    /**
      * Check if user has a non-revoked, non-expired entitlement row for the key.
      */
     public function hasAccess(int $userId, string $key): bool

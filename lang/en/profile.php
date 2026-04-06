@@ -174,4 +174,12 @@ return [
     'photo_overlay_cta_upload' => 'Add your photo',
     'photo_overlay_sub_premium' => 'See every photo with a paid plan.',
     'photo_overlay_sub_upload' => 'Members with a photo unlock clearer previews.',
+    /** Own profile: who-viewed monetization strip */
+    'monetization_who_viewed_teaser_count' => '🔥 :count people viewed your profile',
+    'monetization_who_viewed_teaser_generic' => 'See who viewed your profile',
+    'monetization_who_viewed_sub' => 'Upgrade to see who they are',
+    'monetization_upgrade_now' => 'Upgrade Now',
+    'monetization_contact_upgrade_link' => 'Upgrade',
+    'monetization_send_interest_or_message' => 'Send interest or message',
+    'monetization_send_message' => 'Send Message',
 ];

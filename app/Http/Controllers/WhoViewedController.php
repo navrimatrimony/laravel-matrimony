@@ -3,20 +3,16 @@
 namespace App\Http\Controllers;
 
 use App\Models\ProfileView;
-use App\Services\EntitlementService;
+use App\Services\FeatureUsageService;
 use App\Services\ViewTrackingService;
-use App\Support\PlanFeatureKeys;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
 
 class WhoViewedController extends Controller
 {
-    /** Values >= this are treated as unlimited history (no created_at lower bound). */
-    private const WHO_VIEWED_UNLIMITED_DAYS_THRESHOLD = 999;
-
     public function __construct(
-        protected EntitlementService $entitlementService,
+        protected FeatureUsageService $featureUsage,
     ) {}
 
     public function index(Request $request): View|JsonResponse
@@ -27,13 +23,16 @@ class WhoViewedController extends Controller
         }
 
         $profile = $user->matrimonyProfile;
-        $days = $this->resolveWhoViewedWindowDays($user);
+        $days = $this->featureUsage->getWhoViewedMeWindowDays((int) $user->id);
+        $teaserUniqueCount = ViewTrackingService::countEligibleDistinctViewersForTeaser((int) $profile->id);
+        $plansUrl = route('plans.index');
 
-        if ($days === 0) {
+        if (! $this->featureUsage->canUse((int) $user->id, FeatureUsageService::FEATURE_WHO_VIEWED_ME_ACCESS)) {
             if ($request->wantsJson()) {
                 return response()->json([
                     'locked' => true,
                     'message' => __('who_viewed.locked_json_message'),
+                    'teaser_unique_count' => $teaserUniqueCount,
                 ]);
             }
 
@@ -44,6 +43,8 @@ class WhoViewedController extends Controller
                 'since' => null,
                 'whoViewedLocked' => true,
                 'windowDays' => 0,
+                'teaserUniqueCount' => $teaserUniqueCount,
+                'plansUrl' => $plansUrl,
             ]);
         }
 
@@ -56,7 +57,7 @@ class WhoViewedController extends Controller
             ->orderByDesc('created_at');
 
         $since = null;
-        if ($days < self::WHO_VIEWED_UNLIMITED_DAYS_THRESHOLD) {
+        if ($days < FeatureUsageService::WHO_VIEWED_UNLIMITED_DAYS_THRESHOLD) {
             $since = now()->subDays($days);
             $query->where('created_at', '>=', $since);
         }
@@ -85,7 +86,7 @@ class WhoViewedController extends Controller
         $recent = $uniqueByViewer->take($recentLimit);
         $uniqueCount = $uniqueByViewer->count();
 
-        $windowDaysForView = $days >= self::WHO_VIEWED_UNLIMITED_DAYS_THRESHOLD ? null : $days;
+        $windowDaysForView = $days >= FeatureUsageService::WHO_VIEWED_UNLIMITED_DAYS_THRESHOLD ? null : $days;
 
         if ($request->wantsJson()) {
             return response()->json([
@@ -94,6 +95,7 @@ class WhoViewedController extends Controller
                 'recent' => $this->serializeWhoViewedRecent($recent),
                 'window_days' => $windowDaysForView,
                 'since' => $since?->toIso8601String(),
+                'teaser_unique_count' => $uniqueCount,
             ]);
         }
 
@@ -104,17 +106,9 @@ class WhoViewedController extends Controller
             'since' => $since,
             'whoViewedLocked' => false,
             'windowDays' => $windowDaysForView,
+            'teaserUniqueCount' => null,
+            'plansUrl' => $plansUrl,
         ]);
-    }
-
-    private function resolveWhoViewedWindowDays(\App\Models\User $user): int
-    {
-        $raw = $this->entitlementService->getValue((int) $user->id, PlanFeatureKeys::WHO_VIEWED_ME_DAYS, '0');
-        if (! is_numeric($raw)) {
-            return 0;
-        }
-
-        return max(0, (int) $raw);
     }
 
     /**

@@ -1,6 +1,11 @@
 @extends('layouts.app')
 
 @section('content')
+@once
+    <style>
+        .chat-read-lock-blur { filter: blur(5px); }
+    </style>
+@endonce
 <div class="mx-auto max-w-6xl px-4 py-6">
     <div class="flex items-center justify-between gap-4">
         <div class="min-w-0 flex items-center gap-3">
@@ -27,11 +32,34 @@
         @if (session('error'))
         <div class="mt-4 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800 dark:border-rose-900/40 dark:bg-rose-950/30 dark:text-rose-200">
             {{ session('error') }}
+            @if (session('chat_upgrade_cta'))
+                <p class="mt-2">
+                    <a href="{{ route('plans.index') }}" class="font-semibold text-indigo-700 underline hover:text-indigo-900 dark:text-indigo-300 dark:hover:text-indigo-200">
+                        {{ __('subscriptions.chat_upgrade_send_more') }}
+                    </a>
+                </p>
+            @endif
         </div>
     @endif
     @if ($errors->any())
         <div class="mt-4 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800 dark:border-rose-900/40 dark:bg-rose-950/30 dark:text-rose-200">
             {{ $errors->first() }}
+        </div>
+    @endif
+
+    @if (!empty($readLockedForIncoming) && isset($messages) && $messages->isNotEmpty())
+        <div class="mt-4 overflow-hidden rounded-2xl border border-indigo-200/90 bg-gradient-to-r from-indigo-600 via-violet-600 to-indigo-700 p-[1px] shadow-lg shadow-indigo-500/15 dark:border-indigo-500/40 dark:from-indigo-500 dark:via-violet-600 dark:to-indigo-800">
+            <div class="rounded-2xl bg-white px-4 py-4 dark:bg-gray-900 sm:flex sm:items-center sm:justify-between sm:gap-6">
+                <div class="min-w-0">
+                    <p class="text-sm font-extrabold text-gray-900 dark:text-white">{{ __('chat_ui.read_lock_banner_title') }}</p>
+                    <p class="mt-1 text-sm text-gray-600 dark:text-gray-300">{{ __('chat_ui.read_lock_banner_body') }}</p>
+                </div>
+                <div class="mt-3 shrink-0 sm:mt-0">
+                    <a href="{{ route('plans.index') }}" class="inline-flex w-full items-center justify-center rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 px-5 py-2.5 text-sm font-bold text-white shadow-md transition hover:from-indigo-500 hover:to-violet-500 sm:w-auto">
+                        {{ __('chat_ui.read_locked_upgrade_now') }}
+                    </a>
+                </div>
+            </div>
         </div>
     @endif
 

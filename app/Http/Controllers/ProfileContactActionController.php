@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\MatrimonyProfile;
 use App\Services\ContactAccessService;
+use App\Services\FeatureUsageService;
 use App\Services\MediationRequestService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -26,12 +27,27 @@ class ProfileContactActionController extends Controller
             abort(403);
         }
 
+        $userId = (int) $user->id;
+
         $visibilitySettings = DB::table('profile_visibility_settings')
             ->where('profile_id', $matrimony_profile->id)
             ->first();
 
+        $featureUsage = app(FeatureUsageService::class);
+
+        if (! $user->isAnyAdmin()) {
+            if (! $featureUsage->canUse($userId, FeatureUsageService::FEATURE_CONTACT_VIEW_LIMIT)) {
+                return redirect()->route('plans.index');
+            }
+        }
+
         try {
-            $this->contactAccess->consumePaidContactReveal($user, $matrimony_profile, $visibilitySettings);
+            DB::transaction(function () use ($user, $matrimony_profile, $visibilitySettings, $userId, $featureUsage) {
+                $result = $this->contactAccess->performPaidContactRevealBilling($user, $matrimony_profile, $visibilitySettings);
+                if ($result['consume_credit']) {
+                    $featureUsage->consume($userId, FeatureUsageService::FEATURE_CONTACT_VIEW_LIMIT);
+                }
+            });
         } catch (\InvalidArgumentException $e) {
             return redirect()
                 ->route('matrimony.profile.show', $matrimony_profile)

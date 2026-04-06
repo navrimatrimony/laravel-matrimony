@@ -11,14 +11,16 @@ use App\Services\Chat\ChatMessageService;
 use App\Services\Chat\ChatPolicyService;
 use App\Services\Chat\ChatTemplateSuggestionService;
 use App\Services\CommunicationPolicyService;
+use App\Services\FeatureUsageService;
 use App\Services\ShowcaseChat\ShowcaseConversationTagService;
 use App\Services\ShowcaseChat\ShowcaseOrchestrationService;
 use App\Services\SubscriptionService;
 use App\Services\UserEntitlementService;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
-use Symfony\Component\HttpKernel\Exception\HttpException;
 
 class ChatController extends Controller
 {
@@ -26,6 +28,7 @@ class ChatController extends Controller
         protected ChatPolicyService $policy,
         protected ChatConversationService $conversations,
         protected ChatMessageService $messages,
+        protected FeatureUsageService $featureUsage,
     ) {}
 
     public function index(Request $request)
@@ -86,7 +89,7 @@ class ChatController extends Controller
             ->get()
             ->keyBy('id');
 
-        $viewerCanReadIncoming = $this->messages->viewerCanReadReceivedChat($me);
+        $viewerCanReadIncoming = $this->featureUsage->canUse((int) $user->id, FeatureUsageService::FEATURE_CHAT_CAN_READ);
 
         $items = $list->map(function (Conversation $c) use ($me, $unreadByConversation, $othersById, $lastMessagesById, $viewerCanReadIncoming) {
             $otherId = (int) ((int) $c->profile_one_id === (int) $me->id ? $c->profile_two_id : $c->profile_one_id);
@@ -198,7 +201,7 @@ class ChatController extends Controller
         $showcaseTag = app(ShowcaseConversationTagService::class)->shouldShowTagForConversation($conversation, $me, $other);
 
         $sinceId = $request->wantsJson() ? (int) $request->query('since_id', 0) : 0;
-        $readLockedForIncoming = ! $this->messages->viewerCanReadReceivedChat($me);
+        $readLockedForIncoming = ! $this->featureUsage->canUse((int) $user->id, FeatureUsageService::FEATURE_CHAT_CAN_READ);
 
         if ($request->wantsJson()) {
             $q = Message::query()
@@ -331,10 +334,8 @@ class ChatController extends Controller
             ]);
         }
 
-        try {
-            app(SubscriptionService::class)->assertWithinChatSendLimit($user);
-        } catch (HttpException $e) {
-            return back()->with('error', $e->getMessage());
+        if (! $this->featureUsage->canUse((int) $user->id, FeatureUsageService::FEATURE_CHAT_SEND_LIMIT)) {
+            return $this->chatSendLimitExceededResponse($request);
         }
 
         try {
@@ -345,6 +346,8 @@ class ChatController extends Controller
 
             return back()->with('error', $msg)->withErrors($errors);
         }
+
+        $this->featureUsage->consume((int) $user->id, FeatureUsageService::FEATURE_CHAT_SEND_LIMIT);
 
         return back();
     }
@@ -390,6 +393,10 @@ class ChatController extends Controller
             return back()->with('error', __('subscriptions.feature_locked'));
         }
 
+        if (! $this->featureUsage->canUse((int) $user->id, FeatureUsageService::FEATURE_CHAT_SEND_LIMIT)) {
+            return $this->chatSendLimitExceededResponse($request);
+        }
+
         try {
             $this->messages->sendImageMessage($me, $other, $conversation, $request->file('image'), $request->input('caption'));
         } catch (ValidationException $e) {
@@ -398,6 +405,8 @@ class ChatController extends Controller
 
             return back()->with('error', $msg)->withErrors($errors);
         }
+
+        $this->featureUsage->consume((int) $user->id, FeatureUsageService::FEATURE_CHAT_SEND_LIMIT);
 
         return back();
     }
@@ -414,7 +423,7 @@ class ChatController extends Controller
             abort(403);
         }
 
-        if ($this->messages->viewerCanReadReceivedChat($me)) {
+        if ($this->featureUsage->canUse((int) $user->id, FeatureUsageService::FEATURE_CHAT_CAN_READ)) {
             $this->messages->markConversationRead($me, $conversation);
         }
 
@@ -454,5 +463,19 @@ class ChatController extends Controller
         $disp = $mod->bodyTextForViewer($last, (int) $me->id, false);
 
         return (string) ($disp['text'] ?? '');
+    }
+
+    private function chatSendLimitExceededResponse(Request $request): JsonResponse|RedirectResponse
+    {
+        if ($request->expectsJson() || $request->wantsJson()) {
+            return response()->json([
+                'success' => false,
+                'message' => __('subscriptions.chat_limit_json'),
+            ], 403);
+        }
+
+        return back()
+            ->with('error', __('subscriptions.chat_limit_flash'))
+            ->with('chat_upgrade_cta', true);
     }
 }

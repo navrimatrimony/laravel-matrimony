@@ -13,11 +13,10 @@ final class PlanFeatureLabel
     public static function label(string $key): string
     {
         return match ($key) {
-            SubscriptionService::FEATURE_DAILY_CHAT_SEND_LIMIT => __('subscriptions.feature_daily_chat'),
-            SubscriptionService::FEATURE_MONTHLY_INTEREST_SEND_LIMIT => __('subscriptions.feature_monthly_interests'),
-            PlanFeatureKeys::INTEREST_SEND_LIMIT => __('subscriptions.pricing_feature_interest_daily'),
+            SubscriptionService::FEATURE_CHAT_SEND_LIMIT => 'Messages/day',
+            PlanFeatureKeys::INTEREST_SEND_LIMIT => 'Interests/day',
             SubscriptionService::FEATURE_DAILY_PROFILE_VIEW_LIMIT => __('subscriptions.feature_daily_profile_views'),
-            SubscriptionService::FEATURE_CONTACT_NUMBER_ACCESS => __('subscriptions.feature_contact'),
+            PlanFeatureKeys::CONTACT_VIEW_LIMIT => 'Contact views',
             SubscriptionService::FEATURE_CHAT_IMAGE_MESSAGES => __('subscriptions.feature_chat_images'),
             PlanFeatureKeys::PHOTO_FULL_ACCESS => __('subscriptions.pricing_feature_photo_full'),
             PlanFeatureKeys::CONTACT_UNLOCK => __('subscriptions.pricing_feature_contact_unlock'),
@@ -43,6 +42,24 @@ final class PlanFeatureLabel
             return self::truthy($v) ? __('subscriptions.yes') : __('subscriptions.no');
         }
 
+        // 🔥 CUSTOM HUMAN FRIENDLY TEXT
+
+        if ($key === 'chat_can_read') {
+            return $value == '1' ? 'Can read messages' : 'Cannot read messages';
+        }
+
+        if ($key === 'chat_send_limit') {
+            return $value == '9999' ? 'Unlimited messages' : $value.'/day';
+        }
+
+        if ($key === 'contact_view_limit') {
+            return $value == '9999' ? 'Unlimited' : $value;
+        }
+
+        if ($key === 'interest_send_limit') {
+            return $value == '9999' ? 'Unlimited interests' : $value.'/day';
+        }
+
         return $v;
     }
 
@@ -54,7 +71,6 @@ final class PlanFeatureLabel
     private static function isTruthyKey(string $key): bool
     {
         return in_array($key, [
-            SubscriptionService::FEATURE_CONTACT_NUMBER_ACCESS,
             SubscriptionService::FEATURE_CHAT_IMAGE_MESSAGES,
             PlanFeatureKeys::CONTACT_UNLOCK,
             PlanFeatureKeys::PHOTO_FULL_ACCESS,

@@ -3,6 +3,8 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Facades\DB;
+use LogicException;
 
 /**
  * Mediator {@see ContactRequest} rows (type=mediator). Stored in contact_requests.
@@ -39,5 +41,30 @@ class MediationRequest extends ContactRequest
                 $model->requested_scopes = ['mediator'];
             }
         });
+
+        static::saving(function (MediationRequest $model) {
+            self::ensureMediatorProfileIds($model);
+        });
+    }
+
+    /**
+     * Mediator inbox, duplicate checks, and contact-reveal gating rely on non-null profile ids.
+     */
+    private static function ensureMediatorProfileIds(self $model): void
+    {
+        if ($model->receiver_profile_id === null && $model->subject_profile_id !== null) {
+            $model->receiver_profile_id = $model->subject_profile_id;
+        }
+
+        if ($model->sender_profile_id === null && $model->sender_id !== null) {
+            $pid = DB::table('matrimony_profiles')->where('user_id', $model->sender_id)->value('id');
+            if ($pid) {
+                $model->sender_profile_id = (int) $pid;
+            }
+        }
+
+        if ($model->sender_profile_id === null || $model->receiver_profile_id === null) {
+            throw new LogicException(__('mediation.missing_profile_ids_for_mediator'));
+        }
     }
 }

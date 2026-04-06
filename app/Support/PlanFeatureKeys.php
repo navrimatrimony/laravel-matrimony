@@ -4,6 +4,13 @@ namespace App\Support;
 
 /**
  * Canonical snake_case keys for {@see \App\Models\PlanFeature} (feature gating).
+ *
+ * Legacy keys (migrated via migrations; do not use in new rows):
+ * - daily_chat_send_limit → {@see self::CHAT_SEND_LIMIT}
+ * - monthly_interest_send_limit → {@see self::INTEREST_SEND_LIMIT}
+ * - contact_number_access → {@see self::CONTACT_VIEW_LIMIT}
+ *
+ * {@see EntitlementService} mirrors these keys in {@see \App\Models\UserEntitlement} rows for active subscriptions.
  */
 final class PlanFeatureKeys
 {

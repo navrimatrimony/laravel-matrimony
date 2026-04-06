@@ -7,6 +7,9 @@ return [
     'feature_locked' => 'This feature is not included in your current plan.',
     'chat_locked' => 'Chat is not available on your current plan.',
     'chat_daily_limit' => 'You have reached your daily chat message limit. Upgrade your plan to send more.',
+    'chat_limit_json' => 'Your chat limit is over. Please upgrade your plan.',
+    'chat_limit_flash' => 'Chat limit reached. Upgrade your plan.',
+    'chat_upgrade_send_more' => 'Upgrade to send more messages',
     'interest_locked' => 'Sending interests is not available on your current plan.',
     'interest_monthly_limit' => 'You have reached your monthly interest limit. Upgrade your plan to send more.',
     'profile_views_locked' => 'Profile views are not available on your current plan.',
@@ -45,7 +48,7 @@ return [
     'edit_plan' => 'Edit plan',
     'plan_saved' => 'Plan saved.',
     'highlight_plan' => 'Highlight as “best value” on the public plans page',
-    'feature_key_hint' => 'Use keys like daily_chat_send_limit, monthly_interest_send_limit, daily_profile_view_limit, contact_number_access (0/1), chat_image_messages (0/1). Use -1 for unlimited limits.',
+    'feature_key_hint' => 'Use keys like chat_send_limit, interest_send_limit, daily_profile_view_limit, contact_view_limit (0 = none, positive = monthly cap, -1 = unlimited), chat_image_messages (0/1). Use -1 for unlimited limits.',
 
     'plans_empty_title' => 'No membership plans yet',
     'plans_empty_body' => 'Plans are not configured. An administrator can add them under Admin → Subscription plans, or run: php artisan db:seed --class=SubscriptionPlansSeeder',
@@ -136,4 +139,7 @@ return [
     'pricing_feature_boost' => 'Profile boost (per week)',
     'pricing_feature_priority' => 'Priority listing in search',
     'pricing_no_paid_plans' => 'Paid plans are not available yet. Please check back soon.',
+    'pricing_features_show_more' => 'Show more features',
+    'pricing_features_show_less' => 'Show fewer features',
+    'pricing_features_extended_list' => 'Additional plan features',
 ];

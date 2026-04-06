@@ -7,11 +7,9 @@ use App\Models\MatrimonyProfile;
 use App\Models\Message;
 use App\Models\MessageParticipantState;
 use App\Notifications\NewChatMessageNotification;
-use App\Services\EntitlementService;
+use App\Services\FeatureUsageService;
 use App\Services\ShowcaseChat\ShowcaseOrchestrationService;
-use App\Services\SubscriptionService;
 use App\Services\UserEntitlementService;
-use App\Support\PlanFeatureKeys;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
@@ -22,15 +20,11 @@ class ChatMessageService
 {
     public function __construct(
         protected ChatPolicyService $policy,
-        protected EntitlementService $entitlements,
-        protected SubscriptionService $subscriptions,
     ) {}
 
     /**
      * Whether this profile's user may read bodies (and images) of messages they received.
-     *
-     * If the active plan has no {@see PlanFeatureKeys::CHAT_CAN_READ} row, reading is allowed
-     * (legacy plans). When the key exists, {@see EntitlementService::hasFeature} must pass.
+     * Delegates to {@see FeatureUsageService::canUse} ({@see FeatureUsageService::FEATURE_CHAT_CAN_READ}).
      */
     public function viewerCanReadReceivedChat(MatrimonyProfile $viewer): bool
     {
@@ -39,20 +33,8 @@ class ChatMessageService
         if (! $user) {
             return false;
         }
-        if ($user->isAnyAdmin()) {
-            return true;
-        }
 
-        $plan = $this->subscriptions->getActivePlan($user);
-        $plan->loadMissing('features');
-        $planDefinesReadGate = $plan->features->contains(
-            fn ($f) => (string) $f->key === PlanFeatureKeys::CHAT_CAN_READ
-        );
-        if (! $planDefinesReadGate) {
-            return true;
-        }
-
-        return $this->entitlements->hasFeature((int) $user->id, PlanFeatureKeys::CHAT_CAN_READ);
+        return app(FeatureUsageService::class)->canUse((int) $user->id, FeatureUsageService::FEATURE_CHAT_CAN_READ);
     }
 
     public function getMessagesPaginated(Conversation $conversation, int $perPage = 30): LengthAwarePaginator

@@ -10,6 +10,7 @@ use App\Models\PlanTerm;
 use App\Models\ProfileView;
 use App\Models\Subscription;
 use App\Models\User;
+use App\Support\PlanFeatureKeys;
 use Illuminate\Support\Facades\DB;
 use Symfony\Component\HttpKernel\Exception\HttpException;
 
@@ -19,14 +20,11 @@ use Symfony\Component\HttpKernel\Exception\HttpException;
  */
 class SubscriptionService
 {
-    public const FEATURE_DAILY_CHAT_SEND_LIMIT = 'daily_chat_send_limit';
+    public const FEATURE_CHAT_SEND_LIMIT = 'chat_send_limit';
 
-    public const FEATURE_MONTHLY_INTEREST_SEND_LIMIT = 'monthly_interest_send_limit';
+    public const FEATURE_INTEREST_SEND_LIMIT = 'interest_send_limit';
 
     public const FEATURE_DAILY_PROFILE_VIEW_LIMIT = 'daily_profile_view_limit';
-
-    /** "1" = can see contact number when policy allows (mutual interest, grants, etc.). */
-    public const FEATURE_CONTACT_NUMBER_ACCESS = 'contact_number_access';
 
     /** "1" = may send chat images (in addition to communication policy). */
     public const FEATURE_CHAT_IMAGE_MESSAGES = 'chat_image_messages';
@@ -47,10 +45,9 @@ class SubscriptionService
 
         return DB::transaction(function () use ($user, $plan, $planTermId, $planPriceId, $rawCoupon, $couponSvc) {
             $now = now();
-            Subscription::query()
-                ->where('user_id', $user->id)
-                ->where('status', Subscription::STATUS_ACTIVE)
-                ->update(['status' => Subscription::STATUS_CANCELLED, 'updated_at' => $now]);
+
+            // 1) Cancel any current active subscription(s) — rows kept for history (same as model safeguard on create).
+            Subscription::deactivateActiveSubscriptionsForUserId((int) $user->id);
 
             $visiblePrices = PlanPrice::query()
                 ->where('plan_id', $plan->id)
@@ -195,10 +192,10 @@ class SubscriptionService
         $plan->loadMissing('features');
 
         return match ($feature) {
-            'chat' => $this->getFeatureLimit($user, self::FEATURE_DAILY_CHAT_SEND_LIMIT) !== 0,
+            'chat' => $this->getFeatureLimit($user, self::FEATURE_CHAT_SEND_LIMIT) !== 0,
             'interest' => app(InterestSendLimitService::class)->effectiveDailyLimit($user) !== 0,
             'profile_views' => $this->getFeatureLimit($user, self::FEATURE_DAILY_PROFILE_VIEW_LIMIT) !== 0,
-            'contact_number', 'see_contact' => $this->truthyFeature($plan, self::FEATURE_CONTACT_NUMBER_ACCESS),
+            'contact_number', 'see_contact' => $this->getFeatureLimit($user, PlanFeatureKeys::CONTACT_VIEW_LIMIT) !== 0,
             'chat_images' => $this->truthyFeature($plan, self::FEATURE_CHAT_IMAGE_MESSAGES),
             default => $this->truthyFeature($plan, $feature),
         };
@@ -236,7 +233,7 @@ class SubscriptionService
         if ($user->isAnyAdmin()) {
             return;
         }
-        $lim = $this->getFeatureLimit($user, self::FEATURE_DAILY_CHAT_SEND_LIMIT);
+        $lim = $this->getFeatureLimit($user, self::FEATURE_CHAT_SEND_LIMIT);
         if ($lim === -1) {
             return;
         }
@@ -379,9 +376,10 @@ class SubscriptionService
     private function defaultLimitForKey(string $key): int
     {
         return match ($key) {
-            self::FEATURE_DAILY_CHAT_SEND_LIMIT => 10,
-            self::FEATURE_MONTHLY_INTEREST_SEND_LIMIT => 5,
+            self::FEATURE_CHAT_SEND_LIMIT => 10,
+            self::FEATURE_INTEREST_SEND_LIMIT => 5,
             self::FEATURE_DAILY_PROFILE_VIEW_LIMIT => -1,
+            PlanFeatureKeys::CONTACT_VIEW_LIMIT => 0,
             default => 0,
         };
     }

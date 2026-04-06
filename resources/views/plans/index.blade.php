@@ -1,7 +1,6 @@
 @extends('layouts.app')
 
 @php
-    use App\Services\SubscriptionService as SubSvc;
     use App\Support\PlanFeatureKeys;
     use App\Support\PlanFeatureLabel;
 
@@ -16,18 +15,25 @@
 
     $isFreeViewer = ! $eff->id || strtolower((string) ($eff->slug ?? '')) === 'free';
 
-    $planFeatureRows = function ($plan) {
-        $hasDailyInterest = $plan->features->contains(
-            fn ($f) => (string) $f->key === PlanFeatureKeys::INTEREST_SEND_LIMIT
-        );
+    $pricingHighlightFeatureOrder = [
+    PlanFeatureKeys::CHAT_CAN_READ,
+    PlanFeatureKeys::CHAT_SEND_LIMIT,
+    PlanFeatureKeys::CONTACT_VIEW_LIMIT,
+];
 
-        return $plan->features
+    $partitionPricingFeatures = function ($plan) use ($pricingHighlightFeatureOrder) {
+        $rows = $plan->features
             ->filter(fn ($f) => PlanFeatureLabel::shouldListKey((string) $f->key))
-            ->when($hasDailyInterest, fn ($c) => $c->reject(
-                fn ($f) => (string) $f->key === SubSvc::FEATURE_MONTHLY_INTEREST_SEND_LIMIT
-            ))
-            ->sortBy('key')
-            ->values();
+            ->keyBy(fn ($f) => (string) $f->key);
+        $primary = collect();
+        foreach ($pricingHighlightFeatureOrder as $key) {
+            if ($rows->has($key)) {
+                $primary->push($rows->get($key));
+            }
+            $rows->forget($key);
+        }
+
+        return [$primary, $rows->sortKeys()->values()];
     };
 
     $discountPercentForPrice = function (\App\Models\PlanPrice $pp): int {
@@ -212,7 +218,7 @@
                         $defaultBillingId = $useEnginePrices
                             ? (int) $visiblePlanPrices->first()->id
                             : ($useTerms ? (int) $visibleTerms->first()->id : 0);
-                        $featureRows = $planFeatureRows($plan);
+                        [$primaryFeatureRows, $secondaryFeatureRows] = $partitionPricingFeatures($plan);
                     @endphp
                     <article
                         class="relative flex min-w-0 flex-col rounded-2xl border bg-white shadow-lg transition-shadow dark:bg-slate-800/95
@@ -265,11 +271,7 @@
                                         $ppStrike = $pp->strike_list_price;
                                         $ppDisc = $discountPercentForPrice($pp);
                                     @endphp
-                                    <div x-show="selectedBillingId === {{ (int) $pp->id }}" x-cloak class="mt-4 space-y-2" x-data="{
-                                        planId: {{ (int) $plan->id }},
-                                        priceRow: @json(['final' => $ppFinal, 'duration_type' => $pp->duration_type]),
-                                        quote() { return $root.discountFor(this.planId, this.priceRow); },
-                                    }">
+                                    <div x-show="selectedBillingId === {{ (int) $pp->id }}" x-cloak class="mt-4 space-y-2">
                                         <p class="text-sm font-medium text-slate-500 dark:text-slate-400">
                                             <x-plan.duration-label :days="$pp->duration_days" />
                                             <span class="text-slate-400 dark:text-slate-500"> · </span>
@@ -282,19 +284,16 @@
                                         @endif
                                         <div class="flex flex-wrap items-end gap-x-3 gap-y-1">
                                             @if ($ppStrike !== null && (float) $ppStrike > $ppFinal + 0.004)
-                                                <span class="text-lg text-slate-400 line-through tabular-nums dark:text-slate-500">₹{{ number_format((float) $ppStrike) }}</span>
+                                                <span class="text-lg text-slate-400 line-through tabular-nums dark:text-slate-500">{{ number_format((float) $ppStrike) }}</span>
                                             @endif
                                             @if ($ppFinal <= 0)
                                                 <span class="text-3xl font-bold text-emerald-600 tabular-nums dark:text-emerald-400">{{ __('subscriptions.price_free_label') }}</span>
                                             @else
                                                 <span class="text-3xl font-extrabold text-slate-900 tabular-nums dark:text-white">
-                                                    ₹<span x-text="Math.round(quote().final).toLocaleString('en-IN')">{{ number_format($ppFinal) }}</span>
+                                                    ₹{{ number_format($ppFinal) }}
                                                 </span>
                                             @endif
                                         </div>
-                                        <p x-show="quote().savings > 0" x-cloak class="text-xs font-semibold text-emerald-600 dark:text-emerald-400">
-                                            {{ __('subscriptions.coupon_extra_save_prefix') }}₹<span x-text="Math.round(quote().savings).toLocaleString('en-IN')"></span>
-                                        </p>
                                     </div>
                                 @endforeach
                             @elseif ($useTerms)
@@ -320,11 +319,7 @@
                                         $tFinal = (float) $t->final_price;
                                         $tDisc = $discountPercentForTerm($t);
                                     @endphp
-                                    <div x-show="selectedBillingId === {{ (int) $t->id }}" x-cloak class="mt-4 space-y-2" x-data="{
-                                        planId: {{ (int) $plan->id }},
-                                        priceRow: @json(['final' => $tFinal, 'duration_type' => $t->billing_key]),
-                                        quote() { return $root.discountFor(this.planId, this.priceRow); },
-                                    }">
+                                    <div x-show="selectedBillingId === {{ (int) $t->id }}" x-cloak class="mt-4 space-y-2">
                                         <p class="text-sm font-medium text-slate-500 dark:text-slate-400">
                                             <x-plan.duration-label :days="$t->duration_days" />
                                         </p>
@@ -335,15 +330,12 @@
                                         @endif
                                         <div class="flex flex-wrap items-end gap-x-3 gap-y-1">
                                             @if ($tDisc > 0 && $tList > $tFinal + 0.004)
-                                                <span class="text-lg text-slate-400 line-through tabular-nums dark:text-slate-500">₹{{ number_format($tList) }}</span>
+                                                <span class="text-lg text-slate-400 line-through tabular-nums dark:text-slate-500">{{ number_format($tList) }}</span>
                                             @endif
                                             <span class="text-3xl font-extrabold text-slate-900 tabular-nums dark:text-white">
-                                                ₹<span x-text="Math.round(quote().final).toLocaleString('en-IN')">{{ number_format($tFinal) }}</span>
+                                                ₹{{ number_format($tFinal) }}
                                             </span>
                                         </div>
-                                        <p x-show="quote().savings > 0" x-cloak class="text-xs font-semibold text-emerald-600 dark:text-emerald-400">
-                                            {{ __('subscriptions.coupon_extra_save_prefix') }}₹<span x-text="Math.round(quote().savings).toLocaleString('en-IN')"></span>
-                                        </p>
                                     </div>
                                 @endforeach
                             @else
@@ -352,11 +344,7 @@
                                     $finalPrice = (float) $plan->final_price;
                                     $legacyDisc = (int) ($plan->discount_percent ?? 0);
                                 @endphp
-                                <div class="mt-4 space-y-2" x-data="{
-                                    planId: {{ (int) $plan->id }},
-                                    priceRow: @json(['final' => $finalPrice, 'duration_type' => 'legacy']),
-                                    quote() { return $root.discountFor(this.planId, this.priceRow); },
-                                }">
+                                <div class="mt-4 space-y-2">
                                     <p class="text-sm font-medium text-slate-500 dark:text-slate-400">
                                         <x-plan.duration-label :days="$plan->duration_days" />
                                     </p>
@@ -370,26 +358,88 @@
                                             <span class="text-lg text-slate-400 line-through tabular-nums dark:text-slate-500">₹{{ number_format($listPrice) }}</span>
                                         @endif
                                         <span class="text-3xl font-extrabold text-slate-900 tabular-nums dark:text-white">
-                                            ₹<span x-text="Math.round(quote().final).toLocaleString('en-IN')">{{ number_format($finalPrice) }}</span>
+                                            ₹{{ number_format($finalPrice) }}
                                         </span>
                                     </div>
-                                    <p x-show="quote().savings > 0" x-cloak class="text-xs font-semibold text-emerald-600 dark:text-emerald-400">
-                                        {{ __('subscriptions.coupon_extra_save_prefix') }}₹<span x-text="Math.round(quote().savings).toLocaleString('en-IN')"></span>
-                                    </p>
                                 </div>
                             @endif
 
-                            <ul class="mt-6 flex-1 space-y-2.5 border-t border-slate-100 pt-5 text-sm text-slate-700 dark:border-slate-700 dark:text-slate-200">
-                                @foreach ($featureRows as $feat)
-                                    <li class="flex gap-2.5">
-                                        <span class="mt-0.5 shrink-0 text-emerald-600 dark:text-emerald-400" aria-hidden="true">✓</span>
-                                        <span>
-                                            <span class="font-semibold text-slate-900 dark:text-white">{{ PlanFeatureLabel::label((string) $feat->key) }}</span>
-                                            <span class="text-slate-600 dark:text-slate-300"> — {{ PlanFeatureLabel::formatValue((string) $feat->key, (string) $feat->value) }}</span>
-                                        </span>
-                                    </li>
-                                @endforeach
-                            </ul>
+                            @if ($primaryFeatureRows->isEmpty() && $secondaryFeatureRows->isNotEmpty())
+                                <ul class="mt-6 flex-1 space-y-2 border-t border-slate-100 pt-5 text-sm dark:border-slate-700" role="list">
+                                    @foreach ($secondaryFeatureRows as $feat)
+                                        <li class="flex gap-2.5 text-slate-700 dark:text-slate-200" role="listitem">
+                                            <span class="mt-0.5 shrink-0 text-emerald-600/80 dark:text-emerald-400/90" aria-hidden="true">✓</span>
+                                            <span>
+                                                <span class="font-medium text-slate-900 dark:text-white">{{ PlanFeatureLabel::label((string) $feat->key) }}</span>
+                                                <span class="text-slate-600 dark:text-slate-400"> — {{ PlanFeatureLabel::formatValue((string) $feat->key, (string) $feat->value) }}</span>
+                                            </span>
+                                        </li>
+                                    @endforeach
+                                </ul>
+                            @else
+                                <div
+                                    class="mt-6 flex-1 border-t border-slate-100 pt-5 dark:border-slate-700"
+                                    x-data="{ planFeaturesExpanded: false }"
+                                >
+                                    @if ($primaryFeatureRows->isNotEmpty())
+                                        <ul class="space-y-2" role="list">
+                                            @foreach ($primaryFeatureRows as $feat)
+                                                <li
+                                                    class="flex gap-3 rounded-xl border border-slate-100/90 bg-slate-50/70 px-3 py-2.5 dark:border-slate-700/80 dark:bg-slate-900/35"
+                                                    role="listitem"
+                                                >
+                                                    <x-plan.feature-highlight-icon :feature-key="(string) $feat->key" class="mt-0.5" />
+                                                    <span class="min-w-0 flex-1 text-sm leading-snug">
+                                                        <span class="font-semibold text-slate-900 dark:text-white">{{ PlanFeatureLabel::label((string) $feat->key) }}</span>
+                                                        <span class="text-slate-600 dark:text-slate-400"> — {{ PlanFeatureLabel::formatValue((string) $feat->key, (string) $feat->value) }}</span>
+                                                    </span>
+                                                </li>
+                                            @endforeach
+                                        </ul>
+                                    @endif
+
+                                    @if ($secondaryFeatureRows->isNotEmpty())
+                                        <button
+                                            type="button"
+                                            class="mt-4 flex w-full items-center justify-center gap-1.5 rounded-lg py-2 text-sm font-semibold text-indigo-600 transition hover:text-indigo-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 dark:text-indigo-400 dark:hover:text-indigo-300 dark:focus-visible:ring-offset-slate-900"
+                                            @click="planFeaturesExpanded = ! planFeaturesExpanded"
+                                            :aria-expanded="planFeaturesExpanded ? 'true' : 'false'"
+                                            aria-controls="plan-{{ $plan->id }}-features-more"
+                                        >
+                                            <span x-show="! planFeaturesExpanded" x-cloak>{{ __('subscriptions.pricing_features_show_more') }}</span>
+                                            <span x-show="planFeaturesExpanded" x-cloak>{{ __('subscriptions.pricing_features_show_less') }}</span>
+                                            <svg class="h-4 w-4 shrink-0 transition-transform duration-200" :class="planFeaturesExpanded ? 'rotate-180' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                                            </svg>
+                                        </button>
+
+                                        <div
+                                            id="plan-{{ $plan->id }}-features-more"
+                                            x-show="planFeaturesExpanded"
+                                            x-transition:enter="transition ease-out duration-200"
+                                            x-transition:enter-start="opacity-0 -translate-y-0.5"
+                                            x-transition:enter-end="opacity-100 translate-y-0"
+                                            x-transition:leave="transition ease-in duration-150"
+                                            x-transition:leave-start="opacity-100"
+                                            x-transition:leave-end="opacity-0"
+                                            x-cloak
+                                            class="mt-1 border-t border-slate-100/80 pt-3 dark:border-slate-700/80"
+                                        >
+                                            <ul class="space-y-1.5 text-sm text-slate-600 dark:text-slate-300" role="list" aria-label="{{ __('subscriptions.pricing_features_extended_list') }}">
+                                                @foreach ($secondaryFeatureRows as $feat)
+                                                    <li class="flex gap-2.5" role="listitem">
+                                                        <span class="mt-1.5 h-1 shrink-0 w-1 rounded-full bg-emerald-500/80" aria-hidden="true"></span>
+                                                        <span class="min-w-0">
+                                                            <span class="font-medium text-slate-800 dark:text-slate-100">{{ PlanFeatureLabel::label((string) $feat->key) }}</span>
+                                                            <span class="text-slate-500 dark:text-slate-400"> — {{ PlanFeatureLabel::formatValue((string) $feat->key, (string) $feat->value) }}</span>
+                                                        </span>
+                                                    </li>
+                                                @endforeach
+                                            </ul>
+                                        </div>
+                                    @endif
+                                </div>
+                            @endif
 
                             <div class="mt-8">
                                 @if (! $plan->is_active)

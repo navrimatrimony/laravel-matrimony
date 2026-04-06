@@ -17,6 +17,11 @@
             {{ session('success') }}
         </div>
     @endif
+    @if (session('error'))
+        <div class="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800 dark:border-red-900 dark:bg-red-950/40 dark:text-red-200">
+            {{ session('error') }}
+        </div>
+    @endif
 
     <div class="overflow-x-auto">
         <table class="min-w-full text-sm text-left">
@@ -25,10 +30,10 @@
                     <th class="py-3 pr-4">Name</th>
                     <th class="py-3 pr-4">Slug</th>
                     <th class="py-3 pr-4">Price</th>
-                    <th class="py-3 pr-4">Discount</th>
                     <th class="py-3 pr-4">Final</th>
                     <th class="py-3 pr-4">Days</th>
                     <th class="py-3 pr-4">Active</th>
+                    <th class="py-3 pr-4">Highlight</th>
                     <th class="py-3 pr-4"></th>
                 </tr>
             </thead>
@@ -43,12 +48,39 @@
                         </td>
                         <td class="py-3 pr-4 text-gray-600 dark:text-gray-300">{{ $plan->slug }}</td>
                         <td class="py-3 pr-4">₹{{ number_format((float) $plan->price, 2) }}</td>
-                        <td class="py-3 pr-4">{{ $plan->discount_percent !== null ? $plan->discount_percent.'%' : '—' }}</td>
                         <td class="py-3 pr-4 font-semibold text-emerald-600 dark:text-emerald-400">₹{{ number_format($plan->final_price, 2) }}</td>
                         <td class="py-3 pr-4">{{ $plan->duration_days === 0 ? '∞' : $plan->duration_days }}</td>
-                        <td class="py-3 pr-4">{{ $plan->is_active ? 'Yes' : 'No' }}</td>
                         <td class="py-3 pr-4">
-                            <a href="{{ route('admin.plans.edit', $plan) }}" class="text-indigo-600 hover:text-indigo-800 dark:text-indigo-400">Edit</a>
+                            <form method="POST" action="{{ route('admin.plans.toggle', $plan) }}" class="inline">
+                                @csrf
+                                @method('PATCH')
+                                <input type="hidden" name="field" value="is_active" />
+                                <input type="hidden" name="value" value="{{ $plan->is_active ? '0' : '1' }}" />
+                                <button type="submit" class="text-xs font-semibold rounded-md px-2 py-1 {{ $plan->is_active ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-200' : 'bg-gray-200 text-gray-700 dark:bg-gray-700 dark:text-gray-200' }}">
+                                    {{ $plan->is_active ? 'On' : 'Off' }}
+                                </button>
+                            </form>
+                        </td>
+                        <td class="py-3 pr-4">
+                            <form method="POST" action="{{ route('admin.plans.toggle', $plan) }}" class="inline">
+                                @csrf
+                                @method('PATCH')
+                                <input type="hidden" name="field" value="highlight" />
+                                <input type="hidden" name="value" value="{{ $plan->highlight ? '0' : '1' }}" />
+                                <button type="submit" class="text-xs font-semibold rounded-md px-2 py-1 {{ $plan->highlight ? 'bg-amber-100 text-amber-900 dark:bg-amber-900/40 dark:text-amber-100' : 'bg-gray-200 text-gray-700 dark:bg-gray-700 dark:text-gray-200' }}">
+                                    {{ $plan->highlight ? '★' : '—' }}
+                                </button>
+                            </form>
+                        </td>
+                        <td class="py-3 pr-4 whitespace-nowrap">
+                            <a href="{{ route('admin.plans.edit', $plan) }}" class="text-indigo-600 hover:text-indigo-800 dark:text-indigo-400 mr-3">Edit</a>
+                            @if (strtolower((string) $plan->slug) !== 'free')
+                                <form method="POST" action="{{ route('admin.plans.destroy', $plan) }}" class="inline" onsubmit="return confirm(@json(__('admin_commerce.plan_confirm_delete')));">
+                                    @csrf
+                                    @method('DELETE')
+                                    <button type="submit" class="text-red-600 hover:text-red-800 dark:text-red-400 text-xs font-semibold">{{ __('admin_commerce.plan_delete') }}</button>
+                                </form>
+                            @endif
                         </td>
                     </tr>
                 @endforeach

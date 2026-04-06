@@ -109,7 +109,7 @@ class InterestController extends Controller
             return back()->with('error', __('interest.cannot_send_to_profile'));
         }
 
-        // Daily interest send quota via entitlements + user_feature_usage (new sends only)
+        // Daily interest send quota via entitlements + user_feature_usages (new sends only)
         $alreadySent = Interest::where('sender_profile_id', $senderProfile->id)
             ->where('receiver_profile_id', $receiverProfile->id)
             ->exists();
