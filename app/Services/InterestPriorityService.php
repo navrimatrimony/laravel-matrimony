@@ -23,10 +23,7 @@ class InterestPriorityService
 
         $sub = Subscription::query()
             ->where('user_id', $user->id)
-            ->where('status', Subscription::STATUS_ACTIVE)
-            ->where(function ($q) {
-                $q->whereNull('ends_at')->orWhere('ends_at', '>', now());
-            })
+            ->effectivelyActiveForAccess()
             ->orderByDesc('starts_at')
             ->first();
 

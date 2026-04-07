@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Services\EntitlementService;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
@@ -14,6 +15,8 @@ class Subscription extends Model
 
     public const STATUS_CANCELLED = 'cancelled';
 
+    public const STATUS_PENDING = 'pending';
+
     protected $fillable = [
         'user_id',
         'plan_id',
@@ -23,11 +26,13 @@ class Subscription extends Model
         'starts_at',
         'ends_at',
         'status',
+        'meta',
     ];
 
     protected $casts = [
         'starts_at' => 'datetime',
         'ends_at' => 'datetime',
+        'meta' => 'array',
     ];
 
     /**
@@ -50,6 +55,31 @@ class Subscription extends Model
             'status' => self::STATUS_CANCELLED,
             'updated_at' => now(),
         ]);
+    }
+
+    /**
+     * Paid period active OR within grace_days after ends_at (status must still be {@see self::STATUS_ACTIVE}).
+     *
+     * @param  Builder<Subscription>  $query
+     * @return Builder<Subscription>
+     */
+    public function scopeEffectivelyActiveForAccess(Builder $query): Builder
+    {
+        $grace = (int) config('subscription.grace_days', 0);
+
+        return $query->where('status', self::STATUS_ACTIVE)
+            ->where(function ($q) use ($grace) {
+                $q->whereNull('ends_at')
+                    ->orWhere('ends_at', '>', now())
+                    ->orWhere(function ($q2) use ($grace) {
+                        if ($grace <= 0) {
+                            return;
+                        }
+                        $q2->whereNotNull('ends_at')
+                            ->where('ends_at', '<=', now())
+                            ->where('ends_at', '>', now()->subDays($grace));
+                    });
+            });
     }
 
     protected static function booted(): void
@@ -102,7 +132,15 @@ class Subscription extends Model
         if ($this->ends_at === null) {
             return true;
         }
+        if ($this->ends_at->isFuture()) {
+            return true;
+        }
 
-        return $this->ends_at->isFuture();
+        $grace = (int) config('subscription.grace_days', 0);
+        if ($grace <= 0) {
+            return false;
+        }
+
+        return $this->ends_at->greaterThan(now()->subDays($grace));
     }
 }

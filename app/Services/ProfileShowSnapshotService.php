@@ -5,10 +5,10 @@ namespace App\Services;
 use App\Models\Caste;
 use App\Models\City;
 use App\Models\District;
+use App\Models\MasterDiet;
 use App\Models\MasterEducation;
 use App\Models\MasterMaritalStatus;
 use App\Models\MatrimonyProfile;
-use App\Models\MasterDiet;
 use App\Models\Profession;
 use App\Models\Religion;
 use App\Models\State;
@@ -453,6 +453,8 @@ class ProfileShowSnapshotService
                 }
             }
         }
+
+        $marriageBlocks = $this->dedupeMarriageBlocks($marriageBlocks);
 
         if ($rows === [] && $marriageBlocks === []) {
             return null;
@@ -917,6 +919,28 @@ class ProfileShowSnapshotService
             'icon' => $icon,
             'rows' => $rows,
         ];
+    }
+
+    /**
+     * Duplicate {@code profile_marriages} rows with identical display lines → single card.
+     *
+     * @param  list<list<string>>  $blocks
+     * @return list<list<string>>
+     */
+    private function dedupeMarriageBlocks(array $blocks): array
+    {
+        $seen = [];
+        $out = [];
+        foreach ($blocks as $block) {
+            $key = json_encode($block, JSON_UNESCAPED_UNICODE);
+            if ($key === false || isset($seen[$key])) {
+                continue;
+            }
+            $seen[$key] = true;
+            $out[] = $block;
+        }
+
+        return $out;
     }
 
     private function present(?string $v): bool

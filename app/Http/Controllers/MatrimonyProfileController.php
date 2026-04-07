@@ -28,6 +28,7 @@ use App\Services\ProfileCompletenessService;
 use App\Services\ProfileFieldConfigurationService;
 use App\Services\ProfilePhotoAccessService;
 use App\Services\ProfileRotationService;
+use App\Services\ProfileSearchRankingService;
 use App\Services\ProfileShowReadService;
 use App\Services\ProfileShowSnapshotService;
 use App\Services\ViewTrackingService;
@@ -1055,17 +1056,25 @@ class MatrimonyProfileController extends Controller
             $contactGrantReveal = null;
         }
 
-        // Contact reveal CTA + usage strip: SSOT {@see FeatureUsageService} — same $user id as POST contact-reveal.
-        $featureUsageForContact = app(FeatureUsageService::class);
-        $contactUsageSnapshot = $featureUsageForContact->getContactViewUsageSnapshot($user);
-        $canUseContact = false;
-        if (! $isOwnProfile) {
-            $userId = (int) $user->id;
-            $canUseContact = $featureUsageForContact->canUse(
-                $userId,
-                FeatureUsageService::FEATURE_CONTACT_VIEW_LIMIT
-            );
+        // Profile show gates: precompute once for Blade (no direct service calls in views).
+        $featureUsage = app(FeatureUsageService::class);
+        $gateStates = [
+            'contact_view_limit' => $featureUsage->getFeatureState($user, 'contact_view_limit'),
+            'daily_profile_view_limit' => $featureUsage->getFeatureState($user, 'daily_profile_view_limit'),
+            'chat_send_limit' => $featureUsage->getFeatureState($user, 'chat_send_limit'),
+            'chat_can_read' => $featureUsage->getFeatureState($user, 'chat_can_read'),
+            'who_viewed_me_access' => $featureUsage->getFeatureState($user, 'who_viewed_me_access'),
+            'interest_send_limit' => $featureUsage->getFeatureState($user, 'interest_send_limit'),
+        ];
+        $showGateSoftLimitWarning = false;
+        foreach (['contact_view_limit', 'interest_send_limit', 'chat_send_limit', 'daily_profile_view_limit'] as $_gk) {
+            if (($gateStates[$_gk]['reason'] ?? null) === 'soft_limit_warning') {
+                $showGateSoftLimitWarning = true;
+                break;
+            }
         }
+        $contactUsageSnapshot = $featureUsage->getContactViewUsageSnapshot($user);
+        $canUseContact = ! $isOwnProfile && ($gateStates['contact_view_limit']['allowed'] ?? false);
 
         $canViewContact = $isOwnProfile
             || (trim((string) ($contactAccess['paid_contact_phone'] ?? '')) !== '')
@@ -1161,6 +1170,8 @@ class MatrimonyProfileController extends Controller
                 'contactAccess' => $contactAccess,
                 'canUseContact' => $canUseContact,
                 'contactUsageSnapshot' => $contactUsageSnapshot,
+                'gateStates' => $gateStates,
+                'showGateSoftLimitWarning' => $showGateSoftLimitWarning,
                 'hasBlockingConflicts' => $hasBlockingConflicts,
                 'conflictRecords' => $conflictRecords,
                 'contactRequestState' => $contactRequestState,
@@ -1327,6 +1338,8 @@ class MatrimonyProfileController extends Controller
                 $query->whereNotIn('id', $excludeIds);
             }
         }
+
+        ProfileSearchRankingService::applySpotlightFirst($query);
 
         $sort = (string) $request->input('sort', 'latest');
         $allowedSorts = ['latest', 'age_asc', 'age_desc', 'height_asc', 'height_desc', 'discover'];

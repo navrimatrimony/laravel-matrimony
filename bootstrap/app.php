@@ -16,6 +16,9 @@ return Application::configure(basePath: dirname(__DIR__))
             'admin' => \App\Http\Middleware\EnsureUserIsAdmin::class,
             'subscription.feature' => \App\Http\Middleware\EnsureSubscriptionFeature::class,
         ]);
+        $middleware->web(replace: [
+            \Illuminate\Foundation\Http\Middleware\ValidateCsrfToken::class => \App\Http\Middleware\VerifyCsrfToken::class,
+        ]);
         $middleware->appendToGroup('web', [
             \App\Http\Middleware\SetLocaleFromQuery::class,
             \App\Http\Middleware\UpdateUserLastSeen::class,

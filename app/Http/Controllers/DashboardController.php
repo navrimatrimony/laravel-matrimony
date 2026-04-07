@@ -6,8 +6,11 @@ use App\Models\Conversation;
 use App\Models\Interest;
 use App\Models\MatrimonyProfile;
 use App\Models\Message;
+use App\Models\ProfileView;
 use App\Models\Shortlist;
 use App\Services\ProfileCompletenessService;
+use App\Services\SubscriptionService;
+use App\Services\UserWalletService;
 use Illuminate\Support\Facades\DB;
 
 /*
@@ -125,10 +128,31 @@ class DashboardController extends Controller
             })->filter()->values();
         }
 
+        $walletSummary = app(UserWalletService::class)->walletSummary($user);
+        $activeSub = app(SubscriptionService::class)->getActiveSubscription($user);
+        $planExpiresInDays = null;
+        if ($activeSub && $activeSub->ends_at && $activeSub->ends_at->isFuture()) {
+            $planExpiresInDays = max(0, (int) now()->diffInDays($activeSub->ends_at, false));
+        }
+        $profileViewersRecentCount = (int) ProfileView::query()
+            ->where('viewed_profile_id', $myProfileId)
+            ->where('created_at', '>=', now()->subDays(30))
+            ->pluck('viewer_profile_id')
+            ->unique()
+            ->count();
+
+        $referralShareUrl = $user->referral_code
+            ? url(route('register', ['ref' => $user->referral_code], false))
+            : null;
+
         return view('dashboard', [
             'hasProfile' => true,
             'profile' => $profile,
             'myProfileId' => $myProfileId,
+            'walletSummary' => $walletSummary,
+            'planExpiresInDays' => $planExpiresInDays,
+            'profileViewersRecentCount' => $profileViewersRecentCount,
+            'referralShareUrl' => $referralShareUrl,
             'sentInterestsCount' => $sentInterestsCount,
             'receivedPendingCount' => $receivedPendingCount,
             'acceptedInterestsCount' => $acceptedInterestsCount,

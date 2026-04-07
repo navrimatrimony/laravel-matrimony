@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Auth;
 use App\Http\Controllers\Concerns\RedirectsUnprofiledUsers;
 use App\Http\Controllers\Controller;
 use App\Models\User;
+use App\Services\ReferralService;
 use Illuminate\Auth\Events\Registered;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -32,6 +33,7 @@ class RegisteredUserController extends Controller
             'mobile' => ['required', 'string', 'max:20'],
             'password' => ['required', 'confirmed', Rules\Password::defaults()],
             'registering_for' => ['required', 'string', Rule::in(['self', 'parent_guardian', 'sibling', 'relative', 'friend', 'other'])],
+            'invite_code' => ['nullable', 'string', 'max:16'],
         ]);
 
         $mobileDigits = preg_replace('/\D/', '', $request->mobile);
@@ -54,6 +56,9 @@ class RegisteredUserController extends Controller
             // Legacy NOT NULL column; candidate gender is captured on matrimony_profiles in onboarding.
             'gender' => '',
         ]);
+
+        app(ReferralService::class)->recordReferralIfEligible($user, $request->input('invite_code'));
+        $user->forceFill(['referral_code' => User::generateUniqueReferralCode()])->saveQuietly();
 
         event(new Registered($user));
 

@@ -64,6 +64,14 @@
                 </div>
             @endif
 
+            <x-monetization.urgency-strip
+                :profileViewersCount="$profileViewersRecentCount ?? 0"
+                :unreadMessages="$chatUnreadCount ?? 0"
+                :planExpiresInDays="$planExpiresInDays"
+                :walletBalanceDisplay="($walletSummary['wallet_enabled'] ?? false) && (($walletSummary['balance_paise'] ?? 0) > 0) ? $walletSummary['balance_rupees_display'] : null"
+                :shareReferralUrl="$referralShareUrl"
+            />
+
             {{-- Profile Summary Card with Photo --}}
             <div class="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6 mb-6 border-l-4 border-red-600 border border-gray-200 dark:border-gray-700">
                 <div class="flex flex-col md:flex-row items-center md:items-start gap-6">

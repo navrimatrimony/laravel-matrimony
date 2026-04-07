@@ -2,19 +2,25 @@
 
 namespace App\Models;
 
+use App\Services\FeatureUsageService;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\Cache;
 
 class Plan extends Model
 {
     protected $fillable = [
         'name',
+        'description',
         'slug',
+        'tier',
         'price',
         'discount_percent',
         'duration_days',
         'is_active',
+        'is_visible',
         'sort_order',
         'highlight',
     ];
@@ -24,8 +30,10 @@ class Plan extends Model
         'discount_percent' => 'integer',
         'duration_days' => 'integer',
         'is_active' => 'boolean',
+        'is_visible' => 'boolean',
         'sort_order' => 'integer',
         'highlight' => 'boolean',
+        'tier' => 'integer',
     ];
 
     protected static function booted(): void
@@ -45,6 +53,68 @@ class Plan extends Model
     public function features(): HasMany
     {
         return $this->hasMany(PlanFeature::class, 'plan_id');
+    }
+
+    /**
+     * Cached {@see features()} rows (60s TTL). Invalidated when {@see PlanFeature} rows change.
+     *
+     * @return Collection<int, PlanFeature>
+     */
+    public function getCachedFeatures(): Collection
+    {
+        return Cache::rememberForever(
+            "plan_features_{$this->id}",
+            fn () => $this->features()->get()
+        );
+    }
+
+    /**
+     * Typed feature value wrapper over {@see getFeatureValue} using {@see config('plan_features')}.
+     * Does not replace existing string-based APIs (backward compatible).
+     */
+    public function getTypedFeatureValue(string $key): mixed
+    {
+        $value = $this->getFeatureValue($key);
+        if ($value === null) {
+            return null;
+        }
+
+        $normalized = app(FeatureUsageService::class)->normalizeFeatureKey($key);
+        $config = config('plan_features')[$normalized] ?? null;
+        if (! $config || ! is_array($config)) {
+            return $value;
+        }
+
+        return match ((string) ($config['type'] ?? '')) {
+            'limit', 'days' => (int) $value,
+            'boolean' => (bool) ((int) $value),
+            default => $value,
+        };
+    }
+
+    public function forgetCachedPlanFeatures(): void
+    {
+        static::forgetCachedPlanFeaturesByPlanId((int) $this->id);
+    }
+
+    public static function forgetCachedPlanFeaturesByPlanId(int $planId): void
+    {
+        Cache::forget("plan_features_{$planId}");
+    }
+
+    /**
+     * Feature value for a key, with {@see FeatureUsageService} alias normalization.
+     */
+    public function getFeatureValue(string $key): ?string
+    {
+        $normalized = app(FeatureUsageService::class)->normalizeFeatureKey($key);
+        $rows = $this->relationLoaded('features')
+            ? $this->features
+            : $this->getCachedFeatures();
+
+        $row = $rows->firstWhere('key', $normalized);
+
+        return $row?->value !== null ? (string) $row->value : null;
     }
 
     public function subscriptions(): HasMany

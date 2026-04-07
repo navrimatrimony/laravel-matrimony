@@ -4,6 +4,7 @@
     /** @var \App\Models\Coupon $coupon */
     $selectedPlans = old('plan_ids', $coupon->applicable_plan_ids ?? []);
     $selectedDurations = old('duration_types', $coupon->applicable_duration_types ?? []);
+    $typeVal = old('type', $coupon->type === \App\Models\Coupon::TYPE_FIXED ? \App\Models\Coupon::TYPE_FLAT : $coupon->type);
 @endphp
 
 @section('content')
@@ -34,13 +35,31 @@
             <div>
                 <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{{ __('admin_commerce.coupon_type') }}</label>
                 <select name="type" class="w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white shadow-sm">
-                    <option value="{{ \App\Models\Coupon::TYPE_PERCENT }}" @selected(old('type', $coupon->type) === \App\Models\Coupon::TYPE_PERCENT)>{{ __('admin_commerce.coupon_type_percent') }}</option>
-                    <option value="{{ \App\Models\Coupon::TYPE_FIXED }}" @selected(old('type', $coupon->type) === \App\Models\Coupon::TYPE_FIXED)>{{ __('admin_commerce.coupon_type_fixed') }}</option>
+                    <option value="{{ \App\Models\Coupon::TYPE_PERCENT }}" @selected($typeVal === \App\Models\Coupon::TYPE_PERCENT)>{{ __('admin_commerce.coupon_type_percent') }}</option>
+                    <option value="{{ \App\Models\Coupon::TYPE_FLAT }}" @selected($typeVal === \App\Models\Coupon::TYPE_FLAT)>{{ __('admin_commerce.coupon_type_flat') }}</option>
+                    <option value="{{ \App\Models\Coupon::TYPE_DAYS }}" @selected($typeVal === \App\Models\Coupon::TYPE_DAYS)>{{ __('admin_commerce.coupon_type_days') }}</option>
+                    <option value="{{ \App\Models\Coupon::TYPE_FEATURE }}" @selected($typeVal === \App\Models\Coupon::TYPE_FEATURE)>{{ __('admin_commerce.coupon_type_feature') }}</option>
                 </select>
             </div>
             <div>
                 <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{{ __('admin_commerce.coupon_value') }}</label>
                 <input type="number" name="value" value="{{ old('value', $coupon->value) }}" required min="0" step="0.01"
+                    class="w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white shadow-sm" />
+                <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">{{ __('admin_commerce.coupon_value_hint') }}</p>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 border border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-4">
+            <div class="sm:col-span-2 text-sm font-medium text-gray-700 dark:text-gray-300">{{ __('admin_commerce.coupon_feature_section') }}</div>
+            <div>
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{{ __('admin_commerce.coupon_feature_key') }}</label>
+                <input type="text" name="feature_key" value="{{ old('feature_key', $coupon->feature_payload['feature_key'] ?? '') }}" maxlength="64"
+                    placeholder="e.g. chat_can_read"
+                    class="w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white shadow-sm font-mono text-sm" />
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{{ __('admin_commerce.coupon_grant_days') }}</label>
+                <input type="number" name="grant_days" value="{{ old('grant_days', $coupon->feature_payload['grant_days'] ?? 30) }}" min="1" max="3650"
                     class="w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white shadow-sm" />
             </div>
         </div>

@@ -6,6 +6,7 @@ use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
+use Illuminate\Support\Str;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
@@ -44,6 +45,7 @@ class User extends Authenticatable implements MustVerifyEmail
         'gender',
         'mobile_verified_at',
         'registering_for',
+        'referral_code',
     ];
 
     /*
@@ -106,6 +108,41 @@ class User extends Authenticatable implements MustVerifyEmail
         return $this->hasMany(UserFeatureUsage::class);
     }
 
+    public function wallet(): HasOne
+    {
+        return $this->hasOne(UserWallet::class);
+    }
+
+    public function referralsMade(): HasMany
+    {
+        return $this->hasMany(UserReferral::class, 'referrer_id');
+    }
+
+    public function referralReceived(): HasOne
+    {
+        return $this->hasOne(UserReferral::class, 'referred_user_id');
+    }
+
+    public function profileBoosts(): HasMany
+    {
+        return $this->hasMany(ProfileBoost::class);
+    }
+
+    /**
+     * Unique uppercase code for shareable referral links (assigned after registration).
+     */
+    public static function generateUniqueReferralCode(): string
+    {
+        for ($i = 0; $i < 20; $i++) {
+            $code = strtoupper(Str::random(8));
+            if (! static::query()->where('referral_code', $code)->exists()) {
+                return $code;
+            }
+        }
+
+        return strtoupper(substr(bin2hex(random_bytes(8)), 0, 12));
+    }
+
     /**
      * Latest active subscription row (by starts_at), if any.
      */
@@ -114,10 +151,7 @@ class User extends Authenticatable implements MustVerifyEmail
         return $this->hasOne(Subscription::class)
             ->ofMany(
                 ['starts_at' => 'max'],
-                fn ($q) => $q->where('status', Subscription::STATUS_ACTIVE)
-                    ->where(function ($qq) {
-                        $qq->whereNull('ends_at')->orWhere('ends_at', '>', now());
-                    })
+                fn ($q) => $q->effectivelyActiveForAccess()
             );
     }
 

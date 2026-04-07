@@ -13,6 +13,17 @@ class PlanFeature extends Model
         'value',
     ];
 
+    protected static function booted(): void
+    {
+        static::saved(function (PlanFeature $feature): void {
+            Plan::forgetCachedPlanFeaturesByPlanId((int) $feature->plan_id);
+        });
+
+        static::deleted(function (PlanFeature $feature): void {
+            Plan::forgetCachedPlanFeaturesByPlanId((int) $feature->plan_id);
+        });
+    }
+
     public function plan(): BelongsTo
     {
         return $this->belongsTo(Plan::class, 'plan_id');

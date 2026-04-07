@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\Plan;
 use App\Models\Subscription;
 use App\Models\UserEntitlement;
+use Illuminate\Support\Facades\DB;
 
 class EntitlementService
 {
@@ -24,6 +25,12 @@ class EntitlementService
             return;
         }
 
+        $grace = (int) config('subscription.grace_days', 0);
+        $validUntil = null;
+        if ($subscription->ends_at !== null) {
+            $validUntil = $subscription->ends_at->copy()->addDays($grace);
+        }
+
         foreach ($plan->features as $feature) {
             UserEntitlement::updateOrCreate(
                 [
@@ -31,7 +38,8 @@ class EntitlementService
                     'entitlement_key' => $feature->key,
                 ],
                 [
-                    'valid_until' => $subscription->ends_at,
+                    'valid_until' => $validUntil,
+                    'value_override' => null,
                     'revoked_at' => null,
                 ]
             );
@@ -45,10 +53,7 @@ class EntitlementService
     {
         $sub = Subscription::query()
             ->where('user_id', $userId)
-            ->where('status', Subscription::STATUS_ACTIVE)
-            ->where(function ($q) {
-                $q->whereNull('ends_at')->orWhere('ends_at', '>', now());
-            })
+            ->effectivelyActiveForAccess()
             ->orderByDesc('starts_at')
             ->first();
 
@@ -75,8 +80,14 @@ class EntitlementService
      */
     public function getValue(int $userId, string $key, mixed $default = null): mixed
     {
-        if ($this->findValidEntitlement($userId, $key) === null) {
+        $ent = $this->findValidEntitlement($userId, $key);
+        if ($ent === null) {
             return $default;
+        }
+
+        $override = $ent->value_override ?? null;
+        if (is_string($override) && $override !== '') {
+            return $override;
         }
 
         $plan = $this->resolveActivePlanWithFeatures($userId);
@@ -110,12 +121,28 @@ class EntitlementService
      */
     public function revokeExpired(): void
     {
-        UserEntitlement::whereNull('revoked_at')
+        $grace = (int) config('subscription.grace_days', 0);
+
+        $query = UserEntitlement::query()
+            ->whereNull('revoked_at')
             ->whereNotNull('valid_until')
-            ->where('valid_until', '<', now())
-            ->update([
-                'revoked_at' => now(),
-            ]);
+            ->where('valid_until', '<', now());
+
+        if ($grace > 0) {
+            $query->whereNotExists(function ($sub) use ($grace) {
+                $sub->select(DB::raw(1))
+                    ->from('subscriptions')
+                    ->whereColumn('subscriptions.user_id', 'user_entitlements.user_id')
+                    ->where('subscriptions.status', Subscription::STATUS_ACTIVE)
+                    ->whereNotNull('subscriptions.ends_at')
+                    ->where('subscriptions.ends_at', '<=', now())
+                    ->where('subscriptions.ends_at', '>', now()->subDays($grace));
+            });
+        }
+
+        $query->update([
+            'revoked_at' => now(),
+        ]);
     }
 
     /**
@@ -123,12 +150,27 @@ class EntitlementService
      */
     private function validEntitlementsQuery(int $userId, string $key)
     {
+        $grace = (int) config('subscription.grace_days', 0);
+
         return UserEntitlement::query()
             ->where('user_id', $userId)
             ->where('entitlement_key', $key)
             ->whereNull('revoked_at')
-            ->where(function ($q) {
-                $q->whereNull('valid_until')->orWhere('valid_until', '>', now());
+            ->where(function ($q) use ($grace) {
+                $q->whereNull('valid_until')
+                    ->orWhere('valid_until', '>', now());
+
+                if ($grace > 0) {
+                    $q->orWhereExists(function ($sub) use ($grace) {
+                        $sub->select(DB::raw(1))
+                            ->from('subscriptions')
+                            ->whereColumn('subscriptions.user_id', 'user_entitlements.user_id')
+                            ->where('subscriptions.status', Subscription::STATUS_ACTIVE)
+                            ->whereNotNull('subscriptions.ends_at')
+                            ->where('subscriptions.ends_at', '<=', now())
+                            ->where('subscriptions.ends_at', '>', now()->subDays($grace));
+                    });
+                }
             });
     }
 
@@ -145,10 +187,7 @@ class EntitlementService
 
         $sub = Subscription::query()
             ->where('user_id', $userId)
-            ->where('status', Subscription::STATUS_ACTIVE)
-            ->where(function ($q) {
-                $q->whereNull('ends_at')->orWhere('ends_at', '>', now());
-            })
+            ->effectivelyActiveForAccess()
             ->orderByDesc('starts_at')
             ->with(['plan.features'])
             ->first();

@@ -27,6 +27,7 @@ class Kernel extends ConsoleKernel
     {
         // NightlyOcrLearningJob is scheduled in routes/console.php (Day-29)
         $schedule->command('intake:purge-old-files')->dailyAt('03:00');
+        $schedule->command('subscriptions:expire')->daily();
 		$schedule->command('showcase-chat:tick')->everyMinute();
     }
 	

@@ -12,6 +12,7 @@ class UserEntitlement extends Model
         'user_id',
         'entitlement_key',
         'valid_until',
+        'value_override',
         'revoked_at',
     ];
 

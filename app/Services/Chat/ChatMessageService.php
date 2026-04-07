@@ -8,6 +8,7 @@ use App\Models\Message;
 use App\Models\MessageParticipantState;
 use App\Notifications\NewChatMessageNotification;
 use App\Services\FeatureUsageService;
+use App\Services\NotificationService;
 use App\Services\ShowcaseChat\ShowcaseOrchestrationService;
 use App\Services\UserEntitlementService;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
@@ -190,6 +191,18 @@ class ChatMessageService
                         messagePreview: $message->body_text,
                         messageId: (int) $message->id,
                     ));
+
+                    if (! app(FeatureUsageService::class)->canUse((int) $receiverUser->id, FeatureUsageService::FEATURE_CHAT_CAN_READ)) {
+                        try {
+                            app(NotificationService::class)->notifyChatReceivedWhileReadLocked(
+                                $receiverUser,
+                                $sender,
+                                (int) $conversation->id
+                            );
+                        } catch (\Throwable) {
+                            // Must not break messaging.
+                        }
+                    }
                 });
             }
 

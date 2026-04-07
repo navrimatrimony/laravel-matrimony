@@ -9,7 +9,17 @@ class Coupon extends Model
 {
     public const TYPE_PERCENT = 'percent';
 
+    /** Same as {@see self::TYPE_FLAT} in pricing logic (amount off). */
     public const TYPE_FIXED = 'fixed';
+
+    /** Alias of fixed / “flat ₹ off” in product copy. */
+    public const TYPE_FLAT = 'flat';
+
+    /** Extra subscription days after checkout (whole days from {@code value}). */
+    public const TYPE_DAYS = 'days';
+
+    /** Temporary entitlement grant; details in {@see $feature_payload}. */
+    public const TYPE_FEATURE = 'feature';
 
     protected $fillable = [
         'code',
@@ -24,6 +34,7 @@ class Coupon extends Model
         'applicable_plan_ids',
         'applicable_duration_types',
         'description',
+        'feature_payload',
     ];
 
     protected $casts = [
@@ -36,6 +47,7 @@ class Coupon extends Model
         'min_purchase_amount' => 'decimal:2',
         'applicable_plan_ids' => 'array',
         'applicable_duration_types' => 'array',
+        'feature_payload' => 'array',
     ];
 
     public function appliesToPlan(int $planId): bool

@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\Coupon;
 use App\Models\Interest;
 use App\Models\Message;
 use App\Models\Plan;
@@ -42,6 +43,9 @@ class SubscriptionService
 
         $couponSvc = app(CouponService::class);
         $rawCoupon = trim((string) ($couponCode ?? ''));
+        if ($rawCoupon !== '' && ! config('monetization.coupons.enabled', true)) {
+            throw new HttpException(422, __('subscriptions.coupon_invalid'));
+        }
 
         return DB::transaction(function () use ($user, $plan, $planTermId, $planPriceId, $rawCoupon, $couponSvc) {
             $now = now();
@@ -58,6 +62,7 @@ class SubscriptionService
             $planTerm = null;
             $planPrice = null;
             $duration = (int) $plan->duration_days;
+            $baseAmount = (float) $plan->final_price;
             $coupon = null;
 
             if ($visiblePrices->isNotEmpty()) {
@@ -69,6 +74,7 @@ class SubscriptionService
                     throw new HttpException(422, __('subscriptions.invalid_billing_period'));
                 }
                 $duration = (int) $planPrice->duration_days;
+                $baseAmount = (float) $planPrice->final_price;
                 if ($rawCoupon !== '') {
                     $coupon = $couponSvc->lockCouponByCode($rawCoupon);
                     if (! $coupon) {
@@ -77,7 +83,7 @@ class SubscriptionService
                     $couponSvc->assertLockedCouponForCheckout(
                         $coupon,
                         (int) $plan->id,
-                        (float) $planPrice->final_price,
+                        $baseAmount,
                         (string) $planPrice->duration_type
                     );
                 }
@@ -97,6 +103,7 @@ class SubscriptionService
                         throw new HttpException(422, __('subscriptions.invalid_billing_period'));
                     }
                     $duration = (int) $planTerm->duration_days;
+                    $baseAmount = (float) $planTerm->final_price;
                     if ($rawCoupon !== '') {
                         $coupon = $couponSvc->lockCouponByCode($rawCoupon);
                         if (! $coupon) {
@@ -105,7 +112,7 @@ class SubscriptionService
                         $couponSvc->assertLockedCouponForCheckout(
                             $coupon,
                             (int) $plan->id,
-                            (float) $planTerm->final_price,
+                            $baseAmount,
                             (string) $planTerm->billing_key
                         );
                     }
@@ -117,10 +124,17 @@ class SubscriptionService
                     $couponSvc->assertLockedCouponForCheckout(
                         $coupon,
                         (int) $plan->id,
-                        (float) $plan->final_price,
+                        $baseAmount,
                         null
                     );
                 }
+            }
+
+            $subscriptionMeta = [];
+            if ($coupon) {
+                $applied = $this->applyCoupon($coupon, $baseAmount);
+                $duration += (int) ($applied['extra_duration_days'] ?? 0);
+                $subscriptionMeta = $applied['subscription_meta'] ?? [];
             }
 
             $endsAt = null;
@@ -137,26 +151,265 @@ class SubscriptionService
                 'starts_at' => $now,
                 'ends_at' => $endsAt,
                 'status' => Subscription::STATUS_ACTIVE,
+                'meta' => $subscriptionMeta !== [] ? $subscriptionMeta : null,
             ]);
 
             if ($coupon) {
                 $couponSvc->incrementRedemption($coupon);
             }
 
+            if ($coupon && $coupon->type === Coupon::TYPE_FEATURE) {
+                $this->applyFeatureCouponGrants($sub, $coupon);
+            }
+
+            app(ReferralService::class)->applyPurchaseRewardIfEligible($user, $plan);
+
             return $sub;
         });
     }
 
+    /**
+     * @return array{
+     *     discount_amount: float,
+     *     final_price: float,
+     *     extra_duration_days: int,
+     *     subscription_meta: array<string, mixed>
+     * }
+     */
+    public function applyCoupon(?Coupon $coupon, float $planPrice): array
+    {
+        if (! $coupon || ! config('monetization.coupons.enabled', true)) {
+            $planPrice = max(0, round($planPrice, 2));
+
+            return [
+                'discount_amount' => 0.0,
+                'final_price' => $planPrice,
+                'extra_duration_days' => 0,
+                'subscription_meta' => [],
+            ];
+        }
+
+        $planPrice = max(0, round($planPrice, 2));
+        $couponSvc = app(CouponService::class);
+
+        return match ($coupon->type) {
+            Coupon::TYPE_DAYS => [
+                'discount_amount' => 0.0,
+                'final_price' => $planPrice,
+                'extra_duration_days' => max(0, (int) round((float) $coupon->value)),
+                'subscription_meta' => [
+                    'coupon_applied' => [
+                        'type' => $coupon->type,
+                        'code' => $coupon->code,
+                        'extra_days' => max(0, (int) round((float) $coupon->value)),
+                    ],
+                ],
+            ],
+            Coupon::TYPE_FEATURE => [
+                'discount_amount' => 0.0,
+                'final_price' => $planPrice,
+                'extra_duration_days' => 0,
+                'subscription_meta' => [
+                    'coupon_applied' => [
+                        'type' => $coupon->type,
+                        'code' => $coupon->code,
+                        'feature_payload' => $coupon->feature_payload,
+                    ],
+                ],
+            ],
+            default => [
+                'discount_amount' => round($planPrice - $couponSvc->amountAfterCoupon($coupon, $planPrice), 2),
+                'final_price' => $couponSvc->amountAfterCoupon($coupon, $planPrice),
+                'extra_duration_days' => 0,
+                'subscription_meta' => [
+                    'coupon_applied' => [
+                        'type' => $coupon->type,
+                        'code' => $coupon->code,
+                        'discount_amount' => round($planPrice - $couponSvc->amountAfterCoupon($coupon, $planPrice), 2),
+                        'final_price' => $couponSvc->amountAfterCoupon($coupon, $planPrice),
+                    ],
+                ],
+            ],
+        };
+    }
+
+    private function applyFeatureCouponGrants(Subscription $sub, Coupon $coupon): void
+    {
+        $payload = $coupon->feature_payload ?? [];
+        $rawKey = trim((string) ($payload['feature_key'] ?? ''));
+        if ($rawKey === '') {
+            return;
+        }
+
+        $key = app(FeatureUsageService::class)->normalizeFeatureKey($rawKey);
+        $grantDays = max(1, (int) ($payload['grant_days'] ?? 30));
+        $until = now()->copy()->addDays($grantDays);
+        $grace = (int) config('subscription.grace_days', 0);
+        if ($sub->ends_at !== null) {
+            $cap = $sub->ends_at->copy()->addDays($grace);
+            if ($until->gt($cap)) {
+                $until = $cap;
+            }
+        }
+
+        \App\Models\UserEntitlement::query()->updateOrCreate(
+            [
+                'user_id' => $sub->user_id,
+                'entitlement_key' => $key,
+            ],
+            [
+                'valid_until' => $until,
+                'revoked_at' => null,
+                'value_override' => '1',
+            ]
+        );
+    }
+
+    /**
+     * True when the user has subscription access (paid window or grace after ends_at).
+     */
+    public function isActive(User $user): bool
+    {
+        return $this->getActiveSubscription($user) !== null;
+    }
+
+    /**
+     * Latest subscription row that still grants access (including grace_days after ends_at).
+     */
     public function getActiveSubscription(User $user): ?Subscription
     {
         return Subscription::query()
             ->where('user_id', $user->id)
-            ->where('status', Subscription::STATUS_ACTIVE)
-            ->where(function ($q) {
-                $q->whereNull('ends_at')->orWhere('ends_at', '>', now());
-            })
+            ->effectivelyActiveForAccess()
             ->orderByDesc('starts_at')
             ->first();
+    }
+
+    /**
+     * Mark subscriptions as expired after the grace window has passed (batch update).
+     */
+    public function expireSubscriptions(): int
+    {
+        $grace = (int) config('subscription.grace_days', 0);
+
+        return Subscription::query()
+            ->where('status', Subscription::STATUS_ACTIVE)
+            ->whereNotNull('ends_at')
+            ->where('ends_at', '<', now()->subDays($grace))
+            ->update([
+                'status' => Subscription::STATUS_EXPIRED,
+                'updated_at' => now(),
+            ]);
+    }
+
+    /**
+     * New paid period from now(); entitlements assigned via {@see Subscription} created hook.
+     */
+    public function createSubscription(User $user, Plan $plan, PlanTerm $term): Subscription
+    {
+        if ((int) $term->plan_id !== (int) $plan->id) {
+            throw new HttpException(422, __('subscriptions.invalid_billing_period'));
+        }
+
+        return DB::transaction(function () use ($user, $plan, $term) {
+            Subscription::query()
+                ->where('user_id', $user->id)
+                ->where('status', Subscription::STATUS_ACTIVE)
+                ->update([
+                    'status' => Subscription::STATUS_CANCELLED,
+                    'updated_at' => now(),
+                ]);
+
+            $duration = (int) $term->duration_days;
+            $now = now();
+            $endsAt = $duration > 0 ? $now->copy()->addDays($duration) : null;
+
+            return Subscription::query()->create([
+                'user_id' => $user->id,
+                'plan_id' => $plan->id,
+                'plan_term_id' => $term->id,
+                'plan_price_id' => null,
+                'coupon_id' => null,
+                'starts_at' => $now,
+                'ends_at' => $endsAt,
+                'status' => Subscription::STATUS_ACTIVE,
+            ]);
+        });
+    }
+
+    /**
+     * Extend the current paid window from the current ends_at when still in the future; otherwise start from now.
+     */
+    public function renewSubscription(User $user, PlanTerm $term): Subscription
+    {
+        if (! $term->relationLoaded('plan')) {
+            $term->load('plan');
+        }
+
+        $plan = $term->plan ?? Plan::query()->find($term->plan_id);
+        if (! $plan) {
+            throw new HttpException(422, __('subscriptions.invalid_billing_period'));
+        }
+
+        return DB::transaction(function () use ($user, $term, $plan) {
+            $existing = $this->getActiveSubscription($user);
+            $duration = (int) $term->duration_days;
+            if ($duration <= 0) {
+                throw new HttpException(422, __('subscriptions.invalid_billing_period'));
+            }
+
+            if ($existing) {
+                // Renewal window starts at max(ends_at, now()) — never anchor extension in the past (e.g. grace / late renew).
+                $startsAt = $existing->ends_at === null
+                    ? now()
+                    : ($existing->ends_at->greaterThan(now()) ? $existing->ends_at->copy() : now()->copy());
+                $newEnds = $startsAt->copy()->addDays($duration);
+
+                $existing->update([
+                    'plan_term_id' => $term->id,
+                    'starts_at' => $startsAt,
+                    'ends_at' => $newEnds,
+                    'updated_at' => now(),
+                ]);
+
+                $fresh = $existing->fresh();
+                app(EntitlementService::class)->assignFromSubscription($fresh);
+
+                return $fresh;
+            }
+
+            Subscription::query()
+                ->where('user_id', $user->id)
+                ->where('status', Subscription::STATUS_ACTIVE)
+                ->update([
+                    'status' => Subscription::STATUS_CANCELLED,
+                    'updated_at' => now(),
+                ]);
+
+            return $this->createSubscription($user, $plan, $term);
+        });
+    }
+
+    /**
+     * Simple upgrade: cancel current actives and start a new term (no proration).
+     */
+    public function upgradeSubscription(User $user, Plan $newPlan, PlanTerm $term): Subscription
+    {
+        if ((int) $term->plan_id !== (int) $newPlan->id) {
+            throw new HttpException(422, __('subscriptions.invalid_billing_period'));
+        }
+
+        return DB::transaction(function () use ($user, $newPlan, $term) {
+            Subscription::query()
+                ->where('user_id', $user->id)
+                ->where('status', Subscription::STATUS_ACTIVE)
+                ->update([
+                    'status' => Subscription::STATUS_CANCELLED,
+                    'updated_at' => now(),
+                ]);
+
+            return $this->createSubscription($user, $newPlan, $term);
+        });
     }
 
     public function getActivePlan(?User $user = null): Plan

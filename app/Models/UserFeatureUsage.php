@@ -29,6 +29,7 @@ class UserFeatureUsage extends Model
         'used_count',
         'period_start',
         'period_end',
+        'reset_at',
     ];
 
     protected function casts(): array
@@ -37,6 +38,7 @@ class UserFeatureUsage extends Model
             'period_start' => 'date',
             'period_end' => 'date',
             'used_count' => 'integer',
+            'reset_at' => 'datetime',
         ];
     }
 

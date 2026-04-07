@@ -2,13 +2,32 @@
 
 @section('content')
 @php
-    $featureUsage = app(\App\Services\FeatureUsageService::class);
     $userId = auth()->id();
-    $cu = $contactUsageSnapshot ?? ['used' => 0, 'limit' => 0, 'remaining' => 0, 'is_unlimited' => false];
-    $contactUsed = $cu['used'];
-    $isUnlimited = (bool) ($cu['is_unlimited'] ?? false);
-    $contactLimit = $cu['limit'];
-    $contactRemaining = $cu['remaining'];
+    $viewerUser = auth()->user();
+    $gateStates = $gateStates ?? [];
+    $showGateSoftLimitWarning = (bool) ($showGateSoftLimitWarning ?? false);
+    $contactGateAllowed = $viewerUser && (($gateStates['contact_view_limit']['allowed'] ?? false));
+    $chatSendGateAllowed = $viewerUser && (($gateStates['chat_send_limit']['allowed'] ?? false));
+    $chatReadGateAllowed = $viewerUser && (($gateStates['chat_can_read']['allowed'] ?? false));
+    $whoViewedGateAllowed = $viewerUser && (($gateStates['who_viewed_me_access']['allowed'] ?? false));
+    $profileViewGateLocked = $viewerUser
+        && ! ($isOwnProfile ?? false)
+        && $userId
+        && ! ($gateStates['daily_profile_view_limit']['allowed'] ?? false);
+    $cvs = $gateStates['contact_view_limit'] ?? null;
+    $contactUsed = (int) ($cvs['used'] ?? ($contactUsageSnapshot['used'] ?? 0));
+    $isUnlimited = (bool) ($cvs['unlimited'] ?? ($contactUsageSnapshot['is_unlimited'] ?? false));
+    $contactLimit = $isUnlimited ? '∞' : ($cvs['limit'] ?? ($contactUsageSnapshot['limit'] ?? 0));
+    $contactRemaining = $isUnlimited ? '∞' : ($cvs['remaining'] ?? ($contactUsageSnapshot['remaining'] ?? 0));
+    $maskPhoneGateDisplay = static function (?string $raw): string {
+        $d = preg_replace('/\D/', '', (string) $raw);
+        $len = strlen($d);
+        if ($len <= 3) {
+            return 'XXXX';
+        }
+
+        return str_repeat('X', $len - 4).substr($d, -4);
+    };
 @endphp
 <div class="max-w-6xl mx-auto py-8 px-4 sm:px-6" x-data="{ adminEditMode: @js(auth()->check() && auth()->user()->is_admin === true && request()->has('admin_edit')), openRequestModal: false, showContactUpgradeModal: false }">
     <h1 class="text-lg font-semibold tracking-tight text-gray-900 dark:text-gray-100 mb-4 lg:mb-5 lg:text-xl xl:text-2xl">Matrimony Profile</h1>
@@ -21,16 +40,41 @@
         </div>
     @endif
 
+    @if (! empty($showGateSoftLimitWarning) && $viewerUser)
+        <div class="mb-4 rounded-lg border border-amber-200/90 bg-amber-50/90 px-4 py-3 text-center text-sm font-medium text-amber-950 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100" role="status">
+            {{ __('profile.feature_gate_soft_limit_warning') }}
+            <a href="{{ route('plans.index') }}" class="ml-2 font-semibold text-indigo-700 underline hover:text-indigo-900 dark:text-indigo-300">{{ __('profile.feature_gate_upgrade_plan') }}</a>
+        </div>
+    @endif
+
     {{-- success/info/error flash: layouts.app only (dismissible + auto-hide) — avoids triple duplicate banners on this page --}}
 
-    @if (($isOwnProfile ?? false) && auth()->check() && $userId !== null && $featureUsage->canUse((int) $userId, 'who_viewed_me_access'))
-        <div class="mb-4 rounded-lg border border-stone-200/90 bg-white p-4 text-center shadow-sm dark:border-gray-700 dark:bg-gray-800/60">
-            <a href="{{ route('who-viewed.index') }}"
-               class="inline-flex items-center justify-center gap-2 text-sm font-semibold text-indigo-600 hover:text-indigo-800 dark:text-indigo-400 dark:hover:text-indigo-300">
-                {{ __('nav.who_viewed_me') }}
-                <span aria-hidden="true">→</span>
-            </a>
-        </div>
+    @if (($isOwnProfile ?? false) && auth()->check() && $userId !== null)
+        @if ($whoViewedGateAllowed)
+            <div class="mb-4 rounded-lg border border-stone-200/90 bg-white p-4 text-center shadow-sm dark:border-gray-700 dark:bg-gray-800/60">
+                <a href="{{ route('who-viewed.index') }}"
+                   class="inline-flex items-center justify-center gap-2 text-sm font-semibold text-indigo-600 hover:text-indigo-800 dark:text-indigo-400 dark:hover:text-indigo-300">
+                    {{ __('nav.who_viewed_me') }}
+                    <span aria-hidden="true">→</span>
+                </a>
+            </div>
+        @else
+            <div class="relative mb-4 overflow-hidden rounded-lg border border-stone-200/90 bg-stone-50/90 p-4 text-center shadow-sm dark:border-gray-700 dark:bg-gray-800/60">
+                <div class="flex justify-center gap-2 blur-[6px] select-none" aria-hidden="true">
+                    <span class="inline-block h-10 w-10 rounded-full bg-stone-300 dark:bg-gray-600"></span>
+                    <span class="inline-block h-10 w-10 rounded-full bg-stone-300 dark:bg-gray-600"></span>
+                    <span class="inline-block h-10 w-10 rounded-full bg-stone-300 dark:bg-gray-600"></span>
+                </div>
+                <div class="pointer-events-none absolute inset-0 flex items-center justify-center bg-white/50 dark:bg-gray-900/50"></div>
+                <div class="relative z-10 mx-auto max-w-sm pt-2">
+                    <x-feature-lock
+                        :title="__('profile.feature_gate_who_viewed_title')"
+                        :message="__('profile.feature_gate_who_viewed_message')"
+                        :ctaTextDynamic="__('profile.feature_gate_cta_who_viewed')"
+                    />
+                </div>
+            </div>
+        @endif
     @endif
 
 @if (($profile->lifecycle_state ?? null) === 'conflict_pending' && ($hasBlockingConflicts ?? false))
@@ -371,6 +415,10 @@
 
         <div class="lg:flex lg:flex-row lg:items-stretch">
         <div class="min-w-0 flex-1 flex flex-col px-5 lg:px-5 lg:pb-2 lg:pl-6 lg:pr-5 xl:px-6 xl:pl-8">
+        @if ($profileViewGateLocked)
+            <div class="relative min-h-[160px]">
+                <div class="blur-[6px] pointer-events-none select-none">
+        @endif
         <div class="space-y-4">
 
         @if (($isOwnProfile ?? false))
@@ -536,6 +584,17 @@
             </div>
         </div>
         </div>
+        @if ($profileViewGateLocked)
+                </div>
+                <div class="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 bg-white/75 p-4 dark:bg-gray-900/70">
+                    <x-feature-lock
+                        :title="__('profile.feature_gate_profile_views_title')"
+                        :message="__('profile.feature_gate_profile_views_message')"
+                        :ctaTextDynamic="__('profile.feature_gate_cta_full_profile')"
+                    />
+                </div>
+            </div>
+        @endif
         </div>
 
         @if (! ($isOwnProfile ?? false) && auth()->check())
@@ -566,6 +625,11 @@
                         <p class="truncate text-sm font-semibold text-stone-900 dark:text-stone-100">{{ $interestAlreadySent ? __('Interest Sent') : __('profile.interest_not_sent_yet') }}</p>
                     </div>
                 </div>
+                @if (auth()->check() && $viewerUser && ! ($gateStates['interest_send_limit']['unlimited'] ?? false))
+                    <p class="text-center text-[11px] leading-snug text-stone-500 dark:text-stone-400">
+                        {{ __('profile.feature_gate_interest_used_today', ['used' => (int) ($gateStates['interest_send_limit']['used'] ?? 0), 'limit' => (int) ($gateStates['interest_send_limit']['limit'] ?? 0)]) }}
+                    </p>
+                @endif
 
                 @if (! $contactRequestDisabled && $contactRequestState !== null && ($contactAccess['show_contact_request_rail'] ?? false))
                     @if ($crState === 'none' || ($crState === 'expired' && ! $cooldownEndsAt) || $crState === 'cancelled')
@@ -645,15 +709,13 @@
                     @endif
                 @endif
 
-                @if ($userId === null || ! $featureUsage->canUse((int) $userId, 'chat_send_limit'))
-                    <div class="mt-1 w-full text-center">
-                        <p class="text-sm text-gray-500 dark:text-gray-400">
-                            You’ve reached your chat limit
-                        </p>
-                        <a href="{{ route('plans.index') }}"
-                           class="mt-2 inline-block rounded bg-red-500 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-red-600">
-                            Upgrade to continue chatting
-                        </a>
+                @if ($userId === null || ! $chatSendGateAllowed)
+                    <div class="mt-1 w-full">
+                        <x-feature-lock
+                            :title="__('profile.feature_gate_chat_send_locked')"
+                            :message="__('profile.feature_gate_chat_send_locked')"
+                            :ctaTextDynamic="__('profile.feature_gate_cta_read_message')"
+                        />
                     </div>
                 @else
                     <form method="POST" action="{{ route('chat.start', ['matrimony_profile' => $profile->id]) }}" class="w-full">
@@ -665,6 +727,12 @@
                             {{ __('Chat') }}
                         </button>
                     </form>
+                    @if ($viewerUser && ! $chatReadGateAllowed)
+                        <p class="mt-2 rounded-lg border border-amber-200/80 bg-amber-50/90 px-2 py-1.5 text-center text-[11px] font-medium text-amber-950 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-100" role="status">
+                            {{ __('profile.feature_gate_chat_read_locked') }}
+                            <a href="{{ route('plans.index') }}" class="font-semibold text-indigo-700 underline dark:text-indigo-300">{{ __('profile.feature_gate_upgrade_plan') }}</a>
+                        </p>
+                    @endif
                 @endif
 
                 @isset($inShortlist)
@@ -705,6 +773,10 @@
 
         @if (! ($isOwnProfile ?? false))
             <div class="border-b border-stone-200/85 bg-gradient-to-r from-rose-50/80 via-white to-white px-5 py-6 dark:border-gray-700/80 dark:from-rose-950/20 dark:via-gray-900 dark:to-gray-900 lg:px-8">
+                @if ($profileViewGateLocked)
+                    <div class="relative min-h-[100px]">
+                        <div class="blur-[6px] pointer-events-none select-none">
+                @endif
                 <div class="flex flex-col items-stretch gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <div class="min-w-0">
                         <p class="text-xs font-semibold uppercase tracking-[0.18em] text-rose-600/90 dark:text-rose-400/90">{{ __('profile.hero_interest_prompt') }}</p>
@@ -720,11 +792,27 @@
                                     <button type="submit" class="w-full rounded-xl bg-rose-600 px-6 py-3 text-sm font-semibold text-white shadow-md shadow-rose-600/25 transition hover:bg-rose-700 focus:outline-none focus:ring-2 focus:ring-rose-400 focus:ring-offset-2 dark:focus:ring-offset-gray-900">{{ __('Send Interest') }}</button>
                                 </form>
                             @endif
+                            @if ($viewerUser && ! ($gateStates['interest_send_limit']['unlimited'] ?? false))
+                                <p class="mt-2 text-center text-xs text-stone-600 dark:text-stone-400">
+                                    {{ __('profile.feature_gate_interest_used_today', ['used' => (int) ($gateStates['interest_send_limit']['used'] ?? 0), 'limit' => (int) ($gateStates['interest_send_limit']['limit'] ?? 0)]) }}
+                                </p>
+                            @endif
                         @else
                             <a href="{{ route('login') }}" class="inline-flex w-full items-center justify-center rounded-xl border border-rose-200 bg-white px-5 py-3 text-sm font-semibold text-rose-900 shadow-sm dark:border-rose-900/45 dark:bg-gray-800 dark:text-rose-100">{{ __('Login') }} — {{ __('Send Interest') }}</a>
                         @endif
                     </div>
                 </div>
+                @if ($profileViewGateLocked)
+                        </div>
+                        <div class="absolute inset-0 z-10 flex flex-col items-center justify-center gap-2 bg-white/70 p-3 dark:bg-gray-900/65">
+                            <x-feature-lock
+                                :title="__('profile.feature_gate_profile_views_title')"
+                                :message="__('profile.feature_gate_profile_views_message')"
+                                :ctaTextDynamic="__('profile.feature_gate_cta_full_profile')"
+                            />
+                        </div>
+                    </div>
+                @endif
 
                 @if (auth()->check() && ! $contactRequestDisabled && $contactRequestState !== null && ($contactAccess['show_contact_request_rail'] ?? false))
                     @php
@@ -770,14 +858,17 @@
                             <p class="text-sm"><span class="text-gray-500">Email:</span> {{ $contactGrantReveal['email'] }}</p>
                         @endif
                         @if (! empty($contactGrantReveal['phone']))
-                            @if ($userId !== null && $featureUsage->canUse((int) $userId, \App\Services\FeatureUsageService::FEATURE_CONTACT_VIEW_LIMIT))
+                            @if ($contactGateAllowed)
                                 <p class="text-sm"><span class="text-gray-500">Phone:</span> {{ $contactGrantReveal['phone'] }}</p>
                             @else
-                                @php
-                                    $grantPhoneDigits = preg_replace('/\D/', '', (string) $contactGrantReveal['phone']);
-                                    $maskedGrantPhone = substr($grantPhoneDigits !== '' ? $grantPhoneDigits : '9876543210', 0, 4) . 'XXXX';
-                                @endphp
-                                <p class="text-sm"><span class="text-gray-500">Phone:</span> {{ $maskedGrantPhone }} 🔒</p>
+                                <p class="text-sm"><span class="text-gray-500">Phone:</span> {{ $maskPhoneGateDisplay($contactGrantReveal['phone']) }} <span class="text-stone-400" aria-hidden="true">🔒</span></p>
+                                <div class="mt-2">
+                                    <x-feature-lock
+                                        :title="__('profile.feature_gate_upgrade_to_view_contact')"
+                                        :message="__('profile.feature_gate_upgrade_to_view_contact')"
+                                        :ctaTextDynamic="__('profile.feature_gate_cta_unlock_contact')"
+                                    />
+                                </div>
                             @endif
                         @endif
                         @if (! empty($contactGrantReveal['whatsapp']))
@@ -814,6 +905,10 @@
         {{-- About me spotlight: directly under “Like this profile” / interest strip (or first fold for own profile) --}}
         @if ($hasAboutBody)
             <div class="px-5 pb-2 pt-2 lg:px-8 lg:pb-3 lg:pt-4">
+                @if (! ($isOwnProfile ?? false) && $profileViewGateLocked)
+                    <div class="relative min-h-[140px]">
+                        <div class="blur-[6px] pointer-events-none select-none">
+                @endif
                 <article
                     class="relative overflow-hidden rounded-2xl border border-stone-200/70 bg-gradient-to-br from-white via-rose-50/40 to-amber-50/25 px-5 py-6 shadow-[0_12px_48px_-16px_rgba(190,24,93,0.12)] ring-1 ring-rose-100/50 dark:border-rose-900/25 dark:from-gray-900 dark:via-rose-950/30 dark:to-gray-900 dark:ring-rose-900/20 sm:px-7 sm:py-8"
                     aria-labelledby="profile-about-me-heading"
@@ -840,6 +935,17 @@
                         </div>
                     </div>
                 </article>
+                @if (! ($isOwnProfile ?? false) && $profileViewGateLocked)
+                        </div>
+                        <div class="absolute inset-0 z-10 flex flex-col items-center justify-center gap-2 bg-white/75 p-4 dark:bg-gray-900/70">
+                            <x-feature-lock
+                                :title="__('profile.feature_gate_profile_views_title')"
+                                :message="__('profile.feature_gate_profile_views_message')"
+                                :ctaTextDynamic="__('profile.feature_gate_cta_full_profile')"
+                            />
+                        </div>
+                    </div>
+                @endif
             </div>
         @endif
 
@@ -852,8 +958,22 @@
             'lg:pt-5' => $aboutFoldTight,
             'lg:pt-8' => ! $aboutFoldTight,
         ])>
-
+            @if (! ($isOwnProfile ?? false) && $profileViewGateLocked)
+                <div class="relative min-h-[160px]">
+                    <div class="blur-[6px] pointer-events-none select-none">
+            @endif
             @include('matrimony.profile.partials.snapshot-stack', ['profileShowSnapshot' => $profileShowSnapshot ?? []])
+            @if (! ($isOwnProfile ?? false) && $profileViewGateLocked)
+                    </div>
+                    <div class="absolute inset-0 z-10 flex flex-col items-center justify-center gap-2 bg-white/75 p-4 dark:bg-gray-900/70">
+                        <x-feature-lock
+                            :title="__('profile.feature_gate_profile_views_title')"
+                            :message="__('profile.feature_gate_profile_views_message')"
+                            :ctaTextDynamic="__('profile.feature_gate_cta_full_profile')"
+                        />
+                    </div>
+                </div>
+            @endif
 
 
 @if (auth()->check())
@@ -914,9 +1034,21 @@
                 @if (! empty($contactAccess['paid_contact_phone']) || ! empty($contactAccess['paid_contact_email']))
                     <div class="text-center space-y-2">
                         @if (! empty($contactAccess['paid_contact_phone']))
+                            @if ($contactGateAllowed)
                             <p class="text-xl font-bold text-stone-900 dark:text-stone-100">
                                 {{ $contactAccess['paid_contact_phone'] }}
                             </p>
+                            @else
+                            <p class="text-xl font-bold tracking-wider text-stone-900 dark:text-stone-100">
+                                {{ $maskPhoneGateDisplay($contactAccess['paid_contact_phone']) }} <span class="text-stone-400" aria-hidden="true">🔒</span>
+                            </p>
+                            <x-feature-lock
+                                class="!max-w-md"
+                                :title="__('profile.feature_gate_upgrade_to_view_contact')"
+                                :message="__('profile.feature_gate_upgrade_to_view_contact')"
+                                :ctaTextDynamic="__('profile.feature_gate_cta_unlock_contact')"
+                            />
+                            @endif
                         @endif
                         @if (! empty($contactAccess['paid_contact_email']))
                             <p class="text-sm text-stone-800 dark:text-stone-200 break-all">
@@ -1034,15 +1166,13 @@
 @if (! $isOwnProfile && auth()->check())
     <div class="mt-4 rounded-xl border border-stone-200/90 bg-white/90 px-4 py-4 shadow-sm dark:border-gray-700 dark:bg-gray-800/60">
         <p class="text-sm font-medium text-stone-800 dark:text-stone-100">{{ __('profile.monetization_send_interest_or_message') }}</p>
-        @if ($userId === null || ! $featureUsage->canUse((int) $userId, 'chat_send_limit'))
-            <div class="mt-3 text-center">
-                <p class="text-sm text-gray-500 dark:text-gray-400">
-                    You’ve reached your chat limit
-                </p>
-                <a href="{{ route('plans.index') }}"
-                   class="mt-2 inline-block rounded bg-red-500 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-red-600">
-                    Upgrade to continue chatting
-                </a>
+        @if ($userId === null || ! $chatSendGateAllowed)
+            <div class="mt-3">
+                <x-feature-lock
+                    :title="__('profile.feature_gate_chat_send_locked')"
+                    :message="__('profile.feature_gate_chat_send_locked')"
+                    :ctaTextDynamic="__('profile.feature_gate_cta_read_message')"
+                />
             </div>
         @else
             <form method="POST" action="{{ route('chat.start', ['matrimony_profile' => $profile->id]) }}" class="mt-3 inline-block">
@@ -1051,6 +1181,12 @@
                     {{ __('profile.monetization_send_message') }}
                 </button>
             </form>
+            @if ($viewerUser && ! $chatReadGateAllowed)
+                <p class="mt-2 max-w-md text-sm text-amber-900 dark:text-amber-100" role="status">
+                    {{ __('profile.feature_gate_chat_read_locked') }}
+                    <a href="{{ route('plans.index') }}" class="font-semibold text-indigo-700 underline dark:text-indigo-300">{{ __('profile.feature_gate_upgrade_plan') }}</a>
+                </p>
+            @endif
         @endif
     </div>
 @endif

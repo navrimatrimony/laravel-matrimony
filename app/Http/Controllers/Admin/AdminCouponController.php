@@ -91,7 +91,13 @@ class AdminCouponController extends Controller
 
         $validated = $request->validate([
             'code' => ['required', 'string', 'max:64', $codeRule],
-            'type' => ['required', 'string', Rule::in([Coupon::TYPE_PERCENT, Coupon::TYPE_FIXED])],
+            'type' => ['required', 'string', Rule::in([
+                Coupon::TYPE_PERCENT,
+                Coupon::TYPE_FIXED,
+                Coupon::TYPE_FLAT,
+                Coupon::TYPE_DAYS,
+                Coupon::TYPE_FEATURE,
+            ])],
             'value' => ['required', 'numeric', 'min:0'],
             'max_redemptions' => ['nullable', 'integer', 'min:1'],
             'valid_from' => ['nullable', 'date'],
@@ -103,6 +109,8 @@ class AdminCouponController extends Controller
             'plan_ids.*' => ['integer', 'exists:plans,id'],
             'duration_types' => ['nullable', 'array'],
             'duration_types.*' => ['string', Rule::in(PlanTerm::billingKeys())],
+            'feature_key' => ['required_if:type,'.Coupon::TYPE_FEATURE, 'nullable', 'string', 'max:64'],
+            'grant_days' => ['nullable', 'integer', 'min:1', 'max:3650'],
         ]);
 
         $value = (float) $validated['value'];
@@ -110,9 +118,23 @@ class AdminCouponController extends Controller
             $value = min(100, max(0, $value));
         }
 
+        if ($validated['type'] === Coupon::TYPE_DAYS) {
+            $value = (float) max(0, (int) round($value));
+        }
+
+        $featurePayload = null;
+        if ($validated['type'] === Coupon::TYPE_FEATURE) {
+            $featurePayload = [
+                'feature_key' => strtolower(trim((string) ($validated['feature_key'] ?? ''))),
+                'grant_days' => max(1, (int) ($validated['grant_days'] ?? 30)),
+            ];
+        }
+
+        $persistType = $validated['type'] === Coupon::TYPE_FLAT ? Coupon::TYPE_FIXED : $validated['type'];
+
         return [
             'code' => strtoupper(trim($validated['code'])),
-            'type' => $validated['type'],
+            'type' => $persistType,
             'value' => $value,
             'max_redemptions' => $validated['max_redemptions'] ?? null,
             'valid_from' => $validated['valid_from'] ?? null,
@@ -122,6 +144,7 @@ class AdminCouponController extends Controller
             'description' => $validated['description'] ?? null,
             'applicable_plan_ids' => ! empty($validated['plan_ids']) ? array_values(array_map('intval', $validated['plan_ids'])) : null,
             'applicable_duration_types' => ! empty($validated['duration_types']) ? array_values($validated['duration_types']) : null,
+            'feature_payload' => $persistType === Coupon::TYPE_FEATURE ? $featurePayload : null,
         ];
     }
 }

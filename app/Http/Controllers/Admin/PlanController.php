@@ -50,6 +50,7 @@ class PlanController extends Controller
         $features = $this->normalizeFeatureRows($request->input('features', []));
 
         $plan = Plan::query()->create($data);
+        $features = $this->mergeMonetizationFeaturesIntoRows($features, $request);
         $this->syncFeatures($plan, $features);
         if (strtolower((string) $plan->slug) !== 'free') {
             PlanTerm::syncDefaultsForPlan($plan);
@@ -82,6 +83,7 @@ class PlanController extends Controller
         $plan->update($data);
 
         $features = $this->normalizeFeatureRows($request->input('features', []));
+        $features = $this->mergeMonetizationFeaturesIntoRows($features, $request);
         $this->syncFeatures($plan, $features);
 
         if (strtolower((string) $plan->slug) !== 'free') {
@@ -197,6 +199,10 @@ class PlanController extends Controller
             'sort_order' => ['nullable', 'integer', 'min:0', 'max:65535'],
             'is_active' => ['sometimes', 'boolean'],
             'highlight' => ['sometimes', 'boolean'],
+            'referral_bonus_days' => ['nullable', 'integer', 'min:0'],
+            'profile_boost_per_week' => ['nullable', 'integer', 'min:0'],
+            'who_viewed_me_days' => ['nullable', 'integer', 'min:0'],
+            'priority_listing' => ['sometimes', 'boolean'],
             'features' => ['nullable', 'array'],
             'features.*.key' => ['nullable', 'string', 'max:120'],
             'features.*.value' => ['nullable', 'string', 'max:65535'],
@@ -243,6 +249,55 @@ class PlanController extends Controller
         }
 
         return $unique;
+    }
+
+    /**
+     * Ensures structured monetization fields are persisted as plan_features rows
+     * (same keys as the key/value UI) so syncFeatures does not delete them when hidden from the list.
+     *
+     * @param  array<int, array{key: string, value: string}>  $rows
+     * @return array<int, array{key: string, value: string}>
+     */
+    private function mergeMonetizationFeaturesIntoRows(array $rows, Request $request): array
+    {
+        $montKeys = [
+            PlanFeatureKeys::REFERRAL_BONUS_DAYS,
+            PlanFeatureKeys::PRIORITY_LISTING,
+            PlanFeatureKeys::PROFILE_BOOST_PER_WEEK,
+            PlanFeatureKeys::WHO_VIEWED_ME_DAYS,
+        ];
+        $filtered = [];
+        foreach ($rows as $row) {
+            if (in_array($row['key'], $montKeys, true)) {
+                continue;
+            }
+            $filtered[] = $row;
+        }
+
+        $ref = $request->input('referral_bonus_days');
+        $boost = $request->input('profile_boost_per_week');
+        $who = $request->input('who_viewed_me_days');
+
+        $extra = [
+            [
+                'key' => PlanFeatureKeys::REFERRAL_BONUS_DAYS,
+                'value' => ($ref === '' || $ref === null) ? '0' : (string) max(0, (int) $ref),
+            ],
+            [
+                'key' => PlanFeatureKeys::PRIORITY_LISTING,
+                'value' => $request->boolean('priority_listing') ? '1' : '0',
+            ],
+            [
+                'key' => PlanFeatureKeys::PROFILE_BOOST_PER_WEEK,
+                'value' => ($boost === '' || $boost === null) ? '0' : (string) max(0, (int) $boost),
+            ],
+            [
+                'key' => PlanFeatureKeys::WHO_VIEWED_ME_DAYS,
+                'value' => ($who === '' || $who === null) ? '0' : (string) max(0, (int) $who),
+            ],
+        ];
+
+        return array_merge($filtered, $extra);
     }
 
     /**

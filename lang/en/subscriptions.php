@@ -1,6 +1,8 @@
 <?php
 
 return [
+    'default_plan_name' => 'your plan',
+
     'nav_plans' => 'Plans',
 
     'plan_inactive' => 'This plan is not available.',

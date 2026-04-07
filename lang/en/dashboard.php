@@ -67,4 +67,11 @@ return [
     'usage_not_included' => 'Not in your plan',
     'usage_bypass' => 'Plan limits do not apply to your account.',
     'usage_upgrade_plan' => 'Plans & upgrades',
+
+    'monetization_activity_title' => 'What is happening (visible activity)',
+    'monetization_viewed_you' => '{1} :count person viewed you in the last 30 days.|[2,*] :count people viewed you in the last 30 days.',
+    'monetization_messages_waiting' => '{1} :count unread message.|[2,*] :count unread messages.',
+    'monetization_plan_expires' => '{1} Your plan renews or ends in :days day.|[2,*] Your plan renews or ends in :days days.',
+    'monetization_wallet_balance' => 'Wallet balance: ₹:amount (used only when you approve an extra paid action).',
+    'monetization_referral_hint' => 'Invite friends — share your link:',
 ];

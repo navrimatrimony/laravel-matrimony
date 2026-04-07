@@ -91,10 +91,7 @@ class ContactRevealPolicyService
     {
         return Subscription::query()
             ->where('user_id', $viewer->id)
-            ->where('status', Subscription::STATUS_ACTIVE)
-            ->where(function ($q) {
-                $q->whereNull('ends_at')->orWhere('ends_at', '>', now());
-            })
+            ->effectivelyActiveForAccess()
             ->exists();
     }
 

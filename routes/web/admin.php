@@ -5,6 +5,10 @@ use App\Http\Controllers\Admin\AdminCapabilityController;
 use App\Http\Controllers\Admin\AdminCasteController;
 use App\Http\Controllers\Admin\AdminConflictRecordController;
 use App\Http\Controllers\Admin\AdminCouponController;
+use App\Http\Controllers\Admin\CouponController;
+use App\Http\Controllers\Admin\ProfileBoostController;
+use App\Http\Controllers\Admin\ReferralController;
+use App\Http\Controllers\Admin\UserWalletController;
 use App\Http\Controllers\Admin\AdminFieldRegistryController;
 use App\Http\Controllers\Admin\AdminIntakeController;
 use App\Http\Controllers\Admin\AdminKycController;
@@ -27,6 +31,7 @@ use App\Http\Controllers\Admin\LocationSuggestionWebController;
 use App\Http\Controllers\Admin\MatchBoostController;
 use App\Http\Controllers\Admin\OcrPatternController;
 use App\Http\Controllers\Admin\PlanController;
+use App\Http\Controllers\Admin\PlanFeatureController;
 use App\Http\Controllers\Admin\ShowcaseChatDebugController;
 use App\Http\Controllers\Admin\ShowcaseChatSettingsController;
 use App\Http\Controllers\Admin\ShowcaseConversationController;
@@ -313,6 +318,17 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
     Route::patch('/plans/{plan}/toggle', [PlanController::class, 'toggle'])->name('plans.toggle');
     Route::delete('/plans/{plan}', [PlanController::class, 'destroy'])->name('plans.destroy');
 
+    Route::patch('coupons/{coupon}/toggle-active', [CouponController::class, 'toggleActive'])->name('coupons.toggle-active');
+    Route::resource('coupons', CouponController::class)->except(['show']);
+
+    Route::get('wallets', [UserWalletController::class, 'index'])->name('wallets.index');
+    Route::post('wallets/credit', [UserWalletController::class, 'credit'])->name('wallets.credit');
+
+    Route::get('boosts', [ProfileBoostController::class, 'index'])->name('boosts.index');
+    Route::post('boosts/start', [ProfileBoostController::class, 'start'])->name('boosts.start');
+
+    Route::get('referrals', [ReferralController::class, 'index'])->name('referrals.index');
+
     Route::prefix('commerce')->name('commerce.')->group(function () {
         Route::get('analytics', CommerceAnalyticsController::class)->name('analytics.index');
         Route::resource('coupons', AdminCouponController::class)->except(['show']);
@@ -381,3 +397,12 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
     Route::post('/conflict-records/{record}/reject', [AdminConflictRecordController::class, 'conflictRecordReject'])->name('conflict-records.reject');
     Route::post('/conflict-records/{record}/override', [AdminConflictRecordController::class, 'conflictRecordOverride'])->name('conflict-records.override');
 });
+
+/*
+|--------------------------------------------------------------------------
+| DEV ONLY — Plan feature API (testing): no auth / admin middleware
+| Restore: move PUT /admin/plans/{plan}/features back inside the group above.
+|--------------------------------------------------------------------------
+*/
+Route::put('/admin/plans/{plan}/features', [PlanFeatureController::class, 'update'])
+    ->name('admin.plans.features.update');

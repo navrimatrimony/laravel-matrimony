@@ -9,6 +9,7 @@
 
     <form id="register-form" method="POST" action="{{ route('register') }}">
         @csrf
+        <input type="hidden" name="invite_code" value="{{ old('invite_code', request('ref')) }}" autocomplete="off" />
 
         <!-- Registrant name (account) -->
         <div>

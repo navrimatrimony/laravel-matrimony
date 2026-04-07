@@ -13,34 +13,61 @@
     @endif
 
     @php
+        $structuredKVHiddenKeys = [
+            \App\Support\PlanFeatureKeys::REFERRAL_BONUS_DAYS,
+            \App\Support\PlanFeatureKeys::PRIORITY_LISTING,
+            \App\Support\PlanFeatureKeys::PROFILE_BOOST_PER_WEEK,
+        ];
         $featureRowsForForm = [];
+        $shouldFilterStructuredFromKv = function (array $row) use ($structuredKVHiddenKeys): bool {
+            return in_array($row['key'] ?? '', $structuredKVHiddenKeys, true);
+        };
         if (is_array(old('features'))) {
             foreach (old('features') as $r) {
                 if (! is_array($r)) {
                     continue;
                 }
-                $featureRowsForForm[] = [
+                $row = [
                     'key' => (string) ($r['key'] ?? ''),
                     'value' => (string) ($r['value'] ?? ''),
                 ];
+                if ($shouldFilterStructuredFromKv($row)) {
+                    continue;
+                }
+                $featureRowsForForm[] = $row;
             }
         }
         if ($featureRowsForForm === [] && $isEdit) {
             $plan->loadMissing('features');
             foreach ($plan->features->sortBy('key')->values() as $f) {
-                $featureRowsForForm[] = ['key' => $f->key, 'value' => (string) $f->value];
+                $row = ['key' => $f->key, 'value' => (string) $f->value];
+                if ($shouldFilterStructuredFromKv($row)) {
+                    continue;
+                }
+                $featureRowsForForm[] = $row;
             }
         }
         if ($featureRowsForForm === [] && ! $isEdit) {
             foreach ($defaultFeatures as $row) {
-                $featureRowsForForm[] = [
+                $r = [
                     'key' => (string) ($row['key'] ?? ''),
                     'value' => (string) ($row['value'] ?? ''),
                 ];
+                if ($shouldFilterStructuredFromKv($r)) {
+                    continue;
+                }
+                $featureRowsForForm[] = $r;
             }
         }
         if ($featureRowsForForm === []) {
             $featureRowsForForm[] = ['key' => '', 'value' => ''];
+        }
+        $monetizationDefaultsFromTemplate = [];
+        foreach ($defaultFeatures as $row) {
+            $k = (string) ($row['key'] ?? '');
+            if ($k !== '') {
+                $monetizationDefaultsFromTemplate[$k] = (string) ($row['value'] ?? '');
+            }
         }
     @endphp
 
@@ -159,6 +186,48 @@
             <button type="button" id="add-plan-feature-row" class="mt-3 text-sm text-indigo-600 dark:text-indigo-400 hover:underline">
                 {{ __('admin_commerce.features_add_button') }}
             </button>
+        </div>
+
+        <div class="rounded-lg border border-gray-200 dark:border-gray-600 bg-gray-50/80 dark:bg-gray-900/30 p-4 space-y-4">
+            <h2 class="text-lg font-semibold text-gray-800 dark:text-gray-100">Advanced Monetization Settings</h2>
+            <p class="text-xs text-gray-500 dark:text-gray-400">These fields update the same plan feature keys as the key/value list above (keys listed there are managed here).</p>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1" for="referral_bonus_days">Referral bonus days</label>
+                    <input id="referral_bonus_days" type="number" name="referral_bonus_days" min="0" step="1"
+                        value="{{ old('referral_bonus_days', $isEdit ? ($plan->getFeatureValue(\App\Support\PlanFeatureKeys::REFERRAL_BONUS_DAYS) ?? '') : ($monetizationDefaultsFromTemplate[\App\Support\PlanFeatureKeys::REFERRAL_BONUS_DAYS] ?? '')) }}"
+                        class="w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white shadow-sm" />
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1" for="profile_boost_per_week">Profile boost per week</label>
+                    <input id="profile_boost_per_week" type="number" name="profile_boost_per_week" min="0" step="1"
+                        value="{{ old('profile_boost_per_week', $isEdit ? ($plan->getFeatureValue(\App\Support\PlanFeatureKeys::PROFILE_BOOST_PER_WEEK) ?? '') : ($monetizationDefaultsFromTemplate[\App\Support\PlanFeatureKeys::PROFILE_BOOST_PER_WEEK] ?? '')) }}"
+                        class="w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white shadow-sm" />
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1" for="who_viewed_me_days">Who viewed me (days)</label>
+                    <input id="who_viewed_me_days" type="number" name="who_viewed_me_days" min="0" step="1"
+                        value="{{ old('who_viewed_me_days', $isEdit ? ($plan->getFeatureValue(\App\Support\PlanFeatureKeys::WHO_VIEWED_ME_DAYS) ?? '') : ($monetizationDefaultsFromTemplate[\App\Support\PlanFeatureKeys::WHO_VIEWED_ME_DAYS] ?? '')) }}"
+                        class="w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white shadow-sm" />
+                </div>
+                <div class="flex items-end">
+                    <label class="inline-flex items-center gap-2 cursor-pointer pb-1">
+                        <input type="hidden" name="priority_listing" value="0" />
+                        <input type="checkbox" name="priority_listing" value="1" class="rounded border-gray-300"
+                            @checked(
+                                old('priority_listing') !== null
+                                    ? old('priority_listing') == '1'
+                                    : (bool) filter_var(
+                                        (string) ($isEdit
+                                            ? ($plan->getFeatureValue(\App\Support\PlanFeatureKeys::PRIORITY_LISTING) ?? '0')
+                                            : ($monetizationDefaultsFromTemplate[\App\Support\PlanFeatureKeys::PRIORITY_LISTING] ?? '0')),
+                                        FILTER_VALIDATE_BOOLEAN
+                                    )
+                            ) />
+                        <span class="text-sm text-gray-700 dark:text-gray-300">Priority listing</span>
+                    </label>
+                </div>
+            </div>
         </div>
 
         <div class="flex gap-3 pt-2 border-t border-gray-200 dark:border-gray-600">

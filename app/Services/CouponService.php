@@ -74,6 +74,13 @@ class CouponService
             $out['base_amount'] = round($base, 2);
             $out['final_amount'] = $final;
             $out['savings'] = round(max(0, $base - $final), 2);
+            if ($coupon->type === Coupon::TYPE_DAYS) {
+                $out['extra_duration_days'] = max(0, (int) round((float) $coupon->value));
+            }
+            if ($coupon->type === Coupon::TYPE_FEATURE) {
+                $out['feature_coupon'] = true;
+                $out['feature_payload'] = $coupon->feature_payload;
+            }
         } elseif ($planId !== null && ! $coupon->appliesToPlan($planId)) {
             return ['valid' => false, 'message' => __('subscriptions.coupon_plan_excluded')];
         }
@@ -90,7 +97,8 @@ class CouponService
 
         return match ($coupon->type) {
             Coupon::TYPE_PERCENT => $this->applyPercent($coupon, $baseAmount),
-            Coupon::TYPE_FIXED => $this->applyFixed($coupon, $baseAmount),
+            Coupon::TYPE_FIXED, Coupon::TYPE_FLAT => $this->applyFixed($coupon, $baseAmount),
+            Coupon::TYPE_DAYS, Coupon::TYPE_FEATURE => $baseAmount,
             default => $baseAmount,
         };
     }

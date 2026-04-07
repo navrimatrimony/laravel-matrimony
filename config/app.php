@@ -135,4 +135,16 @@ return [
 
     'admin_bypass_mode' => (bool) env('ADMIN_BYPASS_MODE', false),
 
+    /*
+    |--------------------------------------------------------------------------
+    | Feature usage keys (FeatureUsageService)
+    |--------------------------------------------------------------------------
+    |
+    | When true, unknown normalized feature keys throw InvalidArgumentException.
+    | When false, a warning is logged and the key is still processed (legacy).
+    |
+    */
+
+    'strict_feature_keys' => (bool) env('APP_STRICT_FEATURE_KEYS', true),
+
 ];

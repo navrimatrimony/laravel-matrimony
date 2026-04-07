@@ -2,12 +2,16 @@
 
 namespace App\Services;
 
+use App\Models\Subscription;
 use App\Models\User;
 use App\Models\UserFeatureUsage;
 use App\Support\PlanFeatureKeys;
 use App\Support\UserFeatureUsageKeys;
 use Carbon\Carbon;
+use Carbon\CarbonInterface;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
+use InvalidArgumentException;
 
 /**
  * Single source of truth for feature gates (plan_features + entitlements + usage buckets).
@@ -40,6 +44,29 @@ class FeatureUsageService
     public const WHO_VIEWED_UNLIMITED_DAYS_THRESHOLD = 999;
 
     /**
+     * SSOT allowlist for normalized feature keys: config-driven.
+     *
+     * @return list<string>
+     */
+    public function getAllowedFeatureKeys(): array
+    {
+        $keys = array_keys((array) config('plan_features', []));
+
+        return array_values(array_unique(array_map(
+            fn ($k) => strtolower(trim((string) $k)),
+            $keys
+        )));
+    }
+
+    /**
+     * Quota unlimited: any negative int (e.g. -1, -2). Zero is NOT unlimited.
+     */
+    private function isUnlimitedLimit(?int $limit): bool
+    {
+        return $limit !== null && $limit < 0;
+    }
+
+    /**
      * When true, {@see isAdminBypass}, usage limits do not apply for that user.
      */
     public function shouldBypassUsageLimits(User $user): bool
@@ -66,36 +93,510 @@ class FeatureUsageService
     }
 
     /**
-     * Check if user can use a feature
+     * Canonical plan / usage keys (aliases → one key; no duplicate semantics).
      */
-    public function canUse(int $userId, string $featureKey): bool
+    public function normalizeFeatureKey(string $key): string
     {
-        $user = User::query()->find($userId);
-        if ($user && $this->isAdminBypass($user)) {
-            return true;
+        $k = strtolower(trim($key));
+
+        $normalized = match ($k) {
+            'chat_send', 'daily_chat_send_limit' => PlanFeatureKeys::CHAT_SEND_LIMIT,
+            'contact_view', 'contact_number_access', 'contact_unlock' => PlanFeatureKeys::CONTACT_VIEW_LIMIT,
+            'profile_view', 'daily_profile_view', 'profile_view_limit' => self::FEATURE_DAILY_PROFILE_VIEW_LIMIT,
+            'interest_send', 'monthly_interest_send_limit' => PlanFeatureKeys::INTEREST_SEND_LIMIT,
+            'who_viewed_me' => self::FEATURE_WHO_VIEWED_ME_ACCESS,
+            'mediator_request', 'mediator_requests' => PlanFeatureKeys::MEDIATOR_REQUESTS_PER_MONTH,
+            default => $k,
+        };
+
+        $this->assertCanonicalFeatureKeyAllowed($normalized, $key);
+
+        return $normalized;
+    }
+
+    /**
+     * @param  string  $originalKey  Raw input (for logging).
+     */
+    private function assertCanonicalFeatureKeyAllowed(string $normalized, string $originalKey): void
+    {
+        if (in_array($normalized, $this->getAllowedFeatureKeys(), true)) {
+            return;
         }
 
-        if ($featureKey === self::FEATURE_CHAT_SEND_LIMIT) {
-            return $this->canUseChatSendLimit($userId);
+        $message = 'Unknown or invalid feature key after normalization.';
+        $context = [
+            'normalized' => $normalized,
+            'original' => $originalKey,
+        ];
+
+        if (config('app.strict_feature_keys', true)) {
+            Log::warning($message, $context);
+
+            throw new InvalidArgumentException("Invalid feature key: {$normalized}");
         }
 
-        if ($featureKey === self::FEATURE_CHAT_CAN_READ) {
-            return $this->canUseChatCanRead($userId);
+        Log::warning($message, $context);
+    }
+
+    /**
+     * Full gate snapshot for monetization (SSOT). Limits come from {@see SubscriptionService::getFeatureLimit}
+     * and related product rules; usage from {@code user_feature_usages} where applicable.
+     *
+     * @return array{
+     *   allowed: bool,
+     *   limit: int|null,
+     *   used: int,
+     *   remaining: int|null,
+     *   unlimited: bool,
+     *   reset_at: CarbonInterface|null,
+     *   reason: string|null
+     * }
+     */
+    public function getFeatureState(User $user, string $featureKey): array
+    {
+        if ($this->isAdminBypass($user)) {
+            return [
+                'allowed' => true,
+                'limit' => null,
+                'used' => 0,
+                'remaining' => null,
+                'unlimited' => true,
+                'reset_at' => null,
+                'reason' => null,
+            ];
         }
 
-        if ($featureKey === self::FEATURE_CONTACT_VIEW_LIMIT) {
-            return $this->canUseContactViewLimit($userId);
+        $normalized = $this->normalizeFeatureKey($featureKey);
+
+        if ($this->subscriptionMetaFeatureExpired($user, $normalized)) {
+            Log::warning('Feature gate: subscription meta feature_expiry is in the past.', [
+                'user_id' => $user->id,
+                'feature_key' => $normalized,
+            ]);
+
+            return [
+                'allowed' => false,
+                'limit' => null,
+                'used' => 0,
+                'remaining' => null,
+                'unlimited' => false,
+                'reset_at' => null,
+                'reason' => 'feature_expired',
+            ];
         }
 
-        if ($featureKey === self::FEATURE_DAILY_PROFILE_VIEW_LIMIT) {
-            return $this->canUseDailyProfileViewLimit($userId);
+        $state = match ($normalized) {
+            PlanFeatureKeys::CHAT_SEND_LIMIT => $this->stateForChatSendLimit($user),
+            self::FEATURE_CHAT_CAN_READ => $this->stateForChatCanRead($user),
+            PlanFeatureKeys::CONTACT_VIEW_LIMIT => $this->stateForContactViewLimit($user),
+            self::FEATURE_DAILY_PROFILE_VIEW_LIMIT => $this->stateForDailyProfileViewLimit($user),
+            self::FEATURE_WHO_VIEWED_ME_ACCESS => $this->stateForWhoViewedMeAccess($user),
+            PlanFeatureKeys::INTEREST_SEND_LIMIT => $this->stateForInterestSendLimit($user),
+            PlanFeatureKeys::MEDIATOR_REQUESTS_PER_MONTH => $this->stateForMediatorRequestsMonthly($user),
+            default => $this->stateForGenericEntitlementPlanFeature($user, $normalized),
+        };
+
+        $state = $this->applyConfigFallbackDefaults($normalized, $state);
+
+        return $this->applySoftLimitWarning($state);
+    }
+
+    /**
+     * If a key is known in {@see config('plan_features')} but state could not resolve a numeric limit,
+     * apply safe defaults (no access / 0) without changing boolean gate semantics.
+     */
+    private function applyConfigFallbackDefaults(string $normalizedKey, array $state): array
+    {
+        $defs = (array) config('plan_features', []);
+        $def = $defs[$normalizedKey] ?? null;
+        if (! is_array($def)) {
+            return $state;
         }
 
-        if ($featureKey === self::FEATURE_WHO_VIEWED_ME_ACCESS) {
-            return $this->canUseWhoViewedMeAccess($userId);
+        if (($state['reason'] ?? null) === 'feature_expired') {
+            return $state;
         }
 
-        // 1. Check entitlement
+        $type = (string) ($def['type'] ?? '');
+        if (! in_array($type, ['limit', 'days'], true)) {
+            return $state;
+        }
+
+        if (($state['limit'] ?? null) !== null || ($state['unlimited'] ?? false)) {
+            return $state;
+        }
+
+        return [
+            ...$state,
+            'allowed' => false,
+            'limit' => 0,
+            'remaining' => 0,
+            'unlimited' => false,
+            'reason' => 'limit_exhausted',
+        ];
+    }
+
+    /**
+     * Admin / support only: plan, raw sources, usage rows, and {@see getFeatureState} snapshot.
+     * Do not call from production request paths.
+     *
+     * @return array<string, mixed>
+     */
+    public function debugFeatureState(User $user, string $featureKey): array
+    {
+        $normalized = null;
+        $normalizeError = null;
+        try {
+            $normalized = $this->normalizeFeatureKey($featureKey);
+        } catch (InvalidArgumentException $e) {
+            $normalizeError = $e->getMessage();
+        }
+
+        $subscription = Subscription::query()
+            ->where('user_id', $user->id)
+            ->effectivelyActiveForAccess()
+            ->latest('id')
+            ->with(['plan', 'planTerm'])
+            ->first();
+
+        $planFeatureRow = null;
+        $rawValue = null;
+        if ($subscription !== null && $normalized !== null) {
+            $planFeatureRow = DB::table('plan_features')
+                ->where('plan_id', $subscription->plan_id)
+                ->where('key', $normalized)
+                ->first();
+            $rawValue = $planFeatureRow?->value ?? null;
+        }
+
+        $entitlementRow = null;
+        if ($normalized !== null) {
+            $entitlementRow = DB::table('user_entitlements')
+                ->where('user_id', $user->id)
+                ->where('entitlement_key', $normalized)
+                ->whereNull('revoked_at')
+                ->first();
+        }
+
+        $usageRowsSample = [];
+        if ($normalized !== null) {
+            $usageRowsSample = UserFeatureUsage::query()
+                ->where('user_id', $user->id)
+                ->where('feature_key', $normalized)
+                ->orderByDesc('id')
+                ->limit(5)
+                ->get()
+                ->map(fn (UserFeatureUsage $r) => $r->toArray())
+                ->all();
+        }
+
+        $computedState = null;
+        if ($normalized !== null) {
+            $computedState = $this->getFeatureState($user, $featureKey);
+        } else {
+            $computedState = ['error' => $normalizeError];
+        }
+
+        $typedValue = null;
+        if ($subscription?->plan && $normalized !== null) {
+            $typedValue = $subscription->plan->getTypedFeatureValue($normalized);
+        }
+
+        $source = 'fallback';
+        if ($planFeatureRow !== null) {
+            $source = 'plan_feature';
+        } elseif ($entitlementRow !== null) {
+            $source = 'entitlement';
+        }
+
+        return [
+            'input_feature_key' => $featureKey,
+            'normalized_key' => $normalized,
+            'normalize_error' => $normalizeError,
+            'plan_name' => $subscription?->plan?->name,
+            'plan_slug' => $subscription?->plan?->slug,
+            'plan_term' => $subscription?->planTerm ? [
+                'id' => $subscription->planTerm->id,
+                'billing_key' => $subscription->planTerm->billing_key,
+                'duration_days' => $subscription->planTerm->duration_days,
+            ] : null,
+            'limit_sources' => [
+                'plan_features_row' => $planFeatureRow,
+                'user_entitlement_row' => $entitlementRow,
+                'source' => $source,
+                'raw_value' => $rawValue,
+                'typed_value' => $typedValue,
+            ],
+            'usage_rows_sample' => $usageRowsSample,
+            'computed_state' => $computedState,
+        ];
+    }
+
+    /**
+     * True when active subscription {@code meta.feature_expiry[normalizedKey]} is in the past.
+     * Invalid meta / date formats fail closed (ignore expiry — no block).
+     */
+    private function subscriptionMetaFeatureExpired(User $user, string $normalizedKey): bool
+    {
+        try {
+            $sub = Subscription::query()
+                ->where('user_id', $user->id)
+                ->effectivelyActiveForAccess()
+                ->latest('id')
+                ->first();
+
+            if (! $sub) {
+                return false;
+            }
+
+            $meta = $sub->meta;
+            if (! is_array($meta)) {
+                return false;
+            }
+
+            $expiryMap = $meta['feature_expiry'] ?? null;
+            if (! is_array($expiryMap)) {
+                return false;
+            }
+
+            $raw = $expiryMap[$normalizedKey] ?? null;
+            if ($raw === null || $raw === '') {
+                return false;
+            }
+
+            $expiresAt = Carbon::parse($raw);
+
+            return Carbon::now()->gt($expiresAt);
+        } catch (\Throwable) {
+            return false;
+        }
+    }
+
+    /**
+     * @param  array{
+     *   allowed: bool,
+     *   limit: int|null,
+     *   used: int,
+     *   remaining: int|null,
+     *   unlimited: bool,
+     *   reset_at: CarbonInterface|null,
+     *   reason: string|null
+     * }  $state
+     * @return array{
+     *   allowed: bool,
+     *   limit: int|null,
+     *   used: int,
+     *   remaining: int|null,
+     *   unlimited: bool,
+     *   reset_at: CarbonInterface|null,
+     *   reason: string|null
+     * }
+     */
+    private function applySoftLimitWarning(array $state): array
+    {
+        $reason = $state['reason'] ?? null;
+        if ($reason === 'feature_expired' || $reason === 'limit_exhausted') {
+            return $state;
+        }
+
+        $limit = $state['limit'];
+        if ($limit === null || $limit <= 0 || ($state['unlimited'] ?? false)) {
+            return $state;
+        }
+
+        $used = (int) ($state['used'] ?? 0);
+        if ($limit > 0) {
+            $ratio = $used / $limit;
+            if ($ratio >= 0.8) {
+                $state['reason'] = 'soft_limit_warning';
+            }
+        }
+
+        return $state;
+    }
+
+    /**
+     * @return array{
+     *   allowed: bool,
+     *   limit: int|null,
+     *   used: int,
+     *   remaining: int|null,
+     *   unlimited: bool,
+     *   reset_at: CarbonInterface|null,
+     *   reason: string|null
+     * }
+     */
+    private function buildQuotaState(int $limit, int $used, ?CarbonInterface $resetAt = null): array
+    {
+        if ($this->isUnlimitedLimit($limit)) {
+            return [
+                'allowed' => true,
+                'limit' => null,
+                'used' => $used,
+                'remaining' => null,
+                'unlimited' => true,
+                'reset_at' => null,
+                'reason' => null,
+            ];
+        }
+
+        if ($limit === 0) {
+            return [
+                'allowed' => false,
+                'limit' => 0,
+                'used' => $used,
+                'remaining' => 0,
+                'unlimited' => false,
+                'reset_at' => $resetAt,
+                'reason' => 'limit_exhausted',
+            ];
+        }
+
+        $allowed = $used < $limit;
+
+        return [
+            'allowed' => $allowed,
+            'limit' => $limit,
+            'used' => $used,
+            'remaining' => max(0, $limit - $used),
+            'unlimited' => false,
+            'reset_at' => $resetAt,
+            'reason' => null,
+        ];
+    }
+
+    private function resetAtForUsagePeriod(string $period): ?CarbonInterface
+    {
+        $now = Carbon::now();
+
+        return match ($period) {
+            UserFeatureUsage::PERIOD_DAILY => $now->copy()->endOfDay(),
+            UserFeatureUsage::PERIOD_MONTHLY => $now->copy()->endOfMonth()->endOfDay(),
+            default => null,
+        };
+    }
+
+    private function stateForChatSendLimit(User $user): array
+    {
+        $subs = app(SubscriptionService::class);
+        $usageSvc = app(UserFeatureUsageService::class);
+        $limit = $subs->getFeatureLimit($user, SubscriptionService::FEATURE_CHAT_SEND_LIMIT);
+        $used = $usageSvc->getUsage(
+            (int) $user->id,
+            self::FEATURE_CHAT_SEND_LIMIT,
+            UserFeatureUsage::PERIOD_DAILY,
+        );
+
+        return $this->buildQuotaState($limit, $used, $this->resetAtForUsagePeriod(UserFeatureUsage::PERIOD_DAILY));
+    }
+
+    private function stateForChatCanRead(User $user): array
+    {
+        $allowed = $this->canUseChatCanRead((int) $user->id);
+
+        return [
+            'allowed' => $allowed,
+            'limit' => null,
+            'used' => 0,
+            'remaining' => null,
+            'unlimited' => false,
+            'reset_at' => null,
+            'reason' => null,
+        ];
+    }
+
+    private function stateForContactViewLimit(User $user): array
+    {
+        $subs = app(SubscriptionService::class);
+        $usageSvc = app(UserFeatureUsageService::class);
+        $limit = $subs->getFeatureLimit($user, PlanFeatureKeys::CONTACT_VIEW_LIMIT);
+        $used = $usageSvc->getUsage(
+            (int) $user->id,
+            UserFeatureUsageKeys::CONTACT_VIEW_LIMIT,
+            UserFeatureUsage::PERIOD_MONTHLY,
+        );
+
+        return $this->buildQuotaState($limit, $used, $this->resetAtForUsagePeriod(UserFeatureUsage::PERIOD_MONTHLY));
+    }
+
+    private function stateForDailyProfileViewLimit(User $user): array
+    {
+        $subs = app(SubscriptionService::class);
+        $usageSvc = app(UserFeatureUsageService::class);
+        $limit = $subs->getFeatureLimit($user, SubscriptionService::FEATURE_DAILY_PROFILE_VIEW_LIMIT);
+        $used = $usageSvc->getUsage(
+            (int) $user->id,
+            self::FEATURE_DAILY_PROFILE_VIEW_LIMIT,
+            UserFeatureUsage::PERIOD_DAILY,
+        );
+
+        return $this->buildQuotaState($limit, $used, $this->resetAtForUsagePeriod(UserFeatureUsage::PERIOD_DAILY));
+    }
+
+    /**
+     * Matches {@see InterestSendLimitService} (entitlement override + daily bucket).
+     */
+    private function stateForInterestSendLimit(User $user): array
+    {
+        $limit = app(InterestSendLimitService::class)->effectiveDailyLimit($user);
+        $used = app(UserFeatureUsageService::class)->getUsage(
+            (int) $user->id,
+            UserFeatureUsageKeys::INTEREST_SEND_LIMIT,
+            UserFeatureUsage::PERIOD_DAILY,
+        );
+
+        return $this->buildQuotaState($limit, $used, $this->resetAtForUsagePeriod(UserFeatureUsage::PERIOD_DAILY));
+    }
+
+    /**
+     * Same effective cap as dashboard / {@see ContactAccessService} when contact reveal is blocked.
+     */
+    private function effectiveMediatorMonthlyLimitForUser(User $user): int
+    {
+        $subs = app(SubscriptionService::class);
+        $contactCap = $subs->getFeatureLimit($user, PlanFeatureKeys::CONTACT_VIEW_LIMIT);
+        if ($contactCap === 0) {
+            return 0;
+        }
+
+        return $this->parseNumericLimitFromEntitlement((int) $user->id, PlanFeatureKeys::MEDIATOR_REQUESTS_PER_MONTH);
+    }
+
+    private function stateForMediatorRequestsMonthly(User $user): array
+    {
+        $limit = $this->effectiveMediatorMonthlyLimitForUser($user);
+        $used = app(UserFeatureUsageService::class)->getUsage(
+            (int) $user->id,
+            UserFeatureUsageKeys::MEDIATOR_REQUEST,
+            UserFeatureUsage::PERIOD_MONTHLY,
+        );
+
+        return $this->buildQuotaState($limit, $used, $this->resetAtForUsagePeriod(UserFeatureUsage::PERIOD_MONTHLY));
+    }
+
+    private function stateForWhoViewedMeAccess(User $user): array
+    {
+        $days = $this->getWhoViewedMeWindowDays((int) $user->id);
+        $allowed = $days > 0;
+
+        return [
+            'allowed' => $allowed,
+            'limit' => null,
+            'used' => 0,
+            'remaining' => null,
+            'unlimited' => $days >= self::WHO_VIEWED_UNLIMITED_DAYS_THRESHOLD,
+            'reset_at' => null,
+            'reason' => null,
+        ];
+    }
+
+    /**
+     * Legacy entitlement + plan_features + overlapping usage window (unchanged product rules).
+     */
+    private function stateForGenericEntitlementPlanFeature(User $user, string $featureKey): array
+    {
+        $userId = (int) $user->id;
+
         $entitlement = DB::table('user_entitlements')
             ->where('user_id', $userId)
             ->where('entitlement_key', $featureKey)
@@ -103,15 +604,29 @@ class FeatureUsageService
             ->first();
 
         if (! $entitlement) {
-            return false;
+            return [
+                'allowed' => false,
+                'limit' => null,
+                'used' => 0,
+                'remaining' => null,
+                'unlimited' => false,
+                'reset_at' => null,
+                'reason' => null,
+            ];
         }
 
-        // 2. Check expiry
         if ($entitlement->valid_until && Carbon::parse($entitlement->valid_until)->isPast()) {
-            return false;
+            return [
+                'allowed' => false,
+                'limit' => null,
+                'used' => 0,
+                'remaining' => null,
+                'unlimited' => false,
+                'reset_at' => null,
+                'reason' => null,
+            ];
         }
 
-        // 3. Get active subscription
         $subscription = DB::table('subscriptions')
             ->where('user_id', $userId)
             ->where('status', 'active')
@@ -119,28 +634,35 @@ class FeatureUsageService
             ->first();
 
         if (! $subscription) {
-            return false;
+            return [
+                'allowed' => false,
+                'limit' => null,
+                'used' => 0,
+                'remaining' => null,
+                'unlimited' => false,
+                'reset_at' => null,
+                'reason' => null,
+            ];
         }
 
-        // 4. Get feature value
         $feature = DB::table('plan_features')
             ->where('plan_id', $subscription->plan_id)
             ->where('key', $featureKey)
             ->first();
 
         if (! $feature) {
-            return false;
+            return [
+                'allowed' => false,
+                'limit' => null,
+                'used' => 0,
+                'remaining' => null,
+                'unlimited' => false,
+                'reset_at' => null,
+                'reason' => null,
+            ];
         }
 
-        // LIMIT FEATURE
         $limit = (int) $feature->value;
-        if ($limit < 0) {
-            return true;
-        }
-        if ($limit === 0) {
-            return false;
-        }
-
         $now = now();
 
         $usage = DB::table('user_feature_usages')
@@ -150,43 +672,193 @@ class FeatureUsageService
             ->where('period_end', '>=', $now)
             ->first();
 
-        $used = $usage ? $usage->used_count : 0;
+        $used = $usage ? (int) $usage->used_count : 0;
 
-        return $used < $limit;
+        if ($this->isUnlimitedLimit($limit)) {
+            return [
+                'allowed' => true,
+                'limit' => null,
+                'used' => $used,
+                'remaining' => null,
+                'unlimited' => true,
+                'reset_at' => null,
+                'reason' => null,
+            ];
+        }
+
+        if ($limit === 0) {
+            return [
+                'allowed' => false,
+                'limit' => 0,
+                'used' => $used,
+                'remaining' => 0,
+                'unlimited' => false,
+                'reset_at' => null,
+                'reason' => 'limit_exhausted',
+            ];
+        }
+
+        return [
+            'allowed' => $used < $limit,
+            'limit' => $limit,
+            'used' => $used,
+            'remaining' => max(0, $limit - $used),
+            'unlimited' => false,
+            'reset_at' => null,
+            'reason' => null,
+        ];
     }
 
     /**
-     * Consume usage
+     * Check if user can use a feature
      */
-    public function consume(int $userId, string $featureKey): void
+    public function canUse(int $userId, string $featureKey): bool
     {
         $user = User::query()->find($userId);
-        if ($user && $this->isAdminBypass($user)) {
+        if (! $user) {
+            return false;
+        }
+
+        return $this->getFeatureState($user, $featureKey)['allowed'];
+    }
+
+    /**
+     * Consume usage. Returns whether the action is allowed (no increment when unlimited / no-op gates).
+     */
+    public function consume(int $userId, string $featureKey): bool
+    {
+        $user = User::query()->find($userId);
+        if (! $user) {
+            return false;
+        }
+
+        if ($this->isAdminBypass($user)) {
+            return true;
+        }
+
+        $normalized = $this->normalizeFeatureKey($featureKey);
+        $state = $this->getFeatureState($user, $featureKey);
+
+        if (! $state['allowed']) {
+            $ppa = $this->payPerActionQuotePaiseIfEligible($normalized, $state);
+            if ($ppa === null) {
+                return false;
+            }
+
+            return DB::transaction(function () use ($user, $userId, $normalized, $ppa) {
+                if (! app(UserWalletService::class)->debit((int) $user->id, $ppa, 'ppa:'.$normalized)) {
+                    return false;
+                }
+
+                match ($normalized) {
+                    PlanFeatureKeys::CHAT_SEND_LIMIT => $this->consumeChatSendLimit($userId),
+                    PlanFeatureKeys::CONTACT_VIEW_LIMIT => $this->consumeContactViewLimit($userId),
+                    self::FEATURE_DAILY_PROFILE_VIEW_LIMIT => $this->consumeDailyProfileViewLimit($userId),
+                    PlanFeatureKeys::INTEREST_SEND_LIMIT => $this->consumeInterestSendLimit($userId),
+                    PlanFeatureKeys::MEDIATOR_REQUESTS_PER_MONTH => $this->consumeMediatorMonthly($userId),
+                    default => $this->consumeGenericEntitlementPlanFeature($userId, $normalized),
+                };
+
+                return true;
+            });
+        }
+
+        if ($state['unlimited']) {
+            return true;
+        }
+
+        if ($normalized === self::FEATURE_WHO_VIEWED_ME_ACCESS || $normalized === self::FEATURE_CHAT_CAN_READ) {
+            return true;
+        }
+
+        return DB::transaction(function () use ($userId, $normalized) {
+            match ($normalized) {
+                PlanFeatureKeys::CHAT_SEND_LIMIT => $this->consumeChatSendLimit($userId),
+                PlanFeatureKeys::CONTACT_VIEW_LIMIT => $this->consumeContactViewLimit($userId),
+                self::FEATURE_DAILY_PROFILE_VIEW_LIMIT => $this->consumeDailyProfileViewLimit($userId),
+                PlanFeatureKeys::INTEREST_SEND_LIMIT => $this->consumeInterestSendLimit($userId),
+                PlanFeatureKeys::MEDIATOR_REQUESTS_PER_MONTH => $this->consumeMediatorMonthly($userId),
+                default => $this->consumeGenericEntitlementPlanFeature($userId, $normalized),
+            };
+
+            return true;
+        });
+    }
+
+    /**
+     * When quota is exhausted and PPA is configured, return price in paise; otherwise null.
+     *
+     * @param  array<string, mixed>  $state  {@see getFeatureState}
+     */
+    private function payPerActionQuotePaiseIfEligible(string $normalized, array $state): ?int
+    {
+        if (! config('pay_per_action.enabled', false)) {
+            return null;
+        }
+
+        $cfg = config('pay_per_action.actions.'.$normalized);
+        if (! is_array($cfg) || empty($cfg['enabled'])) {
+            return null;
+        }
+
+        $pricePaise = (int) ($cfg['price_paise'] ?? 0);
+        if ($pricePaise <= 0) {
+            return null;
+        }
+
+        if (($state['unlimited'] ?? false) === true) {
+            return null;
+        }
+
+        $limit = $state['limit'] ?? null;
+        if ($limit === null || $limit <= 0) {
+            return null;
+        }
+
+        if ((int) ($state['used'] ?? 0) < (int) $limit) {
+            return null;
+        }
+
+        return $pricePaise;
+    }
+
+    private function consumeInterestSendLimit(int $userId): void
+    {
+        $user = User::query()->find($userId);
+        if (! $user) {
             return;
         }
 
-        if ($featureKey === self::FEATURE_CHAT_SEND_LIMIT) {
-            $this->consumeChatSendLimit($userId);
+        app(UserFeatureUsageService::class)->incrementUsage(
+            $userId,
+            UserFeatureUsageKeys::INTEREST_SEND_LIMIT,
+            1,
+            UserFeatureUsage::PERIOD_DAILY,
+        );
+    }
 
+    private function consumeMediatorMonthly(int $userId): void
+    {
+        $user = User::query()->find($userId);
+        if (! $user) {
             return;
         }
 
-        if ($featureKey === self::FEATURE_CONTACT_VIEW_LIMIT) {
-            $this->consumeContactViewLimit($userId);
-
+        $limit = $this->effectiveMediatorMonthlyLimitForUser($user);
+        if ($this->isUnlimitedLimit($limit) || $limit === 0) {
             return;
         }
 
-        if ($featureKey === self::FEATURE_DAILY_PROFILE_VIEW_LIMIT) {
-            $this->consumeDailyProfileViewLimit($userId);
+        app(UserFeatureUsageService::class)->incrementUsage(
+            $userId,
+            UserFeatureUsageKeys::MEDIATOR_REQUEST,
+            1,
+            UserFeatureUsage::PERIOD_MONTHLY,
+        );
+    }
 
-            return;
-        }
-
-        if ($featureKey === self::FEATURE_WHO_VIEWED_ME_ACCESS) {
-            return;
-        }
-
+    private function consumeGenericEntitlementPlanFeature(int $userId, string $featureKey): void
+    {
         DB::transaction(function () use ($userId, $featureKey) {
 
             // get entitlement
@@ -256,30 +928,6 @@ class FeatureUsageService
         return app(EntitlementService::class)->hasFeature($userId, PlanFeatureKeys::CHAT_CAN_READ);
     }
 
-    private function canUseChatSendLimit(int $userId): bool
-    {
-        $user = User::query()->find($userId);
-        if (! $user) {
-            return false;
-        }
-
-        $limit = app(SubscriptionService::class)->getFeatureLimit($user, SubscriptionService::FEATURE_CHAT_SEND_LIMIT);
-        if ($limit === -1) {
-            return true;
-        }
-        if ($limit === 0) {
-            return false;
-        }
-
-        $used = app(UserFeatureUsageService::class)->getUsage(
-            $userId,
-            self::FEATURE_CHAT_SEND_LIMIT,
-            UserFeatureUsage::PERIOD_DAILY,
-        );
-
-        return $used < $limit;
-    }
-
     private function consumeChatSendLimit(int $userId): void
     {
         $user = User::query()->find($userId);
@@ -295,33 +943,6 @@ class FeatureUsageService
         );
     }
 
-    /**
-     * Viewer daily profile-browse cap: {@see SubscriptionService::getFeatureLimit}(..., {@see self::FEATURE_DAILY_PROFILE_VIEW_LIMIT}) vs {@link UserFeatureUsageService} daily bucket.
-     */
-    private function canUseDailyProfileViewLimit(int $userId): bool
-    {
-        $user = User::query()->find($userId);
-        if (! $user) {
-            return false;
-        }
-
-        $limit = app(SubscriptionService::class)->getFeatureLimit($user, SubscriptionService::FEATURE_DAILY_PROFILE_VIEW_LIMIT);
-        if ($limit === -1) {
-            return true;
-        }
-        if ($limit === 0) {
-            return false;
-        }
-
-        $used = app(UserFeatureUsageService::class)->getUsage(
-            $userId,
-            self::FEATURE_DAILY_PROFILE_VIEW_LIMIT,
-            UserFeatureUsage::PERIOD_DAILY,
-        );
-
-        return $used < $limit;
-    }
-
     private function consumeDailyProfileViewLimit(int $userId): void
     {
         $user = User::query()->find($userId);
@@ -335,34 +956,6 @@ class FeatureUsageService
             1,
             UserFeatureUsage::PERIOD_DAILY,
         );
-    }
-
-    /**
-     * Contact views: same cap as {@see self::getPlanFeatureLimit}({@see PlanFeatureKeys::CONTACT_VIEW_LIMIT})
-     * vs monthly {@see UserFeatureUsageKeys::CONTACT_VIEW_LIMIT} usage (SSOT with UI display).
-     */
-    private function canUseContactViewLimit(int $userId): bool
-    {
-        $user = User::query()->find($userId);
-        if (! $user) {
-            return false;
-        }
-
-        $limit = app(SubscriptionService::class)->getFeatureLimit($user, PlanFeatureKeys::CONTACT_VIEW_LIMIT);
-        if ($limit === -1) {
-            return true;
-        }
-        if ($limit === 0) {
-            return false;
-        }
-
-        $used = app(UserFeatureUsageService::class)->getUsage(
-            $userId,
-            UserFeatureUsageKeys::CONTACT_VIEW_LIMIT,
-            UserFeatureUsage::PERIOD_MONTHLY,
-        );
-
-        return $used < $limit;
     }
 
     private function consumeContactViewLimit(int $userId): void
@@ -398,11 +991,6 @@ class FeatureUsageService
         return max(0, (int) $raw);
     }
 
-    private function canUseWhoViewedMeAccess(int $userId): bool
-    {
-        return $this->getWhoViewedMeWindowDays($userId) > 0;
-    }
-
     // -------------------------------------------------------------------------
     // Public façade — delegates only (controllers / Blade entry point; SSOT API).
     // -------------------------------------------------------------------------
@@ -430,7 +1018,7 @@ class FeatureUsageService
             UserFeatureUsage::PERIOD_MONTHLY,
         );
 
-        if ($limit === -1) {
+        if ($this->isUnlimitedLimit($limit)) {
             return [
                 'used' => $used,
                 'limit' => '∞',
@@ -555,7 +1143,7 @@ class FeatureUsageService
                     UserFeatureUsageKeys::MEDIATOR_REQUEST,
                     UserFeatureUsage::PERIOD_MONTHLY,
                 ),
-                $this->effectiveMediatorMonthlyLimitForDashboard($user, $subs),
+                $this->effectiveMediatorMonthlyLimitForUser($user),
             ),
         ];
 
@@ -576,7 +1164,7 @@ class FeatureUsageService
         int $limit,
     ): array {
         $locked = $limit === 0;
-        $unlimited = $limit === -1;
+        $unlimited = $this->isUnlimitedLimit($limit);
 
         return [
             'key' => $key,
@@ -588,21 +1176,6 @@ class FeatureUsageService
             'locked' => $locked,
             'is_unlimited' => $unlimited,
         ];
-    }
-
-    /**
-     * Mediator quota for dashboard: same product rule as {@see ContactAccessService::resolveViewerContext}
-     * when {@code has_contact_unlock} is false — contact reveal cap 0 ⇒ mediator shows as unavailable (0),
-     * not the raw {@see PlanFeatureKeys::MEDIATOR_REQUESTS_PER_MONTH} on the plan row.
-     */
-    private function effectiveMediatorMonthlyLimitForDashboard(User $user, SubscriptionService $subs): int
-    {
-        $contactCap = $subs->getFeatureLimit($user, PlanFeatureKeys::CONTACT_VIEW_LIMIT);
-        if ($contactCap === 0) {
-            return 0;
-        }
-
-        return $this->parseNumericLimitFromEntitlement((int) $user->id, PlanFeatureKeys::MEDIATOR_REQUESTS_PER_MONTH);
     }
 
     /**

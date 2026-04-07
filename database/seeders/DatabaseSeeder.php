@@ -30,6 +30,7 @@ class DatabaseSeeder extends Seeder
             GeoSeeder::class,
             SubscriptionPlansSeeder::class,
             PlanStandardFeatureKeysSeeder::class,
+            PlanFeatureSeeder::class,
         ]);
     }
 }
