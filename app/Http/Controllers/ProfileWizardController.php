@@ -114,11 +114,20 @@ class ProfileWizardController extends Controller
 
         $minimal = $this->isMinimalWizard();
         if ($section === 'full') {
+            if (! $request->boolean('all')) {
+                return redirect()->route('matrimony.profile.wizard.section', ['section' => 'basic-info']);
+            }
             session()->forget('wizard_minimal');
             $minimal = false;
             $profile->load(['religion', 'caste', 'subCaste']);
         }
-        $sections = $minimal ? FieldCatalogService::getSectionKeys(true) : FieldCatalogService::getSectionKeys(false);
+        $sections = $minimal
+            ? FieldCatalogService::getSectionKeys(true)
+            : array_merge(['full'], FieldCatalogService::getSectionKeys(false));
+        $sectionLabels = FieldCatalogService::getSectionsForDisplay($minimal);
+        if (! $minimal) {
+            $sectionLabels = array_merge(['full' => 'wizard.full_form'], $sectionLabels);
+        }
         $nextSection = $minimal ? FieldCatalogService::getNextSection($section, true) : FieldCatalogService::getNextSection($section, false);
         if ($nextSection === null && $minimal) {
             $nextSection = 'full';
@@ -131,7 +140,7 @@ class ProfileWizardController extends Controller
         $viewData['profile'] = $profile;
         $viewData['currentSection'] = $section;
         $viewData['sections'] = $sections;
-        $viewData['sectionLabels'] = FieldCatalogService::getSectionsForDisplay($minimal);
+        $viewData['sectionLabels'] = $sectionLabels;
         $viewData['completionPct'] = $completionPct;
         $viewData['nextSection'] = $nextSection;
         $viewData['previousSection'] = $previousSection;
@@ -154,6 +163,22 @@ class ProfileWizardController extends Controller
     private function partnerPrefQuery(Request $request): array
     {
         return PartnerPreferenceNavService::prefQuery($request);
+    }
+
+    /**
+     * Query params to preserve when redirecting back to a wizard section (GET).
+     */
+    private function wizardSectionRedirectQuery(Request $request, string $section): array
+    {
+        $q = [];
+        if ($section === 'full') {
+            $q['all'] = 1;
+        }
+        if ($section === 'about-preferences') {
+            $q = array_merge($q, $this->partnerPrefQuery($request));
+        }
+
+        return $q;
     }
 
     /**
@@ -231,7 +256,7 @@ class ProfileWizardController extends Controller
             $minimal = $this->isMinimalWizard();
             $next = $minimal ? FieldCatalogService::getNextSection($section, true) : FieldCatalogService::getNextSection($section, false);
             if ($next) {
-                return redirect()->route('matrimony.profile.wizard.section', ['section' => $next])
+                return redirect()->route('matrimony.profile.wizard.section', array_merge(['section' => $next], $next === 'full' ? ['all' => 1] : []))
                     ->with('info', 'Use the photo upload engine above to add or change your photo.');
             }
 
@@ -243,7 +268,7 @@ class ProfileWizardController extends Controller
         \Log::info('DEBUG SNAPSHOT FULL', $snapshot ?? []);
 
         if ($snapshot === null) {
-            return redirect()->route('matrimony.profile.wizard.section', array_merge(['section' => $section], $this->partnerPrefQuery($request)))
+            return redirect()->route('matrimony.profile.wizard.section', array_merge(['section' => $section], $this->wizardSectionRedirectQuery($request, $section)))
                 ->with('error', 'Invalid section or no data.')
                 ->withInput();
         }
@@ -261,11 +286,11 @@ class ProfileWizardController extends Controller
                 DB::table('profile_children')->where('profile_id', $profile->id)->delete();
             }
         } catch (\Illuminate\Validation\ValidationException $e) {
-            return redirect()->route('matrimony.profile.wizard.section', array_merge(['section' => $section], $this->partnerPrefQuery($request)))
+            return redirect()->route('matrimony.profile.wizard.section', array_merge(['section' => $section], $this->wizardSectionRedirectQuery($request, $section)))
                 ->withErrors($e->errors())
                 ->withInput();
         } catch (\RuntimeException $e) {
-            return redirect()->route('matrimony.profile.wizard.section', array_merge(['section' => $section], $this->partnerPrefQuery($request)))
+            return redirect()->route('matrimony.profile.wizard.section', array_merge(['section' => $section], $this->wizardSectionRedirectQuery($request, $section)))
                 ->withErrors(['lifecycle' => $e->getMessage()])
                 ->withInput();
         } catch (\Throwable $e) {
@@ -282,20 +307,20 @@ class ProfileWizardController extends Controller
         }
 
         if ($result['conflict_detected'] ?? false) {
-            return redirect()->route('matrimony.profile.wizard.section', array_merge(['section' => $section], $this->partnerPrefQuery($request)))
+            return redirect()->route('matrimony.profile.wizard.section', array_merge(['section' => $section], $this->wizardSectionRedirectQuery($request, $section)))
                 ->with('warning', 'Some changes could not be applied due to conflicts.')
                 ->withInput();
         }
 
         if ($request->boolean('save_only')) {
-            return redirect()->route('matrimony.profile.wizard.section', array_merge(['section' => $section], $this->partnerPrefQuery($request)))
+            return redirect()->route('matrimony.profile.wizard.section', array_merge(['section' => $section], $this->wizardSectionRedirectQuery($request, $section)))
                 ->with('success', __('wizard.saved'));
         }
 
         $minimal = $this->isMinimalWizard();
         $next = $minimal ? FieldCatalogService::getNextSection($section, true) : FieldCatalogService::getNextSection($section, false);
         if ($next) {
-            return redirect()->route('matrimony.profile.wizard.section', ['section' => $next])
+            return redirect()->route('matrimony.profile.wizard.section', array_merge(['section' => $next], $next === 'full' ? ['all' => 1] : []))
                 ->with('success', __('wizard.saved_continue_next'));
         }
         if ($minimal) {
@@ -671,13 +696,17 @@ class ProfileWizardController extends Controller
                 $preferredDietIds = Schema::hasTable('profile_preferred_diets')
                     ? DB::table('profile_preferred_diets')->where('profile_id', $profile->id)->pluck('diet_id')->all()
                     : [];
+                $preferredMaritalStatusIdsFromDb = Schema::hasTable('profile_preferred_marital_statuses')
+                    ? DB::table('profile_preferred_marital_statuses')->where('profile_id', $profile->id)->pluck('marital_status_id')->all()
+                    : [];
 
                 $suggestions = \App\Services\PartnerPreferenceSuggestionService::suggestForProfile($profile);
 
                 $wasCompletelyEmpty = ! $criteria && empty($preferredReligionIds) && empty($preferredCasteIds) && empty($preferredDistrictIds)
                     && empty($preferredCountryIds) && empty($preferredStateIds) && empty($preferredTalukaIds)
                     && empty($preferredMasterEducationIds) && empty($preferredWorkingWithTypeIds) && empty($preferredProfessionIds)
-                    && empty($preferredDietIds);
+                    && empty($preferredDietIds) && empty($preferredMaritalStatusIdsFromDb)
+                    && ($criteria?->preferred_marital_status_id ?? null) === null;
 
                 $merged = \App\Services\PartnerPreferenceSuggestionService::mergePartnerPreferencesForDisplay(
                     $profile,
@@ -688,7 +717,8 @@ class ProfileWizardController extends Controller
                     $preferredStateIds,
                     $preferredDistrictIds,
                     $preferredTalukaIds,
-                    $preferredDietIds
+                    $preferredDietIds,
+                    $preferredMaritalStatusIdsFromDb
                 );
                 $criteria = $merged['criteria'];
                 $preferredReligionIds = $merged['preferredReligionIds'];
@@ -698,6 +728,7 @@ class ProfileWizardController extends Controller
                 $preferredDistrictIds = $merged['preferredDistrictIds'];
                 $preferredTalukaIds = $merged['preferredTalukaIds'];
                 $preferredDietIds = $merged['preferredDietIds'];
+                $preferredMaritalStatusIdsMerged = $merged['preferredMaritalStatusIds'] ?? [];
 
                 $data['preferencePreset'] = $wasCompletelyEmpty ? ($suggestions['preference_preset'] ?? 'balanced') : 'custom';
 
@@ -795,10 +826,11 @@ class ProfileWizardController extends Controller
                     fn ($p) => ['id' => $p->id, 'name' => $p->name, 'working_with_type_id' => $p->working_with_type_id]
                 )->all();
 
-                $data['preferredMaritalStatusId'] = old(
-                    'preferred_marital_status_id',
-                    $criteria->preferred_marital_status_id ?? null
-                );
+                $data['preferredMaritalStatusIds'] = collect(old('preferred_marital_status_ids', $preferredMaritalStatusIdsMerged))
+                    ->map(fn ($id) => (int) $id)->filter(fn ($id) => $id > 0)->unique()->values()->all();
+                $data['preferredMaritalStatusId'] = count($data['preferredMaritalStatusIds']) === 1
+                    ? $data['preferredMaritalStatusIds'][0]
+                    : null;
 
                 $data['neverMarriedMaritalStatusId'] = \App\Models\MasterMaritalStatus::where('key', 'never_married')->where('is_active', true)->value('id');
                 $data['partnerProfileWithChildren'] = old(

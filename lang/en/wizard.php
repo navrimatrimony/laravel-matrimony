@@ -7,6 +7,7 @@
 return [
     'profile_completion' => 'Profile completion',
     'sections' => 'Sections',
+    'full_form' => 'Full form',
     'basic_info' => 'Basic info',
     'contacts' => 'Contacts',
     'previous' => 'Previous',

@@ -120,7 +120,7 @@ class ContactAccessService
             ];
         }
 
-        // Must match {@see FeatureUsageService::canUse}(..., FEATURE_CONTACT_VIEW_LIMIT): subscription plan limit ≠ 0 (entitlement row for contact_unlock may be missing while plan_features still grants contact_view_limit).
+        // Must match {@see FeatureUsageService::canUse}(..., FEATURE_CONTACT_VIEW_LIMIT): subscription plan limit ≠ 0.
         $hasUnlock = $this->planGrantsContactRevealFromSubscription($viewer);
 
         if (! $hasUnlock) {

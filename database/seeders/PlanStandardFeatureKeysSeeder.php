@@ -5,6 +5,7 @@ namespace Database\Seeders;
 use App\Models\Plan;
 use App\Models\PlanFeature;
 use App\Models\PlanTerm;
+use App\Services\SubscriptionService;
 use App\Support\PlanFeatureKeys;
 use Illuminate\Database\Seeder;
 
@@ -19,20 +20,19 @@ class PlanStandardFeatureKeysSeeder extends Seeder
         $zeroBase = array_fill_keys(PlanFeatureKeys::all(), '0');
 
         $free = array_merge($zeroBase, [
-            PlanFeatureKeys::CHAT_CAN_SEND => '1',
+            PlanFeatureKeys::CHAT_SEND_LIMIT => '5',
             PlanFeatureKeys::CHAT_CAN_READ => '0',
             PlanFeatureKeys::INTEREST_SEND_LIMIT => '5',
             PlanFeatureKeys::INTEREST_VIEW_LIMIT => '3',
             PlanFeatureKeys::INTEREST_VIEW_RESET_PERIOD => 'monthly',
             PlanFeatureKeys::WHO_VIEWED_ME_DAYS => '0',
-            PlanFeatureKeys::CONTACT_UNLOCK => '0',
             PlanFeatureKeys::MEDIATOR_REQUESTS_PER_MONTH => '2',
+            SubscriptionService::FEATURE_DAILY_PROFILE_VIEW_LIMIT => '50',
         ]);
 
         $silver = array_merge($free, [
             PlanFeatureKeys::CHAT_CAN_READ => '1',
             PlanFeatureKeys::WHO_VIEWED_ME_DAYS => '1',
-            PlanFeatureKeys::CONTACT_UNLOCK => '1',
             PlanFeatureKeys::CONTACT_VIEW_LIMIT => '10',
             PlanFeatureKeys::INTEREST_VIEW_LIMIT => '15',
         ]);

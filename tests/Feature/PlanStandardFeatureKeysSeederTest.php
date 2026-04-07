@@ -22,7 +22,7 @@ class PlanStandardFeatureKeysSeederTest extends TestCase
 
         $free = Plan::query()->where('slug', 'free')->firstOrFail();
 
-        $this->assertSame('1', PlanFeature::query()->where('plan_id', $free->id)->where('key', PlanFeatureKeys::CHAT_CAN_SEND)->value('value'));
+        $this->assertSame('5', PlanFeature::query()->where('plan_id', $free->id)->where('key', PlanFeatureKeys::CHAT_SEND_LIMIT)->value('value'));
         $this->assertSame('0', PlanFeature::query()->where('plan_id', $free->id)->where('key', PlanFeatureKeys::CHAT_CAN_READ)->value('value'));
         $this->assertSame('5', PlanFeature::query()->where('plan_id', $free->id)->where('key', PlanFeatureKeys::INTEREST_SEND_LIMIT)->value('value'));
         $this->assertSame('2', PlanFeature::query()->where('plan_id', $free->id)->where('key', PlanFeatureKeys::MEDIATOR_REQUESTS_PER_MONTH)->value('value'));

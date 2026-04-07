@@ -50,7 +50,7 @@ class ProfileContactVerificationController extends Controller
         }
 
         return redirect()
-            ->route('matrimony.profile.wizard.section', ['section' => 'full'])
+            ->route('matrimony.profile.wizard.section', ['section' => 'full', 'all' => 1])
             ->with('success', __('contact_verify.otp_sent'));
     }
 
@@ -75,12 +75,12 @@ class ProfileContactVerificationController extends Controller
             app(MutationService::class)->markSelfContactVerified($profile, $contact, (int) auth()->id());
         } catch (ValidationException $e) {
             return redirect()
-                ->route('matrimony.profile.wizard.section', ['section' => 'full'])
+                ->route('matrimony.profile.wizard.section', ['section' => 'full', 'all' => 1])
                 ->withErrors($e->errors());
         }
 
         return redirect()
-            ->route('matrimony.profile.wizard.section', ['section' => 'full'])
+            ->route('matrimony.profile.wizard.section', ['section' => 'full', 'all' => 1])
             ->with('success', __('contact_verify.verified_ok'));
     }
 
@@ -93,12 +93,12 @@ class ProfileContactVerificationController extends Controller
             app(MutationService::class)->promoteVerifiedSelfContactToPrimary($profile, $contact, (int) auth()->id());
         } catch (ValidationException $e) {
             return redirect()
-                ->route('matrimony.profile.wizard.section', ['section' => 'full'])
+                ->route('matrimony.profile.wizard.section', ['section' => 'full', 'all' => 1])
                 ->withErrors($e->errors());
         }
 
         return redirect()
-            ->route('matrimony.profile.wizard.section', ['section' => 'full'])
+            ->route('matrimony.profile.wizard.section', ['section' => 'full', 'all' => 1])
             ->with('success', __('contact_verify.promoted_ok'));
     }
 

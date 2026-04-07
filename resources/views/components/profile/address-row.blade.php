@@ -9,7 +9,7 @@
     'rawPlaceholder' => 'Full address',
     'typePlaceholder' => 'current/permanent',
 ])
-<div class="flex gap-4 mb-3 items-end address-row border-2 border-rose-500 dark:border-rose-400 rounded-lg p-3">
+<div class="flex gap-4 mb-3 items-end address-row border border-gray-200 dark:border-gray-600 rounded-lg p-3">
     <div class="flex-1 min-w-0">
         <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Address</label>
         <input type="text"

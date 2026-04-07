@@ -40,6 +40,9 @@ class MatrimonyProfile extends Model
     */
     protected $table = 'matrimony_profiles';
 
+    /** Sentinel for `card_onboarding_resume_step` after step 7 (photo upload handoff). */
+    public const CARD_ONBOARDING_PHOTO_RESUME_STEP = 8;
+
     /** Allowed lifecycle_state values (validated via mutator). */
     public const LIFECYCLE_STATES = [
         'draft',
@@ -205,6 +208,8 @@ class MatrimonyProfile extends Model
         'diet_id',
         'smoking_status_id',
         'drinking_status_id',
+
+        'card_onboarding_resume_step',
     ];
 
     protected $casts = [
@@ -219,6 +224,7 @@ class MatrimonyProfile extends Model
         'safety_defaults_applied' => 'boolean',
         'income_private' => 'boolean',
         'family_income_private' => 'boolean',
+        'card_onboarding_resume_step' => 'integer',
     ];
 
     /**

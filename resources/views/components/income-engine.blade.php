@@ -68,7 +68,7 @@
     $selectedCurrency = collect($currencies)->firstWhere('id', $defaultCurrencyId);
     $currencyDisplayLabel = '—';
     if ($selectedCurrency) {
-        $sym = trim((string) ($selectedCurrency->symbol ?? ''));
+        $sym = $selectedCurrency->displaySymbol();
         $currencyDisplayLabel = trim($sym.' '.($selectedCurrency->code ?? ''));
     }
 
@@ -95,8 +95,8 @@
     $minAmountDisplayFormatted = $amountDisplay($minAmountVal) !== '' ? $indianFormat($minAmountVal) : '';
     $maxAmountDisplayFormatted = $amountDisplay($maxAmountVal) !== '' ? $indianFormat($maxAmountVal) : '';
 
-    $chipCls = 'rounded-xl border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-700/60 px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 focus:ring-2 focus:ring-rose-500/40 focus:border-rose-400 outline-none min-w-0 cursor-pointer';
-    $amountCls = 'rounded-xl border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 px-4 py-2.5 text-sm font-medium text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:ring-2 focus:ring-rose-500/40 focus:border-rose-400 outline-none transition-shadow';
+    $chipCls = 'rounded-xl border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-700/60 px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 focus:ring-2 focus:ring-indigo-500/35 focus:border-indigo-400 outline-none min-w-0 cursor-pointer';
+    $amountCls = 'rounded-xl border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 px-4 py-2.5 text-sm font-medium text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:ring-2 focus:ring-indigo-500/35 focus:border-indigo-400 outline-none transition-shadow';
     // Invisible overlay select: visible label is plain green text (no pill); avoids native <select> width quirks.
     $currencySelectOverlayCls = 'income-currency-select absolute inset-0 z-10 h-full min-h-[2.25rem] w-full cursor-pointer opacity-0 appearance-none border-0 bg-transparent p-0 outline-none focus:ring-0 disabled:cursor-not-allowed disabled:opacity-50';
     $currencyReadonlyCls = 'inline-flex shrink-0 items-center whitespace-nowrap text-sm font-semibold text-emerald-600 dark:text-emerald-400';
@@ -158,7 +158,7 @@
                     @if(!$readOnly)
                         <select name="{{ $n('currency_id') }}" class="{{ $currencySelectOverlayCls }}" {{ $disabled ? 'disabled' : '' }} aria-label="Currency" title="Change currency">
                             @foreach($currencies as $c)
-                                @php $sym = trim((string) ($c->symbol ?? '')); @endphp
+                                @php $sym = $c->displaySymbol(); @endphp
                                 <option value="{{ $c->id }}" {{ (string)$defaultCurrencyId === (string)$c->id ? 'selected' : '' }}>{{ $sym }} {{ $c->code }}</option>
                             @endforeach
                         </select>
@@ -179,7 +179,7 @@
         <div class="flex items-center gap-2 mt-3 w-full">
             @if(!$readOnly)
                 <input type="hidden" name="{{ $n('private') }}" value="0">
-                <input type="checkbox" name="{{ $n('private') }}" value="1" id="{{ $prefix }}_private_cb" {{ $privateRaw ? 'checked' : '' }} class="rounded border-gray-300 dark:border-gray-600 text-rose-600 focus:ring-rose-500" {{ $disabled ? 'disabled' : '' }}>
+                <input type="checkbox" name="{{ $n('private') }}" value="1" id="{{ $prefix }}_private_cb" {{ $privateRaw ? 'checked' : '' }} class="rounded border-gray-300 dark:border-gray-600 text-indigo-600 focus:ring-indigo-500" {{ $disabled ? 'disabled' : '' }}>
                 <label for="{{ $prefix }}_private_cb" class="text-sm text-gray-600 dark:text-gray-400 cursor-pointer select-none inline-flex items-center gap-1.5"><span aria-hidden="true">🔒</span>{{ $privacyLabelText }}</label>
             @else
                 <span class="text-sm text-gray-600 dark:text-gray-400 inline-flex items-center gap-1.5"><span aria-hidden="true">🔒</span>{{ $privateRaw ? $privacyLabelText : 'Visible' }}</span>

@@ -18,7 +18,7 @@
         </style>
 
         @if (file_exists(public_path('build/manifest.json')) || file_exists(public_path('hot')))
-            @vite(['resources/css/app.css', 'resources/js/app.js', 'resources/js/profile/location-typeahead.js'])
+            @vite(['resources/css/app.css', 'resources/js/app.js'])
         @else
             <style>
                 /*! minimal fallback when Vite build missing */
@@ -29,14 +29,15 @@
     <body class="min-h-screen flex flex-col bg-[#f5f5f5] dark:bg-[#111] text-[#333] dark:text-[#e5e5e5]">
         @php
             $castes = $castes ?? collect();
+            $states = $states ?? collect();
+            $districts = $districts ?? collect();
+            $defaultCountry = $defaultCountry ?? null;
             $homepageImages = $homepageImages ?? [];
             $heroPath = ! empty($homepageImages['hero'] ?? null)
                 ? $homepageImages['hero']
                 : 'images/matrimonial-hero.jpg';
             $assistedPath = $homepageImages['assisted_service'] ?? null;
             $successPath = $homepageImages['success_stories'] ?? null;
-            $searchCityId = old('city_id', request()->get('city_id', ''));
-            $searchLocationDisplay = $searchCityId ? (\App\Models\City::find($searchCityId)?->name ?? '') : '';
         @endphp
 
         <header class="w-full bg-white dark:bg-[#1a1a1a] border-b border-[#ddd] dark:border-[#333] sticky top-0 z-10">
@@ -115,21 +116,28 @@
                                 </select>
                             </div>
 
-                            <div class="welcome-search-location">
-                                <x-profile.location-typeahead
-                                    context="residence"
-                                    namePrefix=""
-                                    :value="$searchLocationDisplay"
-                                    placeholder="City / village / pincode"
-                                    label="Location (city)"
-                                    :noBorder="true"
-                                    :gpsAssist="false"
-                                    :data-city-id="$searchCityId"
-                                    :data-state-id="request()->get('state_id', '')"
-                                    :data-district-id="request()->get('district_id', '')"
-                                    :data-taluka-id="request()->get('taluka_id', '')"
-                                    :data-country-id="request()->get('country_id', '')"
-                                />
+                            @if ($defaultCountry)
+                                <input type="hidden" name="country_id" value="{{ $defaultCountry->id }}">
+                            @endif
+                            <div>
+                                <label class="block text-sm font-medium mb-2 dark:text-[#EDEDEC]" for="welcome-search-state">{{ __('search.state') }}</label>
+                                <select id="welcome-search-state" name="state_id"
+                                    class="w-full border border-[#e3e3e0] dark:border-[#3E3E3A] rounded px-3 py-2 bg-white dark:bg-[#161615] text-[#1b1b18] dark:text-[#EDEDEC] focus:outline-none focus:ring-2 focus:ring-[var(--brand-red)]">
+                                    <option value="">{{ __('search.any') }}</option>
+                                    @foreach ($states as $st)
+                                        <option value="{{ $st->id }}" {{ (string) request('state_id') === (string) $st->id ? 'selected' : '' }}>{{ $st->name }}</option>
+                                    @endforeach
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium mb-2 dark:text-[#EDEDEC]" for="welcome-search-district">{{ __('search.district') }}</label>
+                                <select id="welcome-search-district" name="district_id"
+                                    class="w-full border border-[#e3e3e0] dark:border-[#3E3E3A] rounded px-3 py-2 bg-white dark:bg-[#161615] text-[#1b1b18] dark:text-[#EDEDEC] focus:outline-none focus:ring-2 focus:ring-[var(--brand-red)]">
+                                    <option value="">{{ __('search.any') }}</option>
+                                    @foreach ($districts as $d)
+                                        <option value="{{ $d->id }}" {{ (string) request('district_id') === (string) $d->id ? 'selected' : '' }}>{{ $d->name }}</option>
+                                    @endforeach
+                                </select>
                             </div>
 
                             <button type="submit" class="w-full px-5 py-2.5 rounded border border-[var(--brand-red)] bg-[var(--brand-red)] text-white text-sm font-medium hover:bg-[var(--brand-red-dark)] transition-colors">
@@ -256,5 +264,39 @@
                 &copy; {{ date('Y') }} Navri Mile Navryala. All rights reserved.
             </div>
         </footer>
+
+        @if (($states ?? collect())->isNotEmpty())
+            <script>
+                (function () {
+                    var stateEl = document.getElementById('welcome-search-state');
+                    var distEl = document.getElementById('welcome-search-district');
+                    if (!stateEl || !distEl) return;
+                    var apiDistricts = @json(url('/api/internal/location/districts'));
+                    var anyLabel = @json(__('search.any'));
+                    stateEl.addEventListener('change', function () {
+                        var sid = stateEl.value;
+                        distEl.innerHTML = '<option value="">' + anyLabel + '</option>';
+                        if (!sid) return;
+                        fetch(apiDistricts + '?state_id=' + encodeURIComponent(sid), {
+                            headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+                            credentials: 'same-origin',
+                        })
+                            .then(function (r) {
+                                return r.json();
+                            })
+                            .then(function (j) {
+                                var rows = j && j.data ? j.data : [];
+                                rows.forEach(function (d) {
+                                    var o = document.createElement('option');
+                                    o.value = d.id;
+                                    o.textContent = d.name;
+                                    distEl.appendChild(o);
+                                });
+                            })
+                            .catch(function () {});
+                    });
+                })();
+            </script>
+        @endif
     </body>
 </html>

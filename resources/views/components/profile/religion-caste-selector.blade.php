@@ -27,7 +27,7 @@
     $subMissing = $isIntake && $subLabel !== '' && $subDisplay === '';
 @endphp
 
-<div class="religion-caste-component grid md:grid-cols-3 gap-2 border-2 border-rose-500 dark:border-rose-400 rounded-lg p-4">
+<div class="religion-caste-component grid md:grid-cols-3 gap-2 border border-gray-200 dark:border-gray-600 rounded-lg p-4">
     <div class="religion-wrap {{ $relMissing ? 'ocr-field-missing-wrap' : '' }}">
         <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">{{ __('Religion') }}</label>
         <div class="relative">

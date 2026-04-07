@@ -39,6 +39,8 @@ class OnboardingController extends Controller
             return redirect()->route('matrimony.profile.show', $profile->id)->with('error', __('wizard.profile_not_editable_current_state'));
         }
 
+        $this->syncCardOnboardingResumeStep($profile, $step);
+
         $data = [
             'step' => $step,
             'profile' => $profile,
@@ -111,7 +113,17 @@ class OnboardingController extends Controller
             return redirect()->route('login');
         }
 
+        $profile = auth()->user()->matrimonyProfile;
+        if ($profile) {
+            $profile->forceFill(['card_onboarding_resume_step' => null])->saveQuietly();
+        }
+
         session()->forget('wizard_minimal');
+
+        if ($profile) {
+            return redirect()->route('matrimony.profile.show', $profile->id)
+                ->with('success', __('onboarding.all_set'));
+        }
 
         return redirect()->route('matrimony.profiles.index')
             ->with('success', __('onboarding.all_set'));
@@ -165,12 +177,45 @@ class OnboardingController extends Controller
         }
 
         if ($step === 7) {
+            $profile->forceFill(['card_onboarding_resume_step' => MatrimonyProfile::CARD_ONBOARDING_PHOTO_RESUME_STEP])->saveQuietly();
+
             return redirect()->route('matrimony.profile.upload-photo', ['from' => 'onboarding'])
                 ->with('info', __('onboarding.after_step7_redirect_photos'));
         }
 
         return redirect()->route('matrimony.onboarding.show', ['step' => $step + 1])
             ->with('success', __('onboarding.saved_continue'));
+    }
+
+    /**
+     * Persist last-opened card step so returning users resume here (DB survives new sessions).
+     */
+    private function syncCardOnboardingResumeStep(MatrimonyProfile $profile, int $step): void
+    {
+        if ($step < 2 || $step > self::LAST_STEP) {
+            return;
+        }
+
+        if (! $this->shouldTrackCardOnboardingProgress($profile)) {
+            return;
+        }
+
+        $profile->forceFill(['card_onboarding_resume_step' => $step])->saveQuietly();
+    }
+
+    private function shouldTrackCardOnboardingProgress(MatrimonyProfile $profile): bool
+    {
+        if ($profile->card_onboarding_resume_step !== null) {
+            return true;
+        }
+        if (session('wizard_minimal', false)) {
+            return true;
+        }
+        if (($profile->lifecycle_state ?? null) === 'draft') {
+            return true;
+        }
+
+        return false;
     }
 
     private function snapshotStep2(Request $request, MatrimonyProfile $profile, ProfileWizardController $wizard): array
@@ -404,13 +449,17 @@ class OnboardingController extends Controller
         $preferredDietIds = Schema::hasTable('profile_preferred_diets')
             ? DB::table('profile_preferred_diets')->where('profile_id', $profile->id)->pluck('diet_id')->all()
             : [];
+        $preferredMaritalStatusIdsFromDb = Schema::hasTable('profile_preferred_marital_statuses')
+            ? DB::table('profile_preferred_marital_statuses')->where('profile_id', $profile->id)->pluck('marital_status_id')->all()
+            : [];
 
         $suggestions = \App\Services\PartnerPreferenceSuggestionService::suggestForProfile($profile);
 
         $wasCompletelyEmpty = ! $criteria && empty($preferredReligionIds) && empty($preferredCasteIds) && empty($preferredDistrictIds)
             && empty($preferredCountryIds) && empty($preferredStateIds) && empty($preferredTalukaIds)
             && empty($preferredMasterEducationIds) && empty($preferredWorkingWithTypeIds) && empty($preferredProfessionIds)
-            && empty($preferredDietIds);
+            && empty($preferredDietIds) && empty($preferredMaritalStatusIdsFromDb)
+            && ($criteria?->preferred_marital_status_id ?? null) === null;
 
         $merged = \App\Services\PartnerPreferenceSuggestionService::mergePartnerPreferencesForDisplay(
             $profile,
@@ -421,7 +470,8 @@ class OnboardingController extends Controller
             $preferredStateIds,
             $preferredDistrictIds,
             $preferredTalukaIds,
-            $preferredDietIds
+            $preferredDietIds,
+            $preferredMaritalStatusIdsFromDb
         );
         $criteria = $merged['criteria'];
         $preferredReligionIds = $merged['preferredReligionIds'];
@@ -431,6 +481,7 @@ class OnboardingController extends Controller
         $preferredDistrictIds = $merged['preferredDistrictIds'];
         $preferredTalukaIds = $merged['preferredTalukaIds'];
         $preferredDietIds = $merged['preferredDietIds'];
+        $preferredMaritalStatusIdsMerged = $merged['preferredMaritalStatusIds'] ?? [];
 
         $data['preferencePreset'] = $wasCompletelyEmpty ? ($suggestions['preference_preset'] ?? 'balanced') : 'custom';
 
@@ -468,7 +519,11 @@ class OnboardingController extends Controller
         $data['allDistricts'] = \App\Models\District::orderBy('name')->get();
         $data['masterEducationOptions'] = \App\Models\MasterEducation::where('is_active', true)->orderBy('sort_order')->orderBy('name')->get();
         $data['partnerDietOptions'] = \App\Models\MasterDiet::where('is_active', true)->orderBy('sort_order')->orderBy('label')->get();
-        $data['preferredMaritalStatusId'] = $criteria->preferred_marital_status_id ?? null;
+        $data['preferredMaritalStatusIds'] = collect(old('preferred_marital_status_ids', $preferredMaritalStatusIdsMerged))
+            ->map(fn ($id) => (int) $id)->filter(fn ($id) => $id > 0)->unique()->values()->all();
+        $data['preferredMaritalStatusId'] = count($data['preferredMaritalStatusIds']) === 1
+            ? $data['preferredMaritalStatusIds'][0]
+            : null;
         $data['neverMarriedMaritalStatusId'] = \App\Models\MasterMaritalStatus::where('key', 'never_married')->where('is_active', true)->value('id');
         $data['partnerProfileWithChildren'] = $criteria->partner_profile_with_children ?? null;
         $data['extendedAttrs'] = DB::table('profile_extended_attributes')

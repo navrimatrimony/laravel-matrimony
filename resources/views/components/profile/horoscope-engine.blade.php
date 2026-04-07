@@ -71,7 +71,7 @@
     $birthWeekdayValue = $val('birth_weekday');
     $birthWeekdayMismatch = $birthWeekdayExpected && $birthWeekdayValue && $birthWeekdayValue !== $birthWeekdayExpected;
     @endphp
-<div class="horoscope-engine rounded-lg border-2 border-rose-500 dark:border-rose-400 p-4 space-y-4" data-dependency-warnings="{{ json_encode($dependencyWarnings) }}">
+<div class="horoscope-engine rounded-lg border border-gray-200 dark:border-gray-600 p-4 space-y-4" data-dependency-warnings="{{ json_encode($dependencyWarnings) }}">
     @if(!empty($row['id']))
         <input type="hidden" name="{{ $n('id') }}" value="{{ $row['id'] }}">
     @endif
@@ -99,7 +99,7 @@
         </div>
         <div>
             <label for="horoscope-rashi_id" class="{{ $labelCls }}">{{ __('components.horoscope.rashi') }}</label>
-            <select name="{{ $n('rashi_id') }}" id="horoscope-rashi_id" class="{{ $cls }} @if($warn('rashi_id')) border-red-600 dark:border-red-500 @endif" data-horoscope-field="rashi_id">
+            <select name="{{ $n('rashi_id') }}" id="horoscope-rashi_id" class="{{ $cls }}" data-horoscope-field="rashi_id">
                 <option value="">{{ __('common.select_placeholder') }}</option>
                 @foreach($rashis as $item)
                     @if(($item->key ?? '') === 'other') @continue @endif
@@ -108,11 +108,11 @@
             </select>
             @if($warn('rashi_id'))
                 <div class="horoscope-field-warning mt-1">
-                    <p class="text-sm text-red-600 dark:text-red-400">{{ $warn('rashi_id')['message'] ?? '' }}</p>
+                    <p class="text-sm text-amber-800 dark:text-amber-200">{{ $warn('rashi_id')['message'] ?? '' }}</p>
                     @if(!empty($warn('rashi_id')['expected']))
                         <div class="mt-1 flex flex-wrap gap-1">
                             @foreach($warn('rashi_id')['expected'] as $opt)
-                                <button type="button" class="horoscope-hint-chip inline-flex items-center px-2.5 py-1 rounded-md text-xs font-medium bg-red-100 dark:bg-red-900/40 text-red-800 dark:text-red-200 hover:bg-red-200 dark:hover:bg-red-800/60 border border-red-300 dark:border-red-700" data-field="rashi_id" data-value="{{ $opt['id'] }}">{{ __('components.horoscope.correct_option') }} {{ $opt['label'] ?? $opt['id'] }}</button>
+                                <button type="button" class="horoscope-hint-chip inline-flex items-center px-2.5 py-1 rounded-md text-xs font-medium bg-amber-50 dark:bg-amber-900/30 text-amber-900 dark:text-amber-200 hover:bg-amber-100 dark:hover:bg-amber-900/50 border border-amber-200 dark:border-amber-800" data-field="rashi_id" data-value="{{ $opt['id'] }}">{{ __('components.horoscope.correct_option') }} {{ $opt['label'] ?? $opt['id'] }}</button>
                             @endforeach
                         </div>
                     @endif
@@ -134,11 +134,11 @@
             />
             @if($warn('gan_id'))
                 <div class="horoscope-field-warning mt-1">
-                    <p class="text-sm text-red-600 dark:text-red-400">{{ $warn('gan_id')['message'] ?? '' }}</p>
+                    <p class="text-sm text-amber-800 dark:text-amber-200">{{ $warn('gan_id')['message'] ?? '' }}</p>
                     @if(!empty($warn('gan_id')['expected']))
                         <div class="mt-1 flex flex-wrap gap-1">
                             @foreach($warn('gan_id')['expected'] as $opt)
-                                <button type="button" class="horoscope-hint-chip inline-flex items-center px-2.5 py-1 rounded-md text-xs font-medium bg-red-100 dark:bg-red-900/40 text-red-800 dark:text-red-200 hover:bg-red-200 dark:hover:bg-red-800/60 border border-red-300 dark:border-red-700" data-field="gan_id" data-value="{{ $opt['id'] }}">{{ __('components.horoscope.correct_option') }} {{ $opt['label'] ?? $opt['id'] }}</button>
+                                <button type="button" class="horoscope-hint-chip inline-flex items-center px-2.5 py-1 rounded-md text-xs font-medium bg-amber-50 dark:bg-amber-900/30 text-amber-900 dark:text-amber-200 hover:bg-amber-100 dark:hover:bg-amber-900/50 border border-amber-200 dark:border-amber-800" data-field="gan_id" data-value="{{ $opt['id'] }}">{{ __('components.horoscope.correct_option') }} {{ $opt['label'] ?? $opt['id'] }}</button>
                             @endforeach
                         </div>
                     @endif
@@ -156,11 +156,11 @@
             />
             @if($warn('nadi_id'))
                 <div class="horoscope-field-warning mt-1">
-                    <p class="text-sm text-red-600 dark:text-red-400">{{ $warn('nadi_id')['message'] ?? '' }}</p>
+                    <p class="text-sm text-amber-800 dark:text-amber-200">{{ $warn('nadi_id')['message'] ?? '' }}</p>
                     @if(!empty($warn('nadi_id')['expected']))
                         <div class="mt-1 flex flex-wrap gap-1">
                             @foreach($warn('nadi_id')['expected'] as $opt)
-                                <button type="button" class="horoscope-hint-chip inline-flex items-center px-2.5 py-1 rounded-md text-xs font-medium bg-red-100 dark:bg-red-900/40 text-red-800 dark:text-red-200 hover:bg-red-200 dark:hover:bg-red-800/60 border border-red-300 dark:border-red-700" data-field="nadi_id" data-value="{{ $opt['id'] }}">{{ __('components.horoscope.correct_option') }} {{ $opt['label'] ?? $opt['id'] }}</button>
+                                <button type="button" class="horoscope-hint-chip inline-flex items-center px-2.5 py-1 rounded-md text-xs font-medium bg-amber-50 dark:bg-amber-900/30 text-amber-900 dark:text-amber-200 hover:bg-amber-100 dark:hover:bg-amber-900/50 border border-amber-200 dark:border-amber-800" data-field="nadi_id" data-value="{{ $opt['id'] }}">{{ __('components.horoscope.correct_option') }} {{ $opt['label'] ?? $opt['id'] }}</button>
                             @endforeach
                         </div>
                     @endif
@@ -169,7 +169,7 @@
         </div>
         <div>
             <label for="horoscope-yoni_id" class="{{ $labelCls }}">{{ __('components.horoscope.yoni') }}</label>
-            <select name="{{ $n('yoni_id') }}" id="horoscope-yoni_id" class="{{ $cls }} @if($warn('yoni_id')) border-red-600 dark:border-red-500 @endif" data-horoscope-field="yoni_id">
+            <select name="{{ $n('yoni_id') }}" id="horoscope-yoni_id" class="{{ $cls }}" data-horoscope-field="yoni_id">
                 <option value="">{{ __('common.select_placeholder') }}</option>
                 @foreach($yonis as $item)
                     @if(($item->key ?? '') === 'other') @continue @endif
@@ -178,11 +178,11 @@
             </select>
             @if($warn('yoni_id'))
                 <div class="horoscope-field-warning mt-1">
-                    <p class="text-sm text-red-600 dark:text-red-400">{{ $warn('yoni_id')['message'] ?? '' }}</p>
+                    <p class="text-sm text-amber-800 dark:text-amber-200">{{ $warn('yoni_id')['message'] ?? '' }}</p>
                     @if(!empty($warn('yoni_id')['expected']))
                         <div class="mt-1 flex flex-wrap gap-1">
                             @foreach($warn('yoni_id')['expected'] as $opt)
-                                <button type="button" class="horoscope-hint-chip inline-flex items-center px-2.5 py-1 rounded-md text-xs font-medium bg-red-100 dark:bg-red-900/40 text-red-800 dark:text-red-200 hover:bg-red-200 dark:hover:bg-red-800/60 border border-red-300 dark:border-red-700" data-field="yoni_id" data-value="{{ $opt['id'] }}">{{ __('components.horoscope.correct_option') }} {{ $opt['label'] ?? $opt['id'] }}</button>
+                                <button type="button" class="horoscope-hint-chip inline-flex items-center px-2.5 py-1 rounded-md text-xs font-medium bg-amber-50 dark:bg-amber-900/30 text-amber-900 dark:text-amber-200 hover:bg-amber-100 dark:hover:bg-amber-900/50 border border-amber-200 dark:border-amber-800" data-field="yoni_id" data-value="{{ $opt['id'] }}">{{ __('components.horoscope.correct_option') }} {{ $opt['label'] ?? $opt['id'] }}</button>
                             @endforeach
                         </div>
                     @endif
@@ -292,7 +292,7 @@
         <select
             name="{{ $n('birth_weekday') }}"
             id="horoscope-birth_weekday"
-            class="{{ $cls }} @if($birthWeekdayMismatch) border-red-600 dark:border-red-500 @endif"
+            class="{{ $cls }}"
         >
             <option value="">{{ __('common.select_placeholder') }}</option>
             @php
@@ -305,7 +305,7 @@
             @endforeach
         </select>
         @if($birthWeekdayMismatch)
-            <p class="mt-1 text-sm text-red-600 dark:text-red-400">
+            <p class="mt-1 text-sm text-amber-800 dark:text-amber-200">
                 {{ __('components.horoscope.birth_weekday_mismatch', ['selected' => __('components.horoscope.weekdays.' . strtolower($birthWeekdayValue)), 'expected' => __('components.horoscope.weekdays.' . strtolower($birthWeekdayExpected))]) }}
             </p>
         @endif
@@ -425,8 +425,6 @@
                     var s = sel(field);
                     if (s) {
                         s.value = value;
-                        s.classList.remove('border-red-600', 'dark:border-red-500');
-                        s.classList.add('border-gray-300', 'dark:border-gray-600');
                         var cell = s.closest('div');
                         if (cell) {
                             var warnBlock = cell.querySelector('.horoscope-field-warning');

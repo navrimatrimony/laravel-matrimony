@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\Caste;
 use App\Models\District;
 use App\Models\MasterEducation;
+use App\Models\MasterMaritalStatus;
 use App\Models\MatrimonyProfile;
 use App\Models\Religion;
 use Illuminate\Support\Facades\DB;
@@ -54,7 +55,7 @@ class ProfilePreferenceMatchService
 
         $groups['basic'][] = self::rowAge($viewerProfile, $criteria);
         $groups['basic'][] = self::rowHeight($viewerProfile, $criteria);
-        $groups['basic'][] = self::rowMaritalStatus($viewerProfile, $criteria);
+        $groups['basic'][] = self::rowMaritalStatus($viewerProfile, $criteria, $pref['marital_status_ids'] ?? []);
 
         $groups['community'][] = self::rowReligion($viewerProfile, $pref['religion_ids']);
         $groups['community'][] = self::rowCaste($viewerProfile, $pref['caste_ids']);
@@ -133,6 +134,10 @@ class ProfilePreferenceMatchService
             ? DB::table('profile_preferred_diets')->where('profile_id', $targetProfileId)->pluck('diet_id')->map(fn ($id) => (int) $id)->all()
             : [];
 
+        $maritalStatusIds = Schema::hasTable('profile_preferred_marital_statuses')
+            ? DB::table('profile_preferred_marital_statuses')->where('profile_id', $targetProfileId)->pluck('marital_status_id')->map(fn ($id) => (int) $id)->all()
+            : [];
+
         return [
             'criteria' => $criteria,
             'religion_ids' => $religionIds,
@@ -144,12 +149,13 @@ class ProfilePreferenceMatchService
             'master_education_ids' => $masterEducationIds,
             'profession_ids' => $professionIds,
             'diet_ids' => $dietIds,
+            'marital_status_ids' => $maritalStatusIds,
         ];
     }
 
     private static function targetHasAnyPreference(array $pref, ?object $criteria): bool
     {
-        foreach (['religion_ids', 'caste_ids', 'district_ids', 'country_ids', 'state_ids', 'taluka_ids', 'master_education_ids', 'profession_ids', 'diet_ids'] as $k) {
+        foreach (['religion_ids', 'caste_ids', 'district_ids', 'country_ids', 'state_ids', 'taluka_ids', 'master_education_ids', 'profession_ids', 'diet_ids', 'marital_status_ids'] as $k) {
             if (! empty($pref[$k])) {
                 return true;
             }
@@ -247,21 +253,25 @@ class ProfilePreferenceMatchService
     /**
      * @return array<string, mixed>
      */
-    private static function rowMaritalStatus(MatrimonyProfile $viewer, ?object $criteria): array
+    private static function rowMaritalStatus(MatrimonyProfile $viewer, ?object $criteria, array $pivotMaritalIds = []): array
     {
-        $prefId = $criteria?->preferred_marital_status_id ?? null;
-        $their = $prefId
-            ? (string) (DB::table('master_marital_statuses')->where('id', $prefId)->value('label') ?? __('preference_match.preferred_status'))
-            : __('preference_match.open_to_all');
+        $allowed = array_values(array_unique(array_map('intval', $pivotMaritalIds)));
+        if ($allowed === [] && ($criteria?->preferred_marital_status_id ?? null) !== null) {
+            $allowed = [(int) $criteria->preferred_marital_status_id];
+        }
+
+        $their = $allowed === []
+            ? __('preference_match.open_to_all')
+            : (string) MasterMaritalStatus::query()->whereIn('id', $allowed)->orderBy('label')->pluck('label')->filter()->implode(', ');
 
         $yours = $viewer->maritalStatus?->label ?? __('preference_match.value_unknown');
         if (! $viewer->marital_status_id) {
             return self::row('marital_status', __('preference_match.field_marital'), $their, $yours, self::STRICT_OPEN, self::STATUS_UNKNOWN, __('preference_match.reason_missing_marital'));
         }
-        if ($prefId === null) {
+        if ($allowed === []) {
             return self::row('marital_status', __('preference_match.field_marital'), $their, $yours, self::STRICT_OPEN, self::STATUS_FLEXIBLE, __('preference_match.reason_marital_open'));
         }
-        if ((int) $viewer->marital_status_id === (int) $prefId) {
+        if (in_array((int) $viewer->marital_status_id, $allowed, true)) {
             return self::row('marital_status', __('preference_match.field_marital'), $their, $yours, self::STRICT_PREFERRED, self::STATUS_MATCH, null);
         }
 

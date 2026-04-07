@@ -22,11 +22,12 @@ require __DIR__.'/web/admin.php';
 require __DIR__.'/auth.php';
 
 use App\Http\Controllers\PlansController;
+use App\Http\Middleware\EnforceCardOnboarding;
 
 Route::get('/plans', [PlansController::class, 'index'])->name('plans.index');
 Route::post('/plans/coupon/validate', [PlansController::class, 'validateCoupon'])->name('plans.coupon.validate');
 Route::post('/subscribe/{plan}', [PlansController::class, 'subscribe'])
-    ->middleware('auth')
+    ->middleware(['auth', EnforceCardOnboarding::class])
     ->name('plans.subscribe');
 
 // Temporary debug route — Phase-5 Day-12 verification. Remove before production.

@@ -317,7 +317,7 @@ class ProfileContactPrimaryPromotionTest extends TestCase
             ->post(route('matrimony.profile.contacts.verify-otp', ['contact' => $cid]), [
                 'otp' => $otp,
             ])
-            ->assertRedirect(route('matrimony.profile.wizard.section', ['section' => 'full']));
+            ->assertRedirect(route('matrimony.profile.wizard.section', ['section' => 'full', 'all' => 1]));
 
         $this->assertSame(1, (int) DB::table('profile_contacts')->where('id', $cid)->value('verified_status'));
     }

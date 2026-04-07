@@ -1924,6 +1924,7 @@ class MutationService
             'profile_preferred_working_with_types' => ['preferred_working_with_type_ids', 'working_with_type_id'],
             'profile_preferred_professions' => ['preferred_profession_ids', 'profession_id'],
             'profile_preferred_diets' => ['preferred_diet_ids', 'diet_id'],
+            'profile_preferred_marital_statuses' => ['preferred_marital_status_ids', 'marital_status_id'],
         ];
         foreach ($pivotConfig as $table => [$key, $fkCol]) {
             if (! Schema::hasTable($table)) {

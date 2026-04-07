@@ -94,6 +94,7 @@ test('merge display does not inject income from suggestion', function () {
         [],
         [],
         [],
+        [],
         []
     );
     expect($m['criteria']->preferred_income_min)->toBeNull();

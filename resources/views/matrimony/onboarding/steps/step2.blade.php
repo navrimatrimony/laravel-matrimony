@@ -1,13 +1,18 @@
 <form method="POST" action="{{ route('matrimony.onboarding.store', ['step' => 2]) }}" class="space-y-6">
     @csrf
-    <div>
+    <div data-lv-highlight-wrap data-lv-scroll-target>
         <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">{{ __('wizard.full_name') }} <span class="text-red-500">*</span></label>
         <input type="text" name="full_name" value="{{ old('full_name', $profile->full_name) }}" required
             class="w-full rounded-xl border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-4 py-3 text-base min-h-[48px] focus:ring-2 focus:ring-indigo-500">
-        @error('full_name')<p class="mt-1 text-sm text-red-600">{{ $message }}</p>@enderror
+        @error('full_name')<p class="mt-1 text-sm text-red-600 dark:text-red-400">{{ $message }}</p>@enderror
     </div>
 
-    <div class="border border-gray-200 dark:border-gray-600 rounded-xl p-4 bg-gray-50/80 dark:bg-gray-900/40" x-data="onboardingGender({{ (int) old('gender_id', $profile->gender_id) ?: 'null' }})">
+    <div
+        data-lv-highlight-wrap
+        data-lv-scroll-target
+        class="border border-gray-200 dark:border-gray-600 rounded-xl p-4 bg-gray-50/80 dark:bg-gray-900/40"
+        x-data="onboardingGender({{ (int) old('gender_id', $profile->gender_id) ?: 'null' }})"
+    >
         <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">{{ __('wizard.gender') }} <span class="text-red-500">*</span></label>
         <input type="hidden" name="gender_id" :value="genderId">
         <span class="hidden bg-blue-600 bg-pink-500" aria-hidden="true"></span>
@@ -27,10 +32,10 @@
                 </button>
             @endforeach
         </div>
-        @error('gender_id')<p class="mt-2 text-sm text-red-600">{{ $message }}</p>@enderror
+        @error('gender_id')<p class="mt-2 text-sm text-red-600 dark:text-red-400">{{ $message }}</p>@enderror
     </div>
 
-    <div>
+    <div data-lv-highlight-wrap data-lv-scroll-target>
         <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">{{ __('wizard.date_of_birth') }}</label>
         @php
             $yMin = now()->subYears(60)->format('Y');
@@ -47,7 +52,7 @@
         <input type="date" name="date_of_birth" value="{{ $dobValue }}"
             min="{{ $yMin }}-01-01" max="{{ $yMax }}-12-31"
             class="w-full rounded-xl border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-4 py-3 text-base min-h-[48px] focus:ring-2 focus:ring-indigo-500">
-        @error('date_of_birth')<p class="mt-1 text-sm text-red-600">{{ $message }}</p>@enderror
+        @error('date_of_birth')<p class="mt-1 text-sm text-red-600 dark:text-red-400">{{ $message }}</p>@enderror
     </div>
 
     @include('matrimony.profile.wizard.sections.marital_engine', [

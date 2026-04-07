@@ -39,6 +39,21 @@ class DashboardPlanUsageSummaryTest extends TestCase
         $this->actingAs($user)
             ->get(route('matrimony.profiles.index'))
             ->assertOk()
-            ->assertSee(__('dashboard.usage_strip_title'), false);
+            ->assertSee(__('dashboard.usage_strip_title'), false)
+            ->assertSee(__('dashboard.usage_short_profile_opens'), false);
+    }
+
+    public function test_onboarding_step_does_not_show_plan_usage_strip(): void
+    {
+        $this->seed(SubscriptionPlansSeeder::class);
+        $this->seed(PlanStandardFeatureKeysSeeder::class);
+
+        $user = User::factory()->create(['is_admin' => false]);
+        MatrimonyProfile::factory()->for($user)->create(['lifecycle_state' => 'active']);
+
+        $this->actingAs($user)
+            ->get(route('matrimony.onboarding.show', ['step' => 2]))
+            ->assertOk()
+            ->assertDontSee(__('dashboard.usage_short_profile_opens'), false);
     }
 }

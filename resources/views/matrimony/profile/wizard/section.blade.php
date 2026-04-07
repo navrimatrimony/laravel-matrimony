@@ -11,6 +11,9 @@
     $previousSection = $previousSection ?? null;
     $partnerPrefNavItems = $partnerPrefNavItems ?? [];
     $partnerPrefSection = $partnerPrefSection ?? 'basics';
+    $wizardSectionLink = static function (string $sec): array {
+        return $sec === 'full' ? ['section' => 'full', 'all' => 1] : ['section' => $sec];
+    };
 @endphp
 <div class="py-4 md:py-6">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -36,7 +39,7 @@
             <div class="mb-4 px-4 py-3 rounded-lg bg-red-50 dark:bg-red-900/30 text-red-800 dark:text-red-200 text-sm">{{ session('error') }}</div>
         @endif
         @if ($errors->any())
-            <div class="mb-4 px-4 py-3 rounded-lg bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 text-red-800 dark:text-red-200 text-sm">
+            <div class="mb-4 px-4 py-3 rounded-lg bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 text-red-800 dark:text-red-200 text-sm" role="alert" data-lv-humanize-summary>
                 {{ $errors->first() }}
             </div>
         @endif
@@ -79,7 +82,7 @@
                                 @endif
                             </div>
                         @else
-                            <a href="{{ route('matrimony.profile.wizard.section', ['section' => $s]) }}"
+                            <a href="{{ route('matrimony.profile.wizard.section', $wizardSectionLink($s)) }}"
                                 class="flex items-center gap-2 rounded-md px-2 py-2 text-sm font-medium transition-colors {{ $isActive ? 'bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300' : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700' }}">
                                 <span class="shrink-0 w-2 h-2 rounded-full
                                     @if($status === 'completed') bg-emerald-500
@@ -102,7 +105,7 @@
                             $status = $sectionStatuses[$s] ?? 'incomplete';
                             $isActive = $currentSection === $s;
                         @endphp
-                        <a href="{{ route('matrimony.profile.wizard.section', ['section' => $s]) }}"
+                        <a href="{{ route('matrimony.profile.wizard.section', $wizardSectionLink($s)) }}"
                             class="shrink-0 px-3 py-2 rounded-full text-sm font-medium border transition-colors whitespace-nowrap
                                 {{ $isActive ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-600 hover:border-indigo-400' }}">
                             {{ __($label) }}
@@ -149,7 +152,7 @@
 
                         <div class="flex flex-wrap gap-3 pt-6 mt-6 border-t border-gray-200 dark:border-gray-700">
                             @if ($previousSection)
-                                <a href="{{ route('matrimony.profile.wizard.section', ['section' => $previousSection]) }}" class="px-4 py-2 bg-gray-200 dark:bg-gray-600 text-gray-800 dark:text-gray-200 rounded-lg font-medium hover:bg-gray-300 dark:hover:bg-gray-500 transition-colors">
+                                <a href="{{ route('matrimony.profile.wizard.section', $wizardSectionLink($previousSection)) }}" class="px-4 py-2 bg-gray-200 dark:bg-gray-600 text-gray-800 dark:text-gray-200 rounded-lg font-medium hover:bg-gray-300 dark:hover:bg-gray-500 transition-colors">
                                     {{ __('wizard.previous') }}
                                 </a>
                             @endif
@@ -160,7 +163,7 @@
                                 {{ $nextSection ? __('wizard.save_next') : __('wizard.save_finish') }}
                             </button>
                             @if ($nextSection)
-                                <a href="{{ route('matrimony.profile.wizard.section', ['section' => $nextSection]) }}" class="px-4 py-2 text-gray-600 dark:text-gray-400 text-sm font-medium hover:text-indigo-600 dark:hover:text-indigo-400">
+                                <a href="{{ route('matrimony.profile.wizard.section', $wizardSectionLink($nextSection)) }}" class="px-4 py-2 text-gray-600 dark:text-gray-400 text-sm font-medium hover:text-indigo-600 dark:hover:text-indigo-400">
                                     {{ __('wizard.skip_for_now') }}
                                 </a>
                             @endif

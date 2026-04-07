@@ -125,8 +125,21 @@ class MatchingService
                     ->where('date_of_birth', '>=', now()->subYears($maxAge));
             }
 
-            if (config('matching.strict_marital_filter', false) && $pc->preferred_marital_status_id) {
-                $q->where('marital_status_id', (int) $pc->preferred_marital_status_id);
+            if (config('matching.strict_marital_filter', false)) {
+                $maritalIds = [];
+                if (Schema::hasTable('profile_preferred_marital_statuses')) {
+                    $maritalIds = DB::table('profile_preferred_marital_statuses')
+                        ->where('profile_id', $profile->id)
+                        ->pluck('marital_status_id')
+                        ->map(fn ($id) => (int) $id)
+                        ->all();
+                }
+                if ($maritalIds === [] && $pc->preferred_marital_status_id) {
+                    $maritalIds = [(int) $pc->preferred_marital_status_id];
+                }
+                if ($maritalIds !== []) {
+                    $q->whereIn('marital_status_id', $maritalIds);
+                }
             }
         }
 
@@ -214,6 +227,9 @@ class MatchingService
         if (Schema::hasTable('profile_preferred_diets')) {
             $this->mergePivotIds($map, 'profile_preferred_diets', $profileIds, 'diet_id', 'diet_ids');
         }
+        if (Schema::hasTable('profile_preferred_marital_statuses')) {
+            $this->mergePivotIds($map, 'profile_preferred_marital_statuses', $profileIds, 'marital_status_id', 'marital_status_ids');
+        }
 
         return $map;
     }
@@ -253,6 +269,7 @@ class MatchingService
             'master_education_ids' => [],
             'profession_ids' => [],
             'diet_ids' => [],
+            'marital_status_ids' => [],
         ];
     }
 

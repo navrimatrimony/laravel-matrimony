@@ -5,6 +5,11 @@ return [
     'step_of' => 'Step :current of :total',
     'registration_done' => 'Account created. Let’s set up the profile.',
     'saved_continue' => 'Saved. Continue to the next step.',
+    'resume_continue_notice' => 'Continue your profile setup from where you left off.',
+    'resume_photo_notice' => 'Add a profile photo to finish this step, or use “Finish onboarding” when you’re ready.',
+    'photo_uploaded_view_profile' => 'Your photo is saved. Here is your profile — you can add more photos anytime from Edit profile.',
+    'photo_upload_conflict_retry' => 'Some profile details could not be updated automatically. Your photo was added; please review your profile if something looks off.',
+    'validation_more_errors' => 'Please also fix :count more field(s) highlighted below.',
     'all_set' => 'You’re all set — you can explore matches or complete more details anytime.',
     'education_examples' => 'e.g. B.E., M.Com, Diploma, Ph.D.',
 

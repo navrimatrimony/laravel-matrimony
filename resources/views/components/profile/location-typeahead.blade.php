@@ -65,7 +65,7 @@
 </style>
 @php
     $paddingClass = $compactRow ? 'px-2 py-0' : ($noBorder ? 'pt-0 px-3 pb-3' : 'p-3');
-    $borderClass = $noBorder ? '' : 'border-2 border-rose-500 dark:border-rose-400';
+    $borderClass = $noBorder ? '' : 'border border-gray-200 dark:border-gray-600';
 @endphp
 <div class="{{ $wrapperClass }} space-y-0 rounded-lg {{ $paddingClass }} {{ $borderClass }}" data-location-context="{{ $context }}" data-name-prefix="{{ $namePrefix }}" @if($showGps) data-resolve-url="{{ $resolveUrlResolved }}" data-gps="1" @endif @if(!empty($displaySyncName)) data-display-sync-name="{{ $displaySyncName }}" @endif>
     @if ($context === 'residence')
@@ -166,7 +166,7 @@
 <template id="location-suggest-modal-template">
     <div class="location-suggest-modal-backdrop"></div>
     <div class="location-suggest-modal">
-        <div class="location-suggest-modal-inner border border-rose-200 dark:border-rose-700">
+        <div class="location-suggest-modal-inner border border-gray-200 dark:border-gray-600">
             <div class="px-4 py-3 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
                 <h3 class="text-sm font-semibold text-gray-800 dark:text-gray-100">Add village / city</h3>
                 <button type="button" class="location-suggest-close text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 text-xl leading-none px-1">&times;</button>

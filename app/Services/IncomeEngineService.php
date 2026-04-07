@@ -86,54 +86,58 @@ class IncomeEngineService
      */
     public function formatForDisplay(array $data, string $prefix, ?MasterIncomeCurrency $currency = null): string
     {
-        $private = $data[$prefix . '_private'] ?? false;
+        $private = $data[$prefix.'_private'] ?? false;
         if ($private) {
             return 'Income hidden';
         }
 
-        $valueType = $data[$prefix . '_value_type'] ?? null;
+        $valueType = $data[$prefix.'_value_type'] ?? null;
         $legacyAmountKey = $prefix === 'income' ? 'annual_income' : 'family_income';
         if ($valueType === self::VALUE_TYPE_UNDISCLOSED || $valueType === null) {
-            $amount = $data[$prefix . '_amount'] ?? $data[$legacyAmountKey] ?? null;
+            $amount = $data[$prefix.'_amount'] ?? $data[$legacyAmountKey] ?? null;
             if ($amount === null || $amount === '') {
                 return 'Not disclosed';
             }
         }
 
-        $symbol = $currency ? trim($currency->symbol ?? '') : '₹';
+        $symbol = $currency ? $currency->displaySymbol() : '₹';
         $code = $currency ? ($currency->code ?? 'INR') : 'INR';
         $isInr = strtoupper($code) === 'INR';
 
-        $period = $data[$prefix . '_period'] ?? 'annual';
+        $period = $data[$prefix.'_period'] ?? 'annual';
         $periodLabel = $this->periodLabel($period);
 
         switch ($valueType) {
             case self::VALUE_TYPE_EXACT:
-                $amount = $data[$prefix . '_amount'] ?? $data[$legacyAmountKey] ?? null;
+                $amount = $data[$prefix.'_amount'] ?? $data[$legacyAmountKey] ?? null;
                 if ($amount === null || $amount === '') {
                     return 'Not disclosed';
                 }
-                return $symbol . $this->formatNumber($amount, $isInr) . ' ' . $periodLabel;
+
+                return $symbol.$this->formatNumber($amount, $isInr).' '.$periodLabel;
             case self::VALUE_TYPE_APPROXIMATE:
-                $amount = $data[$prefix . '_amount'] ?? $data[$legacyAmountKey] ?? null;
+                $amount = $data[$prefix.'_amount'] ?? $data[$legacyAmountKey] ?? null;
                 if ($amount === null || $amount === '') {
                     return 'Not disclosed';
                 }
-                return 'Approx. ' . $symbol . $this->formatNumber($amount, $isInr) . ' ' . $periodLabel;
+
+                return 'Approx. '.$symbol.$this->formatNumber($amount, $isInr).' '.$periodLabel;
             case self::VALUE_TYPE_RANGE:
-                $min = $data[$prefix . '_min_amount'] ?? null;
-                $max = $data[$prefix . '_max_amount'] ?? null;
+                $min = $data[$prefix.'_min_amount'] ?? null;
+                $max = $data[$prefix.'_max_amount'] ?? null;
                 if ($min === null && $max === null) {
                     return 'Not disclosed';
                 }
-                $minStr = $symbol . $this->formatNumber((float) ($min ?? 0), $isInr);
-                $maxStr = $symbol . $this->formatNumber((float) ($max ?? $min ?? 0), $isInr);
-                return $minStr . ' – ' . $maxStr . ' ' . $periodLabel;
+                $minStr = $symbol.$this->formatNumber((float) ($min ?? 0), $isInr);
+                $maxStr = $symbol.$this->formatNumber((float) ($max ?? $min ?? 0), $isInr);
+
+                return $minStr.' – '.$maxStr.' '.$periodLabel;
             default:
-                $amount = $data[$prefix . '_amount'] ?? $data[$legacyAmountKey] ?? null;
+                $amount = $data[$prefix.'_amount'] ?? $data[$legacyAmountKey] ?? null;
                 if ($amount !== null && $amount !== '') {
-                    return $symbol . $this->formatNumber($amount, $isInr) . ' ' . $periodLabel;
+                    return $symbol.$this->formatNumber($amount, $isInr).' '.$periodLabel;
                 }
+
                 return 'Not disclosed';
         }
     }
@@ -152,14 +156,15 @@ class IncomeEngineService
     private function formatNumber(float $num, bool $indianStyle): string
     {
         if ($indianStyle && $num >= 10000000) {
-            return number_format($num / 10000000, 1) . ' Cr';
+            return number_format($num / 10000000, 1).' Cr';
         }
         if ($indianStyle && $num >= 100000) {
-            return number_format($num / 100000, 1) . ' L';
+            return number_format($num / 100000, 1).' L';
         }
         if ($indianStyle) {
             return $this->indianNumberFormat($num);
         }
+
         return number_format($num, 0);
     }
 
@@ -174,6 +179,7 @@ class IncomeEngineService
         $last3 = substr($n, -3);
         $rest = substr($n, 0, -3);
         $rest = strrev(implode(',', str_split(strrev($rest), 2)));
-        return $rest . ',' . $last3;
+
+        return $rest.','.$last3;
     }
 }

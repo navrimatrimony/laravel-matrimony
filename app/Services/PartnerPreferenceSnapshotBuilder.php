@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\Caste;
 use App\Models\District;
+use App\Models\MasterMaritalStatus;
 use App\Models\Profession;
 use App\Models\State;
 use App\Models\Taluka;
@@ -39,6 +40,7 @@ class PartnerPreferenceSnapshotBuilder
             'willing_to_relocate',
             'marriage_type_preference_id',
             'preferred_marital_status_id',
+            'preferred_marital_status_ids',
             'partner_profile_with_children',
             'preference_preset',
             'preferred_master_education_ids',
@@ -97,6 +99,8 @@ class PartnerPreferenceSnapshotBuilder
             'settled_preference.city_id' => ['nullable', 'integer', 'exists:cities,id'],
             'marriage_type_preference_id' => ['nullable', 'integer', Rule::exists('master_marriage_type_preferences', 'id')->where(fn ($q) => $q->where('is_active', true))],
             'preferred_marital_status_id' => ['nullable', 'integer', Rule::exists('master_marital_statuses', 'id')->where(fn ($q) => $q->where('is_active', true))],
+            'preferred_marital_status_ids' => ['nullable', 'array'],
+            'preferred_marital_status_ids.*' => ['integer', Rule::exists('master_marital_statuses', 'id')->where(fn ($q) => $q->where('is_active', true))],
             'partner_profile_with_children' => ['nullable', 'string', Rule::in(['no', 'yes_if_live_separate', 'yes'])],
         ]);
 
@@ -150,6 +154,26 @@ class PartnerPreferenceSnapshotBuilder
 
         $dietIds = array_values(array_unique(array_map('intval', array_filter($validated['preferred_diet_ids'] ?? []))));
 
+        $maritalIds = array_values(array_unique(array_map('intval', array_filter($validated['preferred_marital_status_ids'] ?? []))));
+        if ($maritalIds === [] && ($validated['preferred_marital_status_id'] ?? null) !== null) {
+            $maritalIds = [(int) $validated['preferred_marital_status_id']];
+        }
+        if ($maritalIds !== []) {
+            $allActiveMaritalIds = MasterMaritalStatus::query()
+                ->where('is_active', true)
+                ->orderBy('id')
+                ->pluck('id')
+                ->map(fn ($id) => (int) $id)
+                ->sort()
+                ->values()
+                ->all();
+            $sortedPosted = collect($maritalIds)->sort()->values()->all();
+            if ($allActiveMaritalIds !== [] && $sortedPosted === $allActiveMaritalIds) {
+                $maritalIds = [];
+            }
+        }
+        $maritalColumn = count($maritalIds) === 1 ? $maritalIds[0] : null;
+
         $row = [
             'preferred_age_min' => $validated['preferred_age_min'] ?? null,
             'preferred_age_max' => $validated['preferred_age_max'] ?? null,
@@ -159,7 +183,8 @@ class PartnerPreferenceSnapshotBuilder
             'preferred_income_max' => $validated['preferred_income_max'] ?? null,
             'willing_to_relocate' => $request->boolean('willing_to_relocate') ? true : null,
             'marriage_type_preference_id' => $validated['marriage_type_preference_id'] ?? null,
-            'preferred_marital_status_id' => $validated['preferred_marital_status_id'] ?? null,
+            'preferred_marital_status_id' => $maritalColumn,
+            'preferred_marital_status_ids' => $maritalIds,
             'preferred_religion_ids' => $validated['preferred_religion_ids'] ?? [],
             'preferred_caste_ids' => $validated['preferred_caste_ids'] ?? [],
             'preferred_country_ids' => $countryIds,

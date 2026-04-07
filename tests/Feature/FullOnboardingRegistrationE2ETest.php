@@ -179,7 +179,13 @@ class FullOnboardingRegistrationE2ETest extends TestCase
             'district_id' => $district->id,
         ]);
 
-        // Wizard checks before photo upload: storePhoto applies a minimal snapshot; verify narrative in UI first.
+        // Onboarding lock blocks the full wizard until the user finishes or explicitly completes onboarding.
+        $this->get(route('matrimony.onboarding.complete'))
+            ->assertRedirect(route('matrimony.profile.show', $profile->id));
+        $profile->refresh();
+        $this->assertNull($profile->card_onboarding_resume_step);
+
+        // Wizard checks: verify narrative and sections in UI (photo upload still exercised below).
         $wizardSession = ['wizard_minimal' => false];
 
         $aboutMe = $this->withSession($wizardSession)->get(route('matrimony.profile.wizard.section', ['section' => 'about-me']));

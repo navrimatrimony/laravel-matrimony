@@ -22,7 +22,7 @@
     <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100 border-b border-gray-200 dark:border-gray-700 pb-2">{{ __('components.property.property') }}</h2>
 
     {{-- Property Assets (repeatable) — same Add / Remove this entry pattern as relation-details --}}
-    <div class="border-2 border-rose-500 dark:border-rose-400 rounded-lg p-4">
+    <div class="border border-gray-200 dark:border-gray-600 rounded-lg p-4">
         <h3 class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">{{ __('components.property.property_assets') }}</h3>
         <style>
         .property-engine .property-asset-row:not(:last-child) .property-asset-add-wrap { display: none; }

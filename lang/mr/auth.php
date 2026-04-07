@@ -6,6 +6,6 @@ return [
     'throttle' => 'खूप प्रयत्न झाले आहेत. कृपया :seconds सेकंदांनी पुन्हा प्रयत्न करा.',
     'mobile' => 'मोबाइल नंबर',
     'mobile_already_registered' => 'हा मोबाइल नंबर आधीच नोंदणीकृत आहे.',
+    'password_show' => 'पासवर्ड दाखवा',
+    'password_hide' => 'पासवर्ड लपवा',
 ];
-
-

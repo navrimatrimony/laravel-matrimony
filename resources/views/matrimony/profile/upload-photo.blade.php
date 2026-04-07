@@ -195,6 +195,9 @@ body.upload-landscape .upload-gallery-col {
 
             <form method="POST" action="{{ route('matrimony.profile.store-photo') }}" enctype="multipart/form-data" id="photoUploadForm">
                 @csrf
+                @if (! empty($fromOnboarding))
+                    <input type="hidden" name="from" value="onboarding">
+                @endif
 
                 {{-- Premium summary strip --}}
                 <div style="margin: 0 0 20px 0; padding: 14px 16px; background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 14px; text-align: left;">
@@ -697,6 +700,10 @@ body.upload-landscape .upload-gallery-col {
         function doSubmit(blob) {
             const fd = new FormData();
             fd.append('_token', document.querySelector('input[name="_token"]').value);
+            const fromInput = form.querySelector('input[name="from"]');
+            if (fromInput && fromInput.value) {
+                fd.append('from', fromInput.value);
+            }
             fd.append('profile_photo', blob, (file && file.name) ? file.name.replace(/\.[^.]+$/, '.jpg') : 'photo.jpg');
             // Send remaining photos to gallery (no cropper for them; they are compressed server-side).
             if (files && files.length > 1) {

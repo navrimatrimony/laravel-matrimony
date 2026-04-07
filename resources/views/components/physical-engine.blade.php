@@ -58,7 +58,7 @@
     }
 @endphp
 
-<div class="physical-engine space-y-6 border-2 border-rose-500 dark:border-rose-400 rounded-lg p-4">
+<div class="physical-engine space-y-6 border border-gray-200 dark:border-gray-600 rounded-lg p-4">
     {{-- A) Core Physical Details — 3 fields on one line (md+) --}}
     <div>
         <h3 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">{{ __('components.physical.core_physical_details') }}</h3>

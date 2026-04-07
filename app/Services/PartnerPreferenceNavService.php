@@ -4,7 +4,6 @@ namespace App\Services;
 
 use App\Models\MatrimonyProfile;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Schema;
 
 /**
  * Partner Preferences workspace: URL ?pref= slug + sidebar summaries (counts only).
@@ -32,11 +31,12 @@ class PartnerPreferenceNavService
         $criteria = $vd['preferenceCriteria'] ?? null;
 
         $basics = 0;
+        $maritalPrefCount = count($vd['preferredMaritalStatusIds'] ?? []);
         if ($criteria !== null) {
             if (! empty($criteria->marriage_type_preference_id)) {
                 $basics++;
             }
-            if (! empty($criteria->preferred_marital_status_id)) {
+            if ($maritalPrefCount > 0 || ! empty($criteria->preferred_marital_status_id)) {
                 $basics++;
             }
             if (! empty($criteria->partner_profile_with_children)) {

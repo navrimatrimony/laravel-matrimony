@@ -2,10 +2,17 @@ import './bootstrap';
 
 import Alpine from 'alpinejs';
 import './plans-catalog';
+import { initLaravelValidationUi } from './laravel-validation-ui';
 
 window.Alpine = Alpine;
 
 Alpine.start();
+
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initLaravelValidationUi);
+} else {
+    initLaravelValidationUi();
+}
 
 /** Flash banners in layouts.app: auto-dismiss + manual close so stacked messages do not linger. */
 function initFlashDismiss() {

@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\MatrimonyProfile;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 /**
  * Phase-5B: Section-based completion percentage for profile wizard.
@@ -122,6 +123,10 @@ class ProfileCompletionService
         if (DB::table('profile_preferred_districts')->where('profile_id', $profile->id)->exists()) {
             return true;
         }
+        if (Schema::hasTable('profile_preferred_marital_statuses')
+            && DB::table('profile_preferred_marital_statuses')->where('profile_id', $profile->id)->exists()) {
+            return true;
+        }
         $ext = DB::table('profile_extended_attributes')->where('profile_id', $profile->id)->first();
         if ($ext && (
             trim((string) ($ext->narrative_about_me ?? '')) !== '' || trim((string) ($ext->narrative_expectations ?? '')) !== ''
@@ -173,6 +178,7 @@ class ProfileCompletionService
             case 'physical':
                 $has = ($profile->height_cm ?? null) !== null || ($profile->complexion_id ?? null) !== null
                     || ($profile->blood_group_id ?? null) !== null || ($profile->physical_build_id ?? null) !== null;
+
                 return $has ? 'completed' : 'incomplete';
             case 'marriages':
                 return ($profile->marital_status_id ?? null) !== null ? 'completed' : 'incomplete';
@@ -180,9 +186,11 @@ class ProfileCompletionService
                 $hasEdu = ($profile->highest_education ?? '') !== '' || ($profile->occupation_title ?? '') !== '' || ($profile->annual_income ?? null) !== null;
                 $eduCount = DB::table('profile_education')->where('profile_id', $profile->id)->count();
                 $careerCount = DB::table('profile_career')->where('profile_id', $profile->id)->count();
+
                 return $hasEdu || $eduCount > 0 || $careerCount > 0 ? 'completed' : 'incomplete';
             case 'family-details':
                 $hasFamily = ($profile->father_name ?? '') !== '' || ($profile->mother_name ?? '') !== '' || ($profile->family_type_id ?? null) !== null;
+
                 return $hasFamily ? 'completed' : 'incomplete';
             case 'personal-family':
                 return self::sectionPersonalFamilyFilled($profile) ? 'completed' : 'incomplete';
@@ -191,22 +199,27 @@ class ProfileCompletionService
                     return 'completed';
                 }
                 $count = DB::table('profile_siblings')->where('profile_id', $profile->id)->count();
+
                 return $count > 0 ? 'completed' : 'incomplete';
             case 'relatives':
                 $count = DB::table('profile_relatives')->where('profile_id', $profile->id)->count();
+
                 return $count > 0 ? 'completed' : 'incomplete';
             case 'alliance':
                 $count = DB::table('profile_alliance_networks')->where('profile_id', $profile->id)->count();
+
                 return $count > 0 ? 'completed' : 'incomplete';
             case 'location':
                 return self::sectionLocationFilled($profile) ? 'completed' : 'incomplete';
             case 'property':
                 $summary = DB::table('profile_property_summary')->where('profile_id', $profile->id)->exists();
                 $assets = DB::table('profile_property_assets')->where('profile_id', $profile->id)->count();
+
                 return $summary || $assets > 0 ? 'completed' : 'incomplete';
             case 'horoscope':
                 $h = DB::table('profile_horoscope_data')->where('profile_id', $profile->id)->first();
                 $hasRashi = $h && ($h->rashi_id ?? null) !== null;
+
                 return $hasRashi ? 'completed' : 'incomplete';
             case 'about-preferences':
                 return self::sectionAboutPreferencesFilled($profile) ? 'completed' : 'incomplete';
@@ -214,6 +227,7 @@ class ProfileCompletionService
                 $selfRelId = DB::table('master_contact_relations')->where('key', 'self')->value('id');
                 $has = DB::table('profile_contacts')->where('profile_id', $profile->id)
                     ->where('contact_relation_id', $selfRelId)->exists();
+
                 return $has ? 'completed' : 'warning';
             case 'photo':
                 return self::sectionPhotoFilled($profile) ? 'completed' : 'incomplete';
@@ -234,6 +248,7 @@ class ProfileCompletionService
         foreach ($sectionKeys as $key) {
             $out[$key] = self::getSectionStatus($profile, $key);
         }
+
         return $out;
     }
 }

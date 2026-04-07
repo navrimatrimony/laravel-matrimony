@@ -1,3 +1,16 @@
+    @php
+        $partnerMaritalSelectedIds = collect(old('preferred_marital_status_ids', $preferredMaritalStatusIds ?? []))->map(fn ($id) => (int) $id)->filter(fn ($id) => $id > 0)->unique()->values()->all();
+        $allMaritalStatusIdsForUi = collect($allMaritalStatuses ?? [])->pluck('id')->map(fn ($id) => (int) $id)->values()->all();
+        $maritalIdsForCheckboxUi = ($partnerMaritalSelectedIds === [] && $allMaritalStatusIdsForUi !== [])
+            ? $allMaritalStatusIdsForUi
+            : $partnerMaritalSelectedIds;
+        $neverMsId = $neverMarriedMaritalStatusId ?? null;
+        $onlyNeverMaritalPref = $neverMsId !== null
+            && count($partnerMaritalSelectedIds) === 1
+            && (int) $partnerMaritalSelectedIds[0] === (int) $neverMsId;
+        $showPartnerChildren = ! $onlyNeverMaritalPref;
+        $pwc = $partnerProfileWithChildren ?? null;
+    @endphp
     <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
         <div>
             <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{{ __('wizard.marriage_type_preference') }}</label>
@@ -8,22 +21,20 @@
                 @endforeach
             </select>
         </div>
-        <div>
+        <div class="md:col-span-2">
             <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{{ __('wizard.marital_status_preference') }}</label>
-            <select name="preferred_marital_status_id" id="partner-pref-marital-status" data-never-married-id="{{ $neverMarriedMaritalStatusId ?? '' }}" class="w-full rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 px-3 py-2">
-                <option value="">{{ __('wizard.open_to_all_marital_pref') }}</option>
+            <p class="text-xs text-gray-500 dark:text-gray-400 mb-2">{{ __('wizard.open_to_all_marital_pref') }}</p>
+            <div class="flex flex-wrap gap-2 max-h-28 overflow-y-auto">
                 @foreach(($allMaritalStatuses ?? collect()) as $ms)
-                    <option value="{{ $ms->id }}" {{ (string)($preferredMaritalStatusId ?? '') === (string)$ms->id ? 'selected' : '' }}>{{ $optionLabel($ms, 'marital_status') }}</option>
+                    <label class="inline-flex items-center gap-1 rounded-full border border-gray-300 dark:border-gray-600 px-2 py-0.5 text-xs cursor-pointer text-gray-800 dark:text-gray-100">
+                        <input type="checkbox" name="preferred_marital_status_ids[]" value="{{ $ms->id }}" class="partner-marital-pref-cb rounded border-gray-300 dark:border-gray-600 text-indigo-600 focus:outline-none focus:ring-0 focus:ring-offset-0"
+                            {{ in_array((int) $ms->id, $maritalIdsForCheckboxUi, true) ? 'checked' : '' }}>
+                        <span>{{ $optionLabel($ms, 'marital_status') }}</span>
+                    </label>
                 @endforeach
-            </select>
+            </div>
         </div>
     </div>
-    @php
-        $neverMsId = $neverMarriedMaritalStatusId ?? null;
-        $pmsId = $preferredMaritalStatusId ?? null;
-        $showPartnerChildren = $neverMsId === null || $pmsId === null || $pmsId === '' || (string) $pmsId !== (string) $neverMsId;
-        $pwc = $partnerProfileWithChildren ?? null;
-    @endphp
     <div id="partner-profile-with-children-wrap" class="mt-4 rounded-lg border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-800/40 p-4 space-y-3 {{ $showPartnerChildren ? '' : 'hidden' }}">
         <p class="text-sm font-medium text-gray-800 dark:text-gray-100">{{ __('wizard.profile_with_children_partner') }}</p>
         <div class="flex flex-col sm:flex-row sm:flex-wrap gap-3 text-sm">
@@ -46,21 +57,24 @@
     </div>
     <script>
         (function () {
-            var sel = document.getElementById('partner-pref-marital-status');
             var wrap = document.getElementById('partner-profile-with-children-wrap');
-            if (!sel || !wrap) {
+            var neverId = @json((string) ($neverMarriedMaritalStatusId ?? ''));
+            if (!wrap) {
                 return;
             }
-            var neverId = sel.getAttribute('data-never-married-id') || '';
             function syncPartnerChildrenBlock() {
-                var v = sel.value || '';
-                var hide = neverId !== '' && v === neverId;
+                var checked = Array.prototype.slice.call(document.querySelectorAll('input.partner-marital-pref-cb:checked'));
+                var ids = checked.map(function (el) { return String(el.value || ''); });
+                var hide = neverId !== '' && ids.length === 1 && ids[0] === neverId;
                 wrap.classList.toggle('hidden', hide);
                 wrap.querySelectorAll('input[name="partner_profile_with_children"]').forEach(function (el) {
                     el.disabled = hide;
                 });
             }
-            sel.addEventListener('change', syncPartnerChildrenBlock);
+            window.__syncPartnerPrefMaritalChildren = syncPartnerChildrenBlock;
+            document.querySelectorAll('input.partner-marital-pref-cb').forEach(function (el) {
+                el.addEventListener('change', syncPartnerChildrenBlock);
+            });
             syncPartnerChildrenBlock();
         })();
     </script>
@@ -335,6 +349,26 @@
                                 window.__partnerCommunityRefreshCastes();
                             }
                         }, 0);
+                    }
+                    var maritalCbs = document.querySelectorAll('input.partner-marital-pref-cb');
+                    if (maritalCbs.length) {
+                        if (Array.isArray(preset.preferred_marital_status_ids) && preset.preferred_marital_status_ids.length > 0) {
+                            var mIds = preset.preferred_marital_status_ids.map(function (v) { return parseInt(v, 10); });
+                            maritalCbs.forEach(function (cb) {
+                                var val = parseInt(cb.value || '0', 10);
+                                cb.checked = mIds.indexOf(val) !== -1;
+                            });
+                        } else if (preset.preferred_marital_status_id !== undefined && preset.preferred_marital_status_id !== null && preset.preferred_marital_status_id !== '') {
+                            var singleM = parseInt(preset.preferred_marital_status_id, 10);
+                            maritalCbs.forEach(function (cb) {
+                                cb.checked = parseInt(cb.value || '0', 10) === singleM;
+                            });
+                        } else {
+                            maritalCbs.forEach(function (cb) { cb.checked = true; });
+                        }
+                    }
+                    if (typeof window.__syncPartnerPrefMaritalChildren === 'function') {
+                        window.__syncPartnerPrefMaritalChildren();
                     }
                 }
 

@@ -18,10 +18,23 @@
         @vite(['resources/css/app.css', 'resources/js/app.js', 'resources/js/profile/religion-caste-selector.js', 'resources/js/profile/location-typeahead.js', 'resources/js/profile/about-me-narrative.js'])
     </head>
     <body class="font-sans antialiased">
+        @php
+            $cardOnboardingStep = auth()->check()
+                ? \App\Models\MatrimonyProfile::query()->where('user_id', auth()->id())->value('card_onboarding_resume_step')
+                : null;
+            $hideMemberMainNav = request()->routeIs('matrimony.onboarding.*')
+                || $cardOnboardingStep !== null;
+        @endphp
         <div class="min-h-screen bg-gray-100 dark:bg-gray-900">
-            @include('layouts.navigation')
+            @if ($hideMemberMainNav)
+                @include('layouts.partials.onboarding-minimal-nav')
+            @else
+                @include('layouts.navigation')
+            @endif
 
-            @include('partials.plan-usage-summary', ['variant' => 'compact'])
+            @unless ($hideMemberMainNav)
+                @include('partials.plan-usage-summary', ['variant' => 'compact'])
+            @endunless
 
             <!-- Page Heading -->
             @isset($header)
@@ -35,6 +48,7 @@
             <!-- Page Content -->
             <!-- Page Content -->
 				<main>
+                @include('partials.laravel-validation-payload')
                 {{-- Flash messages: single place, dismissible + auto-hide (see resources/js/app.js) --}}
 @if (session('success'))
     <div data-flash-dismissible data-flash-auto-ms="8000" role="status" class="relative z-40 mx-auto max-w-2xl px-4 pt-4">

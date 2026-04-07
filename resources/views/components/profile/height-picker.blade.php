@@ -35,7 +35,7 @@
             }
         }
     }
-    $wrap = $wrapperClass ?? 'height-picker w-full border-2 border-rose-500 dark:border-rose-400 rounded-lg p-3';
+    $wrap = $wrapperClass ?? 'height-picker w-full border border-gray-200 dark:border-gray-600 rounded-lg p-3';
 @endphp
 <div class="{{ $wrap }}" x-data="heightPickerState({{ $selectedCm }})">
     <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{{ $label }} @if($required)<span class="text-red-500">*</span>@endif</label>

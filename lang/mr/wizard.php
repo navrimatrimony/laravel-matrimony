@@ -6,6 +6,7 @@
 return [
     'profile_completion' => 'प्रोफाइल पूर्णता',
     'sections' => 'विभाग',
+    'full_form' => 'संपूर्ण फॉर्म',
     'basic_info' => 'मूलभूत माहिती',
     'contacts' => 'संपर्क',
     'previous' => 'मागील',

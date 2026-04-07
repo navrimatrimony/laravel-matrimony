@@ -488,7 +488,7 @@
                     </div>
                 @endif
                 @if ($profile->incomeCurrency && ! $hasPersonalIncome && ! $hasFamilyIncome)
-                    <p class="text-xs text-stone-500 dark:text-stone-400">{{ __('Income Currency') }}: <span class="font-medium text-stone-800 dark:text-stone-200">{{ trim($profile->incomeCurrency->symbol ?? '') }} {{ $profile->incomeCurrency->code ?? '—' }}</span></p>
+                    <p class="text-xs text-stone-500 dark:text-stone-400">{{ __('Income Currency') }}: <span class="font-medium text-stone-800 dark:text-stone-200">{{ $profile->incomeCurrency->displaySymbol() }} {{ $profile->incomeCurrency->code ?? '—' }}</span></p>
                 @endif
             </div>
         @endif
@@ -755,12 +755,14 @@
             || ($preferenceCriteria->preferred_height_min_cm ?? null) !== null
             || ($preferenceCriteria->preferred_height_max_cm ?? null) !== null
             || ($preferenceCriteria->preferred_marital_status_id ?? null) !== null
+            || ! empty($preferredMaritalStatusIds ?? [])
             || ($preferenceCriteria->partner_profile_with_children ?? null) !== null;
     }
     $hasAnyPrefs = $hasAnyPrefs
         || !empty($preferredReligionIds ?? [])
         || !empty($preferredCasteIds ?? [])
-        || !empty($preferredDistrictIds ?? []);
+        || !empty($preferredDistrictIds ?? [])
+        || !empty($preferredMaritalStatusIds ?? []);
 @endphp
 @if ($hasAnyPrefs)
 <div class="mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
@@ -789,7 +791,14 @@
             @php $prefCityName = \App\Models\City::where('id', $preferenceCriteria->preferred_city_id)->value('name'); @endphp
             @if($prefCityName)<p><span class="text-gray-500">{{ __('City:') }}</span> {{ $prefCityName }}</p>@endif
         @endif
-        @if($hasPrefCriteria && ($preferenceCriteria->preferred_marital_status_id ?? null))
+        @if(!empty($preferredMaritalStatusIds ?? []))
+            @php
+                $prefMsLabels = \App\Models\MasterMaritalStatus::whereIn('id', $preferredMaritalStatusIds)->orderBy('label')->pluck('label')->all();
+            @endphp
+            @if($prefMsLabels)
+                <p><span class="text-gray-500">{{ __('wizard.marital_status_preference') }}:</span> {{ implode(', ', $prefMsLabels) }}</p>
+            @endif
+        @elseif($hasPrefCriteria && ($preferenceCriteria->preferred_marital_status_id ?? null))
             @php
                 $prefMs = \App\Models\MasterMaritalStatus::where('id', $preferenceCriteria->preferred_marital_status_id)->first();
             @endphp

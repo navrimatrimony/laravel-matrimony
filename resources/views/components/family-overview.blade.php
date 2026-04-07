@@ -34,7 +34,7 @@
     $familyTypes = $familyTypes ?? ($familyTypes ?? \App\Models\MasterFamilyType::where('is_active', true)->get());
 @endphp
 
-<div class="border-2 border-rose-500 dark:border-rose-400 rounded-lg p-4 space-y-4">
+<div class="border border-gray-200 dark:border-gray-600 rounded-lg p-4 space-y-4">
     {{-- Row 1: Family Type, Status, Values — one line, same width as below --}}
     <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div>

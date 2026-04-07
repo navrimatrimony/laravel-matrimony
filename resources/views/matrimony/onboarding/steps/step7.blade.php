@@ -5,7 +5,11 @@
     $oldAgeMax = old('preferred_age_max', $criteria?->preferred_age_max ?? 32);
     $oldHeightMin = old('preferred_height_min_cm', $criteria?->preferred_height_min_cm ?? 155);
     $oldHeightMax = old('preferred_height_max_cm', $criteria?->preferred_height_max_cm ?? 175);
-    $selectedMaritalStatus = old('preferred_marital_status_id', $preferredMaritalStatusId ?? null);
+    $selectedMaritalStatusIds = collect(old('preferred_marital_status_ids', $preferredMaritalStatusIds ?? []))->map(fn ($id) => (int) $id)->filter(fn ($id) => $id > 0)->unique()->values()->all();
+    $allMaritalStatusIdsForUi = collect($allMaritalStatuses ?? [])->pluck('id')->map(fn ($id) => (int) $id)->values()->all();
+    $maritalIdsForCheckboxUi = ($selectedMaritalStatusIds === [] && $allMaritalStatusIdsForUi !== [])
+        ? $allMaritalStatusIdsForUi
+        : $selectedMaritalStatusIds;
     $selectedReligionIds = collect(old('preferred_religion_ids', $preferredReligionIds ?? []))->map(fn ($id) => (int) $id)->all();
     $selectedCasteIds = collect(old('preferred_caste_ids', $preferredCasteIds ?? []))->map(fn ($id) => (int) $id)->all();
     $interestedInIntercaste = old('preferred_intercaste', $interestedInIntercaste ?? false);
@@ -30,7 +34,9 @@
     $casteText = collect($selectedCasteIds)->map(fn ($id) => $casteById->get($id)?->display_label)->filter()->implode(', ');
     $districtText = collect($selectedDistrictIds)->map(fn ($id) => $districtById->get($id)?->name)->filter()->implode(', ');
     $openToAllText = __('Open to all');
-    $maritalText = $maritalById->get((int) $selectedMaritalStatus)?->label ?? $openToAllText;
+    $maritalText = $selectedMaritalStatusIds === []
+        ? $openToAllText
+        : collect($selectedMaritalStatusIds)->map(fn ($id) => $maritalById->get($id)?->label)->filter()->implode(', ');
     $communitySummary = trim(($religionText ?: $openToAllText).($casteText ? ' · '.$casteText : ''));
     $profileResidenceText = method_exists($profile, 'residenceLocationDisplayLine')
         ? trim((string) $profile->residenceLocationDisplayLine())
@@ -100,12 +106,16 @@
                     <button type="button" data-edit-toggle="edit-marital" class="text-xs font-semibold text-indigo-600 dark:text-indigo-400">Edit</button>
                 </div>
                 <div id="edit-marital" class="hidden mt-3 pt-3 border-t border-gray-200 dark:border-gray-700">
-                    <select name="preferred_marital_status_id" class="w-full rounded-lg border border-gray-300 dark:border-gray-600 dark:bg-gray-800 px-3 py-2 text-sm">
-                        <option value="">{{ __('Open to all') }}</option>
+                    <p class="text-xs text-gray-500 dark:text-gray-400 mb-2">{{ __('wizard.open_to_all_marital_pref') }}</p>
+                    <div class="flex flex-wrap gap-2 max-h-28 overflow-y-auto">
                         @foreach(($allMaritalStatuses ?? collect()) as $ms)
-                            <option value="{{ $ms->id }}" {{ (string) $selectedMaritalStatus === (string) $ms->id ? 'selected' : '' }}>{{ $ms->label }}</option>
+                            <label class="inline-flex items-center gap-1 rounded-full border border-gray-300 dark:border-gray-600 px-2 py-0.5 text-xs cursor-pointer text-gray-800 dark:text-gray-100">
+                                <input type="checkbox" name="preferred_marital_status_ids[]" value="{{ $ms->id }}" class="onb-marital-pref-cb rounded border-gray-300 dark:border-gray-600 text-indigo-600 focus:outline-none focus:ring-0 focus:ring-offset-0"
+                                    {{ in_array((int) $ms->id, $maritalIdsForCheckboxUi, true) ? 'checked' : '' }}>
+                                <span>{{ $ms->label }}</span>
+                            </label>
                         @endforeach
-                    </select>
+                    </div>
                 </div>
             </div>
 

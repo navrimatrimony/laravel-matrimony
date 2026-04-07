@@ -8,6 +8,21 @@
     $marriage = ($profileMarriages ?? collect())->sortByDesc('id')->first();
     $profileChildren = $profileChildren ?? collect();
     $childLivingWithOptions = $childLivingWithOptions ?? collect();
+    $postedChildren = ! $isSnapshot ? old('children') : null;
+    if (is_array($postedChildren)) {
+        $initialChildrenRows = collect($postedChildren)->values()->map(function ($row) {
+            $r = is_array($row) ? $row : [];
+
+            return [
+                'id' => isset($r['id']) && $r['id'] !== '' ? $r['id'] : null,
+                'gender' => (string) ($r['gender'] ?? ''),
+                'age' => isset($r['age']) && $r['age'] !== '' ? (string) $r['age'] : '',
+                'child_living_with_id' => isset($r['child_living_with_id']) && $r['child_living_with_id'] !== '' ? (string) $r['child_living_with_id'] : '',
+            ];
+        })->values()->toArray();
+    } else {
+        $initialChildrenRows = $profileChildren->map(fn ($c) => ['id' => $c->id ?? null, 'gender' => $c->gender ?? '', 'age' => $c->age ?? '', 'child_living_with_id' => $c->child_living_with_id ?? ''])->values()->toArray();
+    }
     $oldCore = $isSnapshot ? 'snapshot.core' : null;
     $savedStatusId = $profile->marital_status_id ?? '';
     $rawStatusId = $oldCore
@@ -28,13 +43,13 @@
 @endphp
 <div class="border border-gray-200 dark:border-gray-600 rounded-lg p-4 bg-white dark:bg-gray-800 space-y-7"
      data-name-prefix="{{ $namePrefix }}"
-     x-data="maritalEngineState({{ json_encode($currentStatusId) }}, {{ json_encode($currentKey) }}, {{ $showChildrenQuestion ? 'true' : 'false' }}, {{ $showChildrenDetails ? 'true' : 'false' }}, {{ json_encode($hasChildrenValue) }}, {{ json_encode($profileChildren->map(fn($c) => ['id' => $c->id ?? null, 'gender' => $c->gender ?? '', 'age' => $c->age ?? '', 'child_living_with_id' => $c->child_living_with_id ?? ''])->values()->toArray()) }}, {{ json_encode($childLivingWithOptions->pluck('id')->toArray()) }}, {{ json_encode($namePrefix) }})"
+     x-data="maritalEngineState({{ json_encode($currentStatusId) }}, {{ json_encode($currentKey) }}, {{ $showChildrenQuestion ? 'true' : 'false' }}, {{ $showChildrenDetails ? 'true' : 'false' }}, {{ json_encode($hasChildrenValue) }}, {{ json_encode($initialChildrenRows) }}, {{ json_encode($childLivingWithOptions->pluck('id')->toArray()) }}, {{ json_encode($namePrefix) }})"
      x-init="init()"
      @marital-status-change.window="onStatusChange($event.detail)">
     @if($showMaritalStatus)
         <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100 border-b border-gray-200 dark:border-gray-700 pb-2">{{ __('Marital status') }}</h2>
         {{-- Step 1: Marital status (radios) — bold, spaced, card-style options --}}
-        <div>
+        <div data-lv-highlight-wrap data-lv-scroll-target>
             <p class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">{{ __('Marital status') }} <span class="text-red-500">*</span></p>
             @php $maritalStatusCount = max(1, $maritalStatuses->count()); @endphp
             <div class="w-full min-w-0 overflow-hidden py-0.5">
@@ -68,13 +83,14 @@
     @endif
 
     {{-- Step 2: Status details (optional) + Children — heading line then inputs; Yes/No as on-off toggle --}}
-    <div class="marital-details-block" x-show="statusKey === 'divorced' || statusKey === 'annulled' || statusKey === 'separated' || statusKey === 'widowed'" x-cloak style="display: none;">
+    <div class="marital-details-block" data-lv-scroll-target="marital-details" x-show="statusKey === 'divorced' || statusKey === 'annulled' || statusKey === 'separated' || statusKey === 'widowed'" x-cloak style="display: none;">
         {{-- Heading line: Status details + Children (required) — visible section heading --}}
         <div class="flex flex-nowrap items-center gap-2 sm:gap-3 min-w-0 overflow-hidden pb-2 mb-2 border-b border-gray-200 dark:border-gray-600">
             <h3 class="text-sm sm:text-base font-semibold text-gray-800 dark:text-gray-100 truncate min-w-0">{{ __('Status details (optional)') }}</h3>
             <span class="shrink-0 text-gray-400 dark:text-gray-500" aria-hidden="true">|</span>
             <h3 class="text-sm sm:text-base font-semibold text-gray-800 dark:text-gray-100 truncate min-w-0">{{ __('Children') }} <span class="text-red-500">*</span></h3>
         </div>
+        <div class="flex flex-col w-full min-w-0 gap-2" data-lv-section="marital-details">
         <div class="flex flex-nowrap w-full min-w-0 gap-1.5 sm:gap-2 items-end overflow-hidden">
             <div class="min-w-0 w-[4.25rem] sm:w-24 shrink-0">
                 <label class="block text-xs text-gray-600 dark:text-gray-400 mb-0.5 truncate" title="{{ __('Marriage year') }}">{{ __('Marriage year') }}</label>
@@ -132,9 +148,8 @@
                 </div>
             </div>
         </div>
-        @error($isSnapshot ? 'snapshot.core.has_children' : 'has_children')
-            <p class="mt-1 text-sm text-red-600 dark:text-red-400">{{ $message }}</p>
-        @enderror
+        <div class="w-full min-w-0" data-lv-errors-slot="marital-details" aria-live="polite"></div>
+        </div>
     </div>
 
     {{-- Hidden marriage row id + marital_status_id so row exists for intake/wizard when status is never_married (details block hidden). --}}
@@ -142,54 +157,62 @@
     <input type="hidden" :name="namePrefix ? 'snapshot[marriages][0][marital_status_id]' : 'marriages[0][marital_status_id]'" :value="maritalStatusId" x-show="false">
 
     {{-- Step 4: Children details (only if has_children = Yes) — one line per child --}}
-    <div id="marital-children-details" x-show="showChildrenDetails" x-cloak style="display: none;">
+    <div id="marital-children-details" class="scroll-mt-28" data-lv-scroll-target="children-details" tabindex="-1" x-show="showChildrenDetails" x-cloak style="display: none;">
         <h3 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">{{ __('wizard.children_details') }}</h3>
+        <div class="w-full min-w-0 mb-2" data-lv-errors-slot="children-section" aria-live="polite"></div>
         <div class="space-y-3" x-ref="childrenContainer">
             <template x-for="(child, index) in children" :key="'child-' + index">
-                <div class="flex flex-nowrap w-full min-w-0 gap-1.5 sm:gap-2 items-end overflow-hidden border border-gray-200 dark:border-gray-600 rounded-lg p-2 sm:p-3 bg-gray-50 dark:bg-gray-700/30">
-                    <div class="min-w-0 w-[4.5rem] sm:w-[5.5rem] shrink-0">
-                        <label class="block text-xs text-gray-600 dark:text-gray-400 mb-0.5 truncate">{{ __('wizard.gender') }}</label>
-                        <select :name="(namePrefix ? 'snapshot[children][' : 'children[') + index + '][gender]'" class="w-full max-w-full min-w-0 rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-1 sm:px-2 py-2 text-xs sm:text-sm h-[42px]" x-model="child.gender">
-                            <option value="">{{ __('wizard.select') }}</option>
-                            <option value="male">{{ __('wizard.male') }}</option>
-                            <option value="female">{{ __('wizard.female') }}</option>
-                            <option value="other">{{ __('wizard.other') }}</option>
-                            <option value="prefer_not_say">{{ __('wizard.prefer_not_say') }}</option>
-                        </select>
-                    </div>
-                    <div class="min-w-0 w-14 sm:w-16 shrink-0">
-                        <label class="block text-xs text-gray-600 dark:text-gray-400 mb-0.5 truncate">{{ __('wizard.age') }} <span class="text-red-500">*</span></label>
-                        <input type="number" :name="(namePrefix ? 'snapshot[children][' : 'children[') + index + '][age]'" min="1" max="120" class="w-full max-w-full min-w-0 rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-1 sm:px-2 py-2 text-sm h-[42px]" x-model.number="child.age" placeholder="{{ __('wizard.age') }}">
-                    </div>
-                    <div class="min-w-0 w-[9.5rem] sm:w-[12rem] shrink-0">
-                        <label class="block text-xs text-gray-600 dark:text-gray-400 mb-0.5 truncate">{{ __('wizard.living_with') }}</label>
-                        <select :name="(namePrefix ? 'snapshot[children][' : 'children[') + index + '][child_living_with_id]'" class="w-full max-w-full min-w-0 rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-1 sm:px-2 py-2 text-xs sm:text-sm h-[42px]" x-model="child.child_living_with_id">
-                            <option value="">{{ __('wizard.select') }}</option>
-                            @foreach($childLivingWithOptions as $opt)
-                                <option value="{{ $opt->id }}">{{ $opt->label }}</option>
-                            @endforeach
-                        </select>
-                    </div>
-                    <div class="min-w-0 flex-1 flex items-end pt-0 border-0 sm:pl-1">
-                        <div class="flex w-full min-w-0 items-center justify-between gap-x-3">
-                            <input type="hidden" :name="(namePrefix ? 'snapshot[children][' : 'children[') + index + '][id]'" :value="child.id || ''">
-                            <input type="hidden" :name="(namePrefix ? 'snapshot[children][' : 'children[') + index + '][sort_order]'" :value="index">
-                            <button
-                                type="button"
-                                @click="addChild()"
-                                class="text-sm font-medium text-indigo-600 underline-offset-2 hover:text-indigo-800 hover:underline dark:text-indigo-400 dark:hover:text-indigo-300"
-                            >
-                                + {{ __('wizard.add_more') }}
-                            </button>
-                            <button
-                                type="button"
-                                @click="removeChild(index)"
-                                class="text-sm font-medium text-rose-700 underline-offset-2 hover:text-rose-900 hover:underline dark:text-rose-400 dark:hover:text-rose-300"
-                            >
-                                {{ __('common.remove') }}
-                            </button>
+                <div
+                    class="flex flex-col gap-2 w-full min-w-0 scroll-mt-28 border border-gray-200 dark:border-gray-600 rounded-lg p-2 sm:p-3 bg-gray-50 dark:bg-gray-700/30"
+                    data-lv-child-row
+                    x-bind:data-child-index="String(index)"
+                >
+                    <div class="flex flex-nowrap w-full min-w-0 gap-1.5 sm:gap-2 items-end overflow-hidden">
+                        <div class="min-w-0 w-[4.5rem] sm:w-[5.5rem] shrink-0">
+                            <label class="block text-xs text-gray-600 dark:text-gray-400 mb-0.5 truncate">{{ __('wizard.gender') }}</label>
+                            <select :name="(namePrefix ? 'snapshot[children][' : 'children[') + index + '][gender]'" class="w-full max-w-full min-w-0 rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-1 sm:px-2 py-2 text-xs sm:text-sm h-[42px]" x-model="child.gender">
+                                <option value="">{{ __('wizard.select') }}</option>
+                                <option value="male">{{ __('wizard.male') }}</option>
+                                <option value="female">{{ __('wizard.female') }}</option>
+                                <option value="other">{{ __('wizard.other') }}</option>
+                                <option value="prefer_not_say">{{ __('wizard.prefer_not_say') }}</option>
+                            </select>
+                        </div>
+                        <div class="min-w-0 w-14 sm:w-16 shrink-0">
+                            <label class="block text-xs text-gray-600 dark:text-gray-400 mb-0.5 truncate">{{ __('wizard.age') }} <span class="text-red-500">*</span></label>
+                            <input type="number" :name="(namePrefix ? 'snapshot[children][' : 'children[') + index + '][age]'" min="1" max="120" class="w-full max-w-full min-w-0 rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-1 sm:px-2 py-2 text-sm h-[42px]" x-model.number="child.age" placeholder="{{ __('wizard.age') }}">
+                        </div>
+                        <div class="min-w-0 w-[9.5rem] sm:w-[12rem] shrink-0">
+                            <label class="block text-xs text-gray-600 dark:text-gray-400 mb-0.5 truncate">{{ __('wizard.living_with') }}</label>
+                            <select :name="(namePrefix ? 'snapshot[children][' : 'children[') + index + '][child_living_with_id]'" class="w-full max-w-full min-w-0 rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-1 sm:px-2 py-2 text-xs sm:text-sm h-[42px]" x-model="child.child_living_with_id">
+                                <option value="">{{ __('wizard.select') }}</option>
+                                @foreach($childLivingWithOptions as $opt)
+                                    <option value="{{ $opt->id }}">{{ $opt->label }}</option>
+                                @endforeach
+                            </select>
+                        </div>
+                        <div class="min-w-0 flex-1 flex items-end pt-0 border-0 sm:pl-1">
+                            <div class="flex w-full min-w-0 items-center justify-between gap-x-3">
+                                <input type="hidden" :name="(namePrefix ? 'snapshot[children][' : 'children[') + index + '][id]'" :value="child.id || ''">
+                                <input type="hidden" :name="(namePrefix ? 'snapshot[children][' : 'children[') + index + '][sort_order]'" :value="index">
+                                <button
+                                    type="button"
+                                    @click="addChild()"
+                                    class="text-sm font-medium text-indigo-600 underline-offset-2 hover:text-indigo-800 hover:underline dark:text-indigo-400 dark:hover:text-indigo-300"
+                                >
+                                    + {{ __('wizard.add_more') }}
+                                </button>
+                                <button
+                                    type="button"
+                                    @click="removeChild(index)"
+                                    class="text-sm font-medium text-rose-700 underline-offset-2 hover:text-rose-900 hover:underline dark:text-rose-400 dark:hover:text-rose-300"
+                                >
+                                    {{ __('common.remove') }}
+                                </button>
+                            </div>
                         </div>
                     </div>
+                    <div class="w-full min-w-0" x-bind:data-lv-child-errors="String(index)" aria-live="polite"></div>
                 </div>
             </template>
         </div>

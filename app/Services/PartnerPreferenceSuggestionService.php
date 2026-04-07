@@ -234,6 +234,7 @@ class PartnerPreferenceSuggestionService
             'preferred_master_education_ids' => [],
             'preferred_diet_ids' => self::defaultPreferredDietIds($profile),
             'preferred_marital_status_id' => null,
+            'preferred_marital_status_ids' => [],
             'preference_preset' => 'balanced',
         ];
 
@@ -275,7 +276,9 @@ class PartnerPreferenceSuggestionService
             $out['preferred_caste_ids'] = [(int) $profile->caste_id];
         }
 
-        $out['preferred_marital_status_id'] = self::defaultPreferredMaritalStatusId($profile);
+        $mid = self::defaultPreferredMaritalStatusId($profile);
+        $out['preferred_marital_status_id'] = $mid;
+        $out['preferred_marital_status_ids'] = $mid !== null ? [(int) $mid] : [];
 
         return $out;
     }
@@ -293,6 +296,7 @@ class PartnerPreferenceSuggestionService
      *   preferredDistrictIds: array<int, int>,
      *   preferredTalukaIds: array<int, int>,
      *   preferredDietIds: array<int, int>,
+     *   preferredMaritalStatusIds: array<int, int>,
      * }
      */
     public static function mergePartnerPreferencesForDisplay(
@@ -305,6 +309,7 @@ class PartnerPreferenceSuggestionService
         array $districtIds,
         array $talukaIds,
         array $dietIds,
+        array $maritalStatusIds = [],
     ): array {
         $s = self::suggestForProfile($profile);
 
@@ -368,6 +373,11 @@ class PartnerPreferenceSuggestionService
             $dietIds = $normalize($s['preferred_diet_ids'] ?? []);
         }
 
+        $maritalIds = $normalize($maritalStatusIds);
+        if ($maritalIds === [] && ($row['preferred_marital_status_id'] ?? null) !== null) {
+            $maritalIds = [(int) $row['preferred_marital_status_id']];
+        }
+
         return [
             'criteria' => (object) $row,
             'preferredReligionIds' => $religionIds,
@@ -377,6 +387,7 @@ class PartnerPreferenceSuggestionService
             'preferredDistrictIds' => $districtIds,
             'preferredTalukaIds' => $talukaIds,
             'preferredDietIds' => $dietIds,
+            'preferredMaritalStatusIds' => $maritalIds,
         ];
     }
 }

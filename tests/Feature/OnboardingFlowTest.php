@@ -278,16 +278,16 @@ class OnboardingFlowTest extends TestCase
         $response->assertSee(__('profile.profile_completeness'), false);
     }
 
-    public function test_onboarding_complete_redirects_to_profiles_index(): void
+    public function test_onboarding_complete_redirects_to_my_profile(): void
     {
         $user = User::factory()->create();
-        MatrimonyProfile::factory()->create(['user_id' => $user->id]);
+        $profile = MatrimonyProfile::factory()->create(['user_id' => $user->id]);
 
         $response = $this->actingAs($user)
             ->withSession(['wizard_minimal' => true])
             ->get(route('matrimony.onboarding.complete'));
 
-        $response->assertRedirect(route('matrimony.profiles.index'));
+        $response->assertRedirect(route('matrimony.profile.show', $profile->id));
         $response->assertSessionHas('success', __('onboarding.all_set'));
         $response->assertSessionMissing('wizard_minimal');
     }

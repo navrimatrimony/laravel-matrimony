@@ -35,19 +35,12 @@ use Illuminate\Support\Facades\Route;
 
 /*
 |--------------------------------------------------------------------------
-| Dashboard
+| Authenticated member surface (onboarding lock applies while card flow incomplete)
 |--------------------------------------------------------------------------
 */
-Route::get('/dashboard', [DashboardController::class, 'index'])
-    ->middleware(['auth'])
-    ->name('dashboard');
+Route::middleware(['auth', \App\Http\Middleware\EnforceCardOnboarding::class])->group(function () {
 
-/*
-|--------------------------------------------------------------------------
-| Authenticated Routes
-|--------------------------------------------------------------------------
-*/
-Route::middleware('auth')->group(function () {
+    Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
 
     /*
     | Phase-5: User-side Intake UI (user-access path /intake/...)
@@ -303,4 +296,5 @@ Route::middleware('auth')->group(function () {
     Route::get('/notifications/unread-count', [NotificationController::class, 'unreadCount'])->name('notifications.unread-count');
     Route::get('/notifications/{id}', [NotificationController::class, 'show'])->name('notifications.show');
     Route::post('/notifications/{id}/mark-read', [NotificationController::class, 'markRead'])->name('notifications.mark-read');
+
 });

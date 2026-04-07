@@ -6,5 +6,6 @@ return [
     'throttle' => 'Too many login attempts. Please try again in :seconds seconds.',
     'mobile' => 'Mobile number',
     'mobile_already_registered' => 'This mobile number is already registered.',
+    'password_show' => 'Show password',
+    'password_hide' => 'Hide password',
 ];
-

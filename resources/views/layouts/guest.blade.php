@@ -16,6 +16,7 @@
     </head>
     <body class="font-sans text-gray-900 antialiased">
         <div class="min-h-screen flex flex-col sm:justify-center items-center pt-6 sm:pt-0 bg-gray-100 dark:bg-gray-900">
+            @include('partials.laravel-validation-payload')
             <div>
                 <a href="/">
                     <x-application-logo class="w-20 h-20 fill-current text-gray-500" />
@@ -32,5 +33,32 @@
                 {{ $slot }}
             </div>
         </div>
+        <script>
+            document.addEventListener('DOMContentLoaded', function () {
+                document.querySelectorAll('[data-password-field]').forEach(function (wrap) {
+                    var input = wrap.querySelector('input');
+                    var btn = wrap.querySelector('[data-password-toggle]');
+                    if (!input || !btn) return;
+                    var showIcon = btn.querySelector('[data-icon="show"]');
+                    var hideIcon = btn.querySelector('[data-icon="hide"]');
+                    var labelShow = wrap.getAttribute('data-label-show') || 'Show password';
+                    var labelHide = wrap.getAttribute('data-label-hide') || 'Hide password';
+
+                    function syncUi() {
+                        var visible = input.type === 'text';
+                        btn.setAttribute('aria-pressed', visible ? 'true' : 'false');
+                        btn.setAttribute('aria-label', visible ? labelHide : labelShow);
+                        if (showIcon) showIcon.classList.toggle('hidden', visible);
+                        if (hideIcon) hideIcon.classList.toggle('hidden', !visible);
+                    }
+
+                    btn.addEventListener('click', function () {
+                        input.type = input.type === 'password' ? 'text' : 'password';
+                        syncUi();
+                    });
+                    syncUi();
+                });
+            });
+        </script>
     </body>
 </html>

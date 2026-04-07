@@ -12,7 +12,8 @@ return [
     'strict_religion_filter' => (bool) env('MATCHING_STRICT_RELIGION', false),
 
     /**
-     * When true, candidates must match seeker preferred_marital_status_id when it is set.
+     * When true, candidates must have marital_status_id in the seeker’s profile_preferred_marital_statuses
+     * (or legacy profile_preference_criteria.preferred_marital_status_id when the pivot is empty).
      */
     'strict_marital_filter' => (bool) env('MATCHING_STRICT_MARITAL', false),
 ];

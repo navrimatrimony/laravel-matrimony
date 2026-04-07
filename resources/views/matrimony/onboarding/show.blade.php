@@ -18,8 +18,11 @@
     <div class="w-full max-w-xl md:max-w-2xl mx-auto px-4 sm:px-6 lg:px-8">
         {{-- success/info flash: layouts.app only (dismissible + auto-hide) to avoid duplicate banners --}}
         @if ($errors->any())
-            <div class="mb-4 px-4 py-3 rounded-xl bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 text-red-800 dark:text-red-200 text-sm">
-                {{ $errors->first() }}
+            <div class="mb-4 px-4 py-3 rounded-xl bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 text-red-800 dark:text-red-200 text-sm" role="alert" id="onboarding-errors-summary" data-lv-humanize-summary>
+                <p class="font-medium leading-relaxed">{{ $errors->first() }}</p>
+                @if ($errors->count() > 1)
+                    <p class="mt-2 text-sm text-red-700/90 dark:text-red-200/90">{{ __('onboarding.validation_more_errors', ['count' => $errors->count() - 1]) }}</p>
+                @endif
             </div>
         @endif
 

@@ -96,7 +96,7 @@
     }
     $inputCls = 'w-full rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-3 py-2';
     $labelCls = 'block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1';
-    $cardCls = 'rounded-lg border-2 border-rose-500/30 dark:border-rose-400/30 bg-white dark:bg-gray-800/50 p-4';
+    $cardCls = 'rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800/50 p-4';
 
     // जर education history row मध्ये degree/specialization/university/year पैकी काहीही भरलेलं असेल,
     // तर तो section collapsed न ठेवण्यासाठी flag.
@@ -109,7 +109,7 @@
         return $deg !== '' || $spec !== '' || $uni !== '' || $year !== '';
     });
 @endphp
-<div class="education-occupation-income-engine space-y-6 border-2 border-rose-500 dark:border-rose-400 rounded-lg p-4">
+<div class="education-occupation-income-engine space-y-6 border border-gray-200 dark:border-gray-600 rounded-lg p-4">
     {{-- Education engine: snapshot + history एकत्र --}}
     <div class="{{ $cardCls }}">
         <h3 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">Education</h3>

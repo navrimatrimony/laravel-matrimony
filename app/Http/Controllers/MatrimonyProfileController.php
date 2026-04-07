@@ -29,6 +29,7 @@ use App\Services\ProfileFieldConfigurationService;
 use App\Services\ProfilePhotoAccessService;
 use App\Services\ProfileRotationService;
 use App\Services\ProfileShowReadService;
+use App\Services\ProfileShowSnapshotService;
 use App\Services\ViewTrackingService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Schema;
@@ -211,8 +212,8 @@ class MatrimonyProfileController extends Controller
                 ->with('error', __('interest.create_profile_first'));
         }
 
-        // Phase-5B: Single edit path = wizard. Redirect to wizard (full section).
-        return redirect()->route('matrimony.profile.wizard.section', ['section' => 'full']);
+        // Phase-5B: Single edit path = wizard; default entry is Basic info (not monolithic full).
+        return redirect()->route('matrimony.profile.wizard.section', ['section' => 'basic-info']);
     }
 
     /**
@@ -227,7 +228,7 @@ class MatrimonyProfileController extends Controller
                 ->with('error', __('profile_actions.create_profile_first'));
         }
 
-        return redirect()->route('matrimony.profile.wizard.section', ['section' => 'full']);
+        return redirect()->route('matrimony.profile.wizard.section', ['section' => 'basic-info']);
     }
 
     /**
@@ -248,23 +249,23 @@ class MatrimonyProfileController extends Controller
         }
         $snapshot = app(\App\Services\ManualSnapshotBuilderService::class)->buildFullManualSnapshot($request, $profile);
         if (empty($snapshot['core'] ?? null) && empty($snapshot['contacts'] ?? null)) {
-            return redirect()->route('matrimony.profile.wizard.section', ['section' => 'full'])
+            return redirect()->route('matrimony.profile.wizard.section', ['section' => 'full', 'all' => 1])
                 ->with('error', __('common.no_valid_data_to_save'))
                 ->withInput();
         }
         try {
             $result = app(\App\Services\MutationService::class)->applyManualSnapshot($profile, $snapshot, (int) $user->id, 'manual');
         } catch (\Illuminate\Validation\ValidationException $e) {
-            return redirect()->route('matrimony.profile.wizard.section', ['section' => 'full'])
+            return redirect()->route('matrimony.profile.wizard.section', ['section' => 'full', 'all' => 1])
                 ->withErrors($e->errors())
                 ->withInput();
         } catch (\RuntimeException $e) {
-            return redirect()->route('matrimony.profile.wizard.section', ['section' => 'full'])
+            return redirect()->route('matrimony.profile.wizard.section', ['section' => 'full', 'all' => 1])
                 ->with('error', $e->getMessage())
                 ->withInput();
         }
         if ($result['conflict_detected'] ?? false) {
-            return redirect()->route('matrimony.profile.wizard.section', ['section' => 'full'])
+            return redirect()->route('matrimony.profile.wizard.section', ['section' => 'full', 'all' => 1])
                 ->with('warning', __('common.some_changes_conflict'))
                 ->withInput();
         }
@@ -348,6 +349,10 @@ class MatrimonyProfileController extends Controller
         if ($profile->user_id !== $user->id) {
             abort(403, __('common.unauthorized_photo_update'));
         }
+
+        $inOnboardingPhotoPhase = (int) ($profile->card_onboarding_resume_step ?? 0) === MatrimonyProfile::CARD_ONBOARDING_PHOTO_RESUME_STEP
+            || $request->input('from') === 'onboarding'
+            || $request->query('from') === 'onboarding';
 
         // Phase-5 PART-5: Block manual edit when lifecycle blocks it
         if (in_array($profile->lifecycle_state, [
@@ -545,16 +550,35 @@ class MatrimonyProfileController extends Controller
         }
 
         if (! empty($result['conflict_detected'])) {
-            return redirect()->route('matrimony.profile.wizard.section', ['section' => 'full'])->with('warning', 'Photo uploaded but some conflicts were detected.');
+            if ($inOnboardingPhotoPhase) {
+                return redirect()->route('matrimony.profile.upload-photo', ['from' => 'onboarding'])
+                    ->with('warning', __('onboarding.photo_upload_conflict_retry'));
+            }
+
+            return redirect()->route('matrimony.profile.wizard.section', ['section' => 'full', 'all' => 1])->with('warning', 'Photo uploaded but some conflicts were detected.');
         }
 
         $additionalCount = is_array($additionalFilenames) ? count($additionalFilenames) : 0;
         $uploadedCount = 1 + $additionalCount;
 
+        $firstEverBatch = $existingPhotosCount === 0;
+        if ($inOnboardingPhotoPhase && $firstEverBatch) {
+            $this->releaseCardOnboardingLock($profile);
+
+            return redirect()->route('matrimony.profile.show', $profile->id)
+                ->with('success', __('onboarding.photo_uploaded_view_profile'));
+        }
+
         return redirect()->route('matrimony.profile.upload-photo')->with(
             'success',
             "Photos uploaded successfully ({$uploadedCount}). You can add more photos below."
         );
+    }
+
+    private function releaseCardOnboardingLock(MatrimonyProfile $profile): void
+    {
+        $profile->forceFill(['card_onboarding_resume_step' => null])->saveQuietly();
+        session()->forget('wizard_minimal');
     }
 
     /**
@@ -829,6 +853,12 @@ class MatrimonyProfileController extends Controller
         $preferredWorkingWithTypeIds = Schema::hasTable('profile_preferred_working_with_types')
             ? \Illuminate\Support\Facades\DB::table('profile_preferred_working_with_types')->where('profile_id', $profile->id)->pluck('working_with_type_id')->all()
             : [];
+        $preferredMaritalStatusIds = Schema::hasTable('profile_preferred_marital_statuses')
+            ? \Illuminate\Support\Facades\DB::table('profile_preferred_marital_statuses')->where('profile_id', $profile->id)->pluck('marital_status_id')->map(fn ($id) => (int) $id)->all()
+            : [];
+        if ($preferredMaritalStatusIds === [] && $preferenceCriteria && ($preferenceCriteria->preferred_marital_status_id ?? null)) {
+            $preferredMaritalStatusIds = [(int) $preferenceCriteria->preferred_marital_status_id];
+        }
 
         // 🔒 GUARD: Guest users are NOT allowed to view single profiles
         if (! auth()->check()) {
@@ -1069,10 +1099,35 @@ class MatrimonyProfileController extends Controller
             $galleryPhotos
         );
 
+        $profileShowSnapshot = app(ProfileShowSnapshotService::class)->build($profile, [
+            'is_own_profile' => $isOwnProfile,
+            'date_of_birth_visible' => $dateOfBirthVisible,
+            'marital_status_visible' => $maritalStatusVisible,
+            'education_visible' => $educationVisible,
+            'location_visible' => $locationVisible,
+            'caste_visible' => $casteVisible,
+            'height_visible' => $heightVisible,
+            'enable_relatives_section' => $enableRelativesSection,
+            'profile_property_summary' => $profilePropertySummary,
+            'preference_criteria' => $preferenceCriteria,
+            'preferred_religion_ids' => $preferredReligionIds,
+            'preferred_caste_ids' => $preferredCasteIds,
+            'preferred_district_ids' => $preferredDistrictIds,
+            'preferred_master_education_ids' => $preferredMasterEducationIds,
+            'preferred_diet_ids' => $preferredDietIds,
+            'preferred_profession_ids' => $preferredProfessionIds,
+            'preferred_working_with_type_ids' => $preferredWorkingWithTypeIds,
+            'preferred_marital_status_ids' => $preferredMaritalStatusIds,
+            'extended_attributes' => $extendedAttributes,
+            'extended_values' => $extendedValues,
+            'extended_meta' => $extendedMeta,
+        ]);
+
         return view(
             'matrimony.profile.show',
             [
                 'profile' => $profile,
+                'profileShowSnapshot' => $profileShowSnapshot,
                 'profilePropertySummary' => $profilePropertySummary,
                 'enableRelativesSection' => $enableRelativesSection,
                 'isOwnProfile' => $isOwnProfile,
@@ -1091,6 +1146,7 @@ class MatrimonyProfileController extends Controller
                 'preferredDietIds' => $preferredDietIds,
                 'preferredProfessionIds' => $preferredProfessionIds,
                 'preferredWorkingWithTypeIds' => $preferredWorkingWithTypeIds,
+                'preferredMaritalStatusIds' => $preferredMaritalStatusIds,
                 'completenessDetailedPct' => $completenessDetailedPct,
                 'profilePhotoVisible' => $profilePhotoVisible,
                 'dateOfBirthVisible' => $dateOfBirthVisible,
