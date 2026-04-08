@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Services\ConflictDetectionService;
 use App\Services\ProfileFieldLockService;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
@@ -372,6 +373,18 @@ class MatrimonyProfile extends Model
     public function user()
     {
         return $this->belongsTo(User::class);
+    }
+
+    /**
+     * Exclude profiles tied to admin/staff accounts ({@see User::isAnyAdmin()}).
+     */
+    public function scopeWhereMemberAccountsOnly(Builder $query): Builder
+    {
+        return $query->whereHas('user', function ($q) {
+            $q->where(function ($q2) {
+                $q2->whereNull('is_admin')->orWhere('is_admin', false);
+            })->whereNull('admin_role');
+        });
     }
 
     /*

@@ -331,32 +331,32 @@
 
 {{-- Desktop top fold: one bordered panel (photo rail | summary). Below: full-width detail stack. --}}
 <div class="flex w-full flex-col gap-8">
-    <div class="flex w-full flex-col gap-6 lg:flex-row lg:items-stretch lg:gap-0 lg:overflow-hidden lg:rounded-2xl lg:border lg:border-stone-200/65 lg:bg-white lg:shadow-[0_4px_28px_-8px_rgba(28,25,23,0.1)] lg:ring-1 lg:ring-stone-200/45 dark:lg:border-gray-700/75 dark:lg:bg-gray-900/95 dark:lg:shadow-[0_4px_32px_-10px_rgba(0,0,0,0.42)] dark:lg:ring-gray-700/55">
+    <div class="flex w-full flex-col gap-6 lg:flex-row lg:items-stretch lg:gap-0 lg:overflow-visible lg:rounded-2xl lg:border lg:border-stone-200/65 lg:bg-white lg:shadow-[0_4px_28px_-8px_rgba(28,25,23,0.1)] lg:ring-1 lg:ring-stone-200/45 dark:lg:border-gray-700/75 dark:lg:bg-gray-900/95 dark:lg:shadow-[0_4px_32px_-10px_rgba(0,0,0,0.42)] dark:lg:ring-gray-700/55">
     <aside class="w-full space-y-6 lg:sticky lg:top-24 lg:w-[318px] lg:max-w-[330px] lg:shrink-0 lg:space-y-4 lg:border-b lg:border-stone-200/60 lg:bg-gradient-to-b lg:from-stone-50/50 lg:to-stone-50/20 lg:p-4 dark:lg:border-gray-700/70 dark:lg:from-gray-900/50 dark:lg:to-gray-900/30 xl:w-[336px]">
         @php
             $galleryPhotos = $galleryPhotos ?? collect();
             $photoAlbumPresentation = $photoAlbumPresentation ?? ['slots' => [], 'message_key' => null, 'tier' => 'own_profile'];
         @endphp
-		
-		
-		
-        <div class="group lg:overflow-hidden lg:rounded-xl lg:ring-1 lg:ring-stone-200/55 lg:transition-[box-shadow,ring-color] lg:duration-300 lg:ease-out dark:lg:ring-gray-600/55 lg:hover:shadow-[0_10px_36px_-14px_rgba(28,25,23,0.14)] lg:hover:ring-stone-300/65 dark:lg:hover:ring-gray-500/60">
-        <x-profile.show.hero-card
-            class="w-full !shadow-none !ring-0 lg:!rounded-xl"
-            :profile="$profile"
-            :profilePhotoVisible="$profilePhotoVisible"
-            :photoAlbumPresentation="$photoAlbumPresentation"
-            :galleryPhotos="$galleryPhotos"
-            :photoLocked="$photoLocked"
-            :photoLockMode="$photoLockMode ?? 'all'"
-            :interestAlreadySent="$interestAlreadySent"
-            :contactRequestDisabled="$contactRequestDisabled"
-            :contactRequestState="$contactRequestState"
-            :dateOfBirthVisible="$dateOfBirthVisible"
-            :heightVisible="$heightVisible"
-            :locationVisible="$locationVisible"
-            :educationVisible="$educationVisible"
-        />
+
+        <div class="relative">
+            <div class="group lg:overflow-visible lg:rounded-xl lg:ring-1 lg:ring-stone-200/55 lg:transition-[box-shadow,ring-color] lg:duration-300 lg:ease-out dark:lg:ring-gray-600/55 lg:hover:shadow-[0_10px_36px_-14px_rgba(28,25,23,0.14)] lg:hover:ring-stone-300/65 dark:lg:hover:ring-gray-500/60">
+                <x-profile.show.hero-card
+                    class="w-full !shadow-none !ring-0 lg:!rounded-xl"
+                    :profile="$profile"
+                    :profilePhotoVisible="$profilePhotoVisible"
+                    :photoAlbumPresentation="$photoAlbumPresentation"
+                    :galleryPhotos="$galleryPhotos"
+                    :photoLocked="$photoLocked"
+                    :photoLockMode="$photoLockMode ?? 'all'"
+                    :interestAlreadySent="$interestAlreadySent"
+                    :contactRequestDisabled="$contactRequestDisabled"
+                    :contactRequestState="$contactRequestState"
+                    :dateOfBirthVisible="$dateOfBirthVisible"
+                    :heightVisible="$heightVisible"
+                    :locationVisible="$locationVisible"
+                    :educationVisible="$educationVisible"
+                />
+            </div>
         </div>
         @if (! empty($photoAlbumPresentation['message_key'] ?? null))
             <p class="mt-3 text-sm text-stone-700 dark:text-stone-200 bg-stone-100/90 dark:bg-gray-800/90 px-3 py-2 rounded-lg border border-stone-200/80 dark:border-gray-600" role="status">
@@ -534,10 +534,25 @@
 @endphp
             <div class="min-w-0">
             @if ($heroDisplayName !== '')
-                <h2 class="mb-4 text-2xl font-extrabold uppercase leading-tight tracking-tight text-stone-900 dark:text-stone-50 sm:text-3xl break-words [word-break:break-word]">{{ $heroDisplayName }}</h2>
-                @if (! ($isOwnProfile ?? false))
-                    <p class="mt-1 text-xs text-green-600 dark:text-green-400">🟢 Active now • Viewed recently</p>
-                @endif
+                <div class="mb-4 flex items-start justify-between gap-3">
+                    <div class="min-w-0 flex-1">
+                        <h2 class="text-2xl font-extrabold uppercase leading-tight tracking-tight text-stone-900 dark:text-stone-50 sm:text-3xl break-words [word-break:break-word]">{{ $heroDisplayName }}</h2>
+                        @if (! ($isOwnProfile ?? false))
+                            <p class="mt-1 text-xs text-green-600 dark:text-green-400">🟢 Active now • Viewed recently</p>
+                        @endif
+                    </div>
+                    @auth
+                        @if (! $isOwnProfile && auth()->user()->matrimonyProfile)
+                            <div class="shrink-0 pt-1">
+                                @include('matrimony.profile.partials.viewer-profile-actions-menu', [
+                                    'matrimonyProfile' => $profile,
+                                    'isListingOwnProfile' => false,
+                                    'reportablePhotoSummary' => $reportablePhotoSummary ?? null,
+                                ])
+                            </div>
+                        @endif
+                    @endauth
+                </div>
             @endif
             <div class="space-y-3 rounded-xl bg-stone-50/50 px-3 py-3.5 ring-1 ring-stone-100/80 dark:bg-stone-900/25 dark:ring-stone-800/60 sm:px-3.5 @if (!($isOwnProfile ?? false)) lg:grid lg:grid-cols-2 lg:gap-x-8 lg:gap-y-2 lg:space-y-0 @endif">
                 @if ($scanRow1Text !== '')
@@ -1509,49 +1524,24 @@
 </div>
 @endif
 
-{{-- User-side abuse reporting --}}
-@if (auth()->check() && !$isOwnProfile)
-    <hr style="margin-top:2rem; margin-bottom:1.5rem;">
-    
-    <div x-data="{ showReportForm: false }">
-        @if ($errors->any())
-            <div style="color:red; margin-bottom:1rem;">
-                <ul>
-                    @foreach ($errors->all() as $error)
-                        <li>{{ $error }}</li>
-                    @endforeach
-                </ul>
-            </div>
-        @endif
-
-        @if ($hasAlreadyReported)
-            <div style="border:1px solid #fbbf24; background:#fef3c7; padding:1rem; max-width:500px; border-radius:4px;">
-                <p style="color:#92400e; margin:0; font-weight:500;">
-                    {{ __('You have already reported this profile. Our team is reviewing it.') }}
-                </p>
-            </div>
-        @else
-            <button
-                type="button"
-                @click="showReportForm = !showReportForm"
-                class="bg-transparent p-0 border-0 font-inherit"
-                style="color:#6b7280; text-decoration:underline; font-size:0.875rem; cursor:pointer;">
-                {{ __('Report profile for abuse') }}
-            </button>
-
-            <div x-show="showReportForm" x-transition style="margin-top:1rem; max-width:500px;">
-                <form method="POST" action="{{ route('abuse-reports.store', $profile) }}" style="border:1px solid #ccc; padding:1rem;">
-                    @csrf
-                    <p style="font-weight:600; margin-bottom:8px;">{{ __('Report this profile for abuse') }}</p>
-                    <textarea name="reason" rows="4" required minlength="10" placeholder="{{ __('Please provide a reason for reporting this profile (minimum 10 characters)') }}" style="width:100%; margin-bottom:10px; padding:8px; border:1px solid #ddd; border-radius:4px;"></textarea>
-                    <div class="flex gap-2">
-                        <button type="submit" class="inline-flex items-center px-4 py-2 bg-red-600 border border-transparent rounded-md font-semibold text-sm text-white tracking-wide hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 transition disabled:opacity-50 disabled:cursor-not-allowed">{{ __('Submit Report') }}</button>
-                        <button type="button" @click="showReportForm = false" class="inline-flex items-center px-4 py-2 bg-gray-500 border border-transparent rounded-md font-semibold text-sm text-white tracking-wide hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 transition">{{ __('Cancel') }}</button>
-                    </div>
-                </form>
-            </div>
-        @endif
-    </div>
+{{-- Abuse: submit via ⋮ menu (viewer-profile-actions-menu). Status + validation messages only here. --}}
+@if (auth()->check() && ! $isOwnProfile && (($hasAlreadyReported ?? false) || $errors->any()))
+    <hr class="my-8 border-stone-200 dark:border-gray-700">
+    @if ($hasAlreadyReported)
+        <div class="max-w-lg rounded-lg border border-amber-200 bg-amber-50 p-4 dark:border-amber-800 dark:bg-amber-950/40">
+            <p class="text-sm font-medium text-amber-900 dark:text-amber-100">
+                {{ __('You have already reported this profile. Our team is reviewing it.') }}
+            </p>
+        </div>
+    @elseif ($errors->any())
+        <div class="max-w-lg rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-900 dark:border-red-800 dark:bg-red-950/40 dark:text-red-100" role="alert">
+            <ul class="list-inside list-disc space-y-1">
+                @foreach ($errors->all() as $error)
+                    <li>{{ $error }}</li>
+                @endforeach
+            </ul>
+        </div>
+    @endif
 @endif
 
         </div>{{-- detailed sections below summary band --}}

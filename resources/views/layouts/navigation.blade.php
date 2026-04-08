@@ -1,8 +1,8 @@
-<nav x-data="{ open: false }" class="bg-red-600 border-b border-red-800 shadow-sm dark:bg-red-800 dark:border-red-950">
+<nav x-data="{ open: false }" class="bg-red-600 border-b border-red-800 shadow-sm dark:bg-red-800 dark:border-red-950 overflow-visible">
     <!-- Primary Navigation Menu -->
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div class="flex justify-between h-16 lg:h-12 items-center">
-            <div class="flex items-center min-h-0">
+            <div class="flex min-h-0 items-center self-stretch md:min-w-0">
                 <!-- Logo -->
                 <div class="shrink-0 flex items-center">
                     <a href="{{ route('dashboard') }}">
@@ -11,135 +11,111 @@
                 </div>
 
                 <!-- Navigation Links -->
-                <div class="hidden space-x-8 md:-my-px md:ms-10 md:flex md:items-center">
+                <div class="hidden min-w-0 space-x-8 md:-my-px md:ms-10 md:flex md:h-full md:items-center">
 
-                    {{-- Dashboard --}}
-                    
-                  {{-- 
-|--------------------------------------------------------------------------
-| Matrimony Main Navigation (SSOT Day 13)
-|--------------------------------------------------------------------------
-| PURPOSE:
-|   Logged-in user ला Matrimony related सगळे actions
-|   top menu मधूनच accessible असावेत.
-|
-| IMPORTANT:
-|   User ने URL लक्षात ठेवायची गरज नसावी.
-|   "कुठे आहे?" हा प्रश्न कधीही येऊ नये.
-|
-| SSOT RULES:
-|   - Core discovery links stay in the top bar; profile view / uploads / lists live under the user menu (less clutter).
-|   - Rule 13: UI-first, no hidden flows
-|--------------------------------------------------------------------------
---}}
+@php
+    $mpNav = auth()->check() ? auth()->user()->matrimonyProfile : null;
+    $chatUnreadCount = 0;
+    if ($mpNav) {
+        $chatUnreadCount = (int) \Illuminate\Support\Facades\DB::table('messages')
+            ->where('receiver_profile_id', $mpNav->id)
+            ->whereNull('read_at')
+            ->count();
+    }
+    $isOwnProfileShow = request()->routeIs('matrimony.profile.show')
+        && $mpNav
+        && (int) request()->route('matrimony_profile_id') === (int) $mpNav->id;
 
-@auth
-    @if (!auth()->user()->matrimonyProfile)
-        <x-nav-link :href="route('matrimony.profile.wizard.section', ['section' => 'basic-info'])" 
-                    :active="request()->routeIs('matrimony.profile.wizard*')">
-            {{ __('Create Profile') }}
-        </x-nav-link>
-    @else
-    <x-nav-link :href="route('matrimony.profile.edit')"
-                :active="request()->routeIs('matrimony.profile.edit')">
-        {{ __('Edit Profile') }}
-    </x-nav-link>
-    @endif
-@endauth
+    $navMainSection = 'none';
+    if (request()->routeIs('plans.*')) {
+        $navMainSection = 'plans';
+    } elseif (request()->routeIs('who-viewed.*')
+        || request()->routeIs('notifications.index', 'notifications.show')) {
+        $navMainSection = 'activity';
+    } elseif (request()->routeIs('interests.*')
+        || request()->routeIs('chat.*')
+        || request()->routeIs('mediation-inbox.*')
+        || request()->routeIs('mediation-requests.*')) {
+        $navMainSection = 'connect';
+    } elseif (request()->routeIs('matrimony.profiles.index')
+        || request()->routeIs('matches.*')
+        || (request()->routeIs('matrimony.profile.show') && ! $isOwnProfileShow)) {
+        $navMainSection = 'discover';
+    } elseif (request()->routeIs('dashboard')
+        || request()->routeIs('matrimony.profile.edit')
+        || request()->routeIs('matrimony.profile.edit-full')
+        || request()->routeIs('matrimony.profile.create')
+        || request()->routeIs('matrimony.profile.contacts.*')
+        || request()->routeIs('matrimony.profile.photos.*')
+        || request()->routeIs('matrimony.profile.upload-photo')
+        || request()->routeIs('matrimony.profile.wizard*')
+        || request()->routeIs('user.settings.*')
+        || request()->routeIs('intake.*')
+        || request()->routeIs('blocks.index')
+        || request()->routeIs('contact-inbox.*')
+        || request()->routeIs('shortlist.*')
+        || request()->routeIs('matrimony.verification.*')
+        || request()->routeIs('matrimony.profile.verification.*')
+        || $isOwnProfileShow) {
+        $navMainSection = 'home';
+    }
+@endphp
 
-
-
-<x-nav-link :href="route('matrimony.profiles.index')" 
-            :active="request()->routeIs('matrimony.profiles.index')">
-    {{ __('Search Profiles') }}
-</x-nav-link>
-
-@auth
-    <x-nav-link :href="route('plans.index')" :active="request()->routeIs('plans.*')">
-        {{ __('subscriptions.nav_plans') }}
-    </x-nav-link>
-    @if (auth()->user()->matrimonyProfile)
-        <x-nav-link :href="route('matches.index')"
-                    :active="request()->routeIs('matches.*')">
-            {{ __('matching.nav_matches') }}
-        </x-nav-link>
-    @endif
-@endauth
-
-@auth
-    <x-dropdown align="right" width="56">
-        <x-slot name="trigger">
-            <button class="inline-flex items-center px-3 py-2 lg:py-1.5 lg:px-2.5 border border-white/25 text-sm leading-4 font-medium rounded-md text-white bg-red-700/40 hover:bg-red-700/80 focus:outline-none transition ease-in-out duration-150">
-                <span>Interests</span>
-                <svg class="fill-current h-4 w-4 ms-2" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
-                    <path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clip-rule="evenodd" />
-                </svg>
-            </button>
-        </x-slot>
-
-        <x-slot name="content">
-            <x-dropdown-link :href="route('interests.sent')">
-                {{ __('Interests Sent') }}
-            </x-dropdown-link>
-
-            <x-dropdown-link :href="route('interests.received')">
-                {{ __('Interests Received') }}
-            </x-dropdown-link>
-        </x-slot>
-    </x-dropdown>
-
-    <x-nav-link :href="route('who-viewed.index')" 
-                :active="request()->routeIs('who-viewed.index')">
-        {{ __('Who viewed me') }}
-    </x-nav-link>
-
-    <x-nav-link :href="route('mediation-inbox.index')"
-                :active="request()->routeIs('mediation-inbox.*') || request()->routeIs('mediation-requests.*')">
-        {{ __('mediation.nav_link') }}
-    </x-nav-link>
+{{-- =========================
+    NEW SMART NAV — tier 1 (Shaadi-style main row; tier 2 below)
+========================= --}}
+<div class="flex h-full items-center gap-8">
 
     @php
-        $chatUnreadCount = 0;
-        $mp = auth()->user()->matrimonyProfile;
-        if ($mp) {
-            $chatUnreadCount = \Illuminate\Support\Facades\DB::table('messages')
-                ->where('receiver_profile_id', $mp->id)
-                ->whereNull('read_at')
-                ->count();
-        }
+        /* Tip points up; sit on bottom edge of red row so base meets white sub-bar */
+        $navMainCaret = 'pointer-events-none absolute bottom-0 left-1/2 z-30 h-0 w-0 -translate-x-1/2 translate-y-px border-x-[9px] border-x-transparent border-b-[10px] border-b-white drop-shadow-sm';
+        $navMainLink = static function (bool $active): string {
+            $base = 'relative flex h-full items-center px-1 leading-none transition';
+
+            return $active
+                ? $base.' text-base font-black text-yellow-300 dark:text-yellow-200'
+                : $base.' text-sm font-medium text-white/90 hover:text-white';
+        };
     @endphp
 
-    <x-nav-link :href="route('chat.index')"
-                :active="request()->routeIs('chat.*')"
-                class="relative">
-        <span class="inline-flex items-center gap-2">
-            <svg class="h-4 w-4 text-white/90" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.7" stroke="currentColor" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 12.76c0 1.6 1.123 2.95 2.63 3.217.42.074.797.31 1.046.66l.85 1.19c.34.477.99.596 1.48.272l2.155-1.43c.33-.219.73-.29 1.11-.2 1.04.246 2.17.246 3.21 0 .38-.09.78-.02 1.11.2l2.155 1.43c.49.324 1.14.205 1.48-.272l.85-1.19c.249-.35.626-.586 1.046-.66 1.507-.267 2.63-1.618 2.63-3.217V6.99c0-1.86-1.51-3.37-3.37-3.37H5.62c-1.86 0-3.37 1.51-3.37 3.37v5.77Z"/></svg>
-            <span>{{ __('Chat') }}</span>
-        </span>
-        <span
-            id="chat-badge"
-            class="absolute -top-1 -right-2 inline-flex items-center justify-center px-1.5 py-0.5 text-xs font-bold leading-none text-red-800 bg-white ring-1 ring-white/90 rounded-full {{ $chatUnreadCount > 0 ? 'animate-pulse' : 'hidden' }}"
-        >{{ $chatUnreadCount > 99 ? '99+' : $chatUnreadCount }}</span>
-    </x-nav-link>
+    {{-- Home → opens dashboard; submenu shows profile & account links --}}
+    <a href="{{ route('dashboard') }}" class="{{ $navMainLink($navMainSection === 'home') }}">
+        <span class="whitespace-nowrap">{{ __('nav.home') }}</span>
+        @if ($navMainSection === 'home')
+            <span class="{{ $navMainCaret }}" aria-hidden="true"></span>
+        @endif
+    </a>
 
-    {{-- Notifications with unread badge --}}
-    <x-nav-link :href="route('notifications.index')" 
-                :active="request()->routeIs('notifications.*')"
-                class="relative">
-        {{ __('Notifications') }}
-        <span 
-            id="notification-badge" 
-            class="absolute -top-1 -right-2 inline-flex items-center justify-center px-1.5 py-0.5 text-xs font-bold leading-none text-red-800 bg-white ring-1 ring-white/90 rounded-full {{ $unreadNotificationCount > 0 ? '' : 'hidden' }}"
-        >{{ $unreadNotificationCount > 99 ? '99+' : $unreadNotificationCount }}</span>
-    </x-nav-link>
-@endauth
+    <a href="{{ route('matrimony.profiles.index') }}" class="{{ $navMainLink($navMainSection === 'discover') }}">
+        <span class="whitespace-nowrap">{{ __('nav.discover') }}</span>
+        @if ($navMainSection === 'discover')
+            <span class="{{ $navMainCaret }}" aria-hidden="true"></span>
+        @endif
+    </a>
 
-@if (auth()->check() && auth()->user()->is_admin === true)
-    <x-nav-link :href="route('admin.dashboard')" 
-                :active="request()->routeIs('admin.*')">
-        {{ __('common.admin') }}
-    </x-nav-link>
-@endif
+    <a href="{{ route('interests.received') }}" class="{{ $navMainLink($navMainSection === 'connect') }}">
+        <span class="whitespace-nowrap">{{ __('nav.connect') }}</span>
+        @if ($navMainSection === 'connect')
+            <span class="{{ $navMainCaret }}" aria-hidden="true"></span>
+        @endif
+    </a>
+
+    <a href="{{ route('who-viewed.index') }}" class="{{ $navMainLink($navMainSection === 'activity') }}">
+        <span class="whitespace-nowrap">{{ __('nav.activity') }}</span>
+        @if ($navMainSection === 'activity')
+            <span class="{{ $navMainCaret }}" aria-hidden="true"></span>
+        @endif
+    </a>
+
+    <a href="{{ route('plans.index') }}"
+       class="relative flex h-full items-center transition transform focus:outline-none focus-visible:ring-2 focus-visible:ring-white/70">
+        <span class="inline-flex items-center rounded-md bg-gradient-to-r from-yellow-400 to-yellow-500 px-4 py-1.5 text-sm font-semibold text-black shadow hover:scale-105 hover:from-yellow-300 hover:to-yellow-400 whitespace-nowrap leading-none {{ $navMainSection === 'plans' ? 'ring-2 ring-white/90' : '' }}">{{ __('nav.upgrade') }}</span>
+        @if ($navMainSection === 'plans')
+            <span class="{{ $navMainCaret }}" aria-hidden="true"></span>
+        @endif
+    </a>
+
+</div>
 
                 </div>
             </div>
@@ -162,33 +138,34 @@
                     </x-slot>
 
                     <x-slot name="content">
+                        <div class="py-1 bg-white rounded-lg shadow-lg dark:bg-gray-800">
                         <div class="block px-4 py-2 text-xs text-gray-500 dark:text-gray-400 font-semibold">
                             {{ __('nav.personal_menu_profile_section') }}
                         </div>
 
                         @if (auth()->user()->matrimonyProfile)
-                            <x-dropdown-link :href="route('matrimony.profile.upload-photo')">
+                            <x-dropdown-link :href="route('matrimony.profile.upload-photo')" class="hover:bg-gray-100 transition rounded-md">
                                 {{ __('Upload Photos') }}
                             </x-dropdown-link>
 
-                            <x-dropdown-link :href="route('matrimony.profile.show', auth()->user()->matrimonyProfile->id)">
+                            <x-dropdown-link :href="route('matrimony.profile.show', auth()->user()->matrimonyProfile->id)" class="hover:bg-gray-100 transition rounded-md">
                                 {{ __('nav.my_profile') }}
                             </x-dropdown-link>
                         @endif
 
-                        <x-dropdown-link :href="route('contact-inbox.index')">
+                        <x-dropdown-link :href="route('contact-inbox.index')" class="hover:bg-gray-100 transition rounded-md">
                             {{ __('nav.contact_requests') }}
                         </x-dropdown-link>
 
-                        <x-dropdown-link :href="route('shortlist.index')">
+                        <x-dropdown-link :href="route('shortlist.index')" class="hover:bg-gray-100 transition rounded-md">
                             {{ __('nav.shortlist') }}
                         </x-dropdown-link>
 
-                        <x-dropdown-link :href="route('intake.index')">
+                        <x-dropdown-link :href="route('intake.index')" class="hover:bg-gray-100 transition rounded-md">
                             {{ __('nav.my_biodata_uploads') }}
                         </x-dropdown-link>
 
-                        <x-dropdown-link :href="route('blocks.index')">
+                        <x-dropdown-link :href="route('blocks.index')" class="hover:bg-gray-100 transition rounded-md">
                             {{ __('nav.blocked') }}
                         </x-dropdown-link>
 
@@ -198,19 +175,19 @@
                             {{ __('Settings') }}
                         </div>
 
-                        <x-dropdown-link :href="route('user.settings.privacy')">
+                        <x-dropdown-link :href="route('user.settings.privacy')" class="hover:bg-gray-100 transition rounded-md">
                             {{ __('Privacy & Visibility') }}
                         </x-dropdown-link>
 
-                        <x-dropdown-link :href="route('user.settings.communication')">
+                        <x-dropdown-link :href="route('user.settings.communication')" class="hover:bg-gray-100 transition rounded-md">
                             {{ __('Communication Preferences') }}
                         </x-dropdown-link>
 
-                        <x-dropdown-link :href="route('user.settings.security')">
+                        <x-dropdown-link :href="route('user.settings.security')" class="hover:bg-gray-100 transition rounded-md">
                             {{ __('Account & Security') }}
                         </x-dropdown-link>
 
-                        <x-dropdown-link :href="route('notifications.index')">
+                        <x-dropdown-link :href="route('notifications.index')" class="hover:bg-gray-100 transition rounded-md">
                             {{ __('Manage Notifications') }}
                         </x-dropdown-link>
 
@@ -218,10 +195,12 @@
                         <form method="POST" action="{{ route('logout') }}">
                             @csrf
                             <x-dropdown-link :href="route('logout')"
+                                class="hover:bg-gray-100 transition rounded-md"
                                 onclick="event.preventDefault(); this.closest('form').submit();">
                                 {{ __('Log Out') }}
                             </x-dropdown-link>
                         </form>
+                        </div>
                     </x-slot>
                 </x-dropdown>
                 @endauth
@@ -239,93 +218,100 @@
         </div>
     </div>
 
+    @include('layouts.partials.nav-secondary')
+
     <!-- Responsive Navigation Menu -->
     <div :class="{'block': open, 'hidden': ! open}" class="hidden md:hidden bg-red-700 border-t border-red-800/90 dark:bg-red-900 dark:border-red-950">
         <div class="pt-2 pb-3 space-y-1">
 
-            
+{{-- =========================
+    NEW MOBILE NAV (STEP 3)
+========================= --}}
 
-            
+<x-responsive-nav-link :href="route('dashboard')">
+    {{ __('nav.home') }}
+</x-responsive-nav-link>
+
+{{-- Discover --}}
+<details class="px-2">
+    <summary class="cursor-pointer px-3 py-2 text-white font-medium">
+        Discover
+    </summary>
+    <div class="ml-3 space-y-1">
+        <x-responsive-nav-link :href="route('matrimony.profiles.index')">
+            Search Profiles
+        </x-responsive-nav-link>
+
         @auth
-    @if (!auth()->user()->matrimonyProfile)
-        <x-responsive-nav-link :href="route('matrimony.profile.wizard.section', ['section' => 'basic-info'])">
-            {{ __('Create Profile') }}
-        </x-responsive-nav-link>
-    @else
-        <x-responsive-nav-link :href="route('matrimony.profile.edit')"
-            :active="request()->routeIs('matrimony.profile.edit')">
-            {{ __('nav.edit_profile') }}
-        </x-responsive-nav-link>
-    @endif
-@endauth
-
-
-    <x-responsive-nav-link :href="route('matrimony.profiles.index')">
-        {{ __('Search Profiles') }}
-    </x-responsive-nav-link>
-
-@auth
-    <x-responsive-nav-link :href="route('plans.index')">
-        {{ __('subscriptions.nav_plans') }}
-    </x-responsive-nav-link>
-    @if (auth()->user()->matrimonyProfile)
         <x-responsive-nav-link :href="route('matches.index')">
-            {{ __('matching.nav_matches') }}
+            Matches
         </x-responsive-nav-link>
-    @endif
-@endauth
+        @endauth
+    </div>
+</details>
 
-@auth
-    <details class="px-2">
-        <summary class="cursor-pointer select-none px-3 py-2 text-sm font-medium text-white/95">
-            Interests
-        </summary>
-        <div class="ml-2 space-y-1">
-            <x-responsive-nav-link :href="route('interests.sent')">
-                {{ __('Interests Sent') }}
-            </x-responsive-nav-link>
+{{-- Connect --}}
+<details class="px-2">
+    <summary class="cursor-pointer px-3 py-2 text-white font-medium">
+        Connect
+    </summary>
+    <div class="ml-3 space-y-1">
+        <x-responsive-nav-link :href="route('interests.received')">
+            Inbox
+        </x-responsive-nav-link>
 
-            <x-responsive-nav-link :href="route('interests.received')">
-                {{ __('Interests Received') }}
-            </x-responsive-nav-link>
-        </div>
-    </details>
+        <x-responsive-nav-link :href="route('chat.index')" class="relative inline-flex items-center">
+            Chat
+            @auth
+                @if (($chatUnreadCount ?? 0) > 0)
+                    <span
+                        id="chat-badge-mobile"
+                        class="ml-2 inline-flex items-center justify-center px-1.5 py-0.5 text-xs font-bold leading-none text-red-800 bg-white ring-1 ring-white/80 rounded-full"
+                    >{{ $chatUnreadCount > 99 ? '99+' : $chatUnreadCount }}</span>
+                @endif
+            @endauth
+        </x-responsive-nav-link>
 
-    <x-responsive-nav-link :href="route('who-viewed.index')">
-        {{ __('Who viewed me') }}
-    </x-responsive-nav-link>
+        <x-responsive-nav-link :href="route('contact-inbox.index')">
+            Contact Requests
+        </x-responsive-nav-link>
 
-    <x-responsive-nav-link :href="route('mediation-inbox.index')">
-        {{ __('mediation.nav_link') }}
-    </x-responsive-nav-link>
+        <x-responsive-nav-link :href="route('mediation-inbox.index')">
+            Mediation
+        </x-responsive-nav-link>
+    </div>
+</details>
 
-    {{-- Notifications with unread badge (mobile) --}}
-    <x-responsive-nav-link :href="route('notifications.index')" class="relative inline-flex items-center">
-        {{ __('Notifications') }}
-        @if($unreadNotificationCount > 0)
-            <span 
-                id="notification-badge-mobile" 
-                class="ml-2 inline-flex items-center justify-center px-1.5 py-0.5 text-xs font-bold leading-none text-red-800 bg-white ring-1 ring-white/80 rounded-full"
-            >{{ $unreadNotificationCount > 99 ? '99+' : $unreadNotificationCount }}</span>
-        @endif
-    </x-responsive-nav-link>
+{{-- Activity --}}
+<details class="px-2">
+    <summary class="cursor-pointer px-3 py-2 text-white font-medium">
+        Activity
+    </summary>
+    <div class="ml-3 space-y-1">
+        <x-responsive-nav-link :href="route('who-viewed.index')">
+            Who viewed me
+        </x-responsive-nav-link>
 
-    <x-responsive-nav-link :href="route('chat.index')" class="relative inline-flex items-center">
-        {{ __('Chat') }}
-        @if($chatUnreadCount > 0)
-            <span
-                id="chat-badge-mobile"
-                class="ml-2 inline-flex items-center justify-center px-1.5 py-0.5 text-xs font-bold leading-none text-red-800 bg-white ring-1 ring-white/80 rounded-full"
-            >{{ $chatUnreadCount > 99 ? '99+' : $chatUnreadCount }}</span>
-        @endif
-    </x-responsive-nav-link>
-@endauth
+        <x-responsive-nav-link :href="route('shortlist.index')">
+            Shortlist
+        </x-responsive-nav-link>
 
-@if (auth()->check() && auth()->user()->is_admin === true)
-    <x-responsive-nav-link :href="route('admin.dashboard')">
-        {{ __('common.admin') }}
-    </x-responsive-nav-link>
-@endif
+        <x-responsive-nav-link :href="route('notifications.index')" class="relative inline-flex items-center">
+            Notifications
+            @if (($unreadNotificationCount ?? 0) > 0)
+                <span
+                    id="notification-badge-mobile"
+                    class="ml-2 inline-flex items-center justify-center px-1.5 py-0.5 text-xs font-bold leading-none text-red-800 bg-white ring-1 ring-white/80 rounded-full"
+                >{{ $unreadNotificationCount > 99 ? '99+' : $unreadNotificationCount }}</span>
+            @endif
+        </x-responsive-nav-link>
+    </div>
+</details>
+
+{{-- Plans --}}
+<x-responsive-nav-link :href="route('plans.index')">
+    Plans
+</x-responsive-nav-link>
 
         </div>
 

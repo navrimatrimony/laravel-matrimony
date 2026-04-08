@@ -5,6 +5,17 @@
  * Use in views as: __('nav.search_profiles')
  */
 return [
+    'dashboard' => 'डॅशबोर्ड',
+    'home' => 'मुख्यपृष्ठ',
+    'discover' => 'शोध',
+    'connect' => 'जोडणी',
+    'activity' => 'क्रियाकलाप',
+    'upgrade' => 'अपग्रेड',
+    'partner_preferences' => 'जोडीदार पसंती',
+    'browse_plans' => 'योजना व किंमत',
+    'premium' => 'प्रीमियम',
+    'inbox' => 'इनबॉक्स',
+    'sub_navigation' => 'विभाग नेव्हिगेशन',
     'personal_menu_profile_section' => 'माझे प्रोफाइल आणि याद्या',
     'create_profile' => 'प्रोफाइल तयार करा',
     'my_profile' => 'माझे प्रोफाइल',

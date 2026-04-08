@@ -18,6 +18,17 @@ return [
     'namespaces' => [
         'nav' => [
             'personal_menu_profile_section',
+            'dashboard',
+            'home',
+            'discover',
+            'connect',
+            'activity',
+            'upgrade',
+            'partner_preferences',
+            'browse_plans',
+            'premium',
+            'inbox',
+            'sub_navigation',
             'create_profile',
             'my_profile',
             'edit_profile',

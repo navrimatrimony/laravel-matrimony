@@ -109,6 +109,7 @@ class MatchingService
     private function baseCandidateQuery(MatrimonyProfile $profile, string $oppositeGenderKey): Builder
     {
         $q = MatrimonyProfile::query()
+            ->whereMemberAccountsOnly()
             ->whereKeyNot($profile->id)
             ->where('lifecycle_state', 'active')
             ->where('is_suspended', false)

@@ -1108,6 +1108,8 @@ class MatrimonyProfileController extends Controller
             $galleryPhotos
         );
 
+        $reportablePhotoSummary = ! $isOwnProfile ? self::buildReportablePhotoSummary($profile) : null;
+
         $profileShowSnapshot = app(ProfileShowSnapshotService::class)->build($profile, [
             'is_own_profile' => $isOwnProfile,
             'date_of_birth_visible' => $dateOfBirthVisible,
@@ -1184,6 +1186,7 @@ class MatrimonyProfileController extends Controller
                 'verificationPanel' => $verificationPanel,
                 'galleryPhotos' => $galleryPhotos,
                 'photoAlbumPresentation' => $photoAlbumPresentation,
+                'reportablePhotoSummary' => $reportablePhotoSummary,
             ]
         );
     }
@@ -1206,6 +1209,13 @@ class MatrimonyProfileController extends Controller
             $q->where('lifecycle_state', 'active')->orWhereNull('lifecycle_state');
         })->where('is_suspended', false);
         // Soft deletes are automatically excluded by Laravel's SoftDeletes trait
+
+        $query->whereMemberAccountsOnly();
+
+        $viewerOwnProfileId = auth()->user()?->matrimonyProfile?->id;
+        if ($viewerOwnProfileId) {
+            $query->whereKeyNot((int) $viewerOwnProfileId);
+        }
 
         // Day-18: Only use enabled AND searchable fields for search
         $searchableFields = ProfileFieldConfigurationService::getSearchableFieldKeys();

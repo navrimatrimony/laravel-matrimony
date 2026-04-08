@@ -6,6 +6,17 @@
  * Admin translation control: edit this file or override via DB/API later.
  */
 return [
+    'dashboard' => 'Dashboard',
+    'home' => 'Home',
+    'discover' => 'Discover',
+    'connect' => 'Connect',
+    'activity' => 'Activity',
+    'upgrade' => 'Upgrade',
+    'partner_preferences' => 'Partner Preferences',
+    'browse_plans' => 'Plans & pricing',
+    'premium' => 'Premium',
+    'inbox' => 'Inbox',
+    'sub_navigation' => 'Section navigation',
     'personal_menu_profile_section' => 'My profile & lists',
     'create_profile' => 'Create Profile',
     'my_profile' => 'My Profile',
