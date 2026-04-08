@@ -10,11 +10,28 @@
     <link href="https://fonts.bunny.net/css?family=figtree:400,500,600&display=swap" rel="stylesheet" />
     @vite(['resources/css/app.css', 'resources/js/app.js'])
     <style>
-        .admin-sidebar .nav-link.active { background: rgb(79 70 229); color: white; }
-        .admin-sidebar .nav-link.active svg { color: white; }
+        /* Active item: keep indigo even on hover (plain :hover was winning via higher specificity). */
+        .admin-sidebar .nav-link.active,
+        .admin-sidebar .nav-link.active:hover,
+        .admin-sidebar .nav-link.active:focus-visible {
+            background-color: rgb(79 70 229) !important;
+            color: #fff !important;
+        }
+        .admin-sidebar .nav-link.active svg,
+        .admin-sidebar .nav-link.active svg.text-gray-500 {
+            color: #fff !important;
+        }
         .admin-sidebar .nav-link.disabled { opacity: 0.5; cursor: not-allowed; pointer-events: none; }
+        /* Which section contains the current page (works even when the active row is scrolled out of view). */
+        .admin-sidebar .nav-group:has(.nav-link.active) > .nav-group-btn {
+            background: rgba(79, 70, 229, 0.18);
+            color: #fff;
+        }
+        .admin-sidebar .nav-group:has(.nav-link.active) > .nav-group-btn:hover {
+            background: rgba(79, 70, 229, 0.28);
+        }
         .admin-sidebar .nav-group-btn:hover { background: rgb(55 65 81); }
-        .admin-sidebar .nav-link:not(.disabled):hover { background: rgb(55 65 81); }
+        .admin-sidebar .nav-link:not(.disabled):hover:not(.active) { background: rgb(55 65 81); }
         .admin-sidebar .nav-chevron { transition: transform 0.2s ease; }
     </style>
 </head>
@@ -25,7 +42,7 @@
                 <a href="{{ route('admin.dashboard') }}" class="text-lg font-semibold text-white">Admin Panel</a>
                 <p class="text-xs text-gray-400 mt-1">{{ __('admin.moderation_settings') }}</p>
             </div>
-            <nav class="p-4 flex-1 overflow-y-auto overscroll-contain space-y-2">
+            <nav class="p-4 flex-1 overflow-y-auto overscroll-contain space-y-2" x-data="{}" x-init="$nextTick(() => { const el = $el.querySelector('.nav-link.active'); if (el) el.scrollIntoView({ block: 'nearest', behavior: 'auto' }); })">
                 @php
                     $moderationOpen = request()->routeIs('admin.abuse-reports.*') || request()->routeIs('admin.conflict-records.*') || request()->routeIs('admin.biodata-intakes.*') || request()->routeIs('admin.ocr-patterns.*') || request()->routeIs('admin.intake.*');
                     $governanceOpen = request()->routeIs('admin.governance-dashboard');

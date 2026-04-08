@@ -1,6 +1,12 @@
 @extends('layouts.app')
 
 @section('content')
+@php
+    $photoAdminQuery = [];
+    if (auth()->check() && auth()->user()->isAnyAdmin() && ($profile->is_demo ?? false)) {
+        $photoAdminQuery['profile_id'] = $profile->id;
+    }
+@endphp
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.1/cropper.min.css" crossorigin="anonymous" referrerpolicy="no-referrer" />
 <style>
 #cropperWrap { position: relative; }
@@ -153,10 +159,10 @@ body.upload-landscape .upload-gallery-col {
             <div class="upload-main-col" style="background: white; border-radius: 16px; box-shadow: 0 4px 20px rgba(0,0,0,0.08); padding: 32px 24px; text-align: center;">
 
             {{-- Photo rejection warning --}}
-            @if (auth()->check() && auth()->user()->matrimonyProfile && auth()->user()->matrimonyProfile->photo_rejection_reason)
+            @if (! empty($profile->photo_rejection_reason))
                 <div style="margin-bottom: 24px; padding: 16px; background: #fef2f2; border: 1px solid #fecaca; border-radius: 12px; text-align: left;">
                     <p style="font-weight: 600; margin: 0 0 8px 0; color: #991b1b; font-size: 14px;">{{ __('photo.previous_photo_removed') }}</p>
-                    <p style="margin: 0; color: #7f1d1d; font-size: 13px;"><strong>{{ __('common.reason') }}:</strong> {{ auth()->user()->matrimonyProfile->photo_rejection_reason }}</p>
+                    <p style="margin: 0; color: #7f1d1d; font-size: 13px;"><strong>{{ __('common.reason') }}:</strong> {{ $profile->photo_rejection_reason }}</p>
                 </div>
             @endif
 
@@ -179,12 +185,11 @@ body.upload-landscape .upload-gallery-col {
             </p>
 
             @php
-                $profile = auth()->user()->matrimonyProfile;
-                $gender = $profile->gender ?? null;
-                if ($gender === 'male') {
+                $genderKey = $profile->gender?->key ?? null;
+                if ($genderKey === 'male') {
                     $placeholderImage = asset('images/placeholders/male-profile.svg');
                     $borderColor = '#0ea5e9';
-                } elseif ($gender === 'female') {
+                } elseif ($genderKey === 'female') {
                     $placeholderImage = asset('images/placeholders/female-profile.svg');
                     $borderColor = '#ec4899';
                 } else {
@@ -195,6 +200,9 @@ body.upload-landscape .upload-gallery-col {
 
             <form method="POST" action="{{ route('matrimony.profile.store-photo') }}" enctype="multipart/form-data" id="photoUploadForm">
                 @csrf
+                @if (count($photoAdminQuery))
+                    <input type="hidden" name="profile_id" value="{{ $profile->id }}">
+                @endif
                 @if (! empty($fromOnboarding))
                     <input type="hidden" name="from" value="onboarding">
                 @endif
@@ -294,7 +302,7 @@ body.upload-landscape .upload-gallery-col {
 
             {{-- Secondary action --}}
             <div style="margin-top: 20px; padding-top: 20px; border-top: 1px solid #f3f4f6;">
-                <a href="{{ route('matrimony.profile.show', auth()->user()->matrimonyProfile->id) }}" style="font-size: 13px; color: #9ca3af; text-decoration: none;">
+                <a href="{{ route('matrimony.profile.show', $profile->id) }}" style="font-size: 13px; color: #9ca3af; text-decoration: none;">
                     {{ __('wizard.skip_for_now') }} →
                 </a>
             </div>
@@ -413,8 +421,11 @@ body.upload-landscape .upload-gallery-col {
                                         <div style="font-size: 12px; font-weight: 950; color: #059669;">Primary</div>
                                     </div>
                                 @else
-                                    <form method="POST" action="{{ route('matrimony.profile.photos.make-primary', $photo->id) }}" style="margin-top: 10px;">
+                                    <form method="POST" action="{{ route('matrimony.profile.photos.make-primary', array_merge(['photo' => $photo->id], $photoAdminQuery)) }}" style="margin-top: 10px;">
                                         @csrf
+                                        @if (count($photoAdminQuery))
+                                            <input type="hidden" name="profile_id" value="{{ $profile->id }}">
+                                        @endif
                                         <label for="primary_select_{{ $photo->id }}" style="display:flex; align-items:center; justify-content:center; gap: 8px; padding: 8px 10px; border-radius: 12px; background: transparent; border: none; box-shadow: none; outline: none; cursor: pointer;">
                                             <input
                                                 id="primary_select_{{ $photo->id }}"
@@ -428,9 +439,12 @@ body.upload-landscape .upload-gallery-col {
                                     </form>
                                 @endif
 
-                                <form method="POST" action="{{ route('matrimony.profile.photos.destroy', $photo->id) }}" style="margin-top: 8px;">
+                                <form method="POST" action="{{ route('matrimony.profile.photos.destroy', array_merge(['photo' => $photo->id], $photoAdminQuery)) }}" style="margin-top: 8px;">
                                     @csrf
                                     @method('DELETE')
+                                    @if (count($photoAdminQuery))
+                                        <input type="hidden" name="profile_id" value="{{ $profile->id }}">
+                                    @endif
                                     <button type="submit" style="width: 100%; padding: 9px 10px; background: #ef4444; color: #fff; border: none; border-radius: 12px; font-weight: 950; font-size: 12px; cursor: pointer;"
                                         onclick="return confirm('Delete this photo?');">
                                         Delete
@@ -444,8 +458,11 @@ body.upload-landscape .upload-gallery-col {
 
             @if (! $galleryPhotos->isEmpty())
                 <div style="margin-top: 18px;">
-                    <form id="reorderForm" method="POST" action="{{ route('matrimony.profile.photos.reorder') }}">
+                    <form id="reorderForm" method="POST" action="{{ route('matrimony.profile.photos.reorder', $photoAdminQuery) }}">
                         @csrf
+                        @if (count($photoAdminQuery))
+                            <input type="hidden" name="profile_id" value="{{ $profile->id }}">
+                        @endif
                         <div id="photoIdsInputs">
                             @foreach ($galleryPhotos as $photo)
                                 <input type="hidden" name="photo_ids[]" value="{{ $photo->id }}">
@@ -700,6 +717,10 @@ body.upload-landscape .upload-gallery-col {
         function doSubmit(blob) {
             const fd = new FormData();
             fd.append('_token', document.querySelector('input[name="_token"]').value);
+            const profileIdInput = form.querySelector('input[name="profile_id"]');
+            if (profileIdInput && profileIdInput.value) {
+                fd.append('profile_id', profileIdInput.value);
+            }
             const fromInput = form.querySelector('input[name="from"]');
             if (fromInput && fromInput.value) {
                 fd.append('from', fromInput.value);

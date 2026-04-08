@@ -28,7 +28,7 @@
     $hasActiveFilters = collect($filterKeys)->contains(fn ($k) => request()->filled($k));
     $perPageActive = (int) request('per_page', 15) !== 15;
     $resolvedSort = $sort ?? request('sort', 'latest');
-    if (! in_array($resolvedSort, ['latest', 'age_asc', 'age_desc', 'height_asc', 'height_desc'], true)) {
+    if (! in_array($resolvedSort, ['latest', 'age_asc', 'age_desc', 'height_asc', 'height_desc', 'discover'], true)) {
         $resolvedSort = 'latest';
     }
     $hasResultsChrome = $hasActiveFilters || $perPageActive || ($resolvedSort !== 'latest');

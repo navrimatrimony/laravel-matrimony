@@ -23,11 +23,12 @@ class ProfileRotationService
     }
 
     /**
-     * Per-day stable seed so page 2+ matches page 1 ordering for the same user session.
+     * Stable seed for the current session so page 2+ matches page 1 ordering.
+     * New browser session ⇒ new shuffle (more variety than a once-per-day seed).
      */
     public static function stableSeedForSession(): string
     {
-        $key = 'profile_discover_order_seed_'.now()->toDateString();
+        $key = 'profile_discover_order_seed';
         if (! session()->has($key)) {
             session()->put($key, bin2hex(random_bytes(16)));
         }
@@ -40,18 +41,23 @@ class ProfileRotationService
      */
     public static function applyDiscoverScope(Builder $query, int $viewerProfileId, ?int $viewerUserId): void
     {
-        $days = (int) config('profile_rotation.view_cooldown_days', 30);
-        $cutoff = now()->subDays(max(1, $days));
-
         $query->where('matrimony_profiles.id', '!=', $viewerProfileId);
 
-        $query->whereNotExists(function ($sub) use ($viewerProfileId, $cutoff) {
-            $sub->selectRaw('1')
-                ->from('profile_views as pv')
-                ->whereColumn('pv.viewed_profile_id', 'matrimony_profiles.id')
-                ->where('pv.viewer_profile_id', $viewerProfileId)
-                ->where('pv.created_at', '>=', $cutoff);
-        });
+        $suppressHours = (int) config('profile_rotation.recent_view_suppress_hours', 72);
+        $legacyDays = (int) config('profile_rotation.view_cooldown_days', 0);
+        if ($suppressHours <= 0 && $legacyDays > 0) {
+            $suppressHours = $legacyDays * 24;
+        }
+        if ($suppressHours > 0) {
+            $cutoff = now()->subHours($suppressHours);
+            $query->whereNotExists(function ($sub) use ($viewerProfileId, $cutoff) {
+                $sub->selectRaw('1')
+                    ->from('profile_views as pv')
+                    ->whereColumn('pv.viewed_profile_id', 'matrimony_profiles.id')
+                    ->where('pv.viewer_profile_id', $viewerProfileId)
+                    ->where('pv.created_at', '>=', $cutoff);
+            });
+        }
 
         $query->whereNotExists(function ($sub) use ($viewerProfileId) {
             $sub->selectRaw('1')

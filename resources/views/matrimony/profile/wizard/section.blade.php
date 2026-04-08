@@ -11,8 +11,14 @@
     $previousSection = $previousSection ?? null;
     $partnerPrefNavItems = $partnerPrefNavItems ?? [];
     $partnerPrefSection = $partnerPrefSection ?? 'basics';
-    $wizardSectionLink = static function (string $sec): array {
-        return $sec === 'full' ? ['section' => 'full', 'all' => 1] : ['section' => $sec];
+    $wizardAdminQuery = [];
+    if (auth()->check() && auth()->user()->isAnyAdmin() && ($profile->is_demo ?? false)) {
+        $wizardAdminQuery['profile_id'] = $profile->id;
+    }
+    $wizardSectionLink = function (string $sec) use ($wizardAdminQuery): array {
+        $base = $sec === 'full' ? ['section' => 'full', 'all' => 1] : ['section' => $sec];
+
+        return array_merge($base, $wizardAdminQuery);
     };
 @endphp
 <div class="py-4 md:py-6">
@@ -57,7 +63,7 @@
                         @endphp
                         @if ($s === 'about-preferences')
                             <div class="space-y-0.5">
-                                <a href="{{ route('matrimony.profile.wizard.section', ['section' => $s]) }}"
+                                <a href="{{ route('matrimony.profile.wizard.section', array_merge(['section' => $s], $wizardAdminQuery)) }}"
                                     class="flex items-center gap-2 rounded-md px-2 py-2 text-sm font-medium transition-colors {{ $isActive ? 'bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300' : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700' }}">
                                     <span class="shrink-0 w-2 h-2 rounded-full
                                         @if($status === 'completed') bg-emerald-500
@@ -72,7 +78,7 @@
                                             $pSlug = $pItem['slug'] ?? '';
                                             $pActive = ($partnerPrefSection === $pSlug);
                                         @endphp
-                                        <a href="{{ route('matrimony.profile.wizard.section', array_merge(['section' => 'about-preferences'], ['pref' => $pSlug])) }}"
+                                        <a href="{{ route('matrimony.profile.wizard.section', array_merge(['section' => 'about-preferences'], ['pref' => $pSlug], $wizardAdminQuery)) }}"
                                             class="flex items-center gap-2 rounded-md pl-6 pr-2 py-1.5 text-xs font-medium transition-colors {{ $pActive ? 'bg-indigo-100/80 dark:bg-indigo-900/40 text-indigo-800 dark:text-indigo-200' : 'text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700/50' }}">
                                             <span class="shrink-0 w-1.5 h-1.5 rounded-full {{ $pActive ? 'bg-indigo-500' : 'bg-gray-300 dark:bg-gray-600' }}" aria-hidden="true"></span>
                                             <span class="truncate flex-1 min-w-0">{{ __($pItem['label'] ?? '') }}</span>
@@ -123,7 +129,7 @@
                                 $pSlug = $pItem['slug'] ?? '';
                                 $pActive = ($partnerPrefSection === $pSlug);
                             @endphp
-                            <a href="{{ route('matrimony.profile.wizard.section', array_merge(['section' => 'about-preferences'], ['pref' => $pSlug])) }}"
+                            <a href="{{ route('matrimony.profile.wizard.section', array_merge(['section' => 'about-preferences'], ['pref' => $pSlug], $wizardAdminQuery)) }}"
                                 class="shrink-0 px-3 py-1.5 rounded-full text-xs font-medium border transition-colors whitespace-nowrap
                                     {{ $pActive ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-600 hover:border-indigo-400' }}">
                                 {{ __($pItem['label'] ?? '') }}
@@ -144,6 +150,9 @@
                     </div>
                     <form method="POST" action="{{ route('matrimony.profile.wizard.store', ['section' => $currentSection]) }}" enctype="{{ in_array($currentSection, ['photo', 'full'], true) ? 'multipart/form-data' : 'application/x-www-form-urlencoded' }}" class="p-4 sm:p-6">
                         @csrf
+                        @if (auth()->user()->isAnyAdmin() && ($profile->is_demo ?? false))
+                            <input type="hidden" name="profile_id" value="{{ $profile->id }}">
+                        @endif
                         @if ($currentSection === 'about-preferences')
                             <input type="hidden" name="pref" value="{{ $partnerPrefSection }}">
                         @endif
@@ -169,6 +178,8 @@
                             @endif
                         </div>
                     </form>
+                    {{-- OTP / promote mini-forms must not nest inside the wizard <form> (invalid HTML closes the outer form early and breaks Save). --}}
+                    @stack('wizard-external-forms')
                 </div>
             </main>
         </div>

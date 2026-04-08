@@ -94,25 +94,24 @@
                                     <span class="text-xs text-amber-700 dark:text-amber-300">{{ __('contact_verify.badge_not_verified') }}</span>
                                 @endif
                             </div>
+                            @php $contactRowId = (int) $sc['id']; @endphp
                             @if(empty($sc['verified_status']))
                                 <div class="flex flex-wrap items-end gap-2">
-                                    <form method="POST" action="{{ route('matrimony.profile.contacts.send-otp', ['contact' => $sc['id']]) }}" class="inline">
-                                        @csrf
-                                        <button type="submit" class="px-2 py-1 text-xs rounded bg-gray-200 dark:bg-gray-600 text-gray-900 dark:text-gray-100 hover:opacity-90">{{ __('contact_verify.send_code') }}</button>
-                                    </form>
-                                    <form method="POST" action="{{ route('matrimony.profile.contacts.verify-otp', ['contact' => $sc['id']]) }}" class="inline flex flex-wrap items-center gap-2">
-                                        @csrf
-                                        <input type="text" name="otp" inputmode="numeric" maxlength="6" pattern="[0-9]*" autocomplete="one-time-code" class="w-24 rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 px-2 py-1 text-xs" placeholder="{{ __('contact_verify.otp_placeholder') }}">
-                                        <button type="submit" class="px-2 py-1 text-xs rounded bg-sky-600 text-white hover:bg-sky-700">{{ __('contact_verify.verify') }}</button>
-                                    </form>
+                                    <button type="submit" form="wizard-contact-send-otp-{{ $contactRowId }}" class="px-2 py-1 text-xs rounded bg-gray-200 dark:bg-gray-600 text-gray-900 dark:text-gray-100 hover:opacity-90">{{ __('contact_verify.send_code') }}</button>
+                                    <input type="text" name="otp" inputmode="numeric" maxlength="6" pattern="[0-9]*" autocomplete="one-time-code" form="wizard-contact-verify-otp-{{ $contactRowId }}" class="w-24 rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 px-2 py-1 text-xs" placeholder="{{ __('contact_verify.otp_placeholder') }}">
+                                    <button type="submit" form="wizard-contact-verify-otp-{{ $contactRowId }}" class="px-2 py-1 text-xs rounded bg-sky-600 text-white hover:bg-sky-700">{{ __('contact_verify.verify') }}</button>
                                 </div>
+                                @push('wizard-external-forms')
+                                    <form id="wizard-contact-send-otp-{{ $contactRowId }}" method="POST" action="{{ route('matrimony.profile.contacts.send-otp', ['contact' => $contactRowId]) }}" class="hidden" aria-hidden="true">@csrf</form>
+                                    <form id="wizard-contact-verify-otp-{{ $contactRowId }}" method="POST" action="{{ route('matrimony.profile.contacts.verify-otp', ['contact' => $contactRowId]) }}" class="hidden" aria-hidden="true">@csrf</form>
+                                @endpush
                             @endif
                             @if(empty($sc['is_primary']))
                                 @if(! empty($sc['verified_status']))
-                                    <form method="POST" action="{{ route('matrimony.profile.contacts.promote-primary', ['contact' => $sc['id']]) }}" class="inline">
-                                        @csrf
-                                        <button type="submit" class="px-2 py-1 text-xs rounded bg-emerald-600 text-white hover:bg-emerald-700">{{ __('contact_verify.make_primary') }}</button>
-                                    </form>
+                                    <button type="submit" form="wizard-contact-promote-{{ $contactRowId }}" class="px-2 py-1 text-xs rounded bg-emerald-600 text-white hover:bg-emerald-700">{{ __('contact_verify.make_primary') }}</button>
+                                    @push('wizard-external-forms')
+                                        <form id="wizard-contact-promote-{{ $contactRowId }}" method="POST" action="{{ route('matrimony.profile.contacts.promote-primary', ['contact' => $contactRowId]) }}" class="hidden" aria-hidden="true">@csrf</form>
+                                    @endpush
                                 @else
                                     <p class="text-xs text-gray-500 dark:text-gray-400">{{ __('contact_verify.verify_before_primary') }}</p>
                                 @endif

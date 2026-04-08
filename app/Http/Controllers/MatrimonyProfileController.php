@@ -65,16 +65,52 @@ class MatrimonyProfileController extends Controller
         }
 
         if (method_exists($user, 'isAnyAdmin') && $user->isAnyAdmin()) {
-            $targetId = (int) ($request->query('profile_id') ?? 0);
+            $targetId = (int) ($request->input('profile_id') ?? $request->query('profile_id') ?? 0);
+            if ($targetId <= 0) {
+                $targetId = (int) (session('admin_edit_profile_id') ?? 0);
+            }
             if ($targetId > 0) {
                 $target = MatrimonyProfile::withTrashed()->find($targetId);
                 if ($target && ($target->is_demo ?? false)) {
+                    session(['admin_edit_profile_id' => (int) $target->id]);
+
                     return $target;
                 }
             }
         }
 
         return $user->matrimonyProfile;
+    }
+
+    /**
+     * Query params to preserve admin showcase/demo photo editing across redirects (GET + POST body may omit query string).
+     *
+     * @return array<string, string>
+     */
+    private function adminDemoProfileQuery(MatrimonyProfile $profile): array
+    {
+        $user = auth()->user();
+        if (! $user || ! method_exists($user, 'isAnyAdmin') || ! $user->isAnyAdmin()) {
+            return [];
+        }
+        if (! ($profile->is_demo ?? false)) {
+            return [];
+        }
+
+        return ['profile_id' => (string) $profile->id];
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    private function uploadPhotoRedirectQuery(Request $request, MatrimonyProfile $profile): array
+    {
+        $q = [];
+        if ($request->input('from') === 'onboarding' || $request->query('from') === 'onboarding') {
+            $q['from'] = 'onboarding';
+        }
+
+        return array_merge($q, $this->adminDemoProfileQuery($profile));
     }
 
     /**
@@ -322,6 +358,8 @@ class MatrimonyProfileController extends Controller
 
         $galleryPhotos = $galleryPhotosQuery->get();
 
+        $profile->load('gender');
+
         $photoApprovalRequired = \App\Services\Admin\AdminSettingService::isPhotoApprovalRequired();
         $photoMaxPerProfile = (int) \App\Models\AdminSetting::getValue('photo_max_per_profile', '5');
 
@@ -566,11 +604,14 @@ class MatrimonyProfileController extends Controller
 
         if (! empty($result['conflict_detected'])) {
             if ($inOnboardingPhotoPhase) {
-                return redirect()->route('matrimony.profile.upload-photo', ['from' => 'onboarding'])
+                return redirect()->route('matrimony.profile.upload-photo', $this->uploadPhotoRedirectQuery($request, $profile))
                     ->with('warning', __('onboarding.photo_upload_conflict_retry'));
             }
 
-            return redirect()->route('matrimony.profile.wizard.section', ['section' => 'full', 'all' => 1])->with('warning', 'Photo uploaded but some conflicts were detected.');
+            return redirect()->route('matrimony.profile.wizard.section', array_merge(
+                ['section' => 'full', 'all' => 1],
+                $this->adminDemoProfileQuery($profile)
+            ))->with('warning', 'Photo uploaded but some conflicts were detected.');
         }
 
         $additionalCount = is_array($additionalFilenames) ? count($additionalFilenames) : 0;
@@ -584,7 +625,7 @@ class MatrimonyProfileController extends Controller
                 ->with('success', __('onboarding.photo_uploaded_view_profile'));
         }
 
-        return redirect()->route('matrimony.profile.upload-photo')->with(
+        return redirect()->route('matrimony.profile.upload-photo', $this->uploadPhotoRedirectQuery($request, $profile))->with(
             'success',
             "Photos uploaded successfully ({$uploadedCount}). You can add more photos below."
         );
@@ -635,7 +676,7 @@ class MatrimonyProfileController extends Controller
             \App\Models\MatrimonyProfile::$bypassGovernanceEnforcement = $priorBypass;
         }
 
-        return redirect()->route('matrimony.profile.upload-photo')
+        return redirect()->route('matrimony.profile.upload-photo', $this->uploadPhotoRedirectQuery(request(), $profile))
             ->with('success', 'Selected photo updated.');
     }
 
@@ -687,7 +728,7 @@ class MatrimonyProfileController extends Controller
             }
         });
 
-        return redirect()->route('matrimony.profile.upload-photo')
+        return redirect()->route('matrimony.profile.upload-photo', $this->uploadPhotoRedirectQuery($request, $profile))
             ->with('success', 'Photo order updated.');
     }
 
@@ -785,7 +826,7 @@ class MatrimonyProfileController extends Controller
             @unlink($fileToDelete);
         }
 
-        return redirect()->route('matrimony.profile.upload-photo')
+        return redirect()->route('matrimony.profile.upload-photo', $this->uploadPhotoRedirectQuery(request(), $profile))
             ->with('success', 'Photo deleted.');
     }
 
@@ -1376,7 +1417,8 @@ class MatrimonyProfileController extends Controller
 
         ProfileSearchRankingService::applySpotlightFirst($query);
 
-        $sort = (string) $request->input('sort', 'latest');
+        $defaultSort = ($viewerOwnProfileId && ProfileRotationService::isEnabled()) ? 'discover' : 'latest';
+        $sort = (string) $request->input('sort', $defaultSort);
         $allowedSorts = ['latest', 'age_asc', 'age_desc', 'height_asc', 'height_desc', 'discover'];
         if (! in_array($sort, $allowedSorts, true)) {
             $sort = 'latest';

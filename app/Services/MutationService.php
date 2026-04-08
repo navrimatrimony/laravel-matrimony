@@ -425,8 +425,12 @@ class MutationService
                     \App\Services\ProfileLifecycleService::syncLifecycleFromPendingConflicts($profile);
                 } else {
                     $current = $profile->lifecycle_state ?? 'draft';
+                    // Showcase (is_demo) profiles stay draft until admin publishes from bulk-create; do not
+                    // treat photo upload / wizard edits as "go live" for member search.
                     if ($current === 'draft' && ! empty($profile->profile_photo) && ! in_array($current, self::NO_AUTO_ACTIVATE_STATES, true)) {
-                        $this->setLifecycleState($profile, 'active');
+                        if (! ($profile->is_demo ?? false)) {
+                            $this->setLifecycleState($profile, 'active');
+                        }
                     }
                 }
             });

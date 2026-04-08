@@ -1,16 +1,17 @@
 @php
     /** @var array<int, array<string, mixed>> $profileShowSnapshot */
     $profileShowSnapshot = $profileShowSnapshot ?? [];
-    $accentStrip = [
-        'stone' => 'bg-stone-500',
-        'rose' => 'bg-rose-500',
-        'sky' => 'bg-sky-500',
-        'emerald' => 'bg-emerald-500',
-        'amber' => 'bg-amber-500',
-        'indigo' => 'bg-indigo-500',
-        'violet' => 'bg-violet-500',
-        'cyan' => 'bg-cyan-500',
-        'purple' => 'bg-purple-600',
+    /** Full-width section header backgrounds (dark tint per accent; replaces old left edge strip). */
+    $accentHeaderBg = [
+        'stone' => 'bg-stone-800',
+        'rose' => 'bg-rose-950',
+        'sky' => 'bg-sky-950',
+        'emerald' => 'bg-emerald-950',
+        'amber' => 'bg-amber-950',
+        'indigo' => 'bg-indigo-950',
+        'violet' => 'bg-violet-950',
+        'cyan' => 'bg-cyan-950',
+        'purple' => 'bg-purple-950',
     ];
 @endphp
 
@@ -18,17 +19,15 @@
     <div class="space-y-5">
         @foreach ($profileShowSnapshot as $section)
             @php
-                $strip = $accentStrip[$section['accent'] ?? 'stone'] ?? 'bg-stone-500';
+                $headerBg = $accentHeaderBg[$section['accent'] ?? 'stone'] ?? 'bg-stone-800';
                 $icon = $section['icon'] ?? 'document';
             @endphp
             <article
-                class="relative flex overflow-hidden rounded-xl border border-stone-200/80 bg-white/90 shadow-sm ring-1 ring-stone-100/70 dark:border-gray-700/80 dark:bg-gray-900/40 dark:ring-gray-800/60"
+                class="relative flex flex-col overflow-hidden rounded-xl border border-stone-200/80 bg-white/90 shadow-sm ring-1 ring-stone-100/70 dark:border-gray-700/80 dark:bg-gray-900/40 dark:ring-gray-800/60"
                 aria-labelledby="snapshot-{{ $section['id'] }}-heading"
             >
-                <div class="w-1 shrink-0 rounded-l-xl {{ $strip }}" aria-hidden="true"></div>
-                <div class="min-w-0 flex-1 px-4 py-5 sm:px-5 sm:py-6">
-                    <header class="mb-4 flex flex-wrap items-start gap-3">
-                        <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-stone-100 text-stone-600 shadow-inner dark:bg-stone-800 dark:text-stone-300" aria-hidden="true">
+                <header class="flex flex-wrap items-start gap-3 border-b border-white/10 px-4 py-4 sm:px-5 sm:py-4 {{ $headerBg }}">
+                    <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white/15 text-white shadow-inner ring-1 ring-white/20" aria-hidden="true">
                             @switch($icon)
                                 @case('user')
                                     <svg class="h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z"/></svg>
@@ -60,15 +59,16 @@
                                 @default
                                     <svg class="h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z"/></svg>
                             @endswitch
-                        </span>
-                        <div class="min-w-0">
-                            <p class="text-[10px] font-semibold uppercase tracking-[0.2em] text-stone-400 dark:text-stone-500">{{ $section['kicker'] ?? '' }}</p>
-                            <h3 id="snapshot-{{ $section['id'] }}-heading" class="text-lg font-semibold tracking-tight text-stone-900 dark:text-stone-50">
-                                {{ $section['title'] ?? '' }}
-                            </h3>
-                        </div>
-                    </header>
+                    </span>
+                    <div class="min-w-0">
+                        <p class="text-[10px] font-semibold uppercase tracking-[0.2em] text-white/65">{{ $section['kicker'] ?? '' }}</p>
+                        <h3 id="snapshot-{{ $section['id'] }}-heading" class="text-lg font-semibold tracking-tight text-white">
+                            {{ $section['title'] ?? '' }}
+                        </h3>
+                    </div>
+                </header>
 
+                <div class="min-w-0 flex-1 px-4 py-5 sm:px-5 sm:py-6">
                     @if (! empty($section['rows']))
                         <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
                             @foreach ($section['rows'] as $row)

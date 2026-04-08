@@ -179,8 +179,32 @@ class ProfileWizardController extends Controller
         if ($section === 'about-preferences') {
             $q = array_merge($q, $this->partnerPrefQuery($request));
         }
+        $q = array_merge($q, $this->wizardAdminProfileIdQuery($request));
 
         return $q;
+    }
+
+    /**
+     * Preserve ?profile_id= when an admin is editing a showcase/demo profile (POST body may not repeat query string).
+     *
+     * @return array<string, string>
+     */
+    private function wizardAdminProfileIdQuery(Request $request): array
+    {
+        $user = auth()->user();
+        if (! $user || ! method_exists($user, 'isAnyAdmin') || ! $user->isAnyAdmin()) {
+            return [];
+        }
+        $targetId = (int) ($request->input('profile_id') ?? $request->query('profile_id') ?? session('admin_edit_profile_id') ?? 0);
+        if ($targetId <= 0) {
+            return [];
+        }
+        $target = MatrimonyProfile::withTrashed()->find($targetId);
+        if ($target && ($target->is_demo ?? false)) {
+            return ['profile_id' => (string) $target->id];
+        }
+
+        return [];
     }
 
     /**
@@ -258,7 +282,7 @@ class ProfileWizardController extends Controller
             $minimal = $this->isMinimalWizard();
             $next = $minimal ? FieldCatalogService::getNextSection($section, true) : FieldCatalogService::getNextSection($section, false);
             if ($next) {
-                return redirect()->route('matrimony.profile.wizard.section', array_merge(['section' => $next], $next === 'full' ? ['all' => 1] : []))
+                return redirect()->route('matrimony.profile.wizard.section', array_merge(['section' => $next], $this->wizardSectionRedirectQuery($request, $next)))
                     ->with('info', 'Use the photo upload engine above to add or change your photo.');
             }
 
@@ -322,7 +346,7 @@ class ProfileWizardController extends Controller
         $minimal = $this->isMinimalWizard();
         $next = $minimal ? FieldCatalogService::getNextSection($section, true) : FieldCatalogService::getNextSection($section, false);
         if ($next) {
-            return redirect()->route('matrimony.profile.wizard.section', array_merge(['section' => $next], $next === 'full' ? ['all' => 1] : []))
+            return redirect()->route('matrimony.profile.wizard.section', array_merge(['section' => $next], $this->wizardSectionRedirectQuery($request, $next)))
                 ->with('success', __('wizard.saved_continue_next'));
         }
         if ($minimal) {
@@ -346,7 +370,7 @@ class ProfileWizardController extends Controller
 
         // Admin override: allow using the wizard engine for a specific showcase/demo profile (SSOT).
         if ($request && method_exists($user, 'isAnyAdmin') && $user->isAnyAdmin()) {
-            $targetId = (int) ($request->query('profile_id') ?? 0);
+            $targetId = (int) ($request->input('profile_id') ?? $request->query('profile_id') ?? 0);
             if ($targetId <= 0) {
                 $targetId = (int) (session('admin_edit_profile_id') ?? 0);
             }

@@ -109,7 +109,7 @@
 
     <a href="{{ route('plans.index') }}"
        class="relative flex h-full items-center transition transform focus:outline-none focus-visible:ring-2 focus-visible:ring-white/70">
-        <span class="inline-flex items-center rounded-md bg-gradient-to-r from-yellow-400 to-yellow-500 px-4 py-1.5 text-sm font-semibold text-black shadow hover:scale-105 hover:from-yellow-300 hover:to-yellow-400 whitespace-nowrap leading-none {{ $navMainSection === 'plans' ? 'ring-2 ring-white/90' : '' }}">{{ __('nav.upgrade') }}</span>
+        <span class="inline-flex items-center rounded-md bg-yellow-400 px-4 py-1.5 text-sm font-semibold text-gray-900 shadow-md ring-1 ring-black/10 hover:bg-yellow-300 hover:scale-105 whitespace-nowrap leading-none dark:bg-yellow-400 dark:text-gray-900 dark:hover:bg-yellow-300 {{ $navMainSection === 'plans' ? 'ring-2 ring-white/90' : '' }}">{{ __('nav.upgrade') }}</span>
         @if ($navMainSection === 'plans')
             <span class="{{ $navMainCaret }}" aria-hidden="true"></span>
         @endif
