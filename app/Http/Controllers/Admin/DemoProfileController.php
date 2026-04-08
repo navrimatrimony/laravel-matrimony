@@ -4,12 +4,14 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\MatrimonyProfile;
+use App\Models\ProfilePhoto;
 use App\Models\User;
 use App\Services\DemoProfileDefaultsService;
 use App\Services\ExtendedFieldService;
 use App\Services\FieldValueHistoryService;
 use App\Services\MutationService;
 use App\Services\ProfileCompletenessService;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -53,22 +55,48 @@ class DemoProfileController extends Controller
         $attrs['user_id'] = $demoUser->id;
         $attrs['is_demo'] = true;
         $attrs['is_suspended'] = false;
+        $attrs['lifecycle_state'] = 'draft';
 
         $profile = MatrimonyProfile::create($attrs);
-        self::setLifecycleActive($profile);
         self::addPrimaryContact($profile);
         self::autofillExtendedAndHistory($profile);
         self::applyWizardLikeNarrativeAndPreferences($profile, (int) ($request->user()?->id ?? 0));
         self::recordHistoryForDemo($profile);
 
         return redirect()
-            ->route('matrimony.profile.show', $profile->id)
-            ->with('success', 'Showcase profile created successfully.');
+            ->route('admin.demo-profile.bulk-create')
+            ->with('success', 'Showcase profile created as draft. Publish it to make it visible in member search.')
+            ->with('created_demo_profile_ids', [$profile->id]);
     }
 
     public function bulkCreate()
     {
-        return view('admin.demo-profile.bulk-create');
+        $ids = session('created_demo_profile_ids', []);
+        if (! is_array($ids)) {
+            $ids = [];
+        }
+        $ids = array_values(array_unique(array_map('intval', $ids)));
+
+        $createdProfiles = collect();
+        if (! empty($ids)) {
+            $createdProfiles = MatrimonyProfile::query()
+                ->whereIn('id', $ids)
+                ->where('is_demo', true)
+                ->orderByDesc('id')
+                ->get();
+        }
+
+        $recentDrafts = MatrimonyProfile::query()
+            ->where('is_demo', true)
+            ->where('lifecycle_state', 'draft')
+            ->orderByDesc('id')
+            ->limit(50)
+            ->get();
+
+        return view('admin.demo-profile.bulk-create', [
+            'createdProfiles' => $createdProfiles,
+            'recentDrafts' => $recentDrafts,
+        ]);
     }
 
     public function bulkStore(Request $request)
@@ -84,6 +112,7 @@ class DemoProfileController extends Controller
             : null;
 
         $created = 0;
+        $createdIds = [];
         for ($i = 0; $i < $count; $i++) {
             $email = 'demo-profile-' . Str::random(8) . '@system.local';
             $user = User::firstOrCreate(
@@ -104,26 +133,247 @@ class DemoProfileController extends Controller
             $attrs['user_id'] = $user->id;
             $attrs['is_demo'] = true;
             $attrs['is_suspended'] = false;
+            $attrs['lifecycle_state'] = 'draft';
             $profile = MatrimonyProfile::create($attrs);
-            self::setLifecycleActive($profile);
             self::addPrimaryContact($profile);
             self::autofillExtendedAndHistory($profile);
             self::applyWizardLikeNarrativeAndPreferences($profile, (int) ($request->user()?->id ?? 0));
             self::recordHistoryForDemo($profile);
             $created++;
+            $createdIds[] = (int) $profile->id;
         }
 
         return redirect()
             ->route('admin.demo-profile.bulk-create')
-            ->with('success', "Created {$created} showcase profile(s).");
+            ->with('success', "Created {$created} showcase profile(s) as draft. Publish them to make visible in member search.")
+            ->with('created_demo_profile_ids', $createdIds);
     }
 
-    /**
-     * Set lifecycle_state to active so demo profile is visible (DB update to avoid model mutator).
-     */
-    private static function setLifecycleActive(MatrimonyProfile $profile): void
+    public function publish(Request $request, MatrimonyProfile $profile)
     {
-        DB::table('matrimony_profiles')->where('id', $profile->id)->update(['lifecycle_state' => 'active']);
+        if (! ($profile->is_demo ?? false)) {
+            abort(404);
+        }
+
+        DB::table('matrimony_profiles')
+            ->where('id', $profile->id)
+            ->update([
+                'lifecycle_state' => 'active',
+                'is_suspended' => 0,
+            ]);
+
+        return redirect()->back()->with('success', 'Showcase profile published (now visible in member search).');
+    }
+
+    public function delete(Request $request, MatrimonyProfile $profile)
+    {
+        if (! ($profile->is_demo ?? false)) {
+            abort(404);
+        }
+
+        $profile->delete();
+
+        return redirect()->back()->with('success', 'Showcase profile deleted.');
+    }
+
+    public function photos(Request $request, MatrimonyProfile $profile)
+    {
+        if (! ($profile->is_demo ?? false)) {
+            abort(404);
+        }
+
+        $galleryPhotosQuery = ProfilePhoto::query()->where('profile_id', $profile->id);
+        if (Schema::hasColumn('profile_photos', 'sort_order')) {
+            $galleryPhotosQuery->orderByDesc('is_primary')->orderBy('sort_order')->orderBy('id');
+        } else {
+            $galleryPhotosQuery->orderByDesc('is_primary')->orderByDesc('created_at')->orderBy('id');
+        }
+        $galleryPhotos = $galleryPhotosQuery->get();
+
+        $photoApprovalRequired = \App\Services\Admin\AdminSettingService::isPhotoApprovalRequired();
+        $photoMaxPerProfile = (int) \App\Models\AdminSetting::getValue('photo_max_per_profile', '5');
+
+        $currentPhotoCount = $galleryPhotos->count();
+        $photoSlotsRemaining = max(0, $photoMaxPerProfile - $currentPhotoCount);
+        $photoLimitReached = $currentPhotoCount >= $photoMaxPerProfile;
+
+        return view('admin.demo-profile.photos', [
+            'profile' => $profile,
+            'galleryPhotos' => $galleryPhotos,
+            'photoApprovalRequired' => $photoApprovalRequired,
+            'photoMaxPerProfile' => $photoMaxPerProfile,
+            'currentPhotoCount' => $currentPhotoCount,
+            'photoSlotsRemaining' => $photoSlotsRemaining,
+            'photoLimitReached' => $photoLimitReached,
+        ]);
+    }
+
+    public function storePhotos(Request $request, MatrimonyProfile $profile)
+    {
+        if (! ($profile->is_demo ?? false)) {
+            abort(404);
+        }
+
+        $maxUploadMb = (int) \App\Models\AdminSetting::getValue('photo_max_upload_mb', '8');
+        $maxUploadKb = max(1, $maxUploadMb) * 1024;
+        $request->validate([
+            'profile_photo' => 'required|image|max:'.$maxUploadKb,
+            'profile_photos' => 'sometimes|array',
+            'profile_photos.*' => 'image|max:'.$maxUploadKb,
+        ]);
+
+        if (in_array($profile->lifecycle_state, [
+            'intake_uploaded', 'awaiting_user_approval', 'approved_pending_mutation', 'conflict_pending',
+        ], true)) {
+            return redirect()->back()->with('error', __('common.profile_edit_blocked_intake_conflict'));
+        }
+
+        $maxPerProfile = (int) \App\Models\AdminSetting::getValue('photo_max_per_profile', '5');
+        $maxEdgePx = (int) \App\Models\AdminSetting::getValue('photo_max_edge_px', '1200');
+        $maxEdgePx = max(400, $maxEdgePx);
+
+        /** @var UploadedFile $primaryFile */
+        $primaryFile = $request->file('profile_photo');
+        $additionalFiles = $request->file('profile_photos', []);
+        if (! is_array($additionalFiles)) {
+            $additionalFiles = [];
+        }
+        $additionalFiles = array_values(array_filter($additionalFiles));
+
+        $existingPhotosCount = ProfilePhoto::query()
+            ->where('profile_id', $profile->id)
+            ->count();
+
+        $incomingCount = 1 + count($additionalFiles);
+        if (($existingPhotosCount + $incomingCount) > $maxPerProfile) {
+            return redirect()->back()
+                ->withErrors(['profile_photos' => "You have already used all {$maxPerProfile} photo slots. Delete one photo before uploading a new one."])
+                ->withInput();
+        }
+
+        $mainBecomesPrimary = $existingPhotosCount === 0;
+
+        $targetDir = public_path('uploads/matrimony_photos');
+        if (! is_dir($targetDir)) {
+            mkdir($targetDir, 0755, true);
+        }
+
+        $storeUploadedPhoto = function (UploadedFile $file, int $idx) use ($targetDir, $maxEdgePx): string {
+            $originalName = basename((string) ($file->getClientOriginalName() ?: 'photo'));
+            $slug = pathinfo($originalName, PATHINFO_FILENAME);
+            $rand = bin2hex(random_bytes(3));
+            $baseName = time().'_'.$idx.'_'.$rand.'_'.$slug;
+
+            if (function_exists('imagecreatefromstring') && function_exists('imagewebp')) {
+                $realPath = $file->getRealPath() ?: $file->getPathname();
+                $imageData = is_string($realPath) ? @file_get_contents($realPath) : false;
+                $image = $imageData !== false ? @imagecreatefromstring($imageData) : false;
+                if ($image === false) {
+                    throw new \RuntimeException(__('common.invalid_photo_upload_jpg_png'));
+                }
+
+                $width = imagesx($image);
+                $height = imagesy($image);
+                $maxEdge = $maxEdgePx;
+                if ($width > $maxEdge || $height > $maxEdge) {
+                    $scale = min($maxEdge / $width, $maxEdge / $height);
+                    $newWidth = (int) floor($width * $scale);
+                    $newHeight = (int) floor($height * $scale);
+                    $resized = imagecreatetruecolor($newWidth, $newHeight);
+                    imagecopyresampled($resized, $image, 0, 0, 0, 0, $newWidth, $newHeight, $width, $height);
+                    imagedestroy($image);
+                    $image = $resized;
+                }
+
+                $webpFilename = $baseName.'.webp';
+                $webpPath = $targetDir.DIRECTORY_SEPARATOR.$webpFilename;
+                imagewebp($image, $webpPath, 80);
+                imagedestroy($image);
+
+                if (is_file($webpPath) && filesize($webpPath) > 200 * 1024) {
+                    $tmpImage = @imagecreatefromstring(file_get_contents($webpPath));
+                    if ($tmpImage !== false) {
+                        imagewebp($tmpImage, $webpPath, 70);
+                        imagedestroy($tmpImage);
+                    }
+                }
+
+                return $webpFilename;
+            }
+
+            $extension = $file->getClientOriginalExtension() ?: 'jpg';
+            $filename = $baseName.'.'.$extension;
+            $file->move($targetDir, $filename);
+
+            return $filename;
+        };
+
+        try {
+            $primaryFilename = $storeUploadedPhoto($primaryFile, 0);
+            $additionalFilenames = [];
+            foreach ($additionalFiles as $i => $addFile) {
+                $additionalFilenames[] = $storeUploadedPhoto($addFile, (int) $i + 1);
+            }
+        } catch (\RuntimeException $e) {
+            return redirect()->back()->with('error', $e->getMessage());
+        }
+
+        $photoApprovalRequired = \App\Services\Admin\AdminSettingService::isPhotoApprovalRequired();
+        $photoApproved = ! $photoApprovalRequired;
+        $approvedStatus = $photoApproved ? 'approved' : 'pending';
+
+        $sortBase = -1;
+        if (Schema::hasColumn('profile_photos', 'sort_order')) {
+            $maxSortOrder = ProfilePhoto::query()
+                ->where('profile_id', $profile->id)
+                ->max('sort_order');
+            $sortBase = $maxSortOrder !== null ? (int) $maxSortOrder : -1;
+        }
+
+        $hasSort = Schema::hasColumn('profile_photos', 'sort_order');
+        $sortFieldsMain = $hasSort ? ['sort_order' => $sortBase + 1] : [];
+
+        ProfilePhoto::create([
+            'profile_id' => $profile->id,
+            'file_path' => $primaryFilename,
+            'is_primary' => $mainBecomesPrimary,
+            'uploaded_via' => 'admin_showcase',
+            'approved_status' => $approvedStatus,
+            'watermark_detected' => false,
+        ] + $sortFieldsMain);
+
+        if (! empty($additionalFilenames)) {
+            foreach (array_values($additionalFilenames) as $i => $filename) {
+                $sortFieldsAdditional = $hasSort ? ['sort_order' => $sortBase + 2 + (int) $i] : [];
+                ProfilePhoto::create([
+                    'profile_id' => $profile->id,
+                    'file_path' => $filename,
+                    'is_primary' => false,
+                    'uploaded_via' => 'admin_showcase',
+                    'approved_status' => $approvedStatus,
+                    'watermark_detected' => false,
+                ] + $sortFieldsAdditional);
+            }
+        }
+
+        if ($mainBecomesPrimary) {
+            $priorBypass = \App\Models\MatrimonyProfile::$bypassGovernanceEnforcement;
+            \App\Models\MatrimonyProfile::$bypassGovernanceEnforcement = true;
+            try {
+                $profile->profile_photo = $primaryFilename;
+                $profile->photo_approved = $photoApproved;
+                $profile->photo_rejected_at = null;
+                $profile->photo_rejection_reason = null;
+                $profile->save();
+            } finally {
+                \App\Models\MatrimonyProfile::$bypassGovernanceEnforcement = $priorBypass;
+            }
+        }
+
+        $uploadedCount = 1 + (is_array($additionalFiles) ? count($additionalFiles) : 0);
+
+        return redirect()->route('admin.demo-profile.photos', $profile->id)
+            ->with('success', "Photos uploaded successfully ({$uploadedCount}).");
     }
 
     /**
