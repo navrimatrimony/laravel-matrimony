@@ -32,6 +32,7 @@ class ContactRequestAcceptedNotification extends Notification
             'message' => "{$name} approved your contact request. Shared: Phone (primary). Valid until {$validUntil}.",
             'contact_request_id' => $this->grant->contact_request_id,
             'contact_grant_id' => $this->grant->id,
+            'receiver_profile_id' => (int) ($receiver->matrimonyProfile?->id ?? 0) ?: null,
         ];
     }
 }

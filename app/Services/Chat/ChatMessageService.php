@@ -7,6 +7,7 @@ use App\Models\MatrimonyProfile;
 use App\Models\Message;
 use App\Models\MessageParticipantState;
 use App\Notifications\NewChatMessageNotification;
+use App\Services\AdminActivityNotificationGate;
 use App\Services\FeatureUsageService;
 use App\Services\NotificationService;
 use App\Services\ShowcaseChat\ShowcaseOrchestrationService;
@@ -182,8 +183,14 @@ class ChatMessageService
             if ($receiver->id !== $sender->id && $receiver->user) {
                 $receiverUser = $receiver->user;
                 $receiverUser->loadMissing('notifications');
+                $sender->loadMissing('user');
+                $allowPeerNotify = AdminActivityNotificationGate::allowsPeerActivityNotification($sender->user);
 
-                DB::afterCommit(function () use ($receiverUser, $sender, $conversation, $message) {
+                DB::afterCommit(function () use ($receiverUser, $sender, $conversation, $message, $allowPeerNotify) {
+                    if (! $allowPeerNotify) {
+                        return;
+                    }
+
                     $receiverUser->notify(new NewChatMessageNotification(
                         senderProfile: $sender,
                         conversationId: (int) $conversation->id,

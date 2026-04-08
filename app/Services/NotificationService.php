@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\MatrimonyProfile;
 use App\Models\Subscription;
 use App\Models\User;
+use App\Services\AdminActivityNotificationGate;
 use App\Notifications\ChatMessageLockedNotification;
 use App\Notifications\PlanExpiringSoonNotification;
 use App\Notifications\ReferralRewardGrantedNotification;
@@ -29,6 +30,9 @@ class NotificationService
      */
     public function notifyReferralReward(User $referrer, User $referredUser, int $bonusDays, string $purchasedPlanName): void
     {
+        if (! AdminActivityNotificationGate::allowsPeerActivityNotification($referrer)) {
+            return;
+        }
         $referrer->notify(new ReferralRewardGrantedNotification($bonusDays, $purchasedPlanName));
     }
 
@@ -37,6 +41,10 @@ class NotificationService
      */
     public function notifyChatReceivedWhileReadLocked(User $receiverUser, MatrimonyProfile $senderProfile, int $conversationId): void
     {
+        $senderProfile->loadMissing('user');
+        if (! AdminActivityNotificationGate::allowsPeerActivityNotification($senderProfile->user)) {
+            return;
+        }
         $receiverUser->notify(new ChatMessageLockedNotification($senderProfile, $conversationId));
     }
 

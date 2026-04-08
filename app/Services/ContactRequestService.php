@@ -10,6 +10,7 @@ use App\Notifications\ContactGrantRevokedNotification;
 use App\Notifications\ContactRequestAcceptedNotification;
 use App\Notifications\ContactRequestExpiredNotification;
 use App\Notifications\ContactRequestRejectedNotification;
+use App\Services\AdminActivityNotificationGate;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -241,7 +242,9 @@ class ContactRequestService
             ]);
         });
         $this->audit($request, $grant, 'approved', $request->receiver_id, ['granted_scopes' => $grantedScopes]);
-        $request->sender->notify(new ContactRequestAcceptedNotification($grant));
+        if (AdminActivityNotificationGate::allowsPeerActivityNotification($receiver)) {
+            $request->sender->notify(new ContactRequestAcceptedNotification($grant));
+        }
 
         return $grant;
     }
@@ -269,7 +272,9 @@ class ContactRequestService
             'cooldown_ends_at' => $cooldownEndsAt,
         ]);
         $this->audit($request, null, 'rejected', $receiver->id, ['cooldown_ends_at' => $cooldownEndsAt->toIso8601String()]);
-        $request->sender->notify(new ContactRequestRejectedNotification($request));
+        if (AdminActivityNotificationGate::allowsPeerActivityNotification($receiver)) {
+            $request->sender->notify(new ContactRequestRejectedNotification($request));
+        }
     }
 
     /**
@@ -310,7 +315,9 @@ class ContactRequestService
         ]);
         $request->update(['status' => ContactRequest::STATUS_REVOKED]);
         $this->audit($request, $grant, 'revoked', $receiver->id, []);
-        $request->sender->notify(new ContactGrantRevokedNotification($grant));
+        if (AdminActivityNotificationGate::allowsPeerActivityNotification($receiver)) {
+            $request->sender->notify(new ContactGrantRevokedNotification($grant));
+        }
     }
 
     /**

@@ -31,4 +31,6 @@ return [
     'blocked' => 'ब्लॉक केले',
     'notifications' => 'सूचना',
     'log_out' => 'लॉग आउट',
+    'admin_section' => 'प्रशासन',
+    'admin_panel' => 'अ‍ॅडमीन पॅनेल',
 ];

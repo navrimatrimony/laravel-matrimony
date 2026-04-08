@@ -32,4 +32,6 @@ return [
     'blocked' => 'Blocked',
     'notifications' => 'Notifications',
     'log_out' => 'Log Out',
+    'admin_section' => 'Administration',
+    'admin_panel' => 'Admin panel',
 ];

@@ -8,6 +8,7 @@ use App\Models\MatrimonyProfile;
 use App\Models\ProfileView;
 use App\Models\User;
 use App\Notifications\ProfileViewedNotification;
+use App\Services\AdminActivityNotificationGate;
 use Illuminate\Support\Facades\DB;
 
 /*
@@ -152,6 +153,10 @@ class ViewTrackingService
     public static function notifyProfileViewIfEligible(?User $owner, MatrimonyProfile $viewerProfile, bool $isViewBack): void
     {
         if (! $owner) {
+            return;
+        }
+        $viewerProfile->loadMissing('user');
+        if (! AdminActivityNotificationGate::allowsPeerActivityNotification($viewerProfile->user)) {
             return;
         }
         if (! self::shouldSendProfileViewNotification($owner, (int) $viewerProfile->id)) {

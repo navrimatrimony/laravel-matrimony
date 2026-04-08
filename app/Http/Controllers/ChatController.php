@@ -10,6 +10,7 @@ use App\Services\Chat\ChatMessageModerationService;
 use App\Services\Chat\ChatMessageService;
 use App\Services\Chat\ChatPolicyService;
 use App\Services\Chat\ChatTemplateSuggestionService;
+use App\Services\ChatListService;
 use App\Services\CommunicationPolicyService;
 use App\Services\FeatureUsageService;
 use App\Services\ShowcaseChat\ShowcaseConversationTagService;
@@ -28,6 +29,7 @@ class ChatController extends Controller
         protected ChatConversationService $conversations,
         protected ChatMessageService $messages,
         protected FeatureUsageService $featureUsage,
+        protected ChatListService $chatList,
     ) {}
 
     public function index(Request $request)
@@ -39,125 +41,37 @@ class ChatController extends Controller
                 ->with('error', __('profile_actions.create_profile_first'));
         }
 
+        // Legacy polling endpoint (kept): unread message count.
         if ($request->wantsJson() && $request->boolean('unread_only')) {
-            $count = DB::table('messages')
-                ->where('receiver_profile_id', $me->id)
-                ->whereNull('read_at')
-                ->count();
-
-            return response()->json(['count' => (int) $count]);
+            return response()->json([
+                'count' => $this->chatList->getUnreadMessageCount((int) $me->id),
+            ]);
         }
 
-        $activeFilter = (string) $request->query('filter', 'all');
-        if (! in_array($activeFilter, ['all', 'unread', 'awaiting_me', 'awaiting_them'], true)) {
-            $activeFilter = 'all';
+        $tab = (string) $request->query('tab', 'all');
+        if (! in_array($tab, ['all', 'unread', 'requests'], true)) {
+            $tab = 'all';
         }
 
-        $list = $this->conversations->listConversationsForProfile($me);
+        $all = $this->chatList->getAllConversations((int) $me->id);
+        $unread = $this->chatList->getUnreadConversations((int) $me->id);
+        $requests = $this->chatList->getRequestConversations((int) $me->id);
 
-        $conversationIds = $list->pluck('id')->all();
-        $unreadByConversation = [];
-        if (! empty($conversationIds)) {
-            $unreadByConversation = DB::table('messages')
-                ->select('conversation_id', DB::raw('COUNT(*) as c'))
-                ->whereIn('conversation_id', $conversationIds)
-                ->where('receiver_profile_id', $me->id)
-                ->whereNull('read_at')
-                ->groupBy('conversation_id')
-                ->pluck('c', 'conversation_id')
-                ->map(fn ($v) => (int) $v)
-                ->all();
-        }
-
-        $lastMessageIds = $list->pluck('last_message_id')->filter()->unique()->values()->all();
-        $lastMessagesById = [];
-        if (! empty($lastMessageIds)) {
-            $lastMessagesById = Message::query()
-                ->whereIn('id', $lastMessageIds)
-                ->get()
-                ->keyBy('id')
-                ->all();
-        }
-
-        $otherProfileIds = [];
-        foreach ($list as $c) {
-            $otherProfileIds[] = (int) ((int) $c->profile_one_id === (int) $me->id ? $c->profile_two_id : $c->profile_one_id);
-        }
-        $othersById = MatrimonyProfile::query()
-            ->whereIn('id', array_values(array_unique($otherProfileIds)))
-            ->get()
-            ->keyBy('id');
-
-        $viewerCanReadIncoming = $this->featureUsage->canUse((int) $user->id, FeatureUsageService::FEATURE_CHAT_CAN_READ);
-
-        $items = $list->map(function (Conversation $c) use ($me, $unreadByConversation, $othersById, $lastMessagesById, $viewerCanReadIncoming) {
-            $otherId = (int) ((int) $c->profile_one_id === (int) $me->id ? $c->profile_two_id : $c->profile_one_id);
-            /** @var MatrimonyProfile|null $other */
-            $other = $othersById->get($otherId);
-            $last = null;
-            if ($c->last_message_id) {
-                $last = $lastMessagesById[(int) $c->last_message_id] ?? null;
-            }
-
-            $preview = '';
-            if ($last) {
-                $preview = $this->previewLineForMessage($last, $me, $viewerCanReadIncoming);
-            }
-
-            $awaitingMe = false;
-            $awaitingThem = false;
-            if ($last) {
-                // "Awaiting my reply" should mean: the other participant spoke last (even if I've read it).
-                $awaitingMe = ((int) $last->sender_profile_id !== (int) $me->id);
-                $awaitingThem = ((int) $last->sender_profile_id === (int) $me->id);
-            }
-
-            return [
-                'conversation' => $c,
-                'other' => $other,
-                'unread' => (int) ($unreadByConversation[$c->id] ?? 0),
-                'last_message' => $last,
-                'last_preview' => $preview,
-                'awaiting_me' => $awaitingMe,
-                'awaiting_them' => $awaitingThem,
-                'showcase_tag' => ($other && ($other->is_demo ?? false))
-                    ? app(ShowcaseConversationTagService::class)->shouldShowTagForConversation($c, $me, $other)
-                    : false,
-            ];
-        });
-
-        // Apply filter (no heavy SQL; use computed fields).
-        $items = $items->filter(function ($it) use ($activeFilter) {
-            if ($activeFilter === 'unread') {
-                return (int) ($it['unread'] ?? 0) > 0;
-            }
-            if ($activeFilter === 'awaiting_me') {
-                return (bool) ($it['awaiting_me'] ?? false);
-            }
-            if ($activeFilter === 'awaiting_them') {
-                return (bool) ($it['awaiting_them'] ?? false);
-            }
-
-            return true;
-        })->values();
-
-        // Sorting: unread first, then latest activity.
-        $items = $items->sort(function ($a, $b) {
-            $ua = (int) ($a['unread'] ?? 0);
-            $ub = (int) ($b['unread'] ?? 0);
-            if (($ua > 0) !== ($ub > 0)) {
-                return ($ua > 0) ? -1 : 1;
-            }
-            $ta = $a['conversation']->last_message_at?->getTimestamp() ?? 0;
-            $tb = $b['conversation']->last_message_at?->getTimestamp() ?? 0;
-
-            return $tb <=> $ta;
-        })->values();
+        $conversations = match ($tab) {
+            'unread' => $unread,
+            'requests' => $requests,
+            default => $all,
+        };
 
         return view('chat.index', [
             'me' => $me,
-            'items' => $items,
-            'activeFilter' => $activeFilter,
+            'tab' => $tab,
+            'conversations' => $conversations,
+            'counts' => [
+                'all' => $all->count(),
+                'unread' => $unread->count(),
+                'requests' => $requests->count(),
+            ],
         ]);
     }
 

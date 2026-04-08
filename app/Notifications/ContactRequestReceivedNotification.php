@@ -31,6 +31,7 @@ class ContactRequestReceivedNotification extends Notification
             'message' => "{$name} requested your contact.",
             'contact_request_id' => $this->contactRequest->id,
             'sender_id' => $this->contactRequest->sender_id,
+            'sender_profile_id' => (int) ($sender->matrimonyProfile?->id ?? 0) ?: null,
         ];
     }
 }

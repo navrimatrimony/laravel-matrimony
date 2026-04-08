@@ -151,6 +151,14 @@
                             <x-dropdown-link :href="route('matrimony.profile.show', auth()->user()->matrimonyProfile->id)" class="hover:bg-gray-100 transition rounded-md">
                                 {{ __('nav.my_profile') }}
                             </x-dropdown-link>
+
+                            <x-dropdown-link :href="route('interests.received')" class="hover:bg-gray-100 transition rounded-md">
+                                {{ __('nav.interests_received') }}
+                            </x-dropdown-link>
+
+                            <x-dropdown-link :href="route('interests.sent')" class="hover:bg-gray-100 transition rounded-md">
+                                {{ __('nav.interests_sent') }}
+                            </x-dropdown-link>
                         @endif
 
                         <x-dropdown-link :href="route('contact-inbox.index')" class="hover:bg-gray-100 transition rounded-md">
@@ -168,6 +176,16 @@
                         <x-dropdown-link :href="route('blocks.index')" class="hover:bg-gray-100 transition rounded-md">
                             {{ __('nav.blocked') }}
                         </x-dropdown-link>
+
+                        @if (auth()->user()->isAnyAdmin())
+                            <div class="border-t border-gray-200 dark:border-gray-600 my-1"></div>
+                            <div class="block px-4 py-2 text-xs text-gray-500 dark:text-gray-400 font-semibold">
+                                {{ __('nav.admin_section') }}
+                            </div>
+                            <x-dropdown-link :href="route('admin.dashboard')" class="hover:bg-gray-100 transition rounded-md font-semibold text-indigo-700 dark:text-indigo-300">
+                                {{ __('nav.admin_panel') }}
+                            </x-dropdown-link>
+                        @endif
 
                         <div class="border-t border-gray-200 dark:border-gray-600 my-1"></div>
 
@@ -257,7 +275,11 @@
     </summary>
     <div class="ml-3 space-y-1">
         <x-responsive-nav-link :href="route('interests.received')">
-            Inbox
+            {{ __('nav.interests_received') }}
+        </x-responsive-nav-link>
+
+        <x-responsive-nav-link :href="route('interests.sent')">
+            {{ __('nav.interests_sent') }}
         </x-responsive-nav-link>
 
         <x-responsive-nav-link :href="route('chat.index')" class="relative inline-flex items-center">
@@ -289,15 +311,27 @@
     </summary>
     <div class="ml-3 space-y-1">
         <x-responsive-nav-link :href="route('who-viewed.index')">
-            Who viewed me
+            {{ __('nav.who_viewed_me') }}
         </x-responsive-nav-link>
 
+        @auth
+            @if (auth()->user()->matrimonyProfile)
+                <x-responsive-nav-link :href="route('interests.received')">
+                    {{ __('nav.interests_received') }}
+                </x-responsive-nav-link>
+
+                <x-responsive-nav-link :href="route('interests.sent')">
+                    {{ __('nav.interests_sent') }}
+                </x-responsive-nav-link>
+            @endif
+        @endauth
+
         <x-responsive-nav-link :href="route('shortlist.index')">
-            Shortlist
+            {{ __('nav.shortlist') }}
         </x-responsive-nav-link>
 
         <x-responsive-nav-link :href="route('notifications.index')" class="relative inline-flex items-center">
-            Notifications
+            {{ __('nav.notifications') }}
             @if (($unreadNotificationCount ?? 0) > 0)
                 <span
                     id="notification-badge-mobile"
@@ -340,6 +374,14 @@
                     <x-responsive-nav-link :href="route('matrimony.profile.show', auth()->user()->matrimonyProfile->id)">
                         {{ __('nav.my_profile') }}
                     </x-responsive-nav-link>
+
+                    <x-responsive-nav-link :href="route('interests.received')">
+                        {{ __('nav.interests_received') }}
+                    </x-responsive-nav-link>
+
+                    <x-responsive-nav-link :href="route('interests.sent')">
+                        {{ __('nav.interests_sent') }}
+                    </x-responsive-nav-link>
                 @endif
 
                 <x-responsive-nav-link :href="route('contact-inbox.index')">
@@ -357,6 +399,15 @@
                 <x-responsive-nav-link :href="route('blocks.index')">
                     {{ __('nav.blocked') }}
                 </x-responsive-nav-link>
+
+                @if (auth()->user()->isAnyAdmin())
+                    <div class="px-4 pt-3 text-xs font-semibold text-white/70">
+                        {{ __('nav.admin_section') }}
+                    </div>
+                    <x-responsive-nav-link :href="route('admin.dashboard')">
+                        {{ __('nav.admin_panel') }}
+                    </x-responsive-nav-link>
+                @endif
 
                 <div class="px-4 pt-3 text-xs font-semibold text-white/70">
                     {{ __('Settings') }}

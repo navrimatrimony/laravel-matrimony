@@ -15,8 +15,8 @@
 </style>
 
 <div class="bg-white dark:bg-gray-800 shadow rounded-lg p-6">
-    <h1 class="text-2xl font-bold text-gray-800 dark:text-gray-100 mb-2">Showcase Search Visibility</h1>
-    <p class="text-gray-500 dark:text-gray-400 text-sm mb-6">Show or hide all showcase profiles from search. Profile view, interests, and completeness rules unchanged.</p>
+    <h1 class="text-2xl font-bold text-gray-800 dark:text-gray-100 mb-2">Member search visibility</h1>
+    <p class="text-gray-500 dark:text-gray-400 text-sm mb-6">Showcase demo profiles and opposite-gender-only listing for member search.</p>
     @if ($errors->any())
         <ul class="text-red-600 text-sm mb-4 space-y-1">
             @foreach ($errors->all() as $e) <li>{{ $e }}</li> @endforeach
@@ -41,6 +41,20 @@
             <p class="text-xs text-gray-500 dark:text-gray-400 mt-2">When OFF, showcase profiles will not appear in search results but can still be accessed via direct links.</p>
         </div>
 
+        {{-- Opposite gender only (male sees female, female sees male) --}}
+        <div class="p-4 bg-gray-50 dark:bg-gray-700/30 rounded-lg border border-gray-200 dark:border-gray-600">
+            <label class="admin-toggle" id="oppositeGenderToggle">
+                <input type="checkbox" name="search_opposite_gender_only" value="1" {{ ($searchOppositeGenderOnly ?? false) ? 'checked' : '' }} onchange="updateOppositeGenderUI()">
+                <span class="toggle-track"><span class="toggle-thumb"></span></span>
+                <span class="toggle-label {{ ($searchOppositeGenderOnly ?? false) ? 'on' : 'off' }}" id="oppositeGenderLabel">
+                    {{ ($searchOppositeGenderOnly ?? false) ? 'Opposite gender only: ON' : 'Opposite gender only: OFF' }}
+                </span>
+            </label>
+            <p class="text-xs text-gray-500 dark:text-gray-400 mt-2">
+                When ON, each member sees only the opposite binary gender in <strong>search results</strong> (male → female profiles, female → male). Other genders or missing gender on the viewer profile: no extra filter. Direct profile URLs unchanged.
+            </p>
+        </div>
+
         <div class="pt-2">
             <button type="submit" style="background-color: #4f46e5; color: white; padding: 12px 24px; border-radius: 6px; font-weight: 600; font-size: 16px; border: none; cursor: pointer; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);">
                 Save Settings
@@ -60,6 +74,21 @@ function updateDemoSearchUI() {
         label.classList.add('on');
     } else {
         label.textContent = 'Showcase Profiles HIDDEN from Search';
+        label.classList.remove('on');
+        label.classList.add('off');
+    }
+}
+
+function updateOppositeGenderUI() {
+    const checkbox = document.querySelector('#oppositeGenderToggle input');
+    const label = document.getElementById('oppositeGenderLabel');
+    if (!checkbox || !label) return;
+    if (checkbox.checked) {
+        label.textContent = 'Opposite gender only: ON';
+        label.classList.remove('off');
+        label.classList.add('on');
+    } else {
+        label.textContent = 'Opposite gender only: OFF';
         label.classList.remove('on');
         label.classList.add('off');
     }

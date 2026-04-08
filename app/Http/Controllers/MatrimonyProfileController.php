@@ -1335,6 +1335,20 @@ class MatrimonyProfileController extends Controller
             });
         }
 
+        // Admin: male members see only female profiles in search (and vice versa); other viewer genders unchanged.
+        if (\App\Models\AdminSetting::getBool('search_opposite_gender_only', false) && auth()->check()) {
+            $viewerProfile = auth()->user()->matrimonyProfile;
+            if ($viewerProfile) {
+                $viewerProfile->loadMissing('gender');
+                $viewerGenderKey = $viewerProfile->gender?->key ?? null;
+                if ($viewerGenderKey === 'male') {
+                    $query->whereHas('gender', fn ($g) => $g->where('key', 'female'));
+                } elseif ($viewerGenderKey === 'female') {
+                    $query->whereHas('gender', fn ($g) => $g->where('key', 'male'));
+                }
+            }
+        }
+
         // Exclude blocked profiles (either direction) and viewer-hidden profiles when viewer has profile
         $myId = auth()->user()?->matrimonyProfile?->id;
         $viewerUserId = auth()->id();

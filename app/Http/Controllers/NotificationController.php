@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\MatrimonyProfile;
 use Illuminate\Http\Request;
 
 /*
@@ -15,6 +16,30 @@ use Illuminate\Http\Request;
 */
 class NotificationController extends Controller
 {
+    private function extractActorProfileId(array $data): ?int
+    {
+        if (($data['revealed'] ?? true) === false) {
+            return null;
+        }
+
+        $keys = [
+            'viewer_profile_id',
+            'sender_profile_id',
+            'accepter_profile_id',
+            'rejecter_profile_id',
+            'receiver_profile_id',
+        ];
+
+        foreach ($keys as $key) {
+            $id = (int) ($data[$key] ?? 0);
+            if ($id > 0) {
+                return $id;
+            }
+        }
+
+        return null;
+    }
+
     /**
      * List current user's notifications (all, paginated).
      */
@@ -23,7 +48,26 @@ class NotificationController extends Controller
         $user = $request->user();
         $notifications = $user->notifications()->paginate(20);
         $unreadNotifications = $user->unreadNotifications;
-        return view('notifications.index', compact('notifications', 'unreadNotifications'));
+
+        $actorProfileIds = [];
+        foreach ($notifications as $n) {
+            $data = is_array($n->data) ? $n->data : [];
+            $id = $this->extractActorProfileId($data);
+            if ($id) {
+                $actorProfileIds[] = $id;
+            }
+        }
+        $actorProfileIds = array_values(array_unique($actorProfileIds));
+
+        $actorProfiles = collect();
+        if (! empty($actorProfileIds)) {
+            $actorProfiles = MatrimonyProfile::query()
+                ->whereIn('id', $actorProfileIds)
+                ->get()
+                ->keyBy('id');
+        }
+
+        return view('notifications.index', compact('notifications', 'unreadNotifications', 'actorProfiles'));
     }
 
     /**
@@ -34,7 +78,15 @@ class NotificationController extends Controller
         $user = $request->user();
         $notification = $user->notifications()->where('id', $id)->firstOrFail();
         $notification->markAsRead();
-        return view('notifications.show', compact('notification'));
+
+        $data = is_array($notification->data) ? $notification->data : [];
+        $actorProfileId = $this->extractActorProfileId($data);
+        $actorProfile = null;
+        if ($actorProfileId) {
+            $actorProfile = MatrimonyProfile::query()->where('id', $actorProfileId)->first();
+        }
+
+        return view('notifications.show', compact('notification', 'actorProfile'));
     }
 
     /**

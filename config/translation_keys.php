@@ -43,6 +43,8 @@ return [
             'blocked',
             'notifications',
             'log_out',
+            'admin_section',
+            'admin_panel',
         ],
         'profile' => [
             'profile_completeness',

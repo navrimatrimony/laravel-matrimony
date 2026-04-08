@@ -3,9 +3,9 @@
     $section = $navMainSection ?? 'none';
 @endphp
 @if ($section !== 'none')
-    <div class="hidden md:block bg-white border-b border-gray-200 dark:bg-gray-950 dark:border-gray-800 shadow-sm">
+    <div class="block bg-white border-b border-gray-200 dark:bg-gray-950 dark:border-gray-800 shadow-sm">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <nav class="flex flex-wrap items-stretch gap-x-1 gap-y-0" aria-label="{{ __('nav.sub_navigation') }}">
+            <nav class="flex flex-nowrap overflow-x-auto items-stretch gap-x-1 gap-y-0 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden" aria-label="{{ __('nav.sub_navigation') }}">
                 @if ($section === 'home')
                     {{-- Dashboard + same items as user menu “My profile & lists” (no Edit / Partner prefs / Settings here) --}}
                     <a href="{{ route('dashboard') }}"
@@ -61,7 +61,7 @@
                 @elseif ($section === 'connect')
                     <a href="{{ route('interests.received') }}"
                        class="inline-flex items-center border-b-2 px-3 py-3 text-sm font-medium transition {{ request()->routeIs('interests.received') ? 'border-red-600 text-red-600 dark:border-red-500 dark:text-red-400' : 'border-transparent text-gray-600 hover:text-red-700 dark:text-gray-400 dark:hover:text-red-400' }}">
-                        {{ __('nav.inbox') }}
+                        {{ __('nav.interests_received') }}
                     </a>
                     <a href="{{ route('interests.sent') }}"
                        class="inline-flex items-center border-b-2 px-3 py-3 text-sm font-medium transition {{ request()->routeIs('interests.sent') ? 'border-red-600 text-red-600 dark:border-red-500 dark:text-red-400' : 'border-transparent text-gray-600 hover:text-red-700 dark:text-gray-400 dark:hover:text-red-400' }}">
@@ -84,6 +84,18 @@
                         <span>{{ __('nav.who_viewed_me') }}</span>
                         <span class="text-[10px] font-semibold uppercase tracking-wide text-amber-600 dark:text-amber-400">{{ __('nav.premium') }}</span>
                     </a>
+                    @auth
+                        @if (auth()->user()->matrimonyProfile)
+                            <a href="{{ route('interests.received') }}"
+                               class="inline-flex items-center border-b-2 px-3 py-3 text-sm font-medium transition {{ request()->routeIs('interests.received') ? 'border-red-600 text-red-600 dark:border-red-500 dark:text-red-400' : 'border-transparent text-gray-600 hover:text-red-700 dark:text-gray-400 dark:hover:text-red-400' }}">
+                                {{ __('nav.interests_received') }}
+                            </a>
+                            <a href="{{ route('interests.sent') }}"
+                               class="inline-flex items-center border-b-2 px-3 py-3 text-sm font-medium transition {{ request()->routeIs('interests.sent') ? 'border-red-600 text-red-600 dark:border-red-500 dark:text-red-400' : 'border-transparent text-gray-600 hover:text-red-700 dark:text-gray-400 dark:hover:text-red-400' }}">
+                                {{ __('nav.interests_sent') }}
+                            </a>
+                        @endif
+                    @endauth
                     <a href="{{ route('notifications.index') }}"
                        class="inline-flex items-center gap-2 border-b-2 px-3 py-3 text-sm font-medium transition {{ request()->routeIs('notifications.index', 'notifications.show') ? 'border-red-600 text-red-600 dark:border-red-500 dark:text-red-400' : 'border-transparent text-gray-600 hover:text-red-700 dark:text-gray-400 dark:hover:text-red-400' }}">
                         {{ __('nav.notifications') }}

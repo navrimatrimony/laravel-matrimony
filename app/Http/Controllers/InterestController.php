@@ -8,6 +8,7 @@ use App\Models\MatrimonyProfile;
 use App\Notifications\InterestAcceptedNotification;
 use App\Notifications\InterestRejectedNotification;
 use App\Notifications\InterestSentNotification;
+use App\Services\AdminActivityNotificationGate;
 use App\Services\InterestPriorityService;
 use App\Services\InterestSendLimitService;
 use App\Services\ProfileCompletenessService;
@@ -136,7 +137,7 @@ class InterestController extends Controller
         if ($interest->wasRecentlyCreated) {
             $this->interestSendLimit->recordSuccessfulSend($authUser);
             $receiverOwner = $receiverProfile->user;
-            if ($receiverOwner) {
+            if ($receiverOwner && AdminActivityNotificationGate::allowsPeerActivityNotification($authUser)) {
                 $receiverOwner->notify(new InterestSentNotification($senderProfile));
             }
         }
@@ -275,7 +276,7 @@ class InterestController extends Controller
         }
 
         $senderOwner = $interest->senderProfile?->user;
-        if ($senderOwner) {
+        if ($senderOwner && AdminActivityNotificationGate::allowsPeerActivityNotification($user)) {
             $senderOwner->notify(new InterestAcceptedNotification($receiverProfile));
         }
 
@@ -315,7 +316,7 @@ class InterestController extends Controller
         ]);
 
         $senderOwner = $interest->senderProfile?->user;
-        if ($senderOwner) {
+        if ($senderOwner && AdminActivityNotificationGate::allowsPeerActivityNotification($user)) {
             $senderOwner->notify(new InterestRejectedNotification($user->matrimonyProfile));
         }
 

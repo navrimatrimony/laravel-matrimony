@@ -86,9 +86,11 @@ class AdminSettingsController extends Controller
     public function demoSearchSettings()
     {
         $visible = AdminSetting::getBool('demo_profiles_visible_in_search', true);
+        $oppositeGenderOnly = AdminSetting::getBool('search_opposite_gender_only', false);
 
         return view('admin.demo-search-settings.index', [
             'demoProfilesVisibleInSearch' => $visible,
+            'searchOppositeGenderOnly' => $oppositeGenderOnly,
         ]);
     }
 
@@ -99,22 +101,26 @@ class AdminSettingsController extends Controller
     {
         $request->validate([
             'demo_profiles_visible_in_search' => 'nullable|in:0,1',
+            'search_opposite_gender_only' => 'nullable|in:0,1',
         ]);
 
         $visible = $request->has('demo_profiles_visible_in_search') ? '1' : '0';
         AdminSetting::setValue('demo_profiles_visible_in_search', $visible);
+
+        $oppositeOnly = $request->has('search_opposite_gender_only') ? '1' : '0';
+        AdminSetting::setValue('search_opposite_gender_only', $oppositeOnly);
 
         AuditLogService::log(
             $request->user(),
             'update_demo_search_settings',
             'AdminSetting',
             null,
-            "demo_profiles_visible_in_search={$visible}",
+            "demo_profiles_visible_in_search={$visible}, search_opposite_gender_only={$oppositeOnly}",
             false
         );
 
         return redirect()->route('admin.demo-search-settings.index')
-            ->with('success', 'Showcase search visibility updated.');
+            ->with('success', 'Search visibility settings updated.');
     }
 
     /**

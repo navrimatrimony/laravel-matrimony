@@ -24,6 +24,7 @@ class ContactRequestRejectedNotification extends Notification
 
     public function toArray(object $notifiable): array
     {
+        $receiver = $this->contactRequest->receiver;
         $endsAt = $this->contactRequest->cooldown_ends_at
             ? $this->contactRequest->cooldown_ends_at->format('M j, Y')
             : 'later';
@@ -32,6 +33,7 @@ class ContactRequestRejectedNotification extends Notification
             'message' => 'Your contact request was declined. You can send a new request after the cooling period (ends ' . $endsAt . ').',
             'contact_request_id' => $this->contactRequest->id,
             'cooldown_ends_at' => $this->contactRequest->cooldown_ends_at?->toIso8601String(),
+            'receiver_profile_id' => (int) ($receiver?->matrimonyProfile?->id ?? 0) ?: null,
         ];
     }
 }
