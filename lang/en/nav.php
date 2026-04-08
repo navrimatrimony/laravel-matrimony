@@ -6,6 +6,7 @@
  * Admin translation control: edit this file or override via DB/API later.
  */
 return [
+    'personal_menu_profile_section' => 'My profile & lists',
     'create_profile' => 'Create Profile',
     'my_profile' => 'My Profile',
     'edit_profile' => 'Edit Profile',

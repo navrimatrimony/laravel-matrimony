@@ -7,6 +7,7 @@ use App\Services\CareerHistoryRowNormalizer;
 use App\Services\FieldCatalogService;
 use App\Services\PartnerPreferenceNavService;
 use App\Services\PartnerPreferenceSnapshotBuilder;
+use App\Services\ProfileCompletenessService;
 use App\Services\ProfileCompletionService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -60,7 +61,8 @@ class ProfileWizardController extends Controller
 
         $minimal = $this->isMinimalWizard();
         $first = $minimal ? FieldCatalogService::getFirstSection(true) : FieldCatalogService::getFirstSection(false);
-        $pct = ProfileCompletionService::calculateCompletionPercentage($profile);
+        // Same metric as profile show + section nav: all catalog sections (not legacy 5×20% buckets).
+        $pct = ProfileCompletenessService::detailedPercentage($profile);
         if ($pct >= 100) {
             session()->forget('wizard_minimal');
 
@@ -134,7 +136,7 @@ class ProfileWizardController extends Controller
         }
         $previousSection = $minimal ? FieldCatalogService::getPreviousSection($section, true) : FieldCatalogService::getPreviousSection($section, false);
 
-        $completionPct = ProfileCompletionService::calculateCompletionPercentage($profile);
+        $completionPct = ProfileCompletenessService::detailedPercentage($profile);
         $sectionStatuses = ProfileCompletionService::getSectionStatuses($profile, $sections);
         $viewData = $this->getSectionViewData($section, $profile);
         $viewData['profile'] = $profile;

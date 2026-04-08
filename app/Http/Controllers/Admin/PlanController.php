@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\Plan;
 use App\Models\PlanFeature;
+use App\Models\PlanFeatureConfig;
 use App\Models\PlanPrice;
 use App\Models\PlanTerm;
 use App\Models\Subscription;
@@ -52,6 +53,7 @@ class PlanController extends Controller
         $plan = Plan::query()->create($data);
         $features = $this->mergeMonetizationFeaturesIntoRows($features, $request);
         $this->syncFeatures($plan, $features);
+        $this->syncFeatureConfigsFromRequest($plan, $request);
         if (strtolower((string) $plan->slug) !== 'free') {
             PlanTerm::syncDefaultsForPlan($plan);
         }
@@ -63,7 +65,7 @@ class PlanController extends Controller
 
     public function edit(Plan $plan)
     {
-        $plan->load(['features', 'terms']);
+        $plan->load(['features', 'terms', 'planPrices', 'featureConfigs']);
 
         return view('admin.plans.form', [
             'plan' => $plan,
@@ -88,9 +90,12 @@ class PlanController extends Controller
 
         if (strtolower((string) $plan->slug) !== 'free') {
             $this->syncPlanTerms($plan, $request);
+            $this->syncAdvancedDurationPricesFromRequest($plan, $request);
         } else {
             PlanTerm::query()->where('plan_id', $plan->id)->delete();
         }
+
+        $this->syncFeatureConfigsFromRequest($plan, $request);
 
         return redirect()
             ->route('admin.plans.edit', $plan)
@@ -206,6 +211,8 @@ class PlanController extends Controller
             'features' => ['nullable', 'array'],
             'features.*.key' => ['nullable', 'string', 'max:120'],
             'features.*.value' => ['nullable', 'string', 'max:65535'],
+            'prices' => ['nullable', 'array'],
+            'feature_configs' => ['nullable', 'array'],
         ]);
 
         return [
@@ -298,6 +305,109 @@ class PlanController extends Controller
         ];
 
         return array_merge($filtered, $extra);
+    }
+
+    /**
+     * "Pricing (Advanced)" table: updates {@see PlanTerm} for non-empty rows, then mirrors {@see PlanPrice}.
+     * Runs after {@see syncPlanTerms()} so filled advanced cells override duplicate billing fields for the same duration keys.
+     */
+    private function syncAdvancedDurationPricesFromRequest(Plan $plan, Request $request): void
+    {
+        if (strtolower((string) $plan->slug) === 'free') {
+            return;
+        }
+        $payload = $request->input('prices');
+        if (! is_array($payload)) {
+            return;
+        }
+        $touched = false;
+        foreach (PlanTerm::billingKeys() as $type) {
+            if (! isset($payload[$type]) || ! is_array($payload[$type])) {
+                continue;
+            }
+            $data = $payload[$type];
+            $priceRaw = $data['price'] ?? null;
+            $discRaw = $data['discount'] ?? null;
+            if (($priceRaw === '' || $priceRaw === null) && ($discRaw === '' || $discRaw === null)) {
+                continue;
+            }
+            $touched = true;
+            $base = (float) ($priceRaw ?? 0);
+            $disc = ($discRaw === '' || $discRaw === null)
+                ? null
+                : max(0, min(100, (int) round((float) $discRaw)));
+            $days = PlanTerm::durationDaysFor($type);
+
+            PlanTerm::query()->updateOrCreate(
+                ['plan_id' => $plan->id, 'billing_key' => $type],
+                [
+                    'duration_days' => $days,
+                    'price' => $base,
+                    'discount_percent' => $disc,
+                    'is_visible' => true,
+                    'sort_order' => PlanTerm::defaultSortOrder($type),
+                ]
+            );
+        }
+        if ($touched) {
+            PlanPrice::syncFromPlanTerms($plan->fresh('terms'));
+        }
+    }
+
+    /**
+     * Structured feature engine (parallel to plan_features key/value); does not replace {@see FeatureUsageService} reads.
+     */
+    private function syncFeatureConfigsFromRequest(Plan $plan, Request $request): void
+    {
+        $payload = $request->input('feature_configs');
+        if (! is_array($payload)) {
+            return;
+        }
+        $allowed = [
+            PlanFeatureKeys::CHAT_SEND_LIMIT,
+            PlanFeatureKeys::CONTACT_VIEW_LIMIT,
+            PlanFeatureKeys::INTEREST_SEND_LIMIT,
+            SubscriptionService::FEATURE_DAILY_PROFILE_VIEW_LIMIT,
+        ];
+        foreach ($allowed as $key) {
+            if (! isset($payload[$key]) || ! is_array($payload[$key])) {
+                continue;
+            }
+            $data = $payload[$key];
+            $extra = $data['extra_cost'] ?? null;
+            $extraPaise = ($extra === '' || $extra === null)
+                ? null
+                : (int) max(0, round(((float) $extra) * 100));
+
+            $lim = $data['limit'] ?? null;
+            $limitTotal = ($lim === '' || $lim === null) ? null : (int) $lim;
+
+            $cap = $data['daily_cap'] ?? null;
+            $dailyCap = ($cap === '' || $cap === null) ? null : (int) $cap;
+
+            $soft = $data['soft_limit'] ?? null;
+            $softPct = ($soft === '' || $soft === null) ? null : (int) max(0, min(100, (int) $soft));
+
+            $ex = $data['expiry'] ?? null;
+            $expiryDays = ($ex === '' || $ex === null) ? null : (int) $ex;
+
+            $period = $data['period'] ?? null;
+            $period = in_array($period, ['daily', 'monthly'], true) ? $period : null;
+
+            PlanFeatureConfig::query()->updateOrCreate(
+                ['plan_id' => $plan->id, 'feature_key' => $key],
+                [
+                    'is_enabled' => $request->boolean("feature_configs.$key.enabled"),
+                    'is_unlimited' => $request->boolean("feature_configs.$key.unlimited"),
+                    'limit_total' => $limitTotal,
+                    'period' => $period,
+                    'daily_cap' => $dailyCap,
+                    'soft_limit_percent' => $softPct,
+                    'expiry_days' => $expiryDays,
+                    'extra_cost_per_action' => $extraPaise,
+                ]
+            );
+        }
     }
 
     /**

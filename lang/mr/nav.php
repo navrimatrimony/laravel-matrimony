@@ -5,6 +5,7 @@
  * Use in views as: __('nav.search_profiles')
  */
 return [
+    'personal_menu_profile_section' => 'माझे प्रोफाइल आणि याद्या',
     'create_profile' => 'प्रोफाइल तयार करा',
     'my_profile' => 'माझे प्रोफाइल',
     'edit_profile' => 'प्रोफाइल संपादन',

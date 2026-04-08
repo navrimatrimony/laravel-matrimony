@@ -17,6 +17,7 @@
 return [
     'namespaces' => [
         'nav' => [
+            'personal_menu_profile_section',
             'create_profile',
             'my_profile',
             'edit_profile',

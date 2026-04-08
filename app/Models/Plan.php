@@ -56,6 +56,22 @@ class Plan extends Model
     }
 
     /**
+     * Multi-duration rows (parallel to legacy {@see terms()} / admin billing UI).
+     */
+    public function prices(): HasMany
+    {
+        return $this->hasMany(PlanPrice::class)->orderBy('sort_order');
+    }
+
+    /**
+     * Structured feature engine (parallel to string {@see features()} / plan_features).
+     */
+    public function featureConfigs(): HasMany
+    {
+        return $this->hasMany(PlanFeatureConfig::class);
+    }
+
+    /**
      * Cached {@see features()} rows (60s TTL). Invalidated when {@see PlanFeature} rows change.
      *
      * @return Collection<int, PlanFeature>
@@ -134,7 +150,7 @@ class Plan extends Model
 
     public function planPrices(): HasMany
     {
-        return $this->hasMany(PlanPrice::class)->orderBy('sort_order');
+        return $this->prices();
     }
 
     public function visiblePlanPrices(): HasMany
