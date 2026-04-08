@@ -57,6 +57,26 @@ class MatrimonyProfileController extends Controller
         protected InterestSendLimitService $interestSendLimitService,
     ) {}
 
+    private function resolvePhotoTargetProfile(Request $request): ?MatrimonyProfile
+    {
+        $user = auth()->user();
+        if (! $user) {
+            return null;
+        }
+
+        if (method_exists($user, 'isAnyAdmin') && $user->isAnyAdmin()) {
+            $targetId = (int) ($request->query('profile_id') ?? 0);
+            if ($targetId > 0) {
+                $target = MatrimonyProfile::withTrashed()->find($targetId);
+                if ($target && ($target->is_demo ?? false)) {
+                    return $target;
+                }
+            }
+        }
+
+        return $user->matrimonyProfile;
+    }
+
     /**
      * Phase-5B: Build snapshot (same schema as approval_snapshot_json) from request + profile.
      * Only includes keys present in request (or in overrides). No DB write.
@@ -284,15 +304,12 @@ class MatrimonyProfileController extends Controller
 
     public function uploadPhoto(Request $request)
     {
-        $user = auth()->user();
-
-        if (! $user || ! $user->matrimonyProfile) {
+        $profile = $this->resolvePhotoTargetProfile($request);
+        if (! $profile) {
             return redirect()
                 ->route('matrimony.profile.wizard.section', ['section' => 'basic-info'])
                 ->with('error', __('profile_actions.create_profile_first'));
         }
-
-        $profile = $user->matrimonyProfile;
 
         $galleryPhotosQuery = ProfilePhoto::query()
             ->where('profile_id', $profile->id);
@@ -338,16 +355,13 @@ class MatrimonyProfileController extends Controller
         ]);
 
         $user = auth()->user();
-
-        // 🔒 Guard: MatrimonyProfile must exist
-        if (! $user->matrimonyProfile) {
+        $profile = $this->resolvePhotoTargetProfile($request);
+        if (! $user || ! $profile) {
             return redirect()
                 ->route('matrimony.profile.wizard.section', ['section' => 'basic-info'])
                 ->with('error', __('profile_actions.create_profile_first'));
         }
-
-        $profile = $user->matrimonyProfile;
-        if ($profile->user_id !== $user->id) {
+        if (! ($profile->is_demo ?? false) && (int) $profile->user_id !== (int) $user->id) {
             abort(403, __('common.unauthorized_photo_update'));
         }
 
@@ -589,11 +603,10 @@ class MatrimonyProfileController extends Controller
     public function makePrimary(ProfilePhoto $photo)
     {
         $user = auth()->user();
-        if (! $user || ! $user->matrimonyProfile) {
+        $profile = $this->resolvePhotoTargetProfile(request());
+        if (! $user || ! $profile) {
             abort(403);
         }
-
-        $profile = $user->matrimonyProfile;
         if ((int) $photo->profile_id !== (int) $profile->id) {
             abort(403);
         }
@@ -632,11 +645,10 @@ class MatrimonyProfileController extends Controller
     public function reorderPhotos(Request $request)
     {
         $user = auth()->user();
-        if (! $user || ! $user->matrimonyProfile) {
+        $profile = $this->resolvePhotoTargetProfile($request);
+        if (! $user || ! $profile) {
             abort(403);
         }
-
-        $profile = $user->matrimonyProfile;
 
         $request->validate([
             'photo_ids' => ['required', 'array'],
@@ -685,11 +697,10 @@ class MatrimonyProfileController extends Controller
     public function destroy(ProfilePhoto $photo)
     {
         $user = auth()->user();
-        if (! $user || ! $user->matrimonyProfile) {
+        $profile = $this->resolvePhotoTargetProfile(request());
+        if (! $user || ! $profile) {
             abort(403);
         }
-
-        $profile = $user->matrimonyProfile;
         if ((int) $photo->profile_id !== (int) $profile->id) {
             abort(403);
         }

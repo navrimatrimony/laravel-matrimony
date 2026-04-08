@@ -79,8 +79,8 @@
                             </td>
                             <td class="py-3 pr-4">
                                 <div class="flex flex-wrap gap-2">
-                                    <a href="{{ route('admin.profiles.show', $p->id) }}" class="px-3 py-1.5 rounded bg-gray-100 hover:bg-gray-200 text-gray-800 dark:bg-gray-900 dark:hover:bg-gray-800 dark:text-gray-100">Edit</a>
-                                    <a href="{{ route('admin.demo-profile.photos', $p->id) }}" class="px-3 py-1.5 rounded bg-indigo-600 hover:bg-indigo-700 text-white">Photos</a>
+                                    <a href="{{ route('matrimony.profile.wizard.section', ['section' => 'full', 'all' => 1, 'profile_id' => $p->id]) }}" class="px-3 py-1.5 rounded bg-gray-100 hover:bg-gray-200 text-gray-800 dark:bg-gray-900 dark:hover:bg-gray-800 dark:text-gray-100">Edit all</a>
+                                    <a href="{{ route('matrimony.profile.upload-photo', ['profile_id' => $p->id]) }}" class="px-3 py-1.5 rounded bg-indigo-600 hover:bg-indigo-700 text-white">Photos</a>
                                     @if (($p->lifecycle_state ?? null) !== 'active')
                                         <form method="POST" action="{{ route('admin.demo-profile.publish', $p->id) }}">
                                             @csrf
@@ -109,8 +109,8 @@
                             </td>
                             <td class="py-3 pr-4">
                                 <div class="flex flex-wrap gap-2">
-                                    <a href="{{ route('admin.profiles.show', $p->id) }}" class="px-3 py-1.5 rounded bg-gray-100 hover:bg-gray-200 text-gray-800 dark:bg-gray-900 dark:hover:bg-gray-800 dark:text-gray-100">Edit</a>
-                                    <a href="{{ route('admin.demo-profile.photos', $p->id) }}" class="px-3 py-1.5 rounded bg-indigo-600 hover:bg-indigo-700 text-white">Photos</a>
+                                    <a href="{{ route('matrimony.profile.wizard.section', ['section' => 'full', 'all' => 1, 'profile_id' => $p->id]) }}" class="px-3 py-1.5 rounded bg-gray-100 hover:bg-gray-200 text-gray-800 dark:bg-gray-900 dark:hover:bg-gray-800 dark:text-gray-100">Edit all</a>
+                                    <a href="{{ route('matrimony.profile.upload-photo', ['profile_id' => $p->id]) }}" class="px-3 py-1.5 rounded bg-indigo-600 hover:bg-indigo-700 text-white">Photos</a>
                                     <form method="POST" action="{{ route('admin.demo-profile.publish', $p->id) }}">
                                         @csrf
                                         <button type="submit" class="px-3 py-1.5 rounded bg-emerald-600 hover:bg-emerald-700 text-white">Publish</button>

@@ -54,7 +54,7 @@ class ProfileWizardController extends Controller
     public function index()
     {
         $user = auth()->user();
-        $profile = $this->ensureProfile($user);
+        $profile = $this->ensureProfile($user, request());
         if (! $profile) {
             return redirect()->route('login');
         }
@@ -105,7 +105,7 @@ class ProfileWizardController extends Controller
         }
 
         $user = auth()->user();
-        $profile = $this->ensureProfile($user);
+        $profile = $this->ensureProfile($user, $request);
         if (! $profile) {
             return redirect()->route('login');
         }
@@ -189,7 +189,7 @@ class ProfileWizardController extends Controller
      */
     public function marriageFields(Request $request)
     {
-        $profile = $this->ensureProfile(auth()->user());
+        $profile = $this->ensureProfile(auth()->user(), $request);
         if (! $profile) {
             return response('', 403);
         }
@@ -244,7 +244,7 @@ class ProfileWizardController extends Controller
         }
 
         $user = auth()->user();
-        $profile = $this->ensureProfile($user);
+        $profile = $this->ensureProfile($user, $request);
         if (! $profile) {
             return redirect()->route('login');
         }
@@ -338,11 +338,27 @@ class ProfileWizardController extends Controller
     /**
      * Ensure user has a matrimony profile. Create minimal one if not (full_name from registrant only when registering_for = self).
      */
-    private function ensureProfile($user): ?MatrimonyProfile
+    private function ensureProfile($user, ?Request $request = null): ?MatrimonyProfile
     {
         if (! $user) {
             return null;
         }
+
+        // Admin override: allow using the wizard engine for a specific showcase/demo profile (SSOT).
+        if ($request && method_exists($user, 'isAnyAdmin') && $user->isAnyAdmin()) {
+            $targetId = (int) ($request->query('profile_id') ?? 0);
+            if ($targetId <= 0) {
+                $targetId = (int) (session('admin_edit_profile_id') ?? 0);
+            }
+            if ($targetId > 0) {
+                $target = MatrimonyProfile::withTrashed()->find($targetId);
+                if ($target && ($target->is_demo ?? false)) {
+                    session(['admin_edit_profile_id' => (int) $target->id]);
+                    return $target;
+                }
+            }
+        }
+
         $profile = $user->matrimonyProfile;
         if ($profile) {
             return $profile;

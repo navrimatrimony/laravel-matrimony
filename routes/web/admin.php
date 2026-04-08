@@ -244,8 +244,6 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
     Route::post('/demo-profiles/bulk', [DemoProfileController::class, 'bulkStore'])->name('demo-profile.bulk-store');
     Route::post('/demo-profiles/{profile}/publish', [DemoProfileController::class, 'publish'])->name('demo-profile.publish');
     Route::post('/demo-profiles/{profile}/delete', [DemoProfileController::class, 'delete'])->name('demo-profile.delete');
-    Route::get('/demo-profiles/{profile}/photos', [DemoProfileController::class, 'photos'])->name('demo-profile.photos');
-    Route::post('/demo-profiles/{profile}/photos', [DemoProfileController::class, 'storePhotos'])->name('demo-profile.photos.store');
 
     /*
     | Showcase Chat Orchestration (production-safe)
