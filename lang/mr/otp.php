@@ -4,7 +4,7 @@
  * Mobile OTP verification UI strings (Marathi).
  */
 return [
-    'step_1_of_2_verify_mobile' => 'पायरी 1/2: मोबाईल सत्यापन',
+    'step_1_of_2_verify_mobile' => 'मोबाईल सत्यापन',
     'verify_to_continue_or_skip' => 'पुढे जाण्यासाठी मोबाईल क्रमांक सत्यापित करा. तुम्ही आत्ता वगळून नंतर डॅशबोर्डवरूनही सत्यापन करू शकता.',
     'verify_we_will_send_otp' => 'मोबाईल क्रमांक सत्यापित करा. आम्ही 6-अंकी OTP पाठवू.',
     'for_testing_otp_is' => 'टेस्टिंगसाठी तुमचा OTP:',

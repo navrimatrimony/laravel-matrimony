@@ -1,4 +1,4 @@
-@props(['profile', 'namePrefix' => '', 'placeholderNotFound' => null, 'placeholderSelectRequired' => null])
+@props(['profile', 'namePrefix' => '', 'placeholderNotFound' => null, 'placeholderSelectRequired' => null, 'showSubcaste' => true])
 
 @php
     $religions = \App\Models\Religion::where('is_active', true)->orderBy('label')->get()->map(fn ($r) => [
@@ -27,7 +27,7 @@
     $subMissing = $isIntake && $subLabel !== '' && $subDisplay === '';
 @endphp
 
-<div class="religion-caste-component grid md:grid-cols-3 gap-2 border border-gray-200 dark:border-gray-600 rounded-lg p-4">
+<div class="religion-caste-component grid {{ $showSubcaste ? 'md:grid-cols-3' : 'md:grid-cols-2' }} gap-2 border border-gray-200 dark:border-gray-600 rounded-lg p-4">
     <div class="religion-wrap {{ $relMissing ? 'ocr-field-missing-wrap' : '' }}">
         <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">{{ __('Religion') }}</label>
         <div class="relative">
@@ -48,6 +48,7 @@
             <div class="caste-dropdown absolute left-0 right-0 top-full mt-1 bg-white dark:bg-gray-800 border rounded-md shadow-lg max-h-48 overflow-y-auto hidden z-50"></div>
         </div>
     </div>
+    @if ($showSubcaste)
     <div class="subcaste-wrap {{ $subMissing ? 'ocr-field-missing-wrap' : '' }}">
         <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">{{ __('Sub caste') }}</label>
         <div class="relative">
@@ -58,4 +59,5 @@
             <div class="subcaste-dropdown absolute left-0 right-0 top-full mt-1 bg-white dark:bg-gray-800 border rounded-md shadow-lg max-h-48 overflow-y-auto hidden z-50"></div>
         </div>
     </div>
+    @endif
 </div>

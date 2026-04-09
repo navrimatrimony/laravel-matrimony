@@ -11,7 +11,7 @@ class OnboardingEnforcementTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_member_routes_redirect_to_saved_onboarding_step_when_resume_pointer_set(): void
+    public function test_legacy_resume_step_six_redirects_to_photo_upload(): void
     {
         $user = User::factory()->create();
         MatrimonyProfile::factory()->create([
@@ -22,8 +22,8 @@ class OnboardingEnforcementTest extends TestCase
 
         $this->actingAs($user)
             ->get(route('dashboard'))
-            ->assertRedirect(route('matrimony.onboarding.show', ['step' => 6]))
-            ->assertSessionHas('info', __('onboarding.resume_continue_notice'));
+            ->assertRedirect(route('matrimony.profile.upload-photo', ['from' => 'onboarding']))
+            ->assertSessionHas('info', __('onboarding.resume_photo_notice'));
     }
 
     public function test_photo_phase_redirects_to_upload_photo_with_from_onboarding(): void

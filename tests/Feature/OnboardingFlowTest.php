@@ -131,6 +131,7 @@ class OnboardingFlowTest extends TestCase
             'religion_id' => (string) $religion->id,
             'caste_id' => '',
             'sub_caste_id' => '',
+            'height_cm' => '170',
         ]);
 
         $response->assertRedirect(route('matrimony.onboarding.show', ['step' => 4]));
@@ -174,67 +175,63 @@ class OnboardingFlowTest extends TestCase
         ]);
     }
 
-    public function test_onboarding_step_six_route_is_available(): void
+    public function test_onboarding_step_six_is_removed(): void
     {
         $user = User::factory()->create();
         MatrimonyProfile::factory()->create(['user_id' => $user->id]);
 
         $this->actingAs($user)
             ->get('/matrimony/onboarding/6')
-            ->assertOk();
+            ->assertNotFound();
     }
 
-    public function test_onboarding_step_five_success_redirects_to_step_six(): void
+    public function test_onboarding_step_four_success_redirects_to_photo_upload(): void
+    {
+        $this->seed(\Database\Seeders\MasterLookupSeeder::class);
+        $this->seed(\Database\Seeders\EducationSeeder::class);
+        $this->seed(\Database\Seeders\EducationCareerTemporarySeeder::class);
+
+        $user = User::factory()->create();
+        MatrimonyProfile::factory()->create(['user_id' => $user->id]);
+
+        $degreeCode = \App\Models\EducationDegree::query()->value('code');
+        $wwId = \Illuminate\Support\Facades\DB::table('working_with_types')->where('is_active', true)->value('id');
+        $profId = \Illuminate\Support\Facades\DB::table('professions')->where('is_active', true)->value('id');
+        if (! $degreeCode || ! $wwId || ! $profId) {
+            $this->markTestSkipped('Education / career seed incomplete.');
+        }
+
+        $response = $this->actingAs($user)->post(route('matrimony.onboarding.store', ['step' => 4]), [
+            'highest_education' => $degreeCode,
+            'working_with_type_id' => (string) $wwId,
+            'profession_id' => (string) $profId,
+        ]);
+
+        $response->assertRedirect(route('matrimony.profile.upload-photo', ['from' => 'onboarding']));
+        $response->assertSessionHasNoErrors();
+        $response->assertSessionHas('info', __('onboarding.after_cards_redirect_photos'));
+    }
+
+    public function test_onboarding_step_five_route_is_removed(): void
     {
         $user = User::factory()->create();
         MatrimonyProfile::factory()->create(['user_id' => $user->id]);
 
-        $response = $this->actingAs($user)->post(route('matrimony.onboarding.store', ['step' => 5]), [
-            'height_cm' => '170',
-        ]);
-
-        $response->assertRedirect(route('matrimony.onboarding.show', ['step' => 6]));
-        $response->assertSessionHasNoErrors();
-        $response->assertSessionHas('success', __('onboarding.saved_continue'));
+        $this->actingAs($user)
+            ->get('/matrimony/onboarding/5')
+            ->assertNotFound();
     }
 
-    public function test_onboarding_step_seven_success_redirects_to_photo_upload(): void
+    public function test_onboarding_step_seven_is_removed(): void
     {
         $this->seed(\Database\Seeders\MasterLookupSeeder::class);
 
         $user = User::factory()->create();
         MatrimonyProfile::factory()->create(['user_id' => $user->id]);
 
-        $response = $this->actingAs($user)->post(route('matrimony.onboarding.store', ['step' => 7]), [
-            'preferred_age_min' => 24,
-            'preferred_age_max' => 32,
-        ]);
-
-        $response->assertRedirect(route('matrimony.profile.upload-photo', ['from' => 'onboarding']));
-        $response->assertSessionHasNoErrors();
-        $response->assertSessionHas('info', __('onboarding.after_step7_redirect_photos'));
-    }
-
-    public function test_onboarding_step_seven_reflects_saved_profile_district_selection(): void
-    {
-        $this->seed(\Database\Seeders\LocationSeeder::class);
-
-        $district = DB::table('districts')->orderBy('id')->first();
-        if (! $district) {
-            $this->markTestSkipped('No district data available.');
-        }
-
-        $user = User::factory()->create();
-        MatrimonyProfile::factory()->create([
-            'user_id' => $user->id,
-            'district_id' => (int) $district->id,
-        ]);
-
-        $response = $this->actingAs($user)->get(route('matrimony.onboarding.show', ['step' => 7]));
-
-        $response->assertOk();
-        $response->assertSee('name="preferred_district_ids[]" value="'.$district->id.'"', false);
-        $response->assertSee('name="preferred_district_ids[]" value="'.$district->id.'" checked', false);
+        $this->actingAs($user)
+            ->get('/matrimony/onboarding/7')
+            ->assertNotFound();
     }
 
     public function test_profile_show_displays_child_living_with_label_when_present(): void

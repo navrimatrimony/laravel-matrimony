@@ -10,6 +10,7 @@ use App\Services\ExtendedFieldService;
 use App\Services\FieldValueHistoryService;
 use App\Services\MutationService;
 use App\Services\ProfileCompletenessService;
+use Illuminate\Database\QueryException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -169,7 +170,8 @@ class DemoProfileController extends Controller
             abort(404);
         }
 
-        DB::transaction(function () use ($profile) {
+        try {
+            DB::transaction(function () use ($profile) {
             $pid = (int) $profile->id;
 
             // Chats
@@ -243,6 +245,30 @@ class DemoProfileController extends Controller
             if (Schema::hasTable('profile_horoscopes')) {
                 DB::table('profile_horoscopes')->where('profile_id', $pid)->delete();
             }
+            // Phase-5 / schema: FK restrictOnDelete on matrimony_profiles — clear before forceDelete().
+            // Table => FK column (some tables use matrimony_profile_id, not profile_id).
+            foreach ([
+                ['profile_change_history', 'profile_id'],
+                ['profile_field_locks', 'profile_id'],
+                ['profile_visibility_settings', 'profile_id'],
+                ['profile_preferences', 'profile_id'],
+                ['profile_education', 'profile_id'],
+                ['profile_career', 'profile_id'],
+                ['profile_children', 'profile_id'],
+                ['profile_addresses', 'profile_id'],
+                ['profile_property_summary', 'profile_id'],
+                ['profile_property_assets', 'profile_id'],
+                ['profile_horoscope_data', 'profile_id'],
+                ['profile_legal_cases', 'profile_id'],
+                ['profile_alliance_networks', 'profile_id'],
+                ['profile_kyc_submissions', 'matrimony_profile_id'],
+                ['profile_verification_tag', 'matrimony_profile_id'],
+                ['profile_verification_tag_audits', 'matrimony_profile_id'],
+            ] as [$tbl, $col]) {
+                if (Schema::hasTable($tbl) && Schema::hasColumn($tbl, $col)) {
+                    DB::table($tbl)->where($col, $pid)->delete();
+                }
+            }
 
             // Finally: hard delete profile row.
             $profile->forceDelete();
@@ -252,7 +278,21 @@ class DemoProfileController extends Controller
             if ($owner && str_ends_with((string) $owner->email, '@system.local')) {
                 $owner->forceDelete();
             }
-        });
+            });
+        } catch (QueryException $e) {
+            $state = $e->errorInfo[0] ?? '';
+            $code = (int) ($e->errorInfo[1] ?? 0);
+            // MySQL 1451: cannot delete parent (child FK still references row).
+            if ($state === '23000' && $code === 1451) {
+                $profile->delete();
+
+                return redirect()->back()->with(
+                    'info',
+                    'Showcase profile archived (soft delete). A database link still blocked a full remove; the row is hidden but not purged.'
+                );
+            }
+            throw $e;
+        }
 
         return redirect()->back()->with('success', 'Showcase profile deleted.');
     }

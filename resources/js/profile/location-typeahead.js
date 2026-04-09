@@ -419,9 +419,6 @@
                                     return;
                                 }
 
-                                var conf = typeof data.confidence === 'number' ? Math.round(data.confidence * 100) : null;
-                                var confHtml = conf !== null ? '<span class="text-xs text-gray-500">Confidence ~' + conf + '% (GPS suggestion — confirm below)</span>' : '';
-
                                 var primaryItem = itemFromResolvePayload(data);
                                 var alts = Array.isArray(data.alternatives) ? data.alternatives : [];
                                 var altHtml = '';
@@ -439,7 +436,6 @@
                                         '<div class="text-sm text-gray-800 dark:text-gray-100">' +
                                             (data.display_label || '').replace(/</g, '&lt;') +
                                             '</div>' +
-                                        confHtml +
                                         '<div class="flex flex-wrap gap-2 pt-1">' +
                                         '<button type="button" class="location-gps-apply px-3 py-1.5 rounded text-xs font-semibold bg-indigo-600 text-white hover:bg-indigo-700">Use this location</button>' +
                                         '<button type="button" class="location-gps-dismiss px-3 py-1.5 rounded text-xs border border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700">Dismiss</button>' +

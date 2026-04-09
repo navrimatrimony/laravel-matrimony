@@ -23,7 +23,7 @@ return [
     'female' => 'Female',
     'birth_time_optional' => 'Birth Time (optional)',
     'birth_place_optional' => 'Birth Place (optional)',
-    'type_city_area' => 'Type city / area',
+    'type_city_area' => 'Type village or city',
     'use_current_location' => 'Use current location',
     'mother_tongue' => 'Mother Tongue',
     'type_to_search_religion' => 'Type to search religion',

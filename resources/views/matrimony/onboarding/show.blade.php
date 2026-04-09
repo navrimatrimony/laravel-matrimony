@@ -6,12 +6,11 @@
         2 => ['title' => __('onboarding.step2_title'), 'sub' => __('onboarding.step2_sub')],
         3 => ['title' => __('onboarding.step3_title'), 'sub' => __('onboarding.step3_sub')],
         4 => ['title' => __('onboarding.step4_title'), 'sub' => __('onboarding.step4_sub')],
-        5 => ['title' => __('onboarding.step5_title'), 'sub' => __('onboarding.step5_sub')],
-        6 => ['title' => __('onboarding.step6_title'), 'sub' => __('onboarding.step6_sub')],
-        7 => ['title' => __('onboarding.step7_title'), 'sub' => __('onboarding.step7_sub')],
     ];
     $head = $labels[$step] ?? ['title' => '', 'sub' => ''];
-    $pct = (int) round(($step / max(1, (int) ($totalSteps ?? 5))) * 100);
+    $displayCurrent = (int) ($onboardingDisplayCurrent ?? max(0, $step - 1));
+    $displayTotal = (int) ($onboardingDisplayTotal ?? 3);
+    $pct = $displayTotal > 0 ? (int) round(($displayCurrent / $displayTotal) * 100) : 0;
 @endphp
 <div class="py-6 md:py-12 bg-gradient-to-b from-slate-50/90 via-white to-slate-50/80 dark:from-gray-950 dark:via-gray-900 dark:to-gray-950 min-h-[calc(100vh-5rem)]">
     {{-- Capped width on large screens so fields and CTAs do not stretch edge-to-edge --}}
@@ -26,7 +25,7 @@
             </div>
         @endif
 
-        <p class="text-xs font-semibold tracking-wide text-indigo-600 dark:text-indigo-400 uppercase mb-2">{{ __('onboarding.step_of', ['current' => $step, 'total' => $totalSteps]) }}</p>
+        <p class="text-xs font-semibold tracking-wide text-indigo-600 dark:text-indigo-400 uppercase mb-2">{{ __('onboarding.step_of', ['current' => $displayCurrent, 'total' => $displayTotal]) }}</p>
         <div class="mb-6">
             <div class="h-2.5 rounded-full bg-gray-200 dark:bg-gray-700 overflow-hidden">
                 <div class="h-full rounded-full bg-gradient-to-r from-indigo-500 to-rose-500 transition-all duration-500" style="width: {{ $pct }}%"></div>
@@ -45,12 +44,6 @@
                 @include('matrimony.onboarding.steps.step3')
             @elseif ($step === 4)
                 @include('matrimony.onboarding.steps.step4')
-            @elseif ($step === 5)
-                @include('matrimony.onboarding.steps.step5')
-            @elseif ($step === 6)
-                @include('matrimony.onboarding.steps.step6')
-            @elseif ($step === 7)
-                @include('matrimony.onboarding.steps.step7')
             @endif
         </div>
 

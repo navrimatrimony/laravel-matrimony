@@ -121,7 +121,7 @@ test('basic info GET shows saved residence line in typeahead value', function ()
         ->assertSee('Saved society line', false);
 });
 
-test('onboarding step 5 GET shows saved residence line in typeahead value', function () {
+test('onboarding step 3 GET shows saved residence line in typeahead value', function () {
     $user = User::factory()->create();
     $profile = MatrimonyProfile::factory()->create(['user_id' => $user->id]);
     $country = Country::where('name', 'India')->firstOrFail();
@@ -136,12 +136,11 @@ test('onboarding step 5 GET shows saved residence line in typeahead value', func
         'district_id' => $district->id,
         'taluka_id' => $taluka->id,
         'city_id' => $city->id,
-        'address_line' => 'Step5 visible line',
+        'address_line' => 'Saved detailed line (wizard only)',
     ]);
 
     $this->actingAs($user)
-        ->get(route('matrimony.onboarding.show', ['step' => 5]))
+        ->get(route('matrimony.onboarding.show', ['step' => 3]))
         ->assertOk()
-        ->assertSee('Pune City', false)
-        ->assertSee('Step5 visible line', false);
+        ->assertSee('Pune City', false);
 });

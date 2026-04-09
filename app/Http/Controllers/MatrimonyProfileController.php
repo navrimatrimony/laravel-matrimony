@@ -1128,6 +1128,10 @@ class MatrimonyProfileController extends Controller
         $contactUsageSnapshot = $featureUsage->getContactViewUsageSnapshot($user);
         $canUseContact = ! $isOwnProfile && ($gateStates['contact_view_limit']['allowed'] ?? false);
 
+        $whoViewedEligibleDistinctCount = $isOwnProfile
+            ? ViewTrackingService::countEligibleDistinctViewersForTeaser((int) $profile->id)
+            : 0;
+
         $canViewContact = $isOwnProfile
             || (trim((string) ($contactAccess['paid_contact_phone'] ?? '')) !== '')
             || (trim((string) ($contactAccess['paid_contact_email'] ?? '')) !== '');
@@ -1225,6 +1229,7 @@ class MatrimonyProfileController extends Controller
                 'canUseContact' => $canUseContact,
                 'contactUsageSnapshot' => $contactUsageSnapshot,
                 'gateStates' => $gateStates,
+                'whoViewedEligibleDistinctCount' => $whoViewedEligibleDistinctCount,
                 'showGateSoftLimitWarning' => $showGateSoftLimitWarning,
                 'hasBlockingConflicts' => $hasBlockingConflicts,
                 'conflictRecords' => $conflictRecords,

@@ -15,8 +15,8 @@ return [
 
     'step2_title' => 'About the candidate',
     'step2_sub' => 'This helps us show the right matches.',
-    'step3_title' => 'Community',
-    'step3_sub' => 'Religion and caste help with compatible matches.',
+    'step3_title' => 'Community, height & location',
+    'step3_sub' => 'Religion, caste, height, and your area (city) help with compatible matches. You can add a detailed address later in Edit profile.',
     'step4_title' => 'Education & work',
     'step4_sub' => 'A short summary is enough — you can refine later.',
     'career_income_section' => 'Salary / income',
@@ -25,8 +25,9 @@ return [
     'career_income_help' => 'We normalize to an annual figure for search. You can hide the number from your public profile with the privacy option.',
     'step5_title' => 'Height & address',
     'step5_sub' => 'Used for distance and preference matching.',
-    'after_step7_redirect_photos' => 'Last step: add a profile photo. You can skip and finish anytime from that page.',
-    'photo_flow_edit_step5' => 'Edit partner preference (step 7)',
+    'after_cards_redirect_photos' => 'Next: add a profile photo. You can skip and finish anytime from that page.',
+    'after_step7_redirect_photos' => 'Next: add a profile photo. You can skip and finish anytime from that page.',
+    'photo_flow_edit_step5' => 'Back to education & work',
     'photo_flow_finish' => 'Finish onboarding',
     'step6_title' => 'About me',
     'step6_sub' => 'Write a short introduction, or use one-tap templates.',
@@ -62,5 +63,5 @@ return [
     'step5_continue_intro' => 'Save and continue — you’ll go to photo upload next (optional).',
     'finish_save' => 'Save & finish',
 
-    'step5_location_hint' => 'Type city or pincode, then pick one row from the list so your location saves to the profile. (Typing alone is not enough.)',
+    'step5_location_hint' => 'Type city or village name, then pick one row from the list so your location saves to the profile. (Typing alone is not enough.)',
 ];

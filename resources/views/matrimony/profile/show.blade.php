@@ -49,7 +49,7 @@
 
     {{-- success/info/error flash: layouts.app only (dismissible + auto-hide) — avoids triple duplicate banners on this page --}}
 
-    @if (($isOwnProfile ?? false) && auth()->check() && $userId !== null)
+    @if (($isOwnProfile ?? false) && auth()->check() && $userId !== null && (int) ($whoViewedEligibleDistinctCount ?? 0) > 0)
         @if ($whoViewedGateAllowed)
             <div class="mb-4 rounded-lg border border-stone-200/90 bg-white p-4 text-center shadow-sm dark:border-gray-700 dark:bg-gray-800/60">
                 <a href="{{ route('who-viewed.index') }}"

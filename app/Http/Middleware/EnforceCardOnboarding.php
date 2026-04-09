@@ -32,10 +32,24 @@ class EnforceCardOnboarding
             return $next($request);
         }
 
-        if ($step >= 2 && $step <= 7) {
+        if ($step >= 2 && $step <= 4) {
             return redirect()
                 ->route('matrimony.onboarding.show', ['step' => $step])
                 ->with('info', __('onboarding.resume_continue_notice'));
+        }
+
+        // Legacy: old step 5 (physical-only card) → community + height + location is now step 3.
+        if ($step === 5) {
+            return redirect()
+                ->route('matrimony.onboarding.show', ['step' => 3])
+                ->with('info', __('onboarding.resume_continue_notice'));
+        }
+
+        // Legacy: steps 6–7 (About me / Partner preference) removed from onboarding → photo handoff.
+        if ($step === 6 || $step === 7) {
+            return redirect()
+                ->route('matrimony.profile.upload-photo', ['from' => 'onboarding'])
+                ->with('info', __('onboarding.resume_photo_notice'));
         }
 
         if ((int) $step === MatrimonyProfile::CARD_ONBOARDING_PHOTO_RESUME_STEP) {

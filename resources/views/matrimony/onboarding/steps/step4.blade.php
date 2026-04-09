@@ -113,7 +113,12 @@
         />
     </div>
 
-    <x-onboarding.form-footer
-        :back-url="route('matrimony.onboarding.show', ['step' => 3])"
-    />
+    <div class="mt-8 space-y-4 sm:sticky sm:bottom-4 sm:z-10 sm:-mx-1 sm:px-4 sm:py-4 sm:rounded-xl sm:border sm:border-gray-200/90 sm:dark:border-gray-600 sm:bg-white/95 sm:dark:bg-gray-800/95 sm:backdrop-blur-md sm:shadow-lg sm:shadow-slate-300/20 dark:sm:shadow-none">
+        <p class="text-sm font-medium text-gray-800 dark:text-gray-100">{{ __('onboarding.step5_continue_intro') }}</p>
+        <x-onboarding.form-footer
+            :back-url="route('matrimony.onboarding.show', ['step' => 3])"
+            submit-extra-class="!min-h-[58px] !text-lg !font-bold !px-11"
+            class="!mt-0 !pt-4 border-t border-gray-200 dark:border-gray-600"
+        />
+    </div>
 </form>

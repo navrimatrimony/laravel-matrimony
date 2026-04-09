@@ -4,7 +4,7 @@
  * Mobile OTP verification UI strings.
  */
 return [
-    'step_1_of_2_verify_mobile' => 'Step 1 of 2: Verify your mobile',
+    'step_1_of_2_verify_mobile' => 'Verify your mobile',
     'verify_to_continue_or_skip' => 'Verify your mobile number to continue. You can also skip and verify later from the dashboard.',
     'verify_we_will_send_otp' => 'Verify your mobile number. We will send you a 6-digit OTP.',
     'for_testing_otp_is' => 'For testing, your OTP is:',

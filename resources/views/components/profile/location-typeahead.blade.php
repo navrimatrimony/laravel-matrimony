@@ -3,7 +3,7 @@
     'context' => 'residence', // residence | work | native | alliance
     'namePrefix' => '',       // e.g. 'alliance_networks[0]' for alliance rows
     'value' => '',
-    'placeholder' => 'Type village / city / pincode',
+    'placeholder' => 'Type village or city',
     'label' => null,
     /** When true and user is logged in, show “current location” assist (never writes profile by itself). */
     'gpsAssist' => true,

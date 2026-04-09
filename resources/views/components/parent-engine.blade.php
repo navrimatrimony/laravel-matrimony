@@ -10,22 +10,31 @@
     $namePrefix = $namePrefix ?? '';
     $n = fn($k) => $namePrefix !== '' ? $namePrefix . '[' . $k . ']' : $k;
     $oldK = fn($k) => $namePrefix !== '' ? str_replace(']', '', str_replace('[', '.', $namePrefix . '[' . $k . ']')) : $k;
+    /** Undo UTF-8 mojibake for session old() + DB values (old() wins over model and bypasses Eloquent casts). */
+    $u8 = static function ($v) {
+        if ($v === null || ! is_string($v)) {
+            return $v;
+        }
+        $r = \App\Support\Utf8MojibakeRepair::repair($v);
+
+        return is_string($r) ? $r : $v;
+    };
     $fatherContacts = [
-        old($oldK('father_contact_1'), $profile->father_contact_1 ?? ''),
-        old($oldK('father_contact_2'), $profile->father_contact_2 ?? ''),
-        old($oldK('father_contact_3'), $profile->father_contact_3 ?? ''),
+        $u8(old($oldK('father_contact_1'), $profile->father_contact_1 ?? '')),
+        $u8(old($oldK('father_contact_2'), $profile->father_contact_2 ?? '')),
+        $u8(old($oldK('father_contact_3'), $profile->father_contact_3 ?? '')),
     ];
     $fatherCount = max(1, count(array_filter($fatherContacts, fn($v) => trim((string)$v) !== '')));
     $motherContacts = [
-        old($oldK('mother_contact_1'), $profile->mother_contact_1 ?? ''),
-        old($oldK('mother_contact_2'), $profile->mother_contact_2 ?? ''),
-        old($oldK('mother_contact_3'), $profile->mother_contact_3 ?? ''),
+        $u8(old($oldK('mother_contact_1'), $profile->mother_contact_1 ?? '')),
+        $u8(old($oldK('mother_contact_2'), $profile->mother_contact_2 ?? '')),
+        $u8(old($oldK('mother_contact_3'), $profile->mother_contact_3 ?? '')),
     ];
     $motherCount = max(1, count(array_filter($motherContacts, fn($v) => trim((string)$v) !== '')));
 
     // Preview-only tweak: for intake snapshot core, prefix father's occupation with "Job - "
     // when we have an occupation text but no explicit job/व्यवसाय split.
-    $fatherOccupationValue = old($oldK('father_occupation'), $profile->father_occupation ?? null);
+    $fatherOccupationValue = $u8(old($oldK('father_occupation'), $profile->father_occupation ?? null));
     if (
         is_string($fatherOccupationValue)
         && trim($fatherOccupationValue) !== ''
@@ -41,7 +50,7 @@
     <div class="flex flex-col md:flex-row md:items-end gap-3 md:gap-4">
         <div class="flex-1">
             <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Father Name</label>
-            <input type="text" name="{{ $n('father_name') }}" value="{{ old($oldK('father_name'), $profile->father_name ?? null) }}" class="w-full rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-3 py-2">
+            <input type="text" name="{{ $n('father_name') }}" value="{{ $u8(old($oldK('father_name'), $profile->father_name ?? null)) }}" class="w-full rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-3 py-2">
         </div>
         <div class="flex-1">
             <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Father Occupation</label>
@@ -53,7 +62,7 @@
     <div class="flex flex-col md:flex-row md:items-end gap-3 md:gap-4">
         <div class="flex-1">
             <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Father Extra Information</label>
-            <input type="text" name="{{ $n('father_extra_info') }}" value="{{ old($oldK('father_extra_info'), $profile->father_extra_info ?? '') }}" maxlength="255" placeholder="e.g. Retired from MSEB, Kolhapur" class="w-full rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-3 py-2">
+            <input type="text" name="{{ $n('father_extra_info') }}" value="{{ $u8(old($oldK('father_extra_info'), $profile->father_extra_info ?? '')) }}" maxlength="255" placeholder="e.g. Retired from MSEB, Kolhapur" class="w-full rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-3 py-2">
         </div>
         <div class="flex-1 min-w-0" data-contact-context="father" data-max-slots="3">
             <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Father Contact number</label>
@@ -87,11 +96,11 @@
     <div class="flex flex-col md:flex-row md:items-end gap-3 md:gap-4">
         <div class="flex-1">
             <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Mother Name</label>
-            <input type="text" name="{{ $n('mother_name') }}" value="{{ old($oldK('mother_name'), $profile->mother_name ?? null) }}" class="w-full rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-3 py-2">
+            <input type="text" name="{{ $n('mother_name') }}" value="{{ $u8(old($oldK('mother_name'), $profile->mother_name ?? null)) }}" class="w-full rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-3 py-2">
         </div>
         <div class="flex-1">
             <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Mother Occupation</label>
-            <input type="text" name="{{ $n('mother_occupation') }}" value="{{ old($oldK('mother_occupation'), $profile->mother_occupation ?? null) }}" class="w-full rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-3 py-2">
+            <input type="text" name="{{ $n('mother_occupation') }}" value="{{ $u8(old($oldK('mother_occupation'), $profile->mother_occupation ?? null)) }}" class="w-full rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-3 py-2">
         </div>
     </div>
 
@@ -99,7 +108,7 @@
     <div class="flex flex-col md:flex-row md:items-end gap-3 md:gap-4">
         <div class="flex-1">
             <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Mother Extra Information</label>
-            <input type="text" name="{{ $n('mother_extra_info') }}" value="{{ old($oldK('mother_extra_info'), $profile->mother_extra_info ?? '') }}" maxlength="255" placeholder="e.g. Housewife, stays with son in Pune" class="w-full rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-3 py-2">
+            <input type="text" name="{{ $n('mother_extra_info') }}" value="{{ $u8(old($oldK('mother_extra_info'), $profile->mother_extra_info ?? '')) }}" maxlength="255" placeholder="e.g. Housewife, stays with son in Pune" class="w-full rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-3 py-2">
         </div>
         <div class="flex-1 min-w-0" data-contact-context="mother" data-max-slots="3">
             <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Mother Contact number</label>
@@ -137,9 +146,9 @@
             :namePrefix="$namePrefix"
             :detailedLabel="__('components.parents.parents_home_address')"
             :detailedPlaceholder="__('components.parents.parents_address_line')"
-            detailedValue="{{ old($oldK('parents_address_line'), $profile->address_line ?? '') }}"
+            detailedValue="{{ $u8(old($oldK('parents_address_line'), $profile->address_line ?? '')) }}"
             :detailedName="$namePrefix !== '' ? $namePrefix . '[parents_address_line]' : 'parents_address_line'"
-            :value="old($oldK('wizard_parents_city_display'), $profile->city?->name ?? '')"
+            :value="$u8(old($oldK('wizard_parents_city_display'), $profile->city?->name ?? ''))"
             placeholder="{{ __('components.parents.parents_location_placeholder') }}"
             label="{{ __('components.parents.parents_village_city') }}"
             :data-country-id="old($oldK('country_id'), $profile->country_id ?? null)"

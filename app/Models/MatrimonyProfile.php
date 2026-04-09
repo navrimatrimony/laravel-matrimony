@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Casts\MojibakeSafeUtf8String;
 use App\Services\ConflictDetectionService;
 use App\Services\ProfileFieldLockService;
 use Illuminate\Database\Eloquent\Builder;
@@ -41,7 +42,7 @@ class MatrimonyProfile extends Model
     */
     protected $table = 'matrimony_profiles';
 
-    /** Sentinel for `card_onboarding_resume_step` after step 7 (photo upload handoff). */
+    /** Sentinel for `card_onboarding_resume_step` after last onboarding card (step 4 → photo upload handoff). */
     public const CARD_ONBOARDING_PHOTO_RESUME_STEP = 8;
 
     /** Allowed lifecycle_state values (validated via mutator). */
@@ -226,6 +227,35 @@ class MatrimonyProfile extends Model
         'income_private' => 'boolean',
         'family_income_private' => 'boolean',
         'card_onboarding_resume_step' => 'integer',
+        // UTF-8 bytes misread as Latin-1 (mojibake) — repair on read/write for MR/EN narrative fields.
+        'full_name' => MojibakeSafeUtf8String::class,
+        'highest_education' => MojibakeSafeUtf8String::class,
+        'address_line' => MojibakeSafeUtf8String::class,
+        'birth_place_text' => MojibakeSafeUtf8String::class,
+        'photo_rejection_reason' => MojibakeSafeUtf8String::class,
+        'visibility_override_reason' => MojibakeSafeUtf8String::class,
+        'edit_reason' => MojibakeSafeUtf8String::class,
+        'specialization' => MojibakeSafeUtf8String::class,
+        'occupation_title' => MojibakeSafeUtf8String::class,
+        'company_name' => MojibakeSafeUtf8String::class,
+        'work_location_text' => MojibakeSafeUtf8String::class,
+        'annual_income' => MojibakeSafeUtf8String::class,
+        'family_income' => MojibakeSafeUtf8String::class,
+        'father_name' => MojibakeSafeUtf8String::class,
+        'father_occupation' => MojibakeSafeUtf8String::class,
+        'father_extra_info' => MojibakeSafeUtf8String::class,
+        'father_contact_1' => MojibakeSafeUtf8String::class,
+        'father_contact_2' => MojibakeSafeUtf8String::class,
+        'father_contact_3' => MojibakeSafeUtf8String::class,
+        'mother_name' => MojibakeSafeUtf8String::class,
+        'mother_occupation' => MojibakeSafeUtf8String::class,
+        'mother_extra_info' => MojibakeSafeUtf8String::class,
+        'mother_contact_1' => MojibakeSafeUtf8String::class,
+        'mother_contact_2' => MojibakeSafeUtf8String::class,
+        'mother_contact_3' => MojibakeSafeUtf8String::class,
+        'other_relatives_text' => MojibakeSafeUtf8String::class,
+        'physical_condition' => MojibakeSafeUtf8String::class,
+        'weight_range' => MojibakeSafeUtf8String::class,
     ];
 
     /**

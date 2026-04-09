@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Casts\MojibakeSafeUtf8String;
 use Illuminate\Database\Eloquent\Model;
 
 /**
@@ -14,6 +15,7 @@ class MasterEducation extends Model
     protected $fillable = ['name', 'code', 'group', 'sort_order', 'is_active'];
 
     protected $casts = [
+        'name' => MojibakeSafeUtf8String::class,
         'is_active' => 'boolean',
     ];
 }

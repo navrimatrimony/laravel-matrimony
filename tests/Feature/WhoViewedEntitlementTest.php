@@ -159,4 +159,43 @@ class WhoViewedEntitlementTest extends TestCase
             ->assertJsonPath('unique_count', 1)
             ->assertJsonPath('window_days', null);
     }
+
+    public function test_own_profile_show_hides_who_viewed_strip_when_no_eligible_views(): void
+    {
+        $user = User::factory()->create();
+        $profile = MatrimonyProfile::factory()->for($user)->create([
+            'lifecycle_state' => 'active',
+            'is_suspended' => false,
+        ]);
+
+        $this->actingAs($user)
+            ->get(route('matrimony.profile.show', $profile->id))
+            ->assertOk()
+            ->assertDontSee(__('profile.feature_gate_who_viewed_title'), false)
+            ->assertDontSee(__('profile.feature_gate_cta_who_viewed'), false);
+    }
+
+    public function test_own_profile_show_shows_who_viewed_strip_when_eligible_view_exists(): void
+    {
+        $owner = User::factory()->create();
+        $viewerUser = User::factory()->create();
+        $ownerProfile = MatrimonyProfile::factory()->for($owner)->create([
+            'lifecycle_state' => 'active',
+            'is_suspended' => false,
+        ]);
+        $viewerProfile = MatrimonyProfile::factory()->for($viewerUser)->create([
+            'lifecycle_state' => 'active',
+            'is_suspended' => false,
+        ]);
+
+        ProfileView::query()->create([
+            'viewer_profile_id' => $viewerProfile->id,
+            'viewed_profile_id' => $ownerProfile->id,
+        ]);
+
+        $this->actingAs($owner)
+            ->get(route('matrimony.profile.show', $ownerProfile->id))
+            ->assertOk()
+            ->assertSee(__('profile.feature_gate_who_viewed_title'), false);
+    }
 }

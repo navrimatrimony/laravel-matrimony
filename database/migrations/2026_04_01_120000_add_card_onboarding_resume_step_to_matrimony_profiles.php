@@ -7,7 +7,7 @@ use Illuminate\Support\Facades\Schema;
 return new class extends Migration
 {
     /**
-     * Card onboarding (steps 2–7) + photo handoff: nullable resume pointer.
+     * Card onboarding (steps 2–4) + photo handoff: nullable resume pointer.
      * 2–7 = card step; 8 = photo upload phase; null = not in forced onboarding.
      */
     public function up(): void

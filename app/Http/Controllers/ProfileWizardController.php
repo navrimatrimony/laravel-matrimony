@@ -950,7 +950,7 @@ class ProfileWizardController extends Controller
     }
 
     /**
-     * Card onboarding step 5: physical core + residence hierarchy/address_line (single applyManualSnapshot).
+     * Physical + residence core for manual snapshot (legacy onboarding step 5; wizard physical section may still compose similarly).
      */
     public function buildOnboardingPhysicalAddressSnapshot(Request $request, MatrimonyProfile $profile): array
     {
