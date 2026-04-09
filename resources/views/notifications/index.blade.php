@@ -30,7 +30,7 @@
                         $actor = ($actorProfileId && isset($actorProfiles)) ? ($actorProfiles[$actorProfileId] ?? null) : null;
                         $actorHref = $actor ? route('matrimony.profile.show', $actor->id) : null;
                         $hasApprovedPhoto = $actor && $actor->profile_photo && $actor->photo_approved !== false;
-                        $photoSrc = $actor ? ($hasApprovedPhoto ? asset('uploads/matrimony_photos/'.$actor->profile_photo) : $actor->profile_photo_url) : null;
+                        $photoSrc = $actor ? ($hasApprovedPhoto ? app(\App\Services\Image\ProfilePhotoUrlService::class)->publicUrl($actor->profile_photo) : $actor->profile_photo_url) : null;
                     @endphp
 
                     @if ($actor && $actorHref)

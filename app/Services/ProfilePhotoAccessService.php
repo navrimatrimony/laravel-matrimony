@@ -174,7 +174,7 @@ class ProfilePhotoAccessService
                 continue;
             }
             $slots[] = [
-                'url' => asset('uploads/matrimony_photos/'.$p->file_path),
+                'url' => app(\App\Services\Image\ProfilePhotoUrlService::class)->publicUrl($p->file_path),
                 'blur' => $allBlur,
             ];
         }
@@ -211,6 +211,6 @@ class ProfilePhotoAccessService
             return null;
         }
 
-        return asset('uploads/matrimony_photos/'.$path);
+        return app(\App\Services\Image\ProfilePhotoUrlService::class)->publicUrl($path);
     }
 }

@@ -260,7 +260,7 @@ class ProfileShowReadService
     public static function photoThumbUrl(MatrimonyProfile $p): string
     {
         if ($p->profile_photo && $p->photo_approved !== false) {
-            return asset('uploads/matrimony_photos/'.$p->profile_photo);
+            return app(\App\Services\Image\ProfilePhotoUrlService::class)->publicUrl($p->profile_photo);
         }
         $g = $p->gender?->key ?? $p->gender;
         if ($g === 'male') {

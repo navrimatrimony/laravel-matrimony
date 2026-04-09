@@ -147,6 +147,7 @@ class MatrimonyProfile extends Model
         'photo_approved',
         'photo_rejected_at',
         'photo_rejection_reason',
+        'photo_moderation_snapshot',
         'is_demo',
         'visibility_override',
         'visibility_override_reason',
@@ -233,6 +234,7 @@ class MatrimonyProfile extends Model
         'address_line' => MojibakeSafeUtf8String::class,
         'birth_place_text' => MojibakeSafeUtf8String::class,
         'photo_rejection_reason' => MojibakeSafeUtf8String::class,
+        'photo_moderation_snapshot' => 'array',
         'visibility_override_reason' => MojibakeSafeUtf8String::class,
         'edit_reason' => MojibakeSafeUtf8String::class,
         'specialization' => MojibakeSafeUtf8String::class,
@@ -297,7 +299,7 @@ class MatrimonyProfile extends Model
     {
         $file = trim((string) ($this->profile_photo ?? ''));
         if ($file !== '') {
-            return asset('uploads/matrimony_photos/' . ltrim($file, '/'));
+            return app(\App\Services\Image\ProfilePhotoUrlService::class)->publicUrl($file);
         }
 
         $genderKey = $this->gender?->key ?? $this->gender_id ?? $this->user?->gender ?? null;

@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Jobs\ProcessProfilePhoto;
 use App\Models\Caste;
 use App\Models\City;
 use App\Models\EducationDegree;
@@ -11,6 +12,7 @@ use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Queue;
 use Tests\TestCase;
 
 /**
@@ -145,6 +147,7 @@ class FullOnboardingRegistrationE2ETest extends TestCase
         $edu->assertOk();
         $this->assertStringContainsString('E2E Company', $edu->getContent() ?: '');
 
+        Queue::fake();
         $file = UploadedFile::fake()->image('e2e_upload.jpg', 900, 900);
         $photoResponse = $this->post(route('matrimony.profile.upload-photo'), [
             'profile_photo' => $file,
@@ -152,8 +155,10 @@ class FullOnboardingRegistrationE2ETest extends TestCase
         $photoResponse->assertRedirect(route('matrimony.profile.upload-photo'));
         $photoResponse->assertSessionHasNoErrors();
 
+        Queue::assertPushed(ProcessProfilePhoto::class);
+
         $profile->refresh();
         $this->assertNotNull($profile->profile_photo);
-        $this->assertGreaterThan(0, DB::table('profile_photos')->where('profile_id', $profile->id)->count());
+        $this->assertStringStartsWith('pending/', (string) $profile->profile_photo);
     }
 }

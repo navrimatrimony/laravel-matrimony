@@ -23,6 +23,10 @@ use App\Models\User;
 use App\Services\ContactAccessService;
 use App\Services\ExtendedFieldService;
 use App\Services\FeatureUsageService;
+use App\Services\Admin\AdminSettingService;
+use App\Services\Image\ImageModerationService;
+use App\Services\Image\PhotoModerationScanPayload;
+use App\Services\Image\ProfileGalleryPhotoModerationStatus;
 use App\Services\InterestSendLimitService;
 use App\Services\ProfileCompletenessService;
 use App\Services\ProfileFieldConfigurationService;
@@ -33,6 +37,7 @@ use App\Services\ProfileShowReadService;
 use App\Services\ProfileShowSnapshotService;
 use App\Services\ViewTrackingService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
 
 /*
@@ -111,6 +116,62 @@ class MatrimonyProfileController extends Controller
         }
 
         return array_merge($q, $this->adminDemoProfileQuery($profile));
+    }
+
+    /**
+     * Photo upload from XHR/fetch: avoid following a 302 inside fetch (that consumes session flash before the visible navigation).
+     *
+     * @param  array<string, string|null>  $flash
+     * @return \Illuminate\Http\RedirectResponse|\Illuminate\Http\JsonResponse
+     */
+    private function photoUploadRedirectResponse(Request $request, string $url, array $flash = [])
+    {
+        if ($request->ajax() || $request->expectsJson()) {
+            foreach ($flash as $key => $value) {
+                if ($value !== null && $value !== '') {
+                    session()->flash($key, $value);
+                }
+            }
+
+            $hasError = isset($flash['error']) && $flash['error'] !== null && $flash['error'] !== '';
+
+            return response()->json([
+                'success' => ! $hasError,
+                'redirect' => $url,
+            ]);
+        }
+
+        $redirect = redirect()->to($url);
+        foreach ($flash as $key => $value) {
+            if ($value !== null && $value !== '') {
+                $redirect = $redirect->with($key, $value);
+            }
+        }
+
+        return $redirect;
+    }
+
+    /**
+     * @return \Illuminate\Http\RedirectResponse|\Illuminate\Http\JsonResponse
+     */
+    private function photoUploadBackWithError(Request $request, string $message, ?MatrimonyProfile $profile = null)
+    {
+        if ($request->ajax() || $request->expectsJson()) {
+            session()->flash('error', $message);
+            $target = url()->previous();
+            if ($target === '' || $target === $request->fullUrl()) {
+                $target = $profile
+                    ? route('matrimony.profile.upload-photo', $this->uploadPhotoRedirectQuery($request, $profile))
+                    : route('matrimony.profile.wizard.section', ['section' => 'basic-info']);
+            }
+
+            return response()->json([
+                'success' => false,
+                'redirect' => $target,
+            ]);
+        }
+
+        return redirect()->back()->with('error', $message);
     }
 
     /**
@@ -312,6 +373,9 @@ class MatrimonyProfileController extends Controller
         }
         try {
             $result = app(\App\Services\MutationService::class)->applyManualSnapshot($profile, $snapshot, (int) $user->id, 'manual');
+            if ($request->attributes->get('matrimony_apply_pending_photo_review')) {
+                app(\App\Services\Image\ProfilePhotoPendingStateService::class)->applyPendingReviewState($profile);
+            }
         } catch (\Illuminate\Validation\ValidationException $e) {
             return redirect()->route('matrimony.profile.wizard.section', ['section' => 'full', 'all' => 1])
                 ->withErrors($e->errors())
@@ -360,10 +424,19 @@ class MatrimonyProfileController extends Controller
 
         $profile->load('gender');
 
-        $photoApprovalRequired = \App\Services\Admin\AdminSettingService::isPhotoApprovalRequired();
+        $photoApprovalRequired = AdminSettingService::isPhotoApprovalRequired();
         $photoMaxPerProfile = (int) \App\Models\AdminSetting::getValue('photo_max_per_profile', '5');
 
-        $currentPhotoCount = $galleryPhotos->count();
+        $galleryCount = $galleryPhotos->count();
+        $profilePhotoCol = trim((string) ($profile->profile_photo ?? ''));
+        // Primary photo often lives only on matrimony_profiles (pending/… or final filename) until ProcessProfilePhoto syncs profile_photos.
+        $primaryOnlyOnCoreColumn = $galleryCount === 0 && $profilePhotoCol !== '';
+        $primaryPhotoProcessing = $primaryOnlyOnCoreColumn && str_starts_with($profilePhotoCol, 'pending/');
+
+        $currentPhotoCount = $galleryCount;
+        if ($primaryOnlyOnCoreColumn) {
+            $currentPhotoCount = 1;
+        }
         $photoSlotsRemaining = max(0, $photoMaxPerProfile - $currentPhotoCount);
         $photoLimitReached = $currentPhotoCount >= $photoMaxPerProfile;
 
@@ -378,11 +451,18 @@ class MatrimonyProfileController extends Controller
             'photoSlotsRemaining' => $photoSlotsRemaining,
             'photoLimitReached' => $photoLimitReached,
             'fromOnboarding' => $fromOnboarding,
+            'primaryPhotoProcessing' => $primaryPhotoProcessing,
+            'primaryOnlyOnCoreColumn' => $primaryOnlyOnCoreColumn,
         ]);
     }
 
     public function storePhoto(Request $request)
     {
+        Log::info('UPLOAD ENTRY HIT', [
+            'controller' => __METHOD__,
+            'user_id' => auth()->id() ?? null,
+        ]);
+
         $maxUploadMb = (int) \App\Models\AdminSetting::getValue('photo_max_upload_mb', '8');
         $maxUploadKb = max(1, $maxUploadMb) * 1024;
 
@@ -395,9 +475,11 @@ class MatrimonyProfileController extends Controller
         $user = auth()->user();
         $profile = $this->resolvePhotoTargetProfile($request);
         if (! $user || ! $profile) {
-            return redirect()
-                ->route('matrimony.profile.wizard.section', ['section' => 'basic-info'])
-                ->with('error', __('profile_actions.create_profile_first'));
+            return $this->photoUploadRedirectResponse(
+                $request,
+                route('matrimony.profile.wizard.section', ['section' => 'basic-info']),
+                ['error' => __('profile_actions.create_profile_first')]
+            );
         }
         if (! ($profile->is_demo ?? false) && (int) $profile->user_id !== (int) $user->id) {
             abort(403, __('common.unauthorized_photo_update'));
@@ -411,7 +493,7 @@ class MatrimonyProfileController extends Controller
         if (in_array($profile->lifecycle_state, [
             'intake_uploaded', 'awaiting_user_approval', 'approved_pending_mutation', 'conflict_pending',
         ], true)) {
-            return redirect()->back()->with('error', __('common.profile_edit_blocked_intake_conflict'));
+            return $this->photoUploadBackWithError($request, __('common.profile_edit_blocked_intake_conflict'), $profile);
         }
 
         $maxPerProfile = (int) \App\Models\AdminSetting::getValue('photo_max_per_profile', '5');
@@ -453,7 +535,7 @@ class MatrimonyProfileController extends Controller
         // Otherwise, new uploads are added as non-primary by default.
         $mainBecomesPrimary = $existingPhotosCount === 0;
 
-        $targetDir = public_path('uploads/matrimony_photos');
+        $targetDir = storage_path('app/public/matrimony_photos');
         if (! is_dir($targetDir)) {
             mkdir($targetDir, 0755, true);
         }
@@ -512,28 +594,51 @@ class MatrimonyProfileController extends Controller
         };
 
         try {
-            $primaryFilename = $storeUploadedPhoto($primaryFile, 0);
+            $pendingPrimary = null;
+            $primaryFilename = null;
+            if ($mainBecomesPrimary) {
+                $pendingPrimary = app(\App\Services\Image\ImageProcessingService::class)
+                    ->enqueueProfilePhotoProcessing($primaryFile, (int) $profile->id);
+            } else {
+                $primaryFilename = $storeUploadedPhoto($primaryFile, 0);
+            }
             $additionalFilenames = [];
             foreach ($additionalFiles as $i => $addFile) {
                 $additionalFilenames[] = $storeUploadedPhoto($addFile, (int) $i + 1);
             }
         } catch (\RuntimeException $e) {
-            return redirect()->back()->with('error', $e->getMessage());
+            return $this->photoUploadBackWithError($request, $e->getMessage(), $profile);
         }
 
-        $photoApprovalRequired = \App\Services\Admin\AdminSettingService::isPhotoApprovalRequired();
-        $photoApproved = ! $photoApprovalRequired;
+        // Each stored gallery file runs NudeNet + pipeline (same rules as primary job). Stage 1 only affects
+        // automated-safe "approved" path; flagged / pending_manual never go to "approved" without Stage 2.
+        $galleryRowMetaForStoredFilename = function (string $filename): array {
+            $path = storage_path('app/public/matrimony_photos/'.ltrim($filename, '/'));
+            if (! is_file($path)) {
+                return ['approved_status' => 'pending', 'moderation_scan_json' => null];
+            }
+            try {
+                $result = app(ImageModerationService::class)->moderateProfilePhoto($path);
 
-        $approvedStatus = $photoApproved ? 'approved' : 'pending';
+                return [
+                    'approved_status' => ProfileGalleryPhotoModerationStatus::fromModerationResult($result),
+                    'moderation_scan_json' => PhotoModerationScanPayload::fromModerationResult($result),
+                ];
+            } catch (\Throwable $e) {
+                Log::warning('Gallery photo moderation failed', ['path' => $path, 'message' => $e->getMessage()]);
+
+                return ['approved_status' => 'pending', 'moderation_scan_json' => null];
+            }
+        };
+
+        $batchHadPending = $mainBecomesPrimary;
+        $hasModerationScanColumn = \Illuminate\Support\Facades\Schema::hasColumn('profile_photos', 'moderation_scan_json');
 
         $result = ['conflict_detected' => false];
         if ($mainBecomesPrimary) {
             $snapshot = [
                 'core' => [
-                    'profile_photo' => $primaryFilename,
-                    'photo_approved' => $photoApproved,
-                    'photo_rejected_at' => null,
-                    'photo_rejection_reason' => null,
+                    'profile_photo' => $pendingPrimary,
                 ],
                 'contacts' => [],
                 'children' => [],
@@ -553,8 +658,9 @@ class MatrimonyProfileController extends Controller
                     $snapshot,
                     (int) $user->id
                 );
+                app(\App\Services\Image\ProfilePhotoPendingStateService::class)->applyPendingReviewState($profile);
             } catch (\RuntimeException $e) {
-                return redirect()->back()->with('error', $e->getMessage());
+                return $this->photoUploadBackWithError($request, $e->getMessage(), $profile);
             }
         }
 
@@ -573,15 +679,25 @@ class MatrimonyProfileController extends Controller
             $sortFieldsMain['sort_order'] = $sortBase + 1;
         }
 
-        // Insert main uploaded photo.
-        ProfilePhoto::create([
-            'profile_id' => $profile->id,
-            'file_path' => $primaryFilename,
-            'is_primary' => $mainBecomesPrimary,
-            'uploaded_via' => 'user_web',
-            'approved_status' => $approvedStatus,
-            'watermark_detected' => false,
-        ] + $sortFieldsMain);
+        // Insert main uploaded photo into gallery only when it isn't handled as primary profile_photo.
+        if (! $mainBecomesPrimary && $primaryFilename) {
+            $meta = $galleryRowMetaForStoredFilename($primaryFilename);
+            if (($meta['approved_status'] ?? '') === 'pending') {
+                $batchHadPending = true;
+            }
+            $row = [
+                'profile_id' => $profile->id,
+                'file_path' => $primaryFilename,
+                'is_primary' => false,
+                'uploaded_via' => 'user_web',
+                'approved_status' => $meta['approved_status'],
+                'watermark_detected' => false,
+            ] + $sortFieldsMain;
+            if ($hasModerationScanColumn) {
+                $row['moderation_scan_json'] = $meta['moderation_scan_json'];
+            }
+            ProfilePhoto::create($row);
+        }
 
         // Insert additional photos as non-primary by default.
         if (! empty($additionalFilenames)) {
@@ -591,27 +707,42 @@ class MatrimonyProfileController extends Controller
                     $sortFieldsAdditional['sort_order'] = $sortBase + 2 + (int) $i;
                 }
 
-                ProfilePhoto::create([
+                $meta = $galleryRowMetaForStoredFilename($filename);
+                if (($meta['approved_status'] ?? '') === 'pending') {
+                    $batchHadPending = true;
+                }
+                $row = [
                     'profile_id' => $profile->id,
                     'file_path' => $filename,
                     'is_primary' => false,
                     'uploaded_via' => 'user_web',
-                    'approved_status' => $approvedStatus,
+                    'approved_status' => $meta['approved_status'],
                     'watermark_detected' => false,
-                ] + $sortFieldsAdditional);
+                ] + $sortFieldsAdditional;
+                if ($hasModerationScanColumn) {
+                    $row['moderation_scan_json'] = $meta['moderation_scan_json'];
+                }
+                ProfilePhoto::create($row);
             }
         }
 
         if (! empty($result['conflict_detected'])) {
             if ($inOnboardingPhotoPhase) {
-                return redirect()->route('matrimony.profile.upload-photo', $this->uploadPhotoRedirectQuery($request, $profile))
-                    ->with('warning', __('onboarding.photo_upload_conflict_retry'));
+                return $this->photoUploadRedirectResponse(
+                    $request,
+                    route('matrimony.profile.upload-photo', $this->uploadPhotoRedirectQuery($request, $profile)),
+                    ['warning' => __('onboarding.photo_upload_conflict_retry')]
+                );
             }
 
-            return redirect()->route('matrimony.profile.wizard.section', array_merge(
-                ['section' => 'full', 'all' => 1],
-                $this->adminDemoProfileQuery($profile)
-            ))->with('warning', 'Photo uploaded but some conflicts were detected.');
+            return $this->photoUploadRedirectResponse(
+                $request,
+                route('matrimony.profile.wizard.section', array_merge(
+                    ['section' => 'full', 'all' => 1],
+                    $this->adminDemoProfileQuery($profile)
+                )),
+                ['warning' => 'Photo uploaded but some conflicts were detected.']
+            );
         }
 
         $additionalCount = is_array($additionalFilenames) ? count($additionalFilenames) : 0;
@@ -621,13 +752,28 @@ class MatrimonyProfileController extends Controller
         if ($inOnboardingPhotoPhase && $firstEverBatch) {
             $this->releaseCardOnboardingLock($profile);
 
-            return redirect()->route('matrimony.profile.show', $profile->id)
-                ->with('success', __('onboarding.photo_uploaded_view_profile'));
+            return $this->photoUploadRedirectResponse(
+                $request,
+                route('matrimony.profile.show', $profile->id),
+                ['success' => __('onboarding.photo_uploaded_view_profile')]
+            );
         }
 
-        return redirect()->route('matrimony.profile.upload-photo', $this->uploadPhotoRedirectQuery($request, $profile))->with(
-            'success',
-            "Photos uploaded successfully ({$uploadedCount}). You can add more photos below."
+        $stage1 = AdminSettingService::isPhotoApprovalRequired();
+        if ($mainBecomesPrimary) {
+            $successMsg = $stage1
+                ? 'Your first photo was received and is processing. It will stay pending until automated checks and admin approval complete. You can add more gallery photos below.'
+                : 'Your first photo was received and is processing. It may show as pending briefly while automated checks run. You can add more gallery photos below.';
+        } elseif ($batchHadPending) {
+            $successMsg = "Photos received ({$uploadedCount}). At least one is still pending (not fully live yet) — see the yellow badge on each thumbnail.";
+        } else {
+            $successMsg = "Photos uploaded successfully ({$uploadedCount}). You can add more photos below.";
+        }
+
+        return $this->photoUploadRedirectResponse(
+            $request,
+            route('matrimony.profile.upload-photo', $this->uploadPhotoRedirectQuery($request, $profile)),
+            ['success' => $successMsg]
         );
     }
 
@@ -747,7 +893,8 @@ class MatrimonyProfileController extends Controller
         }
 
         $wasPrimary = (bool) $photo->is_primary;
-        $fileToDelete = public_path('uploads/matrimony_photos/'.$photo->file_path);
+        $fileToDeleteLegacy = public_path('uploads/matrimony_photos/'.$photo->file_path);
+        $fileToDeleteNew = storage_path('app/public/matrimony_photos/'.$photo->file_path);
 
         $priorBypass = \App\Models\MatrimonyProfile::$bypassGovernanceEnforcement;
         \App\Models\MatrimonyProfile::$bypassGovernanceEnforcement = true;
@@ -822,8 +969,10 @@ class MatrimonyProfileController extends Controller
             \App\Models\MatrimonyProfile::$bypassGovernanceEnforcement = $priorBypass;
         }
 
-        if (is_string($fileToDelete) && $fileToDelete !== '' && is_file($fileToDelete)) {
-            @unlink($fileToDelete);
+        foreach ([$fileToDeleteNew, $fileToDeleteLegacy] as $fileToDelete) {
+            if (is_string($fileToDelete) && $fileToDelete !== '' && is_file($fileToDelete)) {
+                @unlink($fileToDelete);
+            }
         }
 
         return redirect()->route('matrimony.profile.upload-photo', $this->uploadPhotoRedirectQuery(request(), $profile))

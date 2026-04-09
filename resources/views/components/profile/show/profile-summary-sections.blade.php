@@ -318,7 +318,7 @@
                     <div class="snap-start flex-none w-24 sm:w-28">
                         <div class="relative overflow-hidden rounded-xl border border-gray-200 dark:border-gray-700 bg-white/70 dark:bg-gray-800/40 shadow-sm">
                             <img
-                                src="{{ asset('uploads/matrimony_photos/'.$photo->file_path) }}"
+                                src="{{ app(\App\Services\Image\ProfilePhotoUrlService::class)->publicUrl($photo->file_path) }}"
                                 alt="Profile photo"
                                 class="w-full h-24 sm:h-28 object-cover"
                                 style="{{ $photoLocked ? 'filter: blur(8px);' : '' }}"
@@ -363,7 +363,7 @@
 </div>
 @endif
 
-@if ($isOwnProfile && $profile->photo_rejection_reason)
+@if ($isOwnProfile && $profile->photo_rejection_reason && $profile->photo_rejected_at)
     <div style="margin-bottom:1.5rem; padding:1rem; background:#fee2e2; border:1px solid #fca5a5; border-radius:8px; color:#991b1b;">
         <p style="font-weight:600; margin-bottom:0.5rem;">Your profile photo was removed by admin.</p>
         <p style="margin:0;"><strong>Reason:</strong> {{ $profile->photo_rejection_reason }}</p>

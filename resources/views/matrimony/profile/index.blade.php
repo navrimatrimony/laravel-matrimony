@@ -425,7 +425,7 @@
                             <div class="relative aspect-[3/4] w-full shrink-0 overflow-hidden rounded-t-xl bg-gray-100 dark:bg-gray-800 sm:aspect-auto sm:h-auto sm:w-44 sm:min-h-[11rem] md:w-48 sm:self-stretch sm:rounded-l-xl sm:rounded-tr-none">
                                 @if ($hasApprovedPhoto)
         <img
-            src="{{ asset('uploads/matrimony_photos/'.$matrimonyProfile->profile_photo) }}"
+            src="{{ app(\App\Services\Image\ProfilePhotoUrlService::class)->publicUrl($matrimonyProfile->profile_photo) }}"
                                         alt=""
                                         class="absolute inset-0 h-full w-full object-cover"
         />

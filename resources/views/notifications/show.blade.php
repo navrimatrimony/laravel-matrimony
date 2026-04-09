@@ -6,7 +6,7 @@
         @php
             $hasApprovedPhoto = isset($actorProfile) && $actorProfile && $actorProfile->profile_photo && $actorProfile->photo_approved !== false;
             $photoSrc = (isset($actorProfile) && $actorProfile)
-                ? ($hasApprovedPhoto ? asset('uploads/matrimony_photos/'.$actorProfile->profile_photo) : $actorProfile->profile_photo_url)
+                ? ($hasApprovedPhoto ? app(\App\Services\Image\ProfilePhotoUrlService::class)->publicUrl($actorProfile->profile_photo) : $actorProfile->profile_photo_url)
                 : null;
         @endphp
 

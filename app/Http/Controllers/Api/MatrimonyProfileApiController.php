@@ -3,11 +3,12 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
-use Illuminate\Http\Request;
 use App\Models\MatrimonyProfile;
 use App\Services\ProfileLifecycleService;
-use App\Services\ViewTrackingService;
 use App\Services\ProfileVisibilityPolicyService;
+use App\Services\ViewTrackingService;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 
 class MatrimonyProfileApiController extends Controller
 {
@@ -19,7 +20,7 @@ class MatrimonyProfileApiController extends Controller
         $core = [];
         $coreFields = ['full_name', 'date_of_birth', 'caste', 'highest_education', 'country_id', 'state_id', 'district_id', 'taluka_id', 'city_id'];
         foreach ($coreFields as $key) {
-            if (!$request->has($key)) {
+            if (! $request->has($key)) {
                 continue;
             }
             $val = $request->input($key);
@@ -28,8 +29,10 @@ class MatrimonyProfileApiController extends Controller
             }
             $core[$key] = $val === '' ? null : $val;
         }
+
         return ['core' => $core];
     }
+
     /**
      * Store matrimony profile for logged-in user
      * SSOT: User ≠ MatrimonyProfile
@@ -67,16 +70,16 @@ class MatrimonyProfileApiController extends Controller
 
         // Create new profile
         $profile = MatrimonyProfile::create([
-            'user_id'      => $user->id,
-            'full_name'     => $request->full_name,
+            'user_id' => $user->id,
+            'full_name' => $request->full_name,
             'date_of_birth' => $request->date_of_birth,
-            'caste'         => $request->caste,
+            'caste' => $request->caste,
             'highest_education' => $request->highest_education,
-            'country_id'    => $request->country_id,
-            'state_id'      => $request->state_id,
-            'district_id'   => $request->district_id,
-            'taluka_id'     => $request->taluka_id,
-            'city_id'       => $request->city_id,
+            'country_id' => $request->country_id,
+            'state_id' => $request->state_id,
+            'district_id' => $request->district_id,
+            'taluka_id' => $request->taluka_id,
+            'city_id' => $request->city_id,
         ]);
 
         // Day-6 BUGFIX-B FINAL: API create initial history (Law 9) — प्रत्येक initial field साठी एक row
@@ -103,103 +106,110 @@ class MatrimonyProfileApiController extends Controller
             'profile' => $profile,
         ]);
     }
-	/**
- * Get matrimony profile for logged-in user
- */
-public function show(Request $request)
-{
-    $user = $request->user();
 
-    $profile = MatrimonyProfile::where('user_id', $user->id)->first();
+    /**
+     * Get matrimony profile for logged-in user
+     */
+    public function show(Request $request)
+    {
+        $user = $request->user();
 
-    if (!$profile) {
-        return response()->json([
-            'success' => false,
-            'message' => 'Profile not found',
-        ], 404);
-    }
+        $profile = MatrimonyProfile::where('user_id', $user->id)->first();
 
-    // Hide rejected images - return null for profile_photo if explicitly rejected
-    $profileData = $profile->toArray();
-    if ($profile->photo_approved === false || !$profile->profile_photo) {
-        $profileData['profile_photo'] = null;
-    }
-
-    return response()->json([
-        'success' => true,
-        'profile' => $profileData,
-    ]);
-}
-/**
- * Update matrimony profile for logged-in user
- */
-public function update(Request $request)
-{
-    // Phase-4 Day-8: Location hierarchy validation
-    $request->validate([
-        'full_name' => ['sometimes', 'required', 'string', 'max:255'],
-        'date_of_birth' => ['sometimes', 'required', 'date'],
-        'caste' => ['sometimes', 'required', 'string', 'max:255'],
-        'highest_education' => ['sometimes', 'required', 'string', 'max:255'],
-        'country_id' => ['sometimes', 'required', 'exists:countries,id'],
-        'state_id' => ['sometimes', 'required', 'exists:states,id'],
-        'district_id' => ['nullable', 'exists:districts,id'],
-        'taluka_id' => ['nullable', 'exists:talukas,id'],
-        'city_id' => ['sometimes', 'required', 'exists:cities,id'],
-    ]);
-
-    // Phase-4 Day-8: Validate location hierarchy integrity if any location field provided
-    if ($request->hasAny(['country_id', 'state_id', 'district_id', 'taluka_id', 'city_id'])) {
-        $this->validateLocationHierarchy($request);
-    }
-
-    $user = $request->user();
-
-    $profile = MatrimonyProfile::where('user_id', $user->id)->first();
-
-    if (!$profile) {
-        return response()->json([
-            'success' => false,
-            'message' => 'Profile not found',
-        ], 404);
-    }
-
-    // Day 7: Archived/Suspended → edit blocked
-    if (!\App\Services\ProfileLifecycleService::isEditable($profile)) {
-        return response()->json([
-            'success' => false,
-            'message' => 'Your profile cannot be edited in its current state.',
-        ], 403);
-    }
-
-    // Phase-5B: All updates via MutationService (source=manual, profile_change_history)
-    $snapshot = $this->buildManualSnapshotFromApi($request, $profile);
-    if (!empty($snapshot['core'])) {
-        $result = app(\App\Services\MutationService::class)->applyManualSnapshot($profile, $snapshot, (int) $user->id, 'manual');
-        $changedFields = array_keys($snapshot['core']);
-        if (!empty($changedFields)) {
-            \App\Services\ProfileFieldLockService::applyLocks($profile, $changedFields, 'CORE', $user);
+        if (! $profile) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Profile not found',
+            ], 404);
         }
+
+        // Hide rejected images - return null for profile_photo if explicitly rejected
+        $profileData = $profile->toArray();
+        if ($profile->photo_approved === false || ! $profile->profile_photo) {
+            $profileData['profile_photo'] = null;
+        }
+
+        return response()->json([
+            'success' => true,
+            'profile' => $profileData,
+        ]);
     }
 
-    // Hide rejected images - return null for profile_photo if explicitly rejected
-    $profileData = $profile->toArray();
-    if ($profile->photo_approved === false || !$profile->profile_photo) {
-        $profileData['profile_photo'] = null;
-    }
+    /**
+     * Update matrimony profile for logged-in user
+     */
+    public function update(Request $request)
+    {
+        // Phase-4 Day-8: Location hierarchy validation
+        $request->validate([
+            'full_name' => ['sometimes', 'required', 'string', 'max:255'],
+            'date_of_birth' => ['sometimes', 'required', 'date'],
+            'caste' => ['sometimes', 'required', 'string', 'max:255'],
+            'highest_education' => ['sometimes', 'required', 'string', 'max:255'],
+            'country_id' => ['sometimes', 'required', 'exists:countries,id'],
+            'state_id' => ['sometimes', 'required', 'exists:states,id'],
+            'district_id' => ['nullable', 'exists:districts,id'],
+            'taluka_id' => ['nullable', 'exists:talukas,id'],
+            'city_id' => ['sometimes', 'required', 'exists:cities,id'],
+        ]);
 
-    return response()->json([
-        'success' => true,
-        'message' => 'Matrimony profile updated',
-        'profile' => $profileData,
-    ]);
-}
+        // Phase-4 Day-8: Validate location hierarchy integrity if any location field provided
+        if ($request->hasAny(['country_id', 'state_id', 'district_id', 'taluka_id', 'city_id'])) {
+            $this->validateLocationHierarchy($request);
+        }
+
+        $user = $request->user();
+
+        $profile = MatrimonyProfile::where('user_id', $user->id)->first();
+
+        if (! $profile) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Profile not found',
+            ], 404);
+        }
+
+        // Day 7: Archived/Suspended → edit blocked
+        if (! \App\Services\ProfileLifecycleService::isEditable($profile)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Your profile cannot be edited in its current state.',
+            ], 403);
+        }
+
+        // Phase-5B: All updates via MutationService (source=manual, profile_change_history)
+        $snapshot = $this->buildManualSnapshotFromApi($request, $profile);
+        if (! empty($snapshot['core'])) {
+            $result = app(\App\Services\MutationService::class)->applyManualSnapshot($profile, $snapshot, (int) $user->id, 'manual');
+            $changedFields = array_keys($snapshot['core']);
+            if (! empty($changedFields)) {
+                \App\Services\ProfileFieldLockService::applyLocks($profile, $changedFields, 'CORE', $user);
+            }
+        }
+
+        // Hide rejected images - return null for profile_photo if explicitly rejected
+        $profileData = $profile->toArray();
+        if ($profile->photo_approved === false || ! $profile->profile_photo) {
+            $profileData['profile_photo'] = null;
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Matrimony profile updated',
+            'profile' => $profileData,
+        ]);
+    }
 
     /**
      * Upload or replace matrimony profile photo for logged-in user
      */
     public function uploadPhoto(Request $request)
     {
+        Log::info('UPLOAD ENTRY HIT', [
+            'controller' => __METHOD__,
+            'user_id' => auth()->id() ?? null,
+        ]);
+
         $request->validate([
             'profile_photo' => 'required|image|max:2048',
         ]);
@@ -208,7 +218,7 @@ public function update(Request $request)
 
         $profile = MatrimonyProfile::where('user_id', $user->id)->first();
 
-        if (!$profile) {
+        if (! $profile) {
             return response()->json([
                 'success' => false,
                 'message' => 'Profile not found.',
@@ -216,32 +226,23 @@ public function update(Request $request)
         }
 
         $file = $request->file('profile_photo');
-        $filename = time() . '_' . basename($file->getClientOriginalName());
-
-        $file->move(
-            public_path('uploads/matrimony_photos'),
-            $filename
-        );
-
-        $photoApprovalRequired = \App\Services\Admin\AdminSettingService::isPhotoApprovalRequired();
-        $photoApproved = !$photoApprovalRequired;
+        $pending = app(\App\Services\Image\ImageProcessingService::class)
+            ->enqueueProfilePhotoProcessing($file, (int) $profile->id);
 
         $snapshot = [
             'core' => [
-                'profile_photo' => $filename,
-                'photo_approved' => $photoApproved,
-                'photo_rejected_at' => null,
-                'photo_rejection_reason' => null,
+                'profile_photo' => $pending,
             ],
         ];
         app(\App\Services\MutationService::class)->applyManualSnapshot($profile, $snapshot, (int) $user->id, 'manual');
+        app(\App\Services\Image\ProfilePhotoPendingStateService::class)->applyPendingReviewState($profile);
 
         return response()->json([
             'success' => true,
-            'message' => 'Profile photo uploaded successfully.',
+            'message' => 'Profile photo uploaded. Processing will complete shortly.',
             'data' => [
-                'profile_photo' => $filename,
-                'url' => asset('uploads/matrimony_photos/' . $filename),
+                'profile_photo' => $pending,
+                'status' => 'processing',
             ],
         ]);
     }
@@ -284,12 +285,12 @@ public function update(Request $request)
         // Age filter (from date_of_birth)
         if ($request->filled('age_from') || $request->filled('age_to')) {
             $query->whereNotNull('date_of_birth');
-            
+
             if ($request->filled('age_from')) {
                 $minDate = now()->subYears($request->age_from)->format('Y-m-d');
                 $query->whereDate('date_of_birth', '<=', $minDate);
             }
-            
+
             if ($request->filled('age_to')) {
                 $maxDate = now()->subYears($request->age_to + 1)->addDay()->format('Y-m-d');
                 $query->whereDate('date_of_birth', '>=', $maxDate);
@@ -336,7 +337,7 @@ public function update(Request $request)
     {
         $profile = MatrimonyProfile::with('user')->find($id);
 
-        if (!$profile) {
+        if (! $profile) {
             return response()->json([
                 'success' => false,
                 'message' => 'Profile not found',
@@ -347,8 +348,8 @@ public function update(Request $request)
         $viewerProfile = $user ? $user->matrimonyProfile : null;
         $isOwnProfile = $viewerProfile && (int) $viewerProfile->id === (int) $profile->id;
 
-        if (!$isOwnProfile) {
-            if (!ProfileLifecycleService::isVisibleToOthers($profile)) {
+        if (! $isOwnProfile) {
+            if (! ProfileLifecycleService::isVisibleToOthers($profile)) {
                 return response()->json([
                     'success' => false,
                     'message' => 'Profile not found',
@@ -360,7 +361,7 @@ public function update(Request $request)
                     'message' => 'Profile not found',
                 ], 404);
             }
-            if (!ProfileVisibilityPolicyService::canViewProfile($profile, $user)) {
+            if (! ProfileVisibilityPolicyService::canViewProfile($profile, $user)) {
                 return response()->json([
                     'success' => false,
                     'message' => 'Profile not found',
@@ -405,7 +406,7 @@ public function update(Request $request)
             $city = \App\Models\City::find($request->city_id);
             if ($city && $city->taluka_id != $request->taluka_id) {
                 throw \Illuminate\Validation\ValidationException::withMessages([
-                    'city_id' => 'Selected city does not belong to the selected taluka.'
+                    'city_id' => 'Selected city does not belong to the selected taluka.',
                 ]);
             }
         }
@@ -415,7 +416,7 @@ public function update(Request $request)
             $taluka = \App\Models\Taluka::find($request->taluka_id);
             if ($taluka && $taluka->district_id != $request->district_id) {
                 throw \Illuminate\Validation\ValidationException::withMessages([
-                    'taluka_id' => 'Selected taluka does not belong to the selected district.'
+                    'taluka_id' => 'Selected taluka does not belong to the selected district.',
                 ]);
             }
         }
@@ -425,7 +426,7 @@ public function update(Request $request)
             $district = \App\Models\District::find($request->district_id);
             if ($district && $district->state_id != $request->state_id) {
                 throw \Illuminate\Validation\ValidationException::withMessages([
-                    'district_id' => 'Selected district does not belong to the selected state.'
+                    'district_id' => 'Selected district does not belong to the selected state.',
                 ]);
             }
         }
@@ -435,10 +436,9 @@ public function update(Request $request)
             $state = \App\Models\State::find($request->state_id);
             if ($state && $state->country_id != $request->country_id) {
                 throw \Illuminate\Validation\ValidationException::withMessages([
-                    'state_id' => 'Selected state does not belong to the selected country.'
+                    'state_id' => 'Selected state does not belong to the selected country.',
                 ]);
             }
         }
     }
-
 }

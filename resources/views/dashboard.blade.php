@@ -42,7 +42,7 @@
             </div>
 
             {{-- Photo Rejection Alert --}}
-            @if ($profile->photo_rejection_reason)
+            @if ($profile->photo_rejection_reason && $profile->photo_rejected_at)
                 <div class="mb-6 p-5 bg-red-50 dark:bg-red-900/20 border-2 border-red-200 dark:border-red-800 rounded-lg text-red-900 dark:text-red-200">
                     <p class="font-bold mb-1 text-lg">{{ __('dashboard.photo_removed_by_admin') }}</p>
                     <p class="text-sm"><strong>{{ __('common.reason') }}:</strong> {{ $profile->photo_rejection_reason }}</p>
@@ -79,7 +79,7 @@
                     {{-- Profile Photo with Gender-based Fallback --}}
                     <div class="flex-shrink-0">
                         @if ($profile->profile_photo && $profile->photo_approved !== false)
-                            <img src="{{ asset('uploads/matrimony_photos/'.$profile->profile_photo) }}" 
+                            <img src="{{ app(\App\Services\Image\ProfilePhotoUrlService::class)->publicUrl($profile->profile_photo) }}"
                                  alt="{{ __('Profile Photo') }}" 
                                  class="w-24 h-24 rounded-full object-cover border-4 border-red-200 shadow-md">
                         @else
@@ -307,7 +307,7 @@
                                 {{-- Sender Photo with Gender-based Fallback --}}
                                 <div class="flex-shrink-0">
                                     @if ($interest->senderProfile && $interest->senderProfile->profile_photo && $interest->senderProfile->photo_approved !== false)
-                                        <img src="{{ asset('uploads/matrimony_photos/'.$interest->senderProfile->profile_photo) }}" 
+                                        <img src="{{ app(\App\Services\Image\ProfilePhotoUrlService::class)->publicUrl($interest->senderProfile->profile_photo) }}"
                                              alt="{{ __('common.profile') }}" 
                                              class="w-14 h-14 rounded-full object-cover border-2 border-red-200">
                                     @else
@@ -370,7 +370,7 @@
                                 {{-- Receiver Photo with Gender-based Fallback --}}
                                 <div class="flex-shrink-0">
                                     @if ($interest->receiverProfile && $interest->receiverProfile->profile_photo && $interest->receiverProfile->photo_approved !== false)
-                                        <img src="{{ asset('uploads/matrimony_photos/'.$interest->receiverProfile->profile_photo) }}" 
+                                        <img src="{{ app(\App\Services\Image\ProfilePhotoUrlService::class)->publicUrl($interest->receiverProfile->profile_photo) }}"
                                              alt="{{ __('common.profile') }}" 
                                              class="w-14 h-14 rounded-full object-cover border-2 border-red-200">
                                     @else

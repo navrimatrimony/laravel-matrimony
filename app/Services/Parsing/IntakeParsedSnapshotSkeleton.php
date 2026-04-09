@@ -200,10 +200,6 @@ class IntakeParsedSnapshotSkeleton
             'work_state_id' => null,
             'work_location_text' => null,
             'serious_intent_id' => null,
-            'profile_photo' => null,
-            'photo_approved' => null,
-            'photo_rejected_at' => null,
-            'photo_rejection_reason' => null,
         ];
     }
 
@@ -231,4 +227,3 @@ class IntakeParsedSnapshotSkeleton
         ];
     }
 }
-

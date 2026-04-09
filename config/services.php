@@ -35,7 +35,6 @@ return [
         ],
     ],
 
-
     'tesseract' => [
         'path' => env('TESSERACT_PATH'),
     ],
@@ -53,6 +52,8 @@ return [
         'key' => env('OPENAI_API_KEY'),
         'url' => env('OPENAI_API_URL', 'https://api.openai.com/v1/chat/completions'),
         'model' => env('OPENAI_MODEL', 'gpt-4o-mini'),
+        'moderation_url' => env('OPENAI_MODERATION_URL', 'https://api.openai.com/v1/moderations'),
+        'moderation_model' => env('OPENAI_MODERATION_MODEL', 'omni-moderation-latest'),
     ],
 
     'sarvam' => [
@@ -61,6 +62,17 @@ return [
         'base_url' => env('SARVAM_API_BASE_URL', 'https://api.sarvam.ai'),
         'chat_model' => env('SARVAM_CHAT_MODEL', 'sarvam-105b'),
         'timeout' => (int) env('SARVAM_HTTP_TIMEOUT', 20),
+    ],
+
+    /*
+    | Local NudeNet HTTP API (multipart field name: file).
+    */
+    'nudenet' => [
+        /*
+         * Python/FastAPI NudeNet service. Port 8000 is often the Laravel app — use the detector port (e.g. 8001).
+         */
+        'url' => env('NUDENET_DETECT_URL', 'http://127.0.0.1:8001/detect'),
+        'timeout' => (int) env('NUDENET_TIMEOUT', 15),
     ],
 
 ];

@@ -58,7 +58,7 @@
                 <div class="flex items-center gap-4 border border-gray-200 dark:border-gray-700 rounded-lg p-3 bg-white dark:bg-gray-800">
                     <div class="w-16 h-16 rounded-full overflow-hidden border flex-shrink-0">
                         @if ($viewerProfile && $viewerProfile->profile_photo && $viewerProfile->photo_approved !== false)
-                            <img src="{{ asset('uploads/matrimony_photos/'.$viewerProfile->profile_photo) }}" class="w-full h-full object-cover" alt="">
+                            <img src="{{ app(\App\Services\Image\ProfilePhotoUrlService::class)->publicUrl($viewerProfile->profile_photo) }}" class="w-full h-full object-cover" alt="">
                         @else
                             <img src="{{ asset('images/placeholders/default-profile.svg') }}" class="w-full h-full object-cover" alt="">
                         @endif

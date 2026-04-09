@@ -19,8 +19,6 @@ class AdminSettingService
     /**
      * Check if manual profile activation is required.
      * When true, new profiles start as suspended until admin activates.
-     *
-     * @return bool
      */
     public static function isManualProfileActivationRequired(): bool
     {
@@ -28,10 +26,9 @@ class AdminSettingService
     }
 
     /**
-     * Check if photo approval is required.
-     * When true, new photos are hidden until admin approves.
-     *
-     * @return bool
+     * Stage 1 (clean / automated-safe path): when true, even NudeNet-safe photos stay hidden until admin approves.
+     * When false, photos that pass automated screening can be marked visible without admin (see ProcessProfilePhoto + gallery moderation).
+     * Flagged / suspicious photos never use this to auto-approve — they follow Stage 2 (manual queue or AI).
      */
     public static function isPhotoApprovalRequired(): bool
     {
@@ -41,8 +38,6 @@ class AdminSettingService
     /**
      * Check if profile should be suspended after edit.
      * When true, profile edits trigger suspension for review.
-     *
-     * @return bool
      */
     public static function shouldSuspendAfterProfileEdit(): bool
     {
@@ -52,8 +47,6 @@ class AdminSettingService
     /**
      * Get suspend mode.
      * Options: 'full' (entire profile suspended) or 'new_content_only' (only new edits hidden)
-     *
-     * @return string
      */
     public static function getSuspendMode(): string
     {

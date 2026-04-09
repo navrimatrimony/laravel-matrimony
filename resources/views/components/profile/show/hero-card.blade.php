@@ -97,14 +97,14 @@
             return ! empty($p->file_path);
         })->values();
         $primaryPhotoUrl = ($profile->profile_photo && $profile->photo_approved !== false)
-            ? asset('uploads/matrimony_photos/'.$profile->profile_photo)
+            ? app(\App\Services\Image\ProfilePhotoUrlService::class)->publicUrl($profile->profile_photo)
             : null;
         $albumPhotoSlots = collect();
         if ($primaryPhotoUrl) {
             $albumPhotoSlots->push(['url' => $primaryPhotoUrl, 'blur' => false]);
         }
         foreach ($galleryItems as $p) {
-            $albumPhotoSlots->push(['url' => asset('uploads/matrimony_photos/'.$p->file_path), 'blur' => false]);
+            $albumPhotoSlots->push(['url' => app(\App\Services\Image\ProfilePhotoUrlService::class)->publicUrl($p->file_path), 'blur' => false]);
         }
     }
     $albumTotal = $albumPhotoSlots->count();

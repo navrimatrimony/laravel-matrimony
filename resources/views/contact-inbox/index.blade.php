@@ -39,7 +39,7 @@
                 <div class="border border-gray-200 dark:border-gray-600 rounded-lg p-4 mb-4 bg-white dark:bg-gray-800">
                     <div class="flex flex-wrap items-start gap-4">
                         @if ($senderProfile && $senderProfile->profile_photo && $senderProfile->photo_approved !== false)
-                            <img src="{{ asset('uploads/matrimony_photos/'.$senderProfile->profile_photo) }}" class="w-16 h-16 rounded-full object-cover border" alt="">
+                            <img src="{{ app(\App\Services\Image\ProfilePhotoUrlService::class)->publicUrl($senderProfile->profile_photo) }}" class="w-16 h-16 rounded-full object-cover border" alt="">
                         @else
                             <img src="{{ asset('images/placeholders/default-profile.svg') }}" class="w-16 h-16 rounded-full object-cover border" alt="">
                         @endif

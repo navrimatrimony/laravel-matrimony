@@ -454,7 +454,7 @@
     <p class="mb-3 text-xs text-amber-600 dark:text-amber-400" title="This field was corrected by admin">(Admin corrected)</p>
 @endif
 
-@if ($isOwnProfile && $profile->photo_rejection_reason)
+@if ($isOwnProfile && $profile->photo_rejection_reason && $profile->photo_rejected_at)
     <div style="margin-bottom:1.5rem; padding:1rem; background:#fee2e2; border:1px solid #fca5a5; border-radius:8px; color:#991b1b;">
         <p style="font-weight:600; margin-bottom:0.5rem;">Your profile photo was removed by admin.</p>
         <p style="margin:0;"><strong>Reason:</strong> {{ $profile->photo_rejection_reason }}</p>
@@ -1230,7 +1230,7 @@
     $viewerProfile = auth()->user()->matrimonyProfile ?? null;
     $viewerPhotoSrc = null;
     if ($viewerProfile && $viewerProfile->profile_photo && $viewerProfile->photo_approved !== false) {
-        $viewerPhotoSrc = asset('uploads/matrimony_photos/'.$viewerProfile->profile_photo);
+        $viewerPhotoSrc = app(\App\Services\Image\ProfilePhotoUrlService::class)->publicUrl($viewerProfile->profile_photo);
     } else {
         $viewerGender = $viewerProfile->gender ?? auth()->user()->gender ?? null;
         if ($viewerGender === 'male') {
@@ -1244,7 +1244,7 @@
     // Get viewed profile photo for comparison
     $viewedPhotoSrc = null;
     if ($profile->profile_photo && $profile->photo_approved !== false) {
-        $viewedPhotoSrc = asset('uploads/matrimony_photos/'.$profile->profile_photo);
+        $viewedPhotoSrc = app(\App\Services\Image\ProfilePhotoUrlService::class)->publicUrl($profile->profile_photo);
     } else {
         $viewedGender = $profile->gender?->key ?? $profile->gender;
         if ($viewedGender === 'male') {

@@ -5,10 +5,6 @@ use App\Http\Controllers\Admin\AdminCapabilityController;
 use App\Http\Controllers\Admin\AdminCasteController;
 use App\Http\Controllers\Admin\AdminConflictRecordController;
 use App\Http\Controllers\Admin\AdminCouponController;
-use App\Http\Controllers\Admin\CouponController;
-use App\Http\Controllers\Admin\ProfileBoostController;
-use App\Http\Controllers\Admin\ReferralController;
-use App\Http\Controllers\Admin\UserWalletController;
 use App\Http\Controllers\Admin\AdminFieldRegistryController;
 use App\Http\Controllers\Admin\AdminIntakeController;
 use App\Http\Controllers\Admin\AdminKycController;
@@ -23,6 +19,7 @@ use App\Http\Controllers\Admin\AdminUserNotificationsController;
 use App\Http\Controllers\Admin\AdminVerificationTagController;
 use App\Http\Controllers\Admin\CommerceAnalyticsController;
 use App\Http\Controllers\Admin\CommerceMemberOverrideController;
+use App\Http\Controllers\Admin\CouponController;
 use App\Http\Controllers\Admin\DemoProfileController;
 use App\Http\Controllers\Admin\GovernanceDashboardController;
 use App\Http\Controllers\Admin\HomepageImageController;
@@ -30,13 +27,17 @@ use App\Http\Controllers\Admin\IntakeReviewController;
 use App\Http\Controllers\Admin\LocationSuggestionWebController;
 use App\Http\Controllers\Admin\MatchBoostController;
 use App\Http\Controllers\Admin\OcrPatternController;
+use App\Http\Controllers\Admin\PhotoReviewQueueController;
 use App\Http\Controllers\Admin\PlanController;
 use App\Http\Controllers\Admin\PlanFeatureController;
+use App\Http\Controllers\Admin\ProfileBoostController;
+use App\Http\Controllers\Admin\ReferralController;
 use App\Http\Controllers\Admin\ShowcaseChatDebugController;
 use App\Http\Controllers\Admin\ShowcaseChatSettingsController;
 use App\Http\Controllers\Admin\ShowcaseConversationController;
 use App\Http\Controllers\Admin\SubCasteAdminController;
 use App\Http\Controllers\Admin\TranslationController;
+use App\Http\Controllers\Admin\UserWalletController;
 use App\Http\Controllers\Internal\Admin\CityAliasAdminController;
 use App\Http\Controllers\Internal\Admin\LocationSuggestionAdminController;
 use Illuminate\Support\Facades\Route;
@@ -112,6 +113,9 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
     | Profiles List (Admin)
     */
     Route::get('/profiles', [AdminProfileModerationController::class, 'profilesIndex'])->name('profiles.index');
+    Route::get('/photo-review-queue', [PhotoReviewQueueController::class, 'index'])->name('photo-review-queue.index');
+    Route::get('/photo-review-queue/{profile}/preview/{galleryPhoto?}', [PhotoReviewQueueController::class, 'preview'])
+        ->name('photo-review-queue.preview');
 
     Route::post('/profiles/{profile}/tags/assign', [AdminProfileTagController::class, 'assign'])
         ->name('profiles.tags.assign');
@@ -150,6 +154,16 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
 
     Route::post('/profiles/{profile}/reject-image', [AdminProfileModerationController::class, 'rejectImage'])
         ->name('profiles.reject-image');
+
+    Route::post('/profiles/{profile}/delete-primary-photo', [AdminProfileModerationController::class, 'deletePrimaryPhoto'])
+        ->name('profiles.delete-primary-photo');
+
+    Route::post('/profile-photos/{profilePhoto}/approve', [AdminProfileModerationController::class, 'approveGalleryPhoto'])
+        ->name('profile-photos.approve');
+    Route::post('/profile-photos/{profilePhoto}/reject', [AdminProfileModerationController::class, 'rejectGalleryPhoto'])
+        ->name('profile-photos.reject');
+    Route::post('/profile-photos/{profilePhoto}/delete', [AdminProfileModerationController::class, 'deleteGalleryPhoto'])
+        ->name('profile-photos.delete');
 
     Route::get('/profiles/{profile}/kyc/{submission}/file', [AdminKycController::class, 'stream'])
         ->name('profiles.kyc.file');

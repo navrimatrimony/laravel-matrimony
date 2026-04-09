@@ -9,7 +9,7 @@
     $viewerProfile = $viewer?->matrimonyProfile;
     $viewerPhotoSrc = null;
     if ($viewerProfile && $viewerProfile->profile_photo && $viewerProfile->photo_approved !== false) {
-        $viewerPhotoSrc = asset('uploads/matrimony_photos/'.$viewerProfile->profile_photo);
+        $viewerPhotoSrc = app(\App\Services\Image\ProfilePhotoUrlService::class)->publicUrl($viewerProfile->profile_photo);
     } else {
         $viewerGender = $viewerProfile->gender ?? $viewer->gender ?? null;
         if ($viewerGender === 'male') {
@@ -22,7 +22,7 @@
     }
     $viewedPhotoSrc = null;
     if ($profile->profile_photo && $profile->photo_approved !== false) {
-        $viewedPhotoSrc = asset('uploads/matrimony_photos/'.$profile->profile_photo);
+        $viewedPhotoSrc = app(\App\Services\Image\ProfilePhotoUrlService::class)->publicUrl($profile->profile_photo);
     } else {
         $viewedGender = $profile->gender?->key ?? $profile->gender;
         if ($viewedGender === 'male') {

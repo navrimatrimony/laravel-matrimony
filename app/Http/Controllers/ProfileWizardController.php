@@ -11,6 +11,7 @@ use App\Services\ProfileCompletenessService;
 use App\Services\ProfileCompletionService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Rule;
@@ -306,6 +307,9 @@ class ProfileWizardController extends Controller
 
         try {
             $result = app(\App\Services\MutationService::class)->applyManualSnapshot($profile, $snapshot, (int) $user->id, 'manual');
+            if ($request->attributes->get('matrimony_apply_pending_photo_review')) {
+                app(\App\Services\Image\ProfilePhotoPendingStateService::class)->applyPendingReviewState($profile);
+            }
             \Illuminate\Support\Facades\Log::info('WIZARD RESULT DEBUG', ['result' => $result, 'keys' => array_keys($result)]);
             $hasChildrenNo = isset($snapshot['core']['has_children']) && ($snapshot['core']['has_children'] === false || $snapshot['core']['has_children'] === 0 || $snapshot['core']['has_children'] === '0');
             if (in_array($section, ['basic-info', 'marriages', 'full'], true) && $hasChildrenNo) {
@@ -378,6 +382,7 @@ class ProfileWizardController extends Controller
                 $target = MatrimonyProfile::withTrashed()->find($targetId);
                 if ($target && ($target->is_demo ?? false)) {
                     session(['admin_edit_profile_id' => (int) $target->id]);
+
                     return $target;
                 }
             }
@@ -1691,23 +1696,24 @@ class ProfileWizardController extends Controller
 
     private function buildPhotoSnapshot(Request $request, MatrimonyProfile $profile): array
     {
+        Log::info('UPLOAD ENTRY HIT', [
+            'controller' => __METHOD__,
+            'user_id' => auth()->id() ?? null,
+        ]);
+
         $request->validate([
             'profile_photo' => ['required', 'image', 'max:2048'],
         ]);
 
         $file = $request->file('profile_photo');
-        $filename = time().'_'.basename($file->getClientOriginalName());
-        $file->move(public_path('uploads/matrimony_photos'), $filename);
+        $pending = app(\App\Services\Image\ImageProcessingService::class)
+            ->enqueueProfilePhotoProcessing($file, (int) $profile->id);
 
-        $photoApprovalRequired = \App\Services\Admin\AdminSettingService::isPhotoApprovalRequired();
-        $photoApproved = ! $photoApprovalRequired;
+        $request->attributes->set('matrimony_apply_pending_photo_review', true);
 
         return [
             'core' => [
-                'profile_photo' => $filename,
-                'photo_approved' => $photoApproved,
-                'photo_rejected_at' => null,
-                'photo_rejection_reason' => null,
+                'profile_photo' => $pending,
             ],
         ];
     }

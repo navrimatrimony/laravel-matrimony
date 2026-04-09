@@ -75,7 +75,8 @@ class MutationService
         'father_name', 'father_occupation', 'father_extra_info', 'father_contact_1', 'father_contact_2', 'father_contact_3',
         'mother_name', 'mother_occupation', 'mother_extra_info', 'mother_contact_1', 'mother_contact_2', 'mother_contact_3',
         'other_relatives_text',
-        'photo_approved', 'photo_rejected_at', 'photo_rejection_reason', 'is_suspended',
+        // photo_approved / photo_rejected_at / photo_rejection_reason: NOT snapshot-driven (see ProcessProfilePhoto + ProfilePhotoPendingStateService)
+        'is_suspended',
     ];
 
     /** Lifecycle states that block manual edit (PART-5). */
@@ -132,6 +133,9 @@ class MutationService
         try {
             DB::transaction(function () use ($profile, $snapshot, $isAdmin, $mode, &$hadConflicts): void {
                 $proposedCore = $snapshot['core'] ?? [];
+                if ($mode === 'manual') {
+                    $proposedCore = $this->stripPhotoModerationFromManualCore($proposedCore);
+                }
                 $proposedExtended = $this->proposedExtendedForManualSnapshotConflictDetection($snapshot);
                 $conflictRecords = [];
                 $conflictFieldNames = [];
@@ -2326,6 +2330,22 @@ class MutationService
         $merged = array_values(array_unique(array_merge($keys ?: [], self::FALLBACK_CORE_KEYS)));
 
         return $merged !== [] ? $merged : self::FALLBACK_CORE_KEYS;
+    }
+
+    /**
+     * @param  array<string, mixed>  $proposedCore
+     * @return array<string, mixed>
+     */
+    private function stripPhotoModerationFromManualCore(array $proposedCore): array
+    {
+        foreach (['photo_approved', 'photo_rejected_at', 'photo_rejection_reason'] as $k) {
+            unset($proposedCore[$k]);
+        }
+        if (array_key_exists('profile_photo', $proposedCore) && $proposedCore['profile_photo'] === null) {
+            unset($proposedCore['profile_photo']);
+        }
+
+        return $proposedCore;
     }
 
     private function getCurrentCoreValue(MatrimonyProfile $profile, string $fieldKey): mixed

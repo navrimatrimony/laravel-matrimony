@@ -18,7 +18,7 @@
                         <div class="border rounded-lg p-4 mb-4 bg-gray-50 dark:bg-gray-700 flex items-center justify-between">
                             <div class="flex items-center gap-4">
                                 @if ($p->profile_photo && $p->photo_approved !== false)
-                                    <img src="{{ asset('uploads/matrimony_photos/'.$p->profile_photo) }}" alt="" class="w-14 h-14 rounded-full object-cover border">
+                                    <img src="{{ app(\App\Services\Image\ProfilePhotoUrlService::class)->publicUrl($p->profile_photo) }}" alt="" class="w-14 h-14 rounded-full object-cover border">
                                 @else
                                     @php
                                         $pGender = $p->gender ?? null;

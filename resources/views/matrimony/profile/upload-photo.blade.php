@@ -158,8 +158,8 @@ body.upload-landscape .upload-gallery-col {
             {{-- Main Card --}}
             <div class="upload-main-col" style="background: white; border-radius: 16px; box-shadow: 0 4px 20px rgba(0,0,0,0.08); padding: 32px 24px; text-align: center;">
 
-            {{-- Photo rejection warning --}}
-            @if (! empty($profile->photo_rejection_reason))
+            {{-- Real rejection only (pending review must not use this banner — see photo_rejected_at) --}}
+            @if (! empty($profile->photo_rejection_reason) && $profile->photo_rejected_at)
                 <div style="margin-bottom: 24px; padding: 16px; background: #fef2f2; border: 1px solid #fecaca; border-radius: 12px; text-align: left;">
                     <p style="font-weight: 600; margin: 0 0 8px 0; color: #991b1b; font-size: 14px;">{{ __('photo.previous_photo_removed') }}</p>
                     <p style="margin: 0; color: #7f1d1d; font-size: 13px;"><strong>{{ __('common.reason') }}:</strong> {{ $profile->photo_rejection_reason }}</p>
@@ -220,9 +220,9 @@ body.upload-landscape .upload-gallery-col {
                             </div>
                             <div style="padding: 7px 10px; border-radius: 999px; background: #ffffff; border: 1px solid #e5e7eb; color: #374151; font-size: 12px; font-weight: 800;">
                                 @if (! $photoApprovalRequired)
-                                    Photos go live immediately
+                                    Clean photos (passing scan) can go live without admin; flagged photos stay pending
                                 @else
-                                    New photos stay pending until review
+                                    New photos stay pending until admin review
                                 @endif
                             </div>
                         </div>
@@ -326,9 +326,26 @@ body.upload-landscape .upload-gallery-col {
             </div>
 
             @if ($galleryPhotos->isEmpty())
-                <div style="margin-top: 14px; font-size: 13px; color: #6b7280;">
-                    Your gallery is empty. Upload a photo above to get started.
-                </div>
+                @if (! empty($primaryPhotoProcessing))
+                    <div style="margin-top: 14px; padding: 16px; background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 14px; text-align: left;">
+                        <p style="margin: 0 0 8px 0; font-weight: 900; color: #1e40af; font-size: 14px;">Processing your photo…</p>
+                        <p style="margin: 0; font-size: 13px; color: #1e3a8a; line-height: 1.5;">
+                            Your upload was received. The image is being optimized and checked; this usually takes a few seconds.
+                            Refresh the page if the preview does not appear.
+                        </p>
+                    </div>
+                @elseif (! empty($primaryOnlyOnCoreColumn) && ! empty(trim((string) ($profile->profile_photo ?? ''))) && ! str_starts_with(trim((string) $profile->profile_photo), 'pending/'))
+                    <div style="margin-top: 14px; padding: 12px; background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 16px;">
+                        <p style="margin: 0 0 10px 0; font-size: 12px; color: #6b7280; font-weight: 700;">Primary photo (syncing to gallery…)</p>
+                        <div style="max-width: 220px; margin: 0 auto; border-radius: 14px; overflow: hidden; aspect-ratio: 1/1; background: #f3f4f6;">
+                            <img src="{{ app(\App\Services\Image\ProfilePhotoUrlService::class)->publicUrl($profile->profile_photo) }}" alt="" style="width: 100%; height: 100%; object-fit: cover;">
+                        </div>
+                    </div>
+                @else
+                    <div style="margin-top: 14px; font-size: 13px; color: #6b7280;">
+                        Your gallery is empty. Upload a photo above to get started.
+                    </div>
+                @endif
             @else
                 @if ($photoLimitReached)
                     <div style="margin-top: 14px; padding: 12px 14px; background: #fef3c7; border: 1px solid #fde68a; border-radius: 14px; color: #92400e; font-weight: 900; font-size: 13px;">
@@ -344,7 +361,7 @@ body.upload-landscape .upload-gallery-col {
                     <div style="margin-top: 16px; padding: 14px 14px; background: linear-gradient(135deg, rgba(5,150,105,0.12) 0%, rgba(79,70,229,0.08) 100%); border: 1px solid rgba(5,150,105,0.20); border-radius: 16px;">
                         <div style="display:flex; gap: 14px; align-items:center; flex-wrap: wrap;">
                             <div style="width: 92px; height: 92px; border-radius: 14px; overflow:hidden; background:#f3f4f6; flex: none; border: 1px solid rgba(5,150,105,0.22);">
-                                <img src="{{ asset('uploads/matrimony_photos/'.$primaryPhoto->file_path) }}" alt="Primary Photo profile photo" style="width:100%; height:100%; object-fit:cover;">
+                                <img src="{{ app(\App\Services\Image\ProfilePhotoUrlService::class)->publicUrl($primaryPhoto->file_path) }}" alt="Primary Photo profile photo" style="width:100%; height:100%; object-fit:cover;">
                             </div>
                             <div style="flex:1; min-width: 200px;">
                                 <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
@@ -383,7 +400,7 @@ body.upload-landscape .upload-gallery-col {
                         <div class="photo-card" data-photo-id="{{ $photo->id }}" style="border: 1px solid #e5e7eb; border-radius: 16px; padding: 12px; background: #ffffff; box-shadow: 0 10px 30px rgba(17,24,39,0.06); {{ $photo->is_primary ? 'border-color: rgba(5,150,105,0.35); box-shadow: 0 16px 40px rgba(5,150,105,0.12);' : '' }}">
                             <div style="position: relative; border-radius: 14px; overflow: hidden; width: 100%; aspect-ratio: 1 / 1; background: #f3f4f6;">
                                 <img
-                                    src="{{ asset('uploads/matrimony_photos/'.$photo->file_path) }}"
+                                    src="{{ app(\App\Services\Image\ProfilePhotoUrlService::class)->publicUrl($photo->file_path) }}"
                                     alt="Profile photo"
                                     style="width: 100%; height: 100%; object-fit: cover;"
                                 >
@@ -737,7 +754,6 @@ body.upload-landscape .upload-gallery-col {
             fetch(form.action, {
                 method: 'POST',
                 body: fd,
-                redirect: 'follow',
                 credentials: 'same-origin',
                 headers: {
                     'Accept': 'application/json',
@@ -745,21 +761,27 @@ body.upload-landscape .upload-gallery-col {
                 }
             })
                 .then(async function(res) {
-                    if (res.redirected) {
-                        window.location.href = res.url || form.action;
+                    const ct = (res.headers.get('content-type') || '').toLowerCase();
+                    let data = null;
+                    if (ct.includes('application/json')) {
+                        try {
+                            data = await res.json();
+                        } catch (e) {
+                            data = null;
+                        }
+                    }
+                    /* Server returns 200 JSON { redirect } + session flash — avoid fetch following 302 (flash consumed before visible navigation). */
+                    if (data && data.redirect) {
+                        window.location.assign(data.redirect);
+                        return;
+                    }
+                    if (res.redirected && res.url) {
+                        window.location.assign(res.url);
                         return;
                     }
                     if (res.ok) {
                         window.location.reload();
                         return;
-                    }
-
-                    // Non-2xx: try to show server message (JSON 422), otherwise fallback to text.
-                    let data = null;
-                    try {
-                        data = await res.json();
-                    } catch (e) {
-                        data = null;
                     }
 
                     if (data && typeof data.message === 'string' && data.message) {

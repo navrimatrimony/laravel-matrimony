@@ -53,7 +53,7 @@
                 <div class="flex flex-col gap-4 p-5 sm:flex-row sm:items-stretch sm:gap-6">
                     <div class="relative shrink-0">
                         @if ($unlocked && $sender && $sender->profile_photo && $sender->photo_approved !== false)
-                            <img src="{{ asset('uploads/matrimony_photos/'.$sender->profile_photo) }}"
+                            <img src="{{ app(\App\Services\Image\ProfilePhotoUrlService::class)->publicUrl($sender->profile_photo) }}"
                                  alt=""
                                  class="h-24 w-24 rounded-2xl object-cover ring-2 ring-white dark:ring-gray-700">
                         @elseif ($unlocked && $sender)

@@ -201,7 +201,11 @@
             @if ($matrimonyProfile->profile_photo)
                 <div>
                     <p class="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">{{ __('profile.profile_photo') }}</p>
-                    <img src="{{ asset('uploads/matrimony_photos/'.$matrimonyProfile->profile_photo) }}" alt="" class="h-32 w-32 rounded-lg object-cover border border-gray-200 dark:border-gray-600" />
+                    @if (\App\Services\Image\ProfilePhotoUrlService::isPendingPlaceholder($matrimonyProfile->profile_photo))
+                        <div class="h-32 w-32 rounded-lg border border-dashed border-indigo-300 flex items-center justify-center bg-indigo-50 text-xs text-indigo-800 p-2 text-center">Processing…</div>
+                    @else
+                        <img src="{{ app(\App\Services\Image\ProfilePhotoUrlService::class)->publicUrl($matrimonyProfile->profile_photo) }}" alt="" class="h-32 w-32 rounded-lg object-cover border border-gray-200 dark:border-gray-600" />
+                    @endif
                 </div>
             @endif
             <div class="flex flex-col gap-2">
@@ -435,11 +439,17 @@
 
         <div class="mb-6 flex flex-col items-center">
             @if ($matrimonyProfile->profile_photo)
-                <img
-                    src="{{ asset('uploads/matrimony_photos/'.$matrimonyProfile->profile_photo) }}"
-                    alt="Profile Photo"
-                    class="w-40 h-40 rounded-full object-cover border"
-                />
+                @if (\App\Services\Image\ProfilePhotoUrlService::isPendingPlaceholder($matrimonyProfile->profile_photo))
+                    <div class="w-40 h-40 rounded-full border-2 border-dashed border-indigo-300 dark:border-indigo-600 flex items-center justify-center bg-indigo-50 dark:bg-indigo-900/20 text-center p-3">
+                        <span class="text-xs font-semibold text-indigo-800 dark:text-indigo-200">Processing upload…<br><span class="font-normal text-indigo-600 dark:text-indigo-300">Refresh after a few seconds</span></span>
+                    </div>
+                @else
+                    <img
+                        src="{{ app(\App\Services\Image\ProfilePhotoUrlService::class)->publicUrl($matrimonyProfile->profile_photo) }}"
+                        alt="Profile Photo"
+                        class="w-40 h-40 rounded-full object-cover border"
+                    />
+                @endif
                 @if ($matrimonyProfile->photo_approved === false && empty($matrimonyProfile->photo_rejected_at))
                     <span class="mt-2 inline-block px-3 py-1 text-xs font-semibold bg-amber-100 text-amber-800 dark:bg-amber-900/50 dark:text-amber-200 rounded">Photo pending review</span>
                 @endif

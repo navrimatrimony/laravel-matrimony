@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\MatrimonyProfile;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
 
 /**
@@ -83,15 +84,20 @@ class ManualSnapshotBuilderService
 
         // Phase-5 Point 7: optional photo in full edit — same handling as wizard photo step
         if ($request->hasFile('profile_photo')) {
+            Log::info('UPLOAD ENTRY HIT', [
+                'controller' => __METHOD__,
+                'user_id' => auth()->id() ?? null,
+            ]);
+
             $request->validate(['profile_photo' => ['image', 'max:2048']]);
             $file = $request->file('profile_photo');
-            $filename = time().'_'.basename($file->getClientOriginalName());
-            $file->move(public_path('uploads/matrimony_photos'), $filename);
-            $photoApprovalRequired = \App\Services\Admin\AdminSettingService::isPhotoApprovalRequired();
-            $core['profile_photo'] = $filename;
-            $core['photo_approved'] = ! $photoApprovalRequired;
-            $core['photo_rejected_at'] = null;
-            $core['photo_rejection_reason'] = null;
+            $pending = app(\App\Services\Image\ImageProcessingService::class)
+                ->enqueueProfilePhotoProcessing($file, (int) $profile->id);
+
+            // Store a placeholder filename immediately; final file is written by the queue job.
+            $core['profile_photo'] = $pending;
+            // Moderation columns are applied after MutationService (see ProfilePhotoPendingStateService).
+            $request->attributes->set('matrimony_apply_pending_photo_review', true);
         }
 
         $contacts = [];

@@ -16,11 +16,13 @@ class ProfilePhoto extends Model
         'uploaded_via',
         'approved_status',
         'watermark_detected',
+        'moderation_scan_json',
     ];
 
     protected $casts = [
         'is_primary' => 'boolean',
         'watermark_detected' => 'boolean',
+        'moderation_scan_json' => 'array',
     ];
 
     public function scopeOrdered($query)

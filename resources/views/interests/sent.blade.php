@@ -88,7 +88,7 @@
                         <div>
                             @if ($interest->receiverProfile && $interest->receiverProfile->profile_photo && $interest->receiverProfile->photo_approved !== false)
                                 <img
-                                    src="{{ asset('uploads/matrimony_photos/'.$interest->receiverProfile->profile_photo) }}"
+                                    src="{{ app(\App\Services\Image\ProfilePhotoUrlService::class)->publicUrl($interest->receiverProfile->profile_photo) }}"
                                     alt="{{ __('Profile Photo') }}"
                                     class="w-14 h-14 rounded-full object-cover border">
                             @else
