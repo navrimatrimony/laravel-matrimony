@@ -9,6 +9,7 @@ use App\Services\ProfileVisibilityPolicyService;
 use App\Services\ViewTrackingService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Schema;
 
 class MatrimonyProfileApiController extends Controller
 {
@@ -223,6 +224,13 @@ class MatrimonyProfileApiController extends Controller
                 'success' => false,
                 'message' => 'Profile not found.',
             ], 404);
+        }
+
+        if (Schema::hasColumn('users', 'photo_uploads_suspended') && (bool) $user->photo_uploads_suspended) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Photo uploads have been suspended for your account.',
+            ], 403);
         }
 
         $file = $request->file('profile_photo');

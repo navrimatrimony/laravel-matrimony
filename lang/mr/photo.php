@@ -21,5 +21,18 @@ return [
     'profiles_with_photos_get_more_interests_html' => '📸 <strong>फोटो असलेल्या प्रोफाइलना 3× अधिक इच्छा मिळतात</strong>',
     'upload_photo_complete_profile' => 'फोटो अपलोड करा आणि प्रोफाइल पूर्ण करा',
     'secure_visible_to_registered_members' => '🔒 तुमचा फोटो सुरक्षित आहे आणि फक्त नोंदणीकृत सदस्यांनाच दिसेल',
+
+    'upload_prefix_count' => '{1}|{2,*}:count फोटो:',
+    'upload_line_pending_generic' => 'प्रलंबित — तपासणी सुरू.',
+    'upload_line_sensitive' => '{1}प्रलंबित — संवेदनशील; प्रशासक मंजूरी.|[2,*]:count प्रलंबित — संवेदनशील; प्रशासक मंजूरी.',
+    'upload_line_review' => '{1}प्रलंबित — मॅन्युअल तपासणी.|[2,*]:count प्रलंबित — मॅन्युअल तपासणी.',
+    'upload_line_admin' => '{1}प्रलंबित — प्रशासक मंजूरी.|[2,*]:count प्रलंबित — प्रशासक मंजूरी.',
+    'upload_line_unknown' => '{1}प्रलंबित — तपासणी चालू.|[2,*]:count प्रलंबित — तपासणी चालू.',
+    'upload_line_rejected_only' => '{1}स्वीकारला नाही — नियम.|[2,*]:count स्वीकारले नाहीत — नियम.',
+    'upload_line_rejected_mixed' => '{1}एक स्वीकारला नाही (नियम).|[2,*]:count स्वीकारले नाहीत (नियम).',
+    'upload_line_all_ok' => '{1}अपलोड झाला — लाईव्ह.|[2,*]:count अपलोड — लाईव्ह.',
+    'upload_all_saved_ok' => '{1}जतन झाले. खाली आणखी जोडा.|[2,*]:count जतन. खाली आणखी जोडा.',
+    'upload_first_pending_admin' => 'प्रलंबित — प्रक्रिया; प्रशासक मंजूरी लागेल.',
+    'upload_first_pending_scan' => 'प्रलंबित — आपोआप तपासणी चालू.',
 ];
 

@@ -1,12 +1,18 @@
 <?php
 
 use App\Http\Controllers\Api\AuthController;
+use App\Http\Controllers\Api\ModerationConfigController;
 use App\Http\Controllers\Api\MasterEducationController;
 use App\Http\Controllers\Api\V1\LocationController;
 use App\Http\Controllers\Internal\LocationHierarchyController;
 use App\Http\Controllers\Internal\LocationSearchController;
 use App\Http\Controllers\Internal\LocationSuggestionController;
 use Illuminate\Support\Facades\Route;
+
+/*
+| Moderation thresholds for Python NudeNet (no auth; same network / firewall in production).
+*/
+Route::get('/moderation-config', ModerationConfigController::class);
 
 Route::get('/internal/location/search', [LocationSearchController::class, 'search']);
 Route::get('/internal/location/states', [LocationHierarchyController::class, 'states']);

@@ -36,17 +36,26 @@ class PhotoModerationScanPayload
             }
         }
 
-        $apiStatus = $raw['status'] ?? null;
+        $apiStatus = $raw['api_status'] ?? $raw['status'] ?? null;
         if (! is_string($apiStatus) || $apiStatus === '') {
             $apiStatus = (($nn['safe'] ?? false) === true) ? 'safe' : 'flagged';
+        }
+
+        $pipelineConf = null;
+        if (array_key_exists('pipeline_confidence', $raw) && $raw['pipeline_confidence'] !== null && $raw['pipeline_confidence'] !== '') {
+            $pipelineConf = round((float) $raw['pipeline_confidence'], 4);
+        } elseif (array_key_exists('confidence', $raw) && $raw['confidence'] !== null && $raw['confidence'] !== '') {
+            $pipelineConf = round((float) $raw['confidence'], 4);
+        } elseif (isset($nn['confidence'])) {
+            $pipelineConf = round((float) $nn['confidence'], 4);
         }
 
         return [
             'scanner' => 'nudenet',
             'captured_at' => now()->toIso8601String(),
             'pipeline_safe' => (bool) ($nn['safe'] ?? false),
-            'pipeline_confidence' => isset($nn['confidence']) ? round((float) $nn['confidence'], 4) : null,
-            'api_status' => $apiStatus,
+            'pipeline_confidence' => $pipelineConf,
+            'api_status' => strtolower(trim($apiStatus)),
             'detections' => $detections,
         ];
     }

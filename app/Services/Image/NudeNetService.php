@@ -86,8 +86,9 @@ class NudeNetService
         }
 
         $interpreted = self::interpretDetectorJson($json);
-        $topLevelSafe = array_key_exists('status', $json)
-            ? (($json['status'] ?? '') === 'safe')
+        $topStatus = $json['api_status'] ?? $json['status'] ?? null;
+        $topLevelSafe = is_string($topStatus)
+            ? (strtolower(trim($topStatus)) === 'safe')
             : (bool) ($json['safe'] ?? false);
         if ($topLevelSafe && ! $interpreted['safe']) {
             Log::warning('NudeNet: overriding safe=true using detections/unsafe flags', [
@@ -111,11 +112,11 @@ class NudeNetService
      */
     public static function interpretDetectorJson(array $json): array
     {
-        $status = $json['status'] ?? null;
+        $status = $json['api_status'] ?? $json['status'] ?? null;
         if (is_string($status)) {
             $status = strtolower(trim($status));
             $safe = $status === 'safe';
-            $confidence = (float) ($json['confidence'] ?? 0.0);
+            $confidence = (float) ($json['pipeline_confidence'] ?? $json['confidence'] ?? 0.0);
 
             $unsafeVal = $json['unsafe'] ?? null;
             if ($unsafeVal === true || $unsafeVal === 1 || $unsafeVal === '1'
@@ -141,7 +142,7 @@ class NudeNetService
 
         $hasTopLevelSafeKey = array_key_exists('safe', $json);
         $safe = $hasTopLevelSafeKey ? (bool) $json['safe'] : true;
-        $confidence = (float) ($json['confidence'] ?? 0.0);
+        $confidence = (float) ($json['pipeline_confidence'] ?? $json['confidence'] ?? 0.0);
 
         $unsafeVal = $json['unsafe'] ?? null;
         if ($unsafeVal === true || $unsafeVal === 1 || $unsafeVal === '1'

@@ -30,6 +30,14 @@ STEP 4 — Test in browser
   Open: http://127.0.0.1:8001/docs
   Try POST /detect with an image file.
 
+OPTIONAL — Laravel threshold sync (defaults apply if Laravel is down)
+-----------------------------------------------------------------------
+  $env:MODERATION_LARAVEL_CONFIG_URL="http://127.0.0.1:8000/api/moderation-config"
+  $env:MODERATION_CONFIG_REFRESH_SEC="300"
+  $env:MODERATION_CONFIG_TRAFFIC_DEBOUNCE_SEC="15"
+
+  GET http://127.0.0.1:8001/config-status — current nsfw/review mins, last_sync, source.
+
 OPTIONAL — stricter / looser nudity threshold (0.0 to 1.0)
 ------------------------------------------------------------
   $env:NUDENET_THRESHOLD="0.35"

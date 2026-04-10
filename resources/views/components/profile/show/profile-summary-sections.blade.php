@@ -242,7 +242,7 @@
             ->where('is_primary', false);
 
         if (! $isOwnProfile) {
-            $galleryPhotosQuery->where('approved_status', 'approved');
+            $galleryPhotosQuery->effectivelyApproved();
         }
 
         if (\Illuminate\Support\Facades\Schema::hasColumn('profile_photos', 'sort_order')) {
@@ -311,7 +311,7 @@
             >
                 @foreach ($galleryPhotos as $photo)
                     @php
-                        $status = (string) ($photo->approved_status ?? '');
+                        $status = $photo->effectiveApprovedStatus();
                         $statusLabel = $status === 'approved' ? 'approved' : ($status === 'pending' ? 'pending' : 'rejected');
                     @endphp
 

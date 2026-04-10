@@ -101,20 +101,7 @@ body.upload-landscape .upload-gallery-col {
             $photoLimitReached = isset($photoLimitReached) ? (bool) $photoLimitReached : ($currentPhotoCount >= $photoMaxPerProfile);
         @endphp
 
-        {{-- Success Banner --}}
-        @if (session('success'))
-        <div style="background: linear-gradient(90deg, #d1fae5, #a7f3d0); border: 1px solid #6ee7b7; border-radius: 12px; padding: 16px 20px; margin-bottom: 24px; text-align: center;">
-            <p style="margin: 0; color: #065f46; font-size: 16px; font-weight: 600;">
-                {{ session('success') ?: __('photo.profile_live_add_photo_more_responses') }}
-            </p>
-        </div>
-        @endif
-
-        @if (session('error'))
-            <div style="background: #fef2f2; border: 1px solid #fecaca; border-radius: 12px; padding: 16px 20px; margin-bottom: 24px; text-align: left;">
-                <p style="margin: 0; font-weight: 800; color: #991b1b; font-size: 14px;">{{ session('error') }}</p>
-            </div>
-        @endif
+        {{-- Success / error: layouts/app.blade.php (dismissible flash). Warning kept here (no layout slot). --}}
 
         @if (session('warning'))
             <div style="background: #fffbeb; border: 1px solid #fde68a; border-radius: 12px; padding: 16px 20px; margin-bottom: 24px; text-align: left;">
@@ -367,7 +354,7 @@ body.upload-landscape .upload-gallery-col {
                                 <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
                                     <span style="padding:6px 10px; border-radius:999px; background:#059669; color:#fff; font-size:12px; font-weight:900;">Primary Photo</span>
                                     @php
-                                        $primaryStatus = (string) ($primaryPhoto->approved_status ?? '');
+                                        $primaryStatus = $primaryPhoto->effectiveApprovedStatus();
                                         $primaryStatusText = $primaryStatus === 'approved' ? 'approved' : ($primaryStatus === 'pending' ? 'pending' : 'rejected');
                                     @endphp
                                     <span style="
@@ -393,7 +380,7 @@ body.upload-landscape .upload-gallery-col {
                 <div id="galleryOrder" style="margin-top: 16px; display: grid; grid-template-columns: repeat(auto-fill, minmax(185px, 1fr)); gap: 16px;">
                     @foreach ($galleryPhotos as $photo)
                         @php
-                            $status = (string) ($photo->approved_status ?? '');
+                            $status = $photo->effectiveApprovedStatus();
                             $statusLabel = $status === 'approved' ? 'approved' : ($status === 'pending' ? 'pending' : 'rejected');
                         @endphp
 

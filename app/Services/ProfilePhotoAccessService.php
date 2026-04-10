@@ -11,6 +11,7 @@ use App\Support\PlanFeatureKeys;
 use App\Support\UserFeatureUsageKeys;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 /**
  * Album visibility for profile show: paid full access vs free tier blur + daily distinct-profile cap
@@ -153,10 +154,14 @@ class ProfilePhotoAccessService
             return true;
         }
 
-        return ProfilePhoto::query()
-            ->where('profile_id', $viewerProfile->id)
-            ->where('approved_status', 'approved')
-            ->exists();
+        $q = ProfilePhoto::query()->where('profile_id', $viewerProfile->id);
+        if (Schema::hasColumn('profile_photos', 'admin_override_status')) {
+            $q->effectivelyApproved();
+        } else {
+            $q->where('approved_status', 'approved');
+        }
+
+        return $q->exists();
     }
 
     /**

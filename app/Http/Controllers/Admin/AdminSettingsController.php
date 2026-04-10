@@ -555,4 +555,50 @@ class AdminSettingsController extends Controller
         return redirect()->route('admin.app-settings.index')
             ->with('success', 'App settings updated.');
     }
+
+    /**
+     * Future sync: thresholds for Python NudeNet (stored now; scanner still uses its own defaults until wired).
+     */
+    public function moderationEngineSettings(): \Illuminate\View\View
+    {
+        $nsfw = (string) AdminSetting::getValue('moderation_nsfw_score_min', '');
+        $review = (string) AdminSetting::getValue('moderation_review_score_min', '');
+        $ignoreRaw = (string) AdminSetting::getValue('moderation_ignore_classes', '[]');
+        $ignoreList = json_decode($ignoreRaw, true);
+        $ignoreCsv = is_array($ignoreList) ? implode(', ', array_map('strval', $ignoreList)) : '';
+
+        return view('admin.moderation-engine-settings.index', [
+            'nsfwScoreMin' => $nsfw,
+            'reviewScoreMin' => $review,
+            'ignoreClassesCsv' => $ignoreCsv,
+        ]);
+    }
+
+    public function updateModerationEngineSettings(Request $request): \Illuminate\Http\RedirectResponse
+    {
+        $request->validate([
+            'moderation_nsfw_score_min' => ['nullable', 'string', 'max:32'],
+            'moderation_review_score_min' => ['nullable', 'string', 'max:32'],
+            'moderation_ignore_classes' => ['nullable', 'string', 'max:5000'],
+        ]);
+
+        AdminSetting::setValue('moderation_nsfw_score_min', (string) $request->input('moderation_nsfw_score_min', ''));
+        AdminSetting::setValue('moderation_review_score_min', (string) $request->input('moderation_review_score_min', ''));
+
+        $csv = trim((string) $request->input('moderation_ignore_classes', ''));
+        $parts = $csv === '' ? [] : array_values(array_filter(array_map('trim', preg_split('/[,\n]+/', $csv) ?: [])));
+        AdminSetting::setValue('moderation_ignore_classes', json_encode(array_values($parts)));
+
+        AuditLogService::log(
+            $request->user(),
+            'update_moderation_engine_settings',
+            'AdminSetting',
+            null,
+            'moderation_nsfw_score_min / moderation_review_score_min / moderation_ignore_classes updated',
+            false
+        );
+
+        return redirect()->route('admin.moderation-engine-settings.index')
+            ->with('success', 'Moderation engine settings saved. The Python scanner pulls these values from GET /api/moderation-config on a short interval.');
+    }
 }

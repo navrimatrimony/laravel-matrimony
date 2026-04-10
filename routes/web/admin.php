@@ -26,8 +26,9 @@ use App\Http\Controllers\Admin\HomepageImageController;
 use App\Http\Controllers\Admin\IntakeReviewController;
 use App\Http\Controllers\Admin\LocationSuggestionWebController;
 use App\Http\Controllers\Admin\MatchBoostController;
+use App\Http\Controllers\Admin\ModerationLearningController;
 use App\Http\Controllers\Admin\OcrPatternController;
-use App\Http\Controllers\Admin\PhotoReviewQueueController;
+use App\Http\Controllers\Admin\PhotoModerationEngineController;
 use App\Http\Controllers\Admin\PlanController;
 use App\Http\Controllers\Admin\PlanFeatureController;
 use App\Http\Controllers\Admin\ProfileBoostController;
@@ -113,9 +114,18 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
     | Profiles List (Admin)
     */
     Route::get('/profiles', [AdminProfileModerationController::class, 'profilesIndex'])->name('profiles.index');
-    Route::get('/photo-review-queue', [PhotoReviewQueueController::class, 'index'])->name('photo-review-queue.index');
-    Route::get('/photo-review-queue/{profile}/preview/{galleryPhoto?}', [PhotoReviewQueueController::class, 'preview'])
-        ->name('photo-review-queue.preview');
+    Route::get('/photo-moderation', [PhotoModerationEngineController::class, 'index'])->name('photo-moderation.index');
+    Route::get('/photo-moderation/{profilePhoto}/panel', [PhotoModerationEngineController::class, 'panelFragment'])
+        ->name('photo-moderation.panel');
+    Route::post('/photo-moderation/bulk', [PhotoModerationEngineController::class, 'bulk'])->name('photo-moderation.bulk');
+    Route::post('/photo-moderation/users/{user}/suspend-uploads', [PhotoModerationEngineController::class, 'suspendUserPhotoUploads'])
+        ->name('photo-moderation.suspend-user-uploads');
+    Route::get('/photo-moderation/preview/{profile}/{galleryPhoto?}', [PhotoModerationEngineController::class, 'preview'])
+        ->name('photo-moderation.preview');
+    Route::get('/photo-moderation/{profilePhoto}', [PhotoModerationEngineController::class, 'show'])->name('photo-moderation.show');
+    Route::post('/photo-moderation/{profilePhoto}/action', [PhotoModerationEngineController::class, 'singleAction'])->name('photo-moderation.action');
+
+    Route::get('/moderation-learning', [ModerationLearningController::class, 'index'])->name('moderation-learning.index');
 
     Route::post('/profiles/{profile}/tags/assign', [AdminProfileTagController::class, 'assign'])
         ->name('profiles.tags.assign');
@@ -319,6 +329,9 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
 
     Route::get('/photo-approval-settings', [AdminSettingsController::class, 'photoApprovalSettings'])->name('photo-approval-settings.index');
     Route::post('/photo-approval-settings', [AdminSettingsController::class, 'updatePhotoApprovalSettings'])->name('photo-approval-settings.update');
+
+    Route::get('/moderation-engine-settings', [AdminSettingsController::class, 'moderationEngineSettings'])->name('moderation-engine-settings.index');
+    Route::post('/moderation-engine-settings', [AdminSettingsController::class, 'updateModerationEngineSettings'])->name('moderation-engine-settings.update');
 
     Route::get('/intake-settings', [AdminSettingsController::class, 'intakeSettings'])->name('intake-settings.index');
     Route::post('/intake-settings', [AdminSettingsController::class, 'updateIntakeSettings'])->name('intake-settings.update');

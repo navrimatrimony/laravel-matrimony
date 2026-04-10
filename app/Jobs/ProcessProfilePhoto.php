@@ -5,6 +5,7 @@ namespace App\Jobs;
 use App\Models\MatrimonyProfile;
 use App\Models\ProfilePhoto;
 use App\Services\Admin\AdminSettingService;
+use App\Services\Admin\UserModerationStatsService;
 use App\Services\Image\ImageModerationService;
 use App\Services\Image\ImageOptimizationService;
 use App\Services\Image\PhotoModerationScanPayload;
@@ -158,6 +159,12 @@ class ProcessProfilePhoto implements ShouldQueue
 
         if ($previousPrimaryId !== null) {
             ProfilePhoto::query()->where('id', $previousPrimaryId)->update($payload);
+            if (Schema::hasTable('user_moderation_stats')) {
+                $uid = $profile->user_id;
+                if ($uid) {
+                    app(UserModerationStatsService::class)->recordUpload((int) $uid);
+                }
+            }
         } else {
             ProfilePhoto::query()->create(array_merge([
                 'profile_id' => $profile->id,

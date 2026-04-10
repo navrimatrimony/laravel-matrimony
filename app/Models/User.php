@@ -69,6 +69,7 @@ class User extends Authenticatable implements MustVerifyEmail
         'last_seen_at' => 'datetime',
         'password' => 'hashed',
         'is_admin' => 'boolean',
+        'photo_uploads_suspended' => 'boolean',
     ];
 
     /*
@@ -96,6 +97,11 @@ class User extends Authenticatable implements MustVerifyEmail
     public function matrimonyProfile()
     {
         return $this->hasOne(\App\Models\MatrimonyProfile::class);
+    }
+
+    public function moderationStat(): HasOne
+    {
+        return $this->hasOne(UserModerationStat::class);
     }
 
     public function subscriptions(): HasMany

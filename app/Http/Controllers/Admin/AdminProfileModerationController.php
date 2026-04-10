@@ -20,6 +20,9 @@ use App\Services\AdminProfileSoftDeleteService;
 use App\Services\AuditLogService;
 use App\Services\ConflictDetectionService;
 use App\Services\FieldValueHistoryService;
+use App\Services\Admin\PhotoModerationAdminService;
+use App\Services\Admin\UserModerationStatsService;
+use App\Services\Image\ProfileGalleryPhotoDeletionService;
 use App\Services\Image\ProfilePhotoUrlService;
 use App\Services\ProfileCompletenessService;
 use App\Services\ProfileFieldLockService;
@@ -42,6 +45,8 @@ class AdminProfileModerationController extends Controller
 
     public function __construct(
         private readonly AdminProfileEditGovernanceService $adminProfileEditGovernance,
+        private readonly ProfileGalleryPhotoDeletionService $galleryPhotoDeletion,
+        private readonly UserModerationStatsService $userModerationStats,
     ) {}
 
     /**
@@ -266,6 +271,22 @@ class AdminProfileModerationController extends Controller
     {
         $request->validate(['reason' => self::REASON_RULES]);
 
+        $scanJson = null;
+        if (Schema::hasTable('profile_photos')) {
+            $primaryRow = ProfilePhoto::query()
+                ->where('profile_id', $profile->id)
+                ->where('is_primary', true)
+                ->first();
+            $scanJson = $primaryRow?->moderation_scan_json;
+        }
+        if ($scanJson === null && Schema::hasColumn('matrimony_profiles', 'photo_moderation_snapshot')) {
+            $snap = $profile->photo_moderation_snapshot;
+            $scanJson = is_array($snap) ? $snap : null;
+        }
+        if (PhotoModerationAdminService::moderationScanIndicatesUnsafe($scanJson)) {
+            return redirect()->back()->with('error', 'Cannot approve: NudeNet API classified this image as unsafe.');
+        }
+
         $snapshot = $this->adminProfileEditGovernance->buildAdminSnapshot($profile, [
             'photo_approved' => true,
             'photo_rejected_at' => null,
@@ -283,6 +304,10 @@ class AdminProfileModerationController extends Controller
             $request->reason,
             (bool) ($profile->is_demo ?? false)
         );
+
+        if ($profile->user_id) {
+            $this->userModerationStats->recordModerationOutcome((int) $profile->user_id, 'approved');
+        }
 
         return $this->redirectAfterImageModeration($request, $profile, 'Image approved.');
     }
@@ -315,6 +340,10 @@ class AdminProfileModerationController extends Controller
         $owner = $profile->user;
         if ($owner) {
             $owner->notify(new ImageRejectedNotification($request->reason));
+        }
+
+        if ($profile->user_id) {
+            $this->userModerationStats->recordModerationOutcome((int) $profile->user_id, 'rejected');
         }
 
         return $this->redirectAfterImageModeration($request, $profile, 'Image rejected.');
@@ -434,6 +463,10 @@ class AdminProfileModerationController extends Controller
             return redirect()->back()->with('error', 'This photo is not pending review.');
         }
 
+        if (PhotoModerationAdminService::moderationScanIndicatesUnsafe($profilePhoto->moderation_scan_json)) {
+            return redirect()->back()->with('error', 'Cannot approve: NudeNet API classified this image as unsafe.');
+        }
+
         MatrimonyProfile::$bypassGovernanceEnforcement = true;
         try {
             $profilePhoto->approved_status = 'approved';
@@ -450,6 +483,10 @@ class AdminProfileModerationController extends Controller
             $request->reason,
             (bool) ($profile->is_demo ?? false)
         );
+
+        if ($profile->user_id) {
+            $this->userModerationStats->recordModerationOutcome((int) $profile->user_id, 'approved');
+        }
 
         return $this->redirectAfterImageModeration($request, $profile, 'Gallery photo approved.');
     }
@@ -486,6 +523,10 @@ class AdminProfileModerationController extends Controller
         $owner = $profile->user;
         if ($owner) {
             $owner->notify(new ImageRejectedNotification($request->reason));
+        }
+
+        if ($profile->user_id) {
+            $this->userModerationStats->recordModerationOutcome((int) $profile->user_id, 'rejected');
         }
 
         return $this->redirectAfterImageModeration($request, $profile, 'Gallery photo rejected.');
@@ -535,8 +576,8 @@ class AdminProfileModerationController extends Controller
 
     private function redirectAfterImageModeration(Request $request, MatrimonyProfile $profile, string $message): RedirectResponse
     {
-        if ($request->input('return_to') === 'photo-review-queue') {
-            return redirect()->route('admin.photo-review-queue.index')->with('success', $message);
+        if ($request->input('return_to') === 'photo-moderation') {
+            return redirect()->route('admin.photo-moderation.index')->with('success', $message);
         }
 
         return redirect()->route('admin.profiles.show', $profile->id)->with('success', $message);
@@ -547,86 +588,7 @@ class AdminProfileModerationController extends Controller
      */
     private function deleteGalleryPhotoLikeMemberFlow(MatrimonyProfile $profile, ProfilePhoto $photo): void
     {
-        $fileToDeleteLegacy = public_path('uploads/matrimony_photos/'.$photo->file_path);
-        $fileToDeleteNew = storage_path('app/public/matrimony_photos/'.$photo->file_path);
-
-        $wasPrimary = (bool) $photo->is_primary;
-
-        $priorBypass = MatrimonyProfile::$bypassGovernanceEnforcement;
-        MatrimonyProfile::$bypassGovernanceEnforcement = true;
-        try {
-            DB::transaction(function () use ($profile, $photo, $wasPrimary): void {
-                $photo->delete();
-
-                $remaining = ProfilePhoto::query()
-                    ->where('profile_id', $profile->id)
-                    ->orderBy('sort_order')
-                    ->orderBy('id')
-                    ->get(['id']);
-
-                foreach ($remaining as $idx => $row) {
-                    ProfilePhoto::query()
-                        ->where('profile_id', $profile->id)
-                        ->where('id', (int) $row->id)
-                        ->update(['sort_order' => (int) $idx]);
-                }
-
-                if (! $wasPrimary) {
-                    return;
-                }
-
-                if ($remaining->count() === 0) {
-                    $profile->profile_photo = null;
-                    $profile->photo_approved = false;
-                    $profile->photo_rejected_at = null;
-                    $profile->photo_rejection_reason = null;
-                    $profile->save();
-
-                    return;
-                }
-
-                $replacement = ProfilePhoto::query()
-                    ->where('profile_id', $profile->id)
-                    ->where('approved_status', 'approved')
-                    ->orderBy('sort_order')
-                    ->orderBy('id')
-                    ->first();
-
-                if (! $replacement) {
-                    $replacement = ProfilePhoto::query()
-                        ->where('profile_id', $profile->id)
-                        ->orderBy('sort_order')
-                        ->orderBy('id')
-                        ->first();
-                }
-
-                if (! $replacement) {
-                    return;
-                }
-
-                ProfilePhoto::query()
-                    ->where('profile_id', $profile->id)
-                    ->update(['is_primary' => false]);
-
-                $replacement->is_primary = true;
-                $replacement->save();
-
-                $replacementApproved = ((string) $replacement->approved_status) === 'approved';
-                $profile->profile_photo = $replacement->file_path;
-                $profile->photo_approved = $replacementApproved;
-                $profile->photo_rejected_at = null;
-                $profile->photo_rejection_reason = null;
-                $profile->save();
-            });
-        } finally {
-            MatrimonyProfile::$bypassGovernanceEnforcement = $priorBypass;
-        }
-
-        foreach ([$fileToDeleteNew, $fileToDeleteLegacy] as $fileToDelete) {
-            if (is_string($fileToDelete) && $fileToDelete !== '' && is_file($fileToDelete)) {
-                @unlink($fileToDelete);
-            }
-        }
+        $this->galleryPhotoDeletion->deleteWithPrimaryResync($profile, $photo);
     }
 
     private function unlinkPendingTempIfExists(string $pendingPath): void

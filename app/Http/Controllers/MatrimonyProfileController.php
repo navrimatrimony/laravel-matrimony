@@ -26,6 +26,7 @@ use App\Services\FeatureUsageService;
 use App\Services\Admin\AdminSettingService;
 use App\Services\Image\ImageModerationService;
 use App\Services\Image\PhotoModerationScanPayload;
+use App\Services\Image\PhotoUploadBatchUserMessage;
 use App\Services\Image\ProfileGalleryPhotoModerationStatus;
 use App\Services\InterestSendLimitService;
 use App\Services\ProfileCompletenessService;
@@ -485,6 +486,10 @@ class MatrimonyProfileController extends Controller
             abort(403, __('common.unauthorized_photo_update'));
         }
 
+        if (Schema::hasColumn('users', 'photo_uploads_suspended') && (bool) $user->photo_uploads_suspended) {
+            return $this->photoUploadBackWithError($request, 'Photo uploads have been suspended for your account.', $profile);
+        }
+
         $inOnboardingPhotoPhase = (int) ($profile->card_onboarding_resume_step ?? 0) === MatrimonyProfile::CARD_ONBOARDING_PHOTO_RESUME_STEP
             || $request->input('from') === 'onboarding'
             || $request->query('from') === 'onboarding';
@@ -632,7 +637,10 @@ class MatrimonyProfileController extends Controller
         };
 
         $batchHadPending = $mainBecomesPrimary;
+        $batchHadRejected = false;
         $hasModerationScanColumn = \Illuminate\Support\Facades\Schema::hasColumn('profile_photos', 'moderation_scan_json');
+        /** @var list<array{approved_status: string, moderation_scan_json: mixed}> $allBatchMetas */
+        $allBatchMetas = [];
 
         $result = ['conflict_detected' => false];
         if ($mainBecomesPrimary) {
@@ -682,8 +690,12 @@ class MatrimonyProfileController extends Controller
         // Insert main uploaded photo into gallery only when it isn't handled as primary profile_photo.
         if (! $mainBecomesPrimary && $primaryFilename) {
             $meta = $galleryRowMetaForStoredFilename($primaryFilename);
+            $allBatchMetas[] = $meta;
             if (($meta['approved_status'] ?? '') === 'pending') {
                 $batchHadPending = true;
+            }
+            if (($meta['approved_status'] ?? '') === 'rejected') {
+                $batchHadRejected = true;
             }
             $row = [
                 'profile_id' => $profile->id,
@@ -708,8 +720,12 @@ class MatrimonyProfileController extends Controller
                 }
 
                 $meta = $galleryRowMetaForStoredFilename($filename);
+                $allBatchMetas[] = $meta;
                 if (($meta['approved_status'] ?? '') === 'pending') {
                     $batchHadPending = true;
+                }
+                if (($meta['approved_status'] ?? '') === 'rejected') {
+                    $batchHadRejected = true;
                 }
                 $row = [
                     'profile_id' => $profile->id,
@@ -760,20 +776,24 @@ class MatrimonyProfileController extends Controller
         }
 
         $stage1 = AdminSettingService::isPhotoApprovalRequired();
+        $uploadFlash = [];
         if ($mainBecomesPrimary) {
-            $successMsg = $stage1
-                ? 'Your first photo was received and is processing. It will stay pending until automated checks and admin approval complete. You can add more gallery photos below.'
-                : 'Your first photo was received and is processing. It may show as pending briefly while automated checks run. You can add more gallery photos below.';
-        } elseif ($batchHadPending) {
-            $successMsg = "Photos received ({$uploadedCount}). At least one is still pending (not fully live yet) — see the yellow badge on each thumbnail.";
+            $uploadFlash['member_notice'] = [
+                'message' => $stage1
+                    ? __('photo.upload_first_pending_admin')
+                    : __('photo.upload_first_pending_scan'),
+                'tone' => 'danger',
+            ];
+        } elseif ($batchHadPending || $batchHadRejected) {
+            $uploadFlash['member_notice'] = PhotoUploadBatchUserMessage::forUploadResponse($uploadedCount, $allBatchMetas);
         } else {
-            $successMsg = "Photos uploaded successfully ({$uploadedCount}). You can add more photos below.";
+            $uploadFlash['success'] = trans_choice('photo.upload_all_saved_ok', $uploadedCount, ['count' => $uploadedCount]);
         }
 
         return $this->photoUploadRedirectResponse(
             $request,
             route('matrimony.profile.upload-photo', $this->uploadPhotoRedirectQuery($request, $profile)),
-            ['success' => $successMsg]
+            $uploadFlash
         );
     }
 
@@ -798,7 +818,7 @@ class MatrimonyProfileController extends Controller
             abort(403);
         }
 
-        $targetApproved = ((string) $photo->approved_status) === 'approved';
+        $targetApproved = $photo->effectiveApprovedStatus() === 'approved';
 
         $priorBypass = \App\Models\MatrimonyProfile::$bypassGovernanceEnforcement;
         \App\Models\MatrimonyProfile::$bypassGovernanceEnforcement = true;
@@ -931,10 +951,10 @@ class MatrimonyProfileController extends Controller
                     return;
                 }
 
-                // Choose replacement primary: first approved, else first remaining by sort_order.
+                // Choose replacement primary: first effectively approved, else first remaining by sort_order.
                 $replacement = ProfilePhoto::query()
                     ->where('profile_id', $profile->id)
-                    ->where('approved_status', 'approved')
+                    ->effectivelyApproved()
                     ->orderBy('sort_order')
                     ->orderBy('id')
                     ->first();
@@ -958,7 +978,7 @@ class MatrimonyProfileController extends Controller
                 $replacement->is_primary = true;
                 $replacement->save();
 
-                $replacementApproved = ((string) $replacement->approved_status) === 'approved';
+                $replacementApproved = $replacement->effectiveApprovedStatus() === 'approved';
                 $profile->profile_photo = $replacement->file_path;
                 $profile->photo_approved = $replacementApproved;
                 $profile->photo_rejected_at = null;
@@ -1297,7 +1317,7 @@ class MatrimonyProfileController extends Controller
             $galleryQuery = ProfilePhoto::query()
                 ->where('profile_id', $profile->id)
                 ->where('is_primary', false)
-                ->where('approved_status', 'approved');
+                ->effectivelyApproved();
             if (Schema::hasColumn('profile_photos', 'sort_order')) {
                 $galleryQuery->orderBy('sort_order')->orderBy('id');
             } else {
@@ -1636,8 +1656,7 @@ class MatrimonyProfileController extends Controller
             'seriousIntent',
             'user:id,email_verified_at,last_seen_at',
             'photos' => function ($q) {
-                $q->select('id', 'profile_id', 'file_path', 'is_primary', 'approved_status')
-                    ->where('approved_status', 'approved');
+                $q->effectivelyApproved();
             },
         ])->paginate($perPage)->withQueryString();
 
