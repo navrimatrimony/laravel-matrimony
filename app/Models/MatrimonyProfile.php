@@ -144,6 +144,7 @@ class MatrimonyProfile extends Model
         'family_type_id',
         'income_currency_id',
         'is_suspended',
+        'lifecycle_state',
         'photo_approved',
         'photo_rejected_at',
         'photo_rejection_reason',

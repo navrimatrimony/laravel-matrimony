@@ -12,6 +12,7 @@ use App\Models\MasterComplexion;
 use App\Models\MasterDiet;
 use App\Models\MasterDrinkingStatus;
 use App\Models\MasterFamilyType;
+use App\Models\MasterEducation;
 use App\Models\MasterGender;
 use App\Models\MasterIncomeCurrency;
 use App\Models\MasterMaritalStatus;
@@ -25,6 +26,7 @@ use App\Models\State;
 use App\Models\SubCaste;
 use App\Models\Taluka;
 use App\Models\WorkingWithType;
+use App\Services\Showcase\ShowcaseBulkCreateSettings;
 use Illuminate\Support\Facades\DB;
 
 /*
@@ -203,25 +205,76 @@ class DemoProfileDefaultsService
      * Uses master table IDs (gender_id, marital_status_id, religion_id, caste_id, sub_caste_id, etc.).
      * No "demo" labels; data looks like real users for manual testing.
      */
-    public static function fullAttributesForDemoProfile(int $index = 0, ?string $genderOverride = null): array
+    /**
+     * @param  array<string, mixed>|null  $bulkPolicy  raw or partial; normalized when non-null
+     */
+    public static function fullAttributesForDemoProfile(int $index = 0, ?string $genderOverride = null, ?array $bulkPolicy = null): array
     {
+        $policy = $bulkPolicy !== null ? ShowcaseBulkCreateSettings::normalize($bulkPolicy) : null;
+
         $gender = self::resolveGender($genderOverride);
-        $dob = self::randomDobDemo();
-        $heightCm = random_int(155, 182);
+        $dob = $policy !== null
+            ? self::randomDobForAgeRange((int) $policy['age_min'], (int) $policy['age_max'])
+            : self::randomDobDemo();
+        $heightCm = $policy !== null
+            ? random_int((int) $policy['height_cm_min'], (int) $policy['height_cm_max'])
+            : random_int(155, 182);
         $weightKg = random_int(50, 85);
-        $loc = self::locationHierarchyForShowcaseFromRealUsers();
+
+        $loc = $policy !== null
+            ? self::locationHierarchyForShowcaseFromRealUsersPolicy($policy)
+            : self::locationHierarchyForShowcaseFromRealUsers();
+        if ($loc === null && $policy !== null) {
+            $loc = self::locationHierarchyForShowcaseFromRealUsers();
+        }
+
         $profilePhoto = self::randomDemoPhoto($gender);
 
         $genderId = MasterGender::where('key', $gender)->where('is_active', true)->value('id');
-        $maritalId = MasterMaritalStatus::where('key', 'never_married')->where('is_active', true)->value('id')
-            ?? MasterMaritalStatus::where('is_active', true)->inRandomOrder()->value('id');
 
-        $religion = self::pickAllowedShowcaseReligion();
+        if ($policy !== null && $policy['marital_status_ids'] !== []) {
+            $maritalId = MasterMaritalStatus::query()
+                ->where('is_active', true)
+                ->whereIn('id', $policy['marital_status_ids'])
+                ->inRandomOrder()
+                ->value('id');
+            if ($maritalId === null) {
+                $maritalId = MasterMaritalStatus::where('key', 'never_married')->where('is_active', true)->value('id')
+                    ?? MasterMaritalStatus::where('is_active', true)->inRandomOrder()->value('id');
+            }
+        } else {
+            $maritalId = MasterMaritalStatus::where('key', 'never_married')->where('is_active', true)->value('id')
+                ?? MasterMaritalStatus::where('is_active', true)->inRandomOrder()->value('id');
+        }
+
+        if ($policy !== null && $policy['religion_ids'] !== []) {
+            $religion = Religion::query()
+                ->where(function ($q) {
+                    $q->where('is_active', true)->orWhereNull('is_active');
+                })
+                ->whereIn('id', $policy['religion_ids'])
+                ->inRandomOrder()
+                ->first();
+        } else {
+            $religion = self::pickAllowedShowcaseReligion();
+        }
+
         $religionId = $religion?->id;
         $casteId = null;
         $subCasteId = null;
         if ($religion) {
-            $caste = Caste::where('religion_id', $religion->id)->where('is_active', true)->inRandomOrder()->first();
+            $casteQ = Caste::where('religion_id', $religion->id)->where(function ($q) {
+                $q->where('is_active', true)->orWhereNull('is_active');
+            });
+            if ($policy !== null && $policy['caste_ids'] !== []) {
+                $casteQ->whereIn('id', $policy['caste_ids']);
+            }
+            $caste = $casteQ->inRandomOrder()->first();
+            if (! $caste && $policy !== null && $policy['caste_ids'] !== []) {
+                $caste = Caste::where('religion_id', $religion->id)->where(function ($q) {
+                    $q->where('is_active', true)->orWhereNull('is_active');
+                })->inRandomOrder()->first();
+            }
             $casteId = $caste?->id;
             if ($caste) {
                 $subCaste = SubCaste::where('caste_id', $caste->id)->inRandomOrder()->first();
@@ -230,13 +283,34 @@ class DemoProfileDefaultsService
         }
 
         $complexionId = MasterComplexion::where('is_active', true)->inRandomOrder()->value('id');
+        if ($policy !== null && $policy['fixed_complexion_ids'] !== []) {
+            $pickCx = MasterComplexion::query()
+                ->where('is_active', true)
+                ->whereIn('id', $policy['fixed_complexion_ids'])
+                ->inRandomOrder()
+                ->value('id');
+            if ($pickCx !== null) {
+                $complexionId = $pickCx;
+            }
+        }
+
         $physicalBuildId = MasterPhysicalBuild::where('is_active', true)->inRandomOrder()->value('id');
+        if ($policy !== null && $policy['fixed_physical_build_ids'] !== []) {
+            $pickPb = MasterPhysicalBuild::query()
+                ->where('is_active', true)
+                ->whereIn('id', $policy['fixed_physical_build_ids'])
+                ->inRandomOrder()
+                ->value('id');
+            if ($pickPb !== null) {
+                $physicalBuildId = $pickPb;
+            }
+        }
+
         $bloodGroupId = MasterBloodGroup::where('is_active', true)->inRandomOrder()->value('id');
         $familyTypeId = MasterFamilyType::where('is_active', true)->inRandomOrder()->value('id');
         $incomeCurrencyId = MasterIncomeCurrency::where('is_active', true)->inRandomOrder()->value('id');
 
         $fullName = self::generateFullNameForReligion($gender, $religion, $index);
-        // Rule: 50% showcase profiles should have only first name (no surname).
         if (random_int(1, 100) <= 50) {
             $parts = preg_split('/\s+/u', trim($fullName), 2);
             $firstOnly = trim((string) ($parts[0] ?? ''));
@@ -245,21 +319,56 @@ class DemoProfileDefaultsService
             }
         }
 
-        $educations = [
-            'B.Com', 'B.E.', 'B.Tech', 'M.Com', 'M.B.A.', 'B.Sc', 'M.Sc', 'B.A.', 'M.A.',
-            'Graduate', 'Post Graduate', 'Professional',
-            // Keep some school-level entries for realism; constraints below prevent mismatched occupations.
-            'HSC', 'SSC', 'Below SSC',
-        ];
-        [$highestEducation, $occupationTitle] = self::pickEducationAndOccupation($educations);
+        if ($policy !== null && $policy['master_education_ids'] !== []) {
+            $eduRow = MasterEducation::query()
+                ->where('is_active', true)
+                ->whereIn('id', $policy['master_education_ids'])
+                ->inRandomOrder()
+                ->first();
+            $eduLabel = $eduRow ? trim((string) $eduRow->name) : 'Graduate';
+            if ($eduLabel === '') {
+                $eduLabel = 'Graduate';
+            }
+            [$highestEducation, $occupationTitle] = self::pickEducationAndOccupation([$eduLabel]);
+        } else {
+            $educations = [
+                'B.Com', 'B.E.', 'B.Tech', 'M.Com', 'M.B.A.', 'B.Sc', 'M.Sc', 'B.A.', 'M.A.',
+                'Graduate', 'Post Graduate', 'Professional',
+                'HSC', 'SSC', 'Below SSC',
+            ];
+            [$highestEducation, $occupationTitle] = self::pickEducationAndOccupation($educations);
+        }
 
-        // Showcase realism rule: ~80% of female profiles should be non-working (no job/income fields).
         $isFemale = ($gender === 'female');
         $isNonWorking = $isFemale && (random_int(1, 100) <= 80);
 
-        $dietId = self::pickDietIdForReligion($religion);
+        if ($policy !== null && $policy['diet_ids'] !== []) {
+            $dietId = MasterDiet::query()
+                ->where('is_active', true)
+                ->whereIn('id', $policy['diet_ids'])
+                ->inRandomOrder()
+                ->value('id');
+            if ($dietId === null) {
+                $dietId = self::pickDietIdForReligion($religion);
+            }
+        } else {
+            $dietId = self::pickDietIdForReligion($religion);
+        }
+
         $smokingStatusId = self::pickSmokingStatusIdForReligion($religion);
         $drinkingStatusId = self::pickDrinkingStatusIdForReligion($religion);
+        if ($policy !== null && $policy['fixed_smoking_status_id']) {
+            $sid = (int) $policy['fixed_smoking_status_id'];
+            if (MasterSmokingStatus::query()->where('id', $sid)->where('is_active', true)->exists()) {
+                $smokingStatusId = $sid;
+            }
+        }
+        if ($policy !== null && $policy['fixed_drinking_status_id']) {
+            $did = (int) $policy['fixed_drinking_status_id'];
+            if (MasterDrinkingStatus::query()->where('id', $did)->where('is_active', true)->exists()) {
+                $drinkingStatusId = $did;
+            }
+        }
 
         $motherTongueId = self::pickMotherTongueIdForReligion($religion);
 
@@ -275,18 +384,17 @@ class DemoProfileDefaultsService
         $motherNames = ['Sunita', 'Lata', 'Kavita', 'Anita', 'Meera', 'Poonam', 'Seema', 'Rekha', 'Vandana', 'Priya'];
 
         $birthTime = sprintf('%02d:%02d', random_int(6, 22), random_int(0, 59));
-        $addressLine = random_int(1, 999).', '.['MG Road', 'Station Road', 'Gandhi Nagar', 'Shivaji Park', 'Sector 5', 'Main Street'][array_rand(['MG Road', 'Station Road', 'Gandhi Nagar', 'Shivaji Park', 'Sector 5', 'Main Street'])];
 
         $annualIncome = (string) (random_int(3, 50) * 100000);
         $familyIncome = (string) (random_int(5, 80) * 100000);
 
-        // Location rules (requested):
-        // 1) Only pick districts that exist among real (non-demo) users.
-        // 2) Residence should be in the district "town" (city), not a village.
         $spectaclesLens = ['no', 'spectacles', 'contact_lens', 'both'][array_rand(['no', 'spectacles', 'contact_lens', 'both'])];
+        if ($policy !== null && $policy['fixed_spectacles_lens'] !== '') {
+            $spectaclesLens = $policy['fixed_spectacles_lens'];
+        }
         $physicalCondition = ['none', 'prefer_not_to_say'][array_rand(['none', 'prefer_not_to_say'])];
 
-        return array_merge($loc ?? [], [
+        $attrs = array_merge($loc ?? [], [
             'full_name' => $fullName,
             'gender_id' => $genderId,
             'date_of_birth' => $dob,
@@ -326,6 +434,66 @@ class DemoProfileDefaultsService
             'mother_name' => $motherNames[array_rand($motherNames)].' '.explode(' ', $fullName)[0],
             'mother_occupation' => ['Homemaker', 'Teacher', 'Retired', 'Private Job'][array_rand(['Homemaker', 'Teacher', 'Retired', 'Private Job'])],
         ]);
+
+        if ($policy !== null) {
+            self::applyBulkPolicyRandomFill($attrs, $policy);
+            self::applyBulkPolicyNeverFill($attrs, $policy);
+        }
+
+        return $attrs;
+    }
+
+    private static function randomDobForAgeRange(int $ageMin, int $ageMax): string
+    {
+        if ($ageMin > $ageMax) {
+            [$ageMin, $ageMax] = [$ageMax, $ageMin];
+        }
+        $age = random_int($ageMin, $ageMax);
+
+        return now()->subYears($age)->subDays(random_int(0, 364))->format('Y-m-d');
+    }
+
+    /**
+     * @param  array<string, mixed>  $attrs
+     * @param  array<string, mixed>  $policy
+     */
+    private static function applyBulkPolicyRandomFill(array &$attrs, array $policy): void
+    {
+        foreach ($policy['random_fill_keys'] as $key) {
+            if ($key === 'blood_group_id') {
+                $attrs['blood_group_id'] = MasterBloodGroup::where('is_active', true)->inRandomOrder()->value('id');
+            } elseif ($key === 'complexion_id') {
+                $attrs['complexion_id'] = MasterComplexion::where('is_active', true)->inRandomOrder()->value('id');
+            } elseif ($key === 'physical_build_id') {
+                $attrs['physical_build_id'] = MasterPhysicalBuild::where('is_active', true)->inRandomOrder()->value('id');
+            } elseif ($key === 'weight_kg') {
+                $attrs['weight_kg'] = random_int(50, 85);
+            } elseif ($key === 'family_type_id') {
+                $attrs['family_type_id'] = MasterFamilyType::where('is_active', true)->inRandomOrder()->value('id');
+            } elseif ($key === 'income_currency_id') {
+                $attrs['income_currency_id'] = MasterIncomeCurrency::where('is_active', true)->inRandomOrder()->value('id');
+            } elseif ($key === 'mother_tongue_id') {
+                $attrs['mother_tongue_id'] = MasterMotherTongue::where('is_active', true)->inRandomOrder()->value('id');
+            } elseif ($key === 'birth_time') {
+                $attrs['birth_time'] = sprintf('%02d:%02d', random_int(6, 22), random_int(0, 59));
+            }
+        }
+    }
+
+    /**
+     * @param  array<string, mixed>  $attrs
+     * @param  array<string, mixed>  $policy
+     */
+    private static function applyBulkPolicyNeverFill(array &$attrs, array $policy): void
+    {
+        foreach ($policy['never_fill_keys'] as $key) {
+            if ($key === 'about_me' || $key === 'expectations') {
+                continue;
+            }
+            if (array_key_exists($key, $attrs)) {
+                $attrs[$key] = null;
+            }
+        }
     }
 
     /**
@@ -363,8 +531,13 @@ class DemoProfileDefaultsService
      *
      * @return array{extended_narrative: list<array<string, mixed>>, preferences: array<string, mixed>}
      */
-    public static function postCreateSnapshotForDemoProfile(MatrimonyProfile $profile): array
+    /**
+     * @param  array<string, mixed>|null  $bulkPolicy  normalized admin bulk policy; null = legacy behaviour
+     */
+    public static function postCreateSnapshotForDemoProfile(MatrimonyProfile $profile, ?array $bulkPolicy = null): array
     {
+        $policy = $bulkPolicy !== null ? ShowcaseBulkCreateSettings::normalize($bulkPolicy) : null;
+
         $age = null;
         if ($profile->date_of_birth) {
             try {
@@ -384,17 +557,37 @@ class DemoProfileDefaultsService
         $prefHeightMin = $height !== null ? max(1, $height - 10) : null;
         $prefHeightMax = $height !== null ? ($height + 10) : null;
 
-        $about = [];
-        $occ = trim((string) ($profile->occupation_title ?? ''));
-        $edu = trim((string) ($profile->highest_education ?? ''));
-        if ($occ !== '') {
-            $about[] = "Working as {$occ}.";
+        $aboutText = '';
+        $expectText = 'Looking for a respectful, family-oriented match. Prefer honest and calm communication.';
+
+        if ($policy !== null && $policy['about_me_templates'] !== []) {
+            $aboutText = $policy['about_me_templates'][array_rand($policy['about_me_templates'])];
         }
-        if ($edu !== '') {
-            $about[] = "Education: {$edu}.";
+        if ($policy !== null && $policy['expectations_templates'] !== []) {
+            $expectText = $policy['expectations_templates'][array_rand($policy['expectations_templates'])];
         }
-        if ($about === []) {
-            $about[] = 'I value family and clear communication.';
+
+        if ($aboutText === '') {
+            $about = [];
+            $occ = trim((string) ($profile->occupation_title ?? ''));
+            $edu = trim((string) ($profile->highest_education ?? ''));
+            if ($occ !== '') {
+                $about[] = "Working as {$occ}.";
+            }
+            if ($edu !== '') {
+                $about[] = "Education: {$edu}.";
+            }
+            if ($about === []) {
+                $about[] = 'I value family and clear communication.';
+            }
+            $aboutText = trim(implode(' ', $about));
+        }
+
+        if ($policy !== null && in_array('about_me', $policy['never_fill_keys'], true)) {
+            $aboutText = '';
+        }
+        if ($policy !== null && in_array('expectations', $policy['never_fill_keys'], true)) {
+            $expectText = '';
         }
 
         $dietId = $profile->diet_id ? (int) $profile->diet_id : null;
@@ -405,8 +598,8 @@ class DemoProfileDefaultsService
         return [
             'extended_narrative' => [[
                 'id' => null,
-                'narrative_about_me' => trim(implode(' ', $about)),
-                'narrative_expectations' => 'Looking for a respectful, family-oriented match. Prefer honest and calm communication.',
+                'narrative_about_me' => $aboutText,
+                'narrative_expectations' => $expectText,
                 'additional_notes' => null,
             ]],
             'preferences' => [
@@ -606,29 +799,36 @@ class DemoProfileDefaultsService
      *
      * @return array{country_id:int|null,state_id:int|null,district_id:int|null,taluka_id:int|null,city_id:int|null,work_state_id:int|null,work_city_id:int|null}|null
      */
-    private static function locationHierarchyForShowcaseFromRealUsers(): ?array
+    /**
+     * @return list<int>
+     */
+    private static function eligibleNonDemoDistrictIds(): array
     {
-        static $eligibleDistrictIds = null;
-        if ($eligibleDistrictIds === null) {
-            $eligibleDistrictIds = DB::table('matrimony_profiles')
-                ->where('is_demo', false)
-                ->whereNull('deleted_at')
-                ->whereNotNull('district_id')
-                ->pluck('district_id')
-                ->map(fn ($v) => (int) $v)
-                ->filter()
-                ->unique()
-                ->values()
-                ->all();
-        }
-        if (empty($eligibleDistrictIds)) {
+        return DB::table('matrimony_profiles')
+            ->where('is_demo', false)
+            ->whereNull('deleted_at')
+            ->whereNotNull('district_id')
+            ->pluck('district_id')
+            ->map(fn ($v) => (int) $v)
+            ->filter()
+            ->unique()
+            ->values()
+            ->all();
+    }
+
+    /**
+     * @param  list<int>  $eligibleDistrictIds
+     * @return array{country_id:int|null,state_id:int|null,district_id:int|null,taluka_id:int|null,city_id:int|null,work_state_id:int|null,work_city_id:int|null}|null
+     */
+    private static function pickShowcaseHierarchyFromDistrictPool(array $eligibleDistrictIds): ?array
+    {
+        if ($eligibleDistrictIds === []) {
             return null;
         }
 
-        // Try a few times to find a district with a usable "town" city.
         for ($attempt = 0; $attempt < 12; $attempt++) {
             $districtId = $eligibleDistrictIds[array_rand($eligibleDistrictIds)];
-            $district = \App\Models\District::query()->find($districtId);
+            $district = District::query()->find($districtId);
             if (! $district) {
                 continue;
             }
@@ -636,10 +836,9 @@ class DemoProfileDefaultsService
             $stateId = $district->state_id ? (int) $district->state_id : null;
             $countryId = null;
             if ($stateId) {
-                $countryId = (int) (\App\Models\State::query()->where('id', $stateId)->value('country_id') ?? 0) ?: null;
+                $countryId = (int) (State::query()->where('id', $stateId)->value('country_id') ?? 0) ?: null;
             }
 
-            // Strict rule: choose only district-city match (जिल्ह्याचं गाव).
             $districtName = strtolower(trim((string) ($district->name ?? '')));
 
             $candidate = DB::table('cities')
@@ -662,7 +861,6 @@ class DemoProfileDefaultsService
                 }
             }
 
-            // No strict district-city match for this district => skip district.
             if ($picked === null) {
                 continue;
             }
@@ -679,13 +877,66 @@ class DemoProfileDefaultsService
                 'district_id' => (int) $districtId,
                 'taluka_id' => $talukaId,
                 'city_id' => $cityId,
-                // Align work location to residence for showcase realism (no village).
                 'work_state_id' => $stateId,
                 'work_city_id' => $cityId,
             ];
         }
 
         return null;
+    }
+
+    private static function locationHierarchyForShowcaseFromRealUsers(): ?array
+    {
+        static $eligibleDistrictIds = null;
+        if ($eligibleDistrictIds === null) {
+            $eligibleDistrictIds = self::eligibleNonDemoDistrictIds();
+        }
+
+        return self::pickShowcaseHierarchyFromDistrictPool($eligibleDistrictIds);
+    }
+
+    /**
+     * @param  array<string, mixed>  $policy  normalized {@see ShowcaseBulkCreateSettings::normalize}
+     */
+    private static function locationHierarchyForShowcaseFromRealUsersPolicy(array $policy): ?array
+    {
+        static $fullPool = null;
+        if ($fullPool === null) {
+            $fullPool = self::eligibleNonDemoDistrictIds();
+        }
+
+        $ids = $fullPool;
+        if ($policy['district_ids'] !== []) {
+            $allow = array_flip($policy['district_ids']);
+            $ids = array_values(array_filter($ids, fn (int $id) => isset($allow[$id])));
+        }
+        if ($policy['state_ids'] !== []) {
+            $inStates = District::query()
+                ->whereIn('state_id', $policy['state_ids'])
+                ->pluck('id')
+                ->map(fn ($v) => (int) $v)
+                ->all();
+            $inSet = array_flip($inStates);
+            $ids = array_values(array_filter($ids, fn (int $id) => isset($inSet[$id])));
+        }
+        if ($policy['country_ids'] !== []) {
+            $stateIds = State::query()
+                ->whereIn('country_id', $policy['country_ids'])
+                ->pluck('id')
+                ->all();
+            if ($stateIds === []) {
+                return null;
+            }
+            $inCountries = District::query()
+                ->whereIn('state_id', $stateIds)
+                ->pluck('id')
+                ->map(fn ($v) => (int) $v)
+                ->all();
+            $inSet = array_flip($inCountries);
+            $ids = array_values(array_filter($ids, fn (int $id) => isset($inSet[$id])));
+        }
+
+        return self::pickShowcaseHierarchyFromDistrictPool($ids);
     }
 
     private static function pickSmokingStatusIdForReligion(?Religion $religion): ?int

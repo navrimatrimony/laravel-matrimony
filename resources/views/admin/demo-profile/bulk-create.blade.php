@@ -3,7 +3,14 @@
 @section('content')
 <div class="bg-white dark:bg-gray-800 shadow rounded-lg p-6">
     <h1 class="text-2xl font-bold text-gray-800 dark:text-gray-100 mb-2">Bulk Create Showcase Profiles (1–50)</h1>
-    <p class="text-gray-500 dark:text-gray-400 text-sm mb-6">Create multiple showcase profiles. New profiles are created as <strong>draft</strong> and are <strong>not visible in member search</strong> until you publish.</p>
+    @php $bulkLc = $bulkShowcaseLifecycle ?? 'draft'; @endphp
+    <p class="text-gray-500 dark:text-gray-400 text-sm mb-6">
+        @if ($bulkLc === 'active')
+            Create multiple showcase profiles. Current <a href="{{ route('admin.auto-showcase-settings.edit') }}#bulk" class="text-indigo-600 dark:text-indigo-400 underline">Admin bulk</a> lifecycle is <strong>active</strong> — new profiles are visible in member search when completeness and visibility rules pass (no publish step).
+        @else
+            Create multiple showcase profiles. Current Admin bulk lifecycle is <strong>draft</strong> — new profiles are <strong>not visible in member search</strong> until you publish. Change this under <a href="{{ route('admin.auto-showcase-settings.edit') }}#bulk" class="text-indigo-600 dark:text-indigo-400 underline">Auto-showcase settings → Admin bulk</a>.
+        @endif
+    </p>
     @if ($errors->any())
         <ul class="text-red-600 text-sm mb-4 space-y-1">
             @foreach ($errors->all() as $e) <li>{{ $e }}</li> @endforeach
@@ -32,22 +39,28 @@
         <p class="text-sm text-gray-500 dark:text-gray-400">All other mandatory fields are auto-filled with random values per profile. No manual input.</p>
         <div class="flex gap-3">
             <button type="submit" style="background-color: #059669; color: white; padding: 10px 20px; border-radius: 6px; font-weight: 600; font-size: 14px; border: none; cursor: pointer; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">Create</button>
-            <a href="{{ route('admin.demo-profile.create') }}" class="px-4 py-2 text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 text-sm">Cancel</a>
+            <a href="{{ route('admin.dashboard') }}" class="px-4 py-2 text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 text-sm">Cancel</a>
         </div>
     </form>
 </div>
 
 @php
     $created = $createdProfiles ?? collect();
-    $drafts = $recentDrafts ?? collect();
+    $recent = $recentShowcase ?? collect();
 @endphp
 
-@if ($created->isNotEmpty() || $drafts->isNotEmpty())
+@if ($created->isNotEmpty() || $recent->isNotEmpty())
     <div class="mt-6 bg-white dark:bg-gray-800 shadow rounded-lg p-6">
         <div class="flex items-center justify-between gap-4 mb-4">
             <div class="min-w-0">
-                <h2 class="text-lg font-bold text-gray-800 dark:text-gray-100">Draft showcase profiles</h2>
-                <p class="text-sm text-gray-500 dark:text-gray-400">Only profiles you publish will become visible to members in search.</p>
+                <h2 class="text-lg font-bold text-gray-800 dark:text-gray-100">Recent showcase profiles</h2>
+                <p class="text-sm text-gray-500 dark:text-gray-400">
+                    @if (($bulkShowcaseLifecycle ?? 'draft') === 'draft')
+                        Draft rows need <strong>Publish</strong> before they appear in member search. Active rows are already searchable (subject to filters).
+                    @else
+                        New bulk creates use <strong>active</strong> lifecycle; publish is only needed if you switch Admin bulk back to draft or change a profile to draft elsewhere.
+                    @endif
+                </p>
             </div>
         </div>
 
@@ -96,7 +109,7 @@
                         </tr>
                     @endforeach
 
-                    @foreach ($drafts as $p)
+                    @foreach ($recent as $p)
                         @if ($created->pluck('id')->contains($p->id))
                             @continue
                         @endif
@@ -111,10 +124,12 @@
                                 <div class="flex flex-wrap gap-2">
                                     <a href="{{ route('matrimony.profile.wizard.section', ['section' => 'full', 'all' => 1, 'profile_id' => $p->id]) }}" class="px-3 py-1.5 rounded bg-gray-100 hover:bg-gray-200 text-gray-800 dark:bg-gray-900 dark:hover:bg-gray-800 dark:text-gray-100">Edit all</a>
                                     <a href="{{ route('matrimony.profile.upload-photo', ['profile_id' => $p->id]) }}" class="px-3 py-1.5 rounded bg-indigo-600 hover:bg-indigo-700 text-white">Photos</a>
-                                    <form method="POST" action="{{ route('admin.demo-profile.publish', $p->id) }}">
-                                        @csrf
-                                        <button type="submit" class="px-3 py-1.5 rounded bg-emerald-600 hover:bg-emerald-700 text-white">Publish</button>
-                                    </form>
+                                    @if (($p->lifecycle_state ?? null) !== 'active')
+                                        <form method="POST" action="{{ route('admin.demo-profile.publish', $p->id) }}">
+                                            @csrf
+                                            <button type="submit" class="px-3 py-1.5 rounded bg-emerald-600 hover:bg-emerald-700 text-white">Publish</button>
+                                        </form>
+                                    @endif
                                     <form method="POST" action="{{ route('admin.demo-profile.delete', $p->id) }}" onsubmit="return confirm('Delete this showcase profile?');">
                                         @csrf
                                         <button type="submit" class="px-3 py-1.5 rounded bg-red-600 hover:bg-red-700 text-white">Delete</button>

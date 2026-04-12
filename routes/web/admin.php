@@ -17,6 +17,7 @@ use App\Http\Controllers\Admin\AdminSettingsController;
 use App\Http\Controllers\Admin\AdminSuggestionReviewController;
 use App\Http\Controllers\Admin\AdminUserNotificationsController;
 use App\Http\Controllers\Admin\AdminVerificationTagController;
+use App\Http\Controllers\Admin\AutoShowcaseSettingsController;
 use App\Http\Controllers\Admin\CommerceAnalyticsController;
 use App\Http\Controllers\Admin\CommerceMemberOverrideController;
 use App\Http\Controllers\Admin\CouponController;
@@ -26,6 +27,7 @@ use App\Http\Controllers\Admin\HomepageImageController;
 use App\Http\Controllers\Admin\IntakeReviewController;
 use App\Http\Controllers\Admin\LocationSuggestionWebController;
 use App\Http\Controllers\Admin\MatchBoostController;
+use App\Http\Controllers\Admin\MatchingEngineController;
 use App\Http\Controllers\Admin\ModerationLearningController;
 use App\Http\Controllers\Admin\OcrPatternController;
 use App\Http\Controllers\Admin\PhotoModerationEngineController;
@@ -54,7 +56,7 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
         $totalProfiles = \App\Models\MatrimonyProfile::count();
         $activeProfiles = \App\Models\MatrimonyProfile::where('is_suspended', false)->count();
         $suspendedProfiles = \App\Models\MatrimonyProfile::where('is_suspended', true)->count();
-        $demoProfiles = \App\Models\MatrimonyProfile::where('is_demo', true)->count();
+        $showcaseProfilesCount = \App\Models\MatrimonyProfile::where('is_demo', true)->count();
         $pendingAbuseReports = \App\Models\AbuseReport::where('status', 'open')->count();
         $totalBiodataIntakes = \App\Models\BiodataIntake::count();
 
@@ -97,7 +99,7 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
             'totalProfiles' => $totalProfiles,
             'activeProfiles' => $activeProfiles,
             'suspendedProfiles' => $suspendedProfiles,
-            'demoProfiles' => $demoProfiles,
+            'showcaseProfilesCount' => $showcaseProfilesCount,
             'pendingAbuseReports' => $pendingAbuseReports,
             'totalBiodataIntakes' => $totalBiodataIntakes,
             'intakeLast7Count' => $last7Count,
@@ -262,8 +264,11 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
         Route::post('/cities/{cityId}/aliases', [CityAliasAdminController::class, 'store']);
     });
 
-    Route::get('/demo-profile/create', [DemoProfileController::class, 'create'])->name('demo-profile.create');
-    Route::post('/demo-profile', [DemoProfileController::class, 'store'])->name('demo-profile.store');
+    Route::get('/auto-showcase-settings', [AutoShowcaseSettingsController::class, 'edit'])->name('auto-showcase-settings.edit');
+    Route::post('/auto-showcase-settings', [AutoShowcaseSettingsController::class, 'update'])->name('auto-showcase-settings.update');
+    Route::post('/auto-showcase-settings/fill-city-population', [AutoShowcaseSettingsController::class, 'fillCityPopulation'])->name('auto-showcase-settings.fill-city-population');
+    Route::post('/auto-showcase-settings/reset-ai-population-locks', [AutoShowcaseSettingsController::class, 'resetAiPopulationDistrictLocks'])->name('auto-showcase-settings.reset-ai-population-locks');
+
     Route::get('/demo-profile/bulk-create', [DemoProfileController::class, 'bulkCreate'])->name('demo-profile.bulk-create');
     Route::post('/demo-profiles/bulk', [DemoProfileController::class, 'bulkStore'])->name('demo-profile.bulk-store');
     Route::post('/demo-profiles/{profile}/publish', [DemoProfileController::class, 'publish'])->name('demo-profile.publish');
@@ -371,6 +376,23 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
 
     Route::get('/match-boost', [MatchBoostController::class, 'edit'])->name('match-boost.edit');
     Route::put('/match-boost', [MatchBoostController::class, 'update'])->name('match-boost.update');
+
+    Route::prefix('matching-engine')->name('matching-engine.')->group(function () {
+        Route::get('/', [MatchingEngineController::class, 'overview'])->name('overview');
+        Route::post('/runtime', [MatchingEngineController::class, 'runtime'])->name('runtime');
+        Route::get('/fields', [MatchingEngineController::class, 'fields'])->name('fields');
+        Route::post('/fields', [MatchingEngineController::class, 'saveFields'])->name('fields.save');
+        Route::get('/filters', [MatchingEngineController::class, 'filters'])->name('filters');
+        Route::post('/filters', [MatchingEngineController::class, 'saveFilters'])->name('filters.save');
+        Route::get('/behavior', [MatchingEngineController::class, 'behavior'])->name('behavior');
+        Route::post('/behavior', [MatchingEngineController::class, 'saveBehavior'])->name('behavior.save');
+        Route::get('/boosts', [MatchingEngineController::class, 'boosts'])->name('boosts');
+        Route::post('/boosts', [MatchingEngineController::class, 'saveBoosts'])->name('boosts.save');
+        Route::get('/ai', [MatchingEngineController::class, 'ai'])->name('ai');
+        Route::get('/preview', [MatchingEngineController::class, 'preview'])->name('preview');
+        Route::get('/audit', [MatchingEngineController::class, 'audit'])->name('audit');
+        Route::post('/audit/{matching_config_version}/rollback', [MatchingEngineController::class, 'rollback'])->name('audit.rollback');
+    });
 
     Route::get('/profile-field-config', [AdminSettingsController::class, 'profileFieldConfigIndex'])->name('profile-field-config.index');
     Route::post('/profile-field-config', [AdminSettingsController::class, 'profileFieldConfigUpdate'])->name('profile-field-config.update');

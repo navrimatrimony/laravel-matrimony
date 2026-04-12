@@ -7,7 +7,6 @@ use App\Models\City;
 use App\Models\Country;
 use App\Models\District;
 use App\Models\FieldRegistry;
-use App\Models\HiddenProfile;
 use App\Models\Interest;
 use App\Models\MasterMaritalStatus;
 use App\Models\MatrimonyProfile;
@@ -20,15 +19,18 @@ use App\Models\State;
 use App\Models\SubCaste;
 use App\Models\Taluka;
 use App\Models\User;
+use App\Services\Admin\AdminSettingService;
 use App\Services\ContactAccessService;
 use App\Services\ExtendedFieldService;
 use App\Services\FeatureUsageService;
-use App\Services\Admin\AdminSettingService;
 use App\Services\Image\ImageModerationService;
+use App\Services\Image\MatrimonyPhotoStoragePathService;
 use App\Services\Image\PhotoModerationScanPayload;
 use App\Services\Image\PhotoUploadBatchUserMessage;
 use App\Services\Image\ProfileGalleryPhotoModerationStatus;
+use App\Services\Image\ProfilePhotoUrlService;
 use App\Services\InterestSendLimitService;
+use App\Services\MatrimonyProfileSearchQueryService;
 use App\Services\ProfileCompletenessService;
 use App\Services\ProfileFieldConfigurationService;
 use App\Services\ProfilePhotoAccessService;
@@ -36,6 +38,8 @@ use App\Services\ProfileRotationService;
 use App\Services\ProfileSearchRankingService;
 use App\Services\ProfileShowReadService;
 use App\Services\ProfileShowSnapshotService;
+use App\Services\Showcase\AutoShowcaseEngine;
+use App\Services\Showcase\AutoShowcaseSettings;
 use App\Services\ViewTrackingService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
@@ -89,11 +93,11 @@ class MatrimonyProfileController extends Controller
     }
 
     /**
-     * Query params to preserve admin showcase/demo photo editing across redirects (GET + POST body may omit query string).
+     * Query params to preserve admin showcase profile photo editing across redirects (GET + POST body may omit query string).
      *
      * @return array<string, string>
      */
-    private function adminDemoProfileQuery(MatrimonyProfile $profile): array
+    private function adminShowcaseProfileQuery(MatrimonyProfile $profile): array
     {
         $user = auth()->user();
         if (! $user || ! method_exists($user, 'isAnyAdmin') || ! $user->isAnyAdmin()) {
@@ -116,7 +120,7 @@ class MatrimonyProfileController extends Controller
             $q['from'] = 'onboarding';
         }
 
-        return array_merge($q, $this->adminDemoProfileQuery($profile));
+        return array_merge($q, $this->adminShowcaseProfileQuery($profile));
     }
 
     /**
@@ -545,11 +549,12 @@ class MatrimonyProfileController extends Controller
             mkdir($targetDir, 0755, true);
         }
 
-        $storeUploadedPhoto = function ($file, int $idx) use ($targetDir, $maxEdgePx): string {
+        $storeUploadedPhoto = function ($file, int $idx) use ($maxEdgePx, $profile): string {
             $originalName = basename((string) ($file->getClientOriginalName() ?: 'photo'));
             $slug = pathinfo($originalName, PATHINFO_FILENAME);
             $rand = bin2hex(random_bytes(3));
             $baseName = time().'_'.$idx.'_'.$rand.'_'.$slug;
+            $pid = (int) $profile->id;
 
             // Prefer WebP + resize when GD/WebP extensions are available; otherwise fall back to original upload.
             if (function_exists('imagecreatefromstring') && function_exists('imagewebp')) {
@@ -573,8 +578,10 @@ class MatrimonyProfileController extends Controller
                     $image = $resized;
                 }
 
-                $webpFilename = $baseName.'.webp';
-                $webpPath = $targetDir.DIRECTORY_SEPARATOR.$webpFilename;
+                $leaf = $baseName.'.webp';
+                $relative = MatrimonyPhotoStoragePathService::nestedRelativePathForNewFile($pid, $leaf);
+                MatrimonyPhotoStoragePathService::ensureDirectoryForRelativePath($relative);
+                $webpPath = storage_path('app/public/matrimony_photos/'.$relative);
                 imagewebp($image, $webpPath, 80);
                 imagedestroy($image);
 
@@ -587,15 +594,21 @@ class MatrimonyProfileController extends Controller
                     }
                 }
 
-                return $webpFilename;
+                return $relative;
             }
 
             // Fallback: store original file without re-encoding (keeps old behaviour on systems without GD/WebP)
             $extension = $file->getClientOriginalExtension() ?: 'jpg';
             $filename = $baseName.'.'.$extension;
-            $file->move($targetDir, $filename);
+            $relative = MatrimonyPhotoStoragePathService::nestedRelativePathForNewFile($pid, $filename);
+            MatrimonyPhotoStoragePathService::ensureDirectoryForRelativePath($relative);
+            $destDir = pathinfo(storage_path('app/public/matrimony_photos/'.$relative), PATHINFO_DIRNAME);
+            if (! is_dir($destDir)) {
+                mkdir($destDir, 0755, true);
+            }
+            $file->move($destDir, basename($relative));
 
-            return $filename;
+            return $relative;
         };
 
         try {
@@ -742,6 +755,9 @@ class MatrimonyProfileController extends Controller
             }
         }
 
+        $profile->refresh();
+        $this->syncCoreProfilePhotoFromPrimaryGalleryIfPendingStale($profile);
+
         if (! empty($result['conflict_detected'])) {
             if ($inOnboardingPhotoPhase) {
                 return $this->photoUploadRedirectResponse(
@@ -755,7 +771,7 @@ class MatrimonyProfileController extends Controller
                 $request,
                 route('matrimony.profile.wizard.section', array_merge(
                     ['section' => 'full', 'all' => 1],
-                    $this->adminDemoProfileQuery($profile)
+                    $this->adminShowcaseProfileQuery($profile)
                 )),
                 ['warning' => 'Photo uploaded but some conflicts were detected.']
             );
@@ -801,6 +817,25 @@ class MatrimonyProfileController extends Controller
     {
         $profile->forceFill(['card_onboarding_resume_step' => null])->saveQuietly();
         session()->forget('wizard_minimal');
+    }
+
+    /**
+     * Core column can stay pending/… while profile_photos already has the processed file (queue edge / legacy rows).
+     */
+    private function syncCoreProfilePhotoFromPrimaryGalleryIfPendingStale(MatrimonyProfile $profile): void
+    {
+        $col = trim((string) ($profile->profile_photo ?? ''));
+        if ($col === '' || ! ProfilePhotoUrlService::isPendingPlaceholder($col)) {
+            return;
+        }
+        if (ProfilePhotoUrlService::storedFileExistsForRelativePath($col)) {
+            return;
+        }
+        $rel = ProfilePhotoUrlService::primaryNonPendingGalleryRelativePath($profile);
+        if ($rel === null || ! ProfilePhotoUrlService::storedFileExistsForRelativePath($rel)) {
+            return;
+        }
+        $profile->forceFill(['profile_photo' => $rel])->saveQuietly();
     }
 
     /**
@@ -1428,166 +1463,27 @@ class MatrimonyProfileController extends Controller
     */
     public function index(Request $request)
     {
-        $query = MatrimonyProfile::query();
-
-        // Day 7: Only active profiles searchable; NULL treated as active (backward compat)
-        $query->where(function ($q) {
-            $q->where('lifecycle_state', 'active')->orWhereNull('lifecycle_state');
-        })->where('is_suspended', false);
-        // Soft deletes are automatically excluded by Laravel's SoftDeletes trait
-
-        $query->whereMemberAccountsOnly();
-
         $viewerOwnProfileId = auth()->user()?->matrimonyProfile?->id;
-        if ($viewerOwnProfileId) {
-            $query->whereKeyNot((int) $viewerOwnProfileId);
+
+        $filterQuery = MatrimonyProfileSearchQueryService::newFilteredListingQuery($request, $viewerOwnProfileId);
+        $totalCount = (clone $filterQuery)->count();
+
+        $strictKeys = AutoShowcaseSettings::strictDimensionKeys();
+        $strictCount = MatrimonyProfileSearchQueryService::countStrictMatches($request, $viewerOwnProfileId, $strictKeys);
+
+        if (auth()->check()) {
+            app(AutoShowcaseEngine::class)->evaluateAfterSearchCounts(
+                $request,
+                auth()->user(),
+                $totalCount,
+                $strictCount
+            );
         }
 
-        // Day-18: Only use enabled AND searchable fields for search
-        $searchableFields = ProfileFieldConfigurationService::getSearchableFieldKeys();
-        $enabledFields = ProfileFieldConfigurationService::getEnabledFieldKeys();
+        $query = MatrimonyProfileSearchQueryService::newFilteredListingQuery($request, $viewerOwnProfileId);
 
-        // Intersection: fields that are both enabled and searchable
-        $enabledSearchableFields = array_intersect($searchableFields, $enabledFields);
-
-        // Helper: check if field is enabled and searchable
-        $isSearchable = fn (string $fieldKey) => in_array($fieldKey, $enabledSearchableFields, true);
-
-        // Religion filter (only if searchable)
-        if ($isSearchable('religion_id') && $request->filled('religion_id')) {
-            $query->where('religion_id', $request->input('religion_id'));
-        }
-
-        // Caste filter (only if searchable) — normalized: use caste_id
-        if ($isSearchable('caste') && $request->filled('caste_id')) {
-            $query->where('caste_id', $request->input('caste_id'));
-        }
-
-        // Sub-caste filter (only if searchable)
-        if ($isSearchable('sub_caste_id') && $request->filled('sub_caste_id')) {
-            $query->where('sub_caste_id', $request->input('sub_caste_id'));
-        }
-
-        // Phase-6: Location hierarchy filters (only if searchable)
-        if ($isSearchable('location')) {
-            if ($request->filled('country_id')) {
-                $query->where('country_id', (int) $request->country_id);
-            }
-            if ($request->filled('state_id')) {
-                $query->where('state_id', (int) $request->state_id);
-            }
-            if ($request->filled('district_id')) {
-                $query->where('district_id', (int) $request->district_id);
-            }
-            if ($request->filled('taluka_id')) {
-                $query->where('taluka_id', (int) $request->taluka_id);
-            }
-            if ($request->filled('city_id')) {
-                $query->where('city_id', (int) $request->city_id);
-            }
-        }
-
-        // Age filter from date_of_birth (only if searchable)
-        if ($isSearchable('date_of_birth') && ($request->filled('age_from') || $request->filled('age_to'))) {
-            $query->whereNotNull('date_of_birth');
-            if ($request->filled('age_from')) {
-                $minDate = now()->subYears((int) $request->age_from)->format('Y-m-d');
-                $query->whereDate('date_of_birth', '<=', $minDate);
-            }
-            if ($request->filled('age_to')) {
-                $maxDate = now()->subYears((int) $request->age_to + 1)->addDay()->format('Y-m-d');
-                $query->whereDate('date_of_birth', '>=', $maxDate);
-            }
-        }
-
-        // Height filter (only if searchable)
-        if ($isSearchable('height_cm')) {
-            if ($request->filled('height_from')) {
-                $query->whereNotNull('height_cm')->where('height_cm', '>=', (int) $request->height_from);
-            }
-            if ($request->filled('height_to')) {
-                $query->whereNotNull('height_cm')->where('height_cm', '<=', (int) $request->height_to);
-            }
-        }
-
-        // Marital status filter (Phase-5: marital_status_id)
-        if ($isSearchable('marital_status_id') && ($request->filled('marital_status_id') || $request->filled('marital_status'))) {
-            $msId = $request->input('marital_status_id') ?: ($request->input('marital_status') === 'single'
-                ? \App\Models\MasterMaritalStatus::where('key', 'never_married')->value('id')
-                : \App\Models\MasterMaritalStatus::where('key', $request->input('marital_status'))->value('id'));
-            if ($msId) {
-                $query->where('marital_status_id', $msId);
-            }
-        }
-
-        // Education filter (only if searchable) — column: highest_education
-        if ($isSearchable('education') && $request->filled('education')) {
-            $query->where('highest_education', $request->input('education'));
-        }
-
-        // Profession filter (only if searchable)
-        if ($isSearchable('profession_id') && $request->filled('profession_id')) {
-            $query->where('profession_id', $request->input('profession_id'));
-        }
-
-        // Serious intent filter (only if searchable)
-        if ($isSearchable('serious_intent_id') && $request->filled('serious_intent_id')) {
-            $query->where('serious_intent_id', $request->input('serious_intent_id'));
-        }
-
-        // Photo-only filter (truthful: uses core profile_photo + photo_approved flag)
-        if ($request->boolean('has_photo')) {
-            $query->whereNotNull('profile_photo')
-                ->where(function ($q) {
-                    $q->whereNull('photo_approved')->orWhere('photo_approved', 1);
-                });
-        }
-
-        // Verified-only filter (truthful: email verification only)
-        if ($request->boolean('verified_only')) {
-            $query->whereHas('user', function ($q) {
-                $q->whereNotNull('email_verified_at');
-            });
-        }
-
-        // 70% completeness or admin override (search visibility only)
-        $query->whereRaw(ProfileCompletenessService::sqlSearchVisible('matrimony_profiles'));
-
-        // Admin global toggle: hide demo profiles from search when OFF (Day-8)
-        $demoVisible = \App\Models\AdminSetting::getBool('demo_profiles_visible_in_search', true);
-        if (! $demoVisible) {
-            $query->where(function ($q) {
-                $q->where('is_demo', false)->orWhereNull('is_demo');
-            });
-        }
-
-        // Admin: male members see only female profiles in search (and vice versa); other viewer genders unchanged.
-        if (\App\Models\AdminSetting::getBool('search_opposite_gender_only', false) && auth()->check()) {
-            $viewerProfile = auth()->user()->matrimonyProfile;
-            if ($viewerProfile) {
-                $viewerProfile->loadMissing('gender');
-                $viewerGenderKey = $viewerProfile->gender?->key ?? null;
-                if ($viewerGenderKey === 'male') {
-                    $query->whereHas('gender', fn ($g) => $g->where('key', 'female'));
-                } elseif ($viewerGenderKey === 'female') {
-                    $query->whereHas('gender', fn ($g) => $g->where('key', 'male'));
-                }
-            }
-        }
-
-        // Exclude blocked profiles (either direction) and viewer-hidden profiles when viewer has profile
         $myId = auth()->user()?->matrimonyProfile?->id;
         $viewerUserId = auth()->id();
-        if ($myId) {
-            $blockedIds = ViewTrackingService::getBlockedProfileIds($myId);
-            $hiddenIds = HiddenProfile::query()
-                ->where('owner_profile_id', $myId)
-                ->pluck('hidden_profile_id');
-            $excludeIds = $blockedIds->merge($hiddenIds)->unique()->values();
-            if ($excludeIds->isNotEmpty()) {
-                $query->whereNotIn('id', $excludeIds);
-            }
-        }
 
         ProfileSearchRankingService::applySpotlightFirst($query);
 
