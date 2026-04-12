@@ -12,7 +12,7 @@ return [
     'good_photo_better_matches' => 'A good photo helps you find better matches',
     'click_to_upload' => 'Click to upload your photo',
     'preview' => 'Preview',
-    'adjust_crop_help_html' => 'Adjust crop: drag the <strong>square’s corners or edges</strong> to resize; drag <strong>inside the square</strong> to move. Or use the <strong>Crop</strong> button to apply.',
+    'adjust_crop_help_html' => 'Adjust crop: drag the <strong>frame’s corners or edges</strong> to resize; drag <strong>inside the frame</strong> to move. Or use the <strong>Crop</strong> button to apply. (Portrait 3:4.)',
     'crop' => 'Crop',
     'rotate_left' => 'Rotate left',
     'rotate_right' => 'Rotate right',
@@ -35,4 +35,3 @@ return [
     'upload_first_pending_admin' => 'Pending — processing; admin approval needed.',
     'upload_first_pending_scan' => 'Pending — automated checks running.',
 ];
-

@@ -1161,7 +1161,7 @@ class MatrimonyProfileController extends Controller
                 ->first();
             if ($incomingPending && ! $this->interestSendLimitService->isIncomingInterestUnlocked($user, $incomingPending)) {
                 return redirect()
-                    ->route('interests.received')
+                    ->route('interests.index', ['tab' => 'received'])
                     ->with('info', __('interests.profile_open_locked_use_inbox'));
             }
         }

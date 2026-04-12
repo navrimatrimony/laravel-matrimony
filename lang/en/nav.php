@@ -22,6 +22,7 @@ return [
     'my_profile' => 'My Profile',
     'edit_profile' => 'Edit Profile',
     'search_profiles' => 'Search Profiles',
+    'interests' => 'Interests',
     'interests_sent' => 'Interests Sent',
     'interests_received' => 'Interests Received',
     'who_viewed_me' => 'Who viewed me',

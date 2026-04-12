@@ -93,7 +93,7 @@
         @endif
     </a>
 
-    <a href="{{ route('interests.received') }}" class="{{ $navMainLink($navMainSection === 'connect') }}">
+    <a href="{{ route('interests.index') }}" class="{{ $navMainLink($navMainSection === 'connect') }}">
         <span class="whitespace-nowrap">{{ __('nav.connect') }}</span>
         @if ($navMainSection === 'connect')
             <span class="{{ $navMainCaret }}" aria-hidden="true"></span>
@@ -152,12 +152,8 @@
                                 {{ __('nav.my_profile') }}
                             </x-dropdown-link>
 
-                            <x-dropdown-link :href="route('interests.received')" class="hover:bg-gray-100 transition rounded-md">
-                                {{ __('nav.interests_received') }}
-                            </x-dropdown-link>
-
-                            <x-dropdown-link :href="route('interests.sent')" class="hover:bg-gray-100 transition rounded-md">
-                                {{ __('nav.interests_sent') }}
+                            <x-dropdown-link :href="route('interests.index')" class="hover:bg-gray-100 transition rounded-md">
+                                {{ __('nav.interests') }}
                             </x-dropdown-link>
                         @endif
 
@@ -274,12 +270,8 @@
         Connect
     </summary>
     <div class="ml-3 space-y-1">
-        <x-responsive-nav-link :href="route('interests.received')">
-            {{ __('nav.interests_received') }}
-        </x-responsive-nav-link>
-
-        <x-responsive-nav-link :href="route('interests.sent')">
-            {{ __('nav.interests_sent') }}
+        <x-responsive-nav-link :href="route('interests.index')">
+            {{ __('nav.interests') }}
         </x-responsive-nav-link>
 
         <x-responsive-nav-link :href="route('chat.index')" class="relative inline-flex items-center">
@@ -316,12 +308,8 @@
 
         @auth
             @if (auth()->user()->matrimonyProfile)
-                <x-responsive-nav-link :href="route('interests.received')">
-                    {{ __('nav.interests_received') }}
-                </x-responsive-nav-link>
-
-                <x-responsive-nav-link :href="route('interests.sent')">
-                    {{ __('nav.interests_sent') }}
+                <x-responsive-nav-link :href="route('interests.index')">
+                    {{ __('nav.interests') }}
                 </x-responsive-nav-link>
             @endif
         @endauth
@@ -375,12 +363,8 @@
                         {{ __('nav.my_profile') }}
                     </x-responsive-nav-link>
 
-                    <x-responsive-nav-link :href="route('interests.received')">
-                        {{ __('nav.interests_received') }}
-                    </x-responsive-nav-link>
-
-                    <x-responsive-nav-link :href="route('interests.sent')">
-                        {{ __('nav.interests_sent') }}
+                    <x-responsive-nav-link :href="route('interests.index')">
+                        {{ __('nav.interests') }}
                     </x-responsive-nav-link>
                 @endif
 

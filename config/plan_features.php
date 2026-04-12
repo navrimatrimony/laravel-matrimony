@@ -41,6 +41,10 @@ return [
         'type' => 'days',
         'label' => 'Who Viewed Me Days',
     ],
+    'who_viewed_me_preview_limit' => [
+        'type' => 'limit',
+        'label' => 'Who Viewed Me — free preview (distinct viewers / calendar month)',
+    ],
     'photo_blur_limit' => [
         'type' => 'limit',
         'label' => 'Photo Blur Limit',

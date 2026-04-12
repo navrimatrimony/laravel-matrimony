@@ -1,0 +1,63 @@
+<?php
+
+namespace App\Support;
+
+use App\Services\FeatureUsageService;
+use App\Services\SubscriptionService;
+
+/**
+ * Plan admin quota cards: single source for policy rows + mirrored {@see \App\Models\PlanFeature} values.
+ *
+ * @phpstan-import-type PlanFeatureKey from PlanFeatureKeys
+ */
+final class PlanQuotaPolicyKeys
+{
+    /**
+     * Display / persistence order (matches product priority for admins).
+     *
+     * @return list<string>
+     */
+    public static function ordered(): array
+    {
+        return [
+            PlanFeatureKeys::CHAT_SEND_LIMIT,
+            PlanFeatureKeys::CHAT_CAN_READ,
+            PlanFeatureKeys::CONTACT_VIEW_LIMIT,
+            PlanFeatureKeys::INTEREST_SEND_LIMIT,
+            PlanFeatureKeys::INTEREST_VIEW_LIMIT,
+            SubscriptionService::FEATURE_DAILY_PROFILE_VIEW_LIMIT,
+            PlanFeatureKeys::WHO_VIEWED_ME_DAYS,
+            PlanFeatureKeys::PHOTO_FULL_ACCESS,
+            PlanFeatureKeys::PROFILE_BOOST_PER_WEEK,
+            PlanFeatureKeys::PRIORITY_LISTING,
+            PlanFeatureKeys::MEDIATOR_REQUESTS_PER_MONTH,
+            PlanFeatureKeys::REFERRAL_BONUS_DAYS,
+        ];
+    }
+
+    /**
+     * Admin uses the full quota card (refresh, limit, grace, pack) for every policy row.
+     * Runtime {@see \App\Models\PlanFeature} for these keys stays boolean (0/1): only {@code is_enabled} is mirrored.
+     */
+    public static function mirrorsPlanFeatureAsBooleanOnly(string $featureKey): bool
+    {
+        return match ($featureKey) {
+            PlanFeatureKeys::CHAT_CAN_READ,
+            PlanFeatureKeys::PHOTO_FULL_ACCESS,
+            PlanFeatureKeys::PRIORITY_LISTING => true,
+            default => false,
+        };
+    }
+
+    /**
+     * @return list<string>
+     */
+    public static function planFeatureKeysWrittenByPolicies(): array
+    {
+        $keys = self::ordered();
+        $keys[] = PlanFeatureKeys::INTEREST_VIEW_RESET_PERIOD;
+        $keys[] = FeatureUsageService::FEATURE_WHO_VIEWED_ME_ACCESS;
+
+        return array_values(array_unique($keys));
+    }
+}

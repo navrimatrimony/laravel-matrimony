@@ -7,7 +7,8 @@
 ])
 
 @php
-    $show = ($profileViewersCount > 0 && $profileViewersCount <= 20)
+    /* Show activity strip for any recent profile views (no upper cap — avoids hiding the whole strip when count > 20). */
+    $show = ($profileViewersCount > 0)
         || ($unreadMessages > 0 && $unreadMessages <= 20)
         || ($planExpiresInDays !== null && $planExpiresInDays <= 7);
 @endphp
@@ -17,7 +18,11 @@
         <p class="text-sm font-semibold text-amber-900 dark:text-amber-50">{{ __('dashboard.monetization_activity_title') }}</p>
         <ul class="mt-2 space-y-1 text-sm text-amber-900/90 dark:text-amber-100/90 list-disc list-inside">
             @if ($profileViewersCount > 0)
-                <li>{{ trans_choice('dashboard.monetization_viewed_you', $profileViewersCount, ['count' => $profileViewersCount]) }}</li>
+                <li>
+                    <a href="{{ route('who-viewed.index') }}" class="font-medium text-amber-950 underline decoration-amber-800/50 underline-offset-2 hover:decoration-amber-950 dark:text-amber-50 dark:decoration-amber-200/50 dark:hover:decoration-amber-50">
+                        {{ trans_choice('dashboard.monetization_viewed_you', $profileViewersCount, ['count' => $profileViewersCount]) }}
+                    </a>
+                </li>
             @endif
             @if ($unreadMessages > 0)
                 <li>{{ trans_choice('dashboard.monetization_messages_waiting', $unreadMessages, ['count' => $unreadMessages]) }}</li>

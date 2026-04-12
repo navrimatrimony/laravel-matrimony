@@ -577,7 +577,8 @@ class FeatureUsageService
     private function stateForWhoViewedMeAccess(User $user): array
     {
         $days = $this->getWhoViewedMeWindowDays((int) $user->id);
-        $allowed = $days > 0;
+        $preview = $this->getWhoViewedMePreviewLimit((int) $user->id);
+        $allowed = $days > 0 || $preview > 0;
 
         return [
             'allowed' => $allowed,
@@ -984,6 +985,25 @@ class FeatureUsageService
         }
 
         $raw = app(EntitlementService::class)->getValue($userId, PlanFeatureKeys::WHO_VIEWED_ME_DAYS, '0');
+        if (! is_numeric($raw)) {
+            return 0;
+        }
+
+        return max(0, (int) $raw);
+    }
+
+    /**
+     * Distinct viewers per calendar month shown in clear text when {@see getWhoViewedMeWindowDays} is 0.
+     * Plan admin field {@see PlanFeatureKeys::WHO_VIEWED_ME_PREVIEW_LIMIT}; 0 = no preview rows (full blur lock UI).
+     */
+    public function getWhoViewedMePreviewLimit(int $userId): int
+    {
+        $user = User::query()->find($userId);
+        if ($user && $this->isAdminBypass($user)) {
+            return 0;
+        }
+
+        $raw = app(EntitlementService::class)->getValue($userId, PlanFeatureKeys::WHO_VIEWED_ME_PREVIEW_LIMIT, '0');
         if (! is_numeric($raw)) {
             return 0;
         }

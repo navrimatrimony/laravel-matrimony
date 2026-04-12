@@ -30,6 +30,13 @@ final class PlanFeatureKeys
 
     public const WHO_VIEWED_ME_DAYS = 'who_viewed_me_days';
 
+    /**
+     * When {@see self::WHO_VIEWED_ME_DAYS} is 0, free-tier users may still see this many distinct viewers
+     * in the current calendar month; additional viewers are shown blurred with upgrade CTA.
+     * 0 = no preview (legacy full-lock teaser only).
+     */
+    public const WHO_VIEWED_ME_PREVIEW_LIMIT = 'who_viewed_me_preview_limit';
+
     public const PHOTO_BLUR_LIMIT = 'photo_blur_limit';
 
     /** Truthy plan value = subscriber may view full albums without tier blur. */
@@ -57,6 +64,7 @@ final class PlanFeatureKeys
             self::CHAT_SEND_LIMIT,
             self::CHAT_CAN_READ,
             self::WHO_VIEWED_ME_DAYS,
+            self::WHO_VIEWED_ME_PREVIEW_LIMIT,
             self::PHOTO_BLUR_LIMIT,
             self::PHOTO_FULL_ACCESS,
             self::CONTACT_VIEW_LIMIT,

@@ -26,6 +26,7 @@ class PlanStandardFeatureKeysSeeder extends Seeder
             PlanFeatureKeys::INTEREST_VIEW_LIMIT => '3',
             PlanFeatureKeys::INTEREST_VIEW_RESET_PERIOD => 'monthly',
             PlanFeatureKeys::WHO_VIEWED_ME_DAYS => '0',
+            PlanFeatureKeys::WHO_VIEWED_ME_PREVIEW_LIMIT => '5',
             PlanFeatureKeys::MEDIATOR_REQUESTS_PER_MONTH => '2',
             SubscriptionService::FEATURE_DAILY_PROFILE_VIEW_LIMIT => '50',
         ]);
@@ -33,6 +34,7 @@ class PlanStandardFeatureKeysSeeder extends Seeder
         $silver = array_merge($free, [
             PlanFeatureKeys::CHAT_CAN_READ => '1',
             PlanFeatureKeys::WHO_VIEWED_ME_DAYS => '1',
+            PlanFeatureKeys::WHO_VIEWED_ME_PREVIEW_LIMIT => '0',
             PlanFeatureKeys::CONTACT_VIEW_LIMIT => '10',
             PlanFeatureKeys::INTEREST_VIEW_LIMIT => '15',
         ]);

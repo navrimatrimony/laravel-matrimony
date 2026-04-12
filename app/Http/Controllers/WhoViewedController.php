@@ -2,11 +2,14 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\MatrimonyProfile;
 use App\Models\ProfileView;
 use App\Services\FeatureUsageService;
 use App\Services\ViewTrackingService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
+use Illuminate\Support\Collection;
 use Illuminate\View\View;
 
 class WhoViewedController extends Controller
@@ -23,11 +26,14 @@ class WhoViewedController extends Controller
         }
 
         $profile = $user->matrimonyProfile;
-        $days = $this->featureUsage->getWhoViewedMeWindowDays((int) $user->id);
+        $userId = (int) $user->id;
+        $days = $this->featureUsage->getWhoViewedMeWindowDays($userId);
+        $previewLimit = $this->featureUsage->getWhoViewedMePreviewLimit($userId);
+        $hasFullAccess = $days > 0;
         $teaserUniqueCount = ViewTrackingService::countEligibleDistinctViewersForTeaser((int) $profile->id);
         $plansUrl = route('plans.index');
 
-        if (! $this->featureUsage->canUse((int) $user->id, FeatureUsageService::FEATURE_WHO_VIEWED_ME_ACCESS)) {
+        if (! $this->featureUsage->canUse($userId, FeatureUsageService::FEATURE_WHO_VIEWED_ME_ACCESS)) {
             if ($request->wantsJson()) {
                 return response()->json([
                     'locked' => true,
@@ -45,9 +51,81 @@ class WhoViewedController extends Controller
                 'windowDays' => 0,
                 'teaserUniqueCount' => $teaserUniqueCount,
                 'plansUrl' => $plansUrl,
+                'whoViewedPartial' => false,
+                'lockedOverflowCount' => 0,
+                'previewLimit' => 0,
+                'whoViewedEmptyUsesMonth' => false,
+                'hasFullWhoViewedAccess' => false,
             ]);
         }
 
+        $since = $this->resolveWhoViewedSince($hasFullAccess, $days);
+        $uniqueByViewer = $this->uniqueViewerViewsForProfile($profile, $since);
+        $uniqueCount = $uniqueByViewer->count();
+
+        $windowDaysForView = $days >= FeatureUsageService::WHO_VIEWED_UNLIMITED_DAYS_THRESHOLD ? null : $days;
+
+        if ($hasFullAccess) {
+            $recentLimit = 10;
+            $recent = $uniqueByViewer->take($recentLimit);
+            $whoViewedPartial = false;
+            $lockedOverflowCount = 0;
+        } else {
+            $recent = $uniqueByViewer->take($previewLimit);
+            $lockedOverflowCount = max(0, $uniqueCount - $previewLimit);
+            $whoViewedPartial = $previewLimit > 0 && $lockedOverflowCount > 0;
+            $windowDaysForView = null;
+        }
+
+        if ($request->wantsJson()) {
+            return response()->json([
+                'locked' => false,
+                'partial_mode' => $whoViewedPartial,
+                'preview_limit' => $hasFullAccess ? null : $previewLimit,
+                'unique_count' => $uniqueCount,
+                'overflow_count' => $lockedOverflowCount,
+                'recent' => $this->serializeWhoViewedRecent($recent),
+                'window_days' => $windowDaysForView,
+                'since' => $since?->toIso8601String(),
+                'teaser_unique_count' => $uniqueCount,
+            ]);
+        }
+
+        return view('who-viewed.index', [
+            'profile' => $profile,
+            'uniqueCount' => $uniqueCount,
+            'recentViewers' => $recent,
+            'since' => $since,
+            'whoViewedLocked' => false,
+            'windowDays' => $windowDaysForView,
+            'teaserUniqueCount' => null,
+            'plansUrl' => $plansUrl,
+            'whoViewedPartial' => $whoViewedPartial,
+            'lockedOverflowCount' => $lockedOverflowCount,
+            'previewLimit' => $previewLimit,
+            'hasFullWhoViewedAccess' => $hasFullAccess,
+            'whoViewedEmptyUsesMonth' => ! $hasFullAccess,
+        ]);
+    }
+
+    private function resolveWhoViewedSince(bool $hasFullAccess, int $days): ?Carbon
+    {
+        if ($hasFullAccess) {
+            if ($days >= FeatureUsageService::WHO_VIEWED_UNLIMITED_DAYS_THRESHOLD) {
+                return null;
+            }
+
+            return now()->subDays($days);
+        }
+
+        return now()->startOfMonth();
+    }
+
+    /**
+     * @return Collection<int, ProfileView> One row per distinct viewer, most recent view first.
+     */
+    private function uniqueViewerViewsForProfile(MatrimonyProfile $profile, ?Carbon $since): Collection
+    {
         $blockedIds = ViewTrackingService::getBlockedProfileIds($profile->id);
 
         $query = ProfileView::query()
@@ -56,9 +134,7 @@ class WhoViewedController extends Controller
             ->with('viewerProfile.user')
             ->orderByDesc('created_at');
 
-        $since = null;
-        if ($days < FeatureUsageService::WHO_VIEWED_UNLIMITED_DAYS_THRESHOLD) {
-            $since = now()->subDays($days);
+        if ($since !== null) {
             $query->where('created_at', '>=', $since);
         }
 
@@ -78,37 +154,12 @@ class WhoViewedController extends Controller
             return true;
         });
 
-        $uniqueByViewer = $rows->groupBy('viewer_profile_id')->map(function ($group) {
-            return $group->sortByDesc('created_at')->first();
-        })->sortByDesc('created_at');
-
-        $recentLimit = 10;
-        $recent = $uniqueByViewer->take($recentLimit);
-        $uniqueCount = $uniqueByViewer->count();
-
-        $windowDaysForView = $days >= FeatureUsageService::WHO_VIEWED_UNLIMITED_DAYS_THRESHOLD ? null : $days;
-
-        if ($request->wantsJson()) {
-            return response()->json([
-                'locked' => false,
-                'unique_count' => $uniqueCount,
-                'recent' => $this->serializeWhoViewedRecent($recent),
-                'window_days' => $windowDaysForView,
-                'since' => $since?->toIso8601String(),
-                'teaser_unique_count' => $uniqueCount,
-            ]);
-        }
-
-        return view('who-viewed.index', [
-            'profile' => $profile,
-            'uniqueCount' => $uniqueCount,
-            'recentViewers' => $recent,
-            'since' => $since,
-            'whoViewedLocked' => false,
-            'windowDays' => $windowDaysForView,
-            'teaserUniqueCount' => null,
-            'plansUrl' => $plansUrl,
-        ]);
+        return $rows->groupBy('viewer_profile_id')
+            ->map(function ($group) {
+                return $group->sortByDesc('created_at')->first();
+            })
+            ->sortByDesc('created_at')
+            ->values();
     }
 
     /**

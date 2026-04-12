@@ -13,8 +13,9 @@ final class PlanFeatureLabel
     public static function label(string $key): string
     {
         return match ($key) {
-            SubscriptionService::FEATURE_CHAT_SEND_LIMIT => 'Messages/day',
-            PlanFeatureKeys::INTEREST_SEND_LIMIT => 'Interests/day',
+            SubscriptionService::FEATURE_CHAT_SEND_LIMIT => __('subscriptions.pricing_feature_chat_send'),
+            PlanFeatureKeys::CHAT_CAN_READ => __('subscriptions.pricing_feature_chat_read'),
+            PlanFeatureKeys::INTEREST_SEND_LIMIT => __('subscriptions.pricing_feature_interest_send'),
             PlanFeatureKeys::INTEREST_VIEW_LIMIT => __('subscriptions.pricing_feature_interest_view_limit'),
             PlanFeatureKeys::INTEREST_VIEW_RESET_PERIOD => __('subscriptions.pricing_feature_interest_view_reset'),
             SubscriptionService::FEATURE_DAILY_PROFILE_VIEW_LIMIT => __('subscriptions.feature_daily_profile_views'),
@@ -22,6 +23,7 @@ final class PlanFeatureLabel
             SubscriptionService::FEATURE_CHAT_IMAGE_MESSAGES => __('subscriptions.feature_chat_images'),
             PlanFeatureKeys::PHOTO_FULL_ACCESS => __('subscriptions.pricing_feature_photo_full'),
             PlanFeatureKeys::WHO_VIEWED_ME_DAYS => __('subscriptions.pricing_feature_who_viewed'),
+            PlanFeatureKeys::WHO_VIEWED_ME_PREVIEW_LIMIT => __('subscriptions.pricing_feature_who_viewed_preview'),
             PlanFeatureKeys::MEDIATOR_REQUESTS_PER_MONTH => __('subscriptions.pricing_feature_mediator'),
             PlanFeatureKeys::PROFILE_BOOST_PER_WEEK => __('subscriptions.pricing_feature_boost'),
             PlanFeatureKeys::PRIORITY_LISTING => __('subscriptions.pricing_feature_priority'),
@@ -44,10 +46,6 @@ final class PlanFeatureLabel
         }
 
         // 🔥 CUSTOM HUMAN FRIENDLY TEXT
-
-        if ($key === 'chat_can_read') {
-            return $value == '1' ? 'Can read messages' : 'Cannot read messages';
-        }
 
         if ($key === 'chat_send_limit') {
             return $value == '9999' ? 'Unlimited messages' : $value.'/day';
@@ -82,7 +80,9 @@ final class PlanFeatureLabel
     {
         return in_array($key, [
             SubscriptionService::FEATURE_CHAT_IMAGE_MESSAGES,
+            PlanFeatureKeys::CHAT_CAN_READ,
             PlanFeatureKeys::PHOTO_FULL_ACCESS,
+            PlanFeatureKeys::PRIORITY_LISTING,
         ], true);
     }
 

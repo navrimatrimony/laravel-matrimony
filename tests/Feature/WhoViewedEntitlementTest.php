@@ -114,6 +114,49 @@ class WhoViewedEntitlementTest extends TestCase
             ->assertJsonPath('window_days', 7);
     }
 
+    public function test_free_plan_shows_five_viewers_and_overflow_json(): void
+    {
+        $this->seed(SubscriptionPlansSeeder::class);
+        $this->seed(PlanStandardFeatureKeysSeeder::class);
+
+        $owner = User::factory()->create();
+        $ownerProfile = MatrimonyProfile::factory()->for($owner)->create([
+            'lifecycle_state' => 'active',
+            'is_suspended' => false,
+        ]);
+
+        $free = Plan::query()->where('slug', 'free')->firstOrFail();
+        app(SubscriptionService::class)->subscribe($owner, $free, null, null);
+
+        $viewerProfiles = [];
+        for ($i = 0; $i < 6; $i++) {
+            $u = User::factory()->create();
+            $viewerProfiles[] = MatrimonyProfile::factory()->for($u)->create([
+                'lifecycle_state' => 'active',
+                'is_suspended' => false,
+            ]);
+        }
+
+        foreach ($viewerProfiles as $vp) {
+            ProfileView::query()->create([
+                'viewer_profile_id' => $vp->id,
+                'viewed_profile_id' => $ownerProfile->id,
+            ]);
+        }
+
+        $res = $this->actingAs($owner)
+            ->getJson(route('who-viewed.index'))
+            ->assertOk()
+            ->assertJsonPath('locked', false)
+            ->assertJsonPath('partial_mode', true)
+            ->assertJsonPath('overflow_count', 1)
+            ->assertJsonPath('preview_limit', 5);
+
+        $recent = $res->json('recent');
+        $this->assertIsArray($recent);
+        $this->assertCount(5, $recent);
+    }
+
     public function test_who_viewed_unlimited_window_includes_old_views(): void
     {
         $this->seed(SubscriptionPlansSeeder::class);

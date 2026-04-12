@@ -19,7 +19,7 @@ use Symfony\Component\HttpKernel\Exception\HttpException;
  *
  * Incoming view: {@see PlanFeatureKeys::INTEREST_VIEW_LIMIT} + {@see PlanFeatureKeys::INTEREST_VIEW_RESET_PERIOD}.
  * First N pending interests in the current window (by {@see Interest::scopeReceivedInboxOrder}) get full name/photo/profile;
- * overflow is blurred/locked on {@see routes('interests.received')} and blocked on direct profile open.
+ * overflow is blurred/locked on the interests hub (received tab) and blocked on direct profile open.
  */
 class InterestSendLimitService
 {

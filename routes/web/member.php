@@ -179,6 +179,9 @@ Route::middleware(['auth', \App\Http\Middleware\EnforceCardOnboarding::class])->
     | Matrimony Profiles (View / Search)
     */
     Route::get('/matches', [MatchController::class, 'myMatches'])->name('matches.index');
+    Route::post('/matches/skip', [MatchController::class, 'skipCandidate'])
+        ->middleware('throttle:40,1')
+        ->name('matches.skip');
     Route::get('/profiles/{matrimony_profile_id}/matches', [MatchController::class, 'show'])->name('matches.show');
 
     Route::get('/profiles', [MatrimonyProfileController::class, 'index'])
@@ -202,6 +205,9 @@ Route::middleware(['auth', \App\Http\Middleware\EnforceCardOnboarding::class])->
     /*
     | Interests
     */
+    Route::get('/interests', [InterestController::class, 'index'])
+        ->name('interests.index');
+
     // 🔒 SSOT: MatrimonyProfile route param consistency
     Route::post('/interests/send/{matrimony_profile_id}', [InterestController::class, 'store'])
         ->name('interests.send');

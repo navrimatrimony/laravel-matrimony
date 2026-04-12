@@ -7,7 +7,6 @@
     @if ($whoViewedLocked ?? false)
         @if (($teaserUniqueCount ?? 0) > 0)
             <p class="text-gray-700 dark:text-gray-300 mb-3">
-                <span class="font-semibold">{{ $teaserUniqueCount }}</span>
                 {{ trans_choice('who_viewed.teaser_headline', $teaserUniqueCount, ['count' => $teaserUniqueCount]) }}
             </p>
             <div class="relative mb-6 overflow-hidden rounded-xl border border-gray-200 bg-gray-50/90 dark:border-gray-700 dark:bg-gray-800/50">
@@ -33,7 +32,9 @@
         @endif
     @elseif ($uniqueCount === 0)
         <p class="text-gray-600 dark:text-gray-400 mb-6">
-            @if (($windowDays ?? null) === null)
+            @if ($whoViewedEmptyUsesMonth ?? false)
+                {{ __('who_viewed.none_this_month') }}
+            @elseif (($windowDays ?? null) === null)
                 {{ __('who_viewed.none_all_time') }}
             @else
                 {{ __('who_viewed.none_in_window', ['days' => $windowDays]) }}
@@ -41,8 +42,9 @@
         </p>
     @else
         <p class="text-gray-700 dark:text-gray-300 mb-6">
-            <span class="font-semibold">{{ $uniqueCount }}</span>
-            @if (($windowDays ?? null) === null)
+            @if (! ($hasFullWhoViewedAccess ?? true))
+                {{ trans_choice('who_viewed.people_viewed_this_month', $uniqueCount, ['count' => $uniqueCount]) }}
+            @elseif (($windowDays ?? null) === null)
                 {{ trans_choice('who_viewed.people_viewed_all_time', $uniqueCount, ['count' => $uniqueCount]) }}
             @else
                 {{ trans_choice('who_viewed.people_viewed_in_window', $uniqueCount, ['count' => $uniqueCount, 'days' => $windowDays]) }}
@@ -79,6 +81,35 @@
                 </div>
             @endforeach
         </div>
+
+        @if ($whoViewedPartial ?? false)
+            <div class="relative mt-6 overflow-hidden rounded-xl border border-indigo-200 bg-indigo-50/80 p-4 dark:border-indigo-800 dark:bg-indigo-950/30">
+                <div class="pointer-events-none select-none space-y-3 blur-md opacity-80" aria-hidden="true">
+                    @for ($i = 0; $i < min(3, max(1, (int) ($lockedOverflowCount ?? 0))); $i++)
+                        <div class="flex items-center gap-3">
+                            <div class="h-14 w-14 shrink-0 rounded-full bg-indigo-200 dark:bg-indigo-800"></div>
+                            <div class="min-w-0 flex-1 space-y-2">
+                                <div class="h-4 w-40 rounded bg-indigo-200 dark:bg-indigo-800"></div>
+                                <div class="h-3 w-28 rounded bg-indigo-100 dark:bg-indigo-900"></div>
+                            </div>
+                        </div>
+                    @endfor
+                </div>
+                <div class="pointer-events-none absolute inset-0 bg-gradient-to-b from-white/20 via-white/60 to-white dark:from-gray-900/10 dark:via-gray-900/70 dark:to-gray-900"></div>
+                <div class="relative z-10 text-center">
+                    <p class="text-sm font-medium text-indigo-950 dark:text-indigo-100">
+                        {{ trans_choice('who_viewed.partial_hidden_count', (int) ($lockedOverflowCount ?? 0), ['count' => (int) ($lockedOverflowCount ?? 0)]) }}
+                    </p>
+                    <a href="{{ $plansUrl ?? route('plans.index') }}" class="mt-3 inline-flex items-center justify-center rounded-lg bg-indigo-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 dark:focus:ring-offset-gray-900">
+                        {{ __('who_viewed.upgrade_cta') }}
+                    </a>
+                </div>
+            </div>
+        @elseif (! ($hasFullWhoViewedAccess ?? true))
+            <p class="mt-4 text-sm text-gray-600 dark:text-gray-400">
+                <a href="{{ $plansUrl ?? route('plans.index') }}" class="font-medium text-indigo-600 underline hover:text-indigo-800 dark:text-indigo-400 dark:hover:text-indigo-300">{{ __('who_viewed.partial_plan_upgrade_hint') }}</a>
+            </p>
+        @endif
     @endif
 </div>
 @endsection

@@ -4,6 +4,18 @@
  * Interests pages strings (Marathi).
  */
 return [
+    'page_heading' => 'इच्छा',
+    'page_subheading' => 'तुम्हाला कोणी संपर्क साधला ते पहा, किंवा तुम्ही पाठवलेल्या इच्छा तपासा.',
+    'tab_received' => 'मिळालेल्या',
+    'tab_sent' => 'पाठवलेल्या',
+    'group_inbox' => 'इनबॉक्स',
+    'group_status' => 'स्थितीनुसार',
+    'filter_all' => 'सर्व',
+    'filter_pending' => 'प्रलंबित',
+    'filter_accepted' => 'मान्य',
+    'filter_rejected' => 'नाकारले',
+    'no_received_for_filter' => 'या स्थितीला जुळणारी मिळालेली इच्छा नाही.',
+    'no_sent_for_filter' => 'या स्थितीला जुळणारी पाठवलेली इच्छा नाही.',
     'sent_interests' => 'पाठवलेल्या इच्छा',
     'received_interests' => 'मिळालेल्या इच्छा',
     'no_sent_interests' => 'तुम्ही अजून कोणतीही इच्छा पाठवलेली नाही.',

@@ -67,4 +67,11 @@ return [
     'usage_not_included' => 'तुमच्या प्लॅनमध्ये नाही',
     'usage_bypass' => 'तुमच्यासाठी प्लॅन मर्यादा लागू होत नाहीत.',
     'usage_upgrade_plan' => 'प्लॅन व अपग्रेड',
+
+    'monetization_activity_title' => 'काय चाललंय (दिसणारी हालचाल)',
+    'monetization_viewed_you' => '{1} गेल्या ३० दिवसांत :count जणांनी तुमची प्रोफाइल पाहिली.|[2,*] गेल्या ३० दिवसांत :count जणांनी तुमची प्रोफाइल पाहिली.',
+    'monetization_messages_waiting' => '{1} :count न वाचलेला संदेश.|[2,*] :count न वाचलेले संदेश.',
+    'monetization_plan_expires' => '{1} तुमचा प्लॅन :days दिवसात संपतो/नूतनीकरण होते.|[2,*] तुमचा प्लॅन :days दिवसांत संपतो/नूतनीकरण होते.',
+    'monetization_wallet_balance' => 'वॉलेट शिल्लक: ₹:amount (फक्त तुम्ही मान्य केलेल्या अतिरिक्त पेड कृतींसाठी वापरली जाते).',
+    'monetization_referral_hint' => 'मित्रांना आमंत्रित करा — लिंक शेअर करा:',
 ];

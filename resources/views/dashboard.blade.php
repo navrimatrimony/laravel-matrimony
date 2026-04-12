@@ -174,7 +174,7 @@
                             </svg>
                         </div>
                     </div>
-                    <a href="{{ route('interests.sent') }}" class="text-sm text-red-600 hover:underline mt-3 block">
+                    <a href="{{ route('interests.index', ['tab' => 'sent']) }}" class="text-sm text-red-600 hover:underline mt-3 block">
                         {{ __('common.view_all_arrow') }}
                     </a>
                 </div>
@@ -192,7 +192,7 @@
                             </svg>
                         </div>
                     </div>
-                    <a href="{{ route('interests.received') }}" class="text-sm text-yellow-600 hover:underline mt-3 block">
+                    <a href="{{ route('interests.index', ['tab' => 'received']) }}" class="text-sm text-yellow-600 hover:underline mt-3 block">
                         {{ __('common.view_all_arrow') }}
                     </a>
                 </div>
@@ -210,7 +210,7 @@
                             </svg>
                         </div>
                     </div>
-                    <a href="{{ route('interests.received') }}" class="text-sm text-green-600 hover:underline mt-3 block">{{ __('common.view_all_arrow') }}</a>
+                    <a href="{{ route('interests.index', ['tab' => 'received']) }}" class="text-sm text-green-600 hover:underline mt-3 block">{{ __('common.view_all_arrow') }}</a>
                 </div>
 
                 {{-- Total Profiles --}}
@@ -296,7 +296,7 @@
                 <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 border-l-4 border-red-500 border border-gray-200 dark:border-gray-700">
                     <div class="flex justify-between items-center mb-4">
                         <h3 class="text-lg font-bold text-gray-900 dark:text-gray-100">{{ __('dashboard.recent_received_interests') }}</h3>
-                        <a href="{{ route('interests.received') }}" class="text-sm text-red-600 dark:text-red-400 hover:underline">
+                        <a href="{{ route('interests.index', ['tab' => 'received']) }}" class="text-sm text-red-600 dark:text-red-400 hover:underline">
                             {{ __('common.view_all_arrow') }}
                         </a>
                     </div>
@@ -359,7 +359,7 @@
                 <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 border-l-4 border-red-500 border border-gray-200 dark:border-gray-700">
                     <div class="flex justify-between items-center mb-4">
                         <h3 class="text-lg font-bold text-gray-900 dark:text-gray-100">{{ __('dashboard.recent_sent_interests') }}</h3>
-                        <a href="{{ route('interests.sent') }}" class="text-sm text-red-600 dark:text-red-400 hover:underline">
+                        <a href="{{ route('interests.index', ['tab' => 'sent']) }}" class="text-sm text-red-600 dark:text-red-400 hover:underline">
                             {{ __('common.view_all_arrow') }}
                         </a>
                     </div>
@@ -441,7 +441,7 @@
                         <p class="text-sm text-gray-600 dark:text-gray-400">{{ __('dashboard.find_your_perfect_match') }}</p>
                     </a>
                     
-                    <a href="{{ route('interests.received') }}"
+                    <a href="{{ route('interests.index', ['tab' => 'received']) }}"
                        class="flex-shrink-0 p-4 border-2 border-red-200 dark:border-red-800 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 hover:border-red-400 dark:hover:border-red-600 transition text-center min-w-[200px]">
                         <svg class="w-8 h-8 text-red-600 dark:text-red-400 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path>
@@ -456,7 +456,7 @@
                         </p>
                     </a>
                     
-                    <a href="{{ route('interests.sent') }}"
+                    <a href="{{ route('interests.index', ['tab' => 'sent']) }}"
                        class="flex-shrink-0 p-4 border-2 border-red-200 dark:border-red-800 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 hover:border-red-400 dark:hover:border-red-600 transition text-center min-w-[200px]">
                         <svg class="w-8 h-8 text-red-600 dark:text-red-400 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"></path>

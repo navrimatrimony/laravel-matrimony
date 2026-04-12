@@ -2,9 +2,11 @@
 
 namespace App\Services\Matching;
 
+use App\Models\Interest;
 use App\Models\MasterEducation;
 use App\Models\MatrimonyProfile;
 use App\Models\ProfileMatch;
+use App\Models\ProfileView;
 use App\Services\MatchBoostService;
 use App\Services\ProfilePreferenceMatchService;
 use Illuminate\Database\Eloquent\Builder;
@@ -35,6 +37,46 @@ class MatchingService
 
     public const WEIGHT_PREFERENCES = 20;
 
+    public const TAB_PERFECT = 'perfect';
+
+    public const TAB_DAILY = 'daily';
+
+    public const TAB_NEAR = 'near';
+
+    public const TAB_FRESH = 'fresh';
+
+    public const TAB_VIEWED = 'viewed';
+
+    public const TAB_INTERESTED = 'interested';
+
+    public const TAB_SECOND_CHANCE = 'second_chance';
+
+    public const TAB_CURATED = 'curated';
+
+    /**
+     * @return list<string>
+     */
+    public static function validTabs(): array
+    {
+        return [
+            self::TAB_PERFECT,
+            self::TAB_DAILY,
+            self::TAB_NEAR,
+            self::TAB_FRESH,
+            self::TAB_VIEWED,
+            self::TAB_INTERESTED,
+            self::TAB_SECOND_CHANCE,
+            self::TAB_CURATED,
+        ];
+    }
+
+    public static function normalizeTab(?string $tab): string
+    {
+        $t = strtolower(trim((string) $tab));
+
+        return in_array($t, self::validTabs(), true) ? $t : self::TAB_PERFECT;
+    }
+
     /** @var array<string, array<string, mixed>> */
     private array $prefMap = [];
 
@@ -45,10 +87,23 @@ class MatchingService
     private array $componentsCache = [];
 
     /**
-     * @return Collection<int, array{profile: MatrimonyProfile, score: int, reasons: list<string>}>
+     * @param  bool  $withExplain  When true, each row includes an `explain` array (admin preview / JSON API).
+     * @return Collection<int, array{profile: MatrimonyProfile, score: int, base_score: int, reasons: list<string>, explain?: list<array{reason: string, impact: int}>}>
      */
-    public function findMatches(MatrimonyProfile $profile, int $limit = 20): Collection
+    public function findMatches(MatrimonyProfile $profile, int $limit = 20, bool $withExplain = false): Collection
     {
+        return $this->findMatchesForTab($profile, self::TAB_PERFECT, $limit, $withExplain);
+    }
+
+    /**
+     * Tab-specific lists reuse the same scoring and preference gates; only the candidate pool and ordering differ.
+     *
+     * @param  bool  $withExplain  When true, each row includes `explain` from {@see MatchingExplainService}.
+     * @return Collection<int, array{profile: MatrimonyProfile, score: int, base_score: int, reasons: list<string>, explain?: list<array{reason: string, impact: int}>}>
+     */
+    public function findMatchesForTab(MatrimonyProfile $profile, string $tab, int $limit = 24, bool $withExplain = false): Collection
+    {
+        $tab = self::normalizeTab($tab);
         $this->prefMap = [];
         $this->directionalBuildCache = [];
         $this->componentsCache = [];
@@ -65,16 +120,38 @@ class MatchingService
             return collect();
         }
 
-        $poolLimit = max(1, (int) config('matching.candidate_pool_limit', 200));
-        $candidates = $this->baseCandidateQuery($profile, $oppositeKey)->limit($poolLimit)->get();
+        $candidates = match ($tab) {
+            self::TAB_VIEWED => $this->candidatesWhoViewedMe($profile, $oppositeKey),
+            self::TAB_INTERESTED => $this->candidatesInterestedInMe($profile, $oppositeKey),
+            self::TAB_SECOND_CHANCE => $this->candidatesSecondChance($profile, $oppositeKey),
+            default => $this->baseCandidateQuery($profile, $oppositeKey)
+                ->limit(max(1, (int) config('matching.candidate_pool_limit', 200)))
+                ->get(),
+        };
+
+        if ($tab === self::TAB_FRESH) {
+            $since = now()->subDays(14);
+            $candidates = $candidates->filter(function (MatrimonyProfile $c) use ($since) {
+                return $c->updated_at !== null && $c->updated_at->greaterThanOrEqualTo($since);
+            })->values();
+        }
+
+        $candidates = $candidates
+            ->unique(fn (MatrimonyProfile $c) => (int) $c->getKey())
+            ->values();
 
         $this->eagerLoadMatchingRelations($candidates);
+
+        $skipExcluded = $this->candidateIdsExcludedBySkips((int) $profile->id);
 
         $ids = $candidates->pluck('id')->push($profile->id)->unique()->values()->all();
         $this->prefMap = $this->bulkLoadTargetPreferences($ids);
 
         $out = collect();
         foreach ($candidates as $candidate) {
+            if (in_array((int) $candidate->id, $skipExcluded, true)) {
+                continue;
+            }
             if (! $this->mutuallyPreferenceCompatible($profile, $candidate)) {
                 continue;
             }
@@ -87,16 +164,22 @@ class MatchingService
                 : $baseScore;
             $reasons = $this->explainScore($profile, $candidate);
 
-            $out->push([
+            $row = [
                 'profile' => $candidate,
                 'score' => $score,
+                'base_score' => $baseScore,
                 'reasons' => $reasons,
-            ]);
+            ];
+            if ($withExplain) {
+                $row['explain'] = app(MatchingExplainService::class)->explainPair($profile, $candidate);
+            }
+            $out->push($row);
         }
 
-        $sorted = $out->sortByDesc('score')->values()->take($limit);
+        $sorted = $this->applyTabOrdering($out, $tab, $profile)->values();
+        $sorted = $this->dedupeMatchRowsByPerson($sorted)->take($limit)->values();
 
-        if (config('matching.persist_cache', false) && Schema::hasTable('profile_matches')) {
+        if ($tab === self::TAB_PERFECT && config('matching.persist_cache', false) && Schema::hasTable('profile_matches')) {
             $this->replacePersistedMatches($profile, $sorted);
         }
 
@@ -104,12 +187,324 @@ class MatchingService
     }
 
     /**
+     * One row per profile id, per member account (user_id), and per “surface clone” (same display identity).
+     * Intake/demo data often creates many active rows with the same Marathi full_name and DOB under different
+     * logins; they are indistinguishable in the card UI and must not flood the feed. Ordering is preserved so
+     * the first row wins (best tab rank). Tabs still recompute independently — the same person may appear in
+     * more than one lens when pools differ; this only collapses duplicates within one tab response.
+     *
+     * @param  Collection<int, array{profile: MatrimonyProfile, score: int, base_score: int, reasons: list<string>, explain?: list<array{reason: string, impact: int}>}>  $rows
+     * @return Collection<int, array{profile: MatrimonyProfile, score: int, base_score: int, reasons: list<string>, explain?: list<array{reason: string, impact: int}>}>
+     */
+    private function dedupeMatchRowsByPerson(Collection $rows): Collection
+    {
+        $seenProfileIds = [];
+        $seenUserIds = [];
+        $seenSurfaceFingerprints = [];
+        $out = collect();
+
+        foreach ($rows as $row) {
+            $p = $row['profile'];
+            $pid = (int) $p->getKey();
+            if (isset($seenProfileIds[$pid])) {
+                continue;
+            }
+            $seenProfileIds[$pid] = true;
+
+            $uid = (int) ($p->user_id ?? 0);
+            if ($uid > 0) {
+                if (isset($seenUserIds[$uid])) {
+                    continue;
+                }
+                $seenUserIds[$uid] = true;
+            }
+
+            $fp = $this->matchSurfaceFingerprint($p);
+            if ($fp !== null) {
+                if (isset($seenSurfaceFingerprints[$fp])) {
+                    continue;
+                }
+                $seenSurfaceFingerprints[$fp] = true;
+            }
+
+            $out->push($row);
+        }
+
+        return $out;
+    }
+
+    /**
+     * Groups rows that would look like the same person in the match card (name + gender + DOB + coarse location).
+     */
+    private function matchSurfaceFingerprint(MatrimonyProfile $p): ?string
+    {
+        $name = trim((string) ($p->full_name ?? ''));
+        if ($name === '') {
+            return null;
+        }
+
+        $norm = mb_strtolower(preg_replace('/\h+/u', ' ', $name), 'UTF-8');
+        $dobRaw = $p->date_of_birth;
+        if ($dobRaw instanceof \DateTimeInterface) {
+            $dob = $dobRaw->format('Y-m-d');
+        } elseif (is_string($dobRaw) && $dobRaw !== '') {
+            $dob = substr($dobRaw, 0, 10);
+        } else {
+            $dob = '';
+        }
+
+        return implode('|', [
+            $norm,
+            (string) (int) ($p->gender_id ?? 0),
+            $dob,
+            (string) (int) ($p->city_id ?? 0),
+            (string) (int) ($p->state_id ?? 0),
+        ]);
+    }
+
+    /**
+     * @return Collection<int, MatrimonyProfile>
+     */
+    private function candidatesWhoViewedMe(MatrimonyProfile $profile, string $oppositeGenderKey): Collection
+    {
+        if (! Schema::hasTable('profile_views')) {
+            return collect();
+        }
+
+        $orderedViewerIds = [];
+        $seen = [];
+        $rows = ProfileView::query()
+            ->where('viewed_profile_id', $profile->id)
+            ->orderByDesc('id')
+            ->limit(400)
+            ->get(['viewer_profile_id']);
+        foreach ($rows as $row) {
+            $vid = (int) $row->viewer_profile_id;
+            if ($vid <= 0 || isset($seen[$vid])) {
+                continue;
+            }
+            $seen[$vid] = true;
+            $orderedViewerIds[] = $vid;
+        }
+
+        if ($orderedViewerIds === []) {
+            return collect();
+        }
+
+        $q = MatrimonyProfile::query()->whereIn('id', $orderedViewerIds);
+        $this->applyBaseCandidateFilters($q, $profile, $oppositeGenderKey);
+
+        return $q->get()->sortBy(function (MatrimonyProfile $p) use ($orderedViewerIds) {
+            $i = array_search((int) $p->id, $orderedViewerIds, true);
+
+            return $i === false ? 999999 : $i;
+        })->values();
+    }
+
+    /**
+     * @return Collection<int, MatrimonyProfile>
+     */
+    private function candidatesInterestedInMe(MatrimonyProfile $profile, string $oppositeGenderKey): Collection
+    {
+        if (! Schema::hasTable('interests')) {
+            return collect();
+        }
+
+        $senderIds = Interest::query()
+            ->where('receiver_profile_id', $profile->id)
+            ->where('status', 'pending')
+            ->orderByDesc('priority_score')
+            ->orderByDesc('created_at')
+            ->pluck('sender_profile_id')
+            ->unique()
+            ->map(fn ($id) => (int) $id)
+            ->values()
+            ->all();
+
+        if ($senderIds === []) {
+            return collect();
+        }
+
+        $q = MatrimonyProfile::query()->whereIn('id', $senderIds);
+        $this->applyBaseCandidateFilters($q, $profile, $oppositeGenderKey);
+
+        return $q->get()->sortBy(function (MatrimonyProfile $p) use ($senderIds) {
+            $i = array_search((int) $p->id, $senderIds, true);
+
+            return $i === false ? 999999 : $i;
+        })->values();
+    }
+
+    /**
+     * Profiles you opened but never sent interest to (re-surface after you passed them once).
+     *
+     * @return Collection<int, MatrimonyProfile>
+     */
+    private function candidatesSecondChance(MatrimonyProfile $profile, string $oppositeGenderKey): Collection
+    {
+        if (! Schema::hasTable('profile_views')) {
+            return collect();
+        }
+
+        $viewedIds = ProfileView::query()
+            ->where('viewer_profile_id', $profile->id)
+            ->orderByDesc('id')
+            ->limit(500)
+            ->pluck('viewed_profile_id')
+            ->unique()
+            ->map(fn ($id) => (int) $id)
+            ->values()
+            ->all();
+
+        if ($viewedIds === []) {
+            return collect();
+        }
+
+        $messaged = [];
+        if (Schema::hasTable('interests')) {
+            $messaged = Interest::query()
+                ->where('sender_profile_id', $profile->id)
+                ->whereIn('receiver_profile_id', $viewedIds)
+                ->pluck('receiver_profile_id')
+                ->map(fn ($id) => (int) $id)
+                ->unique()
+                ->all();
+        }
+
+        $candidateIds = array_values(array_diff($viewedIds, $messaged));
+        if ($candidateIds === []) {
+            return collect();
+        }
+
+        $q = MatrimonyProfile::query()->whereIn('id', $candidateIds);
+        $this->applyBaseCandidateFilters($q, $profile, $oppositeGenderKey);
+
+        return $q->get()->sortByDesc('updated_at')->values();
+    }
+
+    /**
+     * @param  Collection<int, array{profile: MatrimonyProfile, score: int, base_score: int, reasons: list<string>}>  $rows
+     * @return Collection<int, array{profile: MatrimonyProfile, score: int, base_score: int, reasons: list<string>}>
+     */
+    private function applyTabOrdering(Collection $rows, string $tab, MatrimonyProfile $profile): Collection
+    {
+        if ($rows->isEmpty()) {
+            return $rows;
+        }
+
+        if ($tab === self::TAB_NEAR) {
+            return $rows->sort(function (array $a, array $b) use ($profile) {
+                /** @var MatrimonyProfile $pa */
+                $pa = $a['profile'];
+                /** @var MatrimonyProfile $pb */
+                $pb = $b['profile'];
+                $ta = $this->locationProximityTier($profile, $pa);
+                $tb = $this->locationProximityTier($profile, $pb);
+                if ($ta !== $tb) {
+                    return $tb <=> $ta;
+                }
+
+                return ($b['score'] ?? 0) <=> ($a['score'] ?? 0);
+            })->values();
+        }
+
+        if ($tab === self::TAB_FRESH) {
+            return $rows->sort(function (array $a, array $b) {
+                $ua = $a['profile']->updated_at?->timestamp ?? 0;
+                $ub = $b['profile']->updated_at?->timestamp ?? 0;
+                if ($ua !== $ub) {
+                    return $ub <=> $ua;
+                }
+
+                return ($b['score'] ?? 0) <=> ($a['score'] ?? 0);
+            })->values();
+        }
+
+        if ($tab === self::TAB_DAILY) {
+            $dateKey = now()->toDateString();
+            $top = $rows->sortByDesc('score')->take(100)->values();
+
+            return $top->sort(function (array $a, array $b) use ($profile, $dateKey) {
+                $ha = crc32($profile->id.'|'.$dateKey.'|'.$a['profile']->id);
+                $hb = crc32($profile->id.'|'.$dateKey.'|'.$b['profile']->id);
+                if ($ha !== $hb) {
+                    return $ha <=> $hb;
+                }
+
+                return ($b['score'] ?? 0) <=> ($a['score'] ?? 0);
+            })->values();
+        }
+
+        if ($tab === self::TAB_CURATED) {
+            return $rows->sort(function (array $a, array $b) {
+                $liftA = (int) ($a['score'] ?? 0) - (int) ($a['base_score'] ?? 0);
+                $liftB = (int) ($b['score'] ?? 0) - (int) ($b['base_score'] ?? 0);
+                if ($liftA !== $liftB) {
+                    return $liftB <=> $liftA;
+                }
+
+                return ($b['score'] ?? 0) <=> ($a['score'] ?? 0);
+            })->values();
+        }
+
+        return $rows->sortByDesc('score')->values();
+    }
+
+    private function locationProximityTier(MatrimonyProfile $seeker, MatrimonyProfile $candidate): int
+    {
+        $cidS = (int) ($seeker->city_id ?? 0);
+        $cidC = (int) ($candidate->city_id ?? 0);
+        if ($cidS > 0 && $cidS === $cidC) {
+            return 3;
+        }
+        $sidS = (int) ($seeker->state_id ?? 0);
+        $sidC = (int) ($candidate->state_id ?? 0);
+        if ($sidS > 0 && $sidS === $sidC) {
+            return 2;
+        }
+        $coidS = (int) ($seeker->country_id ?? 0);
+        $coidC = (int) ($candidate->country_id ?? 0);
+        if ($coidS > 0 && $coidS === $coidC) {
+            return 1;
+        }
+
+        return 0;
+    }
+
+    /**
+     * @return list<int>
+     */
+    private function candidateIdsExcludedBySkips(int $observerProfileId): array
+    {
+        if (! Schema::hasTable('profile_match_tab_skips')) {
+            return [];
+        }
+
+        return DB::table('profile_match_tab_skips')
+            ->select('candidate_profile_id')
+            ->selectRaw('COUNT(*) as skip_count')
+            ->where('observer_profile_id', $observerProfileId)
+            ->groupBy('candidate_profile_id')
+            ->having('skip_count', '>=', 3)
+            ->pluck('candidate_profile_id')
+            ->map(fn ($id) => (int) $id)
+            ->all();
+    }
+
+    /**
      * @return Builder<MatrimonyProfile>
      */
     private function baseCandidateQuery(MatrimonyProfile $profile, string $oppositeGenderKey): Builder
     {
-        $q = MatrimonyProfile::query()
-            ->whereMemberAccountsOnly()
+        $q = MatrimonyProfile::query();
+        $this->applyBaseCandidateFilters($q, $profile, $oppositeGenderKey);
+
+        return $q->orderByDesc('updated_at');
+    }
+
+    private function applyBaseCandidateFilters(Builder $q, MatrimonyProfile $profile, string $oppositeGenderKey): void
+    {
+        $q->whereMemberAccountsOnly()
             ->whereKeyNot($profile->id)
             ->where('lifecycle_state', 'active')
             ->where('is_suspended', false)
@@ -154,8 +549,6 @@ class MatchingService
                 $q->whereIn('religion_id', $relIds);
             }
         }
-
-        return $q->orderByDesc('updated_at');
     }
 
     private function oppositeGenderKey(MatrimonyProfile $profile): ?string
@@ -552,7 +945,62 @@ class MatchingService
     }
 
     /**
-     * @param  Collection<int, array{profile: MatrimonyProfile, score: int, reasons: list<string>}>  $results
+     * Structured breakdown for {@see MatchingExplainService} (does not mutate long-lived scorer caches).
+     *
+     * @return array{
+     *   field_parts: list<array{points: int, reasons: list<string>}>,
+     *   preferred_penalties: list<array{reason: string, impact: int}>,
+     *   behavior_delta: int,
+     *   before_boost: int,
+     *   final_score: int
+     * }
+     */
+    public function computeMatchBreakdown(MatrimonyProfile $seeker, MatrimonyProfile $candidate): array
+    {
+        $savedPref = $this->prefMap;
+        $savedDir = $this->directionalBuildCache;
+        $savedComp = $this->componentsCache;
+        try {
+            $this->directionalBuildCache = [];
+            $this->componentsCache = [];
+            $this->prefMap = $this->bulkLoadTargetPreferences([(int) $seeker->id, (int) $candidate->id]);
+
+            $parts = $this->scoreParts($seeker, $candidate);
+            $fieldParts = [];
+            $sumBase = 0;
+            foreach ($parts as $p) {
+                $pts = (int) ($p['points'] ?? 0);
+                $sumBase += $pts;
+                $fieldParts[] = [
+                    'points' => $pts,
+                    'reasons' => $p['reasons'] ?? [],
+                ];
+            }
+            $baseScore = min(100, max(0, $sumBase));
+
+            $seeker->loadMissing('user');
+            $candidate->loadMissing('user');
+            // Keep in sync with {@see findMatchesForTab}: field score then boost only (no behavior layer).
+            $finalScore = ($seeker->user && $candidate->user)
+                ? $this->matchBoost->applyBoost($seeker->user, $candidate->user, $baseScore)
+                : $baseScore;
+
+            return [
+                'field_parts' => $fieldParts,
+                'preferred_penalties' => [],
+                'behavior_delta' => 0,
+                'before_boost' => $baseScore,
+                'final_score' => $finalScore,
+            ];
+        } finally {
+            $this->prefMap = $savedPref;
+            $this->directionalBuildCache = $savedDir;
+            $this->componentsCache = $savedComp;
+        }
+    }
+
+    /**
+     * @param  Collection<int, array{profile: MatrimonyProfile, score: int, base_score?: int, reasons: list<string>}>  $results
      */
     private function replacePersistedMatches(MatrimonyProfile $profile, Collection $results): void
     {

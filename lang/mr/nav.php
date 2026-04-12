@@ -21,6 +21,7 @@ return [
     'my_profile' => 'माझे प्रोफाइल',
     'edit_profile' => 'प्रोफाइल संपादन',
     'search_profiles' => 'प्रोफाइल शोधा',
+    'interests' => 'इच्छा',
     'interests_sent' => 'पाठवलेली इच्छा',
     'interests_received' => 'मिळालेली इच्छा',
     'who_viewed_me' => 'मला कोणी पाहिले',

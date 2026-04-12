@@ -87,6 +87,46 @@ class ProfilePhotoUrlService
     }
 
     /**
+     * Primary gallery row path when it is no longer a `pending/…` placeholder (for legacy core column sync).
+     */
+    public static function primaryNonPendingGalleryRelativePath(MatrimonyProfile $profile): ?string
+    {
+        if (! Schema::hasTable('profile_photos')) {
+            return null;
+        }
+        $row = ProfilePhoto::query()
+            ->where('profile_id', $profile->id)
+            ->where('is_primary', true)
+            ->orderByDesc('id')
+            ->first(['file_path']);
+        if ($row === null) {
+            return null;
+        }
+        $fn = ltrim((string) $row->file_path, '/');
+        if ($fn === '' || str_contains($fn, '..') || self::isPendingPlaceholder($fn)) {
+            return null;
+        }
+
+        return $fn;
+    }
+
+    /**
+     * Whether bytes exist for a DB `profile_photo` / gallery relative path (tmp for pending placeholders, disk for final paths).
+     */
+    public static function storedFileExistsForRelativePath(string $relativePath): bool
+    {
+        $relativePath = ltrim($relativePath, '/');
+        if ($relativePath === '' || str_contains($relativePath, '..')) {
+            return false;
+        }
+        if (self::isPendingPlaceholder($relativePath)) {
+            return self::resolvePendingTempAbsolutePath($relativePath) !== null;
+        }
+
+        return self::resolveStoredPublicAbsolutePath($relativePath) !== null;
+    }
+
+    /**
      * Backward compatible resolver:
      * - new: storage/app/public/matrimony_photos (served via /storage)
      * - old: public/uploads/matrimony_photos (served via /uploads)

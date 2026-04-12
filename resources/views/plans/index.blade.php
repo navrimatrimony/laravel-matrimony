@@ -15,15 +15,22 @@
 
     $isFreeViewer = ! $eff->id || strtolower((string) ($eff->slug ?? '')) === 'free';
 
-    $pricingHighlightFeatureOrder = [
-    PlanFeatureKeys::CHAT_CAN_READ,
-    PlanFeatureKeys::CHAT_SEND_LIMIT,
-    PlanFeatureKeys::CONTACT_VIEW_LIMIT,
-];
+    /** Admin plan quota engine owns these; omit from public pricing feature lists. */
+    $pricingCatalogKeysHidden = [
+        PlanFeatureKeys::CHAT_CAN_READ,
+        PlanFeatureKeys::PHOTO_FULL_ACCESS,
+        PlanFeatureKeys::PRIORITY_LISTING,
+    ];
 
-    $partitionPricingFeatures = function ($plan) use ($pricingHighlightFeatureOrder) {
+    $pricingHighlightFeatureOrder = [
+        PlanFeatureKeys::CHAT_SEND_LIMIT,
+        PlanFeatureKeys::CONTACT_VIEW_LIMIT,
+    ];
+
+    $partitionPricingFeatures = function ($plan) use ($pricingHighlightFeatureOrder, $pricingCatalogKeysHidden) {
         $rows = $plan->features
             ->filter(fn ($f) => PlanFeatureLabel::shouldListKey((string) $f->key))
+            ->reject(fn ($f) => in_array((string) $f->key, $pricingCatalogKeysHidden, true))
             ->keyBy(fn ($f) => (string) $f->key);
         $primary = collect();
         foreach ($pricingHighlightFeatureOrder as $key) {
@@ -112,10 +119,11 @@
                         </div>
                     @endif
                     @if ($profileViewersCount > 0)
-                        <div class="rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-2.5 text-center text-sm font-semibold text-indigo-900 shadow-sm dark:border-indigo-800 dark:bg-indigo-950/40 dark:text-indigo-100">
+                        <a href="{{ route('who-viewed.index') }}"
+                           class="rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-2.5 text-center text-sm font-semibold text-indigo-900 shadow-sm transition hover:bg-indigo-100 dark:border-indigo-800 dark:bg-indigo-950/40 dark:text-indigo-100 dark:hover:bg-indigo-900/60">
                             {{ __('subscriptions.pricing_trigger_views') }}
                             <span class="tabular-nums text-indigo-700 dark:text-indigo-300">({{ $profileViewersCount }})</span>
-                        </div>
+                        </a>
                     @endif
                 </div>
             @endif

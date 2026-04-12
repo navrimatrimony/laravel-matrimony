@@ -5,12 +5,13 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\Plan;
 use App\Models\PlanFeature;
-use App\Models\PlanFeatureConfig;
 use App\Models\PlanPrice;
+use App\Models\PlanQuotaPolicy;
 use App\Models\PlanTerm;
 use App\Models\Subscription;
-use App\Services\SubscriptionService;
+use App\Services\PlanQuotaPolicyMirror;
 use App\Support\PlanFeatureKeys;
+use App\Support\PlanQuotaPolicyKeys;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 
@@ -36,24 +37,24 @@ class PlanController extends Controller
             'highlight' => false,
         ]);
 
-        $defaultFeatures = $this->defaultFeatureTemplate();
-
         return view('admin.plans.form', [
             'plan' => $plan,
-            'defaultFeatures' => $defaultFeatures,
             'isEdit' => false,
+            'quotaPolicyKeys' => PlanQuotaPolicyKeys::ordered(),
+            'quotaPoliciesForm' => $this->quotaPoliciesFormState($plan, false),
         ]);
     }
 
     public function store(Request $request)
     {
+        $this->validateQuotaPoliciesRequest($request);
         $data = $this->validatedPlanData($request);
-        $features = $this->normalizeFeatureRows($request->input('features', []));
 
         $plan = Plan::query()->create($data);
-        $features = $this->mergeMonetizationFeaturesIntoRows($features, $request);
-        $this->syncFeatures($plan, $features);
-        $this->syncFeatureConfigsFromRequest($plan, $request);
+        PlanQuotaPolicy::ensureAllForPlan($plan);
+        $this->syncQuotaPoliciesFromRequest($plan, $request);
+        $this->syncFeatures($plan, $this->buildFullPlanFeatureRowsFromQuota($plan, $request));
+
         if (strtolower((string) $plan->slug) !== 'free') {
             PlanTerm::syncDefaultsForPlan($plan);
         }
@@ -65,17 +66,20 @@ class PlanController extends Controller
 
     public function edit(Plan $plan)
     {
-        $plan->load(['features', 'terms', 'planPrices', 'featureConfigs']);
+        PlanQuotaPolicy::ensureAllForPlan($plan);
+        $plan->load(['features', 'terms', 'planPrices', 'quotaPolicies']);
 
         return view('admin.plans.form', [
             'plan' => $plan,
-            'defaultFeatures' => $this->defaultFeatureTemplate(),
             'isEdit' => true,
+            'quotaPolicyKeys' => PlanQuotaPolicyKeys::ordered(),
+            'quotaPoliciesForm' => $this->quotaPoliciesFormState($plan, true),
         ]);
     }
 
     public function update(Request $request, Plan $plan)
     {
+        $this->validateQuotaPoliciesRequest($request);
         $data = $this->validatedPlanData($request, $plan->id);
 
         if (strtolower((string) $data['slug']) !== 'free') {
@@ -84,18 +88,15 @@ class PlanController extends Controller
 
         $plan->update($data);
 
-        $features = $this->normalizeFeatureRows($request->input('features', []));
-        $features = $this->mergeMonetizationFeaturesIntoRows($features, $request);
-        $this->syncFeatures($plan, $features);
-
         if (strtolower((string) $plan->slug) !== 'free') {
             $this->syncPlanTerms($plan, $request);
-            $this->syncAdvancedDurationPricesFromRequest($plan, $request);
         } else {
             PlanTerm::query()->where('plan_id', $plan->id)->delete();
         }
 
-        $this->syncFeatureConfigsFromRequest($plan, $request);
+        PlanQuotaPolicy::ensureAllForPlan($plan);
+        $this->syncQuotaPoliciesFromRequest($plan, $request);
+        $this->syncFeatures($plan, $this->buildFullPlanFeatureRowsFromQuota($plan, $request));
 
         return redirect()
             ->route('admin.plans.edit', $plan)
@@ -204,15 +205,6 @@ class PlanController extends Controller
             'sort_order' => ['nullable', 'integer', 'min:0', 'max:65535'],
             'is_active' => ['sometimes', 'boolean'],
             'highlight' => ['sometimes', 'boolean'],
-            'referral_bonus_days' => ['nullable', 'integer', 'min:0'],
-            'profile_boost_per_week' => ['nullable', 'integer', 'min:0'],
-            'who_viewed_me_days' => ['nullable', 'integer', 'min:0'],
-            'priority_listing' => ['sometimes', 'boolean'],
-            'features' => ['nullable', 'array'],
-            'features.*.key' => ['nullable', 'string', 'max:120'],
-            'features.*.value' => ['nullable', 'string', 'max:65535'],
-            'prices' => ['nullable', 'array'],
-            'feature_configs' => ['nullable', 'array'],
         ]);
 
         return [
@@ -227,187 +219,222 @@ class PlanController extends Controller
         ];
     }
 
+    private function validateQuotaPoliciesRequest(Request $request): void
+    {
+        $qp = $request->input('quota_policies');
+        if (is_array($qp)) {
+            foreach ($qp as $fk => $payload) {
+                if (! is_array($payload) || ! array_key_exists('refresh_type', $payload)) {
+                    continue;
+                }
+                $qp[$fk]['refresh_type'] = PlanQuotaPolicy::normalizeRefreshType((string) $payload['refresh_type']);
+            }
+            $request->merge(['quota_policies' => $qp]);
+        }
+
+        $rules = [
+            'quota_policies' => ['required', 'array'],
+        ];
+        foreach (PlanQuotaPolicyKeys::ordered() as $fk) {
+            $rules["quota_policies.$fk"] = ['required', 'array'];
+            $rules["quota_policies.$fk.is_enabled"] = ['nullable'];
+            $rules["quota_policies.$fk.refresh_type"] = ['required', 'string', Rule::in(PlanQuotaPolicy::refreshTypes())];
+            $rules["quota_policies.$fk.limit_value"] = ['nullable', 'integer', 'min:0'];
+            $rules["quota_policies.$fk.daily_sub_cap"] = ['nullable', 'integer', 'min:0'];
+            $rules["quota_policies.$fk.per_day_usage_limit_enabled"] = ['sometimes', 'boolean'];
+            $rules["quota_policies.$fk.grace_percent_of_plan"] = ['required', 'integer', 'min:0', 'max:100'];
+            $rules["quota_policies.$fk.purchasable_if_exhausted"] = ['sometimes', 'boolean'];
+            $rules["quota_policies.$fk.pack_price_rupees"] = ['nullable', 'numeric', 'min:0'];
+            $rules["quota_policies.$fk.pack_message_count"] = ['nullable', 'integer', 'min:1'];
+            $rules["quota_policies.$fk.pack_validity_days"] = ['nullable', 'integer', 'min:1'];
+        }
+        $request->validate($rules);
+    }
+
+    /**
+     * @return array<string, array<string, mixed>>
+     */
+    private function quotaPoliciesFormState(Plan $plan, bool $isEdit): array
+    {
+        if ($isEdit) {
+            $plan->loadMissing('quotaPolicies', 'features');
+        }
+        $states = [];
+        foreach (PlanQuotaPolicyKeys::ordered() as $featureKey) {
+            if ($isEdit && $plan->exists) {
+                $row = $plan->quotaPolicies->firstWhere('feature_key', $featureKey);
+                $base = $row ? $row->toArray() : PlanQuotaPolicy::defaultsFromPlanFeatures($plan, $featureKey);
+            } else {
+                $base = PlanQuotaPolicy::defaultsForNewPlan($featureKey);
+            }
+            $old = old('quota_policies.'.$featureKey);
+            if (is_array($old)) {
+                $base = $this->mergeQuotaPolicyOldIntoBase($base, $old);
+            }
+            $base['refresh_type'] = PlanQuotaPolicy::normalizeRefreshType((string) ($base['refresh_type'] ?? PlanQuotaPolicy::REFRESH_MONTHLY_30D_IST));
+            $states[$featureKey] = $base;
+        }
+
+        return $states;
+    }
+
+    /**
+     * @param  array<string, mixed>  $base
+     * @param  array<string, mixed>  $old
+     * @return array<string, mixed>
+     */
+    private function mergeQuotaPolicyOldIntoBase(array $base, array $old): array
+    {
+        if (isset($old['meta']) && is_array($old['meta'])) {
+            $pm = is_array($base['policy_meta'] ?? null) ? $base['policy_meta'] : [];
+            $base['policy_meta'] = array_replace_recursive($pm, $old['meta']);
+        }
+        unset($old['meta']);
+
+        if (array_key_exists('pack_price_rupees', $old)) {
+            $pr = $old['pack_price_rupees'];
+            if ($pr !== '' && $pr !== null) {
+                $base['pack_price_paise'] = (int) max(0, round(((float) $pr) * 100));
+            }
+            unset($old['pack_price_rupees']);
+        }
+
+        if (array_key_exists('purchasable_if_exhausted', $old)) {
+            $p = filter_var($old['purchasable_if_exhausted'], FILTER_VALIDATE_BOOLEAN)
+                || (string) $old['purchasable_if_exhausted'] === '1';
+            $base['overuse_mode'] = $p ? PlanQuotaPolicy::OVERUSE_PACK : PlanQuotaPolicy::OVERUSE_BLOCK;
+            unset($old['purchasable_if_exhausted']);
+        }
+
+        foreach (['is_enabled', 'per_day_usage_limit_enabled'] as $boolKey) {
+            if (! array_key_exists($boolKey, $old)) {
+                continue;
+            }
+            $base[$boolKey] = filter_var($old[$boolKey], FILTER_VALIDATE_BOOLEAN)
+                || (string) $old[$boolKey] === '1';
+            unset($old[$boolKey]);
+        }
+
+        return array_merge($base, $old);
+    }
+
+    private function syncQuotaPoliciesFromRequest(Plan $plan, Request $request): void
+    {
+        foreach (PlanQuotaPolicyKeys::ordered() as $featureKey) {
+            $prefix = 'quota_policies.'.$featureKey;
+            if (! is_array($request->input($prefix))) {
+                continue;
+            }
+            $refresh = (string) $request->input("$prefix.refresh_type");
+            $limitRaw = $request->input("$prefix.limit_value");
+            $limitValue = null;
+            if ($refresh !== PlanQuotaPolicy::REFRESH_UNLIMITED) {
+                $limitValue = ($limitRaw === '' || $limitRaw === null) ? 0 : max(0, (int) $limitRaw);
+            }
+
+            $perDayEnabled = $request->boolean("$prefix.per_day_usage_limit_enabled");
+            $capRaw = $request->input("$prefix.daily_sub_cap");
+            $dailySubCap = null;
+            if ($perDayEnabled) {
+                $dailySubCap = ($capRaw === '' || $capRaw === null) ? null : max(0, (int) $capRaw);
+            }
+
+            $packRupees = $request->input("$prefix.pack_price_rupees");
+            $packPaise = ($packRupees === '' || $packRupees === null)
+                ? null
+                : (int) max(0, round(((float) $packRupees) * 100));
+
+            $packCountRaw = $request->input("$prefix.pack_message_count");
+            $packCount = ($packCountRaw === '' || $packCountRaw === null) ? null : max(1, (int) $packCountRaw);
+
+            $packDaysRaw = $request->input("$prefix.pack_validity_days");
+            $packDays = ($packDaysRaw === '' || $packDaysRaw === null) ? null : max(1, (int) $packDaysRaw);
+
+            $purchasableIfExhausted = $request->boolean("$prefix.purchasable_if_exhausted");
+            $overuse = $purchasableIfExhausted
+                ? PlanQuotaPolicy::OVERUSE_PACK
+                : PlanQuotaPolicy::OVERUSE_BLOCK;
+            if (! $purchasableIfExhausted) {
+                $packPaise = null;
+                $packCount = null;
+                $packDays = null;
+            }
+
+            $meta = null;
+            if ($featureKey === PlanFeatureKeys::INTEREST_VIEW_LIMIT) {
+                $plan->loadMissing('features');
+                $raw = (string) ($plan->getFeatureValue(PlanFeatureKeys::INTEREST_VIEW_RESET_PERIOD) ?? 'monthly');
+                $period = in_array($raw, ['weekly', 'monthly', 'quarterly'], true) ? $raw : 'monthly';
+                $meta = ['interest_view_reset_period' => $period];
+            }
+
+            PlanQuotaPolicy::query()->updateOrCreate(
+                ['plan_id' => $plan->id, 'feature_key' => $featureKey],
+                [
+                    'is_enabled' => $request->boolean("$prefix.is_enabled"),
+                    'refresh_type' => $refresh,
+                    'limit_value' => $limitValue,
+                    'daily_sub_cap' => $dailySubCap,
+                    'per_day_usage_limit_enabled' => $perDayEnabled,
+                    'grace_percent_of_plan' => max(0, min(100, (int) $request->input("$prefix.grace_percent_of_plan", 0))),
+                    'overuse_mode' => $overuse,
+                    'pack_price_paise' => $packPaise,
+                    'pack_message_count' => $packCount,
+                    'pack_validity_days' => $packDays,
+                    'policy_meta' => $meta,
+                ]
+            );
+        }
+    }
+
+    /**
+     * @return list<array{key: string, value: string}>
+     */
+    private function buildFullPlanFeatureRowsFromQuota(Plan $plan, Request $request): array
+    {
+        $quotaRows = PlanQuotaPolicyMirror::planFeatureRowsFromQuotaRequest($request);
+        $byKey = [];
+        foreach ($quotaRows as $row) {
+            $byKey[$row['key']] = $row['value'];
+        }
+        $plan->forgetCachedPlanFeatures();
+        $plan->load('features');
+        $out = [];
+        foreach (array_keys((array) config('plan_features', [])) as $key) {
+            if (array_key_exists($key, $byKey)) {
+                $out[] = ['key' => $key, 'value' => $byKey[$key]];
+            } else {
+                $existing = $plan->getFeatureValue($key);
+                $fallback = $key === PlanFeatureKeys::INTEREST_VIEW_RESET_PERIOD ? 'monthly' : '0';
+                $out[] = [
+                    'key' => $key,
+                    'value' => ($existing !== null && $existing !== '') ? $existing : $fallback,
+                ];
+            }
+        }
+
+        return $this->normalizeFeatureRows($out);
+    }
+
     /**
      * @param  array<int, array{key?: string, value?: string}>  $rows
      * @return array<int, array{key: string, value: string}>
      */
     private function normalizeFeatureRows(array $rows): array
     {
-        $out = [];
+        $byKey = [];
         foreach ($rows as $row) {
             $key = trim((string) ($row['key'] ?? ''));
             if ($key === '') {
                 continue;
             }
-            $out[] = [
+            $byKey[$key] = [
                 'key' => $key,
                 'value' => (string) ($row['value'] ?? ''),
             ];
         }
 
-        $seen = [];
-        $unique = [];
-        foreach ($out as $r) {
-            if (isset($seen[$r['key']])) {
-                continue;
-            }
-            $seen[$r['key']] = true;
-            $unique[] = $r;
-        }
-
-        return $unique;
-    }
-
-    /**
-     * Ensures structured monetization fields are persisted as plan_features rows
-     * (same keys as the key/value UI) so syncFeatures does not delete them when hidden from the list.
-     *
-     * @param  array<int, array{key: string, value: string}>  $rows
-     * @return array<int, array{key: string, value: string}>
-     */
-    private function mergeMonetizationFeaturesIntoRows(array $rows, Request $request): array
-    {
-        $montKeys = [
-            PlanFeatureKeys::REFERRAL_BONUS_DAYS,
-            PlanFeatureKeys::PRIORITY_LISTING,
-            PlanFeatureKeys::PROFILE_BOOST_PER_WEEK,
-            PlanFeatureKeys::WHO_VIEWED_ME_DAYS,
-        ];
-        $filtered = [];
-        foreach ($rows as $row) {
-            if (in_array($row['key'], $montKeys, true)) {
-                continue;
-            }
-            $filtered[] = $row;
-        }
-
-        $ref = $request->input('referral_bonus_days');
-        $boost = $request->input('profile_boost_per_week');
-        $who = $request->input('who_viewed_me_days');
-
-        $extra = [
-            [
-                'key' => PlanFeatureKeys::REFERRAL_BONUS_DAYS,
-                'value' => ($ref === '' || $ref === null) ? '0' : (string) max(0, (int) $ref),
-            ],
-            [
-                'key' => PlanFeatureKeys::PRIORITY_LISTING,
-                'value' => $request->boolean('priority_listing') ? '1' : '0',
-            ],
-            [
-                'key' => PlanFeatureKeys::PROFILE_BOOST_PER_WEEK,
-                'value' => ($boost === '' || $boost === null) ? '0' : (string) max(0, (int) $boost),
-            ],
-            [
-                'key' => PlanFeatureKeys::WHO_VIEWED_ME_DAYS,
-                'value' => ($who === '' || $who === null) ? '0' : (string) max(0, (int) $who),
-            ],
-        ];
-
-        return array_merge($filtered, $extra);
-    }
-
-    /**
-     * "Pricing (Advanced)" table: updates {@see PlanTerm} for non-empty rows, then mirrors {@see PlanPrice}.
-     * Runs after {@see syncPlanTerms()} so filled advanced cells override duplicate billing fields for the same duration keys.
-     */
-    private function syncAdvancedDurationPricesFromRequest(Plan $plan, Request $request): void
-    {
-        if (strtolower((string) $plan->slug) === 'free') {
-            return;
-        }
-        $payload = $request->input('prices');
-        if (! is_array($payload)) {
-            return;
-        }
-        $touched = false;
-        foreach (PlanTerm::billingKeys() as $type) {
-            if (! isset($payload[$type]) || ! is_array($payload[$type])) {
-                continue;
-            }
-            $data = $payload[$type];
-            $priceRaw = $data['price'] ?? null;
-            $discRaw = $data['discount'] ?? null;
-            if (($priceRaw === '' || $priceRaw === null) && ($discRaw === '' || $discRaw === null)) {
-                continue;
-            }
-            $touched = true;
-            $base = (float) ($priceRaw ?? 0);
-            $disc = ($discRaw === '' || $discRaw === null)
-                ? null
-                : max(0, min(100, (int) round((float) $discRaw)));
-            $days = PlanTerm::durationDaysFor($type);
-
-            PlanTerm::query()->updateOrCreate(
-                ['plan_id' => $plan->id, 'billing_key' => $type],
-                [
-                    'duration_days' => $days,
-                    'price' => $base,
-                    'discount_percent' => $disc,
-                    'is_visible' => true,
-                    'sort_order' => PlanTerm::defaultSortOrder($type),
-                ]
-            );
-        }
-        if ($touched) {
-            PlanPrice::syncFromPlanTerms($plan->fresh('terms'));
-        }
-    }
-
-    /**
-     * Structured feature engine (parallel to plan_features key/value); does not replace {@see FeatureUsageService} reads.
-     */
-    private function syncFeatureConfigsFromRequest(Plan $plan, Request $request): void
-    {
-        $payload = $request->input('feature_configs');
-        if (! is_array($payload)) {
-            return;
-        }
-        $allowed = [
-            PlanFeatureKeys::CHAT_SEND_LIMIT,
-            PlanFeatureKeys::CONTACT_VIEW_LIMIT,
-            PlanFeatureKeys::INTEREST_SEND_LIMIT,
-            SubscriptionService::FEATURE_DAILY_PROFILE_VIEW_LIMIT,
-        ];
-        foreach ($allowed as $key) {
-            if (! isset($payload[$key]) || ! is_array($payload[$key])) {
-                continue;
-            }
-            $data = $payload[$key];
-            $extra = $data['extra_cost'] ?? null;
-            $extraPaise = ($extra === '' || $extra === null)
-                ? null
-                : (int) max(0, round(((float) $extra) * 100));
-
-            $lim = $data['limit'] ?? null;
-            $limitTotal = ($lim === '' || $lim === null) ? null : (int) $lim;
-
-            $cap = $data['daily_cap'] ?? null;
-            $dailyCap = ($cap === '' || $cap === null) ? null : (int) $cap;
-
-            $soft = $data['soft_limit'] ?? null;
-            $softPct = ($soft === '' || $soft === null) ? null : (int) max(0, min(100, (int) $soft));
-
-            $ex = $data['expiry'] ?? null;
-            $expiryDays = ($ex === '' || $ex === null) ? null : (int) $ex;
-
-            $period = $data['period'] ?? null;
-            $period = in_array($period, ['daily', 'monthly'], true) ? $period : null;
-
-            PlanFeatureConfig::query()->updateOrCreate(
-                ['plan_id' => $plan->id, 'feature_key' => $key],
-                [
-                    'is_enabled' => $request->boolean("feature_configs.$key.enabled"),
-                    'is_unlimited' => $request->boolean("feature_configs.$key.unlimited"),
-                    'limit_total' => $limitTotal,
-                    'period' => $period,
-                    'daily_cap' => $dailyCap,
-                    'soft_limit_percent' => $softPct,
-                    'expiry_days' => $expiryDays,
-                    'extra_cost_per_action' => $extraPaise,
-                ]
-            );
-        }
+        return array_values($byKey);
     }
 
     /**
@@ -435,26 +462,5 @@ class PlanController extends Controller
             return;
         }
         PlanFeature::query()->where('plan_id', $plan->id)->whereNotIn('key', $keys)->delete();
-    }
-
-    /**
-     * @return list<array{key: string, value: string}>
-     */
-    private function defaultFeatureTemplate(): array
-    {
-        $ordered = [
-            PlanFeatureKeys::CHAT_SEND_LIMIT,
-            PlanFeatureKeys::INTEREST_SEND_LIMIT,
-            SubscriptionService::FEATURE_DAILY_PROFILE_VIEW_LIMIT,
-            PlanFeatureKeys::CONTACT_VIEW_LIMIT,
-            SubscriptionService::FEATURE_CHAT_IMAGE_MESSAGES,
-        ];
-        $rest = array_values(array_diff(PlanFeatureKeys::all(), $ordered));
-        $rows = [];
-        foreach (array_merge($ordered, $rest) as $key) {
-            $rows[] = ['key' => $key, 'value' => ''];
-        }
-
-        return $rows;
     }
 }

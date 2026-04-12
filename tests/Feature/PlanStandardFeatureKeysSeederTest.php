@@ -26,6 +26,7 @@ class PlanStandardFeatureKeysSeederTest extends TestCase
         $this->assertSame('0', PlanFeature::query()->where('plan_id', $free->id)->where('key', PlanFeatureKeys::CHAT_CAN_READ)->value('value'));
         $this->assertSame('5', PlanFeature::query()->where('plan_id', $free->id)->where('key', PlanFeatureKeys::INTEREST_SEND_LIMIT)->value('value'));
         $this->assertSame('2', PlanFeature::query()->where('plan_id', $free->id)->where('key', PlanFeatureKeys::MEDIATOR_REQUESTS_PER_MONTH)->value('value'));
+        $this->assertSame('5', PlanFeature::query()->where('plan_id', $free->id)->where('key', PlanFeatureKeys::WHO_VIEWED_ME_PREVIEW_LIMIT)->value('value'));
     }
 
     public function test_platinum_plan_and_priority_listing(): void

@@ -36,6 +36,11 @@
                            class="inline-flex items-center border-b-2 px-3 py-3 text-sm font-medium transition {{ request()->routeIs('shortlist.*') ? 'border-red-600 text-red-600 dark:border-red-500 dark:text-red-400' : 'border-transparent text-gray-600 hover:text-red-700 dark:text-gray-400 dark:hover:text-red-400' }}">
                             {{ __('nav.shortlist') }}
                         </a>
+                        <a href="{{ route('who-viewed.index') }}"
+                           class="inline-flex items-center gap-2 border-b-2 px-3 py-3 text-sm font-medium transition {{ request()->routeIs('who-viewed.*') ? 'border-red-600 text-red-600 dark:border-red-500 dark:text-red-400' : 'border-transparent text-gray-600 hover:text-red-700 dark:text-gray-400 dark:hover:text-red-400' }}">
+                            <span>{{ __('nav.who_viewed_me') }}</span>
+                            <span class="text-[10px] font-semibold uppercase tracking-wide text-amber-600 dark:text-amber-400">{{ __('nav.premium') }}</span>
+                        </a>
                         <a href="{{ route('intake.index') }}"
                            class="inline-flex items-center border-b-2 px-3 py-3 text-sm font-medium transition {{ request()->routeIs('intake.*') ? 'border-red-600 text-red-600 dark:border-red-500 dark:text-red-400' : 'border-transparent text-gray-600 hover:text-red-700 dark:text-gray-400 dark:hover:text-red-400' }}">
                             {{ __('nav.my_biodata_uploads') }}
@@ -59,13 +64,9 @@
                         @endif
                     @endauth
                 @elseif ($section === 'connect')
-                    <a href="{{ route('interests.received') }}"
-                       class="inline-flex items-center border-b-2 px-3 py-3 text-sm font-medium transition {{ request()->routeIs('interests.received') ? 'border-red-600 text-red-600 dark:border-red-500 dark:text-red-400' : 'border-transparent text-gray-600 hover:text-red-700 dark:text-gray-400 dark:hover:text-red-400' }}">
-                        {{ __('nav.interests_received') }}
-                    </a>
-                    <a href="{{ route('interests.sent') }}"
-                       class="inline-flex items-center border-b-2 px-3 py-3 text-sm font-medium transition {{ request()->routeIs('interests.sent') ? 'border-red-600 text-red-600 dark:border-red-500 dark:text-red-400' : 'border-transparent text-gray-600 hover:text-red-700 dark:text-gray-400 dark:hover:text-red-400' }}">
-                        {{ __('nav.interests_sent') }}
+                    <a href="{{ route('interests.index') }}"
+                       class="inline-flex items-center border-b-2 px-3 py-3 text-sm font-medium transition {{ request()->routeIs('interests.index', 'interests.sent', 'interests.received') ? 'border-red-600 text-red-600 dark:border-red-500 dark:text-red-400' : 'border-transparent text-gray-600 hover:text-red-700 dark:text-gray-400 dark:hover:text-red-400' }}">
+                        {{ __('nav.interests') }}
                     </a>
                     <a href="{{ route('chat.index') }}"
                        class="inline-flex items-center gap-2 border-b-2 px-3 py-3 text-sm font-medium transition {{ request()->routeIs('chat.*') ? 'border-red-600 text-red-600 dark:border-red-500 dark:text-red-400' : 'border-transparent text-gray-600 hover:text-red-700 dark:text-gray-400 dark:hover:text-red-400' }}">
@@ -86,13 +87,9 @@
                     </a>
                     @auth
                         @if (auth()->user()->matrimonyProfile)
-                            <a href="{{ route('interests.received') }}"
-                               class="inline-flex items-center border-b-2 px-3 py-3 text-sm font-medium transition {{ request()->routeIs('interests.received') ? 'border-red-600 text-red-600 dark:border-red-500 dark:text-red-400' : 'border-transparent text-gray-600 hover:text-red-700 dark:text-gray-400 dark:hover:text-red-400' }}">
-                                {{ __('nav.interests_received') }}
-                            </a>
-                            <a href="{{ route('interests.sent') }}"
-                               class="inline-flex items-center border-b-2 px-3 py-3 text-sm font-medium transition {{ request()->routeIs('interests.sent') ? 'border-red-600 text-red-600 dark:border-red-500 dark:text-red-400' : 'border-transparent text-gray-600 hover:text-red-700 dark:text-gray-400 dark:hover:text-red-400' }}">
-                                {{ __('nav.interests_sent') }}
+                            <a href="{{ route('interests.index') }}"
+                               class="inline-flex items-center border-b-2 px-3 py-3 text-sm font-medium transition {{ request()->routeIs('interests.index', 'interests.sent', 'interests.received') ? 'border-red-600 text-red-600 dark:border-red-500 dark:text-red-400' : 'border-transparent text-gray-600 hover:text-red-700 dark:text-gray-400 dark:hover:text-red-400' }}">
+                                {{ __('nav.interests') }}
                             </a>
                         @endif
                     @endauth

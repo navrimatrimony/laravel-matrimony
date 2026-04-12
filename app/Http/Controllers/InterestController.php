@@ -13,6 +13,10 @@ use App\Services\InterestPriorityService;
 use App\Services\InterestSendLimitService;
 use App\Services\ProfileCompletenessService;
 use App\Services\ProfileLifecycleService;
+use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
+use Illuminate\View\View;
 use Symfony\Component\HttpKernel\Exception\HttpException;
 
 /*
@@ -28,6 +32,9 @@ use Symfony\Component\HttpKernel\Exception\HttpException;
 
 class InterestController extends Controller
 {
+    /** @var list<string> */
+    private const INTEREST_STATUS_FILTERS = ['all', 'pending', 'accepted', 'rejected'];
+
     public function __construct(
         private readonly InterestSendLimitService $interestSendLimit,
         private readonly InterestPriorityService $interestPriority,
@@ -145,73 +152,117 @@ class InterestController extends Controller
         return back()->with('success', __('interest.interest_sent_successfully'));
     }
 
-    /*
-    |--------------------------------------------------------------------------
-    | Sent Interests
-    |--------------------------------------------------------------------------
-    |
-    | Meaning:
-    | - माझ्या MatrimonyProfile ने कोणकोणाला interest पाठवला
-    |
-    */
-    public function sent()
+    /**
+     * Interests hub: default tab is received; use ?tab=sent for sent.
+     */
+    public function index(Request $request): View|RedirectResponse
     {
-        $authUser = auth()->user();
+        $tab = strtolower((string) $request->query('tab', 'received')) === 'sent' ? 'sent' : 'received';
+        $statusFilter = $this->normalizeInterestStatusFilter($request->query('status'));
 
-        if (! $authUser->matrimonyProfile) {
-            return redirect()
-                ->route('matrimony.profile.wizard.section', ['section' => 'basic-info'])
-                ->with('error', __('interest.create_profile_first'));
-        }
-
-        $myProfileId = auth()->user()->matrimonyProfile->id;
-
-        $sentInterests = Interest::with('receiverProfile.gender')
-            ->where('sender_profile_id', $myProfileId)
-            ->latest()
-            ->get();
-
-        return view('interests.sent', compact('sentInterests'));
+        return $this->renderInterestsPage($tab, $statusFilter);
     }
 
     /*
     |--------------------------------------------------------------------------
-    | Received Interests
+    | Sent / Received (legacy URLs; same hub as {@see index})
     |--------------------------------------------------------------------------
-    |
-    | Meaning:
-    | - कोणकोणाच्या MatrimonyProfile कडून मला interest आला
-    |
     */
-    public function received()
+    public function sent(): View|RedirectResponse
+    {
+        return $this->renderInterestsPage(
+            'sent',
+            $this->normalizeInterestStatusFilter(request()->query('status'))
+        );
+    }
+
+    public function received(): View|RedirectResponse
+    {
+        return $this->renderInterestsPage(
+            'received',
+            $this->normalizeInterestStatusFilter(request()->query('status'))
+        );
+    }
+
+    private function renderInterestsPage(string $activeTab, string $statusFilter): View|RedirectResponse
     {
         $authUser = auth()->user();
 
-        if (! $authUser->matrimonyProfile) {
+        if (! $authUser || ! $authUser->matrimonyProfile) {
             return redirect()
                 ->route('matrimony.profile.wizard.section', ['section' => 'basic-info'])
                 ->with('error', __('interest.create_profile_first'));
         }
 
-        $myProfileId = auth()->user()->matrimonyProfile->id;
+        $myProfileId = $authUser->matrimonyProfile->id;
 
-        $receivedInterests = Interest::with('senderProfile.gender')
+        $sentInterestsFull = Interest::with('receiverProfile.gender')
+            ->where('sender_profile_id', $myProfileId)
+            ->latest()
+            ->get();
+
+        $receivedInterestsFull = Interest::with('senderProfile.gender')
             ->where('receiver_profile_id', $myProfileId)
             ->receivedInboxOrder()
             ->get();
 
-        $unlockById = $this->interestSendLimit->incomingInterestUnlockMap($authUser, $receivedInterests);
+        $unlockById = $this->interestSendLimit->incomingInterestUnlockMap($authUser, $receivedInterestsFull);
         $interestViewLimit = $this->interestSendLimit->effectiveInterestViewLimit($authUser);
         $interestViewPeriod = $this->interestSendLimit->interestViewResetPeriodLabel($authUser);
         $interestViewWindowStart = $this->interestSendLimit->interestViewWindowStart($authUser);
 
-        return view('interests.received', compact(
+        $receivedCounts = $this->interestStatusCounts($receivedInterestsFull);
+        $sentCounts = $this->interestStatusCounts($sentInterestsFull);
+
+        $receivedInterests = $this->filterInterestsByStatus($receivedInterestsFull, $statusFilter);
+        $sentInterests = $this->filterInterestsByStatus($sentInterestsFull, $statusFilter);
+
+        return view('interests.index', compact(
+            'activeTab',
+            'statusFilter',
+            'receivedCounts',
+            'sentCounts',
+            'sentInterests',
             'receivedInterests',
             'unlockById',
             'interestViewLimit',
             'interestViewPeriod',
             'interestViewWindowStart',
         ));
+    }
+
+    private function normalizeInterestStatusFilter(mixed $raw): string
+    {
+        $s = strtolower(trim((string) $raw));
+
+        return in_array($s, self::INTEREST_STATUS_FILTERS, true) ? $s : 'all';
+    }
+
+    /**
+     * @param  Collection<int, Interest>  $interests
+     * @return array{all: int, pending: int, accepted: int, rejected: int}
+     */
+    private function interestStatusCounts(Collection $interests): array
+    {
+        return [
+            'all' => $interests->count(),
+            'pending' => $interests->where('status', 'pending')->count(),
+            'accepted' => $interests->where('status', 'accepted')->count(),
+            'rejected' => $interests->where('status', 'rejected')->count(),
+        ];
+    }
+
+    /**
+     * @param  Collection<int, Interest>  $interests
+     * @return Collection<int, Interest>
+     */
+    private function filterInterestsByStatus(Collection $interests, string $status): Collection
+    {
+        if ($status === 'all') {
+            return $interests->values();
+        }
+
+        return $interests->where('status', $status)->values();
     }
 
     /*

@@ -4,6 +4,18 @@
  * Interests pages strings.
  */
 return [
+    'page_heading' => 'Interests',
+    'page_subheading' => 'See who reached out to you, or review interests you have sent.',
+    'tab_received' => 'Received',
+    'tab_sent' => 'Sent',
+    'group_inbox' => 'Inbox',
+    'group_status' => 'By status',
+    'filter_all' => 'All',
+    'filter_pending' => 'Pending',
+    'filter_accepted' => 'Accepted',
+    'filter_rejected' => 'Rejected',
+    'no_received_for_filter' => 'No received interests match this status.',
+    'no_sent_for_filter' => 'No sent interests match this status.',
     'sent_interests' => 'Sent Interests',
     'received_interests' => 'Received Interests',
     'no_sent_interests' => 'You have not sent any interests yet.',

@@ -518,6 +518,16 @@ body.upload-landscape .upload-gallery-col {
 
     const uploadLimitMessage = 'You have already used all ' + photoMaxPerProfile + ' photo slots. Delete one photo before uploading a new one.';
 
+    /**
+     * FROZEN — vertical profile crop (width:height = 3:4), top-aligned default.
+     * Do not change ratios/output sizes without explicit product sign-off.
+     */
+    const PROFILE_CROP_EXPORT_W = 600;
+    const PROFILE_CROP_EXPORT_H = 800;
+    const PROFILE_CROP_ASPECT = PROFILE_CROP_EXPORT_W / PROFILE_CROP_EXPORT_H;
+    const PROFILE_CROP_PREVIEW_W = 300;
+    const PROFILE_CROP_PREVIEW_H = 400;
+
     const uploadFetchErrorBox = document.getElementById('uploadFetchErrorBox');
     const uploadFetchErrorText = document.getElementById('uploadFetchErrorText');
 
@@ -538,6 +548,22 @@ body.upload-landscape .upload-gallery-col {
             cropper.destroy();
             cropper = null;
         }
+    }
+
+    function applyDefaultVerticalTopCrop(cropperInstance) {
+        if (!cropperInstance || !cropperImage.naturalWidth || !cropperImage.naturalHeight) return;
+        const iw = cropperImage.naturalWidth;
+        const ih = cropperImage.naturalHeight;
+        const ar = PROFILE_CROP_ASPECT;
+        let w = iw;
+        let h = w / ar;
+        if (h > ih) {
+            h = ih;
+            w = h * ar;
+        }
+        const x = Math.max(0, Math.round((iw - w) / 2));
+        const y = 0;
+        cropperInstance.setData({ x: x, y: y, width: w, height: h });
     }
 
     function showPreview(dataUrl) {
@@ -564,17 +590,25 @@ body.upload-landscape .upload-gallery-col {
             cropperImage.onload = null;
             destroyCropper();
             cropper = new Cropper(cropperImage, {
-                aspectRatio: 1,
+                aspectRatio: PROFILE_CROP_ASPECT,
                 viewMode: 1,
                 dragMode: 'move',
-                autoCropArea: 0.8,
+                autoCropArea: 1,
                 restore: false,
                 guides: true,
-                center: true,
+                center: false,
                 highlight: true,
                 cropBoxMovable: true,
                 cropBoxResizable: true,
                 crop: function() { updateSmallPreview(); },
+                ready: function () {
+                    setTimeout(function () {
+                        if (cropper) {
+                            applyDefaultVerticalTopCrop(cropper);
+                            updateSmallPreview();
+                        }
+                    }, 0);
+                },
             });
             updateSmallPreview();
             if (btnCrop) btnCrop.onclick = onCropClick;
@@ -587,14 +621,22 @@ body.upload-landscape .upload-gallery-col {
 
     function updateSmallPreview() {
         if (!cropper) return;
-        const canvas = cropper.getCroppedCanvas({ width: 400, height: 400, imageSmoothingEnabled: true });
+        const canvas = cropper.getCroppedCanvas({
+            width: PROFILE_CROP_PREVIEW_W,
+            height: PROFILE_CROP_PREVIEW_H,
+            imageSmoothingEnabled: true,
+        });
         if (canvas) smallPreviewImg.src = canvas.toDataURL('image/jpeg', 0.92);
     }
 
     /** Apply crop: replace image with cropped result so it's fixed and used on submit */
     function applyCrop() {
         if (!cropper) return;
-        const canvas = cropper.getCroppedCanvas({ width: 800, height: 800, imageSmoothingEnabled: true });
+        const canvas = cropper.getCroppedCanvas({
+            width: PROFILE_CROP_EXPORT_W,
+            height: PROFILE_CROP_EXPORT_H,
+            imageSmoothingEnabled: true,
+        });
         if (!canvas) return;
         const dataUrl = canvas.toDataURL('image/jpeg', 0.92);
         currentDataUrl = dataUrl;
@@ -608,17 +650,25 @@ body.upload-landscape .upload-gallery-col {
             cropperImage.onload = null;
             destroyCropper();
             cropper = new Cropper(cropperImage, {
-                aspectRatio: 1,
+                aspectRatio: PROFILE_CROP_ASPECT,
                 viewMode: 1,
                 dragMode: 'move',
                 autoCropArea: 1,
                 restore: false,
                 guides: true,
-                center: true,
+                center: false,
                 highlight: true,
                 cropBoxMovable: true,
                 cropBoxResizable: true,
                 crop: function() { updateSmallPreview(); },
+                ready: function () {
+                    setTimeout(function () {
+                        if (cropper) {
+                            applyDefaultVerticalTopCrop(cropper);
+                            updateSmallPreview();
+                        }
+                    }, 0);
+                },
             });
             updateSmallPreview();
             if (btnCrop) btnCrop.onclick = onCropClick;
@@ -797,7 +847,11 @@ body.upload-landscape .upload-gallery-col {
         }
 
         if (cropper) {
-            cropper.getCroppedCanvas({ width: 800, height: 800, imageSmoothingEnabled: true })
+            cropper.getCroppedCanvas({
+                width: PROFILE_CROP_EXPORT_W,
+                height: PROFILE_CROP_EXPORT_H,
+                imageSmoothingEnabled: true,
+            })
                 .toBlob(function(blob) {
                     if (blob) doSubmit(blob);
                     else doSubmit(file);

@@ -6,8 +6,8 @@
  */
 return [
     'rows' => [
-        ['key' => 'chat_send_limit', 'type' => 'limit', 'label_key' => 'subscriptions.feature_daily_chat'],
-        ['key' => 'interest_send_limit', 'type' => 'limit', 'label_key' => 'subscriptions.pricing_feature_interest_daily'],
+        ['key' => 'chat_send_limit', 'type' => 'limit', 'label_key' => 'subscriptions.pricing_feature_chat_send'],
+        ['key' => 'interest_send_limit', 'type' => 'limit', 'label_key' => 'subscriptions.pricing_feature_interest_send'],
         ['key' => 'contact_view_limit', 'type' => 'limit', 'label_key' => 'subscriptions.feature_contact'],
         ['key' => 'daily_profile_view_limit', 'type' => 'limit', 'label_key' => 'subscriptions.feature_daily_profile_views'],
         ['key' => 'chat_image_messages', 'type' => 'truthy', 'label_key' => 'subscriptions.feature_chat_images'],

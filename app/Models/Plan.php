@@ -64,11 +64,19 @@ class Plan extends Model
     }
 
     /**
-     * Structured feature engine (parallel to string {@see features()} / plan_features).
+     * Structured feature engine (legacy table; admin no longer writes here).
      */
     public function featureConfigs(): HasMany
     {
         return $this->hasMany(PlanFeatureConfig::class);
+    }
+
+    /**
+     * Phase 1 quota policies (admin SSOT); mirrored into {@see features()}.
+     */
+    public function quotaPolicies(): HasMany
+    {
+        return $this->hasMany(PlanQuotaPolicy::class, 'plan_id');
     }
 
     /**
