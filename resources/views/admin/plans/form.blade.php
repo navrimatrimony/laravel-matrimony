@@ -1,10 +1,22 @@
 @extends('layouts.admin')
 
 @section('content')
-<div class="bg-white dark:bg-gray-800 shadow rounded-lg p-6 max-w-4xl">
-    <h1 class="text-2xl font-bold text-gray-800 dark:text-gray-100 mb-6">
-        {{ $isEdit ? __('subscriptions.edit_plan') : __('subscriptions.create_plan') }}
-    </h1>
+<div class="bg-white dark:bg-gray-800 shadow rounded-lg p-6 sm:p-8 max-w-5xl">
+    <div class="flex flex-wrap items-start justify-between gap-4 mb-6">
+        <h1 class="text-2xl font-bold text-gray-800 dark:text-gray-100">
+            {{ $isEdit ? __('subscriptions.edit_plan') : __('subscriptions.create_plan') }}
+        </h1>
+        <div class="flex flex-wrap items-center gap-2 shrink-0">
+            <a href="{{ route('admin.plans.index') }}" class="text-sm font-medium text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100">
+                {{ __('subscriptions.admin_plans_back_to_list') }}
+            </a>
+            @if ($isEdit)
+                <a href="{{ route('admin.plans.create') }}" class="inline-flex items-center px-3 py-1.5 rounded-lg text-sm font-medium bg-indigo-600 hover:bg-indigo-700 text-white">
+                    {{ __('subscriptions.create_plan') }}
+                </a>
+            @endif
+        </div>
+    </div>
 
     @if ($errors->any())
         <ul class="text-red-600 text-sm mb-4 space-y-1">
@@ -12,101 +24,247 @@
         </ul>
     @endif
 
-    <form method="POST" action="{{ $isEdit ? route('admin.plans.update', $plan) : route('admin.plans.store') }}" class="space-y-6">
+    @php
+        $presetKeys = \App\Models\PlanTerm::presetBillingKeys();
+        $billingLabels = [];
+        foreach ($presetKeys as $bk) {
+            $billingLabels[$bk] = __('subscriptions.billing_'.$bk);
+        }
+        $termRowsInitial = old('term_rows', $termRowsInitial ?? []);
+        $durationPresetInitial = old('duration_preset', $durationPresetInitial ?? 'monthly');
+        $isFreePlanEdit = $isEdit && \App\Models\Plan::isFreeCatalogSlug((string) ($plan->slug ?? ''));
+        $planNameInput = $planNameInput ?? (string) ($plan->name ?? '');
+    @endphp
+
+    <form method="POST" action="{{ $isEdit ? route('admin.plans.update', $plan) : route('admin.plans.store') }}" class="space-y-6"
+        @if (! $isFreePlanEdit)
+        x-data="adminPlanBillingForm({
+            slug: @js($plan->exists ? (string) ($plan->slug ?? '') : ''),
+            planName: @js($planNameInput),
+            appliesToGender: @js(old('applies_to_gender', $plan->applies_to_gender ?? 'all')),
+            initialPlanNameSha10: @js($initialPlanNameSha10 ?? substr(hash('sha256', $planNameInput), 0, 10)),
+            rows: @js($termRowsInitial ?? []),
+            durationPreset: @js($durationPresetInitial),
+            defaultBilling: @js(old('default_billing_key', $plan->default_billing_key ?? '')),
+            presets: @js($presetKeys),
+            billingLabels: @json($billingLabels),
+        })"
+        @endif
+    >
         @csrf
         @if ($isEdit)
             @method('PUT')
         @endif
+        @if ($isFreePlanEdit)
+            <input type="hidden" name="slug" value="{{ $plan->slug }}" />
+        @endif
 
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Name</label>
-                <input type="text" name="name" value="{{ old('name', $plan->name) }}" required maxlength="120"
-                    class="w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white shadow-sm" />
+        @php
+            $initiateOld = old('chat_initiate_new_chats_only');
+            $initiateChecked = $initiateOld !== null
+                ? (string) $initiateOld === '1'
+                : ($plan->exists && (filter_var((string) ($plan->getFeatureValue(\App\Support\PlanFeatureKeys::CHAT_INITIATE_NEW_CHATS_ONLY) ?? '0'), FILTER_VALIDATE_BOOLEAN)
+                    || (string) ($plan->getFeatureValue(\App\Support\PlanFeatureKeys::CHAT_INITIATE_NEW_CHATS_ONLY) ?? '') === '1'));
+            $adminMarketingBadgeKeys = $adminMarketingBadgeKeys ?? \App\Http\Controllers\Admin\PlanController::ADMIN_MARKETING_BADGE_KEYS;
+            $adminPlanDurationPresetKeys = $adminPlanDurationPresetKeys ?? \App\Http\Controllers\Admin\PlanController::ADMIN_PLAN_DURATION_PRESET_KEYS;
+        @endphp
+
+        <div class="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900/40 shadow-sm overflow-hidden">
+            <div class="px-5 py-4 sm:px-6 border-b border-gray-100 dark:border-gray-700 bg-gradient-to-r from-indigo-50/95 via-white to-slate-50/80 dark:from-indigo-950/35 dark:via-gray-900 dark:to-gray-900">
+                <h2 class="text-lg font-semibold tracking-tight text-gray-900 dark:text-gray-50">{{ __('subscriptions.admin_plan_details_card_title') }}</h2>
+                <p class="mt-1.5 text-sm text-gray-600 dark:text-gray-400 leading-relaxed max-w-3xl">{{ __('subscriptions.admin_plan_details_card_intro') }}</p>
             </div>
-            <div>
-                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Slug</label>
-                <input type="text" name="slug" value="{{ old('slug', $plan->slug) }}" required maxlength="64" pattern="[a-z0-9]+(?:-[a-z0-9]+)*"
-                    class="w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white shadow-sm" />
-            </div>
-            <div>
-                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Price (₹)</label>
-                <input type="number" name="price" value="{{ old('price', $plan->price ?? '') }}" required min="0" step="0.01"
-                    class="w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white shadow-sm" />
-            </div>
-            <div>
-                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Discount %</label>
-                <input type="number" name="discount_percent" value="{{ old('discount_percent', $plan->discount_percent ?? '') }}" min="0" max="100" step="1"
-                    placeholder="None"
-                    class="w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white shadow-sm" />
-            </div>
-            <div>
-                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Duration (days, 0 = no expiry)</label>
-                <input type="number" name="duration_days" value="{{ old('duration_days', $plan->duration_days) }}" required min="0"
-                    class="w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white shadow-sm" />
-            </div>
-            <div>
-                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Sort order</label>
-                <input type="number" name="sort_order" value="{{ old('sort_order', $plan->sort_order) }}" min="0"
-                    class="w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white shadow-sm" />
+
+            <div class="p-5 sm:p-6">
+                @if ($isEdit)
+                    <div class="mb-4 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50/70 dark:bg-slate-900/50 px-3 py-2 text-xs text-slate-700 dark:text-slate-300">
+                        <span class="font-semibold">{{ __('subscriptions.admin_plan_catalog_url_key') }}:</span>
+                        <span class="font-mono select-all">{{ (string) ($plan->slug ?? '') }}</span>
+                    </div>
+                @endif
+                @if (! $isFreePlanEdit && ! $isEdit)
+                    <div class="mb-6 rounded-lg border border-indigo-200/80 dark:border-indigo-800/60 bg-indigo-50/50 dark:bg-indigo-950/25 px-4 py-3">
+                        <p class="text-sm text-gray-700 dark:text-gray-300">{{ __('subscriptions.admin_create_plan_price_from_first_row') }}</p>
+                    </div>
+                @endif
+
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-x-5 gap-y-6 md:items-end w-full"
+                    @if ($isFreePlanEdit)
+                        x-data="adminPlanAudienceHeader({
+                            planName: @js($planNameInput),
+                            appliesToGender: @js(old('applies_to_gender', $plan->applies_to_gender ?? 'all')),
+                        })"
+                    @endif
+                >
+                    {{-- Row 1: name | gender | sort --}}
+                    <div class="min-w-0">
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2" for="plan-admin-name">{{ __('subscriptions.admin_plan_name_label') }}</label>
+                        <input id="plan-admin-name" type="text" name="name" value="{{ $planNameInput }}" required maxlength="120" autocomplete="off"
+                            class="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-white shadow-sm text-base py-2.5 px-3.5 font-medium placeholder:text-gray-400 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 dark:focus:ring-indigo-400/20" />
+                    </div>
+                    <div class="min-w-0">
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2" for="plan-admin-gender">{{ __('subscriptions.admin_plan_applies_to_gender') }}</label>
+                        <select id="plan-admin-gender" name="applies_to_gender" x-model="appliesToGender"
+                            class="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-white shadow-sm py-2.5 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20">
+                            @foreach (['all' => __('subscriptions.admin_plan_gender_all'), 'male' => __('subscriptions.admin_plan_gender_male'), 'female' => __('subscriptions.admin_plan_gender_female')] as $gk => $glab)
+                                <option value="{{ $gk }}" @selected(old('applies_to_gender', $plan->applies_to_gender ?? 'all') === $gk)>{{ $glab }}</option>
+                            @endforeach
+                        </select>
+                    </div>
+                    <div class="min-w-0">
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2" for="plan-admin-sort">{{ __('subscriptions.admin_plan_sort_order') }}</label>
+                        <input id="plan-admin-sort" type="number" name="sort_order" value="{{ old('sort_order', $plan->sort_order) }}" min="0"
+                            class="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-white shadow-sm py-2.5 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20" />
+                    </div>
+
+                    @if ($isFreePlanEdit)
+                        {{-- Row 2: highlight | duration (days) | spacer --}}
+                        <div class="min-w-0">
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2" for="plan-admin-marketing-badge-free">{{ __('subscriptions.admin_plan_marketing_badge') }}</label>
+                            <select id="plan-admin-marketing-badge-free" name="marketing_badge" class="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-white shadow-sm py-2.5 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20">
+                                <option value="" @selected(old('marketing_badge', $plan->marketing_badge) === null || old('marketing_badge', $plan->marketing_badge) === '')>{{ __('subscriptions.admin_plan_marketing_opt_none') }}</option>
+                                @foreach ($adminMarketingBadgeKeys as $mbKey)
+                                    <option value="{{ $mbKey }}" @selected(old('marketing_badge', $plan->marketing_badge) === $mbKey)>{{ __('subscriptions.admin_plan_marketing_opt_'.$mbKey) }}</option>
+                                @endforeach
+                            </select>
+                        </div>
+                        <div class="min-w-0">
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2" for="plan-admin-duration-days-free">{{ __('subscriptions.admin_plan_duration_free_label') }}</label>
+                            <input id="plan-admin-duration-days-free" type="number" name="duration_days" value="{{ old('duration_days', $plan->duration_days) }}" required min="0"
+                                class="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-white shadow-sm py-2.5" />
+                        </div>
+                        <div class="hidden md:block min-h-[2.75rem]" aria-hidden="true"></div>
+
+                        @include('admin.plans.partials.plan-grace-carry-selects', ['showPlanDiscount' => false])
+                    @else
+                        {{-- Row 2: highlight | duration | plan price --}}
+                        <div class="min-w-0">
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2" for="plan-admin-marketing-badge">{{ __('subscriptions.admin_plan_marketing_badge') }}</label>
+                            <select id="plan-admin-marketing-badge" name="marketing_badge" class="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-white shadow-sm py-2.5 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20">
+                                <option value="" @selected(old('marketing_badge', $plan->marketing_badge) === null || old('marketing_badge', $plan->marketing_badge) === '')>{{ __('subscriptions.admin_plan_marketing_opt_none') }}</option>
+                                @foreach ($adminMarketingBadgeKeys as $mbKey)
+                                    <option value="{{ $mbKey }}" @selected(old('marketing_badge', $plan->marketing_badge) === $mbKey)>{{ __('subscriptions.admin_plan_marketing_opt_'.$mbKey) }}</option>
+                                @endforeach
+                            </select>
+                        </div>
+                        <div class="min-w-0">
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2" for="plan-admin-duration-preset">{{ __('subscriptions.admin_plan_duration') }}</label>
+                            <select id="plan-admin-duration-preset" name="duration_preset" x-model="durationPreset" class="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-white shadow-sm py-2.5 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20">
+                                @foreach ($adminPlanDurationPresetKeys as $dk)
+                                    <option value="{{ $dk }}" @selected(old('duration_preset', $durationPresetInitial ?? 'monthly') === $dk)>{{ __('subscriptions.billing_'.$dk) }}</option>
+                                @endforeach
+                            </select>
+                        </div>
+                        <div class="min-w-0">
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2" for="plan-admin-plan-price">{{ __('subscriptions.admin_plan_plan_price') }}</label>
+                            <input id="plan-admin-plan-price" type="number" name="list_price_rupees" value="{{ old('list_price_rupees', $plan->list_price_rupees !== null ? (int) $plan->list_price_rupees : '') }}" min="0" step="1" inputmode="numeric" placeholder="—"
+                                class="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-white shadow-sm py-2.5 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20" />
+                        </div>
+
+                        @include('admin.plans.partials.plan-grace-carry-selects', ['showPlanDiscount' => true])
+                    @endif
+
+                    <div class="col-span-full border-t border-gray-200 dark:border-gray-700 my-1"></div>
+
+                    {{-- Row 4: checkboxes on one aligned row/grid --}}
+                    <div class="col-span-full grid grid-cols-1 md:grid-cols-3 gap-x-5 gap-y-3 items-center pt-1">
+                        @if ($isFreePlanEdit)
+                            <div class="hidden md:block" aria-hidden="true"></div>
+                        @else
+                            <div class="min-w-0">
+                                <input type="hidden" name="gst_inclusive" value="0" />
+                                <label class="inline-flex items-center gap-2.5 cursor-pointer text-sm text-gray-800 dark:text-gray-100">
+                                    <input type="checkbox" name="gst_inclusive" value="1" class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500" @checked((string) old('gst_inclusive', ($plan->gst_inclusive ?? true) ? '1' : '0') === '1') />
+                                    <span>{{ __('subscriptions.admin_plan_gst_inclusive') }}</span>
+                                </label>
+                            </div>
+                        @endif
+                        <div class="min-w-0">
+                            <input type="hidden" name="chat_initiate_new_chats_only" value="0" />
+                            <label class="inline-flex items-center gap-2.5 cursor-pointer text-sm text-gray-800 dark:text-gray-100">
+                                <input type="checkbox" name="chat_initiate_new_chats_only" value="1" class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500" @checked($initiateChecked) />
+                                <span>{{ __('subscriptions.admin_plan_chat_initiate_only') }}</span>
+                            </label>
+                        </div>
+                        <div class="min-w-0">
+                            <input type="hidden" name="is_active" value="0" />
+                            <label class="inline-flex items-center gap-2.5 cursor-pointer text-sm text-gray-800 dark:text-gray-100">
+                                <input type="checkbox" name="is_active" value="1" class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500" @checked((string) old('is_active', $plan->is_active ? '1' : '0') === '1') />
+                                <span>{{ __('subscriptions.admin_plan_active_label') }}</span>
+                            </label>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
 
-        <div class="flex flex-wrap gap-6">
-            <label class="inline-flex items-center gap-2 cursor-pointer">
-                <input type="hidden" name="is_active" value="0" />
-                <input type="checkbox" name="is_active" value="1" class="rounded border-gray-300" @checked((string) old('is_active', $plan->is_active ? '1' : '0') === '1') />
-                <span class="text-sm text-gray-700 dark:text-gray-300">Active (visible for new subscriptions)</span>
-            </label>
-            <label class="inline-flex items-center gap-2 cursor-pointer">
-                <input type="hidden" name="highlight" value="0" />
-                <input type="checkbox" name="highlight" value="1" class="rounded border-gray-300" @checked((string) old('highlight', $plan->highlight ? '1' : '0') === '1') />
-                <span class="text-sm text-gray-700 dark:text-gray-300">{{ __('subscriptions.highlight_plan') }}</span>
-            </label>
-        </div>
+        @unless ($isFreePlanEdit)
+            <div x-show="showPaidBilling" class="rounded-lg border border-indigo-200 dark:border-indigo-900 bg-indigo-50/50 dark:bg-indigo-950/20 p-4 space-y-4">
+                <div class="flex flex-wrap items-start justify-between gap-2">
+                    <div>
+                        <h2 class="text-lg font-semibold text-gray-800 dark:text-gray-100">{{ __('subscriptions.admin_billing_rows_title') }}</h2>
+                        <p class="text-xs text-gray-600 dark:text-gray-400 mt-1">{{ __('subscriptions.admin_billing_rows_intro') }}</p>
+                    </div>
+                    <button type="button" @click="addRow()" class="shrink-0 rounded-lg border border-indigo-300 bg-white px-3 py-1.5 text-sm font-semibold text-indigo-700 shadow-sm hover:bg-indigo-50 dark:border-indigo-700 dark:bg-indigo-950 dark:text-indigo-200">
+                        {{ __('subscriptions.admin_add_billing_period') }}
+                    </button>
+                </div>
 
-        @if ($isEdit && strtolower((string) $plan->slug) !== 'free')
-            <div class="rounded-lg border border-indigo-200 dark:border-indigo-900 bg-indigo-50/50 dark:bg-indigo-950/20 p-4 space-y-4">
-                <h2 class="text-lg font-semibold text-gray-800 dark:text-gray-100">{{ __('subscriptions.admin_billing_periods_title') }}</h2>
-                <p class="text-xs text-gray-600 dark:text-gray-400">{{ __('subscriptions.admin_billing_periods_intro') }}</p>
-                <div class="space-y-4">
-                    @foreach (\App\Models\PlanTerm::billingKeys() as $billingKey)
-                        @php
-                            $termRow = $plan->terms->firstWhere('billing_key', $billingKey);
-                        @endphp
+                <div class="space-y-3">
+                    <template x-for="(row, i) in rows" :key="i">
                         <div class="rounded-md border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 p-3 grid grid-cols-1 sm:grid-cols-12 gap-3 items-end">
                             <div class="sm:col-span-3">
-                                <span class="block text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-1">{{ __('subscriptions.billing_'.$billingKey) }}</span>
-                                <span class="text-xs text-gray-500 dark:text-gray-500">{{ __('subscriptions.duration_days', ['count' => \App\Models\PlanTerm::durationDaysFor($billingKey)]) }}</span>
+                                <label class="block text-xs font-medium text-gray-600 dark:text-gray-300 mb-1">{{ __('subscriptions.admin_billing_period_column') }}</label>
+                                <select class="w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white text-sm" x-model="row.billing_key"
+                                    :name="'term_rows[' + i + '][billing_key]'">
+                                    @foreach ($presetKeys as $pk)
+                                        <option value="{{ $pk }}" x-bind:disabled="!availableKeysForRow(i).includes('{{ $pk }}') && row.billing_key !== '{{ $pk }}'">{{ __('subscriptions.billing_'.$pk) }}</option>
+                                    @endforeach
+                                </select>
+                                <p class="text-[10px] text-gray-500 mt-0.5" x-show="row.billing_key === 'lifetime'">{{ __('subscriptions.admin_billing_lifetime_note') }}</p>
                             </div>
                             <div class="sm:col-span-3">
                                 <label class="block text-xs font-medium text-gray-600 dark:text-gray-300 mb-1">Price (₹)</label>
-                                <input type="number" name="terms[{{ $billingKey }}][price]" min="0" step="0.01" required
-                                    value="{{ old('terms.'.$billingKey.'.price', $termRow?->price ?? '0') }}"
-                                    class="w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white text-sm" />
+                                <input type="number" min="0" step="0.01" required class="w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white text-sm"
+                                    :name="'term_rows[' + i + '][price]'" x-model.number="row.price" />
                             </div>
                             <div class="sm:col-span-3">
                                 <label class="block text-xs font-medium text-gray-600 dark:text-gray-300 mb-1">Discount %</label>
-                                <input type="number" name="terms[{{ $billingKey }}][discount_percent]" min="0" max="100" step="1"
-                                    value="{{ old('terms.'.$billingKey.'.discount_percent', $termRow?->discount_percent ?? '') }}"
-                                    placeholder="—"
-                                    class="w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white text-sm" />
+                                <input type="number" min="0" max="100" step="1" placeholder="—" class="w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white text-sm"
+                                    :name="'term_rows[' + i + '][discount_percent]'" x-model="row.discount_percent" />
                             </div>
-                            <div class="sm:col-span-3 flex items-center">
-                                <input type="hidden" name="terms[{{ $billingKey }}][is_visible]" value="0" />
+                            <div class="sm:col-span-2 flex items-center gap-2">
+                                <input type="hidden" :name="'term_rows[' + i + '][is_visible]'" value="0" />
                                 <label class="inline-flex items-center gap-2 cursor-pointer text-sm text-gray-700 dark:text-gray-300">
-                                    <input type="checkbox" name="terms[{{ $billingKey }}][is_visible]" value="1" class="rounded border-gray-300"
-                                        @checked((string) old('terms.'.$billingKey.'.is_visible', $termRow?->is_visible ? '1' : '0') === '1') />
+                                    <input type="checkbox" value="1" class="rounded border-gray-300" :name="'term_rows[' + i + '][is_visible]'" :checked="row.is_visible" @change="row.is_visible = $event.target.checked" />
                                     <span>{{ __('subscriptions.admin_billing_show_public') }}</span>
                                 </label>
                             </div>
+                            <div class="sm:col-span-1 flex justify-end">
+                                <button type="button" @click="removeRow(i)" class="text-xs font-semibold text-red-600 hover:underline" x-show="rows.length > 1">{{ __('subscriptions.admin_remove_billing_period') }}</button>
+                            </div>
                         </div>
-                    @endforeach
+                    </template>
+                </div>
+
+                <div class="pt-2 border-t border-indigo-200/60 dark:border-indigo-900/60 space-y-2">
+                    <label class="block text-sm font-medium text-gray-800 dark:text-gray-200">{{ __('subscriptions.admin_default_catalog_billing') }}</label>
+                    <p class="text-xs text-gray-600 dark:text-gray-400">{{ __('subscriptions.admin_default_catalog_billing_help') }}</p>
+                    <div class="flex flex-col gap-2">
+                        <label class="inline-flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
+                            <input type="radio" name="default_billing_key" value="" class="rounded-full border-gray-300 text-indigo-600" x-model="defaultBilling" />
+                            <span>{{ __('subscriptions.admin_default_catalog_billing_auto') }}</span>
+                        </label>
+                        <template x-for="row in rows" :key="row.billing_key">
+                            <label class="inline-flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
+                                <input type="radio" name="default_billing_key" class="rounded-full border-gray-300 text-indigo-600" :value="row.billing_key" x-model="defaultBilling" />
+                                <span x-text="billingLabel(row.billing_key)"></span>
+                            </label>
+                        </template>
+                    </div>
                 </div>
             </div>
-        @elseif (! $isEdit)
-            <p class="text-sm text-gray-600 dark:text-gray-400">{{ __('subscriptions.admin_billing_after_create') }}</p>
-        @endif
+        @endunless
 
         <div class="rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 p-4 space-y-6">
             <div>
@@ -116,16 +274,29 @@
                 </p>
             </div>
 
+            @php
+                $simpleBooleanToggleKeys = \App\Support\PlanQuotaPolicyKeys::adminSimpleBooleanToggleKeys();
+            @endphp
             @foreach ($quotaPolicyKeys as $featureKey)
+                @if (in_array($featureKey, $simpleBooleanToggleKeys, true))
+                    @continue
+                @endif
                 @include('admin.plans.partials.quota-policy-quota-card', ['featureKey' => $featureKey, 'quotaPoliciesForm' => $quotaPoliciesForm])
             @endforeach
+
+            @include('admin.plans.partials.quota-policy-boolean-pair-row', ['quotaPoliciesForm' => $quotaPoliciesForm])
         </div>
 
-        <div class="flex gap-3 pt-2 border-t border-gray-200 dark:border-gray-600">
+        <div class="flex flex-wrap items-center gap-3 pt-2 border-t border-gray-200 dark:border-gray-600">
             <button type="submit" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded-lg">
                 {{ __('admin_commerce.plan_save_changes') }}
             </button>
             <a href="{{ route('admin.plans.index') }}" class="px-4 py-2 text-gray-600 dark:text-gray-400 text-sm">Cancel</a>
+            @if ($isEdit)
+                <a href="{{ route('admin.plans.create') }}" class="inline-flex items-center px-4 py-2 rounded-lg text-sm font-medium border border-indigo-600 text-indigo-700 hover:bg-indigo-50 dark:border-indigo-500 dark:text-indigo-300 dark:hover:bg-indigo-950/40">
+                    {{ __('subscriptions.create_plan') }}
+                </a>
+            @endif
         </div>
     </form>
 </div>

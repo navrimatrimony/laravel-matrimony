@@ -84,11 +84,11 @@
 
     {{-- Step 2: Status details (optional) + Children — heading line then inputs; Yes/No as on-off toggle --}}
     <div class="marital-details-block" data-lv-scroll-target="marital-details" x-show="statusKey === 'divorced' || statusKey === 'annulled' || statusKey === 'separated' || statusKey === 'widowed'" x-cloak style="display: none;">
-        {{-- Heading line: Status details + Children (required) — visible section heading --}}
+        {{-- Heading line: Status details + Children — visible section heading --}}
         <div class="flex flex-nowrap items-center gap-2 sm:gap-3 min-w-0 overflow-hidden pb-2 mb-2 border-b border-gray-200 dark:border-gray-600">
             <h3 class="text-sm sm:text-base font-semibold text-gray-800 dark:text-gray-100 truncate min-w-0">{{ __('Status details (optional)') }}</h3>
             <span class="shrink-0 text-gray-400 dark:text-gray-500" aria-hidden="true">|</span>
-            <h3 class="text-sm sm:text-base font-semibold text-gray-800 dark:text-gray-100 truncate min-w-0">{{ __('Children') }} <span class="text-red-500">*</span></h3>
+            <h3 class="text-sm sm:text-base font-semibold text-gray-800 dark:text-gray-100 truncate min-w-0">{{ __('Children') }}</h3>
         </div>
         <div class="flex flex-col w-full min-w-0 gap-2" data-lv-section="marital-details">
         <div class="flex flex-nowrap w-full min-w-0 gap-1.5 sm:gap-2 items-end overflow-hidden">
@@ -131,7 +131,7 @@
             </div>
             {{-- Children Yes/No: heading + toggle. Yes selected = green. --}}
             <div class="shrink-0 min-w-0 flex flex-col max-w-full">
-                <label class="block text-xs text-gray-600 dark:text-gray-400 mb-0.5 truncate">{{ __('Children') }} <span class="text-red-500">*</span></label>
+                <label class="block text-xs text-gray-600 dark:text-gray-400 mb-0.5 truncate">{{ __('Children') }}</label>
                 {{-- Static name so the field is always submitted (Alpine :name is not a real HTML name until Alpine runs). --}}
                 <input type="hidden" name="{{ $isSnapshot ? 'snapshot[core][has_children]' : 'has_children' }}" :value="hasChildrenValue">
                 <div class="inline-flex max-w-full rounded-full border-2 border-gray-300 dark:border-gray-600 bg-gray-100 dark:bg-gray-700 p-0.5 h-[42px] items-stretch" role="group">
@@ -179,7 +179,7 @@
                             </select>
                         </div>
                         <div class="min-w-0 w-14 sm:w-16 shrink-0">
-                            <label class="block text-xs text-gray-600 dark:text-gray-400 mb-0.5 truncate">{{ __('wizard.age') }} <span class="text-red-500">*</span></label>
+                            <label class="block text-xs text-gray-600 dark:text-gray-400 mb-0.5 truncate">{{ __('wizard.age') }}</label>
                             <input type="number" :name="(namePrefix ? 'snapshot[children][' : 'children[') + index + '][age]'" min="1" max="120" class="w-full max-w-full min-w-0 rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-1 sm:px-2 py-2 text-sm h-[42px]" x-model.number="child.age" placeholder="{{ __('wizard.age') }}">
                         </div>
                         <div class="min-w-0 w-[9.5rem] sm:w-[12rem] shrink-0">

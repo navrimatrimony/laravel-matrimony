@@ -3,10 +3,13 @@ import './bootstrap';
 import Alpine from 'alpinejs';
 import './plans-catalog';
 import { planQuotaPolicyCard } from './plan-quota-policy-card';
+import { adminPlanAudienceHeader, adminPlanBillingForm } from './admin-plan-billing-form';
 import { initLaravelValidationUi } from './laravel-validation-ui';
 
 window.Alpine = Alpine;
 window.planQuotaPolicyCard = planQuotaPolicyCard;
+window.adminPlanBillingForm = adminPlanBillingForm;
+window.adminPlanAudienceHeader = adminPlanAudienceHeader;
 
 Alpine.start();
 

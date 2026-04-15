@@ -92,4 +92,9 @@ return [
     'photo_report_invalid_photo' => 'तो फोटो या प्रोफाइलशी जोडलेला नाही.',
     'photo_report_already_open' => 'या फोटोसाठी तुमची उघड नोंद आधीच आहे.',
     'photo_report_submitted' => 'फोटो नोंद पाठवली. धन्यवाद.',
+    'income_min_annual' => 'किमान वार्षिक उत्पन्न (₹, एकत्रित)',
+    'income_max_annual' => 'कमाल वार्षिक उत्पन्न (₹, एकत्रित)',
+    'premium_filters_title' => 'प्रीमियम फिल्टर',
+    'premium_filters_hint' => 'जात, शिक्षण आणि उत्पन्न फिल्टर अपग्रेड प्लॅनवर उपलब्ध.',
+    'premium_filters_cta' => 'प्लॅन पहा',
 ];

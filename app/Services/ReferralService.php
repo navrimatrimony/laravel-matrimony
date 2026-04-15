@@ -53,12 +53,16 @@ class ReferralService
             return;
         }
 
-        if (strtolower((string) $plan->slug) === 'free') {
+        if (Plan::isFreeCatalogSlug((string) $plan->slug)) {
             return;
         }
 
         $slug = strtolower((string) $plan->slug);
-        $bonusDays = (int) (config('referral.rewards_by_plan_slug', [])[$slug] ?? 0);
+        $map = (array) config('referral.rewards_by_plan_slug', []);
+        $bonusDays = (int) ($map[$slug] ?? 0);
+        if ($bonusDays <= 0 && preg_match('/^(silver|gold)_/', $slug, $m)) {
+            $bonusDays = (int) ($map[$m[1]] ?? 0);
+        }
         if ($bonusDays <= 0) {
             return;
         }

@@ -247,7 +247,10 @@ class ChatController extends Controller
             ]);
         }
 
-        if (! $this->featureUsage->canUse((int) $user->id, FeatureUsageService::FEATURE_CHAT_SEND_LIMIT)) {
+        $uid = (int) $user->id;
+        $canSend = $this->featureUsage->canUse($uid, FeatureUsageService::FEATURE_CHAT_SEND_LIMIT)
+            || $this->featureUsage->canSendChatInExistingConversation($uid, (int) $conversation->id, (int) $me->id);
+        if (! $canSend) {
             return $this->chatSendLimitExceededResponse($request);
         }
 
@@ -260,7 +263,7 @@ class ChatController extends Controller
             return back()->with('error', $msg)->withErrors($errors);
         }
 
-        $this->featureUsage->consume((int) $user->id, FeatureUsageService::FEATURE_CHAT_SEND_LIMIT);
+        $this->featureUsage->consumeChatSendAfterMessage($uid, (int) $conversation->id, (int) $me->id);
 
         return back();
     }
@@ -306,7 +309,10 @@ class ChatController extends Controller
             return back()->with('error', __('subscriptions.feature_locked'));
         }
 
-        if (! $this->featureUsage->canUse((int) $user->id, FeatureUsageService::FEATURE_CHAT_SEND_LIMIT)) {
+        $uid = (int) $user->id;
+        $canSend = $this->featureUsage->canUse($uid, FeatureUsageService::FEATURE_CHAT_SEND_LIMIT)
+            || $this->featureUsage->canSendChatInExistingConversation($uid, (int) $conversation->id, (int) $me->id);
+        if (! $canSend) {
             return $this->chatSendLimitExceededResponse($request);
         }
 
@@ -319,7 +325,7 @@ class ChatController extends Controller
             return back()->with('error', $msg)->withErrors($errors);
         }
 
-        $this->featureUsage->consume((int) $user->id, FeatureUsageService::FEATURE_CHAT_SEND_LIMIT);
+        $this->featureUsage->consumeChatSendAfterMessage($uid, (int) $conversation->id, (int) $me->id);
 
         return back();
     }

@@ -30,7 +30,6 @@ class ContactAccessService
     public const CASE_NO_ONE = 'no_one';
 
     public function __construct(
-        protected EntitlementService $entitlements,
         protected UserFeatureUsageService $usage,
         protected FeatureUsageService $featureUsage,
         protected ContactRevealPolicyService $contactRevealPolicy,
@@ -166,7 +165,7 @@ class ContactAccessService
         $cvUsed = $this->usage->getUsage($uid, UserFeatureUsageKeys::CONTACT_VIEW_LIMIT);
         $cvRemaining = $this->remaining($cvLimit, $cvUsed);
 
-        $medLimit = $this->parseNumericLimit($uid, PlanFeatureKeys::MEDIATOR_REQUESTS_PER_MONTH);
+        $medLimit = $this->featureUsage->getEffectiveMediatorMonthlyLimit($viewer);
         $medUsed = $this->usage->getUsage($uid, UserFeatureUsageKeys::MEDIATOR_REQUEST);
         $medRemaining = $this->remaining($medLimit, $medUsed);
 
@@ -397,7 +396,7 @@ class ContactAccessService
             return;
         }
 
-        $medLimit = $this->parseNumericLimit($uid, PlanFeatureKeys::MEDIATOR_REQUESTS_PER_MONTH);
+        $medLimit = $this->featureUsage->getEffectiveMediatorMonthlyLimit($viewer);
         $contactRevealOk = $this->planGrantsContactRevealFromSubscription($viewer);
         $hasMediatorFeature = $medLimit !== 0;
 
@@ -424,7 +423,7 @@ class ContactAccessService
             return;
         }
 
-        $limit = $this->parseNumericLimit((int) $viewer->id, PlanFeatureKeys::MEDIATOR_REQUESTS_PER_MONTH);
+        $limit = $this->featureUsage->getEffectiveMediatorMonthlyLimit($viewer);
         if ($limit !== -1) {
             $this->usage->incrementUsage((int) $viewer->id, UserFeatureUsageKeys::MEDIATOR_REQUEST);
         }
@@ -509,17 +508,6 @@ class ContactAccessService
     /**
      * -1 = unlimited, 0 = none, n = cap.
      */
-    private function parseNumericLimit(int $userId, string $featureKey): int
-    {
-        $raw = $this->entitlements->getValue($userId, $featureKey, '0');
-        $s = strtolower(trim((string) $raw));
-        if ($s === '' || $s === '-1' || $s === 'unlimited') {
-            return -1;
-        }
-
-        return max(0, (int) $raw);
-    }
-
     /**
      * @return int|null null means unlimited
      */

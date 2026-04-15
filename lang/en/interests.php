@@ -49,4 +49,6 @@ return [
     'period_weekly' => 'week',
     'period_monthly' => 'month',
     'period_quarterly' => 'quarter',
+    'period_half_yearly' => 'half-year',
+    'period_yearly' => 'year',
 ];

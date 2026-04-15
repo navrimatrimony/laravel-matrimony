@@ -18,7 +18,7 @@
         </div>
         <div class="bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600 p-5">
             <p class="text-sm font-medium text-gray-500 uppercase tracking-wider">Showcase</p>
-            <p class="text-2xl font-bold text-sky-600 mt-1">{{ $demoProfiles }}</p>
+            <p class="text-2xl font-bold text-sky-600 mt-1">{{ $showcaseProfilesCount }}</p>
         </div>
     </div>
     <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">

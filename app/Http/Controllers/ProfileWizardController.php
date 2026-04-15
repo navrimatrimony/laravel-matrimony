@@ -1945,7 +1945,7 @@ class ProfileWizardController extends Controller
             'marriages.*.spouse_death_year' => ['nullable', 'integer', 'min:1901', 'max:'.(int) date('Y')],
         ];
         if ($statusKey && in_array($statusKey, $statusesRequiringChildren, true)) {
-            $rules['has_children'] = ['required', 'in:0,1'];
+            $rules['has_children'] = ['nullable', 'in:0,1'];
         }
         $request->validate($rules);
 
@@ -1954,10 +1954,10 @@ class ProfileWizardController extends Controller
             $hasChildrenYes = $hasChildren === '1' || $hasChildren === 1 || $hasChildren === true;
             if ($hasChildrenYes) {
                 $request->validate([
-                    'children' => ['required', 'array', 'min:1'],
-                    'children.*.gender' => ['required', 'in:male,female,other,prefer_not_say'],
-                    'children.*.age' => ['required', 'integer', 'min:1', 'max:120'],
-                    'children.*.child_living_with_id' => ['required'],
+                    'children' => ['nullable', 'array'],
+                    'children.*.gender' => ['nullable', 'in:male,female,other,prefer_not_say'],
+                    'children.*.age' => ['nullable', 'integer', 'min:1', 'max:120'],
+                    'children.*.child_living_with_id' => ['nullable'],
                 ]);
             }
         }
@@ -2013,12 +2013,21 @@ class ProfileWizardController extends Controller
         $children = [];
         if ($hasChildrenBool && $statusKey && in_array($statusKey, $statusesRequiringChildren, true)) {
             foreach ($request->input('children', []) as $i => $row) {
+                $gender = trim((string) ($row['gender'] ?? ''));
+                $ageRaw = $row['age'] ?? null;
+                $livingWithIdRaw = $row['child_living_with_id'] ?? null;
+                $hasAnyChildValue = $gender !== ''
+                    || ($ageRaw !== null && $ageRaw !== '')
+                    || ($livingWithIdRaw !== null && $livingWithIdRaw !== '');
+                if (! $hasAnyChildValue) {
+                    continue;
+                }
                 $children[] = [
                     'id' => ! empty($row['id']) ? (int) $row['id'] : null,
                     'child_name' => null,
-                    'gender' => trim((string) ($row['gender'] ?? '')),
-                    'age' => isset($row['age']) && $row['age'] !== '' ? (int) $row['age'] : null,
-                    'child_living_with_id' => ! empty($row['child_living_with_id']) ? (int) $row['child_living_with_id'] : null,
+                    'gender' => $gender !== '' ? $gender : null,
+                    'age' => $ageRaw !== null && $ageRaw !== '' ? (int) $ageRaw : null,
+                    'child_living_with_id' => ! empty($livingWithIdRaw) ? (int) $livingWithIdRaw : null,
                     'sort_order' => $i,
                 ];
             }

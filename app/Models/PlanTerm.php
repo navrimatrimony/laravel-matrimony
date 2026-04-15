@@ -16,6 +16,10 @@ class PlanTerm extends Model
 
     public const BILLING_YEARLY = 'yearly';
 
+    public const BILLING_FIVE_YEARLY = 'five_yearly';
+
+    public const BILLING_LIFETIME = 'lifetime';
+
     protected $fillable = [
         'plan_id',
         'billing_key',
@@ -59,14 +63,29 @@ class PlanTerm extends Model
         });
     }
 
-    public static function billingKeys(): array
+    /**
+     * All catalog billing keys (coupons, validation). Legacy alias kept as {@see billingKeys()}.
+     *
+     * @return list<string>
+     */
+    public static function presetBillingKeys(): array
     {
         return [
             self::BILLING_MONTHLY,
             self::BILLING_QUARTERLY,
             self::BILLING_HALF_YEARLY,
             self::BILLING_YEARLY,
+            self::BILLING_FIVE_YEARLY,
+            self::BILLING_LIFETIME,
         ];
+    }
+
+    /**
+     * @return list<string>
+     */
+    public static function billingKeys(): array
+    {
+        return self::presetBillingKeys();
     }
 
     public static function durationDaysFor(string $billingKey): int
@@ -76,6 +95,8 @@ class PlanTerm extends Model
             self::BILLING_QUARTERLY => 90,
             self::BILLING_HALF_YEARLY => 180,
             self::BILLING_YEARLY => 365,
+            self::BILLING_FIVE_YEARLY => 1825,
+            self::BILLING_LIFETIME => 0,
             default => 30,
         };
     }
@@ -87,8 +108,18 @@ class PlanTerm extends Model
             self::BILLING_QUARTERLY => 20,
             self::BILLING_HALF_YEARLY => 30,
             self::BILLING_YEARLY => 40,
-            default => 50,
+            self::BILLING_FIVE_YEARLY => 50,
+            self::BILLING_LIFETIME => 60,
+            default => 100,
         };
+    }
+
+    /**
+     * Human label key under {@code subscriptions.billing_*}.
+     */
+    public static function billingLabelKey(string $billingKey): string
+    {
+        return 'subscriptions.billing_'.$billingKey;
     }
 
     /**
@@ -97,7 +128,7 @@ class PlanTerm extends Model
      */
     public static function fillMissingTermsForPlan(Plan $plan): void
     {
-        if (strtolower((string) $plan->slug) === 'free') {
+        if (Plan::isFreeCatalogSlug((string) $plan->slug)) {
             return;
         }
 
@@ -134,11 +165,11 @@ class PlanTerm extends Model
     }
 
     /**
-     * Create or update the four billing rows for a paid plan from base monthly list price.
+     * Seed / backfill: four classic billing rows from base monthly list price.
      */
     public static function syncDefaultsForPlan(Plan $plan): void
     {
-        if (strtolower((string) $plan->slug) === 'free') {
+        if (Plan::isFreeCatalogSlug((string) $plan->slug)) {
             static::query()->where('plan_id', $plan->id)->delete();
 
             return;
@@ -166,6 +197,71 @@ class PlanTerm extends Model
         }
 
         PlanPrice::syncFromPlanTerms($plan->fresh('terms'));
+    }
+
+    /**
+     * Replace all {@see PlanTerm} rows for a plan from admin-submitted rows (unique {@code billing_key}).
+     *
+     * @param  list<array{billing_key: string, price: float|int|string, discount_percent?: mixed, is_visible?: bool}>  $rows
+     */
+    public static function syncAdminTermRows(Plan $plan, array $rows): void
+    {
+        if (Plan::isFreeCatalogSlug((string) $plan->slug)) {
+            static::query()->where('plan_id', $plan->id)->delete();
+            PlanPrice::query()->where('plan_id', $plan->id)->delete();
+
+            return;
+        }
+
+        $seen = [];
+        foreach ($rows as $row) {
+            $key = (string) ($row['billing_key'] ?? '');
+            if ($key === '' || isset($seen[$key])) {
+                continue;
+            }
+            $seen[$key] = true;
+        }
+
+        $plan->loadMissing('terms');
+        foreach ($plan->terms as $term) {
+            if (! isset($seen[$term->billing_key])) {
+                $term->delete();
+            }
+        }
+
+        foreach ($rows as $row) {
+            $key = (string) ($row['billing_key'] ?? '');
+            if ($key === '' || ! in_array($key, self::presetBillingKeys(), true)) {
+                continue;
+            }
+
+            $price = (float) ($row['price'] ?? 0);
+            $rawD = $row['discount_percent'] ?? null;
+            $disc = ($rawD === '' || $rawD === null)
+                ? null
+                : max(0, min(100, (int) round((float) $rawD)));
+            $visible = filter_var($row['is_visible'] ?? true, FILTER_VALIDATE_BOOLEAN)
+                || (string) ($row['is_visible'] ?? '') === '1';
+
+            static::query()->updateOrCreate(
+                ['plan_id' => $plan->id, 'billing_key' => $key],
+                [
+                    'duration_days' => self::durationDaysFor($key),
+                    'price' => max(0, $price),
+                    'discount_percent' => $disc,
+                    'is_visible' => $visible,
+                    'sort_order' => self::defaultSortOrder($key),
+                ]
+            );
+        }
+
+        PlanPrice::syncFromPlanTerms($plan->fresh('terms'));
+
+        $keys = static::query()->where('plan_id', $plan->id)->pluck('billing_key')->all();
+        PlanPrice::query()
+            ->where('plan_id', $plan->id)
+            ->whereNotIn('duration_type', $keys)
+            ->delete();
     }
 
     public function plan(): BelongsTo

@@ -66,11 +66,13 @@ class MatrimonyProfileSearchQueryService
             $query->where('religion_id', $request->input('religion_id'));
         }
 
-        if ((! $strict || $inStrict('caste_id')) && $isSearchable('caste') && $request->filled('caste_id')) {
+        $advancedProfileSearch = (bool) $request->attributes->get('advanced_profile_search', false);
+
+        if ($advancedProfileSearch && (! $strict || $inStrict('caste_id')) && $isSearchable('caste') && $request->filled('caste_id')) {
             $query->where('caste_id', $request->input('caste_id'));
         }
 
-        if ((! $strict || $inStrict('sub_caste_id')) && $isSearchable('sub_caste_id') && $request->filled('sub_caste_id')) {
+        if ($advancedProfileSearch && (! $strict || $inStrict('sub_caste_id')) && $isSearchable('sub_caste_id') && $request->filled('sub_caste_id')) {
             $query->where('sub_caste_id', $request->input('sub_caste_id'));
         }
 
@@ -133,12 +135,22 @@ class MatrimonyProfileSearchQueryService
             }
         }
 
-        if ((! $strict || $inStrict('education')) && $isSearchable('education') && $request->filled('education')) {
+        if ($advancedProfileSearch && (! $strict || $inStrict('education')) && $isSearchable('education') && $request->filled('education')) {
             $query->where('highest_education', $request->input('education'));
         }
 
         if ((! $strict || $inStrict('profession_id')) && $isSearchable('profession_id') && $request->filled('profession_id')) {
             $query->where('profession_id', $request->input('profession_id'));
+        }
+
+        if ($advancedProfileSearch && ! $strict && ($request->filled('income_min') || $request->filled('income_max'))) {
+            $query->whereNotNull('income_normalized_annual_amount');
+            if ($request->filled('income_min')) {
+                $query->where('income_normalized_annual_amount', '>=', max(0, (int) $request->input('income_min')));
+            }
+            if ($request->filled('income_max')) {
+                $query->where('income_normalized_annual_amount', '<=', max(0, (int) $request->input('income_max')));
+            }
         }
 
         if ((! $strict || $inStrict('serious_intent_id')) && $isSearchable('serious_intent_id') && $request->filled('serious_intent_id')) {

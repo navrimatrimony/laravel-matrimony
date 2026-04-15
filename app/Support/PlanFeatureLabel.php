@@ -10,6 +10,78 @@ use Illuminate\Support\Str;
  */
 final class PlanFeatureLabel
 {
+    /**
+     * Public catalog (/plans): scale pool limits by billing duration vs shortest option on the card.
+     *
+     * @param  float  $durationMultiplier  e.g. 90/30 = 3 for quarterly vs monthly baseline
+     * @param  string|null  $billingDurationType  {@see PlanPrice::duration_type} or {@see PlanTerm::billing_key}
+     */
+    public static function catalogFormatValue(string $key, string $value, float $durationMultiplier, ?string $billingDurationType = null): string
+    {
+        $v = trim($value);
+        if ($v === '') {
+            return '—';
+        }
+        if ((int) $v === -1 || strcasecmp($v, 'unlimited') === 0) {
+            return __('subscriptions.unlimited');
+        }
+
+        if (self::isTruthyKey($key)) {
+            return self::truthy($v) ? __('subscriptions.yes') : __('subscriptions.no');
+        }
+
+        if ($key === PlanFeatureKeys::INTEREST_VIEW_RESET_PERIOD) {
+            return self::catalogInterestViewResetDisplay($v, $billingDurationType);
+        }
+
+        $mult = max(0.0, $durationMultiplier);
+        if ($mult > 0 && $mult !== 1.0 && self::catalogShouldScaleLimitKey($key)) {
+            $n = (int) $v;
+            if ($n !== 9999 && $n >= 0) {
+                $scaled = (int) max(0, (int) round($n * $mult));
+
+                return self::formatValue($key, (string) $scaled);
+            }
+        }
+
+        return self::formatValue($key, $v);
+    }
+
+    /**
+     * Keys whose numeric cap represents a per-cycle pool that grows with subscription length on the pricing card.
+     */
+    private static function catalogShouldScaleLimitKey(string $key): bool
+    {
+        return in_array($key, [
+            PlanFeatureKeys::CONTACT_VIEW_LIMIT,
+            PlanFeatureKeys::MEDIATOR_REQUESTS_PER_MONTH,
+            PlanFeatureKeys::INTEREST_VIEW_LIMIT,
+            'photo_blur_limit',
+            PlanFeatureKeys::WHO_VIEWED_ME_PREVIEW_LIMIT,
+        ], true);
+    }
+
+    /**
+     * Align marketing copy with selected billing period; weekly reset stays weekly.
+     */
+    private static function catalogInterestViewResetDisplay(string $stored, ?string $billingDurationType): string
+    {
+        $s = strtolower(trim($stored));
+        if ($s === 'weekly') {
+            return __('interests.period_weekly');
+        }
+
+        $t = $billingDurationType !== null ? strtolower(trim($billingDurationType)) : '';
+
+        return match ($t) {
+            'quarterly' => __('interests.period_quarterly'),
+            'half_yearly' => __('interests.period_half_yearly'),
+            'yearly' => __('interests.period_yearly'),
+            'monthly', '' => self::formatValue(PlanFeatureKeys::INTEREST_VIEW_RESET_PERIOD, $stored),
+            default => self::formatValue(PlanFeatureKeys::INTEREST_VIEW_RESET_PERIOD, $stored),
+        };
+    }
+
     public static function label(string $key): string
     {
         return match ($key) {
@@ -27,6 +99,8 @@ final class PlanFeatureLabel
             PlanFeatureKeys::MEDIATOR_REQUESTS_PER_MONTH => __('subscriptions.pricing_feature_mediator'),
             PlanFeatureKeys::PROFILE_BOOST_PER_WEEK => __('subscriptions.pricing_feature_boost'),
             PlanFeatureKeys::PRIORITY_LISTING => __('subscriptions.pricing_feature_priority'),
+            PlanFeatureKeys::ADVANCED_PROFILE_SEARCH => __('subscriptions.pricing_feature_advanced_search'),
+            PlanFeatureKeys::PROFILE_WHATSAPP_DIRECT => __('subscriptions.pricing_feature_whatsapp_direct'),
             default => Str::headline(str_replace('_', ' ', $key)),
         };
     }
@@ -83,6 +157,8 @@ final class PlanFeatureLabel
             PlanFeatureKeys::CHAT_CAN_READ,
             PlanFeatureKeys::PHOTO_FULL_ACCESS,
             PlanFeatureKeys::PRIORITY_LISTING,
+            PlanFeatureKeys::ADVANCED_PROFILE_SEARCH,
+            PlanFeatureKeys::PROFILE_WHATSAPP_DIRECT,
         ], true);
     }
 

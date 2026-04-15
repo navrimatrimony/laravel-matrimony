@@ -21,6 +21,7 @@ use App\Models\Taluka;
 use App\Models\User;
 use App\Services\Admin\AdminSettingService;
 use App\Services\ContactAccessService;
+use App\Services\EntitlementService;
 use App\Services\ExtendedFieldService;
 use App\Services\FeatureUsageService;
 use App\Services\Image\ImageModerationService;
@@ -41,6 +42,7 @@ use App\Services\ProfileShowSnapshotService;
 use App\Services\Showcase\AutoShowcaseEngine;
 use App\Services\Showcase\AutoShowcaseSettings;
 use App\Services\ViewTrackingService;
+use App\Support\PlanFeatureKeys;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
@@ -1340,6 +1342,22 @@ class MatrimonyProfileController extends Controller
             || (trim((string) ($contactAccess['paid_contact_phone'] ?? '')) !== '')
             || (trim((string) ($contactAccess['paid_contact_email'] ?? '')) !== '');
 
+        $canProfileWhatsappDirect = ! $isOwnProfile
+            && app(EntitlementService::class)->hasAccess((int) $user->id, PlanFeatureKeys::PROFILE_WHATSAPP_DIRECT);
+        $whatsappWaMeHref = null;
+        if ($canProfileWhatsappDirect && $canViewContact) {
+            $phoneRaw = trim((string) ($contactAccess['paid_contact_phone'] ?? ''));
+            if ($phoneRaw === '') {
+                $phoneRaw = trim((string) ($primaryContactPhone ?? ''));
+            }
+            $digits = preg_replace('/\D+/', '', $phoneRaw);
+            if (strlen($digits) === 10) {
+                $whatsappWaMeHref = 'https://wa.me/91'.$digits;
+            } elseif (strlen($digits) === 12 && str_starts_with($digits, '91')) {
+                $whatsappWaMeHref = 'https://wa.me/'.$digits;
+            }
+        }
+
         // Profile show: always show gallery / primary photo (no blur lock for other viewers).
         $showPhotoTo = optional($visibilitySettings)->show_photo_to ?? 'all';
         $photoViewAllowed = true;
@@ -1448,6 +1466,8 @@ class MatrimonyProfileController extends Controller
                 'galleryPhotos' => $galleryPhotos,
                 'photoAlbumPresentation' => $photoAlbumPresentation,
                 'reportablePhotoSummary' => $reportablePhotoSummary,
+                'canProfileWhatsappDirect' => $canProfileWhatsappDirect,
+                'whatsappWaMeHref' => $whatsappWaMeHref,
             ]
         );
     }
@@ -1464,6 +1484,12 @@ class MatrimonyProfileController extends Controller
     public function index(Request $request)
     {
         $viewerOwnProfileId = auth()->user()?->matrimonyProfile?->id;
+
+        $request->attributes->set(
+            'advanced_profile_search',
+            auth()->check()
+                && app(EntitlementService::class)->hasAccess((int) auth()->id(), PlanFeatureKeys::ADVANCED_PROFILE_SEARCH)
+        );
 
         $filterQuery = MatrimonyProfileSearchQueryService::newFilteredListingQuery($request, $viewerOwnProfileId);
         $totalCount = (clone $filterQuery)->count();
@@ -1631,7 +1657,9 @@ class MatrimonyProfileController extends Controller
             'maritalStatuses',
             'resolvedMaritalStatusId',
             'sort'
-        ), $locationLookups));
+        ), $locationLookups, [
+            'canAdvancedProfileSearch' => (bool) $request->attributes->get('advanced_profile_search', false),
+        ]));
 
     }
 

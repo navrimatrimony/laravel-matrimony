@@ -1,5 +1,5 @@
 /**
- * Admin plan form: Phase 1 quota policy card (Alpine state + live summary).
+ * Admin plan form: quota policy card (Alpine state + live summary).
  * Factory receives JSON-safe initial state from Blade (@json).
  */
 function boolFromInitial(value) {
@@ -14,7 +14,6 @@ export function planQuotaPolicyCard(initial) {
         refreshType: String(initial.refreshType ?? ''),
         refreshUnlimited: String(initial.refreshUnlimited ?? ''),
         limitVal: initial.limitVal != null ? String(initial.limitVal) : '',
-        graceVal: initial.graceVal != null ? String(initial.graceVal) : '0',
         dailyCapVal: initial.dailyCapVal != null ? String(initial.dailyCapVal) : '',
         packPrice: initial.packPrice != null ? String(initial.packPrice) : '',
         packMsgs: initial.packMsgs != null ? String(initial.packMsgs) : '',
@@ -34,8 +33,6 @@ export function planQuotaPolicyCard(initial) {
                 const lv = String(this.limitVal ?? '').trim();
                 bits.push(`${s.limit}: ${lv === '' ? '0' : lv}`);
             }
-            const g = String(this.graceVal ?? '').trim();
-            bits.push(`${s.grace}: ${g === '' ? '0' : g}%`);
             if (this.perDayLimit) {
                 const d = String(this.dailyCapVal ?? '').trim();
                 bits.push(`${s.perDay}: ${d === '' ? s.dash : d}`);

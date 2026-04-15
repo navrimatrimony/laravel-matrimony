@@ -7,29 +7,33 @@ use App\Models\PlanFeature;
 use Illuminate\Database\Seeder;
 
 /**
- * Example defaults for monetization-related keys (Silver / Gold / Platinum).
- * Idempotent: upserts only listed keys; other plan_features rows are left unchanged.
+ * Optional tweaks for gendered catalog tiers (slugs {@code *_male} / {@code *_female}).
+ * Core limits are owned by {@see SubscriptionPlansSeeder}; this seeder only adjusts listed keys when plans exist.
  */
 class PlanFeatureSeeder extends Seeder
 {
     public function run(): void
     {
         $sets = [
-            'silver' => [
-                'chat_send_limit' => '20',
-                'contact_view_limit' => '5',
-                'chat_can_read' => '0',
-            ],
-            'gold' => [
+            'silver_male' => [
                 'chat_send_limit' => '100',
+                'contact_view_limit' => '10',
+                'chat_can_read' => '1',
+            ],
+            'silver_female' => [
+                'chat_send_limit' => '200',
                 'contact_view_limit' => '20',
                 'chat_can_read' => '1',
             ],
-            'platinum' => [
+            'gold_male' => [
                 'chat_send_limit' => '-1',
                 'contact_view_limit' => '-1',
                 'chat_can_read' => '1',
-                'priority_listing' => '1',
+            ],
+            'gold_female' => [
+                'chat_send_limit' => '-1',
+                'contact_view_limit' => '-1',
+                'chat_can_read' => '1',
             ],
         ];
 

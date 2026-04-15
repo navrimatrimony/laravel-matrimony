@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\MatchBoostSetting;
 use App\Models\MatrimonyProfile;
+use App\Models\Plan;
 use App\Models\User;
 use Illuminate\Support\Facades\Cache;
 
@@ -81,14 +82,14 @@ class MatchBoostService
 
         $plan = $this->subscriptions->getEffectivePlan($userB);
         $slug = strtolower(trim((string) ($plan->slug ?? '')));
-        if ($slug === '' || $slug === 'free') {
+        if ($slug === '' || Plan::isFreeCatalogSlug($slug)) {
             return 0;
         }
 
         $add = (int) $settings->boost_premium_weight;
-        if ($slug === 'gold') {
+        if (str_contains($slug, 'gold')) {
             $add += (int) $settings->boost_gold_extra;
-        } elseif ($slug === 'silver') {
+        } elseif (str_contains($slug, 'silver')) {
             $add += (int) $settings->boost_silver_extra;
         }
 

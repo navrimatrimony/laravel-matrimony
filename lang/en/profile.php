@@ -214,4 +214,5 @@ return [
     'feature_gate_chat_read_locked' => 'Message received — upgrade to read',
     'feature_gate_chat_send_locked' => 'You’ve reached your chat limit for today.',
     'feature_gate_interest_used_today' => 'You have used :used/:limit interests today',
+    'whatsapp_open_chat' => 'Chat on WhatsApp',
 ];

@@ -49,4 +49,6 @@ return [
     'period_weekly' => 'आठवडा',
     'period_monthly' => 'महिना',
     'period_quarterly' => 'त्रैमासिक',
+    'period_half_yearly' => 'सहा महिने',
+    'period_yearly' => 'वर्ष',
 ];

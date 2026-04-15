@@ -92,4 +92,9 @@ return [
     'photo_report_invalid_photo' => 'That photo does not belong to this profile.',
     'photo_report_already_open' => 'You already have an open report for this photo.',
     'photo_report_submitted' => 'Photo report submitted. Thank you.',
+    'income_min_annual' => 'Min annual income (₹, normalized)',
+    'income_max_annual' => 'Max annual income (₹, normalized)',
+    'premium_filters_title' => 'Premium filters',
+    'premium_filters_hint' => 'Caste, education, and income filters are available on upgraded plans.',
+    'premium_filters_cta' => 'View plans',
 ];

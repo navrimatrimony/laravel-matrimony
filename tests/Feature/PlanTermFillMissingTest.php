@@ -55,8 +55,8 @@ class PlanTermFillMissingTest extends TestCase
     public function fill_missing_terms_skips_free_plan(): void
     {
         $plan = Plan::query()->create([
-            'name' => 'Free',
-            'slug' => 'free',
+            'name' => 'Free (Male)',
+            'slug' => 'free_male',
             'price' => 0,
             'discount_percent' => null,
             'duration_days' => 0,

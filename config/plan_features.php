@@ -7,7 +7,19 @@
 return [
     'chat_send_limit' => [
         'type' => 'limit',
-        'label' => 'Chat Send Limit',
+        'label' => 'Initiate new chats (quota)',
+    ],
+    'chat_initiate_new_chats_only' => [
+        'type' => 'boolean',
+        'label' => 'Count quota only on first message per conversation',
+    ],
+    'advanced_profile_search' => [
+        'type' => 'boolean',
+        'label' => 'Advanced profile search (education, income, caste filters)',
+    ],
+    'profile_whatsapp_direct' => [
+        'type' => 'boolean',
+        'label' => 'Direct WhatsApp link on profiles',
     ],
     'chat_image_messages' => [
         'type' => 'boolean',

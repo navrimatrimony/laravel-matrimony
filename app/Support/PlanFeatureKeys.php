@@ -26,7 +26,19 @@ final class PlanFeatureKeys
 
     public const CHAT_SEND_LIMIT = 'chat_send_limit';
 
+    /**
+     * When truthy, {@see PlanFeatureKeys::CHAT_SEND_LIMIT} counts only the first outbound message per conversation;
+     * further messages in the same thread do not consume quota.
+     */
+    public const CHAT_INITIATE_NEW_CHATS_ONLY = 'chat_initiate_new_chats_only';
+
     public const CHAT_CAN_READ = 'chat_can_read';
+
+    /** Education / income / caste-style filters on member search (gated in {@see MatrimonyProfileSearchQueryService}). */
+    public const ADVANCED_PROFILE_SEARCH = 'advanced_profile_search';
+
+    /** Show a direct WhatsApp link on profiles when contact number is available. */
+    public const PROFILE_WHATSAPP_DIRECT = 'profile_whatsapp_direct';
 
     public const WHO_VIEWED_ME_DAYS = 'who_viewed_me_days';
 
@@ -62,7 +74,10 @@ final class PlanFeatureKeys
             self::INTEREST_VIEW_LIMIT,
             self::INTEREST_VIEW_RESET_PERIOD,
             self::CHAT_SEND_LIMIT,
+            self::CHAT_INITIATE_NEW_CHATS_ONLY,
             self::CHAT_CAN_READ,
+            self::ADVANCED_PROFILE_SEARCH,
+            self::PROFILE_WHATSAPP_DIRECT,
             self::WHO_VIEWED_ME_DAYS,
             self::WHO_VIEWED_ME_PREVIEW_LIMIT,
             self::PHOTO_BLUR_LIMIT,

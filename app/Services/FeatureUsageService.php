@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\Message;
 use App\Models\Subscription;
 use App\Models\User;
 use App\Models\UserFeatureUsage;
@@ -534,7 +535,7 @@ class FeatureUsageService
     }
 
     /**
-     * Matches {@see InterestSendLimitService} (entitlement override + daily bucket).
+     * Matches {@see InterestSendLimitService} (plan + carry, optional {@see EntitlementService::getValueOverride} + daily bucket).
      */
     private function stateForInterestSendLimit(User $user): array
     {
@@ -550,8 +551,9 @@ class FeatureUsageService
 
     /**
      * Same effective cap as dashboard / {@see ContactAccessService} when contact reveal is blocked.
+     * Uses {@see SubscriptionService::getFeatureLimit} so {@code meta.carry_quota} applies.
      */
-    private function effectiveMediatorMonthlyLimitForUser(User $user): int
+    public function getEffectiveMediatorMonthlyLimit(User $user): int
     {
         $subs = app(SubscriptionService::class);
         $contactCap = $subs->getFeatureLimit($user, PlanFeatureKeys::CONTACT_VIEW_LIMIT);
@@ -559,7 +561,27 @@ class FeatureUsageService
             return 0;
         }
 
-        return $this->parseNumericLimitFromEntitlement((int) $user->id, PlanFeatureKeys::MEDIATOR_REQUESTS_PER_MONTH);
+        return $subs->getFeatureLimit($user, PlanFeatureKeys::MEDIATOR_REQUESTS_PER_MONTH);
+    }
+
+    /**
+     * Same as {@see getEffectiveMediatorMonthlyLimit} for gates; for usage strips use
+     * {@see getEffectiveMediatorMonthlyLimitForUsageDisplay} so staff see plan-accurate caps.
+     */
+    public function getEffectiveMediatorMonthlyLimitForUsageDisplay(User $user): int
+    {
+        $subs = app(SubscriptionService::class);
+        $contactCap = $subs->getQuotaLimitForUsageDisplay($user, PlanFeatureKeys::CONTACT_VIEW_LIMIT);
+        if ($contactCap === 0) {
+            return 0;
+        }
+
+        return $subs->getQuotaLimitForUsageDisplay($user, PlanFeatureKeys::MEDIATOR_REQUESTS_PER_MONTH);
+    }
+
+    private function effectiveMediatorMonthlyLimitForUser(User $user): int
+    {
+        return $this->getEffectiveMediatorMonthlyLimit($user);
     }
 
     private function stateForMediatorRequestsMonthly(User $user): array
@@ -724,6 +746,92 @@ class FeatureUsageService
     }
 
     /**
+     * After a chat message is persisted: apply {@see PlanFeatureKeys::CHAT_SEND_LIMIT} usage.
+     * When {@see PlanFeatureKeys::CHAT_INITIATE_NEW_CHATS_ONLY} is on, only the first outbound message
+     * in a conversation increments the daily counter (continuing threads stay unlimited).
+     */
+    public function consumeChatSendAfterMessage(int $userId, int $conversationId, int $senderProfileId): bool
+    {
+        $user = User::query()->find($userId);
+        if (! $user) {
+            return false;
+        }
+
+        if ($this->isAdminBypass($user)) {
+            return true;
+        }
+
+        $normalized = PlanFeatureKeys::CHAT_SEND_LIMIT;
+        $state = $this->getFeatureState($user, self::FEATURE_CHAT_SEND_LIMIT);
+
+        $countAfter = Message::query()
+            ->where('conversation_id', $conversationId)
+            ->where('sender_profile_id', $senderProfileId)
+            ->count();
+        $priorBeforeSend = max(0, $countAfter - 1);
+        $continuingThread = $this->chatInitiateNewChatsOnlyEnabledForUser($user) && $priorBeforeSend >= 1;
+
+        if ($continuingThread) {
+            return true;
+        }
+
+        if (! $state['allowed']) {
+            $ppa = $this->payPerActionQuotePaiseIfEligible($normalized, $state);
+            if ($ppa === null) {
+                return false;
+            }
+
+            return DB::transaction(function () use ($user, $userId, $ppa, $conversationId, $senderProfileId) {
+                if (! app(UserWalletService::class)->debit((int) $user->id, $ppa, 'ppa:'.$normalized)) {
+                    return false;
+                }
+                $this->consumeChatSendLimit($userId, $conversationId, $senderProfileId);
+
+                return true;
+            });
+        }
+
+        if ($state['unlimited']) {
+            return true;
+        }
+
+        return DB::transaction(function () use ($userId, $conversationId, $senderProfileId) {
+            $this->consumeChatSendLimit($userId, $conversationId, $senderProfileId);
+
+            return true;
+        });
+    }
+
+    /**
+     * When initiate-only mode is on and the viewer already has outbound messages in this thread,
+     * they may send even if the daily "new chat" quota is exhausted.
+     */
+    public function canSendChatInExistingConversation(int $userId, int $conversationId, int $senderProfileId): bool
+    {
+        $user = User::query()->find($userId);
+        if (! $user || $this->isAdminBypass($user)) {
+            return true;
+        }
+        if (! $this->chatInitiateNewChatsOnlyEnabledForUser($user)) {
+            return false;
+        }
+
+        return Message::query()
+            ->where('conversation_id', $conversationId)
+            ->where('sender_profile_id', $senderProfileId)
+            ->exists();
+    }
+
+    private function chatInitiateNewChatsOnlyEnabledForUser(User $user): bool
+    {
+        $plan = app(SubscriptionService::class)->getEffectivePlan($user);
+        $plan->loadMissing('features');
+        $raw = strtolower(trim((string) ($plan->getFeatureValue(PlanFeatureKeys::CHAT_INITIATE_NEW_CHATS_ONLY) ?? '0')));
+
+        return in_array($raw, ['1', 'true', 'yes', 'on'], true);
+    }
+
+    /**
      * Consume usage. Returns whether the action is allowed (no increment when unlimited / no-op gates).
      */
     public function consume(int $userId, string $featureKey): bool
@@ -752,7 +860,7 @@ class FeatureUsageService
                 }
 
                 match ($normalized) {
-                    PlanFeatureKeys::CHAT_SEND_LIMIT => $this->consumeChatSendLimit($userId),
+                    PlanFeatureKeys::CHAT_SEND_LIMIT => $this->consumeChatSendLimit($userId, null, null),
                     PlanFeatureKeys::CONTACT_VIEW_LIMIT => $this->consumeContactViewLimit($userId),
                     self::FEATURE_DAILY_PROFILE_VIEW_LIMIT => $this->consumeDailyProfileViewLimit($userId),
                     PlanFeatureKeys::INTEREST_SEND_LIMIT => $this->consumeInterestSendLimit($userId),
@@ -774,7 +882,7 @@ class FeatureUsageService
 
         return DB::transaction(function () use ($userId, $normalized) {
             match ($normalized) {
-                PlanFeatureKeys::CHAT_SEND_LIMIT => $this->consumeChatSendLimit($userId),
+                PlanFeatureKeys::CHAT_SEND_LIMIT => $this->consumeChatSendLimit($userId, null, null),
                 PlanFeatureKeys::CONTACT_VIEW_LIMIT => $this->consumeContactViewLimit($userId),
                 self::FEATURE_DAILY_PROFILE_VIEW_LIMIT => $this->consumeDailyProfileViewLimit($userId),
                 PlanFeatureKeys::INTEREST_SEND_LIMIT => $this->consumeInterestSendLimit($userId),
@@ -929,11 +1037,23 @@ class FeatureUsageService
         return app(EntitlementService::class)->hasFeature($userId, PlanFeatureKeys::CHAT_CAN_READ);
     }
 
-    private function consumeChatSendLimit(int $userId): void
+    private function consumeChatSendLimit(int $userId, ?int $conversationId = null, ?int $senderProfileId = null): void
     {
         $user = User::query()->find($userId);
         if (! $user) {
             return;
+        }
+
+        if ($this->chatInitiateNewChatsOnlyEnabledForUser($user)
+            && $conversationId !== null
+            && $senderProfileId !== null) {
+            $count = Message::query()
+                ->where('conversation_id', $conversationId)
+                ->where('sender_profile_id', $senderProfileId)
+                ->count();
+            if ($count > 1) {
+                return;
+            }
         }
 
         app(UserFeatureUsageService::class)->incrementUsage(
@@ -1090,6 +1210,8 @@ class FeatureUsageService
 
     /**
      * Member dashboard / layout: used vs plan limit per quota (display-only; gates use {@see canUse} / domain services).
+     * Limits are resolved with {@see SubscriptionService::getQuotaLimitForUsageDisplay} so staff accounts
+     * see the same plan row as on /plans (not {@see SubscriptionService::getFeatureLimit} unlimited).
      *
      * @return array{bypass: bool, rows: list<array{key: string, label: string, period: string, used: int, limit: int|null, remaining: int|null, locked: bool, is_unlimited: bool}>}|null
      */
@@ -1110,16 +1232,20 @@ class FeatureUsageService
         $usageSvc = app(UserFeatureUsageService::class);
         $interestSvc = app(InterestSendLimitService::class);
 
-        $contact = $this->getContactViewUsageSnapshot($user);
-        $contactLimit = $contact['is_unlimited'] ? -1 : (int) $contact['limit'];
+        $contactLimitDisplay = $subs->getQuotaLimitForUsageDisplay($user, PlanFeatureKeys::CONTACT_VIEW_LIMIT);
+        $contactUsed = $usageSvc->getUsage(
+            (int) $user->id,
+            UserFeatureUsageKeys::CONTACT_VIEW_LIMIT,
+            UserFeatureUsage::PERIOD_MONTHLY,
+        );
 
         $rows = [
             $this->dashboardUsageRow(
                 'contact_reveals',
                 __('dashboard.usage_row_contact_reveals'),
                 'monthly',
-                (int) $contact['used'],
-                $contactLimit,
+                $contactUsed,
+                $contactLimitDisplay,
             ),
             $this->dashboardUsageRow(
                 'chat_sends',
@@ -1130,7 +1256,7 @@ class FeatureUsageService
                     self::FEATURE_CHAT_SEND_LIMIT,
                     UserFeatureUsage::PERIOD_DAILY,
                 ),
-                $subs->getFeatureLimit($user, SubscriptionService::FEATURE_CHAT_SEND_LIMIT),
+                $subs->getQuotaLimitForUsageDisplay($user, SubscriptionService::FEATURE_CHAT_SEND_LIMIT),
             ),
             $this->dashboardUsageRow(
                 'profile_opens',
@@ -1141,7 +1267,7 @@ class FeatureUsageService
                     self::FEATURE_DAILY_PROFILE_VIEW_LIMIT,
                     UserFeatureUsage::PERIOD_DAILY,
                 ),
-                $subs->getFeatureLimit($user, SubscriptionService::FEATURE_DAILY_PROFILE_VIEW_LIMIT),
+                $subs->getQuotaLimitForUsageDisplay($user, SubscriptionService::FEATURE_DAILY_PROFILE_VIEW_LIMIT),
             ),
             $this->dashboardUsageRow(
                 'interest_sends',
@@ -1152,7 +1278,7 @@ class FeatureUsageService
                     UserFeatureUsageKeys::INTEREST_SEND_LIMIT,
                     UserFeatureUsage::PERIOD_DAILY,
                 ),
-                $interestSvc->effectiveDailyLimit($user),
+                $interestSvc->effectiveDailyLimitForUsageDisplay($user),
             ),
             $this->dashboardUsageRow(
                 'mediator_requests',
@@ -1163,7 +1289,7 @@ class FeatureUsageService
                     UserFeatureUsageKeys::MEDIATOR_REQUEST,
                     UserFeatureUsage::PERIOD_MONTHLY,
                 ),
-                $this->effectiveMediatorMonthlyLimitForUser($user),
+                $this->getEffectiveMediatorMonthlyLimitForUsageDisplay($user),
             ),
         ];
 
@@ -1196,19 +1322,5 @@ class FeatureUsageService
             'locked' => $locked,
             'is_unlimited' => $unlimited,
         ];
-    }
-
-    /**
-     * Same parsing as {@see ContactAccessService::parseNumericLimit} for mediator monthly cap.
-     */
-    private function parseNumericLimitFromEntitlement(int $userId, string $featureKey): int
-    {
-        $raw = app(EntitlementService::class)->getValue($userId, $featureKey, '0');
-        $s = strtolower(trim((string) $raw));
-        if ($s === '' || $s === '-1' || $s === 'unlimited') {
-            return -1;
-        }
-
-        return max(0, (int) $raw);
     }
 }

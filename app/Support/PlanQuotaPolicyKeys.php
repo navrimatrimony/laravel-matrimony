@@ -32,6 +32,8 @@ final class PlanQuotaPolicyKeys
             PlanFeatureKeys::PRIORITY_LISTING,
             PlanFeatureKeys::MEDIATOR_REQUESTS_PER_MONTH,
             PlanFeatureKeys::REFERRAL_BONUS_DAYS,
+            PlanFeatureKeys::ADVANCED_PROFILE_SEARCH,
+            PlanFeatureKeys::PROFILE_WHATSAPP_DIRECT,
         ];
     }
 
@@ -44,9 +46,24 @@ final class PlanQuotaPolicyKeys
         return match ($featureKey) {
             PlanFeatureKeys::CHAT_CAN_READ,
             PlanFeatureKeys::PHOTO_FULL_ACCESS,
-            PlanFeatureKeys::PRIORITY_LISTING => true,
+            PlanFeatureKeys::PRIORITY_LISTING,
+            PlanFeatureKeys::ADVANCED_PROFILE_SEARCH,
+            PlanFeatureKeys::PROFILE_WHATSAPP_DIRECT => true,
             default => false,
         };
+    }
+
+    /**
+     * Plan admin: rendered as one row of plain checkboxes (no refresh/limit/pack UI).
+     *
+     * @return list<string>
+     */
+    public static function adminSimpleBooleanToggleKeys(): array
+    {
+        return [
+            PlanFeatureKeys::ADVANCED_PROFILE_SEARCH,
+            PlanFeatureKeys::PROFILE_WHATSAPP_DIRECT,
+        ];
     }
 
     /**

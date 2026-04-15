@@ -1053,6 +1053,15 @@
                             <p class="text-xl font-bold text-stone-900 dark:text-stone-100">
                                 {{ $contactAccess['paid_contact_phone'] }}
                             </p>
+                            @if (! empty($whatsappWaMeHref ?? null))
+                                <div class="mt-3 flex justify-center">
+                                    <a href="{{ $whatsappWaMeHref }}" target="_blank" rel="noopener noreferrer"
+                                        class="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 dark:focus:ring-offset-gray-900">
+                                        <span aria-hidden="true">💬</span>
+                                        {{ __('profile.whatsapp_open_chat') }}
+                                    </a>
+                                </div>
+                            @endif
                             @else
                             <p class="text-xl font-bold tracking-wider text-stone-900 dark:text-stone-100">
                                 {{ $maskPhoneGateDisplay($contactAccess['paid_contact_phone']) }} <span class="text-stone-400" aria-hidden="true">🔒</span>

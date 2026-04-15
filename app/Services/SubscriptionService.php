@@ -11,6 +11,8 @@ use App\Models\PlanTerm;
 use App\Models\ProfileView;
 use App\Models\Subscription;
 use App\Models\User;
+use App\Models\UserFeatureUsage;
+use App\Support\UserFeatureUsageKeys;
 use App\Support\PlanFeatureKeys;
 use Illuminate\Support\Facades\DB;
 use Symfony\Component\HttpKernel\Exception\HttpException;
@@ -49,6 +51,7 @@ class SubscriptionService
 
         return DB::transaction(function () use ($user, $plan, $planTermId, $planPriceId, $rawCoupon, $couponSvc) {
             $now = now();
+            $carryQuota = $this->resolveCarryQuotaFromPreviousSubscription($user, $now);
 
             // 1) Cancel any current active subscription(s) — rows kept for history (same as model safeguard on create).
             Subscription::deactivateActiveSubscriptionsForUserId((int) $user->id);
@@ -135,6 +138,9 @@ class SubscriptionService
                 $applied = $this->applyCoupon($coupon, $baseAmount);
                 $duration += (int) ($applied['extra_duration_days'] ?? 0);
                 $subscriptionMeta = $applied['subscription_meta'] ?? [];
+            }
+            if ($carryQuota !== []) {
+                $subscriptionMeta['carry_quota'] = $carryQuota;
             }
 
             $endsAt = null;
@@ -244,7 +250,8 @@ class SubscriptionService
         $key = app(FeatureUsageService::class)->normalizeFeatureKey($rawKey);
         $grantDays = max(1, (int) ($payload['grant_days'] ?? 30));
         $until = now()->copy()->addDays($grantDays);
-        $grace = (int) config('subscription.grace_days', 0);
+        $sub->loadMissing('plan');
+        $grace = PlanSubscriptionTerms::gracePeriodDays($sub->plan);
         if ($sub->ends_at !== null) {
             $cap = $sub->ends_at->copy()->addDays($grace);
             if ($until->gt($cap)) {
@@ -290,15 +297,23 @@ class SubscriptionService
      */
     public function expireSubscriptions(): int
     {
-        $grace = (int) config('subscription.grace_days', 0);
+        $now = now();
+        $driver = DB::connection()->getDriverName();
+        $expiryExpr = match ($driver) {
+            'mysql', 'mariadb' => 'DATE_ADD(subscriptions.ends_at, INTERVAL COALESCE(plans.grace_period_days, 0) DAY)',
+            'sqlite' => "datetime(subscriptions.ends_at, '+' || COALESCE(plans.grace_period_days, 0) || ' days')",
+            'pgsql' => "subscriptions.ends_at + (COALESCE(plans.grace_period_days, 0) || ' days')::interval",
+            default => 'subscriptions.ends_at',
+        };
 
         return Subscription::query()
-            ->where('status', Subscription::STATUS_ACTIVE)
-            ->whereNotNull('ends_at')
-            ->where('ends_at', '<', now()->subDays($grace))
+            ->join('plans', 'plans.id', '=', 'subscriptions.plan_id')
+            ->where('subscriptions.status', Subscription::STATUS_ACTIVE)
+            ->whereNotNull('subscriptions.ends_at')
+            ->whereRaw($expiryExpr.' <= ?', [$now->toDateTimeString()])
             ->update([
-                'status' => Subscription::STATUS_EXPIRED,
-                'updated_at' => now(),
+                'subscriptions.status' => Subscription::STATUS_EXPIRED,
+                'subscriptions.updated_at' => $now,
             ]);
     }
 
@@ -421,7 +436,7 @@ class SubscriptionService
             }
         }
 
-        return $this->defaultFreePlan();
+        return $this->defaultFreePlan($user);
     }
 
     /**
@@ -455,14 +470,12 @@ class SubscriptionService
     }
 
     /**
+     * Effective plan limit (+ {@code meta.carry_quota}) for gates and member UX.
+     *
      * @return int -1 = unlimited, 0 = blocked
      */
-    public function getFeatureLimit(User $user, string $key): int
+    private function resolveQuotaLimitFromPlanAndCarry(User $user, string $key): int
     {
-        if ($user->isAnyAdmin()) {
-            return -1;
-        }
-
         $plan = $this->getEffectivePlan($user);
         $plan->loadMissing('features');
 
@@ -471,7 +484,37 @@ class SubscriptionService
             return $this->defaultLimitForKey($key);
         }
 
-        return $this->parseLimitInt($raw);
+        $base = $this->parseLimitInt($raw);
+        if ($base < 0) {
+            return -1;
+        }
+        if ($base === 0) {
+            return 0;
+        }
+
+        return $base + $this->carriedQuotaBonus($user, $key);
+    }
+
+    /**
+     * @return int -1 = unlimited, 0 = blocked
+     */
+    public function getFeatureLimit(User $user, string $key): int
+    {
+        if ($user->isAnyAdmin()) {
+            return -1;
+        }
+
+        return $this->resolveQuotaLimitFromPlanAndCarry($user, $key);
+    }
+
+    /**
+     * Same numeric quota as {@see getFeatureLimit} for members, but for staff accounts uses the
+     * subscribed plan (+ carry) instead of unlimited — so usage strips match the catalog / plan card.
+     * Use only for display; gates still use {@see getFeatureLimit} and admin early-exits on asserts.
+     */
+    public function getQuotaLimitForUsageDisplay(User $user, string $key): int
+    {
+        return $this->resolveQuotaLimitFromPlanAndCarry($user, $key);
     }
 
     public function assertHasFeature(User $user, string $feature): void
@@ -574,9 +617,9 @@ class SubscriptionService
             ->count();
     }
 
-    private function defaultFreePlan(): Plan
+    private function defaultFreePlan(?User $user = null): Plan
     {
-        $p = Plan::defaultFree();
+        $p = Plan::defaultFree($user);
         if ($p) {
             return $p->loadMissing('features');
         }
@@ -636,5 +679,96 @@ class SubscriptionService
             PlanFeatureKeys::INTEREST_VIEW_LIMIT => 3,
             default => 0,
         };
+    }
+
+    private function carriedQuotaBonus(User $user, string $key): int
+    {
+        $sub = $this->getActiveSubscription($user);
+        if (! $sub) {
+            return 0;
+        }
+        $meta = $sub->meta;
+        if (! is_array($meta)) {
+            return 0;
+        }
+        $carry = $meta['carry_quota'] ?? null;
+        if (! is_array($carry)) {
+            return 0;
+        }
+        $normalized = app(FeatureUsageService::class)->normalizeFeatureKey($key);
+        $bonus = $carry[$normalized] ?? 0;
+
+        return max(0, (int) $bonus);
+    }
+
+    /**
+     * Snapshot remaining quota from the last subscription when renewal/purchase happens
+     * in grace or carry window after grace.
+     *
+     * @return array<string, int>
+     */
+    private function resolveCarryQuotaFromPreviousSubscription(User $user, \Carbon\CarbonInterface $at): array
+    {
+        $previous = Subscription::query()
+            ->where('user_id', $user->id)
+            ->whereNotNull('ends_at')
+            ->orderByDesc('starts_at')
+            ->with('plan.features')
+            ->first();
+        if (! $previous || ! $previous->plan || ! $this->isWithinGraceOrCarryWindow($previous, $at)) {
+            return [];
+        }
+
+        $usage = app(UserFeatureUsageService::class);
+        $featurePeriods = [
+            PlanFeatureKeys::CHAT_SEND_LIMIT => UserFeatureUsage::PERIOD_DAILY,
+            PlanFeatureKeys::CONTACT_VIEW_LIMIT => UserFeatureUsage::PERIOD_MONTHLY,
+            self::FEATURE_DAILY_PROFILE_VIEW_LIMIT => UserFeatureUsage::PERIOD_DAILY,
+            PlanFeatureKeys::INTEREST_SEND_LIMIT => UserFeatureUsage::PERIOD_DAILY,
+            PlanFeatureKeys::MEDIATOR_REQUESTS_PER_MONTH => UserFeatureUsage::PERIOD_MONTHLY,
+        ];
+
+        $carry = [];
+        foreach ($featurePeriods as $featureKey => $period) {
+            $raw = $previous->plan->featureValue($featureKey);
+            if ($raw === null || $raw === '') {
+                continue;
+            }
+            $limit = $this->parseLimitInt($raw);
+            if ($limit <= 0) {
+                continue;
+            }
+            $usageKey = $featureKey === PlanFeatureKeys::MEDIATOR_REQUESTS_PER_MONTH
+                ? UserFeatureUsageKeys::MEDIATOR_REQUEST
+                : $featureKey;
+            $used = $usage->getUsage((int) $user->id, $usageKey, $period, $at);
+            $remaining = max(0, $limit - $used);
+            if ($remaining > 0) {
+                $carry[$featureKey] = $remaining;
+            }
+        }
+
+        return $carry;
+    }
+
+    private function isWithinGraceOrCarryWindow(Subscription $subscription, \Carbon\CarbonInterface $at): bool
+    {
+        if ($subscription->ends_at === null || ! $subscription->plan) {
+            return false;
+        }
+
+        $graceDays = PlanSubscriptionTerms::gracePeriodDays($subscription->plan);
+        $graceEndsAt = $subscription->ends_at->copy()->addDays($graceDays);
+        if ($at->lessThanOrEqualTo($graceEndsAt)) {
+            return true;
+        }
+
+        $carryWindowDays = PlanSubscriptionTerms::leftoverQuotaCarryWindowDays($subscription->plan);
+        if ($carryWindowDays === null || $carryWindowDays <= 0) {
+            return false;
+        }
+        $carryDeadline = $graceEndsAt->copy()->addDays($carryWindowDays);
+
+        return $at->lessThanOrEqualTo($carryDeadline);
     }
 }

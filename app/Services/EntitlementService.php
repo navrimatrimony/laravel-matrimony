@@ -25,7 +25,7 @@ class EntitlementService
             return;
         }
 
-        $grace = (int) config('subscription.grace_days', 0);
+        $grace = PlanSubscriptionTerms::gracePeriodDays($plan);
         $validUntil = null;
         if ($subscription->ends_at !== null) {
             $validUntil = $subscription->ends_at->copy()->addDays($grace);
@@ -104,6 +104,26 @@ class EntitlementService
     }
 
     /**
+     * Non-null when a valid entitlement row has an explicit {@see UserEntitlement::value_override}
+     * (coupon/admin). When null, numeric quotas should use {@see SubscriptionService::getFeatureLimit}
+     * so plan limits and {@code meta.carry_quota} stay in sync.
+     */
+    public function getValueOverride(int $userId, string $key): ?string
+    {
+        $ent = $this->findValidEntitlement($userId, $key);
+        if ($ent === null) {
+            return null;
+        }
+
+        $override = $ent->value_override ?? null;
+        if (is_string($override) && $override !== '') {
+            return $override;
+        }
+
+        return null;
+    }
+
+    /**
      * True when {@see getValue} resolves to a “truthy” feature flag (e.g. 1, yes, non-zero limits).
      */
     public function hasFeature(int $userId, string $key): bool
@@ -121,24 +141,14 @@ class EntitlementService
      */
     public function revokeExpired(): void
     {
-        $grace = (int) config('subscription.grace_days', 0);
-
         $query = UserEntitlement::query()
             ->whereNull('revoked_at')
             ->whereNotNull('valid_until')
             ->where('valid_until', '<', now());
 
-        if ($grace > 0) {
-            $query->whereNotExists(function ($sub) use ($grace) {
-                $sub->select(DB::raw(1))
-                    ->from('subscriptions')
-                    ->whereColumn('subscriptions.user_id', 'user_entitlements.user_id')
-                    ->where('subscriptions.status', Subscription::STATUS_ACTIVE)
-                    ->whereNotNull('subscriptions.ends_at')
-                    ->where('subscriptions.ends_at', '<=', now())
-                    ->where('subscriptions.ends_at', '>', now()->subDays($grace));
-            });
-        }
+        $query->whereNotExists(function ($sub) {
+            $this->applyPlanGraceActiveSubscriptionExistsQuery($sub);
+        });
 
         $query->update([
             'revoked_at' => now(),
@@ -150,28 +160,38 @@ class EntitlementService
      */
     private function validEntitlementsQuery(int $userId, string $key)
     {
-        $grace = (int) config('subscription.grace_days', 0);
-
         return UserEntitlement::query()
             ->where('user_id', $userId)
             ->where('entitlement_key', $key)
             ->whereNull('revoked_at')
-            ->where(function ($q) use ($grace) {
+            ->where(function ($q) {
                 $q->whereNull('valid_until')
                     ->orWhere('valid_until', '>', now());
-
-                if ($grace > 0) {
-                    $q->orWhereExists(function ($sub) use ($grace) {
-                        $sub->select(DB::raw(1))
-                            ->from('subscriptions')
-                            ->whereColumn('subscriptions.user_id', 'user_entitlements.user_id')
-                            ->where('subscriptions.status', Subscription::STATUS_ACTIVE)
-                            ->whereNotNull('subscriptions.ends_at')
-                            ->where('subscriptions.ends_at', '<=', now())
-                            ->where('subscriptions.ends_at', '>', now()->subDays($grace));
-                    });
-                }
+                $q->orWhereExists(function ($sub) {
+                    $this->applyPlanGraceActiveSubscriptionExistsQuery($sub);
+                });
             });
+    }
+
+    private function applyPlanGraceActiveSubscriptionExistsQuery($sub): void
+    {
+        $now = now();
+        $driver = DB::connection()->getDriverName();
+        $graceExpr = match ($driver) {
+            'mysql', 'mariadb' => 'DATE_ADD(subscriptions.ends_at, INTERVAL COALESCE(p.grace_period_days, 0) DAY)',
+            'sqlite' => "datetime(subscriptions.ends_at, '+' || COALESCE(p.grace_period_days, 0) || ' days')",
+            'pgsql' => "subscriptions.ends_at + (COALESCE(p.grace_period_days, 0) || ' days')::interval",
+            default => 'subscriptions.ends_at',
+        };
+
+        $sub->select(DB::raw(1))
+            ->from('subscriptions')
+            ->join('plans as p', 'p.id', '=', 'subscriptions.plan_id')
+            ->whereColumn('subscriptions.user_id', 'user_entitlements.user_id')
+            ->where('subscriptions.status', Subscription::STATUS_ACTIVE)
+            ->whereNotNull('subscriptions.ends_at')
+            ->where('subscriptions.ends_at', '<=', $now)
+            ->whereRaw($graceExpr.' > ?', [$now->toDateTimeString()]);
     }
 
     private function findValidEntitlement(int $userId, string $key): ?UserEntitlement

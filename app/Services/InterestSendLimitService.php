@@ -14,8 +14,9 @@ use Symfony\Component\HttpKernel\Exception\HttpException;
 /**
  * Interest engine (SSOT): daily **send** quota + plan **incoming view** reveal slots per reset window.
  *
- * Send: {@see EntitlementService::getValue}(..., {@see PlanFeatureKeys::INTEREST_SEND_LIMIT})
- * vs {@see UserFeatureUsageService} ({@see UserFeatureUsageKeys::INTEREST_SEND_LIMIT}, {@see UserFeatureUsage::PERIOD_DAILY}).
+ * Send limit: {@see SubscriptionService::getFeatureLimit}(..., {@see PlanFeatureKeys::INTEREST_SEND_LIMIT})
+ * (includes {@code meta.carry_quota}) or {@see EntitlementService::getValueOverride} when set;
+ * usage {@see UserFeatureUsageService} ({@see UserFeatureUsageKeys::INTEREST_SEND_LIMIT}, {@see UserFeatureUsage::PERIOD_DAILY}).
  *
  * Incoming view: {@see PlanFeatureKeys::INTEREST_VIEW_LIMIT} + {@see PlanFeatureKeys::INTEREST_VIEW_RESET_PERIOD}.
  * First N pending interests in the current window (by {@see Interest::scopeReceivedInboxOrder}) get full name/photo/profile;
@@ -90,16 +91,33 @@ class InterestSendLimitService
     }
 
     /**
+     * Like {@see effectiveDailyLimit} but uses {@see SubscriptionService::getQuotaLimitForUsageDisplay}
+     * so staff accounts see the same numbers as the plan card on usage strips.
+     */
+    public function effectiveDailyLimitForUsageDisplay(User $user): int
+    {
+        if ($this->featureUsage->shouldBypassUsageLimits($user)) {
+            return -1;
+        }
+
+        $uid = (int) $user->id;
+        $override = $this->entitlements->getValueOverride($uid, PlanFeatureKeys::INTEREST_SEND_LIMIT);
+        if ($override !== null) {
+            return $this->parseLimitString($override);
+        }
+
+        return $this->subscriptions->getQuotaLimitForUsageDisplay($user, PlanFeatureKeys::INTEREST_SEND_LIMIT);
+    }
+
+    /**
      * @return int 0 = blocked, &gt;0 = max sends per calendar day (app tz), -1 = unlimited
      */
     private function resolveLimit(User $user): int
     {
         $uid = (int) $user->id;
-
-        if ($this->entitlements->hasAccess($uid, PlanFeatureKeys::INTEREST_SEND_LIMIT)) {
-            $raw = $this->entitlements->getValue($uid, PlanFeatureKeys::INTEREST_SEND_LIMIT, '5');
-
-            return $this->parseLimitString((string) $raw);
+        $override = $this->entitlements->getValueOverride($uid, PlanFeatureKeys::INTEREST_SEND_LIMIT);
+        if ($override !== null) {
+            return $this->parseLimitString($override);
         }
 
         return $this->subscriptions->getFeatureLimit($user, PlanFeatureKeys::INTEREST_SEND_LIMIT);

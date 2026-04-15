@@ -39,9 +39,12 @@
             </thead>
             <tbody class="divide-y divide-gray-100 dark:divide-gray-700">
                 @foreach ($plans as $plan)
+                    @php
+                        $displayName = preg_replace('/\s*\((male|female)\)\s*$/i', '', (string) $plan->name) ?? (string) $plan->name;
+                    @endphp
                     <tr>
                         <td class="py-3 pr-4 font-medium text-gray-900 dark:text-gray-100">
-                            {{ $plan->name }}
+                            {{ $displayName }}
                             @if ($plan->highlight)
                                 <span class="ml-2 text-xs font-semibold text-amber-600 dark:text-amber-400">★</span>
                             @endif
@@ -74,7 +77,7 @@
                         </td>
                         <td class="py-3 pr-4 whitespace-nowrap">
                             <a href="{{ route('admin.plans.edit', $plan) }}" class="text-indigo-600 hover:text-indigo-800 dark:text-indigo-400 mr-3">Edit</a>
-                            @if (strtolower((string) $plan->slug) !== 'free')
+                            @if (! \App\Models\Plan::isFreeCatalogSlug((string) $plan->slug))
                                 <form method="POST" action="{{ route('admin.plans.destroy', $plan) }}" class="inline" onsubmit="return confirm(@json(__('admin_commerce.plan_confirm_delete')));">
                                     @csrf
                                     @method('DELETE')
@@ -86,6 +89,15 @@
                 @endforeach
             </tbody>
         </table>
+    </div>
+
+    <div class="mt-8 flex flex-wrap items-center justify-between gap-4 pt-6 border-t border-gray-200 dark:border-gray-600">
+        <p class="text-sm text-gray-600 dark:text-gray-400 max-w-xl">
+            {{ __('subscriptions.admin_plans_index_footer_hint') }}
+        </p>
+        <a href="{{ route('admin.plans.create') }}" class="inline-flex items-center px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded-lg shrink-0">
+            {{ __('subscriptions.create_plan') }}
+        </a>
     </div>
 </div>
 @endsection

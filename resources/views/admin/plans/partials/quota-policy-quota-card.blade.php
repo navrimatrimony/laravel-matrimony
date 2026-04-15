@@ -5,7 +5,6 @@
     $refresh = PlanQuotaPolicy::normalizeRefreshType((string) ($p['refresh_type'] ?? PlanQuotaPolicy::REFRESH_MONTHLY_30D_IST));
     $limitVal = $p['limit_value'];
     $cap = $p['daily_sub_cap'];
-    $grace = (int) ($p['grace_percent_of_plan'] ?? 10);
     $purchasable = ($p['overuse_mode'] ?? PlanQuotaPolicy::OVERUSE_BLOCK) === PlanQuotaPolicy::OVERUSE_PACK;
     $packRupees = isset($p['pack_price_paise']) && $p['pack_price_paise'] !== null
         ? number_format((int) $p['pack_price_paise'] / 100, 2, '.', '')
@@ -28,7 +27,6 @@
         'refresh' => __('subscriptions.chat_quota_phase1_sum_refresh'),
         'limit' => __('subscriptions.chat_quota_phase1_sum_limit'),
         'limitUnlimited' => __('subscriptions.chat_quota_phase1_sum_limit_unlimited'),
-        'grace' => __('subscriptions.chat_quota_phase1_sum_grace'),
         'perDay' => __('subscriptions.chat_quota_phase1_sum_per_day'),
         'dash' => __('subscriptions.chat_quota_phase1_sum_dash'),
         'topup' => __('subscriptions.chat_quota_phase1_sum_topup'),
@@ -42,7 +40,6 @@
         'refreshType' => $refresh,
         'refreshUnlimited' => PlanQuotaPolicy::REFRESH_UNLIMITED,
         'limitVal' => $limitVal !== null && $limitVal !== '' ? (string) $limitVal : '',
-        'graceVal' => (string) $grace,
         'dailyCapVal' => $cap !== null && $cap !== '' ? (string) $cap : '',
         'packPrice' => (string) $packRupees,
         'packMsgs' => $packCount !== null && $packCount !== '' ? (string) $packCount : '',
@@ -75,7 +72,7 @@
             {{ __('subscriptions.chat_quota_phase1_purchasable_if_exhausted') }}
         </label>
     </div>
-    <div class="grid grid-cols-2 sm:grid-cols-3 gap-x-2 gap-y-2 text-sm items-end" :class="perDayLimit ? 'md:grid-cols-4' : 'md:grid-cols-3'">
+    <div class="grid grid-cols-2 sm:grid-cols-3 gap-x-2 gap-y-2 text-sm items-end" :class="perDayLimit ? 'md:grid-cols-3' : 'md:grid-cols-2'">
         <div class="min-w-0 md:col-span-1 sm:col-span-1 col-span-2">
             <label class="block text-[10px] font-medium uppercase tracking-wide text-gray-600 dark:text-gray-400 mb-0.5 truncate" title="{{ __('subscriptions.chat_quota_phase1_refresh') }}">{{ __('subscriptions.chat_quota_phase1_col_refresh') }}</label>
             <select name="quota_policies[{{ $featureKey }}][refresh_type]" x-model="refreshType" class="w-full max-w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white text-sm py-1.5" title="{{ __('subscriptions.chat_quota_phase1_refresh') }}">
@@ -105,13 +102,6 @@
                 title="{{ __('subscriptions.chat_quota_phase1_daily_sub_cap') }}"
                 :disabled="! perDayLimit"
                 class="w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white text-sm py-1.5 disabled:opacity-50" />
-        </div>
-        <div class="min-w-0">
-            <label class="block text-[10px] font-medium uppercase tracking-wide text-gray-600 dark:text-gray-400 mb-0.5 truncate" title="{{ __('subscriptions.chat_quota_phase1_grace_percent') }}">{{ __('subscriptions.chat_quota_phase1_col_grace') }}</label>
-            <input type="number" name="quota_policies[{{ $featureKey }}][grace_percent_of_plan]" min="0" max="100" step="1" required
-                x-model="graceVal"
-                title="{{ __('subscriptions.chat_quota_phase1_grace_percent') }}"
-                class="w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white text-sm py-1.5" />
         </div>
     </div>
     <div x-show="purchasableIfExhausted" class="border-t border-amber-200/80 dark:border-amber-800/60 pt-2 mt-1">

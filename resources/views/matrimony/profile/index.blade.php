@@ -77,24 +77,32 @@
                                         @endforeach
                                     </select>
                                 </div>
-                                <div>
-                                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1" for="search-filter-caste">{{ __('search.caste') }}</label>
-                                    <select id="search-filter-caste" name="caste_id" class="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-900 rounded px-3 py-2 text-sm">
-                                        <option value="">{{ __('search.any') }}</option>
-                                        @foreach(($castes ?? collect()) as $c)
-                                            <option value="{{ $c->id }}" {{ (string) request('caste_id') === (string) $c->id ? 'selected' : '' }}>{{ $c->display_label }}</option>
-                                        @endforeach
-                                    </select>
-                                </div>
-                                <div>
-                                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1" for="search-filter-sub-caste">{{ __('search.sub_caste') }}</label>
-                                    <select id="search-filter-sub-caste" name="sub_caste_id" class="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-900 rounded px-3 py-2 text-sm">
-                                        <option value="">{{ __('search.any') }}</option>
-                                        @foreach(($subCastes ?? collect()) as $sc)
-                                            <option value="{{ $sc->id }}" {{ (string) request('sub_caste_id') === (string) $sc->id ? 'selected' : '' }}>{{ $sc->display_label }}</option>
-                                        @endforeach
-                                    </select>
-                                </div>
+                                @if (! empty($canAdvancedProfileSearch))
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1" for="search-filter-caste">{{ __('search.caste') }}</label>
+                                        <select id="search-filter-caste" name="caste_id" class="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-900 rounded px-3 py-2 text-sm">
+                                            <option value="">{{ __('search.any') }}</option>
+                                            @foreach(($castes ?? collect()) as $c)
+                                                <option value="{{ $c->id }}" {{ (string) request('caste_id') === (string) $c->id ? 'selected' : '' }}>{{ $c->display_label }}</option>
+                                            @endforeach
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1" for="search-filter-sub-caste">{{ __('search.sub_caste') }}</label>
+                                        <select id="search-filter-sub-caste" name="sub_caste_id" class="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-900 rounded px-3 py-2 text-sm">
+                                            <option value="">{{ __('search.any') }}</option>
+                                            @foreach(($subCastes ?? collect()) as $sc)
+                                                <option value="{{ $sc->id }}" {{ (string) request('sub_caste_id') === (string) $sc->id ? 'selected' : '' }}>{{ $sc->display_label }}</option>
+                                            @endforeach
+                                        </select>
+                                    </div>
+                                @else
+                                    <p class="rounded-md border border-amber-200/80 bg-amber-50/80 px-3 py-2 text-xs text-amber-950 dark:border-amber-900/50 dark:bg-amber-950/25 dark:text-amber-100">
+                                        <span class="font-semibold">{{ __('search.premium_filters_title') }}:</span>
+                                        {{ __('search.premium_filters_hint') }}
+                                        <a href="{{ route('plans.index') }}" class="ml-1 font-semibold text-indigo-700 underline hover:text-indigo-900 dark:text-indigo-300">{{ __('search.premium_filters_cta') }}</a>
+                                    </p>
+                                @endif
                             </section>
 
                             <section class="space-y-3 border-t border-gray-200/70 pt-4 dark:border-gray-700/70">
@@ -167,10 +175,12 @@
                                         @endforeach
                             </select>
                         </div>
-                        <div>
-                                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{{ __('search.education') }}</label>
-                                    <input type="text" name="education" value="{{ request('education') }}" class="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-900 rounded px-3 py-2 text-sm" placeholder="{{ __('search.education_placeholder') }}">
-                                </div>
+                        @if (! empty($canAdvancedProfileSearch))
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{{ __('search.education') }}</label>
+                                        <input type="text" name="education" value="{{ request('education') }}" class="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-900 rounded px-3 py-2 text-sm" placeholder="{{ __('search.education_placeholder') }}">
+                                    </div>
+                                @endif
                             </section>
 
                             <section class="space-y-3 border-t border-gray-200/70 pt-4 dark:border-gray-700/70">
@@ -184,6 +194,18 @@
                                         @endforeach
                                     </select>
                                 </div>
+                                @if (! empty($canAdvancedProfileSearch))
+                                    <div class="grid grid-cols-2 gap-3">
+                                        <div>
+                                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{{ __('search.income_min_annual') }}</label>
+                                            <input type="number" name="income_min" value="{{ request('income_min') }}" min="0" step="1000" class="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-900 rounded px-3 py-2 text-sm" placeholder="0">
+                                        </div>
+                                        <div>
+                                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{{ __('search.income_max_annual') }}</label>
+                                            <input type="number" name="income_max" value="{{ request('income_max') }}" min="0" step="1000" class="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-900 rounded px-3 py-2 text-sm" placeholder="—">
+                                        </div>
+                                    </div>
+                                @endif
                                 <div class="grid grid-cols-2 gap-3">
                                     <div>
                                         <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{{ __('search.height_from_cm') }}</label>
@@ -290,11 +312,11 @@
                                     $r = ($religions ?? collect())->firstWhere('id', (int) request('religion_id'));
                                     $chips[] = ['k' => 'Religion', 'v' => $r ? $r->display_label : ('#' . request('religion_id'))];
                                 }
-                                if (request()->filled('caste_id')) {
+                                if (! empty($canAdvancedProfileSearch) && request()->filled('caste_id')) {
                                     $c = ($castes ?? collect())->firstWhere('id', (int) request('caste_id'));
                                     $chips[] = ['k' => 'Caste', 'v' => $c ? $c->display_label : ('#' . request('caste_id'))];
                                 }
-                                if (request()->filled('sub_caste_id')) {
+                                if (! empty($canAdvancedProfileSearch) && request()->filled('sub_caste_id')) {
                                     $sc = ($subCastes ?? collect())->firstWhere('id', (int) request('sub_caste_id'));
                                     $chips[] = ['k' => 'Sub-caste', 'v' => $sc ? $sc->display_label : ('#' . request('sub_caste_id'))];
                                 }
@@ -328,8 +350,11 @@
                                     $m = ($maritalStatuses ?? collect())->firstWhere('id', (int) $maritalSelectValue);
                                     $chips[] = ['k' => 'Marital', 'v' => $m ? $m->label : ('#' . $maritalSelectValue)];
                                 }
-                                if (request()->filled('education')) {
+                                if (! empty($canAdvancedProfileSearch) && request()->filled('education')) {
                                     $chips[] = ['k' => 'Education', 'v' => (string) request('education')];
+                                }
+                                if (! empty($canAdvancedProfileSearch) && (request()->filled('income_min') || request()->filled('income_max'))) {
+                                    $chips[] = ['k' => 'Income', 'v' => (request('income_min') ?: '—') . '–' . (request('income_max') ?: '—')];
                                 }
                                 if (request()->filled('profession_id')) {
                                     $p = ($professions ?? collect())->firstWhere('id', (int) request('profession_id'));

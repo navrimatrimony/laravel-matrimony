@@ -41,12 +41,28 @@ class PlansController extends Controller
 
         // All active non-free plans (admin-created tiers like "test" must appear). Order by sort_order + id.
         $pricingPlans = $plans
-            ->filter(fn (Plan $p) => strtolower((string) $p->slug) !== 'free')
+            ->filter(fn (Plan $p) => ! Plan::isFreeCatalogSlug((string) $p->slug))
             ->sortBy([
                 ['sort_order', 'asc'],
                 ['id', 'asc'],
             ])
             ->values();
+
+        $user?->loadMissing('matrimonyProfile.gender');
+        $viewerGenderKey = strtolower(trim((string) ($user?->matrimonyProfile?->gender?->key ?? '')));
+        $planMatchesViewerGender = static function (Plan $p) use ($viewerGenderKey): bool {
+            $target = strtolower(trim((string) ($p->applies_to_gender ?? 'all')));
+            if ($target === '' || $target === 'all') {
+                return true;
+            }
+            if ($viewerGenderKey === '' || $viewerGenderKey === 'other') {
+                return true;
+            }
+
+            return $target === $viewerGenderKey;
+        };
+        $plans = $plans->filter($planMatchesViewerGender)->values();
+        $pricingPlans = $pricingPlans->filter($planMatchesViewerGender)->values();
 
         $unreadMessagesCount = 0;
         $profileViewersCount = 0;

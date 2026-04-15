@@ -18,17 +18,31 @@ class Plan extends Model
         'tier',
         'price',
         'discount_percent',
+        'list_price_rupees',
+        'gst_inclusive',
         'duration_days',
+        'duration_quantity',
+        'duration_unit',
+        'default_billing_key',
+        'grace_period_days',
+        'leftover_quota_carry_window_days',
         'is_active',
         'is_visible',
         'sort_order',
         'highlight',
+        'applies_to_gender',
+        'marketing_badge',
     ];
 
     protected $casts = [
         'price' => 'decimal:2',
         'discount_percent' => 'integer',
+        'list_price_rupees' => 'decimal:2',
+        'gst_inclusive' => 'boolean',
         'duration_days' => 'integer',
+        'duration_quantity' => 'integer',
+        'grace_period_days' => 'integer',
+        'leftover_quota_carry_window_days' => 'integer',
         'is_active' => 'boolean',
         'is_visible' => 'boolean',
         'sort_order' => 'integer',
@@ -202,8 +216,49 @@ class Plan extends Model
         return (string) $row->value;
     }
 
-    public static function defaultFree(): ?self
+    /**
+     * True for legacy slug {@code free} or gendered free tiers ({@code free_male}, {@code free_female}).
+     */
+    public static function isFreeCatalogSlug(?string $slug): bool
     {
-        return static::query()->where('slug', 'free')->where('is_active', true)->first();
+        if ($slug === null || $slug === '') {
+            return false;
+        }
+
+        $s = strtolower(trim((string) $slug));
+
+        return $s === 'free' || str_starts_with($s, 'free_');
+    }
+
+    /**
+     * Default free catalog row for entitlements when the member has no paid subscription.
+     * Uses profile gender when available ({@code free_male} / {@code free_female}).
+     */
+    public static function defaultFree(?User $user = null): ?self
+    {
+        $genderKey = '';
+        if ($user !== null) {
+            $user->loadMissing('matrimonyProfile.gender');
+            $genderKey = strtolower(trim((string) ($user->matrimonyProfile?->gender?->key ?? '')));
+        }
+
+        if ($genderKey === 'male') {
+            $hit = static::query()->where('slug', 'free_male')->where('is_active', true)->first();
+            if ($hit) {
+                return $hit;
+            }
+        } elseif ($genderKey === 'female') {
+            $hit = static::query()->where('slug', 'free_female')->where('is_active', true)->first();
+            if ($hit) {
+                return $hit;
+            }
+        }
+
+        return static::query()
+            ->whereIn('slug', ['free', 'free_male', 'free_female'])
+            ->where('is_active', true)
+            ->orderBy('sort_order')
+            ->orderBy('id')
+            ->first();
     }
 }

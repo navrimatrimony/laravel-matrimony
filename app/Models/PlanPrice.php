@@ -73,7 +73,7 @@ class PlanPrice extends Model
      */
     public static function syncFromPlanTerms(Plan $plan): void
     {
-        if (strtolower((string) $plan->slug) === 'free') {
+        if (Plan::isFreeCatalogSlug((string) $plan->slug)) {
             static::query()->where('plan_id', $plan->id)->delete();
 
             return;

@@ -41,6 +41,6 @@ class InterestPriorityService
 
     private function isFreePlan(Plan $plan): bool
     {
-        return $plan->slug === 'free';
+        return Plan::isFreeCatalogSlug((string) $plan->slug);
     }
 }
