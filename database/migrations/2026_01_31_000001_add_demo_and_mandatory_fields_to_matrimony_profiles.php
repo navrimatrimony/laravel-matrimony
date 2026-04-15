@@ -6,7 +6,7 @@ use Illuminate\Support\Facades\Schema;
 
 /*
 |--------------------------------------------------------------------------
-| Add gender, marital_status, is_demo for demo profiles (SSOT mandatory fields)
+| Add gender, marital_status, is_demo for showcase profiles (SSOT mandatory fields)
 |--------------------------------------------------------------------------
 */
 return new class extends Migration

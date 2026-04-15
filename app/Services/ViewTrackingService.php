@@ -16,7 +16,7 @@ use Illuminate\Support\Facades\DB;
 | ViewTrackingService (SSOT Day-9 — Recovery-Day-R4)
 |--------------------------------------------------------------------------
 |
-| Records profile views, triggers demo→real view-back when eligible.
+| Records profile views, triggers showcase→real view-back when eligible.
 | Respects enable, probability, 24h cap, delay min/max, no recursion.
 |
 */
@@ -52,7 +52,7 @@ class ViewTrackingService
     }
 
     /**
-     * When real user views demo profile: maybe trigger view-back (demo views real).
+     * When a real user views a showcase profile: maybe trigger view-back (showcase views real).
      * Respects view_back_enabled, view_back_probability, delay min/max, 24h cap. No recursion.
      */
     public static function maybeTriggerViewBack(MatrimonyProfile $viewer, MatrimonyProfile $viewed): void
@@ -81,10 +81,10 @@ class ViewTrackingService
             return;
         }
 
-        $demoId = $viewed->id;
+        $showcaseId = $viewed->id;
         $realId = $viewer->id;
         $since = now()->subDay();
-        $exists = ProfileView::where('viewer_profile_id', $demoId)
+        $exists = ProfileView::where('viewer_profile_id', $showcaseId)
             ->where('viewed_profile_id', $realId)
             ->where('created_at', '>=', $since)
             ->exists();
@@ -103,7 +103,7 @@ class ViewTrackingService
 
         if ($delayMinutes > 0) {
             // Dispatch delayed job
-            ProcessDelayedViewBack::dispatch($demoId, $realId)
+            ProcessDelayedViewBack::dispatch($showcaseId, $realId)
                 ->delay(now()->addMinutes($delayMinutes));
         } else {
             // Instant view-back (backward compatible)
@@ -114,22 +114,22 @@ class ViewTrackingService
     /**
      * Create view-back immediately (no delay).
      */
-    private static function createViewBackNow(MatrimonyProfile $demoProfile, MatrimonyProfile $realProfile): void
+    private static function createViewBackNow(MatrimonyProfile $showcaseProfile, MatrimonyProfile $realProfile): void
     {
         ProfileView::create([
-            'viewer_profile_id' => $demoProfile->id,
+            'viewer_profile_id' => $showcaseProfile->id,
             'viewed_profile_id' => $realProfile->id,
         ]);
 
-        self::consumeDailyProfileViewUsageForViewer($demoProfile);
+        self::consumeDailyProfileViewUsageForViewer($showcaseProfile);
 
-        self::notifyProfileViewIfEligible($realProfile->user, $demoProfile, true);
+        self::notifyProfileViewIfEligible($realProfile->user, $showcaseProfile, true);
     }
 
     /**
      * After a {@link ProfileView} row is inserted for {@code viewer_profile_id}, increment
      * {@code user_feature_usages} for {@see FeatureUsageService::FEATURE_DAILY_PROFILE_VIEW_LIMIT} (real users only).
-     * Skips demo profiles; quota increments via {@see FeatureUsageService::consume} (respects admin bypass mode).
+     * Skips showcase profiles; quota increments via {@see FeatureUsageService::consume} (respects admin bypass mode).
      */
     public static function consumeDailyProfileViewUsageForViewer(MatrimonyProfile $viewer): void
     {

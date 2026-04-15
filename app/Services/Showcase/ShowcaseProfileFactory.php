@@ -33,7 +33,7 @@ class ShowcaseProfileFactory
         ?int $searcherMatrimonyProfileId = null,
         bool $useAdminBulkFieldPolicy = false
     ): ?int {
-        $email = 'demo-profile-'.Str::random(8).'@system.local';
+        $email = 'showcase-profile-'.Str::random(8).'@system.local';
         $user = User::firstOrCreate(
             ['email' => $email],
             [

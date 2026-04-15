@@ -16,7 +16,7 @@
 
 <div class="bg-white dark:bg-gray-800 shadow rounded-lg p-6">
     <h1 class="text-2xl font-bold text-gray-800 dark:text-gray-100 mb-2">Member search visibility</h1>
-    <p class="text-gray-500 dark:text-gray-400 text-sm mb-6">Showcase demo profiles and opposite-gender-only listing for member search.</p>
+    <p class="text-gray-500 dark:text-gray-400 text-sm mb-6">Showcase profiles and opposite-gender-only listing for member search.</p>
     @if ($errors->any())
         <ul class="text-red-600 text-sm mb-4 space-y-1">
             @foreach ($errors->all() as $e) <li>{{ $e }}</li> @endforeach
@@ -26,22 +26,20 @@
         <p class="font-semibold mb-1">Showcase Profiles in Search Results</p>
         <p>Controls whether showcase profiles appear in user search results. Direct profile views and interest actions are unaffected.</p>
     </div>
-    <form method="POST" action="{{ route('admin.demo-search-settings.update') }}" class="space-y-6">
+    <form method="POST" action="{{ route('admin.showcase-search-settings.update') }}" class="space-y-6">
         @csrf
 
-        {{-- Showcase Search Visibility Toggle --}}
         <div class="p-4 bg-gray-50 dark:bg-gray-700/30 rounded-lg border border-gray-200 dark:border-gray-600">
-            <label class="admin-toggle" id="demoSearchToggle">
-                <input type="checkbox" name="demo_profiles_visible_in_search" value="1" {{ $demoProfilesVisibleInSearch ? 'checked' : '' }} onchange="updateDemoSearchUI()">
+            <label class="admin-toggle" id="showcaseSearchToggle">
+                <input type="checkbox" name="showcase_profiles_visible_in_search" value="1" {{ $showcaseProfilesVisibleInSearch ? 'checked' : '' }} onchange="updateShowcaseSearchUI()">
                 <span class="toggle-track"><span class="toggle-thumb"></span></span>
-                <span class="toggle-label {{ $demoProfilesVisibleInSearch ? 'on' : 'off' }}" id="demoSearchLabel">
-                    {{ $demoProfilesVisibleInSearch ? 'Showcase Profiles VISIBLE in Search' : 'Showcase Profiles HIDDEN from Search' }}
+                <span class="toggle-label {{ $showcaseProfilesVisibleInSearch ? 'on' : 'off' }}" id="showcaseSearchLabel">
+                    {{ $showcaseProfilesVisibleInSearch ? 'Showcase Profiles VISIBLE in Search' : 'Showcase Profiles HIDDEN from Search' }}
                 </span>
             </label>
             <p class="text-xs text-gray-500 dark:text-gray-400 mt-2">When OFF, showcase profiles will not appear in search results but can still be accessed via direct links.</p>
         </div>
 
-        {{-- Opposite gender only (male sees female, female sees male) --}}
         <div class="p-4 bg-gray-50 dark:bg-gray-700/30 rounded-lg border border-gray-200 dark:border-gray-600">
             <label class="admin-toggle" id="oppositeGenderToggle">
                 <input type="checkbox" name="search_opposite_gender_only" value="1" {{ ($searchOppositeGenderOnly ?? false) ? 'checked' : '' }} onchange="updateOppositeGenderUI()">
@@ -51,7 +49,7 @@
                 </span>
             </label>
             <p class="text-xs text-gray-500 dark:text-gray-400 mt-2">
-                When ON, each member sees only the opposite binary gender in <strong>search results</strong> (male → female profiles, female → male). Other genders or missing gender on the viewer profile: no extra filter. Direct profile URLs unchanged.
+                When ON, each member sees only the opposite binary gender in <strong>search results</strong> (male -> female profiles, female -> male). Other genders or missing gender on the viewer profile: no extra filter. Direct profile URLs unchanged.
             </p>
         </div>
 
@@ -64,10 +62,10 @@
 </div>
 
 <script>
-function updateDemoSearchUI() {
-    const checkbox = document.querySelector('#demoSearchToggle input');
-    const label = document.getElementById('demoSearchLabel');
-    
+function updateShowcaseSearchUI() {
+    const checkbox = document.querySelector('#showcaseSearchToggle input');
+    const label = document.getElementById('showcaseSearchLabel');
+
     if (checkbox.checked) {
         label.textContent = 'Showcase Profiles VISIBLE in Search';
         label.classList.remove('off');

@@ -186,7 +186,7 @@ class ProfileWizardController extends Controller
     }
 
     /**
-     * Preserve ?profile_id= when an admin is editing a showcase/demo profile (POST body may not repeat query string).
+     * Preserve ?profile_id= when an admin is editing a showcase profile (POST body may not repeat query string).
      *
      * @return array<string, string>
      */
@@ -372,7 +372,7 @@ class ProfileWizardController extends Controller
             return null;
         }
 
-        // Admin override: allow using the wizard engine for a specific showcase/demo profile (SSOT).
+        // Admin override: allow using the wizard engine for a specific showcase profile (SSOT).
         if ($request && method_exists($user, 'isAnyAdmin') && $user->isAnyAdmin()) {
             $targetId = (int) ($request->input('profile_id') ?? $request->query('profile_id') ?? 0);
             if ($targetId <= 0) {

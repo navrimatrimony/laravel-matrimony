@@ -45,7 +45,7 @@ class DemoProfileController extends Controller
 
         $bulkLifecycle = AutoShowcaseSettings::bulkShowcaseLifecycle();
 
-        return view('admin.demo-profile.bulk-create', [
+        return view('admin.showcase-profile.bulk-create', [
             'createdProfiles' => $createdProfiles,
             'recentShowcase' => $recentShowcase,
             'bulkShowcaseLifecycle' => $bulkLifecycle,
@@ -82,7 +82,7 @@ class DemoProfileController extends Controller
             : 'Profiles are draft — publish from Showcase profiles to make them visible in member search.';
 
         return redirect()
-            ->route('admin.demo-profile.bulk-create')
+            ->route('admin.showcase-profile.bulk-create')
             ->with('success', "Created {$created} showcase profile(s) ({$lifecycle}). {$lifecycleHint}")
             ->with('created_showcase_profile_ids', $createdIds);
     }

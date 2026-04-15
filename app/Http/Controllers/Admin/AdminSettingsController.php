@@ -81,30 +81,32 @@ class AdminSettingsController extends Controller
     }
 
     /**
-     * Demo search visibility (Day-8). Global toggle: show/hide demo profiles in search.
+     * Showcase search visibility (Day-8). Global toggle: show/hide showcase profiles in search.
      */
-    public function demoSearchSettings()
+    public function showcaseSearchSettings()
     {
-        $visible = AdminSetting::getBool('demo_profiles_visible_in_search', true);
+        $visible = AdminSetting::getBool('showcase_profiles_visible_in_search', AdminSetting::getBool('demo_profiles_visible_in_search', true));
         $oppositeGenderOnly = AdminSetting::getBool('search_opposite_gender_only', false);
 
-        return view('admin.demo-search-settings.index', [
-            'demoProfilesVisibleInSearch' => $visible,
+        return view('admin.showcase-search-settings.index', [
+            'showcaseProfilesVisibleInSearch' => $visible,
             'searchOppositeGenderOnly' => $oppositeGenderOnly,
         ]);
     }
 
     /**
-     * Update demo search visibility. Persisted via AdminSetting.
+     * Update showcase search visibility. Persisted via AdminSetting.
      */
-    public function updateDemoSearchSettings(Request $request): \Illuminate\Http\RedirectResponse
+    public function updateShowcaseSearchSettings(Request $request): \Illuminate\Http\RedirectResponse
     {
         $request->validate([
-            'demo_profiles_visible_in_search' => 'nullable|in:0,1',
+            'showcase_profiles_visible_in_search' => 'nullable|in:0,1',
             'search_opposite_gender_only' => 'nullable|in:0,1',
         ]);
 
-        $visible = $request->has('demo_profiles_visible_in_search') ? '1' : '0';
+        $visible = $request->has('showcase_profiles_visible_in_search') ? '1' : '0';
+        AdminSetting::setValue('showcase_profiles_visible_in_search', $visible);
+        // Backward-compatible mirror for older runtime reads.
         AdminSetting::setValue('demo_profiles_visible_in_search', $visible);
 
         $oppositeOnly = $request->has('search_opposite_gender_only') ? '1' : '0';
@@ -112,14 +114,14 @@ class AdminSettingsController extends Controller
 
         AuditLogService::log(
             $request->user(),
-            'update_demo_search_settings',
+            'update_showcase_search_settings',
             'AdminSetting',
             null,
-            "demo_profiles_visible_in_search={$visible}, search_opposite_gender_only={$oppositeOnly}",
+            "showcase_profiles_visible_in_search={$visible}, search_opposite_gender_only={$oppositeOnly}",
             false
         );
 
-        return redirect()->route('admin.demo-search-settings.index')
+        return redirect()->route('admin.showcase-search-settings.index')
             ->with('success', 'Search visibility settings updated.');
     }
 

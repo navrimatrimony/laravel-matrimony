@@ -19,7 +19,7 @@ use Illuminate\Support\Facades\Schema;
 class ProfileShowReadService
 {
     /**
-     * Base query aligned with matrimony profile index search visibility (active, completeness, demo, blocks).
+     * Base query aligned with matrimony profile index search visibility (active, completeness, showcase, blocks).
      */
     public static function browseBaseQuery(User $viewer): Builder
     {
@@ -31,8 +31,8 @@ class ProfileShowReadService
 
         $q->whereRaw(ProfileCompletenessService::sqlSearchVisible('matrimony_profiles'));
 
-        $demoVisible = AdminSetting::getBool('demo_profiles_visible_in_search', true);
-        if (! $demoVisible) {
+        $showcaseVisible = AdminSetting::getBool('showcase_profiles_visible_in_search', AdminSetting::getBool('demo_profiles_visible_in_search', true));
+        if (! $showcaseVisible) {
             $q->where(function ($q) {
                 $q->where('is_demo', false)->orWhereNull('is_demo');
             });

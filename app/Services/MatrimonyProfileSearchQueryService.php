@@ -173,7 +173,7 @@ class MatrimonyProfileSearchQueryService
         if (! $strict) {
             $query->whereRaw(ProfileCompletenessService::sqlSearchVisible('matrimony_profiles'));
 
-            $showcaseVisibleInSearch = \App\Models\AdminSetting::getBool('demo_profiles_visible_in_search', true);
+            $showcaseVisibleInSearch = \App\Models\AdminSetting::getBool('showcase_profiles_visible_in_search', \App\Models\AdminSetting::getBool('demo_profiles_visible_in_search', true));
             if (! $showcaseVisibleInSearch) {
                 $query->where(function ($q) {
                     $q->where('is_demo', false)->orWhereNull('is_demo');
@@ -272,7 +272,7 @@ class MatrimonyProfileSearchQueryService
         self::applyCoreListingScope($query, $excludeViewerProfileId);
         $query->whereRaw(ProfileCompletenessService::sqlSearchVisible('matrimony_profiles'));
 
-        $showcaseVisibleInSearch = \App\Models\AdminSetting::getBool('demo_profiles_visible_in_search', true);
+        $showcaseVisibleInSearch = \App\Models\AdminSetting::getBool('showcase_profiles_visible_in_search', \App\Models\AdminSetting::getBool('demo_profiles_visible_in_search', true));
         if (! $showcaseVisibleInSearch) {
             $query->where(function ($q) {
                 $q->where('is_demo', false)->orWhereNull('is_demo');

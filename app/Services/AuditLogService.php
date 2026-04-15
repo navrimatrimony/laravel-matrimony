@@ -25,7 +25,7 @@ class AuditLogService
      * @param string $entityType Entity type (e.g., 'MatrimonyProfile', 'AbuseReport')
      * @param int|null $entityId Entity ID
      * @param string $reason Mandatory reason for the action
-     * @param bool $isDemo Whether the action is on a demo profile
+     * @param bool $isDemo Whether the action is on a showcase profile
      * @return AdminAuditLog
      */
     public static function log(

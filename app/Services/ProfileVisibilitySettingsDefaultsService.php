@@ -47,7 +47,7 @@ class ProfileVisibilitySettingsDefaultsService
     }
 
     /**
-     * Admin showcase / demo profiles: hide contact number + email from direct paid reveal by default.
+     * Admin showcase profiles: hide contact number + email from direct paid reveal by default.
      *
      * @return array<string, mixed>
      */

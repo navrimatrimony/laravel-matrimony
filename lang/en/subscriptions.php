@@ -269,7 +269,7 @@ return [
     'chat_quota_phase1_grace_percent' => 'Grace % of plan duration (after expiry, policy TBD)',
     'chat_quota_phase1_overuse' => 'When quota is exhausted',
     'chat_quota_phase1_overuse_block' => 'Block (hard stop)',
-    'chat_quota_phase1_overuse_pack' => 'Allow top-up pack (demo fields below)',
+    'chat_quota_phase1_overuse_pack' => 'Allow top-up pack (pack fields below)',
     'chat_quota_phase1_pack_price' => 'Top-up pack price (₹)',
     'chat_quota_phase1_pack_messages' => 'Messages in pack',
     'chat_quota_phase1_pack_validity' => 'Pack validity (days)',

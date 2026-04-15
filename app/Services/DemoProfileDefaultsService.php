@@ -33,7 +33,7 @@ use Illuminate\Support\Facades\DB;
 |--------------------------------------------------------------------------
 | DemoProfileDefaultsService (SSOT)
 |--------------------------------------------------------------------------
-| Auto-fill mandatory fields for demo profiles. Guarantees ≥70% completeness.
+| Auto-fill mandatory fields for showcase profiles. Guarantees ≥70% completeness.
 | Gender may be overridden by admin; all other fields are randomly generated
 | per profile (non-identical in bulk).
 */
@@ -141,7 +141,7 @@ class DemoProfileDefaultsService
      *
      * profile_photo is randomly selected from unused images in engagement folder at creation time.
      * Stored as full relative path from matrimony_photos (e.g., "engagement/female/f1.jpg").
-     * Each image is used only once across all demo profiles. Falls back to null if no unused images available.
+     * Each image is used only once across all showcase profiles. Falls back to null if no unused images available.
      *
      * full_name is auto-generated based on gender and caste at creation time only.
      *
@@ -173,7 +173,7 @@ class DemoProfileDefaultsService
     }
 
     /**
-     * Phase-4: Defaults for demo profile autofill. Only fill if null; do not override.
+     * Phase-4: Defaults for showcase profile autofill. Only fill if null; do not override.
      * Uses: realistic name, gender, age 23–35, Never Married (single), Graduate,
      * caste, height_cm 150–180, location hierarchy (valid country/state/district/city).
      */
@@ -998,7 +998,7 @@ class DemoProfileDefaultsService
     }
 
     /**
-     * Generate a realistic Indian mobile number for demo profile (primary contact).
+     * Generate a realistic Indian mobile number for showcase profile (primary contact).
      */
     public static function randomPrimaryPhone(): string
     {
@@ -1051,7 +1051,7 @@ class DemoProfileDefaultsService
     }
 
     /**
-     * Phase-4: Generate dummy extended field values for demo profile.
+     * Phase-4: Generate dummy extended field values for showcase profile.
      * Loads EXTENDED + is_enabled from field_registry; returns [field_key => value] by data_type.
      */
     public static function extendedDefaultsForProfile(): array
@@ -1082,8 +1082,8 @@ class DemoProfileDefaultsService
     }
 
     /**
-     * Generate full_name for demo profile based on gender and caste.
-     * Falls back to "Demo Profile {index+1}" if caste is missing or not mapped.
+     * Generate full_name for showcase profile based on gender and caste.
+     * Falls back to "Showcase Profile {index+1}" if caste is missing or not mapped.
      *
      * @param  string  $gender  male|female
      * @param  string|null  $caste  Caste value or null
@@ -1159,8 +1159,8 @@ class DemoProfileDefaultsService
     }
 
     /**
-     * Randomly select an unused demo profile photo from gender-specific engagement folder.
-     * Each image is used only once across all demo profiles. Returns null if no unused images available.
+     * Randomly select an unused showcase profile photo from gender-specific engagement folder.
+     * Each image is used only once across all showcase profiles. Returns null if no unused images available.
      *
      * @param  string  $gender  male|female
      * @return string|null Full relative path from matrimony_photos (e.g., "engagement/female/f1.jpg"), or null if no unused images found
@@ -1220,7 +1220,7 @@ class DemoProfileDefaultsService
     }
 
     /**
-     * Get list of filenames (extracted from stored paths) already assigned to demo profiles of given gender.
+     * Get list of filenames (extracted from stored paths) already assigned to showcase profiles of given gender.
      * Handles both old format (filename only) and new format (relative path).
      *
      * @param  string  $gender  male|female

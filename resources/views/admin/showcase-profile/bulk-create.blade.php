@@ -21,7 +21,7 @@
             {{ session('success') }}
         </div>
     @endif
-    <form method="POST" action="{{ route('admin.demo-profile.bulk-store') }}" class="space-y-4">
+    <form method="POST" action="{{ route('admin.showcase-profile.bulk-store') }}" class="space-y-4">
         @csrf
         <div>
             <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Number of profiles (1–50)</label>
@@ -95,12 +95,12 @@
                                     <a href="{{ route('matrimony.profile.wizard.section', ['section' => 'full', 'all' => 1, 'profile_id' => $p->id]) }}" class="px-3 py-1.5 rounded bg-gray-100 hover:bg-gray-200 text-gray-800 dark:bg-gray-900 dark:hover:bg-gray-800 dark:text-gray-100">Edit all</a>
                                     <a href="{{ route('matrimony.profile.upload-photo', ['profile_id' => $p->id]) }}" class="px-3 py-1.5 rounded bg-indigo-600 hover:bg-indigo-700 text-white">Photos</a>
                                     @if (($p->lifecycle_state ?? null) !== 'active')
-                                        <form method="POST" action="{{ route('admin.demo-profile.publish', $p->id) }}">
+                                        <form method="POST" action="{{ route('admin.showcase-profile.publish', $p->id) }}">
                                             @csrf
                                             <button type="submit" class="px-3 py-1.5 rounded bg-emerald-600 hover:bg-emerald-700 text-white">Publish</button>
                                         </form>
                                     @endif
-                                    <form method="POST" action="{{ route('admin.demo-profile.delete', $p->id) }}" onsubmit="return confirm('Delete this showcase profile?');">
+                                    <form method="POST" action="{{ route('admin.showcase-profile.delete', $p->id) }}" onsubmit="return confirm('Delete this showcase profile?');">
                                         @csrf
                                         <button type="submit" class="px-3 py-1.5 rounded bg-red-600 hover:bg-red-700 text-white">Delete</button>
                                     </form>
@@ -125,12 +125,12 @@
                                     <a href="{{ route('matrimony.profile.wizard.section', ['section' => 'full', 'all' => 1, 'profile_id' => $p->id]) }}" class="px-3 py-1.5 rounded bg-gray-100 hover:bg-gray-200 text-gray-800 dark:bg-gray-900 dark:hover:bg-gray-800 dark:text-gray-100">Edit all</a>
                                     <a href="{{ route('matrimony.profile.upload-photo', ['profile_id' => $p->id]) }}" class="px-3 py-1.5 rounded bg-indigo-600 hover:bg-indigo-700 text-white">Photos</a>
                                     @if (($p->lifecycle_state ?? null) !== 'active')
-                                        <form method="POST" action="{{ route('admin.demo-profile.publish', $p->id) }}">
+                                        <form method="POST" action="{{ route('admin.showcase-profile.publish', $p->id) }}">
                                             @csrf
                                             <button type="submit" class="px-3 py-1.5 rounded bg-emerald-600 hover:bg-emerald-700 text-white">Publish</button>
                                         </form>
                                     @endif
-                                    <form method="POST" action="{{ route('admin.demo-profile.delete', $p->id) }}" onsubmit="return confirm('Delete this showcase profile?');">
+                                    <form method="POST" action="{{ route('admin.showcase-profile.delete', $p->id) }}" onsubmit="return confirm('Delete this showcase profile?');">
                                         @csrf
                                         <button type="submit" class="px-3 py-1.5 rounded bg-red-600 hover:bg-red-700 text-white">Delete</button>
                                     </form>

@@ -269,10 +269,10 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
     Route::post('/auto-showcase-settings/fill-city-population', [AutoShowcaseSettingsController::class, 'fillCityPopulation'])->name('auto-showcase-settings.fill-city-population');
     Route::post('/auto-showcase-settings/reset-ai-population-locks', [AutoShowcaseSettingsController::class, 'resetAiPopulationDistrictLocks'])->name('auto-showcase-settings.reset-ai-population-locks');
 
-    Route::get('/demo-profile/bulk-create', [DemoProfileController::class, 'bulkCreate'])->name('demo-profile.bulk-create');
-    Route::post('/demo-profiles/bulk', [DemoProfileController::class, 'bulkStore'])->name('demo-profile.bulk-store');
-    Route::post('/demo-profiles/{profile}/publish', [DemoProfileController::class, 'publish'])->name('demo-profile.publish');
-    Route::post('/demo-profiles/{profile}/delete', [DemoProfileController::class, 'delete'])->name('demo-profile.delete');
+    Route::get('/showcase-profile/bulk-create', [DemoProfileController::class, 'bulkCreate'])->name('showcase-profile.bulk-create');
+    Route::post('/showcase-profiles/bulk', [DemoProfileController::class, 'bulkStore'])->name('showcase-profile.bulk-store');
+    Route::post('/showcase-profiles/{profile}/publish', [DemoProfileController::class, 'publish'])->name('showcase-profile.publish');
+    Route::post('/showcase-profiles/{profile}/delete', [DemoProfileController::class, 'delete'])->name('showcase-profile.delete');
 
     /*
     | Showcase Chat Orchestration (production-safe)
@@ -329,8 +329,8 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
     Route::get('/view-back-settings', [AdminSettingsController::class, 'viewBackSettings'])->name('view-back-settings.index');
     Route::post('/view-back-settings', [AdminSettingsController::class, 'updateViewBackSettings'])->name('view-back-settings.update');
 
-    Route::get('/demo-search-settings', [AdminSettingsController::class, 'demoSearchSettings'])->name('demo-search-settings.index');
-    Route::post('/demo-search-settings', [AdminSettingsController::class, 'updateDemoSearchSettings'])->name('demo-search-settings.update');
+    Route::get('/showcase-search-settings', [AdminSettingsController::class, 'showcaseSearchSettings'])->name('showcase-search-settings.index');
+    Route::post('/showcase-search-settings', [AdminSettingsController::class, 'updateShowcaseSearchSettings'])->name('showcase-search-settings.update');
 
     Route::get('/photo-approval-settings', [AdminSettingsController::class, 'photoApprovalSettings'])->name('photo-approval-settings.index');
     Route::post('/photo-approval-settings', [AdminSettingsController::class, 'updatePhotoApprovalSettings'])->name('photo-approval-settings.update');

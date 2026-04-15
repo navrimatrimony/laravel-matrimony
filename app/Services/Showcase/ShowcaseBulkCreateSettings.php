@@ -248,7 +248,7 @@ class ShowcaseBulkCreateSettings
     }
 
     /**
-     * Districts that appear on at least one non-demo profile (same pool as showcase residence picker), for bulk policy multiselect.
+     * Districts that appear on at least one non-showcase profile (same pool as showcase residence picker), for bulk policy multiselect.
      *
      * @return \Illuminate\Database\Eloquent\Collection<int, District>
      */
