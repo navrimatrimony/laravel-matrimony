@@ -43,7 +43,7 @@ class MatchingTest extends TestCase
             'gender_id' => $maleGid,
             'lifecycle_state' => 'active',
             'is_suspended' => false,
-            'is_demo' => false,
+            'is_showcase' => false,
             'date_of_birth' => now()->subYears(28),
             'full_name' => 'Seeker Male',
         ]);
@@ -53,7 +53,7 @@ class MatchingTest extends TestCase
             'gender_id' => $femaleGid,
             'lifecycle_state' => 'active',
             'is_suspended' => false,
-            'is_demo' => false,
+            'is_showcase' => false,
             'date_of_birth' => now()->subYears(26),
             'full_name' => 'Candidate Female',
         ]);
@@ -77,7 +77,7 @@ class MatchingTest extends TestCase
             'gender_id' => $maleGid,
             'lifecycle_state' => 'active',
             'is_suspended' => false,
-            'is_demo' => false,
+            'is_showcase' => false,
             'date_of_birth' => now()->subYears(28),
             'full_name' => 'Seeker Male',
         ]);
@@ -87,7 +87,7 @@ class MatchingTest extends TestCase
             'gender_id' => $femaleGid,
             'lifecycle_state' => 'active',
             'is_suspended' => false,
-            'is_demo' => false,
+            'is_showcase' => false,
             'date_of_birth' => now()->subYears(26),
             'full_name' => 'Duplicate Row Same User',
         ];
@@ -115,7 +115,7 @@ class MatchingTest extends TestCase
             'gender_id' => $maleGid,
             'lifecycle_state' => 'active',
             'is_suspended' => false,
-            'is_demo' => false,
+            'is_showcase' => false,
             'date_of_birth' => now()->subYears(28),
             'full_name' => 'Seeker Male',
         ]);
@@ -128,7 +128,7 @@ class MatchingTest extends TestCase
             'gender_id' => $femaleGid,
             'lifecycle_state' => 'active',
             'is_suspended' => false,
-            'is_demo' => false,
+            'is_showcase' => false,
             'date_of_birth' => $dob,
             'full_name' => $dupName,
         ]);
@@ -137,7 +137,7 @@ class MatchingTest extends TestCase
             'gender_id' => $femaleGid,
             'lifecycle_state' => 'active',
             'is_suspended' => false,
-            'is_demo' => false,
+            'is_showcase' => false,
             'date_of_birth' => $dob,
             'full_name' => $dupName,
         ]);
@@ -160,7 +160,7 @@ class MatchingTest extends TestCase
             'gender_id' => $maleGid,
             'lifecycle_state' => 'active',
             'is_suspended' => false,
-            'is_demo' => false,
+            'is_showcase' => false,
         ]);
 
         $this->actingAs($other)

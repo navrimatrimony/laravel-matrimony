@@ -108,7 +108,7 @@ class AbuseReportController extends Controller
             'AbuseReport',
             $report->id,
             $request->reason,
-            $report->reportedProfile->is_demo ?? false
+            (bool) ($report->reportedProfile?->isShowcaseProfile() ?? false)
         );
 
         if ($request->expectsJson()) {

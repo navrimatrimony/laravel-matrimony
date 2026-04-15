@@ -198,7 +198,7 @@ class AdminProfileModerationController extends Controller
             'MatrimonyProfile',
             $profile->id,
             $request->reason,
-            (bool) ($profile->is_demo ?? false)
+            $profile->isShowcaseProfile()
         );
 
         $owner = $profile->user;
@@ -225,7 +225,7 @@ class AdminProfileModerationController extends Controller
             'MatrimonyProfile',
             $profile->id,
             $request->reason,
-            (bool) ($profile->is_demo ?? false)
+            $profile->isShowcaseProfile()
         );
 
         $owner = $profile->user;
@@ -246,7 +246,7 @@ class AdminProfileModerationController extends Controller
         $result = AdminProfileSoftDeleteService::perform($profile);
         $profileId = $result['profile_id'];
         $owner = $result['owner'];
-        $isDemo = $result['is_demo'];
+        $isShowcase = $result['is_showcase'];
 
         AuditLogService::log(
             $request->user(),
@@ -254,7 +254,7 @@ class AdminProfileModerationController extends Controller
             'MatrimonyProfile',
             $profileId,
             $request->reason,
-            $isDemo
+            $isShowcase
         );
 
         if ($owner) {
@@ -302,7 +302,7 @@ class AdminProfileModerationController extends Controller
             'MatrimonyProfile',
             $profile->id,
             $request->reason,
-            (bool) ($profile->is_demo ?? false)
+            $profile->isShowcaseProfile()
         );
 
         if ($profile->user_id) {
@@ -334,7 +334,7 @@ class AdminProfileModerationController extends Controller
             'MatrimonyProfile',
             $profile->id,
             $request->reason,
-            (bool) ($profile->is_demo ?? false)
+            $profile->isShowcaseProfile()
         );
 
         $owner = $profile->user;
@@ -377,7 +377,7 @@ class AdminProfileModerationController extends Controller
                 'MatrimonyProfile',
                 $profile->id,
                 $request->reason,
-                (bool) ($profile->is_demo ?? false)
+                $profile->isShowcaseProfile()
             );
 
             $owner = $profile->fresh()->user;
@@ -411,7 +411,7 @@ class AdminProfileModerationController extends Controller
                 'MatrimonyProfile',
                 $profile->id,
                 $request->reason,
-                (bool) ($profile->is_demo ?? false)
+                $profile->isShowcaseProfile()
             );
 
             $owner = $profile->fresh()->user;
@@ -437,7 +437,7 @@ class AdminProfileModerationController extends Controller
             'MatrimonyProfile',
             $profile->id,
             $request->reason,
-            (bool) ($profile->is_demo ?? false)
+            $profile->isShowcaseProfile()
         );
 
         $owner = $profile->fresh()->user;
@@ -481,7 +481,7 @@ class AdminProfileModerationController extends Controller
             'ProfilePhoto',
             $profilePhoto->id,
             $request->reason,
-            (bool) ($profile->is_demo ?? false)
+            $profile->isShowcaseProfile()
         );
 
         if ($profile->user_id) {
@@ -517,7 +517,7 @@ class AdminProfileModerationController extends Controller
             'ProfilePhoto',
             $profilePhoto->id,
             $request->reason,
-            (bool) ($profile->is_demo ?? false)
+            $profile->isShowcaseProfile()
         );
 
         $owner = $profile->user;
@@ -549,7 +549,7 @@ class AdminProfileModerationController extends Controller
             'ProfilePhoto',
             $profilePhoto->id,
             $request->reason,
-            (bool) ($profile->is_demo ?? false)
+            $profile->isShowcaseProfile()
         );
 
         $owner = $profile->fresh()->user;
@@ -614,7 +614,7 @@ class AdminProfileModerationController extends Controller
 
     /**
      * Override visibility: force profile visible in search even if <70% complete.
-     * Mandatory reason, audit log, is_demo. Affects search only; interest rules unchanged.
+     * Mandatory reason, audit log, is_showcase. Affects search only; interest rules unchanged.
      */
     public function overrideVisibility(Request $request, MatrimonyProfile $profile): \Illuminate\Http\RedirectResponse
     {
@@ -632,7 +632,7 @@ class AdminProfileModerationController extends Controller
             'MatrimonyProfile',
             $profile->id,
             $request->reason,
-            (bool) ($profile->is_demo ?? false)
+            $profile->isShowcaseProfile()
         );
 
         return redirect()->route('admin.profiles.show', $profile->id)->with('success', 'Visibility override applied.');

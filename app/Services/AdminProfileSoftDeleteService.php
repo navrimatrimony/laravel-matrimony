@@ -15,21 +15,21 @@ class AdminProfileSoftDeleteService
     /**
      * Soft-delete the profile and return data needed for audit logging and user notification.
      *
-     * @return array{profile_id: int, owner: User|null, is_demo: bool}
+     * @return array{profile_id: int, owner: User|null, is_showcase: bool}
      */
     public static function perform(MatrimonyProfile $profile): array
     {
         return DB::transaction(function () use ($profile) {
             $profileId = $profile->id;
             $owner = $profile->user;
-            $isDemo = (bool) ($profile->is_demo ?? false);
+            $isShowcase = $profile->isShowcaseProfile();
 
             $profile->delete();
 
             return [
                 'profile_id' => $profileId,
                 'owner' => $owner,
-                'is_demo' => $isDemo,
+                'is_showcase' => $isShowcase,
             ];
         });
     }

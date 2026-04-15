@@ -16,23 +16,23 @@ use Illuminate\Queue\SerializesModels;
 | ProcessDelayedViewBack Job
 |--------------------------------------------------------------------------
 |
-| Creates a delayed view-back (demo views real) after admin-configured delay.
-| Respects 24h cap per demo–real pair. No recursion.
+| Creates a delayed view-back (showcase views real) after admin-configured delay.
+| Respects 24h cap per showcase–real pair. No recursion.
 |
 */
 class ProcessDelayedViewBack implements ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
-    public int $demoProfileId;
+    public int $showcaseProfileId;
     public int $realProfileId;
 
     /**
      * Create a new job instance.
      */
-    public function __construct(int $demoProfileId, int $realProfileId)
+    public function __construct(int $showcaseProfileId, int $realProfileId)
     {
-        $this->demoProfileId = $demoProfileId;
+        $this->showcaseProfileId = $showcaseProfileId;
         $this->realProfileId = $realProfileId;
     }
 
@@ -43,7 +43,7 @@ class ProcessDelayedViewBack implements ShouldQueue
     {
         // Re-check 24h cap at execution time (delay may have passed since dispatch)
         $since = now()->subDay();
-        $exists = ProfileView::where('viewer_profile_id', $this->demoProfileId)
+        $exists = ProfileView::where('viewer_profile_id', $this->showcaseProfileId)
             ->where('viewed_profile_id', $this->realProfileId)
             ->where('created_at', '>=', $since)
             ->exists();
@@ -53,27 +53,27 @@ class ProcessDelayedViewBack implements ShouldQueue
         }
 
         // Re-check block status (uses ViewTrackingService as single source)
-        if (ViewTrackingService::isBlocked($this->demoProfileId, $this->realProfileId)) {
+        if (ViewTrackingService::isBlocked($this->showcaseProfileId, $this->realProfileId)) {
             return;
         }
 
         // Load profiles
-        $demoProfile = MatrimonyProfile::find($this->demoProfileId);
+        $showcaseProfile = MatrimonyProfile::find($this->showcaseProfileId);
         $realProfile = MatrimonyProfile::find($this->realProfileId);
 
-        if (!$demoProfile || !$realProfile) {
+        if (! $showcaseProfile || ! $realProfile) {
             return;
         }
 
         // Create view-back
         ProfileView::create([
-            'viewer_profile_id' => $demoProfile->id,
+            'viewer_profile_id' => $showcaseProfile->id,
             'viewed_profile_id' => $realProfile->id,
         ]);
 
-        ViewTrackingService::consumeDailyProfileViewUsageForViewer($demoProfile);
+        ViewTrackingService::consumeDailyProfileViewUsageForViewer($showcaseProfile);
 
         // Notify real user (with dedup guard from service).
-        ViewTrackingService::notifyProfileViewIfEligible($realProfile->user, $demoProfile, true);
+        ViewTrackingService::notifyProfileViewIfEligible($realProfile->user, $showcaseProfile, true);
     }
 }

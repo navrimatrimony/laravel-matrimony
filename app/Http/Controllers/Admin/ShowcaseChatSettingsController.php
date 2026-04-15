@@ -18,9 +18,9 @@ class ShowcaseChatSettingsController extends Controller
     public function index()
     {
         $showcases = MatrimonyProfile::query()
-            ->where('is_demo', true)
+            ->whereShowcase()
             ->orderByDesc('id')
-            ->get(['id', 'full_name', 'lifecycle_state', 'is_demo']);
+            ->get(['id', 'full_name', 'lifecycle_state', 'is_showcase']);
 
         $settingsByProfileId = ShowcaseChatSetting::query()
             ->whereIn('matrimony_profile_id', $showcases->pluck('id')->all())
@@ -35,7 +35,7 @@ class ShowcaseChatSettingsController extends Controller
 
     public function show(MatrimonyProfile $profile)
     {
-        abort_unless((bool) ($profile->is_demo ?? false), 404);
+        abort_unless($profile->isShowcaseProfile(), 404);
 
         $s = $this->settingsService->getOrCreateForProfile($profile);
 
@@ -47,7 +47,7 @@ class ShowcaseChatSettingsController extends Controller
 
     public function update(Request $request, MatrimonyProfile $profile)
     {
-        abort_unless((bool) ($profile->is_demo ?? false), 404);
+        abort_unless($profile->isShowcaseProfile(), 404);
 
         $data = $request->validate([
             'enabled' => 'boolean',

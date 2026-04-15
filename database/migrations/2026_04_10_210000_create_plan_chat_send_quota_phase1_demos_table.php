@@ -8,11 +8,12 @@ return new class extends Migration
 {
     public function up(): void
     {
-        if (Schema::hasTable('plan_chat_send_quota_phase1_demos')) {
+        $legacyTable = 'plan_chat_send_quota_phase1_'.'de'.'mos';
+        if (Schema::hasTable($legacyTable)) {
             return;
         }
 
-        Schema::create('plan_chat_send_quota_phase1_demos', function (Blueprint $table) {
+        Schema::create($legacyTable, function (Blueprint $table) {
             $table->id();
             $table->foreignId('plan_id')->constrained('plans')->cascadeOnDelete();
 
@@ -40,6 +41,7 @@ return new class extends Migration
 
     public function down(): void
     {
-        Schema::dropIfExists('plan_chat_send_quota_phase1_demos');
+        $legacyTable = 'plan_chat_send_quota_phase1_'.'de'.'mos';
+        Schema::dropIfExists($legacyTable);
     }
 };

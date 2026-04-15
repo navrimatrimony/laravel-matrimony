@@ -130,10 +130,10 @@ class ChatController extends Controller
                 $this->messages->markConversationRead($me, $conversation);
             }
 
-            // Showcase demo: presence/typing ticks (orchestration). Admin debug & manual reply tone live under
+            // Showcase automation: presence/typing ticks (orchestration). Admin debug & manual reply tone live under
             // admin routes (ShowcaseChatDebugController, ShowcaseConversationController::replyAsShowcase); not user-facing.
             $showcaseStatus = null;
-            if (($other->is_demo ?? false) && $showcaseTag) {
+            if ($other->isShowcaseProfile() && $showcaseTag) {
                 try {
                     $showcaseStatus = app(ShowcaseOrchestrationService::class)->tickConversation($conversation, $other, $me);
                 } catch (\Throwable $e) {

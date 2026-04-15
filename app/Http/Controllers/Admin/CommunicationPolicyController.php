@@ -3,8 +3,8 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
-use App\Models\AdminAuditLog;
 use App\Models\AdminSetting;
+use App\Services\AuditLogService;
 use App\Services\CommunicationPolicyService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
@@ -57,7 +57,6 @@ class CommunicationPolicyController extends Controller
         }
 
         $reason = $request->input('reason');
-        $adminId = auth()->id();
         $prefix = CommunicationPolicyService::KEY_PREFIX;
         $current = CommunicationPolicyService::getCurrentForAdmin();
 
@@ -109,14 +108,14 @@ class CommunicationPolicyController extends Controller
         }
 
         $reasonText = 'Communication policy update. Reason: ' . $reason . '. Changes: ' . json_encode($changes);
-        AdminAuditLog::create([
-            'admin_id' => $adminId,
-            'action_type' => 'communication_policy_update',
-            'entity_type' => 'communication_policy',
-            'entity_id' => null,
-            'reason' => $reasonText,
-            'is_demo' => false,
-        ]);
+        AuditLogService::log(
+            $request->user(),
+            'communication_policy_update',
+            'communication_policy',
+            null,
+            $reasonText,
+            false
+        );
 
         return back()->with('success', 'Communication policy updated. All changes have been logged.');
     }

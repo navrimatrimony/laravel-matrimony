@@ -22,7 +22,7 @@
                     @php
                         $p1 = $profiles[$c->profile_one_id] ?? null;
                         $p2 = $profiles[$c->profile_two_id] ?? null;
-                        $showcase = ($p1 && ($p1->is_demo ?? false)) ? $p1 : (($p2 && ($p2->is_demo ?? false)) ? $p2 : null);
+                        $showcase = ($p1 && $p1->isShowcaseProfile()) ? $p1 : (($p2 && $p2->isShowcaseProfile()) ? $p2 : null);
                         $other = ($showcase && (int) $showcase->id === (int) ($p1?->id ?? 0)) ? $p2 : $p1;
                         $state = ($states[$c->id] ?? collect())->firstWhere('showcase_profile_id', $showcase?->id);
                     @endphp

@@ -7,7 +7,7 @@ use App\Models\District;
 use Illuminate\Support\Facades\DB;
 
 /**
- * Admin-only policy for {@see DemoProfileDefaultsService::fullAttributesForDemoProfile} when bulk-creating showcase profiles.
+ * Admin-only policy for {@see ShowcaseProfileDefaultsService::fullAttributesForShowcaseProfile} when bulk-creating showcase profiles.
  * Stored as JSON in {@see AdminSetting} key `showcase_bulk_create_policy`.
  *
  * Photo selection is governed elsewhere — not configured here.
@@ -252,10 +252,12 @@ class ShowcaseBulkCreateSettings
      *
      * @return \Illuminate\Database\Eloquent\Collection<int, District>
      */
-    public static function eligibleNonDemoDistrictModels(int $limit = 1200): \Illuminate\Database\Eloquent\Collection
+    public static function eligibleNonShowcaseDistrictModels(int $limit = 1200): \Illuminate\Database\Eloquent\Collection
     {
         $ids = DB::table('matrimony_profiles')
-            ->where('is_demo', false)
+            ->where(function ($q) {
+                $q->where('is_showcase', false)->orWhereNull('is_showcase');
+            })
             ->whereNull('deleted_at')
             ->whereNotNull('district_id')
             ->distinct()
@@ -275,4 +277,5 @@ class ShowcaseBulkCreateSettings
             ->limit($limit)
             ->get();
     }
+
 }

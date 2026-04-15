@@ -4,7 +4,7 @@ namespace App\Services\Showcase;
 
 use App\Models\MatrimonyProfile;
 use App\Models\User;
-use App\Services\DemoProfileDefaultsService;
+use App\Services\ShowcaseProfileDefaultsService;
 use App\Services\ExtendedFieldService;
 use App\Services\FieldValueHistoryService;
 use App\Services\MutationService;
@@ -14,14 +14,14 @@ use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 
 /**
- * Single entry point for creating showcase (demo) profiles — admin bulk and auto-engine.
+ * Single entry point for creating showcase profiles — admin bulk and auto-engine.
  */
 class ShowcaseProfileFactory
 {
     /**
      * Create one showcase profile (dedicated @system.local user, full autofill).
      *
-     * @param  array<string, mixed>  $attributeOverrides  merged on top of {@see DemoProfileDefaultsService::fullAttributesForDemoProfile}
+     * @param  array<string, mixed>  $attributeOverrides  merged on top of {@see ShowcaseProfileDefaultsService::fullAttributesForShowcaseProfile}
      * @return int|null New matrimony_profiles.id, or null if skipped (e.g. user already owns a profile or missing location)
      */
     public function create(
@@ -51,7 +51,7 @@ class ShowcaseProfileFactory
             : null;
 
         $attrs = array_merge(
-            DemoProfileDefaultsService::fullAttributesForDemoProfile($sequenceIndex, $genderOverride, $bulkPolicy),
+            ShowcaseProfileDefaultsService::fullAttributesForShowcaseProfile($sequenceIndex, $genderOverride, $bulkPolicy),
             $attributeOverrides
         );
 
@@ -60,7 +60,7 @@ class ShowcaseProfileFactory
         }
 
         $attrs['user_id'] = $user->id;
-        $attrs['is_demo'] = true;
+        $attrs['is_showcase'] = true;
         $attrs['is_suspended'] = false;
         $attrs['lifecycle_state'] = in_array($lifecycleState, ['draft', 'active'], true) ? $lifecycleState : 'draft';
 
@@ -75,7 +75,7 @@ class ShowcaseProfileFactory
 
     private function addPrimaryContact(MatrimonyProfile $profile): void
     {
-        $phone = DemoProfileDefaultsService::randomPrimaryPhone();
+        $phone = ShowcaseProfileDefaultsService::randomPrimaryPhone();
         $contactRelationId = null;
         if (Schema::hasColumn('profile_contacts', 'contact_relation_id')) {
             $contactRelationId = DB::table('master_contact_relations')->where('key', 'self')->value('id');
@@ -104,7 +104,7 @@ class ShowcaseProfileFactory
         $coreKeys = [
             'full_name', 'gender_id', 'date_of_birth', 'marital_status_id', 'highest_education',
             'religion_id', 'caste_id', 'sub_caste_id', 'height_cm', 'profile_photo', 'photo_approved',
-            'is_demo', 'is_suspended', 'specialization', 'occupation_title', 'company_name',
+            'is_showcase', 'is_suspended', 'specialization', 'occupation_title', 'company_name',
             'annual_income', 'family_income', 'father_name', 'mother_name',
         ];
         foreach ($coreKeys as $fieldKey) {
@@ -116,7 +116,7 @@ class ShowcaseProfileFactory
                 $newVal = $newVal->format('Y-m-d');
             }
             $newVal = $newVal === '' || $newVal === null ? null : (string) $newVal;
-            if (in_array($fieldKey, ['photo_approved', 'is_demo', 'is_suspended'], true)) {
+            if (in_array($fieldKey, ['photo_approved', 'is_showcase', 'is_suspended'], true)) {
                 $newVal = $newVal === null ? null : ($newVal ? '1' : '0');
             }
             FieldValueHistoryService::record($profile->id, $fieldKey, 'CORE', null, $newVal, FieldValueHistoryService::CHANGED_BY_SYSTEM);
@@ -128,7 +128,7 @@ class ShowcaseProfileFactory
      */
     private function applyWizardLikeNarrativeAndPreferences(MatrimonyProfile $profile, int $actorUserId, ?int $searcherMatrimonyProfileId, ?array $bulkPolicy = null): void
     {
-        $snapshot = DemoProfileDefaultsService::postCreateSnapshotForDemoProfile($profile->fresh(), $bulkPolicy);
+        $snapshot = ShowcaseProfileDefaultsService::postCreateSnapshotForShowcaseProfile($profile->fresh(), $bulkPolicy);
         $searcher = $searcherMatrimonyProfileId
             ? MatrimonyProfile::query()->find((int) $searcherMatrimonyProfileId)
             : null;
@@ -148,7 +148,7 @@ class ShowcaseProfileFactory
 
     private function autofillExtendedAndHistory(MatrimonyProfile $profile): void
     {
-        $extended = DemoProfileDefaultsService::extendedDefaultsForProfile();
+        $extended = ShowcaseProfileDefaultsService::extendedDefaultsForProfile();
         if (! empty($extended)) {
             ExtendedFieldService::saveValuesForProfile($profile, $extended, null);
         }

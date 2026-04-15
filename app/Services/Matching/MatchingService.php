@@ -188,7 +188,7 @@ class MatchingService
 
     /**
      * One row per profile id, per member account (user_id), and per “surface clone” (same display identity).
-     * Intake/demo data often creates many active rows with the same Marathi full_name and DOB under different
+     * Intake/showcase data often creates many active rows with the same Marathi full_name and DOB under different
      * logins; they are indistinguishable in the card UI and must not flood the feed. Ordering is preserved so
      * the first row wins (best tab rank). Tabs still recompute independently — the same person may appear in
      * more than one lens when pools differ; this only collapses duplicates within one tab response.
@@ -508,7 +508,7 @@ class MatchingService
             ->whereKeyNot($profile->id)
             ->where('lifecycle_state', 'active')
             ->where('is_suspended', false)
-            ->where('is_demo', false)
+            ->whereNonShowcase()
             ->whereHas('gender', static fn ($g) => $g->where('key', $oppositeGenderKey));
 
         $pc = $profile->preferenceCriteria;

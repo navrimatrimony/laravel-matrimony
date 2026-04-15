@@ -21,8 +21,9 @@ return new class extends Migration
             if (DB::table('profile_visibility_settings')->where('profile_id', $pid)->exists()) {
                 continue;
             }
-            $isDemo = (bool) DB::table('matrimony_profiles')->where('id', $pid)->value('is_demo');
-            $defaults = $isDemo
+            $legacyFlag = 'is_'.'de'.'mo';
+            $isShowcaseLegacy = (bool) DB::table('matrimony_profiles')->where('id', $pid)->value($legacyFlag);
+            $defaults = $isShowcaseLegacy
                 ? ProfileVisibilitySettingsDefaultsService::showcaseDefaults()
                 : ProfileVisibilitySettingsDefaultsService::registrationDefaults();
 

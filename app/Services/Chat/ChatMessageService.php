@@ -214,7 +214,7 @@ class ChatMessageService
             }
 
             // Showcase orchestration (read/typing/reply scheduling) after commit.
-            if (($receiver->is_demo ?? false) === true) {
+            if ($receiver->isShowcaseProfile()) {
                 DB::afterCommit(function () use ($message) {
                     try {
                         app(ShowcaseOrchestrationService::class)->onIncomingMessage($message);

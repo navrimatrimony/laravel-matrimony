@@ -31,11 +31,9 @@ class ProfileShowReadService
 
         $q->whereRaw(ProfileCompletenessService::sqlSearchVisible('matrimony_profiles'));
 
-        $showcaseVisible = AdminSetting::getBool('showcase_profiles_visible_in_search', AdminSetting::getBool('demo_profiles_visible_in_search', true));
+        $showcaseVisible = AdminSetting::getBool('showcase_profiles_visible_in_search', true);
         if (! $showcaseVisible) {
-            $q->where(function ($q) {
-                $q->where('is_demo', false)->orWhereNull('is_demo');
-            });
+            $q->whereNonShowcase();
         }
 
         $myId = $viewer->matrimonyProfile?->id;

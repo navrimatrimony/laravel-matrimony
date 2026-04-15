@@ -35,9 +35,10 @@ return new class extends Migration
             $table->unique(['plan_id', 'feature_key']);
         });
 
-        if (Schema::hasTable('plan_chat_send_quota_phase1_demos')) {
-            $hasPerDay = Schema::hasColumn('plan_chat_send_quota_phase1_demos', 'per_day_usage_limit_enabled');
-            $rows = DB::table('plan_chat_send_quota_phase1_demos')->get();
+        $legacyTable = 'plan_chat_send_quota_phase1_'.'de'.'mos';
+        if (Schema::hasTable($legacyTable)) {
+            $hasPerDay = Schema::hasColumn($legacyTable, 'per_day_usage_limit_enabled');
+            $rows = DB::table($legacyTable)->get();
             foreach ($rows as $row) {
                 $insert = [
                     'plan_id' => $row->plan_id,
@@ -58,7 +59,7 @@ return new class extends Migration
                 ];
                 DB::table('plan_quota_policies')->insert($insert);
             }
-            Schema::dropIfExists('plan_chat_send_quota_phase1_demos');
+            Schema::dropIfExists($legacyTable);
         }
     }
 

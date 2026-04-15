@@ -31,13 +31,13 @@ use Illuminate\Support\Facades\DB;
 
 /*
 |--------------------------------------------------------------------------
-| DemoProfileDefaultsService (SSOT)
+| ShowcaseProfileDefaultsService (SSOT)
 |--------------------------------------------------------------------------
 | Auto-fill mandatory fields for showcase profiles. Guarantees ≥70% completeness.
 | Gender may be overridden by admin; all other fields are randomly generated
 | per profile (non-identical in bulk).
 */
-class DemoProfileDefaultsService
+class ShowcaseProfileDefaultsService
 {
     public const GENDERS = ['male', 'female'];
 
@@ -156,7 +156,7 @@ class DemoProfileDefaultsService
         $education = self::EDUCATION_OPTIONS[array_rand(self::EDUCATION_OPTIONS)];
         $location = self::LOCATION_OPTIONS[array_rand(self::LOCATION_OPTIONS)];
         $caste = self::randomCaste();
-        $profilePhoto = self::randomDemoPhoto($gender);
+        $profilePhoto = self::randomShowcasePhoto($gender);
         $fullName = self::generateFullName($gender, $caste, $index);
 
         return [
@@ -177,15 +177,15 @@ class DemoProfileDefaultsService
      * Uses: realistic name, gender, age 23–35, Never Married (single), Graduate,
      * caste, height_cm 150–180, location hierarchy (valid country/state/district/city).
      */
-    public static function defaultsForDemo(int $index = 0, ?string $genderOverride = null): array
+    public static function defaultsForShowcase(int $index = 0, ?string $genderOverride = null): array
     {
         $gender = self::resolveGender($genderOverride);
-        $dob = self::randomDobDemo();
+        $dob = self::randomDobShowcase();
         $caste = self::randomCaste();
-        $profilePhoto = self::randomDemoPhoto($gender);
+        $profilePhoto = self::randomShowcasePhoto($gender);
         $fullName = self::generateFullName($gender, $caste, $index);
         $heightCm = random_int(150, 180);
-        $hierarchy = self::locationHierarchyForDemo();
+        $hierarchy = self::locationHierarchyForShowcase();
 
         return array_merge([
             'full_name' => $fullName,
@@ -203,19 +203,19 @@ class DemoProfileDefaultsService
     /**
      * Full attributes for MatrimonyProfile::create() — all fillable fields with realistic data.
      * Uses master table IDs (gender_id, marital_status_id, religion_id, caste_id, sub_caste_id, etc.).
-     * No "demo" labels; data looks like real users for manual testing.
+     * No legacy labels; data looks like real users for manual testing.
      */
     /**
      * @param  array<string, mixed>|null  $bulkPolicy  raw or partial; normalized when non-null
      */
-    public static function fullAttributesForDemoProfile(int $index = 0, ?string $genderOverride = null, ?array $bulkPolicy = null): array
+    public static function fullAttributesForShowcaseProfile(int $index = 0, ?string $genderOverride = null, ?array $bulkPolicy = null): array
     {
         $policy = $bulkPolicy !== null ? ShowcaseBulkCreateSettings::normalize($bulkPolicy) : null;
 
         $gender = self::resolveGender($genderOverride);
         $dob = $policy !== null
             ? self::randomDobForAgeRange((int) $policy['age_min'], (int) $policy['age_max'])
-            : self::randomDobDemo();
+            : self::randomDobShowcase();
         $heightCm = $policy !== null
             ? random_int((int) $policy['height_cm_min'], (int) $policy['height_cm_max'])
             : random_int(155, 182);
@@ -228,7 +228,7 @@ class DemoProfileDefaultsService
             $loc = self::locationHierarchyForShowcaseFromRealUsers();
         }
 
-        $profilePhoto = self::randomDemoPhoto($gender);
+        $profilePhoto = self::randomShowcasePhoto($gender);
 
         $genderId = MasterGender::where('key', $gender)->where('is_active', true)->value('id');
 
@@ -421,7 +421,7 @@ class DemoProfileDefaultsService
             'drinking_status_id' => $drinkingStatusId,
             'is_suspended' => false,
             'photo_approved' => true,
-            'is_demo' => true,
+            'is_showcase' => true,
             'specialization' => ['Commerce', 'Computer Science', 'Arts', 'Science', 'Management'][array_rand(['Commerce', 'Computer Science', 'Arts', 'Science', 'Management'])],
             'occupation_title' => $occupationTitle,
             'working_with_type_id' => $workingWithTypeId,
@@ -525,7 +525,7 @@ class DemoProfileDefaultsService
     }
 
     /**
-     * Demo "step 6" + "step 7" parity:
+     * Showcase "step 6" + "step 7" parity:
      * - extended_narrative (about me + expectations)
      * - preferences (partner preference criteria + pivots via MutationService)
      *
@@ -534,7 +534,7 @@ class DemoProfileDefaultsService
     /**
      * @param  array<string, mixed>|null  $bulkPolicy  normalized admin bulk policy; null = legacy behaviour
      */
-    public static function postCreateSnapshotForDemoProfile(MatrimonyProfile $profile, ?array $bulkPolicy = null): array
+    public static function postCreateSnapshotForShowcaseProfile(MatrimonyProfile $profile, ?array $bulkPolicy = null): array
     {
         $policy = $bulkPolicy !== null ? ShowcaseBulkCreateSettings::normalize($bulkPolicy) : null;
 
@@ -791,7 +791,7 @@ class DemoProfileDefaultsService
 
     /**
      * Location rule-set for showcase profiles:
-     * - pick only districts that have at least one real (non-demo) profile
+     * - pick only districts that have at least one real (non-showcase) profile
      * - set residence in the district "town" using cities table (not villages)
      *
      * Returns hierarchy keys for MatrimonyProfile core columns:
@@ -802,11 +802,10 @@ class DemoProfileDefaultsService
     /**
      * @return list<int>
      */
-    private static function eligibleNonDemoDistrictIds(): array
+    private static function eligibleNonShowcaseDistrictIds(): array
     {
-        return DB::table('matrimony_profiles')
-            ->where('is_demo', false)
-            ->whereNull('deleted_at')
+        return MatrimonyProfile::query()
+            ->whereNonShowcase()
             ->whereNotNull('district_id')
             ->pluck('district_id')
             ->map(fn ($v) => (int) $v)
@@ -889,7 +888,7 @@ class DemoProfileDefaultsService
     {
         static $eligibleDistrictIds = null;
         if ($eligibleDistrictIds === null) {
-            $eligibleDistrictIds = self::eligibleNonDemoDistrictIds();
+            $eligibleDistrictIds = self::eligibleNonShowcaseDistrictIds();
         }
 
         return self::pickShowcaseHierarchyFromDistrictPool($eligibleDistrictIds);
@@ -902,7 +901,7 @@ class DemoProfileDefaultsService
     {
         static $fullPool = null;
         if ($fullPool === null) {
-            $fullPool = self::eligibleNonDemoDistrictIds();
+            $fullPool = self::eligibleNonShowcaseDistrictIds();
         }
 
         $ids = $fullPool;
@@ -1012,8 +1011,8 @@ class DemoProfileDefaultsService
         return $p.$rest;
     }
 
-    /** Age 23–35 for demo. */
-    private static function randomDobDemo(): string
+    /** Age 23–35 for showcase. */
+    private static function randomDobShowcase(): string
     {
         $age = random_int(23, 35);
 
@@ -1021,7 +1020,7 @@ class DemoProfileDefaultsService
     }
 
     /** Valid country/state/district/taluka/city IDs; nulls if any level missing. */
-    private static function locationHierarchyForDemo(): array
+    private static function locationHierarchyForShowcase(): array
     {
         $country = Country::query()->inRandomOrder()->first();
         if (! $country) {
@@ -1165,7 +1164,7 @@ class DemoProfileDefaultsService
      * @param  string  $gender  male|female
      * @return string|null Full relative path from matrimony_photos (e.g., "engagement/female/f1.jpg"), or null if no unused images found
      */
-    private static function randomDemoPhoto(string $gender): ?string
+    private static function randomShowcasePhoto(string $gender): ?string
     {
         if (! in_array($gender, self::GENDERS, true)) {
             return null;
@@ -1207,7 +1206,7 @@ class DemoProfileDefaultsService
             return null;
         }
 
-        $usedFilenames = self::getUsedDemoPhotoFilenames($gender);
+        $usedFilenames = self::getUsedShowcasePhotoFilenames($gender);
         $unusedFiles = array_diff($availableFiles, $usedFilenames);
 
         if (empty($unusedFiles)) {
@@ -1226,14 +1225,15 @@ class DemoProfileDefaultsService
      * @param  string  $gender  male|female
      * @return array Array of filenames only (for comparison with available files)
      */
-    private static function getUsedDemoPhotoFilenames(string $gender): array
+    private static function getUsedShowcasePhotoFilenames(string $gender): array
     {
         $genderId = MasterGender::where('key', $gender)->where('is_active', true)->value('id');
         if ($genderId === null) {
             return [];
         }
 
-        $usedPhotos = MatrimonyProfile::where('is_demo', true)
+        $usedPhotos = MatrimonyProfile::query()
+            ->whereShowcase()
             ->where('gender_id', $genderId)
             ->whereNotNull('profile_photo')
             ->pluck('profile_photo')

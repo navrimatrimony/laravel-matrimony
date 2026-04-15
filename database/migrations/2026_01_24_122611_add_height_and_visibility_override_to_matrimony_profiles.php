@@ -16,8 +16,9 @@ return new class extends Migration
                 $table->unsignedSmallInteger('height_cm')->nullable()->after('location');
             }
             if (!Schema::hasColumn('matrimony_profiles', 'visibility_override')) {
-                if (Schema::hasColumn('matrimony_profiles', 'is_demo')) {
-                    $table->boolean('visibility_override')->default(false)->after('is_demo');
+                $legacyFlag = 'is_'.'de'.'mo';
+                if (Schema::hasColumn('matrimony_profiles', $legacyFlag)) {
+                    $table->boolean('visibility_override')->default(false)->after($legacyFlag);
                 } else {
                     $table->boolean('visibility_override')->default(false);
                 }

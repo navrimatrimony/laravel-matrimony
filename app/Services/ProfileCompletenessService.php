@@ -11,7 +11,7 @@ use App\Models\MatrimonyProfile;
 |
 | Centralized completeness: (filled mandatory / total mandatory) × 100.
 | Mandatory fields are read dynamically from ProfileFieldConfigurationService.
-| Same logic for demo and real profiles.
+| Same logic for showcase and real profiles.
 |
 */
 class ProfileCompletenessService

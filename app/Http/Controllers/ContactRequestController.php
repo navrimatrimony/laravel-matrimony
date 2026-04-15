@@ -35,7 +35,7 @@ class ContactRequestController extends Controller
 
         $receiver = $profile->user;
         if (! $receiver) {
-            // For profiles without a linked user (old demo/real data), attach a system user
+            // For profiles without a linked user (older showcase/real data), attach a system user
             // so that contact requests can flow uniformly during testing, without creating new profiles.
             $receiver = User::firstOrCreate(
                 ['email' => 'contact-profile-' . $profile->id . '@system.local'],

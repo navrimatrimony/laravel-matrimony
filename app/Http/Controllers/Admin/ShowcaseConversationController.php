@@ -28,7 +28,7 @@ class ShowcaseConversationController extends Controller
 
     public function index()
     {
-        $showcaseIds = MatrimonyProfile::query()->where('is_demo', true)->pluck('id')->all();
+        $showcaseIds = MatrimonyProfile::query()->whereShowcase()->pluck('id')->all();
         $enabledIds = ShowcaseChatSetting::query()->where('enabled', true)->pluck('matrimony_profile_id')->all();
         $activeShowcaseIds = array_values(array_intersect($showcaseIds, $enabledIds));
 
@@ -64,7 +64,7 @@ class ShowcaseConversationController extends Controller
         $p1 = MatrimonyProfile::find($conversation->profile_one_id);
         $p2 = MatrimonyProfile::find($conversation->profile_two_id);
 
-        $showcase = ($p1 && ($p1->is_demo ?? false)) ? $p1 : (($p2 && ($p2->is_demo ?? false)) ? $p2 : null);
+        $showcase = ($p1 && $p1->isShowcaseProfile()) ? $p1 : (($p2 && $p2->isShowcaseProfile()) ? $p2 : null);
         abort_unless($showcase !== null, 404);
 
         $other = ($showcase->id === $p1?->id) ? $p2 : $p1;
@@ -117,7 +117,7 @@ class ShowcaseConversationController extends Controller
     {
         $showcaseId = (int) $request->input('showcase_profile_id');
         $showcase = MatrimonyProfile::findOrFail($showcaseId);
-        abort_unless((bool) ($showcase->is_demo ?? false), 404);
+        abort_unless($showcase->isShowcaseProfile(), 404);
 
         $state = $this->orchestration->ensureState($conversation, $showcase);
         $this->takeover->pauseAutomationForConversation($state, $request->user(), 'Paused from admin conversation screen.');
@@ -129,7 +129,7 @@ class ShowcaseConversationController extends Controller
     {
         $showcaseId = (int) $request->input('showcase_profile_id');
         $showcase = MatrimonyProfile::findOrFail($showcaseId);
-        abort_unless((bool) ($showcase->is_demo ?? false), 404);
+        abort_unless($showcase->isShowcaseProfile(), 404);
 
         $state = $this->orchestration->ensureState($conversation, $showcase);
         $this->takeover->resumeAutomationForConversation($state, $request->user(), 'Resumed from admin conversation screen.');
@@ -146,7 +146,7 @@ class ShowcaseConversationController extends Controller
         ]);
 
         $showcase = MatrimonyProfile::findOrFail((int) $request->input('showcase_profile_id'));
-        abort_unless((bool) ($showcase->is_demo ?? false), 404);
+        abort_unless($showcase->isShowcaseProfile(), 404);
 
         $other = $this->conversations->getOtherParticipant($conversation, $showcase);
         abort_unless($other !== null, 404);

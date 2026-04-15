@@ -21,7 +21,7 @@ use App\Http\Controllers\Admin\AutoShowcaseSettingsController;
 use App\Http\Controllers\Admin\CommerceAnalyticsController;
 use App\Http\Controllers\Admin\CommerceMemberOverrideController;
 use App\Http\Controllers\Admin\CouponController;
-use App\Http\Controllers\Admin\DemoProfileController;
+use App\Http\Controllers\Admin\ShowcaseProfileController;
 use App\Http\Controllers\Admin\GovernanceDashboardController;
 use App\Http\Controllers\Admin\HomepageImageController;
 use App\Http\Controllers\Admin\IntakeReviewController;
@@ -56,7 +56,7 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
         $totalProfiles = \App\Models\MatrimonyProfile::count();
         $activeProfiles = \App\Models\MatrimonyProfile::where('is_suspended', false)->count();
         $suspendedProfiles = \App\Models\MatrimonyProfile::where('is_suspended', true)->count();
-        $showcaseProfilesCount = \App\Models\MatrimonyProfile::where('is_demo', true)->count();
+        $showcaseProfilesCount = \App\Models\MatrimonyProfile::query()->whereShowcase()->count();
         $pendingAbuseReports = \App\Models\AbuseReport::where('status', 'open')->count();
         $totalBiodataIntakes = \App\Models\BiodataIntake::count();
 
@@ -269,10 +269,10 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
     Route::post('/auto-showcase-settings/fill-city-population', [AutoShowcaseSettingsController::class, 'fillCityPopulation'])->name('auto-showcase-settings.fill-city-population');
     Route::post('/auto-showcase-settings/reset-ai-population-locks', [AutoShowcaseSettingsController::class, 'resetAiPopulationDistrictLocks'])->name('auto-showcase-settings.reset-ai-population-locks');
 
-    Route::get('/showcase-profile/bulk-create', [DemoProfileController::class, 'bulkCreate'])->name('showcase-profile.bulk-create');
-    Route::post('/showcase-profiles/bulk', [DemoProfileController::class, 'bulkStore'])->name('showcase-profile.bulk-store');
-    Route::post('/showcase-profiles/{profile}/publish', [DemoProfileController::class, 'publish'])->name('showcase-profile.publish');
-    Route::post('/showcase-profiles/{profile}/delete', [DemoProfileController::class, 'delete'])->name('showcase-profile.delete');
+    Route::get('/showcase-profile/bulk-create', [ShowcaseProfileController::class, 'bulkCreate'])->name('showcase-profile.bulk-create');
+    Route::post('/showcase-profiles/bulk', [ShowcaseProfileController::class, 'bulkStore'])->name('showcase-profile.bulk-store');
+    Route::post('/showcase-profiles/{profile}/publish', [ShowcaseProfileController::class, 'publish'])->name('showcase-profile.publish');
+    Route::post('/showcase-profiles/{profile}/delete', [ShowcaseProfileController::class, 'delete'])->name('showcase-profile.delete');
 
     /*
     | Showcase Chat Orchestration (production-safe)

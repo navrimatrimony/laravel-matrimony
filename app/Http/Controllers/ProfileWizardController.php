@@ -201,7 +201,7 @@ class ProfileWizardController extends Controller
             return [];
         }
         $target = MatrimonyProfile::withTrashed()->find($targetId);
-        if ($target && ($target->is_demo ?? false)) {
+        if ($target && $target->isShowcaseProfile()) {
             return ['profile_id' => (string) $target->id];
         }
 
@@ -380,7 +380,7 @@ class ProfileWizardController extends Controller
             }
             if ($targetId > 0) {
                 $target = MatrimonyProfile::withTrashed()->find($targetId);
-                if ($target && ($target->is_demo ?? false)) {
+                if ($target && $target->isShowcaseProfile()) {
                     session(['admin_edit_profile_id' => (int) $target->id]);
 
                     return $target;

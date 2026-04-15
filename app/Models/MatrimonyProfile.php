@@ -10,6 +10,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\ValidationException;
 
 /*
@@ -149,7 +150,7 @@ class MatrimonyProfile extends Model
         'photo_rejected_at',
         'photo_rejection_reason',
         'photo_moderation_snapshot',
-        'is_demo',
+        'is_showcase',
         'visibility_override',
         'visibility_override_reason',
         'edited_by',
@@ -220,7 +221,7 @@ class MatrimonyProfile extends Model
         'is_suspended' => 'boolean',
         'photo_approved' => 'boolean',
         'photo_rejected_at' => 'datetime',
-        'is_demo' => 'boolean',
+        'is_showcase' => 'boolean',
         'visibility_override' => 'boolean',
         'edited_at' => 'datetime',
         'admin_edited_fields' => 'array',
@@ -312,6 +313,35 @@ class MatrimonyProfile extends Model
         }
 
         return asset('images/placeholders/default-profile.svg');
+    }
+
+    public function getIsShowcaseAttribute(): bool
+    {
+        $raw = $this->attributes['is_showcase'] ?? null;
+        return filter_var($raw, FILTER_VALIDATE_BOOLEAN) || (string) $raw === '1';
+    }
+
+    public function setIsShowcaseAttribute(mixed $value): void
+    {
+        $bool = filter_var($value, FILTER_VALIDATE_BOOLEAN) || (string) $value === '1';
+        $this->attributes['is_showcase'] = $bool ? 1 : 0;
+    }
+
+    public function isShowcaseProfile(): bool
+    {
+        return (bool) $this->is_showcase;
+    }
+
+    public function scopeWhereShowcase(Builder $query): Builder
+    {
+        return $query->where('is_showcase', true);
+    }
+
+    public function scopeWhereNonShowcase(Builder $query): Builder
+    {
+        return $query->where(function (Builder $q) {
+            $q->where('is_showcase', false)->orWhereNull('is_showcase');
+        });
     }
 
     /**

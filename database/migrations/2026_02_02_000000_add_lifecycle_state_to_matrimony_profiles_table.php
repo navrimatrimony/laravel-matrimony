@@ -6,7 +6,7 @@ use Illuminate\Support\Facades\Schema;
 
 /**
  * Phase-3 Day 7: Add canonical lifecycle_state to matrimony_profiles.
- * Governance-only; does NOT replace is_suspended, deleted_at, is_demo, visibility_override.
+ * Governance-only; does NOT replace is_suspended, deleted_at, legacy showcase flag, visibility_override.
  * Default ACTIVE = safe for existing profiles (preserves current visibility).
  */
 return new class extends Migration

@@ -10,7 +10,7 @@ use Illuminate\Database\Eloquent\Model;
 |--------------------------------------------------------------------------
 |
 | Tracks profile views: viewer_profile_id → viewed_profile_id.
-| Used for real→real, real→demo, demo→real (view-back).
+| Used for real→real and showcase↔real view-back flows.
 |
 */
 class ProfileView extends Model

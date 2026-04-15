@@ -18,7 +18,7 @@ class ShowcaseConversationTagService
         if (!$other) {
             return false;
         }
-        if (!($other->is_demo ?? false)) {
+        if (! $other->isShowcaseProfile()) {
             return false;
         }
 

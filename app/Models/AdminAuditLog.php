@@ -28,7 +28,6 @@ class AdminAuditLog extends Model
         'entity_type',
         'entity_id',
         'reason',
-        'is_demo',
     ];
 
     /*

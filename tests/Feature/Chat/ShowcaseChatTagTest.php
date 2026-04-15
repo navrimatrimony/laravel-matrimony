@@ -19,7 +19,7 @@ class ShowcaseChatTagTest extends TestCase
         $userB = User::factory()->create();
 
         $real = MatrimonyProfile::factory()->create(['user_id' => $userA->id, 'lifecycle_state' => 'active', 'is_suspended' => false]);
-        $showcase = MatrimonyProfile::factory()->create(['user_id' => $userB->id, 'lifecycle_state' => 'active', 'is_suspended' => false, 'is_demo' => true]);
+        $showcase = MatrimonyProfile::factory()->create(['user_id' => $userB->id, 'lifecycle_state' => 'active', 'is_suspended' => false, 'is_showcase' => true]);
 
         ShowcaseChatSetting::create([
             'matrimony_profile_id' => $showcase->id,

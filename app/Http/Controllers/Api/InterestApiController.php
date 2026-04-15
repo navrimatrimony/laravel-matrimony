@@ -57,7 +57,7 @@ class InterestApiController extends Controller
             ], 403);
         }
 
-        // Day 7: Sender lifecycle — Archived/Suspended/Demo-Hidden cannot send interest
+        // Day 7: Sender lifecycle — Archived/Suspended/Search-Hidden cannot send interest
         if (! ProfileLifecycleService::canInitiateInteraction($senderProfile)) {
             return response()->json([
                 'success' => false,
@@ -65,7 +65,7 @@ class InterestApiController extends Controller
             ], 403);
         }
 
-        // Day 7: Archived/Suspended/Demo-Hidden → interest blocked (receiver)
+        // Day 7: Archived/Suspended/Search-Hidden → interest blocked (receiver)
         if (! ProfileLifecycleService::canReceiveInterest($receiverProfile)) {
             return response()->json([
                 'success' => false,

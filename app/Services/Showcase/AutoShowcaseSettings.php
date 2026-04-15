@@ -94,7 +94,7 @@ class AutoShowcaseSettings
         return max(0, (int) AdminSetting::getValue('auto_showcase_daily_user_cap', '3'));
     }
 
-    /** draft | active — admin bulk showcase create (Demo profile bulk UI). Default draft when unset. */
+    /** draft | active — admin bulk showcase create (Showcase profile bulk UI). Default draft when unset. */
     public static function bulkShowcaseLifecycle(): string
     {
         $v = AdminSetting::getValue('showcase_bulk_create_lifecycle');

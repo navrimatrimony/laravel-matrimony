@@ -85,7 +85,7 @@ class AdminSettingsController extends Controller
      */
     public function showcaseSearchSettings()
     {
-        $visible = AdminSetting::getBool('showcase_profiles_visible_in_search', AdminSetting::getBool('demo_profiles_visible_in_search', true));
+        $visible = AdminSetting::getBool('showcase_profiles_visible_in_search', true);
         $oppositeGenderOnly = AdminSetting::getBool('search_opposite_gender_only', false);
 
         return view('admin.showcase-search-settings.index', [
@@ -106,9 +106,6 @@ class AdminSettingsController extends Controller
 
         $visible = $request->has('showcase_profiles_visible_in_search') ? '1' : '0';
         AdminSetting::setValue('showcase_profiles_visible_in_search', $visible);
-        // Backward-compatible mirror for older runtime reads.
-        AdminSetting::setValue('demo_profiles_visible_in_search', $visible);
-
         $oppositeOnly = $request->has('search_opposite_gender_only') ? '1' : '0';
         AdminSetting::setValue('search_opposite_gender_only', $oppositeOnly);
 

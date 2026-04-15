@@ -83,7 +83,7 @@ class MatrimonyProfileController extends Controller
             }
             if ($targetId > 0) {
                 $target = MatrimonyProfile::withTrashed()->find($targetId);
-                if ($target && ($target->is_demo ?? false)) {
+                if ($target && $target->isShowcaseProfile()) {
                     session(['admin_edit_profile_id' => (int) $target->id]);
 
                     return $target;
@@ -105,7 +105,7 @@ class MatrimonyProfileController extends Controller
         if (! $user || ! method_exists($user, 'isAnyAdmin') || ! $user->isAnyAdmin()) {
             return [];
         }
-        if (! ($profile->is_demo ?? false)) {
+        if (! $profile->isShowcaseProfile()) {
             return [];
         }
 
@@ -488,7 +488,7 @@ class MatrimonyProfileController extends Controller
                 ['error' => __('profile_actions.create_profile_first')]
             );
         }
-        if (! ($profile->is_demo ?? false) && (int) $profile->user_id !== (int) $user->id) {
+        if (! $profile->isShowcaseProfile() && (int) $profile->user_id !== (int) $user->id) {
             abort(403, __('common.unauthorized_photo_update'));
         }
 

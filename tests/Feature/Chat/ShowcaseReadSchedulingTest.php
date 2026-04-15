@@ -22,7 +22,7 @@ class ShowcaseReadSchedulingTest extends TestCase
         $showUser = User::factory()->create();
 
         $real = MatrimonyProfile::factory()->create(['user_id' => $realUser->id, 'lifecycle_state' => 'active', 'is_suspended' => false]);
-        $showcase = MatrimonyProfile::factory()->create(['user_id' => $showUser->id, 'lifecycle_state' => 'active', 'is_suspended' => false, 'is_demo' => true]);
+        $showcase = MatrimonyProfile::factory()->create(['user_id' => $showUser->id, 'lifecycle_state' => 'active', 'is_suspended' => false, 'is_showcase' => true]);
 
         ShowcaseChatSetting::create([
             'matrimony_profile_id' => $showcase->id,
@@ -63,7 +63,7 @@ class ShowcaseReadSchedulingTest extends TestCase
         $showUser = User::factory()->create();
 
         $real = MatrimonyProfile::factory()->create(['user_id' => $realUser->id, 'lifecycle_state' => 'active', 'is_suspended' => false]);
-        $showcase = MatrimonyProfile::factory()->create(['user_id' => $showUser->id, 'lifecycle_state' => 'active', 'is_suspended' => false, 'is_demo' => true]);
+        $showcase = MatrimonyProfile::factory()->create(['user_id' => $showUser->id, 'lifecycle_state' => 'active', 'is_suspended' => false, 'is_showcase' => true]);
 
         ShowcaseChatSetting::create([
             'matrimony_profile_id' => $showcase->id,

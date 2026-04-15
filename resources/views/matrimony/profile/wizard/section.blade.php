@@ -12,7 +12,7 @@
     $partnerPrefNavItems = $partnerPrefNavItems ?? [];
     $partnerPrefSection = $partnerPrefSection ?? 'basics';
     $wizardAdminQuery = [];
-    if (auth()->check() && auth()->user()->isAnyAdmin() && ($profile->is_demo ?? false)) {
+    if (auth()->check() && auth()->user()->isAnyAdmin() && $profile->isShowcaseProfile()) {
         $wizardAdminQuery['profile_id'] = $profile->id;
     }
     $wizardSectionLink = function (string $sec) use ($wizardAdminQuery): array {
@@ -150,7 +150,7 @@
                     </div>
                     <form method="POST" action="{{ route('matrimony.profile.wizard.store', ['section' => $currentSection]) }}" enctype="{{ in_array($currentSection, ['photo', 'full'], true) ? 'multipart/form-data' : 'application/x-www-form-urlencoded' }}" class="p-4 sm:p-6">
                         @csrf
-                        @if (auth()->user()->isAnyAdmin() && ($profile->is_demo ?? false))
+                        @if (auth()->user()->isAnyAdmin() && $profile->isShowcaseProfile())
                             <input type="hidden" name="profile_id" value="{{ $profile->id }}">
                         @endif
                         @if ($currentSection === 'about-preferences')

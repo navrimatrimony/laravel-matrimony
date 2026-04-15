@@ -22,7 +22,7 @@ class ShowcaseTimelineConsistencyTest extends TestCase
         $showUser = User::factory()->create();
 
         $real = MatrimonyProfile::factory()->create(['user_id' => $realUser->id, 'lifecycle_state' => 'active', 'is_suspended' => false]);
-        $showcase = MatrimonyProfile::factory()->create(['user_id' => $showUser->id, 'lifecycle_state' => 'active', 'is_suspended' => false, 'is_demo' => true]);
+        $showcase = MatrimonyProfile::factory()->create(['user_id' => $showUser->id, 'lifecycle_state' => 'active', 'is_suspended' => false, 'is_showcase' => true]);
 
         ShowcaseChatSetting::create([
             'matrimony_profile_id' => $showcase->id,
@@ -71,7 +71,7 @@ class ShowcaseTimelineConsistencyTest extends TestCase
         $showUser = User::factory()->create();
 
         $real = MatrimonyProfile::factory()->create(['user_id' => $realUser->id, 'lifecycle_state' => 'active', 'is_suspended' => false]);
-        $showcase = MatrimonyProfile::factory()->create(['user_id' => $showUser->id, 'lifecycle_state' => 'active', 'is_suspended' => false, 'is_demo' => true]);
+        $showcase = MatrimonyProfile::factory()->create(['user_id' => $showUser->id, 'lifecycle_state' => 'active', 'is_suspended' => false, 'is_showcase' => true]);
 
         ShowcaseChatSetting::create([
             'matrimony_profile_id' => $showcase->id,
@@ -134,7 +134,7 @@ class ShowcaseTimelineConsistencyTest extends TestCase
         $showUser = User::factory()->create();
 
         $real = MatrimonyProfile::factory()->create(['user_id' => $realUser->id, 'lifecycle_state' => 'active', 'is_suspended' => false]);
-        $showcase = MatrimonyProfile::factory()->create(['user_id' => $showUser->id, 'lifecycle_state' => 'active', 'is_suspended' => false, 'is_demo' => true]);
+        $showcase = MatrimonyProfile::factory()->create(['user_id' => $showUser->id, 'lifecycle_state' => 'active', 'is_suspended' => false, 'is_showcase' => true]);
 
         ShowcaseChatSetting::create([
             'matrimony_profile_id' => $showcase->id,
@@ -144,6 +144,7 @@ class ShowcaseTimelineConsistencyTest extends TestCase
             'read_delay_min_minutes' => 5,
             'read_delay_max_minutes' => 5,
             'reply_probability_percent' => 0,
+            'personality_preset' => 'reserved',
         ]);
 
         $this->actingAs($realUser)->post(route('chat.start', ['matrimony_profile' => $showcase->id]))->assertRedirect();
@@ -169,7 +170,7 @@ class ShowcaseTimelineConsistencyTest extends TestCase
         $showUser = User::factory()->create();
 
         $real = MatrimonyProfile::factory()->create(['user_id' => $realUser->id, 'lifecycle_state' => 'active', 'is_suspended' => false]);
-        $showcase = MatrimonyProfile::factory()->create(['user_id' => $showUser->id, 'lifecycle_state' => 'active', 'is_suspended' => false, 'is_demo' => true]);
+        $showcase = MatrimonyProfile::factory()->create(['user_id' => $showUser->id, 'lifecycle_state' => 'active', 'is_suspended' => false, 'is_showcase' => true]);
 
         ShowcaseChatSetting::create([
             'matrimony_profile_id' => $showcase->id,

@@ -58,7 +58,7 @@ class ShowcaseChatSettingsService
 
     public function isShowcaseChatEnabled(MatrimonyProfile $profile): bool
     {
-        if (!($profile->is_demo ?? false)) {
+        if (! $profile->isShowcaseProfile()) {
             return false;
         }
 

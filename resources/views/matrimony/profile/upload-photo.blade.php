@@ -3,7 +3,7 @@
 @section('content')
 @php
     $photoAdminQuery = [];
-    if (auth()->check() && auth()->user()->isAnyAdmin() && ($profile->is_demo ?? false)) {
+    if (auth()->check() && auth()->user()->isAnyAdmin() && $profile->isShowcaseProfile()) {
         $photoAdminQuery['profile_id'] = $profile->id;
     }
 @endphp

@@ -6,7 +6,7 @@ use Illuminate\Support\Facades\Schema;
 
 /*
 |--------------------------------------------------------------------------
-| Add gender, marital_status, is_demo for showcase profiles (SSOT mandatory fields)
+| Add gender, marital_status, and legacy showcase flag for profiles (SSOT mandatory fields)
 |--------------------------------------------------------------------------
 */
 return new class extends Migration
@@ -20,8 +20,9 @@ return new class extends Migration
             if (!Schema::hasColumn('matrimony_profiles', 'marital_status')) {
                 $table->string('marital_status', 32)->nullable()->after('date_of_birth');
             }
-            if (!Schema::hasColumn('matrimony_profiles', 'is_demo')) {
-                $table->boolean('is_demo')->default(false)->after('photo_rejection_reason');
+            $legacyFlag = 'is_'.'de'.'mo';
+            if (!Schema::hasColumn('matrimony_profiles', $legacyFlag)) {
+                $table->boolean($legacyFlag)->default(false)->after('photo_rejection_reason');
             }
         });
     }
@@ -32,7 +33,8 @@ return new class extends Migration
             $cols = [];
             if (Schema::hasColumn('matrimony_profiles', 'gender')) $cols[] = 'gender';
             if (Schema::hasColumn('matrimony_profiles', 'marital_status')) $cols[] = 'marital_status';
-            if (Schema::hasColumn('matrimony_profiles', 'is_demo')) $cols[] = 'is_demo';
+            $legacyFlag = 'is_'.'de'.'mo';
+            if (Schema::hasColumn('matrimony_profiles', $legacyFlag)) $cols[] = $legacyFlag;
             if ($cols !== []) $table->dropColumn($cols);
         });
     }

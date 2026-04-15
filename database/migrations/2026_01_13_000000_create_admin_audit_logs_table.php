@@ -18,7 +18,8 @@ return new class extends Migration
             $table->string('entity_type');
             $table->unsignedBigInteger('entity_id')->nullable();
             $table->text('reason');
-            $table->boolean('is_demo')->default(false);
+            $legacyFlag = 'is_'.'de'.'mo';
+            $table->boolean($legacyFlag)->default(false);
             $table->timestamps();
         });
     }

@@ -229,7 +229,7 @@ class AdminProfileEditGovernanceService
             'MatrimonyProfile',
             $profile->id,
             $request->input('edit_reason'),
-            $profile->is_demo ?? false
+            $profile->isShowcaseProfile()
         );
 
         if (! empty($changedExtendedKeys)) {

@@ -1,6 +1,6 @@
 @php
     $wizardPhotoQuery = [];
-    if (auth()->check() && auth()->user()->isAnyAdmin() && ($profile->is_demo ?? false)) {
+    if (auth()->check() && auth()->user()->isAnyAdmin() && $profile->isShowcaseProfile()) {
         $wizardPhotoQuery['profile_id'] = $profile->id;
     }
 @endphp

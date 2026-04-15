@@ -11,7 +11,7 @@ use Illuminate\Notifications\Notification;
 | ProfileViewedNotification (SSOT Day-9 — Recovery-Day-R4)
 |--------------------------------------------------------------------------
 |
-| Notifies user when their profile is viewed (or view-back by demo).
+| Notifies user when their profile is viewed (or view-back by showcase).
 |
 */
 class ProfileViewedNotification extends Notification

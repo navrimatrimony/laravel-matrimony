@@ -169,7 +169,7 @@ class ShowcaseOrchestrationService
         $incoming->loadMissing(['conversation', 'senderProfile', 'receiverProfile']);
 
         $receiver = $incoming->receiverProfile;
-        if (! $receiver || !($receiver->is_demo ?? false)) {
+        if (! $receiver || ! $receiver->isShowcaseProfile()) {
             return;
         }
 

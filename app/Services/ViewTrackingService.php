@@ -63,7 +63,7 @@ class ViewTrackingService
         if (self::isBlocked($viewer->id, $viewed->id)) {
             return;
         }
-        if (!($viewed->is_demo ?? false) || ($viewer->is_demo ?? false)) {
+        if (! $viewed->isShowcaseProfile() || $viewer->isShowcaseProfile()) {
             return;
         }
 
@@ -137,7 +137,7 @@ class ViewTrackingService
         if (! $user) {
             return;
         }
-        if ($viewer->is_demo ?? false) {
+        if ($viewer->isShowcaseProfile()) {
             return;
         }
 

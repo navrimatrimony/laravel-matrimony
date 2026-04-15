@@ -24,9 +24,7 @@ class ShowcaseEligibleCityPopulationService
     {
         $d1 = MatrimonyProfile::query()
             ->whereNotNull('district_id')
-            ->where(function ($q) {
-                $q->where('is_demo', false)->orWhereNull('is_demo');
-            })
+            ->whereNonShowcase()
             ->distinct()
             ->pluck('district_id');
 
@@ -35,7 +33,7 @@ class ShowcaseEligibleCityPopulationService
             ->join('talukas as t', 't.id', '=', 'c.taluka_id')
             ->whereNotNull('mp.city_id')
             ->where(function ($q) {
-                $q->where('mp.is_demo', false)->orWhereNull('mp.is_demo');
+                $q->where('mp.is_showcase', false)->orWhereNull('mp.is_showcase');
             })
             ->distinct()
             ->pluck('t.district_id');

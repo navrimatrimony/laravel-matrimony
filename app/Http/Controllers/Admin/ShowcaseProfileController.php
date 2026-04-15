@@ -13,12 +13,12 @@ use Illuminate\Support\Facades\Schema;
 
 /*
 |--------------------------------------------------------------------------
-| DemoProfileController (SSOT)
+| ShowcaseProfileController (SSOT)
 |--------------------------------------------------------------------------
 | Showcase profiles are created only via the bulk UI: each profile
 | gets its own system user. Core creation lives in {@see ShowcaseProfileFactory}.
 */
-class DemoProfileController extends Controller
+class ShowcaseProfileController extends Controller
 {
     public function bulkCreate()
     {
@@ -32,13 +32,13 @@ class DemoProfileController extends Controller
         if (! empty($ids)) {
             $createdProfiles = MatrimonyProfile::query()
                 ->whereIn('id', $ids)
-                ->where('is_demo', true)
+                ->whereShowcase()
                 ->orderByDesc('id')
                 ->get();
         }
 
         $recentShowcase = MatrimonyProfile::query()
-            ->where('is_demo', true)
+            ->whereShowcase()
             ->orderByDesc('id')
             ->limit(50)
             ->get();
@@ -89,7 +89,7 @@ class DemoProfileController extends Controller
 
     public function publish(Request $request, MatrimonyProfile $profile)
     {
-        if (! ($profile->is_demo ?? false)) {
+        if (! $profile->isShowcaseProfile()) {
             abort(404);
         }
 
@@ -105,7 +105,7 @@ class DemoProfileController extends Controller
 
     public function delete(Request $request, MatrimonyProfile $profile)
     {
-        if (! ($profile->is_demo ?? false)) {
+        if (! $profile->isShowcaseProfile()) {
             abort(404);
         }
 
@@ -113,7 +113,6 @@ class DemoProfileController extends Controller
             DB::transaction(function () use ($profile) {
                 $pid = (int) $profile->id;
 
-                // Chats
                 $conversationIds = DB::table('conversations')
                     ->where('profile_one_id', $pid)
                     ->orWhere('profile_two_id', $pid)
@@ -126,7 +125,6 @@ class DemoProfileController extends Controller
                     DB::table('conversations')->whereIn('id', $conversationIds)->delete();
                 }
 
-                // Common engagement tables (best-effort cleanup)
                 if (Schema::hasTable('interests')) {
                     DB::table('interests')->where('sender_profile_id', $pid)->orWhere('receiver_profile_id', $pid)->delete();
                 }
@@ -143,7 +141,6 @@ class DemoProfileController extends Controller
                     DB::table('hidden_profiles')->where('owner_profile_id', $pid)->orWhere('hidden_profile_id', $pid)->delete();
                 }
 
-                // Profile-owned child tables (best-effort)
                 if (Schema::hasTable('profile_photos')) {
                     DB::table('profile_photos')->where('profile_id', $pid)->delete();
                 }
@@ -184,8 +181,7 @@ class DemoProfileController extends Controller
                 if (Schema::hasTable('profile_horoscopes')) {
                     DB::table('profile_horoscopes')->where('profile_id', $pid)->delete();
                 }
-                // Phase-5 / schema: FK restrictOnDelete on matrimony_profiles — clear before forceDelete().
-                // Table => FK column (some tables use matrimony_profile_id, not profile_id).
+
                 foreach ([
                     ['profile_change_history', 'profile_id'],
                     ['profile_field_locks', 'profile_id'],
@@ -209,10 +205,8 @@ class DemoProfileController extends Controller
                     }
                 }
 
-                // Finally: hard delete profile row.
                 $profile->forceDelete();
 
-                // If it is a system showcase user (@system.local), hard delete the user too.
                 $owner = $profile->user;
                 if ($owner && str_ends_with((string) $owner->email, '@system.local')) {
                     $owner->forceDelete();
@@ -221,7 +215,6 @@ class DemoProfileController extends Controller
         } catch (QueryException $e) {
             $state = $e->errorInfo[0] ?? '';
             $code = (int) ($e->errorInfo[1] ?? 0);
-            // MySQL 1451: cannot delete parent (child FK still references row).
             if ($state === '23000' && $code === 1451) {
                 $profile->delete();
 

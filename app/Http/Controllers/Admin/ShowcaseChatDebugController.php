@@ -19,7 +19,7 @@ class ShowcaseChatDebugController extends Controller
     {
         $p1 = MatrimonyProfile::find($conversation->profile_one_id);
         $p2 = MatrimonyProfile::find($conversation->profile_two_id);
-        $showcase = ($p1 && ($p1->is_demo ?? false)) ? $p1 : (($p2 && ($p2->is_demo ?? false)) ? $p2 : null);
+        $showcase = ($p1 && $p1->isShowcaseProfile()) ? $p1 : (($p2 && $p2->isShowcaseProfile()) ? $p2 : null);
         abort_unless($showcase !== null, 404);
 
         $other = ($showcase->id === $p1?->id) ? $p2 : $p1;

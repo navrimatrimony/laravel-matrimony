@@ -3,7 +3,7 @@
 namespace App\Services\Showcase;
 
 use App\Models\MatrimonyProfile;
-use App\Services\DemoProfileDefaultsService;
+use App\Services\ShowcaseProfileDefaultsService;
 use App\Services\PartnerPreferencePresetService;
 use App\Services\PartnerPreferenceSuggestionService;
 
@@ -22,7 +22,7 @@ class ShowcasePartnerPreferenceSnapshotBuilder
             $mode = 'rules_autofill';
         }
 
-        $fallback = DemoProfileDefaultsService::postCreateSnapshotForDemoProfile($showcase->fresh())['preferences'] ?? [];
+        $fallback = ShowcaseProfileDefaultsService::postCreateSnapshotForShowcaseProfile($showcase->fresh())['preferences'] ?? [];
 
         return match ($mode) {
             'match_searcher' => $this->matchSearcherPreferences($showcase, $searcher, $fallback),

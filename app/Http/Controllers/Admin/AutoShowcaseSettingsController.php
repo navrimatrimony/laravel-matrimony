@@ -38,7 +38,7 @@ class AutoShowcaseSettingsController extends Controller
             ->get();
 
         $bulkPolicy = ShowcaseBulkCreateSettings::policy();
-        $bulkDistricts = ShowcaseBulkCreateSettings::eligibleNonDemoDistrictModels();
+        $bulkDistricts = ShowcaseBulkCreateSettings::eligibleNonShowcaseDistrictModels();
         $countries = Country::query()->orderBy('name')->get();
         $states = State::query()->orderBy('name')->limit(600)->get();
         $castes = Caste::query()

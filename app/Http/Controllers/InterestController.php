@@ -99,7 +99,7 @@ class InterestController extends Controller
             abort(403, __('interest.create_profile_first'));
         }
 
-        // Day 7: Sender lifecycle — Archived/Suspended/Demo-Hidden cannot send interest
+        // Day 7: Sender lifecycle — Archived/Suspended/Search-Hidden cannot send interest
         if (! ProfileLifecycleService::canInitiateInteraction($senderProfile)) {
             return back()->with('error', __('interest.sender_cannot_send_current_state'));
         }
@@ -112,7 +112,7 @@ class InterestController extends Controller
             return back()->with('error', __('interest.cannot_send_to_profile'));
         }
 
-        // Day 7: Archived/Suspended/Demo-Hidden → interest blocked
+        // Day 7: Archived/Suspended/Search-Hidden → interest blocked
         if (! ProfileLifecycleService::canReceiveInterest($receiverProfile)) {
             return back()->with('error', __('interest.cannot_send_to_profile'));
         }

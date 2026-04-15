@@ -46,7 +46,7 @@ class MatchingEngineAdminTest extends TestCase
             'gender_id' => $maleGid,
             'lifecycle_state' => 'active',
             'is_suspended' => false,
-            'is_demo' => false,
+            'is_showcase' => false,
             'date_of_birth' => now()->subYears(28),
         ]);
         MatrimonyProfile::factory()->create([
@@ -54,7 +54,7 @@ class MatchingEngineAdminTest extends TestCase
             'gender_id' => $femaleGid,
             'lifecycle_state' => 'active',
             'is_suspended' => false,
-            'is_demo' => false,
+            'is_showcase' => false,
             'date_of_birth' => now()->subYears(26),
         ]);
 

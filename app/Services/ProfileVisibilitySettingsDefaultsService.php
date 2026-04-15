@@ -20,7 +20,7 @@ class ProfileVisibilitySettingsDefaultsService
             return;
         }
 
-        $payload = ($profile->is_demo ?? false)
+        $payload = $profile->isShowcaseProfile()
             ? self::showcaseDefaults()
             : self::registrationDefaults();
 
