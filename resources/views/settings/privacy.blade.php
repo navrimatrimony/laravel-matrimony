@@ -40,10 +40,18 @@
         @endif
 
         @php
-            $visibilityScope = old('visibility_scope', $visibilitySettings->visibility_scope ?? null);
-            $showPhotoTo = old('show_photo_to', $visibilitySettings->show_photo_to ?? null);
-            $showContactTo = old('show_contact_to', $visibilitySettings->show_contact_to ?? null);
-            $hideFromBlocked = old('hide_from_blocked_users', $visibilitySettings->hide_from_blocked_users ?? true);
+            $visibilityScope = old('visibility_scope', $visibilitySettings?->visibility_scope ?? null);
+            $showPhotoTo = old('show_photo_to', $visibilitySettings?->show_photo_to ?? null);
+            $cvR = $contactVisibilityResolved ?? [];
+            $cvRule = old('contact_visibility_rule', $cvR['rule'] ?? 'anyone');
+            $cvStrict = old('contact_visibility_strictness', $cvR['strictness'] ?? 'balanced');
+            $strictnessSliderMap = ['relaxed' => 0, 'balanced' => 1, 'strict' => 2];
+            $cvStrictSlider = (int) ($strictnessSliderMap[$cvStrict] ?? 1);
+            $idVerified = (bool) ($cvR['filters']['id_verified_only'] ?? $cvR['filters']['verified_only'] ?? false);
+            $cvIdVerified = old('contact_visibility_id_verified_only', $idVerified ? '1' : '0');
+            $cvPhoto = old('contact_visibility_photo_only', ($cvR['filters']['photo_only'] ?? false) ? '1' : '0');
+            $cvRequireRequest = old('contact_visibility_require_contact_request', ($cvR['require_contact_request'] ?? false) ? '1' : '0');
+            $cvApproval = old('contact_visibility_approval_required', ($cvR['approval_required'] ?? false) ? '1' : '0');
         @endphp
 
         <form method="POST" action="{{ route('user.settings.privacy.update') }}" class="space-y-6">
@@ -85,37 +93,82 @@
             </div>
 
             <div class="bg-white dark:bg-gray-800 shadow-sm border border-gray-200 dark:border-gray-700 rounded-lg p-6">
-                <div class="text-lg font-semibold text-gray-900 dark:text-gray-100">{{ __('Contact detail visibility') }}</div>
+                <div class="text-lg font-semibold text-gray-900 dark:text-gray-100">{{ __('settings_privacy.contact_details_visibility_title') }}</div>
                 <div class="mt-2 text-sm text-gray-600 dark:text-gray-400">
-                    {{ __('This controls when contact details can be unlocked for other profiles.') }}
+                    {{ __('settings_privacy.contact_details_visibility_intro') }}
                 </div>
 
-                <div class="mt-4">
-                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                        {{ __('Show contact to') }}
-                    </label>
-                    <select name="show_contact_to"
-                            class="mt-2 w-full rounded-md border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
-                            required>
-                        <option value="" {{ $showContactTo === null ? 'selected' : '' }}>{{ __('Choose...') }}</option>
-                        <option value="everyone" {{ $showContactTo === 'everyone' ? 'selected' : '' }}>{{ __('Everyone (plan limits still apply)') }}</option>
-                        <option value="premium_only" {{ $showContactTo === 'premium_only' ? 'selected' : '' }}>{{ __('Paid subscribers only') }}</option>
-                        <option value="accepted_interest" {{ $showContactTo === 'accepted_interest' ? 'selected' : '' }}>{{ __('After interest accepted') }}</option>
-                        <option value="unlock_only" {{ $showContactTo === 'unlock_only' ? 'selected' : '' }}>{{ __('Unlocked only') }}</option>
-                        <option value="no_one" {{ $showContactTo === 'no_one' ? 'selected' : '' }}>{{ __('No one') }}</option>
-                    </select>
+                <input type="hidden" name="hide_from_blocked_users" value="1">
+
+                <div class="mt-6">
+                    <div class="text-base font-semibold text-gray-900 dark:text-gray-100">{{ __('settings_privacy.who_can_see_contact_heading') }}</div>
+
+                    <div class="mt-4 space-y-3">
+                        @foreach ([
+                            'anyone' => __('settings_privacy.contact_rule_anyone'),
+                            'interest' => __('settings_privacy.contact_rule_interest'),
+                            'matching' => __('settings_privacy.contact_rule_matching'),
+                            'none' => __('settings_privacy.contact_rule_none'),
+                        ] as $val => $label)
+                            <label class="flex items-center gap-2 text-sm text-gray-800 dark:text-gray-200">
+                                <input type="radio" name="contact_visibility_rule" value="{{ $val }}" class="rounded-full border-gray-400 text-red-600" @checked($cvRule === $val) required>
+                                <span>{{ $label }}</span>
+                            </label>
+                        @endforeach
+                    </div>
+
+                    <div class="mt-6">
+                        <span class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">{{ __('settings_privacy.match_preference_heading') }}</span>
+                        <input type="hidden" name="contact_visibility_strictness" id="contact_visibility_strictness" value="{{ $cvStrict }}">
+                        <input type="range"
+                               id="contact_strictness_slider"
+                               min="0"
+                               max="2"
+                               step="1"
+                               value="{{ $cvStrictSlider }}"
+                               class="w-full accent-red-600">
+                        <div class="mt-2 flex justify-between text-xs text-gray-500 dark:text-gray-400">
+                            <span>{{ __('settings_privacy.strictness_relaxed') }}</span>
+                            <span>{{ __('settings_privacy.strictness_balanced') }}</span>
+                            <span>{{ __('settings_privacy.strictness_strict') }}</span>
+                        </div>
+                    </div>
+
+                    <div class="mt-6 text-sm font-medium text-gray-700 dark:text-gray-300">
+                        {{ __('settings_privacy.show_contact_details_only_to_heading') }}
+                    </div>
+                    <div class="mt-2 space-y-3">
+                        <label class="flex items-start gap-3">
+                            <input type="hidden" name="contact_visibility_id_verified_only" value="0">
+                            <input type="checkbox" name="contact_visibility_id_verified_only" value="1" class="mt-1" @checked($cvIdVerified === '1' || $cvIdVerified === true || $cvIdVerified === 1)>
+                            <span class="text-sm text-gray-700 dark:text-gray-200">{{ __('settings_privacy.filter_id_verified') }}</span>
+                        </label>
+                        <label class="flex items-start gap-3">
+                            <input type="hidden" name="contact_visibility_photo_only" value="0">
+                            <input type="checkbox" name="contact_visibility_photo_only" value="1" class="mt-1" @checked($cvPhoto === '1' || $cvPhoto === true || $cvPhoto === 1)>
+                            <span class="text-sm text-gray-700 dark:text-gray-200">{{ __('settings_privacy.filter_photo_only') }}</span>
+                        </label>
+                    </div>
+
+                    <div class="mt-6 space-y-3">
+                        <label class="flex items-start gap-3">
+                            <input type="hidden" name="contact_visibility_require_contact_request" value="0">
+                            <input type="checkbox" name="contact_visibility_require_contact_request" value="1" class="mt-1" @checked($cvRequireRequest === '1' || $cvRequireRequest === true || $cvRequireRequest === 1)>
+                            <span class="text-sm text-gray-700 dark:text-gray-200">{{ __('settings_privacy.require_contact_request_label') }}</span>
+                        </label>
+                        <label class="flex items-start gap-3">
+                            <input type="hidden" name="contact_visibility_approval_required" value="0">
+                            <input type="checkbox" name="contact_visibility_approval_required" value="1" class="mt-1" @checked($cvApproval === '1' || $cvApproval === true || $cvApproval === 1)>
+                            <span class="text-sm text-gray-700 dark:text-gray-200">{{ __('settings_privacy.ask_permission_before_sharing') }}</span>
+                        </label>
+                    </div>
                 </div>
 
-                <div class="mt-4">
-                    <label class="flex items-start gap-3">
-                        <input type="hidden" name="hide_from_blocked_users" value="0">
-                        <input type="checkbox"
-                               name="hide_from_blocked_users"
-                               value="1"
-                               class="mt-1"
-                               {{ $hideFromBlocked ? 'checked' : '' }}>
+                <div class="mt-6 pt-4 border-t border-gray-200 dark:border-gray-700">
+                    <label class="flex items-start gap-3 opacity-90 cursor-not-allowed">
+                        <input type="checkbox" class="mt-1" checked disabled>
                         <span class="text-sm text-gray-700 dark:text-gray-200">
-                            {{ __('Hide photo/contact from users you have blocked.') }}
+                            {{ __('settings_privacy.blocked_users_never_see_contact') }}
                         </span>
                     </label>
                 </div>
@@ -134,5 +187,21 @@
         </form>
     </div>
 </div>
+<script>
+(function () {
+    var map = ['relaxed', 'balanced', 'strict'];
+    var slider = document.getElementById('contact_strictness_slider');
+    var hidden = document.getElementById('contact_visibility_strictness');
+    if (!slider || !hidden) return;
+    function syncFromSlider() {
+        var i = parseInt(slider.value, 10);
+        if (isNaN(i) || i < 0 || i > 2) i = 1;
+        hidden.value = map[i] || 'balanced';
+    }
+    slider.addEventListener('input', syncFromSlider);
+    slider.addEventListener('change', syncFromSlider);
+    syncFromSlider();
+})();
+</script>
 @endsection
 

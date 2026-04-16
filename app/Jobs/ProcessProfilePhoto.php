@@ -60,14 +60,13 @@ class ProcessProfilePhoto implements ShouldQueue
         $optimized = $optimizer->optimizeAndStoreProfilePhoto($this->tempImagePath, $base);
         $finalFilename = $optimized['filename'];
 
-        $photoApprovalRequired = AdminSettingService::isPhotoApprovalRequired();
-
         $photoApproved = false;
         $rejectedAt = null;
         $rejectionReason = null;
 
         if (($result['status'] ?? null) === 'approved') {
-            $photoApproved = ! $photoApprovalRequired;
+            // Auto decisions should be applied immediately (no admin wait).
+            $photoApproved = true;
         } elseif (($result['status'] ?? null) === 'rejected') {
             $photoApproved = false;
             $rejectedAt = now();
@@ -85,7 +84,7 @@ class ProcessProfilePhoto implements ShouldQueue
         Log::info('PHOTO APPROVED OR REJECTED', [
             'profile_id' => $this->profileId,
             'status' => $status,
-            'photo_approval_required' => $photoApprovalRequired,
+            'photo_approval_required' => AdminSettingService::isPhotoApprovalRequired(),
             'final_filename' => $finalFilename,
         ]);
 

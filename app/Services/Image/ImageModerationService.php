@@ -33,6 +33,133 @@ class ImageModerationService
                 'meta' => ['nudenet' => $nn],
             ];
         }
+        $apiStatus = strtolower(trim((string) ($nn['raw']['api_status'] ?? $nn['raw']['status'] ?? '')));
+        $pipelineConfidence = (float) ($nn['raw']['pipeline_confidence'] ?? $nn['raw']['confidence'] ?? $nn['confidence'] ?? 0.0);
+
+        if ($apiStatus === 'safe') {
+            return [
+                'status' => 'approved',
+                'reason' => null,
+                'meta' => [
+                    'nudenet' => $nn,
+                    'auto_decision' => 'approved_from_safe',
+                    'auto_confidence' => round($pipelineConfidence, 4),
+                ],
+            ];
+        }
+
+        if ($apiStatus === 'unsafe') {
+            return [
+                'status' => 'rejected',
+                'reason' => 'Rejected by automated moderation (unsafe).',
+                'meta' => [
+                    'nudenet' => $nn,
+                    'auto_decision' => 'rejected_from_unsafe',
+                    'auto_confidence' => round($pipelineConfidence, 4),
+                ],
+            ];
+        }
+
+        if ($apiStatus === 'review') {
+            $detections = $nn['raw']['detections'] ?? [];
+            $maxButtocksCovered = 0.0;
+            $maxBreastCovered = 0.0;
+            if (is_array($detections)) {
+                foreach ($detections as $det) {
+                    if (! is_array($det)) {
+                        continue;
+                    }
+                    $cls = strtoupper(trim((string) ($det['class'] ?? $det['label'] ?? '')));
+                    $score = (float) ($det['score'] ?? $det['confidence'] ?? 0.0);
+                    if ($cls === 'BUTTOCKS_COVERED') {
+                        $maxButtocksCovered = max($maxButtocksCovered, $score);
+                    } elseif ($cls === 'FEMALE_BREAST_COVERED') {
+                        $maxBreastCovered = max($maxBreastCovered, $score);
+                    }
+                }
+            }
+
+            if ($maxBreastCovered > 0.0) {
+                if ($maxBreastCovered < 0.55) {
+                    return [
+                        'status' => 'approved',
+                        'reason' => null,
+                        'meta' => [
+                            'nudenet' => $nn,
+                            'auto_decision' => 'approved_from_review_breast_covered_low',
+                            'auto_confidence' => round($pipelineConfidence, 4),
+                        ],
+                    ];
+                }
+                if ($maxBreastCovered < 0.75) {
+                    return [
+                        'status' => 'pending_manual',
+                        'reason' => 'Manual review required (breast covered score medium).',
+                        'meta' => [
+                            'nudenet' => $nn,
+                            'auto_decision' => 'pending_from_review_breast_covered_medium',
+                            'auto_confidence' => round($pipelineConfidence, 4),
+                        ],
+                    ];
+                }
+
+                return [
+                    'status' => 'rejected',
+                    'reason' => 'Rejected by automated moderation (breast covered score high).',
+                    'meta' => [
+                        'nudenet' => $nn,
+                        'auto_decision' => 'rejected_from_review_breast_covered_high',
+                        'auto_confidence' => round($pipelineConfidence, 4),
+                    ],
+                ];
+            }
+
+            if ($pipelineConfidence >= 0.75) {
+                return [
+                    'status' => 'rejected',
+                    'reason' => 'Rejected by automated moderation (review confidence high).',
+                    'meta' => [
+                        'nudenet' => $nn,
+                        'auto_decision' => 'rejected_from_review_high_confidence',
+                        'auto_confidence' => round($pipelineConfidence, 4),
+                    ],
+                ];
+            }
+            if ($pipelineConfidence >= 0.60) {
+                return [
+                    'status' => 'pending_manual',
+                    'reason' => 'Manual review required (review confidence medium).',
+                    'meta' => [
+                        'nudenet' => $nn,
+                        'auto_decision' => 'pending_from_review_medium_confidence',
+                        'auto_confidence' => round($pipelineConfidence, 4),
+                    ],
+                ];
+            }
+
+            if ($maxButtocksCovered > 0.4 || $maxBreastCovered > 0.5) {
+                return [
+                    'status' => 'pending_manual',
+                    'reason' => 'Manual review required (review low confidence with suggestive detections).',
+                    'meta' => [
+                        'nudenet' => $nn,
+                        'auto_decision' => 'pending_from_review_low_confidence_suggestive',
+                        'auto_confidence' => round($pipelineConfidence, 4),
+                    ],
+                ];
+            }
+
+            return [
+                'status' => 'approved',
+                'reason' => null,
+                'meta' => [
+                    'nudenet' => $nn,
+                    'auto_decision' => 'approved_from_review_low_confidence',
+                    'auto_confidence' => round($pipelineConfidence, 4),
+                ],
+            ];
+        }
+
         if ($nn['safe'] === true) {
             if (AdminSetting::getBool('photo_verify_safe_with_secondary_ai', false)) {
                 $provider = (string) AdminSetting::getValue('photo_ai_provider', 'openai');

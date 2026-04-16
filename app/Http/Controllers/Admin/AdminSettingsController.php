@@ -8,6 +8,7 @@ use App\Models\ProfileFieldConfig;
 use App\Services\AuditLogService;
 use App\Services\Parsing\ProviderResolver;
 use App\Services\SettingService;
+use App\Services\Showcase\ShowcaseInterestPolicyService;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 
@@ -31,11 +32,30 @@ class AdminSettingsController extends Controller
         $delayMin = (int) AdminSetting::getValue('view_back_delay_min', '0');
         $delayMax = (int) AdminSetting::getValue('view_back_delay_max', '0');
 
+        $rvMin = max(1, (int) AdminSetting::getValue('showcase_random_view_revisit_random_min_days', '3'));
+        $rvMax = max($rvMin, (int) AdminSetting::getValue('showcase_random_view_revisit_random_max_days', '14'));
+
         return view('admin.view-back-settings.index', [
             'viewBackEnabled' => $enabled,
             'viewBackProbability' => $probability,
             'viewBackDelayMin' => max(0, $delayMin),
             'viewBackDelayMax' => max(0, $delayMax),
+            'randomViewEnabled' => AdminSetting::getBool('showcase_random_view_enabled', false),
+            'randomViewRevisitMode' => (string) AdminSetting::getValue('showcase_random_view_revisit_mode', '30d'),
+            'randomViewRevisitRandomMinDays' => $rvMin,
+            'randomViewRevisitRandomMaxDays' => $rvMax,
+            'randomViewBatchPerRun' => max(0, (int) AdminSetting::getValue('showcase_random_view_batch_per_run', '15')),
+            'randomViewCandidatePool' => max(30, (int) AdminSetting::getValue('showcase_random_view_candidate_pool', '120')),
+            'randomViewMaxPerRealWeek' => max(0, (int) AdminSetting::getValue('showcase_random_view_max_per_real_per_week', '5')),
+            'randomViewMaxPerRealMonth' => max(0, (int) AdminSetting::getValue('showcase_random_view_max_per_real_per_month', '10')),
+            'randomViewAgeSpreadYears' => max(1, (int) AdminSetting::getValue('showcase_random_view_age_spread_years', '6')),
+            'randomViewNewUserDays' => max(1, (int) AdminSetting::getValue('showcase_random_view_new_user_days', '30')),
+            'randomViewWeightDistrict' => max(0, (int) AdminSetting::getValue('showcase_random_view_weight_district', '40')),
+            'randomViewWeightReligion' => max(0, (int) AdminSetting::getValue('showcase_random_view_weight_religion', '30')),
+            'randomViewWeightCaste' => max(0, (int) AdminSetting::getValue('showcase_random_view_weight_caste', '30')),
+            'randomViewWeightAge' => max(0, (int) AdminSetting::getValue('showcase_random_view_weight_age', '20')),
+            'randomViewWeightNewUser' => max(0, (int) AdminSetting::getValue('showcase_random_view_weight_new_user', '35')),
+            'randomViewWeightBase' => max(0, (int) AdminSetting::getValue('showcase_random_view_weight_base', '10')),
         ]);
     }
 
@@ -78,6 +98,68 @@ class AdminSettingsController extends Controller
 
         return redirect()->route('admin.view-back-settings.index')
             ->with('success', 'View-back settings updated.');
+    }
+
+    /**
+     * Showcase → real random views (scheduled). Weighted matching + per-real caps.
+     */
+    public function updateShowcaseRandomViewSettings(Request $request): \Illuminate\Http\RedirectResponse
+    {
+        $request->validate([
+            'showcase_random_view_enabled' => 'nullable|in:0,1',
+            'showcase_random_view_revisit_mode' => 'required|string|in:never,1d,7d,30d,random',
+            'showcase_random_view_revisit_random_min_days' => 'required|integer|min:1|max:365',
+            'showcase_random_view_revisit_random_max_days' => 'required|integer|min:1|max:365',
+            'showcase_random_view_batch_per_run' => 'required|integer|min:0|max:500',
+            'showcase_random_view_candidate_pool' => 'required|integer|min:30|max:500',
+            'showcase_random_view_max_per_real_per_week' => 'required|integer|min:0|max:999',
+            'showcase_random_view_max_per_real_per_month' => 'required|integer|min:0|max:999',
+            'showcase_random_view_age_spread_years' => 'required|integer|min:1|max:40',
+            'showcase_random_view_new_user_days' => 'required|integer|min:1|max:365',
+            'showcase_random_view_weight_district' => 'required|integer|min:0|max:500',
+            'showcase_random_view_weight_religion' => 'required|integer|min:0|max:500',
+            'showcase_random_view_weight_caste' => 'required|integer|min:0|max:500',
+            'showcase_random_view_weight_age' => 'required|integer|min:0|max:500',
+            'showcase_random_view_weight_new_user' => 'required|integer|min:0|max:500',
+            'showcase_random_view_weight_base' => 'required|integer|min:0|max:500',
+        ]);
+
+        $minRand = (int) $request->input('showcase_random_view_revisit_random_min_days', 3);
+        $maxRand = (int) $request->input('showcase_random_view_revisit_random_max_days', 14);
+        if ($maxRand < $minRand) {
+            $maxRand = $minRand;
+        }
+
+        $enabled = $request->has('showcase_random_view_enabled') ? '1' : '0';
+
+        AdminSetting::setValue('showcase_random_view_enabled', $enabled);
+        AdminSetting::setValue('showcase_random_view_revisit_mode', (string) $request->input('showcase_random_view_revisit_mode'));
+        AdminSetting::setValue('showcase_random_view_revisit_random_min_days', (string) $minRand);
+        AdminSetting::setValue('showcase_random_view_revisit_random_max_days', (string) $maxRand);
+        AdminSetting::setValue('showcase_random_view_batch_per_run', (string) $request->input('showcase_random_view_batch_per_run'));
+        AdminSetting::setValue('showcase_random_view_candidate_pool', (string) $request->input('showcase_random_view_candidate_pool'));
+        AdminSetting::setValue('showcase_random_view_max_per_real_per_week', (string) $request->input('showcase_random_view_max_per_real_per_week'));
+        AdminSetting::setValue('showcase_random_view_max_per_real_per_month', (string) $request->input('showcase_random_view_max_per_real_per_month'));
+        AdminSetting::setValue('showcase_random_view_age_spread_years', (string) $request->input('showcase_random_view_age_spread_years'));
+        AdminSetting::setValue('showcase_random_view_new_user_days', (string) $request->input('showcase_random_view_new_user_days'));
+        AdminSetting::setValue('showcase_random_view_weight_district', (string) $request->input('showcase_random_view_weight_district'));
+        AdminSetting::setValue('showcase_random_view_weight_religion', (string) $request->input('showcase_random_view_weight_religion'));
+        AdminSetting::setValue('showcase_random_view_weight_caste', (string) $request->input('showcase_random_view_weight_caste'));
+        AdminSetting::setValue('showcase_random_view_weight_age', (string) $request->input('showcase_random_view_weight_age'));
+        AdminSetting::setValue('showcase_random_view_weight_new_user', (string) $request->input('showcase_random_view_weight_new_user'));
+        AdminSetting::setValue('showcase_random_view_weight_base', (string) $request->input('showcase_random_view_weight_base'));
+
+        AuditLogService::log(
+            $request->user(),
+            'update_showcase_random_view_settings',
+            'AdminSetting',
+            null,
+            "showcase_random_view_enabled={$enabled}, revisit=".(string) $request->input('showcase_random_view_revisit_mode'),
+            false
+        );
+
+        return redirect()->route('admin.view-back-settings.index')
+            ->with('success', 'Showcase random view settings updated.');
     }
 
     /**
@@ -599,5 +681,106 @@ class AdminSettingsController extends Controller
 
         return redirect()->route('admin.moderation-engine-settings.index')
             ->with('success', 'Moderation engine settings saved. The Python scanner pulls these values from GET /api/moderation-config on a short interval.');
+    }
+
+    /**
+     * Showcase interest admin: mostly showcase → real sends; plus incoming auto-respond (real → showcase).
+     * Other {@see ShowcaseInterestPolicyService} keys may remain in DB untouched.
+     */
+    public function showcaseInterestSettings(): \Illuminate\View\View
+    {
+        $p = ShowcaseInterestPolicyService::KEY_PREFIX;
+
+        return view('admin.showcase-interest-settings.index', [
+            'rulesEnabled' => AdminSetting::getBool($p.'rules_enabled', false),
+            'bypassPlanSendQuotaForShowcaseSender' => AdminSetting::getBool($p.'bypass_plan_send_quota_for_showcase_sender', false),
+            'allowShowcaseToReal' => AdminSetting::getBool($p.'allow_showcase_to_real', true),
+            'requireOppositeGenderWhenAnyShowcase' => AdminSetting::getBool($p.'require_opposite_gender_when_any_showcase', true),
+            'showcaseSenderMinSecondsBetweenSends' => max(0, (int) AdminSetting::getValue($p.'showcase_sender_min_seconds_between_sends', '0')),
+            'showcaseSenderMaxSendsPer24h' => max(0, (int) AdminSetting::getValue($p.'showcase_sender_max_sends_per_24h', '0')),
+            'showcaseSenderMaxSendsPer7d' => max(0, (int) AdminSetting::getValue($p.'showcase_sender_max_sends_per_7d', '0')),
+            'allowShowcaseSenderWithdraw' => AdminSetting::getBool($p.'allow_showcase_sender_withdraw', true),
+            'stochasticGatesEnabled' => AdminSetting::getBool($p.'stochastic_gates_enabled', false),
+            'probSendPct' => max(0, min(100, (int) AdminSetting::getValue($p.'prob_send_pct', '100'))),
+            'scaleProbByMatchWeight' => AdminSetting::getBool($p.'scale_prob_by_match_weight', true),
+            'weightAge' => max(0, (int) AdminSetting::getValue($p.'weight_age', '25')),
+            'weightReligion' => max(0, (int) AdminSetting::getValue($p.'weight_religion', '25')),
+            'weightCaste' => max(0, (int) AdminSetting::getValue($p.'weight_caste', '25')),
+            'weightDistrict' => max(0, (int) AdminSetting::getValue($p.'weight_district', '25')),
+            'ageMatchMaxYearDiff' => max(0, (int) AdminSetting::getValue($p.'age_match_max_year_diff', '5')),
+            'showcaseSenderMaxDistinctReceivers24h' => max(0, (int) AdminSetting::getValue($p.'showcase_sender_max_distinct_receivers_24h', '0')),
+            'incomingAutoRespondEnabled' => AdminSetting::getBool($p.'incoming_auto_respond_enabled', false),
+            'incomingAutoAcceptPct' => max(0, min(100, (int) AdminSetting::getValue($p.'incoming_auto_accept_pct', '50'))),
+            'outgoingAutoSendEnabled' => AdminSetting::getBool($p.'outgoing_auto_send_enabled', false),
+            'outgoingAutoBatchPerRun' => max(1, (int) AdminSetting::getValue($p.'outgoing_auto_batch_per_run', '50')),
+            'outgoingAutoMaxSendsPerShowcasePerRun' => max(1, (int) AdminSetting::getValue($p.'outgoing_auto_max_sends_per_showcase_per_run', '1')),
+            'outgoingAutoCandidatePool' => max(10, (int) AdminSetting::getValue($p.'outgoing_auto_candidate_pool', '120')),
+        ]);
+    }
+
+    public function updateShowcaseInterestSettings(Request $request): \Illuminate\Http\RedirectResponse
+    {
+        $request->validate([
+            'showcase_interest_rules_enabled' => 'nullable|in:0,1',
+            'showcase_interest_bypass_plan_send_quota_for_showcase_sender' => 'nullable|in:0,1',
+            'showcase_interest_allow_showcase_to_real' => 'nullable|in:0,1',
+            'showcase_interest_require_opposite_gender_when_any_showcase' => 'nullable|in:0,1',
+            'showcase_interest_showcase_sender_min_seconds_between_sends' => 'required|integer|min:0|max:864000',
+            'showcase_interest_showcase_sender_max_sends_per_24h' => 'required|integer|min:0|max:99999',
+            'showcase_interest_showcase_sender_max_sends_per_7d' => 'required|integer|min:0|max:999999',
+            'showcase_interest_allow_showcase_sender_withdraw' => 'nullable|in:0,1',
+            'showcase_interest_stochastic_gates_enabled' => 'nullable|in:0,1',
+            'showcase_interest_prob_send_pct' => 'required|integer|min:0|max:100',
+            'showcase_interest_scale_prob_by_match_weight' => 'nullable|in:0,1',
+            'showcase_interest_weight_age' => 'required|integer|min:0|max:500',
+            'showcase_interest_weight_religion' => 'required|integer|min:0|max:500',
+            'showcase_interest_weight_caste' => 'required|integer|min:0|max:500',
+            'showcase_interest_weight_district' => 'required|integer|min:0|max:500',
+            'showcase_interest_age_match_max_year_diff' => 'required|integer|min:0|max:30',
+            'showcase_interest_showcase_sender_max_distinct_receivers_24h' => 'required|integer|min:0|max:99999',
+            'showcase_interest_incoming_auto_respond_enabled' => 'nullable|in:0,1',
+            'showcase_interest_incoming_auto_accept_pct' => 'required|integer|min:0|max:100',
+            'showcase_interest_outgoing_auto_send_enabled' => 'nullable|in:0,1',
+            'showcase_interest_outgoing_auto_batch_per_run' => 'required|integer|min:1|max:2000',
+            'showcase_interest_outgoing_auto_max_sends_per_showcase_per_run' => 'required|integer|min:1|max:20',
+            'showcase_interest_outgoing_auto_candidate_pool' => 'required|integer|min:10|max:1000',
+        ]);
+
+        $p = ShowcaseInterestPolicyService::KEY_PREFIX;
+        AdminSetting::setValue($p.'rules_enabled', $request->has('showcase_interest_rules_enabled') ? '1' : '0');
+        AdminSetting::setValue($p.'bypass_plan_send_quota_for_showcase_sender', $request->has('showcase_interest_bypass_plan_send_quota_for_showcase_sender') ? '1' : '0');
+        AdminSetting::setValue($p.'allow_showcase_to_real', $request->has('showcase_interest_allow_showcase_to_real') ? '1' : '0');
+        AdminSetting::setValue($p.'require_opposite_gender_when_any_showcase', $request->has('showcase_interest_require_opposite_gender_when_any_showcase') ? '1' : '0');
+        AdminSetting::setValue($p.'showcase_sender_min_seconds_between_sends', (string) (int) $request->input('showcase_interest_showcase_sender_min_seconds_between_sends', 0));
+        AdminSetting::setValue($p.'showcase_sender_max_sends_per_24h', (string) (int) $request->input('showcase_interest_showcase_sender_max_sends_per_24h', 0));
+        AdminSetting::setValue($p.'showcase_sender_max_sends_per_7d', (string) (int) $request->input('showcase_interest_showcase_sender_max_sends_per_7d', 0));
+        AdminSetting::setValue($p.'allow_showcase_sender_withdraw', $request->has('showcase_interest_allow_showcase_sender_withdraw') ? '1' : '0');
+        AdminSetting::setValue($p.'stochastic_gates_enabled', $request->has('showcase_interest_stochastic_gates_enabled') ? '1' : '0');
+        AdminSetting::setValue($p.'prob_send_pct', (string) max(0, min(100, (int) $request->input('showcase_interest_prob_send_pct', 100))));
+        AdminSetting::setValue($p.'scale_prob_by_match_weight', $request->has('showcase_interest_scale_prob_by_match_weight') ? '1' : '0');
+        AdminSetting::setValue($p.'weight_age', (string) max(0, (int) $request->input('showcase_interest_weight_age', 0)));
+        AdminSetting::setValue($p.'weight_religion', (string) max(0, (int) $request->input('showcase_interest_weight_religion', 0)));
+        AdminSetting::setValue($p.'weight_caste', (string) max(0, (int) $request->input('showcase_interest_weight_caste', 0)));
+        AdminSetting::setValue($p.'weight_district', (string) max(0, (int) $request->input('showcase_interest_weight_district', 0)));
+        AdminSetting::setValue($p.'age_match_max_year_diff', (string) max(0, (int) $request->input('showcase_interest_age_match_max_year_diff', 5)));
+        AdminSetting::setValue($p.'showcase_sender_max_distinct_receivers_24h', (string) max(0, (int) $request->input('showcase_interest_showcase_sender_max_distinct_receivers_24h', 0)));
+        AdminSetting::setValue($p.'incoming_auto_respond_enabled', $request->has('showcase_interest_incoming_auto_respond_enabled') ? '1' : '0');
+        AdminSetting::setValue($p.'incoming_auto_accept_pct', (string) max(0, min(100, (int) $request->input('showcase_interest_incoming_auto_accept_pct', 50))));
+        AdminSetting::setValue($p.'outgoing_auto_send_enabled', $request->has('showcase_interest_outgoing_auto_send_enabled') ? '1' : '0');
+        AdminSetting::setValue($p.'outgoing_auto_batch_per_run', (string) max(1, min(2000, (int) $request->input('showcase_interest_outgoing_auto_batch_per_run', 50))));
+        AdminSetting::setValue($p.'outgoing_auto_max_sends_per_showcase_per_run', (string) max(1, min(20, (int) $request->input('showcase_interest_outgoing_auto_max_sends_per_showcase_per_run', 1))));
+        AdminSetting::setValue($p.'outgoing_auto_candidate_pool', (string) max(10, min(1000, (int) $request->input('showcase_interest_outgoing_auto_candidate_pool', 120))));
+
+        AuditLogService::log(
+            $request->user(),
+            'update_showcase_interest_settings',
+            'AdminSetting',
+            null,
+            'showcase_interest_* (showcase interest admin page) updated',
+            false
+        );
+
+        return redirect()->route('admin.showcase-interest-settings.index')
+            ->with('success', 'Showcase interest rules saved.');
     }
 }

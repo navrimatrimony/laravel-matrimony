@@ -7,6 +7,7 @@ use App\Models\Interest;
 use App\Models\MatrimonyProfile;
 use App\Services\InterestPriorityService;
 use App\Services\InterestSendLimitService;
+use App\Services\Showcase\ShowcaseInterestPolicyService;
 use App\Services\ProfileLifecycleService;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpKernel\Exception\HttpException;
@@ -16,6 +17,7 @@ class InterestApiController extends Controller
     public function __construct(
         private readonly InterestSendLimitService $interestSendLimit,
         private readonly InterestPriorityService $interestPriority,
+        private readonly ShowcaseInterestPolicyService $showcaseInterestPolicy,
     ) {}
 
     /**
@@ -89,13 +91,23 @@ class InterestApiController extends Controller
             ], 409);
         }
 
-        try {
-            $this->interestSendLimit->assertCanSend($user);
-        } catch (HttpException $e) {
+        $sendEval = $this->showcaseInterestPolicy->evaluateSendInterest($senderProfile, $receiverProfile);
+        if (! $sendEval['ok']) {
             return response()->json([
                 'success' => false,
-                'message' => $e->getMessage(),
-            ], $e->getStatusCode());
+                'message' => $sendEval['message'] ?? 'Interest cannot be sent.',
+            ], 422);
+        }
+
+        if (! ($sendEval['bypass_plan_quota'] ?? false)) {
+            try {
+                $this->interestSendLimit->assertCanSend($user);
+            } catch (HttpException $e) {
+                return response()->json([
+                    'success' => false,
+                    'message' => $e->getMessage(),
+                ], $e->getStatusCode());
+            }
         }
 
         // Create new interest
@@ -106,7 +118,9 @@ class InterestApiController extends Controller
             'priority_score' => $this->interestPriority->baseScoreForSender($user),
         ]);
 
-        $this->interestSendLimit->recordSuccessfulSend($user);
+        if (! ($sendEval['bypass_plan_quota'] ?? false)) {
+            $this->interestSendLimit->recordSuccessfulSend($user);
+        }
 
         return response()->json([
             'success' => true,
@@ -235,6 +249,13 @@ class InterestApiController extends Controller
             ], 403);
         }
 
+        if ($msg = $this->showcaseInterestPolicy->validateAcceptInterest($user->matrimonyProfile, $interest)) {
+            return response()->json([
+                'success' => false,
+                'message' => $msg,
+            ], 422);
+        }
+
         $interest->update([
             'status' => 'accepted',
         ]);
@@ -285,6 +306,13 @@ class InterestApiController extends Controller
             ], 403);
         }
 
+        if ($msg = $this->showcaseInterestPolicy->validateRejectInterest($user->matrimonyProfile, $interest)) {
+            return response()->json([
+                'success' => false,
+                'message' => $msg,
+            ], 422);
+        }
+
         $interest->update([
             'status' => 'rejected',
         ]);
@@ -333,6 +361,13 @@ class InterestApiController extends Controller
                 'success' => false,
                 'message' => 'Only pending interests can be withdrawn.',
             ], 403);
+        }
+
+        if ($msg = $this->showcaseInterestPolicy->validateWithdrawInterest($user->matrimonyProfile, $interest)) {
+            return response()->json([
+                'success' => false,
+                'message' => $msg,
+            ], 422);
         }
 
         $interest->delete();

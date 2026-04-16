@@ -7,6 +7,7 @@ use App\Models\MatrimonyProfile;
 use App\Models\MediationRequest;
 use App\Models\User;
 use App\Models\UserContactRevealLog;
+use App\Support\ContactVisibilityDecision;
 use App\Support\PlanFeatureKeys;
 use App\Support\UserFeatureUsageKeys;
 use Illuminate\Support\Carbon;
@@ -33,6 +34,7 @@ class ContactAccessService
         protected UserFeatureUsageService $usage,
         protected FeatureUsageService $featureUsage,
         protected ContactRevealPolicyService $contactRevealPolicy,
+        protected ContactVisibilityPolicyService $contactVisibilityPolicy,
     ) {}
 
     /**
@@ -67,6 +69,7 @@ class ContactAccessService
             'reveal_blocked_reason' => null,
             'plans_url' => route('plans.index'),
             'paid_reveal_blocked_pending_matchmaking' => false,
+            'contact_visibility_decision' => ContactVisibilityDecision::Allowed->value,
         ];
     }
 
@@ -116,6 +119,7 @@ class ContactAccessService
                 'plans_url' => $plansUrl,
                 'already_revealed_this_month' => true,
                 'paid_reveal_blocked_pending_matchmaking' => false,
+                'contact_visibility_decision' => ContactVisibilityDecision::Allowed->value,
             ];
         }
 
@@ -150,7 +154,49 @@ class ContactAccessService
                 'reveal_blocked_reason' => null,
                 'plans_url' => $plansUrl,
                 'paid_reveal_blocked_pending_matchmaking' => false,
+                'contact_visibility_decision' => ContactVisibilityDecision::Allowed->value,
             ];
+        }
+
+        $refinedDecision = ContactVisibilityDecision::Allowed;
+        if ($targetProfile->user) {
+            $refinedDecision = $this->contactVisibilityPolicy->resolveContactAccess($viewer, $targetProfile->user);
+            if ($refinedDecision === ContactVisibilityDecision::Denied) {
+                $case = $this->contactRevealPolicy->resolveVisibilityCase($targetProfile, $visibilitySettings);
+                $cvLimitDenied = $this->featureUsage->getPlanFeatureLimit($viewer, PlanFeatureKeys::CONTACT_VIEW_LIMIT);
+                $cvUsedDenied = $this->usage->getUsage($uid, UserFeatureUsageKeys::CONTACT_VIEW_LIMIT);
+                $medLimitDenied = $this->featureUsage->getEffectiveMediatorMonthlyLimit($viewer);
+                $medUsedDenied = $this->usage->getUsage($uid, UserFeatureUsageKeys::MEDIATOR_REQUEST);
+
+                return [
+                    'has_contact_unlock' => true,
+                    'blocked' => true,
+                    'visibility_case' => $case,
+                    'allows_direct_contact_reveal' => false,
+                    'contact_view_limit' => $cvLimitDenied,
+                    'contact_view_used' => $cvUsedDenied,
+                    'contact_view_remaining' => $this->remaining($cvLimitDenied, $cvUsedDenied),
+                    'has_contact_view_credit' => $this->featureUsage->canUse($uid, FeatureUsageService::FEATURE_CONTACT_VIEW_LIMIT),
+                    'no_contact_credits_left' => false,
+                    'mediator_limit' => $medLimitDenied,
+                    'mediator_used' => $medUsedDenied,
+                    'mediator_remaining' => $this->remaining($medLimitDenied, $medUsedDenied),
+                    'has_mediator_credit' => $medLimitDenied === -1 || ($medLimitDenied > 0 && $medUsedDenied < $medLimitDenied),
+                    'show_contact_request_rail' => false,
+                    'show_paid_reveal_button' => false,
+                    'show_mediator_cta' => $this->contactRevealPolicy->allowsMediatorPath($targetProfile, $visibilitySettings),
+                    'show_no_one_copy' => $case === self::CASE_NO_ONE,
+                    'needs_upgrade' => false,
+                    'needs_upgrade_for_mediator' => false,
+                    'paid_contact_phone' => null,
+                    'paid_contact_email' => null,
+                    'reveal_blocked_reason' => 'contact_visibility',
+                    'plans_url' => $plansUrl,
+                    'already_revealed_this_month' => false,
+                    'paid_reveal_blocked_pending_matchmaking' => false,
+                    'contact_visibility_decision' => ContactVisibilityDecision::Denied->value,
+                ];
+            }
         }
 
         $case = $this->contactRevealPolicy->resolveVisibilityCase($targetProfile, $visibilitySettings);
@@ -258,11 +304,20 @@ class ContactAccessService
 
         $showMediatorCta = $this->contactRevealPolicy->allowsMediatorPath($targetProfile, $visibilitySettings);
 
+        if ($refinedDecision === ContactVisibilityDecision::RequiresApproval
+            && $grantPhone === null && $grantEmail === null) {
+            $showPaidReveal = false;
+            if (! $showNoOne) {
+                $showRequestRail = true;
+            }
+        }
+
         return [
             'has_contact_unlock' => true,
             'blocked' => false,
             'visibility_case' => $case,
-            'allows_direct_contact_reveal' => $case === self::CASE_PAID_ALLOWED && $mayRevealForPaid,
+            'allows_direct_contact_reveal' => $case === self::CASE_PAID_ALLOWED && $mayRevealForPaid
+                && ! ($refinedDecision === ContactVisibilityDecision::RequiresApproval && $grantPhone === null && $grantEmail === null),
             'contact_view_limit' => $cvLimit,
             'contact_view_used' => $cvUsed,
             'contact_view_remaining' => $cvRemaining,
@@ -284,6 +339,7 @@ class ContactAccessService
             'plans_url' => $plansUrl,
             'already_revealed_this_month' => $alreadyRevealedThisMonth,
             'paid_reveal_blocked_pending_matchmaking' => $paidRevealBlockedByMatchmaking,
+            'contact_visibility_decision' => $refinedDecision->value,
         ];
     }
 
@@ -312,6 +368,13 @@ class ContactAccessService
 
         if (! $this->planGrantsContactRevealFromSubscription($viewer)) {
             throw new InvalidArgumentException(__('contact_access.upgrade_required'));
+        }
+
+        if ($targetProfile->user) {
+            $refined = $this->contactVisibilityPolicy->resolveContactAccess($viewer, $targetProfile->user);
+            if ($refined !== ContactVisibilityDecision::Allowed) {
+                throw new InvalidArgumentException(__('contact_access.reveal_not_allowed'));
+            }
         }
 
         $case = $this->contactRevealPolicy->resolveVisibilityCase($targetProfile, $visibilitySettings);
@@ -496,13 +559,7 @@ class ContactAccessService
      */
     private function planGrantsContactRevealFromSubscription(User $viewer): bool
     {
-        if ($this->featureUsage->shouldBypassUsageLimits($viewer)) {
-            return true;
-        }
-
-        $lim = $this->featureUsage->getPlanFeatureLimit($viewer, PlanFeatureKeys::CONTACT_VIEW_LIMIT);
-
-        return $lim !== 0;
+        return $this->featureUsage->planGrantsContactReveal($viewer);
     }
 
     /**

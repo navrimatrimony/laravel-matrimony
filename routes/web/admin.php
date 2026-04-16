@@ -38,6 +38,7 @@ use App\Http\Controllers\Admin\ReferralController;
 use App\Http\Controllers\Admin\ShowcaseChatDebugController;
 use App\Http\Controllers\Admin\ShowcaseChatSettingsController;
 use App\Http\Controllers\Admin\ShowcaseConversationController;
+use App\Http\Controllers\Admin\ShowcaseEngineDashboardController;
 use App\Http\Controllers\Admin\SubCasteAdminController;
 use App\Http\Controllers\Admin\TranslationController;
 use App\Http\Controllers\Admin\UserWalletController;
@@ -111,6 +112,12 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
             'intakeAvgAutoFilled' => (float) $avgAutoFilled,
         ]);
     })->name('dashboard');
+
+    Route::get('/showcase', function () {
+        return redirect()->route('admin.showcase-dashboard.index');
+    })->name('showcase.index');
+
+    Route::get('/showcase-dashboard', [ShowcaseEngineDashboardController::class, 'index'])->name('showcase-dashboard.index');
 
     /*
     | Profiles List (Admin)
@@ -328,6 +335,9 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
 
     Route::get('/view-back-settings', [AdminSettingsController::class, 'viewBackSettings'])->name('view-back-settings.index');
     Route::post('/view-back-settings', [AdminSettingsController::class, 'updateViewBackSettings'])->name('view-back-settings.update');
+    Route::post('/view-back-settings/random-views', [AdminSettingsController::class, 'updateShowcaseRandomViewSettings'])->name('view-back-settings.random-views-update');
+    Route::get('/showcase-interest-settings', [AdminSettingsController::class, 'showcaseInterestSettings'])->name('showcase-interest-settings.index');
+    Route::post('/showcase-interest-settings', [AdminSettingsController::class, 'updateShowcaseInterestSettings'])->name('showcase-interest-settings.update');
 
     Route::get('/showcase-search-settings', [AdminSettingsController::class, 'showcaseSearchSettings'])->name('showcase-search-settings.index');
     Route::post('/showcase-search-settings', [AdminSettingsController::class, 'updateShowcaseSearchSettings'])->name('showcase-search-settings.update');

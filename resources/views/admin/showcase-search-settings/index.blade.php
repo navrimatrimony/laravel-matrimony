@@ -1,6 +1,6 @@
-@extends('layouts.admin')
+@extends('layouts.admin-showcase')
 
-@section('content')
+@section('showcase_content')
 {{-- Toggle Switch Styles --}}
 <style>
 .admin-toggle { position: relative; display: inline-flex; align-items: center; cursor: pointer; }

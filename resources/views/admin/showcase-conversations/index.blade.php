@@ -1,6 +1,6 @@
-@extends('layouts.admin')
+@extends('layouts.admin-showcase')
 
-@section('content')
+@section('showcase_content')
 <div class="bg-white dark:bg-gray-800 shadow rounded-lg p-6">
     <h1 class="text-2xl font-bold text-gray-800 dark:text-gray-100 mb-2">Showcase Conversations</h1>
     <p class="text-gray-500 dark:text-gray-400 text-sm mb-6">Conversations involving enabled showcase profiles. Use this to monitor orchestration and take over safely.</p>

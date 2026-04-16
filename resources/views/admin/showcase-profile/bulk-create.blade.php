@@ -1,6 +1,6 @@
-@extends('layouts.admin')
+@extends('layouts.admin-showcase')
 
-@section('content')
+@section('showcase_content')
 <div class="bg-white dark:bg-gray-800 shadow rounded-lg p-6">
     <h1 class="text-2xl font-bold text-gray-800 dark:text-gray-100 mb-2">Bulk Create Showcase Profiles (1–50)</h1>
     @php $bulkLc = $bulkShowcaseLifecycle ?? 'draft'; @endphp

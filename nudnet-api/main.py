@@ -187,17 +187,30 @@ def _normalize_detections(raw: list[Any]) -> list[dict[str, Any]]:
     return out
 
 
-def classify_image(detections: list[dict[str, Any]]) -> tuple[str, float]:
+def classify_image(detections: list[dict[str, Any]]) -> tuple[str, float, str]:
     """
     Deterministic 3-way decision using dynamically synced thresholds when available.
 
     1) Any NSFW class with score > nsfw_min → unsafe
-    2) Else, any risky class with score > nsfw_min → review
-       OR any non-ignored detection with score > review_min → review
-    3) Else → safe
+    2) Matrimony strict / context bands (unchanged thresholds)
+    3) Face + body mix heuristic → review
+    4) Else, any risky class with score > nsfw_min → review
+       OR any non-ignored class with score > review_min → review
+    5) Else → safe (or review if confidence is low)
     """
     if not detections:
-        return "safe", 1.0
+        return "safe", 1.0, "clean_image"
+
+    scores: dict[str, float] = {}
+    for d in detections:
+        cls = d.get("class")
+        if not cls:
+            continue
+        try:
+            sc = float(d.get("score", 0.0))
+        except (TypeError, ValueError):
+            sc = 0.0
+        scores[str(cls)] = max(scores.get(str(cls), 0.0), sc)
 
     with _CFG_LOCK:
         nsfw_min = _NSFW_SCORE_MIN
@@ -205,42 +218,74 @@ def classify_image(detections: list[dict[str, Any]]) -> tuple[str, float]:
         ignore_for_review = _IGNORE_HIGH_SCORE_FOR_REVIEW
 
     explicit_scores = [
-        float(d["score"])
-        for d in detections
-        if d.get("class") in NSFW_CLASSES and float(d["score"]) > nsfw_min
+        scores[c]
+        for c in NSFW_CLASSES
+        if c in scores and scores[c] > nsfw_min
     ]
     if explicit_scores:
-        return "unsafe", round(max(explicit_scores), 4)
+        return "unsafe", round(max(explicit_scores), 4), "explicit_nudity"
 
-    risky_scores = []
-    for d in detections:
-        cls = d.get("class")
-        sc = float(d["score"])
-        if cls in RISKY_CLASSES and sc > nsfw_min:
-            risky_scores.append(sc)
-        elif cls == "ARMPITS_EXPOSED" and sc > ARMPITS_REVIEW_MIN:
-            risky_scores.append(sc)
+    # Matrimony strict rules (fixed thresholds)
+    bex = scores.get("FEMALE_BREAST_EXPOSED", 0.0)
+    if bex > 0.4:
+        return "unsafe", round(bex, 4), "explicit_nudity"
+
+    bcc = scores.get("FEMALE_BREAST_COVERED", 0.0)
+    if bcc > 0.85:
+        return "unsafe", round(bcc, 4), "explicit_nudity"
+
+    belly = scores.get("BELLY_EXPOSED", 0.0)
+    if belly > 0.6:
+        return "unsafe", round(belly, 4), "explicit_nudity"
+
+    # Matrimony context rules (covered / suggestive → review)
+    b_cov = scores.get("BUTTOCKS_COVERED", 0.0)
+    if b_cov > 0.4:
+        return "review", round(b_cov, 4), "buttocks_suggestive"
+
+    if 0.6 < bcc < 0.85:
+        return "review", round(bcc, 4), "breast_covered_suggestive"
+
+    if 0.5 < belly < 0.7:
+        return "review", round(belly, 4), "belly_suggestive"
+
+    # Face + body mix (female face present with other signals)
+    if "FACE_FEMALE" in scores and len(scores) > 1:
+        mx = max(scores.values())
+        # ✅ NEW: normal saree logic
+        if bcc < 0.6:
+            return "safe", 0.8, "face_normal_pose"
+
+        if mx > 0.4:
+            return "review", round(mx, 4), "face_body_mix"
+
+    risky_scores: list[float] = []
+    for cls in RISKY_CLASSES:
+        if cls in scores and scores[cls] > nsfw_min:
+            risky_scores.append(scores[cls])
+    ap = scores.get("ARMPITS_EXPOSED", 0.0)
+    if ap > ARMPITS_REVIEW_MIN:
+        risky_scores.append(ap)
+
     high_body_scores = [
-        float(d["score"])
-        for d in detections
-        if d.get("class") not in ignore_for_review and float(d["score"]) > review_min
+        scores[c]
+        for c in scores
+        if c not in ignore_for_review and scores[c] > review_min
     ]
     if risky_scores or high_body_scores:
         combined = risky_scores + high_body_scores
-        return "review", round(max(combined), 4)
+        return "review", round(max(combined), 4), "body_signals_review"
 
-    rest = [
-        float(d["score"])
-        for d in detections
-        if d.get("class") not in ignore_for_review
-    ]
+    rest = [scores[c] for c in scores if c not in ignore_for_review]
     if not rest:
-        return "safe", 1.0
+        return "safe", 1.0, "clean_image"
 
     peak = max(rest)
     margin = max(0.0, review_min - peak)
     conf = round(min(1.0, 0.5 + margin), 4)
-    return "safe", conf
+    if conf < 0.6:
+        return "review", conf, "low_confidence"
+    return "safe", conf, "clean_image"
 
 
 def _load_model() -> None:
@@ -289,6 +334,7 @@ async def detect(file: UploadFile = File(...)):
         return {
             "status": "review",
             "confidence": 0.0,
+            "reason": "empty_file",
             "detections": [],
             "error": "empty_file",
         }
@@ -297,6 +343,7 @@ async def detect(file: UploadFile = File(...)):
         return {
             "status": "review",
             "confidence": 0.0,
+            "reason": "model_not_loaded",
             "detections": [],
             "error": "model_not_loaded",
             "detail": _LOAD_ERROR,
@@ -327,10 +374,11 @@ async def detect(file: UploadFile = File(...)):
                 pass
 
     detections_out = _normalize_detections(raw if isinstance(raw, list) else [])
-    status, confidence = classify_image(detections_out)
+    status, confidence, reason = classify_image(detections_out)
 
     return {
         "status": status,
         "confidence": confidence,
+        "reason": reason,
         "detections": detections_out,
     }

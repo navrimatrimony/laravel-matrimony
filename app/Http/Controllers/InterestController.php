@@ -11,6 +11,7 @@ use App\Notifications\InterestSentNotification;
 use App\Services\AdminActivityNotificationGate;
 use App\Services\InterestPriorityService;
 use App\Services\InterestSendLimitService;
+use App\Services\Showcase\ShowcaseInterestPolicyService;
 use App\Services\ProfileCompletenessService;
 use App\Services\ProfileLifecycleService;
 use Illuminate\Http\RedirectResponse;
@@ -38,6 +39,7 @@ class InterestController extends Controller
     public function __construct(
         private readonly InterestSendLimitService $interestSendLimit,
         private readonly InterestPriorityService $interestPriority,
+        private readonly ShowcaseInterestPolicyService $showcaseInterestPolicy,
     ) {}
 
     /*
@@ -117,11 +119,16 @@ class InterestController extends Controller
             return back()->with('error', __('interest.cannot_send_to_profile'));
         }
 
+        $sendEval = $this->showcaseInterestPolicy->evaluateSendInterest($senderProfile, $receiverProfile);
+        if (! $sendEval['ok']) {
+            return back()->with('error', $sendEval['message'] ?? __('interest.cannot_send_to_profile'));
+        }
+
         // Daily interest send quota via entitlements + user_feature_usages (new sends only)
         $alreadySent = Interest::where('sender_profile_id', $senderProfile->id)
             ->where('receiver_profile_id', $receiverProfile->id)
             ->exists();
-        if (! $alreadySent) {
+        if (! $alreadySent && ! ($sendEval['bypass_plan_quota'] ?? false)) {
             try {
                 $this->interestSendLimit->assertCanSend($authUser);
             } catch (HttpException $e) {
@@ -141,7 +148,7 @@ class InterestController extends Controller
             ]
         );
 
-        if ($interest->wasRecentlyCreated) {
+        if ($interest->wasRecentlyCreated && ! ($sendEval['bypass_plan_quota'] ?? false)) {
             $this->interestSendLimit->recordSuccessfulSend($authUser);
             $receiverOwner = $receiverProfile->user;
             if ($receiverOwner && AdminActivityNotificationGate::allowsPeerActivityNotification($authUser)) {
@@ -293,6 +300,10 @@ class InterestController extends Controller
             return back()->with('error', __('interest.interest_already_processed'));
         }
 
+        if ($msg = $this->showcaseInterestPolicy->validateAcceptInterest($user->matrimonyProfile, $interest)) {
+            return back()->with('error', $msg);
+        }
+
         // 🔒 70% completeness required to receive (accept) interest
         $receiverProfile = $interest->receiverProfile;
         if (! $receiverProfile || ! ProfileCompletenessService::meetsThreshold($receiverProfile)) {
@@ -361,6 +372,10 @@ class InterestController extends Controller
             return back()->with('error', __('interest.interest_already_processed'));
         }
 
+        if ($msg = $this->showcaseInterestPolicy->validateRejectInterest($user->matrimonyProfile, $interest)) {
+            return back()->with('error', $msg);
+        }
+
         // ✅ Reject
         $interest->update([
             'status' => 'rejected',
@@ -399,6 +414,10 @@ class InterestController extends Controller
         // 🔒 Guard: फक्त pending interest withdraw करता येईल
         if ($interest->status !== 'pending') {
             return back()->with('error', __('interest.only_pending_withdraw'));
+        }
+
+        if ($msg = $this->showcaseInterestPolicy->validateWithdrawInterest($user->matrimonyProfile, $interest)) {
+            return back()->with('error', $msg);
         }
 
         // ✅ Withdraw = delete record

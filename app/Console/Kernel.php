@@ -29,6 +29,8 @@ class Kernel extends ConsoleKernel
         $schedule->command('intake:purge-old-files')->dailyAt('03:00');
         $schedule->command('subscriptions:expire')->daily();
 		$schedule->command('showcase-chat:tick')->everyMinute();
+        $schedule->command('showcase:respond-incoming-interests')->everyFifteenMinutes();
+        $schedule->command('showcase:send-outgoing-interests')->everyFifteenMinutes();
     }
 	
 

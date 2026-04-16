@@ -1,4 +1,4 @@
-@extends('layouts.admin')
+@extends('layouts.admin-showcase')
 
 {{-- Admin main uses bg-gray-100: all copy must be dark-on-light (no text-white on transparent). --}}
 @php
@@ -11,7 +11,7 @@
         : $religionAllowlistSelectedIds;
 @endphp
 
-@section('content')
+@section('showcase_content')
     <div
         class="max-w-4xl space-y-6 pb-24 text-gray-900"
         x-data="{

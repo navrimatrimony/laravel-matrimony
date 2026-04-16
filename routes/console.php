@@ -10,3 +10,4 @@ Artisan::command('inspire', function () {
 
 Schedule::command('notifications:cleanup')->daily();
 Schedule::job(new \App\Jobs\NightlyOcrLearningJob)->dailyAt('02:00');
+Schedule::command('showcase:random-views')->hourly();

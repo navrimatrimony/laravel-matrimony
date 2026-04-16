@@ -1144,6 +1144,21 @@ class FeatureUsageService
     }
 
     /**
+     * True when the viewer's plan allows any contact reveal quota (limit ≠ 0).
+     * Same rule as {@see ContactAccessService}'s private subscription gate.
+     */
+    public function planGrantsContactReveal(User $user): bool
+    {
+        if ($this->shouldBypassUsageLimits($user)) {
+            return true;
+        }
+
+        $lim = $this->getPlanFeatureLimit($user, PlanFeatureKeys::CONTACT_VIEW_LIMIT);
+
+        return $lim !== 0;
+    }
+
+    /**
      * Contact view quota for display — same inputs as {@see self::canUse}(..., {@see self::FEATURE_CONTACT_VIEW_LIMIT}).
      * CTA must use {@see self::canUse} only; this snapshot is display-only.
      *

@@ -1,6 +1,6 @@
-@extends('layouts.admin')
+@extends('layouts.admin-showcase')
 
-@section('content')
+@section('showcase_content')
 <div class="bg-white dark:bg-gray-800 shadow rounded-lg p-6">
     <div class="flex items-center justify-between gap-4 mb-6">
         <div>

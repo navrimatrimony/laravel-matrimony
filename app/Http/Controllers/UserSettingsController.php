@@ -3,9 +3,9 @@
 namespace App\Http\Controllers;
 
 use App\Models\MatrimonyProfile;
+use App\Models\ProfileVisibilitySetting;
 use Illuminate\Http\Request;
 use Illuminate\Http\RedirectResponse;
-use Illuminate\Support\Facades\DB;
 
 class UserSettingsController extends Controller
 {
@@ -40,13 +40,17 @@ class UserSettingsController extends Controller
             return $profile;
         }
 
-        $visibilitySettings = DB::table('profile_visibility_settings')
+        $visibilitySettings = ProfileVisibilitySetting::query()
             ->where('profile_id', $profile->id)
             ->first();
+
+        $contactVisibilityResolved = $visibilitySettings?->resolvedContactVisibility()
+            ?? ProfileVisibilitySetting::defaultResolvedContactVisibility();
 
         return view('settings.privacy', [
             'profile' => $profile,
             'visibilitySettings' => $visibilitySettings,
+            'contactVisibilityResolved' => $contactVisibilityResolved,
         ]);
     }
 
@@ -60,37 +64,62 @@ class UserSettingsController extends Controller
         $validated = $request->validate([
             'visibility_scope' => 'required|in:public,premium_only,hidden',
             'show_photo_to' => 'required|in:all,premium,accepted_interest',
-            'show_contact_to' => 'required|in:everyone,premium_only,accepted_interest,unlock_only,no_one',
-            'hide_from_blocked_users' => 'required|boolean',
+            'contact_visibility_rule' => 'required|in:anyone,interest,matching,none',
+            'contact_visibility_strictness' => 'required|in:relaxed,balanced,strict',
+            'contact_visibility_id_verified_only' => 'nullable|boolean',
+            'contact_visibility_photo_only' => 'nullable|boolean',
+            'contact_visibility_require_contact_request' => 'nullable|boolean',
+            'contact_visibility_approval_required' => 'nullable|boolean',
         ]);
 
-        $hideFromBlocked = $request->boolean('hide_from_blocked_users');
-        $payload = [
-            'visibility_scope' => $validated['visibility_scope'],
-            'show_photo_to' => $validated['show_photo_to'],
-            'show_contact_to' => $validated['show_contact_to'],
-            'hide_from_blocked_users' => $hideFromBlocked,
-            'updated_at' => now(),
+        $showContactTo = self::deriveLegacyShowContactTo(
+            $validated['contact_visibility_rule'],
+            $request->boolean('contact_visibility_require_contact_request'),
+        );
+
+        $contactVisibilityJson = [
+            'rule' => $validated['contact_visibility_rule'],
+            'strictness' => $validated['contact_visibility_strictness'],
+            'filters' => [
+                'id_verified_only' => $request->boolean('contact_visibility_id_verified_only'),
+                'photo_only' => $request->boolean('contact_visibility_photo_only'),
+            ],
+            'approval_required' => $request->boolean('contact_visibility_approval_required'),
+            'require_contact_request' => $request->boolean('contact_visibility_require_contact_request'),
         ];
 
-        $existing = DB::table('profile_visibility_settings')
-            ->where('profile_id', $profile->id)
-            ->first();
-
-        if ($existing) {
-            DB::table('profile_visibility_settings')
-                ->where('profile_id', $profile->id)
-                ->update($payload);
-        } else {
-            DB::table('profile_visibility_settings')->insert(array_merge($payload, [
-                'profile_id' => $profile->id,
-                'created_at' => now(),
-            ]));
-        }
+        ProfileVisibilitySetting::query()->updateOrCreate(
+            ['profile_id' => $profile->id],
+            [
+                'visibility_scope' => $validated['visibility_scope'],
+                'show_photo_to' => $validated['show_photo_to'],
+                'show_contact_to' => $showContactTo,
+                'hide_from_blocked_users' => true,
+                'contact_visibility_json' => $contactVisibilityJson,
+            ]
+        );
 
         return redirect()
             ->route('user.settings.privacy')
             ->with('status', 'privacy-updated');
+    }
+
+    /**
+     * Keeps {@see \App\Services\ContactRevealPolicyService} in sync without exposing {@code show_contact_to} in the UI.
+     */
+    private static function deriveLegacyShowContactTo(string $rule, bool $requireContactRequest): string
+    {
+        if ($rule === 'none') {
+            return 'no_one';
+        }
+        if ($requireContactRequest) {
+            return 'unlock_only';
+        }
+        if ($rule === 'interest') {
+            return 'accepted_interest';
+        }
+
+        return 'everyone';
     }
 
     public function communication(Request $request)

@@ -127,6 +127,32 @@ class ViewTrackingService
     }
 
     /**
+     * Showcase engine: scheduled random profile view. Same DB row and notification path as a normal view
+     * (not flagged as view-back). Who-viewed-me lists this like any other view.
+     */
+    public static function recordShowcaseRandomProfileView(MatrimonyProfile $showcaseProfile, MatrimonyProfile $realProfile): void
+    {
+        if ($showcaseProfile->id === $realProfile->id) {
+            return;
+        }
+        if (self::isBlocked($showcaseProfile->id, $realProfile->id)) {
+            return;
+        }
+        if (! $showcaseProfile->isShowcaseProfile() || $realProfile->isShowcaseProfile()) {
+            return;
+        }
+
+        ProfileView::create([
+            'viewer_profile_id' => $showcaseProfile->id,
+            'viewed_profile_id' => $realProfile->id,
+        ]);
+
+        self::consumeDailyProfileViewUsageForViewer($showcaseProfile);
+
+        self::notifyProfileViewIfEligible($realProfile->user, $showcaseProfile, false);
+    }
+
+    /**
      * After a {@link ProfileView} row is inserted for {@code viewer_profile_id}, increment
      * {@code user_feature_usages} for {@see FeatureUsageService::FEATURE_DAILY_PROFILE_VIEW_LIMIT} (real users only).
      * Skips showcase profiles; quota increments via {@see FeatureUsageService::consume} (respects admin bypass mode).
