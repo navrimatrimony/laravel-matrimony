@@ -26,6 +26,9 @@ return [
     'enter_valid_10_digit_mobile' => 'कृपया वैध 10-अंकी मोबाईल क्रमांक टाका.',
     'otp_generated_enter_below' => 'OTP तयार झाला आहे. खाली टाका.',
     'otp_sent_to_mobile' => 'OTP तुमच्या मोबाईलवर पाठवला आहे.',
+    'otp_sent_via_whatsapp' => 'OTP तुमच्या WhatsApp वर पाठवला आहे.',
+    'whatsapp_not_configured' => 'WhatsApp OTP सर्व्हरवर सेट केलेला नाही. प्रशासकाला Meta WhatsApp Cloud API सेटिंग पूर्ण करायला सांगा.',
+    'whatsapp_send_failed' => 'WhatsApp वर OTP पाठवता आला नाही. काही वेळाने पुन्हा प्रयत्न करा.',
     'invalid_or_expired_request_new' => 'OTP चुकीचा आहे किंवा कालबाह्य झाला आहे. नवीन OTP मागवा.',
     'mobile_verified_successfully' => 'मोबाईल क्रमांक यशस्वीरीत्या सत्यापित झाला.',
 ];

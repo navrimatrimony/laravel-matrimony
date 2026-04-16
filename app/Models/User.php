@@ -67,6 +67,8 @@ class User extends Authenticatable implements MustVerifyEmail
         'email_verified_at' => 'datetime',
         'mobile_verified_at' => 'datetime',
         'last_seen_at' => 'datetime',
+        'last_inactive_reminder_sent_at' => 'datetime',
+        'last_new_matches_digest_sent_at' => 'datetime',
         'password' => 'hashed',
         'is_admin' => 'boolean',
         'photo_uploads_suspended' => 'boolean',

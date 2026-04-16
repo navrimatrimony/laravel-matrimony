@@ -28,7 +28,7 @@
         <p class="font-semibold mb-1">Behaviour</p>
         <p><strong>Redirect after registration ON:</strong> User registers with mobile → lands on OTP page → can Verify (then wizard) or Skip / Verify later (wizard). User can always use the wizard without verifying.</p>
         <p class="mt-2"><strong>Redirect after registration OFF:</strong> User registers → goes straight to profile wizard (no OTP step).</p>
-        <p class="mt-2"><strong>OTP mode:</strong> off = verification page redirects away; dev_show = OTP shown on screen for testing; live = real SMS (when implemented).</p>
+        <p class="mt-2"><strong>OTP mode:</strong> off = verification page redirects away; dev_show = OTP shown on screen for testing; live = OTP sent via <strong>Meta WhatsApp Cloud API</strong> (set WHATSAPP_* env vars + approved OTP template).</p>
     </div>
     <form method="POST" action="{{ route('admin.mobile-verification-settings.update') }}" class="space-y-6">
         @csrf
@@ -49,7 +49,7 @@
             <select name="mobile_verification_mode" class="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 shadow-sm">
                 <option value="off" {{ $mobileVerificationMode === 'off' ? 'selected' : '' }}>Off — verification disabled (redirects away)</option>
                 <option value="dev_show" {{ $mobileVerificationMode === 'dev_show' ? 'selected' : '' }}>Dev — OTP shown on screen (testing)</option>
-                <option value="live" {{ $mobileVerificationMode === 'live' ? 'selected' : '' }}>Live — real SMS (when implemented)</option>
+                <option value="live" {{ $mobileVerificationMode === 'live' ? 'selected' : '' }}>Live — WhatsApp OTP (Meta Cloud API)</option>
             </select>
             <p class="text-xs text-gray-500 dark:text-gray-400 mt-2">Must not be "Off" for redirect-after-registration to show the OTP page.</p>
         </div>

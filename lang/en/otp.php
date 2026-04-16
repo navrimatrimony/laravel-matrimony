@@ -26,6 +26,9 @@ return [
     'enter_valid_10_digit_mobile' => 'Enter a valid 10-digit mobile number.',
     'otp_generated_enter_below' => 'OTP generated. Enter it below.',
     'otp_sent_to_mobile' => 'OTP sent to your mobile.',
+    'otp_sent_via_whatsapp' => 'OTP sent to your WhatsApp.',
+    'whatsapp_not_configured' => 'WhatsApp OTP is not configured on the server. Ask the administrator to set Meta WhatsApp Cloud API credentials.',
+    'whatsapp_send_failed' => 'We could not send the OTP on WhatsApp. Please try again in a few minutes.',
     'invalid_or_expired_request_new' => 'Invalid or expired OTP. Request a new one.',
     'mobile_verified_successfully' => 'Mobile number verified successfully.',
 ];

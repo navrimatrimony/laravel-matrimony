@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
 use App\Models\AdminSetting;
+use App\Services\Messaging\MetaWhatsAppCloudService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
@@ -105,8 +106,21 @@ class MobileOtpController extends Controller
             return redirect()->route('mobile.verify')->with('status', __('otp.otp_generated_enter_below'));
         }
 
-        // Future: send real SMS when mode === 'live'
-        return redirect()->route('mobile.verify')->with('status', __('otp.otp_sent_to_mobile'));
+        /** @var MetaWhatsAppCloudService $whatsapp */
+        $whatsapp = app(MetaWhatsAppCloudService::class);
+        if (! $whatsapp->isConfiguredForOtp()) {
+            return redirect()
+                ->route('mobile.verify')
+                ->withErrors(['mobile' => __('otp.whatsapp_not_configured')]);
+        }
+
+        if (! $whatsapp->sendOtp($mobile, $otp)) {
+            return redirect()
+                ->route('mobile.verify')
+                ->withErrors(['mobile' => __('otp.whatsapp_send_failed')]);
+        }
+
+        return redirect()->route('mobile.verify')->with('status', __('otp.otp_sent_via_whatsapp'));
     }
 
     public function verifyOtp(Request $request): RedirectResponse

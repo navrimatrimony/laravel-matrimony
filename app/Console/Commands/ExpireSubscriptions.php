@@ -14,10 +14,20 @@ class ExpireSubscriptions extends Command
 
     public function handle(SubscriptionService $subscriptionService, NotificationService $notifications): int
     {
-        $days = (int) config('monetization.plan_expiry_notify_days_before', 2);
-        if ($days > 0) {
+        $windows = array_filter(
+            array_map('intval', config('monetization.plan_expiry_notify_days_before_list', [2])),
+            static fn (int $d): bool => $d > 0
+        );
+
+        $totalSent = 0;
+        foreach ($windows as $days) {
             $sent = $notifications->notifySubscriptionsExpiringSoon($days);
-            $this->info("Queued plan-expiry heads-up for {$sent} subscription(s) (≈{$days} days).");
+            $totalSent += $sent;
+            $this->info("Plan-expiry heads-up ({$days} day window): {$sent} subscription(s).");
+        }
+
+        if ($totalSent > 0) {
+            $this->info("Total plan-expiry heads-up sent this run: {$totalSent}.");
         }
 
         $n = $subscriptionService->expireSubscriptions();

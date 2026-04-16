@@ -16,6 +16,12 @@ return [
     'boost' => [
         'enabled' => (bool) env('MONETIZATION_BOOST_ENABLED', true),
     ],
-    /** Days before plan end to send in-app reminder. */
-    'plan_expiry_notify_days_before' => (int) env('MONETIZATION_PLAN_EXPIRY_NOTIFY_DAYS', 2),
+    /**
+     * Comma-separated “days before ends_at” windows to send plan-expiry heads-up (e.g. 7,2,1).
+     * Each window sends at most once per subscription per value (see NotificationService dedup).
+     */
+    'plan_expiry_notify_days_before_list' => array_values(array_unique(array_filter(array_map(
+        static fn (string $v): int => max(0, (int) trim($v)),
+        explode(',', (string) env('MONETIZATION_PLAN_EXPIRY_NOTIFY_DAYS', '7,2,1'))
+    )))),
 ];

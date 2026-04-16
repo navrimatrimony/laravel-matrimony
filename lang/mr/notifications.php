@@ -44,4 +44,9 @@ return [
     'only_pending_can_be_cancelled' => 'फक्त प्रलंबित विनंत्या रद्द करता येतात.',
     'only_receiver_can_revoke' => 'फक्त रिसीव्हरच प्रवेश रद्द करू शकतो.',
     'access_already_revoked' => 'प्रवेश आधीच रद्द केला आहे.',
+
+    'fellow_member' => 'सदस्या',
+    'inactive_reminder_message' => 'नमस्कार :name, तुम्ही काही काळ लॉग इन केले नाही. अपडेट्स, संदेश आणि जुळण्या पाहण्यासाठी लॉग इन करा.',
+    'inactive_reminder_whatsapp_line' => ':app — तुमचे खाते सक्रिय आहे. भेट द्या: :url',
+    'new_matches_digest_message' => 'तुमच्यासाठी :count शिफारस केलेल्या जुळण्या (सर्वोत्तम गुण :score/100). पाहण्यासाठी Matches उघडा.',
 ];

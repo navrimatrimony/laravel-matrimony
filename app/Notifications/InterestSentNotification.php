@@ -4,8 +4,11 @@ namespace App\Notifications;
 
 use App\Models\Interest;
 use App\Models\MatrimonyProfile;
+use App\Notifications\Concerns\SendsMatrimonyMailChannel;
+use App\Notifications\Support\MatrimonyMailTemplate;
 use App\Services\InterestSendLimitService;
 use Illuminate\Bus\Queueable;
+use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
 
 /*
@@ -17,6 +20,7 @@ use Illuminate\Notifications\Notification;
 class InterestSentNotification extends Notification
 {
     use Queueable;
+    use SendsMatrimonyMailChannel;
 
     public function __construct(
         public MatrimonyProfile $senderProfile
@@ -24,7 +28,12 @@ class InterestSentNotification extends Notification
 
     public function via(object $notifiable): array
     {
-        return ['database'];
+        return $this->matrimonyNotificationChannels($notifiable);
+    }
+
+    public function toMail(object $notifiable): MailMessage
+    {
+        return MatrimonyMailTemplate::fromToArray($this->toArray($notifiable));
     }
 
     public function toArray(object $notifiable): array

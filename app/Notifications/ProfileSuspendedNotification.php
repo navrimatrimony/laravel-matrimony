@@ -2,7 +2,10 @@
 
 namespace App\Notifications;
 
+use App\Notifications\Concerns\SendsMatrimonyMailChannel;
+use App\Notifications\Support\MatrimonyMailTemplate;
 use Illuminate\Bus\Queueable;
+use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
 
 /*
@@ -16,6 +19,7 @@ use Illuminate\Notifications\Notification;
 class ProfileSuspendedNotification extends Notification
 {
     use Queueable;
+    use SendsMatrimonyMailChannel;
 
     /**
      * Create a new notification instance.
@@ -33,7 +37,12 @@ class ProfileSuspendedNotification extends Notification
      */
     public function via(object $notifiable): array
     {
-        return ['database'];
+        return $this->matrimonyNotificationChannels($notifiable);
+    }
+
+    public function toMail(object $notifiable): MailMessage
+    {
+        return MatrimonyMailTemplate::fromToArray($this->toArray($notifiable));
     }
 
     /**

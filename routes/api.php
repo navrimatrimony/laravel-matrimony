@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Api\AuthController;
+use App\Http\Controllers\Webhooks\MetaWhatsAppWebhookController;
 use App\Http\Controllers\Api\ModerationConfigController;
 use App\Http\Controllers\Api\MasterEducationController;
 use App\Http\Controllers\Api\V1\LocationController;
@@ -13,6 +14,13 @@ use Illuminate\Support\Facades\Route;
 | Moderation thresholds for Python NudeNet (no auth; same network / firewall in production).
 */
 Route::get('/moderation-config', ModerationConfigController::class);
+
+/*
+| Meta WhatsApp Cloud API — webhook (no auth; verify token + optional HMAC).
+| Set callback URL to: https://your-domain.com/api/webhooks/whatsapp
+*/
+Route::get('/webhooks/whatsapp', [MetaWhatsAppWebhookController::class, 'verify']);
+Route::post('/webhooks/whatsapp', [MetaWhatsAppWebhookController::class, 'handle']);
 
 Route::get('/internal/location/search', [LocationSearchController::class, 'search']);
 Route::get('/internal/location/states', [LocationHierarchyController::class, 'states']);

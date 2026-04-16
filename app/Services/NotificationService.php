@@ -15,14 +15,42 @@ use App\Notifications\ReferralRewardGrantedNotification;
  */
 class NotificationService
 {
-    public function notifyPlanExpiringSoon(User $user, Subscription $subscription, int $daysLeft): void
+    public function notifyPlanExpiringSoon(User $user, Subscription $subscription, int $daysLeft): bool
     {
+        if ($this->planExpiryReminderRecentlySent($user, (int) $subscription->id, $daysLeft)) {
+            return false;
+        }
+
         $plan = $subscription->plan;
         $name = $plan?->name ?? __('subscriptions.default_plan_name');
         $ends = $subscription->ends_at;
         $endsDisplay = $ends ? $ends->timezone(config('app.timezone'))->toDayDateTimeString() : '';
 
-        $user->notify(new PlanExpiringSoonNotification($name, $daysLeft, $endsDisplay));
+        $user->notify(new PlanExpiringSoonNotification(
+            $name,
+            $daysLeft,
+            $endsDisplay,
+            (int) $subscription->id,
+        ));
+
+        return true;
+    }
+
+    /**
+     * Avoid duplicate heads-up if the nightly job runs twice within the window.
+     */
+    private function planExpiryReminderRecentlySent(User $user, int $subscriptionId, int $daysLeft): bool
+    {
+        return $user->notifications()
+            ->where('type', PlanExpiringSoonNotification::class)
+            ->where('created_at', '>=', now()->subHours(48))
+            ->get()
+            ->contains(function ($n) use ($subscriptionId, $daysLeft): bool {
+                $d = is_array($n->data) ? $n->data : [];
+
+                return (int) ($d['subscription_id'] ?? 0) === $subscriptionId
+                    && (int) ($d['days_left'] ?? 0) === $daysLeft;
+            });
     }
 
     /**
@@ -49,7 +77,7 @@ class NotificationService
     }
 
     /**
-     * Batch: subscriptions that end in exactly N days (idempotent per run via notification title hash — lightweight).
+     * Batch: subscriptions that end in exactly N days from “today” (per-day window).
      */
     public function notifySubscriptionsExpiringSoon(int $daysBefore): int
     {
@@ -70,8 +98,9 @@ class NotificationService
             if (! $user) {
                 continue;
             }
-            $this->notifyPlanExpiringSoon($user, $sub, $daysBefore);
-            $sent++;
+            if ($this->notifyPlanExpiringSoon($user, $sub, $daysBefore)) {
+                $sent++;
+            }
         }
 
         return $sent;
