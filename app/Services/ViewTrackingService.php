@@ -8,7 +8,7 @@ use App\Models\MatrimonyProfile;
 use App\Models\ProfileView;
 use App\Models\User;
 use App\Notifications\ProfileViewedNotification;
-use App\Services\AdminActivityNotificationGate;
+use App\Support\SafeNotifier;
 use Illuminate\Support\Facades\DB;
 
 /*
@@ -68,7 +68,7 @@ class ViewTrackingService
         }
 
         $enabled = \App\Models\AdminSetting::getBool('view_back_enabled', false);
-        if (!$enabled) {
+        if (! $enabled) {
             return;
         }
 
@@ -189,7 +189,7 @@ class ViewTrackingService
             return;
         }
 
-        $owner->notify(new ProfileViewedNotification($viewerProfile, $isViewBack));
+        SafeNotifier::notify($owner, new ProfileViewedNotification($viewerProfile, $isViewBack));
     }
 
     private static function shouldSendProfileViewNotification(User $owner, int $viewerProfileId): bool

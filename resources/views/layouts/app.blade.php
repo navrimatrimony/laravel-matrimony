@@ -24,6 +24,7 @@
                 : null;
             $hideMemberMainNav = request()->routeIs('matrimony.onboarding.*')
                 || $cardOnboardingStep !== null;
+            $showMobileStickyNav = auth()->check() && ! $hideMemberMainNav;
         @endphp
         <div class="min-h-screen bg-gray-100 dark:bg-gray-900">
             @if ($hideMemberMainNav)
@@ -47,7 +48,7 @@
 
             <!-- Page Content -->
             <!-- Page Content -->
-				<main>
+				<main class="{{ $showMobileStickyNav ? 'pb-16 md:pb-0' : '' }}">
                 @include('partials.laravel-validation-payload')
                 {{-- Flash messages: single place, dismissible + auto-hide (see resources/js/app.js) --}}
 @php($memberNotice = session('member_notice'))
@@ -90,6 +91,16 @@
 
     @yield('content')
 </main>
+
+@auth
+    @if (! $hideMemberMainNav && ! request()->routeIs('help-centre.*'))
+        @include('help-centre.partials.floating-widget')
+        @if (! request()->routeIs('chat.*'))
+            @include('partials.chat-dock-widget')
+        @endif
+    @endif
+@endauth
+@include('partials.mobile-sticky-quick-nav', ['hideMemberMainNav' => $hideMemberMainNav])
 
 
 

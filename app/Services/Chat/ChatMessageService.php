@@ -12,6 +12,7 @@ use App\Services\FeatureUsageService;
 use App\Services\NotificationService;
 use App\Services\ShowcaseChat\ShowcaseOrchestrationService;
 use App\Services\UserEntitlementService;
+use App\Support\SafeNotifier;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
@@ -191,7 +192,7 @@ class ChatMessageService
                         return;
                     }
 
-                    $receiverUser->notify(new NewChatMessageNotification(
+                    SafeNotifier::notify($receiverUser, new NewChatMessageNotification(
                         senderProfile: $sender,
                         conversationId: (int) $conversation->id,
                         messageType: (string) ($message->message_type ?? 'text'),

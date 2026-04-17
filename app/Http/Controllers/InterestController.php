@@ -11,9 +11,10 @@ use App\Notifications\InterestSentNotification;
 use App\Services\AdminActivityNotificationGate;
 use App\Services\InterestPriorityService;
 use App\Services\InterestSendLimitService;
-use App\Services\Showcase\ShowcaseInterestPolicyService;
 use App\Services\ProfileCompletenessService;
 use App\Services\ProfileLifecycleService;
+use App\Services\Showcase\ShowcaseInterestPolicyService;
+use App\Support\SafeNotifier;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
@@ -152,7 +153,7 @@ class InterestController extends Controller
             $this->interestSendLimit->recordSuccessfulSend($authUser);
             $receiverOwner = $receiverProfile->user;
             if ($receiverOwner && AdminActivityNotificationGate::allowsPeerActivityNotification($authUser)) {
-                $receiverOwner->notify(new InterestSentNotification($senderProfile));
+                SafeNotifier::notify($receiverOwner, new InterestSentNotification($senderProfile));
             }
         }
 
@@ -339,7 +340,7 @@ class InterestController extends Controller
 
         $senderOwner = $interest->senderProfile?->user;
         if ($senderOwner && AdminActivityNotificationGate::allowsPeerActivityNotification($user)) {
-            $senderOwner->notify(new InterestAcceptedNotification($receiverProfile));
+            SafeNotifier::notify($senderOwner, new InterestAcceptedNotification($receiverProfile));
         }
 
         return back()->with('success', __('interest.interest_accepted'));
@@ -383,7 +384,7 @@ class InterestController extends Controller
 
         $senderOwner = $interest->senderProfile?->user;
         if ($senderOwner && AdminActivityNotificationGate::allowsPeerActivityNotification($user)) {
-            $senderOwner->notify(new InterestRejectedNotification($user->matrimonyProfile));
+            SafeNotifier::notify($senderOwner, new InterestRejectedNotification($user->matrimonyProfile));
         }
 
         return back()->with('success', __('interest.interest_rejected'));

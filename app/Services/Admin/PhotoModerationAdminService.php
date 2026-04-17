@@ -9,6 +9,7 @@ use App\Models\ProfilePhoto;
 use App\Models\User;
 use App\Notifications\ImageRejectedNotification;
 use App\Services\Image\ProfileGalleryPhotoDeletionService;
+use App\Support\SafeNotifier;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -94,7 +95,7 @@ class PhotoModerationAdminService
 
         $newApproved = (string) $fill['approved_status'];
 
-        DB::transaction(function () use ($photo, $fill, $oldApproved, $newApproved, $admin, $reason, $action): void {
+        DB::transaction(function () use ($photo, $fill, $oldApproved, $newApproved, $admin, $reason): void {
             $photo->forceFill($fill);
             $priorBypass = MatrimonyProfile::$bypassGovernanceEnforcement;
             MatrimonyProfile::$bypassGovernanceEnforcement = true;
@@ -146,7 +147,7 @@ class PhotoModerationAdminService
             $owner = $profile?->user;
             if ($owner !== null) {
                 $msg = ($reason !== null && trim($reason) !== '') ? $reason : 'Your photo was rejected by moderation.';
-                $owner->notify(new ImageRejectedNotification($msg));
+                SafeNotifier::notify($owner, new ImageRejectedNotification($msg));
             }
         }
     }

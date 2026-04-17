@@ -8,6 +8,7 @@ use App\Notifications\InterestAcceptedNotification;
 use App\Notifications\InterestRejectedNotification;
 use App\Services\AdminActivityNotificationGate;
 use App\Services\ProfileCompletenessService;
+use App\Support\SafeNotifier;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -110,7 +111,7 @@ class ShowcaseIncomingInterestResponderService
         $actorUser = $receiverProfile->user;
         $senderOwner = $senderProfile?->user;
         if ($senderOwner && $actorUser && AdminActivityNotificationGate::allowsPeerActivityNotification($actorUser)) {
-            $senderOwner->notify(new InterestAcceptedNotification($receiverProfile));
+            SafeNotifier::notify($senderOwner, new InterestAcceptedNotification($receiverProfile));
         }
     }
 
@@ -121,7 +122,7 @@ class ShowcaseIncomingInterestResponderService
         $actorUser = $receiverProfile->user;
         $senderOwner = $interest->senderProfile?->user;
         if ($senderOwner && $actorUser && AdminActivityNotificationGate::allowsPeerActivityNotification($actorUser)) {
-            $senderOwner->notify(new InterestRejectedNotification($receiverProfile));
+            SafeNotifier::notify($senderOwner, new InterestRejectedNotification($receiverProfile));
         }
     }
 }

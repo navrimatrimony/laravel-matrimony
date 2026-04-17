@@ -5,10 +5,10 @@ namespace App\Services;
 use App\Models\MatrimonyProfile;
 use App\Models\Subscription;
 use App\Models\User;
-use App\Services\AdminActivityNotificationGate;
 use App\Notifications\ChatMessageLockedNotification;
 use App\Notifications\PlanExpiringSoonNotification;
 use App\Notifications\ReferralRewardGrantedNotification;
+use App\Support\SafeNotifier;
 
 /**
  * In-app (database) notifications for monetization and engagement — all copy is user-visible.
@@ -26,7 +26,7 @@ class NotificationService
         $ends = $subscription->ends_at;
         $endsDisplay = $ends ? $ends->timezone(config('app.timezone'))->toDayDateTimeString() : '';
 
-        $user->notify(new PlanExpiringSoonNotification(
+        SafeNotifier::notify($user, new PlanExpiringSoonNotification(
             $name,
             $daysLeft,
             $endsDisplay,
@@ -61,7 +61,7 @@ class NotificationService
         if (! AdminActivityNotificationGate::allowsPeerActivityNotification($referrer)) {
             return;
         }
-        $referrer->notify(new ReferralRewardGrantedNotification($bonusDays, $purchasedPlanName));
+        SafeNotifier::notify($referrer, new ReferralRewardGrantedNotification($bonusDays, $purchasedPlanName));
     }
 
     /**
@@ -73,7 +73,7 @@ class NotificationService
         if (! AdminActivityNotificationGate::allowsPeerActivityNotification($senderProfile->user)) {
             return;
         }
-        $receiverUser->notify(new ChatMessageLockedNotification($senderProfile, $conversationId));
+        SafeNotifier::notify($receiverUser, new ChatMessageLockedNotification($senderProfile, $conversationId));
     }
 
     /**

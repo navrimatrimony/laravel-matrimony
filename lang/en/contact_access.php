@@ -3,7 +3,8 @@
 return [
     'unlock_required' => 'Upgrade your plan to unlock contact features on profiles.',
     'upgrade_plans' => 'View plans',
-    'owner_restricted_contact' => 'This member is not sharing their number on the platform. You can ask our team to help connect you.',
+    'owner_restricted_contact' => 'This member prefers not to share contact details directly.',
+    'owner_restricted_contact_help' => 'You can request our team to connect you safely.',
     'reveal_button' => 'Reveal contact number',
     'reveal_uses_credit' => 'Uses 1 contact credit this month.',
     'credits_remaining' => 'Contact credits left this month: :count.',
@@ -42,4 +43,6 @@ return [
     'contact_preview_label' => 'Preview',
     'upgrade_to_view_contact' => 'Upgrade to view contact',
     'no_mediator_credits' => 'You have no mediator requests remaining.',
+    'mediator_side_note' => 'We coordinate via WhatsApp and share their response.',
+    'mediator_open_inbox' => 'Open matchmaking inbox',
 ];

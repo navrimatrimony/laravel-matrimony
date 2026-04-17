@@ -4,11 +4,12 @@ namespace App\Models;
 
 use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
-use Illuminate\Support\Str;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Illuminate\Support\Str;
 use Laravel\Sanctum\HasApiTokens;
 
 /*
@@ -41,6 +42,8 @@ class User extends Authenticatable implements MustVerifyEmail
         'name',
         'email',
         'mobile',
+        'mobile_backup',
+        'mobile_duplicate_of_user_id',
         'password',
         'gender',
         'mobile_verified_at',
@@ -111,6 +114,16 @@ class User extends Authenticatable implements MustVerifyEmail
         return $this->hasMany(Subscription::class);
     }
 
+    public function mobileDuplicatePrimary(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'mobile_duplicate_of_user_id');
+    }
+
+    public function mobileDuplicateSecondaries(): HasMany
+    {
+        return $this->hasMany(User::class, 'mobile_duplicate_of_user_id');
+    }
+
     public function featureUsages(): HasMany
     {
         return $this->hasMany(UserFeatureUsage::class);
@@ -134,6 +147,11 @@ class User extends Authenticatable implements MustVerifyEmail
     public function profileBoosts(): HasMany
     {
         return $this->hasMany(ProfileBoost::class);
+    }
+
+    public function helpCentreTickets(): HasMany
+    {
+        return $this->hasMany(HelpCentreTicket::class);
     }
 
     /**

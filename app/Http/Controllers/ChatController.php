@@ -260,10 +260,25 @@ class ChatController extends Controller
             $errors = $e->errors();
             $msg = $errors['policy'][0] ?? $errors['body_text'][0] ?? $e->getMessage();
 
+            if ($request->expectsJson() || $request->wantsJson()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => $msg,
+                    'errors' => $errors,
+                ], 422);
+            }
+
             return back()->with('error', $msg)->withErrors($errors);
         }
 
         $this->featureUsage->consumeChatSendAfterMessage($uid, (int) $conversation->id, (int) $me->id);
+
+        if ($request->expectsJson() || $request->wantsJson()) {
+            return response()->json([
+                'success' => true,
+                'message' => 'Message sent.',
+            ]);
+        }
 
         return back();
     }

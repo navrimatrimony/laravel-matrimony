@@ -12,6 +12,7 @@ use App\Services\InterestPriorityService;
 use App\Services\InterestSendLimitService;
 use App\Services\ProfileCompletenessService;
 use App\Services\ProfileLifecycleService;
+use App\Support\SafeNotifier;
 
 /**
  * Automated showcase -> real interest sender.
@@ -147,7 +148,7 @@ class ShowcaseOutgoingInterestSenderService
 
                 $receiverOwner = $receiver->user;
                 if ($receiverOwner && AdminActivityNotificationGate::allowsPeerActivityNotification($actor)) {
-                    $receiverOwner->notify(new InterestSentNotification($showcase));
+                    SafeNotifier::notify($receiverOwner, new InterestSentNotification($showcase));
                 }
 
                 $created++;

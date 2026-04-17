@@ -60,7 +60,15 @@ class MatrimonyVerificationEmailController extends Controller
             $user->refresh();
         }
 
-        $user->sendEmailVerificationNotification();
+        try {
+            $user->sendEmailVerificationNotification();
+        } catch (\Throwable $e) {
+            report($e);
+
+            return redirect()
+                ->route('matrimony.verification.email')
+                ->withErrors(['email' => __('auth.mail_send_failed')]);
+        }
 
         return redirect()
             ->route('matrimony.verification.email')

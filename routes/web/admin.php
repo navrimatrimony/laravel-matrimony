@@ -5,6 +5,7 @@ use App\Http\Controllers\Admin\AdminCapabilityController;
 use App\Http\Controllers\Admin\AdminCasteController;
 use App\Http\Controllers\Admin\AdminConflictRecordController;
 use App\Http\Controllers\Admin\AdminCouponController;
+use App\Http\Controllers\Admin\AdminDashboardController;
 use App\Http\Controllers\Admin\AdminFieldRegistryController;
 use App\Http\Controllers\Admin\AdminIntakeController;
 use App\Http\Controllers\Admin\AdminKycController;
@@ -21,9 +22,10 @@ use App\Http\Controllers\Admin\AutoShowcaseSettingsController;
 use App\Http\Controllers\Admin\CommerceAnalyticsController;
 use App\Http\Controllers\Admin\CommerceMemberOverrideController;
 use App\Http\Controllers\Admin\CouponController;
-use App\Http\Controllers\Admin\ShowcaseProfileController;
+use App\Http\Controllers\Admin\DuplicatePhoneController;
 use App\Http\Controllers\Admin\GovernanceDashboardController;
 use App\Http\Controllers\Admin\HomepageImageController;
+use App\Http\Controllers\Admin\HelpCentreTicketController;
 use App\Http\Controllers\Admin\IntakeReviewController;
 use App\Http\Controllers\Admin\LocationSuggestionWebController;
 use App\Http\Controllers\Admin\MatchBoostController;
@@ -39,6 +41,7 @@ use App\Http\Controllers\Admin\ShowcaseChatDebugController;
 use App\Http\Controllers\Admin\ShowcaseChatSettingsController;
 use App\Http\Controllers\Admin\ShowcaseConversationController;
 use App\Http\Controllers\Admin\ShowcaseEngineDashboardController;
+use App\Http\Controllers\Admin\ShowcaseProfileController;
 use App\Http\Controllers\Admin\SubCasteAdminController;
 use App\Http\Controllers\Admin\TranslationController;
 use App\Http\Controllers\Admin\UserWalletController;
@@ -112,6 +115,31 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
             'intakeAvgAutoFilled' => (float) $avgAutoFilled,
         ]);
     })->name('dashboard');
+
+    /*
+    | Help centre tickets (Phase 3 support queue)
+    */
+    Route::get('/help-centre/tickets', [HelpCentreTicketController::class, 'index'])->name('help-centre.tickets.index');
+    Route::get('/help-centre/tickets/{ticket}', [HelpCentreTicketController::class, 'show'])->name('help-centre.tickets.show');
+    Route::post('/help-centre/tickets/{ticket}/assign', [HelpCentreTicketController::class, 'assign'])->name('help-centre.tickets.assign');
+    Route::post('/help-centre/tickets/{ticket}/notes', [HelpCentreTicketController::class, 'addNote'])->name('help-centre.tickets.notes');
+    Route::post('/help-centre/tickets/{ticket}/resolve', [HelpCentreTicketController::class, 'resolve'])->name('help-centre.tickets.resolve');
+
+    Route::get('/duplicate-phones', [DuplicatePhoneController::class, 'index'])->name('duplicate-phones.index');
+    Route::post('/duplicate-phones/{user}/mobile', [DuplicatePhoneController::class, 'updateMobile'])->name('duplicate-phones.update-mobile');
+
+    Route::prefix('dashboard-metrics')->name('dashboard-metrics.')->group(function () {
+        Route::get('/overview', [AdminDashboardController::class, 'getOverviewStats'])->name('overview');
+        Route::get('/activity', [AdminDashboardController::class, 'getUserActivityStats'])->name('activity');
+        Route::get('/revenue', [AdminDashboardController::class, 'getRevenueStats'])->name('revenue');
+        Route::get('/funnel', [AdminDashboardController::class, 'getFunnelStats'])->name('funnel');
+        Route::get('/timeseries', [AdminDashboardController::class, 'getTimeSeriesData'])->name('timeseries');
+        Route::get('/insights', [AdminDashboardController::class, 'getInsights'])->name('insights');
+        Route::post('/insights/action-click', [AdminDashboardController::class, 'postInsightActionClick'])->name('insights.action-click');
+        Route::post('/insights/feedback', [AdminDashboardController::class, 'postInsightFeedback'])->name('insights.feedback');
+        Route::get('/risk', [AdminDashboardController::class, 'getRiskAlerts'])->name('risk');
+        Route::get('/live', [AdminDashboardController::class, 'getLiveActions'])->name('live');
+    });
 
     Route::get('/showcase', function () {
         return redirect()->route('admin.showcase-dashboard.index');

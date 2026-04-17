@@ -27,6 +27,7 @@ return [
     'interests_received' => 'Interests Received',
     'who_viewed_me' => 'Who viewed me',
     'contact_requests' => 'Contact Requests',
+    'help_centre' => 'Help centre',
     'shortlist' => 'Shortlist',
     'my_biodata_uploads' => 'My biodata uploads',
     'upload_biodata' => 'Upload Biodata',

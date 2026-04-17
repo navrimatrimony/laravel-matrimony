@@ -60,10 +60,17 @@ class AppServiceProvider extends ServiceProvider
         */
         View::composer('layouts.navigation', function ($view) {
             $count = 0;
+            $memberActivityCounts = [
+                'interests_pending' => 0,
+                'who_viewed_count' => 0,
+            ];
             if (auth()->check()) {
                 $count = auth()->user()->unreadNotifications()->count();
+                $memberActivityCounts = app(\App\Services\MemberQuickHubService::class)
+                    ->buildActivityCountsForUser(auth()->user());
             }
             $view->with('unreadNotificationCount', $count);
+            $view->with('memberActivityCounts', $memberActivityCounts);
         });
 
         /*
@@ -73,11 +80,22 @@ class AppServiceProvider extends ServiceProvider
         */
         View::composer(['layouts.app', 'dashboard'], function ($view) {
             $planUsageSummary = null;
+            $chatDockData = null;
+            $memberActivityCounts = [
+                'interests_pending' => 0,
+                'who_viewed_count' => 0,
+            ];
             if (auth()->check() && auth()->user()->matrimonyProfile) {
                 $planUsageSummary = app(\App\Services\FeatureUsageService::class)
                     ->getDashboardUsageSummary(auth()->user());
+                $chatDockData = app(\App\Services\MemberQuickHubService::class)
+                    ->buildChatDockForUser(auth()->user());
+                $memberActivityCounts = app(\App\Services\MemberQuickHubService::class)
+                    ->buildActivityCountsForUser(auth()->user());
             }
             $view->with('planUsageSummary', $planUsageSummary);
+            $view->with('chatDockData', $chatDockData);
+            $view->with('memberActivityCounts', $memberActivityCounts);
         });
 
         /*

@@ -15,19 +15,20 @@ use App\Notifications\ImageRejectedNotification;
 use App\Notifications\ProfileSoftDeletedNotification;
 use App\Notifications\ProfileSuspendedNotification;
 use App\Notifications\ProfileUnsuspendedNotification;
+use App\Services\Admin\PhotoModerationAdminService;
+use App\Services\Admin\UserModerationStatsService;
 use App\Services\AdminProfileEditGovernanceService;
 use App\Services\AdminProfileSoftDeleteService;
 use App\Services\AuditLogService;
 use App\Services\ConflictDetectionService;
 use App\Services\FieldValueHistoryService;
-use App\Services\Admin\PhotoModerationAdminService;
-use App\Services\Admin\UserModerationStatsService;
 use App\Services\Image\ProfileGalleryPhotoDeletionService;
 use App\Services\Image\ProfilePhotoUrlService;
 use App\Services\ProfileCompletenessService;
 use App\Services\ProfileFieldLockService;
 use App\Services\ProfileLifecycleService;
 use App\Services\ViewTrackingService;
+use App\Support\SafeNotifier;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -203,7 +204,7 @@ class AdminProfileModerationController extends Controller
 
         $owner = $profile->user;
         if ($owner) {
-            $owner->notify(new ProfileSuspendedNotification($request->reason));
+            SafeNotifier::notify($owner, new ProfileSuspendedNotification($request->reason));
         }
 
         return redirect()->route('admin.profiles.show', $profile->id)->with('success', 'Profile suspended.');
@@ -230,7 +231,7 @@ class AdminProfileModerationController extends Controller
 
         $owner = $profile->user;
         if ($owner) {
-            $owner->notify(new ProfileUnsuspendedNotification($request->reason));
+            SafeNotifier::notify($owner, new ProfileUnsuspendedNotification($request->reason));
         }
 
         return redirect()->route('admin.profiles.show', $profile->id)->with('success', 'Profile unsuspended.');
@@ -258,7 +259,7 @@ class AdminProfileModerationController extends Controller
         );
 
         if ($owner) {
-            $owner->notify(new ProfileSoftDeletedNotification($request->reason));
+            SafeNotifier::notify($owner, new ProfileSoftDeletedNotification($request->reason));
         }
 
         return redirect()->route('admin.profiles.show', $profileId)->with('success', 'Profile soft deleted.');
@@ -339,7 +340,7 @@ class AdminProfileModerationController extends Controller
 
         $owner = $profile->user;
         if ($owner) {
-            $owner->notify(new ImageRejectedNotification($request->reason));
+            SafeNotifier::notify($owner, new ImageRejectedNotification($request->reason));
         }
 
         if ($profile->user_id) {
@@ -382,7 +383,7 @@ class AdminProfileModerationController extends Controller
 
             $owner = $profile->fresh()->user;
             if ($owner) {
-                $owner->notify(new ImageRejectedNotification($request->reason));
+                SafeNotifier::notify($owner, new ImageRejectedNotification($request->reason));
             }
 
             return $this->redirectAfterImageModeration($request, $profile, 'Photo removed.');
@@ -416,7 +417,7 @@ class AdminProfileModerationController extends Controller
 
             $owner = $profile->fresh()->user;
             if ($owner) {
-                $owner->notify(new ImageRejectedNotification($request->reason));
+                SafeNotifier::notify($owner, new ImageRejectedNotification($request->reason));
             }
 
             return $this->redirectAfterImageModeration($request, $profile, 'Photo deleted.');
@@ -442,7 +443,7 @@ class AdminProfileModerationController extends Controller
 
         $owner = $profile->fresh()->user;
         if ($owner) {
-            $owner->notify(new ImageRejectedNotification($request->reason));
+            SafeNotifier::notify($owner, new ImageRejectedNotification($request->reason));
         }
 
         return $this->redirectAfterImageModeration($request, $profile, 'Photo removed.');
@@ -522,7 +523,7 @@ class AdminProfileModerationController extends Controller
 
         $owner = $profile->user;
         if ($owner) {
-            $owner->notify(new ImageRejectedNotification($request->reason));
+            SafeNotifier::notify($owner, new ImageRejectedNotification($request->reason));
         }
 
         if ($profile->user_id) {
@@ -554,7 +555,7 @@ class AdminProfileModerationController extends Controller
 
         $owner = $profile->fresh()->user;
         if ($owner) {
-            $owner->notify(new ImageRejectedNotification($request->reason));
+            SafeNotifier::notify($owner, new ImageRejectedNotification($request->reason));
         }
 
         return $this->redirectAfterImageModeration($request, $profile, 'Gallery photo removed.');

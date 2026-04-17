@@ -9,7 +9,7 @@ use App\Models\MediationRequest;
 use App\Models\User;
 use App\Notifications\MediationRequestReceivedNotification;
 use App\Notifications\MediationRequestResponseNotification;
-use App\Services\AdminActivityNotificationGate;
+use App\Support\SafeNotifier;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use InvalidArgumentException;
@@ -93,7 +93,7 @@ class MediationRequestService
 
         $mediation->load(['sender.matrimonyProfile', 'receiver', 'senderProfile', 'receiverProfile']);
         if (AdminActivityNotificationGate::allowsPeerActivityNotification($mediation->sender)) {
-            $receiver->notify(new MediationRequestReceivedNotification($mediation));
+            SafeNotifier::notify($receiver, new MediationRequestReceivedNotification($mediation));
         }
         event(new MediationRequestCreated($mediation));
 
@@ -146,7 +146,7 @@ class MediationRequestService
 
         $mediation->load(['sender.matrimonyProfile', 'receiver.matrimonyProfile', 'senderProfile', 'receiverProfile']);
         if (AdminActivityNotificationGate::allowsPeerActivityNotification($receiver)) {
-            $mediation->sender->notify(new MediationRequestResponseNotification($mediation));
+            SafeNotifier::notify($mediation->sender, new MediationRequestResponseNotification($mediation));
         }
         event(new MediationRequestResponded($mediation));
 

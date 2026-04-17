@@ -10,7 +10,7 @@ use App\Notifications\ContactGrantRevokedNotification;
 use App\Notifications\ContactRequestAcceptedNotification;
 use App\Notifications\ContactRequestExpiredNotification;
 use App\Notifications\ContactRequestRejectedNotification;
-use App\Services\AdminActivityNotificationGate;
+use App\Support\SafeNotifier;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -243,7 +243,7 @@ class ContactRequestService
         });
         $this->audit($request, $grant, 'approved', $request->receiver_id, ['granted_scopes' => $grantedScopes]);
         if (AdminActivityNotificationGate::allowsPeerActivityNotification($receiver)) {
-            $request->sender->notify(new ContactRequestAcceptedNotification($grant));
+            SafeNotifier::notify($request->sender, new ContactRequestAcceptedNotification($grant));
         }
 
         return $grant;
@@ -273,7 +273,7 @@ class ContactRequestService
         ]);
         $this->audit($request, null, 'rejected', $receiver->id, ['cooldown_ends_at' => $cooldownEndsAt->toIso8601String()]);
         if (AdminActivityNotificationGate::allowsPeerActivityNotification($receiver)) {
-            $request->sender->notify(new ContactRequestRejectedNotification($request));
+            SafeNotifier::notify($request->sender, new ContactRequestRejectedNotification($request));
         }
     }
 
@@ -316,7 +316,7 @@ class ContactRequestService
         $request->update(['status' => ContactRequest::STATUS_REVOKED]);
         $this->audit($request, $grant, 'revoked', $receiver->id, []);
         if (AdminActivityNotificationGate::allowsPeerActivityNotification($receiver)) {
-            $request->sender->notify(new ContactGrantRevokedNotification($grant));
+            SafeNotifier::notify($request->sender, new ContactGrantRevokedNotification($grant));
         }
     }
 
@@ -364,7 +364,7 @@ class ContactRequestService
             if ($request->expires_at && $request->expires_at->isPast()) {
                 $request->update(['status' => ContactRequest::STATUS_EXPIRED]);
                 $this->audit($request, null, 'expired', null, []);
-                $request->sender->notify(new ContactRequestExpiredNotification($request));
+                SafeNotifier::notify($request->sender, new ContactRequestExpiredNotification($request));
 
                 return ['state' => 'expired', 'request' => $request->fresh(), 'grant' => null, 'cooldown_ends_at' => null];
             }

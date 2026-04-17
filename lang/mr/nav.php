@@ -26,6 +26,7 @@ return [
     'interests_received' => 'मिळालेली इच्छा',
     'who_viewed_me' => 'मला कोणी पाहिले',
     'contact_requests' => 'संपर्क विनंत्या',
+    'help_centre' => 'हेल्प सेंटर',
     'shortlist' => 'शॉर्टलिस्ट',
     'my_biodata_uploads' => 'माझे बायोडाटा अपलोड',
     'upload_biodata' => 'बायोडाटा अपलोड करा',

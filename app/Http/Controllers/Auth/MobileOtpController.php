@@ -5,15 +5,19 @@ namespace App\Http\Controllers\Auth;
 use App\Http\Controllers\Controller;
 use App\Models\AdminSetting;
 use App\Services\Messaging\MetaWhatsAppCloudService;
+use App\Support\MobileNumber;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Validator;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 
 class MobileOtpController extends Controller
 {
     private const OTP_TTL_SECONDS = 600; // 10 min
+
     private const CACHE_KEY_PREFIX = 'mobile_otp:';
 
     public function show(Request $request): View|RedirectResponse
@@ -86,23 +90,30 @@ class MobileOtpController extends Controller
         }
 
         $request->validate([
-            'mobile' => ['required', 'string', 'max:20'],
+            'mobile' => ['required', 'string', 'max:32'],
         ]);
 
         $user = $request->user();
-        $mobile = preg_replace('/\D/', '', $request->input('mobile'));
-        if (strlen($mobile) < 10) {
+        $mobileDigits = MobileNumber::normalize($request->input('mobile'));
+        if ($mobileDigits === null) {
             throw ValidationException::withMessages(['mobile' => __('otp.enter_valid_10_digit_mobile')]);
         }
 
-        $user->update(['mobile' => $request->input('mobile')]);
+        Validator::make(
+            ['mobile' => $mobileDigits],
+            ['mobile' => ['required', Rule::unique('users', 'mobile')->ignore($user->id)]],
+            ['mobile.unique' => __('auth.mobile_duplicate_register')]
+        )->validate();
+
+        $user->update(['mobile' => $mobileDigits]);
 
         $otp = (string) random_int(100000, 999999);
-        Cache::put(self::CACHE_KEY_PREFIX . $user->id, $otp, self::OTP_TTL_SECONDS);
+        Cache::put(self::CACHE_KEY_PREFIX.$user->id, $otp, self::OTP_TTL_SECONDS);
 
         if ($mode === 'dev_show') {
             // Store OTP in session so it reliably shows on next page load (flash can be lost on redirect in some setups)
             $request->session()->put('otp_display', $otp);
+
             return redirect()->route('mobile.verify')->with('status', __('otp.otp_generated_enter_below'));
         }
 
@@ -114,7 +125,7 @@ class MobileOtpController extends Controller
                 ->withErrors(['mobile' => __('otp.whatsapp_not_configured')]);
         }
 
-        if (! $whatsapp->sendOtp($mobile, $otp)) {
+        if (! $whatsapp->sendOtp($mobileDigits, $otp)) {
             return redirect()
                 ->route('mobile.verify')
                 ->withErrors(['mobile' => __('otp.whatsapp_send_failed')]);
@@ -130,7 +141,7 @@ class MobileOtpController extends Controller
         ]);
 
         $user = $request->user();
-        $key = self::CACHE_KEY_PREFIX . $user->id;
+        $key = self::CACHE_KEY_PREFIX.$user->id;
         $cached = Cache::get($key);
 
         if ($cached === null || $cached !== $request->input('otp')) {

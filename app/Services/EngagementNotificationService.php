@@ -6,8 +6,9 @@ use App\Models\MatrimonyProfile;
 use App\Models\User;
 use App\Notifications\InactiveUserReminderNotification;
 use App\Notifications\NewMatchesAvailableNotification;
-use App\Services\Messaging\MetaWhatsAppCloudService;
 use App\Services\Matching\MatchingService;
+use App\Services\Messaging\MetaWhatsAppCloudService;
+use App\Support\SafeNotifier;
 use Illuminate\Support\Facades\Log;
 
 /**
@@ -49,7 +50,7 @@ class EngagementNotificationService
                 foreach ($users as $user) {
                     /** @var User $user */
                     try {
-                        $user->notify(new InactiveUserReminderNotification);
+                        SafeNotifier::notify($user, new InactiveUserReminderNotification);
                         $user->forceFill(['last_inactive_reminder_sent_at' => now()])->saveQuietly();
                         if (($cfg['whatsapp']['enabled'] ?? false) && $this->whatsapp->canSendEngagementTemplate()) {
                             $mobile = preg_replace('/\D/', '', (string) ($user->mobile ?? ''));
@@ -121,7 +122,7 @@ class EngagementNotificationService
                         if ($count < $minMatches) {
                             continue;
                         }
-                        $user->notify(new NewMatchesAvailableNotification($count, $top, $tab));
+                        SafeNotifier::notify($user, new NewMatchesAvailableNotification($count, $top, $tab));
                         $user->forceFill(['last_new_matches_digest_sent_at' => now()])->saveQuietly();
                         $sent++;
                     } catch (\Throwable $e) {

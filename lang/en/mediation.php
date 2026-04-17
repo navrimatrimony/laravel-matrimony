@@ -1,7 +1,7 @@
 <?php
 
 return [
-    'nav_link' => 'Matchmaking',
+    'nav_link' => 'Assisted matchmaking',
     'someone' => 'Someone',
     'inbox_title' => 'Assisted matchmaking',
     'pending_heading' => 'Needs your response',

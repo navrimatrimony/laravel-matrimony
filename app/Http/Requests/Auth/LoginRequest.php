@@ -3,6 +3,7 @@
 namespace App\Http\Requests\Auth;
 
 use App\Models\User;
+use App\Support\MobileNumber;
 use Illuminate\Auth\Events\Lockout;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Support\Facades\Auth;
@@ -96,9 +97,31 @@ class LoginRequest extends FormRequest
             return false;
         }
 
-        $mobileDigits = preg_replace('/\D/', '', $rawLogin);
-        if (strlen($mobileDigits) === 10) {
-            return Auth::attempt(['mobile' => $mobileDigits, 'password' => $password], $this->boolean('remember'));
+        $mobileDigits = MobileNumber::normalize($rawLogin);
+        if ($mobileDigits !== null) {
+            $users = User::query()
+                ->where('mobile', $mobileDigits)
+                ->orderByDesc('mobile_verified_at')
+                ->orderByDesc('id')
+                ->get();
+
+            if ($users->isEmpty()) {
+                return false;
+            }
+
+            if ($users->count() === 1) {
+                return Auth::attempt(['mobile' => $mobileDigits, 'password' => $password], $this->boolean('remember'));
+            }
+
+            foreach ($users as $u) {
+                if (Hash::check($password, $u->password)) {
+                    Auth::login($u, $this->boolean('remember'));
+
+                    return true;
+                }
+            }
+
+            return false;
         }
 
         if (filter_var($rawLogin, FILTER_VALIDATE_EMAIL)) {

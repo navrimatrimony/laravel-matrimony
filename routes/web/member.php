@@ -6,12 +6,14 @@ use App\Http\Controllers\ChatController;
 use App\Http\Controllers\ContactInboxController;
 use App\Http\Controllers\ContactRequestController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\HelpCentreController;
 use App\Http\Controllers\IntakeController;
 use App\Http\Controllers\InterestController;
 use App\Http\Controllers\Internal\CurrentLocationController;
 use App\Http\Controllers\MatchController;
 use App\Http\Controllers\MatrimonyProfileController;
 use App\Http\Controllers\MatrimonyVerificationEmailController;
+use App\Http\Controllers\MemberWidgetController;
 use App\Http\Controllers\MediationInboxController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\OnboardingController;
@@ -283,6 +285,14 @@ Route::middleware(['auth', \App\Http\Middleware\EnforceCardOnboarding::class])->
     Route::get('/chat/messages/{message}/image', [ChatController::class, 'image'])->name('chat.messages.image.show');
 
     /*
+    | Help centre (safe support assistant)
+    */
+    Route::get('/help-centre', [HelpCentreController::class, 'index'])->name('help-centre.index');
+    Route::post('/help-centre/ask', [HelpCentreController::class, 'ask'])
+        ->middleware('throttle:30,1')
+        ->name('help-centre.ask');
+
+    /*
     | Abuse Reports (User action)
     */
     Route::post('/abuse-reports/{matrimony_profile}', [AbuseReportController::class, 'store'])
@@ -302,5 +312,11 @@ Route::middleware(['auth', \App\Http\Middleware\EnforceCardOnboarding::class])->
     Route::get('/notifications/unread-count', [NotificationController::class, 'unreadCount'])->name('notifications.unread-count');
     Route::get('/notifications/{id}', [NotificationController::class, 'show'])->name('notifications.show');
     Route::post('/notifications/{id}/mark-read', [NotificationController::class, 'markRead'])->name('notifications.mark-read');
+    Route::get('/widgets/member-counts', [MemberWidgetController::class, 'counts'])
+        ->middleware('throttle:60,1')
+        ->name('member.widgets.counts');
+    Route::get('/widgets/chat-dock', [MemberWidgetController::class, 'chatDock'])
+        ->middleware('throttle:60,1')
+        ->name('member.widgets.chat-dock');
 
 });

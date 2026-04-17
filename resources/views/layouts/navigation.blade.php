@@ -35,7 +35,8 @@
     } elseif (request()->routeIs('interests.*')
         || request()->routeIs('chat.*')
         || request()->routeIs('mediation-inbox.*')
-        || request()->routeIs('mediation-requests.*')) {
+        || request()->routeIs('mediation-requests.*')
+        || request()->routeIs('help-centre.*')) {
         $navMainSection = 'connect';
     } elseif (request()->routeIs('matrimony.profiles.index')
         || request()->routeIs('matches.*')
@@ -102,6 +103,11 @@
 
     <a href="{{ route('who-viewed.index') }}" class="{{ $navMainLink($navMainSection === 'activity') }}">
         <span class="whitespace-nowrap">{{ __('nav.activity') }}</span>
+        @php($activityMainCount = (int) (($memberActivityCounts['interests_pending'] ?? 0) + ($memberActivityCounts['who_viewed_count'] ?? 0)))
+        <span
+            id="activity-main-badge"
+            class="ml-2 inline-flex min-w-[1.2rem] items-center justify-center rounded-full bg-yellow-300 px-1.5 py-0.5 text-[10px] font-black leading-none text-red-700 {{ $activityMainCount > 0 ? '' : 'hidden' }}"
+        >{{ $activityMainCount > 99 ? '99+' : $activityMainCount }}</span>
         @if ($navMainSection === 'activity')
             <span class="{{ $navMainCaret }}" aria-hidden="true"></span>
         @endif
@@ -276,14 +282,10 @@
 
         <x-responsive-nav-link :href="route('chat.index')" class="relative inline-flex items-center">
             Chat
-            @auth
-                @if (($chatUnreadCount ?? 0) > 0)
-                    <span
-                        id="chat-badge-mobile"
-                        class="ml-2 inline-flex items-center justify-center px-1.5 py-0.5 text-xs font-bold leading-none text-red-800 bg-white ring-1 ring-white/80 rounded-full"
-                    >{{ $chatUnreadCount > 99 ? '99+' : $chatUnreadCount }}</span>
-                @endif
-            @endauth
+            <span
+                id="chat-badge-mobile"
+                class="ml-2 inline-flex items-center justify-center px-1.5 py-0.5 text-xs font-bold leading-none text-red-800 bg-white ring-1 ring-white/80 rounded-full {{ (int) ($chatUnreadCount ?? 0) > 0 ? '' : 'hidden' }}"
+            >{{ (int) ($chatUnreadCount ?? 0) > 99 ? '99+' : (int) ($chatUnreadCount ?? 0) }}</span>
         </x-responsive-nav-link>
 
         <x-responsive-nav-link :href="route('contact-inbox.index')">
@@ -292,6 +294,10 @@
 
         <x-responsive-nav-link :href="route('mediation-inbox.index')">
             Mediation
+        </x-responsive-nav-link>
+
+        <x-responsive-nav-link :href="route('help-centre.index')">
+            {{ __('nav.help_centre') }}
         </x-responsive-nav-link>
     </div>
 </details>
@@ -302,14 +308,22 @@
         Activity
     </summary>
     <div class="ml-3 space-y-1">
-        <x-responsive-nav-link :href="route('who-viewed.index')">
+        <x-responsive-nav-link :href="route('who-viewed.index')" class="relative inline-flex items-center">
             {{ __('nav.who_viewed_me') }}
+            <span
+                id="who-viewed-badge-mobile"
+                class="ml-2 inline-flex items-center justify-center px-1.5 py-0.5 text-xs font-bold leading-none text-red-800 bg-white ring-1 ring-white/80 rounded-full {{ (int) ($memberActivityCounts['who_viewed_count'] ?? 0) > 0 ? '' : 'hidden' }}"
+            >{{ (int) ($memberActivityCounts['who_viewed_count'] ?? 0) > 99 ? '99+' : (int) ($memberActivityCounts['who_viewed_count'] ?? 0) }}</span>
         </x-responsive-nav-link>
 
         @auth
             @if (auth()->user()->matrimonyProfile)
-                <x-responsive-nav-link :href="route('interests.index')">
+                <x-responsive-nav-link :href="route('interests.index')" class="relative inline-flex items-center">
                     {{ __('nav.interests') }}
+                    <span
+                        id="interests-received-badge-mobile"
+                        class="ml-2 inline-flex items-center justify-center px-1.5 py-0.5 text-xs font-bold leading-none text-red-800 bg-white ring-1 ring-white/80 rounded-full {{ (int) ($memberActivityCounts['interests_pending'] ?? 0) > 0 ? '' : 'hidden' }}"
+                    >{{ (int) ($memberActivityCounts['interests_pending'] ?? 0) > 99 ? '99+' : (int) ($memberActivityCounts['interests_pending'] ?? 0) }}</span>
                 </x-responsive-nav-link>
             @endif
         @endauth
@@ -320,12 +334,10 @@
 
         <x-responsive-nav-link :href="route('notifications.index')" class="relative inline-flex items-center">
             {{ __('nav.notifications') }}
-            @if (($unreadNotificationCount ?? 0) > 0)
-                <span
-                    id="notification-badge-mobile"
-                    class="ml-2 inline-flex items-center justify-center px-1.5 py-0.5 text-xs font-bold leading-none text-red-800 bg-white ring-1 ring-white/80 rounded-full"
-                >{{ $unreadNotificationCount > 99 ? '99+' : $unreadNotificationCount }}</span>
-            @endif
+            <span
+                id="notification-badge-mobile"
+                class="ml-2 inline-flex items-center justify-center px-1.5 py-0.5 text-xs font-bold leading-none text-red-800 bg-white ring-1 ring-white/80 rounded-full {{ (int) ($unreadNotificationCount ?? 0) > 0 ? '' : 'hidden' }}"
+            >{{ (int) ($unreadNotificationCount ?? 0) > 99 ? '99+' : (int) ($unreadNotificationCount ?? 0) }}</span>
         </x-responsive-nav-link>
     </div>
 </details>
@@ -435,6 +447,21 @@
     const badgeMobile = document.getElementById('notification-badge-mobile');
     const chatBadge = document.getElementById('chat-badge');
     const chatBadgeMobile = document.getElementById('chat-badge-mobile');
+    const chatDockBadge = document.getElementById('chat-dock-badge');
+    const interestsBadge = document.getElementById('interests-received-badge');
+    const interestsBadgeMobile = document.getElementById('interests-received-badge-mobile');
+    const whoViewedBadge = document.getElementById('who-viewed-badge');
+    const whoViewedBadgeMobile = document.getElementById('who-viewed-badge-mobile');
+    const activityMainBadge = document.getElementById('activity-main-badge');
+    const stickyChatBadge = document.getElementById('sticky-chat-badge');
+    const stickyInterestsBadge = document.getElementById('sticky-interests-badge');
+    const stickyActivityBadge = document.getElementById('sticky-activity-badge');
+
+    function applyBadge(el, count) {
+        if (!el) return;
+        el.textContent = count > 99 ? '99+' : String(count);
+        el.classList.toggle('hidden', !(count > 0));
+    }
 
     function updateNotificationCount() {
         fetch('{{ route("notifications.unread-count") }}', {
@@ -448,27 +475,8 @@
         .then(response => response.json())
         .then(data => {
             const count = data.count || 0;
-            const displayCount = count > 99 ? '99+' : count;
-
-            // Update desktop badge
-            if (badge) {
-                badge.textContent = displayCount;
-                if (count > 0) {
-                    badge.classList.remove('hidden');
-                } else {
-                    badge.classList.add('hidden');
-                }
-            }
-
-            // Update mobile badge
-            if (badgeMobile) {
-                badgeMobile.textContent = displayCount;
-                if (count > 0) {
-                    badgeMobile.style.display = 'inline-flex';
-                } else {
-                    badgeMobile.style.display = 'none';
-                }
-            }
+            applyBadge(badge, count);
+            applyBadge(badgeMobile, count);
         })
         .catch(err => {
             // Silent fail - don't disrupt user experience
@@ -477,8 +485,8 @@
     }
 
     // Start polling after page load
-    function updateChatCount() {
-        fetch('{{ route("chat.index") }}?unread_only=1', {
+    function updateMemberWidgetCounts() {
+        fetch('{{ route("member.widgets.counts") }}', {
             method: 'GET',
             headers: {
                 'Accept': 'application/json',
@@ -486,25 +494,41 @@
             },
             credentials: 'same-origin'
         })
-        .then(r => r.json())
+        .then(response => response.json())
         .then(data => {
-            const count = data.count || 0;
-            const displayCount = count > 99 ? '99+' : count;
-            if (chatBadge) {
-                chatBadge.textContent = displayCount;
-                if (count > 0) chatBadge.classList.remove('hidden'); else chatBadge.classList.add('hidden');
-            }
-            if (chatBadgeMobile) {
-                chatBadgeMobile.textContent = displayCount;
-                chatBadgeMobile.style.display = count > 0 ? 'inline-flex' : 'none';
-            }
+            if (!data || data.ok !== true) return;
+            const chatCount = Number(data.chat_unread || 0);
+            const interestsCount = Number(data.interests_pending || 0);
+            const whoViewedCount = Number(data.who_viewed_count || 0);
+            applyBadge(chatBadge, chatCount);
+            applyBadge(chatBadgeMobile, chatCount);
+            applyBadge(chatDockBadge, chatCount);
+            applyBadge(stickyChatBadge, chatCount);
+            applyBadge(interestsBadge, interestsCount);
+            applyBadge(interestsBadgeMobile, interestsCount);
+            applyBadge(stickyInterestsBadge, interestsCount);
+            applyBadge(whoViewedBadge, whoViewedCount);
+            applyBadge(whoViewedBadgeMobile, whoViewedCount);
+            const activityCount = interestsCount + whoViewedCount;
+            applyBadge(activityMainBadge, activityCount);
+            applyBadge(stickyActivityBadge, activityCount);
+
+            document.dispatchEvent(new CustomEvent('member-widget-counts-updated', {
+                detail: {
+                    chat_unread: chatCount,
+                    interests_pending: interestsCount,
+                    who_viewed_count: whoViewedCount
+                }
+            }));
         })
         .catch(() => {});
     }
 
-    if (badge || badgeMobile || chatBadge || chatBadgeMobile) {
+    if (badge || badgeMobile || chatBadge || chatBadgeMobile || interestsBadge || whoViewedBadge || stickyChatBadge) {
+        updateNotificationCount();
+        updateMemberWidgetCounts();
         setInterval(updateNotificationCount, POLL_INTERVAL);
-        setInterval(updateChatCount, POLL_INTERVAL);
+        setInterval(updateMemberWidgetCounts, POLL_INTERVAL);
     }
 })();
 </script>

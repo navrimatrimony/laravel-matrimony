@@ -65,25 +65,38 @@
                     @endauth
                 @elseif ($section === 'connect')
                     <a href="{{ route('interests.index') }}"
-                       class="inline-flex items-center border-b-2 px-3 py-3 text-sm font-medium transition {{ request()->routeIs('interests.index', 'interests.sent', 'interests.received') ? 'border-red-600 text-red-600 dark:border-red-500 dark:text-red-400' : 'border-transparent text-gray-600 hover:text-red-700 dark:text-gray-400 dark:hover:text-red-400' }}">
+                       class="inline-flex items-center gap-2 border-b-2 px-3 py-3 text-sm font-medium transition {{ request()->routeIs('interests.index', 'interests.sent', 'interests.received') ? 'border-red-600 text-red-600 dark:border-red-500 dark:text-red-400' : 'border-transparent text-gray-600 hover:text-red-700 dark:text-gray-400 dark:hover:text-red-400' }}">
                         {{ __('nav.interests') }}
+                        <span
+                            id="interests-received-badge"
+                            class="inline-flex min-w-[1.25rem] items-center justify-center rounded-full bg-red-500 px-1.5 py-0.5 text-[10px] font-bold leading-none text-white {{ (int) ($memberActivityCounts['interests_pending'] ?? 0) > 0 ? '' : 'hidden' }}"
+                        >{{ (int) ($memberActivityCounts['interests_pending'] ?? 0) > 99 ? '99+' : (int) ($memberActivityCounts['interests_pending'] ?? 0) }}</span>
                     </a>
                     <a href="{{ route('chat.index') }}"
                        class="inline-flex items-center gap-2 border-b-2 px-3 py-3 text-sm font-medium transition {{ request()->routeIs('chat.*') ? 'border-red-600 text-red-600 dark:border-red-500 dark:text-red-400' : 'border-transparent text-gray-600 hover:text-red-700 dark:text-gray-400 dark:hover:text-red-400' }}">
                         {{ __('Chat') }}
-                        @if (isset($chatUnreadCount) && $chatUnreadCount > 0)
-                            <span class="inline-flex min-w-[1.25rem] items-center justify-center rounded-full bg-red-500 px-1.5 py-0.5 text-[10px] font-bold leading-none text-white">{{ $chatUnreadCount > 99 ? '99+' : $chatUnreadCount }}</span>
-                        @endif
+                        <span
+                            id="chat-badge"
+                            class="inline-flex min-w-[1.25rem] items-center justify-center rounded-full bg-red-500 px-1.5 py-0.5 text-[10px] font-bold leading-none text-white {{ (int) ($chatUnreadCount ?? 0) > 0 ? '' : 'hidden' }}"
+                        >{{ (int) ($chatUnreadCount ?? 0) > 99 ? '99+' : (int) ($chatUnreadCount ?? 0) }}</span>
                     </a>
                     <a href="{{ route('mediation-inbox.index') }}"
                        class="inline-flex items-center border-b-2 px-3 py-3 text-sm font-medium transition {{ request()->routeIs('mediation-inbox.*') || request()->routeIs('mediation-requests.*') ? 'border-red-600 text-red-600 dark:border-red-500 dark:text-red-400' : 'border-transparent text-gray-600 hover:text-red-700 dark:text-gray-400 dark:hover:text-red-400' }}">
                         {{ __('mediation.nav_link') }}
+                    </a>
+                    <a href="{{ route('help-centre.index') }}"
+                       class="inline-flex items-center border-b-2 px-3 py-3 text-sm font-medium transition {{ request()->routeIs('help-centre.*') ? 'border-red-600 text-red-600 dark:border-red-500 dark:text-red-400' : 'border-transparent text-gray-600 hover:text-red-700 dark:text-gray-400 dark:hover:text-red-400' }}">
+                        {{ __('nav.help_centre') }}
                     </a>
                 @elseif ($section === 'activity')
                     <a href="{{ route('who-viewed.index') }}"
                        class="inline-flex items-center gap-2 border-b-2 px-3 py-3 text-sm font-medium transition {{ request()->routeIs('who-viewed.*') ? 'border-red-600 text-red-600 dark:border-red-500 dark:text-red-400' : 'border-transparent text-gray-600 hover:text-red-700 dark:text-gray-400 dark:hover:text-red-400' }}">
                         <span>{{ __('nav.who_viewed_me') }}</span>
                         <span class="text-[10px] font-semibold uppercase tracking-wide text-amber-600 dark:text-amber-400">{{ __('nav.premium') }}</span>
+                        <span
+                            id="who-viewed-badge"
+                            class="inline-flex min-w-[1.25rem] items-center justify-center rounded-full bg-amber-500 px-1.5 py-0.5 text-[10px] font-bold leading-none text-white {{ (int) ($memberActivityCounts['who_viewed_count'] ?? 0) > 0 ? '' : 'hidden' }}"
+                        >{{ (int) ($memberActivityCounts['who_viewed_count'] ?? 0) > 99 ? '99+' : (int) ($memberActivityCounts['who_viewed_count'] ?? 0) }}</span>
                     </a>
                     @auth
                         @if (auth()->user()->matrimonyProfile)
@@ -96,9 +109,10 @@
                     <a href="{{ route('notifications.index') }}"
                        class="inline-flex items-center gap-2 border-b-2 px-3 py-3 text-sm font-medium transition {{ request()->routeIs('notifications.index', 'notifications.show') ? 'border-red-600 text-red-600 dark:border-red-500 dark:text-red-400' : 'border-transparent text-gray-600 hover:text-red-700 dark:text-gray-400 dark:hover:text-red-400' }}">
                         {{ __('nav.notifications') }}
-                        @if (isset($unreadNotificationCount) && $unreadNotificationCount > 0)
-                            <span class="inline-flex min-w-[1.25rem] items-center justify-center rounded-full bg-red-500 px-1.5 py-0.5 text-[10px] font-bold leading-none text-white">{{ $unreadNotificationCount > 99 ? '99+' : $unreadNotificationCount }}</span>
-                        @endif
+                        <span
+                            id="notification-badge"
+                            class="inline-flex min-w-[1.25rem] items-center justify-center rounded-full bg-red-500 px-1.5 py-0.5 text-[10px] font-bold leading-none text-white {{ (int) ($unreadNotificationCount ?? 0) > 0 ? '' : 'hidden' }}"
+                        >{{ (int) ($unreadNotificationCount ?? 0) > 99 ? '99+' : (int) ($unreadNotificationCount ?? 0) }}</span>
                     </a>
                 @elseif ($section === 'plans')
                     <a href="{{ route('plans.index') }}"

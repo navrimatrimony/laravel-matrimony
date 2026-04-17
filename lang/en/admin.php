@@ -43,4 +43,15 @@ return [
     'kyc_approved' => 'KYC marked as approved.',
     'kyc_rejected' => 'KYC marked as rejected. The member can upload again.',
     'kyc_not_pending' => 'This submission is not pending review.',
+    'duplicate_phones' => [
+        'title' => 'Duplicate phone manager',
+        'intro' => 'Accounts that shared a mobile before uniqueness was enforced, or that still reference a primary account.',
+        'primary' => 'Primary account',
+        'secondaries' => 'Linked duplicates',
+        'merge_coming' => 'Merge accounts',
+        'merge_hint' => 'Coming soon',
+        'mark_primary_coming' => 'Mark primary',
+        'save_mobile' => 'Save canonical mobile',
+        'mobile_updated' => 'Mobile updated.',
+    ],
 ];

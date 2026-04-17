@@ -11,6 +11,7 @@ Artisan::command('inspire', function () {
 Schedule::command('notifications:cleanup')->daily();
 Schedule::job(new \App\Jobs\NightlyOcrLearningJob)->dailyAt('02:00');
 Schedule::command('showcase:random-views')->hourly();
+Schedule::command('admin:evaluate-action-effects')->hourly();
 
 Schedule::command('intake:purge-old-files')->dailyAt('03:00');
 Schedule::command('subscriptions:expire')->daily();
