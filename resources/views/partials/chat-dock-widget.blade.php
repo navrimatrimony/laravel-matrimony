@@ -4,6 +4,7 @@
     $chatDockInitialData = [
         'unread_count' => (int) ($chatDockData['unread_count'] ?? 0),
         'unread' => array_values($chatDockData['unread'] ?? []),
+        'chats' => array_values($chatDockData['chats'] ?? []),
         'active' => array_values($chatDockData['active'] ?? []),
         'can_read_incoming' => (bool) ($chatDockData['can_read_incoming'] ?? false),
     ];
@@ -91,8 +92,8 @@
     const openPopouts = new Map();
     const minimizedPopouts = new Map();
     let currentTab = 'alerts';
-    let selectedConversationId = null;
-    let dockData = { unread_count: 0, unread: [], active: [], can_read_incoming: false };
+    let selectedConversationKey = null;
+    let dockData = { unread_count: 0, unread: [], chats: [], active: [], can_read_incoming: false };
 
     if (initialDataEl) {
         try {
@@ -101,6 +102,7 @@
                 dockData = {
                     unread_count: Number(parsed.unread_count || 0),
                     unread: Array.isArray(parsed.unread) ? parsed.unread : [],
+                    chats: Array.isArray(parsed.chats) ? parsed.chats : [],
                     active: Array.isArray(parsed.active) ? parsed.active : [],
                     can_read_incoming: !!parsed.can_read_incoming,
                 };
@@ -117,7 +119,7 @@
             .replace(/'/g, '&#039;');
     }
 
-    function setTab(tab) {
+    function applyTabVisuals(tab) {
         currentTab = tab;
         tabButtons.forEach((btn) => {
             const active = btn.getAttribute('data-tab') === tab;
@@ -130,18 +132,66 @@
         });
     }
 
-    function getConversationById(conversationId) {
-        const all = [...(dockData.unread || []), ...(dockData.active || [])];
-        return all.find((r) => String(r.conversation_id) === String(conversationId)) || null;
+    /** Rows for the tab (unfiltered — used to pick the featured header for this tab). */
+    function getTabRows(tab) {
+        if (tab === 'alerts') return dockData.unread || [];
+        if (tab === 'chats') return dockData.chats || [];
+        if (tab === 'active') return dockData.active || [];
+        return [];
+    }
+
+    function clearSelectedHeaderPlaceholder() {
+        selectedConversationKey = null;
+        const ph = {
+            alerts: { name: 'Alerts', l1: 'No unread messages right now', l2: '', l3: '' },
+            chats: { name: 'Chats', l1: 'No conversations yet', l2: '', l3: '' },
+            active: { name: 'Active now', l1: 'No members online', l2: '', l3: '' },
+        };
+        const p = ph[currentTab] || ph.alerts;
+        if (selectedName) selectedName.textContent = p.name;
+        if (selectedInfoLine1) selectedInfoLine1.textContent = p.l1;
+        if (selectedInfoLine2) selectedInfoLine2.textContent = p.l2;
+        if (selectedInfoLine3) selectedInfoLine3.textContent = p.l3;
+        if (selectedProfile) selectedProfile.setAttribute('href', '{{ route("chat.index") }}');
+        if (selectedOpenChat) selectedOpenChat.setAttribute('href', '{{ route("chat.index") }}');
+        if (selectedAvatar && selectedAvatarFallback) {
+            selectedAvatar.classList.add('hidden');
+            selectedAvatar.removeAttribute('src');
+            selectedAvatarFallback.classList.remove('hidden');
+            selectedAvatarFallback.textContent = '?';
+        }
+    }
+
+    /** Featured card = first member in the current tab’s list (not one global “selected” for all tabs). */
+    function syncHeaderToCurrentTab() {
+        const rows = getTabRows(currentTab);
+        const first = rows[0] || null;
+        if (first) {
+            setSelectedFromConversation(first);
+        } else {
+            clearSelectedHeaderPlaceholder();
+        }
+    }
+
+    function setTabFromUserClick(tab) {
+        applyTabVisuals(tab);
+        syncHeaderToCurrentTab();
+        renderDockLists();
+        updateTabCounts();
+    }
+
+    function getConversationByKey(rowKey) {
+        const all = [...(dockData.unread || []), ...(dockData.chats || []), ...(dockData.active || [])];
+        return all.find((r) => String(r.conversation_key) === String(rowKey)) || null;
     }
 
     function setSelectedFromConversation(conversation) {
         if (!conversation) return;
-        selectedConversationId = String(conversation.conversation_id || '');
+        selectedConversationKey = String(conversation.conversation_key || '');
         if (selectedName) selectedName.textContent = conversation.name || 'Member';
         if (selectedInfoLine1) selectedInfoLine1.textContent = conversation.profile_title || 'Profile summary';
-        if (selectedInfoLine2) selectedInfoLine2.textContent = conversation.profile_subtitle || 'Details are being updated';
-        if (selectedInfoLine3) selectedInfoLine3.textContent = conversation.profile_location || 'Location not specified';
+        if (selectedInfoLine2) selectedInfoLine2.textContent = conversation.profile_subtitle || '';
+        if (selectedInfoLine3) selectedInfoLine3.textContent = conversation.profile_location || '';
         if (selectedProfile) selectedProfile.setAttribute('href', conversation.profile_url || '#');
         if (selectedOpenChat) selectedOpenChat.setAttribute('href', conversation.url || '#');
 
@@ -167,7 +217,7 @@
             <button
                 type="button"
                 class="chat-dock-row w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-left transition hover:border-red-200 hover:bg-red-50/60 dark:border-gray-800 dark:bg-gray-900 dark:hover:border-red-800 dark:hover:bg-red-950/20"
-                data-conversation-id="${escapeHtml(row.conversation_id)}"
+                data-row-key="${escapeHtml(row.conversation_key)}"
             >
                 <div class="flex items-start gap-2">
                     <div class="shrink-0">${avatar}</div>
@@ -187,10 +237,11 @@
     function attachRowHandlers(container, rowsData) {
         container.querySelectorAll('.chat-dock-row').forEach((el) => {
             el.addEventListener('click', () => {
-                const cid = el.getAttribute('data-conversation-id');
-                const conversation = rowsData.find((r) => String(r.conversation_id) === String(cid));
+                const rowKey = el.getAttribute('data-row-key');
+                const conversation = rowsData.find((r) => String(r.conversation_key) === String(rowKey));
                 if (!conversation) return;
                 setSelectedFromConversation(conversation);
+                renderDockLists();
                 openPopoutFromConversation(conversation);
             });
         });
@@ -202,21 +253,22 @@
         const activeHost = root.querySelector('[data-tab-content="active"]');
         if (!alertsHost || !chatsHost || !activeHost) return;
 
-        const unreadRows = dockData.unread || [];
-        const activeRows = dockData.active || [];
+        const unreadRows = (dockData.unread || []).filter((r) => String(r.conversation_key) !== String(selectedConversationKey || ''));
+        const chatsRows = (dockData.chats || []).filter((r) => String(r.conversation_key) !== String(selectedConversationKey || ''));
+        const activeRows = (dockData.active || []).filter((r) => String(r.conversation_key) !== String(selectedConversationKey || ''));
 
         alertsHost.innerHTML = unreadRows.length
             ? unreadRows.map((r) => renderRow(r, 'alerts')).join('')
             : '<p class="rounded-lg border border-dashed border-gray-300 bg-white px-3 py-4 text-center text-xs text-gray-500 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300">No alerts.</p>';
-        chatsHost.innerHTML = activeRows.length
-            ? activeRows.map((r) => renderRow(r, 'chats')).join('')
+        chatsHost.innerHTML = chatsRows.length
+            ? chatsRows.map((r) => renderRow(r, 'chats')).join('')
             : '<p class="rounded-lg border border-dashed border-gray-300 bg-white px-3 py-4 text-center text-xs text-gray-500 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300">No chats yet.</p>';
         activeHost.innerHTML = activeRows.length
             ? activeRows.map((r) => renderRow(r, 'active')).join('')
             : '<p class="rounded-lg border border-dashed border-gray-300 bg-white px-3 py-4 text-center text-xs text-gray-500 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300">No active members.</p>';
 
         attachRowHandlers(alertsHost, unreadRows);
-        attachRowHandlers(chatsHost, activeRows);
+        attachRowHandlers(chatsHost, chatsRows);
         attachRowHandlers(activeHost, activeRows);
     }
 
@@ -254,6 +306,7 @@
     }
 
     async function fetchConversationForCard(card, sinceId) {
+        if (card.dataset.hasConversation !== '1') return;
         const chatUrl = card.dataset.chatUrl;
         if (!chatUrl) return;
         const url = new URL(chatUrl, window.location.origin);
@@ -341,6 +394,7 @@
         const safeTitle = escapeHtml(payload.profileTitle || '');
         const safeSubtitle = escapeHtml(payload.profileSubtitle || '');
         const safeLocation = escapeHtml(payload.profileLocation || '');
+        const safeMetaLine = escapeHtml(payload.metaLine || '');
         const safeProfileUrl = escapeHtml(payload.profileUrl || '#');
         const safeChatUrl = escapeHtml(payload.chatUrl || '#');
         const safeAvatarUrl = escapeHtml(payload.avatarUrl || '');
@@ -360,6 +414,8 @@
         card.dataset.conversationId = payload.conversationId;
         card.dataset.chatUrl = payload.chatUrl;
         card.dataset.sendUrl = payload.sendUrl;
+        card.dataset.startChatUrl = payload.startChatUrl;
+        card.dataset.hasConversation = payload.hasConversation ? '1' : '0';
         card.dataset.lastId = '0';
         card.dataset.minimized = '0';
         card.dataset.customPos = '0';
@@ -392,17 +448,23 @@
                         <span class="text-gray-300">|</span>
                         <a href="${safeProfileUrl}#report" class="font-semibold hover:underline">Report misuse</a>
                     </div>
-                    <p class="mt-1 text-gray-700 dark:text-gray-200">${safeSubtitle || 'Details are being updated'}</p>
-                    <p class="text-gray-600 dark:text-gray-300">${safeLocation || 'Location not specified'}</p>
+                    <p class="mt-1 text-gray-700 dark:text-gray-200">${safeMetaLine}</p>
+                    <p class="text-gray-700 dark:text-gray-200">${safeSubtitle}</p>
+                    <p class="text-gray-600 dark:text-gray-300">${safeLocation}</p>
                 </div>
                 <div class="space-y-2 border-b border-gray-200 bg-gray-50 px-3 py-2 dark:border-gray-700 dark:bg-gray-950/30">
                     ${premiumNote}
                 </div>
                 <div data-popout-thread class="min-h-0 flex-1 overflow-y-auto space-y-2 bg-gray-50 px-3 py-3 dark:bg-gray-950"></div>
                 <div class="border-t border-gray-200 bg-white px-3 py-2.5 dark:border-gray-700 dark:bg-gray-900">
-                    <form data-popout-form class="flex items-end gap-2">
+                    <form data-popout-form class="flex items-end gap-2 ${payload.hasConversation ? '' : 'hidden'}">
                         <textarea data-popout-input rows="2" maxlength="500" placeholder="Type a message..." class="min-h-[42px] flex-1 resize-none rounded-xl border border-gray-300 px-3 py-2 text-xs text-gray-900 focus:border-red-500 focus:outline-none focus:ring-2 focus:ring-red-200 dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100"></textarea>
                         <button type="submit" data-popout-send class="inline-flex h-[42px] items-center justify-center rounded-xl bg-red-600 px-3 text-xs font-semibold text-white hover:bg-red-700">Send</button>
+                    </form>
+                    <form method="POST" action="${escapeHtml(payload.startChatUrl || '#')}" class="${payload.hasConversation ? 'hidden' : 'flex'} items-center gap-2">
+                        <input type="hidden" name="_token" value="${escapeHtml(csrf)}" />
+                        <button type="submit" class="inline-flex h-[38px] items-center justify-center rounded-xl bg-indigo-600 px-3 text-xs font-semibold text-white hover:bg-indigo-700">Start chat</button>
+                        <p class="text-[11px] text-gray-500">No previous conversation.</p>
                     </form>
                     <p data-popout-status class="mt-1 hidden text-[10px] font-semibold"></p>
                     <a href="${safeChatUrl}" class="mt-1 inline-flex text-[11px] font-semibold text-red-600 hover:underline">Open full chat</a>
@@ -417,6 +479,13 @@
         const input = card.querySelector('[data-popout-input]');
         const sendBtn = card.querySelector('[data-popout-send]');
         const statusEl = card.querySelector('[data-popout-status]');
+
+        if (!payload.hasConversation) {
+            const thread = card.querySelector('[data-popout-thread]');
+            if (thread) {
+                thread.innerHTML = '<p class="rounded-xl border border-dashed border-gray-300 bg-white px-3 py-4 text-xs text-gray-600 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300">Start a chat to see messages here.</p>';
+            }
+        }
 
         if (closeBtn) {
             closeBtn.addEventListener('click', () => {
@@ -502,16 +571,25 @@
 
     async function openPopoutFromConversation(conversation) {
         if (!popoutLayer) return;
+        const metaBits = [conversation.profile_age, conversation.profile_height, conversation.profile_religion, conversation.profile_caste]
+            .map((v) => (v || '').trim())
+            .filter(Boolean);
+        const secondaryBits = [conversation.profile_occupation, conversation.profile_education]
+            .map((v) => (v || '').trim())
+            .filter(Boolean);
         const payload = {
-            conversationId: String(conversation.conversation_id || ''),
+            conversationId: String(conversation.conversation_key || ''),
             name: conversation.name || 'Member',
             avatarUrl: conversation.avatar_url || '',
             profileUrl: conversation.profile_url || '#',
             chatUrl: conversation.url || '#',
             sendUrl: conversation.send_url || '',
+            startChatUrl: conversation.start_chat_url || '',
+            hasConversation: !!conversation.has_conversation,
             profileTitle: conversation.profile_title || '',
-            profileSubtitle: conversation.profile_subtitle || '',
+            profileSubtitle: secondaryBits.join(', '),
             profileLocation: conversation.profile_location || '',
+            metaLine: metaBits.join(', '),
         };
         if (!payload.conversationId) return;
 
@@ -545,7 +623,7 @@
     async function pollOpenPopouts() {
         if (openPopouts.size === 0) return;
         for (const card of openPopouts.values()) {
-            if (!card || card.dataset.minimized === '1') continue;
+            if (!card || card.dataset.minimized === '1' || card.dataset.hasConversation !== '1') continue;
             await fetchConversationForCard(card, Number(card.dataset.lastId || 0));
         }
     }
@@ -566,35 +644,37 @@
             dockData = {
                 unread_count: Number(next.unread_count || 0),
                 unread: Array.isArray(next.unread) ? next.unread : [],
+                chats: Array.isArray(next.chats) ? next.chats : [],
                 active: Array.isArray(next.active) ? next.active : [],
                 can_read_incoming: !!next.can_read_incoming,
             };
 
+            applyTabVisuals(currentTab);
+            if (selectedConversationKey) {
+                const selected = getConversationByKey(selectedConversationKey);
+                if (selected) {
+                    setSelectedFromConversation(selected);
+                } else {
+                    syncHeaderToCurrentTab();
+                }
+            } else {
+                syncHeaderToCurrentTab();
+            }
             renderDockLists();
             updateTabCounts();
-            setTab(currentTab);
-
-            if (selectedConversationId) {
-                const selected = getConversationById(selectedConversationId);
-                if (selected) setSelectedFromConversation(selected);
-            } else {
-                const fallback = (dockData.unread && dockData.unread[0]) || (dockData.active && dockData.active[0]) || null;
-                if (fallback) setSelectedFromConversation(fallback);
-            }
         } catch (_e) {}
     }
 
     tabButtons.forEach((btn) => {
         btn.addEventListener('click', () => {
-            setTab(btn.getAttribute('data-tab') || 'alerts');
+            setTabFromUserClick(btn.getAttribute('data-tab') || 'alerts');
         });
     });
 
+    applyTabVisuals('alerts');
+    syncHeaderToCurrentTab();
     renderDockLists();
     updateTabCounts();
-    setTab('alerts');
-    const firstConversation = (dockData.unread && dockData.unread[0]) || (dockData.active && dockData.active[0]) || null;
-    if (firstConversation) setSelectedFromConversation(firstConversation);
 
     document.addEventListener('member-widget-counts-updated', () => {
         pollChatDockSnapshot();

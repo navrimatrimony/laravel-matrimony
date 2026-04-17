@@ -31,17 +31,26 @@ class MemberQuickHubService
         $allConversations = $this->chatList->getAllConversations($profileId);
         $unreadConversations = $this->chatList->getUnreadConversations($profileId);
         $chatUnreadCount = $this->chatList->getUnreadMessageCount($profileId);
-        $detailMap = $this->loadProfileDetailMap(
-            $allConversations->pluck('other_id')->filter()->map(fn ($v) => (int) $v)->all()
-        );
-        $activeChats = $this->mapConversationsForDock($allConversations->take(10), $detailMap);
-        $unreadChats = $this->mapConversationsForDock($unreadConversations->take(10), $detailMap);
+        $conversationProfileIds = $allConversations->pluck('other_id')->filter()->map(fn ($v) => (int) $v)->all();
+        $onlineProfileIds = $this->loadOnlineProfileIdsForUser($user);
+        $detailMap = $this->loadProfileDetailMap(array_values(array_unique(array_merge($conversationProfileIds, $onlineProfileIds))));
+
+        $chats = $this->mapConversationsForDock($allConversations->take(20), $detailMap);
+        $unreadChats = $this->mapConversationsForDock($unreadConversations->take(20), $detailMap);
+        $chatByProfileId = [];
+        foreach ($chats as $row) {
+            $pid = (int) ($row['profile_id'] ?? 0);
+            if ($pid > 0) {
+                $chatByProfileId[$pid] = $row;
+            }
+        }
+        $activeUsers = $this->buildActiveRowsForOnlineProfiles($onlineProfileIds, $chatByProfileId, $detailMap);
 
         return [
             'unread_count' => $chatUnreadCount,
-            'active' => $activeChats,
+            'chats' => $chats,
             'unread' => $unreadChats,
-            'strip' => collect($activeChats)->take(7)->values()->all(),
+            'active' => $activeUsers,
             'all_url' => route('chat.index'),
             'can_read_incoming' => $this->featureUsage->canUse($userId, FeatureUsageService::FEATURE_CHAT_CAN_READ),
         ];
@@ -75,13 +84,21 @@ class MemberQuickHubService
 
             $otherId = (int) ($conversation->other_profile?->id ?? 0);
             $detail = $detailMap[$otherId] ?? [
-                'title' => 'Profile summary',
-                'subtitle' => 'Details are being updated',
-                'location' => 'Location not specified',
+                'title' => '',
+                'subtitle' => '',
+                'location' => '',
+                'age' => '',
+                'height' => '',
+                'religion' => '',
+                'caste' => '',
+                'education' => '',
+                'occupation' => '',
             ];
 
             return [
+                'conversation_key' => 'conversation-'.(int) $conversation->id,
                 'conversation_id' => (int) $conversation->id,
+                'profile_id' => $otherId,
                 'name' => (string) ($conversation->other_profile?->full_name ?: 'Member'),
                 'avatar_url' => (string) ($conversation->other_profile?->profile_photo_url ?: ''),
                 'profile_url' => (int) ($conversation->other_profile?->id ?? 0) > 0
@@ -89,14 +106,126 @@ class MemberQuickHubService
                     : route('chat.index'),
                 'url' => route('chat.show', ['conversation' => $conversation->id]),
                 'send_url' => route('chat.messages.text', ['conversation' => $conversation->id]),
+                'start_chat_url' => null,
                 'preview' => $preview,
                 'unread' => (int) ($conversation->unread_count ?? 0),
                 'time' => $conversation->last_message_at?->diffForHumans(),
+                'has_conversation' => true,
                 'profile_title' => $detail['title'],
                 'profile_subtitle' => $detail['subtitle'],
                 'profile_location' => $detail['location'],
+                'profile_age' => $detail['age'],
+                'profile_height' => $detail['height'],
+                'profile_religion' => $detail['religion'],
+                'profile_caste' => $detail['caste'],
+                'profile_education' => $detail['education'],
+                'profile_occupation' => $detail['occupation'],
             ];
         })->values()->all();
+    }
+
+    /**
+     * @return list<int>
+     */
+    private function loadOnlineProfileIdsForUser(User $user): array
+    {
+        $selfProfileId = (int) ($user->matrimonyProfile?->id ?? 0);
+        if ($selfProfileId <= 0) {
+            return [];
+        }
+
+        return MatrimonyProfile::query()
+            ->where('id', '!=', $selfProfileId)
+            ->where(function ($q): void {
+                $q->whereNull('is_suspended')->orWhere('is_suspended', false);
+            })
+            ->whereHas('user', function ($q): void {
+                $q->where(function ($qq): void {
+                    $qq->whereNull('is_admin')->orWhere('is_admin', false);
+                })
+                    ->whereNotNull('last_seen_at')
+                    ->where('last_seen_at', '>=', now()->subMinutes(5));
+            })
+            ->orderByDesc('updated_at')
+            ->limit(50)
+            ->pluck('id')
+            ->map(fn ($v) => (int) $v)
+            ->values()
+            ->all();
+    }
+
+    /**
+     * @param  list<int>  $onlineProfileIds
+     * @param  array<int, array<string, mixed>>  $chatByProfileId
+     * @param  array<int, array<string, string>>  $detailMap
+     * @return array<int, array<string, mixed>>
+     */
+    private function buildActiveRowsForOnlineProfiles(array $onlineProfileIds, array $chatByProfileId, array $detailMap): array
+    {
+        if ($onlineProfileIds === []) {
+            return [];
+        }
+
+        $profiles = MatrimonyProfile::query()
+            ->whereIn('id', $onlineProfileIds)
+            ->get(['id', 'full_name', 'profile_photo']);
+        $profileById = [];
+        foreach ($profiles as $profile) {
+            $profileById[(int) $profile->id] = $profile;
+        }
+
+        $rows = [];
+        foreach ($onlineProfileIds as $pid) {
+            if (isset($chatByProfileId[$pid])) {
+                $row = $chatByProfileId[$pid];
+                $row['time'] = 'Online now';
+                $rows[] = $row;
+                continue;
+            }
+
+            $profile = $profileById[$pid] ?? null;
+            if (! $profile) {
+                continue;
+            }
+            $detail = $detailMap[$pid] ?? [
+                'title' => '',
+                'subtitle' => '',
+                'location' => '',
+                'age' => '',
+                'height' => '',
+                'religion' => '',
+                'caste' => '',
+                'education' => '',
+                'occupation' => '',
+            ];
+
+            $rows[] = [
+                'conversation_key' => 'profile-'.$pid,
+                'conversation_id' => null,
+                'profile_id' => $pid,
+                'name' => (string) ($profile->full_name ?: 'Member'),
+                'avatar_url' => (string) ($profile->profile_photo_url ?: ''),
+                'profile_url' => route('matrimony.profile.show', ['matrimony_profile_id' => $pid]),
+                'url' => route('matrimony.profile.show', ['matrimony_profile_id' => $pid]),
+                'send_url' => null,
+                'start_chat_url' => route('chat.start', ['matrimony_profile' => $pid]),
+                'preview' => 'Online now',
+                'unread' => 0,
+                'time' => 'Online now',
+                'has_conversation' => false,
+                'profile_title' => $detail['title'],
+                'profile_subtitle' => $detail['subtitle'],
+                'profile_location' => $detail['location'],
+                'profile_age' => $detail['age'],
+                'profile_height' => $detail['height'],
+                'profile_religion' => $detail['religion'],
+                'profile_caste' => $detail['caste'],
+                'profile_education' => $detail['education'],
+                'profile_occupation' => $detail['occupation'],
+            ];
+        }
+
+        return $rows;
     }
 
     /**
@@ -140,9 +269,15 @@ class MemberQuickHubService
             ]));
 
             $out[(int) $profile->id] = [
-                'title' => $titleParts ? implode(', ', $titleParts) : 'Profile summary',
-                'subtitle' => $subtitleParts ? implode(', ', $subtitleParts) : 'Details are being updated',
-                'location' => trim((string) $profile->residenceLocationDisplayLine()) ?: 'Location not specified',
+                'title' => $titleParts ? implode(', ', $titleParts) : '',
+                'subtitle' => $subtitleParts ? implode(', ', $subtitleParts) : '',
+                'location' => trim((string) $profile->residenceLocationDisplayLine()),
+                'age' => $age ?: '',
+                'height' => $height ?: '',
+                'religion' => $religion,
+                'caste' => $caste,
+                'education' => trim((string) ($profile->highest_education ?? '')),
+                'occupation' => trim((string) ($profile->occupation_title ?? '')),
             ];
         }
 
