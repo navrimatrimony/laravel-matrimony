@@ -297,6 +297,21 @@ return [
         'select_category' => 'श्रेणी निवडा',
         'select_degree' => 'पदवी निवडा',
         'full_form_prefix' => 'पूर्ण रूप:',
+        'combobox_placeholder' => 'शोधण्यासाठी टाइप करा (उदा. BA, MBA)…',
+        'combobox_hint' => 'जुळणारी पदवी यादीतून निवडा. यादीत नसेल तर टाइप करा — आम्ही ते फक्त “Specialization” मध्ये जतन करू (Edit profile मध्येही दिसेल); “Highest education” रिकामे राहील.',
+        'combobox_no_results' => 'जुळणारी पदवी नाही — टाइप पूर्ण करून सबमिट करा; मजकूर Specialization मध्ये जतन होईल.',
+        'tom_select_manual_create' => '"__TEXT__" वापरा — आम्ही ते तुमच्या शिक्षण म्हणून जतन करू',
+        'education_did_you_mean' => '__NAME__ हे होते का?',
+        'education_invalid_soft' => 'हे सामान्य शिक्षणासारखे दिसत नाही. स्पेलिंग तपासा.',
+        'education_manual_helper_not_found' => 'सापडले नाही — वर उघडलेल्या यादीत “+ add …” वापरा.',
+        'education_manual_helper_saved' => 'तुमच्या शिक्षण म्हणून जतन केले.',
+        'education_add_btn' => '+ जोडा',
+        'education_inline_add_short' => 'जोडा',
+        'education_no_results_heading' => 'काहीही सापडले नाही',
+        'multiselect_intro' => 'आपण अनेक शिक्षण जोडू शकता (उदा. B.A, B.Ed, M.Sc)',
+        'custom_added' => 'सानुकूल शिक्षण जोडले',
+        'no_match_press_enter' => 'जुळले नाही. जोडण्यासाठी Enter दाबा',
+        'placeholder_degrees' => 'शिक्षण टाइप करा किंवा निवडा (उदा. B.A, B.Ed)',
     ],
     'family' => [
         'family_type' => 'कुटुंब प्रकार',
@@ -328,4 +343,3 @@ return [
         'parents_village_city' => 'पालकांचे गाव / शहर',
     ],
 ];
-

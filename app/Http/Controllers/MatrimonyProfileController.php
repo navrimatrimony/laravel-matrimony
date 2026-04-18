@@ -32,6 +32,7 @@ use App\Services\Image\ProfileGalleryPhotoModerationStatus;
 use App\Services\Image\ProfilePhotoUrlService;
 use App\Services\InterestSendLimitService;
 use App\Services\MatrimonyProfileSearchQueryService;
+use App\Services\MemberPresencePresentationService;
 use App\Services\ProfileCompletenessService;
 use App\Services\ProfileFieldConfigurationService;
 use App\Services\ProfilePhotoAccessService;
@@ -1412,6 +1413,10 @@ class MatrimonyProfileController extends Controller
             'extended_meta' => $extendedMeta,
         ]);
 
+        $profileOwnerPresence = ! $isOwnProfile
+            ? app(MemberPresencePresentationService::class)->buildProfileHeroPresence($profile->user)
+            : null;
+
         return view(
             'matrimony.profile.show',
             [
@@ -1468,6 +1473,7 @@ class MatrimonyProfileController extends Controller
                 'reportablePhotoSummary' => $reportablePhotoSummary,
                 'canProfileWhatsappDirect' => $canProfileWhatsappDirect,
                 'whatsappWaMeHref' => $whatsappWaMeHref,
+                'profileOwnerPresence' => $profileOwnerPresence,
             ]
         );
     }
@@ -1670,42 +1676,7 @@ class MatrimonyProfileController extends Controller
      */
     private static function buildOnlineStatusSummaryForUser(?User $user): ?array
     {
-        if ($user === null || $user->last_seen_at === null) {
-            return null;
-        }
-
-        $ls = $user->last_seen_at;
-        $onlineThresholdMinutes = 5;
-        if ($ls->greaterThanOrEqualTo(now()->subMinutes($onlineThresholdMinutes))) {
-            return ['is_online' => true, 'label' => 'Online now'];
-        }
-
-        $m = (int) floor($ls->diffInMinutes(now()));
-
-        if ($m < 60) {
-            $n = max(1, $m);
-            $label = $n === 1
-                ? "Online {$n} minute ago"
-                : "Online {$n} minutes ago";
-
-            return ['is_online' => false, 'label' => $label];
-        }
-
-        if ($m < 1440) {
-            $n = (int) max(1, floor($m / 60));
-            $label = $n === 1
-                ? "Online {$n} hour ago"
-                : "Online {$n} hours ago";
-
-            return ['is_online' => false, 'label' => $label];
-        }
-
-        $n = (int) max(1, floor($m / 1440));
-        $label = $n === 1
-            ? "Online {$n} day ago"
-            : "Online {$n} days ago";
-
-        return ['is_online' => false, 'label' => $label];
+        return app(MemberPresencePresentationService::class)->buildListingSummary($user);
     }
 
     /**

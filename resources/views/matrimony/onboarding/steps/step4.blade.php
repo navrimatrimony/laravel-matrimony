@@ -1,40 +1,19 @@
 @php
-    $highestEdRaw = old('highest_education', $profile->highest_education);
-    $selectedCategory = old('education_category', $selectedEducationCategory ?? null);
-    $isOtherEducation = (string) $highestEdRaw === 'Other';
+    use Illuminate\Support\Facades\Schema;
+
+    $hasEducationEngine = Schema::hasColumn('matrimony_profiles', 'education_degree_id');
 @endphp
-<form method="POST" action="{{ route('matrimony.onboarding.store', ['step' => 4]) }}" class="space-y-6">
+<form method="POST" action="{{ route('matrimony.onboarding.store', ['step' => 4]) }}" class="space-y-6" id="onboarding-step4-form">
     @csrf
     <div class="rounded-xl border border-rose-200 dark:border-rose-800/60 bg-white dark:bg-gray-900/30 p-4 space-y-4">
         <h3 class="text-sm font-semibold text-gray-800 dark:text-gray-100">{{ __('wizard.basic_information') }}</h3>
-        <x-education-hierarchy-select
-            categoryName="education_category"
-            degreeName="highest_education"
-            :selectedCategory="$selectedCategory"
-            :selectedDegree="$highestEdRaw"
-            mode="dependent"
-            labelCategory="{{ __('Education category') }}"
-            labelDegree="{{ __('Highest education') }}"
-        />
-        @error('highest_education')<p class="text-sm text-red-600">{{ $message }}</p>@enderror
-        <div data-other-ed class="{{ $isOtherEducation ? '' : 'hidden' }}">
-            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{{ __('Other (please specify)') }}</label>
-            <input type="text" name="highest_education_other" value="{{ old('highest_education_other', $profile->highest_education_other) }}"
-                class="w-full rounded-xl border border-gray-300 dark:border-gray-600 dark:bg-gray-700 px-4 py-3 text-base min-h-[48px]">
-        </div>
-        <p class="text-xs text-gray-500 dark:text-gray-400">{{ __('onboarding.education_examples') }}</p>
-        <script>
-        (function(){
-            var form = document.currentScript.closest('form');
-            if (!form) return;
-            var degSelect = form.querySelector('.education-degree-select');
-            var otherBlock = form.querySelector('[data-other-ed]');
-            if (!degSelect || !otherBlock) return;
-            function toggle(){ otherBlock.classList.toggle('hidden', degSelect.value !== 'Other'); }
-            degSelect.addEventListener('change', toggle);
-            toggle();
-        })();
-        </script>
+
+        @if ($hasEducationEngine)
+            <x-education-multiselect-engine :profile="$profile" form-selector="#onboarding-step4-form" />
+        @else
+            <p class="text-sm text-amber-800 dark:text-amber-200">{{ __('onboarding.run_migrations_education') }}</p>
+            <p class="text-xs text-gray-500 dark:text-gray-400">{{ __('onboarding.education_examples') }}</p>
+        @endif
     </div>
 
     <div class="rounded-xl border border-rose-200 dark:border-rose-800/60 bg-white dark:bg-gray-900/30 p-4 space-y-4 career-dependent-block">

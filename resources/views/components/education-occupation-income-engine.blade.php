@@ -20,6 +20,8 @@
 ])
 @php
     use App\Models\EducationDegree;
+    use App\Services\EducationService;
+    use Illuminate\Support\Facades\Schema;
     use App\Models\MasterOccupationType;
     use App\Models\MasterEmploymentStatus;
     use App\Models\MasterIncomeCurrency;
@@ -108,6 +110,10 @@
         $year = trim((string) ($r['year_completed'] ?? ''));
         return $deg !== '' || $spec !== '' || $uni !== '' || $year !== '';
     });
+
+    // Intake preview uses a stdClass "intakeProfile" — still support the Tom Select engine when the DB column exists.
+    $useDegreeMultiselectEngine = Schema::hasColumn('matrimony_profiles', 'education_degree_id')
+        && is_object($profile);
 @endphp
 <div class="education-occupation-income-engine space-y-6 border border-gray-200 dark:border-gray-600 rounded-lg p-4">
     {{-- Education engine: snapshot + history एकत्र --}}
@@ -116,44 +122,59 @@
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
             @if($readOnly)
                 @php
-                    $degDisplay = $highestEdRaw ? (EducationDegree::where('code', $highestEdRaw)->value('title') ?? $highestEdRaw) : '—';
+                    if ($useDegreeMultiselectEngine) {
+                        $degDisplay = $profile instanceof \App\Models\MatrimonyProfile
+                            ? app(EducationService::class)->displayHighestEducation($profile)
+                            : app(EducationService::class)->formatEducationDisplayLineFromObject($profile);
+                    } else {
+                        $degDisplay = $highestEdRaw ? (EducationDegree::where('code', $highestEdRaw)->value('title') ?? $highestEdRaw) : '';
+                    }
                 @endphp
                 <div class="md:col-span-2">
                     <label class="{{ $labelCls }}">Highest Education</label>
-                    <p class="py-2 text-gray-900 dark:text-gray-100">{{ $degDisplay }}</p>
+                    <p class="py-2 text-gray-900 dark:text-gray-100">{{ ($degDisplay !== '' && $degDisplay !== null) ? $degDisplay : '—' }}</p>
                 </div>
             @else
-                <div class="md:col-span-2">
-                    <x-education-hierarchy-select
-                        :categories="$categories"
-                        :namePrefix="$namePrefix"
-                        categoryName="education_category"
-                        degreeName="highest_education"
-                        :selectedCategory="$selectedCategoryForEd"
-                        :selectedDegree="$highestEdRaw"
-                        mode="dependent"
-                        labelCategory="Education Category"
-                        labelDegree="Education Degree"
-                    />
-                    @if($err('highest_education'))<p class="text-red-600 text-xs mt-1">{{ $err('highest_education') }}</p>@endif
-                </div>
-                <div data-other-ed class="{{ $isOtherEducation ? '' : 'hidden' }} md:col-span-2">
-                    <label class="{{ $labelCls }}">Other (please specify)</label>
-                    <input type="text" name="{{ $n('highest_education_other') }}" value="{{ old($oldKey('highest_education_other'), $v('highest_education_other')) }}" class="{{ $inputCls }}" placeholder="Specify">
-                </div>
+                @if($useDegreeMultiselectEngine)
+                    <div class="md:col-span-2">
+                        <x-education-multiselect-engine
+                            :profile="$profile"
+                            :name-prefix="$namePrefix"
+                        />
+                    </div>
+                @else
+                    <div class="md:col-span-2">
+                        <x-education-hierarchy-select
+                            :categories="$categories"
+                            :namePrefix="$namePrefix"
+                            categoryName="education_category"
+                            degreeName="highest_education"
+                            :selectedCategory="$selectedCategoryForEd"
+                            :selectedDegree="$highestEdRaw"
+                            mode="dependent"
+                            labelCategory="Education Category"
+                            labelDegree="Education Degree"
+                        />
+                        @if($err('highest_education'))<p class="text-red-600 text-xs mt-1">{{ $err('highest_education') }}</p>@endif
+                    </div>
+                    <div data-other-ed class="{{ $isOtherEducation ? '' : 'hidden' }} md:col-span-2">
+                        <label class="{{ $labelCls }}">Other (please specify)</label>
+                        <input type="text" name="{{ $n('highest_education_other') }}" value="{{ old($oldKey('highest_education_other'), $v('highest_education_other')) }}" class="{{ $inputCls }}" placeholder="Specify">
+                    </div>
+                    <script>
+                    (function(){
+                        var engine = document.currentScript.closest('.education-occupation-income-engine');
+                        if (!engine) return;
+                        var degSelect = engine.querySelector('.education-degree-select');
+                        var otherBlock = engine.querySelector('[data-other-ed]');
+                        if (!degSelect || !otherBlock) return;
+                        function toggle(){ otherBlock.classList.toggle('hidden', degSelect.value !== 'Other'); }
+                        degSelect.addEventListener('change', toggle);
+                        toggle();
+                    })();
+                    </script>
+                @endif
             @endif
-            <script>
-            (function(){
-                var engine = document.currentScript.closest('.education-occupation-income-engine');
-                if (!engine) return;
-                var degSelect = engine.querySelector('.education-degree-select');
-                var otherBlock = engine.querySelector('[data-other-ed]');
-                if (!degSelect || !otherBlock) return;
-                function toggle(){ otherBlock.classList.toggle('hidden', degSelect.value !== 'Other'); }
-                degSelect.addEventListener('change', toggle);
-                toggle();
-            })();
-            </script>
             <div>
                 <label class="{{ $labelCls }}">College Attended</label>
                 @if($readOnly)

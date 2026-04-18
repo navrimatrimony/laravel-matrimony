@@ -18,7 +18,7 @@ class AdminProfileEditGovernanceService
 {
     /** @var list<string> */
     public const EDITABLE_CORE_FIELDS = [
-        'full_name', 'date_of_birth', 'marital_status_id', 'highest_education', 'location',
+        'full_name', 'date_of_birth', 'marital_status_id', 'highest_education', 'education_degree_id', 'education_text', 'location',
         'religion_id', 'caste_id', 'sub_caste_id', 'height_cm',
         'complexion_id', 'blood_group_id', 'physical_build_id', 'weight_kg', 'spectacles_lens', 'physical_condition',
     ];

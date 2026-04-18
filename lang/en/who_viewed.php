@@ -19,4 +19,9 @@ return [
     'partial_plan_upgrade_hint' => 'Upgrade for a longer who-viewed window and full lists.',
     'view_profile' => 'View profile',
     'viewed_at' => 'Viewed :time',
+
+    'bubble_title' => 'Your profile got attention',
+    'bubble_intro' => 'You now have',
+    'bubble_after_count' => 'distinct viewer(s) — open to see who.',
+    'bubble_dismiss' => 'Dismiss',
 ];

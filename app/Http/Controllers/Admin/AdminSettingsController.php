@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\AdminSetting;
 use App\Models\ProfileFieldConfig;
 use App\Services\AuditLogService;
+use App\Services\MemberPresencePresentationService;
 use App\Services\Parsing\ProviderResolver;
 use App\Services\ProfileCompletenessService;
 use App\Services\SettingService;
@@ -613,9 +614,18 @@ class AdminSettingsController extends Controller
 
         $interestMinCorePct = ProfileCompletenessService::interestMinimumPercent();
 
+        $presenceOnlineThresholdMin = max(1, min(
+            24 * 60,
+            (int) AdminSetting::getValue(
+                MemberPresencePresentationService::SETTING_KEY_ONLINE_THRESHOLD_MINUTES,
+                '5'
+            )
+        ));
+
         return view('admin.app-settings.index', [
             'adminBypassMode' => $adminBypassMode,
             'interestMinCorePct' => $interestMinCorePct,
+            'presenceOnlineThresholdMin' => $presenceOnlineThresholdMin,
         ]);
     }
 
@@ -624,6 +634,7 @@ class AdminSettingsController extends Controller
         $request->validate([
             'admin_bypass_mode' => 'nullable|in:0,1',
             'interest_min_core_completeness_pct' => 'required|integer|min:0|max:100',
+            'member_presence_online_threshold_minutes' => 'required|integer|min:1|max:1440',
         ]);
 
         $on = $request->boolean('admin_bypass_mode');
@@ -632,12 +643,18 @@ class AdminSettingsController extends Controller
         $pct = max(0, min(100, (int) $request->input('interest_min_core_completeness_pct', 0)));
         AdminSetting::setValue(ProfileCompletenessService::ADMIN_KEY_INTEREST_MIN_CORE_PCT, (string) $pct);
 
+        $presenceMin = max(1, min(24 * 60, (int) $request->input('member_presence_online_threshold_minutes', 5)));
+        AdminSetting::setValue(
+            MemberPresencePresentationService::SETTING_KEY_ONLINE_THRESHOLD_MINUTES,
+            (string) $presenceMin
+        );
+
         AuditLogService::log(
             $request->user(),
             'update_app_settings',
             'AdminSetting',
             null,
-            'admin_bypass_mode='.($on ? '1' : '0').'; interest_min_core_completeness_pct='.$pct,
+            'admin_bypass_mode='.($on ? '1' : '0').'; interest_min_core_completeness_pct='.$pct.'; member_presence_online_threshold_minutes='.$presenceMin,
             false
         );
 

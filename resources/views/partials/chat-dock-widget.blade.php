@@ -13,7 +13,7 @@
 
 <section
     id="chat-dock-root"
-    class="fixed right-0 top-[7.5rem] bottom-0 z-[52] hidden w-[21.5rem] border-l border-gray-200 bg-white shadow-2xl transition-transform duration-300 ease-out will-change-transform lg:flex lg:flex-col dark:border-gray-800 dark:bg-gray-900{{ $dockHasAlerts ? '' : ' translate-x-full' }}"
+    class="fixed right-0 top-[7.5rem] bottom-0 z-[52] hidden w-[17rem] border-l border-gray-200 bg-white shadow-2xl transition-transform duration-300 ease-out will-change-transform lg:flex lg:flex-col dark:border-gray-800 dark:bg-gray-900{{ $dockHasAlerts ? '' : ' translate-x-full' }}"
     role="complementary"
     aria-label="{{ __('chat_ui.dock_panel_title') }}"
     data-label-profile="{{ __('chat_ui.dock_profile_link') }}"
@@ -63,8 +63,8 @@
     <span class="block max-h-[5.5rem] overflow-hidden text-center [writing-mode:vertical-rl] [text-orientation:mixed]">{{ __('chat_ui.dock_panel_title') }}</span>
 </button>
 
-<div id="chat-popout-layer" class="pointer-events-none fixed bottom-4 right-[22.5rem] z-50 hidden max-w-[calc(100vw-24rem)] items-end gap-3"></div>
-<div id="chat-minimized-chipbar" class="pointer-events-none fixed bottom-3 right-[22.5rem] z-50 hidden items-center gap-2"></div>
+<div id="chat-popout-layer" class="pointer-events-none fixed bottom-4 right-[18rem] z-50 hidden max-w-[calc(100vw-19rem)] items-end gap-3"></div>
+<div id="chat-minimized-chipbar" class="pointer-events-none fixed bottom-3 right-[18rem] z-50 hidden items-center gap-2"></div>
 <script type="application/json" id="chat-dock-initial-data">{!! json_encode($chatDockInitialData, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT) !!}</script>
 
 <script>
@@ -83,6 +83,40 @@
     const expandHandle = document.getElementById('chat-dock-expand-handle');
     const headerMinBtn = document.getElementById('chat-dock-header-minimize');
     const csrf = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+
+    /** Dock width (rem); keep in sync with #chat-dock-root Tailwind w-[…rem] */
+    const DOCK_WIDTH_REM = 17;
+    const POPOUT_GAP_REM = 1;
+    const POPOUT_STACK_STEP_REM = 22.5;
+
+    const LS_COLLAPSED_DAY_KEY = 'chat_dock_collapsed_day_v1';
+
+    function localCalendarYmd() {
+        const d = new Date();
+        const y = d.getFullYear();
+        const m = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        return `${y}-${m}-${day}`;
+    }
+
+    /** User tapped minimize today — suppress auto-expand from alerts until tomorrow */
+    function userCollapsedDockToday() {
+        try {
+            return localStorage.getItem(LS_COLLAPSED_DAY_KEY) === localCalendarYmd();
+        } catch (_e) {
+            return false;
+        }
+    }
+
+    function rememberCollapsedDockToday() {
+        try {
+            localStorage.setItem(LS_COLLAPSED_DAY_KEY, localCalendarYmd());
+        } catch (_e) {}
+    }
+
+    function popoutRightOffsetRem(stackIndex) {
+        return DOCK_WIDTH_REM + POPOUT_GAP_REM + (stackIndex * POPOUT_STACK_STEP_REM);
+    }
 
     const openPopouts = new Map();
     const minimizedPopouts = new Map();
@@ -131,7 +165,8 @@
     }
 
     function syncDockShellFromAlerts() {
-        setDockExpanded(hasUnreadAlerts());
+        const shouldExpand = hasUnreadAlerts() && !userCollapsedDockToday();
+        setDockExpanded(shouldExpand);
     }
 
     dockLastHadUnreadAlerts = hasUnreadAlerts();
@@ -316,6 +351,39 @@
         renderPopupMessages(card, htmlList, data.last_id || sinceId || 0);
     }
 
+    async function ensureConversationStarted(card) {
+        if (card.dataset.hasConversation === '1') {
+            return { ok: true };
+        }
+        const startUrl = card.dataset.startChatUrl;
+        if (!startUrl) {
+            return { ok: false, message: 'Unable to start this chat from the dock.' };
+        }
+        const fd = new FormData();
+        fd.append('_token', csrf);
+        const response = await fetch(startUrl, {
+            method: 'POST',
+            headers: {
+                'Accept': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest',
+            },
+            credentials: 'same-origin',
+            body: fd,
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok || data.success !== true) {
+            return { ok: false, message: data.message || 'Unable to start conversation.' };
+        }
+        card.dataset.hasConversation = '1';
+        if (data.chat_url) {
+            card.dataset.chatUrl = data.chat_url;
+        }
+        if (data.send_url) {
+            card.dataset.sendUrl = data.send_url;
+        }
+        return { ok: true };
+    }
+
     async function sendInlineFromCard(card, bodyText) {
         const sendUrl = card.dataset.sendUrl;
         if (!sendUrl) return { ok: false, message: 'Send route missing' };
@@ -371,7 +439,7 @@
         for (const card of openPopouts.values()) {
             if (!card || card.dataset.customPos === '1' || card.dataset.minimized === '1') continue;
             card.style.bottom = '1rem';
-            card.style.right = (22.5 + (idx * 22.5)) + 'rem';
+            card.style.right = popoutRightOffsetRem(idx) + 'rem';
             card.style.left = 'auto';
             card.style.top = 'auto';
             idx++;
@@ -411,7 +479,7 @@
         card.dataset.customPos = '0';
         card.style.position = 'fixed';
         card.style.bottom = '1rem';
-        card.style.right = (22.5 + (openPopouts.size * 22.5)) + 'rem';
+        card.style.right = popoutRightOffsetRem(openPopouts.size) + 'rem';
         card.style.left = 'auto';
         card.style.top = 'auto';
 
@@ -447,17 +515,12 @@
                 </div>
                 <div data-popout-thread class="min-h-0 flex-1 overflow-y-auto space-y-2 bg-gray-50 px-3 py-3 dark:bg-gray-950"></div>
                 <div class="border-t border-gray-200 bg-white px-3 py-2.5 dark:border-gray-700 dark:bg-gray-900">
-                    <form data-popout-form class="flex items-end gap-2 ${payload.hasConversation ? '' : 'hidden'}">
+                    <form data-popout-form class="flex items-end gap-2">
                         <textarea data-popout-input rows="2" maxlength="500" placeholder="Type a message..." class="min-h-[42px] flex-1 resize-none rounded-xl border border-gray-300 px-3 py-2 text-xs text-gray-900 focus:border-red-500 focus:outline-none focus:ring-2 focus:ring-red-200 dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100"></textarea>
                         <button type="submit" data-popout-send class="inline-flex h-[42px] items-center justify-center rounded-xl bg-red-600 px-3 text-xs font-semibold text-white hover:bg-red-700">Send</button>
                     </form>
-                    <form method="POST" action="${escapeHtml(payload.startChatUrl || '#')}" class="${payload.hasConversation ? 'hidden' : 'flex'} items-center gap-2">
-                        <input type="hidden" name="_token" value="${escapeHtml(csrf)}" />
-                        <button type="submit" class="inline-flex h-[38px] items-center justify-center rounded-xl bg-indigo-600 px-3 text-xs font-semibold text-white hover:bg-indigo-700">Start chat</button>
-                        <p class="text-[11px] text-gray-500">No previous conversation.</p>
-                    </form>
                     <p data-popout-status class="mt-1 hidden text-[10px] font-semibold"></p>
-                    <a href="${safeChatUrl}" class="mt-1 inline-flex text-[11px] font-semibold text-red-600 hover:underline">Open full chat</a>
+                    <a href="${safeChatUrl}" data-popout-open-full class="mt-1 inline-flex text-[11px] font-semibold text-red-600 hover:underline">Open full chat</a>
                 </div>
             </div>
         `;
@@ -473,7 +536,7 @@
         if (!payload.hasConversation) {
             const thread = card.querySelector('[data-popout-thread]');
             if (thread) {
-                thread.innerHTML = '<p class="rounded-xl border border-dashed border-gray-300 bg-white px-3 py-4 text-xs text-gray-600 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300">Start a chat to see messages here.</p>';
+                thread.innerHTML = '<p class="rounded-xl border border-dashed border-gray-300 bg-white px-3 py-4 text-xs text-gray-600 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300">No messages yet. Type below and press Send — your first message opens the conversation.</p>';
             }
         }
 
@@ -537,6 +600,26 @@
                 if (!bodyText) return;
                 if (sendBtn) sendBtn.disabled = true;
                 if (statusEl) statusEl.classList.add('hidden');
+                if (card.dataset.hasConversation !== '1') {
+                    const started = await ensureConversationStarted(card);
+                    if (!started.ok) {
+                        if (statusEl) {
+                            statusEl.textContent = started.message || 'Unable to start chat.';
+                            statusEl.className = 'mt-1 text-[10px] font-semibold text-red-600';
+                            statusEl.classList.remove('hidden');
+                        }
+                        if (sendBtn) sendBtn.disabled = false;
+                        return;
+                    }
+                    const thread = card.querySelector('[data-popout-thread]');
+                    if (thread) thread.innerHTML = '';
+                    card.dataset.lastId = '0';
+                    const fullLink = card.querySelector('[data-popout-open-full]');
+                    if (fullLink && card.dataset.chatUrl) {
+                        fullLink.setAttribute('href', card.dataset.chatUrl);
+                    }
+                    await fetchConversationForCard(card, 0);
+                }
                 const sent = await sendInlineFromCard(card, bodyText);
                 if (!sent.ok) {
                     if (statusEl) {
@@ -565,9 +648,15 @@
         const metaBits = [conversation.profile_age, conversation.profile_height, conversation.profile_religion, conversation.profile_caste]
             .map((v) => (v || '').trim())
             .filter(Boolean);
+        let metaLine = metaBits.join(', ');
+        if (!metaLine) {
+            const fallback = [(conversation.profile_title || '').trim(), (conversation.profile_location || '').trim()].filter(Boolean);
+            metaLine = fallback.join(' · ');
+        }
         const secondaryBits = [conversation.profile_occupation, conversation.profile_education]
             .map((v) => (v || '').trim())
             .filter(Boolean);
+        const headerTitle = (conversation.profile_title || '').trim() || metaLine;
         const payload = {
             conversationId: String(conversation.conversation_key || ''),
             name: conversation.name || 'Member',
@@ -577,10 +666,10 @@
             sendUrl: conversation.send_url || '',
             startChatUrl: conversation.start_chat_url || '',
             hasConversation: !!conversation.has_conversation,
-            profileTitle: conversation.profile_title || '',
-            profileSubtitle: secondaryBits.join(', '),
+            profileTitle: headerTitle,
+            profileSubtitle: secondaryBits.length ? secondaryBits.join(', ') : ((conversation.profile_subtitle || '').trim() || ''),
             profileLocation: conversation.profile_location || '',
-            metaLine: metaBits.join(', '),
+            metaLine,
         };
         if (!payload.conversationId) return;
 
@@ -646,7 +735,8 @@
             renderDockLists();
             updateTabCounts();
             const nowUnread = hasUnreadAlerts();
-            if (nowUnread) {
+            const allowAutoExpand = !userCollapsedDockToday();
+            if (nowUnread && allowAutoExpand) {
                 setDockExpanded(true);
             } else if (dockLastHadUnreadAlerts && !nowUnread) {
                 setDockExpanded(false);
@@ -670,7 +760,10 @@
     window.addEventListener('resize', refreshExpandHandleVisibility);
 
     if (headerMinBtn) {
-        headerMinBtn.addEventListener('click', () => setDockExpanded(false));
+        headerMinBtn.addEventListener('click', () => {
+            rememberCollapsedDockToday();
+            setDockExpanded(false);
+        });
     }
     if (expandHandle) {
         expandHandle.addEventListener('click', () => setDockExpanded(true));

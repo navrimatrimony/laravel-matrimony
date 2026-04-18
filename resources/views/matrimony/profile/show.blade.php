@@ -295,9 +295,13 @@
             @endif
             
             @if ($educationVisible)
-            <div>
-                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{{ __('Education') }}</label>
-                <input type="text" name="highest_education" value="{{ old('highest_education', $profile->highest_education) }}" class="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100">
+            <div class="md:col-span-2">
+                @if (\Illuminate\Support\Facades\Schema::hasColumn('matrimony_profiles', 'education_degree_id'))
+                    <x-education-multiselect-engine :profile="$profile" form-selector="#admin-profile-edit-form" />
+                @else
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{{ __('Education') }}</label>
+                    <input type="text" name="highest_education" value="{{ old('highest_education', $profile->highest_education) }}" class="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100">
+                @endif
             </div>
             @endif
             
@@ -537,8 +541,8 @@
                 <div class="mb-4 flex items-start justify-between gap-3">
                     <div class="min-w-0 flex-1">
                         <h2 class="text-2xl font-extrabold uppercase leading-tight tracking-tight text-stone-900 dark:text-stone-50 sm:text-3xl break-words [word-break:break-word]">{{ $heroDisplayName }}</h2>
-                        @if (! ($isOwnProfile ?? false))
-                            <p class="mt-1 text-xs text-green-600 dark:text-green-400">🟢 Active now • Viewed recently</p>
+                        @if (! ($isOwnProfile ?? false) && ($profileOwnerPresence ?? null))
+                            <p class="mt-1 text-xs {{ ($profileOwnerPresence['tone'] ?? 'inactive') === 'live' ? 'text-green-600 dark:text-green-400' : 'text-stone-500 dark:text-stone-400' }}">{{ $profileOwnerPresence['text'] ?? '' }}</p>
                         @endif
                     </div>
                     @auth

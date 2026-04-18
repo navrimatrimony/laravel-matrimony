@@ -3,9 +3,11 @@
 namespace App\Services;
 
 use App\Models\Interest;
+use App\Models\MasterGender;
 use App\Models\MatrimonyProfile;
 use App\Models\User;
 use Carbon\Carbon;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
@@ -29,8 +31,8 @@ class MemberQuickHubService
         $profileId = (int) $profile->id;
         $userId = (int) $user->id;
 
-        $allConversations = $this->chatList->getAllConversations($profileId);
-        $unreadConversations = $this->chatList->getUnreadConversations($profileId);
+        $allConversations = $this->filterConversationsForDock($this->chatList->getAllConversations($profileId), $profile);
+        $unreadConversations = $this->filterConversationsForDock($this->chatList->getUnreadConversations($profileId), $profile);
         $chatUnreadCount = $this->chatList->getUnreadMessageCount($profileId);
         $conversationProfileIds = $allConversations->pluck('other_id')->filter()->map(fn ($v) => (int) $v)->all();
         $onlineProfileIds = $this->loadOnlineProfileIdsForUser($user);
@@ -126,34 +128,127 @@ class MemberQuickHubService
     }
 
     /**
+     * Chat dock + Active tab: exclude admin-owned profiles; male↔female only when viewer gender is male/female.
+     *
+     * @param  Collection<int, \App\Models\Conversation>  $conversations
+     * @return Collection<int, \App\Models\Conversation>
+     */
+    private function filterConversationsForDock(Collection $conversations, MatrimonyProfile $viewer): Collection
+    {
+        $allowedKeys = $this->dockOppositeGenderKeysForViewer($viewer);
+        $others = $conversations->map(fn ($c) => $c->other_profile)->filter();
+        $profileIds = $others->pluck('id')->unique()->filter()->values()->all();
+        if ($profileIds === []) {
+            return $conversations;
+        }
+
+        $adminProfileIds = MatrimonyProfile::query()
+            ->whereIn('id', $profileIds)
+            ->whereHas('user', function ($q): void {
+                $q->where('is_admin', true);
+            })
+            ->pluck('id')
+            ->all();
+        $adminSet = array_flip(array_map('intval', $adminProfileIds));
+
+        $genderIds = $others->pluck('gender_id')->unique()->filter()->values()->all();
+        $genderKeyById = $genderIds === []
+            ? []
+            : MasterGender::query()->whereIn('id', $genderIds)->pluck('key', 'id')->all();
+
+        return $conversations->filter(function ($c) use ($allowedKeys, $adminSet, $genderKeyById) {
+            $other = $c->other_profile;
+            if (! $other || ! $other->id) {
+                return false;
+            }
+            if (isset($adminSet[(int) $other->id])) {
+                return false;
+            }
+            if ($allowedKeys === null) {
+                return true;
+            }
+            $gk = $genderKeyById[(int) ($other->gender_id ?? 0)] ?? null;
+
+            return $gk !== null && $gk !== '' && in_array((string) $gk, $allowedKeys, true);
+        })->values();
+    }
+
+    /**
+     * @return list<string>|null null = do not filter by gender (viewer not male/female)
+     */
+    private function dockOppositeGenderKeysForViewer(MatrimonyProfile $viewer): ?array
+    {
+        $vid = (int) ($viewer->gender_id ?? 0);
+        if ($vid <= 0) {
+            return null;
+        }
+        $vk = MasterGender::query()->where('id', $vid)->value('key');
+        if ($vk === 'male') {
+            return ['female'];
+        }
+        if ($vk === 'female') {
+            return ['male'];
+        }
+
+        return null;
+    }
+
+    /**
+     * @return list<int>|null null = no gender filter; empty list = no matches
+     */
+    private function dockOppositeGenderIdsForViewer(MatrimonyProfile $viewer): ?array
+    {
+        $keys = $this->dockOppositeGenderKeysForViewer($viewer);
+        if ($keys === null) {
+            return null;
+        }
+
+        return MasterGender::query()
+            ->whereIn('key', $keys)
+            ->where('is_active', true)
+            ->pluck('id')
+            ->map(fn ($v) => (int) $v)
+            ->values()
+            ->all();
+    }
+
+    /**
+     * Active tab: last 1 hour on users.last_seen_at, most recent first; non-admin; opposite gender when applicable.
+     *
      * @return list<int>
      */
     private function loadOnlineProfileIdsForUser(User $user): array
     {
-        $selfProfileId = (int) ($user->matrimonyProfile?->id ?? 0);
-        if ($selfProfileId <= 0) {
+        $selfProfile = $user->matrimonyProfile;
+        $selfProfileId = (int) ($selfProfile?->id ?? 0);
+        if ($selfProfileId <= 0 || ! $selfProfile) {
             return [];
         }
 
-        return MatrimonyProfile::query()
-            ->where('id', '!=', $selfProfileId)
+        $genderIds = $this->dockOppositeGenderIdsForViewer($selfProfile);
+        if (is_array($genderIds) && $genderIds === []) {
+            return [];
+        }
+
+        $q = MatrimonyProfile::query()
+            ->join('users', 'users.id', '=', 'matrimony_profiles.user_id')
+            ->where('matrimony_profiles.id', '!=', $selfProfileId)
             ->where(function ($q): void {
-                $q->whereNull('is_suspended')->orWhere('is_suspended', false);
+                $q->whereNull('matrimony_profiles.is_suspended')->orWhere('matrimony_profiles.is_suspended', false);
             })
-            ->whereHas('user', function ($q): void {
-                $q->whereNotNull('last_seen_at')
-                    ->where('last_seen_at', '>=', now()->subMinutes(5))
-                    ->where(function ($qq): void {
-                        $qq->where(function ($nonAdmin): void {
-                            $nonAdmin->whereNull('is_admin')->orWhere('is_admin', false);
-                        })->orWhereHas('matrimonyProfile', function ($mp): void {
-                            $mp->where('is_showcase', true);
-                        });
-                    });
+            ->where(function ($q): void {
+                $q->whereNull('users.is_admin')->orWhere('users.is_admin', false);
             })
-            ->orderByDesc('updated_at')
+            ->whereNotNull('users.last_seen_at')
+            ->where('users.last_seen_at', '>=', now()->subHour());
+
+        if ($genderIds !== null) {
+            $q->whereIn('matrimony_profiles.gender_id', $genderIds);
+        }
+
+        return $q->orderByDesc('users.last_seen_at')
             ->limit(50)
-            ->pluck('id')
+            ->pluck('matrimony_profiles.id')
             ->map(fn ($v) => (int) $v)
             ->values()
             ->all();
@@ -185,6 +280,7 @@ class MemberQuickHubService
                 $row = $chatByProfileId[$pid];
                 $row['time'] = 'Online now';
                 $rows[] = $row;
+
                 continue;
             }
 
@@ -268,6 +364,14 @@ class MemberQuickHubService
             $religion = trim((string) ($profile->religion?->name ?? ''));
             $caste = trim((string) ($profile->caste?->name ?? ''));
             $titleParts = array_values(array_filter([$age, $height, $religion, $caste]));
+            if ($titleParts === []) {
+                $titleParts = array_values(array_filter([
+                    trim((string) ($profile->occupation_title ?? '')),
+                    trim((string) ($profile->highest_education ?? '')),
+                    $height,
+                    $religion,
+                ]));
+            }
             $subtitleParts = array_values(array_filter([
                 trim((string) ($profile->occupation_title ?? '')),
                 trim((string) ($profile->highest_education ?? '')),

@@ -2,13 +2,14 @@
 
 namespace App\Services\Showcase;
 
+use App\Models\MasterGender;
 use App\Models\MatrimonyProfile;
 use App\Models\User;
-use App\Services\ShowcaseProfileDefaultsService;
 use App\Services\ExtendedFieldService;
 use App\Services\FieldValueHistoryService;
 use App\Services\MutationService;
 use App\Services\ProfileCompletenessService;
+use App\Services\ShowcaseProfileDefaultsService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
@@ -33,19 +34,6 @@ class ShowcaseProfileFactory
         ?int $searcherMatrimonyProfileId = null,
         bool $useAdminBulkFieldPolicy = false
     ): ?int {
-        $email = 'showcase-profile-'.Str::random(8).'@system.local';
-        $user = User::firstOrCreate(
-            ['email' => $email],
-            [
-                'name' => 'Showcase '.($sequenceIndex + 1),
-                'password' => bcrypt(Str::random(32)),
-                'gender' => 'other',
-            ]
-        );
-        if ($user->matrimonyProfile) {
-            return null;
-        }
-
         $bulkPolicy = ($useAdminBulkFieldPolicy && $searcherMatrimonyProfileId === null)
             ? ShowcaseBulkCreateSettings::policy()
             : null;
@@ -59,6 +47,32 @@ class ShowcaseProfileFactory
             return null;
         }
 
+        $fullName = trim((string) ($attrs['full_name'] ?? ''));
+        if ($fullName === '') {
+            $fullName = 'Member';
+            $attrs['full_name'] = $fullName;
+        }
+
+        $email = $this->allocateUniqueLoginEmailForShowcase($fullName);
+        $userGender = $this->genderKeyFromProfileGenderId((int) ($attrs['gender_id'] ?? 0));
+
+        $user = User::firstOrCreate(
+            ['email' => $email],
+            [
+                'name' => $fullName,
+                'password' => bcrypt(Str::random(32)),
+                'gender' => $userGender,
+            ]
+        );
+        if ($user->matrimonyProfile) {
+            return null;
+        }
+
+        $user->forceFill([
+            'name' => $fullName,
+            'gender' => $userGender,
+        ])->save();
+
         $attrs['user_id'] = $user->id;
         $attrs['is_showcase'] = true;
         $attrs['is_suspended'] = false;
@@ -70,7 +84,68 @@ class ShowcaseProfileFactory
         $this->applyWizardLikeNarrativeAndPreferences($profile, $actorUserId, $searcherMatrimonyProfileId, $bulkPolicy);
         $this->recordHistoryForShowcaseProfile($profile);
 
+        $profile->refresh();
+        $this->syncAuthUserWithShowcaseProfile($user->fresh(), $profile);
+
         return (int) $profile->id;
+    }
+
+    /**
+     * Login email for system-local showcase accounts: derived from profile full name + short suffix (unique).
+     * Avoids legacy "showcase-profile-..." wording while staying on @system.local.
+     */
+    private function allocateUniqueLoginEmailForShowcase(string $fullName): string
+    {
+        $ascii = Str::ascii(trim($fullName));
+        $slug = Str::slug((string) $ascii, '.');
+        if ($slug === '' || $slug === '.') {
+            $slug = 'member';
+        }
+        $slug = substr($slug, 0, 44);
+
+        for ($attempt = 0; $attempt < 25; $attempt++) {
+            $candidate = $slug.'.'.Str::lower(Str::random(4)).'@system.local';
+            if (! User::query()->where('email', $candidate)->exists()) {
+                return $candidate;
+            }
+        }
+
+        for ($attempt = 0; $attempt < 25; $attempt++) {
+            $fallback = 'member.'.Str::lower(Str::random(12)).'@system.local';
+            if (! User::query()->where('email', $fallback)->exists()) {
+                return $fallback;
+            }
+        }
+
+        return 'member.'.Str::lower(Str::random(16)).'@system.local';
+    }
+
+    private function genderKeyFromProfileGenderId(int $genderId): string
+    {
+        if ($genderId <= 0) {
+            return 'other';
+        }
+
+        $key = MasterGender::query()->where('id', $genderId)->value('key');
+        $key = $key !== null ? (string) $key : '';
+
+        return in_array($key, ['male', 'female'], true) ? $key : 'other';
+    }
+
+    /**
+     * Keep {@see User} display fields aligned with {@see MatrimonyProfile} after autofill (same as member-facing profile).
+     */
+    private function syncAuthUserWithShowcaseProfile(User $user, MatrimonyProfile $profile): void
+    {
+        $name = trim((string) ($profile->full_name ?? ''));
+        if ($name === '') {
+            $name = trim((string) ($user->name ?? '')) ?: 'Member';
+        }
+
+        $user->forceFill([
+            'name' => $name,
+            'gender' => $this->genderKeyFromProfileGenderId((int) ($profile->gender_id ?? 0)),
+        ])->save();
     }
 
     private function addPrimaryContact(MatrimonyProfile $profile): void

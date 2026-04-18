@@ -311,9 +311,13 @@
                             <option value="widowed" {{ old('marital_status', $matrimonyProfile->marital_status) === 'widowed' ? 'selected' : '' }}>Widowed</option>
                         </select>
                     </div>
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Education</label>
-                        <input type="text" name="highest_education" value="{{ old('highest_education', $matrimonyProfile->highest_education) }}" class="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100">
+                    <div class="md:col-span-2">
+                        @if (\Illuminate\Support\Facades\Schema::hasColumn('matrimony_profiles', 'education_degree_id'))
+                            <x-education-multiselect-engine :profile="$matrimonyProfile" form-selector="#admin-profile-edit-form" />
+                        @else
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Education</label>
+                            <input type="text" name="highest_education" value="{{ old('highest_education', $matrimonyProfile->highest_education) }}" class="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100">
+                        @endif
                     </div>
                     <div class="md:col-span-2">
                         <p class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Location</p>

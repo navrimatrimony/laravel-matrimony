@@ -54,6 +54,18 @@
             </p>
         </div>
 
+        <div class="p-4 bg-gray-50 dark:bg-gray-700/30 rounded-lg border border-gray-200 dark:border-gray-600">
+            <label class="block text-sm font-semibold text-gray-900 dark:text-gray-100 mb-2">Member presence — treat as “online” for (minutes)</label>
+            <input type="number" name="member_presence_online_threshold_minutes" min="1" max="1440" required
+                value="{{ old('member_presence_online_threshold_minutes', $presenceOnlineThresholdMin) }}"
+                class="block w-full max-w-xs rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm text-gray-900 dark:text-gray-100">
+            <p class="text-xs text-gray-500 dark:text-gray-400 mt-2">
+                If the member’s last activity was within this window, profile / listing shows <strong>online / active now</strong> (based on <code class="text-xs bg-gray-200 dark:bg-gray-600 px-1 rounded">users.last_seen_at</code>).
+                Default <strong>5</strong> minutes. Same-day behaviour and “last active” labels follow after that window. Stored as
+                <code class="text-xs bg-gray-200 dark:bg-gray-600 px-1 rounded">member_presence_online_threshold_minutes</code>.
+            </p>
+        </div>
+
         <div class="pt-2">
             <button type="submit" class="inline-flex items-center px-4 py-2 rounded-md bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-500">
                 Save settings

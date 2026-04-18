@@ -19,7 +19,6 @@ use App\Services\UserEntitlementService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
 class ChatController extends Controller
@@ -86,10 +85,26 @@ class ChatController extends Controller
         $receiver = $matrimony_profile;
         $decision = $this->policy->canStartConversation($me, $receiver);
         if (! $decision->allowed) {
+            if ($request->wantsJson() || $request->expectsJson()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => $decision->humanMessage,
+                ], 422);
+            }
+
             return back()->with('error', $decision->humanMessage);
         }
 
         $conversation = $this->conversations->findOrCreateConversationBetweenProfiles($me, $receiver);
+
+        if ($request->wantsJson() || $request->expectsJson()) {
+            return response()->json([
+                'success' => true,
+                'conversation_id' => (int) $conversation->id,
+                'chat_url' => route('chat.show', ['conversation' => $conversation->id]),
+                'send_url' => route('chat.messages.text', ['conversation' => $conversation->id]),
+            ]);
+        }
 
         return redirect()->route('chat.show', ['conversation' => $conversation->id]);
     }

@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Jobs\ParseIntakeJob;
 use App\Models\AdminSetting;
 use App\Models\BiodataIntake;
+use App\Services\EducationService;
 use App\Services\Intake\IntakeExtractionReuseResolver;
 use App\Services\Intake\IntakePipelineService;
 use App\Services\Intake\IntakeReviewParseInputTextResolver;
@@ -20,6 +21,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Schema;
 use Smalot\PdfParser\Parser as PdfParser;
 
 /*
@@ -1666,6 +1668,7 @@ class IntakeController extends Controller
                 }
                 $snapshot['preferences'] = [$prefRow];
             }
+            $snapshot = $this->mergeSnapshotCoreEducationFromMultiselect($snapshot);
             $snapshot = $this->normalizeApprovalSnapshot(array_merge($base, $snapshot));
             $core = $snapshot['core'] ?? [];
             if (is_array($core)) {
@@ -1748,6 +1751,37 @@ class IntakeController extends Controller
         return redirect()->route('intake.status', $intake->id)
             ->with('success', __('intake.approved_successfully'))
             ->with('mutation_result', $result);
+    }
+
+    /**
+     * Flattens Tom Select multiselect (snapshot[core][education_slots] + hidden arrays) into canonical core education fields.
+     */
+    private function mergeSnapshotCoreEducationFromMultiselect(array $snapshot): array
+    {
+        if (! Schema::hasColumn('matrimony_profiles', 'education_degree_id')) {
+            return $snapshot;
+        }
+        $core = $snapshot['core'] ?? null;
+        if (! is_array($core)) {
+            return $snapshot;
+        }
+        $fake = Request::create('/', 'POST', ['snapshot' => ['core' => $core]]);
+        $edu = app(EducationService::class);
+        if (! $edu->mergeMultiselectEducationIntoRequest($fake, 'snapshot.core')) {
+            return $snapshot;
+        }
+        $core['education_degree_id'] = $fake->input('education_degree_id');
+        $core['education_text'] = $fake->input('education_text');
+        $core['highest_education'] = $fake->input('highest_education');
+        $core['highest_education_text'] = $fake->input('highest_education_text');
+        $core['highest_education_id'] = $fake->input('highest_education_id');
+        $core['highest_education_other'] = $fake->input('highest_education_other');
+        foreach (['education_slots', 'education_degree_ids', 'education_custom'] as $rk) {
+            unset($core[$rk]);
+        }
+        $snapshot['core'] = $core;
+
+        return $snapshot;
     }
 
     /**

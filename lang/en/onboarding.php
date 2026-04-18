@@ -12,6 +12,7 @@ return [
     'validation_more_errors' => 'Please also fix :count more field(s) highlighted below.',
     'all_set' => 'You’re all set — you can explore matches or complete more details anytime.',
     'education_examples' => 'e.g. B.E., M.Com, Diploma, Ph.D.',
+    'run_migrations_education' => 'Database migrations are required before the education search field is available. Please run `php artisan migrate`.',
 
     'step2_title' => 'About the candidate',
     'step2_sub' => 'This helps us show the right matches.',

@@ -309,6 +309,21 @@ return [
         'select_category' => 'Select category',
         'select_degree' => 'Select degree',
         'full_form_prefix' => 'Full form:',
+        'combobox_placeholder' => 'Type to search (e.g. BA, MBA)…',
+        'combobox_hint' => 'Pick a listed degree when it matches. If yours is not listed, type it — we save it under Specialization so it appears in Edit profile too.',
+        'combobox_no_results' => 'No matching degree — you can finish typing and submit; your text will be saved under Specialization.',
+        'tom_select_manual_create' => 'Use "__TEXT__" — we\'ll save this as your education',
+        'education_did_you_mean' => 'Did you mean __NAME__?',
+        'education_invalid_soft' => 'This doesn\'t look like a common education. Please check spelling.',
+        'education_manual_helper_not_found' => 'Not found — use “+ add …” in the open list above.',
+        'education_manual_helper_saved' => 'Saved as your education.',
+        'education_add_btn' => '+ Add',
+        'education_inline_add_short' => 'Add',
+        'education_no_results_heading' => 'No results found',
+        'multiselect_intro' => 'You can add multiple education (e.g., B.A, B.Ed, M.Sc)',
+        'custom_added' => 'Custom education added',
+        'no_match_press_enter' => 'No match found. Press Enter to add',
+        'placeholder_degrees' => 'Type or select education (e.g., B.A, B.Ed)',
     ],
     'family' => [
         'family_type' => 'Family Type',
@@ -334,10 +349,9 @@ return [
         'select_marital_status' => 'Select Marital Status',
     ],
     'parents' => [
-        'parents_home_address' => "Parents home address",
+        'parents_home_address' => 'Parents home address',
         'parents_address_line' => 'Flat / house / society / road / landmark',
         'parents_location_placeholder' => "Type village / city / pincode for parents' home",
         'parents_village_city' => 'Parents village / city',
     ],
 ];
-

@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\AdminSetting;
 use App\Models\MatrimonyProfile;
+use Illuminate\Support\Facades\Schema;
 
 /*
 |--------------------------------------------------------------------------
@@ -72,7 +73,23 @@ class ProfileCompletenessService
 
             case 'education':
             case 'highest_education':
-                return $profile->highest_education !== null && $profile->highest_education !== '';
+                if (($profile->highest_education ?? '') !== '') {
+                    return true;
+                }
+                if (! empty($profile->education_degree_id)) {
+                    return true;
+                }
+                if (($profile->education_text ?? '') !== '') {
+                    return true;
+                }
+                if (! empty($profile->highest_education_id)) {
+                    return true;
+                }
+                if (($profile->highest_education_text ?? '') !== '') {
+                    return true;
+                }
+
+                return false;
 
             case 'location':
                 return $profile->city_id !== null;
@@ -208,7 +225,20 @@ class ProfileCompletenessService
 
             case 'education':
             case 'highest_education':
-                return "(CASE WHEN COALESCE(TRIM({$table}.highest_education),'') != '' THEN 1 ELSE 0 END)";
+                $parts = ["COALESCE(TRIM({$table}.highest_education),'') != ''"];
+                if (Schema::hasColumn('matrimony_profiles', 'education_degree_id')) {
+                    $parts[] = "{$table}.education_degree_id IS NOT NULL";
+                    $parts[] = "COALESCE(TRIM({$table}.education_text),'') != ''";
+                }
+                if (Schema::hasColumn('matrimony_profiles', 'highest_education_id')) {
+                    $parts[] = "{$table}.highest_education_id IS NOT NULL";
+                }
+                if (Schema::hasColumn('matrimony_profiles', 'highest_education_text')) {
+                    $parts[] = "COALESCE(TRIM({$table}.highest_education_text),'') != ''";
+                }
+                $cond = implode(' OR ', $parts);
+
+                return "(CASE WHEN {$cond} THEN 1 ELSE 0 END)";
 
             case 'location':
                 return "(CASE WHEN {$table}.city_id IS NOT NULL THEN 1 ELSE 0 END)";

@@ -28,6 +28,7 @@ return [
     'approved' => 'Approved',
     'submit' => 'Submit',
     'cancel' => 'Cancel',
+    'clear' => 'Clear',
     'save' => 'Save',
     'reset' => 'Reset',
     'admin' => 'Admin',
@@ -43,4 +44,3 @@ return [
     'profile_not_found' => 'Profile not found.',
     'dismiss' => 'Dismiss',
 ];
-

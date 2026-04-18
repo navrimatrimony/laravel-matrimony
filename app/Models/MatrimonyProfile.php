@@ -10,7 +10,6 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\ValidationException;
 
 /*
@@ -118,6 +117,10 @@ class MatrimonyProfile extends Model
         'caste_id',
         'sub_caste_id',
         'highest_education',
+        'highest_education_id',
+        'highest_education_text',
+        'education_degree_id',
+        'education_text',
         'country_id',
         'state_id',
         'district_id',
@@ -230,9 +233,13 @@ class MatrimonyProfile extends Model
         'income_private' => 'boolean',
         'family_income_private' => 'boolean',
         'card_onboarding_resume_step' => 'integer',
+        'highest_education_id' => 'integer',
+        'education_degree_id' => 'integer',
         // UTF-8 bytes misread as Latin-1 (mojibake) — repair on read/write for MR/EN narrative fields.
         'full_name' => MojibakeSafeUtf8String::class,
         'highest_education' => MojibakeSafeUtf8String::class,
+        'highest_education_text' => MojibakeSafeUtf8String::class,
+        'education_text' => MojibakeSafeUtf8String::class,
         'address_line' => MojibakeSafeUtf8String::class,
         'birth_place_text' => MojibakeSafeUtf8String::class,
         'photo_rejection_reason' => MojibakeSafeUtf8String::class,
@@ -318,6 +325,7 @@ class MatrimonyProfile extends Model
     public function getIsShowcaseAttribute(): bool
     {
         $raw = $this->attributes['is_showcase'] ?? null;
+
         return filter_var($raw, FILTER_VALIDATE_BOOLEAN) || (string) $raw === '1';
     }
 
@@ -420,6 +428,14 @@ class MatrimonyProfile extends Model
     public function preferredDistricts()
     {
         return $this->belongsToMany(District::class, 'profile_preferred_districts', 'profile_id', 'district_id');
+    }
+
+    /**
+     * Highest education via Shaadi-style degree master ({@see EducationDegree}).
+     */
+    public function educationDegree(): \Illuminate\Database\Eloquent\Relations\BelongsTo
+    {
+        return $this->belongsTo(EducationDegree::class, 'education_degree_id');
     }
 
     /*

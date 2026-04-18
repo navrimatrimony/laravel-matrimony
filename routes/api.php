@@ -1,13 +1,14 @@
 <?php
 
 use App\Http\Controllers\Api\AuthController;
-use App\Http\Controllers\Webhooks\MetaWhatsAppWebhookController;
-use App\Http\Controllers\Api\ModerationConfigController;
+use App\Http\Controllers\Api\EducationDegreeSearchController;
 use App\Http\Controllers\Api\MasterEducationController;
+use App\Http\Controllers\Api\ModerationConfigController;
 use App\Http\Controllers\Api\V1\LocationController;
 use App\Http\Controllers\Internal\LocationHierarchyController;
 use App\Http\Controllers\Internal\LocationSearchController;
 use App\Http\Controllers\Internal\LocationSuggestionController;
+use App\Http\Controllers\Webhooks\MetaWhatsAppWebhookController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -34,6 +35,11 @@ Route::post('/internal/location/suggest', [LocationSuggestionController::class, 
 */
 Route::get('/master/education', [MasterEducationController::class, 'index']);
 
+/*
+| Highest education picker — public read-only degree master (no auth redirect).
+*/
+Route::get('/education-degrees/search', EducationDegreeSearchController::class)->name('api.education_degrees.search');
+
 Route::prefix('v1')->group(function () {
 
     /*
@@ -53,7 +59,7 @@ Route::prefix('v1')->group(function () {
 
     Route::get('/ping', function () {
         return response()->json([
-            'status' => 'api alive'
+            'status' => 'api alive',
         ]);
     });
 

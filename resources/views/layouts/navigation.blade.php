@@ -443,19 +443,6 @@
 <script>
 (function() {
     const POLL_INTERVAL = 30000; // 30 seconds
-    const badge = document.getElementById('notification-badge');
-    const badgeMobile = document.getElementById('notification-badge-mobile');
-    const chatBadge = document.getElementById('chat-badge');
-    const chatBadgeMobile = document.getElementById('chat-badge-mobile');
-    const chatDockBadge = document.getElementById('chat-dock-badge');
-    const interestsBadge = document.getElementById('interests-received-badge');
-    const interestsBadgeMobile = document.getElementById('interests-received-badge-mobile');
-    const whoViewedBadge = document.getElementById('who-viewed-badge');
-    const whoViewedBadgeMobile = document.getElementById('who-viewed-badge-mobile');
-    const activityMainBadge = document.getElementById('activity-main-badge');
-    const stickyChatBadge = document.getElementById('sticky-chat-badge');
-    const stickyInterestsBadge = document.getElementById('sticky-interests-badge');
-    const stickyActivityBadge = document.getElementById('sticky-activity-badge');
 
     function applyBadge(el, count) {
         if (!el) return;
@@ -463,7 +450,7 @@
         el.classList.toggle('hidden', !(count > 0));
     }
 
-    function updateNotificationCount() {
+    function updateNotificationCount(badge, badgeMobile) {
         fetch('{{ route("notifications.unread-count") }}', {
             method: 'GET',
             headers: {
@@ -484,8 +471,7 @@
         });
     }
 
-    // Start polling after page load
-    function updateMemberWidgetCounts() {
+    function updateMemberWidgetCounts(elements) {
         fetch('{{ route("member.widgets.counts") }}', {
             method: 'GET',
             headers: {
@@ -500,18 +486,18 @@
             const chatCount = Number(data.chat_unread || 0);
             const interestsCount = Number(data.interests_pending || 0);
             const whoViewedCount = Number(data.who_viewed_count || 0);
-            applyBadge(chatBadge, chatCount);
-            applyBadge(chatBadgeMobile, chatCount);
-            applyBadge(chatDockBadge, chatCount);
-            applyBadge(stickyChatBadge, chatCount);
-            applyBadge(interestsBadge, interestsCount);
-            applyBadge(interestsBadgeMobile, interestsCount);
-            applyBadge(stickyInterestsBadge, interestsCount);
-            applyBadge(whoViewedBadge, whoViewedCount);
-            applyBadge(whoViewedBadgeMobile, whoViewedCount);
+            applyBadge(elements.chatBadge, chatCount);
+            applyBadge(elements.chatBadgeMobile, chatCount);
+            applyBadge(elements.chatDockBadge, chatCount);
+            applyBadge(elements.stickyChatBadge, chatCount);
+            applyBadge(elements.interestsBadge, interestsCount);
+            applyBadge(elements.interestsBadgeMobile, interestsCount);
+            applyBadge(elements.stickyInterestsBadge, interestsCount);
+            applyBadge(elements.whoViewedBadge, whoViewedCount);
+            applyBadge(elements.whoViewedBadgeMobile, whoViewedCount);
             const activityCount = interestsCount + whoViewedCount;
-            applyBadge(activityMainBadge, activityCount);
-            applyBadge(stickyActivityBadge, activityCount);
+            applyBadge(elements.activityMainBadge, activityCount);
+            applyBadge(elements.stickyActivityBadge, activityCount);
 
             document.dispatchEvent(new CustomEvent('member-widget-counts-updated', {
                 detail: {
@@ -524,11 +510,57 @@
         .catch(() => {});
     }
 
-    if (badge || badgeMobile || chatBadge || chatBadgeMobile || interestsBadge || whoViewedBadge || stickyChatBadge) {
-        updateNotificationCount();
-        updateMemberWidgetCounts();
-        setInterval(updateNotificationCount, POLL_INTERVAL);
-        setInterval(updateMemberWidgetCounts, POLL_INTERVAL);
+    function startMemberWidgetPolling() {
+        const badge = document.getElementById('notification-badge');
+        const badgeMobile = document.getElementById('notification-badge-mobile');
+        const chatBadge = document.getElementById('chat-badge');
+        const chatBadgeMobile = document.getElementById('chat-badge-mobile');
+        const chatDockBadge = document.getElementById('chat-dock-badge');
+        const interestsBadge = document.getElementById('interests-received-badge');
+        const interestsBadgeMobile = document.getElementById('interests-received-badge-mobile');
+        const whoViewedBadge = document.getElementById('who-viewed-badge');
+        const whoViewedBadgeMobile = document.getElementById('who-viewed-badge-mobile');
+        const activityMainBadge = document.getElementById('activity-main-badge');
+        const stickyChatBadge = document.getElementById('sticky-chat-badge');
+        const stickyInterestsBadge = document.getElementById('sticky-interests-badge');
+        const stickyActivityBadge = document.getElementById('sticky-activity-badge');
+        const whoViewedBubbleRoot = document.getElementById('who-viewed-bubble-root');
+
+        const widgets = {
+            chatBadge,
+            chatBadgeMobile,
+            chatDockBadge,
+            stickyChatBadge,
+            interestsBadge,
+            interestsBadgeMobile,
+            stickyInterestsBadge,
+            whoViewedBadge,
+            whoViewedBadgeMobile,
+            activityMainBadge,
+            stickyActivityBadge,
+        };
+
+        if (
+            !badge && !badgeMobile
+            && !chatBadge && !chatBadgeMobile && !chatDockBadge
+            && !interestsBadge && !interestsBadgeMobile && !stickyInterestsBadge
+            && !whoViewedBadge && !whoViewedBadgeMobile
+            && !activityMainBadge && !stickyChatBadge && !stickyActivityBadge
+            && !whoViewedBubbleRoot
+        ) {
+            return;
+        }
+
+        updateNotificationCount(badge, badgeMobile);
+        updateMemberWidgetCounts(widgets);
+        setInterval(function () { updateNotificationCount(badge, badgeMobile); }, POLL_INTERVAL);
+        setInterval(function () { updateMemberWidgetCounts(widgets); }, POLL_INTERVAL);
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', startMemberWidgetPolling);
+    } else {
+        startMemberWidgetPolling();
     }
 })();
 </script>

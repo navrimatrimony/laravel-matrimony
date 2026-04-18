@@ -7,6 +7,7 @@ use App\Models\MatrimonyProfile;
 use App\Models\Profession;
 use App\Models\ProfileMarriage;
 use App\Models\WorkingWithType;
+use App\Services\EducationService;
 use App\Services\MutationService;
 use App\Services\ProfileLifecycleService;
 use Illuminate\Http\RedirectResponse;
@@ -88,10 +89,6 @@ class OnboardingController extends Controller
                 $data['professions'] = Profession::where('is_active', true)->with('workingWithType')->orderBy('sort_order')->orderBy('name')->get();
                 $data['currencies'] = \App\Models\MasterIncomeCurrency::where('is_active', true)->get();
                 $data['educationExamples'] = __('onboarding.education_examples');
-                $deg = $profile->highest_education
-                    ? \App\Models\EducationDegree::where('code', $profile->highest_education)->with('category')->first()
-                    : null;
-                $data['selectedEducationCategory'] = $deg?->category?->name;
                 break;
         }
 
@@ -224,6 +221,37 @@ class OnboardingController extends Controller
     private function snapshotStep4(Request $request, MatrimonyProfile $profile, ProfileWizardController $wizard): array
     {
         $this->hydrateEducationCareerContext($request, $profile);
+
+        $educationService = app(EducationService::class);
+        if (! $educationService->mergeMultiselectEducationIntoRequest($request)) {
+            $rawDegreeId = $request->input('education_degree_id');
+            $rawManual = trim((string) $request->input('education_text', ''));
+            if ($rawManual === '' && $request->filled('highest_education')) {
+                $rawManual = trim((string) $request->input('highest_education'));
+            }
+
+            // Legacy hidden names (single release overlap).
+            if (($rawDegreeId === null || $rawDegreeId === '') && $request->filled('education_master_id')) {
+                $rawDegreeId = $request->input('education_master_id');
+            }
+            if ($rawManual === '' && $request->filled('education_manual_text')) {
+                $rawManual = trim((string) $request->input('education_manual_text', ''));
+            }
+
+            $resolved = $educationService->resolveDegreeSelection(
+                ($rawDegreeId !== null && $rawDegreeId !== '') ? (int) $rawDegreeId : null,
+                $rawManual
+            );
+
+            $request->merge([
+                'education_degree_id' => $resolved['education_degree_id'],
+                'education_text' => $resolved['education_text'],
+                'highest_education_id' => null,
+                'highest_education_text' => $resolved['mirror_highest_education_text'],
+                'highest_education' => $resolved['legacy_highest_education'],
+                'highest_education_other' => null,
+            ]);
+        }
 
         return $wizard->buildSnapshotForSection($request, 'education-career', $profile);
     }
@@ -363,7 +391,7 @@ class OnboardingController extends Controller
                 $key
             ),
             4 => (bool) preg_match(
-                '/^(highest_education|highest_education_other|specialization|working_with_type_id|profession_id|company_name|annual_income|income_range_id|income_currency_id|income_private|college_id|work_city_id|work_state_id|income_period|income_value_type|income_amount|income_min_amount|income_max_amount|income_[a-z0-9_]+|education_category)(\.|$)/',
+                '/^(highest_education|highest_education_other|highest_education_id|highest_education_text|education_degree_id|education_text|education_slots|education_degree_ids|education_custom|education_master_id|education_manual_text|specialization|working_with_type_id|profession_id|company_name|annual_income|income_range_id|income_currency_id|income_private|college_id|work_city_id|work_state_id|income_period|income_value_type|income_amount|income_min_amount|income_max_amount|income_[a-z0-9_]+|education_category)(\.|$)/',
                 $key
             ),
             default => false,
@@ -404,9 +432,21 @@ class OnboardingController extends Controller
     private function hydrateEducationCareerContext(Request $request, MatrimonyProfile $profile): void
     {
         $defaultInr = \App\Models\MasterIncomeCurrency::where('code', 'INR')->value('id');
+        $coalesce = static function (mixed $posted, mixed $fallback): mixed {
+            if ($posted === null || $posted === '') {
+                return $fallback;
+            }
+
+            return $posted;
+        };
+
         $request->merge([
-            'highest_education' => $request->input('highest_education', $profile->highest_education),
-            'highest_education_other' => $request->input('highest_education_other', $profile->highest_education_other),
+            'highest_education' => $coalesce($request->input('highest_education'), $profile->highest_education),
+            'highest_education_other' => $coalesce($request->input('highest_education_other'), $profile->highest_education_other),
+            'highest_education_id' => $coalesce($request->input('highest_education_id'), $profile->highest_education_id ?? null),
+            'highest_education_text' => $coalesce($request->input('highest_education_text'), $profile->highest_education_text ?? null),
+            'education_degree_id' => $coalesce($request->input('education_degree_id'), $profile->education_degree_id ?? null),
+            'education_text' => $coalesce($request->input('education_text'), $profile->education_text ?? null),
             'specialization' => $request->input('specialization', $profile->specialization),
             'working_with_type_id' => $request->input('working_with_type_id', $profile->working_with_type_id),
             'profession_id' => $request->input('profession_id', $profile->profession_id),

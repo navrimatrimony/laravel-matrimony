@@ -685,6 +685,9 @@ class AdminProfileModerationController extends Controller
         $admin = auth()->user();
 
         $this->adminProfileEditGovernance->mergeMaritalStatusFromLegacyRequest($request);
+        if (\Illuminate\Support\Facades\Schema::hasColumn('matrimony_profiles', 'education_degree_id')) {
+            app(\App\Services\EducationService::class)->mergeMultiselectEducationIntoRequest($request);
+        }
         $originalData = $this->adminProfileEditGovernance->buildOriginalCoreSnapshot($profile);
         $hasCoreFieldChanges = $this->adminProfileEditGovernance->hasCoreFieldChanges($request, $originalData);
 
@@ -697,6 +700,11 @@ class AdminProfileModerationController extends Controller
             $validationRules['date_of_birth'] = 'nullable|date';
             $validationRules['marital_status_id'] = ['nullable', Rule::exists('master_marital_statuses', 'id')->where(fn ($q) => $q->where('is_active', true))];
             $validationRules['highest_education'] = 'nullable|string|max:255';
+            if (\Illuminate\Support\Facades\Schema::hasColumn('matrimony_profiles', 'education_degree_id')) {
+                $validationRules['education_slots'] = 'nullable|string|max:8192';
+                $validationRules['education_degree_id'] = ['nullable', 'integer', Rule::exists('education_degrees', 'id')];
+                $validationRules['education_text'] = 'nullable|string|max:512';
+            }
             $validationRules['location'] = 'nullable|string|max:255';
             $validationRules['religion_id'] = ['nullable', 'exists:religions,id'];
             $validationRules['caste_id'] = [

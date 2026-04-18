@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\MatrimonyProfile;
 use App\Services\CareerHistoryRowNormalizer;
+use App\Services\EducationService;
 use App\Services\FieldCatalogService;
 use App\Services\PartnerPreferenceNavService;
 use App\Services\PartnerPreferenceSnapshotBuilder;
@@ -1179,6 +1180,12 @@ class ProfileWizardController extends Controller
 
     private function buildEducationCareerSnapshot(Request $request, MatrimonyProfile $profile): array
     {
+        if (Schema::hasColumn('matrimony_profiles', 'education_degree_id')) {
+            $educationService = app(EducationService::class);
+            if (! $educationService->mergeMultiselectEducationIntoRequest($request)) {
+                $educationService->mergeMultiselectEducationIntoRequest($request, 'snapshot.core');
+            }
+        }
         $this->resolveMasterLookupIds($request, ['income_currency' => 'income_currency_id']);
         $incomeEngineRules = $this->incomeEngineValidationRules($request, 'income');
         $request->validate(array_merge([
@@ -1207,6 +1214,13 @@ class ProfileWizardController extends Controller
                 $professionId = null;
             }
         }
+        if (Schema::hasColumn('matrimony_profiles', 'education_degree_id')) {
+            $request->validate([
+                'education_slots' => ['nullable', 'string', 'max:8192'],
+                'education_degree_id' => ['nullable', 'integer', Rule::exists('education_degrees', 'id')],
+                'education_text' => ['nullable', 'string', 'max:512'],
+            ]);
+        }
         $incomeEngineService = app(\App\Services\IncomeEngineService::class);
         $incomeCore = $this->buildIncomeEngineCore($request, 'income', $incomeEngineService);
         $defaultInr = \App\Models\MasterIncomeCurrency::where('code', 'INR')->value('id');
@@ -1227,6 +1241,14 @@ class ProfileWizardController extends Controller
             'work_city_id' => $workCityId,
             'work_state_id' => $workStateId,
         ];
+        if (Schema::hasColumn('matrimony_profiles', 'highest_education_id')) {
+            $core['highest_education_id'] = $request->filled('highest_education_id') ? (int) $request->input('highest_education_id') : null;
+            $core['highest_education_text'] = $request->filled('highest_education_text') ? trim((string) $request->input('highest_education_text')) ?: null : null;
+        }
+        if (Schema::hasColumn('matrimony_profiles', 'education_degree_id')) {
+            $core['education_degree_id'] = $request->filled('education_degree_id') ? (int) $request->input('education_degree_id') : null;
+            $core['education_text'] = $request->filled('education_text') ? trim((string) $request->input('education_text')) ?: null : null;
+        }
         if (Schema::hasColumn('matrimony_profiles', 'work_location_text')) {
             $wlt = trim((string) $request->input('work_location_text', ''));
             $core['work_location_text'] = $wlt !== '' ? mb_substr($wlt, 0, 255) : null;
@@ -1315,6 +1337,12 @@ class ProfileWizardController extends Controller
 
     private function buildPersonalFamilySnapshot(Request $request, MatrimonyProfile $profile): array
     {
+        if (Schema::hasColumn('matrimony_profiles', 'education_degree_id')) {
+            $educationService = app(EducationService::class);
+            if (! $educationService->mergeMultiselectEducationIntoRequest($request)) {
+                $educationService->mergeMultiselectEducationIntoRequest($request, 'snapshot.core');
+            }
+        }
         $this->resolveMasterLookupIds($request, [
             'income_currency' => 'income_currency_id',
             'family_type' => 'family_type_id',
@@ -1349,6 +1377,13 @@ class ProfileWizardController extends Controller
                 $professionId = null;
             }
         }
+        if (Schema::hasColumn('matrimony_profiles', 'education_degree_id')) {
+            $request->validate([
+                'education_slots' => ['nullable', 'string', 'max:8192'],
+                'education_degree_id' => ['nullable', 'integer', Rule::exists('education_degrees', 'id')],
+                'education_text' => ['nullable', 'string', 'max:512'],
+            ]);
+        }
         $incomeEngineService = app(\App\Services\IncomeEngineService::class);
         $incomeCore = $this->buildIncomeEngineCore($request, 'income', $incomeEngineService);
         $familyIncomeCore = $this->buildIncomeEngineCore($request, 'family_income', $incomeEngineService);
@@ -1367,6 +1402,14 @@ class ProfileWizardController extends Controller
             'family_income' => $request->filled('family_income') ? (float) $request->input('family_income') : null,
             'income_currency_id' => $request->input('income_currency_id') ? (int) $request->input('income_currency_id') : (\App\Models\MasterIncomeCurrency::where('code', 'INR')->value('id')),
         ];
+        if (Schema::hasColumn('matrimony_profiles', 'highest_education_id')) {
+            $core['highest_education_id'] = $request->filled('highest_education_id') ? (int) $request->input('highest_education_id') : null;
+            $core['highest_education_text'] = $request->filled('highest_education_text') ? trim((string) $request->input('highest_education_text')) ?: null : null;
+        }
+        if (Schema::hasColumn('matrimony_profiles', 'education_degree_id')) {
+            $core['education_degree_id'] = $request->filled('education_degree_id') ? (int) $request->input('education_degree_id') : null;
+            $core['education_text'] = $request->filled('education_text') ? trim((string) $request->input('education_text')) ?: null : null;
+        }
         $core = array_merge($core, $incomeCore, $familyIncomeCore);
         $core['father_name'] = $request->input('father_name') ?: null;
         $core['father_occupation'] = $request->input('father_occupation') ?: null;

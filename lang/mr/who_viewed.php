@@ -19,4 +19,9 @@ return [
     'partial_plan_upgrade_hint' => 'अधिक कालावधीसाठी आणि पूर्ण यादीसाठी प्लॅन अपग्रेड करा.',
     'view_profile' => 'प्रोफाइल पहा',
     'viewed_at' => 'पाहिले: :time',
+
+    'bubble_title' => 'तुमच्या प्रोफाइलला लक्ष',
+    'bubble_intro' => 'आत्ता यादीत',
+    'bubble_after_count' => 'वेगळे पाहणारे आहेत — कोण पाहिले ते उघडण्यासाठी टॅप करा.',
+    'bubble_dismiss' => 'बंद करा',
 ];
