@@ -294,6 +294,9 @@ return [
         'add_career_history' => 'Add career history',
         'working_with' => 'Working With',
         'working_as' => 'Working As',
+        /** Centralized occupation engine (Tom Select + occupation_master) */
+        'occupation_select_label' => 'Occupation',
+        'occupation_category_label' => 'Workplace',
         'select_working_with_first' => 'Select Working With first',
         'employer_name' => 'Employer Name',
         'company_org' => 'Company / Organisation',

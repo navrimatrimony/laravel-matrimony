@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\EducationDegreeSearchController;
+use App\Http\Controllers\OccupationController;
 use App\Http\Controllers\Api\MasterEducationController;
 use App\Http\Controllers\Api\ModerationConfigController;
 use App\Http\Controllers\Api\V1\LocationController;
@@ -39,6 +40,9 @@ Route::get('/master/education', [MasterEducationController::class, 'index']);
 | Highest education picker — public read-only degree master (no auth redirect).
 */
 Route::get('/education-degrees/search', EducationDegreeSearchController::class)->name('api.education_degrees.search');
+
+Route::get('/occupations/search', [OccupationController::class, 'search'])->name('api.occupations.search');
+Route::get('/occupations/category/{occupation_master}', [OccupationController::class, 'category'])->name('api.occupations.category');
 
 Route::prefix('v1')->group(function () {
 

@@ -4,9 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\MasterMaritalStatus;
 use App\Models\MatrimonyProfile;
-use App\Models\Profession;
 use App\Models\ProfileMarriage;
-use App\Models\WorkingWithType;
 use App\Services\EducationService;
 use App\Services\MutationService;
 use App\Services\ProfileLifecycleService;
@@ -85,10 +83,9 @@ class OnboardingController extends Controller
                 $data['profile'] = $profile->load(['religion', 'caste', 'subCaste']);
                 break;
             case 4:
-                $data['workingWithTypes'] = WorkingWithType::where('is_active', true)->orderBy('sort_order')->orderBy('name')->get();
-                $data['professions'] = Profession::where('is_active', true)->with('workingWithType')->orderBy('sort_order')->orderBy('name')->get();
                 $data['currencies'] = \App\Models\MasterIncomeCurrency::where('is_active', true)->get();
                 $data['educationExamples'] = __('onboarding.education_examples');
+                $data['profile'] = $profile->loadMissing(['occupationMaster', 'occupationCustom', 'profession']);
                 break;
         }
 
@@ -391,7 +388,7 @@ class OnboardingController extends Controller
                 $key
             ),
             4 => (bool) preg_match(
-                '/^(highest_education|highest_education_other|highest_education_id|highest_education_text|education_degree_id|education_text|education_slots|education_degree_ids|education_custom|education_master_id|education_manual_text|specialization|working_with_type_id|profession_id|company_name|annual_income|income_range_id|income_currency_id|income_private|college_id|work_city_id|work_state_id|income_period|income_value_type|income_amount|income_min_amount|income_max_amount|income_[a-z0-9_]+|education_category)(\.|$)/',
+                '/^(highest_education|highest_education_other|highest_education_id|highest_education_text|education_degree_id|education_text|education_slots|education_degree_ids|education_custom|education_master_id|education_manual_text|specialization|occupation_master_id|occupation_custom_id|working_with_type_id|profession_id|company_name|annual_income|income_range_id|income_currency_id|income_private|college_id|work_city_id|work_state_id|income_period|income_value_type|income_amount|income_min_amount|income_max_amount|income_[a-z0-9_]+|education_category)(\.|$)/',
                 $key
             ),
             default => false,
@@ -464,6 +461,13 @@ class OnboardingController extends Controller
             'income_min_amount' => $request->input('income_min_amount', $profile->income_min_amount),
             'income_max_amount' => $request->input('income_max_amount', $profile->income_max_amount),
         ]);
+
+        if (\Illuminate\Support\Facades\Schema::hasColumn('matrimony_profiles', 'occupation_master_id')) {
+            $request->merge([
+                'occupation_master_id' => $coalesce($request->input('occupation_master_id'), $profile->occupation_master_id ?? null),
+                'occupation_custom_id' => $coalesce($request->input('occupation_custom_id'), $profile->occupation_custom_id ?? null),
+            ]);
+        }
     }
 
     private function ensureProfile($user): ?MatrimonyProfile

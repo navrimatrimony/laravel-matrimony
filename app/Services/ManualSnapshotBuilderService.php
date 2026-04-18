@@ -57,6 +57,14 @@ class ManualSnapshotBuilderService
         $core = array_merge($core, $this->buildIncomeEngineCoreForSnapshot($request, 'family_income'));
         $core['father_name'] = $request->input('father_name');
         $core['father_occupation'] = $request->input('father_occupation');
+        if (Schema::hasColumn('matrimony_profiles', 'father_occupation_master_id')) {
+            app(\App\Services\OccupationService::class)->mergeParentOccupationTextIntoRequest($request);
+            $core['father_occupation'] = $request->input('father_occupation');
+            $core['father_occupation_master_id'] = $request->filled('father_occupation_master_id') ? (int) $request->input('father_occupation_master_id') : null;
+            $core['father_occupation_custom_id'] = $request->filled('father_occupation_custom_id') ? (int) $request->input('father_occupation_custom_id') : null;
+            $core['mother_occupation_master_id'] = $request->filled('mother_occupation_master_id') ? (int) $request->input('mother_occupation_master_id') : null;
+            $core['mother_occupation_custom_id'] = $request->filled('mother_occupation_custom_id') ? (int) $request->input('mother_occupation_custom_id') : null;
+        }
         $core['father_contact_1'] = trim((string) ($request->input('father_contact_1') ?? '')) ?: null;
         $core['father_contact_2'] = trim((string) ($request->input('father_contact_2') ?? '')) ?: null;
         $core['father_contact_3'] = trim((string) ($request->input('father_contact_3') ?? '')) ?: null;

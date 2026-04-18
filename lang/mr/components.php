@@ -282,6 +282,8 @@ return [
         'add_career_history' => 'कारकीर्द इतिहास जोडा',
         'working_with' => 'यांच्यासोबत काम',
         'working_as' => 'कामाचा प्रकार',
+        'occupation_select_label' => 'पेशा / व्यवसाय',
+        'occupation_category_label' => 'कार्यस्थळ प्रकार',
         'select_working_with_first' => 'प्रथम “Working With” निवडा',
         'employer_name' => 'नियोक्ता नाव',
         'company_org' => 'कंपनी / संस्था',

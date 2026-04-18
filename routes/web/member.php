@@ -16,6 +16,7 @@ use App\Http\Controllers\MatrimonyVerificationEmailController;
 use App\Http\Controllers\MemberWidgetController;
 use App\Http\Controllers\MediationInboxController;
 use App\Http\Controllers\NotificationController;
+use App\Http\Controllers\OccupationController;
 use App\Http\Controllers\OnboardingController;
 use App\Http\Controllers\ProfileContactActionController;
 use App\Http\Controllers\ProfileContactVerificationController;
@@ -41,6 +42,10 @@ use Illuminate\Support\Facades\Route;
 |--------------------------------------------------------------------------
 */
 Route::middleware(['auth', \App\Http\Middleware\EnforceCardOnboarding::class])->group(function () {
+
+    Route::post('/api/occupations/create', [OccupationController::class, 'create'])
+        ->middleware('throttle:60,1')
+        ->name('matrimony.api.occupations.create');
 
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
 

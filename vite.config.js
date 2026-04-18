@@ -12,6 +12,7 @@ export default defineConfig({
                 'resources/js/profile/about-me-narrative.js',
                 'resources/js/intake-preview-crop.js',
                 'resources/js/admin/suggestions-review.js',
+                'resources/js/matrimony/occupation-engine-entry.js',
             ],
             refresh: true,
         }),

@@ -18,6 +18,8 @@ class ProfileSiblingSpouse extends Model
         'profile_sibling_id',
         'name',
         'occupation_title',
+        'occupation_master_id',
+        'occupation_custom_id',
         'contact_number',
         'address_line',
         'city_id',
@@ -29,6 +31,16 @@ class ProfileSiblingSpouse extends Model
     public function sibling()
     {
         return $this->belongsTo(ProfileSibling::class, 'profile_sibling_id');
+    }
+
+    public function occupationMaster()
+    {
+        return $this->belongsTo(OccupationMaster::class, 'occupation_master_id');
+    }
+
+    public function occupationCustom()
+    {
+        return $this->belongsTo(OccupationCustom::class, 'occupation_custom_id');
     }
 
     public function city()

@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\MatrimonyProfile;
 use App\Services\CareerHistoryRowNormalizer;
 use App\Services\EducationService;
+use App\Services\OccupationService;
 use App\Services\FieldCatalogService;
 use App\Services\PartnerPreferenceNavService;
 use App\Services\PartnerPreferenceSnapshotBuilder;
@@ -521,7 +522,7 @@ class ProfileWizardController extends Controller
                 break;
             case 'siblings':
                 $siblings = \App\Models\ProfileSibling::where('profile_id', $profile->id)
-                    ->with(['spouse', 'city'])
+                    ->with(['spouse', 'city', 'occupationMaster', 'occupationCustom', 'spouse.occupationMaster', 'spouse.occupationCustom'])
                     ->orderBy('sort_order')
                     ->orderBy('id')
                     ->get();
@@ -1186,8 +1187,23 @@ class ProfileWizardController extends Controller
                 $educationService->mergeMultiselectEducationIntoRequest($request, 'snapshot.core');
             }
         }
+        $hasOccEngine = Schema::hasColumn('matrimony_profiles', 'occupation_master_id');
+        if ($hasOccEngine) {
+            app(OccupationService::class)->mergeOccupationIntoRequest($request);
+        }
         $this->resolveMasterLookupIds($request, ['income_currency' => 'income_currency_id']);
         $incomeEngineRules = $this->incomeEngineValidationRules($request, 'income');
+        $occRules = [];
+        if ($hasOccEngine) {
+            $occRules = [
+                'occupation_master_id' => ['nullable', 'integer', Rule::exists('occupation_master', 'id')],
+                'occupation_custom_id' => [
+                    'nullable',
+                    'integer',
+                    Rule::exists('occupation_custom', 'id')->where(fn ($q) => $q->where('user_id', auth()->id())),
+                ],
+            ];
+        }
         $request->validate(array_merge([
             'annual_income' => 'nullable|numeric',
             'income_currency_id' => ['nullable', Rule::exists('master_income_currencies', 'id')->where(fn ($q) => $q->where('is_active', true))],
@@ -1197,21 +1213,25 @@ class ProfileWizardController extends Controller
             'college_id' => 'nullable|exists:colleges,id',
             'company_name' => 'nullable|string|max:255',
             'income_private' => 'nullable|boolean',
-        ], $incomeEngineRules));
-        if ($request->filled('profession_id') && $request->filled('working_with_type_id')) {
-            $prof = \App\Models\Profession::find($request->input('profession_id'));
-            if ($prof && (string) $prof->working_with_type_id !== (string) $request->input('working_with_type_id')) {
-                throw \Illuminate\Validation\ValidationException::withMessages([
-                    'profession_id' => ['The selected profession does not belong to the selected Working With.'],
-                ]);
+        ], $occRules, $incomeEngineRules));
+        if (! $hasOccEngine || (! $request->filled('occupation_master_id') && ! $request->filled('occupation_custom_id'))) {
+            if ($request->filled('profession_id') && $request->filled('working_with_type_id')) {
+                $prof = \App\Models\Profession::find($request->input('profession_id'));
+                if ($prof && (string) $prof->working_with_type_id !== (string) $request->input('working_with_type_id')) {
+                    throw \Illuminate\Validation\ValidationException::withMessages([
+                        'profession_id' => ['The selected profession does not belong to the selected Working With.'],
+                    ]);
+                }
             }
         }
         $workingWithTypeId = $request->filled('working_with_type_id') ? (int) $request->input('working_with_type_id') : null;
         $professionId = $request->filled('profession_id') ? (int) $request->input('profession_id') : null;
-        if ($professionId && $workingWithTypeId) {
-            $prof = \App\Models\Profession::find($professionId);
-            if (! $prof || (string) $prof->working_with_type_id !== (string) $workingWithTypeId) {
-                $professionId = null;
+        if (! $hasOccEngine || (! $request->filled('occupation_master_id') && ! $request->filled('occupation_custom_id'))) {
+            if ($professionId && $workingWithTypeId) {
+                $prof = \App\Models\Profession::find($professionId);
+                if (! $prof || (string) $prof->working_with_type_id !== (string) $workingWithTypeId) {
+                    $professionId = null;
+                }
             }
         }
         if (Schema::hasColumn('matrimony_profiles', 'education_degree_id')) {
@@ -1252,6 +1272,10 @@ class ProfileWizardController extends Controller
         if (Schema::hasColumn('matrimony_profiles', 'work_location_text')) {
             $wlt = trim((string) $request->input('work_location_text', ''));
             $core['work_location_text'] = $wlt !== '' ? mb_substr($wlt, 0, 255) : null;
+        }
+        if ($hasOccEngine) {
+            $core['occupation_master_id'] = $request->filled('occupation_master_id') ? (int) $request->input('occupation_master_id') : null;
+            $core['occupation_custom_id'] = $request->filled('occupation_custom_id') ? (int) $request->input('occupation_custom_id') : null;
         }
         $core = array_merge($core, $incomeCore);
         $core = array_map(fn ($v) => $v === '' ? null : $v, $core);
@@ -1298,6 +1322,10 @@ class ProfileWizardController extends Controller
         $familyIncomeCore = $this->buildIncomeEngineCore($request, 'family_income', $incomeEngineService);
         $parentsAddressLine = $request->filled('parents_address_line') ? trim((string) $request->input('parents_address_line')) : null;
 
+        if (Schema::hasColumn('matrimony_profiles', 'father_occupation_master_id')) {
+            app(OccupationService::class)->mergeParentOccupationTextIntoRequest($request);
+        }
+
         $core = [
             'father_name' => $request->input('father_name') ?: null,
             'father_occupation' => $request->input('father_occupation') ?: null,
@@ -1318,6 +1346,12 @@ class ProfileWizardController extends Controller
             'weight_kg' => $request->filled('weight_kg') ? (float) $request->input('weight_kg') : $profile->weight_kg,
             'physical_build_id' => $request->input('physical_build_id') ? (int) $request->input('physical_build_id') : $profile->physical_build_id,
         ];
+        if (Schema::hasColumn('matrimony_profiles', 'father_occupation_master_id')) {
+            $core['father_occupation_master_id'] = $request->filled('father_occupation_master_id') ? (int) $request->input('father_occupation_master_id') : null;
+            $core['father_occupation_custom_id'] = $request->filled('father_occupation_custom_id') ? (int) $request->input('father_occupation_custom_id') : null;
+            $core['mother_occupation_master_id'] = $request->filled('mother_occupation_master_id') ? (int) $request->input('mother_occupation_master_id') : null;
+            $core['mother_occupation_custom_id'] = $request->filled('mother_occupation_custom_id') ? (int) $request->input('mother_occupation_custom_id') : null;
+        }
         // Parents home address uses the same core address fields; allow editing from Family details too.
         if ($request->has('city_id') || $request->has('state_id') || $request->has('parents_address_line')) {
             $core['country_id'] = $request->input('country_id') ?: null;
@@ -1343,6 +1377,10 @@ class ProfileWizardController extends Controller
                 $educationService->mergeMultiselectEducationIntoRequest($request, 'snapshot.core');
             }
         }
+        $hasOccEngine = Schema::hasColumn('matrimony_profiles', 'occupation_master_id');
+        if ($hasOccEngine) {
+            app(OccupationService::class)->mergeOccupationIntoRequest($request);
+        }
         $this->resolveMasterLookupIds($request, [
             'income_currency' => 'income_currency_id',
             'family_type' => 'family_type_id',
@@ -1350,6 +1388,17 @@ class ProfileWizardController extends Controller
         ]);
         $incomeEngineRules = $this->incomeEngineValidationRules($request, 'income');
         $familyIncomeEngineRules = $this->incomeEngineValidationRules($request, 'family_income');
+        $occRulesPf = [];
+        if ($hasOccEngine) {
+            $occRulesPf = [
+                'occupation_master_id' => ['nullable', 'integer', Rule::exists('occupation_master', 'id')],
+                'occupation_custom_id' => [
+                    'nullable',
+                    'integer',
+                    Rule::exists('occupation_custom', 'id')->where(fn ($q) => $q->where('user_id', auth()->id())),
+                ],
+            ];
+        }
         $request->validate(array_merge([
             'annual_income' => 'nullable|numeric',
             'family_income' => 'nullable|numeric',
@@ -1360,21 +1409,25 @@ class ProfileWizardController extends Controller
             'college_id' => 'nullable|exists:colleges,id',
             'company_name' => 'nullable|string|max:255',
             'income_private' => 'nullable|boolean',
-        ], $incomeEngineRules, $familyIncomeEngineRules));
-        if ($request->filled('profession_id') && $request->filled('working_with_type_id')) {
-            $prof = \App\Models\Profession::find($request->input('profession_id'));
-            if ($prof && (string) $prof->working_with_type_id !== (string) $request->input('working_with_type_id')) {
-                throw \Illuminate\Validation\ValidationException::withMessages([
-                    'profession_id' => ['The selected profession does not belong to the selected Working With.'],
-                ]);
+        ], $occRulesPf, $incomeEngineRules, $familyIncomeEngineRules));
+        if (! $hasOccEngine || (! $request->filled('occupation_master_id') && ! $request->filled('occupation_custom_id'))) {
+            if ($request->filled('profession_id') && $request->filled('working_with_type_id')) {
+                $prof = \App\Models\Profession::find($request->input('profession_id'));
+                if ($prof && (string) $prof->working_with_type_id !== (string) $request->input('working_with_type_id')) {
+                    throw \Illuminate\Validation\ValidationException::withMessages([
+                        'profession_id' => ['The selected profession does not belong to the selected Working With.'],
+                    ]);
+                }
             }
         }
         $workingWithTypeId = $request->filled('working_with_type_id') ? (int) $request->input('working_with_type_id') : null;
         $professionId = $request->filled('profession_id') ? (int) $request->input('profession_id') : null;
-        if ($professionId && $workingWithTypeId) {
-            $prof = \App\Models\Profession::find($professionId);
-            if (! $prof || (string) $prof->working_with_type_id !== (string) $workingWithTypeId) {
-                $professionId = null;
+        if (! $hasOccEngine || (! $request->filled('occupation_master_id') && ! $request->filled('occupation_custom_id'))) {
+            if ($professionId && $workingWithTypeId) {
+                $prof = \App\Models\Profession::find($professionId);
+                if (! $prof || (string) $prof->working_with_type_id !== (string) $workingWithTypeId) {
+                    $professionId = null;
+                }
             }
         }
         if (Schema::hasColumn('matrimony_profiles', 'education_degree_id')) {
@@ -1387,6 +1440,10 @@ class ProfileWizardController extends Controller
         $incomeEngineService = app(\App\Services\IncomeEngineService::class);
         $incomeCore = $this->buildIncomeEngineCore($request, 'income', $incomeEngineService);
         $familyIncomeCore = $this->buildIncomeEngineCore($request, 'family_income', $incomeEngineService);
+
+        if (Schema::hasColumn('matrimony_profiles', 'father_occupation_master_id')) {
+            app(OccupationService::class)->mergeParentOccupationTextIntoRequest($request);
+        }
 
         $core = [
             'highest_education' => $request->input('highest_education') ?: null,
@@ -1410,9 +1467,19 @@ class ProfileWizardController extends Controller
             $core['education_degree_id'] = $request->filled('education_degree_id') ? (int) $request->input('education_degree_id') : null;
             $core['education_text'] = $request->filled('education_text') ? trim((string) $request->input('education_text')) ?: null : null;
         }
+        if ($hasOccEngine) {
+            $core['occupation_master_id'] = $request->filled('occupation_master_id') ? (int) $request->input('occupation_master_id') : null;
+            $core['occupation_custom_id'] = $request->filled('occupation_custom_id') ? (int) $request->input('occupation_custom_id') : null;
+        }
         $core = array_merge($core, $incomeCore, $familyIncomeCore);
         $core['father_name'] = $request->input('father_name') ?: null;
         $core['father_occupation'] = $request->input('father_occupation') ?: null;
+        if (Schema::hasColumn('matrimony_profiles', 'father_occupation_master_id')) {
+            $core['father_occupation_master_id'] = $request->filled('father_occupation_master_id') ? (int) $request->input('father_occupation_master_id') : null;
+            $core['father_occupation_custom_id'] = $request->filled('father_occupation_custom_id') ? (int) $request->input('father_occupation_custom_id') : null;
+            $core['mother_occupation_master_id'] = $request->filled('mother_occupation_master_id') ? (int) $request->input('mother_occupation_master_id') : null;
+            $core['mother_occupation_custom_id'] = $request->filled('mother_occupation_custom_id') ? (int) $request->input('mother_occupation_custom_id') : null;
+        }
         $core['father_contact_1'] = trim((string) ($request->input('father_contact_1') ?? '')) ?: null;
         $core['father_contact_2'] = trim((string) ($request->input('father_contact_2') ?? '')) ?: null;
         $core['father_contact_3'] = trim((string) ($request->input('father_contact_3') ?? '')) ?: null;
@@ -1485,18 +1552,26 @@ class ProfileWizardController extends Controller
         if ($hasSiblings === false) {
             // User chose "No" — do not persist sibling rows
         } else {
+            $occSvc = app(OccupationService::class);
+            $uid = auth()->id();
             foreach ($request->input('siblings', []) as $row) {
                 $relationType = in_array($row['relation_type'] ?? null, ['brother', 'sister'], true) ? $row['relation_type'] : null;
                 $maritalStatus = in_array($row['marital_status'] ?? null, ['unmarried', 'married'], true) ? $row['marital_status'] : null;
                 $isMarried = $maritalStatus === 'married' || ! empty($row['is_married']);
                 $spouseIn = $row['spouse'] ?? [];
+                $sibMid = ! empty($row['occupation_master_id']) ? (int) $row['occupation_master_id'] : null;
+                $sibCid = ! empty($row['occupation_custom_id']) ? (int) $row['occupation_custom_id'] : null;
+                $sibOccText = $occSvc->resolvedOccupationText($sibMid, $sibCid, $uid)
+                    ?: (trim((string) ($row['occupation'] ?? '')) !== '' ? trim((string) ($row['occupation'] ?? '')) : null);
                 $siblingRow = [
                     'id' => ! empty($row['id']) ? (int) $row['id'] : null,
                     'relation_type' => $relationType,
                     'name' => trim((string) ($row['name'] ?? '')) ?: null,
                     'gender' => in_array($row['gender'] ?? null, ['male', 'female'], true) ? $row['gender'] : null,
                     'marital_status' => $maritalStatus,
-                    'occupation' => trim((string) ($row['occupation'] ?? '')) ?: null,
+                    'occupation' => $sibOccText,
+                    'occupation_master_id' => $sibMid && $sibMid > 0 ? $sibMid : null,
+                    'occupation_custom_id' => $sibCid && $sibCid > 0 ? $sibCid : null,
                     'city_id' => ! empty($row['city_id']) ? (int) $row['city_id'] : null,
                     'contact_number' => trim((string) ($row['contact_number'] ?? '')) ?: null,
                     'contact_number_2' => trim((string) ($row['contact_number_2'] ?? '')) ?: null,
@@ -1504,10 +1579,16 @@ class ProfileWizardController extends Controller
                     'notes' => trim((string) ($row['notes'] ?? '')) ?: null,
                     'sort_order' => isset($row['sort_order']) && $row['sort_order'] !== '' ? (int) $row['sort_order'] : 0,
                 ];
-                if ($isMarried && (array_key_exists('name', $spouseIn) || array_key_exists('occupation_title', $spouseIn) || array_key_exists('contact_number', $spouseIn) || array_key_exists('city_id', $spouseIn))) {
+                $spMid = ! empty($spouseIn['occupation_master_id']) ? (int) $spouseIn['occupation_master_id'] : null;
+                $spCid = ! empty($spouseIn['occupation_custom_id']) ? (int) $spouseIn['occupation_custom_id'] : null;
+                $spOccTitle = $occSvc->resolvedOccupationText($spMid, $spCid, $uid)
+                    ?: (trim((string) ($spouseIn['occupation_title'] ?? '')) !== '' ? trim((string) ($spouseIn['occupation_title'] ?? '')) : null);
+                if ($isMarried && (array_key_exists('name', $spouseIn) || array_key_exists('occupation_title', $spouseIn) || array_key_exists('occupation_master_id', $spouseIn) || array_key_exists('contact_number', $spouseIn) || array_key_exists('city_id', $spouseIn))) {
                     $siblingRow['spouse'] = [
                         'name' => trim((string) ($spouseIn['name'] ?? '')) ?: null,
-                        'occupation_title' => trim((string) ($spouseIn['occupation_title'] ?? '')) ?: null,
+                        'occupation_title' => $spOccTitle,
+                        'occupation_master_id' => $spMid && $spMid > 0 ? $spMid : null,
+                        'occupation_custom_id' => $spCid && $spCid > 0 ? $spCid : null,
                         'contact_number' => trim((string) ($spouseIn['contact_number'] ?? '')) ?: null,
                         'address_line' => trim((string) ($spouseIn['address_line'] ?? '')) ?: null,
                         'city_id' => ! empty($spouseIn['city_id']) ? (int) $spouseIn['city_id'] : null,
@@ -1551,6 +1632,8 @@ class ProfileWizardController extends Controller
     private function collectRelativesFromRequestSource(array $rows): array
     {
         $relatives = [];
+        $occSvc = app(OccupationService::class);
+        $uid = auth()->id();
         foreach ($rows as $row) {
             $relationType = trim((string) ($row['relation_type'] ?? ''));
             if ($relationType === '') {
@@ -1560,11 +1643,17 @@ class ProfileWizardController extends Controller
             if (in_array($relationType, ['maternal_address_ajol', 'native_place'], true)) {
                 $name = '';
             }
+            $rMid = ! empty($row['occupation_master_id']) ? (int) $row['occupation_master_id'] : null;
+            $rCid = ! empty($row['occupation_custom_id']) ? (int) $row['occupation_custom_id'] : null;
+            $occText = $occSvc->resolvedOccupationText($rMid, $rCid, $uid)
+                ?: (trim((string) ($row['occupation'] ?? '')) !== '' ? trim((string) ($row['occupation'] ?? '')) : null);
             $relatives[] = [
                 'id' => ! empty($row['id']) ? (int) $row['id'] : null,
                 'relation_type' => $relationType ?: '',
                 'name' => $name ?: '',
-                'occupation' => trim((string) ($row['occupation'] ?? '')) ?: null,
+                'occupation' => $occText,
+                'occupation_master_id' => $rMid && $rMid > 0 ? $rMid : null,
+                'occupation_custom_id' => $rCid && $rCid > 0 ? $rCid : null,
                 'city_id' => ! empty($row['city_id']) ? (int) $row['city_id'] : null,
                 'state_id' => ! empty($row['state_id']) ? (int) $row['state_id'] : null,
                 'contact_number' => trim((string) ($row['contact_number'] ?? '')) ?: null,
@@ -1588,6 +1677,8 @@ class ProfileWizardController extends Controller
             'relation_type' => $r->relation_type ?? '',
             'name' => $r->name ?? '',
             'occupation' => $r->occupation ?? null,
+            'occupation_master_id' => $r->occupation_master_id ?? null,
+            'occupation_custom_id' => $r->occupation_custom_id ?? null,
             'city_id' => $r->city_id ?? null,
             'state_id' => $r->state_id ?? null,
             'contact_number' => $r->contact_number ?? null,

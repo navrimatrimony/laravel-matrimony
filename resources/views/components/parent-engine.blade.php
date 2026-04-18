@@ -6,6 +6,7 @@
     'namePrefix' => '',
 ])
 @php
+    use Illuminate\Support\Facades\Schema;
     $profile = $profile ?? new \stdClass();
     $namePrefix = $namePrefix ?? '';
     $n = fn($k) => $namePrefix !== '' ? $namePrefix . '[' . $k . ']' : $k;
@@ -32,29 +33,24 @@
     ];
     $motherCount = max(1, count(array_filter($motherContacts, fn($v) => trim((string)$v) !== '')));
 
-    // Preview-only tweak: for intake snapshot core, prefix father's occupation with "Job - "
-    // when we have an occupation text but no explicit job/व्यवसाय split.
-    $fatherOccupationValue = $u8(old($oldK('father_occupation'), $profile->father_occupation ?? null));
-    if (
-        is_string($fatherOccupationValue)
-        && trim($fatherOccupationValue) !== ''
-        && $namePrefix === 'snapshot[core]'
-        && ! str_starts_with($fatherOccupationValue, 'Job - ')
-    ) {
-        $fatherOccupationValue = 'Job - ' . $fatherOccupationValue;
-    }
 @endphp
 
 <div class="parent-engine border border-gray-200 dark:border-gray-600 rounded-lg p-4 space-y-5" data-name-prefix="{{ $namePrefix }}">
     {{-- Line 1: Father — name + occupation --}}
-    <div class="flex flex-col md:flex-row md:items-end gap-3 md:gap-4">
+    <div class="flex flex-col md:flex-row md:items-start gap-3 md:gap-4">
         <div class="flex-1">
             <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Father Name</label>
             <input type="text" name="{{ $n('father_name') }}" value="{{ $u8(old($oldK('father_name'), $profile->father_name ?? null)) }}" class="w-full rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-3 py-2">
         </div>
         <div class="flex-1">
-            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Father Occupation</label>
-            <input type="text" name="{{ $n('father_occupation') }}" value="{{ $fatherOccupationValue }}" class="w-full rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-3 py-2">
+            @if (Schema::hasColumn('matrimony_profiles', 'father_occupation_master_id'))
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{{ __('Father Occupation') }}</label>
+                <x-occupation-search-engine :profile="$profile" :name-prefix="$namePrefix" occupation-key-stem="father_occupation" :show-label="false" :form-field-style="true" />
+            @else
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Father Occupation</label>
+                @php $fatherOccupationLegacy = $u8(old($oldK('father_occupation'), $profile->father_occupation ?? null)); @endphp
+                <input type="text" name="{{ $n('father_occupation') }}" value="{{ $fatherOccupationLegacy }}" class="w-full rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-3 py-2">
+            @endif
         </div>
     </div>
 
@@ -93,14 +89,19 @@
     </div>
 
     {{-- Line 3: Mother — name + occupation --}}
-    <div class="flex flex-col md:flex-row md:items-end gap-3 md:gap-4">
+    <div class="flex flex-col md:flex-row md:items-start gap-3 md:gap-4">
         <div class="flex-1">
             <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Mother Name</label>
             <input type="text" name="{{ $n('mother_name') }}" value="{{ $u8(old($oldK('mother_name'), $profile->mother_name ?? null)) }}" class="w-full rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-3 py-2">
         </div>
         <div class="flex-1">
-            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Mother Occupation</label>
-            <input type="text" name="{{ $n('mother_occupation') }}" value="{{ $u8(old($oldK('mother_occupation'), $profile->mother_occupation ?? null)) }}" class="w-full rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-3 py-2">
+            @if (Schema::hasColumn('matrimony_profiles', 'father_occupation_master_id'))
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{{ __('Mother Occupation') }}</label>
+                <x-occupation-search-engine :profile="$profile" :name-prefix="$namePrefix" occupation-key-stem="mother_occupation" :show-label="false" :form-field-style="true" />
+            @else
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Mother Occupation</label>
+                <input type="text" name="{{ $n('mother_occupation') }}" value="{{ $u8(old($oldK('mother_occupation'), $profile->mother_occupation ?? null)) }}" class="w-full rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-3 py-2">
+            @endif
         </div>
     </div>
 

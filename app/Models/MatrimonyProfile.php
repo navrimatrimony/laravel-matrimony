@@ -174,6 +174,8 @@ class MatrimonyProfile extends Model
         'work_location_text',
         'annual_income',
         'working_with_type_id',
+        'occupation_master_id',
+        'occupation_custom_id',
         'profession_id',
         'income_range_id',
         'college_id',
@@ -195,12 +197,16 @@ class MatrimonyProfile extends Model
         'family_income_normalized_annual_amount',
         'father_name',
         'father_occupation',
+        'father_occupation_master_id',
+        'father_occupation_custom_id',
         'father_extra_info',
         'father_contact_1',
         'father_contact_2',
         'father_contact_3',
         'mother_name',
         'mother_occupation',
+        'mother_occupation_master_id',
+        'mother_occupation_custom_id',
         'mother_extra_info',
         'mother_contact_1',
         'mother_contact_2',
@@ -722,6 +728,36 @@ class MatrimonyProfile extends Model
     public function profession()
     {
         return $this->belongsTo(Profession::class, 'profession_id');
+    }
+
+    public function occupationMaster(): \Illuminate\Database\Eloquent\Relations\BelongsTo
+    {
+        return $this->belongsTo(OccupationMaster::class, 'occupation_master_id');
+    }
+
+    public function occupationCustom(): \Illuminate\Database\Eloquent\Relations\BelongsTo
+    {
+        return $this->belongsTo(OccupationCustom::class, 'occupation_custom_id');
+    }
+
+    public function fatherOccupationMaster(): \Illuminate\Database\Eloquent\Relations\BelongsTo
+    {
+        return $this->belongsTo(OccupationMaster::class, 'father_occupation_master_id');
+    }
+
+    public function fatherOccupationCustom(): \Illuminate\Database\Eloquent\Relations\BelongsTo
+    {
+        return $this->belongsTo(OccupationCustom::class, 'father_occupation_custom_id');
+    }
+
+    public function motherOccupationMaster(): \Illuminate\Database\Eloquent\Relations\BelongsTo
+    {
+        return $this->belongsTo(OccupationMaster::class, 'mother_occupation_master_id');
+    }
+
+    public function motherOccupationCustom(): \Illuminate\Database\Eloquent\Relations\BelongsTo
+    {
+        return $this->belongsTo(OccupationCustom::class, 'mother_occupation_custom_id');
     }
 
     public function incomeRange()

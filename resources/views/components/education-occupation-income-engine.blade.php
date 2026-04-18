@@ -114,6 +114,8 @@
     // Intake preview uses a stdClass "intakeProfile" — still support the Tom Select engine when the DB column exists.
     $useDegreeMultiselectEngine = Schema::hasColumn('matrimony_profiles', 'education_degree_id')
         && is_object($profile);
+
+    $hasOccupationEngine = Schema::hasColumn('matrimony_profiles', 'occupation_master_id');
 @endphp
 <div class="education-occupation-income-engine space-y-6 border border-gray-200 dark:border-gray-600 rounded-lg p-4">
     {{-- Education engine: snapshot + history एकत्र --}}
@@ -228,38 +230,48 @@
     {{-- Career engine: snapshot + history एकत्र --}}
     <div class="{{ $cardCls }} career-dependent-block">
         <h3 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">{{ __('components.education.career') }}</h3>
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-                <label class="{{ $labelCls }}">{{ __('components.education.working_with') }}</label>
-                @if($readOnly)
-                    @php $ww = $workingWithIdRaw ? (WorkingWithType::find($workingWithIdRaw)?->name ?? '—') : '—'; @endphp
-                    <p class="py-2 text-gray-900 dark:text-gray-100">{{ $ww }}</p>
-                @else
-                    <select name="{{ $n('working_with_type_id') }}" class="{{ $inputCls }} career-parent-select">
-                        <option value="">{{ __('common.select') }}</option>
-                        @foreach($workingWithTypes as $ww)
-                            <option value="{{ $ww->id }}" {{ (string)$workingWithIdRaw === (string)$ww->id ? 'selected' : '' }}>{{ $ww->name }}</option>
-                        @endforeach
-                    </select>
-                    @if($err('working_with_type_id'))<p class="text-red-600 text-xs mt-1">{{ $err('working_with_type_id') }}</p>@endif
-                @endif
-            </div>
-            <div>
-                <label class="{{ $labelCls }}">{{ __('components.education.working_as') }}</label>
-                @if($readOnly)
-                    @php $prof = $professionIdRaw ? (Profession::find($professionIdRaw)?->name ?? '—') : '—'; @endphp
-                    <p class="py-2 text-gray-900 dark:text-gray-100">{{ $prof }}</p>
-                @else
-                    <select name="{{ $n('profession_id') }}" class="{{ $inputCls }} career-child-select">
-                        <option value="">{{ __('components.education.select_working_with_first') }}</option>
-                        @foreach($professions as $pr)
-                            <option value="{{ $pr->id }}" data-working-with-type-id="{{ $pr->working_with_type_id ?? '' }}" {{ (string)$professionIdRaw === (string)$pr->id ? 'selected' : '' }}>{{ $pr->name }}</option>
-                        @endforeach
-                    </select>
-                    @if($err('profession_id'))<p class="text-red-600 text-xs mt-1">{{ $err('profession_id') }}</p>@endif
-                @endif
-            </div>
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 w-full md:col-span-2">
+        <div class="space-y-4">
+            @if($hasOccupationEngine)
+                <x-occupation-search-engine
+                    :profile="$profile"
+                    :name-prefix="$namePrefix"
+                    :read-only="$readOnly"
+                />
+            @else
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label class="{{ $labelCls }}">{{ __('components.education.working_with') }}</label>
+                        @if($readOnly)
+                            @php $ww = $workingWithIdRaw ? (WorkingWithType::find($workingWithIdRaw)?->name ?? '—') : '—'; @endphp
+                            <p class="py-2 text-gray-900 dark:text-gray-100">{{ $ww }}</p>
+                        @else
+                            <select name="{{ $n('working_with_type_id') }}" class="{{ $inputCls }} career-parent-select">
+                                <option value="">{{ __('common.select') }}</option>
+                                @foreach($workingWithTypes as $ww)
+                                    <option value="{{ $ww->id }}" {{ (string)$workingWithIdRaw === (string)$ww->id ? 'selected' : '' }}>{{ $ww->name }}</option>
+                                @endforeach
+                            </select>
+                            @if($err('working_with_type_id'))<p class="text-red-600 text-xs mt-1">{{ $err('working_with_type_id') }}</p>@endif
+                        @endif
+                    </div>
+                    <div>
+                        <label class="{{ $labelCls }}">{{ __('components.education.working_as') }}</label>
+                        @if($readOnly)
+                            @php $prof = $professionIdRaw ? (Profession::find($professionIdRaw)?->name ?? '—') : '—'; @endphp
+                            <p class="py-2 text-gray-900 dark:text-gray-100">{{ $prof }}</p>
+                        @else
+                            <select name="{{ $n('profession_id') }}" class="{{ $inputCls }} career-child-select">
+                                <option value="">{{ __('components.education.select_working_with_first') }}</option>
+                                @foreach($professions as $pr)
+                                    <option value="{{ $pr->id }}" data-working-with-type-id="{{ $pr->working_with_type_id ?? '' }}" {{ (string)$professionIdRaw === (string)$pr->id ? 'selected' : '' }}>{{ $pr->name }}</option>
+                                @endforeach
+                            </select>
+                            @if($err('profession_id'))<p class="text-red-600 text-xs mt-1">{{ $err('profession_id') }}</p>@endif
+                        @endif
+                    </div>
+                </div>
+            @endif
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 w-full">
                 <div class="min-w-0">
                     <label class="{{ $labelCls }}">{{ __('components.education.employer_name') }}</label>
                     @if($readOnly)

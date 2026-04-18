@@ -142,7 +142,8 @@
 
             {{-- Main content: one section at a time --}}
             <main class="flex-1 min-w-0">
-                <div class="bg-white dark:bg-gray-800 shadow rounded-lg border border-gray-200 dark:border-gray-600 overflow-hidden">
+                {{-- overflow-visible: Tom Select occupation dropdown extends below the control; overflow-hidden clipped it --}}
+                <div class="bg-white dark:bg-gray-800 shadow rounded-lg border border-gray-200 dark:border-gray-600 overflow-visible">
                     <div class="px-4 sm:px-6 py-4 border-b border-gray-200 dark:border-gray-600">
                         <h1 class="text-xl font-semibold text-gray-900 dark:text-gray-100">
                             {{ __($sectionLabels[$currentSection] ?? 'wizard.' . str_replace('-', '_', $currentSection)) }}

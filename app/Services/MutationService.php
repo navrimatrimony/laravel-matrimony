@@ -73,8 +73,8 @@ class MutationService
         'complexion_id', 'physical_build_id', 'blood_group_id', 'diet_id', 'smoking_status_id', 'drinking_status_id', 'family_type_id', 'income_currency_id',
         'address_line', 'annual_income', 'family_income', 'income_private', 'family_income_private',
         'birth_place_text', 'work_location_text',
-        'father_name', 'father_occupation', 'father_extra_info', 'father_contact_1', 'father_contact_2', 'father_contact_3',
-        'mother_name', 'mother_occupation', 'mother_extra_info', 'mother_contact_1', 'mother_contact_2', 'mother_contact_3',
+        'father_name', 'father_occupation', 'father_occupation_master_id', 'father_occupation_custom_id', 'father_extra_info', 'father_contact_1', 'father_contact_2', 'father_contact_3',
+        'mother_name', 'mother_occupation', 'mother_occupation_master_id', 'mother_occupation_custom_id', 'mother_extra_info', 'mother_contact_1', 'mother_contact_2', 'mother_contact_3',
         'other_relatives_text',
         // photo_approved / photo_rejected_at / photo_rejection_reason: NOT snapshot-driven (see ProcessProfilePhoto + ProfilePhotoPendingStateService)
         'is_suspended',
@@ -1539,6 +1539,8 @@ class MutationService
             $mapped['relation_type'] = trim((string) ($mapped['relation_type'] ?? ''));
             $mapped['name'] = trim((string) ($mapped['name'] ?? ''));
             $mapped['occupation'] = isset($mapped['occupation']) && trim((string) $mapped['occupation']) !== '' ? trim((string) $mapped['occupation']) : null;
+            $mapped['occupation_master_id'] = ! empty($mapped['occupation_master_id']) ? (int) $mapped['occupation_master_id'] : null;
+            $mapped['occupation_custom_id'] = ! empty($mapped['occupation_custom_id']) ? (int) $mapped['occupation_custom_id'] : null;
             $mapped['city_id'] = ! empty($mapped['city_id']) ? (int) $mapped['city_id'] : null;
             $mapped['state_id'] = ! empty($mapped['state_id']) ? (int) $mapped['state_id'] : null;
             $mapped['contact_number'] = isset($mapped['contact_number']) && trim((string) $mapped['contact_number']) !== '' ? trim((string) $mapped['contact_number']) : null;
@@ -1589,6 +1591,8 @@ class MutationService
                 $mapped['marital_status'] = 'married';
             }
             $mapped['occupation'] = isset($mapped['occupation']) && trim((string) $mapped['occupation']) !== '' ? trim((string) $mapped['occupation']) : null;
+            $mapped['occupation_master_id'] = ! empty($mapped['occupation_master_id']) ? (int) $mapped['occupation_master_id'] : null;
+            $mapped['occupation_custom_id'] = ! empty($mapped['occupation_custom_id']) ? (int) $mapped['occupation_custom_id'] : null;
             $mapped['city_id'] = ! empty($mapped['city_id']) ? (int) $mapped['city_id'] : null;
             $mapped['contact_number'] = isset($mapped['contact_number']) && trim((string) $mapped['contact_number']) !== '' ? trim((string) $mapped['contact_number']) : null;
             $mapped['contact_number_2'] = isset($mapped['contact_number_2']) && trim((string) $mapped['contact_number_2']) !== '' ? trim((string) $mapped['contact_number_2']) : null;
@@ -2096,7 +2100,7 @@ class MutationService
                 || $maritalVal === true || $maritalVal === 1
                 || (is_string($maritalVal) && in_array(strtolower(trim($maritalVal)), ['yes', 'married'], true));
             $spouseData = $row['spouse'] ?? [];
-            $hasSpouseFields = ! empty($spouseData['name']) || ! empty($spouseData['occupation_title']) || ! empty($spouseData['contact_number'])
+            $hasSpouseFields = ! empty($spouseData['name']) || ! empty($spouseData['occupation_title']) || ! empty($spouseData['occupation_master_id']) || ! empty($spouseData['occupation_custom_id']) || ! empty($spouseData['contact_number'])
                 || ! empty($spouseData['address_line']) || ! empty($spouseData['address']) || ! empty($spouseData['additional_info']) || ! empty($spouseData['city_id']);
 
             if ($isMarried && $hasSpouseFields) {
@@ -2104,6 +2108,8 @@ class MutationService
                 $spouseRow = [
                     'name' => trim((string) ($spouseData['name'] ?? '')) ?: null,
                     'occupation_title' => trim((string) ($spouseData['occupation_title'] ?? '')) ?: null,
+                    'occupation_master_id' => ! empty($spouseData['occupation_master_id']) ? (int) $spouseData['occupation_master_id'] : null,
+                    'occupation_custom_id' => ! empty($spouseData['occupation_custom_id']) ? (int) $spouseData['occupation_custom_id'] : null,
                     'contact_number' => trim((string) ($spouseData['contact_number'] ?? '')) ?: null,
                     'address_line' => $spouseAddress !== '' ? $spouseAddress : null,
                     'city_id' => ! empty($spouseData['city_id']) ? (int) $spouseData['city_id'] : null,

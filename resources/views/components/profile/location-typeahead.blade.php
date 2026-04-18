@@ -11,6 +11,8 @@
     'resolveUrl' => null,
     'noBorder' => false,      // when true, wrapper has no border (e.g. basic info birth place)
     'compactRow' => false,    // when true, no vertical padding (for single-line row layout)
+    /** When true: no outer padding, no border, no rounded corners (relation grid cells). */
+    'flush' => false,
     /**
      * Mode support (Phase-5): simple (default) vs full (adds detailed address text field).
      * Backward compatible: when not provided, component behaves exactly as before.
@@ -64,10 +66,17 @@
 }
 </style>
 @php
-    $paddingClass = $compactRow ? 'px-2 py-0' : ($noBorder ? 'pt-0 px-3 pb-3' : 'p-3');
-    $borderClass = $noBorder ? '' : 'border border-gray-200 dark:border-gray-600';
+    if (!empty($flush)) {
+        $paddingClass = 'p-0';
+        $borderClass = '';
+        $roundedClass = 'rounded-none';
+    } else {
+        $paddingClass = $compactRow ? 'px-2 py-0' : ($noBorder ? 'pt-0 px-3 pb-3' : 'p-3');
+        $borderClass = $noBorder ? '' : 'border border-gray-200 dark:border-gray-600';
+        $roundedClass = 'rounded-lg';
+    }
 @endphp
-<div class="{{ $wrapperClass }} space-y-0 rounded-lg {{ $paddingClass }} {{ $borderClass }}" data-location-context="{{ $context }}" data-name-prefix="{{ $namePrefix }}" @if($showGps) data-resolve-url="{{ $resolveUrlResolved }}" data-gps="1" @endif @if(!empty($displaySyncName)) data-display-sync-name="{{ $displaySyncName }}" @endif>
+<div class="{{ $wrapperClass }} space-y-0 {{ $roundedClass }} {{ $paddingClass }} {{ $borderClass }}" data-location-context="{{ $context }}" data-name-prefix="{{ $namePrefix }}" @if($showGps) data-resolve-url="{{ $resolveUrlResolved }}" data-gps="1" @endif @if(!empty($displaySyncName)) data-display-sync-name="{{ $displaySyncName }}" @endif>
     @if ($context === 'residence')
         <input type="hidden" name="{{ $namePrefix !== '' ? $namePrefix . '[country_id]' : 'country_id' }}" class="location-hidden-country" value="{{ $dataCountryId }}">
         <input type="hidden" name="{{ $namePrefix !== '' ? $namePrefix . '[state_id]' : 'state_id' }}" class="location-hidden-state" value="{{ $dataStateId }}">
