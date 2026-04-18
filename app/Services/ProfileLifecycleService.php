@@ -195,6 +195,9 @@ class ProfileLifecycleService
         if ($profile->trashed()) {
             return false;
         }
+        if ($profile->isShowcaseProfile()) {
+            return ! ($profile->is_suspended ?? false);
+        }
         $state = $profile->lifecycle_state ?? 'active';
         if (in_array($state, self::statesCannotInitiateInteraction(), true)) {
             return false;
@@ -210,6 +213,9 @@ class ProfileLifecycleService
     {
         if ($profile->trashed()) {
             return false;
+        }
+        if ($profile->isShowcaseProfile()) {
+            return ! ($profile->is_suspended ?? false);
         }
         $state = $profile->lifecycle_state ?? 'active';
         if (in_array($state, self::statesCannotReceiveInterest(), true)) {

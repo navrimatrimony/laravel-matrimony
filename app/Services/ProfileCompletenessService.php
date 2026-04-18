@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\AdminSetting;
 use App\Models\MatrimonyProfile;
 
 /*
@@ -16,7 +17,12 @@ use App\Models\MatrimonyProfile;
 */
 class ProfileCompletenessService
 {
+    /**
+     * Search/discovery SQL visibility only — not used for interest when {@see interestMinimumPercent()} is 0.
+     */
     public const THRESHOLD = 70;
+
+    public const ADMIN_KEY_INTEREST_MIN_CORE_PCT = 'interest_min_core_completeness_pct';
 
     /**
      * Compute completeness percentage (0–100) for a profile.
@@ -87,11 +93,27 @@ class ProfileCompletenessService
     }
 
     /**
-     * Whether profile meets 70% threshold.
+     * Minimum core completeness % required for sending/receiving interest (mandatory-field score).
+     * Stored in admin_settings; 0 = enforcement off (default).
      */
-    public static function meetsThreshold(MatrimonyProfile $profile): bool
+    public static function interestMinimumPercent(): int
     {
-        return self::percentage($profile) >= self::THRESHOLD;
+        $v = (int) AdminSetting::getValue(self::ADMIN_KEY_INTEREST_MIN_CORE_PCT, '0');
+
+        return max(0, min(100, $v));
+    }
+
+    /**
+     * Interest send / receive / accept — respects admin minimum; when minimum is 0, always passes.
+     */
+    public static function meetsInterestCompletenessRequirement(MatrimonyProfile $profile): bool
+    {
+        $min = self::interestMinimumPercent();
+        if ($min <= 0) {
+            return true;
+        }
+
+        return self::percentage($profile) >= $min;
     }
 
     /**

@@ -46,6 +46,8 @@ class ViewTrackingService
             'viewed_profile_id' => $viewed->id,
         ]);
 
+        self::touchViewerLastSeenForPresence($viewer);
+
         self::notifyProfileViewIfEligible($viewed->user, $viewer, false);
 
         return true;
@@ -123,6 +125,8 @@ class ViewTrackingService
 
         self::consumeDailyProfileViewUsageForViewer($showcaseProfile);
 
+        self::touchViewerLastSeenForPresence($showcaseProfile);
+
         self::notifyProfileViewIfEligible($realProfile->user, $showcaseProfile, true);
     }
 
@@ -149,7 +153,25 @@ class ViewTrackingService
 
         self::consumeDailyProfileViewUsageForViewer($showcaseProfile);
 
+        self::touchViewerLastSeenForPresence($showcaseProfile);
+
         self::notifyProfileViewIfEligible($realProfile->user, $showcaseProfile, false);
+    }
+
+    /**
+     * Member "Active now" / search online labels use {@see User::$last_seen_at} within a short window.
+     * Profile views are stronger signal than periodic middleware refresh — especially showcase random views (no HTTP session).
+     */
+    public static function touchViewerLastSeenForPresence(MatrimonyProfile $viewer): void
+    {
+        $viewer->loadMissing('user');
+        $user = $viewer->user;
+        if ($user === null) {
+            return;
+        }
+
+        $user->last_seen_at = now();
+        $user->saveQuietly();
     }
 
     /**

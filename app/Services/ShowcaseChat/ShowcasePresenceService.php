@@ -6,6 +6,7 @@ use App\Models\Conversation;
 use App\Models\MatrimonyProfile;
 use App\Models\ShowcaseChatSetting;
 use App\Models\ShowcasePresenceSession;
+use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 
@@ -87,6 +88,42 @@ class ShowcasePresenceService
                 'ended_at' => now(),
                 'updated_at' => now(),
             ]);
+    }
+
+    /**
+     * While a showcase presence session is active (same rules as {@see isOnline()} without conversation scope),
+     * mirror that state into {@see User::$last_seen_at} so member UI (search cards, Active tab) matches chat presence.
+     * Called from the scheduled showcase-chat tick after orchestration runs.
+     */
+    public function syncLastSeenFromActiveSessions(): void
+    {
+        $this->closeDueSessions();
+
+        $profileIds = ShowcasePresenceSession::query()
+            ->whereNull('ended_at')
+            ->where('started_at', '<=', now())
+            ->where(function ($qb) {
+                $qb->whereNull('scheduled_end_at')->orWhere('scheduled_end_at', '>=', now());
+            })
+            ->distinct()
+            ->pluck('showcase_profile_id');
+
+        foreach ($profileIds as $pid) {
+            $pid = (int) $pid;
+            if ($pid <= 0) {
+                continue;
+            }
+            $profile = MatrimonyProfile::query()->find($pid);
+            if (! $profile || ! $profile->isShowcaseProfile()) {
+                continue;
+            }
+            $user = $profile->user;
+            if (! $user instanceof User) {
+                continue;
+            }
+            $user->last_seen_at = now();
+            $user->saveQuietly();
+        }
     }
 
     public function isWithinBusinessHours(ShowcaseChatSetting $s, Carbon $now): bool

@@ -17,6 +17,12 @@
     <h1 class="text-2xl font-bold text-gray-800 dark:text-gray-100 mb-2">App settings</h1>
     <p class="text-gray-500 dark:text-gray-400 text-sm mb-6">Application-wide switches stored in the database. When no DB value exists, the value falls back to environment configuration.</p>
 
+    @if (session('success'))
+        <div class="mb-4 rounded-lg bg-emerald-50 text-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-100 px-4 py-3 text-sm border border-emerald-200 dark:border-emerald-800">
+            {{ session('success') }}
+        </div>
+    @endif
+
     @if ($errors->any())
         <ul class="text-red-600 text-sm mb-4 space-y-1">
             @foreach ($errors->all() as $e) <li>{{ $e }}</li> @endforeach
@@ -34,6 +40,18 @@
             </label>
             <p class="text-sm text-gray-600 dark:text-gray-300 mt-3 font-medium">When enabled, admin users bypass all limits</p>
             <p class="text-xs text-gray-500 dark:text-gray-400 mt-2">Applies to users with the <code class="text-xs bg-gray-200 dark:bg-gray-600 px-1 rounded">is_admin</code> flag. If this setting has never been saved, <code class="text-xs">ADMIN_BYPASS_MODE</code> in <code class="text-xs">.env</code> is used.</p>
+        </div>
+
+        <div class="p-4 bg-gray-50 dark:bg-gray-700/30 rounded-lg border border-gray-200 dark:border-gray-600">
+            <label class="block text-sm font-semibold text-gray-900 dark:text-gray-100 mb-2">Interest — minimum core completeness (%)</label>
+            <input type="number" name="interest_min_core_completeness_pct" min="0" max="100" required
+                value="{{ old('interest_min_core_completeness_pct', $interestMinCorePct) }}"
+                class="block w-full max-w-xs rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm text-gray-900 dark:text-gray-100">
+            <p class="text-xs text-gray-500 dark:text-gray-400 mt-2">
+                Mandatory-field completeness score required to <strong>send interest</strong>, <strong>receive interest</strong> (when non-zero), and <strong>accept interest</strong>.
+                Use <strong>0</strong> to disable this check (default — no blocking).
+                Stored as <code class="text-xs bg-gray-200 dark:bg-gray-600 px-1 rounded">interest_min_core_completeness_pct</code>.
+            </p>
         </div>
 
         <div class="pt-2">

@@ -547,6 +547,36 @@ class MatrimonyProfile extends Model
         );
     }
 
+    /**
+     * Short residence line for compact UI (e.g. chat dock): district + state only.
+     */
+    public static function residenceDistrictAndStateLineFromIds(?int $districtId, ?int $stateId): string
+    {
+        $parts = [];
+        if ($districtId) {
+            $n = District::query()->where('id', $districtId)->value('name');
+            if ($n) {
+                $parts[] = trim((string) $n);
+            }
+        }
+        if ($stateId) {
+            $n = State::query()->where('id', $stateId)->value('name');
+            if ($n) {
+                $parts[] = trim((string) $n);
+            }
+        }
+
+        return implode(', ', array_values(array_filter($parts, static fn ($p) => $p !== '')));
+    }
+
+    public function residenceDistrictStateLine(): string
+    {
+        return self::residenceDistrictAndStateLineFromIds(
+            $this->district_id ? (int) $this->district_id : null,
+            $this->state_id ? (int) $this->state_id : null,
+        );
+    }
+
     public function birthCity()
     {
         return $this->belongsTo(City::class, 'birth_city_id');

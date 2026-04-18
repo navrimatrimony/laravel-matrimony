@@ -4,6 +4,7 @@ namespace App\Console\Commands;
 
 use Illuminate\Console\Command;
 use App\Services\ShowcaseChat\ShowcaseOrchestrationService;
+use App\Services\ShowcaseChat\ShowcasePresenceService;
 
 class ShowcaseChatTickCommand extends Command
 {
@@ -27,6 +28,8 @@ class ShowcaseChatTickCommand extends Command
     public function handle(): int
     {
         $count = app(ShowcaseOrchestrationService::class)->processDueEvents();
+
+        app(ShowcasePresenceService::class)->syncLastSeenFromActiveSessions();
 
         $this->info("Processed showcase events: {$count}");
 

@@ -7,6 +7,7 @@ use App\Models\AdminSetting;
 use App\Models\ProfileFieldConfig;
 use App\Services\AuditLogService;
 use App\Services\Parsing\ProviderResolver;
+use App\Services\ProfileCompletenessService;
 use App\Services\SettingService;
 use App\Services\Showcase\ShowcaseInterestPolicyService;
 use Illuminate\Http\Request;
@@ -610,8 +611,11 @@ class AdminSettingsController extends Controller
             ? (bool) config('app.admin_bypass_mode', false)
             : filter_var($raw, FILTER_VALIDATE_BOOLEAN);
 
+        $interestMinCorePct = ProfileCompletenessService::interestMinimumPercent();
+
         return view('admin.app-settings.index', [
             'adminBypassMode' => $adminBypassMode,
+            'interestMinCorePct' => $interestMinCorePct,
         ]);
     }
 
@@ -619,17 +623,21 @@ class AdminSettingsController extends Controller
     {
         $request->validate([
             'admin_bypass_mode' => 'nullable|in:0,1',
+            'interest_min_core_completeness_pct' => 'required|integer|min:0|max:100',
         ]);
 
         $on = $request->boolean('admin_bypass_mode');
         $settings->set('admin_bypass_mode', $on);
+
+        $pct = max(0, min(100, (int) $request->input('interest_min_core_completeness_pct', 0)));
+        AdminSetting::setValue(ProfileCompletenessService::ADMIN_KEY_INTEREST_MIN_CORE_PCT, (string) $pct);
 
         AuditLogService::log(
             $request->user(),
             'update_app_settings',
             'AdminSetting',
             null,
-            'admin_bypass_mode='.($on ? '1' : '0'),
+            'admin_bypass_mode='.($on ? '1' : '0').'; interest_min_core_completeness_pct='.$pct,
             false
         );
 

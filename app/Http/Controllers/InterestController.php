@@ -107,12 +107,12 @@ class InterestController extends Controller
             return back()->with('error', __('interest.sender_cannot_send_current_state'));
         }
 
-        // 🔒 70% completeness required for send and receive
-        if (! ProfileCompletenessService::meetsThreshold($senderProfile)) {
-            return back()->with('error', __('interest.sender_must_be_70_complete'));
+        $minPct = ProfileCompletenessService::interestMinimumPercent();
+        if (! ProfileCompletenessService::meetsInterestCompletenessRequirement($senderProfile)) {
+            return back()->with('error', __('interest.sender_min_core_completeness', ['min' => $minPct]));
         }
-        if (! ProfileCompletenessService::meetsThreshold($receiverProfile)) {
-            return back()->with('error', __('interest.cannot_send_to_profile'));
+        if (! ProfileCompletenessService::meetsInterestCompletenessRequirement($receiverProfile)) {
+            return back()->with('error', __('interest.target_min_core_completeness'));
         }
 
         // Day 7: Archived/Suspended/Search-Hidden → interest blocked
@@ -305,10 +305,10 @@ class InterestController extends Controller
             return back()->with('error', $msg);
         }
 
-        // 🔒 70% completeness required to receive (accept) interest
         $receiverProfile = $interest->receiverProfile;
-        if (! $receiverProfile || ! ProfileCompletenessService::meetsThreshold($receiverProfile)) {
-            return back()->with('error', __('interest.receiver_must_be_70_complete_accept'));
+        $minPct = ProfileCompletenessService::interestMinimumPercent();
+        if (! $receiverProfile || ! ProfileCompletenessService::meetsInterestCompletenessRequirement($receiverProfile)) {
+            return back()->with('error', __('interest.receiver_min_core_completeness_accept', ['min' => $minPct]));
         }
 
         // ✅ Accept

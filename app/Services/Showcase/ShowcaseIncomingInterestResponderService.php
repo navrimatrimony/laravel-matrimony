@@ -53,7 +53,7 @@ class ShowcaseIncomingInterestResponderService
         foreach ($rows as $interest) {
             $interest->loadMissing('senderProfile', 'receiverProfile');
             $receiver = $interest->receiverProfile;
-            if (! $receiver || ! ProfileCompletenessService::meetsThreshold($receiver)) {
+            if (! $receiver || ! ProfileCompletenessService::meetsInterestCompletenessRequirement($receiver)) {
                 $skipped++;
 
                 continue;

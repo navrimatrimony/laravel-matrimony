@@ -23,7 +23,7 @@ class ChatPolicyService
             return PolicyDecision::deny('same_profile', 'You cannot message yourself.');
         }
 
-        if (($sender->lifecycle_state ?? '') !== 'active' || ($receiver->lifecycle_state ?? '') !== 'active') {
+        if (! $this->profileAllowsMessagingParticipant($sender) || ! $this->profileAllowsMessagingParticipant($receiver)) {
             return PolicyDecision::deny('inactive_profile', 'Messaging is available only for active profiles.');
         }
 
@@ -198,6 +198,19 @@ class ChatPolicyService
             ->where('receiver_profile_id', $replier->id)
             ->where('reason', MessagePolicyCooldown::REASON_REPLY_GATE_LIMIT)
             ->delete();
+    }
+
+    /**
+     * Normal members must be lifecycle active. Showcase/demo profiles use chat orchestration
+     * without requiring lifecycle_state active (often stored as draft).
+     */
+    protected function profileAllowsMessagingParticipant(MatrimonyProfile $profile): bool
+    {
+        if (($profile->lifecycle_state ?? '') === 'active') {
+            return true;
+        }
+
+        return $profile->isShowcaseProfile();
     }
 
     protected function isPairBlocked(int $aProfileId, int $bProfileId): bool

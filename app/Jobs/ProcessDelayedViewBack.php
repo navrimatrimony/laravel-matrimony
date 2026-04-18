@@ -73,6 +73,8 @@ class ProcessDelayedViewBack implements ShouldQueue
 
         ViewTrackingService::consumeDailyProfileViewUsageForViewer($showcaseProfile);
 
+        ViewTrackingService::touchViewerLastSeenForPresence($showcaseProfile);
+
         // Notify real user (with dedup guard from service).
         ViewTrackingService::notifyProfileViewIfEligible($realProfile->user, $showcaseProfile, true);
     }

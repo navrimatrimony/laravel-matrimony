@@ -59,7 +59,7 @@ class ShowcaseOutgoingInterestSenderService
         $skipped = 0;
 
         foreach ($showcases as $showcase) {
-            if (! ProfileLifecycleService::canInitiateInteraction($showcase) || ! ProfileCompletenessService::meetsThreshold($showcase)) {
+            if (! ProfileLifecycleService::canInitiateInteraction($showcase) || ! ProfileCompletenessService::meetsInterestCompletenessRequirement($showcase)) {
                 $skipped++;
 
                 continue;
@@ -93,7 +93,7 @@ class ShowcaseOutgoingInterestSenderService
                 /** @var MatrimonyProfile $receiver */
                 $receiver = $row['candidate'];
 
-                if (! ProfileLifecycleService::canReceiveInterest($receiver) || ! ProfileCompletenessService::meetsThreshold($receiver)) {
+                if (! ProfileLifecycleService::canReceiveInterest($receiver) || ! ProfileCompletenessService::meetsInterestCompletenessRequirement($receiver)) {
                     continue;
                 }
 

@@ -8,38 +8,29 @@
         'active' => array_values($chatDockData['active'] ?? []),
         'can_read_incoming' => (bool) ($chatDockData['can_read_incoming'] ?? false),
     ];
+    $dockHasAlerts = ($chatDockInitialData['unread_count'] > 0) || count($chatDockInitialData['unread']) > 0;
 @endphp
 
 <section
     id="chat-dock-root"
-    class="fixed right-0 top-[7.5rem] bottom-0 z-40 hidden w-[21.5rem] border-l border-gray-200 bg-white shadow-2xl lg:flex lg:flex-col dark:border-gray-800 dark:bg-gray-900"
+    class="fixed right-0 top-[7.5rem] bottom-0 z-[52] hidden w-[21.5rem] border-l border-gray-200 bg-white shadow-2xl transition-transform duration-300 ease-out will-change-transform lg:flex lg:flex-col dark:border-gray-800 dark:bg-gray-900{{ $dockHasAlerts ? '' : ' translate-x-full' }}"
     role="complementary"
-    aria-label="Chat dock panel"
+    aria-label="{{ __('chat_ui.dock_panel_title') }}"
+    data-label-profile="{{ __('chat_ui.dock_profile_link') }}"
+    data-label-open-chat="{{ __('chat_ui.dock_open_chat_link') }}"
+    data-hint-alerts="{{ __('chat_ui.dock_hint_alerts') }}"
+    data-hint-chats="{{ __('chat_ui.dock_hint_chats') }}"
+    data-hint-active="{{ __('chat_ui.dock_hint_active') }}"
 >
     <header class="border-b border-gray-200 bg-gradient-to-r from-red-500 to-rose-600 px-3 py-2.5 text-white dark:border-gray-800">
         <div class="flex items-center justify-between gap-2">
-            <p class="text-xs font-semibold text-rose-100">I am Online</p>
-            <button type="button" class="rounded px-1 text-sm font-bold text-white/80 hover:bg-white/20">−</button>
+            <p class="text-xs font-semibold text-rose-100">{{ __('chat_ui.dock_panel_title') }}</p>
+            <button type="button" id="chat-dock-header-minimize" class="rounded px-1 text-sm font-bold text-white/80 hover:bg-white/20" aria-label="{{ __('chat_ui.dock_minimize_aria') }}">−</button>
         </div>
     </header>
 
-    <div class="border-b border-gray-200 bg-white px-3 py-3 dark:border-gray-800 dark:bg-gray-900">
-        <div class="flex items-center gap-2.5">
-            <div id="chat-selected-avatar" class="h-11 w-11 overflow-hidden rounded-full bg-red-100 ring-2 ring-red-100 dark:bg-red-950/40">
-                <span id="chat-selected-avatar-fallback" class="inline-flex h-full w-full items-center justify-center text-sm font-bold text-red-700">M</span>
-                <img id="chat-selected-avatar-img" src="" alt="" class="hidden h-full w-full object-cover" />
-            </div>
-            <div class="min-w-0 flex-1">
-                <p id="chat-selected-name" class="truncate text-base font-bold text-gray-900 dark:text-gray-100">Chats</p>
-                <p id="chat-selected-info-line-1" class="truncate text-[11px] text-gray-700 dark:text-gray-200">Select member to open chat</p>
-                <p id="chat-selected-info-line-2" class="truncate text-[11px] text-gray-600 dark:text-gray-300"></p>
-                <div class="mt-0.5 flex items-center gap-2 text-[11px] text-gray-600 dark:text-gray-300">
-                    <p id="chat-selected-info-line-3" class="min-w-0 flex-1 truncate"></p>
-                    <a id="chat-selected-open-chat" href="{{ route('chat.index') }}" class="shrink-0 text-red-600 hover:underline">Open chat</a>
-                </div>
-            </div>
-            <a id="chat-selected-profile" href="{{ route('chat.index') }}" class="rounded-md border border-red-200 px-2 py-1 text-[10px] font-semibold text-red-700 hover:bg-red-50 dark:border-red-800 dark:text-red-300">Profile</a>
-        </div>
+    <div class="border-b border-gray-200 bg-gray-50 px-3 py-2 dark:border-gray-800 dark:bg-gray-950/40">
+        <p id="chat-dock-tab-hint" class="text-[11px] leading-snug text-gray-600 dark:text-gray-400"></p>
     </div>
 
     <div class="flex-1 overflow-y-auto bg-gray-50 p-2.5 dark:bg-gray-950">
@@ -63,8 +54,17 @@
     </div>
 </section>
 
-<div id="chat-popout-layer" class="pointer-events-none fixed bottom-4 right-[22.5rem] z-50 hidden max-w-[calc(100vw-24rem)] items-end gap-3 lg:flex"></div>
-<div id="chat-minimized-chipbar" class="pointer-events-none fixed bottom-3 right-[22.5rem] z-50 hidden items-center gap-2 lg:flex"></div>
+<button
+    type="button"
+    id="chat-dock-expand-handle"
+    class="chat-dock-expand-handle pointer-events-auto fixed right-0 top-1/2 z-[55] w-9 max-w-[2.25rem] -translate-y-1/2 gap-1 rounded-l-lg border border-r-0 border-gray-200 bg-gradient-to-b from-red-500 to-rose-600 py-3 text-[9px] font-bold uppercase leading-tight tracking-wide text-white shadow-lg hover:from-red-600 hover:to-rose-700 @if (! $dockHasAlerts) flex flex-col items-center justify-center @else hidden @endif"
+    aria-label="{{ __('chat_ui.dock_expand_aria') }}"
+>
+    <span class="block max-h-[5.5rem] overflow-hidden text-center [writing-mode:vertical-rl] [text-orientation:mixed]">{{ __('chat_ui.dock_panel_title') }}</span>
+</button>
+
+<div id="chat-popout-layer" class="pointer-events-none fixed bottom-4 right-[22.5rem] z-50 hidden max-w-[calc(100vw-24rem)] items-end gap-3"></div>
+<div id="chat-minimized-chipbar" class="pointer-events-none fixed bottom-3 right-[22.5rem] z-50 hidden items-center gap-2"></div>
 <script type="application/json" id="chat-dock-initial-data">{!! json_encode($chatDockInitialData, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT) !!}</script>
 
 <script>
@@ -74,26 +74,21 @@
     const initialDataEl = document.getElementById('chat-dock-initial-data');
     const tabButtons = root.querySelectorAll('.chat-dock-tab-btn');
     const tabContents = root.querySelectorAll('.chat-dock-tab-content');
-    const selectedName = document.getElementById('chat-selected-name');
-    const selectedInfoLine1 = document.getElementById('chat-selected-info-line-1');
-    const selectedInfoLine2 = document.getElementById('chat-selected-info-line-2');
-    const selectedInfoLine3 = document.getElementById('chat-selected-info-line-3');
-    const selectedAvatar = document.getElementById('chat-selected-avatar-img');
-    const selectedAvatarFallback = document.getElementById('chat-selected-avatar-fallback');
-    const selectedProfile = document.getElementById('chat-selected-profile');
-    const selectedOpenChat = document.getElementById('chat-selected-open-chat');
+    const tabHint = document.getElementById('chat-dock-tab-hint');
     const tabAlertsCount = document.getElementById('chat-tab-alerts-count');
     const tabActiveCount = document.getElementById('chat-tab-active-count');
     const dockBadge = document.getElementById('chat-dock-badge');
     const popoutLayer = document.getElementById('chat-popout-layer');
     const chipBar = document.getElementById('chat-minimized-chipbar');
+    const expandHandle = document.getElementById('chat-dock-expand-handle');
+    const headerMinBtn = document.getElementById('chat-dock-header-minimize');
     const csrf = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
 
     const openPopouts = new Map();
     const minimizedPopouts = new Map();
     let currentTab = 'alerts';
-    let selectedConversationKey = null;
     let dockData = { unread_count: 0, unread: [], chats: [], active: [], can_read_incoming: false };
+    let dockLastHadUnreadAlerts = false;
 
     if (initialDataEl) {
         try {
@@ -109,6 +104,37 @@
             }
         } catch (_e) {}
     }
+
+    function hasUnreadAlerts() {
+        return Number(dockData.unread_count || 0) > 0 || (dockData.unread || []).length > 0;
+    }
+
+    function refreshExpandHandleVisibility() {
+        if (!expandHandle || !root) return;
+        const dockOpen = !root.classList.contains('translate-x-full');
+        const lg = typeof window.matchMedia === 'function' && window.matchMedia('(min-width: 1024px)').matches;
+        const showHandle = !dockOpen && lg;
+        expandHandle.toggleAttribute('hidden', !showHandle);
+        expandHandle.classList.toggle('hidden', !showHandle);
+        expandHandle.classList.toggle('flex', showHandle);
+        expandHandle.classList.toggle('flex-col', showHandle);
+        expandHandle.classList.toggle('items-center', showHandle);
+        expandHandle.classList.toggle('justify-center', showHandle);
+        expandHandle.setAttribute('aria-hidden', showHandle ? 'false' : 'true');
+    }
+
+    function setDockExpanded(expanded) {
+        if (!root) return;
+        root.classList.toggle('translate-x-full', !expanded);
+        root.setAttribute('aria-hidden', expanded ? 'false' : 'true');
+        refreshExpandHandleVisibility();
+    }
+
+    function syncDockShellFromAlerts() {
+        setDockExpanded(hasUnreadAlerts());
+    }
+
+    dockLastHadUnreadAlerts = hasUnreadAlerts();
 
     function escapeHtml(value) {
         return String(value || '')
@@ -132,116 +158,78 @@
         });
     }
 
-    /** Rows for the tab (unfiltered — used to pick the featured header for this tab). */
-    function getTabRows(tab) {
-        if (tab === 'alerts') return dockData.unread || [];
-        if (tab === 'chats') return dockData.chats || [];
-        if (tab === 'active') return dockData.active || [];
-        return [];
-    }
-
-    function clearSelectedHeaderPlaceholder() {
-        selectedConversationKey = null;
-        const ph = {
-            alerts: { name: 'Alerts', l1: 'No unread messages right now', l2: '', l3: '' },
-            chats: { name: 'Chats', l1: 'No conversations yet', l2: '', l3: '' },
-            active: { name: 'Active now', l1: 'No members online', l2: '', l3: '' },
-        };
-        const p = ph[currentTab] || ph.alerts;
-        if (selectedName) selectedName.textContent = p.name;
-        if (selectedInfoLine1) selectedInfoLine1.textContent = p.l1;
-        if (selectedInfoLine2) selectedInfoLine2.textContent = p.l2;
-        if (selectedInfoLine3) selectedInfoLine3.textContent = p.l3;
-        if (selectedProfile) selectedProfile.setAttribute('href', '{{ route("chat.index") }}');
-        if (selectedOpenChat) selectedOpenChat.setAttribute('href', '{{ route("chat.index") }}');
-        if (selectedAvatar && selectedAvatarFallback) {
-            selectedAvatar.classList.add('hidden');
-            selectedAvatar.removeAttribute('src');
-            selectedAvatarFallback.classList.remove('hidden');
-            selectedAvatarFallback.textContent = '?';
-        }
-    }
-
-    /** Featured card = first member in the current tab’s list (not one global “selected” for all tabs). */
-    function syncHeaderToCurrentTab() {
-        const rows = getTabRows(currentTab);
-        const first = rows[0] || null;
-        if (first) {
-            setSelectedFromConversation(first);
-        } else {
-            clearSelectedHeaderPlaceholder();
-        }
+    function updateTabHint() {
+        if (!tabHint || !root) return;
+        let text = '';
+        if (currentTab === 'alerts') text = root.dataset.hintAlerts || '';
+        else if (currentTab === 'chats') text = root.dataset.hintChats || '';
+        else text = root.dataset.hintActive || '';
+        tabHint.textContent = text;
     }
 
     function setTabFromUserClick(tab) {
         applyTabVisuals(tab);
-        syncHeaderToCurrentTab();
+        updateTabHint();
         renderDockLists();
         updateTabCounts();
     }
 
-    function getConversationByKey(rowKey) {
-        const all = [...(dockData.unread || []), ...(dockData.chats || []), ...(dockData.active || [])];
-        return all.find((r) => String(r.conversation_key) === String(rowKey)) || null;
-    }
-
-    function setSelectedFromConversation(conversation) {
-        if (!conversation) return;
-        selectedConversationKey = String(conversation.conversation_key || '');
-        if (selectedName) selectedName.textContent = conversation.name || 'Member';
-        if (selectedInfoLine1) selectedInfoLine1.textContent = conversation.profile_title || 'Profile summary';
-        if (selectedInfoLine2) selectedInfoLine2.textContent = conversation.profile_subtitle || '';
-        if (selectedInfoLine3) selectedInfoLine3.textContent = conversation.profile_location || '';
-        if (selectedProfile) selectedProfile.setAttribute('href', conversation.profile_url || '#');
-        if (selectedOpenChat) selectedOpenChat.setAttribute('href', conversation.url || '#');
-
-        const avatarUrl = conversation.avatar_url || '';
-        if (avatarUrl && selectedAvatar && selectedAvatarFallback) {
-            selectedAvatar.setAttribute('src', avatarUrl);
-            selectedAvatar.setAttribute('alt', conversation.name || 'Member');
-            selectedAvatar.classList.remove('hidden');
-            selectedAvatarFallback.classList.add('hidden');
-        } else if (selectedAvatar && selectedAvatarFallback) {
-            selectedAvatar.classList.add('hidden');
-            selectedAvatarFallback.classList.remove('hidden');
-            selectedAvatarFallback.textContent = ((conversation.name || 'M').trim().charAt(0) || 'M').toUpperCase();
-        }
-    }
-
     function renderRow(row, tabType) {
         const unread = Number(row.unread || 0);
+        const rowKey = escapeHtml(row.conversation_key);
+        const profileUrl = escapeHtml(row.profile_url || '#');
+        const chatUrl = escapeHtml(row.url || '#');
+        const startChatUrl = escapeHtml(row.start_chat_url || '');
+        const hasConversation = !!row.has_conversation;
+        const labelProfile = escapeHtml(root.dataset.labelProfile || 'Profile');
+        const labelOpenChat = escapeHtml(root.dataset.labelOpenChat || 'Open chat');
+
         const avatar = row.avatar_url
             ? `<img src="${escapeHtml(row.avatar_url)}" alt="${escapeHtml(row.name || 'Member')}" class="h-10 w-10 rounded-full object-cover ring-1 ring-black/10">`
             : `<span class="inline-flex h-10 w-10 items-center justify-center rounded-full bg-red-100 text-xs font-bold text-red-700">${escapeHtml((row.name || 'M').trim().charAt(0).toUpperCase())}</span>`;
+
+        const openChatControl = hasConversation
+            ? `<a href="${chatUrl}" class="rounded-md border border-red-200 px-2 py-0.5 text-[10px] font-semibold text-red-700 hover:bg-red-50 dark:border-red-800 dark:text-red-300">${labelOpenChat}</a>`
+            : `<form method="POST" action="${startChatUrl}" class="m-0 inline">
+                    <input type="hidden" name="_token" value="${escapeHtml(csrf)}" />
+                    <button type="submit" class="rounded-md border border-red-200 px-2 py-0.5 text-[10px] font-semibold text-red-700 hover:bg-red-50 dark:border-red-800 dark:text-red-300">${labelOpenChat}</button>
+               </form>`;
+
+        const rightBadge = unread > 0
+            ? `<span class="inline-flex min-w-[1.2rem] items-center justify-center rounded-full bg-green-500 px-1.5 py-0.5 text-[10px] font-bold leading-none text-white">${unread}</span>`
+            : (tabType === 'active' ? '<span class="text-[10px] font-semibold text-gray-500">Active</span>' : '<span></span>');
+
         return `
-            <button
-                type="button"
-                class="chat-dock-row w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-left transition hover:border-red-200 hover:bg-red-50/60 dark:border-gray-800 dark:bg-gray-900 dark:hover:border-red-800 dark:hover:bg-red-950/20"
-                data-row-key="${escapeHtml(row.conversation_key)}"
-            >
-                <div class="flex items-start gap-2">
+            <div class="chat-dock-row flex w-full items-start gap-2 rounded-xl border border-gray-200 bg-white px-3 py-2.5 transition hover:border-red-200 hover:bg-red-50/60 dark:border-gray-800 dark:bg-gray-900 dark:hover:border-red-800 dark:hover:bg-red-950/20">
+                <button
+                    type="button"
+                    class="chat-dock-row-main flex min-w-0 flex-1 items-start gap-2 text-left"
+                    data-row-key="${rowKey}"
+                >
                     <div class="shrink-0">${avatar}</div>
                     <div class="min-w-0 flex-1">
                         <div class="flex items-center justify-between gap-2">
                             <p class="truncate text-sm font-semibold text-gray-900 dark:text-gray-100">${escapeHtml(row.name || 'Member')}</p>
-                            ${unread > 0 ? `<span class="inline-flex min-w-[1.2rem] items-center justify-center rounded-full bg-green-500 px-1.5 py-0.5 text-[10px] font-bold leading-none text-white">${unread}</span>` : (tabType === 'active' ? '<span class="text-[10px] font-semibold text-gray-500">Active</span>' : '<span></span>')}
+                            ${rightBadge}
                         </div>
                         <p class="truncate text-xs text-gray-600 dark:text-gray-300">${escapeHtml(row.preview || 'No messages yet')}</p>
                         <p class="text-[10px] text-gray-500 dark:text-gray-400">${escapeHtml(row.time || '')}</p>
                     </div>
+                </button>
+                <div class="flex shrink-0 flex-col items-end gap-1 pt-0.5">
+                    <a href="${profileUrl}" class="rounded-md border border-red-200 px-2 py-0.5 text-[10px] font-semibold text-red-700 hover:bg-red-50 dark:border-red-800 dark:text-red-300">${labelProfile}</a>
+                    ${openChatControl}
                 </div>
-            </button>
+            </div>
         `;
     }
 
     function attachRowHandlers(container, rowsData) {
-        container.querySelectorAll('.chat-dock-row').forEach((el) => {
+        container.querySelectorAll('.chat-dock-row-main').forEach((el) => {
             el.addEventListener('click', () => {
                 const rowKey = el.getAttribute('data-row-key');
                 const conversation = rowsData.find((r) => String(r.conversation_key) === String(rowKey));
                 if (!conversation) return;
-                setSelectedFromConversation(conversation);
-                renderDockLists();
                 openPopoutFromConversation(conversation);
             });
         });
@@ -253,9 +241,9 @@
         const activeHost = root.querySelector('[data-tab-content="active"]');
         if (!alertsHost || !chatsHost || !activeHost) return;
 
-        const unreadRows = (dockData.unread || []).filter((r) => String(r.conversation_key) !== String(selectedConversationKey || ''));
-        const chatsRows = (dockData.chats || []).filter((r) => String(r.conversation_key) !== String(selectedConversationKey || ''));
-        const activeRows = (dockData.active || []).filter((r) => String(r.conversation_key) !== String(selectedConversationKey || ''));
+        const unreadRows = dockData.unread || [];
+        const chatsRows = dockData.chats || [];
+        const activeRows = dockData.active || [];
 
         alertsHost.innerHTML = unreadRows.length
             ? unreadRows.map((r) => renderRow(r, 'alerts')).join('')
@@ -352,6 +340,7 @@
     function ensureChip(payload, card) {
         if (!chipBar) return;
         chipBar.classList.remove('hidden');
+        chipBar.classList.add('flex');
         if (minimizedPopouts.has(payload.conversationId)) return;
         const chip = document.createElement('button');
         chip.type = 'button';
@@ -373,6 +362,7 @@
         }
         if (chipBar && minimizedPopouts.size === 0) {
             chipBar.classList.add('hidden');
+            chipBar.classList.remove('flex');
         }
     }
 
@@ -494,6 +484,7 @@
                 removeChip(payload.conversationId);
                 if (openPopouts.size === 0 && popoutLayer) {
                     popoutLayer.classList.add('hidden');
+                    popoutLayer.classList.remove('flex');
                 }
             });
         }
@@ -614,6 +605,7 @@
         const card = createPopoutCard(payload);
         if (!card) return;
         popoutLayer.classList.remove('hidden');
+        popoutLayer.classList.add('flex');
         popoutLayer.appendChild(card);
         openPopouts.set(payload.conversationId, card);
         stackPopouts();
@@ -650,18 +642,16 @@
             };
 
             applyTabVisuals(currentTab);
-            if (selectedConversationKey) {
-                const selected = getConversationByKey(selectedConversationKey);
-                if (selected) {
-                    setSelectedFromConversation(selected);
-                } else {
-                    syncHeaderToCurrentTab();
-                }
-            } else {
-                syncHeaderToCurrentTab();
-            }
+            updateTabHint();
             renderDockLists();
             updateTabCounts();
+            const nowUnread = hasUnreadAlerts();
+            if (nowUnread) {
+                setDockExpanded(true);
+            } else if (dockLastHadUnreadAlerts && !nowUnread) {
+                setDockExpanded(false);
+            }
+            dockLastHadUnreadAlerts = nowUnread;
         } catch (_e) {}
     }
 
@@ -672,9 +662,19 @@
     });
 
     applyTabVisuals('alerts');
-    syncHeaderToCurrentTab();
+    updateTabHint();
     renderDockLists();
     updateTabCounts();
+    syncDockShellFromAlerts();
+    refreshExpandHandleVisibility();
+    window.addEventListener('resize', refreshExpandHandleVisibility);
+
+    if (headerMinBtn) {
+        headerMinBtn.addEventListener('click', () => setDockExpanded(false));
+    }
+    if (expandHandle) {
+        expandHandle.addEventListener('click', () => setDockExpanded(true));
+    }
 
     document.addEventListener('member-widget-counts-updated', () => {
         pollChatDockSnapshot();

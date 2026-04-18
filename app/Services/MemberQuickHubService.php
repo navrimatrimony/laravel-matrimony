@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\Interest;
 use App\Models\MatrimonyProfile;
 use App\Models\User;
+use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
@@ -140,11 +141,15 @@ class MemberQuickHubService
                 $q->whereNull('is_suspended')->orWhere('is_suspended', false);
             })
             ->whereHas('user', function ($q): void {
-                $q->where(function ($qq): void {
-                    $qq->whereNull('is_admin')->orWhere('is_admin', false);
-                })
-                    ->whereNotNull('last_seen_at')
-                    ->where('last_seen_at', '>=', now()->subMinutes(5));
+                $q->whereNotNull('last_seen_at')
+                    ->where('last_seen_at', '>=', now()->subMinutes(5))
+                    ->where(function ($qq): void {
+                        $qq->where(function ($nonAdmin): void {
+                            $nonAdmin->whereNull('is_admin')->orWhere('is_admin', false);
+                        })->orWhereHas('matrimonyProfile', function ($mp): void {
+                            $mp->where('is_showcase', true);
+                        });
+                    });
             })
             ->orderByDesc('updated_at')
             ->limit(50)
@@ -258,7 +263,7 @@ class MemberQuickHubService
 
         $out = [];
         foreach ($profiles as $profile) {
-            $age = $profile->date_of_birth ? (string) now()->diffInYears($profile->date_of_birth).' yrs' : null;
+            $age = $this->formatAgeForChatSummary($profile->date_of_birth);
             $height = $this->formatHeightForChatSummary($profile->height_cm);
             $religion = trim((string) ($profile->religion?->name ?? ''));
             $caste = trim((string) ($profile->caste?->name ?? ''));
@@ -271,7 +276,7 @@ class MemberQuickHubService
             $out[(int) $profile->id] = [
                 'title' => $titleParts ? implode(', ', $titleParts) : '',
                 'subtitle' => $subtitleParts ? implode(', ', $subtitleParts) : '',
-                'location' => trim((string) $profile->residenceLocationDisplayLine()),
+                'location' => trim((string) $profile->residenceDistrictStateLine()),
                 'age' => $age ?: '',
                 'height' => $height ?: '',
                 'religion' => $religion,
@@ -282,6 +287,23 @@ class MemberQuickHubService
         }
 
         return $out;
+    }
+
+    private function formatAgeForChatSummary(mixed $dateOfBirth): ?string
+    {
+        if ($dateOfBirth === null || $dateOfBirth === '') {
+            return null;
+        }
+        try {
+            $dob = $dateOfBirth instanceof Carbon ? $dateOfBirth->copy() : Carbon::parse((string) $dateOfBirth);
+        } catch (\Throwable) {
+            return null;
+        }
+        if ($dob->isFuture()) {
+            return null;
+        }
+
+        return max(0, (int) $dob->age).' yrs';
     }
 
     private function formatHeightForChatSummary(mixed $heightCm): ?string

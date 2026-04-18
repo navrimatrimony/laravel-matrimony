@@ -7,6 +7,7 @@ use App\Models\Interest;
 use App\Models\MatrimonyProfile;
 use App\Services\InterestPriorityService;
 use App\Services\InterestSendLimitService;
+use App\Services\ProfileCompletenessService;
 use App\Services\Showcase\ShowcaseInterestPolicyService;
 use App\Services\ProfileLifecycleService;
 use Illuminate\Http\Request;
@@ -73,6 +74,20 @@ class InterestApiController extends Controller
                 'success' => false,
                 'message' => 'You cannot send interest to this profile.',
             ], 403);
+        }
+
+        $minPct = ProfileCompletenessService::interestMinimumPercent();
+        if (! ProfileCompletenessService::meetsInterestCompletenessRequirement($senderProfile)) {
+            return response()->json([
+                'success' => false,
+                'message' => __('interest.sender_min_core_completeness', ['min' => $minPct]),
+            ], 422);
+        }
+        if (! ProfileCompletenessService::meetsInterestCompletenessRequirement($receiverProfile)) {
+            return response()->json([
+                'success' => false,
+                'message' => __('interest.target_min_core_completeness'),
+            ], 422);
         }
 
         // Check if interest already exists
@@ -253,6 +268,15 @@ class InterestApiController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => $msg,
+            ], 422);
+        }
+
+        $receiverProfile = $user->matrimonyProfile;
+        $minPct = ProfileCompletenessService::interestMinimumPercent();
+        if (! ProfileCompletenessService::meetsInterestCompletenessRequirement($receiverProfile)) {
+            return response()->json([
+                'success' => false,
+                'message' => __('interest.receiver_min_core_completeness_accept', ['min' => $minPct]),
             ], 422);
         }
 
