@@ -45,7 +45,7 @@ _LAST_TRAFFIC_FETCH_TRIGGER: float = 0.0
 
 # Laravel JSON endpoint (override in production, e.g. http://laravel-app/api/moderation-config)
 MODERATION_LARAVEL_CONFIG_URL: str = os.environ.get(
-    "MODERATION_LARAVEL_CONFIG_URL", "http://127.0.0.1:8000/api/moderation-config"
+    "MODERATION_LARAVEL_CONFIG_URL", "http://127.0.0.1/api/moderation-config"
 ).strip()
 
 CONFIG_REFRESH_INTERVAL_SEC: float = float(os.environ.get("MODERATION_CONFIG_REFRESH_SEC", "300"))
