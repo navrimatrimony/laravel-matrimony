@@ -9,6 +9,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\ValidationException;
+use App\Services\System\AiHealthService;
 
 class AdminDashboardController extends Controller
 {
@@ -159,4 +160,10 @@ class AdminDashboardController extends Controller
     {
         return response()->json(['data' => $this->metrics->getLiveActions()]);
     }
+public function getAiHealth(): JsonResponse
+{
+    return response()->json([
+        'data' => AiHealthService::check()
+    ]);
+}
 }

@@ -68,7 +68,13 @@ class NudeNetService
                 'message' => $e->getMessage(),
             ]);
 
-            return $this->fallbackResponse('exception');
+            return [
+    'safe' => false,
+    'confidence' => 0.0,
+    'fallback' => true,
+    'error' => true,
+    'raw' => ['fallback_reason' => 'python_api_down'],
+];
         }
 
         Log::info('NudeNet response', [
@@ -77,7 +83,13 @@ class NudeNetService
         ]);
 
         if (! $response->ok()) {
-            return $this->fallbackResponse('http_'.$response->status());
+          return [
+    'safe' => false,
+    'confidence' => 0.0,
+    'fallback' => true,
+    'error' => true,
+    'raw' => ['fallback_reason' => 'python_http_error'],
+];
         }
 
         $json = $response->json();

@@ -11,6 +11,11 @@
 <div class="bg-white dark:bg-gray-800 shadow rounded-lg p-4 sm:p-6">
     <div class="mb-4">
         <h1 class="text-2xl font-bold text-gray-800 dark:text-gray-100">Photo moderation engine</h1>
+		
+		<div class="mt-2 text-sm font-semibold">
+    AI Status: <span id="aiStatusText" class="text-gray-500">Checking...</span>
+</div>
+		
         <p class="text-sm text-gray-600 dark:text-gray-400 mt-1">
             Effective visibility prefers <code class="text-xs bg-gray-100 dark:bg-gray-900 px-1 rounded">admin_override_*</code> when set.
             <a href="{{ route('admin.moderation-engine-settings.index') }}" class="text-indigo-600 dark:text-indigo-400 underline">Threshold settings</a>
@@ -486,5 +491,37 @@
         }
     });
 })();
+
+function loadAiHealth() {
+    fetch('/admin/dashboard-metrics/ai-health')
+        .then(res => res.json())
+        .then(json => {
+            const status = json?.data?.status;
+            const el = document.getElementById('aiStatusText');
+
+            if (!el) return;
+
+            if (status === 'up') {
+                el.textContent = '🟢 Running';
+                el.className = 'text-emerald-600 font-bold';
+            } else {
+                el.textContent = '🔴 Down';
+                el.className = 'text-red-600 font-bold';
+            }
+        })
+        .catch(() => {
+            const el = document.getElementById('aiStatusText');
+            if (el) {
+                el.textContent = '⚠️ Error';
+                el.className = 'text-yellow-600 font-bold';
+            }
+        });
+}
+
+// run on load
+loadAiHealth();
+
+// refresh every 60 sec
+setInterval(loadAiHealth, 60000);
 </script>
 @endsection

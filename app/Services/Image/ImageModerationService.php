@@ -27,12 +27,12 @@ class ImageModerationService
         $nn = $this->nudenet->detect($imagePath);
         // Fallback (API down / unreadable image): never auto-approve — same as suspicious until a human checks.
         if (! empty($nn['fallback'])) {
-            return [
-                'status' => 'pending_manual',
-                'reason' => 'Automated photo check unavailable — manual review required.',
-                'meta' => ['nudenet' => $nn],
-            ];
-        }
+    return [
+        'status' => 'error',
+        'reason' => 'AI moderation service is down',
+        'meta' => ['nudenet' => $nn],
+    ];
+}
         $apiStatus = strtolower(trim((string) ($nn['raw']['api_status'] ?? $nn['raw']['status'] ?? '')));
         $pipelineConfidence = (float) ($nn['raw']['pipeline_confidence'] ?? $nn['raw']['confidence'] ?? $nn['confidence'] ?? 0.0);
 

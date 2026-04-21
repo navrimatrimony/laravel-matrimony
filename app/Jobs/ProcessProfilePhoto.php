@@ -61,26 +61,48 @@ class ProcessProfilePhoto implements ShouldQueue
         $finalFilename = $optimized['filename'];
 
         $photoApproved = false;
-        $rejectedAt = null;
-        $rejectionReason = null;
+$rejectedAt = null;
+$rejectionReason = null;
 
-        if (($result['status'] ?? null) === 'approved') {
-            // Auto decisions should be applied immediately (no admin wait).
-            $photoApproved = true;
-        } elseif (($result['status'] ?? null) === 'rejected') {
-            $photoApproved = false;
-            $rejectedAt = now();
-            $rejectionReason = (string) ($result['reason'] ?? 'Rejected by moderation.');
-        } else {
-            // pending_manual — do not use photo_rejection_reason (that is for real rejections only).
-            $photoApproved = false;
-            $rejectedAt = null;
-            $rejectionReason = null;
-        }
+$statusFromAI = $result['status'] ?? null;
+
+// ✅ APPROVED
+if ($statusFromAI === 'approved') {
+    $photoApproved = true;
+
+// ❌ REJECTED
+} elseif ($statusFromAI === 'rejected') {
+    $photoApproved = false;
+    $rejectedAt = now();
+    $rejectionReason = (string) ($result['reason'] ?? 'Rejected by moderation.');
+
+// 🚨 AI DOWN / ERROR
+} elseif ($statusFromAI === 'error') {
+
+    Log::error('AI SERVICE DOWN', [
+        'profile_id' => $this->profileId,
+        'reason' => $result['reason'] ?? null,
+    ]);
+
+    $photoApproved = false;
+    $rejectedAt = null;
+    $rejectionReason = 'AI service down — try again later';
+
+// ⏳ PENDING (review case)
+} else {
+    $photoApproved = false;
+    $rejectedAt = null;
+    $rejectionReason = null;
+}
 
         $moderationSnapshot = PhotoModerationScanPayload::fromModerationResult($result);
 
-        $status = $photoApproved ? 'approved' : (($rejectedAt !== null) ? 'rejected' : 'pending');
+// 🚨 IMPORTANT FIX
+if ($statusFromAI === 'error') {
+    $status = 'error';
+} else {
+    $status = $photoApproved ? 'approved' : (($rejectedAt !== null) ? 'rejected' : 'pending');
+}
         Log::info('PHOTO APPROVED OR REJECTED', [
             'profile_id' => $this->profileId,
             'status' => $status,
@@ -128,11 +150,11 @@ class ProcessProfilePhoto implements ShouldQueue
         }
 
         $approvedStatus = match ($status) {
-            'approved' => 'approved',
-            'rejected' => 'rejected',
-            default => 'pending',
-        };
-
+    'approved' => 'approved',
+    'rejected' => 'rejected',
+    'error' => 'error', 
+    default => 'pending',
+};
         $previousPrimaryId = ProfilePhoto::query()
             ->where('profile_id', $profile->id)
             ->where('is_primary', true)

@@ -4,6 +4,7 @@
 <div class="bg-white dark:bg-gray-800 shadow rounded-lg p-6">
     <div class="flex flex-wrap items-start justify-between gap-4 mb-6">
         <h1 class="text-2xl font-bold text-gray-800 dark:text-gray-100">Admin Overview</h1>
+		
         <div class="flex flex-wrap items-center gap-3">
             <label for="rangeSelector" class="text-sm text-gray-600 dark:text-gray-300">Period</label>
             <select id="rangeSelector" class="rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
@@ -22,6 +23,9 @@
                 <option value="last_month">This month vs Last month</option>
             </select>
             <p id="dashboardMetricsStatus" class="text-sm text-gray-500 dark:text-gray-400" aria-live="polite">Loading…</p>
+			<div id="aiStatusBox" class="text-sm font-semibold">
+    AI: <span id="aiStatusText" class="text-gray-500">Checking...</span>
+</div>
         </div>
     </div>
 
@@ -204,6 +208,7 @@
         insightFeedback: @json(route('admin.dashboard-metrics.insights.feedback')),
         risk: @json(route('admin.dashboard-metrics.risk')),
         live: @json(route('admin.dashboard-metrics.live')),
+		aiHealth: @json(route('admin.dashboard-metrics.ai-health')),
     };
 
     const statusEl = document.getElementById('dashboardMetricsStatus');
@@ -580,7 +585,36 @@
         if (r === 'today') return 'Active today';
         return 'Active in period';
     }
+async function loadAiHealth() {
+    try {
+        const res = await fetch(E.aiHealth, {
+            credentials: 'same-origin',
+            headers: { 'Accept': 'application/json' }
+        });
 
+        const json = await res.json();
+        const status = json?.data?.status;
+
+        const el = document.getElementById('aiStatusText');
+
+        if (!el) return;
+
+        if (status === 'up') {
+            el.textContent = '🟢 Running';
+            el.className = 'text-emerald-600 font-bold';
+        } else {
+            el.textContent = '🔴 Down';
+            el.className = 'text-red-600 font-bold';
+        }
+
+    } catch (e) {
+        const el = document.getElementById('aiStatusText');
+        if (el) {
+            el.textContent = '⚠️ Error';
+            el.className = 'text-yellow-600 font-bold';
+        }
+    }
+}
     async function loadAll() {
         if (statusEl) statusEl.textContent = 'Loading…';
         const r = currentRange();
@@ -783,7 +817,9 @@
     });
 
     loadAll();
+	loadAiHealth();
     setInterval(loadAll, REFRESH_MS);
+	setInterval(loadAiHealth, REFRESH_MS);
 })();
 </script>
 @endsection

@@ -139,6 +139,7 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
         Route::post('/insights/feedback', [AdminDashboardController::class, 'postInsightFeedback'])->name('insights.feedback');
         Route::get('/risk', [AdminDashboardController::class, 'getRiskAlerts'])->name('risk');
         Route::get('/live', [AdminDashboardController::class, 'getLiveActions'])->name('live');
+      	Route::get('/ai-health', [AdminDashboardController::class, 'getAiHealth'])->name('ai-health');
     });
 
     Route::get('/showcase', function () {

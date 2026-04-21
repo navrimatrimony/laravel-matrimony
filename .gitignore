@@ -35,4 +35,4 @@ laravel-matrimony-master 31Dec25.md
 # Bundled NudeNet FastAPI service (local venv / bytecode)
 /nudnet-api/.venv/
 /nudnet-api/__pycache__/
-
+nudnet-api/venv/
