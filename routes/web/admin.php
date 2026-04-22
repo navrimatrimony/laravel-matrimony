@@ -410,6 +410,10 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
     Route::post('boosts/start', [ProfileBoostController::class, 'start'])->name('boosts.start');
 
     Route::get('referrals', [ReferralController::class, 'index'])->name('referrals.index');
+    Route::get('referrals/export', [ReferralController::class, 'exportReport'])->name('referrals.export');
+    Route::post('referrals/audit/override', [ReferralController::class, 'manualOverride'])->name('referrals.audit.override');
+    Route::post('referrals/engine', [ReferralController::class, 'saveEngine'])->name('referrals.engine.save');
+    Route::post('referrals/rules', [ReferralController::class, 'saveRule'])->name('referrals.rules.save');
 
     Route::prefix('commerce')->name('commerce.')->group(function () {
         Route::get('analytics', CommerceAnalyticsController::class)->name('analytics.index');

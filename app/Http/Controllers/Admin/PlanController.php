@@ -107,6 +107,7 @@ class PlanController extends Controller
                 ->with('success', __('subscriptions.plan_saved'));
         }
 
+        $this->mergeTermRowsFallbackForStore($request);
         $this->syncPlanDiscountFromFormIntoFirstTermRow($request);
         $this->validateTermRowsRequest($request);
         $rows = $this->normalizedTermRowsFromRequest($request);
@@ -139,6 +140,39 @@ class PlanController extends Controller
         return redirect()
             ->route('admin.plans.edit', $plan)
             ->with('success', __('subscriptions.plan_saved'));
+    }
+
+    /**
+     * Create fallback for paid-plan billing rows when JS-bound term_rows are missing.
+     */
+    private function mergeTermRowsFallbackForStore(Request $request): void
+    {
+        if (is_array($request->input('term_rows')) && count((array) $request->input('term_rows')) > 0) {
+            return;
+        }
+
+        $preset = (string) $request->input('duration_preset', PlanTerm::BILLING_MONTHLY);
+        if (! in_array($preset, PlanTerm::presetBillingKeys(), true)) {
+            $preset = PlanTerm::BILLING_MONTHLY;
+        }
+
+        $rawPrice = $request->input('price', $request->input('list_price_rupees', 0));
+        $price = is_numeric($rawPrice) ? (float) $rawPrice : 0.0;
+
+        $rawDiscount = $request->input('discount_percent');
+        $discount = ($rawDiscount === '' || $rawDiscount === null)
+            ? null
+            : max(0, min(100, (int) round((float) $rawDiscount)));
+
+        $request->merge([
+            'duration_preset' => $preset,
+            'term_rows' => [[
+                'billing_key' => $preset,
+                'price' => max(0, $price),
+                'discount_percent' => $discount,
+                'is_visible' => true,
+            ]],
+        ]);
     }
 
     public function edit(Plan $plan)

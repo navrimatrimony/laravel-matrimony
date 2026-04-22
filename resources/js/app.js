@@ -8,8 +8,9 @@ import { initLaravelValidationUi } from './laravel-validation-ui';
 
 window.Alpine = Alpine;
 window.planQuotaPolicyCard = planQuotaPolicyCard;
-window.adminPlanBillingForm = adminPlanBillingForm;
-window.adminPlanAudienceHeader = adminPlanAudienceHeader;
+
+Alpine.data('adminPlanBillingForm', adminPlanBillingForm);
+Alpine.data('adminPlanAudienceHeader', adminPlanAudienceHeader);
 
 Alpine.start();
 

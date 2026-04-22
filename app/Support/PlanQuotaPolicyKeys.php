@@ -31,7 +31,6 @@ final class PlanQuotaPolicyKeys
             PlanFeatureKeys::PROFILE_BOOST_PER_WEEK,
             PlanFeatureKeys::PRIORITY_LISTING,
             PlanFeatureKeys::MEDIATOR_REQUESTS_PER_MONTH,
-            PlanFeatureKeys::REFERRAL_BONUS_DAYS,
             PlanFeatureKeys::ADVANCED_PROFILE_SEARCH,
             PlanFeatureKeys::PROFILE_WHATSAPP_DIRECT,
         ];

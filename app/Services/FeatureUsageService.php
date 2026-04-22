@@ -1109,7 +1109,7 @@ class FeatureUsageService
             return 0;
         }
 
-        return max(0, (int) $raw);
+        return max(0, (int) $raw) + $this->referralCarryBonusForFeature($user, PlanFeatureKeys::WHO_VIEWED_ME_DAYS);
     }
 
     /**
@@ -1128,7 +1128,29 @@ class FeatureUsageService
             return 0;
         }
 
-        return max(0, (int) $raw);
+        return max(0, (int) $raw) + $this->referralCarryBonusForFeature($user, PlanFeatureKeys::WHO_VIEWED_ME_PREVIEW_LIMIT);
+    }
+
+    private function referralCarryBonusForFeature(?User $user, string $featureKey): int
+    {
+        if (! $user) {
+            return 0;
+        }
+
+        $sub = app(SubscriptionService::class)->getActiveSubscription($user);
+        if (! $sub || ! is_array($sub->meta)) {
+            return 0;
+        }
+
+        $carry = $sub->meta['carry_quota'] ?? null;
+        if (! is_array($carry)) {
+            return 0;
+        }
+
+        $normalized = $this->normalizeFeatureKey($featureKey);
+        $bonus = $carry[$normalized] ?? 0;
+
+        return max(0, (int) $bonus);
     }
 
     // -------------------------------------------------------------------------
