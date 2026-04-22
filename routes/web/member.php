@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\AbuseReportController;
+use App\Http\Controllers\PaymentDisputeController;
 use App\Http\Controllers\BlockController;
 use App\Http\Controllers\ChatController;
 use App\Http\Controllers\ContactInboxController;
@@ -48,6 +49,9 @@ Route::middleware(['auth', \App\Http\Middleware\EnforceCardOnboarding::class])->
         ->name('matrimony.api.occupations.create');
 
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
+
+    Route::post('/payments/{txnid}/dispute', [PaymentDisputeController::class, 'store'])
+        ->name('payments.dispute.store');
 
     /*
     | Phase-5: User-side Intake UI (user-access path /intake/...)

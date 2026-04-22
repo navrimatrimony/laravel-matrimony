@@ -2,8 +2,10 @@
 
 namespace App\Http\Controllers\Payments;
 
+use App\Enums\PaymentStatus;
 use App\Http\Controllers\Controller;
 use App\Models\Payment;
+use App\Models\PaymentLog;
 use App\Models\User;
 use App\Support\PayuHasher;
 use Illuminate\Database\QueryException;
@@ -15,6 +17,10 @@ use Symfony\Component\HttpFoundation\Response;
 
 class PayuController extends Controller
 {
+    private const SOURCE_REDIRECT = 'redirect';
+
+    private const SOURCE_WEBHOOK = 'webhook';
+
     public function start(Request $request)
     {
         $user = $request->user();
@@ -85,7 +91,7 @@ class PayuController extends Controller
     public function success(Request $request)
     {
         $data = $request->all();
-        $status = strtolower(trim((string) ($data['status'] ?? '')));
+        $this->logPaymentCallback($data, self::SOURCE_REDIRECT);
 
         if (! $this->verifyPayuResponseHash($data)) {
             Log::error('Payment failed validation', [
@@ -99,33 +105,41 @@ class PayuController extends Controller
             ], 400);
         }
 
-        if ($status !== 'success') {
+        $paymentStatus = PaymentStatus::fromPayu((string) ($data['status'] ?? ''));
+
+        if ($paymentStatus !== PaymentStatus::Success) {
+            return $this->recordPaymentOutcome($data, self::SOURCE_REDIRECT, $paymentStatus);
+        }
+
+        return $this->processSuccessfulPayment($data, self::SOURCE_REDIRECT);
+    }
+
+    public function failure(Request $request)
+    {
+        $data = $request->all();
+        $this->logPaymentCallback($data, self::SOURCE_REDIRECT.'_failure');
+
+        $hasHash = isset($data['hash']) && trim((string) $data['hash']) !== '';
+        if ($hasHash && ! $this->verifyPayuResponseHash($data)) {
             Log::error('Payment failed validation', [
-                'reason' => 'non_success_status',
-                'status' => $status,
+                'reason' => 'hash_mismatch',
+                'channel' => 'failure_callback',
                 'txnid' => $data['txnid'] ?? null,
             ]);
 
             return response()->json([
                 'status' => 'error',
-                'message' => 'Payment failed',
+                'message' => 'Hash mismatch',
             ], 400);
         }
 
-        return $this->processSuccessfulPayment($data);
-    }
-
-    public function failure(Request $request)
-    {
-        Log::warning('PayU failure callback', $request->all());
-
-        return response('Payment Failed', 200);
+        return $this->recordPaymentOutcome($data, self::SOURCE_REDIRECT, PaymentStatus::Failed);
     }
 
     public function webhook(Request $request)
     {
         $data = $request->all();
-        $status = strtolower(trim((string) ($data['status'] ?? '')));
+        $this->logPaymentCallback($data, self::SOURCE_WEBHOOK);
 
         if (! $this->verifyPayuResponseHash($data)) {
             Log::error('Payment failed validation', [
@@ -140,25 +154,24 @@ class PayuController extends Controller
             ], 400);
         }
 
-        if ($status !== 'success') {
-            Log::info('PayU webhook: ignored status', ['status' => $status]);
+        $paymentStatus = PaymentStatus::fromPayu((string) ($data['status'] ?? ''));
 
-            return response()->json([
-                'status' => 'success',
-                'message' => 'Ignored',
-            ]);
+        if ($paymentStatus !== PaymentStatus::Success) {
+            Log::info('PayU webhook: non-success status', ['status' => $paymentStatus->value]);
+
+            return $this->recordPaymentOutcome($data, self::SOURCE_WEBHOOK, $paymentStatus);
         }
 
-        return $this->processSuccessfulPayment($data);
+        return $this->processSuccessfulPayment($data, self::SOURCE_WEBHOOK);
     }
 
     /**
+     * Successful PayU payment: persist row and optionally extend plan (with downgrade guard + webhook priority).
+     *
      * @param  array<string, mixed>  $data
      */
-    private function processSuccessfulPayment(array $data): Response
+    private function processSuccessfulPayment(array $data, string $source): Response
     {
-        $status = strtolower(trim((string) ($data['status'] ?? '')));
-        $email = trim((string) ($data['email'] ?? ''));
         $amount = trim((string) ($data['amount'] ?? ''));
         $txnid = trim((string) ($data['txnid'] ?? ''));
 
@@ -194,13 +207,7 @@ class PayuController extends Controller
             ], 400);
         }
 
-        $userId = auth()->id();
-        if (! $userId && $email !== '') {
-            $userId = User::query()
-                ->whereRaw('LOWER(TRIM(email)) = ?', [strtolower(trim($email))])
-                ->value('id');
-        }
-
+        $userId = $this->resolveUserId($data);
         if (! $userId) {
             Log::error('Payment failed validation', [
                 'reason' => 'missing_user',
@@ -213,37 +220,62 @@ class PayuController extends Controller
             ], 422);
         }
 
+        $statusEnum = PaymentStatus::Success;
+
+        $existing = $txnid !== '' ? Payment::query()->where('txnid', $txnid)->first() : null;
+        if ($existing && $existing->webhook_is_final && $source === self::SOURCE_REDIRECT) {
+            return response()->json([
+                'status' => 'success',
+                'message' => 'Already finalized by webhook',
+            ]);
+        }
+
         try {
-            DB::transaction(function () use ($data, $status, $userId, $txnid, $amount, $planId, $plan): void {
-                try {
-                    Payment::create([
+            DB::transaction(function () use ($data, $source, $userId, $txnid, $postedAmountNorm, $planId, $plan, $statusEnum): void {
+                $locked = $txnid !== ''
+                    ? Payment::query()->where('txnid', $txnid)->lockForUpdate()->first()
+                    : null;
+
+                $webhookFinal = ($locked && $locked->webhook_is_final) || ($source === self::SOURCE_WEBHOOK);
+
+                Payment::query()->updateOrCreate(
+                    ['txnid' => $txnid],
+                    [
                         'user_id' => $userId,
-                        'txnid' => $txnid,
-                        'amount' => $amount,
-                        'status' => $status,
+                        'plan_key' => $planId,
+                        'amount' => $postedAmountNorm,
+                        'status' => $statusEnum->value,
+                        'payment_status' => 'success',
                         'gateway' => 'payu',
                         'payload' => $data,
-                    ]);
-                } catch (QueryException $e) {
-                    if ($this->isDuplicateTxnQueryException($e)) {
-                        throw new \RuntimeException('payu_duplicate_txnid');
-                    }
-                    throw $e;
-                }
+                        'source' => $source,
+                        'is_processed' => true,
+                        'webhook_is_final' => $webhookFinal,
+                    ],
+                );
 
                 $user = User::query()->find($userId);
-                if ($user) {
+                if ($user && ! $this->shouldSkipPlanDowngrade($user, $planId)) {
                     $user->plan = $planId;
                     if ($user->plan_expires_at && $user->plan_expires_at > now()) {
                         $user->plan_expires_at = $user->plan_expires_at->copy()->addDays((int) $plan['days']);
                     } else {
                         $user->plan_expires_at = now()->addDays((int) $plan['days']);
                     }
+                    $user->plan_status = 'active';
+                    $user->plan_started_at = now();
                     $user->save();
+                } elseif ($user && $this->shouldSkipPlanDowngrade($user, $planId)) {
+                    Log::info('Payment stored without plan downgrade', [
+                        'txnid' => $txnid,
+                        'user_id' => $userId,
+                        'current_plan' => $user->plan,
+                        'requested_plan' => $planId,
+                    ]);
                 }
             });
-        } catch (\RuntimeException $e) {
-            if ($e->getMessage() === 'payu_duplicate_txnid') {
+        } catch (\Throwable $e) {
+            if ($e instanceof QueryException && $this->isDuplicateTxnQueryException($e)) {
                 return response()->json([
                     'status' => 'success',
                     'message' => 'Already processed',
@@ -257,12 +289,157 @@ class PayuController extends Controller
             'user_id' => $userId,
             'plan_id' => $planId,
             'amount' => $postedAmountNorm,
+            'source' => $source,
         ]);
 
         return response()->json([
             'status' => 'success',
             'message' => 'Payment successful',
         ]);
+    }
+
+    /**
+     * @param  array<string, mixed>  $data
+     */
+    private function recordPaymentOutcome(array $data, string $source, PaymentStatus $paymentStatus): Response
+    {
+        $txnid = trim((string) ($data['txnid'] ?? ''));
+        if ($txnid === '') {
+            Log::error('Payment failed validation', ['reason' => 'missing_txnid']);
+
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Missing transaction id',
+            ], 422);
+        }
+
+        $userId = $this->resolveUserId($data);
+        $amountRaw = trim((string) ($data['amount'] ?? '0'));
+        $postedAmountNorm = number_format((float) $amountRaw, 2, '.', '');
+        $planKey = trim((string) ($data['udf1'] ?? ''));
+
+        $existing = Payment::query()->where('txnid', $txnid)->first();
+        if ($existing && $existing->webhook_is_final && $source === self::SOURCE_REDIRECT) {
+            return response()->json([
+                'status' => 'success',
+                'message' => 'Already finalized by webhook',
+            ]);
+        }
+
+        $webhookFinal = ($existing && $existing->webhook_is_final) || ($source === self::SOURCE_WEBHOOK);
+
+        if (! $userId) {
+            Log::error('Payment failed validation', [
+                'reason' => 'missing_user',
+                'txnid' => $txnid,
+                'payment_status' => $paymentStatus->value,
+            ]);
+
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Unable to record payment',
+            ], 422);
+        }
+
+        $resolvedSource = $source === self::SOURCE_WEBHOOK ? self::SOURCE_WEBHOOK : self::SOURCE_REDIRECT;
+        $paymentStatusValue = match ($paymentStatus) {
+            PaymentStatus::Success => 'success',
+            PaymentStatus::Pending => 'pending',
+            PaymentStatus::Failed => 'failed',
+        };
+        $isProcessed = $paymentStatus === PaymentStatus::Success;
+
+        Payment::query()->updateOrCreate(
+            ['txnid' => $txnid],
+            [
+                'user_id' => $userId,
+                'plan_key' => $planKey !== '' ? $planKey : null,
+                'amount' => $postedAmountNorm,
+                'status' => $paymentStatus->value,
+                'payment_status' => $paymentStatusValue,
+                'gateway' => 'payu',
+                'payload' => $data,
+                'source' => $resolvedSource,
+                'is_processed' => $isProcessed,
+                'webhook_is_final' => $webhookFinal,
+            ],
+        );
+
+        Log::info('Payment stored', [
+            'txnid' => $txnid,
+            'user_id' => $userId,
+            'payment_status' => $paymentStatus->value,
+            'source' => $source,
+        ]);
+
+        if ($paymentStatus === PaymentStatus::Success) {
+            return response()->json([
+                'status' => 'success',
+                'message' => 'Payment recorded',
+            ]);
+        }
+
+        return response()->json([
+            'status' => 'error',
+            'message' => $paymentStatus === PaymentStatus::Pending ? 'Payment pending' : 'Payment failed',
+        ], $paymentStatus === PaymentStatus::Pending ? 202 : 400);
+    }
+
+    /**
+     * @param  array<string, mixed>  $data
+     */
+    private function logPaymentCallback(array $data, string $source): void
+    {
+        try {
+            PaymentLog::query()->create([
+                'txnid' => isset($data['txnid']) ? trim((string) $data['txnid']) : null,
+                'source' => $source,
+                'payload' => $data,
+            ]);
+        } catch (\Throwable $e) {
+            Log::warning('payment_logs insert failed', ['error' => $e->getMessage()]);
+        }
+    }
+
+    /**
+     * @param  array<string, mixed>  $data
+     */
+    private function resolveUserId(array $data): ?int
+    {
+        $userId = auth()->id();
+        if ($userId) {
+            return (int) $userId;
+        }
+
+        $email = trim((string) ($data['email'] ?? ''));
+        if ($email === '') {
+            return null;
+        }
+
+        $found = User::query()
+            ->whereRaw('LOWER(TRIM(email)) = ?', [strtolower($email)])
+            ->value('id');
+
+        return $found ? (int) $found : null;
+    }
+
+    private function shouldSkipPlanDowngrade(User $user, string $newPlanId): bool
+    {
+        $current = trim((string) ($user->plan ?? ''));
+        if ($current === '') {
+            return false;
+        }
+
+        return $this->planTier($current) > $this->planTier($newPlanId);
+    }
+
+    private function planTier(?string $planKey): int
+    {
+        if ($planKey === null || $planKey === '') {
+            return 0;
+        }
+
+        return (int) (config('plans.'.$planKey.'.tier') ?? 0);
     }
 
     /**
@@ -296,7 +473,6 @@ class PayuController extends Controller
 
     private function isDuplicateTxnQueryException(QueryException $e): bool
     {
-        // MySQL 1062 / SQLSTATE 23000; SQLite constraint (typical tests).
         $code = $e->errorInfo[1] ?? null;
 
         return $code === 1062

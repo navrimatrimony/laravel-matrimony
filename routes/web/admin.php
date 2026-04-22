@@ -9,6 +9,9 @@ use App\Http\Controllers\Admin\AdminDashboardController;
 use App\Http\Controllers\Admin\AdminFieldRegistryController;
 use App\Http\Controllers\Admin\AdminIntakeController;
 use App\Http\Controllers\Admin\AdminKycController;
+use App\Http\Controllers\PaymentDisputeController;
+use App\Http\Controllers\PaymentController;
+use App\Http\Controllers\Admin\AdminPaymentController;
 use App\Http\Controllers\Admin\AdminOcrSimulationController;
 use App\Http\Controllers\Admin\AdminProfileModerationController;
 use App\Http\Controllers\Admin\AdminProfileTagController;
@@ -127,6 +130,12 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
 
     Route::get('/duplicate-phones', [DuplicatePhoneController::class, 'index'])->name('duplicate-phones.index');
     Route::post('/duplicate-phones/{user}/mobile', [DuplicatePhoneController::class, 'updateMobile'])->name('duplicate-phones.update-mobile');
+
+    Route::get('/payments', [AdminPaymentController::class, 'index'])->name('payments.index');
+    Route::get('/disputes', [AdminPaymentController::class, 'disputes'])->name('disputes.index');
+    Route::post('/payments/{txnid}/refund', [PaymentController::class, 'refund'])->name('payments.refund');
+    Route::post('/payment-disputes/{payment_dispute}/resolve', [PaymentDisputeController::class, 'resolve'])
+        ->name('payment-disputes.resolve');
 
     Route::prefix('dashboard-metrics')->name('dashboard-metrics.')->group(function () {
         Route::get('/overview', [AdminDashboardController::class, 'getOverviewStats'])->name('overview');

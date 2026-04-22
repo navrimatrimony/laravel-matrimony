@@ -43,6 +43,8 @@ class User extends Authenticatable implements MustVerifyEmail
         'email',
         'plan',
         'plan_expires_at',
+        'plan_status',
+        'plan_started_at',
         'mobile',
         'mobile_backup',
         'mobile_duplicate_of_user_id',
@@ -71,6 +73,7 @@ class User extends Authenticatable implements MustVerifyEmail
     protected $casts = [
         'email_verified_at' => 'datetime',
         'plan_expires_at' => 'datetime',
+        'plan_started_at' => 'datetime',
         'mobile_verified_at' => 'datetime',
         'last_seen_at' => 'datetime',
         'last_inactive_reminder_sent_at' => 'datetime',
@@ -247,4 +250,23 @@ class User extends Authenticatable implements MustVerifyEmail
 
         return in_array($this->admin_role, $roles, true);
     }
+
+    /**
+     * Whether the subscription period is currently valid.
+     * If past expiry, persists plan_status = expired when it was not already expired.
+     */
+    public function isPlanActive(): bool
+    {
+        if ($this->plan_expires_at !== null && $this->plan_expires_at->isPast()) {
+            if (($this->plan_status ?? '') !== 'expired') {
+                $this->plan_status = 'expired';
+                $this->save();
+            }
+
+            return false;
+        }
+
+        return $this->plan_expires_at !== null && $this->plan_expires_at->isFuture();
+    }
 }
+
