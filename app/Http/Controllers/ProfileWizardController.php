@@ -2069,7 +2069,7 @@ class ProfileWizardController extends Controller
     {
         $maritalStatusId = $request->input('marital_status_id');
         $statusKey = \App\Models\MasterMaritalStatus::where('id', $maritalStatusId)->value('key');
-        $statusesRequiringChildren = ['divorced', 'separated', 'widowed'];
+        $statusesRequiringChildren = ['divorced', 'annulled', 'separated', 'widowed'];
 
         $rules = [
             'marital_status_id' => ['required', Rule::exists('master_marital_statuses', 'id')->where(fn ($q) => $q->where('is_active', true))],
@@ -2165,6 +2165,12 @@ class ProfileWizardController extends Controller
                     'sort_order' => $i,
                 ];
             }
+        }
+
+        if ($hasChildrenBool && $statusKey && in_array($statusKey, $statusesRequiringChildren, true) && count($children) === 0) {
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'children' => [__('wizard.children_at_least_one_required')],
+            ]);
         }
 
         return [

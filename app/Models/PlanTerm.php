@@ -161,7 +161,7 @@ class PlanTerm extends Model
             ]);
         }
 
-        PlanPrice::syncFromPlanTerms($plan->fresh('terms'));
+        PlanPrice::ensureMirrorMatchesTerms($plan->fresh('terms'));
     }
 
     /**
@@ -196,7 +196,7 @@ class PlanTerm extends Model
             );
         }
 
-        PlanPrice::syncFromPlanTerms($plan->fresh('terms'));
+        PlanPrice::ensureMirrorMatchesTerms($plan->fresh('terms'));
     }
 
     /**
@@ -255,13 +255,7 @@ class PlanTerm extends Model
             );
         }
 
-        PlanPrice::syncFromPlanTerms($plan->fresh('terms'));
-
-        $keys = static::query()->where('plan_id', $plan->id)->pluck('billing_key')->all();
-        PlanPrice::query()
-            ->where('plan_id', $plan->id)
-            ->whereNotIn('duration_type', $keys)
-            ->delete();
+        PlanPrice::ensureMirrorMatchesTerms($plan->fresh('terms'));
     }
 
     public function plan(): BelongsTo

@@ -1,18 +1,46 @@
 import './bootstrap';
 
 import Alpine from 'alpinejs';
-import './plans-catalog';
+import { plansPricingCatalog } from './plans-catalog';
 import { planQuotaPolicyCard } from './plan-quota-policy-card';
 import { adminPlanAudienceHeader, adminPlanBillingForm } from './admin-plan-billing-form';
 import { initLaravelValidationUi } from './laravel-validation-ui';
 
 window.Alpine = Alpine;
 window.planQuotaPolicyCard = planQuotaPolicyCard;
+/** Plan form blade uses `x-data="window.adminPlanBillingForm({ ... })"` (same pattern as quota cards). */
+window.adminPlanBillingForm = adminPlanBillingForm;
+window.adminPlanAudienceHeader = adminPlanAudienceHeader;
+window.plansPricingCatalog = plansPricingCatalog;
 
 Alpine.data('adminPlanBillingForm', adminPlanBillingForm);
 Alpine.data('adminPlanAudienceHeader', adminPlanAudienceHeader);
+Alpine.data('plansPricingCatalog', plansPricingCatalog);
 
 Alpine.start();
+
+/**
+ * Admin plan form: "+ Add period" lives inside `x-data="window.adminPlanBillingForm(...)"`, but some
+ * browsers/extensions evaluate `@click="addRow()"` outside that Alpine scope → ReferenceError.
+ * Delegate from the real DOM root so we call `addRow` on `._x_dataStack[0]` for `.js-admin-plan-billing-root`.
+ */
+document.addEventListener(
+    'click',
+    (e) => {
+        const btn = e.target.closest('[data-billing-add-period]');
+        if (!btn) {
+            return;
+        }
+        const root = btn.closest('.js-admin-plan-billing-root');
+        const stack = root && root._x_dataStack;
+        const scope = stack && stack.length ? stack[0] : null;
+        if (scope && typeof scope.addRow === 'function') {
+            e.preventDefault();
+            scope.addRow();
+        }
+    },
+    true
+);
 
 if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', initLaravelValidationUi);

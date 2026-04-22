@@ -1,10 +1,10 @@
 /**
- * Alpine state for /plans: optional coupon meta + per-card duration selection uses local x-data.
+ * Alpine state for /plans: coupon preview + per-card duration selection.
+ * Registered in app.js; blade uses `window.plansPricingCatalog({ ... })`.
  */
-import Alpine from 'alpinejs';
 
-document.addEventListener('alpine:init', () => {
-    Alpine.data('plansPricingCatalog', (initial) => ({
+export function plansPricingCatalog(initial) {
+    return {
         couponCode: '',
         couponMeta: null,
         couponError: '',
@@ -72,5 +72,5 @@ document.addEventListener('alpine:init', () => {
             this.couponError = '';
             this.couponCode = '';
         },
-    }));
-});
+    };
+}

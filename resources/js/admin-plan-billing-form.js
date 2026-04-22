@@ -96,6 +96,9 @@ export function adminPlanBillingForm(config) {
         durationPreset: config.durationPreset ?? 'monthly',
         defaultBilling: config.defaultBilling ?? '',
         presets: Array.isArray(config.presets) ? config.presets : [],
+        billingPanelNotice: '',
+        msgAllPeriodsAdded: config.msgAllPeriodsAdded ?? '',
+        msgNoPresetList: config.msgNoPresetList ?? '',
 
         init() {
             if (!this.rows.length) {
@@ -106,11 +109,49 @@ export function adminPlanBillingForm(config) {
                     is_visible: true,
                 }];
             }
+
+            const rowKeys = () => this.rows.map((r) => r.billing_key);
+            const pickDefault = () => {
+                const keys = rowKeys();
+                if (keys.length === 0) {
+                    return 'monthly';
+                }
+                const fromPlan = typeof this.defaultBilling === 'string' ? this.defaultBilling.trim() : '';
+                if (fromPlan !== '' && keys.includes(fromPlan)) {
+                    return fromPlan;
+                }
+                const cur = String(this.durationPreset || '');
+                if (cur !== '' && keys.includes(cur)) {
+                    return cur;
+                }
+
+                return keys[0];
+            };
+            this.durationPreset = pickDefault();
+
             this._slugHash10 = this.initialPlanNameSha10;
             void this.refreshSlugHash();
             this.$watch('planName', () => {
                 void this.refreshSlugHash();
             });
+
+            this.$watch(
+                'rows',
+                () => {
+                    const keys = rowKeys();
+                    if (keys.length && !keys.includes(this.durationPreset)) {
+                        this.durationPreset = keys[0];
+                    }
+                },
+                { deep: true }
+            );
+        },
+
+        syncDefaultBillingKeyPresence() {
+            const keys = this.rows.map((r) => r.billing_key);
+            if (keys.length && !keys.includes(this.durationPreset)) {
+                this.durationPreset = keys[0];
+            }
         },
 
         async refreshSlugHash() {
@@ -126,25 +167,23 @@ export function adminPlanBillingForm(config) {
             );
         },
 
-        get showPaidBilling() {
-            return (this.slug || '').toLowerCase() !== 'free';
-        },
-
         billingLabel(k) {
             return billingLabels[k] || k;
         },
 
-        availableKeysForRow(index) {
-            const cur = this.rows[index]?.billing_key;
-            return this.presets.filter((key) => key === cur
-                || !this.rows.some((r, j) => j !== index && r.billing_key === key));
-        },
-
         addRow() {
-            const next = this.presets.find((k) => !this.rows.some((r) => r.billing_key === k));
-            if (!next) {
+            if (!Array.isArray(this.presets) || this.presets.length === 0) {
+                this.billingPanelNotice = this.msgNoPresetList || 'Billing presets are not configured.';
+
                 return;
             }
+            const next = this.presets.find((k) => !this.rows.some((r) => r.billing_key === k));
+            if (!next) {
+                this.billingPanelNotice = this.msgAllPeriodsAdded || 'All billing periods are already added for this plan.';
+
+                return;
+            }
+            this.billingPanelNotice = '';
             const monthlyRow = this.rows.find((r) => r.billing_key === 'monthly');
             const monthly = monthlyRow && Number(monthlyRow.price) > 0 ? Number(monthlyRow.price) : 0;
             const mult = { quarterly: 3, half_yearly: 6, yearly: 12, five_yearly: 60 };

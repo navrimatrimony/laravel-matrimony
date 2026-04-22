@@ -60,6 +60,8 @@ class SubscriptionService
             throw new HttpException(422, __('subscriptions.plan_inactive'));
         }
 
+        PlanPrice::ensureMirrorMatchesTerms($plan->fresh());
+
         $couponSvc = app(CouponService::class);
         $rawCoupon = trim((string) ($couponCode ?? ''));
         if ($rawCoupon !== '' && ! config('monetization.coupons.enabled', true)) {

@@ -62,6 +62,7 @@
         'profileMarriages' => $profileMarriages ?? collect(),
         'profileChildren' => $profileChildren ?? collect(),
         'childLivingWithOptions' => $childLivingWithOptions ?? collect(),
+        'hideStatusDetailsOptional' => true,
     ])
 
     <x-onboarding.form-footer />

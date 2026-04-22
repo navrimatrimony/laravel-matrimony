@@ -19,7 +19,8 @@ class PlanCreateBillingUiTest extends TestCase
         $response->assertOk();
         $response->assertSee(__('subscriptions.admin_billing_rows_title'), false);
         $response->assertSee(__('subscriptions.admin_add_billing_period'), false);
-        $response->assertSee(__('subscriptions.admin_plan_duration_preset_title'), false);
+        $response->assertSee(__('subscriptions.admin_billing_default_catalog_tab'), false);
+        $response->assertSee('id="plan-admin-billing-panel"', false);
         $response->assertSee('name="duration_preset"', false);
         $response->assertSee("term_rows[' + i + '][billing_key]", false);
     }

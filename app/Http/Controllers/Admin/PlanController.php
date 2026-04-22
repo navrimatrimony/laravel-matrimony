@@ -77,7 +77,6 @@ class PlanController extends Controller
             'durationPresetInitial' => $this->durationPresetForAdminForm($plan),
             'termRowsInitial' => $this->initialTermRowsForForm($plan, false),
             'adminMarketingBadgeKeys' => self::ADMIN_MARKETING_BADGE_KEYS,
-            'adminPlanDurationPresetKeys' => self::ADMIN_PLAN_DURATION_PRESET_KEYS,
             'planNameInput' => $this->planNameInputFromSession($plan),
             'initialPlanNameSha10' => substr(hash('sha256', $this->planNameInputFromSession($plan)), 0, 10),
         ]);
@@ -108,7 +107,6 @@ class PlanController extends Controller
         }
 
         $this->mergeTermRowsFallbackForStore($request);
-        $this->syncPlanDiscountFromFormIntoFirstTermRow($request);
         $this->validateTermRowsRequest($request);
         $rows = $this->normalizedTermRowsFromRequest($request);
         $primary = $rows[0] ?? null;
@@ -117,13 +115,8 @@ class PlanController extends Controller
                 'term_rows' => [__('subscriptions.admin_term_rows_required')],
             ]);
         }
-        $reqDisc = $request->input('discount_percent');
-        $mergedDisc = ($reqDisc !== '' && $reqDisc !== null)
-            ? max(0, min(100, (int) round((float) $reqDisc)))
-            : $primary['discount_percent'];
         $request->merge([
             'price' => $primary['price'],
-            'discount_percent' => $mergedDisc,
         ]);
 
         $data = $this->validatedPlanData($request);
@@ -135,7 +128,7 @@ class PlanController extends Controller
         $plan->forgetCachedPlanFeatures();
 
         PlanTerm::syncAdminTermRows($plan, $rows);
-        $this->syncPlanDefaultBillingKey($plan->fresh('terms'), $request->input('default_billing_key'));
+        $this->syncPlanDefaultBillingKey($plan->fresh('terms'), $this->resolvedRequestedBillingKey($request));
 
         return redirect()
             ->route('admin.plans.edit', $plan)
@@ -188,7 +181,6 @@ class PlanController extends Controller
             'durationPresetInitial' => $this->durationPresetForAdminForm($plan),
             'termRowsInitial' => $this->initialTermRowsForForm($plan, true),
             'adminMarketingBadgeKeys' => self::ADMIN_MARKETING_BADGE_KEYS,
-            'adminPlanDurationPresetKeys' => self::ADMIN_PLAN_DURATION_PRESET_KEYS,
             'planNameInput' => $this->planNameInputFromSession($plan),
             'initialPlanNameSha10' => substr(hash('sha256', $this->planNameInputFromSession($plan)), 0, 10),
         ]);
@@ -199,7 +191,6 @@ class PlanController extends Controller
         $this->validateQuotaPoliciesRequest($request);
         if (! Plan::isFreeCatalogSlug((string) $plan->slug)) {
             $this->mergeTermRowsFallbackForUpdate($request, $plan);
-            $this->syncPlanDiscountFromFormIntoFirstTermRow($request);
             $this->validateTermRowsRequest($request);
         }
         $data = $this->validatedPlanData($request, $plan->id, $plan);
@@ -209,7 +200,7 @@ class PlanController extends Controller
         if (! Plan::isFreeCatalogSlug((string) ($data['slug'] ?? ''))) {
             $rows = $this->normalizedTermRowsFromRequest($request);
             PlanTerm::syncAdminTermRows($plan, $rows);
-            $this->syncPlanDefaultBillingKey($plan->fresh('terms'), $request->input('default_billing_key'));
+            $this->syncPlanDefaultBillingKey($plan->fresh('terms'), $this->resolvedRequestedBillingKey($request));
         } else {
             PlanTerm::query()->where('plan_id', $plan->id)->delete();
             PlanPrice::query()->where('plan_id', $plan->id)->delete();
@@ -299,6 +290,26 @@ class PlanController extends Controller
                 'term_rows' => [__('subscriptions.admin_term_rows_duplicate')],
             ]);
         }
+
+        $preset = (string) $request->input('duration_preset', '');
+        if ($preset !== '') {
+            $targetRows = collect((array) $request->input('term_rows', []))
+                ->filter(fn ($row) => is_array($row) && (string) ($row['billing_key'] ?? '') === $preset);
+            if ($targetRows->isEmpty()) {
+                throw \Illuminate\Validation\ValidationException::withMessages([
+                    'duration_preset' => ['Selected duration must exist in billing rows.'],
+                ]);
+            }
+
+            $selectedRow = $targetRows->first();
+            $selectedVisible = filter_var($selectedRow['is_visible'] ?? false, FILTER_VALIDATE_BOOLEAN)
+                || (string) ($selectedRow['is_visible'] ?? '') === '1';
+            if (! $selectedVisible) {
+                throw \Illuminate\Validation\ValidationException::withMessages([
+                    'duration_preset' => ['Selected duration must be visible for purchase.'],
+                ]);
+            }
+        }
     }
 
     /**
@@ -356,6 +367,25 @@ class PlanController extends Controller
     }
 
     /**
+     * Default catalog billing: prefers {@code default_billing_key}, then {@code duration_preset}
+     * (both set from the billing-rows UI). Must match a persisted term row after save.
+     */
+    private function resolvedRequestedBillingKey(Request $request): ?string
+    {
+        $explicit = trim((string) $request->input('default_billing_key', ''));
+        if ($explicit !== '') {
+            return in_array($explicit, PlanTerm::presetBillingKeys(), true) ? $explicit : null;
+        }
+
+        $durationPreset = trim((string) $request->input('duration_preset', ''));
+        if ($durationPreset !== '' && in_array($durationPreset, PlanTerm::presetBillingKeys(), true)) {
+            return $durationPreset;
+        }
+
+        return null;
+    }
+
+    /**
      * @return array<string, mixed>
      */
     private function validatedPlanData(Request $request, ?int $ignoreId = null, ?Plan $planContext = null): array
@@ -381,14 +411,7 @@ class PlanController extends Controller
         $isFreeSystemPlan = ($planContext !== null && Plan::isFreeCatalogSlug((string) $planContext->slug))
             || Plan::isFreeCatalogSlug((string) $request->input('slug', ''));
 
-        if ($planContext !== null && ! $isFreeSystemPlan) {
-            $lp = $request->input('list_price_rupees');
-            if ($lp !== null && $lp !== '') {
-                $request->merge(['price' => (float) $lp]);
-            } else {
-                $request->merge(['price' => (float) ($planContext->price ?? 0)]);
-            }
-        } elseif ($isFreeSystemPlan && ! $request->filled('price')) {
+        if ($isFreeSystemPlan && ! $request->filled('price')) {
             $request->merge(['price' => $planContext !== null ? (float) ($planContext->price ?? 0) : 0.0]);
         }
 
@@ -408,6 +431,11 @@ class PlanController extends Controller
             'gst_inclusive' => ['sometimes'],
             'chat_initiate_new_chats_only' => ['sometimes', 'boolean'],
         ]);
+
+        $canonicalPaidPricing = null;
+        if (! $isFreeSystemPlan) {
+            $canonicalPaidPricing = $this->canonicalPaidPricingFromRequest($request, $planContext);
+        }
 
         $leftoverRaw = $request->input('leftover_quota_carry_window_days');
         $leftover = ($leftoverRaw === '' || $leftoverRaw === null)
@@ -451,6 +479,9 @@ class PlanController extends Controller
         } else {
             $listPriceRupees = max(0, (int) $listPrice);
         }
+        if ($canonicalPaidPricing !== null) {
+            $listPriceRupees = $canonicalPaidPricing['list_price_rupees'];
+        }
 
         $defaultBilling = $isFreeSystemPlan ? null : ($validated['default_billing_key'] ?? null);
         if (is_string($defaultBilling) && $defaultBilling === '') {
@@ -464,8 +495,8 @@ class PlanController extends Controller
         return [
             'name' => $validated['name'],
             'slug' => $slug,
-            'price' => $validated['price'],
-            'discount_percent' => $validated['discount_percent'] ?? null,
+            'price' => $canonicalPaidPricing['price'] ?? $validated['price'],
+            'discount_percent' => $canonicalPaidPricing['discount_percent'] ?? ($validated['discount_percent'] ?? null),
             'list_price_rupees' => $listPriceRupees,
             'gst_inclusive' => $request->boolean('gst_inclusive'),
             'duration_days' => $durationDays,
@@ -479,6 +510,46 @@ class PlanController extends Controller
             'highlight' => $marketingBadge !== null,
             'applies_to_gender' => (string) $validated['applies_to_gender'],
             'marketing_badge' => $marketingBadge,
+        ];
+    }
+
+    /**
+     * Paid-plan monetary SSOT comes from selected duration billing row in term_rows.
+     *
+     * @return array{price:float, discount_percent:int|null, list_price_rupees:int}|null
+     */
+    private function canonicalPaidPricingFromRequest(Request $request, ?Plan $planContext): ?array
+    {
+        $rows = $this->normalizedTermRowsFromRequest($request);
+        if ($rows === [] && $planContext !== null) {
+            $rows = $this->initialTermRowsForForm($planContext, true);
+        }
+        if ($rows === []) {
+            return null;
+        }
+
+        $byKey = [];
+        foreach ($rows as $row) {
+            $key = (string) ($row['billing_key'] ?? '');
+            if ($key !== '') {
+                $byKey[$key] = $row;
+            }
+        }
+
+        $selectedKey = (string) $this->resolvedRequestedBillingKey($request);
+        $selectedRow = $selectedKey !== '' ? ($byKey[$selectedKey] ?? null) : null;
+        if (! is_array($selectedRow)) {
+            $selectedRow = $rows[0];
+        }
+
+        $price = max(0, (float) ($selectedRow['price'] ?? 0));
+        $discRaw = $selectedRow['discount_percent'] ?? null;
+        $disc = ($discRaw === '' || $discRaw === null) ? null : max(0, min(100, (int) $discRaw));
+
+        return [
+            'price' => $price,
+            'discount_percent' => $disc,
+            'list_price_rupees' => (int) round($price),
         ];
     }
 
@@ -859,6 +930,28 @@ class PlanController extends Controller
 
     private function resolveDurationPresetFromPlan(Plan $plan): string
     {
+        // Admin duration must reflect the plan period users actually buy in catalog.
+        // Prefer persisted billing intent over legacy duration_days fallback.
+        $plan->loadMissing('terms');
+
+        $defaultBilling = strtolower(trim((string) ($plan->default_billing_key ?? '')));
+        if ($defaultBilling !== '' && in_array($defaultBilling, PlanTerm::presetBillingKeys(), true)) {
+            return $defaultBilling;
+        }
+
+        $visibleTerm = $plan->terms
+            ->where('is_visible', true)
+            ->sortBy('sort_order')
+            ->first();
+        if ($visibleTerm && in_array((string) $visibleTerm->billing_key, PlanTerm::presetBillingKeys(), true)) {
+            return (string) $visibleTerm->billing_key;
+        }
+
+        $firstTerm = $plan->terms->sortBy('sort_order')->first();
+        if ($firstTerm && in_array((string) $firstTerm->billing_key, PlanTerm::presetBillingKeys(), true)) {
+            return (string) $firstTerm->billing_key;
+        }
+
         $days = (int) ($plan->duration_days ?? 0);
         foreach (PlanTerm::presetBillingKeys() as $k) {
             if (PlanTerm::durationDaysFor($k) === $days) {
@@ -870,7 +963,7 @@ class PlanController extends Controller
     }
 
     /**
-     * Initial value for the admin “Duration” dropdown (subset of billing keys).
+     * Initial default billing key for the admin billing-rows UI (subset of billing keys).
      */
     private function durationPresetForAdminForm(Plan $plan): string
     {

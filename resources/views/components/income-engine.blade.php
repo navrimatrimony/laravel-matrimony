@@ -99,7 +99,7 @@
     $amountCls = 'rounded-xl border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 px-4 py-2.5 text-sm font-medium text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:ring-2 focus:ring-indigo-500/35 focus:border-indigo-400 outline-none transition-shadow';
     // Invisible overlay select: visible label is plain green text (no pill); avoids native <select> width quirks.
     $currencySelectOverlayCls = 'income-currency-select absolute inset-0 z-10 h-full min-h-[2.25rem] w-full cursor-pointer opacity-0 appearance-none border-0 bg-transparent p-0 outline-none focus:ring-0 disabled:cursor-not-allowed disabled:opacity-50';
-    $currencyReadonlyCls = 'inline-flex shrink-0 items-center whitespace-nowrap text-sm font-semibold text-emerald-600 dark:text-emerald-400';
+    $currencyReadonlyCls = 'inline-flex shrink-0 items-center justify-end whitespace-nowrap text-right text-sm font-semibold text-emerald-600 dark:text-emerald-400';
     $privacyLabelText = $prefix === 'income' ? 'Keep my income private' : 'Keep family income private';
 @endphp
 <div class="income-engine w-full rounded-2xl border border-gray-200/80 dark:border-gray-600/80 bg-white dark:bg-gray-800/60 shadow-md shadow-gray-200/50 dark:shadow-none overflow-hidden">
@@ -107,10 +107,10 @@
         <h3 class="text-sm font-semibold text-gray-800 dark:text-gray-200">{{ $label }}</h3>
     </div>
     <div class="p-4 pt-2">
-        {{-- One-line engine: period + value type share one width; .is-range shrinks both for range inputs --}}
-        <div class="group income-engine-controls-row flex flex-wrap items-center gap-2 sm:gap-3 w-full {{ $valueTypeRaw === 'range' ? 'is-range' : '' }}">
-            {{-- Period: same width as value type (income-control-col) --}}
-            <div class="income-control-col w-36 min-w-0 shrink-0 transition-[width,max-width] duration-200 sm:w-40 group-[.is-range]:w-[6.75rem] group-[.is-range]:max-w-[6.75rem] sm:group-[.is-range]:w-28 sm:group-[.is-range]:max-w-[7rem]">
+        {{-- md+: one horizontal row. max-md: 2×2 — period | value type; amount row | currency --}}
+        <div class="group income-engine-controls-row w-full gap-2 max-md:grid max-md:grid-cols-2 max-md:items-start max-md:gap-2 md:flex md:flex-wrap md:items-center md:gap-3 {{ $valueTypeRaw === 'range' ? 'is-range' : '' }}">
+            {{-- Period: same width as value type (income-control-col). Desktop widths unchanged from original (md+). --}}
+            <div class="income-control-col w-full min-w-0 shrink-0 transition-[width,max-width] duration-200 md:w-36 lg:w-40 group-[.is-range]:md:w-[6.75rem] group-[.is-range]:md:max-w-[6.75rem] lg:group-[.is-range]:md:w-28 lg:group-[.is-range]:md:max-w-[7rem]">
                 @if(!$readOnly)
                     <select name="{{ $n('period') }}" class="{{ $chipCls }} w-full min-w-0 max-w-full" {{ $disabled ? 'disabled' : '' }} aria-label="Period">
                         @foreach($periodOptions as $opt)
@@ -124,7 +124,7 @@
             </div>
 
             {{-- Value type: same width as period --}}
-            <div class="income-control-col w-36 min-w-0 shrink-0 transition-[width,max-width] duration-200 sm:w-40 group-[.is-range]:w-[6.75rem] group-[.is-range]:max-w-[6.75rem] sm:group-[.is-range]:w-28 sm:group-[.is-range]:max-w-[7rem]">
+            <div class="income-control-col w-full min-w-0 shrink-0 transition-[width,max-width] duration-200 md:w-36 lg:w-40 group-[.is-range]:md:w-[6.75rem] group-[.is-range]:md:max-w-[6.75rem] lg:group-[.is-range]:md:w-28 lg:group-[.is-range]:md:max-w-[7rem]">
                 @if(!$readOnly)
                     <select name="{{ $n('value_type') }}" class="{{ $chipCls }} income-value-type-select w-full min-w-0 max-w-full" data-engine="{{ $prefix }}" {{ $disabled ? 'disabled' : '' }} aria-label="Value type">
                         @foreach($valueTypeOptions as $opt)
@@ -137,9 +137,9 @@
                 @if($err('value_type'))<p class="text-red-600 dark:text-red-400 text-xs mt-1">{{ $err('value_type') }}</p>@endif
             </div>
 
-            {{-- Amount + currency: one unit so the currency pill never sits far from the number and wrap stays clean. --}}
-            <div class="flex min-w-0 flex-[2] flex-wrap items-center gap-2">
-                <div class="income-amount-area flex min-w-0 flex-1 flex-wrap items-center gap-2" data-engine="{{ $prefix }}">
+            {{-- Amount + currency: md+ single flex strip; max-md unwrap for 2×2 grid (amount | currency) --}}
+            <div class="flex min-w-0 flex-[2] flex-wrap items-center gap-2 max-md:contents md:flex md:min-w-0">
+                <div class="income-amount-area flex min-w-0 flex-1 flex-wrap items-center gap-2 max-md:min-w-0" data-engine="{{ $prefix }}">
                     <div class="income-amount-single min-w-0 flex-1 basis-[8rem] transition-opacity duration-200" data-show="exact,approximate" style="{{ in_array($valueTypeRaw, ['exact','approximate'], true) ? '' : 'display:none!important' }}">
                         <input type="text" inputmode="numeric" name="{{ $n('amount') }}" value="{{ $amountDisplayFormatted }}" placeholder="Amount" class="{{ $amountCls }} w-full min-w-0 income-amount-indian" data-raw="{{ $amountDisplay($amountVal) }}" {{ $disabled ? 'disabled' : '' }} aria-label="Amount" autocomplete="off">
                     </div>
@@ -154,7 +154,7 @@
                     </div>
                 </div>
                 {{-- Currency: green text + icon only; invisible overlay <select> for native picker (no wide pill). --}}
-                <div class="group relative inline-flex max-w-full flex-shrink-0 items-center self-center rounded-sm py-0.5 focus-within:ring-2 focus-within:ring-emerald-500/45 focus-within:ring-offset-1 dark:focus-within:ring-offset-gray-800">
+                <div class="group relative inline-flex max-w-full min-w-0 flex-shrink-0 items-center justify-end self-center rounded-sm py-0.5 focus-within:ring-2 focus-within:ring-emerald-500/45 focus-within:ring-offset-1 dark:focus-within:ring-offset-gray-800 max-md:w-full max-md:justify-self-end md:ml-auto">
                     @if(!$readOnly)
                         <select name="{{ $n('currency_id') }}" class="{{ $currencySelectOverlayCls }}" {{ $disabled ? 'disabled' : '' }} aria-label="Currency" title="Change currency">
                             @foreach($currencies as $c)
@@ -162,17 +162,17 @@
                                 <option value="{{ $c->id }}" {{ (string)$defaultCurrencyId === (string)$c->id ? 'selected' : '' }}>{{ $sym }} {{ $c->code }}</option>
                             @endforeach
                         </select>
-                        <span class="income-currency-label pointer-events-none whitespace-nowrap text-sm font-semibold text-emerald-600 dark:text-emerald-400" aria-hidden="true">{{ $currencyDisplayLabel }}</span>
+                        <span class="income-currency-label pointer-events-none whitespace-nowrap text-right text-sm font-semibold text-emerald-600 dark:text-emerald-400" aria-hidden="true">{{ $currencyDisplayLabel }}</span>
                     @else
                         <span class="{{ $currencyReadonlyCls }}">{{ $currencyDisplayLabel }}</span>
                     @endif
                     @if($err('currency_id'))<p class="mt-1 text-xs text-red-600 dark:text-red-400">{{ $err('currency_id') }}</p>@endif
                 </div>
             </div>
+        </div>
             @if($err('amount'))<p class="text-red-600 dark:text-red-400 text-xs mt-1 w-full">{{ $err('amount') }}</p>@endif
             @if($err('min_amount'))<p class="text-red-600 dark:text-red-400 text-xs mt-1 w-full">{{ $err('min_amount') }}</p>@endif
             @if($err('max_amount'))<p class="text-red-600 dark:text-red-400 text-xs mt-1 w-full">{{ $err('max_amount') }}</p>@endif
-        </div>
 
         {{-- Privacy: खालच्या ओळीत --}}
         @if($privacyEnabled)

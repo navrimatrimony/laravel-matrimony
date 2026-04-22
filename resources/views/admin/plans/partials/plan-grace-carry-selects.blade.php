@@ -1,4 +1,6 @@
 @php
+    /** When false, omit the empty third grid cell (used when Highlight + grace + carry share one row). */
+    $withTrailingSpacer = $withTrailingSpacer ?? true;
     $showPlanDiscount = $showPlanDiscount ?? true;
     $graceOpts = \App\Http\Controllers\Admin\PlanController::ADMIN_GRACE_PERIOD_DAY_OPTIONS;
     $carryOpts = \App\Http\Controllers\Admin\PlanController::ADMIN_LEFTOVER_CARRY_DAY_OPTIONS;
@@ -36,6 +38,6 @@
         <input id="plan-admin-plan-discount" type="number" name="discount_percent" value="{{ old('discount_percent', $plan->discount_percent ?? '') }}" min="0" max="100" step="1" placeholder="—"
             class="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-white shadow-sm py-2.5 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20" />
     </div>
-@else
+@elseif ($withTrailingSpacer)
     <div class="hidden md:block min-h-[2.75rem]" aria-hidden="true"></div>
 @endif

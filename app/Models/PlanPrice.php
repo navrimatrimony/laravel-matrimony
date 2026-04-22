@@ -98,6 +98,34 @@ class PlanPrice extends Model
         }
     }
 
+    /**
+     * Re-sync {@see PlanPrice} from {@see PlanTerm} (terms are SSOT) and drop orphan price rows
+     * whose {@code duration_type} no longer matches any term. Idempotent; safe before catalog or checkout.
+     */
+    public static function ensureMirrorMatchesTerms(Plan $plan): void
+    {
+        if (Plan::isFreeCatalogSlug((string) $plan->slug)) {
+            static::query()->where('plan_id', $plan->id)->delete();
+
+            return;
+        }
+
+        $plan->loadMissing('terms');
+        static::syncFromPlanTerms($plan);
+
+        $keys = PlanTerm::query()
+            ->where('plan_id', $plan->id)
+            ->pluck('billing_key')
+            ->all();
+
+        if ($keys !== []) {
+            static::query()
+                ->where('plan_id', $plan->id)
+                ->whereNotIn('duration_type', $keys)
+                ->delete();
+        }
+    }
+
     public function plan(): BelongsTo
     {
         return $this->belongsTo(Plan::class);

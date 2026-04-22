@@ -1,8 +1,9 @@
-{{-- MaritalEngine: single canonical UI for marital status + children. Used in wizard (marriages/full) and intake preview. Pass namePrefix='snapshot' for intake so names become snapshot[core][...], snapshot[marriages][...], snapshot[children][...]. Pass showMaritalStatus=false when used in marriages step only (status already in basic info). --}}
+{{-- MaritalEngine: single canonical UI for marital status + children. Used in wizard (marriages/full) and intake preview. Pass namePrefix='snapshot' for intake so names become snapshot[core][...], snapshot[marriages][...], snapshot[children][...]. Pass showMaritalStatus=false when used in marriages step only (status already in basic info). Pass hideStatusDetailsOptional=true on card onboarding step 1 only to hide optional year/legal fields (Children stays); full edit + intake omit this flag. --}}
 @php
     $namePrefix = $namePrefix ?? '';
     $isSnapshot = $namePrefix === 'snapshot';
     $showMaritalStatus = $showMaritalStatus ?? true;
+    $hideStatusDetailsOptional = $hideStatusDetailsOptional ?? false;
     $maritalStatuses = $maritalStatuses ?? collect();
     // Use the latest marriage row (highest id) so UI reflects the most recent saved legal status.
     $marriage = ($profileMarriages ?? collect())->sortByDesc('id')->first();
@@ -51,13 +52,21 @@
         {{-- Step 1: Marital status (radios) — bold, spaced, card-style options --}}
         <div data-lv-highlight-wrap data-lv-scroll-target>
             <p class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">{{ __('Marital status') }} <span class="text-red-500">*</span></p>
-            @php $maritalStatusCount = max(1, $maritalStatuses->count()); @endphp
+            @php
+                $maritalStatusCount = max(1, $maritalStatuses->count());
+                $maritalMobileTwoThree = $maritalStatusCount === 5;
+            @endphp
             <div class="w-full min-w-0 overflow-hidden py-0.5">
-                <div class="grid w-full min-w-0 gap-1 sm:gap-1.5 items-stretch"
-                     style="grid-template-columns: repeat({{ $maritalStatusCount }}, minmax(0, 1fr));">
+                {{-- Mobile: 2+3 when exactly 5 statuses; else 2-col wrap. md+: one row, equal columns --}}
+                <div class="grid w-full min-w-0 items-stretch gap-1 sm:gap-1.5 {{ $maritalMobileTwoThree ? 'max-md:grid-cols-6' : 'max-md:grid-cols-2' }} md:grid md:[grid-template-columns:repeat({{ $maritalStatusCount }},minmax(0,1fr))]">
                 @foreach($maritalStatuses as $s)
-                    @php $statusLabel = __($s->label); @endphp
-                    <label class="min-w-0 max-w-full flex items-center justify-center gap-0.5 sm:gap-1 cursor-pointer rounded-lg border-2 px-1 sm:px-1.5 py-2 transition-all duration-150 min-h-[42px]
+                    @php
+                        $statusLabel = __($s->label);
+                        $mobileCol = $maritalMobileTwoThree
+                            ? ($loop->index < 2 ? 'max-md:col-span-3' : 'max-md:col-span-2')
+                            : 'max-md:col-span-1';
+                    @endphp
+                    <label class="{{ $mobileCol }} min-w-0 max-w-full flex items-center justify-center gap-0.5 sm:gap-1 cursor-pointer rounded-lg border-2 px-1.5 sm:px-2 py-2 transition-all duration-150 min-h-[42px] md:min-h-[48px]
                         hover:border-gray-300 dark:hover:border-gray-500
                         focus-within:ring-2 focus-within:ring-indigo-400 focus-within:ring-offset-1 dark:focus-within:ring-offset-gray-800"
                         :class="maritalStatusId == '{{ $s->id }}' ? 'border-indigo-600 bg-indigo-600 dark:bg-indigo-500 dark:border-indigo-400 shadow-md ring-2 ring-indigo-400/30' : 'border-gray-200 dark:border-gray-600 bg-gray-50/50 dark:bg-gray-700/30'"
@@ -67,7 +76,7 @@
                                class="rounded-full border-2 border-gray-400 shrink-0 w-3 h-3 sm:w-3.5 sm:h-3.5 accent-indigo-600"
                                x-model="maritalStatusId"
                                @change="onMaritalChange()">
-                        <span class="min-w-0 flex-1 text-center text-[10px] leading-tight sm:text-xs font-semibold truncate"
+                        <span class="min-w-0 flex-1 text-center text-[10px] leading-snug sm:text-xs font-semibold max-md:whitespace-normal max-md:break-words md:truncate"
                               :class="maritalStatusId == '{{ $s->id }}' ? 'text-white' : 'text-gray-800 dark:text-gray-200'">{{ $statusLabel }}</span>
                     </label>
                 @endforeach
@@ -84,21 +93,28 @@
 
     {{-- Step 2: Status details (optional) + Children — heading line then inputs; Yes/No as on-off toggle --}}
     <div class="marital-details-block" data-lv-scroll-target="marital-details" x-show="statusKey === 'divorced' || statusKey === 'annulled' || statusKey === 'separated' || statusKey === 'widowed'" x-cloak style="display: none;">
-        {{-- Heading line: Status details + Children — visible section heading --}}
-        <div class="flex flex-nowrap items-center gap-2 sm:gap-3 min-w-0 overflow-hidden pb-2 mb-2 border-b border-gray-200 dark:border-gray-600">
-            <h3 class="text-sm sm:text-base font-semibold text-gray-800 dark:text-gray-100 truncate min-w-0">{{ __('Status details (optional)') }}</h3>
-            <span class="shrink-0 text-gray-400 dark:text-gray-500" aria-hidden="true">|</span>
-            <h3 class="text-sm sm:text-base font-semibold text-gray-800 dark:text-gray-100 truncate min-w-0">{{ __('Children') }}</h3>
-        </div>
+        @if ($hideStatusDetailsOptional)
+            {{-- Card onboarding only: no optional year/legal fields; submit empties via hidden inputs below --}}
+            <h3 class="text-sm sm:text-base font-semibold text-gray-800 dark:text-gray-100 pb-2 mb-2 border-b border-gray-200 dark:border-gray-600">{{ __('Children') }}</h3>
+        @else
+            {{-- Heading line: Status details + Children — visible section heading --}}
+            <div class="flex flex-nowrap items-center gap-2 sm:gap-3 min-w-0 overflow-hidden pb-2 mb-2 border-b border-gray-200 dark:border-gray-600">
+                <h3 class="text-sm sm:text-base font-semibold text-gray-800 dark:text-gray-100 truncate min-w-0">{{ __('Status details (optional)') }}</h3>
+                <span class="shrink-0 text-gray-400 dark:text-gray-500" aria-hidden="true">|</span>
+                <h3 class="text-sm sm:text-base font-semibold text-gray-800 dark:text-gray-100 truncate min-w-0">{{ __('Children') }}</h3>
+            </div>
+        @endif
         <div class="flex flex-col w-full min-w-0 gap-2" data-lv-section="marital-details">
-        <div class="flex flex-nowrap w-full min-w-0 gap-1.5 sm:gap-2 items-end overflow-hidden">
-            <div class="min-w-0 w-[4.25rem] sm:w-24 shrink-0">
+        {{-- Mobile: 2×2 grid; md+: single horizontal row (unchanged). Optional fields omitted when hideStatusDetailsOptional. --}}
+        <div class="grid w-full min-w-0 grid-cols-2 gap-2 items-end md:flex md:flex-nowrap md:gap-2 md:overflow-hidden {{ $hideStatusDetailsOptional ? 'max-md:grid-cols-1' : '' }}">
+            @unless ($hideStatusDetailsOptional)
+            <div class="min-w-0 w-full md:w-[4.25rem] md:shrink-0">
                 <label class="block text-xs text-gray-600 dark:text-gray-400 mb-0.5 truncate" title="{{ __('Marriage year') }}">{{ __('Marriage year') }}</label>
                 <input type="number" name="{{ $marriagesPrefix }}marriage_year{{ $marriagesSuffix }}" min="1901" max="{{ date('Y') }}"
                        value="{{ old('marriages.0.marriage_year', $marriage?->marriage_year ?? '') }}"
                        class="w-full max-w-full min-w-0 rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-1.5 sm:px-2 py-2 text-sm h-[42px]">
             </div>
-            <div class="min-w-0 w-[4.25rem] sm:w-24 shrink-0" x-show="statusKey === 'divorced' || statusKey === 'annulled'">
+            <div class="min-w-0 w-full md:w-24 md:shrink-0" x-show="statusKey === 'divorced' || statusKey === 'annulled'">
                 <label class="block text-xs text-gray-600 dark:text-gray-400 mb-0.5 truncate">
                     <span x-show="statusKey === 'divorced'" class="block truncate" title="{{ __('wizard.divorce_year') }}">{{ __('wizard.divorce_year') }}</span>
                     <span x-show="statusKey === 'annulled'" x-cloak style="display: none;" class="block truncate" title="{{ __('wizard.annulment_year') }}">{{ __('wizard.annulment_year') }}</span>
@@ -107,19 +123,19 @@
                        value="{{ old('marriages.0.divorce_year', $marriage?->divorce_year ?? '') }}"
                        class="w-full max-w-full min-w-0 rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-1.5 sm:px-2 py-2 text-sm h-[42px]">
             </div>
-            <div class="min-w-0 w-[4.25rem] sm:w-24 shrink-0" x-show="statusKey === 'separated'" x-cloak>
+            <div class="min-w-0 w-full md:w-24 md:shrink-0" x-show="statusKey === 'separated'" x-cloak>
                 <label class="block text-xs text-gray-600 dark:text-gray-400 mb-0.5 truncate" title="{{ __('Separation year') }}">{{ __('Separation year') }}</label>
                 <input type="number" name="{{ $marriagesPrefix }}separation_year{{ $marriagesSuffix }}" min="1901" max="{{ date('Y') }}"
                        value="{{ old('marriages.0.separation_year', $marriage?->separation_year ?? '') }}"
                        class="w-full max-w-full min-w-0 rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-1.5 sm:px-2 py-2 text-sm h-[42px]">
             </div>
-            <div class="min-w-0 w-[4.25rem] sm:w-24 shrink-0" x-show="statusKey === 'widowed'">
+            <div class="min-w-0 w-full md:w-24 md:shrink-0" x-show="statusKey === 'widowed'">
                 <label class="block text-xs text-gray-600 dark:text-gray-400 mb-0.5 truncate" title="{{ __('wizard.spouse_death_year') }}">{{ __('wizard.spouse_death_year') }}</label>
                 <input type="number" name="{{ $marriagesPrefix }}spouse_death_year{{ $marriagesSuffix }}" min="1901" max="{{ date('Y') }}"
                        value="{{ old('marriages.0.spouse_death_year', $marriage?->spouse_death_year ?? '') }}"
                        class="w-full max-w-full min-w-0 rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-1.5 sm:px-2 py-2 text-sm h-[42px]">
             </div>
-            <div class="min-w-0 flex-1 basis-0" x-show="statusKey === 'divorced' || statusKey === 'annulled' || statusKey === 'separated'">
+            <div class="min-w-0 w-full md:flex-1 md:basis-0" x-show="statusKey === 'divorced' || statusKey === 'annulled' || statusKey === 'separated'">
                 <label class="block text-xs text-gray-600 dark:text-gray-400 mb-0.5 truncate" title="{{ __('wizard.legal_status') }}">{{ __('wizard.legal_status') }}</label>
                 <select name="{{ $marriagesPrefix }}divorce_status{{ $marriagesSuffix }}" class="w-full max-w-full min-w-0 rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-1.5 sm:px-2 py-2 text-sm h-[42px]">
                     <option value="">—</option>
@@ -129,25 +145,36 @@
                     <option value="contested" {{ old('marriages.0.divorce_status', $marriage?->divorce_status ?? '') == 'contested' ? 'selected' : '' }}>{{ __('wizard.divorce_contested') }}</option>
                 </select>
             </div>
+            @endunless
             {{-- Children Yes/No: heading + toggle. Yes selected = green. --}}
-            <div class="shrink-0 min-w-0 flex flex-col max-w-full">
+            <div class="min-w-0 w-full {{ $hideStatusDetailsOptional ? '' : 'max-md:col-span-2' }} md:max-w-full md:shrink-0 md:flex md:flex-col">
                 <label class="block text-xs text-gray-600 dark:text-gray-400 mb-0.5 truncate">{{ __('Children') }}</label>
                 {{-- Static name so the field is always submitted (Alpine :name is not a real HTML name until Alpine runs). --}}
                 <input type="hidden" name="{{ $isSnapshot ? 'snapshot[core][has_children]' : 'has_children' }}" :value="hasChildrenValue">
-                <div class="inline-flex max-w-full rounded-full border-2 border-gray-300 dark:border-gray-600 bg-gray-100 dark:bg-gray-700 p-0.5 h-[42px] items-stretch" role="group">
+                <div class="inline-flex w-full max-w-full rounded-full border-2 border-gray-300 dark:border-gray-600 bg-gray-100 dark:bg-gray-700 p-0.5 h-[42px] items-stretch" role="group">
                     <button type="button" @click="hasChildrenValue = '0'; onHasChildrenChange()"
-                            class="px-2 sm:px-3 py-2 text-xs sm:text-sm font-medium rounded-full transition-all min-w-0 shrink-0 flex items-center justify-center"
+                            class="flex-1 px-2 sm:px-3 py-2 text-xs sm:text-sm font-medium rounded-full transition-all min-w-0 flex items-center justify-center"
                             :class="hasChildrenValue == '0' ? 'bg-white dark:bg-gray-600 text-gray-800 dark:text-gray-200 shadow' : 'text-gray-500 dark:text-gray-400'">
                         {{ __('wizard.no') }}
                     </button>
                     <button type="button" @click="hasChildrenValue = '1'; onHasChildrenChange()"
-                            class="px-2 sm:px-3 py-2 text-xs sm:text-sm font-medium rounded-full transition-all min-w-0 shrink-0 flex items-center justify-center"
+                            class="flex-1 px-2 sm:px-3 py-2 text-xs sm:text-sm font-medium rounded-full transition-all min-w-0 flex items-center justify-center"
                             :class="hasChildrenValue == '1' ? 'bg-green-600 text-white shadow' : 'text-gray-500 dark:text-gray-400'">
                         {{ __('wizard.yes') }}
                     </button>
                 </div>
             </div>
         </div>
+        @if ($hideStatusDetailsOptional)
+            {{-- Preserve marriage row keys without showing optional inputs (card onboarding); values from DB/old() so nothing is wiped. --}}
+            <div class="hidden" aria-hidden="true">
+                <input type="hidden" name="{{ $marriagesPrefix }}marriage_year{{ $marriagesSuffix }}" value="{{ old('marriages.0.marriage_year', $marriage?->marriage_year ?? '') }}">
+                <input type="hidden" name="{{ $marriagesPrefix }}divorce_year{{ $marriagesSuffix }}" value="{{ old('marriages.0.divorce_year', $marriage?->divorce_year ?? '') }}">
+                <input type="hidden" name="{{ $marriagesPrefix }}separation_year{{ $marriagesSuffix }}" value="{{ old('marriages.0.separation_year', $marriage?->separation_year ?? '') }}">
+                <input type="hidden" name="{{ $marriagesPrefix }}spouse_death_year{{ $marriagesSuffix }}" value="{{ old('marriages.0.spouse_death_year', $marriage?->spouse_death_year ?? '') }}">
+                <input type="hidden" name="{{ $marriagesPrefix }}divorce_status{{ $marriagesSuffix }}" value="{{ old('marriages.0.divorce_status', $marriage?->divorce_status ?? '') }}">
+            </div>
+        @endif
         <div class="w-full min-w-0" data-lv-errors-slot="marital-details" aria-live="polite"></div>
         </div>
     </div>
@@ -167,49 +194,50 @@
                     data-lv-child-row
                     x-bind:data-child-index="String(index)"
                 >
-                    <div class="flex flex-nowrap w-full min-w-0 gap-1.5 sm:gap-2 items-end overflow-hidden">
-                        <div class="min-w-0 w-[4.5rem] sm:w-[5.5rem] shrink-0">
-                            <label class="block text-xs text-gray-600 dark:text-gray-400 mb-0.5 truncate">{{ __('wizard.gender') }}</label>
-                            <select :name="(namePrefix ? 'snapshot[children][' : 'children[') + index + '][gender]'" class="w-full max-w-full min-w-0 rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-1 sm:px-2 py-2 text-xs sm:text-sm h-[42px]" x-model="child.gender">
-                                <option value="">{{ __('wizard.select') }}</option>
-                                <option value="male">{{ __('wizard.male') }}</option>
-                                <option value="female">{{ __('wizard.female') }}</option>
-                                <option value="other">{{ __('wizard.other') }}</option>
-                                <option value="prefer_not_say">{{ __('wizard.prefer_not_say') }}</option>
-                            </select>
+                    {{-- Mobile: gender | age row, then living_with full width, then actions; md+: one row --}}
+                    <div class="flex w-full min-w-0 flex-col gap-2 md:flex-row md:flex-nowrap md:items-end md:gap-2 md:overflow-hidden">
+                        <div class="grid w-full min-w-0 grid-cols-2 gap-2 md:contents">
+                            <div class="min-w-0 w-full md:w-[5.5rem] md:shrink-0">
+                                <label class="block text-xs text-gray-600 dark:text-gray-400 mb-0.5 truncate">{{ __('wizard.gender') }}</label>
+                                <select :name="(namePrefix ? 'snapshot[children][' : 'children[') + index + '][gender]'" class="w-full max-w-full min-w-0 rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-2 py-2 text-sm h-[42px]" x-model="child.gender">
+                                    <option value="">{{ __('wizard.select') }}</option>
+                                    <option value="male">{{ __('wizard.male') }}</option>
+                                    <option value="female">{{ __('wizard.female') }}</option>
+                                    <option value="other">{{ __('wizard.other') }}</option>
+                                    <option value="prefer_not_say">{{ __('wizard.prefer_not_say') }}</option>
+                                </select>
+                            </div>
+                            <div class="min-w-0 w-full md:w-16 md:shrink-0">
+                                <label class="block text-xs text-gray-600 dark:text-gray-400 mb-0.5 truncate">{{ __('wizard.age') }}</label>
+                                <input type="number" :name="(namePrefix ? 'snapshot[children][' : 'children[') + index + '][age]'" min="1" max="120" class="w-full max-w-full min-w-0 rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-2 py-2 text-sm h-[42px]" x-model.number="child.age" placeholder="{{ __('wizard.age') }}">
+                            </div>
                         </div>
-                        <div class="min-w-0 w-14 sm:w-16 shrink-0">
-                            <label class="block text-xs text-gray-600 dark:text-gray-400 mb-0.5 truncate">{{ __('wizard.age') }}</label>
-                            <input type="number" :name="(namePrefix ? 'snapshot[children][' : 'children[') + index + '][age]'" min="1" max="120" class="w-full max-w-full min-w-0 rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-1 sm:px-2 py-2 text-sm h-[42px]" x-model.number="child.age" placeholder="{{ __('wizard.age') }}">
-                        </div>
-                        <div class="min-w-0 w-[9.5rem] sm:w-[12rem] shrink-0">
+                        <div class="min-w-0 w-full md:w-[12rem] md:shrink-0">
                             <label class="block text-xs text-gray-600 dark:text-gray-400 mb-0.5 truncate">{{ __('wizard.living_with') }}</label>
-                            <select :name="(namePrefix ? 'snapshot[children][' : 'children[') + index + '][child_living_with_id]'" class="w-full max-w-full min-w-0 rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-1 sm:px-2 py-2 text-xs sm:text-sm h-[42px]" x-model="child.child_living_with_id">
+                            <select :name="(namePrefix ? 'snapshot[children][' : 'children[') + index + '][child_living_with_id]'" class="w-full max-w-full min-w-0 rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-2 py-2 text-sm h-[42px]" x-model="child.child_living_with_id">
                                 <option value="">{{ __('wizard.select') }}</option>
                                 @foreach($childLivingWithOptions as $opt)
                                     <option value="{{ $opt->id }}">{{ $opt->label }}</option>
                                 @endforeach
                             </select>
                         </div>
-                        <div class="min-w-0 flex-1 flex items-end pt-0 border-0 sm:pl-1">
-                            <div class="flex w-full min-w-0 items-center justify-between gap-x-3">
-                                <input type="hidden" :name="(namePrefix ? 'snapshot[children][' : 'children[') + index + '][id]'" :value="child.id || ''">
-                                <input type="hidden" :name="(namePrefix ? 'snapshot[children][' : 'children[') + index + '][sort_order]'" :value="index">
-                                <button
-                                    type="button"
-                                    @click="addChild()"
-                                    class="text-sm font-medium text-indigo-600 underline-offset-2 hover:text-indigo-800 hover:underline dark:text-indigo-400 dark:hover:text-indigo-300"
-                                >
-                                    + {{ __('wizard.add_more') }}
-                                </button>
-                                <button
-                                    type="button"
-                                    @click="removeChild(index)"
-                                    class="text-sm font-medium text-rose-700 underline-offset-2 hover:text-rose-900 hover:underline dark:text-rose-400 dark:hover:text-rose-300"
-                                >
-                                    {{ __('common.remove') }}
-                                </button>
-                            </div>
+                        <div class="flex min-w-0 flex-1 items-center justify-between gap-3 border-0 pt-0 md:items-end md:pl-1">
+                            <input type="hidden" :name="(namePrefix ? 'snapshot[children][' : 'children[') + index + '][id]'" :value="child.id || ''">
+                            <input type="hidden" :name="(namePrefix ? 'snapshot[children][' : 'children[') + index + '][sort_order]'" :value="index">
+                            <button
+                                type="button"
+                                @click="addChild()"
+                                class="text-sm font-medium text-indigo-600 underline-offset-2 hover:text-indigo-800 hover:underline dark:text-indigo-400 dark:hover:text-indigo-300"
+                            >
+                                + {{ __('wizard.add_more') }}
+                            </button>
+                            <button
+                                type="button"
+                                @click="removeChild(index)"
+                                class="text-sm font-medium text-rose-700 underline-offset-2 hover:text-rose-900 hover:underline dark:text-rose-400 dark:hover:text-rose-300"
+                            >
+                                {{ __('common.remove') }}
+                            </button>
                         </div>
                     </div>
                     <div class="w-full min-w-0" x-bind:data-lv-child-errors="String(index)" aria-live="polite"></div>

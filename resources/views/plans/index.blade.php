@@ -90,7 +90,7 @@
 
     <div
         class="relative z-10 mx-auto max-w-6xl px-4 pt-10 sm:px-6 lg:px-8"
-        x-data="plansPricingCatalog({
+        x-data="window.plansPricingCatalog({
             validateUrl: @js(route('plans.coupon.validate')),
             csrf: @js(csrf_token()),
         })"

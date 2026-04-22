@@ -132,7 +132,10 @@ return [
     'admin_plan_duration_preset_title' => 'Base plan duration (subscription length)',
     'admin_plan_duration_preset_help' => 'Maps to Duration (days) on save. Each billing row below can use a different price for a different period.',
     'admin_billing_rows_title' => 'Public catalog billing periods',
-    'admin_billing_rows_intro' => 'Add one row per period you sell. Each period is unique; prices and “show on site” are set per row. Use + to add another period.',
+    'admin_billing_rows_intro' => 'Add one row per paid length (catalog price and discount % per row). Use “Default tab on pricing page” on one row for the first selected period on /plans. Use + Add period for more lengths.',
+    'admin_billing_default_catalog_tab' => 'Default tab on pricing page',
+    'admin_billing_all_periods_added' => 'Every billing length is already on this plan. Remove a row to add a different period, or edit an existing row.',
+    'admin_billing_no_preset_list' => 'Billing preset list is empty (configuration error). Reload the page or contact support.',
     'admin_add_billing_period' => '+ Add period',
     'admin_remove_billing_period' => 'Remove',
     'admin_billing_period_column' => 'Period',
@@ -178,7 +181,7 @@ return [
     'plan_leftover_quota_carry_window_days_help' => 'After grace ends: number of days within which purchasing a new plan can still roll unused quota into the new plan. Leave empty to disable this window (behaviour then follows product defaults).',
 
     'plan_quota_policies_title' => 'Plan limits',
-    'plan_quota_policies_intro' => 'Each card saves to plan_quota_policies and mirrors limits and flags into plan_features for runtime gates. Grace is configured above (plan-wide), not here. Choose Unlimited refresh where the product means no numeric cap (-1 in plan_features). Other plan_features keys (for example chat images and photo blur) keep their existing values until you change them in the database or a future admin field.',
+    'plan_quota_policies_intro' => 'Each card saves to plan_quota_policies and mirrors limits and flags into plan_features for runtime gates. Grace is configured above (plan-wide), not here. “Refresh” on a card is how often that usage quota resets for members (not the paid subscription billing period; billing is set in Public catalog billing periods above). Choose Unlimited refresh where the product means no numeric cap (-1 in plan_features). Other plan_features keys (for example chat images and photo blur) keep their existing values until you change them in the database or a future admin field.',
 
     'pricing_feature_chat_read' => 'Chat message read access',
     'pricing_feature_advanced_search' => 'Advanced search',

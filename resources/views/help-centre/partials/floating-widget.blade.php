@@ -1,20 +1,21 @@
 @auth
-<div id="help-centre-widget-root" class="fixed bottom-4 right-4 z-50 lg:right-[21.5rem]">
-    <button
-        type="button"
-        id="help-centre-widget-toggle"
-        aria-expanded="false"
-        aria-controls="help-centre-widget-panel"
-        aria-label="{{ __('help_centre.widget_toggle_open') }}"
-        class="group inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-indigo-600 to-violet-600 px-4 py-2.5 text-sm font-semibold text-white shadow-[0_12px_28px_-14px_rgba(79,70,229,0.8)] transition hover:from-indigo-500 hover:to-violet-500"
-    >
-        <span class="inline-flex h-7 w-7 items-center justify-center rounded-full bg-white/20" aria-hidden="true">💬</span>
-        <span>{{ __('help_centre.title') }}</span>
-    </button>
+{{-- Right-edge vertical tab (matches chat dock “Communication” handle style); avoids covering bottom content. --}}
+<div id="help-centre-widget-root" class="pointer-events-none fixed right-0 top-[min(13rem,22vh)] z-[54] -translate-y-1/2">
+    <div class="relative flex flex-row-reverse items-start">
+        <button
+            type="button"
+            id="help-centre-widget-toggle"
+            aria-expanded="false"
+            aria-controls="help-centre-widget-panel"
+            aria-label="{{ __('help_centre.widget_toggle_open') }}"
+            class="pointer-events-auto flex w-9 max-w-[2.25rem] flex-col items-center justify-center gap-1 rounded-l-lg border border-r-0 border-gray-200 bg-gradient-to-b from-indigo-600 to-violet-700 py-3 text-[9px] font-bold uppercase leading-tight tracking-wide text-white shadow-lg transition hover:from-indigo-500 hover:to-violet-600 dark:border-gray-700"
+        >
+            <span class="block max-h-[5.5rem] overflow-hidden text-center [writing-mode:vertical-rl] [text-orientation:mixed]">{{ __('help_centre.title') }}</span>
+        </button>
 
     <section
         id="help-centre-widget-panel"
-        class="mt-3 hidden w-[22rem] overflow-hidden rounded-2xl border border-indigo-100/90 bg-white shadow-2xl dark:border-indigo-900/70 dark:bg-gray-900 sm:w-[24rem]"
+        class="pointer-events-auto absolute right-full top-0 mr-2 hidden w-[min(22rem,calc(100vw-3rem))] overflow-hidden rounded-2xl rounded-r-none border border-indigo-100/90 bg-white shadow-2xl dark:border-indigo-900/70 dark:bg-gray-900 sm:w-[24rem]"
         role="dialog"
         aria-label="{{ __('help_centre.title') }}"
     >
@@ -50,6 +51,7 @@
             </form>
         </div>
     </section>
+    </div>
 </div>
 
 <script>

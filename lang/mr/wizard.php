@@ -201,6 +201,7 @@ return [
     'no' => 'नाही',
     'yes' => 'होय',
     'children_details' => 'मुलांचे तपशील',
+    'children_at_least_one_required' => 'होय निवडले असल्यास किमान एक मुलाचे तपशील भरा.',
     'living_with' => 'सोबत राहणे',
     'add' => 'जोडा',
     'remove_entry' => 'ही नोंद काढा',

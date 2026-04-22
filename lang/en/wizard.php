@@ -202,6 +202,7 @@ return [
     'no' => 'No',
     'yes' => 'Yes',
     'children_details' => 'Children details',
+    'children_at_least_one_required' => 'Please add at least one child\'s details when you answer Yes.',
     'living_with' => 'Living with',
     'add' => 'Add',
     'remove_entry' => 'Remove this entry',
