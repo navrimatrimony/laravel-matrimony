@@ -74,5 +74,12 @@ return [
         'url' => env('NUDENET_DETECT_URL', 'http://127.0.0.1:8001/detect'),
         'timeout' => (int) env('NUDENET_TIMEOUT', 15),
     ],
-
+	'payu' => [
+    'key' => env('PAYU_KEY'),
+    'salt' => env('PAYU_SALT'),
+    'base_url' => env('PAYU_BASE_URL'),
+    'success_url' => env('PAYU_SUCCESS_URL'),
+    'failure_url' => env('PAYU_FAILURE_URL'),
+    'webhook_url' => env('PAYU_WEBHOOK_URL'),
+],
 ];
