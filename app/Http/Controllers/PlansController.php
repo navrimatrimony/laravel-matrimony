@@ -8,7 +8,6 @@ use App\Models\ProfileView;
 use App\Services\CouponService;
 use App\Services\SubscriptionService;
 use Illuminate\Http\Request;
-use Symfony\Component\HttpKernel\Exception\HttpException;
 
 class PlansController extends Controller
 {
@@ -121,35 +120,4 @@ class PlansController extends Controller
         ));
     }
 
-    public function subscribe(Request $request, Plan $plan, SubscriptionService $subscriptions)
-    {
-        $user = $request->user();
-        if (! $user) {
-            abort(403);
-        }
-
-        $rawTerm = $request->input('plan_term_id');
-        $planTermId = ($rawTerm === null || $rawTerm === '') ? null : (int) $rawTerm;
-        $rawPrice = $request->input('plan_price_id');
-        $planPriceId = ($rawPrice === null || $rawPrice === '') ? null : (int) $rawPrice;
-        $couponCode = $request->input('coupon_code');
-
-        try {
-            $subscriptions->subscribe($user, $plan, $planTermId, $planPriceId, is_string($couponCode) ? $couponCode : null);
-        } catch (HttpException $e) {
-            return redirect()
-                ->route('plans.index')
-                ->with('error', $e->getMessage());
-        } catch (\Throwable $e) {
-            report($e);
-
-            return redirect()
-                ->route('plans.index')
-                ->with('error', __('subscriptions.subscribe_failed'));
-        }
-
-        return redirect()
-            ->route('plans.index')
-            ->with('success', __('subscriptions.subscribe_success', ['plan' => $plan->name]));
-    }
 }

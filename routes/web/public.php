@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Payments\PayuController;
+use App\Http\Controllers\SubscriptionController;
 use App\Models\Caste;
 use App\Models\Country;
 use App\Models\District;
@@ -19,8 +20,8 @@ use Illuminate\Support\Facades\Route;
 | PayU
 |--------------------------------------------------------------------------
 */
-Route::post('/payments/payu/success', [PayuController::class, 'success'])->name('payu.success');
-Route::post('/payments/payu/failure', [PayuController::class, 'failure'])->name('payu.failure');
+Route::post('/payments/payu/success', [SubscriptionController::class, 'success'])->name('payu.success');
+Route::post('/payments/payu/failure', [SubscriptionController::class, 'failure'])->name('payu.failure');
 Route::post('/payments/payu/webhook', [PayuController::class, 'webhook'])->name('payu.webhook');
 
 /*

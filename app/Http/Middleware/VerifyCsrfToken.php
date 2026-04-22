@@ -16,5 +16,10 @@ class VerifyCsrfToken extends ValidateCsrfToken
      */
     protected $except = [
         'admin/plans/*/features',
+        'payment/success',
+        'payment/failure',
+        'payments/payu/success',
+        'payments/payu/failure',
+        'payments/payu/webhook',
     ];
 }

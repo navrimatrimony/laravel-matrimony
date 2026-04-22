@@ -32,13 +32,30 @@ class SubscriptionService
     /** "1" = may send chat images (in addition to communication policy). */
     public const FEATURE_CHAT_IMAGE_MESSAGES = 'chat_image_messages';
 
-    public function subscribe(
+    /**
+     * Resolve billing selection and payable amount (after coupon) without mutating subscriptions.
+     * Used by PayU checkout so the gateway amount matches {@see subscribe()}.
+     *
+     * @return array{
+     *     plan_term_id: ?int,
+     *     plan_price_id: ?int,
+     *     coupon_code: ?string,
+     *     final_amount: float,
+     *     duration_days: int,
+     *     plan_term: ?PlanTerm,
+     *     plan_price: ?PlanPrice,
+     *     coupon: ?Coupon,
+     *     base_amount: float,
+     *     subscription_meta_preview: array<string, mixed>
+     * }
+     */
+    public function resolvePaidPlanCheckout(
         User $user,
         Plan $plan,
         ?int $planTermId = null,
         ?int $planPriceId = null,
         ?string $couponCode = null,
-    ): Subscription {
+    ): array {
         if (! $plan->is_active) {
             throw new HttpException(422, __('subscriptions.plan_inactive'));
         }
@@ -49,35 +66,57 @@ class SubscriptionService
             throw new HttpException(422, __('subscriptions.coupon_invalid'));
         }
 
-        return DB::transaction(function () use ($user, $plan, $planTermId, $planPriceId, $rawCoupon, $couponSvc) {
-            $now = now();
-            $carryQuota = $this->resolveCarryQuotaFromPreviousSubscription($user, $now);
+        $visiblePrices = PlanPrice::query()
+            ->where('plan_id', $plan->id)
+            ->where('is_visible', true)
+            ->orderBy('sort_order')
+            ->get();
 
-            // 1) Cancel any current active subscription(s) — rows kept for history (same as model safeguard on create).
-            Subscription::deactivateActiveSubscriptionsForUserId((int) $user->id);
+        $planTerm = null;
+        $planPrice = null;
+        $duration = (int) $plan->duration_days;
+        $baseAmount = (float) $plan->final_price;
+        $coupon = null;
 
-            $visiblePrices = PlanPrice::query()
+        if ($visiblePrices->isNotEmpty()) {
+            if ($planPriceId === null) {
+                throw new HttpException(422, __('subscriptions.pick_billing_period'));
+            }
+            $planPrice = $visiblePrices->firstWhere('id', $planPriceId);
+            if (! $planPrice) {
+                throw new HttpException(422, __('subscriptions.invalid_billing_period'));
+            }
+            $duration = (int) $planPrice->duration_days;
+            $baseAmount = (float) $planPrice->final_price;
+            if ($rawCoupon !== '') {
+                $coupon = $couponSvc->lockCouponByCode($rawCoupon);
+                if (! $coupon) {
+                    throw new HttpException(422, __('subscriptions.coupon_invalid'));
+                }
+                $couponSvc->assertLockedCouponForCheckout(
+                    $coupon,
+                    (int) $plan->id,
+                    $baseAmount,
+                    (string) $planPrice->duration_type
+                );
+            }
+        } else {
+            $visibleTerms = PlanTerm::query()
                 ->where('plan_id', $plan->id)
                 ->where('is_visible', true)
                 ->orderBy('sort_order')
                 ->get();
 
-            $planTerm = null;
-            $planPrice = null;
-            $duration = (int) $plan->duration_days;
-            $baseAmount = (float) $plan->final_price;
-            $coupon = null;
-
-            if ($visiblePrices->isNotEmpty()) {
-                if ($planPriceId === null) {
+            if ($visibleTerms->isNotEmpty()) {
+                if ($planTermId === null) {
                     throw new HttpException(422, __('subscriptions.pick_billing_period'));
                 }
-                $planPrice = $visiblePrices->firstWhere('id', $planPriceId);
-                if (! $planPrice) {
+                $planTerm = $visibleTerms->firstWhere('id', $planTermId);
+                if (! $planTerm) {
                     throw new HttpException(422, __('subscriptions.invalid_billing_period'));
                 }
-                $duration = (int) $planPrice->duration_days;
-                $baseAmount = (float) $planPrice->final_price;
+                $duration = (int) $planTerm->duration_days;
+                $baseAmount = (float) $planTerm->final_price;
                 if ($rawCoupon !== '') {
                     $coupon = $couponSvc->lockCouponByCode($rawCoupon);
                     if (! $coupon) {
@@ -87,55 +126,66 @@ class SubscriptionService
                         $coupon,
                         (int) $plan->id,
                         $baseAmount,
-                        (string) $planPrice->duration_type
+                        (string) $planTerm->billing_key
                     );
                 }
-            } else {
-                $visibleTerms = PlanTerm::query()
-                    ->where('plan_id', $plan->id)
-                    ->where('is_visible', true)
-                    ->orderBy('sort_order')
-                    ->get();
-
-                if ($visibleTerms->isNotEmpty()) {
-                    if ($planTermId === null) {
-                        throw new HttpException(422, __('subscriptions.pick_billing_period'));
-                    }
-                    $planTerm = $visibleTerms->firstWhere('id', $planTermId);
-                    if (! $planTerm) {
-                        throw new HttpException(422, __('subscriptions.invalid_billing_period'));
-                    }
-                    $duration = (int) $planTerm->duration_days;
-                    $baseAmount = (float) $planTerm->final_price;
-                    if ($rawCoupon !== '') {
-                        $coupon = $couponSvc->lockCouponByCode($rawCoupon);
-                        if (! $coupon) {
-                            throw new HttpException(422, __('subscriptions.coupon_invalid'));
-                        }
-                        $couponSvc->assertLockedCouponForCheckout(
-                            $coupon,
-                            (int) $plan->id,
-                            $baseAmount,
-                            (string) $planTerm->billing_key
-                        );
-                    }
-                } elseif ($rawCoupon !== '') {
-                    $coupon = $couponSvc->lockCouponByCode($rawCoupon);
-                    if (! $coupon) {
-                        throw new HttpException(422, __('subscriptions.coupon_invalid'));
-                    }
-                    $couponSvc->assertLockedCouponForCheckout(
-                        $coupon,
-                        (int) $plan->id,
-                        $baseAmount,
-                        null
-                    );
+            } elseif ($rawCoupon !== '') {
+                $coupon = $couponSvc->lockCouponByCode($rawCoupon);
+                if (! $coupon) {
+                    throw new HttpException(422, __('subscriptions.coupon_invalid'));
                 }
+                $couponSvc->assertLockedCouponForCheckout(
+                    $coupon,
+                    (int) $plan->id,
+                    $baseAmount,
+                    null
+                );
             }
+        }
+
+        $applied = $this->applyCoupon($coupon, $baseAmount);
+        $subscriptionMetaPreview = $applied['subscription_meta'] ?? [];
+
+        return [
+            'plan_term_id' => $planTerm?->id,
+            'plan_price_id' => $planPrice?->id,
+            'coupon_code' => $rawCoupon !== '' ? $rawCoupon : null,
+            'final_amount' => max(0.0, round((float) $applied['final_price'], 2)),
+            'duration_days' => $duration,
+            'plan_term' => $planTerm,
+            'plan_price' => $planPrice,
+            'coupon' => $coupon,
+            'base_amount' => $baseAmount,
+            'subscription_meta_preview' => is_array($subscriptionMetaPreview) ? $subscriptionMetaPreview : [],
+        ];
+    }
+
+    public function subscribe(
+        User $user,
+        Plan $plan,
+        ?int $planTermId = null,
+        ?int $planPriceId = null,
+        ?string $couponCode = null,
+    ): Subscription {
+        $couponSvc = app(CouponService::class);
+        $rawCoupon = trim((string) ($couponCode ?? ''));
+
+        return DB::transaction(function () use ($user, $plan, $planTermId, $planPriceId, $rawCoupon, $couponSvc) {
+            $now = now();
+            $carryQuota = $this->resolveCarryQuotaFromPreviousSubscription($user, $now);
+
+            $resolved = $this->resolvePaidPlanCheckout($user, $plan, $planTermId, $planPriceId, $rawCoupon !== '' ? $rawCoupon : null);
+            $planTerm = $resolved['plan_term'];
+            $planPrice = $resolved['plan_price'];
+            $duration = (int) $resolved['duration_days'];
+            $coupon = $resolved['coupon'];
+
+            // 1) Cancel any current active subscription(s) — rows kept for history (same as model safeguard on create).
+            Subscription::deactivateActiveSubscriptionsForUserId((int) $user->id);
 
             $subscriptionMeta = [];
             if ($coupon) {
-                $applied = $this->applyCoupon($coupon, $baseAmount);
+                $applied = $this->applyCoupon($coupon, (float) $resolved['base_amount']);
                 $duration += (int) ($applied['extra_duration_days'] ?? 0);
                 $subscriptionMeta = $applied['subscription_meta'] ?? [];
             }

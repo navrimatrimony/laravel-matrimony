@@ -434,8 +434,9 @@
                                         {{ __('subscriptions.pricing_current_plan') }}
                                     </span>
                                 @elseif (auth()->check())
-                                    <form method="POST" action="{{ route('plans.subscribe', $plan) }}">
+                                    <form method="POST" action="{{ route('plans.subscribe') }}">
                                         @csrf
+                                        <input type="hidden" name="plan" value="{{ $plan->slug }}" />
                                         @if ($useEnginePrices)
                                             <input type="hidden" name="plan_price_id" x-bind:value="selectedBillingId" />
                                         @elseif ($useTerms)
