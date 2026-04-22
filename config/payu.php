@@ -2,6 +2,12 @@
 
 return [
 
+    'key' => env('PAYU_MERCHANT_KEY', ''),
+    'salt' => env('PAYU_MERCHANT_SALT', ''),
+    'base_url' => env('PAYU_CHECKOUT_URL', env('PAYU_MODE', 'test') === 'live'
+        ? 'https://secure.payu.in/_payment'
+        : 'https://test.payu.in/_payment'),
+
     'merchant_key' => env('PAYU_MERCHANT_KEY', ''),
 
     'merchant_salt' => env('PAYU_MERCHANT_SALT', ''),

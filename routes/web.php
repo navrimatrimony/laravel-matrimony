@@ -31,9 +31,6 @@ Route::post('/subscribe', [SubscriptionController::class, 'subscribe'])
     ->middleware(['auth', EnforceCardOnboarding::class])
     ->name('plans.subscribe');
 
-Route::post('/payment/success', [SubscriptionController::class, 'success'])->name('payment.success');
-Route::post('/payment/failure', [SubscriptionController::class, 'failure'])->name('payment.failure');
-
 // Temporary debug route — Phase-5 Day-12 verification. Remove before production.
 
 Route::get('/api/castes/{religionId}', function ($religionId) {

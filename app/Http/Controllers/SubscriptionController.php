@@ -105,8 +105,8 @@ class SubscriptionController extends Controller
             $email = 'member@example.com';
         }
 
-        $surl = route('payment.success', [], true);
-        $furl = route('payment.failure', [], true);
+        $surl = route('payu.success', [], true);
+        $furl = route('payu.failure', [], true);
 
         $udf1 = (string) $user->id;
         $udf2 = '';

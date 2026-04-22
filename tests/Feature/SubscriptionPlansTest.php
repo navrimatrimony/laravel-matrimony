@@ -105,7 +105,7 @@ class SubscriptionPlansTest extends TestCase
             $fields['key'],
         );
 
-        $this->post(route('payment.success'), [
+        $this->post(route('payu.success'), [
             'key' => $fields['key'],
             'txnid' => $fields['txnid'],
             'amount' => $fields['amount'],
