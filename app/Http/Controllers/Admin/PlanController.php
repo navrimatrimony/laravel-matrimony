@@ -9,12 +9,13 @@ use App\Models\PlanPrice;
 use App\Models\PlanQuotaPolicy;
 use App\Models\PlanTerm;
 use App\Models\Subscription;
-use App\Services\PlanQuotaPolicyMirror;
 use App\Services\PlanSubscriptionTerms;
 use App\Support\PlanFeatureKeys;
 use App\Support\PlanQuotaPolicyKeys;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 
@@ -74,8 +75,8 @@ class PlanController extends Controller
             'isEdit' => false,
             'quotaPolicyKeys' => PlanQuotaPolicyKeys::ordered(),
             'quotaPoliciesForm' => $this->quotaPoliciesFormState($plan, false),
-            'durationPresetInitial' => $this->durationPresetForAdminForm($plan),
-            'termRowsInitial' => $this->initialTermRowsForForm($plan, false),
+            'defaultBillingKeyInitial' => $this->durationPresetForAdminForm($plan),
+            'termRowsInitial' => $this->termRowsForAdminBillingForm($plan, false),
             'adminMarketingBadgeKeys' => self::ADMIN_MARKETING_BADGE_KEYS,
             'planNameInput' => $this->planNameInputFromSession($plan),
             'initialPlanNameSha10' => substr(hash('sha256', $this->planNameInputFromSession($plan)), 0, 10),
@@ -95,18 +96,22 @@ class PlanController extends Controller
             ]);
             $data = $this->validatedPlanData($request);
 
-            $plan = Plan::query()->create($data);
-            PlanQuotaPolicy::ensureAllForPlan($plan);
-            $this->syncQuotaPoliciesFromRequest($plan, $request);
-            $this->syncFeatures($plan, $this->buildFullPlanFeatureRowsFromQuota($plan, $request));
-            $plan->forgetCachedPlanFeatures();
+            $plan = DB::transaction(function () use ($data, $request) {
+                $plan = Plan::query()->create($data);
+                PlanQuotaPolicy::ensureAllKeysForPlan($plan);
+                $this->syncQuotaPoliciesFromRequest($plan, $request);
+                $this->syncFeatures($plan, $this->buildFullPlanFeatureRowsFromQuota($plan, $request));
+                $plan->forgetCachedPlanFeatures();
+
+                return $plan;
+            });
 
             return redirect()
                 ->route('admin.plans.edit', $plan)
                 ->with('success', __('subscriptions.plan_saved'));
         }
 
-        $this->mergeTermRowsFallbackForStore($request);
+        $this->mergeDurationPresetFromDefaultBillingKey($request);
         $this->mergePaidPlanPricingFromTermRowsForRequest($request, null);
         $this->validateTermRowsRequest($request);
         $rows = $this->normalizedTermRowsFromRequest($request);
@@ -118,18 +123,33 @@ class PlanController extends Controller
 
         $data = $this->validatedPlanData($request);
 
-        $plan = Plan::query()->create($data);
-        PlanQuotaPolicy::ensureAllForPlan($plan);
-        $this->syncQuotaPoliciesFromRequest($plan, $request);
-        $this->syncFeatures($plan, $this->buildFullPlanFeatureRowsFromQuota($plan, $request));
-        $plan->forgetCachedPlanFeatures();
+        $plan = DB::transaction(function () use ($data, $request, $rows) {
+            $plan = Plan::query()->create($data);
+            PlanQuotaPolicy::ensureAllKeysForPlan($plan);
+            $this->syncQuotaPoliciesFromRequest($plan, $request);
+            $this->syncFeatures($plan, $this->buildFullPlanFeatureRowsFromQuota($plan, $request));
+            $plan->forgetCachedPlanFeatures();
 
-        PlanTerm::syncAdminTermRows($plan, $rows);
-        $this->syncPlanDefaultBillingKey($plan->fresh('terms'), $this->resolvedRequestedBillingKey($request));
+            PlanTerm::syncAdminTermRows($plan, $rows);
+            $this->persistPlanDefaultBillingKeyFromRequest($plan->fresh('terms'), $request);
+
+            return $plan;
+        });
 
         return redirect()
             ->route('admin.plans.edit', $plan)
             ->with('success', __('subscriptions.plan_saved'));
+    }
+
+    /**
+     * Plan {@code duration_days} logic still reads {@code duration_preset}; mirror {@code default_billing_key}.
+     */
+    private function mergeDurationPresetFromDefaultBillingKey(Request $request): void
+    {
+        $dbk = trim((string) $request->input('default_billing_key', ''));
+        if ($dbk !== '') {
+            $request->merge(['duration_preset' => $dbk]);
+        }
     }
 
     /**
@@ -177,42 +197,9 @@ class PlanController extends Controller
         ]);
     }
 
-    /**
-     * Create fallback for paid-plan billing rows when JS-bound term_rows are missing.
-     */
-    private function mergeTermRowsFallbackForStore(Request $request): void
-    {
-        if (is_array($request->input('term_rows')) && count((array) $request->input('term_rows')) > 0) {
-            return;
-        }
-
-        $preset = (string) $request->input('duration_preset', PlanTerm::BILLING_MONTHLY);
-        if (! in_array($preset, PlanTerm::presetBillingKeys(), true)) {
-            $preset = PlanTerm::BILLING_MONTHLY;
-        }
-
-        $rawPrice = $request->input('price', $request->input('list_price_rupees', 0));
-        $price = is_numeric($rawPrice) ? (float) $rawPrice : 0.0;
-
-        $rawDiscount = $request->input('discount_percent');
-        $discount = ($rawDiscount === '' || $rawDiscount === null)
-            ? null
-            : max(0, min(100, (int) round((float) $rawDiscount)));
-
-        $request->merge([
-            'duration_preset' => $preset,
-            'term_rows' => [[
-                'billing_key' => $preset,
-                'price' => max(0, $price),
-                'discount_percent' => $discount,
-                'is_visible' => true,
-            ]],
-        ]);
-    }
-
     public function edit(Plan $plan)
     {
-        PlanQuotaPolicy::ensureAllForPlan($plan);
+        PlanQuotaPolicy::ensureAllKeysForPlan($plan);
         $plan->load(['features', 'terms', 'planPrices', 'quotaPolicies']);
 
         return view('admin.plans.form', [
@@ -220,8 +207,8 @@ class PlanController extends Controller
             'isEdit' => true,
             'quotaPolicyKeys' => PlanQuotaPolicyKeys::ordered(),
             'quotaPoliciesForm' => $this->quotaPoliciesFormState($plan, true),
-            'durationPresetInitial' => $this->durationPresetForAdminForm($plan),
-            'termRowsInitial' => $this->initialTermRowsForForm($plan, true),
+            'defaultBillingKeyInitial' => $this->durationPresetForAdminForm($plan),
+            'termRowsInitial' => $this->termRowsForAdminBillingForm($plan, true),
             'adminMarketingBadgeKeys' => self::ADMIN_MARKETING_BADGE_KEYS,
             'planNameInput' => $this->planNameInputFromSession($plan),
             'initialPlanNameSha10' => substr(hash('sha256', $this->planNameInputFromSession($plan)), 0, 10),
@@ -232,27 +219,29 @@ class PlanController extends Controller
     {
         $this->validateQuotaPoliciesRequest($request);
         if (! Plan::isFreeCatalogSlug((string) $plan->slug)) {
-            $this->mergeTermRowsFallbackForUpdate($request, $plan);
+            $this->mergeDurationPresetFromDefaultBillingKey($request);
             $this->mergePaidPlanPricingFromTermRowsForRequest($request, $plan);
             $this->validateTermRowsRequest($request);
         }
         $data = $this->validatedPlanData($request, $plan->id, $plan);
 
-        $plan->update($data);
+        DB::transaction(function () use ($request, $plan, $data) {
+            $plan->update($data);
 
-        if (! Plan::isFreeCatalogSlug((string) ($data['slug'] ?? ''))) {
-            $rows = $this->normalizedTermRowsFromRequest($request);
-            PlanTerm::syncAdminTermRows($plan, $rows);
-            $this->syncPlanDefaultBillingKey($plan->fresh('terms'), $this->resolvedRequestedBillingKey($request));
-        } else {
-            PlanTerm::query()->where('plan_id', $plan->id)->delete();
-            PlanPrice::query()->where('plan_id', $plan->id)->delete();
-        }
+            if (! Plan::isFreeCatalogSlug((string) ($data['slug'] ?? ''))) {
+                $rows = $this->normalizedTermRowsFromRequest($request);
+                PlanTerm::syncAdminTermRows($plan, $rows);
+                $this->persistPlanDefaultBillingKeyFromRequest($plan->fresh('terms'), $request);
+            } else {
+                PlanTerm::query()->where('plan_id', $plan->id)->delete();
+                PlanPrice::query()->where('plan_id', $plan->id)->delete();
+            }
 
-        PlanQuotaPolicy::ensureAllForPlan($plan);
-        $this->syncQuotaPoliciesFromRequest($plan, $request);
-        $this->syncFeatures($plan, $this->buildFullPlanFeatureRowsFromQuota($plan, $request));
-        $plan->forgetCachedPlanFeatures();
+            PlanQuotaPolicy::ensureAllKeysForPlan($plan);
+            $this->syncQuotaPoliciesFromRequest($plan, $request);
+            $this->syncFeatures($plan, $this->buildFullPlanFeatureRowsFromQuota($plan, $request));
+            $plan->forgetCachedPlanFeatures();
+        });
 
         return redirect()
             ->route('admin.plans.edit', $plan)
@@ -315,13 +304,12 @@ class PlanController extends Controller
     private function validateTermRowsRequest(Request $request): void
     {
         $request->validate([
-            'duration_preset' => ['required', 'string', Rule::in(PlanTerm::presetBillingKeys())],
             'term_rows' => ['required', 'array', 'min:1'],
             'term_rows.*.billing_key' => ['required', 'string', Rule::in(PlanTerm::presetBillingKeys())],
             'term_rows.*.price' => ['required', 'numeric', 'min:0'],
-            'term_rows.*.discount_percent' => ['nullable', 'numeric', 'min:0', 'max:100'],
+            'term_rows.*.discount_percent' => ['nullable', 'integer', 'min:0', 'max:100'],
             'term_rows.*.is_visible' => ['nullable'],
-            'default_billing_key' => ['nullable', 'string', Rule::in(PlanTerm::presetBillingKeys())],
+            'default_billing_key' => ['required', 'string', Rule::in(PlanTerm::presetBillingKeys())],
         ]);
 
         $keys = collect($request->input('term_rows', []))
@@ -334,24 +322,22 @@ class PlanController extends Controller
             ]);
         }
 
-        $preset = (string) $request->input('duration_preset', '');
-        if ($preset !== '') {
-            $targetRows = collect((array) $request->input('term_rows', []))
-                ->filter(fn ($row) => is_array($row) && (string) ($row['billing_key'] ?? '') === $preset);
-            if ($targetRows->isEmpty()) {
-                throw \Illuminate\Validation\ValidationException::withMessages([
-                    'duration_preset' => ['Selected duration must exist in billing rows.'],
-                ]);
-            }
+        $defaultKey = trim((string) $request->input('default_billing_key', ''));
+        $targetRows = collect((array) $request->input('term_rows', []))
+            ->filter(fn ($row) => is_array($row) && (string) ($row['billing_key'] ?? '') === $defaultKey);
+        if ($targetRows->isEmpty()) {
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'default_billing_key' => [__('subscriptions.admin_default_billing_must_match_row')],
+            ]);
+        }
 
-            $selectedRow = $targetRows->first();
-            $selectedVisible = filter_var($selectedRow['is_visible'] ?? false, FILTER_VALIDATE_BOOLEAN)
-                || (string) ($selectedRow['is_visible'] ?? '') === '1';
-            if (! $selectedVisible) {
-                throw \Illuminate\Validation\ValidationException::withMessages([
-                    'duration_preset' => ['Selected duration must be visible for purchase.'],
-                ]);
-            }
+        $selectedRow = $targetRows->first();
+        $selectedVisible = filter_var($selectedRow['is_visible'] ?? false, FILTER_VALIDATE_BOOLEAN)
+            || (string) ($selectedRow['is_visible'] ?? '') === '1';
+        if (! $selectedVisible) {
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'default_billing_key' => [__('subscriptions.admin_default_billing_must_be_visible')],
+            ]);
         }
     }
 
@@ -387,26 +373,21 @@ class PlanController extends Controller
         return $out;
     }
 
-    private function syncPlanDefaultBillingKey(Plan $plan, mixed $requested): void
+    /**
+     * Persist catalog default tab from the validated request only (already matched to a visible row).
+     */
+    private function persistPlanDefaultBillingKeyFromRequest(Plan $plan, Request $request): void
     {
         $plan->loadMissing('terms');
-        $keys = $plan->terms->pluck('billing_key')->all();
-        if ($keys === []) {
-            $plan->update(['default_billing_key' => null]);
+        $key = trim((string) $request->input('default_billing_key', ''));
+        $keys = $plan->terms->pluck('billing_key')->map(fn ($k) => (string) $k)->all();
+        if ($key !== '' && in_array($key, $keys, true)) {
+            $plan->update(['default_billing_key' => $key]);
 
             return;
         }
 
-        $req = is_string($requested) ? trim($requested) : '';
-        if ($req !== '' && in_array($req, $keys, true)) {
-            $plan->update(['default_billing_key' => $req]);
-
-            return;
-        }
-
-        $visible = $plan->terms->where('is_visible', true)->sortBy('sort_order')->first();
-        $fallback = $visible?->billing_key ?? $plan->terms->sortBy('sort_order')->first()?->billing_key;
-        $plan->update(['default_billing_key' => $fallback]);
+        $plan->update(['default_billing_key' => null]);
     }
 
     /**
@@ -564,9 +545,6 @@ class PlanController extends Controller
     private function canonicalPaidPricingFromRequest(Request $request, ?Plan $planContext): ?array
     {
         $rows = $this->normalizedTermRowsFromRequest($request);
-        if ($rows === [] && $planContext !== null) {
-            $rows = $this->initialTermRowsForForm($planContext, true);
-        }
         if ($rows === []) {
             return null;
         }
@@ -655,6 +633,8 @@ class PlanController extends Controller
 
     private function validateQuotaPoliciesRequest(Request $request): void
     {
+        $this->normalizeQuotaPoliciesNumericInputsForValidation($request);
+
         $qp = $request->input('quota_policies');
         if (is_array($qp)) {
             foreach ($qp as $fk => $payload) {
@@ -673,15 +653,126 @@ class PlanController extends Controller
             $rules["quota_policies.$fk"] = ['required', 'array'];
             $rules["quota_policies.$fk.is_enabled"] = ['nullable'];
             $rules["quota_policies.$fk.refresh_type"] = ['required', 'string', Rule::in(PlanQuotaPolicy::refreshTypes())];
-            $rules["quota_policies.$fk.limit_value"] = ['nullable', 'integer', 'min:0'];
-            $rules["quota_policies.$fk.daily_sub_cap"] = ['nullable', 'integer', 'min:0'];
+            $rules["quota_policies.$fk.limit_value"] = ['nullable', 'numeric', 'min:0'];
+            $rules["quota_policies.$fk.daily_sub_cap"] = ['nullable', 'numeric', 'min:0'];
             $rules["quota_policies.$fk.per_day_usage_limit_enabled"] = ['sometimes', 'boolean'];
             $rules["quota_policies.$fk.purchasable_if_exhausted"] = ['sometimes', 'boolean'];
             $rules["quota_policies.$fk.pack_price_rupees"] = ['nullable', 'numeric', 'min:0'];
-            $rules["quota_policies.$fk.pack_message_count"] = ['nullable', 'integer', 'min:1'];
-            $rules["quota_policies.$fk.pack_validity_days"] = ['nullable', 'integer', 'min:1'];
+            $rules["quota_policies.$fk.pack_message_count"] = ['nullable', 'numeric', 'min:1'];
+            $rules["quota_policies.$fk.pack_validity_days"] = ['nullable', 'numeric', 'min:1'];
         }
         $request->validate($rules);
+    }
+
+    /**
+     * Coerce quota policy numeric fields before validation so admin never fails on harmless formatting ("010", whitespace).
+     *
+     * @see syncQuotaPoliciesFromRequest() which casts to int again when persisting.
+     */
+    private function normalizeQuotaPoliciesNumericInputsForValidation(Request $request): void
+    {
+        $qp = $request->input('quota_policies');
+        if (! is_array($qp)) {
+            return;
+        }
+
+        foreach ($qp as $featureKey => $payload) {
+            if (! is_array($payload)) {
+                continue;
+            }
+            $fk = (string) $featureKey;
+            foreach (['limit_value', 'daily_sub_cap'] as $field) {
+                if (! array_key_exists($field, $payload)) {
+                    continue;
+                }
+                $qp[$featureKey][$field] = $this->normalizedQuotaNumericInputString(
+                    $payload[$field],
+                    $field,
+                    $fk,
+                    allowZero: true,
+                    minWhenPresent: 0,
+                );
+            }
+            foreach (['pack_message_count', 'pack_validity_days'] as $field) {
+                if (! array_key_exists($field, $payload)) {
+                    continue;
+                }
+                $qp[$featureKey][$field] = $this->normalizedQuotaNumericInputString(
+                    $payload[$field],
+                    $field,
+                    $fk,
+                    allowZero: false,
+                    minWhenPresent: 1,
+                );
+            }
+        }
+
+        $request->merge(['quota_policies' => $qp]);
+    }
+
+    /**
+     * @return string Normalized for HTML form: '' = absent / use defaults downstream; digits only when numeric.
+     */
+    private function normalizedQuotaNumericInputString(
+        mixed $raw,
+        string $field,
+        string $featureKey,
+        bool $allowZero,
+        int $minWhenPresent,
+    ): string {
+        if ($raw === null || $raw === '') {
+            return '';
+        }
+        $original = $raw;
+        $s = trim(preg_replace('/\s+/', '', (string) $raw));
+        if ($s === '') {
+            return '';
+        }
+        if (! is_numeric($s)) {
+            Log::warning('Invalid quota limit normalized', [
+                'feature_key' => $featureKey,
+                'field' => $field,
+                'raw' => $original,
+                'reason' => 'non_numeric',
+            ]);
+
+            return '';
+        }
+        if (is_string($original) && preg_match('/^0+\d+$/', $original)) {
+            Log::warning('Invalid quota limit normalized', [
+                'feature_key' => $featureKey,
+                'field' => $field,
+                'raw' => $original,
+                'reason' => 'leading_zeros',
+            ]);
+        }
+        $n = (int) round((float) $s);
+        if ($n < 0) {
+            Log::warning('Invalid quota limit normalized', [
+                'feature_key' => $featureKey,
+                'field' => $field,
+                'raw' => $original,
+                'reason' => 'negative',
+            ]);
+
+            return $allowZero && $minWhenPresent === 0 ? '0' : '';
+        }
+        if ($n === 0 && ! $allowZero) {
+            return '';
+        }
+        if ($n > 0 && $n < $minWhenPresent) {
+            Log::warning('Invalid quota limit normalized', [
+                'feature_key' => $featureKey,
+                'field' => $field,
+                'raw' => $original,
+                'reason' => 'below_minimum',
+                'min' => $minWhenPresent,
+            ]);
+
+            return '';
+        }
+
+        return (string) $n;
     }
 
     /**
@@ -696,7 +787,7 @@ class PlanController extends Controller
         foreach (PlanQuotaPolicyKeys::ordered() as $featureKey) {
             if ($isEdit && $plan->exists) {
                 $row = $plan->quotaPolicies->firstWhere('feature_key', $featureKey);
-                $base = $row ? $row->toArray() : PlanQuotaPolicy::defaultsFromPlanFeatures($plan, $featureKey);
+                $base = $row ? $row->toArray() : PlanQuotaPolicy::defaultsForNewPlan($featureKey);
             } else {
                 $base = PlanQuotaPolicy::defaultsForNewPlan($featureKey);
             }
@@ -753,6 +844,7 @@ class PlanController extends Controller
 
     private function syncQuotaPoliciesFromRequest(Plan $plan, Request $request): void
     {
+        $plan->loadMissing('quotaPolicies');
         foreach (PlanQuotaPolicyKeys::ordered() as $featureKey) {
             $prefix = 'quota_policies.'.$featureKey;
             if (! is_array($request->input($prefix))) {
@@ -794,11 +886,11 @@ class PlanController extends Controller
             }
 
             $meta = null;
-            if ($featureKey === PlanFeatureKeys::INTEREST_VIEW_LIMIT) {
-                $plan->loadMissing('features');
-                $raw = (string) ($plan->getFeatureValue(PlanFeatureKeys::INTEREST_VIEW_RESET_PERIOD) ?? 'monthly');
-                $period = in_array($raw, ['weekly', 'monthly', 'quarterly'], true) ? $raw : 'monthly';
-                $meta = ['interest_view_reset_period' => $period];
+            if ($featureKey === PlanFeatureKeys::CHAT_SEND_LIMIT) {
+                $existingChat = $plan->quotaPolicies->firstWhere('feature_key', $featureKey);
+                $pm = is_array($existingChat?->policy_meta) ? $existingChat->policy_meta : [];
+                $pm['chat_initiate_new_chats_only'] = $request->boolean('chat_initiate_new_chats_only');
+                $meta = $pm;
             }
 
             PlanQuotaPolicy::query()->updateOrCreate(
@@ -826,43 +918,21 @@ class PlanController extends Controller
      */
     private function buildFullPlanFeatureRowsFromQuota(Plan $plan, Request $request): array
     {
-        $quotaRows = PlanQuotaPolicyMirror::planFeatureRowsFromQuotaRequest($request);
-        $byKey = [];
-        foreach ($quotaRows as $row) {
-            $byKey[$row['key']] = $row['value'];
-        }
         $plan->forgetCachedPlanFeatures();
         $plan->load('features');
+        $quotaWritten = array_flip(PlanQuotaPolicyKeys::planFeatureKeysWrittenByPolicies());
         $out = [];
         foreach (array_keys((array) config('plan_features', [])) as $key) {
-            if (array_key_exists($key, $byKey)) {
-                $out[] = ['key' => $key, 'value' => $byKey[$key]];
-            } else {
-                $existing = $plan->getFeatureValue($key);
-                $fallback = $key === PlanFeatureKeys::INTEREST_VIEW_RESET_PERIOD ? 'monthly' : '0';
-                $out[] = [
-                    'key' => $key,
-                    'value' => ($existing !== null && $existing !== '') ? $existing : $fallback,
-                ];
+            if (isset($quotaWritten[$key])) {
+                continue;
+            }
+            $existing = $plan->getFeatureValue($key);
+            if ($existing !== null && $existing !== '') {
+                $out[] = ['key' => $key, 'value' => (string) $existing];
             }
         }
 
-        $rows = $this->normalizeFeatureRows($out);
-        $initVal = $request->boolean('chat_initiate_new_chats_only') ? '1' : '0';
-        $replaced = false;
-        foreach ($rows as &$row) {
-            if (($row['key'] ?? '') === PlanFeatureKeys::CHAT_INITIATE_NEW_CHATS_ONLY) {
-                $row['value'] = $initVal;
-                $replaced = true;
-                break;
-            }
-        }
-        unset($row);
-        if (! $replaced) {
-            $rows[] = ['key' => PlanFeatureKeys::CHAT_INITIATE_NEW_CHATS_ONLY, 'value' => $initVal];
-        }
-
-        return $this->normalizeFeatureRows($rows);
+        return $this->normalizeFeatureRows($out);
     }
 
     /**
@@ -913,42 +983,6 @@ class PlanController extends Controller
         PlanFeature::query()->where('plan_id', $plan->id)->whereNotIn('key', $keys)->delete();
     }
 
-    /**
-     * When the admin sets plan-level “Discount %”, mirror it into the first billing row before term validation/sync.
-     */
-    private function syncPlanDiscountFromFormIntoFirstTermRow(Request $request): void
-    {
-        $tr = $request->input('term_rows');
-        if (! is_array($tr) || ! isset($tr[0]) || ! is_array($tr[0])) {
-            return;
-        }
-        $d = $request->input('discount_percent');
-        if ($d === null || $d === '') {
-            return;
-        }
-        $tr[0]['discount_percent'] = $d;
-        $request->merge(['term_rows' => $tr]);
-    }
-
-    /**
-     * Edit fallback: if JS does not submit term_rows (or admin only updates name), reuse current rows.
-     */
-    private function mergeTermRowsFallbackForUpdate(Request $request, Plan $plan): void
-    {
-        if (is_array($request->input('term_rows')) && count((array) $request->input('term_rows')) > 0) {
-            return;
-        }
-
-        $rows = $this->initialTermRowsForForm($plan, true);
-        if ($rows !== []) {
-            $request->merge(['term_rows' => $rows]);
-        }
-
-        if (! $request->filled('duration_preset')) {
-            $request->merge(['duration_preset' => $this->durationPresetForAdminForm($plan)]);
-        }
-    }
-
     private function normalizeMarketingBadgeRequest(Request $request): void
     {
         $raw = $request->input('marketing_badge');
@@ -995,13 +1029,6 @@ class PlanController extends Controller
             return (string) $firstTerm->billing_key;
         }
 
-        $days = (int) ($plan->duration_days ?? 0);
-        foreach (PlanTerm::presetBillingKeys() as $k) {
-            if (PlanTerm::durationDaysFor($k) === $days) {
-                return $k;
-            }
-        }
-
         return PlanTerm::BILLING_MONTHLY;
     }
 
@@ -1018,9 +1045,11 @@ class PlanController extends Controller
     }
 
     /**
+     * Billing rows for admin form: edit loads only persisted {@see Plan::$terms}; create uses one starter row.
+     *
      * @return list<array{billing_key: string, price: float, discount_percent: int|null, is_visible: bool}>
      */
-    private function initialTermRowsForForm(Plan $plan, bool $isEdit): array
+    private function termRowsForAdminBillingForm(Plan $plan, bool $isEdit): array
     {
         if (Plan::isFreeCatalogSlug((string) $plan->slug)) {
             return [];
@@ -1028,14 +1057,13 @@ class PlanController extends Controller
 
         if ($isEdit && $plan->exists) {
             $plan->loadMissing('terms');
-            if ($plan->terms->isNotEmpty()) {
-                return $plan->terms->sortBy('sort_order')->values()->map(fn (PlanTerm $t) => [
-                    'billing_key' => $t->billing_key,
-                    'price' => (float) $t->price,
-                    'discount_percent' => $t->discount_percent,
-                    'is_visible' => (bool) $t->is_visible,
-                ])->all();
-            }
+
+            return $plan->terms->sortBy('sort_order')->values()->map(fn (PlanTerm $t) => [
+                'billing_key' => $t->billing_key,
+                'price' => (float) $t->price,
+                'discount_percent' => $t->discount_percent,
+                'is_visible' => (bool) $t->is_visible,
+            ])->all();
         }
 
         $p = (float) ($plan->price ?? 0);

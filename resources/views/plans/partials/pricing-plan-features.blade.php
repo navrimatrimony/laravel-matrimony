@@ -1,8 +1,24 @@
 @php
     use App\Support\PlanFeatureLabel;
+    use App\Support\PlanQuotaCatalogFormatter;
     /** @var \Illuminate\Support\Collection $primaryFeatureRows */
     /** @var \Illuminate\Support\Collection $secondaryFeatureRows */
     $wrapInBillingToggle = $wrapInBillingToggle ?? true;
+    /** One SSOT line (label — value) for pricing; no split value/suffix paths. */
+    $catalogLine = static function (object $feat) use ($durationMultiplier, $billingDurationType): string {
+        if (property_exists($feat, 'catalog_quota_payload') && is_array($feat->catalog_quota_payload)) {
+            return PlanQuotaCatalogFormatter::catalogLineFromPayload(
+                (string) $feat->key,
+                $feat->catalog_quota_payload,
+                (float) $durationMultiplier,
+                $billingDurationType
+            );
+        }
+
+        return PlanFeatureLabel::catalogLabelForPricing((string) $feat->key, null)
+            .' — '
+            .PlanFeatureLabel::catalogFormatValue((string) $feat->key, (string) $feat->value, (float) $durationMultiplier, $billingDurationType);
+    };
 @endphp
 
 @if ($wrapInBillingToggle)
@@ -15,10 +31,7 @@
             @foreach ($secondaryFeatureRows as $feat)
                 <li class="flex gap-2.5 text-slate-700 dark:text-slate-200" role="listitem">
                     <span class="mt-0.5 shrink-0 text-emerald-600/80 dark:text-emerald-400/90" aria-hidden="true">✓</span>
-                    <span>
-                        <span class="font-medium text-slate-900 dark:text-white">{{ PlanFeatureLabel::label((string) $feat->key) }}</span>
-                        <span class="text-slate-600 dark:text-slate-400"> — {{ PlanFeatureLabel::catalogFormatValue((string) $feat->key, (string) $feat->value, (float) $durationMultiplier, $billingDurationType) }}</span>
-                    </span>
+                    <span class="min-w-0 whitespace-nowrap">{{ $catalogLine($feat) }}</span>
                 </li>
             @endforeach
         </ul>
@@ -35,10 +48,7 @@
                             role="listitem"
                         >
                             <x-plan.feature-highlight-icon :feature-key="(string) $feat->key" class="mt-0.5" />
-                            <span class="min-w-0 flex-1 text-sm leading-snug">
-                                <span class="font-semibold text-slate-900 dark:text-white">{{ PlanFeatureLabel::label((string) $feat->key) }}</span>
-                                <span class="text-slate-600 dark:text-slate-400"> — {{ PlanFeatureLabel::catalogFormatValue((string) $feat->key, (string) $feat->value, (float) $durationMultiplier, $billingDurationType) }}</span>
-                            </span>
+                            <span class="min-w-0 flex-1 text-sm leading-snug whitespace-nowrap">{{ $catalogLine($feat) }}</span>
                         </li>
                     @endforeach
                 </ul>
@@ -75,10 +85,7 @@
                         @foreach ($secondaryFeatureRows as $feat)
                             <li class="flex gap-2.5" role="listitem">
                                 <span class="mt-1.5 h-1 shrink-0 w-1 rounded-full bg-emerald-500/80" aria-hidden="true"></span>
-                                <span class="min-w-0">
-                                    <span class="font-medium text-slate-800 dark:text-slate-100">{{ PlanFeatureLabel::label((string) $feat->key) }}</span>
-                                    <span class="text-slate-500 dark:text-slate-400"> — {{ PlanFeatureLabel::catalogFormatValue((string) $feat->key, (string) $feat->value, (float) $durationMultiplier, $billingDurationType) }}</span>
-                                </span>
+                                <span class="min-w-0 whitespace-nowrap">{{ $catalogLine($feat) }}</span>
                             </li>
                         @endforeach
                     </ul>

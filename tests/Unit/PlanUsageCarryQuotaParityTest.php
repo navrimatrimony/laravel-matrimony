@@ -30,7 +30,7 @@ class PlanUsageCarryQuotaParityTest extends TestCase
         $user = User::factory()->create(['is_admin' => false]);
         MatrimonyProfile::factory()->for($user)->create(['lifecycle_state' => 'active']);
 
-        $basic = Plan::query()->where('slug', 'basic')->firstOrFail();
+        $basic = Plan::query()->where('slug', 'basic_male')->firstOrFail();
         $sub = Subscription::query()->create([
             'user_id' => $user->id,
             'plan_id' => $basic->id,
@@ -76,7 +76,7 @@ class PlanUsageCarryQuotaParityTest extends TestCase
         $user = User::factory()->create(['is_admin' => false]);
         MatrimonyProfile::factory()->for($user)->create(['lifecycle_state' => 'active']);
 
-        $gold = Plan::query()->where('slug', 'gold')->firstOrFail();
+        $gold = Plan::query()->where('slug', 'gold_male')->firstOrFail();
         $sub = Subscription::query()->create([
             'user_id' => $user->id,
             'plan_id' => $gold->id,
@@ -96,7 +96,7 @@ class PlanUsageCarryQuotaParityTest extends TestCase
         app(EntitlementService::class)->assignFromSubscription($sub->fresh());
 
         $featureUsage = app(FeatureUsageService::class);
-        $this->assertSame(7, $featureUsage->getEffectiveMediatorMonthlyLimit($user->fresh()));
+        $this->assertSame(17, $featureUsage->getEffectiveMediatorMonthlyLimit($user->fresh()));
 
         app(UserFeatureUsageService::class)->incrementUsage(
             (int) $user->id,
@@ -109,8 +109,8 @@ class PlanUsageCarryQuotaParityTest extends TestCase
         $this->assertNotNull($summary);
         $row = collect($summary['rows'])->firstWhere('key', 'mediator_requests');
         $this->assertNotNull($row);
-        $this->assertSame(7, $row['limit']);
+        $this->assertSame(17, $row['limit']);
         $this->assertSame(2, $row['used']);
-        $this->assertSame(5, $row['remaining']);
+        $this->assertSame(15, $row['remaining']);
     }
 }

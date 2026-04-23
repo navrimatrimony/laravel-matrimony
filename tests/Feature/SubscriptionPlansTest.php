@@ -2,8 +2,10 @@
 
 namespace Tests\Feature;
 
+use App\Models\Payment;
 use App\Models\Plan;
-use App\Models\PlanPrice;
+use App\Models\PlanTerm;
+use App\Models\Subscription;
 use App\Models\User;
 use App\Support\PayuHasher;
 use Database\Seeders\SubscriptionPlansSeeder;
@@ -49,17 +51,17 @@ class SubscriptionPlansTest extends TestCase
         $this->seed(SubscriptionPlansSeeder::class);
         $user = User::factory()->create();
         $paidPlan = Plan::query()->where('slug', 'gold_male')->firstOrFail();
-        $price = PlanPrice::query()
+        $term = PlanTerm::query()
             ->where('plan_id', $paidPlan->id)
             ->where('is_visible', true)
             ->orderBy('sort_order')
             ->first();
-        $this->assertNotNull($price);
+        $this->assertNotNull($term);
 
         $this->actingAs($user)
             ->post(route('plans.subscribe'), [
                 'plan' => $paidPlan->slug,
-                'plan_price_id' => $price->id,
+                'plan_term_id' => $term->id,
             ])
             ->assertOk()
             ->assertViewIs('payments.payu_redirect')
@@ -76,17 +78,17 @@ class SubscriptionPlansTest extends TestCase
         $this->seed(SubscriptionPlansSeeder::class);
         $user = User::factory()->create();
         $paidPlan = Plan::query()->where('slug', 'gold_male')->firstOrFail();
-        $price = PlanPrice::query()
+        $term = PlanTerm::query()
             ->where('plan_id', $paidPlan->id)
             ->where('is_visible', true)
             ->orderBy('sort_order')
             ->first();
-        $this->assertNotNull($price);
+        $this->assertNotNull($term);
 
         $checkout = $this->actingAs($user)
             ->post(route('plans.subscribe'), [
                 'plan' => $paidPlan->slug,
-                'plan_price_id' => $price->id,
+                'plan_term_id' => $term->id,
             ]);
         $checkout->assertOk();
         /** @var array<string, string> $fields */
@@ -119,8 +121,41 @@ class SubscriptionPlansTest extends TestCase
         $this->assertDatabaseHas('subscriptions', [
             'user_id' => $user->id,
             'plan_id' => $paidPlan->id,
-            'plan_price_id' => $price->id,
+            'plan_term_id' => $term->id,
             'status' => 'active',
         ]);
+
+        $payment = Payment::query()->where('txnid', $fields['txnid'])->first();
+        $this->assertNotNull($payment);
+        $this->assertSame((int) $paidPlan->id, (int) $payment->plan_id);
+        $this->assertSame((int) $term->id, (int) $payment->plan_term_id);
+        $this->assertSame((string) $term->billing_key, (string) $payment->billing_key);
+        $this->assertSame('INR', (string) $payment->currency);
+        $meta = $payment->meta;
+        $this->assertIsArray($meta);
+        $this->assertSame((string) $paidPlan->name, $meta['plan_name'] ?? null);
+        $this->assertSame((string) $term->billing_key, $meta['billing_key'] ?? null);
+        $this->assertSame((int) $term->duration_days, (int) ($meta['duration_days'] ?? 0));
+        $this->assertEqualsWithDelta((float) $term->final_price, (float) ($meta['base_amount'] ?? 0), 0.02);
+        $amountPaid = round((float) $payment->amount_paid, 2);
+        $this->assertEqualsWithDelta($amountPaid, (float) ($meta['final_amount'] ?? 0), 0.02);
+        $this->assertArrayHasKey('coupon_discount', $meta);
+        $this->assertEqualsWithDelta(0.0, (float) ($meta['coupon_discount'] ?? -1), 0.02);
+        $this->assertEqualsWithDelta($amountPaid, (float) ($meta['final_amount_after_coupon'] ?? 0), 0.02);
+        $this->assertNull($meta['coupon_code'] ?? null);
+
+        $sub = Subscription::query()->where('user_id', $user->id)->where('plan_id', $paidPlan->id)->where('status', 'active')->first();
+        $this->assertNotNull($sub);
+        $snap = $sub->meta['checkout_snapshot'] ?? null;
+        $this->assertIsArray($snap);
+        $this->assertSame((string) $paidPlan->name, $snap['plan_name'] ?? null);
+        $this->assertSame($fields['txnid'], $snap['payu_txnid'] ?? null);
+        $this->assertEqualsWithDelta($amountPaid, (float) ($snap['final_amount'] ?? 0), 0.02);
+        $this->assertEqualsWithDelta(0.0, (float) ($snap['coupon_discount'] ?? -1), 0.02);
+        $this->assertEqualsWithDelta($amountPaid, (float) ($snap['final_amount_after_coupon'] ?? 0), 0.02);
+
+        if (\Illuminate\Support\Facades\Schema::hasColumn('payments', 'payu_txnid')) {
+            $this->assertSame($fields['txnid'], (string) $payment->payu_txnid);
+        }
     }
 }

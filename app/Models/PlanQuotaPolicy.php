@@ -20,6 +20,9 @@ class PlanQuotaPolicy extends Model
 
     public const REFRESH_LIFETIME = 'lifetime';
 
+    /** Incoming interest reveal window aligned with calendar quarters. */
+    public const REFRESH_QUARTERLY = 'quarterly';
+
     public const OVERUSE_BLOCK = 'block';
 
     public const OVERUSE_PACK = 'pack';
@@ -65,6 +68,7 @@ class PlanQuotaPolicy extends Model
             self::REFRESH_DAILY,
             self::REFRESH_WEEKLY,
             self::REFRESH_MONTHLY_30D_IST,
+            self::REFRESH_QUARTERLY,
             self::REFRESH_LIFETIME,
         ];
     }
@@ -90,26 +94,59 @@ class PlanQuotaPolicy extends Model
         return $this->belongsTo(Plan::class);
     }
 
-    public static function ensureAllForPlan(Plan $plan): void
+    /**
+     * Ensures every {@see PlanQuotaPolicyKeys::ordered()} row exists for the plan (additive only).
+     * Missing keys get safe defaults: disabled, limit 0, monthly refresh — SSOT readers stay valid.
+     */
+    public static function ensureAllKeysForPlan(Plan $plan): void
     {
-        $plan->loadMissing('features');
+        $plan->loadMissing('quotaPolicies');
         foreach (PlanQuotaPolicyKeys::ordered() as $featureKey) {
             static::query()->firstOrCreate(
                 ['plan_id' => $plan->id, 'feature_key' => $featureKey],
-                static::defaultsFromPlanFeatures($plan, $featureKey)
+                static::defaultsForNewPlan($featureKey)
+            );
+        }
+        $plan->unsetRelation('quotaPolicies');
+    }
+
+    /** @deprecated Use {@see ensureAllKeysForPlan} */
+    public static function ensureAllForPlan(Plan $plan): void
+    {
+        static::ensureAllKeysForPlan($plan);
+    }
+
+    /**
+     * Catalog/seed only: upserts quota rows from an in-memory map (never read {@code plan_features} at runtime).
+     *
+     * @param  array<string, string|int|float|bool|null>  $featureValues
+     */
+    public static function syncRowsFromCatalogFeatureMap(int $planId, array $featureValues): void
+    {
+        foreach (PlanQuotaPolicyKeys::ordered() as $featureKey) {
+            $attrs = static::attributesFromCatalogFeatureMap($featureKey, $featureValues);
+            static::query()->updateOrCreate(
+                ['plan_id' => $planId, 'feature_key' => $featureKey],
+                $attrs
             );
         }
     }
 
     /**
+     * @param  array<string, string|int|float|bool|null>  $m
      * @return array<string, mixed>
      */
-    public static function defaultsFromPlanFeatures(Plan $plan, string $featureKey): array
+    private static function attributesFromCatalogFeatureMap(string $featureKey, array $m): array
     {
-        $raw = $plan->getFeatureValue($featureKey);
+        $rawStr = static function (string $k) use ($m): string {
+            $v = $m[$k] ?? '';
+
+            return is_scalar($v) ? trim((string) $v) : '';
+        };
 
         if (PlanQuotaPolicyKeys::mirrorsPlanFeatureAsBooleanOnly($featureKey)) {
-            $on = $raw !== null && $raw !== '' && in_array((string) $raw, ['1', 'true', 'yes', 'on'], true);
+            $raw = $rawStr($featureKey);
+            $on = $raw !== '' && in_array($raw, ['1', 'true', 'yes', 'on'], true);
 
             return [
                 'is_enabled' => $on,
@@ -126,17 +163,18 @@ class PlanQuotaPolicy extends Model
             ];
         }
 
-        if ($featureKey === PlanFeatureKeys::WHO_VIEWED_ME_DAYS) {
-            $access = (string) ($plan->getFeatureValue(FeatureUsageService::FEATURE_WHO_VIEWED_ME_ACCESS) ?? '0');
-            $daysRaw = $plan->getFeatureValue(PlanFeatureKeys::WHO_VIEWED_ME_DAYS);
-            $days = is_numeric($daysRaw) ? (int) $daysRaw : 0;
-            $enabled = $access === '1' || $days > 0;
-            $unlimited = $days >= 999;
+        if ($featureKey === PlanFeatureKeys::WHO_VIEWED_ME_PREVIEW_LIMIT) {
+            $access = $rawStr(FeatureUsageService::FEATURE_WHO_VIEWED_ME_ACCESS);
+            $previewRaw = $rawStr(PlanFeatureKeys::WHO_VIEWED_ME_PREVIEW_LIMIT);
+            $preview = is_numeric($previewRaw) ? (int) $previewRaw : 0;
+            $unlimited = $preview === -1 || $preview >= 999;
+            $accessOn = $access !== '' && in_array($access, ['1', 'true', 'yes', 'on'], true);
+            $enabled = $accessOn || $preview > 0 || $unlimited;
 
             return [
                 'is_enabled' => $enabled,
                 'refresh_type' => $unlimited ? self::REFRESH_UNLIMITED : self::REFRESH_MONTHLY_30D_IST,
-                'limit_value' => $unlimited ? null : ($enabled ? max(0, $days) : 0),
+                'limit_value' => $unlimited ? null : max(0, $preview),
                 'daily_sub_cap' => null,
                 'per_day_usage_limit_enabled' => false,
                 'grace_percent_of_plan' => 10,
@@ -148,17 +186,31 @@ class PlanQuotaPolicy extends Model
             ];
         }
 
+        $raw = $rawStr($featureKey);
         $n = is_numeric($raw) ? (int) $raw : 0;
         $unlimited = $n === -1;
-        $meta = null;
+        $policyMeta = null;
+        $refreshForNumeric = self::REFRESH_MONTHLY_30D_IST;
         if ($featureKey === PlanFeatureKeys::INTEREST_VIEW_LIMIT) {
-            $p = $plan->getFeatureValue(PlanFeatureKeys::INTEREST_VIEW_RESET_PERIOD) ?? 'monthly';
-            $meta = ['interest_view_reset_period' => (string) $p];
+            $p = strtolower(trim($rawStr(PlanFeatureKeys::INTEREST_VIEW_RESET_PERIOD)));
+            if ($p === '') {
+                $p = 'monthly';
+            }
+            $refreshForNumeric = match ($p) {
+                'weekly' => self::REFRESH_WEEKLY,
+                'quarterly' => self::REFRESH_QUARTERLY,
+                default => self::REFRESH_MONTHLY_30D_IST,
+            };
+        }
+        if ($featureKey === PlanFeatureKeys::CHAT_SEND_LIMIT) {
+            $ci = $rawStr(PlanFeatureKeys::CHAT_INITIATE_NEW_CHATS_ONLY);
+            $on = $ci !== '' && in_array($ci, ['1', 'true', 'yes', 'on'], true);
+            $policyMeta = ['chat_initiate_new_chats_only' => $on];
         }
 
         return [
             'is_enabled' => $n !== 0 || $unlimited,
-            'refresh_type' => $unlimited ? self::REFRESH_UNLIMITED : self::REFRESH_MONTHLY_30D_IST,
+            'refresh_type' => $unlimited ? self::REFRESH_UNLIMITED : $refreshForNumeric,
             'limit_value' => $unlimited ? null : max(0, $n),
             'daily_sub_cap' => null,
             'per_day_usage_limit_enabled' => false,
@@ -167,27 +219,56 @@ class PlanQuotaPolicy extends Model
             'pack_price_paise' => null,
             'pack_message_count' => null,
             'pack_validity_days' => null,
-            'policy_meta' => $meta,
+            'policy_meta' => $policyMeta,
         ];
     }
 
     /**
-     * Defaults when creating a new plan (no feature rows yet).
+     * Defaults when creating a new plan row (no reads from plan_features).
      *
      * @return array<string, mixed>
      */
     public static function defaultsForNewPlan(string $featureKey): array
     {
         if (PlanQuotaPolicyKeys::mirrorsPlanFeatureAsBooleanOnly($featureKey)) {
-            return static::defaultsFromPlanFeatures(new Plan, $featureKey);
+            return [
+                'is_enabled' => false,
+                'refresh_type' => self::REFRESH_MONTHLY_30D_IST,
+                'limit_value' => null,
+                'daily_sub_cap' => null,
+                'per_day_usage_limit_enabled' => false,
+                'grace_percent_of_plan' => 10,
+                'overuse_mode' => self::OVERUSE_BLOCK,
+                'pack_price_paise' => null,
+                'pack_message_count' => null,
+                'pack_validity_days' => null,
+                'policy_meta' => null,
+            ];
         }
 
-        $meta = $featureKey === PlanFeatureKeys::INTEREST_VIEW_LIMIT
-            ? ['interest_view_reset_period' => 'monthly']
-            : null;
+        if ($featureKey === PlanFeatureKeys::WHO_VIEWED_ME_PREVIEW_LIMIT) {
+            return [
+                'is_enabled' => false,
+                'refresh_type' => self::REFRESH_MONTHLY_30D_IST,
+                'limit_value' => 0,
+                'daily_sub_cap' => null,
+                'per_day_usage_limit_enabled' => false,
+                'grace_percent_of_plan' => 10,
+                'overuse_mode' => self::OVERUSE_BLOCK,
+                'pack_price_paise' => null,
+                'pack_message_count' => null,
+                'pack_validity_days' => null,
+                'policy_meta' => null,
+            ];
+        }
+
+        $policyMeta = match ($featureKey) {
+            PlanFeatureKeys::CHAT_SEND_LIMIT => ['chat_initiate_new_chats_only' => false],
+            default => null,
+        };
 
         return [
-            'is_enabled' => true,
+            'is_enabled' => false,
             'refresh_type' => self::REFRESH_MONTHLY_30D_IST,
             'limit_value' => 0,
             'daily_sub_cap' => null,
@@ -197,7 +278,7 @@ class PlanQuotaPolicy extends Model
             'pack_price_paise' => null,
             'pack_message_count' => null,
             'pack_validity_days' => null,
-            'policy_meta' => $meta,
+            'policy_meta' => $policyMeta,
         ];
     }
 }

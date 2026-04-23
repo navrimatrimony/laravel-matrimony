@@ -34,20 +34,16 @@
         <p class="text-gray-600 dark:text-gray-400 mb-6">
             @if ($whoViewedEmptyUsesMonth ?? false)
                 {{ __('who_viewed.none_this_month') }}
-            @elseif (($windowDays ?? null) === null)
-                {{ __('who_viewed.none_all_time') }}
             @else
-                {{ __('who_viewed.none_in_window', ['days' => $windowDays]) }}
+                {{ __('who_viewed.none_all_time') }}
             @endif
         </p>
     @else
         <p class="text-gray-700 dark:text-gray-300 mb-6">
             @if (! ($hasFullWhoViewedAccess ?? true))
                 {{ trans_choice('who_viewed.people_viewed_this_month', $uniqueCount, ['count' => $uniqueCount]) }}
-            @elseif (($windowDays ?? null) === null)
-                {{ trans_choice('who_viewed.people_viewed_all_time', $uniqueCount, ['count' => $uniqueCount]) }}
             @else
-                {{ trans_choice('who_viewed.people_viewed_in_window', $uniqueCount, ['count' => $uniqueCount, 'days' => $windowDays]) }}
+                {{ trans_choice('who_viewed.people_viewed_all_time', $uniqueCount, ['count' => $uniqueCount]) }}
             @endif
         </p>
 

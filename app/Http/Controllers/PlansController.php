@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Message;
 use App\Models\Plan;
 use App\Models\ProfileView;
+use App\Models\Subscription;
 use App\Services\CouponService;
 use App\Services\SubscriptionService;
 use Illuminate\Http\Request;
@@ -18,7 +19,7 @@ class PlansController extends Controller
 
         $plans = Plan::query()
             ->where('is_active', true)
-            ->with(['features', 'terms', 'visiblePlanPrices'])
+            ->with(['features', 'terms', 'quotaPolicies'])
             ->orderBy('sort_order')
             ->orderBy('id')
             ->get();
@@ -26,7 +27,7 @@ class PlansController extends Controller
         $catalogIncludesInactive = false;
         if ($plans->isEmpty()) {
             $fallback = Plan::query()
-                ->with(['features', 'terms', 'visiblePlanPrices'])
+                ->with(['features', 'terms', 'quotaPolicies'])
                 ->orderBy('sort_order')
                 ->orderBy('id')
                 ->get();
@@ -37,6 +38,18 @@ class PlansController extends Controller
         }
 
         $effectivePlan = $subscriptions->getEffectivePlan($user);
+
+        $currentPlanDisplayName = null;
+        if ($user !== null) {
+            $activeSub = $subscriptions->getActiveSubscription($user);
+            if ($activeSub instanceof Subscription) {
+                $snap = $activeSub->checkoutSnapshot();
+                $label = trim((string) ($snap['plan_name'] ?? ''));
+                if ($label !== '') {
+                    $currentPlanDisplayName = $label;
+                }
+            }
+        }
 
         // All active non-free plans (admin-created tiers like "test" must appear). Order by sort_order + id.
         $pricingPlans = $plans
@@ -80,14 +93,30 @@ class PlansController extends Controller
         }
 
         $maxDiscountPercent = (int) $pricingPlans->max(function (Plan $p) {
-            $m = (int) ($p->discount_percent ?? 0);
-            foreach ($p->visiblePlanPrices as $pp) {
-                $m = max($m, (int) ($pp->discount_percent ?? 0));
-                $strike = $pp->strike_list_price;
-                $final = (float) $pp->final_price;
-                if ($strike !== null && (float) $strike > $final + 0.004) {
-                    $m = max($m, (int) round(100 * (1 - $final / (float) $strike)));
+            $m = 0;
+            $visibleTerms = $p->terms->where('is_visible', true);
+            if ($visibleTerms->isNotEmpty()) {
+                foreach ($visibleTerms as $t) {
+                    $d = (int) ($t->discount_percent ?? 0);
+                    if ($d > 0) {
+                        $m = max($m, $d);
+                    } else {
+                        $list = (float) $t->price;
+                        $fin = (float) $t->final_price;
+                        if ($list > $fin + 0.004) {
+                            $m = max($m, (int) round(100 * (1 - $fin / $list)));
+                        }
+                    }
                 }
+
+                return $m;
+            }
+
+            $m = (int) ($p->discount_percent ?? 0);
+            $list = (float) $p->price;
+            $fin = (float) $p->final_price;
+            if ($m === 0 && $list > $fin + 0.004) {
+                $m = (int) round(100 * (1 - $fin / $list));
             }
 
             return $m;
@@ -98,6 +127,7 @@ class PlansController extends Controller
             'pricingPlans' => $pricingPlans,
             'effectivePlan' => $effectivePlan,
             'currentPlan' => $effectivePlan,
+            'currentPlanDisplayName' => $currentPlanDisplayName,
             'catalogIncludesInactive' => $catalogIncludesInactive,
             'maxDiscountPercent' => $maxDiscountPercent,
             'unreadMessagesCount' => $unreadMessagesCount,
@@ -111,13 +141,14 @@ class PlansController extends Controller
             'code' => ['required', 'string', 'max:64'],
             'plan_id' => ['nullable', 'integer'],
             'plan_price_id' => ['nullable', 'integer'],
+            'plan_term_id' => ['nullable', 'integer'],
         ]);
 
         return response()->json($coupons->validatePreview(
             $data['code'],
             isset($data['plan_id']) ? (int) $data['plan_id'] : null,
             isset($data['plan_price_id']) ? (int) $data['plan_price_id'] : null,
+            isset($data['plan_term_id']) ? (int) $data['plan_term_id'] : null,
         ));
     }
-
 }

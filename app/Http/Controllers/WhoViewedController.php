@@ -27,9 +27,8 @@ class WhoViewedController extends Controller
 
         $profile = $user->matrimonyProfile;
         $userId = (int) $user->id;
-        $days = $this->featureUsage->getWhoViewedMeWindowDays($userId);
         $previewLimit = $this->featureUsage->getWhoViewedMePreviewLimit($userId);
-        $hasFullAccess = $days > 0;
+        $hasFullAccess = $this->featureUsage->whoViewedMeHasFullViewerList($user);
         $teaserUniqueCount = ViewTrackingService::countEligibleDistinctViewersForTeaser((int) $profile->id);
         $plansUrl = route('plans.index');
 
@@ -48,7 +47,7 @@ class WhoViewedController extends Controller
                 'recentViewers' => collect(),
                 'since' => null,
                 'whoViewedLocked' => true,
-                'windowDays' => 0,
+                'windowDays' => null,
                 'teaserUniqueCount' => $teaserUniqueCount,
                 'plansUrl' => $plansUrl,
                 'whoViewedPartial' => false,
@@ -59,11 +58,9 @@ class WhoViewedController extends Controller
             ]);
         }
 
-        $since = $this->resolveWhoViewedSince($hasFullAccess, $days);
+        $since = $hasFullAccess ? null : now()->startOfMonth();
         $uniqueByViewer = $this->uniqueViewerViewsForProfile($profile, $since);
         $uniqueCount = $uniqueByViewer->count();
-
-        $windowDaysForView = $days >= FeatureUsageService::WHO_VIEWED_UNLIMITED_DAYS_THRESHOLD ? null : $days;
 
         if ($hasFullAccess) {
             $recentLimit = 10;
@@ -74,7 +71,6 @@ class WhoViewedController extends Controller
             $recent = $uniqueByViewer->take($previewLimit);
             $lockedOverflowCount = max(0, $uniqueCount - $previewLimit);
             $whoViewedPartial = $previewLimit > 0 && $lockedOverflowCount > 0;
-            $windowDaysForView = null;
         }
 
         if ($request->wantsJson()) {
@@ -85,7 +81,7 @@ class WhoViewedController extends Controller
                 'unique_count' => $uniqueCount,
                 'overflow_count' => $lockedOverflowCount,
                 'recent' => $this->serializeWhoViewedRecent($recent),
-                'window_days' => $windowDaysForView,
+                'window_days' => null,
                 'since' => $since?->toIso8601String(),
                 'teaser_unique_count' => $uniqueCount,
             ]);
@@ -97,7 +93,7 @@ class WhoViewedController extends Controller
             'recentViewers' => $recent,
             'since' => $since,
             'whoViewedLocked' => false,
-            'windowDays' => $windowDaysForView,
+            'windowDays' => null,
             'teaserUniqueCount' => null,
             'plansUrl' => $plansUrl,
             'whoViewedPartial' => $whoViewedPartial,
@@ -106,19 +102,6 @@ class WhoViewedController extends Controller
             'hasFullWhoViewedAccess' => $hasFullAccess,
             'whoViewedEmptyUsesMonth' => ! $hasFullAccess,
         ]);
-    }
-
-    private function resolveWhoViewedSince(bool $hasFullAccess, int $days): ?Carbon
-    {
-        if ($hasFullAccess) {
-            if ($days >= FeatureUsageService::WHO_VIEWED_UNLIMITED_DAYS_THRESHOLD) {
-                return null;
-            }
-
-            return now()->subDays($days);
-        }
-
-        return now()->startOfMonth();
     }
 
     /**

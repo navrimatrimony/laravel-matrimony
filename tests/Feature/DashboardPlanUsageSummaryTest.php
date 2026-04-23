@@ -25,7 +25,8 @@ class DashboardPlanUsageSummaryTest extends TestCase
             ->get(route('dashboard'))
             ->assertOk()
             ->assertSee(__('dashboard.usage_section_title'), false)
-            ->assertSee(__('dashboard.usage_row_contact_reveals'), false);
+            // Free tier contact quota is 0 — row is hidden per catalog rules; other quotas still render.
+            ->assertSee(__('dashboard.usage_row_chat_sends'), false);
     }
 
     public function test_matrimony_page_includes_compact_usage_strip_for_member_with_profile(): void

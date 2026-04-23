@@ -10,7 +10,7 @@ class PlanCreateBillingUiTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_create_plan_page_includes_billing_periods_and_add_button(): void
+    public function test_create_plan_page_includes_static_billing_period_rows(): void
     {
         $admin = User::factory()->create(['is_admin' => true]);
 
@@ -21,8 +21,10 @@ class PlanCreateBillingUiTest extends TestCase
         $response->assertSee(__('subscriptions.admin_add_billing_period'), false);
         $response->assertSee(__('subscriptions.admin_billing_default_catalog_tab'), false);
         $response->assertSee('id="plan-admin-billing-panel"', false);
-        $response->assertSee('name="duration_preset"', false);
-        $response->assertSee("term_rows[' + i + '][billing_key]", false);
+        $response->assertSee('name="default_billing_key"', false);
+        $response->assertSee('name="term_rows[0][billing_key]"', false);
+        $response->assertSee('plan-term-rows-body', false);
+        $response->assertSee('admin-plan-term-row-template', false);
     }
 
     public function test_plans_index_includes_footer_create_cta(): void

@@ -8,7 +8,6 @@ use App\Models\Subscription;
 use App\Models\User;
 use App\Services\EntitlementService;
 use App\Services\FeatureUsageService;
-use App\Support\PlanFeatureKeys;
 use Database\Seeders\PlanStandardFeatureKeysSeeder;
 use Database\Seeders\SubscriptionPlansSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -33,7 +32,7 @@ class DashboardUsageStripStaffPlanParityTest extends TestCase
         ]);
         MatrimonyProfile::factory()->for($user)->create(['lifecycle_state' => 'active']);
 
-        $basic = Plan::query()->where('slug', 'basic')->firstOrFail();
+        $basic = Plan::query()->where('slug', 'basic_male')->firstOrFail();
         $sub = Subscription::query()->create([
             'user_id' => $user->id,
             'plan_id' => $basic->id,
@@ -72,7 +71,7 @@ class DashboardUsageStripStaffPlanParityTest extends TestCase
         ]);
         MatrimonyProfile::factory()->for($user)->create(['lifecycle_state' => 'active']);
 
-        $gold = Plan::query()->where('slug', 'gold')->firstOrFail();
+        $gold = Plan::query()->where('slug', 'gold_male')->firstOrFail();
         Subscription::query()->create([
             'user_id' => $user->id,
             'plan_id' => $gold->id,
@@ -91,10 +90,7 @@ class DashboardUsageStripStaffPlanParityTest extends TestCase
         $summary = app(FeatureUsageService::class)->getDashboardUsageSummary($user->fresh());
         $rows = collect($summary['rows'])->keyBy('key');
 
-        $this->assertSame(
-            app(\App\Services\SubscriptionService::class)->getQuotaLimitForUsageDisplay($user->fresh(), PlanFeatureKeys::MEDIATOR_REQUESTS_PER_MONTH),
-            $rows['mediator_requests']['limit']
-        );
+        $this->assertSame(15, $rows['mediator_requests']['limit']);
         $this->assertFalse($rows['mediator_requests']['is_unlimited']);
     }
 }

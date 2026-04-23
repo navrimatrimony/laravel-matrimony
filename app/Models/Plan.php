@@ -2,7 +2,14 @@
 
 namespace App\Models;
 
+use App\Exceptions\QuotaPolicySourceViolation;
 use App\Services\FeatureUsageService;
+use App\Services\PlanQuotaPolicyMirror;
+use App\Services\PlanQuotaUiSource;
+use App\Services\SubscriptionService;
+use App\Support\PlanFeatureKeys;
+use App\Support\PlanFeatureLabel;
+use App\Support\PlanQuotaPolicyKeys;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -11,6 +18,20 @@ use Illuminate\Support\Facades\Cache;
 
 class Plan extends Model
 {
+    /**
+     * Public pricing (/plans): suppress these mirrored or legacy {@see PlanFeature} keys (UI projection only).
+     *
+     * @var list<string>
+     */
+    private const PRICING_CATALOG_UI_HIDDEN_KEYS = [
+        PlanFeatureKeys::PHOTO_BLUR_LIMIT,
+        PlanFeatureKeys::PHOTO_FULL_ACCESS,
+        PlanFeatureKeys::PROFILE_WHATSAPP_DIRECT,
+        SubscriptionService::FEATURE_CHAT_IMAGE_MESSAGES,
+        'chat_images',
+        'whatsapp_button',
+    ];
+
     protected $fillable = [
         'name',
         'description',
@@ -78,7 +99,7 @@ class Plan extends Model
     }
 
     /**
-     * Structured feature engine (legacy table; admin no longer writes here).
+     * Structured feature engine (legacy table; non-quota keys only for runtime reads).
      */
     public function featureConfigs(): HasMany
     {
@@ -86,7 +107,7 @@ class Plan extends Model
     }
 
     /**
-     * Phase 1 quota policies (admin SSOT); mirrored into {@see features()}.
+     * Phase 1 quota policies (admin SSOT). Runtime limits must read these rows (or checkout snapshot), not {@see features()}.
      */
     public function quotaPolicies(): HasMany
     {
@@ -146,6 +167,7 @@ class Plan extends Model
     public function getFeatureValue(string $key): ?string
     {
         $normalized = app(FeatureUsageService::class)->normalizeFeatureKey($key);
+        $this->assertPlanFeaturesReadAllowed($normalized, 'Plan::getFeatureValue');
         $rows = $this->relationLoaded('features')
             ? $this->features
             : $this->getCachedFeatures();
@@ -205,15 +227,25 @@ class Plan extends Model
 
     public function featureValue(string $key, ?string $default = null): ?string
     {
+        $normalized = app(FeatureUsageService::class)->normalizeFeatureKey($key);
+        $this->assertPlanFeaturesReadAllowed($normalized, 'Plan::featureValue');
+
         $row = $this->relationLoaded('features')
-            ? $this->features->firstWhere('key', $key)
-            : $this->features()->where('key', $key)->first();
+            ? $this->features->firstWhere('key', $normalized)
+            : $this->features()->where('key', $normalized)->first();
 
         if (! $row) {
             return $default;
         }
 
         return (string) $row->value;
+    }
+
+    private function assertPlanFeaturesReadAllowed(string $normalizedKey, string $context): void
+    {
+        if (PlanQuotaPolicyKeys::isForbiddenPlanFeatureRowKey($normalizedKey)) {
+            throw QuotaPolicySourceViolation::planFeaturesReadForbidden($normalizedKey, $context);
+        }
     }
 
     /**
@@ -260,5 +292,75 @@ class Plan extends Model
             ->orderBy('sort_order')
             ->orderBy('id')
             ->first();
+    }
+
+    /**
+     * Public pricing (/plans): quota engine rows are SSOT; {@see features()} fills only keys not emitted by quota mirror
+     * (e.g. legacy chat image flag) so catalog numbers match admin {@see PlanQuotaPolicy}.
+     *
+     * Final projection: non-user-facing keys ({@see self::PRICING_CATALOG_UI_HIDDEN_KEYS}), disabled quotas, and
+     * zero / empty limits are excluded here only — DB rows are unchanged.
+     */
+    public function catalogFeatureRowsForPricing(): \Illuminate\Support\Collection
+    {
+        $this->loadMissing(['quotaPolicies', 'features']);
+        $mirroredKeys = [];
+        $rows = collect();
+
+        $payloads = PlanQuotaUiSource::policyPayloadsFromPlan($this);
+        foreach (PlanQuotaPolicyKeys::ordered() as $fk) {
+            if (! isset($payloads[$fk]) || ! is_array($payloads[$fk])) {
+                continue;
+            }
+            $payload = $payloads[$fk];
+            if (! PlanFeatureLabel::quotaCatalogShouldListRow($fk, $payload)) {
+                continue;
+            }
+            foreach (PlanQuotaPolicyMirror::mirroredFeatureRowsFromPolicyPayload($fk, $payload) as $pair) {
+                if (! PlanFeatureLabel::quotaCatalogShouldListMirroredPair($pair['key'], $pair['value'], $fk)) {
+                    continue;
+                }
+                if ($pair['key'] === FeatureUsageService::FEATURE_WHO_VIEWED_ME_ACCESS) {
+                    continue;
+                }
+                $mirroredKeys[$pair['key']] = true;
+                $rows->push((object) [
+                    'key' => $pair['key'],
+                    'value' => $pair['value'],
+                    'catalog_quota_payload' => $payload,
+                ]);
+            }
+        }
+
+        foreach ($this->features as $f) {
+            $k = (string) $f->key;
+            if (PlanQuotaPolicyKeys::isForbiddenPlanFeatureRowKey($k)) {
+                continue;
+            }
+            if ($k === PlanFeatureKeys::INTEREST_VIEW_RESET_PERIOD) {
+                continue;
+            }
+            if (isset($mirroredKeys[$k])) {
+                continue;
+            }
+            if (! PlanFeatureLabel::quotaCatalogShouldListMirroredPair($k, (string) $f->value, null)) {
+                continue;
+            }
+            $rows->push($f);
+        }
+
+        return $rows
+            ->filter(function (object $row): bool {
+                $key = (string) $row->key;
+                if (in_array($key, self::PRICING_CATALOG_UI_HIDDEN_KEYS, true)) {
+                    return false;
+                }
+                if (property_exists($row, 'catalog_quota_payload') && is_array($row->catalog_quota_payload)) {
+                    return PlanFeatureLabel::quotaCatalogShouldListRow($key, $row->catalog_quota_payload);
+                }
+
+                return PlanFeatureLabel::quotaCatalogShouldListMirroredPair($key, (string) $row->value, null);
+            })
+            ->values();
     }
 }

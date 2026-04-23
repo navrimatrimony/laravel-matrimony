@@ -8,9 +8,9 @@ use App\Models\ReferralRewardLedger;
 use App\Models\ReferralRewardRule;
 use App\Models\User;
 use App\Models\UserReferral;
-use InvalidArgumentException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use InvalidArgumentException;
 
 class ReferralService
 {
@@ -208,7 +208,6 @@ class ReferralService
                 'contact_view_limit' => (int) $dbRule->contact_view_limit_bonus,
                 'interest_send_limit' => (int) $dbRule->interest_send_limit_bonus,
                 'daily_profile_view_limit' => (int) $dbRule->daily_profile_view_limit_bonus,
-                'who_viewed_me_days' => (int) $dbRule->who_viewed_me_days_bonus,
                 'who_viewed_me_preview_limit' => (int) $dbRule->who_viewed_me_preview_limit_bonus,
             ];
             foreach ($raw as $k => $inc) {
@@ -280,7 +279,7 @@ class ReferralService
     }
 
     /**
-     * @param array<string, mixed> $payload
+     * @param  array<string, mixed>  $payload
      */
     private function writeLedger(array $payload): void
     {

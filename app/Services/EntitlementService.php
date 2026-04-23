@@ -2,9 +2,13 @@
 
 namespace App\Services;
 
+use App\Exceptions\QuotaPolicySourceViolation;
 use App\Models\Plan;
 use App\Models\Subscription;
+use App\Models\User;
 use App\Models\UserEntitlement;
+use App\Support\PlanFeatureKeys;
+use App\Support\PlanQuotaPolicyKeys;
 use Illuminate\Support\Facades\DB;
 
 class EntitlementService
@@ -13,6 +17,11 @@ class EntitlementService
      * @var array<int, Plan|null> Resolved active plan (with features) per user for this request/instance.
      */
     private array $activePlanWithFeaturesByUser = [];
+
+    /**
+     * @var array<int, array<string, string>>
+     */
+    private array $quotaMirroredPlanFeatureValuesByUserId = [];
 
     /**
      * Assign entitlements when subscription starts
@@ -31,7 +40,28 @@ class EntitlementService
             $validUntil = $subscription->ends_at->copy()->addDays($grace);
         }
 
+        $payloads = PlanQuotaUiSource::policyPayloadsForSubscription($subscription);
+        $mirrored = PlanQuotaUiSource::mirroredPlanFeatureStringsFromPolicyPayloads($payloads);
+        $writtenByQuota = array_flip(PlanQuotaPolicyKeys::planFeatureKeysWrittenByPolicies());
+
+        foreach ($mirrored as $key => $_value) {
+            UserEntitlement::updateOrCreate(
+                [
+                    'user_id' => $subscription->user_id,
+                    'entitlement_key' => $key,
+                ],
+                [
+                    'valid_until' => $validUntil,
+                    'value_override' => null,
+                    'revoked_at' => null,
+                ]
+            );
+        }
+
         foreach ($plan->features as $feature) {
+            if (isset($writtenByQuota[$feature->key])) {
+                continue;
+            }
             UserEntitlement::updateOrCreate(
                 [
                     'user_id' => $subscription->user_id,
@@ -44,6 +74,8 @@ class EntitlementService
                 ]
             );
         }
+
+        unset($this->quotaMirroredPlanFeatureValuesByUserId[(int) $subscription->user_id]);
     }
 
     /**
@@ -95,7 +127,19 @@ class EntitlementService
             return $default;
         }
 
-        $value = $plan->featureValue($key);
+        $normalized = app(FeatureUsageService::class)->normalizeFeatureKey($key);
+        $quotaMap = $this->mirroredPlanFeatureValuesFromQuota($userId);
+        if (array_key_exists($normalized, $quotaMap)) {
+            return (string) $quotaMap[$normalized];
+        }
+        if ($this->isQuotaEnginePlanFeatureKey($normalized)) {
+            throw QuotaPolicySourceViolation::incompletePayloads(
+                'EntitlementService::getValue',
+                'Missing mirrored quota value for `'.$normalized.'` (user_id='.$userId.')'
+            );
+        }
+
+        $value = $plan->featureValue($normalized);
         if ($value === null || $value === '') {
             return $default;
         }
@@ -209,17 +253,49 @@ class EntitlementService
             ->where('user_id', $userId)
             ->effectivelyActiveForAccess()
             ->orderByDesc('starts_at')
-            ->with(['plan.features'])
+            ->with(['plan.features', 'plan.quotaPolicies'])
             ->first();
 
         $plan = $sub?->plan;
         if ($plan) {
-            $plan->loadMissing('features');
+            $plan->loadMissing(['features', 'quotaPolicies']);
         }
 
         $this->activePlanWithFeaturesByUser[$userId] = $plan;
 
         return $plan;
+    }
+
+    /**
+     * Values for keys emitted by {@see PlanQuotaPolicyMirror} (catalog + member UI), preferring purchase snapshot.
+     *
+     * @return array<string, string>
+     */
+    private function mirroredPlanFeatureValuesFromQuota(int $userId): array
+    {
+        if (array_key_exists($userId, $this->quotaMirroredPlanFeatureValuesByUserId)) {
+            return $this->quotaMirroredPlanFeatureValuesByUserId[$userId];
+        }
+
+        $user = User::query()->find($userId);
+        $out = $user !== null ? PlanQuotaUiSource::mirroredPlanFeatureStringsForUser($user) : [];
+        $this->quotaMirroredPlanFeatureValuesByUserId[$userId] = $out;
+
+        return $out;
+    }
+
+    private function isQuotaEnginePlanFeatureKey(string $normalized): bool
+    {
+        if (in_array($normalized, PlanQuotaPolicyKeys::ordered(), true)) {
+            return true;
+        }
+
+        return in_array($normalized, [
+            FeatureUsageService::FEATURE_WHO_VIEWED_ME_ACCESS,
+            PlanFeatureKeys::WHO_VIEWED_ME_PREVIEW_LIMIT,
+            PlanFeatureKeys::INTEREST_VIEW_RESET_PERIOD,
+            PlanFeatureKeys::CHAT_INITIATE_NEW_CHATS_ONLY,
+        ], true);
     }
 
     private function isTruthyFeatureValue(string $value): bool

@@ -18,7 +18,7 @@ use Symfony\Component\HttpKernel\Exception\HttpException;
  * (includes {@code meta.carry_quota}) or {@see EntitlementService::getValueOverride} when set;
  * usage {@see UserFeatureUsageService} ({@see UserFeatureUsageKeys::INTEREST_SEND_LIMIT}, {@see UserFeatureUsage::PERIOD_DAILY}).
  *
- * Incoming view: {@see PlanFeatureKeys::INTEREST_VIEW_LIMIT} + {@see PlanFeatureKeys::INTEREST_VIEW_RESET_PERIOD}.
+ * Incoming view: {@see PlanFeatureKeys::INTEREST_VIEW_LIMIT} with reset cadence from plan quota {@code refresh_type}.
  * First N pending interests in the current window (by {@see Interest::scopeReceivedInboxOrder}) get full name/photo/profile;
  * overflow is blurred/locked on the interests hub (received tab) and blocked on direct profile open.
  */
@@ -224,11 +224,11 @@ class InterestSendLimitService
     }
 
     /**
-     * @return 'weekly'|'monthly'|'quarterly'
+     * @return 'weekly'|'monthly'|'quarterly'|'daily'|'lifetime'
      */
     public function interestViewResetPeriodLabel(User $receiver): string
     {
-        return $this->resolveInterestViewResetPeriod($receiver);
+        return PlanQuotaUiSource::requireInterestViewResetPeriodForUser($receiver);
     }
 
     private function resolveInterestViewLimit(User $user): int
@@ -236,7 +236,10 @@ class InterestSendLimitService
         $uid = (int) $user->id;
 
         if ($this->entitlements->hasAccess($uid, PlanFeatureKeys::INTEREST_VIEW_LIMIT)) {
-            $raw = $this->entitlements->getValue($uid, PlanFeatureKeys::INTEREST_VIEW_LIMIT, '3');
+            $raw = $this->entitlements->getValue($uid, PlanFeatureKeys::INTEREST_VIEW_LIMIT, null);
+            if ($raw === null || $raw === '') {
+                return 0;
+            }
 
             return $this->parseLimitString((string) $raw);
         }
@@ -245,17 +248,11 @@ class InterestSendLimitService
     }
 
     /**
-     * @return 'weekly'|'monthly'|'quarterly'
+     * @return 'weekly'|'monthly'|'quarterly'|'daily'|'lifetime'
      */
     private function resolveInterestViewResetPeriod(User $user): string
     {
-        $uid = (int) $user->id;
-        $raw = strtolower(trim((string) $this->entitlements->getValue($uid, PlanFeatureKeys::INTEREST_VIEW_RESET_PERIOD, 'monthly')));
-        if (in_array($raw, ['weekly', 'monthly', 'quarterly'], true)) {
-            return $raw;
-        }
-
-        return 'monthly';
+        return PlanQuotaUiSource::requireInterestViewResetPeriodForUser($user);
     }
 
     private function windowStartForPeriod(string $period, Carbon $at): Carbon
@@ -264,7 +261,9 @@ class InterestSendLimitService
             'weekly' => $at->copy()->startOfWeek(Carbon::MONDAY)->startOfDay(),
             'quarterly' => $at->copy()->startOfQuarter(),
             'monthly' => $at->copy()->startOfMonth()->startOfDay(),
-            default => $at->copy()->startOfMonth()->startOfDay(),
+            'daily' => $at->copy()->startOfDay(),
+            'lifetime' => Carbon::create(1970, 1, 1, 0, 0, 0, $at->getTimezone()),
+            default => throw new \InvalidArgumentException('Invalid interest_view_reset_period: '.$period),
         };
     }
 }

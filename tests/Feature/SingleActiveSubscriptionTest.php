@@ -3,7 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\Plan;
-use App\Models\PlanPrice;
+use App\Models\PlanTerm;
 use App\Models\Subscription;
 use App\Models\User;
 use App\Services\SubscriptionService;
@@ -21,8 +21,8 @@ class SingleActiveSubscriptionTest extends TestCase
     {
         $this->seed(SubscriptionPlansSeeder::class);
         $user = User::factory()->create();
-        $basic = Plan::query()->where('slug', 'basic')->firstOrFail();
-        $silver = Plan::query()->where('slug', 'silver')->firstOrFail();
+        $basic = Plan::query()->where('slug', 'basic_male')->firstOrFail();
+        $silver = Plan::query()->where('slug', 'silver_male')->firstOrFail();
 
         $first = Subscription::query()->create([
             'user_id' => $user->id,
@@ -55,9 +55,9 @@ class SingleActiveSubscriptionTest extends TestCase
     {
         $this->seed(SubscriptionPlansSeeder::class);
         $user = User::factory()->create();
-        $basic = Plan::query()->where('slug', 'basic')->firstOrFail();
-        $silver = Plan::query()->where('slug', 'silver')->firstOrFail();
-        $price = PlanPrice::query()
+        $basic = Plan::query()->where('slug', 'basic_male')->firstOrFail();
+        $silver = Plan::query()->where('slug', 'silver_male')->firstOrFail();
+        $term = PlanTerm::query()
             ->where('plan_id', $silver->id)
             ->where('is_visible', true)
             ->orderBy('sort_order')
@@ -74,7 +74,7 @@ class SingleActiveSubscriptionTest extends TestCase
             'status' => Subscription::STATUS_ACTIVE,
         ]);
 
-        app(SubscriptionService::class)->subscribe($user, $silver, null, (int) $price->id);
+        app(SubscriptionService::class)->subscribe($user, $silver, (int) $term->id, null);
 
         $this->assertSame(1, Subscription::query()->where('user_id', $user->id)->where('status', Subscription::STATUS_ACTIVE)->count());
         $this->assertSame($silver->id, Subscription::query()->where('user_id', $user->id)->where('status', Subscription::STATUS_ACTIVE)->value('plan_id'));

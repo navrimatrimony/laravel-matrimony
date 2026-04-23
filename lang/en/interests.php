@@ -47,8 +47,10 @@ return [
     'notification_blurred_sender' => 'Someone sent you an interest. Open Received interests to manage your plan reveals.',
     'profile_open_locked_use_inbox' => 'This profile is not revealed under your current plan. Open Received interests — or upgrade to see full details.',
     'period_weekly' => 'week',
+    'period_daily' => 'day',
     'period_monthly' => 'month',
     'period_quarterly' => 'quarter',
+    'period_lifetime' => 'billing cycle',
     'period_half_yearly' => 'half-year',
     'period_yearly' => 'year',
 ];

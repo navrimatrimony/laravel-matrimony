@@ -44,6 +44,25 @@ class PlanMultiDurationStoreTest extends TestCase
     }
 
     /**
+     * @param  array<string, array<string, mixed>>  $rowDataByBillingKey
+     * @return list<array<string, mixed>>
+     */
+    private function termRowsList(array $rowDataByBillingKey): array
+    {
+        $rows = [];
+        foreach ($rowDataByBillingKey as $bk => $over) {
+            $rows[] = array_merge([
+                'billing_key' => $bk,
+                'price' => '0',
+                'discount_percent' => '',
+                'is_visible' => '0',
+            ], $over);
+        }
+
+        return $rows;
+    }
+
+    /**
      * Two catalog plans (separate DB rows): each has Monthly + Quarterly (3 mo) + Half-yearly (6 mo) billing rows.
      * Plan-wide grace and per-plan quota limits are independent between plans.
      */
@@ -51,60 +70,53 @@ class PlanMultiDurationStoreTest extends TestCase
     {
         $admin = User::factory()->create(['is_admin' => true]);
 
-        $baseTermRows = [
-            [
-                'billing_key' => PlanTerm::BILLING_MONTHLY,
-                'price' => '100',
-                'discount_percent' => '',
-                'is_visible' => '1',
-            ],
-            [
-                'billing_key' => PlanTerm::BILLING_QUARTERLY,
-                'price' => '280',
-                'discount_percent' => '',
-                'is_visible' => '1',
-            ],
-            [
-                'billing_key' => PlanTerm::BILLING_HALF_YEARLY,
-                'price' => '520',
-                'discount_percent' => '',
-                'is_visible' => '1',
-            ],
-        ];
+        $silverTerms = $this->termRowsList([
+            PlanTerm::BILLING_MONTHLY => ['price' => '100', 'is_visible' => '1'],
+            PlanTerm::BILLING_QUARTERLY => ['price' => '280', 'is_visible' => '1'],
+            PlanTerm::BILLING_HALF_YEARLY => ['price' => '520', 'is_visible' => '1'],
+        ]);
 
-        $this->actingAs($admin)->post(route('admin.plans.store'), [
+        $silverResponse = $this->actingAs($admin)->post(route('admin.plans.store'), [
             'name' => 'Silver Line',
             'applies_to_gender' => 'all',
             'sort_order' => 1,
-            'duration_preset' => PlanTerm::BILLING_MONTHLY,
+            'default_billing_key' => PlanTerm::BILLING_QUARTERLY,
             'grace_period_days' => 3,
             'leftover_quota_carry_window_days' => '',
             'is_active' => '1',
-            'default_billing_key' => PlanTerm::BILLING_QUARTERLY,
+            'list_price_rupees' => '',
+            'gst_inclusive' => '1',
             'quota_policies' => $this->quotaPoliciesPayload([
                 \App\Support\PlanFeatureKeys::CHAT_SEND_LIMIT => ['limit_value' => '10'],
             ]),
-            'term_rows' => $baseTermRows,
-        ])->assertRedirect();
+            'term_rows' => $silverTerms,
+        ]);
+        $silverResponse->assertSessionDoesntHaveErrors();
+        $silverResponse->assertRedirect();
 
-        $this->actingAs($admin)->post(route('admin.plans.store'), [
+        $goldTerms = $this->termRowsList([
+            PlanTerm::BILLING_MONTHLY => ['price' => '100', 'is_visible' => '1'],
+            PlanTerm::BILLING_QUARTERLY => ['price' => '290', 'is_visible' => '1'],
+            PlanTerm::BILLING_HALF_YEARLY => ['price' => '540', 'is_visible' => '0'],
+        ]);
+
+        $goldResponse = $this->actingAs($admin)->post(route('admin.plans.store'), [
             'name' => 'Gold Line',
             'applies_to_gender' => 'all',
             'sort_order' => 2,
-            'duration_preset' => PlanTerm::BILLING_MONTHLY,
+            'default_billing_key' => PlanTerm::BILLING_QUARTERLY,
             'grace_period_days' => 14,
             'leftover_quota_carry_window_days' => '7',
             'is_active' => '1',
-            'default_billing_key' => PlanTerm::BILLING_HALF_YEARLY,
+            'list_price_rupees' => '',
+            'gst_inclusive' => '1',
             'quota_policies' => $this->quotaPoliciesPayload([
                 \App\Support\PlanFeatureKeys::CHAT_SEND_LIMIT => ['limit_value' => '999'],
             ]),
-            'term_rows' => [
-                $baseTermRows[0],
-                array_replace($baseTermRows[1], ['price' => '290']),
-                array_replace($baseTermRows[2], ['price' => '540', 'is_visible' => '0']),
-            ],
-        ])->assertRedirect();
+            'term_rows' => $goldTerms,
+        ]);
+        $goldResponse->assertSessionDoesntHaveErrors();
+        $goldResponse->assertRedirect();
 
         $silver = Plan::query()->where('slug', 'silver-line-all')->with(['terms', 'quotaPolicies'])->firstOrFail();
         $gold = Plan::query()->where('slug', 'gold-line-all')->with(['terms', 'quotaPolicies'])->firstOrFail();
@@ -145,26 +157,17 @@ class PlanMultiDurationStoreTest extends TestCase
             'name' => 'Gold Pack',
             'applies_to_gender' => 'all',
             'sort_order' => 5,
-            'duration_preset' => PlanTerm::BILLING_MONTHLY,
+            'default_billing_key' => PlanTerm::BILLING_MONTHLY,
             'grace_period_days' => 3,
             'leftover_quota_carry_window_days' => '',
             'is_active' => '1',
-            'default_billing_key' => PlanTerm::BILLING_MONTHLY,
+            'list_price_rupees' => '',
+            'gst_inclusive' => '1',
             'quota_policies' => $this->quotaPoliciesPayload(),
-            'term_rows' => [
-                [
-                    'billing_key' => PlanTerm::BILLING_MONTHLY,
-                    'price' => '100',
-                    'discount_percent' => '',
-                    'is_visible' => '1',
-                ],
-                [
-                    'billing_key' => PlanTerm::BILLING_QUARTERLY,
-                    'price' => '270',
-                    'discount_percent' => '5',
-                    'is_visible' => '1',
-                ],
-            ],
+            'term_rows' => $this->termRowsList([
+                PlanTerm::BILLING_MONTHLY => ['price' => '100', 'is_visible' => '1'],
+                PlanTerm::BILLING_QUARTERLY => ['price' => '270', 'discount_percent' => '5', 'is_visible' => '1'],
+            ]),
         ];
 
         $response = $this->actingAs($admin)->post(route('admin.plans.store'), $payload);

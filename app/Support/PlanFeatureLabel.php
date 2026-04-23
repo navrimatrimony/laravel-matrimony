@@ -2,6 +2,7 @@
 
 namespace App\Support;
 
+use App\Models\PlanQuotaPolicy;
 use App\Services\SubscriptionService;
 use Illuminate\Support\Str;
 
@@ -28,10 +29,6 @@ final class PlanFeatureLabel
 
         if (self::isTruthyKey($key)) {
             return self::truthy($v) ? __('subscriptions.yes') : __('subscriptions.no');
-        }
-
-        if ($key === PlanFeatureKeys::INTEREST_VIEW_RESET_PERIOD) {
-            return self::catalogInterestViewResetDisplay($v, $billingDurationType);
         }
 
         $mult = max(0.0, $durationMultiplier);
@@ -62,24 +59,23 @@ final class PlanFeatureLabel
     }
 
     /**
-     * Align marketing copy with selected billing period; weekly reset stays weekly.
+     * Public catalog: label may depend on quota {@code refresh_type} (e.g. chat send only shows “(per day)” when daily).
+     *
+     * @param  array<string, mixed>|null  $quotaPayload  Shape like {@see \App\Services\PlanQuotaPolicyMirror::payloadFromModel} output.
      */
-    private static function catalogInterestViewResetDisplay(string $stored, ?string $billingDurationType): string
+    public static function catalogLabelForPricing(string $key, ?array $quotaPayload): string
     {
-        $s = strtolower(trim($stored));
-        if ($s === 'weekly') {
-            return __('interests.period_weekly');
+        if ($quotaPayload !== null && ($key === PlanFeatureKeys::CHAT_SEND_LIMIT || $key === SubscriptionService::FEATURE_CHAT_SEND_LIMIT)) {
+            $rt = PlanQuotaRefreshRuntime::normalizeRefreshTypeString((string) ($quotaPayload['refresh_type'] ?? ''));
+
+            if ($rt === PlanQuotaPolicy::REFRESH_DAILY || $rt === 'daily') {
+                return __('subscriptions.pricing_feature_chat_send_daily');
+            }
+
+            return __('subscriptions.pricing_feature_chat_send');
         }
 
-        $t = $billingDurationType !== null ? strtolower(trim($billingDurationType)) : '';
-
-        return match ($t) {
-            'quarterly' => __('interests.period_quarterly'),
-            'half_yearly' => __('interests.period_half_yearly'),
-            'yearly' => __('interests.period_yearly'),
-            'monthly', '' => self::formatValue(PlanFeatureKeys::INTEREST_VIEW_RESET_PERIOD, $stored),
-            default => self::formatValue(PlanFeatureKeys::INTEREST_VIEW_RESET_PERIOD, $stored),
-        };
+        return self::label($key);
     }
 
     public static function label(string $key): string
@@ -89,12 +85,10 @@ final class PlanFeatureLabel
             PlanFeatureKeys::CHAT_CAN_READ => __('subscriptions.pricing_feature_chat_read'),
             PlanFeatureKeys::INTEREST_SEND_LIMIT => __('subscriptions.pricing_feature_interest_send'),
             PlanFeatureKeys::INTEREST_VIEW_LIMIT => __('subscriptions.pricing_feature_interest_view_limit'),
-            PlanFeatureKeys::INTEREST_VIEW_RESET_PERIOD => __('subscriptions.pricing_feature_interest_view_reset'),
             SubscriptionService::FEATURE_DAILY_PROFILE_VIEW_LIMIT => __('subscriptions.feature_daily_profile_views'),
             PlanFeatureKeys::CONTACT_VIEW_LIMIT => __('subscriptions.pricing_feature_contact_unlock'),
             SubscriptionService::FEATURE_CHAT_IMAGE_MESSAGES => __('subscriptions.feature_chat_images'),
             PlanFeatureKeys::PHOTO_FULL_ACCESS => __('subscriptions.pricing_feature_photo_full'),
-            PlanFeatureKeys::WHO_VIEWED_ME_DAYS => __('subscriptions.pricing_feature_who_viewed'),
             PlanFeatureKeys::WHO_VIEWED_ME_PREVIEW_LIMIT => __('subscriptions.pricing_feature_who_viewed_preview'),
             PlanFeatureKeys::MEDIATOR_REQUESTS_PER_MONTH => __('subscriptions.pricing_feature_mediator'),
             PlanFeatureKeys::PROFILE_BOOST_PER_WEEK => __('subscriptions.pricing_feature_boost'),
@@ -133,13 +127,15 @@ final class PlanFeatureLabel
             return $value == '9999' ? 'Unlimited interests' : $value.'/day';
         }
 
-        if ($key === PlanFeatureKeys::INTEREST_VIEW_RESET_PERIOD) {
-            return match (strtolower(trim($value))) {
-                'weekly' => __('interests.period_weekly'),
-                'quarterly' => __('interests.period_quarterly'),
-                'monthly' => __('interests.period_monthly'),
-                default => $v,
-            };
+        if ($key === PlanFeatureKeys::WHO_VIEWED_ME_PREVIEW_LIMIT) {
+            if ((int) $v === -1 || (int) $v >= 999) {
+                return __('subscriptions.who_viewed_catalog_see_all_viewers');
+            }
+            if ((int) $v === 0) {
+                return __('subscriptions.who_viewed_catalog_hidden');
+            }
+
+            return trans_choice('subscriptions.who_viewed_catalog_see_n_profiles', (int) $v, ['count' => (int) $v]);
         }
 
         return $v;
@@ -148,6 +144,60 @@ final class PlanFeatureLabel
     public static function shouldListKey(string $key): bool
     {
         return $key !== '' && ! str_starts_with($key, '_');
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload  {@see PlanQuotaPolicy} / snapshot row.
+     */
+    public static function quotaCatalogShouldListRow(string $featureKey, array $payload): bool
+    {
+        $enabled = filter_var($payload['is_enabled'] ?? false, FILTER_VALIDATE_BOOLEAN)
+            || (string) ($payload['is_enabled'] ?? '') === '1'
+            || ($payload['is_enabled'] ?? false) === true;
+        if (! $enabled) {
+            return false;
+        }
+        if (PlanQuotaPolicyKeys::mirrorsPlanFeatureAsBooleanOnly($featureKey)) {
+            return true;
+        }
+        if ($featureKey === PlanFeatureKeys::WHO_VIEWED_ME_PREVIEW_LIMIT) {
+            $refresh = PlanQuotaRefreshRuntime::normalizeRefreshTypeString((string) ($payload['refresh_type'] ?? ''));
+            if ($refresh === PlanQuotaPolicy::REFRESH_UNLIMITED) {
+                return true;
+            }
+            $lim = $payload['limit_value'] ?? null;
+            if ($lim === null || $lim === '') {
+                return false;
+            }
+            if ((int) $lim === 0) {
+                return false;
+            }
+
+            return true;
+        }
+        $refresh = (string) ($payload['refresh_type'] ?? '');
+        if ($refresh === PlanQuotaPolicy::REFRESH_UNLIMITED) {
+            return true;
+        }
+        $lim = $payload['limit_value'] ?? null;
+        if ($lim === null || $lim === '') {
+            return false;
+        }
+
+        return (int) $lim !== 0;
+    }
+
+    public static function quotaCatalogShouldListMirroredPair(string $key, string $value, ?string $sourceFeatureKey): bool
+    {
+        if (self::isTruthyKey($key)) {
+            return self::truthy($value);
+        }
+        $v = trim($value);
+        if ($v === '' || $v === '0') {
+            return false;
+        }
+
+        return true;
     }
 
     private static function isTruthyKey(string $key): bool

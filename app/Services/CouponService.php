@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\Coupon;
 use App\Models\PlanPrice;
+use App\Models\PlanTerm;
 use Symfony\Component\HttpKernel\Exception\HttpException;
 
 class CouponService
@@ -33,7 +34,7 @@ class CouponService
      *     savings?: float
      * }
      */
-    public function validatePreview(string $code, ?int $planId = null, ?int $planPriceId = null): array
+    public function validatePreview(string $code, ?int $planId = null, ?int $planPriceId = null, ?int $planTermId = null): array
     {
         $coupon = $this->findActiveByCode($code);
         if (! $coupon) {
@@ -51,7 +52,37 @@ class CouponService
             'duration_types' => $coupon->applicable_duration_types,
         ];
 
-        if ($planPriceId !== null) {
+        if ($planTermId !== null) {
+            $term = PlanTerm::query()->find($planTermId);
+            if (! $term || ! $term->is_visible) {
+                return ['valid' => false, 'message' => __('subscriptions.coupon_invalid_context')];
+            }
+            $resolvedPlanId = (int) $term->plan_id;
+            if ($planId !== null && (int) $planId !== $resolvedPlanId) {
+                return ['valid' => false, 'message' => __('subscriptions.coupon_invalid_context')];
+            }
+            if (! $coupon->appliesToPlan($resolvedPlanId)) {
+                return ['valid' => false, 'message' => __('subscriptions.coupon_plan_excluded')];
+            }
+            if (! $coupon->appliesToDurationType((string) $term->billing_key)) {
+                return ['valid' => false, 'message' => __('subscriptions.coupon_duration_excluded')];
+            }
+            $base = (float) $term->final_price;
+            if ($coupon->min_purchase_amount !== null && $base < (float) $coupon->min_purchase_amount - 0.004) {
+                return ['valid' => false, 'message' => __('subscriptions.coupon_min_not_met')];
+            }
+            $final = $this->amountAfterCoupon($coupon, $base);
+            $out['base_amount'] = round($base, 2);
+            $out['final_amount'] = $final;
+            $out['savings'] = round(max(0, $base - $final), 2);
+            if ($coupon->type === Coupon::TYPE_DAYS) {
+                $out['extra_duration_days'] = max(0, (int) round((float) $coupon->value));
+            }
+            if ($coupon->type === Coupon::TYPE_FEATURE) {
+                $out['feature_coupon'] = true;
+                $out['feature_payload'] = $coupon->feature_payload;
+            }
+        } elseif ($planPriceId !== null) {
             $row = PlanPrice::query()->find($planPriceId);
             if (! $row) {
                 return ['valid' => false, 'message' => __('subscriptions.coupon_invalid_context')];

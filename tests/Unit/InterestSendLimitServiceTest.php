@@ -31,6 +31,9 @@ class InterestSendLimitServiceTest extends TestCase
             fn (int $uid, string $key) => $key === PlanFeatureKeys::INTEREST_SEND_LIMIT
         );
         $entitlements->method('getValue')->willReturn('2');
+        $entitlements->method('getValueOverride')->willReturnCallback(
+            fn (int $uid, string $key) => $key === PlanFeatureKeys::INTEREST_SEND_LIMIT ? '2' : null
+        );
 
         $subscriptions = $this->createMock(SubscriptionService::class);
 
@@ -59,6 +62,9 @@ class InterestSendLimitServiceTest extends TestCase
             fn (int $uid, string $key) => $key === PlanFeatureKeys::INTEREST_SEND_LIMIT
         );
         $entitlements->method('getValue')->willReturn('5');
+        $entitlements->method('getValueOverride')->willReturnCallback(
+            fn (int $uid, string $key) => $key === PlanFeatureKeys::INTEREST_SEND_LIMIT ? '5' : null
+        );
 
         $subscriptions = $this->createMock(SubscriptionService::class);
 

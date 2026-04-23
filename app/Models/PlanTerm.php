@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Facades\Artisan;
+use Illuminate\Validation\ValidationException;
 
 class PlanTerm extends Model
 {
@@ -40,6 +41,14 @@ class PlanTerm extends Model
 
     protected static function booted(): void
     {
+        static::deleting(function (PlanTerm $term) {
+            if (static::hasSubscriptionReferences((int) $term->id)) {
+                throw ValidationException::withMessages([
+                    'plan_terms' => [__('subscriptions.plan_term_in_use')],
+                ]);
+            }
+        });
+
         static::saved(function () {
             if (app()->runningUnitTests()) {
                 return;
@@ -61,6 +70,23 @@ class PlanTerm extends Model
                 //
             }
         });
+    }
+
+    /**
+     * True when any subscription row references this term (FK or immutable checkout snapshot).
+     */
+    public static function hasSubscriptionReferences(int $planTermId): bool
+    {
+        if ($planTermId <= 0) {
+            return false;
+        }
+
+        return Subscription::query()
+            ->where(function ($q) use ($planTermId) {
+                $q->where('plan_term_id', $planTermId)
+                    ->orWhere('meta->checkout_snapshot->plan_term_id', $planTermId);
+            })
+            ->exists();
     }
 
     /**
@@ -200,7 +226,7 @@ class PlanTerm extends Model
     }
 
     /**
-     * Replace all {@see PlanTerm} rows for a plan from admin-submitted rows (unique {@code billing_key}).
+     * Replace all {@see PlanTerm} rows for a plan: delete existing rows, then insert request order (deterministic).
      *
      * @param  list<array{billing_key: string, price: float|int|string, discount_percent?: mixed, is_visible?: bool}>  $rows
      */
@@ -213,27 +239,27 @@ class PlanTerm extends Model
             return;
         }
 
-        $seen = [];
-        foreach ($rows as $row) {
-            $key = (string) ($row['billing_key'] ?? '');
-            if ($key === '' || isset($seen[$key])) {
-                continue;
-            }
-            $seen[$key] = true;
-        }
-
-        $plan->loadMissing('terms');
-        foreach ($plan->terms as $term) {
-            if (! isset($seen[$term->billing_key])) {
-                $term->delete();
+        $existingIds = static::query()->where('plan_id', $plan->id)->pluck('id');
+        foreach ($existingIds as $tid) {
+            if (static::hasSubscriptionReferences((int) $tid)) {
+                throw ValidationException::withMessages([
+                    'plan_terms' => [__('subscriptions.plan_term_replace_blocked_in_use')],
+                ]);
             }
         }
 
-        foreach ($rows as $row) {
+        static::query()->where('plan_id', $plan->id)->delete();
+
+        $insertedKeys = [];
+        foreach ($rows as $index => $row) {
             $key = (string) ($row['billing_key'] ?? '');
             if ($key === '' || ! in_array($key, self::presetBillingKeys(), true)) {
                 continue;
             }
+            if (isset($insertedKeys[$key])) {
+                continue;
+            }
+            $insertedKeys[$key] = true;
 
             $price = (float) ($row['price'] ?? 0);
             $rawD = $row['discount_percent'] ?? null;
@@ -243,16 +269,15 @@ class PlanTerm extends Model
             $visible = filter_var($row['is_visible'] ?? true, FILTER_VALIDATE_BOOLEAN)
                 || (string) ($row['is_visible'] ?? '') === '1';
 
-            static::query()->updateOrCreate(
-                ['plan_id' => $plan->id, 'billing_key' => $key],
-                [
-                    'duration_days' => self::durationDaysFor($key),
-                    'price' => max(0, $price),
-                    'discount_percent' => $disc,
-                    'is_visible' => $visible,
-                    'sort_order' => self::defaultSortOrder($key),
-                ]
-            );
+            static::query()->create([
+                'plan_id' => $plan->id,
+                'billing_key' => $key,
+                'duration_days' => self::durationDaysFor($key),
+                'price' => max(0, $price),
+                'discount_percent' => $disc,
+                'is_visible' => $visible,
+                'sort_order' => ((int) $index + 1) * 10,
+            ]);
         }
 
         PlanPrice::ensureMirrorMatchesTerms($plan->fresh('terms'));

@@ -3,6 +3,27 @@
 
     $p = $quotaPoliciesForm[$featureKey] ?? [];
     $refresh = PlanQuotaPolicy::normalizeRefreshType((string) ($p['refresh_type'] ?? PlanQuotaPolicy::REFRESH_MONTHLY_30D_IST));
+    $normNonNegIntStr = static function ($v): string {
+        if ($v === null || $v === '') {
+            return '';
+        }
+        if (! is_numeric($v)) {
+            return '';
+        }
+
+        return (string) max(0, (int) round((float) $v));
+    };
+    $normPackIntStr = static function ($v): string {
+        if ($v === null || $v === '') {
+            return '';
+        }
+        if (! is_numeric($v)) {
+            return '';
+        }
+        $n = (int) round((float) $v);
+
+        return $n >= 1 ? (string) $n : '';
+    };
     $limitVal = $p['limit_value'];
     $cap = $p['daily_sub_cap'];
     $purchasable = ($p['overuse_mode'] ?? PlanQuotaPolicy::OVERUSE_BLOCK) === PlanQuotaPolicy::OVERUSE_PACK;
@@ -39,20 +60,37 @@
         'perDayLimit' => $perDay,
         'refreshType' => $refresh,
         'refreshUnlimited' => PlanQuotaPolicy::REFRESH_UNLIMITED,
-        'limitVal' => $limitVal !== null && $limitVal !== '' ? (string) $limitVal : '',
-        'dailyCapVal' => $cap !== null && $cap !== '' ? (string) $cap : '',
+        'limitVal' => $normNonNegIntStr($limitVal),
+        'dailyCapVal' => $normNonNegIntStr($cap),
         'packPrice' => (string) $packRupees,
-        'packMsgs' => $packCount !== null && $packCount !== '' ? (string) $packCount : '',
-        'packDays' => $packDays !== null && $packDays !== '' ? (string) $packDays : '',
+        'packMsgs' => $normPackIntStr($packCount),
+        'packDays' => $normPackIntStr($packDays),
         'refreshLabels' => $refreshLabels,
         'sum' => $p1Sum,
+    ];
+    /** Keep in sync with {@see \App\Models\Plan::PRICING_CATALOG_UI_HIDDEN_KEYS} (public pricing projection). */
+    $pricingCatalogUiHiddenKeys = [
+        'photo_blur_limit',
+        'chat_images',
+        'chat_image_messages',
+        'photo_full_access',
+        'whatsapp_button',
+        'profile_whatsapp_direct',
     ];
 @endphp
 <div class="rounded-lg border border-amber-300 dark:border-amber-800 bg-amber-50/80 dark:bg-amber-950/25 p-3 space-y-2"
     x-data='window.planQuotaPolicyCard(@json($alpineInitial, JSON_HEX_APOS | JSON_HEX_QUOT | JSON_UNESCAPED_UNICODE))'>
     <div>
-        <strong class="text-sm text-gray-800 dark:text-gray-100">{{ \App\Support\PlanFeatureLabel::label($featureKey) }}</strong>
-        <span class="ml-2 text-xs font-mono text-gray-500 dark:text-gray-400">{{ $featureKey }}</span>
+        <div class="flex flex-wrap items-center gap-x-2 gap-y-1">
+            <strong class="text-sm text-gray-800 dark:text-gray-100">{{ \App\Support\PlanFeatureLabel::catalogLabelForPricing($featureKey, ['refresh_type' => $refresh, 'is_enabled' => $phaseEnabled]) }}</strong>
+            <span class="text-xs font-mono text-gray-500 dark:text-gray-400">{{ $featureKey }}</span>
+            @if (in_array($featureKey, $pricingCatalogUiHiddenKeys, true))
+                <span
+                    class="inline-flex shrink-0 rounded bg-gray-100 px-2 py-1 text-xs text-gray-600 dark:bg-gray-800 dark:text-gray-400"
+                    title="{{ __('subscriptions.admin_quota_hidden_from_pricing_hint') }}"
+                >{{ __('subscriptions.admin_quota_hidden_from_pricing_badge') }}</span>
+            @endif
+        </div>
         <p class="text-[11px] leading-snug text-amber-900/85 dark:text-amber-200/85 mt-1 font-mono tabular-nums" x-text="phase1SummaryLine()"></p>
     </div>
     <div class="flex flex-wrap items-center gap-x-5 gap-y-1.5 text-sm">
@@ -87,6 +125,7 @@
             <label class="block text-[10px] font-medium uppercase tracking-wide text-gray-600 dark:text-gray-400 mb-0.5 truncate" title="{{ __('subscriptions.chat_quota_phase1_limit') }}">{{ __('subscriptions.chat_quota_phase1_col_limit') }}</label>
             <input type="number" name="quota_policies[{{ $featureKey }}][limit_value]" min="0" step="1"
                 x-model="limitVal"
+                @input="coerceNonNegIntField('limitVal')"
                 placeholder="0"
                 title="{{ __('subscriptions.chat_quota_phase1_limit') }}"
                 class="w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white text-sm py-1.5" />
@@ -98,6 +137,7 @@
             <label class="block text-[10px] font-medium uppercase tracking-wide text-gray-600 dark:text-gray-400 mb-0.5 truncate" title="{{ __('subscriptions.chat_quota_phase1_daily_sub_cap') }}">{{ __('subscriptions.chat_quota_phase1_col_subcap') }}</label>
             <input type="number" name="quota_policies[{{ $featureKey }}][daily_sub_cap]" min="0" step="1"
                 x-model="dailyCapVal"
+                @input="coerceNonNegIntField('dailyCapVal')"
                 placeholder="—"
                 title="{{ __('subscriptions.chat_quota_phase1_daily_sub_cap') }}"
                 :disabled="! perDayLimit"
@@ -119,6 +159,7 @@
                 <label class="block text-[10px] font-medium text-gray-600 dark:text-gray-400 mb-0.5 truncate" title="{{ __('subscriptions.chat_quota_phase1_pack_messages') }}">{{ __('subscriptions.chat_quota_phase1_pack_msgs_short') }}</label>
                 <input type="number" name="quota_policies[{{ $featureKey }}][pack_message_count]" min="1" step="1"
                     x-model="packMsgs"
+                    @input="coercePackIntField('packMsgs')"
                     placeholder="30"
                     title="{{ __('subscriptions.chat_quota_phase1_pack_messages') }}"
                     :disabled="! purchasableIfExhausted"
@@ -128,6 +169,7 @@
                 <label class="block text-[10px] font-medium text-gray-600 dark:text-gray-400 mb-0.5 truncate" title="{{ __('subscriptions.chat_quota_phase1_pack_validity') }}">{{ __('subscriptions.chat_quota_phase1_pack_days_short') }}</label>
                 <input type="number" name="quota_policies[{{ $featureKey }}][pack_validity_days]" min="1" step="1"
                     x-model="packDays"
+                    @input="coercePackIntField('packDays')"
                     placeholder="7"
                     title="{{ __('subscriptions.chat_quota_phase1_pack_validity') }}"
                     :disabled="! purchasableIfExhausted"

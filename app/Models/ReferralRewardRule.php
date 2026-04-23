@@ -14,7 +14,6 @@ class ReferralRewardRule extends Model
         'contact_view_limit_bonus',
         'interest_send_limit_bonus',
         'daily_profile_view_limit_bonus',
-        'who_viewed_me_days_bonus',
         'who_viewed_me_preview_limit_bonus',
     ];
 
@@ -25,8 +24,6 @@ class ReferralRewardRule extends Model
         'contact_view_limit_bonus' => 'integer',
         'interest_send_limit_bonus' => 'integer',
         'daily_profile_view_limit_bonus' => 'integer',
-        'who_viewed_me_days_bonus' => 'integer',
         'who_viewed_me_preview_limit_bonus' => 'integer',
     ];
 }
-

@@ -8,7 +8,7 @@ use App\Models\MasterGender;
 use App\Models\MatrimonyProfile;
 use App\Models\MediationRequest;
 use App\Models\Plan;
-use App\Models\PlanPrice;
+use App\Models\PlanTerm;
 use App\Models\User;
 use App\Notifications\MediationRequestReceivedNotification;
 use App\Notifications\MediationRequestResponseNotification;
@@ -41,15 +41,15 @@ class MediationRequestFlowTest extends TestCase
         return [(int) $male->id, (int) $female->id];
     }
 
-    private function subscribeUser(User $user, string $planSlug = 'silver'): void
+    private function subscribeUser(User $user, string $planSlug = 'silver_male'): void
     {
         $plan = Plan::query()->where('slug', $planSlug)->firstOrFail();
-        $price = PlanPrice::query()
+        $term = PlanTerm::query()
             ->where('plan_id', $plan->id)
             ->where('is_visible', true)
             ->orderBy('sort_order')
             ->firstOrFail();
-        app(SubscriptionService::class)->subscribe($user, $plan, null, $price->id);
+        app(SubscriptionService::class)->subscribe($user, $plan, (int) $term->id, null);
     }
 
     public function test_create_mediation_notifies_receiver_and_consumes_credit_row(): void
@@ -73,7 +73,7 @@ class MediationRequestFlowTest extends TestCase
             'is_suspended' => false,
         ]);
 
-        $this->subscribeUser($sender, 'silver');
+        $this->subscribeUser($sender, 'silver_male');
 
         $svc = app(MediationRequestService::class);
         $mr = $svc->createFromProfile($sender, $target);
@@ -127,7 +127,7 @@ class MediationRequestFlowTest extends TestCase
             'is_suspended' => false,
         ]);
 
-        $this->subscribeUser($sender, 'silver');
+        $this->subscribeUser($sender, 'silver_male');
 
         $mr = app(MediationRequestService::class)->createFromProfile($sender, $target);
         Notification::fake();
@@ -162,7 +162,7 @@ class MediationRequestFlowTest extends TestCase
             'is_suspended' => false,
         ]);
 
-        $this->subscribeUser($sender, 'silver');
+        $this->subscribeUser($sender, 'silver_male');
 
         $mr = app(MediationRequestService::class)->createFromProfile($sender, $target);
         Notification::fake();
@@ -205,7 +205,7 @@ class MediationRequestFlowTest extends TestCase
             'updated_at' => now(),
         ]);
 
-        $this->subscribeUser($sender, 'silver');
+        $this->subscribeUser($sender, 'silver_male');
 
         DB::table('profile_visibility_settings')->updateOrInsert(
             ['profile_id' => $target->id],

@@ -18,9 +18,9 @@ class PlanStandardFeatureKeysSeeder extends Seeder
             if (! preg_match('/^(free|basic|silver|gold)_(male|female)$/', (string) $plan->slug)) {
                 continue;
             }
-            PlanQuotaPolicy::query()->where('plan_id', $plan->id)->delete();
             $plan->load('features');
-            PlanQuotaPolicy::ensureAllForPlan($plan);
+            $map = $plan->features->mapWithKeys(fn ($f) => [$f->key => $f->value])->all();
+            PlanQuotaPolicy::syncRowsFromCatalogFeatureMap((int) $plan->id, $map);
         }
     }
 }

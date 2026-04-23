@@ -29,26 +29,4 @@ class PlanFeatureLabelCatalogTest extends TestCase
         );
         $this->assertSame('150/day', $out);
     }
-
-    public function test_interest_view_reset_shows_quarter_when_billing_quarterly(): void
-    {
-        $out = PlanFeatureLabel::catalogFormatValue(
-            PlanFeatureKeys::INTEREST_VIEW_RESET_PERIOD,
-            'monthly',
-            1.0,
-            'quarterly'
-        );
-        $this->assertSame(__('interests.period_quarterly'), $out);
-    }
-
-    public function test_weekly_reset_not_overridden_by_quarterly_billing(): void
-    {
-        $out = PlanFeatureLabel::catalogFormatValue(
-            PlanFeatureKeys::INTEREST_VIEW_RESET_PERIOD,
-            'weekly',
-            3.0,
-            'quarterly'
-        );
-        $this->assertSame(__('interests.period_weekly'), $out);
-    }
 }

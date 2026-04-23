@@ -3,7 +3,7 @@
 use App\Models\Interest;
 use App\Models\MatrimonyProfile;
 use App\Models\Plan;
-use App\Models\PlanPrice;
+use App\Models\PlanTerm;
 use App\Models\User;
 use App\Services\ContactRequestService;
 use App\Services\SubscriptionService;
@@ -92,13 +92,13 @@ test('contact request works after accepted interest only + reveals only primary 
         ]
     );
 
-    $plan = Plan::query()->where('slug', 'silver')->firstOrFail();
-    $price = PlanPrice::query()
+    $plan = Plan::query()->where('slug', 'silver_male')->firstOrFail();
+    $term = PlanTerm::query()
         ->where('plan_id', $plan->id)
         ->where('is_visible', true)
         ->orderBy('sort_order')
         ->firstOrFail();
-    app(SubscriptionService::class)->subscribe($senderUser, $plan, null, $price->id);
+    app(SubscriptionService::class)->subscribe($senderUser, $plan, (int) $term->id, null);
 
     // Sender interest accepted by receiver. No reverse interest created.
     Interest::create([

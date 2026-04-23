@@ -2,24 +2,32 @@
 
 namespace App\Services;
 
+use App\Enums\PaymentStatus;
+use App\Exceptions\QuotaPolicySourceViolation;
 use App\Models\Coupon;
 use App\Models\Interest;
 use App\Models\Message;
+use App\Models\Payment;
 use App\Models\Plan;
 use App\Models\PlanPrice;
+use App\Models\PlanQuotaPolicy;
 use App\Models\PlanTerm;
 use App\Models\ProfileView;
 use App\Models\Subscription;
 use App\Models\User;
 use App\Models\UserFeatureUsage;
-use App\Support\UserFeatureUsageKeys;
 use App\Support\PlanFeatureKeys;
+use App\Support\PlanQuotaPolicyKeys;
+use App\Support\UserFeatureUsageKeys;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Schema;
 use Symfony\Component\HttpKernel\Exception\HttpException;
 
 /**
- * Subscription limits are driven only by {@see Plan} + {@see PlanFeature} (admin-editable).
- * Users without a subscription row use the active "free" plan features.
+ * Numeric quotas: {@see PlanQuotaPolicy} at purchase time are frozen in {@see Subscription::checkoutSnapshot()}
+ * ({@code quota_policies}); live {@see PlanQuotaPolicy} rows apply for catalog / free tier. Legacy {@see PlanFeature}
+ * mirror is not used for those limits.
  */
 class SubscriptionService
 {
@@ -68,28 +76,29 @@ class SubscriptionService
             throw new HttpException(422, __('subscriptions.coupon_invalid'));
         }
 
-        $visiblePrices = PlanPrice::query()
-            ->where('plan_id', $plan->id)
-            ->where('is_visible', true)
-            ->orderBy('sort_order')
-            ->get();
-
         $planTerm = null;
         $planPrice = null;
         $duration = (int) $plan->duration_days;
         $baseAmount = (float) $plan->final_price;
         $coupon = null;
 
-        if ($visiblePrices->isNotEmpty()) {
-            if ($planPriceId === null) {
+        $plan->loadMissing('terms');
+        $visibleTerms = $plan->terms->where('is_visible', true)->sortBy('sort_order')->values();
+
+        if ($visibleTerms->isNotEmpty()) {
+            if ($planTermId === null) {
                 throw new HttpException(422, __('subscriptions.pick_billing_period'));
             }
-            $planPrice = $visiblePrices->firstWhere('id', $planPriceId);
-            if (! $planPrice) {
+            $planTerm = PlanTerm::query()
+                ->where('plan_id', $plan->id)
+                ->whereKey($planTermId)
+                ->first();
+            // Catalog visibility is not subscription validity: explicit term id must resolve for locked checkout / PayU finalize.
+            if (! $planTerm) {
                 throw new HttpException(422, __('subscriptions.invalid_billing_period'));
             }
-            $duration = (int) $planPrice->duration_days;
-            $baseAmount = (float) $planPrice->final_price;
+            $duration = (int) $planTerm->duration_days;
+            $baseAmount = (float) $planTerm->final_price;
             if ($rawCoupon !== '') {
                 $coupon = $couponSvc->lockCouponByCode($rawCoupon);
                 if (! $coupon) {
@@ -99,54 +108,28 @@ class SubscriptionService
                     $coupon,
                     (int) $plan->id,
                     $baseAmount,
-                    (string) $planPrice->duration_type
+                    (string) $planTerm->billing_key
                 );
             }
-        } else {
-            $visibleTerms = PlanTerm::query()
-                ->where('plan_id', $plan->id)
-                ->where('is_visible', true)
-                ->orderBy('sort_order')
-                ->get();
-
-            if ($visibleTerms->isNotEmpty()) {
-                if ($planTermId === null) {
-                    throw new HttpException(422, __('subscriptions.pick_billing_period'));
-                }
-                $planTerm = $visibleTerms->firstWhere('id', $planTermId);
-                if (! $planTerm) {
-                    throw new HttpException(422, __('subscriptions.invalid_billing_period'));
-                }
-                $duration = (int) $planTerm->duration_days;
-                $baseAmount = (float) $planTerm->final_price;
-                if ($rawCoupon !== '') {
-                    $coupon = $couponSvc->lockCouponByCode($rawCoupon);
-                    if (! $coupon) {
-                        throw new HttpException(422, __('subscriptions.coupon_invalid'));
-                    }
-                    $couponSvc->assertLockedCouponForCheckout(
-                        $coupon,
-                        (int) $plan->id,
-                        $baseAmount,
-                        (string) $planTerm->billing_key
-                    );
-                }
-            } elseif ($rawCoupon !== '') {
-                $coupon = $couponSvc->lockCouponByCode($rawCoupon);
-                if (! $coupon) {
-                    throw new HttpException(422, __('subscriptions.coupon_invalid'));
-                }
-                $couponSvc->assertLockedCouponForCheckout(
-                    $coupon,
-                    (int) $plan->id,
-                    $baseAmount,
-                    null
-                );
+        } elseif ($rawCoupon !== '') {
+            $coupon = $couponSvc->lockCouponByCode($rawCoupon);
+            if (! $coupon) {
+                throw new HttpException(422, __('subscriptions.coupon_invalid'));
             }
+            $couponSvc->assertLockedCouponForCheckout(
+                $coupon,
+                (int) $plan->id,
+                $baseAmount,
+                null
+            );
         }
 
         $applied = $this->applyCoupon($coupon, $baseAmount);
         $subscriptionMetaPreview = $applied['subscription_meta'] ?? [];
+        if (! is_array($subscriptionMetaPreview)) {
+            $subscriptionMetaPreview = [];
+        }
+        $subscriptionMetaPreview = array_merge($subscriptionMetaPreview, PlanQuotaCheckoutSnapshot::forPlan($plan));
 
         return [
             'plan_term_id' => $planTerm?->id,
@@ -158,7 +141,7 @@ class SubscriptionService
             'plan_price' => $planPrice,
             'coupon' => $coupon,
             'base_amount' => $baseAmount,
-            'subscription_meta_preview' => is_array($subscriptionMetaPreview) ? $subscriptionMetaPreview : [],
+            'subscription_meta_preview' => $subscriptionMetaPreview,
         ];
     }
 
@@ -185,11 +168,50 @@ class SubscriptionService
             // 1) Cancel any current active subscription(s) — rows kept for history (same as model safeguard on create).
             Subscription::deactivateActiveSubscriptionsForUserId((int) $user->id);
 
+            $couponApplied = $coupon ? $this->applyCoupon($coupon, (float) $resolved['base_amount']) : null;
+            if ($couponApplied !== null) {
+                $duration += (int) ($couponApplied['extra_duration_days'] ?? 0);
+            }
+            $finalCharged = round((float) ($couponApplied['final_price'] ?? $resolved['final_amount']), 2);
+
             $subscriptionMeta = [];
-            if ($coupon) {
-                $applied = $this->applyCoupon($coupon, (float) $resolved['base_amount']);
-                $duration += (int) ($applied['extra_duration_days'] ?? 0);
-                $subscriptionMeta = $applied['subscription_meta'] ?? [];
+            if ($couponApplied !== null) {
+                $metaFromCoupon = $couponApplied['subscription_meta'] ?? [];
+                if (is_array($metaFromCoupon) && $metaFromCoupon !== []) {
+                    $subscriptionMeta = $metaFromCoupon;
+                }
+            }
+            $checkoutQuota = PlanQuotaCheckoutSnapshot::forPlan($plan);
+            if ($planTerm !== null) {
+                $couponSnap = $this->checkoutCouponSnapshotFromResolved($resolved, $couponApplied);
+                $subscriptionMeta['checkout_snapshot'] = array_merge(
+                    $checkoutQuota,
+                    [
+                        'plan_name' => (string) $plan->name,
+                        'billing_key' => (string) $planTerm->billing_key,
+                        'plan_term_id' => (int) $planTerm->id,
+                        'duration_days' => (int) $planTerm->duration_days,
+                        'discount_percent' => $planTerm->discount_percent !== null ? (int) $planTerm->discount_percent : null,
+                        'base_amount' => round((float) $resolved['base_amount'], 2),
+                        'final_amount' => $finalCharged,
+                        'currency' => 'INR',
+                    ],
+                    $couponSnap,
+                );
+            } else {
+                $subscriptionMeta['checkout_snapshot'] = array_merge(
+                    $checkoutQuota,
+                    [
+                        'plan_name' => (string) $plan->name,
+                        'billing_key' => null,
+                        'plan_term_id' => null,
+                        'duration_days' => $duration,
+                        'discount_percent' => null,
+                        'base_amount' => round((float) $resolved['base_amount'], 2),
+                        'final_amount' => $finalCharged,
+                        'currency' => 'INR',
+                    ],
+                );
             }
             if ($carryQuota !== []) {
                 $subscriptionMeta['carry_quota'] = $carryQuota;
@@ -209,7 +231,7 @@ class SubscriptionService
                 'starts_at' => $now,
                 'ends_at' => $endsAt,
                 'status' => Subscription::STATUS_ACTIVE,
-                'meta' => $subscriptionMeta !== [] ? $subscriptionMeta : null,
+                'meta' => $subscriptionMeta,
             ]);
 
             if ($coupon) {
@@ -224,6 +246,366 @@ class SubscriptionService
 
             return $sub;
         });
+    }
+
+    /**
+     * Persist subscription + immutable payment snapshot after PayU success (uses locked pending payload only).
+     *
+     * @param  array<string, mixed>  $pending
+     * @param  array<string, mixed>  $payuPayload
+     */
+    public function finalizePayuSubscription(User $user, Plan $plan, array $pending, string $txnid, array $payuPayload): Subscription
+    {
+        return DB::transaction(function () use ($user, $plan, $pending, $txnid, $payuPayload) {
+            $existingPayment = Payment::query()
+                ->where('user_id', $user->id)
+                ->where('payment_status', 'success')
+                ->where(function ($q) use ($txnid) {
+                    $q->where('txnid', $txnid);
+                    if (Schema::hasColumn('payments', 'payu_txnid')) {
+                        $q->orWhere('payu_txnid', $txnid);
+                    }
+                })
+                ->first();
+
+            $resumeSubscriptionOnly = false;
+            if ($existingPayment !== null) {
+                $prior = Subscription::query()
+                    ->where('user_id', $user->id)
+                    ->where('plan_id', $existingPayment->plan_id)
+                    ->orderByDesc('id')
+                    ->first();
+                if ($prior !== null) {
+                    return $prior;
+                }
+                $resumeSubscriptionOnly = true;
+            }
+
+            $term = $this->resolvePlanTermForPayuFinalize($plan, $pending, $txnid);
+
+            $finalAmt = round((float) ($pending['final_amount'] ?? 0), 2);
+            $postedLock = round((float) ($pending['amount'] ?? 0), 2);
+            if ($finalAmt <= 0.0 || abs($finalAmt - $postedLock) > 0.02) {
+                Log::warning('payu_finalize_rejected_amount_lock_mismatch', [
+                    'txnid' => $txnid,
+                    'user_id' => $user->id,
+                    'plan_id' => $plan->id,
+                    'final_amount' => $finalAmt,
+                    'posted_lock' => $postedLock,
+                ]);
+                throw new HttpException(422, __('subscriptions.subscribe_failed'));
+            }
+            $gwAmount = isset($payuPayload['amount']) ? round((float) trim((string) $payuPayload['amount']), 2) : null;
+            if ($gwAmount !== null && abs($gwAmount - $finalAmt) > 0.02) {
+                Log::warning('payu_finalize_rejected_gateway_amount_mismatch', [
+                    'txnid' => $txnid,
+                    'user_id' => $user->id,
+                    'final_amount' => $finalAmt,
+                    'gateway_amount' => $gwAmount,
+                ]);
+                throw new HttpException(422, __('subscriptions.subscribe_failed'));
+            }
+
+            $this->assertPayuPendingHardIntegrity($plan, $pending, $term, $txnid, $payuPayload, $finalAmt);
+
+            $currency = (string) ($pending['currency'] ?? 'INR');
+            $paymentMeta = array_merge(
+                $this->paymentMetaSnapshotFromPending($pending),
+                $this->checkoutCouponSnapshotFromPending($pending),
+            );
+
+            if (! $resumeSubscriptionOnly) {
+                $paymentAttrs = [
+                    'user_id' => $user->id,
+                    'plan_id' => $plan->id,
+                    'plan_term_id' => (int) ($pending['plan_term_id'] ?? 0) ?: null,
+                    'txnid' => $txnid,
+                    'plan_key' => (string) $plan->slug,
+                    'billing_key' => (string) ($pending['billing_key'] ?? ''),
+                    'amount' => $finalAmt,
+                    'amount_paid' => $finalAmt,
+                    'currency' => $currency,
+                    'status' => PaymentStatus::Success->value,
+                    'payment_status' => 'success',
+                    'gateway' => 'payu',
+                    'payload' => $payuPayload,
+                    'meta' => $paymentMeta,
+                    'source' => 'subscription_payu',
+                    'is_processed' => true,
+                    'webhook_is_final' => false,
+                ];
+                if (Schema::hasColumn('payments', 'payu_txnid')) {
+                    $paymentAttrs['payu_txnid'] = $txnid;
+                }
+                Payment::query()->create($paymentAttrs);
+            }
+
+            $now = now();
+            $carryQuota = $this->resolveCarryQuotaFromPreviousSubscription($user, $now);
+            Subscription::deactivateActiveSubscriptionsForUserId((int) $user->id);
+
+            $couponSvc = app(CouponService::class);
+            $rawCoupon = trim((string) ($pending['coupon_code'] ?? ''));
+            $coupon = $rawCoupon !== '' ? $couponSvc->lockCouponByCode($rawCoupon) : null;
+
+            $duration = (int) ($pending['duration_days_total'] ?? $pending['duration_days'] ?? 0);
+
+            $subscriptionMeta = [];
+            $preview = $pending['subscription_meta_preview'] ?? [];
+            if (is_array($preview) && $preview !== []) {
+                $subscriptionMeta = $preview;
+            }
+
+            $subscriptionMeta['checkout_snapshot'] = array_merge(
+                PlanQuotaCheckoutSnapshot::forPlan($plan),
+                [
+                    'plan_name' => (string) ($pending['plan_name'] ?? ''),
+                    'billing_key' => (string) ($pending['billing_key'] ?? ''),
+                    'plan_term_id' => (int) ($pending['plan_term_id'] ?? 0),
+                    'duration_days' => (int) ($pending['duration_days'] ?? 0),
+                    'discount_percent' => isset($pending['discount_percent']) && $pending['discount_percent'] !== '' && $pending['discount_percent'] !== null
+                        ? (int) $pending['discount_percent']
+                        : null,
+                    'base_amount' => round((float) ($pending['base_amount'] ?? 0), 2),
+                    'final_amount' => $finalAmt,
+                    'currency' => $currency,
+                    'payu_txnid' => $txnid,
+                ],
+                $this->checkoutCouponSnapshotFromPending($pending),
+            );
+            if ($carryQuota !== []) {
+                $subscriptionMeta['carry_quota'] = $carryQuota;
+            }
+
+            $endsAt = null;
+            if ($duration > 0) {
+                $endsAt = $now->copy()->addDays($duration);
+            }
+
+            $sub = Subscription::query()->create([
+                'user_id' => $user->id,
+                'plan_id' => $plan->id,
+                'plan_term_id' => $term?->id,
+                'plan_price_id' => null,
+                'coupon_id' => $coupon?->id,
+                'starts_at' => $now,
+                'ends_at' => $endsAt,
+                'status' => Subscription::STATUS_ACTIVE,
+                'meta' => $subscriptionMeta,
+            ]);
+
+            if ($coupon) {
+                $couponSvc->incrementRedemption($coupon);
+            }
+
+            if ($coupon && $coupon->type === Coupon::TYPE_FEATURE) {
+                $this->applyFeatureCouponGrants($sub, $coupon);
+            }
+
+            app(ReferralService::class)->applyPurchaseRewardIfEligible($user, $plan);
+
+            return $sub;
+        });
+    }
+
+    /**
+     * @param  array<string, mixed>  $resolved
+     * @return array<string, mixed>
+     */
+    public function buildPayuPendingPayload(User $user, Plan $plan, array $resolved, string $amountString): array
+    {
+        $term = $resolved['plan_term'];
+        $coupon = $resolved['coupon'];
+        $couponApplied = $coupon ? $this->applyCoupon($coupon, (float) $resolved['base_amount']) : null;
+        $extraDays = (int) ($couponApplied['extra_duration_days'] ?? 0);
+        $durationTotal = (int) $resolved['duration_days'] + $extraDays;
+        $preview = $resolved['subscription_meta_preview'] ?? [];
+        if (! is_array($preview)) {
+            $preview = [];
+        }
+
+        $couponDiscount = $couponApplied !== null
+            ? round((float) ($couponApplied['discount_amount'] ?? 0), 2)
+            : 0.0;
+        $finalAfterCoupon = $couponApplied !== null
+            ? round((float) ($couponApplied['final_price'] ?? $resolved['final_amount']), 2)
+            : round((float) $resolved['final_amount'], 2);
+
+        return [
+            'user_id' => (int) $user->id,
+            'plan_id' => (int) $plan->id,
+            'plan_slug' => (string) $plan->slug,
+            'plan_term_id' => $resolved['plan_term_id'],
+            'plan_price_id' => $resolved['plan_price_id'],
+            'plan_name' => (string) $plan->name,
+            'billing_key' => $term?->billing_key,
+            'duration_days' => (int) $resolved['duration_days'],
+            'extra_duration_days' => $extraDays,
+            'duration_days_total' => $durationTotal,
+            'discount_percent' => $term?->discount_percent,
+            'base_amount' => round((float) $resolved['base_amount'], 2),
+            'final_amount' => round((float) $resolved['final_amount'], 2),
+            'currency' => 'INR',
+            'coupon_code' => $resolved['coupon_code'],
+            'coupon_discount' => $couponDiscount,
+            'final_amount_after_coupon' => $finalAfterCoupon,
+            'amount' => $amountString,
+            'subscription_meta_preview' => $preview,
+        ];
+    }
+
+    /**
+     * When the DB term row was removed after checkout, finalize using the locked pending payload only (paid user must retain access).
+     *
+     * @param  array<string, mixed>  $pending
+     */
+    private function resolvePlanTermForPayuFinalize(Plan $plan, array $pending, string $txnid): ?PlanTerm
+    {
+        $tid = (int) ($pending['plan_term_id'] ?? 0);
+        if ($tid <= 0) {
+            throw new HttpException(422, __('subscriptions.invalid_billing_period'));
+        }
+
+        $term = PlanTerm::query()->whereKey($tid)->first();
+        if ($term !== null && (int) $term->plan_id !== (int) $plan->id) {
+            Log::warning('payu_finalize_rejected_term_wrong_plan', [
+                'txnid' => $txnid,
+                'plan_id' => $plan->id,
+                'plan_term_id' => $tid,
+                'term_plan_id' => $term->plan_id,
+            ]);
+            throw new HttpException(422, __('subscriptions.invalid_billing_period'));
+        }
+
+        if ($term === null) {
+            Log::warning('payu_finalize_plan_term_missing_using_pending_snapshot', [
+                'txnid' => $txnid,
+                'user_id' => $pending['user_id'] ?? null,
+                'plan_id' => $plan->id,
+                'plan_term_id' => $tid,
+                'billing_key' => $pending['billing_key'] ?? null,
+            ]);
+        }
+
+        return $term;
+    }
+
+    /**
+     * @param  array<string, mixed>  $pending
+     */
+    private function assertPayuPendingHardIntegrity(
+        Plan $plan,
+        array $pending,
+        ?PlanTerm $term,
+        string $txnid,
+        array $payuPayload,
+        float $finalAmt,
+    ): void {
+        $pendingPlanId = (int) ($pending['plan_id'] ?? 0);
+        if ($pendingPlanId <= 0 || $pendingPlanId !== (int) $plan->id) {
+            Log::warning('payu_finalize_rejected_plan_id_mismatch', [
+                'txnid' => $txnid,
+                'route_plan_id' => $plan->id,
+                'pending_plan_id' => $pendingPlanId,
+            ]);
+            throw new HttpException(422, __('subscriptions.subscribe_failed'));
+        }
+
+        $bk = (string) ($pending['billing_key'] ?? '');
+        if ($bk === '') {
+            Log::warning('payu_finalize_rejected_empty_billing_key', ['txnid' => $txnid]);
+            throw new HttpException(422, __('subscriptions.subscribe_failed'));
+        }
+
+        if ($term !== null) {
+            if ($bk !== (string) $term->billing_key) {
+                Log::warning('payu_finalize_rejected_billing_key_mismatch', [
+                    'txnid' => $txnid,
+                    'pending_billing_key' => $bk,
+                    'term_billing_key' => $term->billing_key,
+                ]);
+                throw new HttpException(422, __('subscriptions.subscribe_failed'));
+            }
+            $lockedBase = round((float) ($pending['base_amount'] ?? -1), 2);
+            $termFinal = round((float) $term->final_price, 2);
+            if (abs($termFinal - $lockedBase) > 0.02) {
+                Log::warning('payu_finalize_rejected_base_amount_mismatch', [
+                    'txnid' => $txnid,
+                    'locked_base' => $lockedBase,
+                    'term_final_price' => $termFinal,
+                ]);
+                throw new HttpException(422, __('subscriptions.subscribe_failed'));
+            }
+        }
+
+        $snapFinal = round((float) ($pending['final_amount_after_coupon'] ?? $pending['final_amount'] ?? -1), 2);
+        if (abs($snapFinal - $finalAmt) > 0.02) {
+            Log::warning('payu_finalize_rejected_final_amount_snapshot_mismatch', [
+                'txnid' => $txnid,
+                'computed_final' => $finalAmt,
+                'snapshot_final' => $snapFinal,
+            ]);
+            throw new HttpException(422, __('subscriptions.subscribe_failed'));
+        }
+    }
+
+    /**
+     * @param  array<string, mixed>  $pending
+     * @return array<string, mixed>
+     */
+    private function paymentMetaSnapshotFromPending(array $pending): array
+    {
+        return [
+            'plan_name' => (string) ($pending['plan_name'] ?? ''),
+            'billing_key' => (string) ($pending['billing_key'] ?? ''),
+            'duration_days' => (int) ($pending['duration_days'] ?? 0),
+            'base_amount' => round((float) ($pending['base_amount'] ?? 0), 2),
+            'discount_percent' => isset($pending['discount_percent']) && $pending['discount_percent'] !== '' && $pending['discount_percent'] !== null
+                ? (int) $pending['discount_percent']
+                : null,
+            'final_amount' => round((float) ($pending['final_amount'] ?? 0), 2),
+        ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $resolved
+     * @param  array<string, mixed>|null  $couponApplied
+     * @return array{coupon_code: ?string, coupon_discount: float, final_amount_after_coupon: float}
+     */
+    private function checkoutCouponSnapshotFromResolved(array $resolved, ?array $couponApplied): array
+    {
+        $raw = $resolved['coupon_code'] ?? null;
+        $code = is_string($raw) && trim($raw) !== '' ? trim($raw) : null;
+        $disc = $couponApplied !== null
+            ? round((float) ($couponApplied['discount_amount'] ?? 0), 2)
+            : 0.0;
+        $finalAfter = $couponApplied !== null
+            ? round((float) ($couponApplied['final_price'] ?? $resolved['final_amount']), 2)
+            : round((float) $resolved['final_amount'], 2);
+
+        return [
+            'coupon_code' => $code,
+            'coupon_discount' => $disc,
+            'final_amount_after_coupon' => $finalAfter,
+        ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $pending
+     * @return array{coupon_code: ?string, coupon_discount: float, final_amount_after_coupon: float}
+     */
+    private function checkoutCouponSnapshotFromPending(array $pending): array
+    {
+        $raw = $pending['coupon_code'] ?? null;
+        $code = is_string($raw) && trim($raw) !== '' ? trim($raw) : null;
+        $disc = round((float) ($pending['coupon_discount'] ?? 0), 2);
+        $finalAfter = round((float) ($pending['final_amount_after_coupon'] ?? $pending['final_amount'] ?? 0), 2);
+
+        return [
+            'coupon_code' => $code,
+            'coupon_discount' => $disc,
+            'final_amount_after_coupon' => $finalAfter,
+        ];
     }
 
     /**
@@ -391,6 +773,20 @@ class SubscriptionService
             $now = now();
             $endsAt = $duration > 0 ? $now->copy()->addDays($duration) : null;
 
+            $plan->loadMissing('quotaPolicies');
+            $checkoutSnapshot = array_merge(
+                PlanQuotaCheckoutSnapshot::forPlan($plan),
+                [
+                    'plan_name' => (string) $plan->name,
+                    'billing_key' => (string) $term->billing_key,
+                    'plan_term_id' => (int) $term->id,
+                    'duration_days' => $duration,
+                    'base_amount' => null,
+                    'final_amount' => null,
+                    'currency' => 'INR',
+                ],
+            );
+
             return Subscription::query()->create([
                 'user_id' => $user->id,
                 'plan_id' => $plan->id,
@@ -400,6 +796,9 @@ class SubscriptionService
                 'starts_at' => $now,
                 'ends_at' => $endsAt,
                 'status' => Subscription::STATUS_ACTIVE,
+                'meta' => [
+                    'checkout_snapshot' => $checkoutSnapshot,
+                ],
             ]);
         });
     }
@@ -432,11 +831,26 @@ class SubscriptionService
                     : ($existing->ends_at->greaterThan(now()) ? $existing->ends_at->copy() : now()->copy());
                 $newEnds = $startsAt->copy()->addDays($duration);
 
+                $plan->loadMissing('quotaPolicies');
+                $meta = is_array($existing->meta) ? $existing->meta : [];
+                $prevCheckout = is_array($meta['checkout_snapshot'] ?? null) ? $meta['checkout_snapshot'] : [];
+                $meta['checkout_snapshot'] = array_merge(
+                    $prevCheckout,
+                    PlanQuotaCheckoutSnapshot::forPlan($plan),
+                    [
+                        'plan_name' => (string) $plan->name,
+                        'billing_key' => (string) $term->billing_key,
+                        'plan_term_id' => (int) $term->id,
+                        'duration_days' => $duration,
+                    ],
+                );
+
                 $existing->update([
                     'plan_term_id' => $term->id,
                     'starts_at' => $startsAt,
                     'ends_at' => $newEnds,
                     'updated_at' => now(),
+                    'meta' => $meta,
                 ]);
 
                 $fresh = $existing->fresh();
@@ -484,7 +898,7 @@ class SubscriptionService
         if ($user !== null) {
             $sub = $this->getActiveSubscription($user);
             if ($sub) {
-                return $sub->plan()->with('features')->firstOrFail();
+                return $sub->plan()->with(['features', 'quotaPolicies'])->firstOrFail();
             }
         }
 
@@ -528,15 +942,34 @@ class SubscriptionService
      */
     private function resolveQuotaLimitFromPlanAndCarry(User $user, string $key): int
     {
-        $plan = $this->getEffectivePlan($user);
-        $plan->loadMissing('features');
+        $normalized = app(FeatureUsageService::class)->normalizeFeatureKey($key);
 
-        $raw = $plan->featureValue($key);
-        if ($raw === null || $raw === '') {
-            return $this->defaultLimitForKey($key);
+        if (! in_array($normalized, PlanQuotaPolicyKeys::ordered(), true)) {
+            $plan = $this->getEffectivePlan($user);
+            $plan->loadMissing('features');
+            $raw = $plan->featureValue($normalized);
+            if ($raw === null || $raw === '') {
+                return $this->defaultLimitForKey($normalized);
+            }
+            $base = $this->parseLimitInt((string) $raw);
+            if ($base < 0) {
+                return -1;
+            }
+            if ($base === 0) {
+                return 0;
+            }
+
+            return $base + $this->carriedQuotaBonus($user, $key);
         }
 
-        $base = $this->parseLimitInt($raw);
+        $payloads = PlanQuotaUiSource::policyPayloadsForUser($user);
+        if (! isset($payloads[$normalized]) || ! is_array($payloads[$normalized])) {
+            throw QuotaPolicySourceViolation::missingPolicyRow(
+                'resolveQuotaLimitFromPlanAndCarry.user_id='.(int) $user->id,
+                $normalized
+            );
+        }
+        $base = PlanQuotaPolicyMirror::subscriptionLimitIntFromQuotaPayload($normalized, $payloads[$normalized]);
         if ($base < 0) {
             return -1;
         }
@@ -673,12 +1106,12 @@ class SubscriptionService
     {
         $p = Plan::defaultFree($user);
         if ($p) {
-            return $p->loadMissing('features');
+            return $p->loadMissing(['features', 'quotaPolicies']);
         }
 
         $any = Plan::query()->where('is_active', true)->orderBy('sort_order')->first();
         if ($any) {
-            return $any->loadMissing('features');
+            return $any->loadMissing(['features', 'quotaPolicies']);
         }
 
         return $this->syntheticFallbackPlan();
@@ -706,7 +1139,21 @@ class SubscriptionService
 
     private function truthyFeature(Plan $plan, string $key): bool
     {
-        $v = strtolower(trim((string) ($plan->featureValue($key, '0') ?? '0')));
+        if (in_array($key, PlanQuotaPolicyKeys::planFeatureKeysWrittenByPolicies(), true)) {
+            $map = PlanQuotaUiSource::mirroredPlanFeatureStringsForPlan($plan, 'truthyFeature');
+            if (! array_key_exists($key, $map)) {
+                throw QuotaPolicySourceViolation::missingPolicyRow('truthyFeature.plan_id='.(int) $plan->id, $key);
+            }
+            $v = strtolower(trim($map[$key]));
+            if (is_numeric($v)) {
+                return ((int) $v) !== 0 || $v === '-1';
+            }
+
+            return in_array($v, ['1', 'true', 'yes', 'on'], true);
+        }
+
+        $raw = $plan->featureValue($key);
+        $v = strtolower(trim((string) ($raw !== null && $raw !== '' ? $raw : '')));
 
         return in_array($v, ['1', 'true', 'yes', 'on'], true);
     }
@@ -765,7 +1212,7 @@ class SubscriptionService
             ->where('user_id', $user->id)
             ->whereNotNull('ends_at')
             ->orderByDesc('starts_at')
-            ->with('plan.features')
+            ->with(['plan.features', 'plan.quotaPolicies'])
             ->first();
         if (! $previous || ! $previous->plan || ! $this->isWithinGraceOrCarryWindow($previous, $at)) {
             return [];
@@ -782,11 +1229,26 @@ class SubscriptionService
 
         $carry = [];
         foreach ($featurePeriods as $featureKey => $period) {
-            $raw = $previous->plan->featureValue($featureKey);
-            if ($raw === null || $raw === '') {
-                continue;
+            $limit = 0;
+            $prevSnap = $previous->checkoutSnapshot();
+            $qp = is_array($prevSnap['quota_policies'] ?? null) ? $prevSnap['quota_policies'] : null;
+            if (is_array($qp) && isset($qp[$featureKey]) && is_array($qp[$featureKey])) {
+                $limit = PlanQuotaPolicyMirror::subscriptionLimitIntFromQuotaPayload($featureKey, $qp[$featureKey]);
+            } else {
+                $previous->plan->loadMissing('quotaPolicies');
+                $row = $previous->plan->quotaPolicies->firstWhere('feature_key', $featureKey);
+                if ($row instanceof PlanQuotaPolicy) {
+                    $limit = PlanQuotaPolicyMirror::subscriptionLimitIntFromQuotaPayload(
+                        $featureKey,
+                        PlanQuotaPolicyMirror::payloadFromModel($row),
+                    );
+                } else {
+                    throw QuotaPolicySourceViolation::missingPolicyRow(
+                        'resolveCarryQuotaFromPreviousSubscription.subscription_id='.(int) $previous->id,
+                        $featureKey
+                    );
+                }
             }
-            $limit = $this->parseLimitInt($raw);
             if ($limit <= 0) {
                 continue;
             }

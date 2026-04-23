@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Payment;
 use App\Models\Plan;
 use App\Models\User;
 use App\Services\SubscriptionService;
@@ -9,6 +10,7 @@ use App\Support\PayuHasher;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use Symfony\Component\HttpKernel\Exception\HttpException;
 
@@ -152,15 +154,7 @@ class SubscriptionController extends Controller
 
         Cache::put(
             self::PENDING_CACHE_PREFIX.$txnid,
-            [
-                'user_id' => (int) $user->id,
-                'plan_id' => (int) $plan->id,
-                'plan_slug' => $built['productinfo'],
-                'plan_term_id' => $resolved['plan_term_id'],
-                'plan_price_id' => $resolved['plan_price_id'],
-                'coupon_code' => $resolved['coupon_code'],
-                'amount' => $built['amount'],
-            ],
+            $subscriptions->buildPayuPendingPayload($user, $plan, $resolved, $built['amount']),
             now()->addMinutes(60),
         );
 
@@ -251,6 +245,31 @@ class SubscriptionController extends Controller
 
         $pending = Cache::pull(self::PENDING_CACHE_PREFIX.$txnid);
         if (! is_array($pending)) {
+            $dup = Payment::query()
+                ->where('payment_status', 'success')
+                ->where(function ($q) use ($txnid) {
+                    $q->where('txnid', $txnid);
+                    if (Schema::hasColumn('payments', 'payu_txnid')) {
+                        $q->orWhere('payu_txnid', $txnid);
+                    }
+                })
+                ->first();
+            if ($dup !== null) {
+                $userIdFromGateway = (int) trim((string) ($data['udf1'] ?? ''));
+                if ($userIdFromGateway > 0 && (int) $dup->user_id === $userIdFromGateway) {
+                    $meta = $dup->meta;
+                    $planLabel = is_array($meta) ? trim((string) ($meta['plan_name'] ?? '')) : '';
+                    if ($planLabel === '') {
+                        $planRow = Plan::query()->find((int) $dup->plan_id);
+                        $planLabel = $planRow ? (string) $planRow->name : (string) __('subscriptions.default_plan_name');
+                    }
+
+                    return redirect()
+                        ->route('plans.index')
+                        ->with('success', __('subscriptions.subscribe_success', ['plan' => $planLabel]));
+                }
+            }
+
             Log::warning('PayU subscription success: missing pending checkout', ['txnid' => $txnid]);
 
             return redirect()
@@ -294,16 +313,8 @@ class SubscriptionController extends Controller
                 ->with('error', __('subscriptions.subscribe_failed'));
         }
 
-        $planTermId = isset($pending['plan_term_id']) && $pending['plan_term_id'] !== null
-            ? (int) $pending['plan_term_id'] : null;
-        $planPriceId = isset($pending['plan_price_id']) && $pending['plan_price_id'] !== null
-            ? (int) $pending['plan_price_id'] : null;
-        $coupon = isset($pending['coupon_code']) && is_string($pending['coupon_code'])
-            ? $pending['coupon_code']
-            : null;
-
         try {
-            $subscriptions->subscribe($user, $plan, $planTermId, $planPriceId, $coupon);
+            $subscriptions->finalizePayuSubscription($user, $plan, $pending, $txnid, $data);
         } catch (HttpException $e) {
             return redirect()
                 ->route('plans.index')
@@ -316,9 +327,14 @@ class SubscriptionController extends Controller
                 ->with('error', __('subscriptions.subscribe_failed'));
         }
 
+        $successPlanName = trim((string) ($pending['plan_name'] ?? ''));
+        if ($successPlanName === '') {
+            $successPlanName = (string) $plan->name;
+        }
+
         return redirect()
             ->route('plans.index')
-            ->with('success', __('subscriptions.subscribe_success', ['plan' => $plan->name]));
+            ->with('success', __('subscriptions.subscribe_success', ['plan' => $successPlanName]));
     }
 
     public function failure(Request $request)

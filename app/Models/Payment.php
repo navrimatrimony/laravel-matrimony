@@ -11,13 +11,20 @@ class Payment extends Model
 {
     protected $fillable = [
         'user_id',
+        'plan_id',
+        'plan_term_id',
         'txnid',
+        'payu_txnid',
         'plan_key',
+        'billing_key',
         'amount',
+        'amount_paid',
+        'currency',
         'status',
         'payment_status',
         'gateway',
         'payload',
+        'meta',
         'source',
         'is_processed',
         'webhook_is_final',
@@ -27,6 +34,8 @@ class Payment extends Model
 
     protected $casts = [
         'amount' => 'decimal:2',
+        'amount_paid' => 'decimal:2',
+        'meta' => 'array',
         'payload' => 'array',
         'is_processed' => 'boolean',
         'webhook_is_final' => 'boolean',

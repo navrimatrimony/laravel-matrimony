@@ -6,6 +6,7 @@ use App\Models\Plan;
 use App\Models\PlanFeature;
 use App\Models\PlanQuotaPolicy;
 use App\Models\PlanTerm;
+use App\Services\FeatureUsageService;
 use App\Services\SubscriptionService;
 use App\Support\PlanFeatureKeys;
 use Illuminate\Database\Seeder;
@@ -26,6 +27,7 @@ class SubscriptionPlansSeeder extends Seeder
     {
         $skipKeys = [
             PlanFeatureKeys::INTEREST_VIEW_RESET_PERIOD,
+            PlanFeatureKeys::WHO_VIEWED_ME_PREVIEW_LIMIT,
         ];
         $out = $features;
         foreach ($out as $k => $v) {
@@ -71,7 +73,7 @@ class SubscriptionPlansSeeder extends Seeder
             PlanFeatureKeys::INTEREST_SEND_LIMIT => '3',
             PlanFeatureKeys::INTEREST_VIEW_LIMIT => '3',
             PlanFeatureKeys::INTEREST_VIEW_RESET_PERIOD => 'monthly',
-            PlanFeatureKeys::WHO_VIEWED_ME_DAYS => '0',
+            FeatureUsageService::FEATURE_WHO_VIEWED_ME_ACCESS => '1',
             PlanFeatureKeys::WHO_VIEWED_ME_PREVIEW_LIMIT => '5',
             PlanFeatureKeys::MEDIATOR_REQUESTS_PER_MONTH => '2',
             PlanFeatureKeys::CONTACT_VIEW_LIMIT => '0',
@@ -94,7 +96,7 @@ class SubscriptionPlansSeeder extends Seeder
             SubscriptionService::FEATURE_CHAT_IMAGE_MESSAGES => '0',
             PlanFeatureKeys::PHOTO_FULL_ACCESS => '1',
             PlanFeatureKeys::CHAT_CAN_READ => '1',
-            PlanFeatureKeys::WHO_VIEWED_ME_DAYS => '1',
+            FeatureUsageService::FEATURE_WHO_VIEWED_ME_ACCESS => '1',
             PlanFeatureKeys::WHO_VIEWED_ME_PREVIEW_LIMIT => '0',
             PlanFeatureKeys::INTEREST_VIEW_LIMIT => '12',
         ]);
@@ -107,7 +109,7 @@ class SubscriptionPlansSeeder extends Seeder
             SubscriptionService::FEATURE_CHAT_IMAGE_MESSAGES => '1',
             PlanFeatureKeys::PHOTO_FULL_ACCESS => '1',
             PlanFeatureKeys::CHAT_CAN_READ => '1',
-            PlanFeatureKeys::WHO_VIEWED_ME_DAYS => '7',
+            FeatureUsageService::FEATURE_WHO_VIEWED_ME_ACCESS => '1',
             PlanFeatureKeys::WHO_VIEWED_ME_PREVIEW_LIMIT => '0',
             PlanFeatureKeys::INTEREST_VIEW_LIMIT => '30',
             PlanFeatureKeys::MEDIATOR_REQUESTS_PER_MONTH => '5',
@@ -125,7 +127,8 @@ class SubscriptionPlansSeeder extends Seeder
             PlanFeatureKeys::PHOTO_FULL_ACCESS => '1',
             PlanFeatureKeys::PROFILE_BOOST_PER_WEEK => '1',
             PlanFeatureKeys::PRIORITY_LISTING => '1',
-            PlanFeatureKeys::WHO_VIEWED_ME_DAYS => '999',
+            FeatureUsageService::FEATURE_WHO_VIEWED_ME_ACCESS => '1',
+            PlanFeatureKeys::WHO_VIEWED_ME_PREVIEW_LIMIT => '-1',
             PlanFeatureKeys::MEDIATOR_REQUESTS_PER_MONTH => '15',
             PlanFeatureKeys::ADVANCED_PROFILE_SEARCH => '1',
             PlanFeatureKeys::PROFILE_WHATSAPP_DIRECT => '1',
@@ -214,7 +217,7 @@ class SubscriptionPlansSeeder extends Seeder
             }
 
             PlanQuotaPolicy::query()->where('plan_id', $plan->id)->delete();
-            PlanQuotaPolicy::ensureAllForPlan($plan->fresh('features'));
+            PlanQuotaPolicy::syncRowsFromCatalogFeatureMap((int) $plan->id, $features);
 
             if (! Plan::isFreeCatalogSlug((string) $plan->slug)) {
                 PlanTerm::syncDefaultsForPlan($plan->fresh());

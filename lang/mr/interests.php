@@ -47,8 +47,10 @@ return [
     'notification_blurred_sender' => 'कोणीतरी तुम्हाला इच्छा पाठवली. प्लॅननुसार व्यवस्थापनासाठी “मिळालेल्या इच्छा” उघडा.',
     'profile_open_locked_use_inbox' => 'सध्याच्या प्लॅनमध्ये हे प्रोफाइल उघड नाही. “मिळालेल्या इच्छा” पहा — किंवा पूर्ण तपशीलासाठी अपग्रेड करा.',
     'period_weekly' => 'आठवडा',
+    'period_daily' => 'दिवस',
     'period_monthly' => 'महिना',
     'period_quarterly' => 'त्रैमासिक',
+    'period_lifetime' => 'एकूण मर्यादा',
     'period_half_yearly' => 'सहा महिने',
     'period_yearly' => 'वर्ष',
 ];

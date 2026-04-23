@@ -128,6 +128,22 @@ class Subscription extends Model
         return $this->belongsTo(PlanPrice::class);
     }
 
+    /**
+     * Immutable purchase-time pricing context (never re-read from {@see Plan} / {@see PlanTerm} for display of what was bought).
+     *
+     * @return array<string, mixed>
+     */
+    public function checkoutSnapshot(): array
+    {
+        $meta = $this->meta;
+        if (! is_array($meta)) {
+            return [];
+        }
+        $snap = $meta['checkout_snapshot'] ?? null;
+
+        return is_array($snap) ? $snap : [];
+    }
+
     public function coupon(): BelongsTo
     {
         return $this->belongsTo(Coupon::class);

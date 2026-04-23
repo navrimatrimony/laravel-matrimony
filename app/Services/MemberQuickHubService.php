@@ -488,17 +488,15 @@ class MemberQuickHubService
         }
 
         $userId = (int) $user->id;
+        $userModel = $user;
         $canSeeWhoViewedNames = $this->featureUsage->canUse($userId, FeatureUsageService::FEATURE_WHO_VIEWED_ME_ACCESS)
-            && $this->featureUsage->getWhoViewedMeWindowDays($userId) > 0;
+            && $this->featureUsage->whoViewedMeHasFullViewerList($userModel);
 
         if (! $canSeeWhoViewedNames) {
             return ViewTrackingService::countEligibleDistinctViewersForTeaser($profileId);
         }
 
-        $days = $this->featureUsage->getWhoViewedMeWindowDays($userId);
-        $since = $days >= FeatureUsageService::WHO_VIEWED_UNLIMITED_DAYS_THRESHOLD
-            ? null
-            : now()->subDays($days);
+        $since = null;
         $blockedIds = ViewTrackingService::getBlockedProfileIds($profileId)->all();
 
         $query = DB::table('profile_views')

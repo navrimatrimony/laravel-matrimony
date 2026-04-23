@@ -156,7 +156,7 @@ class InterestPriorityReceivedOrderTest extends TestCase
     {
         $this->seed(SubscriptionPlansSeeder::class);
         $user = User::factory()->create();
-        $basic = Plan::query()->where('slug', 'basic')->firstOrFail();
+        $basic = Plan::query()->where('slug', 'basic_male')->firstOrFail();
 
         Subscription::query()->create([
             'user_id' => $user->id,
@@ -175,7 +175,7 @@ class InterestPriorityReceivedOrderTest extends TestCase
         $freeOnly = User::factory()->create();
         $this->assertSame(Interest::PRIORITY_SCORE_FREE, $svc->baseScoreForSender($freeOnly));
 
-        $freePlan = Plan::query()->where('slug', 'free')->firstOrFail();
+        $freePlan = Plan::query()->where('slug', 'free_male')->firstOrFail();
         Subscription::query()->create([
             'user_id' => $freeOnly->id,
             'plan_id' => $freePlan->id,

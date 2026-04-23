@@ -26,7 +26,7 @@ final class PlanQuotaPolicyKeys
             PlanFeatureKeys::INTEREST_SEND_LIMIT,
             PlanFeatureKeys::INTEREST_VIEW_LIMIT,
             SubscriptionService::FEATURE_DAILY_PROFILE_VIEW_LIMIT,
-            PlanFeatureKeys::WHO_VIEWED_ME_DAYS,
+            PlanFeatureKeys::WHO_VIEWED_ME_PREVIEW_LIMIT,
             PlanFeatureKeys::PHOTO_FULL_ACCESS,
             PlanFeatureKeys::PROFILE_BOOST_PER_WEEK,
             PlanFeatureKeys::PRIORITY_LISTING,
@@ -73,7 +73,23 @@ final class PlanQuotaPolicyKeys
         $keys = self::ordered();
         $keys[] = PlanFeatureKeys::INTEREST_VIEW_RESET_PERIOD;
         $keys[] = FeatureUsageService::FEATURE_WHO_VIEWED_ME_ACCESS;
+        $keys[] = PlanFeatureKeys::CHAT_INITIATE_NEW_CHATS_ONLY;
 
         return array_values(array_unique($keys));
+    }
+
+    /**
+     * Keys that must never be resolved via {@see \App\Models\Plan::getFeatureValue} / {@see \App\Models\Plan::featureValue}.
+     *
+     * @return list<string>
+     */
+    public static function forbiddenPlanFeatureRowKeys(): array
+    {
+        return self::planFeatureKeysWrittenByPolicies();
+    }
+
+    public static function isForbiddenPlanFeatureRowKey(string $normalizedKey): bool
+    {
+        return in_array($normalizedKey, self::forbiddenPlanFeatureRowKeys(), true);
     }
 }

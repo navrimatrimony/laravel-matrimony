@@ -3,9 +3,7 @@
 namespace App\Providers;
 
 use App\Models\MatrimonyProfile;
-use App\Models\Subscription;
 use App\Observers\MatrimonyProfileObserver;
-use App\Observers\SubscriptionObserver;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -30,7 +28,6 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
-        Subscription::observe(SubscriptionObserver::class);
         MatrimonyProfile::observe(MatrimonyProfileObserver::class);
         // Guard against misconfiguration: Sarvam structured parser must use Sarvam M only.
 

@@ -21,6 +21,36 @@ export function planQuotaPolicyCard(initial) {
         refreshLabels: initial.refreshLabels && typeof initial.refreshLabels === 'object' ? initial.refreshLabels : {},
         sum: initial.sum && typeof initial.sum === 'object' ? initial.sum : {},
 
+        /** Strip leading zeros / junk; empty if NaN. Preserves 0 as "0". */
+        coerceNonNegIntField(prop) {
+            const raw = this[prop];
+            const s = String(raw ?? '').trim();
+            if (s === '') {
+                return;
+            }
+            const n = parseInt(s, 10);
+            if (Number.isNaN(n)) {
+                this[prop] = '';
+                return;
+            }
+            this[prop] = String(Math.max(0, n));
+        },
+
+        /** Pack counts/days: integer >= 1 or empty (backend treats empty as unset). */
+        coercePackIntField(prop) {
+            const raw = this[prop];
+            const s = String(raw ?? '').trim();
+            if (s === '') {
+                return;
+            }
+            const n = parseInt(s, 10);
+            if (Number.isNaN(n) || n < 1) {
+                this[prop] = '';
+                return;
+            }
+            this[prop] = String(n);
+        },
+
         phase1SummaryLine() {
             const s = this.sum;
             const sep = s.sep ?? ' · ';

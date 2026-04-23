@@ -2,6 +2,8 @@
     $periodLabel = match ($interestViewPeriod ?? 'monthly') {
         'weekly' => __('interests.period_weekly'),
         'quarterly' => __('interests.period_quarterly'),
+        'daily' => __('interests.period_daily'),
+        'lifetime' => __('interests.period_lifetime'),
         default => __('interests.period_monthly'),
     };
     $limitVal = $interestViewLimit ?? -1;

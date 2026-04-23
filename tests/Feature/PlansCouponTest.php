@@ -4,7 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\Coupon;
 use App\Models\Plan;
-use App\Models\PlanPrice;
+use App\Models\PlanTerm;
 use Database\Seeders\SubscriptionPlansSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -39,11 +39,11 @@ class PlansCouponTest extends TestCase
             ->assertJsonPath('value', 10);
     }
 
-    public function test_validate_coupon_with_plan_price_computes_final(): void
+    public function test_validate_coupon_with_plan_term_computes_final(): void
     {
         $this->seed(SubscriptionPlansSeeder::class);
-        $gold = Plan::query()->where('slug', 'gold')->firstOrFail();
-        $price = PlanPrice::query()
+        $gold = Plan::query()->where('slug', 'gold_male')->firstOrFail();
+        $term = PlanTerm::query()
             ->where('plan_id', $gold->id)
             ->where('is_visible', true)
             ->orderBy('sort_order')
@@ -66,7 +66,8 @@ class PlansCouponTest extends TestCase
 
         $this->postJson(route('plans.coupon.validate'), [
             'code' => 'FLAT100',
-            'plan_price_id' => $price->id,
+            'plan_id' => $gold->id,
+            'plan_term_id' => $term->id,
         ])
             ->assertOk()
             ->assertJsonPath('valid', true)

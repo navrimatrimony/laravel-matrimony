@@ -124,10 +124,6 @@
                     <input type="number" name="daily_profile_view_limit_bonus" min="0" value="{{ old('daily_profile_view_limit_bonus', (int) ($selectedRewardRule?->daily_profile_view_limit_bonus ?? 0)) }}" class="w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white text-sm" />
                 </div>
                 <div>
-                    <label class="block text-xs text-gray-600 dark:text-gray-400 mb-1">Who viewed days bonus</label>
-                    <input type="number" name="who_viewed_me_days_bonus" min="0" value="{{ old('who_viewed_me_days_bonus', (int) ($selectedRewardRule?->who_viewed_me_days_bonus ?? 0)) }}" class="w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white text-sm" />
-                </div>
-                <div>
                     <label class="block text-xs text-gray-600 dark:text-gray-400 mb-1">Who viewed preview bonus</label>
                     <input type="number" name="who_viewed_me_preview_limit_bonus" min="0" value="{{ old('who_viewed_me_preview_limit_bonus', (int) ($selectedRewardRule?->who_viewed_me_preview_limit_bonus ?? 0)) }}" class="w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white text-sm" />
                 </div>
@@ -153,8 +149,7 @@
                             <th class="py-2 pr-3">Contact</th>
                             <th class="py-2 pr-3">Interest</th>
                             <th class="py-2 pr-3">Profile</th>
-                            <th class="py-2 pr-3">WhoViewedDays</th>
-                            <th class="py-2 pr-3">WhoViewedPreview</th>
+                            <th class="py-2 pr-3">Who viewed preview</th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-gray-100 dark:divide-gray-700">
@@ -169,12 +164,11 @@
                                 <td class="py-2 pr-3">{{ $rule->contact_view_limit_bonus }}</td>
                                 <td class="py-2 pr-3">{{ $rule->interest_send_limit_bonus }}</td>
                                 <td class="py-2 pr-3">{{ $rule->daily_profile_view_limit_bonus }}</td>
-                                <td class="py-2 pr-3">{{ $rule->who_viewed_me_days_bonus }}</td>
                                 <td class="py-2 pr-3">{{ $rule->who_viewed_me_preview_limit_bonus }}</td>
                             </tr>
                         @empty
                             <tr>
-                                <td colspan="10" class="py-4 text-gray-500">No rules configured.</td>
+                                <td colspan="9" class="py-4 text-gray-500">No rules configured.</td>
                             </tr>
                         @endforelse
                     </tbody>
@@ -336,10 +330,6 @@
                 <div>
                     <label class="block text-xs text-gray-600 dark:text-gray-400 mb-1">Profile view bonus</label>
                     <input type="number" name="daily_profile_view_limit_bonus" min="0" value="0" class="w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white text-sm">
-                </div>
-                <div>
-                    <label class="block text-xs text-gray-600 dark:text-gray-400 mb-1">Who viewed days bonus</label>
-                    <input type="number" name="who_viewed_me_days_bonus" min="0" value="0" class="w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white text-sm">
                 </div>
                 <div>
                     <label class="block text-xs text-gray-600 dark:text-gray-400 mb-1">Who viewed preview bonus</label>

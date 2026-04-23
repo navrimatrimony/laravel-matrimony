@@ -49,6 +49,8 @@ class MatrimonyPhotoStoragePathServiceTest extends TestCase
             'updated_at' => $at,
         ]);
 
+        MatrimonyPhotoStoragePathService::nestedRelativePathForNewFile((int) $profile->id, 'alloc-probe.webp');
+
         $allocationId = (int) $profile->fresh()->photo_batch_allocation_id;
         $this->assertGreaterThan(0, $allocationId);
 

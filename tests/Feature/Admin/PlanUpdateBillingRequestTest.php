@@ -6,6 +6,7 @@ use App\Models\Plan;
 use App\Models\PlanQuotaPolicy;
 use App\Models\PlanTerm;
 use App\Models\User;
+use App\Support\PlanFeatureKeys;
 use App\Support\PlanQuotaPolicyKeys;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -35,6 +36,25 @@ class PlanUpdateBillingRequestTest extends TestCase
         return $qp;
     }
 
+    /**
+     * @param  array<string, array<string, mixed>>  $rowDataByBillingKey
+     * @return list<array<string, mixed>>
+     */
+    private function termRowsList(array $rowDataByBillingKey): array
+    {
+        $rows = [];
+        foreach ($rowDataByBillingKey as $bk => $over) {
+            $rows[] = array_merge([
+                'billing_key' => $bk,
+                'price' => '0',
+                'discount_percent' => '',
+                'is_visible' => '0',
+            ], $over);
+        }
+
+        return $rows;
+    }
+
     public function test_update_plan_without_top_level_price_field_merges_from_catalog_tab_term_row(): void
     {
         $admin = User::factory()->create(['is_admin' => true]);
@@ -62,7 +82,6 @@ class PlanUpdateBillingRequestTest extends TestCase
             'name' => 'Test Plan',
             'applies_to_gender' => 'all',
             'sort_order' => '0',
-            'duration_preset' => PlanTerm::BILLING_MONTHLY,
             'default_billing_key' => PlanTerm::BILLING_MONTHLY,
             'grace_period_days' => '3',
             'leftover_quota_carry_window_days' => '',
@@ -70,14 +89,9 @@ class PlanUpdateBillingRequestTest extends TestCase
             'list_price_rupees' => '',
             'gst_inclusive' => '1',
             'quota_policies' => $this->quotaPoliciesPayload(),
-            'term_rows' => [
-                [
-                    'billing_key' => PlanTerm::BILLING_MONTHLY,
-                    'price' => '99',
-                    'discount_percent' => '',
-                    'is_visible' => '1',
-                ],
-            ],
+            'term_rows' => $this->termRowsList([
+                PlanTerm::BILLING_MONTHLY => ['price' => '99', 'is_visible' => '1'],
+            ]),
         ];
 
         $response = $this->actingAs($admin)->from(route('admin.plans.edit', $plan))->put(route('admin.plans.update', $plan), $payload);
@@ -119,7 +133,6 @@ class PlanUpdateBillingRequestTest extends TestCase
             'name' => 'Multi Plan',
             'applies_to_gender' => 'all',
             'sort_order' => '0',
-            'duration_preset' => PlanTerm::BILLING_QUARTERLY,
             'default_billing_key' => PlanTerm::BILLING_QUARTERLY,
             'grace_period_days' => '3',
             'leftover_quota_carry_window_days' => '',
@@ -127,20 +140,10 @@ class PlanUpdateBillingRequestTest extends TestCase
             'list_price_rupees' => '',
             'gst_inclusive' => '1',
             'quota_policies' => $this->quotaPoliciesPayload(),
-            'term_rows' => [
-                [
-                    'billing_key' => PlanTerm::BILLING_MONTHLY,
-                    'price' => '100',
-                    'discount_percent' => '',
-                    'is_visible' => '1',
-                ],
-                [
-                    'billing_key' => PlanTerm::BILLING_QUARTERLY,
-                    'price' => '2',
-                    'discount_percent' => '50',
-                    'is_visible' => '1',
-                ],
-            ],
+            'term_rows' => $this->termRowsList([
+                PlanTerm::BILLING_MONTHLY => ['price' => '100', 'is_visible' => '1'],
+                PlanTerm::BILLING_QUARTERLY => ['price' => '2', 'discount_percent' => '50', 'is_visible' => '1'],
+            ]),
         ];
 
         $response = $this->actingAs($admin)->from(route('admin.plans.edit', $plan))->put(route('admin.plans.update', $plan), $payload);
@@ -156,5 +159,58 @@ class PlanUpdateBillingRequestTest extends TestCase
         $this->assertNotNull($q);
         $this->assertSame(2.0, (float) $q->price);
         $this->assertSame(50, (int) $q->discount_percent);
+    }
+
+    public function test_update_plan_normalizes_quota_limit_with_leading_zeros(): void
+    {
+        $admin = User::factory()->create(['is_admin' => true]);
+        $plan = Plan::query()->create([
+            'name' => 'Quota Lead Zero Plan',
+            'slug' => 'quota-lead-zero-plan',
+            'price' => 100.0,
+            'duration_days' => 30,
+            'grace_period_days' => 3,
+            'is_active' => true,
+        ]);
+        PlanTerm::query()->create([
+            'plan_id' => $plan->id,
+            'billing_key' => PlanTerm::BILLING_MONTHLY,
+            'duration_days' => 30,
+            'price' => 100.0,
+            'discount_percent' => null,
+            'is_visible' => true,
+            'sort_order' => 10,
+        ]);
+
+        $qp = $this->quotaPoliciesPayload();
+        $fk = PlanFeatureKeys::CHAT_SEND_LIMIT;
+        $qp[$fk]['limit_value'] = '010';
+
+        $payload = [
+            '_token' => csrf_token(),
+            '_method' => 'PUT',
+            'name' => 'Quota Lead Zero Plan',
+            'applies_to_gender' => 'all',
+            'sort_order' => '0',
+            'default_billing_key' => PlanTerm::BILLING_MONTHLY,
+            'grace_period_days' => '3',
+            'leftover_quota_carry_window_days' => '',
+            'is_active' => '1',
+            'list_price_rupees' => '',
+            'gst_inclusive' => '1',
+            'quota_policies' => $qp,
+            'term_rows' => $this->termRowsList([
+                PlanTerm::BILLING_MONTHLY => ['price' => '100', 'is_visible' => '1'],
+            ]),
+        ];
+
+        $response = $this->actingAs($admin)->from(route('admin.plans.edit', $plan))->put(route('admin.plans.update', $plan), $payload);
+
+        $response->assertSessionDoesntHaveErrors();
+        $response->assertRedirect(route('admin.plans.edit', $plan));
+
+        $policy = PlanQuotaPolicy::query()->where('plan_id', $plan->id)->where('feature_key', $fk)->first();
+        $this->assertNotNull($policy);
+        $this->assertSame(10, (int) $policy->limit_value);
     }
 }

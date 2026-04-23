@@ -10,7 +10,7 @@ use Illuminate\Database\Eloquent\Builder;
  * Spotlight ordering: paid boosts and {@see PlanFeatureKeys::PRIORITY_LISTING} surface first (transparent to users).
  *
  * Priority listing is satisfied by either (1) a non-revoked entitlement row or (2) an effectively active subscription
- * whose plan has a truthy {@see PlanFeatureKeys::PRIORITY_LISTING} in `plan_features` (admin quota policy mirror).
+ * whose plan has {@see PlanFeatureKeys::PRIORITY_LISTING} enabled on {@see \App\Models\PlanQuotaPolicy}.
  */
 class ProfileSearchRankingService
 {
@@ -25,18 +25,6 @@ class ProfileSearchRankingService
         $priorityKey = PlanFeatureKeys::PRIORITY_LISTING;
 
         $driver = $query->getConnection()->getDriverName();
-        $keyCol = match ($driver) {
-            'mysql', 'mariadb' => 'pf.`key`',
-            default => 'pf."key"',
-        };
-        $valCol = match ($driver) {
-            'mysql', 'mariadb' => 'pf.`value`',
-            default => 'pf."value"',
-        };
-
-        $pfTruthy = sprintf("(TRIM(%s) = '1' OR LOWER(TRIM(%s)) IN ('true','yes','on'))", $valCol, $valCol);
-
-        $driver = $query->getConnection()->getDriverName();
         $graceExpr = match ($driver) {
             'mysql', 'mariadb' => 'DATE_ADD(s.ends_at, INTERVAL COALESCE(p.grace_period_days, 0) DAY)',
             'sqlite' => "datetime(s.ends_at, '+' || COALESCE(p.grace_period_days, 0) || ' days')",
@@ -48,7 +36,7 @@ class ProfileSearchRankingService
         $planExistsSql = 'EXISTS (
                 SELECT 1 FROM subscriptions s
                 INNER JOIN plans p ON p.id = s.plan_id
-                INNER JOIN plan_features pf ON pf.plan_id = s.plan_id AND '.$keyCol.' = ? AND '.$pfTruthy.'
+                INNER JOIN plan_quota_policies pqp ON pqp.plan_id = s.plan_id AND pqp.feature_key = ? AND pqp.is_enabled = 1
                 WHERE s.user_id = matrimony_profiles.user_id
                 AND s.status = ?
                 AND '.$activePeriod.'

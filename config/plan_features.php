@@ -49,13 +49,9 @@ return [
         'type' => 'boolean',
         'label' => 'Who Viewed Me Access',
     ],
-    'who_viewed_me_days' => [
-        'type' => 'days',
-        'label' => 'Who Viewed Me Days',
-    ],
     'who_viewed_me_preview_limit' => [
         'type' => 'limit',
-        'label' => 'Who Viewed Me — free preview (distinct viewers / calendar month)',
+        'label' => 'Who viewed — preview (0 = hidden; >0 = free preview cap; paid ignores cap)',
     ],
     'photo_blur_limit' => [
         'type' => 'limit',

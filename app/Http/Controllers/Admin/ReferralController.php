@@ -15,11 +15,11 @@ use App\Services\EntitlementService;
 use App\Services\FeatureUsageService;
 use App\Services\SubscriptionService;
 use Carbon\Carbon;
-use InvalidArgumentException;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
+use InvalidArgumentException;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class ReferralController extends Controller
@@ -158,7 +158,6 @@ class ReferralController extends Controller
             'contact_view_limit_bonus' => ['nullable', 'integer', 'min:0'],
             'interest_send_limit_bonus' => ['nullable', 'integer', 'min:0'],
             'daily_profile_view_limit_bonus' => ['nullable', 'integer', 'min:0'],
-            'who_viewed_me_days_bonus' => ['nullable', 'integer', 'min:0'],
             'who_viewed_me_preview_limit_bonus' => ['nullable', 'integer', 'min:0'],
         ]);
 
@@ -173,7 +172,6 @@ class ReferralController extends Controller
                 'contact_view_limit_bonus' => (int) ($validated['contact_view_limit_bonus'] ?? 0),
                 'interest_send_limit_bonus' => (int) ($validated['interest_send_limit_bonus'] ?? 0),
                 'daily_profile_view_limit_bonus' => (int) ($validated['daily_profile_view_limit_bonus'] ?? 0),
-                'who_viewed_me_days_bonus' => (int) ($validated['who_viewed_me_days_bonus'] ?? 0),
                 'who_viewed_me_preview_limit_bonus' => (int) ($validated['who_viewed_me_preview_limit_bonus'] ?? 0),
             ]
         );
@@ -282,7 +280,6 @@ class ReferralController extends Controller
             'contact_view_limit_bonus' => ['nullable', 'integer', 'min:0', 'max:100000'],
             'interest_send_limit_bonus' => ['nullable', 'integer', 'min:0', 'max:100000'],
             'daily_profile_view_limit_bonus' => ['nullable', 'integer', 'min:0', 'max:100000'],
-            'who_viewed_me_days_bonus' => ['nullable', 'integer', 'min:0', 'max:100000'],
             'who_viewed_me_preview_limit_bonus' => ['nullable', 'integer', 'min:0', 'max:100000'],
             'reason' => ['required', 'string', 'min:10', 'max:500'],
         ]);
@@ -368,7 +365,7 @@ class ReferralController extends Controller
     }
 
     /**
-     * @param array<string, mixed> $validated
+     * @param  array<string, mixed>  $validated
      */
     private function exportAuditCsv(array $validated): StreamedResponse
     {
@@ -455,7 +452,6 @@ class ReferralController extends Controller
             'contact_view_limit' => (int) $request->input('contact_view_limit_bonus', 0),
             'interest_send_limit' => (int) $request->input('interest_send_limit_bonus', 0),
             'daily_profile_view_limit' => (int) $request->input('daily_profile_view_limit_bonus', 0),
-            'who_viewed_me_days' => (int) $request->input('who_viewed_me_days_bonus', 0),
             'who_viewed_me_preview_limit' => (int) $request->input('who_viewed_me_preview_limit_bonus', 0),
         ];
 

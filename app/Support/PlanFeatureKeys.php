@@ -40,12 +40,9 @@ final class PlanFeatureKeys
     /** Show a direct WhatsApp link on profiles when contact number is available. */
     public const PROFILE_WHATSAPP_DIRECT = 'profile_whatsapp_direct';
 
-    public const WHO_VIEWED_ME_DAYS = 'who_viewed_me_days';
-
     /**
-     * When {@see self::WHO_VIEWED_ME_DAYS} is 0, free-tier users may still see this many distinct viewers
-     * in the current calendar month; additional viewers are shown blurred with upgrade CTA.
-     * 0 = no preview (legacy full-lock teaser only).
+     * Distinct viewers per calendar month shown in clear text on the free preview tier.
+     * 0 = hidden (no named preview rows). Paid catalog plans ignore this cap and see all viewers.
      */
     public const WHO_VIEWED_ME_PREVIEW_LIMIT = 'who_viewed_me_preview_limit';
 
@@ -78,7 +75,6 @@ final class PlanFeatureKeys
             self::CHAT_CAN_READ,
             self::ADVANCED_PROFILE_SEARCH,
             self::PROFILE_WHATSAPP_DIRECT,
-            self::WHO_VIEWED_ME_DAYS,
             self::WHO_VIEWED_ME_PREVIEW_LIMIT,
             self::PHOTO_BLUR_LIMIT,
             self::PHOTO_FULL_ACCESS,

@@ -28,7 +28,7 @@
     ];
 
     $partitionPricingFeatures = function ($plan) use ($pricingHighlightFeatureOrder, $pricingCatalogKeysHidden) {
-        $rows = $plan->features
+        $rows = $plan->catalogFeatureRowsForPricing()
             ->filter(fn ($f) => PlanFeatureLabel::shouldListKey((string) $f->key))
             ->reject(fn ($f) => in_array((string) $f->key, $pricingCatalogKeysHidden, true))
             ->keyBy(fn ($f) => (string) $f->key);
@@ -41,20 +41,6 @@
         }
 
         return [$primary, $rows->sortKeys()->values()];
-    };
-
-    $discountPercentForPrice = function (\App\Models\PlanPrice $pp): int {
-        $d = (int) ($pp->discount_percent ?? 0);
-        if ($d > 0) {
-            return min(100, $d);
-        }
-        $strike = $pp->strike_list_price;
-        $final = (float) $pp->final_price;
-        if ($strike !== null && (float) $strike > $final + 0.004) {
-            return (int) round(100 * (1 - $final / (float) $strike));
-        }
-
-        return 0;
     };
 
     $discountPercentForTerm = function (\App\Models\PlanTerm $t): int {
@@ -105,7 +91,7 @@
             <div class="mt-5 inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white/90 px-4 py-2 text-sm font-medium text-slate-800 shadow-sm dark:border-slate-700 dark:bg-slate-800/90 dark:text-slate-100">
                 <span class="h-2 w-2 shrink-0 animate-pulse rounded-full bg-emerald-500"></span>
                 <span>{{ __('subscriptions.pricing_current_plan') }}:</span>
-                <span class="font-bold">{{ $eff->name }}</span>
+                <span class="font-bold">{{ $currentPlanDisplayName ?? $eff->name }}</span>
             </div>
         </header>
 
@@ -219,20 +205,15 @@
                         $slug = strtolower((string) ($plan->slug ?? ''));
                         $isGold = $slug === 'gold';
                         $isCurrent = $plan->id && $eff->id && (int) $plan->id === (int) $eff->id;
-                        $visiblePlanPrices = $plan->visiblePlanPrices->sortBy('sort_order')->values();
                         $visibleTerms = $plan->terms->where('is_visible', true)->sortBy('sort_order')->values();
-                        $useEnginePrices = $visiblePlanPrices->isNotEmpty();
-                        $useTerms = ! $useEnginePrices && $visibleTerms->isNotEmpty();
+                        $useTerms = $visibleTerms->isNotEmpty();
                         $defaultKey = (string) ($plan->default_billing_key ?? '');
-                        $defaultPriceRow = $defaultKey !== ''
-                            ? $visiblePlanPrices->firstWhere('duration_type', $defaultKey)
-                            : null;
                         $defaultTermRow = $defaultKey !== ''
                             ? $visibleTerms->firstWhere('billing_key', $defaultKey)
                             : null;
-                        $defaultBillingId = $useEnginePrices
-                            ? (int) (($defaultPriceRow ?? $visiblePlanPrices->first())?->id ?? 0)
-                            : ($useTerms ? (int) (($defaultTermRow ?? $visibleTerms->first())?->id ?? 0) : 0);
+                        $defaultBillingId = $useTerms
+                            ? (int) (($defaultTermRow ?? $visibleTerms->first())?->id ?? 0)
+                            : 0;
                         [$primaryFeatureRows, $secondaryFeatureRows] = $partitionPricingFeatures($plan);
                     @endphp
                     <article
@@ -241,7 +222,7 @@
                                 ? 'z-10 border-amber-400/90 shadow-xl shadow-amber-500/10 ring-2 ring-amber-400/50 dark:border-amber-500/60 dark:ring-amber-500/40 lg:scale-[1.03] lg:py-1'
                                 : 'border-slate-200 dark:border-slate-700' }}
                             {{ $isCurrent ? 'ring-2 ring-indigo-500 dark:ring-indigo-400' : '' }}"
-                        @if ($useEnginePrices || $useTerms)
+                        @if ($useTerms)
                             x-data="{ selectedBillingId: {{ $defaultBillingId }} }"
                         @endif
                     >
@@ -265,56 +246,7 @@
                                 {{ $displayPlanName }}
                             </h2>
 
-                            @if ($useEnginePrices)
-                                <div class="mt-4 flex flex-wrap gap-1.5" role="tablist" aria-label="{{ __('subscriptions.billing_period_label') }}">
-                                    @foreach ($visiblePlanPrices as $pp)
-                                        <button
-                                            type="button"
-                                            role="tab"
-                                            class="rounded-lg border px-2.5 py-1 text-[11px] font-semibold transition focus:outline-none focus:ring-2 focus:ring-indigo-500 sm:text-xs"
-                                            :class="selectedBillingId === {{ (int) $pp->id }}
-                                                ? 'border-indigo-600 bg-indigo-600 text-white'
-                                                : 'border-slate-200 bg-slate-50 text-slate-700 hover:border-indigo-300 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-200'"
-                                            :aria-selected="selectedBillingId === {{ (int) $pp->id }} ? 'true' : 'false'"
-                                            @click="selectedBillingId = {{ (int) $pp->id }}"
-                                        >
-                                            {{ $durationTypeLabel($pp->duration_type) }}
-                                        </button>
-                                    @endforeach
-                                </div>
-
-                                @foreach ($visiblePlanPrices as $pp)
-                                    @php
-                                        $ppFinal = (float) $pp->final_price;
-                                        $ppStrike = $pp->strike_list_price;
-                                        $ppDisc = $discountPercentForPrice($pp);
-                                    @endphp
-                                    <div x-show="selectedBillingId === {{ (int) $pp->id }}" x-cloak class="mt-4 space-y-2">
-                                        <p class="text-sm font-medium text-slate-500 dark:text-slate-400">
-                                            <x-plan.duration-label :days="$pp->duration_days" />
-                                            <span class="text-slate-400 dark:text-slate-500"> · </span>
-                                            <span>{{ __('subscriptions.pricing_per_cycle', ['period' => $durationTypeLabel($pp->duration_type)]) }}</span>
-                                        </p>
-                                        @if ($ppDisc > 0)
-                                            <span class="inline-flex w-fit rounded-md bg-rose-100 px-2 py-0.5 text-xs font-bold text-rose-800 dark:bg-rose-950/70 dark:text-rose-200">
-                                                {{ __('subscriptions.discount_badge', ['percent' => $ppDisc]) }}
-                                            </span>
-                                        @endif
-                                        <div class="flex flex-wrap items-end gap-x-3 gap-y-1">
-                                            @if ($ppStrike !== null && (float) $ppStrike > $ppFinal + 0.004)
-                                                <span class="text-lg text-slate-400 line-through tabular-nums dark:text-slate-500">{{ number_format((float) $ppStrike) }}</span>
-                                            @endif
-                                            @if ($ppFinal <= 0)
-                                                <span class="text-3xl font-bold text-emerald-600 tabular-nums dark:text-emerald-400">{{ __('subscriptions.price_free_label') }}</span>
-                                            @else
-                                                <span class="text-3xl font-extrabold text-slate-900 tabular-nums dark:text-white">
-                                                    ₹{{ number_format($ppFinal) }}
-                                                </span>
-                                            @endif
-                                        </div>
-                                    </div>
-                                @endforeach
-                            @elseif ($useTerms)
+                            @if ($useTerms)
                                 <div class="mt-4 flex flex-wrap gap-1.5" role="tablist" aria-label="{{ __('subscriptions.billing_period_label') }}">
                                     @foreach ($visibleTerms as $t)
                                         <button
@@ -382,22 +314,7 @@
                                 </div>
                             @endif
 
-                            @if ($useEnginePrices)
-                                @php
-                                    $refDaysCatalog = max(1, (int) $visiblePlanPrices->min('duration_days'));
-                                @endphp
-                                @foreach ($visiblePlanPrices as $ppCatalog)
-                                    @include('plans.partials.pricing-plan-features', [
-                                        'planId' => $plan->id,
-                                        'primaryFeatureRows' => $primaryFeatureRows,
-                                        'secondaryFeatureRows' => $secondaryFeatureRows,
-                                        'durationMultiplier' => ((float) $ppCatalog->duration_days) / (float) $refDaysCatalog,
-                                        'billingDurationType' => (string) $ppCatalog->duration_type,
-                                        'selectedBillingId' => (int) $ppCatalog->id,
-                                        'wrapInBillingToggle' => true,
-                                    ])
-                                @endforeach
-                            @elseif ($useTerms)
+                            @if ($useTerms)
                                 @php
                                     $refDaysCatalog = max(1, (int) $visibleTerms->min('duration_days'));
                                 @endphp
@@ -437,9 +354,7 @@
                                     <form method="POST" action="{{ route('plans.subscribe') }}">
                                         @csrf
                                         <input type="hidden" name="plan" value="{{ $plan->slug }}" />
-                                        @if ($useEnginePrices)
-                                            <input type="hidden" name="plan_price_id" x-bind:value="selectedBillingId" />
-                                        @elseif ($useTerms)
+                                        @if ($useTerms)
                                             <input type="hidden" name="plan_term_id" x-bind:value="selectedBillingId" />
                                         @endif
                                         <input type="hidden" name="coupon_code" x-bind:value="$root.couponCode" />

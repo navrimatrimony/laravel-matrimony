@@ -5,7 +5,7 @@ namespace Tests\Feature;
 use App\Models\MatchBoostSetting;
 use App\Models\MatrimonyProfile;
 use App\Models\Plan;
-use App\Models\PlanPrice;
+use App\Models\PlanTerm;
 use App\Models\User;
 use App\Services\MatchBoostService;
 use App\Services\SubscriptionService;
@@ -41,13 +41,13 @@ class MatchBoostServiceTest extends TestCase
         MatrimonyProfile::factory()->for($userA)->create();
         MatrimonyProfile::factory()->for($userB)->create();
 
-        $gold = Plan::query()->where('slug', 'gold')->firstOrFail();
-        $price = PlanPrice::query()
+        $gold = Plan::query()->where('slug', 'gold_male')->firstOrFail();
+        $term = PlanTerm::query()
             ->where('plan_id', $gold->id)
             ->where('is_visible', true)
             ->orderBy('sort_order')
             ->firstOrFail();
-        app(SubscriptionService::class)->subscribe($userB, $gold, null, $price->id);
+        app(SubscriptionService::class)->subscribe($userB, $gold, (int) $term->id, null);
 
         $svc = app(MatchBoostService::class);
         // Rule tier: premium_weight + gold_extra = 102, capped by max_boost_limit 5 → +5; 95+5=100
