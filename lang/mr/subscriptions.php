@@ -53,6 +53,7 @@ return [
     'pricing_page_subtitle' => 'पूर्ण फोटो, प्राधान्य दृश्यमिती आणि अमर्याद संभाषण अनलॉक करा.',
     'pricing_urgency_limited' => 'मर्यादित कालावधीची ऑफर',
     'pricing_most_popular' => 'सर्वाधिक लोकप्रिय',
+    'pricing_marketing_badge_hint' => 'किंमत पृष्ठावर विशेष: :label',
     'pricing_cta_upgrade' => 'आता अपग्रेड करा',
     'pricing_cta_sign_in' => 'अपग्रेडसाठी साइन इन करा',
     'pricing_current_plan' => 'तुमचा सध्याचा प्लॅन',

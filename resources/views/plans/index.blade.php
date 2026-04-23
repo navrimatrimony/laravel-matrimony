@@ -57,6 +57,35 @@
         return 0;
     };
 
+    /** Admin {@see \App\Models\Plan::$marketing_badge} keys; labels reuse admin option translations (SSOT with admin form). */
+    $pricingMarketingBadgeKeys = ['best_seller', 'popular', 'new', 'limited_offer', 'recommended'];
+    $pricingMarketingBadgeLabel = static function (\App\Models\Plan $plan) use ($pricingMarketingBadgeKeys): ?string {
+        if (! (bool) $plan->highlight) {
+            return null;
+        }
+        $k = strtolower(trim((string) ($plan->marketing_badge ?? '')));
+        if ($k === '' || ! in_array($k, $pricingMarketingBadgeKeys, true)) {
+            return null;
+        }
+
+        return __('subscriptions.admin_plan_marketing_opt_'.$k);
+    };
+    $pricingMarketingBadgeRibbonClass = static function (\App\Models\Plan $plan) use ($pricingMarketingBadgeKeys): string {
+        $k = strtolower(trim((string) ($plan->marketing_badge ?? '')));
+        if (! in_array($k, $pricingMarketingBadgeKeys, true)) {
+            return 'from-slate-600 to-slate-800';
+        }
+
+        return match ($k) {
+            'best_seller' => 'from-amber-500 to-orange-600',
+            'popular' => 'from-violet-500 to-purple-600',
+            'new' => 'from-emerald-500 to-teal-600',
+            'limited_offer' => 'from-rose-500 to-orange-600',
+            'recommended' => 'from-indigo-600 to-violet-600',
+            default => 'from-slate-600 to-slate-800',
+        };
+    };
+
     $pricingPlans = $pricingPlans ?? collect();
 @endphp
 
@@ -215,6 +244,7 @@
                             ? (int) (($defaultTermRow ?? $visibleTerms->first())?->id ?? 0)
                             : 0;
                         [$primaryFeatureRows, $secondaryFeatureRows] = $partitionPricingFeatures($plan);
+                        $marketingRibbonLabel = $pricingMarketingBadgeLabel($plan);
                     @endphp
                     <article
                         class="relative flex min-w-0 flex-col rounded-2xl border bg-white shadow-lg transition-shadow dark:bg-slate-800/95
@@ -227,9 +257,14 @@
                         @endif
                     >
                         @if ($isGold)
-                            <div class="absolute -top-3 left-1/2 z-20 -translate-x-1/2 whitespace-nowrap rounded-full bg-gradient-to-r from-amber-500 to-orange-600 px-4 py-1 text-[11px] font-extrabold uppercase tracking-wider text-white shadow-md sm:text-xs">
+                            <div class="pointer-events-none absolute -top-3 left-1/2 z-20 max-w-[min(100%-1.5rem,18rem)] -translate-x-1/2 truncate rounded-full bg-gradient-to-r from-amber-500 to-orange-600 px-3 py-1 text-center text-[10px] font-extrabold uppercase tracking-wider text-white shadow-md sm:max-w-[min(100%-2rem,22rem)] sm:px-4 sm:text-xs" title="{{ __('subscriptions.pricing_most_popular') }}">
                                 {{ __('subscriptions.pricing_most_popular') }}
                             </div>
+                        @elseif ($marketingRibbonLabel !== null)
+                            <div
+                                class="pointer-events-none absolute -top-3 left-1/2 z-20 max-w-[min(100%-1.5rem,18rem)] -translate-x-1/2 truncate rounded-full bg-gradient-to-r {{ $pricingMarketingBadgeRibbonClass($plan) }} px-3 py-1 text-center text-[10px] font-extrabold uppercase tracking-wider text-white shadow-md sm:max-w-[min(100%-2rem,22rem)] sm:px-4 sm:text-xs"
+                                title="{{ __('subscriptions.pricing_marketing_badge_hint', ['label' => $marketingRibbonLabel]) }}"
+                            >{{ $marketingRibbonLabel }}</div>
                         @endif
 
                         @if ($isCurrent)

@@ -156,6 +156,7 @@ return [
     'pricing_page_subtitle' => 'Unlock full photos, priority visibility, and unlimited conversations. Join thousands who found their match.',
     'pricing_urgency_limited' => 'Limited time offer',
     'pricing_most_popular' => 'Most Popular',
+    'pricing_marketing_badge_hint' => 'Highlighted on pricing: :label',
     'pricing_cta_upgrade' => 'Upgrade Now',
     'pricing_cta_sign_in' => 'Sign in to upgrade',
     'pricing_current_plan' => 'Your current plan',

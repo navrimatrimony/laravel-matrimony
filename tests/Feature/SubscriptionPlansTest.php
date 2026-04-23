@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\Payment;
 use App\Models\Plan;
+use App\Models\PlanQuotaPolicy;
 use App\Models\PlanTerm;
 use App\Models\Subscription;
 use App\Models\User;
@@ -33,6 +34,58 @@ class SubscriptionPlansTest extends TestCase
         $this->get(route('plans.index'))
             ->assertOk()
             ->assertSee(__('subscriptions.pricing_page_title'));
+    }
+
+    public function test_pricing_catalog_shows_marketing_badge_ribbon_when_highlight_set(): void
+    {
+        $plan = Plan::query()->create([
+            'name' => 'Ribbon Test Plan',
+            'slug' => 'ribbon-test-plan',
+            'price' => 99,
+            'discount_percent' => 0,
+            'duration_days' => 30,
+            'is_active' => true,
+            'sort_order' => 0,
+            'highlight' => true,
+            'marketing_badge' => 'best_seller',
+            'applies_to_gender' => 'all',
+            'gst_inclusive' => true,
+            'grace_period_days' => 0,
+            'leftover_quota_carry_window_days' => null,
+        ]);
+
+        PlanTerm::query()->create([
+            'plan_id' => $plan->id,
+            'billing_key' => PlanTerm::BILLING_MONTHLY,
+            'duration_days' => 30,
+            'price' => 99,
+            'discount_percent' => 0,
+            'is_visible' => true,
+            'sort_order' => PlanTerm::defaultSortOrder(PlanTerm::BILLING_MONTHLY),
+        ]);
+
+        foreach (\App\Support\PlanQuotaPolicyKeys::ordered() as $fk) {
+            PlanQuotaPolicy::query()->create([
+                'plan_id' => $plan->id,
+                'feature_key' => $fk,
+                'is_enabled' => false,
+                'refresh_type' => \App\Models\PlanQuotaPolicy::REFRESH_MONTHLY_30D_IST,
+                'limit_value' => 0,
+                'daily_sub_cap' => null,
+                'per_day_usage_limit_enabled' => false,
+                'overuse_mode' => \App\Models\PlanQuotaPolicy::OVERUSE_BLOCK,
+                'pack_price_paise' => null,
+                'pack_message_count' => null,
+                'pack_validity_days' => null,
+                'policy_meta' => null,
+            ]);
+        }
+
+        $label = __('subscriptions.admin_plan_marketing_opt_best_seller');
+
+        $this->get(route('plans.index'))
+            ->assertOk()
+            ->assertSee($label, false);
     }
 
     public function test_authenticated_user_can_view_plans(): void
