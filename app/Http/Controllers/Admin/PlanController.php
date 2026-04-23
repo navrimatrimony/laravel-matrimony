@@ -107,17 +107,14 @@ class PlanController extends Controller
         }
 
         $this->mergeTermRowsFallbackForStore($request);
+        $this->mergePaidPlanPricingFromTermRowsForRequest($request, null);
         $this->validateTermRowsRequest($request);
         $rows = $this->normalizedTermRowsFromRequest($request);
-        $primary = $rows[0] ?? null;
-        if ($primary === null) {
+        if ($rows === []) {
             throw \Illuminate\Validation\ValidationException::withMessages([
                 'term_rows' => [__('subscriptions.admin_term_rows_required')],
             ]);
         }
-        $request->merge([
-            'price' => $primary['price'],
-        ]);
 
         $data = $this->validatedPlanData($request);
 
@@ -133,6 +130,51 @@ class PlanController extends Controller
         return redirect()
             ->route('admin.plans.edit', $plan)
             ->with('success', __('subscriptions.plan_saved'));
+    }
+
+    /**
+     * Paid-plan form posts list price per {@see PlanTerm} row only; validation still expects plan-level
+     * {@code price} / {@code discount_percent}. Mirror the selected catalog tab row (same logic as
+     * {@see canonicalPaidPricingFromRequest}) before validation.
+     */
+    private function mergePaidPlanPricingFromTermRowsForRequest(Request $request, ?Plan $plan): void
+    {
+        $slug = $plan !== null
+            ? (string) $plan->slug
+            : strtolower(trim((string) $request->input('slug', '')));
+        if (Plan::isFreeCatalogSlug($slug)) {
+            return;
+        }
+
+        $rows = $this->normalizedTermRowsFromRequest($request);
+        if ($rows === []) {
+            return;
+        }
+
+        $byKey = [];
+        foreach ($rows as $row) {
+            $key = (string) ($row['billing_key'] ?? '');
+            if ($key !== '') {
+                $byKey[$key] = $row;
+            }
+        }
+
+        $selectedKey = (string) $this->resolvedRequestedBillingKey($request);
+        $selectedRow = $selectedKey !== '' ? ($byKey[$selectedKey] ?? null) : null;
+        if (! is_array($selectedRow)) {
+            $selectedRow = $rows[0];
+        }
+
+        $price = max(0, (float) ($selectedRow['price'] ?? 0));
+        $rawD = $selectedRow['discount_percent'] ?? null;
+        $disc = ($rawD === '' || $rawD === null)
+            ? null
+            : max(0, min(100, (int) round((float) $rawD)));
+
+        $request->merge([
+            'price' => $price,
+            'discount_percent' => $disc,
+        ]);
     }
 
     /**
@@ -191,6 +233,7 @@ class PlanController extends Controller
         $this->validateQuotaPoliciesRequest($request);
         if (! Plan::isFreeCatalogSlug((string) $plan->slug)) {
             $this->mergeTermRowsFallbackForUpdate($request, $plan);
+            $this->mergePaidPlanPricingFromTermRowsForRequest($request, $plan);
             $this->validateTermRowsRequest($request);
         }
         $data = $this->validatedPlanData($request, $plan->id, $plan);

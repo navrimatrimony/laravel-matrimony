@@ -32,8 +32,22 @@
         }
         $hasValidationErrors = session()->has('errors');
         // Edit form should always reflect persisted DB values; old input is only useful on create retry.
-        $allowOldInput = $hasValidationErrors && ! $isEdit;
+        $allowOldInput = $hasValidationErrors;
         $termRowsInitial = $allowOldInput ? old('term_rows', $termRowsInitial ?? []) : ($termRowsInitial ?? []);
+		
+		
+		
+		if (empty($termRowsInitial)) {
+    $termRowsInitial = [
+        [
+            'billing_key' => 'monthly',
+            'price' => '',
+            'discount_percent' => '',
+            'is_visible' => 1,
+        ]
+    ];
+}
+		
         $durationPresetInitial = $allowOldInput ? old('duration_preset', $durationPresetInitial ?? 'monthly') : ($durationPresetInitial ?? 'monthly');
         $isFreePlanEdit = $isEdit && \App\Models\Plan::isFreeCatalogSlug((string) ($plan->slug ?? ''));
         $planNameInput = $planNameInput ?? (string) ($plan->name ?? '');
@@ -86,7 +100,7 @@
         @endif
 
         {{-- Alpine on <form> can fail to attach methods in some browsers; keep billing state on an inner wrapper. --}}
-        @if (! $isFreePlanEdit)
+
             <div
                 class="space-y-6 js-admin-plan-billing-root"
                 x-data="window.adminPlanBillingForm({
@@ -102,8 +116,9 @@
                     msgAllPeriodsAdded: @js(__('subscriptions.admin_billing_all_periods_added')),
                     msgNoPresetList: @js(__('subscriptions.admin_billing_no_preset_list')),
                 })"
+				x-init="init()"
             >
-        @endif
+       
 
         @php
             $initiateOld = $allowOldInput ? old('chat_initiate_new_chats_only') : null;
@@ -240,11 +255,9 @@
                     </button>
                 </div>
 
-                {{-- Alpine <template x-for> must contain a single root element; stray whitespace/text nodes break the loop and hide all rows. Use x-for on the row div instead. --}}
+                {{-- Alpine requires x-for on <template>; one root element inside (see alpinejs.dev/directives/for). --}}
                 <div class="space-y-3">
-                    <div
-                        x-for="(row, i) in rows"
-                        :key="row.billing_key + '-' + i"
+                    <template x-for="(row, i) in rows" :key="row.billing_key + '-' + i"><div
                         class="rounded-md border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 p-3 grid grid-cols-1 sm:grid-cols-12 gap-3 items-end"
                     >
                         <div class="sm:col-span-3">
@@ -284,8 +297,10 @@
                         <div class="sm:col-span-1 flex justify-end">
                             <button type="button" @click="removeRow(i)" class="text-xs font-semibold text-red-600 hover:underline" x-show="rows.length > 1">{{ __('subscriptions.admin_remove_billing_period') }}</button>
                         </div>
-                    </div>
+                    </div></template>
                 </div>
+
+		
 
                 <div class="pt-2 border-t border-indigo-200/60 dark:border-indigo-900/60 space-y-2">
                     <input type="hidden" name="duration_preset" x-bind:value="durationPreset">
@@ -293,7 +308,7 @@
                 </div>
             </div>
         @endunless
-
+		
         <div class="rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 p-4 space-y-6">
             <div>
                 <h2 class="text-lg font-semibold text-gray-800 dark:text-gray-100">{{ __('subscriptions.plan_quota_policies_title') }}</h2>
@@ -333,16 +348,14 @@
                 {{ __('admin_commerce.plan_save_changes') }}
             </button>
             <a href="{{ route('admin.plans.index') }}" class="px-4 py-2 text-gray-600 dark:text-gray-400 text-sm">Cancel</a>
-            @if ($isEdit)
-                <a href="{{ route('admin.plans.create') }}" class="inline-flex items-center px-4 py-2 rounded-lg text-sm font-medium border border-indigo-600 text-indigo-700 hover:bg-indigo-50 dark:border-indigo-500 dark:text-indigo-300 dark:hover:bg-indigo-950/40">
-                    {{ __('subscriptions.create_plan') }}
-                </a>
-            @endif
+           @if ($isEdit)
+    <a href="{{ route('admin.plans.create') }}" class="inline-flex items-center px-4 py-2 rounded-lg text-sm font-medium border border-indigo-600 text-indigo-700 hover:bg-indigo-50 dark:border-indigo-500 dark:text-indigo-300 dark:hover:bg-indigo-950/40">
+        {{ __('subscriptions.create_plan') }}
+    </a>
+@endif
         </div>
-
-        @if (! $isFreePlanEdit)
-            </div>
-        @endif
+</div>   {{-- Alpine wrapper close --}}
+        
     </form>
 </div>
 @endsection
