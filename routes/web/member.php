@@ -1,7 +1,6 @@
 <?php
 
 use App\Http\Controllers\AbuseReportController;
-use App\Http\Controllers\PaymentDisputeController;
 use App\Http\Controllers\BlockController;
 use App\Http\Controllers\ChatController;
 use App\Http\Controllers\ContactInboxController;
@@ -14,11 +13,12 @@ use App\Http\Controllers\Internal\CurrentLocationController;
 use App\Http\Controllers\MatchController;
 use App\Http\Controllers\MatrimonyProfileController;
 use App\Http\Controllers\MatrimonyVerificationEmailController;
-use App\Http\Controllers\MemberWidgetController;
 use App\Http\Controllers\MediationInboxController;
+use App\Http\Controllers\MemberWidgetController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\OccupationController;
 use App\Http\Controllers\OnboardingController;
+use App\Http\Controllers\PaymentDisputeController;
 use App\Http\Controllers\ProfileContactActionController;
 use App\Http\Controllers\ProfileContactVerificationController;
 use App\Http\Controllers\ProfileHideController;
@@ -26,6 +26,7 @@ use App\Http\Controllers\ProfilePhotoReportController;
 use App\Http\Controllers\ProfileVerificationController;
 use App\Http\Controllers\ProfileWizardController;
 use App\Http\Controllers\ShortlistController;
+use App\Http\Controllers\SubscriptionController;
 use App\Http\Controllers\UserSettingsController;
 use App\Http\Controllers\WhoViewedController;
 use App\Models\BiodataIntake;
@@ -49,6 +50,10 @@ Route::middleware(['auth', \App\Http\Middleware\EnforceCardOnboarding::class])->
         ->name('matrimony.api.occupations.create');
 
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
+
+    Route::get('/test/payment/success/{planId}', [SubscriptionController::class, 'testPayuSuccessSimulate'])
+        ->whereNumber('planId')
+        ->name('test.payment.success');
 
     Route::post('/payments/{txnid}/dispute', [PaymentDisputeController::class, 'store'])
         ->name('payments.dispute.store');

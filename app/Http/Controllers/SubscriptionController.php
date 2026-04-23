@@ -7,6 +7,7 @@ use App\Models\Plan;
 use App\Models\User;
 use App\Services\SubscriptionService;
 use App\Support\PayuHasher;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
@@ -189,6 +190,133 @@ class SubscriptionController extends Controller
 
     public function success(Request $request, SubscriptionService $subscriptions)
     {
+        return $this->handlePayuSubscriptionSuccessRequest($request, $subscriptions, 'plans.index');
+    }
+
+    /**
+     * Non-production only: seed PayU pending cache + synthetic success POST body, then run the same path as
+     * {@see success()} (hash verify, {@see SubscriptionService::finalizePayuSubscription}).
+     */
+    public function testPayuSuccessSimulate(Request $request, SubscriptionService $subscriptions, int $planId): RedirectResponse
+    {
+        // Local / development / testing only (never expose in production).
+        if (! app()->environment(['local', 'development', 'testing'])) {
+            abort(403);
+        }
+
+        $user = $request->user();
+        if (! $user) {
+            abort(403);
+        }
+
+        $plan = Plan::query()
+            ->with(['terms' => fn ($q) => $q->where('is_visible', true)->orderBy('sort_order')])
+            ->findOrFail($planId);
+
+        if (Plan::isFreeCatalogSlug((string) $plan->slug)) {
+            return redirect()
+                ->route('dashboard')
+                ->with('error', __('subscriptions.plan_inactive'));
+        }
+
+        $merchantKey = (string) config('payu.merchant_key', '');
+        $salt = (string) config('payu.merchant_salt', '');
+        if ($merchantKey === '' || $salt === '') {
+            return redirect()
+                ->route('dashboard')
+                ->with('error', __('subscriptions.subscribe_failed'));
+        }
+
+        $visibleTerms = $plan->terms;
+        $planTermId = $visibleTerms->isNotEmpty() ? (int) $visibleTerms->first()->id : null;
+
+        try {
+            $resolved = $subscriptions->resolvePaidPlanCheckout($user, $plan, $planTermId, null, null);
+        } catch (HttpException $e) {
+            return redirect()
+                ->route('dashboard')
+                ->with('error', $e->getMessage());
+        } catch (\Throwable $e) {
+            report($e);
+
+            return redirect()
+                ->route('dashboard')
+                ->with('error', __('subscriptions.subscribe_failed'));
+        }
+
+        $finalAmount = (float) $resolved['final_amount'];
+        if ($finalAmount <= 0.0) {
+            return redirect()
+                ->route('dashboard')
+                ->with('error', __('subscriptions.subscribe_failed'));
+        }
+
+        $txnid = 'TEST_'.strtoupper(Str::random(16));
+        $productinfo = (string) $plan->slug;
+        $firstname = self::payuFirstName($user);
+        $email = strtolower(trim((string) ($user->email ?? '')));
+        if ($email === '') {
+            $email = 'member@example.com';
+        }
+
+        $udf1 = (string) $user->id;
+        $built = PayuHasher::paymentRequestHash(
+            $merchantKey,
+            $txnid,
+            $finalAmount,
+            $productinfo,
+            $firstname,
+            $email,
+            $salt,
+            $udf1,
+            '',
+            '',
+            '',
+            '',
+        );
+
+        Cache::put(
+            self::PENDING_CACHE_PREFIX.$txnid,
+            $subscriptions->buildPayuPendingPayload($user, $plan, $resolved, $built['amount']),
+            now()->addMinutes(60),
+        );
+
+        $postedAmount = $built['amount'];
+        $hash = PayuHasher::paymentResponseHash(
+            $salt,
+            'success',
+            $email,
+            $firstname,
+            $productinfo,
+            $postedAmount,
+            $txnid,
+            $merchantKey,
+        );
+
+        $simulateRequest = Request::create('/payments/payu/success', 'POST', [
+            'key' => $merchantKey,
+            'txnid' => $txnid,
+            'amount' => $postedAmount,
+            'productinfo' => $productinfo,
+            'firstname' => $firstname,
+            'email' => $email,
+            'status' => 'success',
+            'hash' => $hash,
+            'udf1' => $udf1,
+            'mihpayid' => 'TEST_SIM',
+            'mode' => 'TEST',
+        ]);
+
+        return $this->handlePayuSubscriptionSuccessRequest($simulateRequest, $subscriptions, 'dashboard');
+    }
+
+    /**
+     * Shared PayU subscription success (redirect) handling for {@see success()} and {@see testPayuSuccessSimulate()}.
+     *
+     * @param  string  $successRedirectRoute  Route name for successful subscription (and idempotent replay success).
+     */
+    private function handlePayuSubscriptionSuccessRequest(Request $request, SubscriptionService $subscriptions, string $successRedirectRoute): RedirectResponse
+    {
         $data = $request->all();
         Log::info('PayU subscription success callback', [
             'txnid' => $data['txnid'] ?? null,
@@ -265,7 +393,7 @@ class SubscriptionController extends Controller
                     }
 
                     return redirect()
-                        ->route('plans.index')
+                        ->route($successRedirectRoute)
                         ->with('success', __('subscriptions.subscribe_success', ['plan' => $planLabel]));
                 }
             }
@@ -333,7 +461,7 @@ class SubscriptionController extends Controller
         }
 
         return redirect()
-            ->route('plans.index')
+            ->route($successRedirectRoute)
             ->with('success', __('subscriptions.subscribe_success', ['plan' => $successPlanName]));
     }
 
