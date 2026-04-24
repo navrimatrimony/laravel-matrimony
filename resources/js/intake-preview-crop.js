@@ -8,6 +8,16 @@ document.addEventListener('DOMContentLoaded', () => {
         return;
     }
 
+    const toastErr = (msg) => {
+        const m = String(msg || '').trim();
+        if (!m) return;
+        if (window.toastr && typeof window.toastr.error === 'function') {
+            window.toastr.error(m);
+        } else {
+            window.alert(m);
+        }
+    };
+
     const saveUrl = img.dataset.saveUrl;
     if (!saveUrl) {
         return;
@@ -510,7 +520,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const height =
             Math.abs(p.bl.y - p.tl.y) + Math.abs(p.br.y - p.tr.y);
         if (width < 20 || height < 20) {
-            window.alert('Please adjust the 4 corners more precisely, then save.');
+            toastErr(img.dataset.msgCorners || '');
             return;
         }
 
@@ -562,16 +572,16 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                     saveBtn.disabled = false;
                     saveBtn.textContent = label;
-                    window.alert(data.message || 'Saved, but no redirect URL was returned.');
+                    toastErr(data.message || img.dataset.msgNoRedirect || '');
                 });
             })
             .catch((err) => {
                 saveBtn.disabled = false;
                 saveBtn.textContent = label;
-                window.alert(
+                toastErr(
                     err && err.message
                         ? err.message
-                        : 'Could not build or save the cropped image. Please try again.',
+                        : img.dataset.msgSaveFailed || '',
                 );
             });
     });

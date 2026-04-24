@@ -39,6 +39,11 @@
     </div>
 </div>
 
+@php
+    $adminGenericErr = \App\Support\ErrorFactory::generic()->message;
+    $adminNetworkErr = \App\Support\ErrorFactory::helpCentreNetwork()->message;
+@endphp
+
 <script>
 (function () {
     var currentStatus = 'pending';
@@ -47,6 +52,17 @@
     var fetchError = document.getElementById('fetch-error');
     var loadingEl = document.getElementById('loading');
     var paginationEl = document.getElementById('pagination');
+    var GENERIC_ERR = @json($adminGenericErr);
+    var NETWORK_ERR = @json($adminNetworkErr);
+
+    function toastErr(msg) {
+        var m = msg || GENERIC_ERR;
+        if (window.toastr && typeof window.toastr.error === 'function') {
+            window.toastr.error(m);
+        } else if (m) {
+            window.alert(m);
+        }
+    }
 
     function setActiveFilter(status) {
         document.querySelectorAll('.filter-btn').forEach(function (btn) {
@@ -140,7 +156,7 @@
             .then(function (result) {
                 loadingEl.classList.add('hidden');
                 if (!result.ok || !result.data.success) {
-                    fetchError.textContent = result.data && result.data.message ? result.data.message : 'Failed to load suggestions.';
+                    fetchError.textContent = result.data && result.data.message ? result.data.message : GENERIC_ERR;
                     fetchError.classList.remove('hidden');
                     tbody.innerHTML = '<tr><td colspan="9" class="py-8 px-4 text-center text-gray-500">—</td></tr>';
                     return;
@@ -152,7 +168,7 @@
             })
             .catch(function () {
                 loadingEl.classList.add('hidden');
-                fetchError.textContent = 'Network error. Please try again.';
+                fetchError.textContent = NETWORK_ERR;
                 fetchError.classList.remove('hidden');
                 tbody.innerHTML = '<tr><td colspan="9" class="py-8 px-4 text-center text-gray-500">—</td></tr>';
             });
@@ -182,11 +198,11 @@
                 if (data && data.success) {
                     loadData(currentStatus);
                 } else {
-                    alert(data && data.message ? data.message : 'Action failed.');
+                    toastErr(data && data.message ? data.message : GENERIC_ERR);
                 }
             })
             .catch(function () {
-                alert('Request failed. Please try again.');
+                toastErr(NETWORK_ERR);
             });
     }
 

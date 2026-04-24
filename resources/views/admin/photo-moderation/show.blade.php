@@ -154,12 +154,20 @@
     </div>
 </div>
 
+@php($pmReasonMsg = \App\Support\ErrorFactory::photoModerationReasonMinLength()->message)
+
 <script>
 (function () {
     const form = document.getElementById('photo-moderation-detail-form');
     const reasonEl = document.getElementById('moderation-reason-input');
     const actionInput = document.getElementById('moderation-action-input');
     const hint = document.getElementById('detail-reason-hint');
+    const PM_REASON_MSG = @json($pmReasonMsg);
+
+    function toastErr(m) {
+        if (window.toastr && typeof window.toastr.error === 'function') window.toastr.error(m);
+        else window.alert(m);
+    }
 
     function reasonOk() {
         return reasonEl && reasonEl.value.trim().length >= 10;
@@ -182,7 +190,7 @@
                 if (sug) reasonEl.value = sug;
             }
             if (!reasonOk()) {
-                alert('Reason required (min 10 characters).');
+                toastErr(PM_REASON_MSG);
                 reasonEl?.focus();
                 return;
             }

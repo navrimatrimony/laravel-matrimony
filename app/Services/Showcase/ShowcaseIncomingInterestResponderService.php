@@ -7,7 +7,7 @@ use App\Models\Interest;
 use App\Notifications\InterestAcceptedNotification;
 use App\Notifications\InterestRejectedNotification;
 use App\Services\AdminActivityNotificationGate;
-use App\Services\ProfileCompletenessService;
+use App\Services\RuleEngineService;
 use App\Support\SafeNotifier;
 use Illuminate\Support\Facades\DB;
 
@@ -22,6 +22,7 @@ class ShowcaseIncomingInterestResponderService
 {
     public function __construct(
         private readonly ShowcaseInterestPolicyService $policy,
+        private readonly RuleEngineService $ruleEngine,
     ) {}
 
     /**
@@ -53,7 +54,7 @@ class ShowcaseIncomingInterestResponderService
         foreach ($rows as $interest) {
             $interest->loadMissing('senderProfile', 'receiverProfile');
             $receiver = $interest->receiverProfile;
-            if (! $receiver || ! ProfileCompletenessService::meetsInterestCompletenessRequirement($receiver)) {
+            if (! $receiver || ! $this->ruleEngine->passesInterestMandatoryCore($receiver)) {
                 $skipped++;
 
                 continue;

@@ -299,6 +299,9 @@
                         class="relative z-0 block max-w-full select-none"
                         draggable="false"
                         data-save-url="{{ route('intake.manual-crop-save', $intake) }}"
+                        data-msg-corners="{{ e(\App\Support\ErrorFactory::intakeManualCropCornersTooSmall()->message) }}"
+                        data-msg-no-redirect="{{ e(\App\Support\ErrorFactory::intakeManualCropNoRedirect()->message) }}"
+                        data-msg-save-failed="{{ e(\App\Support\ErrorFactory::intakeManualCropWarpSaveFailed()->message) }}"
                     >
 
                     {{-- 4-corner selection overlay (free crop/perspective) --}}

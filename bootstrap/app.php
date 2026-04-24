@@ -1,8 +1,10 @@
 <?php
 
+use App\Exceptions\RuleResultException;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
+use Illuminate\Http\Request;
 
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
@@ -25,5 +27,11 @@ return Application::configure(basePath: dirname(__DIR__))
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
-        //
+        $exceptions->renderable(function (RuleResultException $e, Request $request) {
+            if ($request->expectsJson()) {
+                return response()->json(array_merge(['success' => false], $e->result->toArray()), 422);
+            }
+
+            return back()->with('error', $e->result->message)->with('rule_action', $e->result->action ?? []);
+        });
     })->create();

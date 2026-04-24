@@ -13,6 +13,9 @@ use Illuminate\Support\Facades\Log;
  * Built as: implode('|', [key … udf5]) . '||||||' . salt
  * → 10 pipes inside implode + 6 pipes before salt = 16 pipe characters total.
  *
+ * Response (reverse) preimage for regular integration:
+ * SALT|status||||||udf5|udf4|udf3|udf2|udf1|email|firstname|productinfo|amount|txnid|key
+ *
  * @see https://docs.payu.in/docs/integrate-payu-india
  */
 final class PayuHasher
@@ -116,7 +119,42 @@ final class PayuHasher
     }
 
     /**
-     * Verify hash returned on success callback (status = success).
+     * PayU India reverse hash preimage (regular integration, no additional charges).
+     *
+     * Official order:
+     * {@code SALT|status||||||udf5|udf4|udf3|udf2|udf1|email|firstname|productinfo|amount|txnid|key}
+     *
+     * @see https://docs.payu.in/docs/hashing-request-and-response
+     */
+    public static function paymentResponseHashString(
+        string $salt,
+        string $status,
+        string $email,
+        string $firstname,
+        string $productinfo,
+        string $amount,
+        string $txnid,
+        string $key,
+        string $udf1 = '',
+        string $udf2 = '',
+        string $udf3 = '',
+        string $udf4 = '',
+        string $udf5 = '',
+    ): string {
+        $udf1 = (string) $udf1;
+        $udf2 = (string) $udf2;
+        $udf3 = (string) $udf3;
+        $udf4 = (string) $udf4;
+        $udf5 = (string) $udf5;
+
+        return $salt.'|'.$status.'||||||'.$udf5.'|'.$udf4.'|'.$udf3.'|'.$udf2.'|'.$udf1.'|'
+            .$email.'|'.$firstname.'|'.$productinfo.'|'.$amount.'|'.$txnid.'|'.$key;
+    }
+
+    /**
+     * SHA-512 reverse hash for PayU payment response (lowercase hex).
+     *
+     * @param  string  $udf1  …  $udf5  Must match gateway POST (same order as request: udf1…udf5; reverse hash lists udf5→udf1).
      */
     public static function paymentResponseHash(
         string $salt,
@@ -127,9 +165,27 @@ final class PayuHasher
         string $amount,
         string $txnid,
         string $key,
+        string $udf1 = '',
+        string $udf2 = '',
+        string $udf3 = '',
+        string $udf4 = '',
+        string $udf5 = '',
     ): string {
-        // Use callback values verbatim; PayU builds reverse hash from posted fields.
-        $seq = $salt.'|'.$status.'|||||||||||'.$email.'|'.$firstname.'|'.$productinfo.'|'.$amount.'|'.$txnid.'|'.$key;
+        $seq = self::paymentResponseHashString(
+            $salt,
+            $status,
+            $email,
+            $firstname,
+            $productinfo,
+            $amount,
+            $txnid,
+            $key,
+            $udf1,
+            $udf2,
+            $udf3,
+            $udf4,
+            $udf5,
+        );
 
         return strtolower(hash('sha512', $seq));
     }

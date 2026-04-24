@@ -376,6 +376,11 @@
     </div>
 </div>
 
+@php
+    $pmSelectMsg = \App\Support\ErrorFactory::photoModerationSelectPhotos()->message;
+    $pmReasonMsg = \App\Support\ErrorFactory::photoModerationReasonMinLength()->message;
+@endphp
+
 <script>
 (function () {
     const form = document.getElementById('bulk-moderation-form');
@@ -385,6 +390,13 @@
     const actionSel = document.getElementById('bulk-action-select');
     const selectAll = document.getElementById('select-all-photos');
     const countEl = document.getElementById('bulk-selected-count');
+    const PM_SELECT_MSG = @json($pmSelectMsg);
+    const PM_REASON_MSG = @json($pmReasonMsg);
+
+    function toastErr(m) {
+        if (window.toastr && typeof window.toastr.error === 'function') window.toastr.error(m);
+        else window.alert(m);
+    }
 
     function reasonOk() {
         return (reasonEl && reasonEl.value.trim().length >= 10);
@@ -406,7 +418,7 @@
                 hint.textContent = '';
                 hint.classList.add('hidden');
             } else if (!reasonOk()) {
-                hint.textContent = 'Reason required (min 10 characters).';
+                hint.textContent = PM_REASON_MSG;
                 hint.classList.remove('hidden');
             } else {
                 hint.textContent = '';
@@ -437,12 +449,12 @@
     form?.addEventListener('submit', function (e) {
         if (!hasSelection()) {
             e.preventDefault();
-            alert('Select at least one photo.');
+            toastErr(PM_SELECT_MSG);
             return;
         }
         if (!reasonOk()) {
             e.preventDefault();
-            alert('Reason required (min 10 characters).');
+            toastErr(PM_REASON_MSG);
             return;
         }
         const act = actionSel && actionSel.value;

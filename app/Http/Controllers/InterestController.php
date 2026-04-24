@@ -11,9 +11,11 @@ use App\Notifications\InterestSentNotification;
 use App\Services\AdminActivityNotificationGate;
 use App\Services\InterestPriorityService;
 use App\Services\InterestSendLimitService;
-use App\Services\ProfileCompletenessService;
 use App\Services\ProfileLifecycleService;
+use App\Services\RuleEngineService;
 use App\Services\Showcase\ShowcaseInterestPolicyService;
+use App\Support\ErrorFactory;
+use App\Support\RuleResultResponder;
 use App\Support\SafeNotifier;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -41,6 +43,7 @@ class InterestController extends Controller
         private readonly InterestSendLimitService $interestSendLimit,
         private readonly InterestPriorityService $interestPriority,
         private readonly ShowcaseInterestPolicyService $showcaseInterestPolicy,
+        private readonly RuleEngineService $ruleEngine,
     ) {}
 
     /*
@@ -107,12 +110,13 @@ class InterestController extends Controller
             return back()->with('error', __('interest.sender_cannot_send_current_state'));
         }
 
-        $minPct = ProfileCompletenessService::interestMinimumPercent();
-        if (! ProfileCompletenessService::meetsInterestCompletenessRequirement($senderProfile)) {
-            return back()->with('error', __('interest.sender_min_core_completeness', ['min' => $minPct]));
+        $senderRule = $this->ruleEngine->checkInterestMandatoryCoreForSender($senderProfile);
+        if (! $senderRule->allowed) {
+            return RuleResultResponder::toResponse($senderRule);
         }
-        if (! ProfileCompletenessService::meetsInterestCompletenessRequirement($receiverProfile)) {
-            return back()->with('error', __('interest.target_min_core_completeness'));
+        $targetRule = $this->ruleEngine->checkInterestMandatoryCoreForSendTarget($receiverProfile);
+        if (! $targetRule->allowed) {
+            return RuleResultResponder::toResponse($targetRule);
         }
 
         // Day 7: Archived/Suspended/Search-Hidden → interest blocked
@@ -122,7 +126,13 @@ class InterestController extends Controller
 
         $sendEval = $this->showcaseInterestPolicy->evaluateSendInterest($senderProfile, $receiverProfile);
         if (! $sendEval['ok']) {
-            return back()->with('error', $sendEval['message'] ?? __('interest.cannot_send_to_profile'));
+            $policyMsg = trim((string) ($sendEval['message'] ?? ''));
+
+            return RuleResultResponder::toResponse(
+                $policyMsg !== ''
+                    ? ErrorFactory::deny('INTEREST_SHOWCASE_POLICY', $policyMsg, null)
+                    : ErrorFactory::interestSendBlocked()
+            );
         }
 
         // Daily interest send quota via entitlements + user_feature_usages (new sends only)
@@ -133,7 +143,10 @@ class InterestController extends Controller
             try {
                 $this->interestSendLimit->assertCanSend($authUser);
             } catch (HttpException $e) {
-                return back()->with('error', $e->getMessage());
+                return RuleResultResponder::toResponse(
+                    ErrorFactory::interestSendLimitHttp($e->getStatusCode(), $e->getMessage()),
+                    $e->getStatusCode()
+                );
             }
         }
 
@@ -302,13 +315,16 @@ class InterestController extends Controller
         }
 
         if ($msg = $this->showcaseInterestPolicy->validateAcceptInterest($user->matrimonyProfile, $interest)) {
-            return back()->with('error', $msg);
+            return RuleResultResponder::toResponse(ErrorFactory::deny('INTEREST_SHOWCASE_POLICY', $msg, null));
         }
 
         $receiverProfile = $interest->receiverProfile;
-        $minPct = ProfileCompletenessService::interestMinimumPercent();
-        if (! $receiverProfile || ! ProfileCompletenessService::meetsInterestCompletenessRequirement($receiverProfile)) {
-            return back()->with('error', __('interest.receiver_min_core_completeness_accept', ['min' => $minPct]));
+        if (! $receiverProfile) {
+            return back()->with('error', __('interest.cannot_send_to_profile'));
+        }
+        $acceptRule = $this->ruleEngine->checkInterestMandatoryCoreForAccept($receiverProfile);
+        if (! $acceptRule->allowed) {
+            return RuleResultResponder::toResponse($acceptRule);
         }
 
         // ✅ Accept
@@ -374,7 +390,7 @@ class InterestController extends Controller
         }
 
         if ($msg = $this->showcaseInterestPolicy->validateRejectInterest($user->matrimonyProfile, $interest)) {
-            return back()->with('error', $msg);
+            return RuleResultResponder::toResponse(ErrorFactory::deny('INTEREST_SHOWCASE_POLICY', $msg, null));
         }
 
         // ✅ Reject
@@ -418,7 +434,7 @@ class InterestController extends Controller
         }
 
         if ($msg = $this->showcaseInterestPolicy->validateWithdrawInterest($user->matrimonyProfile, $interest)) {
-            return back()->with('error', $msg);
+            return RuleResultResponder::toResponse(ErrorFactory::deny('INTEREST_SHOWCASE_POLICY', $msg, null));
         }
 
         // ✅ Withdraw = delete record

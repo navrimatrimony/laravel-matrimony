@@ -7,7 +7,8 @@
     $expectedMap = collect($fields)->mapWithKeys(static fn ($f) => [$f['id'] => $f['current_display']])->all();
 @endphp
 <div class="max-w-7xl mx-auto pb-28" id="suggestions-review-root"
-     data-safe-threshold="{{ e(number_format($safeTh, 2, '.', '')) }}">
+     data-safe-threshold="{{ e(number_format($safeTh, 2, '.', '')) }}"
+     data-msg-no-action="{{ e(\App\Support\ErrorFactory::adminSuggestionsChooseActionBeforeApply()->message) }}">
     <div class="flex flex-col lg:flex-row lg:items-start gap-6">
         <div class="flex-1 min-w-0">
             <div class="flex flex-wrap items-center justify-between gap-3 mb-4">

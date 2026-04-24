@@ -6,14 +6,13 @@ use App\Http\Controllers\Controller;
 use App\Models\MatrimonyProfile;
 use App\Models\VerificationTag;
 use App\Services\Admin\TagAssignmentService;
+use App\Support\ErrorFactory;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
 
 class AdminProfileTagController extends Controller
 {
-    public function __construct(private TagAssignmentService $tagAssignmentService)
-    {
-    }
+    public function __construct(private TagAssignmentService $tagAssignmentService) {}
 
     public function assign(Request $request, MatrimonyProfile $profile)
     {
@@ -23,7 +22,7 @@ class AdminProfileTagController extends Controller
         ]);
 
         $admin = $request->user();
-        if (!$admin) {
+        if (! $admin) {
             abort(403, 'Unauthorized.');
         }
 
@@ -31,12 +30,14 @@ class AdminProfileTagController extends Controller
 
         try {
             $this->tagAssignmentService->assignTag($admin, $profile, $tag, $request->reason);
+
             return redirect()->back()->with('success', 'Tag assigned successfully.');
         } catch (ValidationException $e) {
-            return redirect()->back()->withErrors($e->errors())->withInput()->with('error', 'Tag assignment failed.');
+            return redirect()->back()->withErrors($e->errors())->withInput()->with('error', ErrorFactory::adminTagAssignFailed()->message);
         } catch (\Throwable $e) {
             report($e);
-            return redirect()->back()->with('error', 'Unable to assign tag right now.');
+
+            return redirect()->back()->with('error', ErrorFactory::generic()->message);
         }
     }
 
@@ -47,7 +48,7 @@ class AdminProfileTagController extends Controller
         ]);
 
         $admin = $request->user();
-        if (!$admin) {
+        if (! $admin) {
             abort(403, 'Unauthorized.');
         }
 
@@ -55,12 +56,14 @@ class AdminProfileTagController extends Controller
 
         try {
             $this->tagAssignmentService->removeTag($admin, $profile, $tag, $request->reason);
+
             return redirect()->back()->with('success', 'Tag removed successfully.');
         } catch (ValidationException $e) {
-            return redirect()->back()->withErrors($e->errors())->withInput()->with('error', 'Tag removal failed.');
+            return redirect()->back()->withErrors($e->errors())->withInput()->with('error', ErrorFactory::adminTagRemoveFailed()->message);
         } catch (\Throwable $e) {
             report($e);
-            return redirect()->back()->with('error', 'Unable to remove tag right now.');
+
+            return redirect()->back()->with('error', ErrorFactory::generic()->message);
         }
     }
 }

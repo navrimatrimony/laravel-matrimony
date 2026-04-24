@@ -158,6 +158,11 @@ class SubscriptionPlansTest extends TestCase
             $fields['amount'],
             $fields['txnid'],
             $fields['key'],
+            (string) ($fields['udf1'] ?? ''),
+            (string) ($fields['udf2'] ?? ''),
+            (string) ($fields['udf3'] ?? ''),
+            (string) ($fields['udf4'] ?? ''),
+            (string) ($fields['udf5'] ?? ''),
         );
 
         $this->post(route('payu.success'), [
@@ -169,6 +174,11 @@ class SubscriptionPlansTest extends TestCase
             'email' => $fields['email'],
             'status' => $status,
             'hash' => $hash,
+            'udf1' => $fields['udf1'] ?? '',
+            'udf2' => $fields['udf2'] ?? '',
+            'udf3' => $fields['udf3'] ?? '',
+            'udf4' => $fields['udf4'] ?? '',
+            'udf5' => $fields['udf5'] ?? '',
         ])->assertRedirect(route('plans.index'));
 
         $this->assertDatabaseHas('subscriptions', [

@@ -18,6 +18,7 @@
         @vite(['resources/css/app.css', 'resources/js/app.js', 'resources/js/profile/religion-caste-selector.js', 'resources/js/profile/location-typeahead.js', 'resources/js/profile/about-me-narrative.js', 'resources/js/matrimony/occupation-engine-entry.js'])
     </head>
     <body class="font-sans antialiased">
+        @include('partials.sync-toast-shim')
         @php
             $cardOnboardingStep = auth()->check()
                 ? \App\Models\MatrimonyProfile::query()->where('user_id', auth()->id())->value('card_onboarding_resume_step')
@@ -72,10 +73,31 @@
 @endif
 
 @if (session('error'))
+    @php($ruleAction = session('rule_action'))
     <div data-flash-dismissible data-flash-auto-ms="12000" role="alert" class="relative z-40 mx-auto max-w-2xl px-4 pt-4">
-        <div class="flex items-start gap-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-900 shadow-sm dark:border-red-800 dark:bg-red-950/40 dark:text-red-100">
+        <div class="flex flex-wrap items-start gap-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-900 shadow-sm dark:border-red-800 dark:bg-red-950/40 dark:text-red-100">
             <p class="min-w-0 flex-1 leading-relaxed">{{ session('error') }}</p>
-            <button type="button" data-flash-close class="shrink-0 rounded-lg px-2 py-1 text-xs font-semibold text-red-800 hover:bg-red-100 dark:text-red-200 dark:hover:bg-red-900/50" aria-label="{{ __('common.dismiss') }}">×</button>
+            <div class="flex shrink-0 items-center gap-2">
+                @if (is_array($ruleAction) && (! empty($ruleAction['label']) || ! empty($ruleAction['url'])))
+                    @php($ctaLabel = $ruleAction['label'] ?? null)
+                    @php($ctaUrl = $ruleAction['url'] ?? null)
+                    @if (($ruleAction['type'] ?? 'redirect') === 'modal')
+                        <button
+                            type="button"
+                            data-rule-action-kind="modal"
+                            data-rule-modal-id="{{ $ruleAction['modal_id'] ?? '' }}"
+                            class="rounded-lg bg-red-700 px-3 py-1.5 text-xs font-semibold text-white hover:bg-red-800 dark:bg-red-600 dark:hover:bg-red-500"
+                        >{{ $ctaLabel ?: 'Fix kara' }}</button>
+                    @else
+                        <a
+                            href="{{ $ctaUrl ?: '#' }}"
+                            data-rule-action-kind="redirect"
+                            class="rounded-lg bg-red-700 px-3 py-1.5 text-xs font-semibold text-white hover:bg-red-800 dark:bg-red-600 dark:hover:bg-red-500"
+                        >{{ $ctaLabel ?: 'Fix kara' }}</a>
+                    @endif
+                @endif
+                <button type="button" data-flash-close class="rounded-lg px-2 py-1 text-xs font-semibold text-red-800 hover:bg-red-100 dark:text-red-200 dark:hover:bg-red-900/50" aria-label="{{ __('common.dismiss') }}">×</button>
+            </div>
         </div>
     </div>
 @endif

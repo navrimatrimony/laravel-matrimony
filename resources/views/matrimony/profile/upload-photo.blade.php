@@ -489,6 +489,7 @@ body.upload-landscape .upload-gallery-col {
     </div>
 </div>
 
+@php($photoUploadFailMsg = \App\Support\ErrorFactory::photoUploadFailed()->message)
 <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.1/cropper.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 <script>
 (function() {
@@ -516,6 +517,8 @@ body.upload-landscape .upload-gallery-col {
     const photoSlotsRemaining = {{ (int) $photoSlotsRemaining }};
     const photoMaxPerProfile = {{ (int) $photoMaxPerProfile }};
 
+    const PHOTO_UPLOAD_DEFAULT_ERR = @json($photoUploadFailMsg);
+
     const uploadLimitMessage = 'You have already used all ' + photoMaxPerProfile + ' photo slots. Delete one photo before uploading a new one.';
 
     /**
@@ -533,7 +536,7 @@ body.upload-landscape .upload-gallery-col {
 
     function showFetchError(message) {
         if (!uploadFetchErrorBox || !uploadFetchErrorText) return;
-        uploadFetchErrorText.textContent = message || 'Upload failed. Please try again.';
+        uploadFetchErrorText.textContent = message || PHOTO_UPLOAD_DEFAULT_ERR;
         uploadFetchErrorBox.style.display = 'block';
     }
 
@@ -832,7 +835,7 @@ body.upload-landscape .upload-gallery-col {
                         } catch (e) {
                             fallbackText = '';
                         }
-                        showFetchError(fallbackText ? fallbackText : 'Upload failed. Please try again.');
+                        showFetchError(fallbackText ? fallbackText : PHOTO_UPLOAD_DEFAULT_ERR);
                     }
 
                     btnSubmit.disabled = false;
@@ -840,7 +843,7 @@ body.upload-landscape .upload-gallery-col {
                 })
                 .catch(function(err) {
                     console.error('Photo upload failed', err);
-                    showFetchError('Upload failed. Please try again.');
+                    showFetchError(PHOTO_UPLOAD_DEFAULT_ERR);
                     btnSubmit.disabled = false;
                     btnSubmit.textContent = 'Upload Photo & Complete Profile ✓';
                 });

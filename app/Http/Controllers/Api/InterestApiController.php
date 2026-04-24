@@ -7,9 +7,11 @@ use App\Models\Interest;
 use App\Models\MatrimonyProfile;
 use App\Services\InterestPriorityService;
 use App\Services\InterestSendLimitService;
-use App\Services\ProfileCompletenessService;
-use App\Services\Showcase\ShowcaseInterestPolicyService;
 use App\Services\ProfileLifecycleService;
+use App\Services\RuleEngineService;
+use App\Services\Showcase\ShowcaseInterestPolicyService;
+use App\Support\ErrorFactory;
+use App\Support\RuleResultResponder;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpKernel\Exception\HttpException;
 
@@ -19,6 +21,7 @@ class InterestApiController extends Controller
         private readonly InterestSendLimitService $interestSendLimit,
         private readonly InterestPriorityService $interestPriority,
         private readonly ShowcaseInterestPolicyService $showcaseInterestPolicy,
+        private readonly RuleEngineService $ruleEngine,
     ) {}
 
     /**
@@ -30,10 +33,7 @@ class InterestApiController extends Controller
 
         // Guard: MatrimonyProfile must exist
         if (! $user || ! $user->matrimonyProfile) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Please create your matrimony profile first.',
-            ], 403);
+            return RuleResultResponder::toResponse(ErrorFactory::interestApiMatrimonyProfileRequired(), 403);
         }
 
         // Validate receiver_profile_id
@@ -46,48 +46,31 @@ class InterestApiController extends Controller
 
         // Guard: Cannot send interest to own profile
         if ($senderProfile->id === $receiverProfile->id) {
-            return response()->json([
-                'success' => false,
-                'message' => 'You cannot send interest to your own profile.',
-            ], 403);
+            return RuleResultResponder::toResponse(ErrorFactory::interestApiCannotSendToSelf(), 403);
         }
 
         // Safety check
         if (! $senderProfile || ! $receiverProfile) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Matrimony profile missing.',
-            ], 403);
+            return RuleResultResponder::toResponse(ErrorFactory::interestApiProfilesMissing(), 403);
         }
 
         // Day 7: Sender lifecycle — Archived/Suspended/Search-Hidden cannot send interest
         if (! ProfileLifecycleService::canInitiateInteraction($senderProfile)) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Your profile cannot send interest in its current state.',
-            ], 403);
+            return RuleResultResponder::toResponse(ErrorFactory::interestApiSenderLifecycleBlocked(), 403);
         }
 
         // Day 7: Archived/Suspended/Search-Hidden → interest blocked (receiver)
         if (! ProfileLifecycleService::canReceiveInterest($receiverProfile)) {
-            return response()->json([
-                'success' => false,
-                'message' => 'You cannot send interest to this profile.',
-            ], 403);
+            return RuleResultResponder::toResponse(ErrorFactory::interestApiReceiverLifecycleBlocked(), 403);
         }
 
-        $minPct = ProfileCompletenessService::interestMinimumPercent();
-        if (! ProfileCompletenessService::meetsInterestCompletenessRequirement($senderProfile)) {
-            return response()->json([
-                'success' => false,
-                'message' => __('interest.sender_min_core_completeness', ['min' => $minPct]),
-            ], 422);
+        $senderRule = $this->ruleEngine->checkInterestMandatoryCoreForSender($senderProfile);
+        if (! $senderRule->allowed) {
+            return RuleResultResponder::toResponse($senderRule);
         }
-        if (! ProfileCompletenessService::meetsInterestCompletenessRequirement($receiverProfile)) {
-            return response()->json([
-                'success' => false,
-                'message' => __('interest.target_min_core_completeness'),
-            ], 422);
+        $targetRule = $this->ruleEngine->checkInterestMandatoryCoreForSendTarget($receiverProfile);
+        if (! $targetRule->allowed) {
+            return RuleResultResponder::toResponse($targetRule);
         }
 
         // Check if interest already exists
@@ -96,32 +79,38 @@ class InterestApiController extends Controller
             ->first();
 
         if ($existingInterest) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Interest already sent.',
-                'data' => [
-                    'id' => $existingInterest->id,
-                    'status' => $existingInterest->status,
-                ],
-            ], 409);
+            return response()->json(array_merge(
+                ['success' => false],
+                ErrorFactory::interestApiDuplicateInterest()->toArray(),
+                [
+                    'data' => [
+                        'id' => $existingInterest->id,
+                        'status' => $existingInterest->status,
+                    ],
+                ]
+            ), 409);
         }
 
         $sendEval = $this->showcaseInterestPolicy->evaluateSendInterest($senderProfile, $receiverProfile);
         if (! $sendEval['ok']) {
-            return response()->json([
-                'success' => false,
-                'message' => $sendEval['message'] ?? 'Interest cannot be sent.',
-            ], 422);
+            $policyMsg = trim((string) ($sendEval['message'] ?? ''));
+
+            return RuleResultResponder::toResponse(
+                $policyMsg !== ''
+                    ? ErrorFactory::deny('INTEREST_SHOWCASE_POLICY', $policyMsg, null)
+                    : ErrorFactory::interestSendBlocked(),
+                422
+            );
         }
 
         if (! ($sendEval['bypass_plan_quota'] ?? false)) {
             try {
                 $this->interestSendLimit->assertCanSend($user);
             } catch (HttpException $e) {
-                return response()->json([
-                    'success' => false,
-                    'message' => $e->getMessage(),
-                ], $e->getStatusCode());
+                return RuleResultResponder::toResponse(
+                    ErrorFactory::interestSendLimitHttp($e->getStatusCode(), $e->getMessage()),
+                    $e->getStatusCode()
+                );
             }
         }
 
@@ -152,10 +141,7 @@ class InterestApiController extends Controller
         $user = $request->user();
 
         if (! $user || ! $user->matrimonyProfile) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Please create your matrimony profile first.',
-            ], 403);
+            return RuleResultResponder::toResponse(ErrorFactory::interestApiMatrimonyProfileRequired(), 403);
         }
 
         $myProfileId = $user->matrimonyProfile->id;
@@ -181,10 +167,7 @@ class InterestApiController extends Controller
         $user = $request->user();
 
         if (! $user || ! $user->matrimonyProfile) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Please create your matrimony profile first.',
-            ], 403);
+            return RuleResultResponder::toResponse(ErrorFactory::interestApiMatrimonyProfileRequired(), 403);
         }
 
         $myProfileId = $user->matrimonyProfile->id;
@@ -233,51 +216,33 @@ class InterestApiController extends Controller
         $user = request()->user();
 
         if (! $user || ! $user->matrimonyProfile) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Please create your matrimony profile first.',
-            ], 403);
+            return RuleResultResponder::toResponse(ErrorFactory::interestApiMatrimonyProfileRequired(), 403);
         }
 
         $interest = Interest::find($id);
 
         if (! $interest) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Interest not found.',
-            ], 404);
+            return RuleResultResponder::toResponse(ErrorFactory::interestApiNotFound(), 404);
         }
 
         // Guard: Only receiver can accept
         if ($interest->receiver_profile_id !== $user->matrimonyProfile->id) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Unauthorized. Only receiver can accept interest.',
-            ], 403);
+            return RuleResultResponder::toResponse(ErrorFactory::interestApiOnlyReceiver(), 403);
         }
 
         // Guard: Only pending interest can be accepted
         if ($interest->status !== 'pending') {
-            return response()->json([
-                'success' => false,
-                'message' => 'This interest is already processed.',
-            ], 403);
+            return RuleResultResponder::toResponse(ErrorFactory::interestApiAlreadyProcessed(), 403);
         }
 
         if ($msg = $this->showcaseInterestPolicy->validateAcceptInterest($user->matrimonyProfile, $interest)) {
-            return response()->json([
-                'success' => false,
-                'message' => $msg,
-            ], 422);
+            return RuleResultResponder::toResponse(ErrorFactory::deny('INTEREST_SHOWCASE_POLICY', $msg, null), 422);
         }
 
         $receiverProfile = $user->matrimonyProfile;
-        $minPct = ProfileCompletenessService::interestMinimumPercent();
-        if (! ProfileCompletenessService::meetsInterestCompletenessRequirement($receiverProfile)) {
-            return response()->json([
-                'success' => false,
-                'message' => __('interest.receiver_min_core_completeness_accept', ['min' => $minPct]),
-            ], 422);
+        $acceptRule = $this->ruleEngine->checkInterestMandatoryCoreForAccept($receiverProfile);
+        if (! $acceptRule->allowed) {
+            return RuleResultResponder::toResponse($acceptRule);
         }
 
         $interest->update([
@@ -299,42 +264,27 @@ class InterestApiController extends Controller
         $user = request()->user();
 
         if (! $user || ! $user->matrimonyProfile) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Please create your matrimony profile first.',
-            ], 403);
+            return RuleResultResponder::toResponse(ErrorFactory::interestApiMatrimonyProfileRequired(), 403);
         }
 
         $interest = Interest::find($id);
 
         if (! $interest) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Interest not found.',
-            ], 404);
+            return RuleResultResponder::toResponse(ErrorFactory::interestApiNotFound(), 404);
         }
 
         // Guard: Only receiver can reject
         if ($interest->receiver_profile_id !== $user->matrimonyProfile->id) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Unauthorized. Only receiver can reject interest.',
-            ], 403);
+            return RuleResultResponder::toResponse(ErrorFactory::interestApiOnlyReceiver(), 403);
         }
 
         // Guard: Only pending interest can be rejected
         if ($interest->status !== 'pending') {
-            return response()->json([
-                'success' => false,
-                'message' => 'This interest is already processed.',
-            ], 403);
+            return RuleResultResponder::toResponse(ErrorFactory::interestApiAlreadyProcessed(), 403);
         }
 
         if ($msg = $this->showcaseInterestPolicy->validateRejectInterest($user->matrimonyProfile, $interest)) {
-            return response()->json([
-                'success' => false,
-                'message' => $msg,
-            ], 422);
+            return RuleResultResponder::toResponse(ErrorFactory::deny('INTEREST_SHOWCASE_POLICY', $msg, null), 422);
         }
 
         $interest->update([
@@ -356,42 +306,27 @@ class InterestApiController extends Controller
         $user = request()->user();
 
         if (! $user || ! $user->matrimonyProfile) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Please create your matrimony profile first.',
-            ], 403);
+            return RuleResultResponder::toResponse(ErrorFactory::interestApiMatrimonyProfileRequired(), 403);
         }
 
         $interest = Interest::find($id);
 
         if (! $interest) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Interest not found.',
-            ], 404);
+            return RuleResultResponder::toResponse(ErrorFactory::interestApiNotFound(), 404);
         }
 
         // Guard: Only sender can withdraw
         if ($interest->sender_profile_id !== $user->matrimonyProfile->id) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Unauthorized. Only sender can withdraw interest.',
-            ], 403);
+            return RuleResultResponder::toResponse(ErrorFactory::interestApiOnlySenderWithdraw(), 403);
         }
 
         // Guard: Only pending interest can be withdrawn
         if ($interest->status !== 'pending') {
-            return response()->json([
-                'success' => false,
-                'message' => 'Only pending interests can be withdrawn.',
-            ], 403);
+            return RuleResultResponder::toResponse(ErrorFactory::interestApiOnlyPendingWithdraw(), 403);
         }
 
         if ($msg = $this->showcaseInterestPolicy->validateWithdrawInterest($user->matrimonyProfile, $interest)) {
-            return response()->json([
-                'success' => false,
-                'message' => $msg,
-            ], 422);
+            return RuleResultResponder::toResponse(ErrorFactory::deny('INTEREST_SHOWCASE_POLICY', $msg, null), 422);
         }
 
         $interest->delete();

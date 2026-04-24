@@ -447,7 +447,7 @@ class PayuController extends Controller
      */
     private function verifyPayuResponseHash(array $data): bool
     {
-        $salt = (string) config('payu.salt');
+        $salt = (string) config('payu.merchant_salt', '');
         $postedHash = strtolower(trim((string) ($data['hash'] ?? '')));
 
         $email = trim((string) ($data['email'] ?? ''));
@@ -466,6 +466,11 @@ class PayuController extends Controller
             $amount,
             $txnid,
             $key,
+            (string) ($data['udf1'] ?? ''),
+            (string) ($data['udf2'] ?? ''),
+            (string) ($data['udf3'] ?? ''),
+            (string) ($data['udf4'] ?? ''),
+            (string) ($data['udf5'] ?? ''),
         );
 
         return hash_equals($expected, $postedHash);

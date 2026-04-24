@@ -283,9 +283,14 @@
             var payload = buildSubmitPayload();
             if (Object.keys(payload.decisions).length === 0) {
                 e.preventDefault();
-                alert(
-                    'Choose at least one action (Accept / Reject / Flag) before applying.'
-                );
+                var noActionMsg =
+                    (root && root.getAttribute('data-msg-no-action')) ||
+                    'Apply करण्यापूर्वी किमान एक निवडा.';
+                if (window.toastr && typeof window.toastr.error === 'function') {
+                    window.toastr.error(noActionMsg);
+                } else {
+                    window.alert(noActionMsg);
+                }
                 return;
             }
             if (checkForWarningsBeforeSubmit(payload)) {

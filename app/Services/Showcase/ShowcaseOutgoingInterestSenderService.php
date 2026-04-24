@@ -10,8 +10,8 @@ use App\Notifications\InterestSentNotification;
 use App\Services\AdminActivityNotificationGate;
 use App\Services\InterestPriorityService;
 use App\Services\InterestSendLimitService;
-use App\Services\ProfileCompletenessService;
 use App\Services\ProfileLifecycleService;
+use App\Services\RuleEngineService;
 use App\Support\SafeNotifier;
 
 /**
@@ -26,6 +26,7 @@ class ShowcaseOutgoingInterestSenderService
         private readonly ShowcaseInterestPolicyService $policy,
         private readonly InterestPriorityService $priority,
         private readonly InterestSendLimitService $sendLimit,
+        private readonly RuleEngineService $ruleEngine,
     ) {}
 
     /**
@@ -59,7 +60,7 @@ class ShowcaseOutgoingInterestSenderService
         $skipped = 0;
 
         foreach ($showcases as $showcase) {
-            if (! ProfileLifecycleService::canInitiateInteraction($showcase) || ! ProfileCompletenessService::meetsInterestCompletenessRequirement($showcase)) {
+            if (! ProfileLifecycleService::canInitiateInteraction($showcase) || ! $this->ruleEngine->passesInterestMandatoryCore($showcase)) {
                 $skipped++;
 
                 continue;
@@ -93,7 +94,7 @@ class ShowcaseOutgoingInterestSenderService
                 /** @var MatrimonyProfile $receiver */
                 $receiver = $row['candidate'];
 
-                if (! ProfileLifecycleService::canReceiveInterest($receiver) || ! ProfileCompletenessService::meetsInterestCompletenessRequirement($receiver)) {
+                if (! ProfileLifecycleService::canReceiveInterest($receiver) || ! $this->ruleEngine->passesInterestMandatoryCore($receiver)) {
                     continue;
                 }
 

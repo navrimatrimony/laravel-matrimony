@@ -42,3 +42,55 @@ if (document.readyState === 'loading') {
 } else {
     initFlashDismiss();
 }
+
+/** Rule engine flash: modal actions + JSON fetch helpers (RuleResult-shaped API payloads). */
+function initRuleActionFlash() {
+    document.querySelectorAll('[data-rule-action-kind="modal"]').forEach((btn) => {
+        btn.addEventListener('click', () => {
+            const id = btn.getAttribute('data-rule-modal-id') || '';
+            const modal = id ? document.getElementById(id) : null;
+            if (modal && typeof modal.showModal === 'function') {
+                modal.showModal();
+            }
+        });
+    });
+}
+
+/**
+ * @param {Record<string, unknown>} payload Parsed JSON from fetch/XHR (success + RuleResult fields).
+ * @returns {boolean} false if rule failure was handled; true if caller should continue success path.
+ */
+window.handleRuleEngineJsonPayload = function handleRuleEngineJsonPayload(payload) {
+    if (!payload) {
+        return true;
+    }
+    if (payload.success !== false && payload.allowed !== false) {
+        return true;
+    }
+    const message = typeof payload.message === 'string' ? payload.message : '';
+    if (window.toastr && typeof window.toastr.error === 'function') {
+        window.toastr.error(message);
+    } else if (message) {
+        window.alert(message);
+    }
+    const action = payload.action;
+    if (action && typeof action === 'object') {
+        if (action.type === 'redirect' && action.url) {
+            window.location.href = String(action.url);
+            return false;
+        }
+        if (action.type === 'modal' && action.modal_id) {
+            const modal = document.getElementById(String(action.modal_id));
+            if (modal && typeof modal.showModal === 'function') {
+                modal.showModal();
+            }
+        }
+    }
+    return false;
+};
+
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initRuleActionFlash);
+} else {
+    initRuleActionFlash();
+}

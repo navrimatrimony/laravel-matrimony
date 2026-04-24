@@ -74,6 +74,11 @@
     </div>
 </div>
 
+@php
+    $helpCentreGenericMsg = \App\Support\ErrorFactory::generic()->message;
+    $helpCentreNetworkMsg = \App\Support\ErrorFactory::helpCentreNetwork()->message;
+@endphp
+
 <script>
 (function () {
     const form = document.getElementById('help-centre-form');
@@ -116,13 +121,13 @@
 
             const data = await res.json();
             if (!res.ok || !data.ok) {
-                addBubble('Sorry, something went wrong. Please try again.', false);
+                addBubble(@json($helpCentreGenericMsg), false);
                 return;
             }
 
-            addBubble(data.reply || 'Please try again.', false);
+            addBubble(data.reply || @json($helpCentreGenericMsg), false);
         } catch (e) {
-            addBubble('Network issue. Please retry in a moment.', false);
+            addBubble(@json($helpCentreNetworkMsg), false);
         } finally {
             sendBtn.disabled = false;
             input.disabled = false;

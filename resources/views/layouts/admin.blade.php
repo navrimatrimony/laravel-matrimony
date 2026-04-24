@@ -36,6 +36,7 @@
     </style>
 </head>
 <body class="font-sans antialiased bg-gray-100 overflow-x-hidden">
+    @include('partials.sync-toast-shim')
     <div class="min-h-screen flex">
         <aside class="admin-sidebar w-64 flex-shrink-0 bg-gray-800 text-gray-300 fixed inset-y-0 left-0 z-30 flex flex-col min-h-screen h-screen" style="width: 16rem;">
             <div class="p-4 border-b border-gray-700 flex-shrink-0">

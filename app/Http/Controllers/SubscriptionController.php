@@ -291,6 +291,11 @@ class SubscriptionController extends Controller
             $postedAmount,
             $txnid,
             $merchantKey,
+            $udf1,
+            '',
+            '',
+            '',
+            '',
         );
 
         $simulateRequest = Request::create('/payments/payu/success', 'POST', [
@@ -325,6 +330,16 @@ class SubscriptionController extends Controller
 
         $status = strtolower(trim((string) ($data['status'] ?? '')));
         if ($status !== 'success') {
+            Log::error('PAYU FAILURE POINT', [
+                'reason' => 'status_not_success_after_normalization',
+                'data' => $data,
+            ]);
+            Log::info('RETURN PATH', [
+                'type' => 'failure',
+                'reason' => 'status_not_success_after_normalization',
+                'target_route' => 'plans.index',
+            ]);
+
             return redirect()
                 ->route('plans.index')
                 ->with('error', __('subscriptions.subscribe_failed'));
@@ -339,6 +354,19 @@ class SubscriptionController extends Controller
         $key = trim((string) ($data['key'] ?? ''));
 
         if ($txnid === '' || $amount === '' || $postedHash === '') {
+            Log::error('PAYU FAILURE POINT', [
+                'reason' => 'missing_required_txnid_amount_or_hash',
+                'data' => $data,
+                'txnid_empty' => $txnid === '',
+                'amount_empty' => $amount === '',
+                'posted_hash_empty' => $postedHash === '',
+            ]);
+            Log::info('RETURN PATH', [
+                'type' => 'failure',
+                'reason' => 'missing_required_txnid_amount_or_hash',
+                'target_route' => 'plans.index',
+            ]);
+
             return redirect()
                 ->route('plans.index')
                 ->with('error', __('subscriptions.subscribe_failed'));
@@ -347,12 +375,31 @@ class SubscriptionController extends Controller
         $salt = (string) config('payu.merchant_salt', '');
         $expectedKey = (string) config('payu.merchant_key', '');
         if ($salt === '' || $expectedKey === '' || $key !== $expectedKey) {
+            Log::error('PAYU FAILURE POINT', [
+                'reason' => 'payu_key_or_salt_invalid_or_key_mismatch',
+                'data' => $data,
+                'salt_configured' => $salt !== '',
+                'merchant_key_configured' => $expectedKey !== '',
+                'posted_key_matches_config' => $key === $expectedKey,
+            ]);
+            Log::info('RETURN PATH', [
+                'type' => 'failure',
+                'reason' => 'payu_key_or_salt_invalid_or_key_mismatch',
+                'target_route' => 'plans.index',
+            ]);
+
             return redirect()
                 ->route('plans.index')
                 ->with('error', __('subscriptions.subscribe_failed'));
         }
 
-        $computed = PayuHasher::paymentResponseHash(
+        $udf1 = (string) ($data['udf1'] ?? '');
+        $udf2 = (string) ($data['udf2'] ?? '');
+        $udf3 = (string) ($data['udf3'] ?? '');
+        $udf4 = (string) ($data['udf4'] ?? '');
+        $udf5 = (string) ($data['udf5'] ?? '');
+
+        $hashString = PayuHasher::paymentResponseHashString(
             $salt,
             (string) ($data['status'] ?? ''),
             $email,
@@ -361,15 +408,51 @@ class SubscriptionController extends Controller
             $amount,
             $txnid,
             $key,
+            $udf1,
+            $udf2,
+            $udf3,
+            $udf4,
+            $udf5,
         );
+        $computed = strtolower(hash('sha512', $hashString));
+
+        Log::info('PAYU RESPONSE HASH DEBUG', [
+            'calculated' => $computed,
+            'received' => $postedHash,
+            'hash_string' => $hashString,
+        ]);
 
         if (! hash_equals($computed, $postedHash)) {
-            Log::warning('PayU subscription success: hash mismatch', ['txnid' => $txnid]);
+            Log::warning('PayU subscription success: hash mismatch', [
+                'txnid' => $txnid,
+                'calculated' => $computed,
+                'received' => $postedHash,
+                'hash_string' => $hashString,
+            ]);
+            Log::error('PAYU FAILURE POINT', [
+                'reason' => 'response_hash_mismatch',
+                'data' => $data,
+            ]);
+            Log::info('RETURN PATH', [
+                'type' => 'failure',
+                'reason' => 'response_hash_mismatch',
+                'target_route' => 'plans.index',
+            ]);
 
             return redirect()
                 ->route('plans.index')
                 ->with('error', __('subscriptions.subscribe_failed'));
         }
+
+        $pendingCacheKeyLiteral = 'payu_pending_'.$txnid;
+        $pendingCacheKeyActual = self::PENDING_CACHE_PREFIX.$txnid;
+        Log::info('PAYU PENDING CACHE PEEK', [
+            'txnid' => $txnid,
+            'Cache::get_literal_payu_pending_txnid' => Cache::get($pendingCacheKeyLiteral),
+            'Cache::get_actual_subscription_prefix' => Cache::get($pendingCacheKeyActual),
+            'pending_cache_key_literal' => $pendingCacheKeyLiteral,
+            'pending_cache_key_actual' => $pendingCacheKeyActual,
+        ]);
 
         $pending = Cache::pull(self::PENDING_CACHE_PREFIX.$txnid);
         if (! is_array($pending)) {
@@ -392,6 +475,23 @@ class SubscriptionController extends Controller
                         $planLabel = $planRow ? (string) $planRow->name : (string) __('subscriptions.default_plan_name');
                     }
 
+                    Log::info('PAYU FINALIZE SKIPPED', [
+                        'reason' => 'idempotent_success_redirect_existing_payment_same_user',
+                        'txnid' => $txnid,
+                        'payment_id' => $dup->id,
+                        'user_id_from_udf1' => $userIdFromGateway,
+                        'data' => $data,
+                    ]);
+
+                    if ($request->hasSession()) {
+                        $request->session()->forget('error');
+                    }
+                    Log::info('RETURN PATH', [
+                        'type' => 'success',
+                        'reason' => 'idempotent_existing_payment_same_user_no_finalize',
+                        'target_route' => $successRedirectRoute,
+                    ]);
+
                     return redirect()
                         ->route($successRedirectRoute)
                         ->with('success', __('subscriptions.subscribe_success', ['plan' => $planLabel]));
@@ -399,11 +499,31 @@ class SubscriptionController extends Controller
             }
 
             Log::warning('PayU subscription success: missing pending checkout', ['txnid' => $txnid]);
+            Log::error('PAYU FAILURE POINT', [
+                'reason' => 'pending_cache_missing_after_pull_and_no_idempotent_payment_match',
+                'data' => $data,
+                'plan_slug_from_request_productinfo' => $productinfo,
+                'plan_term_id_not_in_request' => null,
+                'user_id_from_udf1' => (int) trim((string) ($data['udf1'] ?? '')),
+            ]);
+            Log::info('RETURN PATH', [
+                'type' => 'failure',
+                'reason' => 'pending_cache_missing_after_pull_and_no_idempotent_payment_match',
+                'target_route' => 'plans.index',
+            ]);
 
             return redirect()
                 ->route('plans.index')
                 ->with('error', __('subscriptions.subscribe_failed'));
         }
+
+        Log::info('PAYU PENDING PAYLOAD', [
+            'txnid' => $txnid,
+            'plan_slug' => $pending['plan_slug'] ?? null,
+            'plan_term_id' => $pending['plan_term_id'] ?? null,
+            'user_id' => $pending['user_id'] ?? null,
+            'plan_id' => $pending['plan_id'] ?? null,
+        ]);
 
         $expectedAmount = (string) ($pending['amount'] ?? '');
         $expectedAmountNorm = $expectedAmount !== '' ? number_format((float) $expectedAmount, 2, '.', '') : '';
@@ -413,6 +533,20 @@ class SubscriptionController extends Controller
                 'txnid' => $txnid,
                 'expected' => $expectedAmountNorm,
                 'received' => $postedAmountNorm,
+            ]);
+            Log::error('PAYU FAILURE POINT', [
+                'reason' => 'posted_amount_does_not_match_pending_amount_lock',
+                'data' => $data,
+                'plan_slug' => $pending['plan_slug'] ?? null,
+                'plan_term_id' => $pending['plan_term_id'] ?? null,
+                'user_id' => $pending['user_id'] ?? null,
+                'expected_amount_norm' => $expectedAmountNorm,
+                'posted_amount_norm' => $postedAmountNorm,
+            ]);
+            Log::info('RETURN PATH', [
+                'type' => 'failure',
+                'reason' => 'posted_amount_does_not_match_pending_amount_lock',
+                'target_route' => 'plans.index',
             ]);
 
             return redirect()
@@ -427,6 +561,18 @@ class SubscriptionController extends Controller
                 'expected_slug' => $slug,
                 'received_productinfo' => $productinfo,
             ]);
+            Log::error('PAYU FAILURE POINT', [
+                'reason' => 'productinfo_does_not_match_pending_plan_slug',
+                'data' => $data,
+                'plan_slug' => $slug,
+                'plan_term_id' => $pending['plan_term_id'] ?? null,
+                'user_id' => $pending['user_id'] ?? null,
+            ]);
+            Log::info('RETURN PATH', [
+                'type' => 'failure',
+                'reason' => 'productinfo_does_not_match_pending_plan_slug',
+                'target_route' => 'plans.index',
+            ]);
 
             return redirect()
                 ->route('plans.index')
@@ -436,29 +582,98 @@ class SubscriptionController extends Controller
         $user = User::query()->find((int) ($pending['user_id'] ?? 0));
         $plan = Plan::query()->find((int) ($pending['plan_id'] ?? 0));
         if (! $user || ! $plan) {
+            Log::error('PAYU FAILURE POINT', [
+                'reason' => 'user_or_plan_not_found_for_pending_ids',
+                'data' => $data,
+                'plan_slug' => $pending['plan_slug'] ?? null,
+                'plan_term_id' => $pending['plan_term_id'] ?? null,
+                'user_id' => $pending['user_id'] ?? null,
+                'plan_id' => $pending['plan_id'] ?? null,
+                'user_found' => $user !== null,
+                'plan_found' => $plan !== null,
+            ]);
+            Log::info('RETURN PATH', [
+                'type' => 'failure',
+                'reason' => 'user_or_plan_not_found_for_pending_ids',
+                'target_route' => 'plans.index',
+            ]);
+
             return redirect()
                 ->route('plans.index')
                 ->with('error', __('subscriptions.subscribe_failed'));
         }
 
+        Log::info('ABOUT TO FINALIZE', [
+            'data' => $data,
+            'pending_plan_slug' => $pending['plan_slug'] ?? null,
+            'pending_plan_term_id' => $pending['plan_term_id'] ?? null,
+            'pending_user_id' => $pending['user_id'] ?? null,
+            'pending_plan_id' => $pending['plan_id'] ?? null,
+        ]);
+
         try {
             $subscriptions->finalizePayuSubscription($user, $plan, $pending, $txnid, $data);
         } catch (HttpException $e) {
+            Log::error('PAYU FAILURE POINT', [
+                'reason' => 'finalize_threw_http_exception',
+                'message' => $e->getMessage(),
+                'data' => $data,
+                'plan_slug' => $pending['plan_slug'] ?? null,
+                'plan_term_id' => $pending['plan_term_id'] ?? null,
+                'user_id' => $pending['user_id'] ?? null,
+            ]);
+            Log::info('RETURN PATH', [
+                'type' => 'failure',
+                'reason' => 'finalize_threw_http_exception',
+                'target_route' => 'plans.index',
+                'exception_message' => $e->getMessage(),
+            ]);
+
             return redirect()
                 ->route('plans.index')
                 ->with('error', $e->getMessage());
         } catch (\Throwable $e) {
             report($e);
+            Log::error('PAYU FAILURE POINT', [
+                'reason' => 'finalize_threw_throwable',
+                'exception' => $e::class,
+                'message' => $e->getMessage(),
+                'data' => $data,
+                'plan_slug' => $pending['plan_slug'] ?? null,
+                'plan_term_id' => $pending['plan_term_id'] ?? null,
+                'user_id' => $pending['user_id'] ?? null,
+            ]);
+            Log::info('RETURN PATH', [
+                'type' => 'failure',
+                'reason' => 'finalize_threw_throwable',
+                'target_route' => 'plans.index',
+                'exception_class' => $e::class,
+            ]);
 
             return redirect()
                 ->route('plans.index')
                 ->with('error', __('subscriptions.subscribe_failed'));
         }
 
+        Log::info('FINALIZE DONE', [
+            'txnid' => $txnid,
+            'user_id' => $user->id,
+            'plan_id' => $plan->id,
+        ]);
+
         $successPlanName = trim((string) ($pending['plan_name'] ?? ''));
         if ($successPlanName === '') {
             $successPlanName = (string) $plan->name;
         }
+
+        if ($request->hasSession()) {
+            $request->session()->forget('error');
+        }
+        Log::info('RETURN PATH', [
+            'type' => 'success',
+            'reason' => 'finalize_completed_subscribe_success_flash',
+            'target_route' => $successRedirectRoute,
+        ]);
 
         return redirect()
             ->route($successRedirectRoute)

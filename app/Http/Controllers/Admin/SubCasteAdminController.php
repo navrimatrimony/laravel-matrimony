@@ -7,7 +7,9 @@ use App\Models\Caste;
 use App\Models\MatrimonyProfile;
 use App\Models\SubCaste;
 use App\Services\MutationService;
+use App\Support\ErrorFactory;
 use App\Support\MasterData\ReligionCasteSubcasteSlugger;
+use App\Support\RuleResultResponder;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
@@ -28,6 +30,7 @@ class SubCasteAdminController extends Controller
         }
         $items = $query->paginate(20);
         $castes = Caste::where('is_active', true)->with('religion')->orderBy('label')->get();
+
         return view('admin.master.sub_castes.index', compact('items', 'castes'));
     }
 
@@ -35,6 +38,7 @@ class SubCasteAdminController extends Controller
     {
         $castes = Caste::where('is_active', true)->with('religion')->orderBy('label')->get();
         $mergeTargets = SubCaste::where('id', '!=', $sub_caste->id)->where('is_active', true)->with('caste.religion')->orderBy('label')->get();
+
         return view('admin.master.sub_castes.edit', ['subCaste' => $sub_caste, 'castes' => $castes, 'mergeTargets' => $mergeTargets]);
     }
 
@@ -56,6 +60,7 @@ class SubCasteAdminController extends Controller
             'label_en' => $label,
             'key' => $key,
         ]);
+
         return redirect()->route('admin.master.sub-castes.index')->with('success', 'Sub-caste updated.');
     }
 
@@ -68,7 +73,7 @@ class SubCasteAdminController extends Controller
         $request->validate(['merge_into_id' => ['required', 'exists:sub_castes,id']]);
         $mergeIntoId = (int) $request->input('merge_into_id');
         if ($mergeIntoId === $subCaste->id) {
-            return redirect()->back()->with('error', 'Cannot merge into itself.');
+            return RuleResultResponder::redirectBack(ErrorFactory::subCasteCannotMergeIntoSelf());
         }
         $actorId = (int) auth()->id();
         $profiles = MatrimonyProfile::where('sub_caste_id', $subCaste->id)->get();
@@ -79,22 +84,26 @@ class SubCasteAdminController extends Controller
                 $mutation->applyManualSnapshot($profile, $snapshot, $actorId, 'admin');
             } catch (\Throwable $e) {
                 report($e);
-                return redirect()->back()->with('error', 'Merge failed for one or more profiles: ' . $e->getMessage());
+
+                return RuleResultResponder::redirectBack(ErrorFactory::subCasteMergeProfilesFailed());
             }
         }
         $subCaste->update(['is_active' => false]);
+
         return redirect()->route('admin.master.sub-castes.index')->with('success', 'Sub-caste merged and disabled.');
     }
 
     public function disable(Request $request, SubCaste $subCaste): RedirectResponse
     {
         $subCaste->update(['is_active' => false]);
+
         return redirect()->route('admin.master.sub-castes.index')->with('success', 'Sub-caste disabled.');
     }
 
     public function enable(Request $request, SubCaste $subCaste): RedirectResponse
     {
         $subCaste->update(['is_active' => true]);
+
         return redirect()->route('admin.master.sub-castes.index')->with('success', 'Sub-caste enabled.');
     }
 
@@ -118,7 +127,7 @@ class SubCasteAdminController extends Controller
     {
         $subCaste = SubCaste::findOrFail($id);
         if ($subCaste->status !== 'pending') {
-            return redirect()->route('admin.sub-castes.pending')->with('error', 'Already approved or not pending.');
+            return redirect()->route('admin.sub-castes.pending')->with('error', ErrorFactory::subCasteNotPending()->message);
         }
 
         $subCaste->update([

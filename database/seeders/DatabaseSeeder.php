@@ -31,6 +31,7 @@ class DatabaseSeeder extends Seeder
             SubscriptionPlansSeeder::class,
             PlanStandardFeatureKeysSeeder::class,
             PlanFeatureSeeder::class,
+            SystemRulesSeeder::class,
         ]);
     }
 }

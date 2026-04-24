@@ -5,12 +5,13 @@ namespace App\Http\Controllers;
 use App\Models\MatrimonyProfile;
 use App\Services\CareerHistoryRowNormalizer;
 use App\Services\EducationService;
-use App\Services\OccupationService;
 use App\Services\FieldCatalogService;
+use App\Services\OccupationService;
 use App\Services\PartnerPreferenceNavService;
 use App\Services\PartnerPreferenceSnapshotBuilder;
 use App\Services\ProfileCompletenessService;
 use App\Services\ProfileCompletionService;
+use App\Support\ErrorFactory;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -297,8 +298,11 @@ class ProfileWizardController extends Controller
         \Log::info('DEBUG SNAPSHOT FULL', $snapshot ?? []);
 
         if ($snapshot === null) {
+            $wizardErr = ErrorFactory::profileWizardInvalidSnapshot();
+
             return redirect()->route('matrimony.profile.wizard.section', array_merge(['section' => $section], $this->wizardSectionRedirectQuery($request, $section)))
-                ->with('error', 'Invalid section or no data.')
+                ->with('error', $wizardErr->message)
+                ->with('rule_action', $wizardErr->action)
                 ->withInput();
         }
 

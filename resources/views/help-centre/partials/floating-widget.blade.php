@@ -1,4 +1,8 @@
 @auth
+@php
+    $helpCentreGenericMsg = \App\Support\ErrorFactory::generic()->message;
+    $helpCentreNetworkMsg = \App\Support\ErrorFactory::helpCentreNetwork()->message;
+@endphp
 {{-- Right-edge vertical tab (matches chat dock “Communication” handle style); avoids covering bottom content. --}}
 <div id="help-centre-widget-root" class="pointer-events-none fixed right-0 top-[min(13rem,22vh)] z-[54] -translate-y-1/2">
     <div class="relative flex flex-row-reverse items-start">
@@ -105,12 +109,12 @@
             });
             const data = await response.json();
             if (!response.ok || !data.ok) {
-                addBubble('Sorry, something went wrong. Please try again.', false);
+                addBubble(@json($helpCentreGenericMsg), false);
             } else {
-                addBubble(data.reply || 'Please try again.', false);
+                addBubble(data.reply || @json($helpCentreGenericMsg), false);
             }
         } catch (e) {
-            addBubble('Network issue. Please retry.', false);
+            addBubble(@json($helpCentreNetworkMsg), false);
         } finally {
             sendBtn.disabled = false;
             input.disabled = false;
