@@ -31,6 +31,7 @@ use App\Services\Image\PhotoUploadBatchUserMessage;
 use App\Services\Image\ProfileGalleryPhotoModerationStatus;
 use App\Services\Image\ProfilePhotoUrlService;
 use App\Services\InterestSendLimitService;
+use App\Services\MatchingEngine;
 use App\Services\MatrimonyProfileSearchQueryService;
 use App\Services\MemberPresencePresentationService;
 use App\Services\ProfileCompletionEngine;
@@ -1224,10 +1225,10 @@ class MatrimonyProfileController extends Controller
         $casteVisible = true;
         $heightVisible = true;
 
-        // Match explanation data (rule-based comparison)
+        // Match explanation + score (SSOT: MatchingEngine → system_rules + ProfileCompletionEngine)
         $matchData = null;
         if (! $isOwnProfile && $user->matrimonyProfile) {
-            $matchData = self::calculateMatchExplanation($user->matrimonyProfile, $profile);
+            $matchData = app(MatchingEngine::class)->profileShowMatchData($user, $profile);
         }
 
         $interestAllowsContact = false;
@@ -1588,23 +1589,24 @@ class MatrimonyProfileController extends Controller
             },
         ])->paginate($perPage)->withQueryString();
 
-        $viewerProfile = auth()->user()?->matrimonyProfile;
-        $profiles->setCollection($profiles->getCollection()->map(function (MatrimonyProfile $listedProfile) use ($viewerProfile) {
+        $viewerUser = auth()->user();
+        $viewerProfile = $viewerUser?->matrimonyProfile;
+        $matchingEngine = app(MatchingEngine::class);
+        $profiles->setCollection($profiles->getCollection()->map(function (MatrimonyProfile $listedProfile) use ($viewerProfile, $viewerUser, $matchingEngine) {
             $listedProfile->compatibility_summary = null;
             $listedProfile->online_status_summary = self::buildOnlineStatusSummaryForUser($listedProfile->user);
             $listedProfile->reportable_photo_summary = self::buildReportablePhotoSummary($listedProfile);
 
-            if ($viewerProfile && (int) $listedProfile->id !== (int) $viewerProfile->id) {
-                $matchData = self::calculateMatchExplanation($viewerProfile, $listedProfile);
-                $matchedCount = (int) ($matchData['matchedCount'] ?? 0);
-                $totalCount = (int) ($matchData['totalCount'] ?? 0);
-                $label = $matchedCount >= 3
-                    ? 'Strong match'
-                    : ($matchedCount >= 1 ? 'Good match' : 'Explore match');
+            if ($viewerProfile && $viewerUser && (int) $listedProfile->id !== (int) $viewerProfile->id) {
+                $listedUser = $listedProfile->user;
+                $engine = $listedUser
+                    ? $matchingEngine->for($viewerUser, $listedUser)
+                    : $matchingEngine->scoreBetweenProfiles($viewerProfile, $listedProfile);
                 $listedProfile->compatibility_summary = [
-                    'matched_count' => $matchedCount,
-                    'total_count' => $totalCount,
-                    'label' => $label,
+                    'score' => $engine['score'],
+                    'grade' => $engine['grade'],
+                    'is_compatible' => $engine['is_compatible'],
+                    'label' => $engine['grade'],
                 ];
             }
 
@@ -1820,152 +1822,6 @@ class MatrimonyProfileController extends Controller
             'locationDisplayDistrictId' => $displayDistrictId,
             'locationDisplayTalukaId' => $displayTalukaId,
             'locationDisplayCityId' => $displayCityId,
-        ];
-    }
-
-    /**
-     * Calculate match explanation between viewer's profile and viewed profile.
-     * Rule-based comparison, no AI/ML. Returns match data for UI display.
-     *
-     * @param  MatrimonyProfile  $viewerProfile  Viewer's own profile
-     * @param  MatrimonyProfile  $viewedProfile  Profile being viewed
-     * @return array|null Match explanation data or null if own profile
-     */
-    private static function calculateMatchExplanation(MatrimonyProfile $viewerProfile, MatrimonyProfile $viewedProfile): array
-    {
-        $matches = [];
-        $commonGround = [];
-
-        // Define comparison fields (deterministic, stored values only) — location handled separately via hierarchy.
-        $preferenceFields = [
-            'highest_education' => ['label' => 'Education', 'icon' => '🎓'],
-            'caste_id' => ['label' => 'Caste', 'icon' => '🗣️'],
-            'marital_status_id' => ['label' => 'Marital status', 'icon' => '💑'],
-        ];
-
-        // Location comparison (hierarchy: city_id = exact match, state_id = partial)
-        $viewerCityId = $viewerProfile->city_id;
-        $viewedCityId = $viewedProfile->city_id;
-        $viewerStateId = $viewerProfile->state_id;
-        $viewedStateId = $viewedProfile->state_id;
-        if ($viewerCityId || $viewedCityId || $viewerStateId || $viewedStateId) {
-            $locationMatched = false;
-            if ($viewerCityId && $viewedCityId && (int) $viewerCityId === (int) $viewedCityId) {
-                $locationMatched = true;
-            } elseif ($viewerStateId && $viewedStateId && (int) $viewerStateId === (int) $viewedStateId) {
-                $locationMatched = true; // partial (same state)
-            }
-            $matches[] = [
-                'field' => 'location',
-                'label' => 'Location',
-                'icon' => '📍',
-                'matched' => $locationMatched,
-            ];
-            if ($locationMatched) {
-                $commonGround[] = [
-                    'field' => 'location',
-                    'label' => 'Location',
-                    'icon' => '📍',
-                    'value' => $viewedProfile->city_id ? ($viewedProfile->city?->name ?? '—') : ($viewedProfile->state?->name ?? '—'),
-                ];
-            }
-        }
-
-        // Age comparison (from date_of_birth)
-        if ($viewerProfile->date_of_birth && $viewedProfile->date_of_birth) {
-            $viewerAge = now()->diffInYears($viewerProfile->date_of_birth);
-            $viewedAge = now()->diffInYears($viewedProfile->date_of_birth);
-            $ageDiff = abs($viewerAge - $viewedAge);
-
-            // Consider age match if within 5 years (flexible)
-            if ($ageDiff <= 5) {
-                $matches[] = [
-                    'field' => 'age',
-                    'label' => 'Age',
-                    'icon' => '🎂',
-                    'matched' => true,
-                ];
-            } else {
-                $matches[] = [
-                    'field' => 'age',
-                    'label' => 'Age',
-                    'icon' => '🎂',
-                    'matched' => false,
-                ];
-            }
-        }
-
-        // Compare other preference fields
-        foreach ($preferenceFields as $fieldKey => $fieldInfo) {
-            $viewerValue = $viewerProfile->getAttribute($fieldKey);
-            $viewedValue = $viewedProfile->getAttribute($fieldKey);
-
-            if ($viewerValue !== null && $viewerValue !== '' && $viewedValue !== null && $viewedValue !== '') {
-                $isMatch = false;
-                if ($fieldKey === 'highest_education') {
-                    $isMatch = strcasecmp(trim((string) $viewerValue), trim((string) $viewedValue)) === 0;
-                } else {
-                    $isMatch = (int) $viewerValue === (int) $viewedValue;
-                }
-
-                $matches[] = [
-                    'field' => $fieldKey,
-                    'label' => $fieldInfo['label'],
-                    'icon' => $fieldInfo['icon'],
-                    'matched' => $isMatch,
-                ];
-
-                // Add to common ground if matched
-                if ($isMatch) {
-                    $displayValue = (string) $viewedValue;
-                    if ($fieldKey === 'caste_id') {
-                        $displayValue = (string) ($viewedProfile->caste?->display_label ?? $displayValue);
-                    } elseif ($fieldKey === 'marital_status_id') {
-                        $displayValue = (string) ($viewedProfile->maritalStatus?->label ?? $displayValue);
-                    } elseif ($fieldKey === 'highest_education') {
-                        $displayValue = (string) $viewedValue;
-                    }
-
-                    $commonGround[] = [
-                        'field' => $fieldKey,
-                        'label' => $fieldInfo['label'],
-                        'icon' => $fieldInfo['icon'],
-                        'value' => $displayValue,
-                    ];
-                }
-            }
-        }
-
-        // Calculate match summary
-        $matchedCount = count(array_filter($matches, fn ($m) => $m['matched']));
-        $totalCount = count($matches);
-
-        // Generate summary text (translated)
-        if ($totalCount > 0) {
-            if ($matchedCount > 0) {
-                $summaryText = __('Your profile matches :matched of :total expectations', ['matched' => $matchedCount, 'total' => $totalCount]);
-            } else {
-                $summaryText = __('Some match with this profile.');
-            }
-        } else {
-            $summaryText = __('Some match with this profile.');
-        }
-
-        // Celebration text (translated)
-        $celebrationText = null;
-        if ($matchedCount >= 3) {
-            $celebrationText = __('Many things match!');
-        } elseif ($matchedCount > 0) {
-            $celebrationText = __('Good start 👍');
-        }
-
-        return [
-            'matches' => $matches,
-            'commonGround' => $commonGround,
-            'matchedCount' => $matchedCount,
-            'totalCount' => $totalCount,
-            'summaryText' => $summaryText,
-            'celebrationText' => $celebrationText,
         ];
     }
 

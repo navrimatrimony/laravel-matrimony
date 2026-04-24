@@ -4,6 +4,7 @@ namespace Database\Seeders;
 
 use App\Models\AdminSetting;
 use App\Models\SystemRule;
+use App\Services\MatchingEngine;
 use App\Services\ProfileCompletenessService;
 use App\Services\RuleEngineService;
 use Illuminate\Database\Seeder;
@@ -34,5 +35,33 @@ class SystemRulesSeeder extends Seeder
                 'meta' => null,
             ]
         );
+
+        SystemRule::query()->firstOrCreate(
+            ['key' => MatchingEngine::RULE_MATCHING_MINIMUM_SCORE],
+            [
+                'value' => '60',
+                'meta' => null,
+            ]
+        );
+
+        $matchingDefaults = [
+            MatchingEngine::RULE_MATCHING_AGE => ['value' => '20', 'meta' => ['max_age_diff_years' => 5]],
+            MatchingEngine::RULE_MATCHING_LOCATION => ['value' => '20', 'meta' => []],
+            MatchingEngine::RULE_MATCHING_EDUCATION => ['value' => '10', 'meta' => []],
+            MatchingEngine::RULE_MATCHING_CASTE => ['value' => '30', 'meta' => []],
+            MatchingEngine::RULE_MATCHING_PROFILE_COMPLETION => ['value' => '20', 'meta' => ['min_mandatory_pct' => 80]],
+        ];
+
+        foreach ($matchingDefaults as $key => $payload) {
+            SystemRule::query()->firstOrCreate(
+                ['key' => $key],
+                [
+                    'value' => $payload['value'],
+                    'meta' => $payload['meta'],
+                ]
+            );
+        }
+
+        MatchingEngine::forgetRulesCache();
     }
 }

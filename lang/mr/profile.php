@@ -192,4 +192,6 @@ return [
     'monetization_contact_upgrade_link' => 'अपग्रेड',
     'monetization_send_interest_or_message' => 'रुची दाखवा किंवा संदेश पाठवा',
     'monetization_send_message' => 'संदेश पाठवा',
+    'match_score' => 'जुळणी गुण',
+    'match_compatible' => 'सुसंगत',
 ];

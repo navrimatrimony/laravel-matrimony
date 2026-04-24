@@ -1235,22 +1235,10 @@
 <hr class="my-8 border-gray-300 dark:border-gray-600">
 @endif
 
-{{-- Match Explanation Section --}}
+{{-- Match Explanation Section (SSOT: MatchingEngine) --}}
 @if (!$isOwnProfile)
 @php
-    $matchData = $matchData ?? null;
-    // Ensure matchData exists, create empty structure if not
-    if (!$matchData) {
-        $matchData = [
-            'matches' => [],
-            'commonGround' => [],
-            'matchedCount' => 0,
-            'totalCount' => 0,
-            'summaryText' => 'या प्रोफाइलशी काही बाबतीत साम्य आहे',
-            'celebrationText' => null,
-        ];
-    }
-    // Get logged-in user's profile photo for comparison
+    $md = is_array($matchData ?? null) ? $matchData : [];
     $viewerProfile = auth()->user()->matrimonyProfile ?? null;
     $viewerPhotoSrc = null;
     if ($viewerProfile && $viewerProfile->profile_photo && $viewerProfile->photo_approved !== false) {
@@ -1282,164 +1270,25 @@
 @endphp
 <div class="mt-8 mb-8 rounded-xl border border-stone-200/90 bg-white p-5 shadow-sm dark:border-gray-700 dark:bg-gray-900/95">
     @php
-        $viewedGenderKey = strtolower((string) ($profile->gender?->key ?? $profile->gender ?? ''));
-        $preferenceSideLabel = $viewedGenderKey === 'female'
-            ? 'Her preference'
-            : ($viewedGenderKey === 'male' ? 'His preference' : 'Preferred');
-        $yourSideLabel = 'Your profile';
-
-        $safeAge = function ($dob): ?int {
-            if (empty($dob)) {
-                return null;
-            }
-            try {
-                $age = \Carbon\Carbon::parse($dob)->age;
-                if (! is_numeric($age)) {
-                    return null;
-                }
-                $age = (int) floor((float) $age);
-                return $age >= 0 ? $age : null;
-            } catch (\Throwable) {
-                return null;
-            }
-        };
-
-        $viewerAge = $safeAge($viewerProfile?->date_of_birth ?? null);
-        $viewedAge = $safeAge($profile->date_of_birth ?? null);
-        $viewerLocation = implode(', ', array_filter([$viewerProfile?->city?->name, $viewerProfile?->state?->name]));
-        $viewedLocation = implode(', ', array_filter([$profile->city?->name, $profile->state?->name]));
-        $rowGroups = [];
-
-        $addRow = function (string $group, string $label, string $their, string $yours, string $status, string $note = '') use (&$rowGroups): void {
-            if (! isset($rowGroups[$group])) {
-                $rowGroups[$group] = [];
-            }
-            $rowGroups[$group][] = [
-                'label' => $label,
-                'their' => $their !== '' ? $their : 'Not specified',
-                'yours' => $yours !== '' ? $yours : 'Not specified',
-                'status' => $status,
-                'note' => $note,
-            ];
-        };
-
-        // Basic fit
-        if ($viewedAge !== null || $viewerAge !== null) {
-            $ageDiff = ($viewedAge !== null && $viewerAge !== null) ? abs($viewedAge - $viewerAge) : null;
-            $ageStatus = ($ageDiff === null)
-                ? 'open'
-                : ($ageDiff <= 5 ? 'match' : ($ageDiff <= 8 ? 'close' : 'mismatch'));
-            $ageNote = ($viewedAge !== null && $viewerAge !== null) ? "You are {$viewerAge} years; profile age is {$viewedAge} years" : '';
-            $addRow('Basic fit', 'Age', $viewedAge !== null ? (string) $viewedAge : '', $viewerAge !== null ? (string) $viewerAge : '', $ageStatus, $ageNote);
-        }
-        if (($profile->maritalStatus?->label ?? '') !== '' || ($viewerProfile?->maritalStatus?->label ?? '') !== '') {
-            $their = (string) ($profile->maritalStatus?->label ?? '');
-            $yours = (string) ($viewerProfile?->maritalStatus?->label ?? '');
-            $status = ($their !== '' && $yours !== '') ? (strcasecmp($their, $yours) === 0 ? 'match' : 'mismatch') : 'open';
-            $addRow('Basic fit', 'Marital status', $their, $yours, $status);
-        }
-        if (($profile->height_cm ?? null) || ($viewerProfile?->height_cm ?? null)) {
-            $their = ($profile->height_cm ?? null) ? ((string) $profile->height_cm.' cm') : '';
-            $yours = ($viewerProfile?->height_cm ?? null) ? ((string) $viewerProfile->height_cm.' cm') : '';
-            $heightDiff = ($their !== '' && $yours !== '') ? abs((int) $profile->height_cm - (int) $viewerProfile->height_cm) : null;
-            $status = ($heightDiff === null) ? 'open' : ($heightDiff <= 8 ? 'match' : ($heightDiff <= 12 ? 'close' : 'open'));
-            $addRow('Basic fit', 'Height', $their, $yours, $status);
-        }
-
-        // Community & background
-        $theirReligion = (string) ($profile->religion?->label ?? '');
-        $yourReligion = (string) ($viewerProfile?->religion?->label ?? '');
-        if ($theirReligion !== '' || $yourReligion !== '') {
-            $status = ($theirReligion !== '' && $yourReligion !== '') ? (strcasecmp($theirReligion, $yourReligion) === 0 ? 'match' : 'mismatch') : 'open';
-            $addRow('Community & background', 'Religion', $theirReligion, $yourReligion, $status);
-        }
-        $theirCaste = (string) ($profile->caste?->label ?? '');
-        $yourCaste = (string) ($viewerProfile?->caste?->label ?? '');
-        if ($theirCaste !== '' || $yourCaste !== '') {
-            $status = ($theirCaste !== '' && $yourCaste !== '') ? (strcasecmp($theirCaste, $yourCaste) === 0 ? 'match' : 'mismatch') : 'open';
-            $addRow('Community & background', 'Caste', $theirCaste, $yourCaste, $status);
-        }
-        $theirSubCaste = (string) ($profile->subCaste?->label ?? '');
-        $yourSubCaste = (string) ($viewerProfile?->subCaste?->label ?? '');
-        if ($theirSubCaste !== '' || $yourSubCaste !== '') {
-            $status = ($theirSubCaste !== '' && $yourSubCaste !== '') ? (strcasecmp($theirSubCaste, $yourSubCaste) === 0 ? 'match' : 'open') : 'open';
-            $addRow('Community & background', 'Sub-caste', $theirSubCaste, $yourSubCaste, $status);
-        }
-        $theirMotherTongue = (string) ($profile->motherTongue?->label ?? '');
-        $yourMotherTongue = (string) ($viewerProfile?->motherTongue?->label ?? '');
-        if ($theirMotherTongue !== '' || $yourMotherTongue !== '') {
-            $status = ($theirMotherTongue !== '' && $yourMotherTongue !== '') ? (strcasecmp($theirMotherTongue, $yourMotherTongue) === 0 ? 'match' : 'open') : 'open';
-            $addRow('Community & background', 'Mother tongue', $theirMotherTongue, $yourMotherTongue, $status);
-        }
-
-        // Career & location
-        $theirEducation = trim((string) ($profile->highest_education ?? ''));
-        $yourEducation = trim((string) ($viewerProfile?->highest_education ?? ''));
-        if ($theirEducation !== '' || $yourEducation !== '') {
-            $status = ($theirEducation !== '' && $yourEducation !== '') ? (strcasecmp($theirEducation, $yourEducation) === 0 ? 'match' : 'mismatch') : 'open';
-            $addRow('Career & location', 'Education', $theirEducation, $yourEducation, $status);
-        }
-        $theirOccupation = trim((string) (($profile->occupation_title ?? '') !== '' ? $profile->occupation_title : ($profile->profession?->name ?? '')));
-        $yourOccupation = trim((string) (($viewerProfile?->occupation_title ?? '') !== '' ? $viewerProfile->occupation_title : ($viewerProfile?->profession?->name ?? '')));
-        if ($theirOccupation !== '' || $yourOccupation !== '') {
-            $status = ($theirOccupation !== '' && $yourOccupation !== '') ? (strcasecmp($theirOccupation, $yourOccupation) === 0 ? 'match' : 'open') : 'open';
-            $addRow('Career & location', 'Occupation', $theirOccupation, $yourOccupation, $status);
-        }
-        if ($viewedLocation !== '' || $viewerLocation !== '') {
-            $sameCity = ($profile->city_id && $viewerProfile?->city_id) ? ((int) $profile->city_id === (int) $viewerProfile->city_id) : false;
-            $sameState = ($profile->state_id && $viewerProfile?->state_id) ? ((int) $profile->state_id === (int) $viewerProfile->state_id) : false;
-            $status = $sameCity ? 'match' : ($sameState ? 'close' : (($viewedLocation !== '' && $viewerLocation !== '') ? 'mismatch' : 'open'));
-            $note = $sameCity ? 'Lives in the same city' : ($sameState ? 'Lives in the same state' : '');
-            $addRow('Career & location', 'Location', $viewedLocation, $viewerLocation, $status, $note);
-        }
-
-        // Lifestyle & family
-        $theirDiet = (string) ($profile->diet?->label ?? '');
-        $yourDiet = (string) ($viewerProfile?->diet?->label ?? '');
-        if ($theirDiet !== '' || $yourDiet !== '') {
-            $status = ($theirDiet !== '' && $yourDiet !== '') ? (strcasecmp($theirDiet, $yourDiet) === 0 ? 'match' : 'open') : 'open';
-            $addRow('Lifestyle & family', 'Diet', $theirDiet, $yourDiet, $status);
-        }
-        $theirFamilyType = (string) ($profile->familyType?->label ?? '');
-        $yourFamilyType = (string) ($viewerProfile?->familyType?->label ?? '');
-        if ($theirFamilyType !== '' || $yourFamilyType !== '') {
-            $status = ($theirFamilyType !== '' && $yourFamilyType !== '') ? (strcasecmp($theirFamilyType, $yourFamilyType) === 0 ? 'match' : 'open') : 'open';
-            $addRow('Lifestyle & family', 'Family type', $theirFamilyType, $yourFamilyType, $status);
-        }
-
-        $allRows = [];
-        foreach ($rowGroups as $rows) {
-            foreach ($rows as $r) {
-                $allRows[] = $r;
-            }
-        }
-        $statusCounts = ['match' => 0, 'close' => 0, 'mismatch' => 0, 'open' => 0];
-        foreach ($allRows as $r) {
-            $statusCounts[$r['status']]++;
-        }
-        $chipPriority = ['location', 'age', 'highest_education', 'marital_status_id', 'caste_id'];
-        $chipMap = [];
-        foreach ($matchData['matches'] as $m) {
-            $statusLabel = $m['matched'] ? 'Aligned' : 'Different';
-            $chipMap[$m['field']] = [
-                'label' => $m['label'],
-                'tone' => $m['matched'] ? 'match' : 'mismatch',
-                'status' => $statusLabel,
-            ];
-        }
-        $smartChips = [];
-        foreach ($chipPriority as $f) {
-            if (isset($chipMap[$f])) {
-                $smartChips[] = $chipMap[$f];
-            }
-        }
-        $smartChips = array_slice($smartChips, 0, 5);
+        $rowGroups = $md['row_groups'] ?? [];
+        $allRows = $md['all_rows'] ?? [];
+        $statusCounts = $md['status_counts'] ?? ['match' => 0, 'close' => 0, 'mismatch' => 0, 'open' => 0];
+        $smartChips = $md['smart_chips'] ?? [];
+        $footerLine = $md['footer_line'] ?? 'Some preferences remain open and can be discussed.';
+        $preferenceSideLabel = $md['preference_side_label'] ?? 'Preferred';
+        $yourSideLabel = $md['your_side_label'] ?? 'Your profile';
     @endphp
 
     <div class="mb-4 flex items-center justify-between gap-4 border-b border-stone-200 pb-4 dark:border-gray-700">
         <div>
             <h3 class="text-lg font-semibold text-stone-900 dark:text-stone-100">{{ __('How does your profile match with theirs?') }}</h3>
-            <p class="text-sm text-stone-600 dark:text-stone-400">Comparison based on shared profile information (no score).</p>
+            <p class="text-sm text-stone-600 dark:text-stone-400">
+                {{ __('profile.match_score') }}: <span class="font-semibold text-stone-800 dark:text-stone-200">{{ $md['engine']['score'] ?? 0 }}</span>
+                · {{ $md['engine']['grade'] ?? '—' }}
+                @if (($md['engine']['is_compatible'] ?? false))
+                    <span class="text-emerald-600 dark:text-emerald-400">· {{ __('profile.match_compatible') }}</span>
+                @endif
+            </p>
         </div>
         <div class="hidden items-center gap-3 sm:flex">
             <div class="text-center">
@@ -1457,7 +1306,7 @@
     <div class="mb-4 grid grid-cols-2 gap-2 md:grid-cols-4">
         <div class="rounded-lg border border-stone-200 bg-stone-50 px-3 py-2 dark:border-gray-700 dark:bg-gray-800/70">
             <p class="text-[11px] uppercase tracking-wide text-stone-500 dark:text-stone-400">Matched</p>
-            <p class="text-base font-semibold text-stone-900 dark:text-stone-100">{{ $matchData['matchedCount'] ?? 0 }} / {{ $matchData['totalCount'] ?? 0 }}</p>
+            <p class="text-base font-semibold text-stone-900 dark:text-stone-100">{{ $md['matchedCount'] ?? 0 }} / {{ $md['totalCount'] ?? 0 }}</p>
         </div>
         <div class="rounded-lg border border-stone-200 bg-stone-50 px-3 py-2 dark:border-gray-700 dark:bg-gray-800/70">
             <p class="text-[11px] uppercase tracking-wide text-stone-500 dark:text-stone-400">Needs attention</p>
@@ -1522,26 +1371,6 @@
     </div>
     @endforeach
 
-    @php
-        $strongest = [];
-        foreach ($allRows as $r) {
-            if ($r['status'] === 'match') {
-                $strongest[] = $r['label'];
-            }
-        }
-        $needsAttention = [];
-        foreach ($allRows as $r) {
-            if ($r['status'] === 'mismatch') {
-                $needsAttention[] = $r['label'];
-            }
-        }
-        $footerLine = ! empty($strongest)
-            ? ('This match is strongest in '.implode(', ', array_slice($strongest, 0, 2)).'.')
-            : 'Some preferences remain open and can be discussed.';
-        if (! empty($needsAttention)) {
-            $footerLine .= ' '.implode(', ', array_slice($needsAttention, 0, 2)).' need attention.';
-        }
-    @endphp
     <div class="mb-6 rounded-lg border border-stone-200 bg-stone-50 px-3 py-2 text-sm text-stone-600 dark:border-gray-700 dark:bg-gray-800/60 dark:text-stone-300">
         {{ $footerLine }}
     </div>

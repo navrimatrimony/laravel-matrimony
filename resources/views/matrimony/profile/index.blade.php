@@ -514,7 +514,7 @@
                                             >
                                                 <span aria-hidden="true">❤</span>
                                                 <span class="min-w-0 truncate">
-                                                    You &amp; {{ $chipFirstName }} match · {{ $matrimonyProfile->compatibility_summary['matched_count'] }}/{{ $matrimonyProfile->compatibility_summary['total_count'] }}
+                                                    You &amp; {{ $chipFirstName }} · {{ $matrimonyProfile->compatibility_summary['score'] ?? 0 }} pts · {{ $matrimonyProfile->compatibility_summary['grade'] ?? '' }}
                                                 </span>
                                             </span>
                                         @endif
