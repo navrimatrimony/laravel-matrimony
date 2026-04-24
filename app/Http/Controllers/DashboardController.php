@@ -8,7 +8,7 @@ use App\Models\MatrimonyProfile;
 use App\Models\Message;
 use App\Models\ProfileView;
 use App\Models\Shortlist;
-use App\Services\ProfileCompletenessService;
+use App\Services\ProfileCompletionEngine;
 use App\Services\SubscriptionService;
 use App\Services\UserWalletService;
 use Illuminate\Support\Facades\DB;
@@ -25,6 +25,10 @@ use Illuminate\Support\Facades\DB;
 
 class DashboardController extends Controller
 {
+    public function __construct(
+        private readonly ProfileCompletionEngine $profileCompletionEngine,
+    ) {}
+
     /**
      * Show user dashboard.
      */
@@ -57,8 +61,7 @@ class DashboardController extends Controller
         $shortlistCount = Shortlist::where('owner_profile_id', $myProfileId)->count();
         $mobileVerified = (bool) $user->mobile_verified_at;
 
-        // Profile Completeness Calculation (from service)
-        $completenessPercentage = ProfileCompletenessService::percentage($profile);
+        $completion = $this->profileCompletionEngine->for($user);
 
         // Recent Interests (Last 3 received)
         $recentReceivedInterests = Interest::with('senderProfile.gender')
@@ -160,7 +163,7 @@ class DashboardController extends Controller
             'totalProfilesCount' => $totalProfilesCount,
             'shortlistCount' => $shortlistCount,
             'mobileVerified' => $mobileVerified,
-            'completenessPercentage' => $completenessPercentage,
+            'completion' => $completion,
             'recentReceivedInterests' => $recentReceivedInterests,
             'recentSentInterests' => $recentSentInterests,
             'chatUnreadCount' => (int) $chatUnreadCount,

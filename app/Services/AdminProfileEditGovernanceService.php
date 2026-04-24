@@ -25,6 +25,7 @@ class AdminProfileEditGovernanceService
 
     public function __construct(
         private readonly MutationService $mutationService,
+        private readonly ProfileCompletionEngine $profileCompletionEngine,
     ) {}
 
     /**
@@ -199,15 +200,16 @@ class AdminProfileEditGovernanceService
 
             if (in_array('caste_id', $editedFields) || in_array('caste', $editedFields)) {
                 $casteValue = $updateData['caste_id'] ?? $updateData['caste'] ?? null;
+                $pct = $this->profileCompletionEngine->forProfile($profile)['mandatory_core'];
                 if ($casteValue !== null && (is_string($casteValue) ? trim($casteValue) !== '' : true)) {
                     Log::info('B_AFTER_ADD', [
                         'db_caste' => $profile->caste,
-                        'pct' => ProfileCompletenessService::percentage($profile),
+                        'pct' => $pct,
                     ]);
                 } else {
                     Log::info('C_AFTER_REMOVE', [
                         'db_caste' => $profile->caste,
-                        'pct' => ProfileCompletenessService::percentage($profile),
+                        'pct' => $pct,
                     ]);
                 }
             }

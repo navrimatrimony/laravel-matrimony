@@ -6,16 +6,16 @@ use App\Models\AdminSetting;
 use App\Models\MatrimonyProfile;
 use Illuminate\Support\Facades\Schema;
 
-/*
-|--------------------------------------------------------------------------
-| ProfileCompletenessService (SSOT Day-7 — Recovery-Day-R3, Day-16)
-|--------------------------------------------------------------------------
-|
-| Centralized completeness: (filled mandatory / total mandatory) × 100.
-| Mandatory fields are read dynamically from ProfileFieldConfigurationService.
-| Same logic for showcase and real profiles.
-|
-*/
+/**
+ * ⚠️ DEPRECATED FOR DIRECT USE
+ *
+ * Do not use this service directly in controllers or application services for read-side completion.
+ * Always use {@see ProfileCompletionEngine} for mandatory/detailed percentages and breakdown.
+ *
+ * This class remains the calculation layer (percentages, SQL visibility, admin keys) used by the engine and legacy call sites.
+ *
+ * Day-7 / Day-16: mandatory completeness uses {@see ProfileFieldConfigurationService}; same logic for showcase and real profiles.
+ */
 class ProfileCompletenessService
 {
     /**
@@ -121,16 +121,13 @@ class ProfileCompletenessService
     }
 
     /**
-     * Interest send / receive / accept — respects admin minimum; when minimum is 0, always passes.
+     * Interest send / receive / accept — delegates to {@see RuleEngineService} (system_rules + admin fallback).
+     *
+     * @deprecated Call {@see RuleEngineService::passesInterestMandatoryCore()} directly in new code.
      */
     public static function meetsInterestCompletenessRequirement(MatrimonyProfile $profile): bool
     {
-        $min = self::interestMinimumPercent();
-        if ($min <= 0) {
-            return true;
-        }
-
-        return self::percentage($profile) >= $min;
+        return app(RuleEngineService::class)->passesInterestMandatoryCore($profile);
     }
 
     /**

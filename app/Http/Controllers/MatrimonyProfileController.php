@@ -33,7 +33,7 @@ use App\Services\Image\ProfilePhotoUrlService;
 use App\Services\InterestSendLimitService;
 use App\Services\MatrimonyProfileSearchQueryService;
 use App\Services\MemberPresencePresentationService;
-use App\Services\ProfileCompletenessService;
+use App\Services\ProfileCompletionEngine;
 use App\Services\ProfileFieldConfigurationService;
 use App\Services\ProfilePhotoAccessService;
 use App\Services\ProfileRotationService;
@@ -68,6 +68,7 @@ class MatrimonyProfileController extends Controller
         protected ContactAccessService $contactAccessService,
         protected ProfilePhotoAccessService $profilePhotoAccessService,
         protected InterestSendLimitService $interestSendLimitService,
+        protected ProfileCompletionEngine $profileCompletionEngine,
     ) {}
 
     private function resolvePhotoTargetProfile(Request $request): ?MatrimonyProfile
@@ -1211,9 +1212,8 @@ class MatrimonyProfileController extends Controller
             ViewTrackingService::maybeTriggerViewBack($user->matrimonyProfile, $profile);
         }
 
-        // Detailed section coverage for own-profile show (core % not shown — redundant post-registration)
-        $completion = ProfileCompletenessService::breakdown($profile);
-        $completenessDetailedPct = $completion['detailed'];
+        // Detailed section coverage for own-profile show (SSOT: ProfileCompletionEngine)
+        $completion = $this->profileCompletionEngine->forProfile($profile);
 
         // Profile show: full stored biodata for every viewer (parity with wizard / DB; no field hiding).
         $profilePhotoVisible = true;
@@ -1441,7 +1441,7 @@ class MatrimonyProfileController extends Controller
                 'preferredProfessionIds' => $preferredProfessionIds,
                 'preferredWorkingWithTypeIds' => $preferredWorkingWithTypeIds,
                 'preferredMaritalStatusIds' => $preferredMaritalStatusIds,
-                'completenessDetailedPct' => $completenessDetailedPct,
+                'completion' => $completion,
                 'profilePhotoVisible' => $profilePhotoVisible,
                 'dateOfBirthVisible' => $dateOfBirthVisible,
                 'maritalStatusVisible' => $maritalStatusVisible,

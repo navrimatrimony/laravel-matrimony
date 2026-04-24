@@ -17,16 +17,22 @@ class SystemRulesSeeder extends Seeder
             '0'
         )));
 
-        if (SystemRule::query()->where('key', RuleEngineService::KEY_PROFILE_COMPLETION_MIN)->exists()) {
-            return;
+        if (! SystemRule::query()->where('key', RuleEngineService::KEY_PROFILE_COMPLETION_MIN)->exists()) {
+            SystemRule::query()->create([
+                'key' => RuleEngineService::KEY_PROFILE_COMPLETION_MIN,
+                'value' => (string) $fromAdmin,
+                'meta' => [
+                    'action_url' => '/matrimony/profile/edit',
+                ],
+            ]);
         }
 
-        SystemRule::query()->create([
-            'key' => RuleEngineService::KEY_PROFILE_COMPLETION_MIN,
-            'value' => (string) $fromAdmin,
-            'meta' => [
-                'action_url' => '/matrimony/profile/edit',
-            ],
-        ]);
+        SystemRule::query()->firstOrCreate(
+            ['key' => RuleEngineService::KEY_SHOWCASE_AUTOFILL_LOG_MIN_CORE],
+            [
+                'value' => '80',
+                'meta' => null,
+            ]
+        );
     }
 }

@@ -124,13 +124,13 @@
                         <div class="mb-4">
                             <div class="flex justify-between items-center mb-2">
                                 <span class="text-sm font-medium text-gray-700 dark:text-gray-300">{{ __('profile.profile_completeness') }}</span>
-                                <span class="text-sm font-bold text-red-600 dark:text-red-400">{{ $completenessPercentage }}%</span>
+                                <span class="text-sm font-bold text-red-600 dark:text-red-400">{{ $completion['mandatory_core'] }}%</span>
                             </div>
                             <div class="w-full bg-gray-200 dark:bg-gray-600 rounded-full h-3">
                                 <div class="bg-red-600 dark:bg-red-500 h-3 rounded-full transition-all duration-300" 
-                                     style="width: {{ $completenessPercentage }}%"></div>
+                                     style="width: {{ $completion['mandatory_core'] }}%"></div>
                             </div>
-                            @if ($completenessPercentage < 100)
+                            @if (!($completion['is_mandatory_complete'] ?? false))
                                 <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
                                     <a href="{{ route('matrimony.profile.wizard.section', ['section' => 'full']) }}" class="text-red-600 dark:text-red-400 hover:underline">{{ __('dashboard.complete_your_profile') }}</a> {{ __('dashboard.to_get_better_matches') }}
                                 </p>

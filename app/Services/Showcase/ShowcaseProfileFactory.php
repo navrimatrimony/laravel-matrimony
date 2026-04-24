@@ -8,7 +8,8 @@ use App\Models\User;
 use App\Services\ExtendedFieldService;
 use App\Services\FieldValueHistoryService;
 use App\Services\MutationService;
-use App\Services\ProfileCompletenessService;
+use App\Services\ProfileCompletionEngine;
+use App\Services\RuleEngineService;
 use App\Services\ShowcaseProfileDefaultsService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -227,9 +228,11 @@ class ShowcaseProfileFactory
         if (! empty($extended)) {
             ExtendedFieldService::saveValuesForProfile($profile, $extended, null);
         }
-        $pct = ProfileCompletenessService::percentage($profile);
-        if ($pct < 80) {
-            \Log::info('Showcase profile autofill: completeness '.$pct.'% for profile '.$profile->id.' (target ≥80%).');
+        $ruleEngine = app(RuleEngineService::class);
+        $pct = app(ProfileCompletionEngine::class)->forProfile($profile)['mandatory_core'];
+        $warnBelow = $ruleEngine->resolveShowcaseAutofillLogMinCorePercent();
+        if ($warnBelow > 0 && $pct < $warnBelow) {
+            \Log::info('Showcase profile autofill: completeness '.$pct.'% for profile '.$profile->id.' (threshold '.$warnBelow.'% from system_rules).');
         }
     }
 }

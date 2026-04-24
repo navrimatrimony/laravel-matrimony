@@ -4,7 +4,7 @@ namespace App\Console\Commands;
 
 use App\Models\MatrimonyProfile;
 use App\Services\FieldValueHistoryService;
-use App\Services\ProfileCompletenessService;
+use App\Services\ProfileCompletionEngine;
 use Illuminate\Console\Command;
 
 /*
@@ -31,6 +31,7 @@ class Day11CompletenessProof extends Command
 
         if (! $profile) {
             $this->error('No profile found.');
+
             return self::FAILURE;
         }
 
@@ -43,13 +44,13 @@ class Day11CompletenessProof extends Command
         ));
         $verify = ['mandatory' => $mandatory, 'enabled' => $enabled, 'used' => $used];
         \Log::info('VERIFY_INPUTS', $verify);
-        $this->line('[VERIFY_INPUTS] ' . json_encode($verify, JSON_PRETTY_PRINT));
+        $this->line('[VERIFY_INPUTS] '.json_encode($verify, JSON_PRETTY_PRINT));
 
         // BASELINE
-        $pctBaseline = ProfileCompletenessService::percentage($profile);
+        $pctBaseline = app(ProfileCompletionEngine::class)->forProfile($profile)['mandatory_core'];
         $casteBaseline = $profile->caste;
         \Log::info('BASELINE', ['pct' => $pctBaseline, 'caste' => $casteBaseline]);
-        $this->line('[BASELINE] ' . json_encode(['pct' => $pctBaseline, 'caste' => $casteBaseline]));
+        $this->line('[BASELINE] '.json_encode(['pct' => $pctBaseline, 'caste' => $casteBaseline]));
 
         // ADD CASTE
         $oldCaste = $profile->caste === '' ? null : $profile->caste;
@@ -57,10 +58,10 @@ class Day11CompletenessProof extends Command
         $profile->caste = 'TestCaste';
         $profile->save();
         $profile->refresh();
-        $pctAfterAdd = ProfileCompletenessService::percentage($profile);
+        $pctAfterAdd = app(ProfileCompletionEngine::class)->forProfile($profile)['mandatory_core'];
         $casteAfterAdd = $profile->caste;
         \Log::info('AFTER_ADD', ['pct' => $pctAfterAdd, 'caste' => $casteAfterAdd]);
-        $this->line('[AFTER_ADD] ' . json_encode(['pct' => $pctAfterAdd, 'caste' => $casteAfterAdd]));
+        $this->line('[AFTER_ADD] '.json_encode(['pct' => $pctAfterAdd, 'caste' => $casteAfterAdd]));
 
         // REMOVE CASTE
         $oldCaste = $profile->caste === '' ? null : $profile->caste;
@@ -68,15 +69,15 @@ class Day11CompletenessProof extends Command
         $profile->caste = null;
         $profile->save();
         $profile->refresh();
-        $pctAfterRemove = ProfileCompletenessService::percentage($profile);
+        $pctAfterRemove = app(ProfileCompletionEngine::class)->forProfile($profile)['mandatory_core'];
         $casteAfterRemove = $profile->caste;
         \Log::info('AFTER_REMOVE', ['pct' => $pctAfterRemove, 'caste' => $casteAfterRemove]);
-        $this->line('[AFTER_REMOVE] ' . json_encode(['pct' => $pctAfterRemove, 'caste' => $casteAfterRemove]));
+        $this->line('[AFTER_REMOVE] '.json_encode(['pct' => $pctAfterRemove, 'caste' => $casteAfterRemove]));
 
         // VERDICT: % must increase when adding and decrease when removing
         $changesCorrectly = $pctAfterAdd > $pctAfterRemove && $pctAfterRemove <= $pctBaseline;
         $verdict = $changesCorrectly ? 'YES' : 'NO';
-        $this->line('VERDICT = % CHANGES CORRECTLY (' . $verdict . ')');
+        $this->line('VERDICT = % CHANGES CORRECTLY ('.$verdict.')');
 
         return self::SUCCESS;
     }

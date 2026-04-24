@@ -612,7 +612,7 @@ class AdminSettingsController extends Controller
             ? (bool) config('app.admin_bypass_mode', false)
             : filter_var($raw, FILTER_VALIDATE_BOOLEAN);
 
-        $interestMinCorePct = ProfileCompletenessService::interestMinimumPercent();
+        $interestMinCorePct = app(\App\Services\RuleEngineService::class)->resolveInterestMinimumPercent();
 
         $presenceOnlineThresholdMin = max(1, min(
             24 * 60,

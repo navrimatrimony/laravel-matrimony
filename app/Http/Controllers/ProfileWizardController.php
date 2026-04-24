@@ -9,7 +9,7 @@ use App\Services\FieldCatalogService;
 use App\Services\OccupationService;
 use App\Services\PartnerPreferenceNavService;
 use App\Services\PartnerPreferenceSnapshotBuilder;
-use App\Services\ProfileCompletenessService;
+use App\Services\ProfileCompletionEngine;
 use App\Services\ProfileCompletionService;
 use App\Support\ErrorFactory;
 use Illuminate\Http\Request;
@@ -42,6 +42,10 @@ class ProfileWizardController extends Controller
         'photo',
     ];
 
+    public function __construct(
+        private readonly ProfileCompletionEngine $profileCompletionEngine,
+    ) {}
+
     private function isMinimalWizard(): bool
     {
         return (bool) session('wizard_minimal', false);
@@ -66,7 +70,7 @@ class ProfileWizardController extends Controller
         $minimal = $this->isMinimalWizard();
         $first = $minimal ? FieldCatalogService::getFirstSection(true) : FieldCatalogService::getFirstSection(false);
         // Same metric as profile show + section nav: all catalog sections (not legacy 5×20% buckets).
-        $pct = ProfileCompletenessService::detailedPercentage($profile);
+        $pct = $this->profileCompletionEngine->for($user)['detailed'];
         if ($pct >= 100) {
             session()->forget('wizard_minimal');
 
@@ -140,7 +144,8 @@ class ProfileWizardController extends Controller
         }
         $previousSection = $minimal ? FieldCatalogService::getPreviousSection($section, true) : FieldCatalogService::getPreviousSection($section, false);
 
-        $completionPct = ProfileCompletenessService::detailedPercentage($profile);
+        $completion = $this->profileCompletionEngine->for($user);
+        $completionPct = $completion['detailed'];
         $sectionStatuses = ProfileCompletionService::getSectionStatuses($profile, $sections);
         $viewData = $this->getSectionViewData($section, $profile);
         $viewData['profile'] = $profile;

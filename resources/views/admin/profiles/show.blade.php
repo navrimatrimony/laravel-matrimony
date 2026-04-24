@@ -434,10 +434,10 @@
         <div class="mb-6">
             <div class="flex justify-between items-center mb-1">
                 <span class="text-sm font-medium text-gray-700">{{ __('profile.profile_completeness') }}</span>
-                <span class="text-sm font-bold text-gray-900">{{ $completenessPct }}%</span>
+                <span class="text-sm font-bold text-gray-900">{{ $completion['mandatory_core'] }}%</span>
             </div>
             <div class="w-full bg-gray-200 rounded-full h-2.5">
-                <div class="bg-indigo-600 h-2.5 rounded-full transition-all duration-300" style="width: {{ $completenessPct }}%;"></div>
+                <div class="bg-indigo-600 h-2.5 rounded-full transition-all duration-300" style="width: {{ $completion['mandatory_core'] }}%;"></div>
             </div>
         </div>
 

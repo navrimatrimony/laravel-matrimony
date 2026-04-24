@@ -426,29 +426,25 @@
         <div class="space-y-4">
 
         @if (($isOwnProfile ?? false))
-        @php
-            $detailedPct = (int) round((float) ($completenessDetailedPct ?? 0));
-            $detailedPct = max(0, min(100, $detailedPct));
-        @endphp
         {{-- Profile completeness: use literal Tailwind classes so JIT includes red/orange/green (dynamic vars get purged) --}}
         <div>
             <div class="flex justify-between items-center mb-1">
                 <span class="text-sm font-medium text-gray-700 dark:text-gray-300">{{ __('profile.profile_completeness') }}</span>
-                @if ($detailedPct < 50)
-                    <span class="text-sm font-bold tabular-nums text-red-600 dark:text-red-400">{{ $detailedPct }}%</span>
-                @elseif ($detailedPct <= 75)
-                    <span class="text-sm font-bold tabular-nums text-orange-600 dark:text-orange-400">{{ $detailedPct }}%</span>
+                @if (($completion['detailed'] ?? 0) < 50)
+                    <span class="text-sm font-bold tabular-nums text-red-600 dark:text-red-400">{{ $completion['detailed'] }}%</span>
+                @elseif (($completion['detailed'] ?? 0) <= 75)
+                    <span class="text-sm font-bold tabular-nums text-orange-600 dark:text-orange-400">{{ $completion['detailed'] }}%</span>
                 @else
-                    <span class="text-sm font-bold tabular-nums text-green-600 dark:text-green-400">{{ $detailedPct }}%</span>
+                    <span class="text-sm font-bold tabular-nums text-green-600 dark:text-green-400">{{ $completion['detailed'] }}%</span>
                 @endif
             </div>
             <div class="w-full rounded-full bg-gray-200 h-2.5 dark:bg-gray-600">
-                @if ($detailedPct < 50)
-                    <div class="h-2.5 rounded-full bg-red-600 transition-all duration-300 dark:bg-red-500" style="width: {{ $detailedPct }}%;"></div>
-                @elseif ($detailedPct <= 75)
-                    <div class="h-2.5 rounded-full bg-orange-500 transition-all duration-300 dark:bg-orange-400" style="width: {{ $detailedPct }}%;"></div>
+                @if (($completion['detailed'] ?? 0) < 50)
+                    <div class="h-2.5 rounded-full bg-red-600 transition-all duration-300 dark:bg-red-500" style="width: {{ $completion['detailed'] }}%;"></div>
+                @elseif (($completion['detailed'] ?? 0) <= 75)
+                    <div class="h-2.5 rounded-full bg-orange-500 transition-all duration-300 dark:bg-orange-400" style="width: {{ $completion['detailed'] }}%;"></div>
                 @else
-                    <div class="h-2.5 rounded-full bg-green-600 transition-all duration-300 dark:bg-green-500" style="width: {{ $detailedPct }}%;"></div>
+                    <div class="h-2.5 rounded-full bg-green-600 transition-all duration-300 dark:bg-green-500" style="width: {{ $completion['detailed'] }}%;"></div>
                 @endif
             </div>
         </div>

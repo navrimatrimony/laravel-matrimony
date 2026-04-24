@@ -24,7 +24,7 @@ use App\Services\ConflictDetectionService;
 use App\Services\FieldValueHistoryService;
 use App\Services\Image\ProfileGalleryPhotoDeletionService;
 use App\Services\Image\ProfilePhotoUrlService;
-use App\Services\ProfileCompletenessService;
+use App\Services\ProfileCompletionEngine;
 use App\Services\ProfileFieldLockService;
 use App\Services\ProfileLifecycleService;
 use App\Services\ViewTrackingService;
@@ -48,6 +48,7 @@ class AdminProfileModerationController extends Controller
         private readonly AdminProfileEditGovernanceService $adminProfileEditGovernance,
         private readonly ProfileGalleryPhotoDeletionService $galleryPhotoDeletion,
         private readonly UserModerationStatsService $userModerationStats,
+        private readonly ProfileCompletionEngine $profileCompletionEngine,
     ) {}
 
     /**
@@ -113,7 +114,7 @@ class AdminProfileModerationController extends Controller
         \Log::info('A_BASELINE', [
             'profile_id' => $profile->id,
             'db_caste' => $profile->caste,
-            'pct' => \App\Services\ProfileCompletenessService::percentage($profile),
+            'pct' => $this->profileCompletionEngine->forProfile($profile)['mandatory_core'],
         ]);
 
         // STEP D: INTERNAL CHECK - Log enabled & mandatory inputs
@@ -126,8 +127,7 @@ class AdminProfileModerationController extends Controller
             )),
         ]);
 
-        // Profile completeness (from service, passed to view)
-        $completenessPct = ProfileCompletenessService::percentage($profile);
+        $completion = $this->profileCompletionEngine->forProfile($profile);
 
         // Day-6: Field lock info for admin visibility (read-only)
         $fieldLocks = ProfileFieldLockService::getLocksForProfile($profile);
@@ -169,7 +169,7 @@ class AdminProfileModerationController extends Controller
             'interestAlreadySent' => $interestAlreadySent,
             'hasAlreadyReported' => $hasAlreadyReported,
             'inShortlist' => $inShortlist,
-            'completenessPct' => $completenessPct,
+            'completion' => $completion,
             'fieldLocks' => $fieldLocks,
             'lifecycleAllowedTargets' => $lifecycleAllowedTargets,
             'fieldHistory' => $fieldHistory,
