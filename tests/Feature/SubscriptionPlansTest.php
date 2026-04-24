@@ -2,6 +2,8 @@
 
 namespace Tests\Feature;
 
+use App\Models\MasterGender;
+use App\Models\MatrimonyProfile;
 use App\Models\Payment;
 use App\Models\Plan;
 use App\Models\PlanQuotaPolicy;
@@ -91,7 +93,7 @@ class SubscriptionPlansTest extends TestCase
     public function test_authenticated_user_can_view_plans(): void
     {
         $this->seed(SubscriptionPlansSeeder::class);
-        $user = User::factory()->create();
+        $user = $this->createUserWithMatrimonyGender('male');
 
         $this->actingAs($user)
             ->get(route('plans.index'))
@@ -102,7 +104,7 @@ class SubscriptionPlansTest extends TestCase
     public function test_subscribe_does_not_create_subscription_before_payu(): void
     {
         $this->seed(SubscriptionPlansSeeder::class);
-        $user = User::factory()->create();
+        $user = $this->createUserWithMatrimonyGender('male');
         $paidPlan = Plan::query()->where('slug', 'gold_male')->firstOrFail();
         $term = PlanTerm::query()
             ->where('plan_id', $paidPlan->id)
@@ -129,7 +131,7 @@ class SubscriptionPlansTest extends TestCase
     public function test_payu_success_callback_creates_subscription(): void
     {
         $this->seed(SubscriptionPlansSeeder::class);
-        $user = User::factory()->create();
+        $user = $this->createUserWithMatrimonyGender('male');
         $paidPlan = Plan::query()->where('slug', 'gold_male')->firstOrFail();
         $term = PlanTerm::query()
             ->where('plan_id', $paidPlan->id)
@@ -220,5 +222,31 @@ class SubscriptionPlansTest extends TestCase
         if (\Illuminate\Support\Facades\Schema::hasColumn('payments', 'payu_txnid')) {
             $this->assertSame($fields['txnid'], (string) $payment->payu_txnid);
         }
+    }
+
+    private static function seedMasterGendersForPlansTests(): void
+    {
+        MasterGender::query()->firstOrCreate(
+            ['key' => 'male'],
+            ['label' => 'Male', 'is_active' => true],
+        );
+        MasterGender::query()->firstOrCreate(
+            ['key' => 'female'],
+            ['label' => 'Female', 'is_active' => true],
+        );
+    }
+
+    private function createUserWithMatrimonyGender(string $genderKey): User
+    {
+        self::seedMasterGendersForPlansTests();
+        $user = User::factory()->create();
+        $genderId = MasterGender::query()->where('key', $genderKey)->where('is_active', true)->value('id');
+        $this->assertNotNull($genderId);
+        MatrimonyProfile::factory()->for($user)->create([
+            'gender_id' => $genderId,
+            'lifecycle_state' => 'active',
+        ]);
+
+        return $user->fresh();
     }
 }

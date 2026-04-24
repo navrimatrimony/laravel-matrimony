@@ -57,11 +57,8 @@ final class PlanQuotaUiSource
      */
     public static function policyPayloadsForUser(User $user): array
     {
-        $sub = Subscription::query()
-            ->where('user_id', $user->id)
-            ->effectivelyActiveForAccess()
-            ->orderByDesc('id')
-            ->first();
+        // Use model query (not SubscriptionService) to avoid resolving the service while it is computing limits.
+        $sub = Subscription::queryAuthoritativeAccessForUser($user)->first();
 
         if ($sub !== null && is_array($sub->meta)) {
             $snap = $sub->meta['checkout_snapshot'] ?? null;

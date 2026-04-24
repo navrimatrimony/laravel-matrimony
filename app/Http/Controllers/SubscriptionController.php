@@ -5,6 +5,8 @@ namespace App\Http\Controllers;
 use App\Models\Payment;
 use App\Models\Plan;
 use App\Models\User;
+use App\Services\RevenueOrchestratorService;
+use App\Services\RevenueSummaryService;
 use App\Services\SubscriptionService;
 use App\Support\PayuHasher;
 use Illuminate\Http\RedirectResponse;
@@ -19,7 +21,7 @@ class SubscriptionController extends Controller
 {
     private const PENDING_CACHE_PREFIX = 'payu_subscription:';
 
-    public function subscribe(Request $request, SubscriptionService $subscriptions)
+    public function subscribe(Request $request, SubscriptionService $subscriptions, RevenueOrchestratorService $revenueOrchestrator)
     {
         $user = $request->user();
         if (! $user) {
@@ -44,6 +46,12 @@ class SubscriptionController extends Controller
             return redirect()
                 ->route('plans.index')
                 ->with('error', __('subscriptions.plan_inactive'));
+        }
+
+        if (! Plan::profileGenderAllowsPlan($user, $plan)) {
+            return redirect()
+                ->route('plans.index')
+                ->with('error', __('subscriptions.plan_gender_mismatch'));
         }
 
         $merchantKey = (string) config('payu.merchant_key', '');
@@ -73,13 +81,14 @@ class SubscriptionController extends Controller
         ]);
 
         try {
-            $resolved = $subscriptions->resolvePaidPlanCheckout(
+            $prepared = $revenueOrchestrator->prepareCheckout(
                 $user,
                 $plan,
                 $planTermId,
                 $planPriceId,
                 is_string($couponCode) ? $couponCode : null,
             );
+            $resolved = $prepared['resolved'];
         } catch (HttpException $e) {
             return redirect()
                 ->route('plans.index')
@@ -159,6 +168,8 @@ class SubscriptionController extends Controller
             now()->addMinutes(60),
         );
 
+        $revenueSummary = app(RevenueSummaryService::class)->forSubscriptionResolvedCheckout($user, $plan, $resolved);
+
         $fields = [
             'key' => $built['key'],
             'txnid' => $built['txnid'],
@@ -185,6 +196,7 @@ class SubscriptionController extends Controller
         return response()->view('payments.payu_redirect', [
             'action' => $checkoutUrl,
             'fields' => $fields,
+            'revenueSummary' => $revenueSummary,
         ]);
     }
 
@@ -197,7 +209,7 @@ class SubscriptionController extends Controller
      * Non-production only: seed PayU pending cache + synthetic success POST body, then run the same path as
      * {@see success()} (hash verify, {@see SubscriptionService::finalizePayuSubscription}).
      */
-    public function testPayuSuccessSimulate(Request $request, SubscriptionService $subscriptions, int $planId): RedirectResponse
+    public function testPayuSuccessSimulate(Request $request, SubscriptionService $subscriptions, RevenueOrchestratorService $revenueOrchestrator, int $planId): RedirectResponse
     {
         // Local / development / testing only (never expose in production).
         if (! app()->environment(['local', 'development', 'testing'])) {
@@ -219,6 +231,12 @@ class SubscriptionController extends Controller
                 ->with('error', __('subscriptions.plan_inactive'));
         }
 
+        if (! Plan::profileGenderAllowsPlan($user, $plan)) {
+            return redirect()
+                ->route('dashboard')
+                ->with('error', __('subscriptions.plan_gender_mismatch'));
+        }
+
         $merchantKey = (string) config('payu.merchant_key', '');
         $salt = (string) config('payu.merchant_salt', '');
         if ($merchantKey === '' || $salt === '') {
@@ -231,7 +249,8 @@ class SubscriptionController extends Controller
         $planTermId = $visibleTerms->isNotEmpty() ? (int) $visibleTerms->first()->id : null;
 
         try {
-            $resolved = $subscriptions->resolvePaidPlanCheckout($user, $plan, $planTermId, null, null);
+            $prepared = $revenueOrchestrator->prepareCheckout($user, $plan, $planTermId, null, null);
+            $resolved = $prepared['resolved'];
         } catch (HttpException $e) {
             return redirect()
                 ->route('dashboard')
@@ -612,7 +631,7 @@ class SubscriptionController extends Controller
         ]);
 
         try {
-            $subscriptions->finalizePayuSubscription($user, $plan, $pending, $txnid, $data);
+            $subscription = $subscriptions->finalizePayuSubscription($user, $plan, $pending, $txnid, $data);
         } catch (HttpException $e) {
             Log::error('PAYU FAILURE POINT', [
                 'reason' => 'finalize_threw_http_exception',
@@ -668,6 +687,10 @@ class SubscriptionController extends Controller
 
         if ($request->hasSession()) {
             $request->session()->forget('error');
+            $request->session()->flash(
+                'subscription_checkout_receipt',
+                app(RevenueSummaryService::class)->forCompletedSubscriptionPayu($subscription, $pending),
+            );
         }
         Log::info('RETURN PATH', [
             'type' => 'success',

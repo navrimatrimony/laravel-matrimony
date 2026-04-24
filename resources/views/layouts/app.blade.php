@@ -72,6 +72,8 @@
     </div>
 @endif
 
+@include('partials.subscription-checkout-receipt')
+
 @if (session('error'))
     @php($ruleAction = session('rule_action'))
     <div data-flash-dismissible data-flash-auto-ms="12000" role="alert" class="relative z-40 mx-auto max-w-2xl px-4 pt-4">

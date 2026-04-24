@@ -1235,7 +1235,7 @@
 <hr class="my-8 border-gray-300 dark:border-gray-600">
 @endif
 
-{{-- Match Explanation Section (SSOT: MatchingEngine) --}}
+{{-- Match Explanation Section (SSOT: MatchingPresenter → RuleEngineService) --}}
 @if (!$isOwnProfile)
 @php
     $md = is_array($matchData ?? null) ? $matchData : [];

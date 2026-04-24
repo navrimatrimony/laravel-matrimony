@@ -8,7 +8,9 @@ use App\Models\MatrimonyProfile;
 use App\Models\Message;
 use App\Models\ProfileView;
 use App\Models\Shortlist;
+use App\Services\NudgeService;
 use App\Services\ProfileCompletionEngine;
+use App\Services\RecommendationService;
 use App\Services\SubscriptionService;
 use App\Services\UserWalletService;
 use Illuminate\Support\Facades\DB;
@@ -27,6 +29,8 @@ class DashboardController extends Controller
 {
     public function __construct(
         private readonly ProfileCompletionEngine $profileCompletionEngine,
+        private readonly RecommendationService $recommendationService,
+        private readonly NudgeService $nudgeService,
     ) {}
 
     /**
@@ -40,6 +44,8 @@ class DashboardController extends Controller
         if (! $user->matrimonyProfile) {
             return view('dashboard', [
                 'hasProfile' => false,
+                'recommendations' => [],
+                'nudges' => [],
             ]);
         }
 
@@ -148,6 +154,9 @@ class DashboardController extends Controller
             ? url(route('register', ['ref' => $user->referral_code], false))
             : null;
 
+        $recommendations = $this->recommendationService->getTopMatches($user, 10);
+        $nudges = $this->nudgeService->getNudges($user, $recommendations);
+
         return view('dashboard', [
             'hasProfile' => true,
             'profile' => $profile,
@@ -168,6 +177,8 @@ class DashboardController extends Controller
             'recentSentInterests' => $recentSentInterests,
             'chatUnreadCount' => (int) $chatUnreadCount,
             'recentUnreadChats' => $recentUnread,
+            'recommendations' => $recommendations,
+            'nudges' => $nudges,
         ]);
     }
 }

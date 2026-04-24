@@ -3,7 +3,9 @@
 namespace App\Providers;
 
 use App\Models\MatrimonyProfile;
+use App\Models\SystemRule;
 use App\Observers\MatrimonyProfileObserver;
+use App\Observers\SystemRuleObserver;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -22,6 +24,7 @@ class AppServiceProvider extends ServiceProvider
     {
         $this->app->singleton(\App\Services\ProfileCompletionEngine::class);
         $this->app->singleton(\App\Services\MatchingEngine::class);
+        $this->app->singleton(\App\Services\Matching\MatchingPresenter::class);
     }
 
     /**
@@ -30,6 +33,7 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         MatrimonyProfile::observe(MatrimonyProfileObserver::class);
+        SystemRule::observe(SystemRuleObserver::class);
         // Guard against misconfiguration: Sarvam structured parser must use Sarvam M only.
 
         $envSarvamStructured = strtolower(trim((string) env('INTAKE_SARVAM_STRUCTURED_MODEL', '')));
@@ -84,8 +88,8 @@ class AppServiceProvider extends ServiceProvider
                 'who_viewed_count' => 0,
             ];
             if (auth()->check() && auth()->user()->matrimonyProfile) {
-                $planUsageSummary = app(\App\Services\FeatureUsageService::class)
-                    ->getDashboardUsageSummary(auth()->user());
+                $planUsageSummary = app(\App\Services\QuotaEngineService::class)
+                    ->getUserQuotaSummary(auth()->user());
                 $chatDockData = app(\App\Services\MemberQuickHubService::class)
                     ->buildChatDockForUser(auth()->user());
                 $memberActivityCounts = app(\App\Services\MemberQuickHubService::class)

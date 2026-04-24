@@ -14,6 +14,7 @@ class AdminCommerceAccessTest extends TestCase
     {
         $this->get(route('admin.commerce.analytics.index'))->assertRedirect();
         $this->get(route('admin.commerce.coupons.index'))->assertRedirect();
+        $this->get(route('admin.revenue.index'))->assertRedirect();
     }
 
     public function test_non_admin_user_cannot_access_commerce_admin(): void
@@ -22,6 +23,10 @@ class AdminCommerceAccessTest extends TestCase
 
         $this->actingAs($user)
             ->get(route('admin.commerce.analytics.index'))
+            ->assertForbidden();
+
+        $this->actingAs($user)
+            ->get(route('admin.revenue.index'))
             ->assertForbidden();
     }
 
@@ -40,5 +45,15 @@ class AdminCommerceAccessTest extends TestCase
         $this->actingAs($admin)
             ->get(route('admin.commerce.overrides.index'))
             ->assertOk();
+
+        $this->actingAs($admin)
+            ->get(route('admin.revenue.index'))
+            ->assertOk()
+            ->assertSee(__('admin_commerce.revenue_title'), false);
+
+        $this->actingAs($admin)
+            ->get(route('admin.revenue.index', ['from' => '2026-01-01', 'to' => '2026-01-31']))
+            ->assertOk()
+            ->assertSee(__('admin_commerce.revenue_table_daily_revenue'), false);
     }
 }

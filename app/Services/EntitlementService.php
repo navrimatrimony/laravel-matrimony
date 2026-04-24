@@ -83,12 +83,12 @@ class EntitlementService
      */
     public function resyncFromActiveSubscription(int $userId): void
     {
-        $sub = Subscription::query()
-            ->where('user_id', $userId)
-            ->effectivelyActiveForAccess()
-            ->orderByDesc('starts_at')
-            ->first();
+        $user = User::query()->find($userId);
+        if (! $user) {
+            return;
+        }
 
+        $sub = Subscription::queryAuthoritativeAccessForUser($user)->first();
         if (! $sub) {
             return;
         }
@@ -249,12 +249,11 @@ class EntitlementService
             return $this->activePlanWithFeaturesByUser[$userId];
         }
 
-        $sub = Subscription::query()
-            ->where('user_id', $userId)
-            ->effectivelyActiveForAccess()
-            ->orderByDesc('starts_at')
-            ->with(['plan.features', 'plan.quotaPolicies'])
-            ->first();
+        $user = User::query()->find($userId);
+        $sub = $user ? Subscription::queryAuthoritativeAccessForUser($user)->first() : null;
+        if ($sub) {
+            $sub->loadMissing(['plan.features', 'plan.quotaPolicies']);
+        }
 
         $plan = $sub?->plan;
         if ($plan) {

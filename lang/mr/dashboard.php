@@ -63,10 +63,17 @@ return [
     'usage_row_interest_sends' => 'पाठवलेल्या इच्छा',
     'usage_row_mediator_requests' => 'मध्यस्थ विनंत्या',
     'usage_remaining' => ':n शिल्लक',
+    'usage_compact_fraction' => ':used/:total',
+    'usage_full_primary' => ':total (वापर :used, शिल्लक :remaining)',
     'usage_unlimited' => 'अमर्याद',
     'usage_not_included' => 'तुमच्या प्लॅनमध्ये नाही',
     'usage_bypass' => 'तुमच्यासाठी प्लॅन मर्यादा लागू होत नाहीत.',
     'usage_upgrade_plan' => 'प्लॅन व अपग्रेड',
+
+    'subscription_state_expired' => 'सक्रिय किंवा ग्रेस कालावधीतील सशुल्क सदस्यता नाही (मोफत प्लॅन मर्यादा लागू).',
+    'subscription_state_grace' => 'ग्रेस प्रवेश — पूर्ण प्लॅन नियम :grace_ends पर्यंत.',
+    'subscription_state_active_open' => 'सशुल्क कालावधी सक्रिय (या प्लॅनवर निश्चित शेवटची तारीख नाही).',
+    'subscription_state_active_until' => 'सशुल्क कालावधी :expires पर्यंत सक्रिय.',
 
     'monetization_activity_title' => 'काय चाललंय (दिसणारी हालचाल)',
     'monetization_viewed_you' => '{1} गेल्या ३० दिवसांत :count जणांनी तुमची प्रोफाइल पाहिली.|[2,*] गेल्या ३० दिवसांत :count जणांनी तुमची प्रोफाइल पाहिली.',
@@ -74,4 +81,10 @@ return [
     'monetization_plan_expires' => '{1} तुमचा प्लॅन :days दिवसात संपतो/नूतनीकरण होते.|[2,*] तुमचा प्लॅन :days दिवसांत संपतो/नूतनीकरण होते.',
     'monetization_wallet_balance' => 'वॉलेट शिल्लक: ₹:amount (फक्त तुम्ही मान्य केलेल्या अतिरिक्त पेड कृतींसाठी वापरली जाते).',
     'monetization_referral_hint' => 'मित्रांना आमंत्रित करा — लिंक शेअर करा:',
+
+    'smart_recommendations_title' => 'तुमच्यासाठी सूचना',
+    'smart_recommendations_subtitle' => 'तुमच्या हालचालीसह जुळण्याच्या गुणांनुसार क्रम (शोधाशी समान नियम).',
+    'smart_recommendations_score' => 'जुळणी :score',
+    'smart_recommendations_empty' => 'अजून सूचना नाहीत — प्रोफाइल ब्राउझ करून पहा.',
+    'smart_recommendations_browse' => 'सर्व प्रोफाइल पहा',
 ];

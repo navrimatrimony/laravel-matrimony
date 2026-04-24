@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Block;
 use App\Models\Interest;
 use App\Models\MatrimonyProfile;
+use App\Models\UserMatchBehavior;
 use App\Notifications\InterestAcceptedNotification;
 use App\Notifications\InterestRejectedNotification;
 use App\Notifications\InterestSentNotification;
@@ -20,6 +21,7 @@ use App\Support\SafeNotifier;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\View\View;
 use Symfony\Component\HttpKernel\Exception\HttpException;
 
@@ -167,6 +169,18 @@ class InterestController extends Controller
             $receiverOwner = $receiverProfile->user;
             if ($receiverOwner && AdminActivityNotificationGate::allowsPeerActivityNotification($authUser)) {
                 SafeNotifier::notify($receiverOwner, new InterestSentNotification($senderProfile));
+            }
+        }
+
+        if ($interest->wasRecentlyCreated && Schema::hasTable('user_match_behaviors')) {
+            $targetUser = $receiverProfile->user;
+            if ($targetUser?->matrimonyProfile) {
+                UserMatchBehavior::query()->create([
+                    'actor_user_id' => $authUser->id,
+                    'target_profile_id' => $targetUser->matrimonyProfile->id,
+                    'action' => 'interest_sent',
+                    'created_at' => now(),
+                ]);
             }
         }
 
@@ -332,8 +346,21 @@ class InterestController extends Controller
             'status' => 'accepted',
         ]);
 
-        // Phase-5: Grant contact visibility via normalized table (replaces contact_visible_to JSON)
         $senderProfile = $interest->senderProfile;
+
+        if (Schema::hasTable('user_match_behaviors')) {
+            $senderUser = $senderProfile?->user;
+            if ($senderUser?->matrimonyProfile) {
+                UserMatchBehavior::query()->create([
+                    'actor_user_id' => $user->id,
+                    'target_profile_id' => $senderUser->matrimonyProfile->id,
+                    'action' => 'interest_accepted',
+                    'created_at' => now(),
+                ]);
+            }
+        }
+
+        // Phase-5: Grant contact visibility via normalized table (replaces contact_visible_to JSON)
         if ($senderProfile && $receiverProfile->contact_unlock_mode === 'after_interest_accepted') {
             \Illuminate\Support\Facades\DB::table('profile_contact_visibility')->insertOrIgnore([
                 'owner_profile_id' => $receiverProfile->id,

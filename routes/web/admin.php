@@ -9,17 +9,17 @@ use App\Http\Controllers\Admin\AdminDashboardController;
 use App\Http\Controllers\Admin\AdminFieldRegistryController;
 use App\Http\Controllers\Admin\AdminIntakeController;
 use App\Http\Controllers\Admin\AdminKycController;
-use App\Http\Controllers\PaymentDisputeController;
-use App\Http\Controllers\PaymentController;
-use App\Http\Controllers\Admin\AdminPaymentController;
 use App\Http\Controllers\Admin\AdminOcrSimulationController;
+use App\Http\Controllers\Admin\AdminPaymentController;
 use App\Http\Controllers\Admin\AdminProfileModerationController;
 use App\Http\Controllers\Admin\AdminProfileTagController;
 use App\Http\Controllers\Admin\AdminReligionController;
+use App\Http\Controllers\Admin\AdminRevenueController;
 use App\Http\Controllers\Admin\AdminSeriousIntentController;
 use App\Http\Controllers\Admin\AdminSettingsController;
 use App\Http\Controllers\Admin\AdminSuggestionReviewController;
 use App\Http\Controllers\Admin\AdminUserNotificationsController;
+use App\Http\Controllers\Admin\AdminUserPlanController;
 use App\Http\Controllers\Admin\AdminVerificationTagController;
 use App\Http\Controllers\Admin\AutoShowcaseSettingsController;
 use App\Http\Controllers\Admin\CommerceAnalyticsController;
@@ -27,8 +27,8 @@ use App\Http\Controllers\Admin\CommerceMemberOverrideController;
 use App\Http\Controllers\Admin\CouponController;
 use App\Http\Controllers\Admin\DuplicatePhoneController;
 use App\Http\Controllers\Admin\GovernanceDashboardController;
-use App\Http\Controllers\Admin\HomepageImageController;
 use App\Http\Controllers\Admin\HelpCentreTicketController;
+use App\Http\Controllers\Admin\HomepageImageController;
 use App\Http\Controllers\Admin\IntakeReviewController;
 use App\Http\Controllers\Admin\LocationSuggestionWebController;
 use App\Http\Controllers\Admin\MatchBoostController;
@@ -50,6 +50,8 @@ use App\Http\Controllers\Admin\TranslationController;
 use App\Http\Controllers\Admin\UserWalletController;
 use App\Http\Controllers\Internal\Admin\CityAliasAdminController;
 use App\Http\Controllers\Internal\Admin\LocationSuggestionAdminController;
+use App\Http\Controllers\PaymentController;
+use App\Http\Controllers\PaymentDisputeController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -131,6 +133,10 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
     Route::get('/duplicate-phones', [DuplicatePhoneController::class, 'index'])->name('duplicate-phones.index');
     Route::post('/duplicate-phones/{user}/mobile', [DuplicatePhoneController::class, 'updateMobile'])->name('duplicate-phones.update-mobile');
 
+    Route::get('/users/{user}/plan', [AdminUserPlanController::class, 'show'])->name('users.plan');
+
+    Route::get('/revenue', [AdminRevenueController::class, 'index'])->name('revenue.index');
+
     Route::get('/payments', [AdminPaymentController::class, 'index'])->name('payments.index');
     Route::get('/disputes', [AdminPaymentController::class, 'disputes'])->name('disputes.index');
     Route::post('/payments/{txnid}/refund', [PaymentController::class, 'refund'])->name('payments.refund');
@@ -148,7 +154,7 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
         Route::post('/insights/feedback', [AdminDashboardController::class, 'postInsightFeedback'])->name('insights.feedback');
         Route::get('/risk', [AdminDashboardController::class, 'getRiskAlerts'])->name('risk');
         Route::get('/live', [AdminDashboardController::class, 'getLiveActions'])->name('live');
-      	Route::get('/ai-health', [AdminDashboardController::class, 'getAiHealth'])->name('ai-health');
+        Route::get('/ai-health', [AdminDashboardController::class, 'getAiHealth'])->name('ai-health');
     });
 
     Route::get('/showcase', function () {

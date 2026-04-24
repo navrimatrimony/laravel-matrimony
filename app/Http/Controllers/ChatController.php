@@ -13,6 +13,7 @@ use App\Services\Chat\ChatTemplateSuggestionService;
 use App\Services\ChatListService;
 use App\Services\CommunicationPolicyService;
 use App\Services\FeatureUsageService;
+use App\Services\QuotaEngineService;
 use App\Services\ShowcaseChat\ShowcaseConversationTagService;
 use App\Services\ShowcaseChat\ShowcaseOrchestrationService;
 use App\Services\UserEntitlementService;
@@ -28,6 +29,7 @@ class ChatController extends Controller
         protected ChatConversationService $conversations,
         protected ChatMessageService $messages,
         protected FeatureUsageService $featureUsage,
+        protected QuotaEngineService $quotaEngine,
         protected ChatListService $chatList,
     ) {}
 
@@ -253,6 +255,8 @@ class ChatController extends Controller
             'body_text' => 'required|string|max:2000',
         ]);
 
+        $uid = (int) $user->id;
+
         $body = (string) $request->input('body_text');
         $mod = app(ChatMessageModerationService::class);
         $decision = $mod->moderate($body);
@@ -262,10 +266,10 @@ class ChatController extends Controller
             ]);
         }
 
-        $uid = (int) $user->id;
-        $canSend = $this->featureUsage->canUse($uid, FeatureUsageService::FEATURE_CHAT_SEND_LIMIT)
-            || $this->featureUsage->canSendChatInExistingConversation($uid, (int) $conversation->id, (int) $me->id);
-        if (! $canSend) {
+        if (! $this->quotaEngine->canAccessFeature($user, 'chat', [
+            'conversation_id' => (int) $conversation->id,
+            'sender_profile_id' => (int) $me->id,
+        ])) {
             return $this->chatSendLimitExceededResponse($request);
         }
 
@@ -306,6 +310,8 @@ class ChatController extends Controller
             abort(403);
         }
 
+        $uid = (int) $user->id;
+
         if (! in_array((int) $me->id, [(int) $conversation->profile_one_id, (int) $conversation->profile_two_id], true)) {
             abort(403);
         }
@@ -339,10 +345,10 @@ class ChatController extends Controller
             return back()->with('error', __('subscriptions.feature_locked'));
         }
 
-        $uid = (int) $user->id;
-        $canSend = $this->featureUsage->canUse($uid, FeatureUsageService::FEATURE_CHAT_SEND_LIMIT)
-            || $this->featureUsage->canSendChatInExistingConversation($uid, (int) $conversation->id, (int) $me->id);
-        if (! $canSend) {
+        if (! $this->quotaEngine->canAccessFeature($user, 'chat', [
+            'conversation_id' => (int) $conversation->id,
+            'sender_profile_id' => (int) $me->id,
+        ])) {
             return $this->chatSendLimitExceededResponse($request);
         }
 

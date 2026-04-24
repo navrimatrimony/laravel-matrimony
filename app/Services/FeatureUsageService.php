@@ -216,12 +216,10 @@ class FeatureUsageService
             $normalizeError = $e->getMessage();
         }
 
-        $subscription = Subscription::query()
-            ->where('user_id', $user->id)
-            ->effectivelyActiveForAccess()
-            ->latest('id')
-            ->with(['plan', 'planTerm'])
-            ->first();
+        $subscription = app(SubscriptionService::class)->getActiveSubscription($user);
+        if ($subscription) {
+            $subscription->loadMissing(['plan', 'planTerm']);
+        }
 
         $planFeatureRow = null;
         $rawValue = null;
@@ -301,15 +299,14 @@ class FeatureUsageService
     /**
      * True when active subscription {@code meta.feature_expiry[normalizedKey]} is in the past.
      * Invalid meta / date formats fail closed (ignore expiry — no block).
+     *
+     * Subscription row: {@see SubscriptionService::getActiveSubscription()} (same ordering as quota / entitlements SSOT).
+     * Previously used {@code latest('id')}; aligned to authoritative resolution under single-active subscription invariant.
      */
     private function subscriptionMetaFeatureExpired(User $user, string $normalizedKey): bool
     {
         try {
-            $sub = Subscription::query()
-                ->where('user_id', $user->id)
-                ->effectivelyActiveForAccess()
-                ->latest('id')
-                ->first();
+            $sub = app(SubscriptionService::class)->getActiveSubscription($user);
 
             if (! $sub) {
                 return false;
@@ -795,7 +792,7 @@ class FeatureUsageService
             return false;
         }
 
-        return $this->getFeatureState($user, $featureKey)['allowed'];
+        return app(QuotaEngineService::class)->canAccessFeature($user, $featureKey, []);
     }
 
     /**
@@ -1323,123 +1320,7 @@ class FeatureUsageService
      */
     public function getDashboardUsageSummary(User $user): ?array
     {
-        if (! $user->matrimonyProfile) {
-            return null;
-        }
-
-        if ($this->shouldBypassUsageLimits($user)) {
-            return [
-                'bypass' => true,
-                'rows' => [],
-            ];
-        }
-
-        $subs = app(SubscriptionService::class);
-        $usageSvc = app(UserFeatureUsageService::class);
-        $interestSvc = app(InterestSendLimitService::class);
-
-        $contactLimitDisplay = $subs->getQuotaLimitForUsageDisplay($user, PlanFeatureKeys::CONTACT_VIEW_LIMIT);
-        $contactUsed = $usageSvc->getUsage(
-            (int) $user->id,
-            UserFeatureUsageKeys::CONTACT_VIEW_LIMIT,
-            UserFeatureUsage::PERIOD_MONTHLY,
-        );
-
-        $rows = [
-            $this->dashboardUsageRow(
-                'contact_reveals',
-                __('dashboard.usage_row_contact_reveals'),
-                'monthly',
-                $contactUsed,
-                $contactLimitDisplay,
-            ),
-            $this->dashboardUsageRow(
-                'chat_sends',
-                __('dashboard.usage_row_chat_sends'),
-                'daily',
-                $usageSvc->getUsage(
-                    (int) $user->id,
-                    self::FEATURE_CHAT_SEND_LIMIT,
-                    UserFeatureUsage::PERIOD_DAILY,
-                ),
-                $subs->getQuotaLimitForUsageDisplay($user, SubscriptionService::FEATURE_CHAT_SEND_LIMIT),
-            ),
-            $this->dashboardUsageRow(
-                'profile_opens',
-                __('dashboard.usage_row_profile_opens'),
-                'daily',
-                $usageSvc->getUsage(
-                    (int) $user->id,
-                    self::FEATURE_DAILY_PROFILE_VIEW_LIMIT,
-                    UserFeatureUsage::PERIOD_DAILY,
-                ),
-                $subs->getQuotaLimitForUsageDisplay($user, SubscriptionService::FEATURE_DAILY_PROFILE_VIEW_LIMIT),
-            ),
-            $this->dashboardUsageRow(
-                'interest_sends',
-                __('dashboard.usage_row_interest_sends'),
-                'daily',
-                $usageSvc->getUsage(
-                    (int) $user->id,
-                    UserFeatureUsageKeys::INTEREST_SEND_LIMIT,
-                    UserFeatureUsage::PERIOD_DAILY,
-                ),
-                $interestSvc->effectiveDailyLimitForUsageDisplay($user),
-            ),
-            $this->dashboardUsageRow(
-                'mediator_requests',
-                __('dashboard.usage_row_mediator_requests'),
-                'monthly',
-                $usageSvc->getUsage(
-                    (int) $user->id,
-                    UserFeatureUsageKeys::MEDIATOR_REQUEST,
-                    UserFeatureUsage::PERIOD_MONTHLY,
-                ),
-                $this->getEffectiveMediatorMonthlyLimitForUsageDisplay($user),
-            ),
-        ];
-
-        $rows = array_values(array_filter($rows, function (array $r): bool {
-            if ($r['is_unlimited'] ?? false) {
-                return true;
-            }
-            // Mediator row stays visible when "locked" because contact cap is 0 (matches profile gating UX).
-            if (($r['key'] ?? '') === 'mediator_requests') {
-                return true;
-            }
-
-            return ! ($r['locked'] ?? false);
-        }));
-
-        return [
-            'bypass' => false,
-            'rows' => $rows,
-        ];
-    }
-
-    /**
-     * @return array{key: string, label: string, period: string, used: int, limit: int|null, remaining: int|null, locked: bool, is_unlimited: bool}
-     */
-    private function dashboardUsageRow(
-        string $key,
-        string $label,
-        string $period,
-        int $used,
-        int $limit,
-    ): array {
-        $locked = $limit === 0;
-        $unlimited = $this->isUnlimitedLimit($limit);
-
-        return [
-            'key' => $key,
-            'label' => $label,
-            'period' => $period,
-            'used' => $used,
-            'limit' => $unlimited ? null : $limit,
-            'remaining' => $unlimited ? null : max(0, $limit - $used),
-            'locked' => $locked,
-            'is_unlimited' => $unlimited,
-        ];
+        return app(QuotaEngineService::class)->getUserQuotaSummary($user);
     }
 
     /**

@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Services\EntitlementService;
 use App\Services\PlanSubscriptionTerms;
+use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -66,7 +67,17 @@ class Subscription extends Model
      */
     public function scopeEffectivelyActiveForAccess(Builder $query): Builder
     {
-        $now = now();
+        return $query->effectivelyActiveForAccessAt(now());
+    }
+
+    /**
+     * Same rules as {@see scopeEffectivelyActiveForAccess} at a fixed instant (tests / previews).
+     *
+     * @param  Builder<Subscription>  $query
+     * @return Builder<Subscription>
+     */
+    public function scopeEffectivelyActiveForAccessAt(Builder $query, CarbonInterface $at): Builder
+    {
         $driver = $query->getConnection()->getDriverName();
         $graceExpr = match ($driver) {
             'mysql', 'mariadb' => 'DATE_ADD(subscriptions.ends_at, INTERVAL COALESCE(p.grace_period_days, 0) DAY)',
@@ -77,18 +88,35 @@ class Subscription extends Model
 
         return $query
             ->where('status', self::STATUS_ACTIVE)
-            ->where(function ($q) use ($now, $graceExpr) {
+            ->where(function ($q) use ($at, $graceExpr) {
                 $q->whereNull('ends_at')
-                    ->orWhere('ends_at', '>', $now)
-                    ->orWhereExists(function ($plan) use ($now, $graceExpr) {
+                    ->orWhere('ends_at', '>', $at)
+                    ->orWhereExists(function ($plan) use ($at, $graceExpr) {
                         $plan->selectRaw('1')
                             ->from('plans as p')
                             ->whereColumn('p.id', 'subscriptions.plan_id')
                             ->whereNotNull('subscriptions.ends_at')
-                            ->where('subscriptions.ends_at', '<=', $now)
-                            ->whereRaw($graceExpr.' > ?', [$now->toDateTimeString()]);
+                            ->where('subscriptions.ends_at', '<=', $at)
+                            ->whereRaw($graceExpr.' > ?', [$at->toDateTimeString()]);
                     });
             });
+    }
+
+    /**
+     * Authoritative query for the member's current subscription row (paid window + grace).
+     * Ordering: {@code starts_at} descending — same as {@see \App\Services\SubscriptionService::getActiveSubscription()}.
+     * Use {@code ->first()} at call sites; keeps selection logic out of duplicated ad-hoc queries.
+     *
+     * @return Builder<Subscription>
+     */
+    public static function queryAuthoritativeAccessForUser(User $user, ?CarbonInterface $at = null): Builder
+    {
+        $moment = $at ?? now();
+
+        return static::query()
+            ->where('user_id', $user->id)
+            ->effectivelyActiveForAccessAt($moment)
+            ->orderByDesc('starts_at');
     }
 
     protected static function booted(): void

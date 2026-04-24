@@ -39,16 +39,27 @@ class PlansController extends Controller
 
         $effectivePlan = $subscriptions->getEffectivePlan($user);
 
-        $currentPlanDisplayName = null;
-        if ($user !== null) {
-            $activeSub = $subscriptions->getActiveSubscription($user);
-            if ($activeSub instanceof Subscription) {
-                $snap = $activeSub->checkoutSnapshot();
-                $label = trim((string) ($snap['plan_name'] ?? ''));
-                if ($label !== '') {
-                    $currentPlanDisplayName = $label;
-                }
+        $activeSub = $user !== null ? $subscriptions->getActiveSubscription($user) : null;
+        $activeSub?->loadMissing('plan');
+
+        $planForMemberTierContext = $effectivePlan;
+        if ($activeSub && $activeSub->plan) {
+            $paidSlug = (string) $activeSub->plan->slug;
+            if (! Plan::isFreeCatalogSlug($paidSlug)) {
+                $planForMemberTierContext = $activeSub->plan->loadMissing(['features', 'terms', 'quotaPolicies']);
             }
+        }
+
+        $currentPlanDisplayName = null;
+        if ($user !== null && $activeSub instanceof Subscription) {
+            $snap = $activeSub->checkoutSnapshot();
+            $label = trim((string) ($snap['plan_name'] ?? ''));
+            if ($label !== '') {
+                $currentPlanDisplayName = $label;
+            }
+        }
+        if ($currentPlanDisplayName === null && $activeSub && $activeSub->plan) {
+            $currentPlanDisplayName = trim((string) $activeSub->plan->name);
         }
 
         // All active non-free plans (admin-created tiers like "test" must appear). Order by sort_order + id.
@@ -61,20 +72,14 @@ class PlansController extends Controller
             ->values();
 
         $user?->loadMissing('matrimonyProfile.gender');
-        $viewerGenderKey = strtolower(trim((string) ($user?->matrimonyProfile?->gender?->key ?? '')));
-        $planMatchesViewerGender = static function (Plan $p) use ($viewerGenderKey): bool {
-            $target = strtolower(trim((string) ($p->applies_to_gender ?? 'all')));
-            if ($target === '' || $target === 'all') {
-                return true;
-            }
-            if ($viewerGenderKey === '' || $viewerGenderKey === 'other') {
-                return true;
-            }
+        $plans = $plans->filter(fn (Plan $p) => Plan::profileGenderAllowsPlan($user, $p))->values();
+        $pricingPlans = $pricingPlans->filter(fn (Plan $p) => Plan::profileGenderAllowsPlan($user, $p))->values();
 
-            return $target === $viewerGenderKey;
-        };
-        $plans = $plans->filter($planMatchesViewerGender)->values();
-        $pricingPlans = $pricingPlans->filter($planMatchesViewerGender)->values();
+        $activePaidPlanId = ($activeSub && $activeSub->plan && ! Plan::isFreeCatalogSlug((string) $activeSub->plan->slug))
+            ? (int) $activeSub->plan_id
+            : null;
+        $pricingCatalogMissesActivePlan = $activePaidPlanId !== null
+            && ! $pricingPlans->contains(fn (Plan $p) => (int) $p->id === $activePaidPlanId);
 
         $unreadMessagesCount = 0;
         $profileViewersCount = 0;
@@ -125,9 +130,10 @@ class PlansController extends Controller
         return view('plans.index', [
             'plans' => $plans,
             'pricingPlans' => $pricingPlans,
-            'effectivePlan' => $effectivePlan,
-            'currentPlan' => $effectivePlan,
+            'effectivePlan' => $planForMemberTierContext,
+            'currentPlan' => $planForMemberTierContext,
             'currentPlanDisplayName' => $currentPlanDisplayName,
+            'pricingCatalogMissesActivePlan' => $pricingCatalogMissesActivePlan,
             'catalogIncludesInactive' => $catalogIncludesInactive,
             'maxDiscountPercent' => $maxDiscountPercent,
             'unreadMessagesCount' => $unreadMessagesCount,

@@ -49,6 +49,16 @@
                 </p>
             </a>
 
+            @if ($hasProfile)
+                <a href="{{ route('user.my-plan') }}"
+                   class="block bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6 hover:shadow-md transition">
+                    <div class="text-lg font-semibold text-gray-900 dark:text-gray-100">{{ __('user_plan.page_title') }}</div>
+                    <p class="mt-2 text-sm text-gray-600 dark:text-gray-400">
+                        {{ __('user_plan.settings_my_plan_intro') }}
+                    </p>
+                </a>
+            @endif
+
             <a href="{{ route('blocks.index') }}"
                class="block bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6 hover:shadow-md transition md:col-span-2 lg:col-span-1">
                 <div class="text-lg font-semibold text-gray-900 dark:text-gray-100">{{ __('Manage Blocked Profiles') }}</div>

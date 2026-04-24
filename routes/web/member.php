@@ -27,6 +27,7 @@ use App\Http\Controllers\ProfileVerificationController;
 use App\Http\Controllers\ProfileWizardController;
 use App\Http\Controllers\ShortlistController;
 use App\Http\Controllers\SubscriptionController;
+use App\Http\Controllers\UserPlanController;
 use App\Http\Controllers\UserSettingsController;
 use App\Http\Controllers\WhoViewedController;
 use App\Models\BiodataIntake;
@@ -114,6 +115,9 @@ Route::middleware(['auth', \App\Http\Middleware\EnforceCardOnboarding::class])->
 
     Route::get('/settings/security', [UserSettingsController::class, 'security'])
         ->name('user.settings.security');
+
+    Route::get('/my-plan', [UserPlanController::class, 'show'])->name('user.my-plan');
+    Route::get('/plan-history', [UserPlanController::class, 'history'])->name('user.plan-history');
 
     /*
     | Matrimony Profile (Phase-5B: wizard is the only create path; create/store disallowed — Point 5)

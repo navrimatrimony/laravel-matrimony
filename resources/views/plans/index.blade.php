@@ -166,6 +166,12 @@
             </div>
         @endif
 
+        @if (! empty($pricingCatalogMissesActivePlan))
+            <div class="mx-auto mt-6 max-w-xl rounded-xl border border-sky-200 bg-sky-50 px-4 py-3 text-center text-sm text-sky-950 dark:border-sky-900 dark:bg-sky-950/30 dark:text-sky-100">
+                {{ __('subscriptions.active_plan_not_in_catalog') }}
+            </div>
+        @endif
+
         @if (session('success'))
             <div class="mx-auto mt-6 max-w-xl rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-center text-sm text-emerald-900 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-100">
                 {{ session('success') }}

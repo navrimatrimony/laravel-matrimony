@@ -2,6 +2,8 @@
 
 namespace Tests\Feature;
 
+use App\Models\MasterGender;
+use App\Models\MatrimonyProfile;
 use App\Models\Payment;
 use App\Models\Plan;
 use App\Models\PlanTerm;
@@ -28,7 +30,17 @@ class PayuTestSuccessSimulateRouteTest extends TestCase
     public function test_simulate_route_finishes_checkout_and_redirects_to_dashboard(): void
     {
         $this->seed(SubscriptionPlansSeeder::class);
+        MasterGender::query()->firstOrCreate(
+            ['key' => 'male'],
+            ['label' => 'Male', 'is_active' => true],
+        );
         $user = User::factory()->create();
+        $maleGenderId = MasterGender::query()->where('key', 'male')->value('id');
+        $this->assertNotNull($maleGenderId);
+        MatrimonyProfile::factory()->for($user)->create([
+            'gender_id' => $maleGenderId,
+            'lifecycle_state' => 'active',
+        ]);
         $paidPlan = Plan::query()->where('slug', 'gold_male')->firstOrFail();
         $term = PlanTerm::query()
             ->where('plan_id', $paidPlan->id)

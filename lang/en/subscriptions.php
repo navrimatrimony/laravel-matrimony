@@ -6,6 +6,8 @@ return [
     'nav_plans' => 'Plans',
 
     'plan_inactive' => 'This plan is not available.',
+    'plan_gender_mismatch' => 'This plan is not available for your profile gender. Pick a plan that matches your gender in your matrimony profile.',
+    'active_plan_not_in_catalog' => 'Your active plan is not listed in this catalog view (for example, gender-specific plans). Your subscription is still valid — use My plan for details or pick a new plan below.',
     'feature_locked' => 'This feature is not included in your current plan.',
     'chat_locked' => 'Chat is not available on your current plan.',
     'chat_daily_limit' => 'You have reached your daily chat message limit. Upgrade your plan to send more.',

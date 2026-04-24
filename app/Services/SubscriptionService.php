@@ -19,6 +19,7 @@ use App\Models\UserFeatureUsage;
 use App\Support\PlanFeatureKeys;
 use App\Support\PlanQuotaPolicyKeys;
 use App\Support\UserFeatureUsageKeys;
+use Carbon\CarbonInterface;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
@@ -157,7 +158,7 @@ class SubscriptionService
 
         return DB::transaction(function () use ($user, $plan, $planTermId, $planPriceId, $rawCoupon, $couponSvc) {
             $now = now();
-            $carryQuota = $this->resolveCarryQuotaFromPreviousSubscription($user, $now);
+            $carryQuota = app(QuotaEngineService::class)->applyPlan($user, $plan, $now)['carry_quota'];
 
             $resolved = $this->resolvePaidPlanCheckout($user, $plan, $planTermId, $planPriceId, $rawCoupon !== '' ? $rawCoupon : null);
             $planTerm = $resolved['plan_term'];
@@ -242,7 +243,7 @@ class SubscriptionService
                 $this->applyFeatureCouponGrants($sub, $coupon);
             }
 
-            app(ReferralService::class)->applyPurchaseRewardIfEligible($user, $plan);
+            app(RevenueOrchestratorService::class)->finalizePurchase($user, $plan, $sub);
 
             return $sub;
         });
@@ -341,7 +342,7 @@ class SubscriptionService
             }
 
             $now = now();
-            $carryQuota = $this->resolveCarryQuotaFromPreviousSubscription($user, $now);
+            $carryQuota = app(QuotaEngineService::class)->applyPlan($user, $plan, $now)['carry_quota'];
             Subscription::deactivateActiveSubscriptionsForUserId((int) $user->id);
 
             $couponSvc = app(CouponService::class);
@@ -402,7 +403,7 @@ class SubscriptionService
                 $this->applyFeatureCouponGrants($sub, $coupon);
             }
 
-            app(ReferralService::class)->applyPurchaseRewardIfEligible($user, $plan);
+            app(RevenueOrchestratorService::class)->finalizePurchase($user, $plan, $sub);
 
             return $sub;
         });
@@ -716,14 +717,40 @@ class SubscriptionService
 
     /**
      * Latest subscription row that still grants access (including grace_days after ends_at).
+     *
+     * @see self::resolveAuthoritativeSubscriptionForAccess() Single implementation used across the app.
      */
-    public function getActiveSubscription(User $user): ?Subscription
+    public function getActiveSubscription(User $user, ?CarbonInterface $at = null): ?Subscription
     {
-        return Subscription::query()
-            ->where('user_id', $user->id)
-            ->effectivelyActiveForAccess()
-            ->orderByDesc('starts_at')
-            ->first();
+        return $this->resolveAuthoritativeSubscriptionForAccess($user, $at);
+    }
+
+    /**
+     * Authoritative "current" subscription for access, quota payloads, entitlements, and meta gates.
+     * Ordering: {@code orderByDesc(starts_at)} among rows matching {@see Subscription::scopeEffectivelyActiveForAccessAt}.
+     */
+    private function resolveAuthoritativeSubscriptionForAccess(User $user, ?CarbonInterface $at = null): ?Subscription
+    {
+        $moment = $at ?? now();
+
+        $sub = Subscription::queryAuthoritativeAccessForUser($user, $moment)->first();
+
+        if ($sub !== null && config('app.debug')) {
+            $legacyLatestId = Subscription::query()
+                ->where('user_id', $user->id)
+                ->effectivelyActiveForAccessAt($moment)
+                ->latest('id')
+                ->value('id');
+            if ($legacyLatestId !== null && (int) $legacyLatestId !== (int) $sub->id) {
+                Log::warning('subscription_selection_disagreement', [
+                    'user_id' => (int) $user->id,
+                    'authoritative_subscription_id' => (int) $sub->id,
+                    'legacy_latest_id_subscription_id' => (int) $legacyLatestId,
+                ]);
+            }
+        }
+
+        return $sub;
     }
 
     /**
@@ -1000,6 +1027,22 @@ class SubscriptionService
     public function getQuotaLimitForUsageDisplay(User $user, string $key): int
     {
         return $this->resolveQuotaLimitFromPlanAndCarry($user, $key);
+    }
+
+    /**
+     * Carry-only bonus already merged into {@see getFeatureLimit} / display limits (subscription meta {@code carry_quota}).
+     */
+    public function getQuotaCarryBonus(User $user, string $key): int
+    {
+        return $this->carriedQuotaBonus($user, $key);
+    }
+
+    /**
+     * @return array<string, int>
+     */
+    public function resolveCarryQuotaSnapshotForCheckout(User $user, ?CarbonInterface $at = null): array
+    {
+        return $this->resolveCarryQuotaFromPreviousSubscription($user, $at ?? now());
     }
 
     public function assertHasFeature(User $user, string $feature): void

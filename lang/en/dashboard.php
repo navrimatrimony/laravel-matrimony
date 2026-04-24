@@ -63,10 +63,17 @@ return [
     'usage_row_interest_sends' => 'Interests sent',
     'usage_row_mediator_requests' => 'Mediator requests',
     'usage_remaining' => ':n left',
+    'usage_compact_fraction' => ':used/:total',
+    'usage_full_primary' => ':total (:used used, :remaining left)',
     'usage_unlimited' => 'Unlimited',
     'usage_not_included' => 'Not in your plan',
     'usage_bypass' => 'Plan limits do not apply to your account.',
     'usage_upgrade_plan' => 'Plans & upgrades',
+
+    'subscription_state_expired' => 'No paid subscription in an active or grace window (free plan limits apply).',
+    'subscription_state_grace' => 'Grace access — full plan rules until :grace_ends.',
+    'subscription_state_active_open' => 'Paid period active (no fixed end date on this plan).',
+    'subscription_state_active_until' => 'Paid period active until :expires.',
 
     'monetization_activity_title' => 'What is happening (visible activity)',
     'monetization_viewed_you' => '{1} :count person viewed you in the last 30 days.|[2,*] :count people viewed you in the last 30 days.',
@@ -74,4 +81,10 @@ return [
     'monetization_plan_expires' => '{1} Your plan renews or ends in :days day.|[2,*] Your plan renews or ends in :days days.',
     'monetization_wallet_balance' => 'Wallet balance: ₹:amount (used only when you approve an extra paid action).',
     'monetization_referral_hint' => 'Invite friends — share your link:',
+
+    'smart_recommendations_title' => 'Suggested for you',
+    'smart_recommendations_subtitle' => 'Ranked by match score including your activity (same rules as search).',
+    'smart_recommendations_score' => 'Match :score',
+    'smart_recommendations_empty' => 'No suggestions yet — try browsing profiles.',
+    'smart_recommendations_browse' => 'Browse all profiles',
 ];

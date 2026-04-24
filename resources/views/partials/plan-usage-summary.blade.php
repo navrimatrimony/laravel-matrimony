@@ -1,5 +1,5 @@
 @php
-    /** @var array{bypass?: bool, rows?: array<int, array<string, mixed>>|null}|null $planUsageSummary */
+    /** @var array{bypass?: bool, rows?: array<int, array<string, mixed>>|null, subscription_status?: string, subscription_state_label?: string}|null $planUsageSummary */
     $summary = $planUsageSummary ?? null;
     $variant = $variant ?? 'compact';
     $show = $summary && (($summary['bypass'] ?? false) || ! empty($summary['rows'] ?? []));
@@ -11,19 +11,34 @@
         if (! empty($row['locked'])) {
             return [
                 'text' => __('dashboard.usage_compact_excluded'),
+                'full_text' => __('dashboard.usage_compact_excluded'),
                 'title' => __('dashboard.usage_not_included'),
             ];
         }
         if (! empty($row['is_unlimited'])) {
             return [
                 'text' => __('dashboard.usage_compact_unlimited'),
+                'full_text' => __('dashboard.usage_unlimited'),
                 'title' => __('dashboard.usage_unlimited'),
             ];
         }
 
+        $used = (int) ($row['used'] ?? 0);
+        $total = (int) ($row['total_allocated'] ?? $row['limit'] ?? 0);
+        $remaining = $row['remaining'] !== null ? (int) $row['remaining'] : max(0, $total - $used);
+
         return [
-            'text' => __('dashboard.usage_remaining', ['n' => $row['remaining']]),
-            'title' => null,
+            'text' => __('dashboard.usage_compact_fraction', ['used' => $used, 'total' => $total]),
+            'full_text' => __('dashboard.usage_full_primary', [
+                'total' => $total,
+                'used' => $used,
+                'remaining' => $remaining,
+            ]),
+            'title' => __('dashboard.usage_full_primary', [
+                'total' => $total,
+                'used' => $used,
+                'remaining' => $remaining,
+            ]),
         ];
     };
 @endphp
@@ -41,13 +56,21 @@
         ])>
             @if ($summary['bypass'] ?? false)
                 <div class="flex flex-wrap items-center justify-between gap-2">
-                    <p class="text-sm text-gray-700 dark:text-gray-300">{{ __('dashboard.usage_bypass') }}</p>
+                    <div class="min-w-0 flex-1 space-y-1">
+                        <p class="text-sm text-gray-700 dark:text-gray-300">{{ __('dashboard.usage_bypass') }}</p>
+                        @if (! empty($summary['subscription_state_label'] ?? ''))
+                            <p class="text-xs text-gray-500 dark:text-gray-400">{{ $summary['subscription_state_label'] }}</p>
+                        @endif
+                    </div>
                     <a href="{{ route('plans.index') }}" class="shrink-0 text-sm font-medium text-red-600 dark:text-red-400 hover:underline">{{ __('dashboard.usage_upgrade_plan') }}</a>
                 </div>
             @elseif ($isCompact)
                 {{-- Single-line strip: short labels + remaining only; scroll on small screens --}}
                 <div class="flex flex-wrap items-center gap-x-3 gap-y-2 sm:flex-nowrap sm:min-w-0">
                     <span class="sr-only">{{ __('dashboard.usage_strip_title') }}</span>
+                    @if (! empty($summary['subscription_state_label'] ?? ''))
+                        <p class="w-full text-[11px] leading-snug text-gray-500 dark:text-gray-400 sm:w-auto sm:shrink-0">{{ $summary['subscription_state_label'] }}</p>
+                    @endif
                     <div class="flex min-w-0 flex-1 items-center gap-2 overflow-x-auto pb-0.5 sm:pb-0 [-webkit-overflow-scrolling:touch] [scrollbar-width:thin]">
                         @foreach ($summary['rows'] ?? [] as $row)
                             @php
@@ -75,6 +98,9 @@
                     <div>
                         <h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100">{{ __('dashboard.usage_section_title') }}</h3>
                         <p class="text-sm text-gray-600 dark:text-gray-400 mt-0.5">{{ __('dashboard.usage_section_subtitle') }}</p>
+                        @if (! empty($summary['subscription_state_label'] ?? ''))
+                            <p class="text-xs text-gray-500 dark:text-gray-400 mt-1.5">{{ $summary['subscription_state_label'] }}</p>
+                        @endif
                     </div>
                     <a href="{{ route('plans.index') }}" class="inline-flex items-center justify-center shrink-0 rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 transition">
                         {{ __('dashboard.usage_upgrade_plan') }}
@@ -92,9 +118,9 @@
                                 <span class="shrink-0 text-[10px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">{{ $periodLabel }}</span>
                             </div>
                             <p
-                                class="text-2xl font-bold tabular-nums text-gray-900 dark:text-gray-50"
+                                class="text-2xl font-bold tabular-nums text-gray-900 dark:text-gray-50 leading-tight"
                                 @if ($dv['title']) title="{{ $dv['title'] }}" @endif
-                            >{{ $dv['text'] }}</p>
+                            >{{ $dv['full_text'] ?? $dv['text'] }}</p>
                         </li>
                     @endforeach
                 </ul>

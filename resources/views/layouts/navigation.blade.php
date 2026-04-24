@@ -51,6 +51,7 @@
         || request()->routeIs('matrimony.profile.upload-photo')
         || request()->routeIs('matrimony.profile.wizard*')
         || request()->routeIs('user.settings.*')
+        || request()->routeIs('user.my-plan', 'user.plan-history')
         || request()->routeIs('intake.*')
         || request()->routeIs('blocks.index')
         || request()->routeIs('contact-inbox.*')
@@ -130,6 +131,11 @@
             <div class="hidden md:flex md:items-center md:ms-6 md:gap-2 lg:ms-4 lg:gap-1.5">
                 <x-language-switcher :on-red="true" />
                 @auth
+                    @if (auth()->user()->matrimonyProfile && filled(data_get($planUsageSummary, 'subscription_state_label')))
+                        <span class="hidden max-w-[14rem] truncate text-xs font-medium text-white/90 lg:inline" title="{{ data_get($planUsageSummary, 'subscription_state_label') }}">
+                            {{ data_get($planUsageSummary, 'subscription_state_label') }}
+                        </span>
+                    @endif
                 <x-dropdown align="right" width="56">
                     <x-slot name="trigger">
                         <button class="inline-flex items-center px-3 py-2 lg:py-1.5 lg:px-2.5 border border-white/25 text-sm leading-4 font-medium rounded-md text-white bg-red-700/40 hover:bg-red-700/80 focus:outline-none transition ease-in-out duration-150">
@@ -206,6 +212,15 @@
                         <x-dropdown-link :href="route('user.settings.security')" class="hover:bg-gray-100 transition rounded-md">
                             {{ __('Account & Security') }}
                         </x-dropdown-link>
+
+                        @if (auth()->user()->matrimonyProfile)
+                            <x-dropdown-link :href="route('user.my-plan')" class="hover:bg-gray-100 transition rounded-md">
+                                {{ __('user_plan.page_title') }}
+                            </x-dropdown-link>
+                            <x-dropdown-link :href="route('user.plan-history')" class="hover:bg-gray-100 transition rounded-md">
+                                {{ __('user_plan.plan_history_title') }}
+                            </x-dropdown-link>
+                        @endif
 
                         <x-dropdown-link :href="route('notifications.index')" class="hover:bg-gray-100 transition rounded-md">
                             {{ __('Manage Notifications') }}
@@ -360,6 +375,11 @@
             <div class="px-4">
                 <div class="font-medium text-base text-white">{{ Auth::user()->name }}</div>
                 <div class="font-medium text-sm text-white/75">{{ Auth::user()->email }}</div>
+                @if (auth()->user()->matrimonyProfile && filled(data_get($planUsageSummary, 'subscription_state_label')))
+                    <div class="mt-2 text-xs font-medium text-white/90">
+                        {{ data_get($planUsageSummary, 'subscription_state_label') }}
+                    </div>
+                @endif
             </div>
             <div class="mt-3 space-y-1">
                 <div class="px-4 pt-2 text-xs font-semibold text-white/70">
@@ -420,6 +440,15 @@
                 <x-responsive-nav-link :href="route('user.settings.security')">
                     {{ __('Account & Security') }}
                 </x-responsive-nav-link>
+
+                @if (auth()->user()->matrimonyProfile)
+                    <x-responsive-nav-link :href="route('user.my-plan')">
+                        {{ __('user_plan.page_title') }}
+                    </x-responsive-nav-link>
+                    <x-responsive-nav-link :href="route('user.plan-history')">
+                        {{ __('user_plan.plan_history_title') }}
+                    </x-responsive-nav-link>
+                @endif
 
                 <x-responsive-nav-link :href="route('notifications.index')">
                     {{ __('Manage Notifications') }}

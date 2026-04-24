@@ -263,6 +263,38 @@ class Plan extends Model
     }
 
     /**
+     * Public catalog / checkout: whether this plan row is intended for the member's profile gender.
+     *
+     * Product invariant (pinned): plans targeted at {@code male} or {@code female} are visible only when
+     * {@code matrimonyProfile.gender.key} matches exactly. Guests, missing gender, and {@code other}
+     * never see opposite-gender rows; only {@code all} / empty {@code applies_to_gender} applies there.
+     * Do not widen this without explicit product sign-off.
+     */
+    public static function profileGenderAllowsPlan(?User $user, self $plan): bool
+    {
+        $target = strtolower(trim((string) ($plan->applies_to_gender ?? 'all')));
+        if ($target === '' || $target === 'all') {
+            return true;
+        }
+
+        if (! in_array($target, ['male', 'female'], true)) {
+            return false;
+        }
+
+        if ($user === null) {
+            return false;
+        }
+
+        $user->loadMissing('matrimonyProfile.gender');
+        $viewerGenderKey = strtolower(trim((string) ($user->matrimonyProfile?->gender?->key ?? '')));
+        if ($viewerGenderKey === '' || $viewerGenderKey === 'other') {
+            return false;
+        }
+
+        return $target === $viewerGenderKey;
+    }
+
+    /**
      * Default free catalog row for entitlements when the member has no paid subscription.
      * Uses profile gender when available ({@code free_male} / {@code free_female}).
      */

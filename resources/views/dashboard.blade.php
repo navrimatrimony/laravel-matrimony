@@ -72,6 +72,17 @@
                 :shareReferralUrl="$referralShareUrl"
             />
 
+            @foreach ($nudges ?? [] as $nudge)
+                <div class="bg-yellow-100 dark:bg-yellow-900/25 border border-yellow-200 dark:border-yellow-800/60 text-yellow-900 dark:text-yellow-100 p-3 rounded-lg mb-2">
+                    <p class="text-sm">{{ $nudge['message'] ?? '' }}</p>
+                    @if (! empty($nudge['action_url'] ?? null))
+                        <a href="{{ $nudge['action_url'] }}" class="text-sm font-medium text-yellow-900 dark:text-yellow-200 underline mt-1 inline-block">
+                            {{ $nudge['action_label'] ?? '' }}
+                        </a>
+                    @endif
+                </div>
+            @endforeach
+
             {{-- Profile Summary Card with Photo --}}
             <div class="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6 mb-6 border-l-4 border-red-600 border border-gray-200 dark:border-gray-700">
                 <div class="flex flex-col md:flex-row items-center md:items-start gap-6">
@@ -157,6 +168,45 @@
             </div>
 
             @include('partials.plan-usage-summary', ['variant' => 'full'])
+
+            @if (!empty($recommendations ?? []))
+                <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 mb-6 border border-gray-200 dark:border-gray-700">
+                    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-4">
+                        <div>
+                            <h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100">{{ __('dashboard.smart_recommendations_title') }}</h3>
+                            <p class="text-sm text-gray-600 dark:text-gray-400">{{ __('dashboard.smart_recommendations_subtitle') }}</p>
+                        </div>
+                        <a href="{{ route('matrimony.profiles.index') }}" class="text-sm font-medium text-red-600 dark:text-red-400 hover:underline whitespace-nowrap">
+                            {{ __('dashboard.smart_recommendations_browse') }}
+                        </a>
+                    </div>
+                    <ul class="divide-y divide-gray-200 dark:divide-gray-700">
+                        @foreach ($recommendations as $rec)
+                            @continue(empty($rec['profile']))
+                            <li class="py-3 flex items-start justify-between gap-3">
+                                <a href="{{ route('matrimony.profile.show', $rec['profile']->id) }}" class="text-gray-900 dark:text-gray-100 font-medium hover:text-red-600 dark:hover:text-red-400 truncate min-w-0">
+                                    {{ $rec['profile']->full_name ?: __('dashboard.profile_placeholder') }}
+                                </a>
+                                <div class="shrink-0 text-right max-w-[58%]">
+                                    <span class="text-sm tabular-nums text-gray-600 dark:text-gray-400 block">
+                                        {{ __('dashboard.smart_recommendations_score', ['score' => (int) ($rec['final_score'] ?? 0)]) }}
+                                    </span>
+                                    @if (! empty($rec['explanation'] ?? ''))
+                                        <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                                            {{ $rec['explanation'] }}
+                                        </p>
+                                    @endif
+                                </div>
+                            </li>
+                        @endforeach
+                    </ul>
+                </div>
+            @else
+                <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-4 mb-6 border border-gray-200 dark:border-gray-700 text-sm text-gray-600 dark:text-gray-400">
+                    {{ __('dashboard.smart_recommendations_empty') }}
+                    <a href="{{ route('matrimony.profiles.index') }}" class="text-red-600 dark:text-red-400 hover:underline ml-1">{{ __('dashboard.smart_recommendations_browse') }}</a>
+                </div>
+            @endif
 
             {{-- Statistics Cards with SVG Icons --}}
             <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 mb-6">

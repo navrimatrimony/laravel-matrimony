@@ -31,7 +31,7 @@ use App\Services\Image\PhotoUploadBatchUserMessage;
 use App\Services\Image\ProfileGalleryPhotoModerationStatus;
 use App\Services\Image\ProfilePhotoUrlService;
 use App\Services\InterestSendLimitService;
-use App\Services\MatchingEngine;
+use App\Services\Matching\MatchingPresenter;
 use App\Services\MatrimonyProfileSearchQueryService;
 use App\Services\MemberPresencePresentationService;
 use App\Services\ProfileCompletionEngine;
@@ -41,6 +41,7 @@ use App\Services\ProfileRotationService;
 use App\Services\ProfileSearchRankingService;
 use App\Services\ProfileShowReadService;
 use App\Services\ProfileShowSnapshotService;
+use App\Services\RuleEngineService;
 use App\Services\Showcase\AutoShowcaseEngine;
 use App\Services\Showcase\AutoShowcaseSettings;
 use App\Services\ViewTrackingService;
@@ -1225,10 +1226,10 @@ class MatrimonyProfileController extends Controller
         $casteVisible = true;
         $heightVisible = true;
 
-        // Match explanation + score (SSOT: MatchingEngine → system_rules + ProfileCompletionEngine)
+        // Match explanation + score (SSOT: MatchingPresenter → RuleEngineService)
         $matchData = null;
         if (! $isOwnProfile && $user->matrimonyProfile) {
-            $matchData = app(MatchingEngine::class)->profileShowMatchData($user, $profile);
+            $matchData = app(MatchingPresenter::class)->profileShowMatchData($user, $profile);
         }
 
         $interestAllowsContact = false;
@@ -1591,17 +1592,14 @@ class MatrimonyProfileController extends Controller
 
         $viewerUser = auth()->user();
         $viewerProfile = $viewerUser?->matrimonyProfile;
-        $matchingEngine = app(MatchingEngine::class);
-        $profiles->setCollection($profiles->getCollection()->map(function (MatrimonyProfile $listedProfile) use ($viewerProfile, $viewerUser, $matchingEngine) {
+        $ruleEngine = app(RuleEngineService::class);
+        $profiles->setCollection($profiles->getCollection()->map(function (MatrimonyProfile $listedProfile) use ($viewerProfile, $viewerUser, $ruleEngine) {
             $listedProfile->compatibility_summary = null;
             $listedProfile->online_status_summary = self::buildOnlineStatusSummaryForUser($listedProfile->user);
             $listedProfile->reportable_photo_summary = self::buildReportablePhotoSummary($listedProfile);
 
             if ($viewerProfile && $viewerUser && (int) $listedProfile->id !== (int) $viewerProfile->id) {
-                $listedUser = $listedProfile->user;
-                $engine = $listedUser
-                    ? $matchingEngine->for($viewerUser, $listedUser)
-                    : $matchingEngine->scoreBetweenProfiles($viewerProfile, $listedProfile);
+                $engine = $ruleEngine->getMatchResultForProfiles($viewerProfile, $listedProfile);
                 $listedProfile->compatibility_summary = [
                     'score' => $engine['score'],
                     'grade' => $engine['grade'],

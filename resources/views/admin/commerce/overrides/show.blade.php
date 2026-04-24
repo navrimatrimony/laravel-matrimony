@@ -7,7 +7,10 @@
             <h1 class="text-2xl font-bold text-gray-800 dark:text-gray-100">User #{{ $user->id }}</h1>
             <p class="text-sm text-gray-600 dark:text-gray-300 mt-1">{{ $user->email }}</p>
         </div>
-        <a href="{{ route('admin.commerce.overrides.index') }}" class="text-sm font-medium text-indigo-600 dark:text-indigo-400">{{ __('admin_commerce.override_back') }}</a>
+        <div class="flex flex-wrap items-center gap-3">
+            <a href="{{ route('admin.users.plan', $user) }}" class="text-sm font-medium text-indigo-600 dark:text-indigo-400">{{ __('user_plan.page_title') }}</a>
+            <a href="{{ route('admin.commerce.overrides.index') }}" class="text-sm font-medium text-indigo-600 dark:text-indigo-400">{{ __('admin_commerce.override_back') }}</a>
+        </div>
     </div>
 
     @if (session('success'))

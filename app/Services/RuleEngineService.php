@@ -9,7 +9,8 @@ use App\Models\User;
 use App\Support\ErrorFactory;
 
 /**
- * Single entry for configurable rules and the mandatory-core completion signal used in product gates.
+ * Single entry for configurable rules, mandatory-core completion signals used in product gates,
+ * and **compatibility scoring** (always use {@see getMatchResult()} / {@see getMatchResultForProfiles()} — not {@see MatchingEngine} directly).
  * Numeric completion reads from {@see ProfileCompletionEngine}; thresholds live in {@see SystemRule} / admin.
  */
 class RuleEngineService
@@ -20,6 +21,8 @@ class RuleEngineService
 
     public function __construct(
         private readonly ProfileCompletionEngine $profileCompletionEngine,
+        private readonly MatchingEngine $matchingEngine,
+        private readonly AIBehaviorService $aiBehaviorService,
     ) {}
 
     /**
@@ -128,6 +131,125 @@ class RuleEngineService
         }
 
         return ErrorFactory::profileIncompleteAccept($required, $rule?->meta);
+    }
+
+    /**
+     * Product gate before running {@see MatchingEngine} between two accounts (both must own profiles; not self).
+     */
+    public function checkMatchingAllowed(User $userA, User $userB): bool
+    {
+        if ((int) $userA->id === (int) $userB->id) {
+            return false;
+        }
+
+        return $userA->matrimonyProfile instanceof MatrimonyProfile
+            && $userB->matrimonyProfile instanceof MatrimonyProfile;
+    }
+
+    /**
+     * Single entry for numeric compatibility between two accounts (SSOT).
+     *
+     * @return array{
+     *     score: int,
+     *     grade: string,
+     *     breakdown: array<string, int>,
+     *     normalized_breakdown: array<string, int>,
+     *     is_compatible: bool,
+     *     ai_boost: int,
+     *     final_score: int,
+     *     debug: array{base_score: int, ai_boost: int},
+     * }
+     */
+    public function getMatchResult(User $userA, User $userB): array
+    {
+        if (! $this->checkMatchingAllowed($userA, $userB)) {
+            $empty = $this->matchingEngine->emptyScorePayload();
+            $empty['ai_boost'] = 0;
+            $empty['final_score'] = (int) $empty['score'];
+            $empty['debug'] = [
+                'base_score' => (int) $empty['score'],
+                'ai_boost' => 0,
+            ];
+
+            return $empty;
+        }
+
+        $base = $this->matchingEngine->for($userA, $userB);
+
+        $targetProfile = $userB->matrimonyProfile ?? null;
+        $aiBoost = 0;
+        if ($targetProfile instanceof MatrimonyProfile) {
+            $aiBoost = $this->aiBehaviorService->getBoost($userA, $targetProfile);
+        }
+
+        $finalScore = min(100, (int) $base['score'] + $aiBoost);
+
+        $base['ai_boost'] = $aiBoost;
+        $base['final_score'] = $finalScore;
+        $base['debug'] = [
+            'base_score' => (int) $base['score'],
+            'ai_boost' => $aiBoost,
+        ];
+
+        if ((int) $base['score'] === 0 && $aiBoost > 0) {
+            $base['grade'] = 'AI Match';
+        }
+
+        return $base;
+    }
+
+    /**
+     * Listing / card entry: applies {@see checkMatchingAllowed()} when the candidate profile has a user;
+     * otherwise falls back to profile-only scoring (e.g. showcase rows without an account).
+     *
+     * @return array{score: int, grade: string, breakdown: array<string, int>, normalized_breakdown: array<string, int>, is_compatible: bool}
+     */
+    public function getMatchResultForProfiles(MatrimonyProfile $viewerProfile, MatrimonyProfile $viewedProfile): array
+    {
+        $viewerUser = $viewerProfile->relationLoaded('user') ? $viewerProfile->user : $viewerProfile->user()->first();
+        if (! $viewerUser instanceof User) {
+            return $this->matchingEngine->emptyScorePayload();
+        }
+
+        $viewedUser = $viewedProfile->relationLoaded('user') ? $viewedProfile->user : $viewedProfile->user()->first();
+        if ($viewedUser instanceof User) {
+            return $this->getMatchResult($viewerUser, $viewedUser);
+        }
+
+        return $this->matchingEngine->scoreBetweenProfiles($viewerProfile, $viewedProfile);
+    }
+
+    /**
+     * @return array{score: int, grade: string, breakdown: array<string, int>, normalized_breakdown: array<string, int>, is_compatible: bool}
+     */
+    public function emptyMatchResult(): array
+    {
+        return $this->matchingEngine->emptyScorePayload();
+    }
+
+    /**
+     * Placeholder batch hook (future optimization). Uses {@see getMatchResultForProfiles()} so gates stay centralized.
+     *
+     * @param  list<MatrimonyProfile>  $profiles
+     * @return list<array{score: int, grade: string, breakdown: array<string, int>, normalized_breakdown: array<string, int>, is_compatible: bool}>
+     */
+    public function forMany(User $user, array $profiles): array
+    {
+        $viewer = $user->matrimonyProfile;
+        if (! $viewer instanceof MatrimonyProfile) {
+            return collect($profiles)->map(fn () => $this->matchingEngine->emptyScorePayload())->values()->all();
+        }
+
+        return collect($profiles)
+            ->map(function ($profile) use ($viewer): array {
+                if (! $profile instanceof MatrimonyProfile) {
+                    return $this->matchingEngine->emptyScorePayload();
+                }
+
+                return $this->getMatchResultForProfiles($viewer, $profile);
+            })
+            ->values()
+            ->all();
     }
 
     /**

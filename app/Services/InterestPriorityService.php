@@ -21,11 +21,7 @@ class InterestPriorityService
             return Interest::PRIORITY_SCORE_PAID;
         }
 
-        $sub = Subscription::query()
-            ->where('user_id', $user->id)
-            ->effectivelyActiveForAccess()
-            ->orderByDesc('starts_at')
-            ->first();
+        $sub = Subscription::queryAuthoritativeAccessForUser($user)->first();
 
         if (! $sub) {
             return Interest::PRIORITY_SCORE_FREE;

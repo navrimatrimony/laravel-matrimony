@@ -176,7 +176,8 @@ class User extends Authenticatable implements MustVerifyEmail
     }
 
     /**
-     * Latest active subscription row (by starts_at), if any.
+     * Relationship helper: subscription with max {@code starts_at} among rows matching {@see Subscription::scopeEffectivelyActiveForAccess()}.
+     * For gates, quotas, and meta, prefer imperative {@see \App\Services\SubscriptionService::getActiveSubscription()} (same scope + ordering SSOT).
      */
     public function activeSubscription(): HasOne
     {
@@ -269,4 +270,3 @@ class User extends Authenticatable implements MustVerifyEmail
         return $this->plan_expires_at !== null && $this->plan_expires_at->isFuture();
     }
 }
-

@@ -9,6 +9,7 @@ use App\Models\Plan;
 use App\Models\Subscription;
 use App\Models\User;
 use App\Services\InterestPriorityService;
+use Database\Seeders\PlanStandardFeatureKeysSeeder;
 use Database\Seeders\SubscriptionPlansSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use PHPUnit\Framework\Attributes\Test;
@@ -17,6 +18,13 @@ use Tests\TestCase;
 class InterestPriorityReceivedOrderTest extends TestCase
 {
     use RefreshDatabase;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        $this->seed(SubscriptionPlansSeeder::class);
+        $this->seed(PlanStandardFeatureKeysSeeder::class);
+    }
 
     private function seedGenders(): array
     {
@@ -154,7 +162,6 @@ class InterestPriorityReceivedOrderTest extends TestCase
     #[Test]
     public function priority_service_marks_paid_plan_subscriber_as_ten(): void
     {
-        $this->seed(SubscriptionPlansSeeder::class);
         $user = User::factory()->create();
         $basic = Plan::query()->where('slug', 'basic_male')->firstOrFail();
 
