@@ -1,5 +1,7 @@
 import './bootstrap';
 
+import './floating-panels';
+
 import Alpine from 'alpinejs';
 import { plansPricingCatalog } from './plans-catalog';
 import { planQuotaPolicyCard } from './plan-quota-policy-card';

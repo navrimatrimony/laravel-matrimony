@@ -234,6 +234,14 @@
                 <p class="font-semibold text-slate-900 dark:text-white">{{ __('subscriptions.pricing_no_paid_plans') }}</p>
             </div>
         @else
+            {{-- coupon_code must bind on the catalog root x-data; associate with each plan form via form="" --}}
+            @auth
+                <div class="sr-only" aria-hidden="true">
+                    @foreach ($pricingPlans as $p)
+                        <input type="hidden" name="coupon_code" form="plan-subscribe-{{ (int) $p->id }}" x-bind:value="couponCode" />
+                    @endforeach
+                </div>
+            @endauth
             <div class="mx-auto mt-14 grid max-w-5xl grid-cols-1 gap-6 lg:grid-cols-3 lg:items-stretch lg:gap-5">
                 @foreach ($pricingPlans as $plan)
                     @php
@@ -392,13 +400,12 @@
                                         {{ __('subscriptions.pricing_current_plan') }}
                                     </span>
                                 @elseif (auth()->check())
-                                    <form method="POST" action="{{ route('plans.subscribe') }}">
+                                    <form method="POST" action="{{ route('plans.subscribe') }}" id="plan-subscribe-{{ (int) $plan->id }}">
                                         @csrf
                                         <input type="hidden" name="plan" value="{{ $plan->slug }}" />
                                         @if ($useTerms)
                                             <input type="hidden" name="plan_term_id" x-bind:value="selectedBillingId" />
                                         @endif
-                                        <input type="hidden" name="coupon_code" x-bind:value="$root.couponCode" />
                                         <button
                                             type="submit"
                                             class="w-full rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 px-4 py-3.5 text-sm font-bold text-white shadow-lg transition hover:from-indigo-500 hover:to-violet-500 hover:shadow-xl active:scale-[0.98] {{ $isGold ? 'py-4 text-base shadow-indigo-500/25' : '' }}"

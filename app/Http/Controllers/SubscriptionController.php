@@ -28,12 +28,21 @@ class SubscriptionController extends Controller
             abort(403);
         }
 
-        $validated = $request->validate([
-            'plan' => ['required', 'string', 'max:128'],
-            'plan_term_id' => ['nullable', 'integer'],
-            'plan_price_id' => ['nullable', 'integer'],
-            'coupon_code' => ['nullable', 'string', 'max:64'],
-        ]);
+        if ($request->isMethod('get')) {
+            $validated = $request->validate([
+                'plan' => ['required', 'string', 'max:128'],
+                'plan_term_id' => ['nullable', 'integer'],
+                'plan_price_id' => ['nullable', 'integer'],
+                'coupon' => ['nullable', 'string', 'max:64'],
+            ]);
+        } else {
+            $validated = $request->validate([
+                'plan' => ['required', 'string', 'max:128'],
+                'plan_term_id' => ['nullable', 'integer'],
+                'plan_price_id' => ['nullable', 'integer'],
+                'coupon_code' => ['nullable', 'string', 'max:64'],
+            ]);
+        }
 
         $plan = Plan::query()->where('slug', $validated['plan'])->first();
         if (! $plan) {
@@ -70,14 +79,14 @@ class SubscriptionController extends Controller
         $planTermId = ($rawTerm === null || $rawTerm === '') ? null : (int) $rawTerm;
         $rawPrice = $request->input('plan_price_id');
         $planPriceId = ($rawPrice === null || $rawPrice === '') ? null : (int) $rawPrice;
-        $couponCode = $validated['coupon_code'] ?? null;
+        $couponCode = self::normalizedCouponFromRequest($request, $validated);
 
         Log::info('Subscribe clicked', [
             'user_id' => $user->id,
             'plan_slug' => $plan->slug,
             'plan_term_id' => $planTermId,
             'plan_price_id' => $planPriceId,
-            'has_coupon' => is_string($couponCode) && trim($couponCode) !== '',
+            'has_coupon' => $couponCode !== null,
         ]);
 
         try {
@@ -86,10 +95,23 @@ class SubscriptionController extends Controller
                 $plan,
                 $planTermId,
                 $planPriceId,
-                is_string($couponCode) ? $couponCode : null,
+                $couponCode,
             );
             $resolved = $prepared['resolved'];
         } catch (HttpException $e) {
+            if ($couponCode !== null) {
+                return redirect()
+                    ->route('plans.subscribe', self::subscribeReplayRouteQuery(
+                        $validated,
+                        $planTermId,
+                        $planPriceId,
+                        $request,
+                        includeCouponFromRequest: true,
+                    ))
+                    ->withErrors(['coupon' => $e->getMessage()])
+                    ->withInput();
+            }
+
             return redirect()
                 ->route('plans.index')
                 ->with('error', $e->getMessage());
@@ -170,6 +192,25 @@ class SubscriptionController extends Controller
 
         $revenueSummary = app(RevenueSummaryService::class)->forSubscriptionResolvedCheckout($user, $plan, $resolved);
 
+        $couponFieldDisplay = self::couponFieldUxValue($request, $resolved);
+        $checkoutContext = [
+            'plan' => (string) $plan->slug,
+            'plan_term_id' => $planTermId !== null ? (string) $planTermId : '',
+            'plan_price_id' => $planPriceId !== null ? (string) $planPriceId : '',
+        ];
+        $removeCouponSubscribeParams = self::subscribeReplayRouteQuery(
+            $validated,
+            $planTermId,
+            $planPriceId,
+            $request,
+            includeCouponFromRequest: false,
+        );
+        $discountAmount = round((float) ($revenueSummary['discount_amount'] ?? 0), 2);
+        $checkoutBestOfferHint = ($revenueSummary['coupon_code'] ?? null) === null
+            && $discountAmount > 0.004;
+
+        $payuAutoSubmitDelayMs = $request->has('coupon') ? 7000 : 4000;
+
         $fields = [
             'key' => $built['key'],
             'txnid' => $built['txnid'],
@@ -197,6 +238,11 @@ class SubscriptionController extends Controller
             'action' => $checkoutUrl,
             'fields' => $fields,
             'revenueSummary' => $revenueSummary,
+            'checkoutContext' => $checkoutContext,
+            'couponFieldValue' => $couponFieldDisplay,
+            'checkoutBestOfferHint' => $checkoutBestOfferHint,
+            'removeCouponSubscribeParams' => $removeCouponSubscribeParams,
+            'payuAutoSubmitDelayMs' => $payuAutoSubmitDelayMs,
         ]);
     }
 
@@ -713,6 +759,73 @@ class SubscriptionController extends Controller
         return redirect()
             ->route('plans.index')
             ->with('error', __('subscriptions.subscribe_failed'));
+    }
+
+    /**
+     * @param  array<string, mixed>  $validated
+     */
+    private static function normalizedCouponFromRequest(Request $request, array $validated): ?string
+    {
+        $raw = $request->input('coupon');
+        if (! is_string($raw) || trim($raw) === '') {
+            $raw = $request->input('coupon_code');
+        }
+        if (! is_string($raw) || trim($raw) === '') {
+            $raw = isset($validated['coupon_code']) && is_string($validated['coupon_code'])
+                ? $validated['coupon_code']
+                : '';
+        }
+        $t = trim((string) $raw);
+
+        return $t !== '' ? strtoupper($t) : null;
+    }
+
+    /**
+     * @param  array<string, mixed>  $resolved
+     */
+    private static function couponFieldUxValue(Request $request, array $resolved): string
+    {
+        $v = old('coupon', $request->input('coupon'));
+        if (! is_string($v) || trim($v) === '') {
+            $v = old('coupon_code', $request->input('coupon_code'));
+        }
+        if (is_string($v) && trim($v) !== '') {
+            return trim($v);
+        }
+        $c = $resolved['coupon_code'] ?? null;
+
+        return is_string($c) ? trim($c) : '';
+    }
+
+    /**
+     * @param  array<string, mixed>  $validated
+     * @return array<string, int|string>
+     */
+    private static function subscribeReplayRouteQuery(
+        array $validated,
+        ?int $planTermId,
+        ?int $planPriceId,
+        Request $request,
+        bool $includeCouponFromRequest,
+    ): array {
+        $q = ['plan' => (string) $validated['plan']];
+        if ($planTermId !== null) {
+            $q['plan_term_id'] = $planTermId;
+        }
+        if ($planPriceId !== null) {
+            $q['plan_price_id'] = $planPriceId;
+        }
+        if ($includeCouponFromRequest) {
+            $c = $request->input('coupon');
+            if (! is_string($c) || trim($c) === '') {
+                $c = $request->input('coupon_code');
+            }
+            if (is_string($c) && trim($c) !== '') {
+                $q['coupon'] = trim($c);
+            }
+        }
+
+        return $q;
     }
 
     private static function payuFirstName(User $user): string

@@ -11,9 +11,13 @@
     $dockHasAlerts = ($chatDockInitialData['unread_count'] > 0) || count($chatDockInitialData['unread']) > 0;
 @endphp
 
+<div
+    id="chatPanel"
+    class="pointer-events-none fixed right-0 top-[7.5rem] bottom-0 z-[52] hidden transition-transform duration-300 ease-out lg:flex lg:flex-col lg:items-stretch"
+>
 <section
     id="chat-dock-root"
-    class="fixed right-0 top-[7.5rem] bottom-0 z-[52] hidden w-[17rem] border-l border-gray-200 bg-white shadow-2xl transition-transform duration-300 ease-out will-change-transform lg:flex lg:flex-col dark:border-gray-800 dark:bg-gray-900{{ $dockHasAlerts ? '' : ' translate-x-full' }}"
+    class="pointer-events-auto flex h-full min-h-0 w-[17rem] flex-col border-l border-gray-200 bg-white shadow-2xl transition-transform duration-300 ease-out will-change-transform dark:border-gray-800 dark:bg-gray-900{{ $dockHasAlerts ? '' : ' translate-x-full' }}"
     role="complementary"
     aria-label="{{ __('chat_ui.dock_panel_title') }}"
     data-label-profile="{{ __('chat_ui.dock_profile_link') }}"
@@ -53,15 +57,7 @@
         </div>
     </div>
 </section>
-
-<button
-    type="button"
-    id="chat-dock-expand-handle"
-    class="chat-dock-expand-handle pointer-events-auto fixed right-0 top-1/2 z-[55] w-9 max-w-[2.25rem] -translate-y-1/2 gap-1 rounded-l-lg border border-r-0 border-gray-200 bg-gradient-to-b from-red-500 to-rose-600 py-3 text-[9px] font-bold uppercase leading-tight tracking-wide text-white shadow-lg hover:from-red-600 hover:to-rose-700 @if (! $dockHasAlerts) flex flex-col items-center justify-center @else hidden @endif"
-    aria-label="{{ __('chat_ui.dock_expand_aria') }}"
->
-    <span class="block max-h-[5.5rem] overflow-hidden text-center [writing-mode:vertical-rl] [text-orientation:mixed]">{{ __('chat_ui.dock_panel_title') }}</span>
-</button>
+</div>
 
 <div id="chat-popout-layer" class="pointer-events-none fixed bottom-4 right-[18rem] z-50 hidden max-w-[calc(100vw-19rem)] items-end gap-3"></div>
 <div id="chat-minimized-chipbar" class="pointer-events-none fixed bottom-3 right-[18rem] z-50 hidden items-center gap-2"></div>
@@ -80,7 +76,10 @@
     const dockBadge = document.getElementById('chat-dock-badge');
     const popoutLayer = document.getElementById('chat-popout-layer');
     const chipBar = document.getElementById('chat-minimized-chipbar');
-    const expandHandle = document.getElementById('chat-dock-expand-handle');
+    /** #chatTab is rendered later (help partial); resolve at use-time or use delegation — never null at parse time. */
+    function getChatTab() {
+        return document.getElementById('chatTab');
+    }
     const headerMinBtn = document.getElementById('chat-dock-header-minimize');
     const csrf = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
 
@@ -144,17 +143,11 @@
     }
 
     function refreshExpandHandleVisibility() {
-        if (!expandHandle || !root) return;
+        const tab = getChatTab();
+        if (!tab || !root) return;
         const dockOpen = !root.classList.contains('translate-x-full');
-        const lg = typeof window.matchMedia === 'function' && window.matchMedia('(min-width: 1024px)').matches;
-        const showHandle = !dockOpen && lg;
-        expandHandle.toggleAttribute('hidden', !showHandle);
-        expandHandle.classList.toggle('hidden', !showHandle);
-        expandHandle.classList.toggle('flex', showHandle);
-        expandHandle.classList.toggle('flex-col', showHandle);
-        expandHandle.classList.toggle('items-center', showHandle);
-        expandHandle.classList.toggle('justify-center', showHandle);
-        expandHandle.setAttribute('aria-hidden', showHandle ? 'false' : 'true');
+        tab.setAttribute('aria-expanded', dockOpen ? 'true' : 'false');
+        tab.setAttribute('aria-hidden', 'false');
     }
 
     function setDockExpanded(expanded) {
@@ -734,6 +727,9 @@
             updateTabHint();
             renderDockLists();
             updateTabCounts();
+            if (typeof window.floatingPanelsSyncChatUnread === 'function') {
+                window.floatingPanelsSyncChatUnread(Number(dockData.unread_count || 0));
+            }
             const nowUnread = hasUnreadAlerts();
             const allowAutoExpand = !userCollapsedDockToday();
             if (nowUnread && allowAutoExpand) {
@@ -755,19 +751,39 @@
     updateTabHint();
     renderDockLists();
     updateTabCounts();
+    if (typeof window.floatingPanelsSyncChatUnread === 'function') {
+        window.floatingPanelsSyncChatUnread(Number(dockData.unread_count || 0));
+    }
     syncDockShellFromAlerts();
     refreshExpandHandleVisibility();
     window.addEventListener('resize', refreshExpandHandleVisibility);
+
+    document.addEventListener('floating-panel-opened', (e) => {
+        const p = e.detail && e.detail.panel;
+        if (p === 'chat') {
+            setDockExpanded(true);
+            refreshExpandHandleVisibility();
+        }
+    });
 
     if (headerMinBtn) {
         headerMinBtn.addEventListener('click', () => {
             rememberCollapsedDockToday();
             setDockExpanded(false);
+            if (typeof window.clearFloatingPanelActive === 'function') {
+                window.clearFloatingPanelActive();
+            }
         });
     }
-    if (expandHandle) {
-        expandHandle.addEventListener('click', () => setDockExpanded(true));
-    }
+    document.addEventListener('click', function onGlobalChatTabClick(e) {
+        const tab = e.target.closest('#chatTab');
+        if (!tab) return;
+        if (typeof window.openPanel === 'function') {
+            window.openPanel('chat');
+        } else {
+            setDockExpanded(true);
+        }
+    });
 
     document.addEventListener('member-widget-counts-updated', () => {
         pollChatDockSnapshot();

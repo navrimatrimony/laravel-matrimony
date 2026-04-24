@@ -118,11 +118,11 @@
 
 @auth
     @if (! $hideMemberMainNav && ! request()->routeIs('help-centre.*'))
-        @include('help-centre.partials.floating-widget')
         @include('partials.who-viewed-floating-bubble', ['suppressWhoViewedBubble' => request()->routeIs('who-viewed.index')])
         @if (! request()->routeIs('chat.*'))
             @include('partials.chat-dock-widget')
         @endif
+        @include('help-centre.partials.floating-widget')
     @endif
 @endauth
 @include('partials.mobile-sticky-quick-nav', ['hideMemberMainNav' => $hideMemberMainNav])

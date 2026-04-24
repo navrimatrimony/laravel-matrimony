@@ -91,6 +91,12 @@ class EnforceCardOnboarding
             return true;
         }
 
+        // Paid plan checkout: allow subscribe + coupon preview while onboarding is paused
+        // (GET /plans is already reachable; POST /subscribe must not be blocked here).
+        if (in_array($name, ['plans.subscribe', 'plans.coupon.validate'], true)) {
+            return true;
+        }
+
         if ($step === MatrimonyProfile::CARD_ONBOARDING_PHOTO_RESUME_STEP) {
             $photoNames = [
                 'matrimony.profile.upload-photo',

@@ -128,6 +128,54 @@ class SubscriptionPlansTest extends TestCase
         ]);
     }
 
+    public function test_subscribe_via_get_returns_payu_redirect(): void
+    {
+        $this->seed(SubscriptionPlansSeeder::class);
+        $user = $this->createUserWithMatrimonyGender('male');
+        $paidPlan = Plan::query()->where('slug', 'gold_male')->firstOrFail();
+        $term = PlanTerm::query()
+            ->where('plan_id', $paidPlan->id)
+            ->where('is_visible', true)
+            ->orderBy('sort_order')
+            ->first();
+        $this->assertNotNull($term);
+
+        $this->actingAs($user)
+            ->get(route('plans.subscribe', [
+                'plan' => $paidPlan->slug,
+                'plan_term_id' => $term->id,
+            ]))
+            ->assertOk()
+            ->assertViewIs('payments.payu_redirect')
+            ->assertViewHas('checkoutContext');
+    }
+
+    public function test_subscribe_invalid_coupon_redirects_back_to_subscribe_with_errors(): void
+    {
+        $this->seed(SubscriptionPlansSeeder::class);
+        $user = $this->createUserWithMatrimonyGender('male');
+        $paidPlan = Plan::query()->where('slug', 'gold_male')->firstOrFail();
+        $term = PlanTerm::query()
+            ->where('plan_id', $paidPlan->id)
+            ->where('is_visible', true)
+            ->orderBy('sort_order')
+            ->first();
+        $this->assertNotNull($term);
+
+        $this->actingAs($user)
+            ->get(route('plans.subscribe', [
+                'plan' => $paidPlan->slug,
+                'plan_term_id' => $term->id,
+                'coupon' => 'NOT_A_REAL_COUPON_CODE_XYZ',
+            ]))
+            ->assertRedirect(route('plans.subscribe', [
+                'plan' => $paidPlan->slug,
+                'plan_term_id' => $term->id,
+                'coupon' => 'NOT_A_REAL_COUPON_CODE_XYZ',
+            ]))
+            ->assertSessionHasErrors('coupon');
+    }
+
     public function test_payu_success_callback_creates_subscription(): void
     {
         $this->seed(SubscriptionPlansSeeder::class);

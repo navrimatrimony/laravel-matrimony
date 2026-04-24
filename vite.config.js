@@ -14,7 +14,16 @@ export default defineConfig({
                 'resources/js/admin/suggestions-review.js',
                 'resources/js/matrimony/occupation-engine-entry.js',
             ],
-            refresh: true,
+            // Narrow refresh paths: compiled Blade lives under storage/framework/views and must NOT
+            // trigger full reloads (it interrupts POST /subscribe and feels like “only refresh”).
+            refresh: [
+                'routes/**',
+                'resources/views/**',
+                'app/**',
+                'config/**',
+                'lang/**',
+                'resources/lang/**',
+            ],
         }),
     ],
 });

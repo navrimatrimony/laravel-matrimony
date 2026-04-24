@@ -27,7 +27,7 @@ use App\Http\Middleware\EnforceCardOnboarding;
 
 Route::get('/plans', [PlansController::class, 'index'])->name('plans.index');
 Route::post('/plans/coupon/validate', [PlansController::class, 'validateCoupon'])->name('plans.coupon.validate');
-Route::post('/subscribe', [SubscriptionController::class, 'subscribe'])
+Route::match(['get', 'post'], '/subscribe', [SubscriptionController::class, 'subscribe'])
     ->middleware(['auth', EnforceCardOnboarding::class])
     ->name('plans.subscribe');
 
