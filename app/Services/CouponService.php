@@ -144,7 +144,7 @@ class CouponService
         ?string $durationType = null,
     ): void {
         if (! $coupon->isUsableNow()) {
-            throw new HttpException(422, __('subscriptions.coupon_invalid'));
+            throw new HttpException(422, __('subscriptions.coupon_inactive'));
         }
         if (! $coupon->appliesToPlan($planId)) {
             throw new HttpException(422, __('subscriptions.coupon_plan_excluded'));

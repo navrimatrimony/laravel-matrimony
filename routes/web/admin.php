@@ -34,6 +34,7 @@ use App\Http\Controllers\Admin\LocationSuggestionWebController;
 use App\Http\Controllers\Admin\MatchBoostController;
 use App\Http\Controllers\Admin\MatchingEngineController;
 use App\Http\Controllers\Admin\ModerationLearningController;
+use App\Http\Controllers\Admin\MonitoringController;
 use App\Http\Controllers\Admin\OcrPatternController;
 use App\Http\Controllers\Admin\PhotoModerationEngineController;
 use App\Http\Controllers\Admin\PlanController;
@@ -136,8 +137,11 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
     Route::get('/users/{user}/plan', [AdminUserPlanController::class, 'show'])->name('users.plan');
 
     Route::get('/revenue', [AdminRevenueController::class, 'index'])->name('revenue.index');
+    Route::get('/monitoring', [MonitoringController::class, 'index'])->name('monitoring.index');
 
     Route::get('/payments', [AdminPaymentController::class, 'index'])->name('payments.index');
+    Route::get('/payments/{txnid}/invoice', [PaymentController::class, 'showAdminInvoice'])->name('payments.invoice');
+    Route::get('/payments/{txnid}/invoice/pdf', [PaymentController::class, 'downloadAdminInvoicePdf'])->name('payments.invoice.pdf');
     Route::get('/disputes', [AdminPaymentController::class, 'disputes'])->name('disputes.index');
     Route::post('/payments/{txnid}/refund', [PaymentController::class, 'refund'])->name('payments.refund');
     Route::post('/payment-disputes/{payment_dispute}/resolve', [PaymentDisputeController::class, 'resolve'])

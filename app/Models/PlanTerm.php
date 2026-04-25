@@ -4,7 +4,6 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Illuminate\Support\Facades\Artisan;
 use Illuminate\Validation\ValidationException;
 
 class PlanTerm extends Model
@@ -49,27 +48,6 @@ class PlanTerm extends Model
             }
         });
 
-        static::saved(function () {
-            if (app()->runningUnitTests()) {
-                return;
-            }
-            try {
-                Artisan::call('view:clear');
-            } catch (\Throwable) {
-                //
-            }
-        });
-
-        static::deleted(function () {
-            if (app()->runningUnitTests()) {
-                return;
-            }
-            try {
-                Artisan::call('view:clear');
-            } catch (\Throwable) {
-                //
-            }
-        });
     }
 
     /**

@@ -1,6 +1,10 @@
 <?php
 
 return [
+    'my_plan_hub_title' => 'माझा प्लॅन',
+    'tab_overview' => 'आढावा व वापर',
+    'tab_history' => 'प्लॅन इतिहास',
+    'settings_back' => 'सेटिंग्जकडे परत',
     'page_title' => 'माझा प्लॅन व वापर',
     'settings_my_plan_intro' => 'सध्याचा प्लॅन, नूतनीकरण तारखा आणि कोटा इंजिननुसार वैशिष्ट्य मर्यादा पहा.',
     'plan_history_title' => 'प्लॅन इतिहास',
@@ -19,6 +23,9 @@ return [
     'started_at' => 'सुरुवात',
     'expires_at' => 'समाप्ती',
     'grace_ends_at' => 'ग्रेस संपते',
+    'plan_grace_period_days' => 'ग्रेस कालावधी (प्लॅन, दिवस)',
+    'plan_carry_window_days' => 'उर्वरित कोटा कॅरी विंडो (प्लॅन, दिवस)',
+    'plan_carry_window_not_set' => 'सेट नाही',
     'subscription_row_status' => 'रकाना स्थिती',
     'bypass_note' => 'तुमच्यासाठी प्लॅन मर्यादा लागू होत नाहीत.',
     'history_plan' => 'प्लॅन',

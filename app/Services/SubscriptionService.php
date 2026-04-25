@@ -69,8 +69,6 @@ class SubscriptionService
             throw new HttpException(422, __('subscriptions.plan_inactive'));
         }
 
-        PlanPrice::ensureMirrorMatchesTerms($plan->fresh());
-
         $couponSvc = app(CouponService::class);
         $rawCoupon = trim((string) ($couponCode ?? ''));
         if ($rawCoupon !== '' && ! config('monetization.coupons.enabled', true)) {
@@ -103,7 +101,7 @@ class SubscriptionService
             if ($rawCoupon !== '') {
                 $coupon = $couponSvc->lockCouponByCode($rawCoupon);
                 if (! $coupon) {
-                    throw new HttpException(422, __('subscriptions.coupon_invalid'));
+                    throw new HttpException(422, __('subscriptions.coupon_not_found'));
                 }
                 $couponSvc->assertLockedCouponForCheckout(
                     $coupon,
@@ -115,7 +113,7 @@ class SubscriptionService
         } elseif ($rawCoupon !== '') {
             $coupon = $couponSvc->lockCouponByCode($rawCoupon);
             if (! $coupon) {
-                throw new HttpException(422, __('subscriptions.coupon_invalid'));
+                throw new HttpException(422, __('subscriptions.coupon_not_found'));
             }
             $couponSvc->assertLockedCouponForCheckout(
                 $coupon,
@@ -157,6 +155,7 @@ class SubscriptionService
         $rawCoupon = trim((string) ($couponCode ?? ''));
 
         return DB::transaction(function () use ($user, $plan, $planTermId, $planPriceId, $rawCoupon, $couponSvc) {
+            $this->lockUserSubscriptionRows((int) $user->id);
             $now = now();
             $carryQuota = app(QuotaEngineService::class)->applyPlan($user, $plan, $now)['carry_quota'];
 
@@ -258,6 +257,7 @@ class SubscriptionService
     public function finalizePayuSubscription(User $user, Plan $plan, array $pending, string $txnid, array $payuPayload): Subscription
     {
         return DB::transaction(function () use ($user, $plan, $pending, $txnid, $payuPayload) {
+            $this->lockUserSubscriptionRows((int) $user->id);
             $existingPayment = Payment::query()
                 ->where('user_id', $user->id)
                 ->where('payment_status', 'success')
@@ -338,7 +338,10 @@ class SubscriptionService
                 if (Schema::hasColumn('payments', 'payu_txnid')) {
                     $paymentAttrs['payu_txnid'] = $txnid;
                 }
-                Payment::query()->create($paymentAttrs);
+                Payment::query()->updateOrCreate(
+                    ['txnid' => $txnid],
+                    $paymentAttrs,
+                );
             }
 
             $now = now();
@@ -722,35 +725,7 @@ class SubscriptionService
      */
     public function getActiveSubscription(User $user, ?CarbonInterface $at = null): ?Subscription
     {
-        return $this->resolveAuthoritativeSubscriptionForAccess($user, $at);
-    }
-
-    /**
-     * Authoritative "current" subscription for access, quota payloads, entitlements, and meta gates.
-     * Ordering: {@code orderByDesc(starts_at)} among rows matching {@see Subscription::scopeEffectivelyActiveForAccessAt}.
-     */
-    private function resolveAuthoritativeSubscriptionForAccess(User $user, ?CarbonInterface $at = null): ?Subscription
-    {
-        $moment = $at ?? now();
-
-        $sub = Subscription::queryAuthoritativeAccessForUser($user, $moment)->first();
-
-        if ($sub !== null && config('app.debug')) {
-            $legacyLatestId = Subscription::query()
-                ->where('user_id', $user->id)
-                ->effectivelyActiveForAccessAt($moment)
-                ->latest('id')
-                ->value('id');
-            if ($legacyLatestId !== null && (int) $legacyLatestId !== (int) $sub->id) {
-                Log::warning('subscription_selection_disagreement', [
-                    'user_id' => (int) $user->id,
-                    'authoritative_subscription_id' => (int) $sub->id,
-                    'legacy_latest_id_subscription_id' => (int) $legacyLatestId,
-                ]);
-            }
-        }
-
-        return $sub;
+        return app(ActivePlanResolver::class)->getActiveSubscription($user, $at);
     }
 
     /**
@@ -788,6 +763,7 @@ class SubscriptionService
         }
 
         return DB::transaction(function () use ($user, $plan, $term) {
+            $this->lockUserSubscriptionRows((int) $user->id);
             Subscription::query()
                 ->where('user_id', $user->id)
                 ->where('status', Subscription::STATUS_ACTIVE)
@@ -845,6 +821,7 @@ class SubscriptionService
         }
 
         return DB::transaction(function () use ($user, $term, $plan) {
+            $this->lockUserSubscriptionRows((int) $user->id);
             $existing = $this->getActiveSubscription($user);
             $duration = (int) $term->duration_days;
             if ($duration <= 0) {
@@ -908,6 +885,7 @@ class SubscriptionService
         }
 
         return DB::transaction(function () use ($user, $newPlan, $term) {
+            $this->lockUserSubscriptionRows((int) $user->id);
             Subscription::query()
                 ->where('user_id', $user->id)
                 ->where('status', Subscription::STATUS_ACTIVE)
@@ -923,10 +901,7 @@ class SubscriptionService
     public function getActivePlan(?User $user = null): Plan
     {
         if ($user !== null) {
-            $sub = $this->getActiveSubscription($user);
-            if ($sub) {
-                return $sub->plan()->with(['features', 'quotaPolicies'])->firstOrFail();
-            }
+            return app(ActivePlanResolver::class)->get($user);
         }
 
         return $this->defaultFreePlan($user);
@@ -1327,5 +1302,17 @@ class SubscriptionService
         $carryDeadline = $graceEndsAt->copy()->addDays($carryWindowDays);
 
         return $at->lessThanOrEqualTo($carryDeadline);
+    }
+
+    private function lockUserSubscriptionRows(int $userId): void
+    {
+        if ($userId <= 0) {
+            return;
+        }
+
+        Subscription::query()
+            ->where('user_id', $userId)
+            ->lockForUpdate()
+            ->get(['id']);
     }
 }

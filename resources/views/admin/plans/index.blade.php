@@ -23,7 +23,13 @@
         </div>
     @endif
 
-    <div class="overflow-x-auto">
+    @php
+        $activePlans = $plans->filter(fn ($p) => (bool) $p->is_active)->values();
+        $inactivePlans = $plans->filter(fn ($p) => ! (bool) $p->is_active)->values();
+    @endphp
+
+    <h2 class="text-sm font-semibold uppercase tracking-wide text-emerald-700 dark:text-emerald-300 mb-2">Active plans</h2>
+    <div class="overflow-x-auto mb-8">
         <table class="min-w-full text-sm text-left">
             <thead class="text-xs uppercase text-gray-500 dark:text-gray-400 border-b border-gray-200 dark:border-gray-600">
                 <tr>
@@ -38,7 +44,7 @@
                 </tr>
             </thead>
             <tbody class="divide-y divide-gray-100 dark:divide-gray-700">
-                @foreach ($plans as $plan)
+                @foreach ($activePlans as $plan)
                     @php
                         $displayName = preg_replace('/\s*\((male|female)\)\s*$/i', '', (string) $plan->name) ?? (string) $plan->name;
                     @endphp
@@ -87,6 +93,81 @@
                         </td>
                     </tr>
                 @endforeach
+            </tbody>
+        </table>
+    </div>
+
+    <h2 class="text-sm font-semibold uppercase tracking-wide text-red-700 dark:text-red-300 mb-2">Inactive plans</h2>
+    <p class="text-xs text-red-600 dark:text-red-300 mb-3">These plans are hidden from members. Reactivate only when you are ready to offer them again.</p>
+    <div class="overflow-x-auto">
+        <table class="min-w-full text-sm text-left">
+            <thead class="text-xs uppercase text-red-500 dark:text-red-300 border-b border-red-200 dark:border-red-700">
+                <tr>
+                    <th class="py-3 pr-4">Name</th>
+                    <th class="py-3 pr-4">Slug</th>
+                    <th class="py-3 pr-4">Price</th>
+                    <th class="py-3 pr-4">Final</th>
+                    <th class="py-3 pr-4">Days</th>
+                    <th class="py-3 pr-4">Active</th>
+                    <th class="py-3 pr-4">Highlight</th>
+                    <th class="py-3 pr-4"></th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-red-100 dark:divide-red-900/50">
+                @forelse ($inactivePlans as $plan)
+                    @php
+                        $displayName = preg_replace('/\s*\((male|female)\)\s*$/i', '', (string) $plan->name) ?? (string) $plan->name;
+                    @endphp
+                    <tr class="bg-red-50/60 dark:bg-red-950/20">
+                        <td class="py-3 pr-4 font-medium text-red-900 dark:text-red-200">
+                            {{ $displayName }}
+                            <span class="ml-2 inline-flex items-center rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-red-700 dark:bg-red-900/50 dark:text-red-200">Inactive</span>
+                            @if ($plan->highlight)
+                                <span class="ml-2 text-xs font-semibold text-amber-600 dark:text-amber-400">★</span>
+                            @endif
+                        </td>
+                        <td class="py-3 pr-4 text-red-700 dark:text-red-200/90">{{ $plan->slug }}</td>
+                        <td class="py-3 pr-4">₹{{ number_format((float) $plan->price, 2) }}</td>
+                        <td class="py-3 pr-4 font-semibold text-red-700 dark:text-red-200">₹{{ number_format($plan->final_price, 2) }}</td>
+                        <td class="py-3 pr-4">{{ $plan->duration_days === 0 ? '∞' : $plan->duration_days }}</td>
+                        <td class="py-3 pr-4">
+                            <form method="POST" action="{{ route('admin.plans.toggle', $plan) }}" class="inline">
+                                @csrf
+                                @method('PATCH')
+                                <input type="hidden" name="field" value="is_active" />
+                                <input type="hidden" name="value" value="{{ $plan->is_active ? '0' : '1' }}" />
+                                <button type="submit" class="text-xs font-semibold rounded-md px-2 py-1 bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-100">
+                                    {{ $plan->is_active ? 'On' : 'Off' }}
+                                </button>
+                            </form>
+                        </td>
+                        <td class="py-3 pr-4">
+                            <form method="POST" action="{{ route('admin.plans.toggle', $plan) }}" class="inline">
+                                @csrf
+                                @method('PATCH')
+                                <input type="hidden" name="field" value="highlight" />
+                                <input type="hidden" name="value" value="{{ $plan->highlight ? '0' : '1' }}" />
+                                <button type="submit" class="text-xs font-semibold rounded-md px-2 py-1 {{ $plan->highlight ? 'bg-amber-100 text-amber-900 dark:bg-amber-900/40 dark:text-amber-100' : 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-100' }}">
+                                    {{ $plan->highlight ? '★' : '—' }}
+                                </button>
+                            </form>
+                        </td>
+                        <td class="py-3 pr-4 whitespace-nowrap">
+                            <a href="{{ route('admin.plans.edit', $plan) }}" class="text-red-700 hover:text-red-900 dark:text-red-300 mr-3">Edit</a>
+                            @if (! \App\Models\Plan::isFreeCatalogSlug((string) $plan->slug))
+                                <form method="POST" action="{{ route('admin.plans.destroy', $plan) }}" class="inline" onsubmit="return confirm(@json(__('admin_commerce.plan_confirm_delete')));">
+                                    @csrf
+                                    @method('DELETE')
+                                    <button type="submit" class="text-red-700 hover:text-red-900 dark:text-red-300 text-xs font-semibold">{{ __('admin_commerce.plan_delete') }}</button>
+                                </form>
+                            @endif
+                        </td>
+                    </tr>
+                @empty
+                    <tr>
+                        <td colspan="8" class="py-4 text-sm text-gray-500 dark:text-gray-400">No inactive plans.</td>
+                    </tr>
+                @endforelse
             </tbody>
         </table>
     </div>

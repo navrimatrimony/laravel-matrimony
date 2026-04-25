@@ -88,7 +88,7 @@ class EntitlementService
             return;
         }
 
-        $sub = Subscription::queryAuthoritativeAccessForUser($user)->first();
+        $sub = app(ActivePlanResolver::class)->getActiveSubscription($user);
         if (! $sub) {
             return;
         }
@@ -250,7 +250,7 @@ class EntitlementService
         }
 
         $user = User::query()->find($userId);
-        $sub = $user ? Subscription::queryAuthoritativeAccessForUser($user)->first() : null;
+        $sub = $user ? app(ActivePlanResolver::class)->getActiveSubscription($user) : null;
         if ($sub) {
             $sub->loadMissing(['plan.features', 'plan.quotaPolicies']);
         }

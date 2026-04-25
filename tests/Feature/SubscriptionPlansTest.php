@@ -29,13 +29,12 @@ class SubscriptionPlansTest extends TestCase
         ]);
     }
 
-    public function test_guest_can_view_plans_catalog(): void
+    public function test_plans_index_redirects_guests_to_login(): void
     {
         $this->seed(SubscriptionPlansSeeder::class);
 
         $this->get(route('plans.index'))
-            ->assertOk()
-            ->assertSee(__('subscriptions.pricing_page_title'));
+            ->assertRedirect(route('login'));
     }
 
     public function test_pricing_catalog_shows_marketing_badge_ribbon_when_highlight_set(): void
@@ -85,7 +84,10 @@ class SubscriptionPlansTest extends TestCase
 
         $label = __('subscriptions.admin_plan_marketing_opt_best_seller');
 
-        $this->get(route('plans.index'))
+        $user = $this->createUserWithMatrimonyGender('male');
+
+        $this->actingAs($user)
+            ->get(route('plans.index'))
             ->assertOk()
             ->assertSee($label, false);
     }
@@ -99,6 +101,21 @@ class SubscriptionPlansTest extends TestCase
             ->get(route('plans.index'))
             ->assertOk()
             ->assertSee(__('subscriptions.pricing_cta_upgrade'));
+    }
+
+    public function test_inactive_plans_are_hidden_from_member_catalog(): void
+    {
+        $this->seed(SubscriptionPlansSeeder::class);
+        $user = $this->createUserWithMatrimonyGender('male');
+
+        $inactivePlan = Plan::query()->where('slug', 'gold_male')->firstOrFail();
+        $inactivePlan->update(['is_active' => false]);
+
+        $this->actingAs($user)
+            ->get(route('plans.index'))
+            ->assertOk()
+            ->assertDontSee((string) $inactivePlan->name)
+            ->assertDontSee((string) $inactivePlan->slug);
     }
 
     public function test_subscribe_does_not_create_subscription_before_payu(): void
@@ -171,7 +188,6 @@ class SubscriptionPlansTest extends TestCase
             ->assertRedirect(route('plans.subscribe', [
                 'plan' => $paidPlan->slug,
                 'plan_term_id' => $term->id,
-                'coupon' => 'NOT_A_REAL_COUPON_CODE_XYZ',
             ]))
             ->assertSessionHasErrors('coupon');
     }

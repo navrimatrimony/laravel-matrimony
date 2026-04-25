@@ -4,7 +4,6 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Illuminate\Support\Facades\Artisan;
 
 class PlanPrice extends Model
 {
@@ -42,31 +41,6 @@ class PlanPrice extends Model
         'is_visible' => 'boolean',
         'sort_order' => 'integer',
     ];
-
-    protected static function booted(): void
-    {
-        static::saved(function () {
-            if (app()->runningUnitTests()) {
-                return;
-            }
-            try {
-                Artisan::call('view:clear');
-            } catch (\Throwable) {
-                //
-            }
-        });
-
-        static::deleted(function () {
-            if (app()->runningUnitTests()) {
-                return;
-            }
-            try {
-                Artisan::call('view:clear');
-            } catch (\Throwable) {
-                //
-            }
-        });
-    }
 
     /**
      * Mirror {@see PlanTerm} rows into the pricing engine table (additive; terms remain for admin/backfill).

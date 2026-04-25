@@ -14,6 +14,7 @@
             <th>User</th>
             <th>Amount</th>
             <th>Status</th>
+            <th>Invoice</th>
         </tr>
     </thead>
     <tbody>
@@ -29,10 +30,15 @@
                 </td>
                 <td>{{ $p->amount }}</td>
                 <td>{{ $p->payment_status ?? $p->status }}</td>
+                <td>
+                    <a href="{{ route('admin.payments.invoice', ['txnid' => $p->txnid]) }}">View</a>
+                    |
+                    <a href="{{ route('admin.payments.invoice.pdf', ['txnid' => $p->txnid]) }}">PDF</a>
+                </td>
             </tr>
         @empty
             <tr>
-                <td colspan="4">No payments.</td>
+                <td colspan="5">No payments.</td>
             </tr>
         @endforelse
     </tbody>

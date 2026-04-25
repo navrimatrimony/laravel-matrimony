@@ -92,7 +92,7 @@ class EnforceCardOnboarding
         }
 
         // Paid plan checkout: allow subscribe + coupon preview while onboarding is paused
-        // (GET /plans is already reachable; POST /subscribe must not be blocked here).
+        // (GET /plans is auth-only; POST /subscribe must not be blocked here).
         if (in_array($name, ['plans.subscribe', 'plans.coupon.validate'], true)) {
             return true;
         }

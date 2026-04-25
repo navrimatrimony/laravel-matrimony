@@ -1,6 +1,10 @@
 <?php
 
 return [
+    'my_plan_hub_title' => 'My plan',
+    'tab_overview' => 'Overview & usage',
+    'tab_history' => 'Plan history',
+    'settings_back' => 'Back to settings',
     'page_title' => 'My plan & usage',
     'settings_my_plan_intro' => 'See your current plan, renewal dates, and feature limits from the quota engine.',
     'plan_history_title' => 'Plan history',
@@ -19,6 +23,9 @@ return [
     'started_at' => 'Started',
     'expires_at' => 'Expires',
     'grace_ends_at' => 'Grace ends',
+    'plan_grace_period_days' => 'Grace period (plan, days)',
+    'plan_carry_window_days' => 'Leftover carry window (plan, days)',
+    'plan_carry_window_not_set' => 'Not set',
     'subscription_row_status' => 'Row status',
     'bypass_note' => 'Plan limits do not apply to your account.',
     'history_plan' => 'Plan',

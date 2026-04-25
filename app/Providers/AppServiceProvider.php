@@ -67,9 +67,17 @@ class AppServiceProvider extends ServiceProvider
                 'who_viewed_count' => 0,
             ];
             if (auth()->check()) {
-                $count = auth()->user()->unreadNotifications()->count();
-                $memberActivityCounts = app(\App\Services\MemberQuickHubService::class)
-                    ->buildActivityCountsForUser(auth()->user());
+                try {
+                    $count = auth()->user()->unreadNotifications()->count();
+                    $memberActivityCounts = app(\App\Services\MemberQuickHubService::class)
+                        ->buildActivityCountsForUser(auth()->user());
+                } catch (\Throwable $e) {
+                    Log::warning('Navigation view composer fallback due to runtime exception', [
+                        'user_id' => (int) auth()->id(),
+                        'exception' => $e::class,
+                        'message' => $e->getMessage(),
+                    ]);
+                }
             }
             $view->with('unreadNotificationCount', $count);
             $view->with('memberActivityCounts', $memberActivityCounts);
@@ -88,12 +96,20 @@ class AppServiceProvider extends ServiceProvider
                 'who_viewed_count' => 0,
             ];
             if (auth()->check() && auth()->user()->matrimonyProfile) {
-                $planUsageSummary = app(\App\Services\QuotaEngineService::class)
-                    ->getUserQuotaSummary(auth()->user());
-                $chatDockData = app(\App\Services\MemberQuickHubService::class)
-                    ->buildChatDockForUser(auth()->user());
-                $memberActivityCounts = app(\App\Services\MemberQuickHubService::class)
-                    ->buildActivityCountsForUser(auth()->user());
+                try {
+                    $planUsageSummary = app(\App\Services\QuotaEngineService::class)
+                        ->getUserQuotaSummary(auth()->user());
+                    $chatDockData = app(\App\Services\MemberQuickHubService::class)
+                        ->buildChatDockForUser(auth()->user());
+                    $memberActivityCounts = app(\App\Services\MemberQuickHubService::class)
+                        ->buildActivityCountsForUser(auth()->user());
+                } catch (\Throwable $e) {
+                    Log::warning('Member layout composer fallback due to runtime exception', [
+                        'user_id' => (int) auth()->id(),
+                        'exception' => $e::class,
+                        'message' => $e->getMessage(),
+                    ]);
+                }
             }
             $view->with('planUsageSummary', $planUsageSummary);
             $view->with('chatDockData', $chatDockData);

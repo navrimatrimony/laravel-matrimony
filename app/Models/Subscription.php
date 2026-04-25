@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Services\EntitlementService;
+use App\Services\ActivePlanResolver;
 use App\Services\PlanSubscriptionTerms;
 use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Builder;
@@ -116,7 +117,8 @@ class Subscription extends Model
         return static::query()
             ->where('user_id', $user->id)
             ->effectivelyActiveForAccessAt($moment)
-            ->orderByDesc('starts_at');
+            ->orderByDesc('starts_at')
+            ->orderByDesc('id');
     }
 
     protected static function booted(): void
@@ -131,6 +133,8 @@ class Subscription extends Model
         });
 
         static::created(function (Subscription $subscription) {
+            app(ActivePlanResolver::class)
+                ->enforceSingleActiveRowInvariantByUserId((int) $subscription->user_id, 'subscription_created_hook');
             app(EntitlementService::class)
                 ->assignFromSubscription($subscription);
         });

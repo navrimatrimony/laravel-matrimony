@@ -8,6 +8,7 @@ use App\Models\Payment;
 use App\Models\PaymentLog;
 use App\Models\User;
 use App\Support\PayuHasher;
+use App\Support\PaymentLogger;
 use Illuminate\Database\QueryException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -139,9 +140,26 @@ class PayuController extends Controller
     public function webhook(Request $request)
     {
         $data = $request->all();
+        PaymentLogger::logEvent('webhook_received', [
+            'txnid' => $data['txnid'] ?? null,
+            'user_id' => null,
+            'plan_id' => null,
+            'plan_term_id' => null,
+            'gateway_status' => strtolower(trim((string) ($data['status'] ?? ''))),
+            'internal_status' => 'webhook_received',
+            'amount' => isset($data['amount']) ? (float) $data['amount'] : null,
+            'source' => 'webhook',
+        ]);
         $this->logPaymentCallback($data, self::SOURCE_WEBHOOK);
 
         if (! $this->verifyPayuResponseHash($data)) {
+            PaymentLogger::logEvent('payment_failed', [
+                'txnid' => $data['txnid'] ?? null,
+                'gateway_status' => 'signature_failed',
+                'internal_status' => 'webhook_hash_mismatch',
+                'amount' => isset($data['amount']) ? (float) $data['amount'] : null,
+                'source' => 'webhook',
+            ]);
             Log::error('Payment failed validation', [
                 'reason' => 'hash_mismatch',
                 'channel' => 'webhook',
@@ -254,25 +272,13 @@ class PayuController extends Controller
                     ],
                 );
 
-                $user = User::query()->find($userId);
-                if ($user && ! $this->shouldSkipPlanDowngrade($user, $planId)) {
-                    $user->plan = $planId;
-                    if ($user->plan_expires_at && $user->plan_expires_at > now()) {
-                        $user->plan_expires_at = $user->plan_expires_at->copy()->addDays((int) $plan['days']);
-                    } else {
-                        $user->plan_expires_at = now()->addDays((int) $plan['days']);
-                    }
-                    $user->plan_status = 'active';
-                    $user->plan_started_at = now();
-                    $user->save();
-                } elseif ($user && $this->shouldSkipPlanDowngrade($user, $planId)) {
-                    Log::info('Payment stored without plan downgrade', [
-                        'txnid' => $txnid,
-                        'user_id' => $userId,
-                        'current_plan' => $user->plan,
-                        'requested_plan' => $planId,
-                    ]);
-                }
+                // Legacy PayU endpoint is payment-log only. Plan state must be derived from subscriptions SSOT.
+                Log::critical('legacy_payu_plan_mutation_blocked', [
+                    'txnid' => $txnid,
+                    'user_id' => $userId,
+                    'plan_key' => $planId,
+                    'reason' => 'legacy_controller_no_longer_mutates_users_plan_columns',
+                ]);
             });
         } catch (\Throwable $e) {
             if ($e instanceof QueryException && $this->isDuplicateTxnQueryException($e)) {
@@ -421,25 +427,6 @@ class PayuController extends Controller
             ->value('id');
 
         return $found ? (int) $found : null;
-    }
-
-    private function shouldSkipPlanDowngrade(User $user, string $newPlanId): bool
-    {
-        $current = trim((string) ($user->plan ?? ''));
-        if ($current === '') {
-            return false;
-        }
-
-        return $this->planTier($current) > $this->planTier($newPlanId);
-    }
-
-    private function planTier(?string $planKey): int
-    {
-        if ($planKey === null || $planKey === '') {
-            return 0;
-        }
-
-        return (int) (config('plans.'.$planKey.'.tier') ?? 0);
     }
 
     /**

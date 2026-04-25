@@ -29,6 +29,12 @@
         </ul>
     @endif
 
+    @if (! ($canManageBillingSettings ?? false))
+        <div class="mb-4 rounded-lg bg-amber-50 text-amber-900 dark:bg-amber-950/40 dark:text-amber-100 px-4 py-3 text-sm border border-amber-200 dark:border-amber-800">
+            Only super_admin can change billing/invoice settings.
+        </div>
+    @endif
+
     <form method="POST" action="{{ route('admin.app-settings.update') }}" class="space-y-6">
         @csrf
 
@@ -40,6 +46,16 @@
             </label>
             <p class="text-sm text-gray-600 dark:text-gray-300 mt-3 font-medium">When enabled, admin users bypass all limits</p>
             <p class="text-xs text-gray-500 dark:text-gray-400 mt-2">Applies to users with the <code class="text-xs bg-gray-200 dark:bg-gray-600 px-1 rounded">is_admin</code> flag. If this setting has never been saved, <code class="text-xs">ADMIN_BYPASS_MODE</code> in <code class="text-xs">.env</code> is used.</p>
+        </div>
+
+        <div class="p-4 bg-gray-50 dark:bg-gray-700/30 rounded-lg border border-gray-200 dark:border-gray-600">
+            <label class="admin-toggle">
+                <input type="checkbox" name="plans_enforce_gender_specific_visibility" value="1" {{ $plansEnforceGenderSpecificVisibility ? 'checked' : '' }}>
+                <span class="toggle-track"><span class="toggle-thumb"></span></span>
+                <span class="toggle-label {{ $plansEnforceGenderSpecificVisibility ? 'on' : 'off' }}">Plans: gender-specific visibility</span>
+            </label>
+            <p class="text-sm text-gray-600 dark:text-gray-300 mt-3 font-medium">ON: male userला male plans आणि female userला female plansच दिसतील</p>
+            <p class="text-xs text-gray-500 dark:text-gray-400 mt-2">Default ON. OFF केल्यावर gender matching drift असताना blank catalog टाळण्यासाठी all paid plans fallback दिसू शकतो.</p>
         </div>
 
         <div class="p-4 bg-gray-50 dark:bg-gray-700/30 rounded-lg border border-gray-200 dark:border-gray-600">
@@ -65,6 +81,70 @@
                 <code class="text-xs bg-gray-200 dark:bg-gray-600 px-1 rounded">member_presence_online_threshold_minutes</code>.
             </p>
         </div>
+
+        <div class="p-4 bg-gray-50 dark:bg-gray-700/30 rounded-lg border border-gray-200 dark:border-gray-600">
+            <h2 class="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-3">Payment monitoring thresholds</h2>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div>
+                    <label class="block text-xs mb-1">Success rate threshold (%)</label>
+                    <input type="number" step="0.01" min="1" max="100" name="success_rate_threshold" value="{{ old('success_rate_threshold', $successRateThreshold) }}" class="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm text-gray-900 dark:text-gray-100">
+                </div>
+                <div>
+                    <label class="block text-xs mb-1">Webhook failure threshold (5m)</label>
+                    <input type="number" min="1" max="10000" name="webhook_failure_threshold" value="{{ old('webhook_failure_threshold', $webhookFailureThreshold) }}" class="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm text-gray-900 dark:text-gray-100">
+                </div>
+                <div>
+                    <label class="block text-xs mb-1">Queue lag threshold (seconds)</label>
+                    <input type="number" min="1" max="10000" name="queue_lag_threshold" value="{{ old('queue_lag_threshold', $queueLagThreshold) }}" class="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm text-gray-900 dark:text-gray-100">
+                </div>
+                <div>
+                    <label class="block text-xs mb-1">Invoice failure threshold (%)</label>
+                    <input type="number" step="0.01" min="0" max="100" name="invoice_failure_threshold" value="{{ old('invoice_failure_threshold', $invoiceFailureThreshold) }}" class="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm text-gray-900 dark:text-gray-100">
+                </div>
+            </div>
+        </div>
+
+        <fieldset @disabled(!($canManageBillingSettings ?? false)) class="p-4 bg-gray-50 dark:bg-gray-700/30 rounded-lg border border-gray-200 dark:border-gray-600 space-y-3 disabled:opacity-60">
+            <h2 class="text-sm font-semibold text-gray-900 dark:text-gray-100">Billing / Invoice settings</h2>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div>
+                    <label class="block text-xs mb-1">Legal name</label>
+                    <input type="text" name="billing_legal_name" required value="{{ old('billing_legal_name', $billingLegalName) }}" class="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm text-gray-900 dark:text-gray-100">
+                </div>
+                <div>
+                    <label class="block text-xs mb-1">Billing email</label>
+                    <input type="email" name="billing_email" required value="{{ old('billing_email', $billingEmail) }}" class="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm text-gray-900 dark:text-gray-100">
+                </div>
+                <div>
+                    <label class="block text-xs mb-1">Billing phone</label>
+                    <input type="text" name="billing_phone" required value="{{ old('billing_phone', $billingPhone) }}" class="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm text-gray-900 dark:text-gray-100">
+                </div>
+                <div>
+                    <label class="block text-xs mb-1">Invoice prefix</label>
+                    <input type="text" name="billing_invoice_prefix" value="{{ old('billing_invoice_prefix', $billingInvoicePrefix) }}" class="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm text-gray-900 dark:text-gray-100">
+                </div>
+                <div>
+                    <label class="block text-xs mb-1">GSTIN</label>
+                    <input type="text" name="billing_gstin" value="{{ old('billing_gstin', $billingGstin) }}" class="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm text-gray-900 dark:text-gray-100">
+                </div>
+                <div>
+                    <label class="block text-xs mb-1">PAN</label>
+                    <input type="text" name="billing_pan" value="{{ old('billing_pan', $billingPan) }}" class="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm text-gray-900 dark:text-gray-100">
+                </div>
+                <div>
+                    <label class="block text-xs mb-1">State code</label>
+                    <input type="text" name="billing_state_code" value="{{ old('billing_state_code', $billingStateCode) }}" class="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm text-gray-900 dark:text-gray-100">
+                </div>
+                <div class="md:col-span-2">
+                    <label class="block text-xs mb-1">Billing address</label>
+                    <textarea name="billing_address" rows="3" required class="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm text-gray-900 dark:text-gray-100">{{ old('billing_address', $billingAddress) }}</textarea>
+                </div>
+                <div class="md:col-span-2">
+                    <label class="block text-xs mb-1">Invoice terms / notes</label>
+                    <textarea name="billing_invoice_terms" rows="3" class="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm text-gray-900 dark:text-gray-100">{{ old('billing_invoice_terms', $billingInvoiceTerms) }}</textarea>
+                </div>
+            </div>
+        </fieldset>
 
         <div class="pt-2">
             <button type="submit" class="inline-flex items-center px-4 py-2 rounded-md bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-500">

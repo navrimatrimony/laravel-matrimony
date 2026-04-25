@@ -6,13 +6,16 @@ use App\Models\Message;
 use App\Models\Plan;
 use App\Models\ProfileView;
 use App\Models\Subscription;
+use App\Models\AdminSetting;
+use App\Services\ActivePlanResolver;
 use App\Services\CouponService;
 use App\Services\SubscriptionService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 
 class PlansController extends Controller
 {
-    public function index(Request $request, SubscriptionService $subscriptions)
+    public function index(Request $request, SubscriptionService $subscriptions, ActivePlanResolver $activePlanResolver)
     {
         $user = $request->user();
         $user?->loadMissing('matrimonyProfile');
@@ -24,22 +27,12 @@ class PlansController extends Controller
             ->orderBy('id')
             ->get();
 
+        // Hard rule: never show inactive plans in member catalog.
         $catalogIncludesInactive = false;
-        if ($plans->isEmpty()) {
-            $fallback = Plan::query()
-                ->with(['features', 'terms', 'quotaPolicies'])
-                ->orderBy('sort_order')
-                ->orderBy('id')
-                ->get();
-            if ($fallback->isNotEmpty()) {
-                $plans = $fallback;
-                $catalogIncludesInactive = true;
-            }
-        }
 
-        $effectivePlan = $subscriptions->getEffectivePlan($user);
+        $effectivePlan = $user !== null ? $activePlanResolver->get($user) : $subscriptions->getEffectivePlan($user);
 
-        $activeSub = $user !== null ? $subscriptions->getActiveSubscription($user) : null;
+        $activeSub = $user !== null ? $activePlanResolver->getActiveSubscription($user) : null;
         $activeSub?->loadMissing('plan');
 
         $planForMemberTierContext = $effectivePlan;
@@ -71,9 +64,45 @@ class PlansController extends Controller
             ])
             ->values();
 
+        $enforceGenderSpecificPlans = AdminSetting::getBool('plans_enforce_gender_specific_visibility', true);
+        $applyGenderSpecificCatalog = $user !== null && $enforceGenderSpecificPlans;
+        $plansBeforeGenderFilter = $plans->values();
+        $pricingPlansBeforeGenderFilter = $pricingPlans->values();
         $user?->loadMissing('matrimonyProfile.gender');
-        $plans = $plans->filter(fn (Plan $p) => Plan::profileGenderAllowsPlan($user, $p))->values();
-        $pricingPlans = $pricingPlans->filter(fn (Plan $p) => Plan::profileGenderAllowsPlan($user, $p))->values();
+        if ($applyGenderSpecificCatalog) {
+            $plans = $plansBeforeGenderFilter->filter(fn (Plan $p) => Plan::profileGenderAllowsPlan($user, $p))->values();
+            $pricingPlans = $pricingPlansBeforeGenderFilter->filter(fn (Plan $p) => Plan::profileGenderAllowsPlan($user, $p))->values();
+        } else {
+            $plans = $plansBeforeGenderFilter;
+            $pricingPlans = $pricingPlansBeforeGenderFilter;
+        }
+        $pricingCatalogUsedUngenderedFallback = false;
+        if (! $enforceGenderSpecificPlans && $user !== null && $pricingPlans->isEmpty() && $pricingPlansBeforeGenderFilter->isNotEmpty()) {
+            $pricingPlans = $pricingPlansBeforeGenderFilter;
+            $pricingCatalogUsedUngenderedFallback = true;
+            Log::warning('plans_catalog_gender_filter_empty_fallback_to_all_paid', [
+                'user_id' => (int) $user?->id,
+                'viewer_gender_key' => strtolower(trim((string) ($user?->matrimonyProfile?->gender?->key ?? ''))),
+                'paid_catalog_count_before_filter' => (int) $pricingPlansBeforeGenderFilter->count(),
+            ]);
+        }
+        $pricingCatalogInjectedActivePlan = false;
+        if ($pricingPlans->isEmpty() && $activeSub !== null && $activeSub->plan !== null) {
+            $activePaidPlan = $activeSub->plan;
+            if (! Plan::isFreeCatalogSlug((string) $activePaidPlan->slug)) {
+                $pricingPlans = collect([$activePaidPlan->loadMissing(['features', 'terms', 'quotaPolicies'])]);
+                $pricingCatalogInjectedActivePlan = true;
+                Log::warning('plans_catalog_injected_active_plan_fallback', [
+                    'user_id' => (int) $user?->id,
+                    'active_subscription_id' => (int) $activeSub->id,
+                    'active_plan_id' => (int) $activePaidPlan->id,
+                    'active_plan_slug' => (string) $activePaidPlan->slug,
+                ]);
+            }
+        }
+        $pricingCatalogEmptyDueToMissingGender = $pricingPlans->isEmpty()
+            && $user !== null
+            && blank((string) ($user->matrimonyProfile?->gender?->key ?? ''));
 
         $activePaidPlanId = ($activeSub && $activeSub->plan && ! Plan::isFreeCatalogSlug((string) $activeSub->plan->slug))
             ? (int) $activeSub->plan_id
@@ -134,6 +163,10 @@ class PlansController extends Controller
             'currentPlan' => $planForMemberTierContext,
             'currentPlanDisplayName' => $currentPlanDisplayName,
             'pricingCatalogMissesActivePlan' => $pricingCatalogMissesActivePlan,
+            'pricingCatalogInjectedActivePlan' => $pricingCatalogInjectedActivePlan,
+            'pricingCatalogEmptyDueToMissingGender' => $pricingCatalogEmptyDueToMissingGender,
+            'pricingCatalogUsedUngenderedFallback' => $pricingCatalogUsedUngenderedFallback,
+            'enforceGenderSpecificPlans' => $enforceGenderSpecificPlans,
             'catalogIncludesInactive' => $catalogIncludesInactive,
             'maxDiscountPercent' => $maxDiscountPercent,
             'unreadMessagesCount' => $unreadMessagesCount,

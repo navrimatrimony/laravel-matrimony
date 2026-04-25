@@ -11,7 +11,7 @@ use Illuminate\Support\Facades\Route;
 | Order: public → member → admin → auth (same as pre-split), then legacy web JSON.
 | Admin intake suggestion queue: routes/web/admin.php → prefix admin/intake (names admin.intake.*).
 | Member matches: routes/web/member.php → GET /matches, GET /profiles/{id}/matches.
-| Member plans: GET /plans + POST /subscribe registered below (public catalog; subscribe requires auth).
+| Member plans: GET /plans + coupon validate are auth-only (avoids guest catalog / gender edge cases); POST /subscribe uses auth + card onboarding.
 | Match boost: routes/web/admin.php → GET/PUT /admin/match-boost; MatchingService applies boosts after base score.
 |--------------------------------------------------------------------------
 */
@@ -25,8 +25,10 @@ use App\Http\Controllers\PlansController;
 use App\Http\Controllers\SubscriptionController;
 use App\Http\Middleware\EnforceCardOnboarding;
 
-Route::get('/plans', [PlansController::class, 'index'])->name('plans.index');
-Route::post('/plans/coupon/validate', [PlansController::class, 'validateCoupon'])->name('plans.coupon.validate');
+Route::middleware('auth')->group(function () {
+    Route::get('/plans', [PlansController::class, 'index'])->name('plans.index');
+    Route::post('/plans/coupon/validate', [PlansController::class, 'validateCoupon'])->name('plans.coupon.validate');
+});
 Route::match(['get', 'post'], '/subscribe', [SubscriptionController::class, 'subscribe'])
     ->middleware(['auth', EnforceCardOnboarding::class])
     ->name('plans.subscribe');

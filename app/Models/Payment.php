@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Support\Facades\Log;
 
 class Payment extends Model
@@ -47,9 +48,19 @@ class Payment extends Model
         return $this->belongsTo(User::class);
     }
 
+    public function plan(): BelongsTo
+    {
+        return $this->belongsTo(Plan::class);
+    }
+
     public function disputes(): HasMany
     {
         return $this->hasMany(PaymentDispute::class);
+    }
+
+    public function invoice(): HasOne
+    {
+        return $this->hasOne(PaymentInvoice::class);
     }
 
     public function refund(?string $reason = null): bool

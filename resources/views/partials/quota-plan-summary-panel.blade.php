@@ -35,6 +35,20 @@
                     <dt class="text-gray-500 dark:text-gray-400">{{ __('user_plan.grace_ends_at') }}</dt>
                     <dd class="font-medium text-gray-900 dark:text-gray-100">{{ $quotaSummary['grace_ends_at_display'] ?? '—' }}</dd>
                 </div>
+                <div>
+                    <dt class="text-gray-500 dark:text-gray-400">{{ __('user_plan.plan_grace_period_days') }}</dt>
+                    <dd class="font-medium text-gray-900 dark:text-gray-100">{{ (int) ($quotaSummary['plan_grace_period_days'] ?? 0) }}</dd>
+                </div>
+                <div>
+                    <dt class="text-gray-500 dark:text-gray-400">{{ __('user_plan.plan_carry_window_days') }}</dt>
+                    <dd class="font-medium text-gray-900 dark:text-gray-100">
+                        @if (($quotaSummary['plan_carry_window_days'] ?? null) === null)
+                            {{ __('user_plan.plan_carry_window_not_set') }}
+                        @else
+                            {{ (int) $quotaSummary['plan_carry_window_days'] }}
+                        @endif
+                    </dd>
+                </div>
                 @if (! empty($quotaSummary['subscription_row_status']))
                     <div>
                         <dt class="text-gray-500 dark:text-gray-400">{{ __('user_plan.subscription_row_status') }}</dt>

@@ -218,19 +218,24 @@ class PlanController extends Controller
     public function update(Request $request, Plan $plan)
     {
         $this->validateQuotaPoliciesRequest($request);
+        $rows = [];
+        $shouldSyncTermRows = false;
         if (! Plan::isFreeCatalogSlug((string) $plan->slug)) {
             $this->mergeDurationPresetFromDefaultBillingKey($request);
             $this->mergePaidPlanPricingFromTermRowsForRequest($request, $plan);
             $this->validateTermRowsRequest($request);
+            $rows = $this->normalizedTermRowsFromRequest($request);
+            $shouldSyncTermRows = ! $this->matchesPersistedTermRows($plan, $rows);
         }
         $data = $this->validatedPlanData($request, $plan->id, $plan);
 
-        DB::transaction(function () use ($request, $plan, $data) {
+        DB::transaction(function () use ($request, $plan, $data, $rows, $shouldSyncTermRows) {
             $plan->update($data);
 
             if (! Plan::isFreeCatalogSlug((string) ($data['slug'] ?? ''))) {
-                $rows = $this->normalizedTermRowsFromRequest($request);
-                PlanTerm::syncAdminTermRows($plan, $rows);
+                if ($shouldSyncTermRows) {
+                    PlanTerm::syncAdminTermRows($plan, $rows);
+                }
                 $this->persistPlanDefaultBillingKeyFromRequest($plan->fresh('terms'), $request);
             } else {
                 PlanTerm::query()->where('plan_id', $plan->id)->delete();
@@ -371,6 +376,38 @@ class PlanController extends Controller
         }
 
         return $out;
+    }
+
+    /**
+     * Prevent replacing terms when submitted rows are effectively unchanged.
+     */
+    private function matchesPersistedTermRows(Plan $plan, array $rows): bool
+    {
+        $plan->loadMissing('terms');
+        $requested = collect($rows)
+            ->mapWithKeys(fn (array $row) => [
+                (string) ($row['billing_key'] ?? '') => [
+                    'price' => round((float) ($row['price'] ?? 0), 2),
+                    'discount_percent' => $row['discount_percent'] === null ? null : (int) $row['discount_percent'],
+                    'is_visible' => (bool) ($row['is_visible'] ?? false),
+                ],
+            ])
+            ->all();
+
+        $persisted = $plan->terms
+            ->mapWithKeys(fn (PlanTerm $term) => [
+                (string) $term->billing_key => [
+                    'price' => round((float) $term->price, 2),
+                    'discount_percent' => $term->discount_percent === null ? null : (int) $term->discount_percent,
+                    'is_visible' => (bool) $term->is_visible,
+                ],
+            ])
+            ->all();
+
+        ksort($requested);
+        ksort($persisted);
+
+        return $requested === $persisted;
     }
 
     /**

@@ -18,6 +18,7 @@ use App\Http\Controllers\MemberWidgetController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\OccupationController;
 use App\Http\Controllers\OnboardingController;
+use App\Http\Controllers\PaymentController;
 use App\Http\Controllers\PaymentDisputeController;
 use App\Http\Controllers\ProfileContactActionController;
 use App\Http\Controllers\ProfileContactVerificationController;
@@ -58,6 +59,10 @@ Route::middleware(['auth', \App\Http\Middleware\EnforceCardOnboarding::class])->
 
     Route::post('/payments/{txnid}/dispute', [PaymentDisputeController::class, 'store'])
         ->name('payments.dispute.store');
+    Route::get('/payments/{txnid}/invoice', [PaymentController::class, 'showMemberInvoice'])
+        ->name('payments.invoice');
+    Route::get('/payments/{txnid}/invoice/pdf', [PaymentController::class, 'downloadMemberInvoicePdf'])
+        ->name('payments.invoice.pdf');
 
     /*
     | Phase-5: User-side Intake UI (user-access path /intake/...)
@@ -116,6 +121,7 @@ Route::middleware(['auth', \App\Http\Middleware\EnforceCardOnboarding::class])->
     Route::get('/settings/security', [UserSettingsController::class, 'security'])
         ->name('user.settings.security');
 
+    Route::get('/settings/my-plan', [UserPlanController::class, 'settingsHub'])->name('user.settings.my-plan');
     Route::get('/my-plan', [UserPlanController::class, 'show'])->name('user.my-plan');
     Route::get('/plan-history', [UserPlanController::class, 'history'])->name('user.plan-history');
 

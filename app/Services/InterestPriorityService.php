@@ -4,7 +4,6 @@ namespace App\Services;
 
 use App\Models\Interest;
 use App\Models\Plan;
-use App\Models\Subscription;
 use App\Models\User;
 
 /**
@@ -21,7 +20,7 @@ class InterestPriorityService
             return Interest::PRIORITY_SCORE_PAID;
         }
 
-        $sub = Subscription::queryAuthoritativeAccessForUser($user)->first();
+        $sub = app(ActivePlanResolver::class)->getActiveSubscription($user);
 
         if (! $sub) {
             return Interest::PRIORITY_SCORE_FREE;

@@ -2,7 +2,10 @@
     /** @var array{bypass?: bool, rows?: array<int, array<string, mixed>>|null, subscription_status?: string, subscription_state_label?: string}|null $planUsageSummary */
     $summary = $planUsageSummary ?? null;
     $variant = $variant ?? 'compact';
-    $show = $summary && (($summary['bypass'] ?? false) || ! empty($summary['rows'] ?? []));
+    $hasRows = ! empty($summary['rows'] ?? []);
+    $hasStateLabel = filled((string) ($summary['subscription_state_label'] ?? ''));
+    $hasPlanName = filled((string) ($summary['plan_name'] ?? ''));
+    $show = $summary && (($summary['bypass'] ?? false) || $hasRows || $hasStateLabel || $hasPlanName);
     if ($show && $variant === 'compact' && request()->routeIs('dashboard')) {
         $show = false;
     }

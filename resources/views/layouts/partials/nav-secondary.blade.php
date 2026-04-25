@@ -119,6 +119,18 @@
                        class="inline-flex items-center border-b-2 px-3 py-3 text-sm font-medium transition {{ request()->routeIs('plans.index') ? 'border-red-600 text-red-600 dark:border-red-500 dark:text-red-400' : 'border-transparent text-gray-600 hover:text-red-700 dark:text-gray-400 dark:hover:text-red-400' }}">
                         {{ __('nav.browse_plans') }}
                     </a>
+                    @auth
+                        @if (auth()->user()->matrimonyProfile)
+                            <a href="{{ route('user.settings.my-plan') }}"
+                               class="inline-flex items-center border-b-2 px-3 py-3 text-sm font-medium transition {{ request()->routeIs('user.settings.my-plan') ? 'border-red-600 text-red-600 dark:border-red-500 dark:text-red-400' : 'border-transparent text-gray-600 hover:text-red-700 dark:text-gray-400 dark:hover:text-red-400' }}">
+                                {{ __('user_plan.my_plan_hub_title') }}
+                            </a>
+                        @endif
+                        <a href="{{ route('user.settings.privacy') }}"
+                           class="inline-flex items-center border-b-2 px-3 py-3 text-sm font-medium transition {{ request()->routeIs('user.settings.*') ? 'border-red-600 text-red-600 dark:border-red-500 dark:text-red-400' : 'border-transparent text-gray-600 hover:text-red-700 dark:text-gray-400 dark:hover:text-red-400' }}">
+                            {{ __('Settings') }}
+                        </a>
+                    @endauth
                 @endif
             </nav>
         </div>

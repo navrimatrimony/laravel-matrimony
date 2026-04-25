@@ -9,6 +9,7 @@ use App\Support\PlanFeatureKeys;
 use App\Support\UserFeatureUsageKeys;
 use Carbon\CarbonInterface;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Log;
 
 /**
  * SSOT read-path for member quota summaries, subscription access window (paid / grace), and feature gates.
@@ -50,6 +51,8 @@ class QuotaEngineService
      *   subscription_started_at: string|null,
      *   subscription_started_at_display: string|null,
      *   subscription_row_status: string|null,
+     *   plan_grace_period_days: int,
+     *   plan_carry_window_days: int|null,
      *   carry_forward_items: list<array{feature_key: string, label: string, carry: int}>
      * }|null
      */
@@ -59,106 +62,149 @@ class QuotaEngineService
             return null;
         }
 
-        $featureUsage = app(FeatureUsageService::class);
-        $lifecycle = $this->subscriptionFieldsForQuotaSummary($user);
-        $planContext = $this->planContextForQuotaSummary($user);
-        if ($featureUsage->shouldBypassUsageLimits($user)) {
+        try {
+            $featureUsage = app(FeatureUsageService::class);
+            $lifecycle = $this->subscriptionFieldsForQuotaSummary($user);
+            $planContext = $this->planContextForQuotaSummary($user);
+            if ($featureUsage->shouldBypassUsageLimits($user)) {
+                return array_merge([
+                    'bypass' => true,
+                    'rows' => [],
+                    'carry_forward_items' => [],
+                ], $lifecycle, $planContext);
+            }
+
+            $contactLimitDisplay = $this->subscriptions->getQuotaLimitForUsageDisplay($user, PlanFeatureKeys::CONTACT_VIEW_LIMIT);
+            $contactUsed = $this->usage->getUsage(
+                (int) $user->id,
+                UserFeatureUsageKeys::CONTACT_VIEW_LIMIT,
+                UserFeatureUsage::PERIOD_MONTHLY,
+            );
+
+            $allRows = [
+                $this->usageRow(
+                    $user,
+                    'contact_reveals',
+                    PlanFeatureKeys::CONTACT_VIEW_LIMIT,
+                    __('dashboard.usage_row_contact_reveals'),
+                    'monthly',
+                    $contactUsed,
+                    $contactLimitDisplay,
+                ),
+                $this->usageRow(
+                    $user,
+                    'chat_sends',
+                    SubscriptionService::FEATURE_CHAT_SEND_LIMIT,
+                    __('dashboard.usage_row_chat_sends'),
+                    'daily',
+                    $this->usage->getUsage(
+                        (int) $user->id,
+                        FeatureUsageService::FEATURE_CHAT_SEND_LIMIT,
+                        UserFeatureUsage::PERIOD_DAILY,
+                    ),
+                    $this->subscriptions->getQuotaLimitForUsageDisplay($user, SubscriptionService::FEATURE_CHAT_SEND_LIMIT),
+                ),
+                $this->usageRow(
+                    $user,
+                    'profile_opens',
+                    SubscriptionService::FEATURE_DAILY_PROFILE_VIEW_LIMIT,
+                    __('dashboard.usage_row_profile_opens'),
+                    'daily',
+                    $this->usage->getUsage(
+                        (int) $user->id,
+                        FeatureUsageService::FEATURE_DAILY_PROFILE_VIEW_LIMIT,
+                        UserFeatureUsage::PERIOD_DAILY,
+                    ),
+                    $this->subscriptions->getQuotaLimitForUsageDisplay($user, SubscriptionService::FEATURE_DAILY_PROFILE_VIEW_LIMIT),
+                ),
+                $this->usageRow(
+                    $user,
+                    'interest_sends',
+                    PlanFeatureKeys::INTEREST_SEND_LIMIT,
+                    __('dashboard.usage_row_interest_sends'),
+                    'daily',
+                    $this->usage->getUsage(
+                        (int) $user->id,
+                        UserFeatureUsageKeys::INTEREST_SEND_LIMIT,
+                        UserFeatureUsage::PERIOD_DAILY,
+                    ),
+                    $this->interestLimits->effectiveDailyLimitForUsageDisplay($user),
+                ),
+                $this->usageRow(
+                    $user,
+                    'mediator_requests',
+                    PlanFeatureKeys::MEDIATOR_REQUESTS_PER_MONTH,
+                    __('dashboard.usage_row_mediator_requests'),
+                    'monthly',
+                    $this->usage->getUsage(
+                        (int) $user->id,
+                        UserFeatureUsageKeys::MEDIATOR_REQUEST,
+                        UserFeatureUsage::PERIOD_MONTHLY,
+                    ),
+                    $this->mediatorMonthlyDisplayLimit($user),
+                ),
+            ];
+
+            $carryForwardItems = $this->carryForwardItemsFromRows($allRows);
+
+            $rows = array_values(array_filter($allRows, function (array $r): bool {
+                if ($r['is_unlimited'] ?? false) {
+                    return true;
+                }
+                if (($r['key'] ?? '') === 'mediator_requests') {
+                    return true;
+                }
+
+                return ! ($r['locked'] ?? false);
+            }));
+
             return array_merge([
-                'bypass' => true,
+                'bypass' => false,
+                'rows' => $rows,
+                'carry_forward_items' => $carryForwardItems,
+            ], $lifecycle, $planContext);
+        } catch (\Throwable $e) {
+            Log::warning('Quota summary fallback due to runtime exception', [
+                'user_id' => (int) $user->id,
+                'exception' => $e::class,
+                'message' => $e->getMessage(),
+            ]);
+
+            $safeState = [
+                'subscription_status' => 'expired',
+                'is_within_plan' => false,
+                'is_within_grace' => false,
+                'expires_at' => null,
+                'grace_ends_at' => null,
+                'expires_at_display' => null,
+                'grace_ends_at_display' => null,
+                'subscription_state_label' => __('dashboard.subscription_state_expired'),
+            ];
+            $safePlan = [
+                'plan_name' => '',
+                'subscription_started_at' => null,
+                'subscription_started_at_display' => null,
+                'subscription_row_status' => null,
+                'plan_grace_period_days' => 0,
+                'plan_carry_window_days' => null,
+            ];
+            try {
+                $safeState = $this->subscriptionFieldsForQuotaSummary($user);
+                $safePlan = $this->planContextForQuotaSummary($user);
+                if (trim((string) ($safePlan['plan_name'] ?? '')) === '') {
+                    $safePlan['plan_name'] = app(ActivePlanResolver::class)->getPlanName($user);
+                }
+            } catch (\Throwable) {
+                // keep defaults
+                $safePlan['plan_name'] = app(ActivePlanResolver::class)->getPlanName($user);
+            }
+
+            return array_merge([
+                'bypass' => false,
                 'rows' => [],
                 'carry_forward_items' => [],
-            ], $lifecycle, $planContext);
+            ], $safeState, $safePlan);
         }
-
-        $contactLimitDisplay = $this->subscriptions->getQuotaLimitForUsageDisplay($user, PlanFeatureKeys::CONTACT_VIEW_LIMIT);
-        $contactUsed = $this->usage->getUsage(
-            (int) $user->id,
-            UserFeatureUsageKeys::CONTACT_VIEW_LIMIT,
-            UserFeatureUsage::PERIOD_MONTHLY,
-        );
-
-        $allRows = [
-            $this->usageRow(
-                $user,
-                'contact_reveals',
-                PlanFeatureKeys::CONTACT_VIEW_LIMIT,
-                __('dashboard.usage_row_contact_reveals'),
-                'monthly',
-                $contactUsed,
-                $contactLimitDisplay,
-            ),
-            $this->usageRow(
-                $user,
-                'chat_sends',
-                SubscriptionService::FEATURE_CHAT_SEND_LIMIT,
-                __('dashboard.usage_row_chat_sends'),
-                'daily',
-                $this->usage->getUsage(
-                    (int) $user->id,
-                    FeatureUsageService::FEATURE_CHAT_SEND_LIMIT,
-                    UserFeatureUsage::PERIOD_DAILY,
-                ),
-                $this->subscriptions->getQuotaLimitForUsageDisplay($user, SubscriptionService::FEATURE_CHAT_SEND_LIMIT),
-            ),
-            $this->usageRow(
-                $user,
-                'profile_opens',
-                SubscriptionService::FEATURE_DAILY_PROFILE_VIEW_LIMIT,
-                __('dashboard.usage_row_profile_opens'),
-                'daily',
-                $this->usage->getUsage(
-                    (int) $user->id,
-                    FeatureUsageService::FEATURE_DAILY_PROFILE_VIEW_LIMIT,
-                    UserFeatureUsage::PERIOD_DAILY,
-                ),
-                $this->subscriptions->getQuotaLimitForUsageDisplay($user, SubscriptionService::FEATURE_DAILY_PROFILE_VIEW_LIMIT),
-            ),
-            $this->usageRow(
-                $user,
-                'interest_sends',
-                PlanFeatureKeys::INTEREST_SEND_LIMIT,
-                __('dashboard.usage_row_interest_sends'),
-                'daily',
-                $this->usage->getUsage(
-                    (int) $user->id,
-                    UserFeatureUsageKeys::INTEREST_SEND_LIMIT,
-                    UserFeatureUsage::PERIOD_DAILY,
-                ),
-                $this->interestLimits->effectiveDailyLimitForUsageDisplay($user),
-            ),
-            $this->usageRow(
-                $user,
-                'mediator_requests',
-                PlanFeatureKeys::MEDIATOR_REQUESTS_PER_MONTH,
-                __('dashboard.usage_row_mediator_requests'),
-                'monthly',
-                $this->usage->getUsage(
-                    (int) $user->id,
-                    UserFeatureUsageKeys::MEDIATOR_REQUEST,
-                    UserFeatureUsage::PERIOD_MONTHLY,
-                ),
-                $this->mediatorMonthlyDisplayLimit($user),
-            ),
-        ];
-
-        $carryForwardItems = $this->carryForwardItemsFromRows($allRows);
-
-        $rows = array_values(array_filter($allRows, function (array $r): bool {
-            if ($r['is_unlimited'] ?? false) {
-                return true;
-            }
-            if (($r['key'] ?? '') === 'mediator_requests') {
-                return true;
-            }
-
-            return ! ($r['locked'] ?? false);
-        }));
-
-        return array_merge([
-            'bypass' => false,
-            'rows' => $rows,
-            'carry_forward_items' => $carryForwardItems,
-        ], $lifecycle, $planContext);
     }
 
     /**
@@ -281,7 +327,9 @@ class QuotaEngineService
      *   plan_name: string,
      *   subscription_started_at: string|null,
      *   subscription_started_at_display: string|null,
-     *   subscription_row_status: string|null
+     *   subscription_row_status: string|null,
+     *   plan_grace_period_days: int,
+     *   plan_carry_window_days: int|null
      * }
      */
     private function planContextForQuotaSummary(User $user): array
@@ -295,17 +343,22 @@ class QuotaEngineService
                 'subscription_started_at' => null,
                 'subscription_started_at_display' => null,
                 'subscription_row_status' => null,
+                'plan_grace_period_days' => PlanSubscriptionTerms::gracePeriodDays($plan),
+                'plan_carry_window_days' => PlanSubscriptionTerms::leftoverQuotaCarryWindowDays($plan),
             ];
         }
 
         $sub->loadMissing('plan');
         $started = $sub->starts_at;
+        $plan = $sub->plan ?? $this->subscriptions->getEffectivePlan($user);
 
         return [
             'plan_name' => (string) ($sub->plan?->name ?? ''),
             'subscription_started_at' => $started?->toIso8601String(),
             'subscription_started_at_display' => $this->formatCarbonForUserDisplay($started),
             'subscription_row_status' => (string) $sub->status,
+            'plan_grace_period_days' => PlanSubscriptionTerms::gracePeriodDays($plan),
+            'plan_carry_window_days' => PlanSubscriptionTerms::leftoverQuotaCarryWindowDays($plan),
         ];
     }
 

@@ -13,7 +13,6 @@ use App\Support\PlanQuotaPolicyKeys;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
-use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Cache;
 
 class Plan extends Model
@@ -70,20 +69,6 @@ class Plan extends Model
         'highlight' => 'boolean',
         'tier' => 'integer',
     ];
-
-    protected static function booted(): void
-    {
-        static::saved(function () {
-            if (app()->runningUnitTests()) {
-                return;
-            }
-            try {
-                Artisan::call('view:clear');
-            } catch (\Throwable) {
-                // Non-fatal: pricing is always read from DB via accessors.
-            }
-        });
-    }
 
     public function features(): HasMany
     {

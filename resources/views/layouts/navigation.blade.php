@@ -51,7 +51,7 @@
         || request()->routeIs('matrimony.profile.upload-photo')
         || request()->routeIs('matrimony.profile.wizard*')
         || request()->routeIs('user.settings.*')
-        || request()->routeIs('user.my-plan', 'user.plan-history')
+        || request()->routeIs('user.settings.my-plan', 'user.my-plan', 'user.plan-history')
         || request()->routeIs('intake.*')
         || request()->routeIs('blocks.index')
         || request()->routeIs('contact-inbox.*')
@@ -214,11 +214,8 @@
                         </x-dropdown-link>
 
                         @if (auth()->user()->matrimonyProfile)
-                            <x-dropdown-link :href="route('user.my-plan')" class="hover:bg-gray-100 transition rounded-md">
-                                {{ __('user_plan.page_title') }}
-                            </x-dropdown-link>
-                            <x-dropdown-link :href="route('user.plan-history')" class="hover:bg-gray-100 transition rounded-md">
-                                {{ __('user_plan.plan_history_title') }}
+                            <x-dropdown-link :href="route('user.settings.my-plan')" class="hover:bg-gray-100 transition rounded-md">
+                                {{ __('user_plan.my_plan_hub_title') }}
                             </x-dropdown-link>
                         @endif
 
@@ -442,11 +439,8 @@
                 </x-responsive-nav-link>
 
                 @if (auth()->user()->matrimonyProfile)
-                    <x-responsive-nav-link :href="route('user.my-plan')">
-                        {{ __('user_plan.page_title') }}
-                    </x-responsive-nav-link>
-                    <x-responsive-nav-link :href="route('user.plan-history')">
-                        {{ __('user_plan.plan_history_title') }}
+                    <x-responsive-nav-link :href="route('user.settings.my-plan')">
+                        {{ __('user_plan.my_plan_hub_title') }}
                     </x-responsive-nav-link>
                 @endif
 

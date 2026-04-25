@@ -125,34 +125,52 @@
         (function () {
             var delayMs = {{ (int) ($payuAutoSubmitDelayMs ?? 4000) }};
             var userInteracting = false;
+            var payuSubmitted = false;
             var payuForm = document.getElementById('payu_checkout');
             var couponInput = document.getElementById('checkout-coupon');
             var couponForm = document.getElementById('checkout_coupon_form');
             var continueBtn = document.getElementById('payu_continue_btn');
+            var timerId = null;
+
+            function submitPayuOnce() {
+                if (!payuForm || payuSubmitted) {
+                    return;
+                }
+                payuSubmitted = true;
+                if (continueBtn) {
+                    continueBtn.disabled = true;
+                    continueBtn.classList.add('opacity-60', 'cursor-not-allowed');
+                }
+                if (timerId) {
+                    clearTimeout(timerId);
+                }
+                payuForm.submit();
+            }
 
             if (couponInput) {
                 couponInput.addEventListener('focus', function () { userInteracting = true; });
                 couponInput.addEventListener('blur', function () { userInteracting = false; });
             }
 
-            var timerId = setTimeout(function () {
-                if (!payuForm) return;
+            timerId = setTimeout(function () {
+                if (!payuForm || payuSubmitted) return;
                 if (userInteracting) return;
-                payuForm.submit();
+                submitPayuOnce();
             }, delayMs);
 
             if (couponForm) {
                 couponForm.addEventListener('submit', function () {
                     userInteracting = true;
-                    clearTimeout(timerId);
+                    if (timerId) {
+                        clearTimeout(timerId);
+                    }
                 });
             }
 
             if (continueBtn && payuForm) {
                 continueBtn.addEventListener('click', function () {
-                    clearTimeout(timerId);
                     userInteracting = false;
-                    payuForm.submit();
+                    submitPayuOnce();
                 });
             }
         })();

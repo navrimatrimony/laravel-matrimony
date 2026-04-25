@@ -607,6 +607,7 @@ class AdminSettingsController extends Controller
      */
     public function appSettings(SettingService $settings): \Illuminate\View\View
     {
+        $viewer = auth()->user();
         $raw = $settings->get('admin_bypass_mode');
         $adminBypassMode = $raw === null
             ? (bool) config('app.admin_bypass_mode', false)
@@ -626,15 +627,46 @@ class AdminSettingsController extends Controller
             'adminBypassMode' => $adminBypassMode,
             'interestMinCorePct' => $interestMinCorePct,
             'presenceOnlineThresholdMin' => $presenceOnlineThresholdMin,
+            'plansEnforceGenderSpecificVisibility' => AdminSetting::getBool('plans_enforce_gender_specific_visibility', true),
+            'canManageBillingSettings' => $viewer?->hasAdminRole(['super_admin']) ?? false,
+            'billingLegalName' => (string) AdminSetting::getValue('billing_legal_name', ''),
+            'billingAddress' => (string) AdminSetting::getValue('billing_address', ''),
+            'billingEmail' => (string) AdminSetting::getValue('billing_email', ''),
+            'billingPhone' => (string) AdminSetting::getValue('billing_phone', ''),
+            'billingGstin' => (string) AdminSetting::getValue('billing_gstin', ''),
+            'billingPan' => (string) AdminSetting::getValue('billing_pan', ''),
+            'billingStateCode' => (string) AdminSetting::getValue('billing_state_code', ''),
+            'billingInvoicePrefix' => (string) AdminSetting::getValue('billing_invoice_prefix', ''),
+            'billingInvoiceTerms' => (string) AdminSetting::getValue('billing_invoice_terms', ''),
+            'successRateThreshold' => (string) AdminSetting::getValue('success_rate_threshold', '85'),
+            'webhookFailureThreshold' => (string) AdminSetting::getValue('webhook_failure_threshold', '5'),
+            'queueLagThreshold' => (string) AdminSetting::getValue('queue_lag_threshold', '120'),
+            'invoiceFailureThreshold' => (string) AdminSetting::getValue('invoice_failure_threshold', '2'),
         ]);
     }
 
     public function updateAppSettings(Request $request, SettingService $settings): \Illuminate\Http\RedirectResponse
     {
+        $canManageBillingSettings = $request->user()->hasAdminRole(['super_admin']);
+
         $request->validate([
             'admin_bypass_mode' => 'nullable|in:0,1',
             'interest_min_core_completeness_pct' => 'required|integer|min:0|max:100',
             'member_presence_online_threshold_minutes' => 'required|integer|min:1|max:1440',
+            'plans_enforce_gender_specific_visibility' => 'nullable|in:0,1',
+            'billing_legal_name' => [Rule::requiredIf($canManageBillingSettings), 'nullable', 'string', 'max:160'],
+            'billing_address' => [Rule::requiredIf($canManageBillingSettings), 'nullable', 'string', 'max:1000'],
+            'billing_email' => [Rule::requiredIf($canManageBillingSettings), 'nullable', 'email:rfc', 'max:190'],
+            'billing_phone' => [Rule::requiredIf($canManageBillingSettings), 'nullable', 'string', 'max:32'],
+            'billing_gstin' => 'nullable|string|max:32',
+            'billing_pan' => 'nullable|string|max:32',
+            'billing_state_code' => 'nullable|string|max:8',
+            'billing_invoice_prefix' => 'nullable|string|max:24',
+            'billing_invoice_terms' => 'nullable|string|max:3000',
+            'success_rate_threshold' => 'required|numeric|min:1|max:100',
+            'webhook_failure_threshold' => 'required|integer|min:1|max:10000',
+            'queue_lag_threshold' => 'required|integer|min:1|max:10000',
+            'invoice_failure_threshold' => 'required|numeric|min:0|max:100',
         ]);
 
         $on = $request->boolean('admin_bypass_mode');
@@ -648,13 +680,30 @@ class AdminSettingsController extends Controller
             MemberPresencePresentationService::SETTING_KEY_ONLINE_THRESHOLD_MINUTES,
             (string) $presenceMin
         );
+        $plansGenderSpecific = $request->boolean('plans_enforce_gender_specific_visibility');
+        AdminSetting::setValue('plans_enforce_gender_specific_visibility', $plansGenderSpecific ? '1' : '0');
+        AdminSetting::setValue('success_rate_threshold', (string) $request->input('success_rate_threshold', '85'));
+        AdminSetting::setValue('webhook_failure_threshold', (string) $request->input('webhook_failure_threshold', '5'));
+        AdminSetting::setValue('queue_lag_threshold', (string) $request->input('queue_lag_threshold', '120'));
+        AdminSetting::setValue('invoice_failure_threshold', (string) $request->input('invoice_failure_threshold', '2'));
+        if ($canManageBillingSettings) {
+            AdminSetting::setValue('billing_legal_name', trim((string) $request->input('billing_legal_name', '')));
+            AdminSetting::setValue('billing_address', trim((string) $request->input('billing_address', '')));
+            AdminSetting::setValue('billing_email', trim((string) $request->input('billing_email', '')));
+            AdminSetting::setValue('billing_phone', trim((string) $request->input('billing_phone', '')));
+            AdminSetting::setValue('billing_gstin', trim((string) $request->input('billing_gstin', '')));
+            AdminSetting::setValue('billing_pan', trim((string) $request->input('billing_pan', '')));
+            AdminSetting::setValue('billing_state_code', trim((string) $request->input('billing_state_code', '')));
+            AdminSetting::setValue('billing_invoice_prefix', trim((string) $request->input('billing_invoice_prefix', '')));
+            AdminSetting::setValue('billing_invoice_terms', trim((string) $request->input('billing_invoice_terms', '')));
+        }
 
         AuditLogService::log(
             $request->user(),
             'update_app_settings',
             'AdminSetting',
             null,
-            'admin_bypass_mode='.($on ? '1' : '0').'; interest_min_core_completeness_pct='.$pct.'; member_presence_online_threshold_minutes='.$presenceMin,
+            'admin_bypass_mode='.($on ? '1' : '0').'; interest_min_core_completeness_pct='.$pct.'; member_presence_online_threshold_minutes='.$presenceMin.'; plans_enforce_gender_specific_visibility='.($plansGenderSpecific ? '1' : '0').'; billing settings updated',
             false
         );
 

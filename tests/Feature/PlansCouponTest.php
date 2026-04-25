@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\Coupon;
 use App\Models\Plan;
 use App\Models\PlanTerm;
+use App\Models\User;
 use Database\Seeders\SubscriptionPlansSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -32,7 +33,8 @@ class PlansCouponTest extends TestCase
             'description' => null,
         ]);
 
-        $this->postJson(route('plans.coupon.validate'), ['code' => 'save10'])
+        $this->actingAs(User::factory()->create())
+            ->postJson(route('plans.coupon.validate'), ['code' => 'save10'])
             ->assertOk()
             ->assertJsonPath('valid', true)
             ->assertJsonPath('type', 'percent')
@@ -64,7 +66,8 @@ class PlansCouponTest extends TestCase
             'description' => null,
         ]);
 
-        $this->postJson(route('plans.coupon.validate'), [
+        $this->actingAs(User::factory()->create())
+            ->postJson(route('plans.coupon.validate'), [
             'code' => 'FLAT100',
             'plan_id' => $gold->id,
             'plan_term_id' => $term->id,
