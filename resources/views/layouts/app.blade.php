@@ -26,6 +26,7 @@
             $hideMemberMainNav = request()->routeIs('matrimony.onboarding.*')
                 || $cardOnboardingStep !== null;
             $showMobileStickyNav = auth()->check() && ! $hideMemberMainNav;
+            $mobileCleanMode = \App\Models\AdminSetting::getBool('mobile_clean_mode', true);
         @endphp
         <div class="min-h-screen bg-gray-100 dark:bg-gray-900">
             @if ($hideMemberMainNav)
@@ -118,11 +119,14 @@
 
 @auth
     @if (! $hideMemberMainNav && ! request()->routeIs('help-centre.*'))
-        @include('partials.who-viewed-floating-bubble', ['suppressWhoViewedBubble' => request()->routeIs('who-viewed.index')])
+        @include('partials.who-viewed-floating-bubble', [
+            'suppressWhoViewedBubble' => request()->routeIs('who-viewed.index'),
+            'mobileCleanMode' => $mobileCleanMode,
+        ])
         @if (! request()->routeIs('chat.*'))
             @include('partials.chat-dock-widget')
         @endif
-        @include('help-centre.partials.floating-widget')
+        @include('help-centre.partials.floating-widget', ['mobileCleanMode' => $mobileCleanMode])
     @endif
 @endauth
 @include('partials.mobile-sticky-quick-nav', ['hideMemberMainNav' => $hideMemberMainNav])

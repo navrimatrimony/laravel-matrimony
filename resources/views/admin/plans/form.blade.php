@@ -268,7 +268,10 @@
                 @include('admin.plans.partials.quota-policy-quota-card', ['featureKey' => $featureKey, 'quotaPoliciesForm' => $quotaPoliciesForm])
             @endforeach
 
-            @include('admin.plans.partials.quota-policy-boolean-pair-row', ['quotaPoliciesForm' => $quotaPoliciesForm])
+            @include('admin.plans.partials.quota-policy-boolean-pair-row', [
+                'quotaPoliciesForm' => $quotaPoliciesForm,
+                'hiddenOnlySimpleToggleKeys' => ! $isEdit ? [PlanFeatureKeys::PROFILE_WHATSAPP_DIRECT] : [],
+            ])
         </div>
 
         @if ($isEdit)

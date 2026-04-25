@@ -14,6 +14,18 @@
             <p class="mt-2 text-sm text-gray-600 dark:text-gray-400">{{ __('user_plan.settings_my_plan_intro') }}</p>
         </div>
 
+        @php
+            $myPlanSummaryItems = [];
+            if (! empty($upgradeUi['upgrade_available'])) {
+                $myPlanSummaryItems[] = [
+                    'severity' => 'info',
+                    'message' => __('subscription_upgrade.banner_title') . ' - ' . __('subscription_upgrade.banner_body'),
+                    'action_url' => $upgradeUi['upgrade_cta_route'] ?? route('plans.index'),
+                    'action_label' => __('subscription_upgrade.cta_pricing'),
+                ];
+            }
+        @endphp
+
         <div class="border-b border-gray-200 dark:border-gray-700 mb-8">
             <nav class="-mb-px flex flex-wrap gap-4" aria-label="{{ __('user_plan.my_plan_hub_title') }}">
                 <a
@@ -41,21 +53,9 @@
 
         @if ($tab === 'overview')
             <div class="bg-white dark:bg-gray-800 shadow-sm rounded-lg border border-gray-200 dark:border-gray-700 p-6 sm:p-8">
-                @if (! empty($upgradeUi['upgrade_available']))
-                    <div class="mb-8 rounded-xl border border-indigo-200 bg-indigo-50/80 px-4 py-4 dark:border-indigo-900/60 dark:bg-indigo-950/30">
-                        <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                            <div>
-                                <p class="text-sm font-semibold text-indigo-900 dark:text-indigo-100">{{ __('subscription_upgrade.banner_title') }}</p>
-                                <p class="mt-1 text-sm text-indigo-900/85 dark:text-indigo-100/85">{{ __('subscription_upgrade.banner_body') }}</p>
-                            </div>
-                            <a
-                                href="{{ $upgradeUi['upgrade_cta_route'] ?? route('plans.index') }}"
-                                data-upgrade-cta="1"
-                                class="inline-flex shrink-0 items-center justify-center rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-indigo-500 dark:bg-indigo-500 dark:hover:bg-indigo-400"
-                            >
-                                {{ __('subscription_upgrade.cta_pricing') }}
-                            </a>
-                        </div>
+                @if (! empty($myPlanSummaryItems))
+                    <div class="mb-8">
+                        <x-notification-summary :items="$myPlanSummaryItems" variant="cards" :columns="1" />
                     </div>
                 @endif
 

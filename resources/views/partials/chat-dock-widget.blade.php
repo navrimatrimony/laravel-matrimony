@@ -13,11 +13,11 @@
 
 <div
     id="chatPanel"
-    class="pointer-events-none fixed right-0 top-[7.5rem] bottom-0 z-[52] hidden transition-transform duration-300 ease-out lg:flex lg:flex-col lg:items-stretch"
+    class="pointer-events-none fixed right-0 top-[7.5rem] z-[52] hidden transition-transform duration-300 ease-out lg:flex lg:flex-col lg:items-stretch"
 >
 <section
     id="chat-dock-root"
-    class="pointer-events-auto flex h-full min-h-0 w-[17rem] flex-col border-l border-gray-200 bg-white shadow-2xl transition-transform duration-300 ease-out will-change-transform dark:border-gray-800 dark:bg-gray-900{{ $dockHasAlerts ? '' : ' translate-x-full' }}"
+    class="pointer-events-auto flex h-auto max-h-[72vh] min-h-0 w-[17rem] flex-col border-l border-gray-200 bg-white shadow-2xl transition-transform duration-300 ease-out will-change-transform dark:border-gray-800 dark:bg-gray-900{{ $dockHasAlerts ? '' : ' translate-x-full' }}"
     role="complementary"
     aria-label="{{ __('chat_ui.dock_panel_title') }}"
     data-label-profile="{{ __('chat_ui.dock_profile_link') }}"
@@ -37,7 +37,7 @@
         <p id="chat-dock-tab-hint" class="text-[11px] leading-snug text-gray-600 dark:text-gray-400"></p>
     </div>
 
-    <div class="flex-1 overflow-y-auto bg-gray-50 p-2.5 dark:bg-gray-950">
+    <div class="overflow-y-auto bg-gray-50 p-2.5 dark:bg-gray-950 max-h-[48vh]">
         <div class="space-y-2 chat-dock-tab-content" data-tab-content="alerts"></div>
         <div class="hidden space-y-2 chat-dock-tab-content" data-tab-content="chats"></div>
         <div class="hidden space-y-2 chat-dock-tab-content" data-tab-content="active"></div>
@@ -778,6 +778,14 @@
     document.addEventListener('click', function onGlobalChatTabClick(e) {
         const tab = e.target.closest('#chatTab');
         if (!tab) return;
+        const dockOpen = !root.classList.contains('translate-x-full');
+        if (dockOpen) {
+            setDockExpanded(false);
+            if (typeof window.releaseFloatingPanelExclusive === 'function') {
+                window.releaseFloatingPanelExclusive();
+            }
+            return;
+        }
         if (typeof window.openPanel === 'function') {
             window.openPanel('chat');
         } else {

@@ -13,6 +13,7 @@ class OccupationMaster extends Model
         'name',
         'normalized_name',
         'category_id',
+        'sort_order',
     ];
 
     public function category(): BelongsTo

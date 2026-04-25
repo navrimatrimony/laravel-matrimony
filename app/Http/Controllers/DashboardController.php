@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Conversation;
+use App\Models\AdminSetting;
 use App\Models\Interest;
 use App\Models\MatrimonyProfile;
 use App\Models\Message;
@@ -156,6 +157,8 @@ class DashboardController extends Controller
 
         $recommendations = $this->recommendationService->getTopMatches($user, 10);
         $nudges = $this->nudgeService->getNudges($user, $recommendations);
+        $notificationCardsLimit = max(1, min(3, (int) AdminSetting::getValue('dashboard_notification_cards_limit', '2')));
+        $activityAutoHideSeconds = max(3, min(30, (int) AdminSetting::getValue('dashboard_activity_autohide_seconds', '7')));
 
         return view('dashboard', [
             'hasProfile' => true,
@@ -179,6 +182,8 @@ class DashboardController extends Controller
             'recentUnreadChats' => $recentUnread,
             'recommendations' => $recommendations,
             'nudges' => $nudges,
+            'notificationCardsLimit' => $notificationCardsLimit,
+            'activityAutoHideSeconds' => $activityAutoHideSeconds,
         ]);
     }
 }

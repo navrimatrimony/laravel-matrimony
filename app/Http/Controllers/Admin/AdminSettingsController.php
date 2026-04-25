@@ -628,6 +628,7 @@ class AdminSettingsController extends Controller
             'interestMinCorePct' => $interestMinCorePct,
             'presenceOnlineThresholdMin' => $presenceOnlineThresholdMin,
             'plansEnforceGenderSpecificVisibility' => AdminSetting::getBool('plans_enforce_gender_specific_visibility', true),
+            'mobileCleanMode' => AdminSetting::getBool('mobile_clean_mode', true),
             'canManageBillingSettings' => $viewer?->hasAdminRole(['super_admin']) ?? false,
             'billingLegalName' => (string) AdminSetting::getValue('billing_legal_name', ''),
             'billingAddress' => (string) AdminSetting::getValue('billing_address', ''),
@@ -642,6 +643,8 @@ class AdminSettingsController extends Controller
             'webhookFailureThreshold' => (string) AdminSetting::getValue('webhook_failure_threshold', '5'),
             'queueLagThreshold' => (string) AdminSetting::getValue('queue_lag_threshold', '120'),
             'invoiceFailureThreshold' => (string) AdminSetting::getValue('invoice_failure_threshold', '2'),
+            'dashboardNotificationCardsLimit' => (int) AdminSetting::getValue('dashboard_notification_cards_limit', '2'),
+            'dashboardActivityAutoHideSeconds' => (int) AdminSetting::getValue('dashboard_activity_autohide_seconds', '7'),
         ]);
     }
 
@@ -654,6 +657,7 @@ class AdminSettingsController extends Controller
             'interest_min_core_completeness_pct' => 'required|integer|min:0|max:100',
             'member_presence_online_threshold_minutes' => 'required|integer|min:1|max:1440',
             'plans_enforce_gender_specific_visibility' => 'nullable|in:0,1',
+            'mobile_clean_mode' => 'nullable|in:0,1',
             'billing_legal_name' => [Rule::requiredIf($canManageBillingSettings), 'nullable', 'string', 'max:160'],
             'billing_address' => [Rule::requiredIf($canManageBillingSettings), 'nullable', 'string', 'max:1000'],
             'billing_email' => [Rule::requiredIf($canManageBillingSettings), 'nullable', 'email:rfc', 'max:190'],
@@ -667,6 +671,8 @@ class AdminSettingsController extends Controller
             'webhook_failure_threshold' => 'required|integer|min:1|max:10000',
             'queue_lag_threshold' => 'required|integer|min:1|max:10000',
             'invoice_failure_threshold' => 'required|numeric|min:0|max:100',
+            'dashboard_notification_cards_limit' => 'required|integer|min:1|max:3',
+            'dashboard_activity_autohide_seconds' => 'required|integer|min:3|max:30',
         ]);
 
         $on = $request->boolean('admin_bypass_mode');
@@ -682,10 +688,14 @@ class AdminSettingsController extends Controller
         );
         $plansGenderSpecific = $request->boolean('plans_enforce_gender_specific_visibility');
         AdminSetting::setValue('plans_enforce_gender_specific_visibility', $plansGenderSpecific ? '1' : '0');
+        $mobileCleanMode = $request->boolean('mobile_clean_mode');
+        AdminSetting::setValue('mobile_clean_mode', $mobileCleanMode ? '1' : '0');
         AdminSetting::setValue('success_rate_threshold', (string) $request->input('success_rate_threshold', '85'));
         AdminSetting::setValue('webhook_failure_threshold', (string) $request->input('webhook_failure_threshold', '5'));
         AdminSetting::setValue('queue_lag_threshold', (string) $request->input('queue_lag_threshold', '120'));
         AdminSetting::setValue('invoice_failure_threshold', (string) $request->input('invoice_failure_threshold', '2'));
+        AdminSetting::setValue('dashboard_notification_cards_limit', (string) $request->input('dashboard_notification_cards_limit', '2'));
+        AdminSetting::setValue('dashboard_activity_autohide_seconds', (string) $request->input('dashboard_activity_autohide_seconds', '7'));
         if ($canManageBillingSettings) {
             AdminSetting::setValue('billing_legal_name', trim((string) $request->input('billing_legal_name', '')));
             AdminSetting::setValue('billing_address', trim((string) $request->input('billing_address', '')));
@@ -703,7 +713,7 @@ class AdminSettingsController extends Controller
             'update_app_settings',
             'AdminSetting',
             null,
-            'admin_bypass_mode='.($on ? '1' : '0').'; interest_min_core_completeness_pct='.$pct.'; member_presence_online_threshold_minutes='.$presenceMin.'; plans_enforce_gender_specific_visibility='.($plansGenderSpecific ? '1' : '0').'; billing settings updated',
+            'admin_bypass_mode='.($on ? '1' : '0').'; interest_min_core_completeness_pct='.$pct.'; member_presence_online_threshold_minutes='.$presenceMin.'; plans_enforce_gender_specific_visibility='.($plansGenderSpecific ? '1' : '0').'; mobile_clean_mode='.($mobileCleanMode ? '1' : '0').'; dashboard_notification_cards_limit='.(string) $request->input('dashboard_notification_cards_limit', '2').'; dashboard_activity_autohide_seconds='.(string) $request->input('dashboard_activity_autohide_seconds', '7').'; billing settings updated',
             false
         );
 

@@ -831,8 +831,11 @@ class PlanController extends Controller
             $old = old('quota_policies.'.$featureKey);
             if (is_array($old)) {
                 $base = $this->mergeQuotaPolicyOldIntoBase($base, $old);
+            } elseif (! $isEdit && array_key_exists('refresh_type', $base)) {
+                // On create-plan screen, start quota refresh with lifetime by default.
+                $base['refresh_type'] = PlanQuotaPolicy::REFRESH_LIFETIME;
             }
-            $base['refresh_type'] = PlanQuotaPolicy::normalizeRefreshType((string) ($base['refresh_type'] ?? PlanQuotaPolicy::REFRESH_MONTHLY_30D_IST));
+            $base['refresh_type'] = PlanQuotaPolicy::normalizeRefreshType((string) ($base['refresh_type'] ?? PlanQuotaPolicy::REFRESH_LIFETIME));
             $states[$featureKey] = $base;
         }
 

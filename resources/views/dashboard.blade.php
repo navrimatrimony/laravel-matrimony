@@ -31,38 +31,68 @@
 
         @else
 
-            {{-- Welcome Section --}}
-            <div class="mb-6">
-                <h2 class="text-3xl font-bold text-gray-900 dark:text-gray-100 mb-2">
-                    {{ __('dashboard.welcome_back', ['name' => $profile->full_name]) }}
-                </h2>
-                <p class="text-gray-600 dark:text-gray-400">
-                    {{ __('dashboard.overview_line') }}
-                </p>
+            @php
+                $notificationSummaryItems = [];
+
+                if ($profile->photo_rejection_reason && $profile->photo_rejected_at) {
+                    $notificationSummaryItems[] = [
+                        'severity' => 'danger',
+                        'message' => __('dashboard.photo_removed_by_admin') . ' - ' . __('common.reason') . ': ' . $profile->photo_rejection_reason,
+                        'action_url' => route('matrimony.profile.upload-photo'),
+                        'action_label' => __('dashboard.upload_photo'),
+                    ];
+                }
+
+                if (($profile->lifecycle_state ?? null) === 'draft') {
+                    $notificationSummaryItems[] = [
+                        'severity' => 'warning',
+                        'message' => __('dashboard.complete_profile_to_go_live'),
+                        'action_url' => route('matrimony.profile.wizard.section', ['section' => 'full']),
+                        'action_label' => __('dashboard.edit_profile_arrow'),
+                    ];
+                }
+
+                if (($profile->lifecycle_state ?? null) === 'conflict_pending') {
+                    $notificationSummaryItems[] = [
+                        'severity' => 'warning',
+                        'message' => __('dashboard.pending_changes_admin_resolve'),
+                        'action_url' => route('matrimony.profile.show', $profile->id),
+                        'action_label' => __('dashboard.view_profile_arrow'),
+                    ];
+                }
+
+                foreach ($nudges ?? [] as $nudge) {
+                    $notificationSummaryItems[] = [
+                        'severity' => 'warning',
+                        'message' => (string) ($nudge['message'] ?? ''),
+                        'action_url' => $nudge['action_url'] ?? null,
+                        'action_label' => $nudge['action_label'] ?? null,
+                    ];
+                }
+
+                $notificationPrimary = collect($notificationSummaryItems)
+                    ->take((int) ($notificationCardsLimit ?? 2))
+                    ->values()
+                    ->all();
+            @endphp
+
+            {{-- Welcome left + two colored notifications right --}}
+            <div class="mb-6 grid grid-cols-1 gap-4 lg:grid-cols-3 lg:items-stretch">
+                <div class="h-full p-1">
+                    <h2 class="truncate text-2xl font-bold text-gray-900 dark:text-gray-100 lg:text-3xl">
+                        {{ __('dashboard.welcome_back', ['name' => $profile->full_name]) }}
+                    </h2>
+                    <p class="mt-1 text-sm text-gray-600 dark:text-gray-400 lg:text-base">
+                        {{ __('dashboard.overview_line') }}
+                    </p>
+                </div>
+
+                @if (!empty($notificationPrimary))
+                    <div class="h-full lg:col-span-2">
+                        <x-notification-summary :items="$notificationPrimary" variant="cards" :limit="2" :columns="2" />
+                    </div>
+                @endif
             </div>
-
-            {{-- Photo Rejection Alert --}}
-            @if ($profile->photo_rejection_reason && $profile->photo_rejected_at)
-                <div class="mb-6 p-5 bg-red-50 dark:bg-red-900/20 border-2 border-red-200 dark:border-red-800 rounded-lg text-red-900 dark:text-red-200">
-                    <p class="font-bold mb-1 text-lg">{{ __('dashboard.photo_removed_by_admin') }}</p>
-                    <p class="text-sm"><strong>{{ __('common.reason') }}:</strong> {{ $profile->photo_rejection_reason }}</p>
-                    <p class="mt-2 text-sm text-red-800 dark:text-red-300">{{ __('dashboard.upload_new_photo_guidelines') }}</p>
-                </div>
-            @endif
-
-            {{-- Draft / Conflict pending banner --}}
-            @if (($profile->lifecycle_state ?? null) === 'draft')
-                <div class="mb-6 p-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-lg text-amber-900 dark:text-amber-200">
-                    <p class="font-semibold">{{ __('dashboard.complete_profile_to_go_live') }}</p>
-                    <a href="{{ route('matrimony.profile.wizard.section', ['section' => 'full']) }}" class="text-sm text-amber-700 dark:text-amber-300 underline mt-1 inline-block">{{ __('dashboard.edit_profile_arrow') }}</a>
-                </div>
-            @endif
-            @if (($profile->lifecycle_state ?? null) === 'conflict_pending')
-                <div class="mb-6 p-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-lg text-amber-900 dark:text-amber-200">
-                    <p class="font-semibold">{{ __('dashboard.pending_changes_admin_resolve') }}</p>
-                    <a href="{{ route('matrimony.profile.show', $profile->id) }}" class="text-sm text-amber-700 dark:text-amber-300 underline mt-1 inline-block">{{ __('dashboard.view_profile_arrow') }}</a>
-                </div>
-            @endif
 
             <x-monetization.urgency-strip
                 :profileViewersCount="$profileViewersRecentCount ?? 0"
@@ -70,18 +100,8 @@
                 :planExpiresInDays="$planExpiresInDays"
                 :walletBalanceDisplay="($walletSummary['wallet_enabled'] ?? false) && (($walletSummary['balance_paise'] ?? 0) > 0) ? $walletSummary['balance_rupees_display'] : null"
                 :shareReferralUrl="$referralShareUrl"
+                :autoHideSeconds="(int) ($activityAutoHideSeconds ?? 7)"
             />
-
-            @foreach ($nudges ?? [] as $nudge)
-                <div class="bg-yellow-100 dark:bg-yellow-900/25 border border-yellow-200 dark:border-yellow-800/60 text-yellow-900 dark:text-yellow-100 p-3 rounded-lg mb-2">
-                    <p class="text-sm">{{ $nudge['message'] ?? '' }}</p>
-                    @if (! empty($nudge['action_url'] ?? null))
-                        <a href="{{ $nudge['action_url'] }}" class="text-sm font-medium text-yellow-900 dark:text-yellow-200 underline mt-1 inline-block">
-                            {{ $nudge['action_label'] ?? '' }}
-                        </a>
-                    @endif
-                </div>
-            @endforeach
 
             {{-- Profile Summary Card with Photo --}}
             <div class="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6 mb-6 border-l-4 border-red-600 border border-gray-200 dark:border-gray-700">

@@ -6,6 +6,7 @@ use App\Http\Controllers\Admin\AdminCasteController;
 use App\Http\Controllers\Admin\AdminConflictRecordController;
 use App\Http\Controllers\Admin\AdminCouponController;
 use App\Http\Controllers\Admin\AdminDashboardController;
+use App\Http\Controllers\Admin\AdminEducationOccupationController;
 use App\Http\Controllers\Admin\AdminFieldRegistryController;
 use App\Http\Controllers\Admin\AdminIntakeController;
 use App\Http\Controllers\Admin\AdminKycController;
@@ -311,6 +312,26 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
     Route::post('/master/sub-castes/{subCaste}/merge', [SubCasteAdminController::class, 'merge'])->name('master.sub-castes.merge');
     Route::post('/master/sub-castes/{subCaste}/disable', [SubCasteAdminController::class, 'disable'])->name('master.sub-castes.disable');
     Route::post('/master/sub-castes/{subCaste}/enable', [SubCasteAdminController::class, 'enable'])->name('master.sub-castes.enable');
+
+    Route::get('/master/education-occupation', [AdminEducationOccupationController::class, 'index'])->name('master.education-occupation.index');
+    Route::get('/master/education', [AdminEducationOccupationController::class, 'educationIndex'])->name('master.education.index');
+    Route::get('/master/occupation', [AdminEducationOccupationController::class, 'occupationIndex'])->name('master.occupation.index');
+
+    Route::post('/master/education/categories', [AdminEducationOccupationController::class, 'storeEducationCategory'])->name('master.education-categories.store');
+    Route::put('/master/education/categories/{category}', [AdminEducationOccupationController::class, 'updateEducationCategory'])->name('master.education-categories.update');
+    Route::delete('/master/education/categories/{category}', [AdminEducationOccupationController::class, 'destroyEducationCategory'])->name('master.education-categories.destroy');
+
+    Route::post('/master/education/degrees', [AdminEducationOccupationController::class, 'storeEducationDegree'])->name('master.education-degrees.store');
+    Route::put('/master/education/degrees/{degree}', [AdminEducationOccupationController::class, 'updateEducationDegree'])->name('master.education-degrees.update');
+    Route::delete('/master/education/degrees/{degree}', [AdminEducationOccupationController::class, 'destroyEducationDegree'])->name('master.education-degrees.destroy');
+
+    Route::post('/master/occupation/categories', [AdminEducationOccupationController::class, 'storeOccupationCategory'])->name('master.occupation-categories.store');
+    Route::put('/master/occupation/categories/{category}', [AdminEducationOccupationController::class, 'updateOccupationCategory'])->name('master.occupation-categories.update');
+    Route::delete('/master/occupation/categories/{category}', [AdminEducationOccupationController::class, 'destroyOccupationCategory'])->name('master.occupation-categories.destroy');
+
+    Route::post('/master/occupations', [AdminEducationOccupationController::class, 'storeOccupation'])->name('master.occupations.store');
+    Route::put('/master/occupations/{occupation}', [AdminEducationOccupationController::class, 'updateOccupation'])->name('master.occupations.update');
+    Route::delete('/master/occupations/{occupation}', [AdminEducationOccupationController::class, 'destroyOccupation'])->name('master.occupations.destroy');
 
     Route::prefix('internal')->group(function () {
         Route::get('/location-suggestions', [LocationSuggestionAdminController::class, 'index']);

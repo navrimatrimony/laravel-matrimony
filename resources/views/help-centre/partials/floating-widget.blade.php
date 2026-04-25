@@ -4,7 +4,7 @@
     $helpCentreNetworkMsg = \App\Support\ErrorFactory::helpCentreNetwork()->message;
 @endphp
 {{-- Side tabs: stacked next to each other (gap-2); panels toggle; z above chat dock so tabs stay clickable. --}}
-<div id="help-centre-widget-root" class="pointer-events-none fixed right-0 top-1/2 z-[56] flex -translate-y-1/2 transform flex-col gap-2 items-end">
+<div id="help-centre-widget-root" data-mobile-clean-mode="{{ ($mobileCleanMode ?? true) ? '1' : '0' }}" class="pointer-events-none fixed right-0 top-1/2 z-[56] {{ ($mobileCleanMode ?? true) ? 'hidden lg:flex' : 'flex' }} -translate-y-1/2 transform flex-col gap-2 items-end">
     <div class="pointer-events-auto relative flex flex-col gap-2 items-end">
         <button
             type="button"
@@ -75,6 +75,8 @@
 (function () {
     const root = document.getElementById('help-centre-widget-root');
     if (!root) return;
+    const mobileCleanMode = root.dataset.mobileCleanMode === '1';
+    if (mobileCleanMode && window.matchMedia('(max-width: 1023px)').matches) return;
     const toggle = document.getElementById('helpTab');
     const panel = document.getElementById('helpPanel');
     const form = document.getElementById('help-centre-widget-form');

@@ -87,6 +87,44 @@
     };
 
     $pricingPlans = $pricingPlans ?? collect();
+
+    $planSummaryItems = [];
+    if (! empty($catalogIncludesInactive)) {
+        $planSummaryItems[] = [
+            'severity' => 'warning',
+            'message' => __('subscriptions.plans_inactive_catalog_note'),
+        ];
+    }
+    if (! empty($pricingCatalogMissesActivePlan)) {
+        $planSummaryItems[] = [
+            'severity' => 'info',
+            'message' => __('subscriptions.active_plan_not_in_catalog'),
+        ];
+    }
+    if (! empty($pricingCatalogUsedUngenderedFallback) && empty($enforceGenderSpecificPlans)) {
+        $planSummaryItems[] = [
+            'severity' => 'warning',
+            'message' => 'We detected a profile-plan matching issue, so all paid plans are shown to avoid a blank catalog.',
+        ];
+    }
+    if (session('success')) {
+        $planSummaryItems[] = [
+            'severity' => 'info',
+            'message' => (string) session('success'),
+        ];
+    }
+    if (session('error')) {
+        $planSummaryItems[] = [
+            'severity' => 'danger',
+            'message' => (string) session('error'),
+        ];
+    }
+    if (! empty($pricingCatalogInjectedActivePlan)) {
+        $planSummaryItems[] = [
+            'severity' => 'warning',
+            'message' => __('subscriptions.active_plan_not_in_catalog'),
+        ];
+    }
 @endphp
 
 @section('content')
@@ -103,46 +141,7 @@
         @endif
     </div>
 
-    <div
-        class="relative z-10 mx-auto max-w-6xl px-4 pt-10 sm:px-6 lg:px-8"
-        x-data="window.plansPricingCatalog({
-            validateUrl: @js(route('plans.coupon.validate')),
-            csrf: @js(csrf_token()),
-        })"
-    >
-        <header class="mx-auto max-w-2xl text-center">
-            <h1 class="text-3xl font-extrabold tracking-tight text-slate-900 dark:text-white sm:text-4xl">
-                {{ __('subscriptions.pricing_page_title') }}
-            </h1>
-            <p class="mt-3 text-base text-slate-600 dark:text-slate-300 sm:text-lg">
-                {{ __('subscriptions.pricing_page_subtitle') }}
-            </p>
-            <div class="mt-5 inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white/90 px-4 py-2 text-sm font-medium text-slate-800 shadow-sm dark:border-slate-700 dark:bg-slate-800/90 dark:text-slate-100">
-                <span class="h-2 w-2 shrink-0 animate-pulse rounded-full bg-emerald-500"></span>
-                <span>{{ __('subscriptions.pricing_current_plan') }}:</span>
-                <span class="font-bold">{{ $currentPlanDisplayName ?? $eff->name }}</span>
-            </div>
-        </header>
-
-        @auth
-            @if ($unreadMessagesCount > 0 || $profileViewersCount > 0)
-                <div class="mx-auto mt-8 flex max-w-xl flex-col gap-2 sm:flex-row sm:justify-center sm:gap-3">
-                    @if ($unreadMessagesCount > 0)
-                        <div class="rounded-xl border border-rose-200 bg-rose-50 px-4 py-2.5 text-center text-sm font-semibold text-rose-900 shadow-sm dark:border-rose-900/50 dark:bg-rose-950/40 dark:text-rose-100">
-                            {{ __('subscriptions.pricing_trigger_unread') }}
-                            <span class="tabular-nums text-rose-700 dark:text-rose-300">({{ $unreadMessagesCount }})</span>
-                        </div>
-                    @endif
-                    @if ($profileViewersCount > 0)
-                        <a href="{{ route('who-viewed.index') }}"
-                           class="rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-2.5 text-center text-sm font-semibold text-indigo-900 shadow-sm transition hover:bg-indigo-100 dark:border-indigo-800 dark:bg-indigo-950/40 dark:text-indigo-100 dark:hover:bg-indigo-900/60">
-                            {{ __('subscriptions.pricing_trigger_views') }}
-                            <span class="tabular-nums text-indigo-700 dark:text-indigo-300">({{ $profileViewersCount }})</span>
-                        </a>
-                    @endif
-                </div>
-            @endif
-        @endauth
+    <div class="relative z-10 mx-auto max-w-7xl px-4 pt-10 sm:px-6 lg:px-8">
 
         @if ($isFreeViewer)
             <div class="mx-auto mt-8 max-w-lg rounded-2xl border border-indigo-200/80 bg-white/95 p-4 shadow-md dark:border-indigo-900/50 dark:bg-slate-800/95 sm:p-5">
@@ -160,83 +159,9 @@
             </div>
         @endif
 
-        @if (! empty($catalogIncludesInactive))
-            <div class="mx-auto mt-6 max-w-xl rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-center text-sm text-amber-950 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-100">
-                {{ __('subscriptions.plans_inactive_catalog_note') }}
-            </div>
-        @endif
-
-        @if (! empty($pricingCatalogMissesActivePlan))
-            <div class="mx-auto mt-6 max-w-xl rounded-xl border border-sky-200 bg-sky-50 px-4 py-3 text-center text-sm text-sky-950 dark:border-sky-900 dark:bg-sky-950/30 dark:text-sky-100">
-                {{ __('subscriptions.active_plan_not_in_catalog') }}
-            </div>
-        @endif
-        @if (! empty($pricingCatalogUsedUngenderedFallback) && empty($enforceGenderSpecificPlans))
-            <div class="mx-auto mt-6 max-w-xl rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-center text-sm text-amber-950 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-100">
-                We detected a profile-plan matching issue, so all paid plans are shown to avoid a blank catalog.
-            </div>
-        @endif
-
-        @if (session('success'))
-            <div class="mx-auto mt-6 max-w-xl rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-center text-sm text-emerald-900 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-100">
-                {{ session('success') }}
-            </div>
-        @endif
-        @if (session('error'))
-            <div class="mx-auto mt-6 max-w-xl rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-center text-sm text-red-900 dark:border-red-900 dark:bg-red-950/40 dark:text-red-100">
-                {{ session('error') }}
-            </div>
-        @endif
-
-        <div class="mx-auto mt-10 max-w-md" x-data="{ couponOpen: false }">
-            <button
-                type="button"
-                class="flex w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white/90 py-2.5 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-800/90 dark:text-slate-200 dark:hover:bg-slate-800"
-                @click="couponOpen = !couponOpen"
-                :aria-expanded="couponOpen"
-            >
-                <span>{{ __('subscriptions.pricing_coupon_toggle') }}</span>
-                <svg class="h-4 w-4 transition" :class="couponOpen ? 'rotate-180' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
-            </button>
-            <div
-                x-show="couponOpen"
-                x-transition
-                x-cloak
-                class="mt-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-800/95"
-            >
-                <label class="block text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400" for="plan-coupon-input">{{ __('subscriptions.coupon_heading') }}</label>
-                <div class="mt-2 flex flex-col gap-2 sm:flex-row sm:items-stretch">
-                    <input
-                        id="plan-coupon-input"
-                        type="text"
-                        name="catalog_coupon_preview"
-                        x-model="couponCode"
-                        autocomplete="off"
-                        class="min-w-0 flex-1 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/30 dark:border-slate-600 dark:bg-slate-900 dark:text-white"
-                        placeholder="{{ __('subscriptions.coupon_placeholder') }}"
-                    />
-                    <div class="flex shrink-0 gap-2">
-                        <button
-                            type="button"
-                            class="rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-bold text-white shadow transition hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-50"
-                            @click="validateCoupon()"
-                            :disabled="couponLoading || !couponCode.trim()"
-                        >{{ __('subscriptions.coupon_apply') }}</button>
-                        <button
-                            type="button"
-                            class="rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-100 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
-                            @click="clearCoupon()"
-                        >{{ __('subscriptions.coupon_clear') }}</button>
-                    </div>
-                </div>
-                <p x-show="couponMeta && couponMeta.valid" x-cloak class="mt-2 text-sm font-medium text-emerald-700 dark:text-emerald-300">{{ __('subscriptions.coupon_applied_hint') }}</p>
-                <p x-show="couponError" x-cloak x-text="couponError" class="mt-2 text-sm text-red-600 dark:text-red-400"></p>
-            </div>
-        </div>
-
-        @if (! empty($pricingCatalogInjectedActivePlan))
-            <div class="mx-auto mt-6 max-w-xl rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-center text-sm text-amber-950 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-100">
-                {{ __('subscriptions.active_plan_not_in_catalog') }}
+        @if (! empty($planSummaryItems))
+            <div class="mx-auto mt-6 max-w-3xl">
+                <x-notification-summary :items="$planSummaryItems" variant="cards" :columns="2" />
             </div>
         @endif
 
@@ -256,15 +181,76 @@
                 @endif
             </div>
         @else
-            {{-- coupon_code must bind on the catalog root x-data; associate with each plan form via form="" --}}
-            @auth
-                <div class="sr-only" aria-hidden="true">
-                    @foreach ($pricingPlans as $p)
-                        <input type="hidden" name="coupon_code" form="plan-subscribe-{{ (int) $p->id }}" x-bind:value="couponCode" />
-                    @endforeach
+            <div
+                class="mx-auto mt-10 max-w-7xl"
+                x-data="{
+                    scrollByAmount: 320,
+                    canLeft: false,
+                    canRight: true,
+                    check() {
+                        const el = this.$refs.track;
+                        if (!el) return;
+                        this.canLeft = el.scrollLeft > 4;
+                        this.canRight = el.scrollLeft + el.clientWidth < el.scrollWidth - 4;
+                    },
+                    move(dir) {
+                        const el = this.$refs.track;
+                        if (!el) return;
+                        el.scrollBy({ left: dir * this.scrollByAmount, behavior: 'smooth' });
+                        setTimeout(() => this.check(), 220);
+                    }
+                }"
+                x-init="$nextTick(() => check())"
+            >
+                <div class="relative">
+                    <div class="pointer-events-none absolute inset-y-0 left-0 right-0 z-20 hidden items-center justify-between md:flex">
+                        <button
+                            type="button"
+                            @click="move(-1)"
+                            :disabled="!canLeft"
+                            class="pointer-events-auto -ml-4 inline-flex h-11 w-11 items-center justify-center rounded-full border border-slate-300 bg-white text-slate-700 shadow-md transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-40 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
+                            aria-label="Scroll plans left"
+                        >
+                            <span aria-hidden="true">‹</span>
+                        </button>
+                        <button
+                            type="button"
+                            @click="move(1)"
+                            :disabled="!canRight"
+                            class="pointer-events-auto -mr-4 inline-flex h-11 w-11 items-center justify-center rounded-full border border-slate-300 bg-white text-slate-700 shadow-md transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-40 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
+                            aria-label="Scroll plans right"
+                        >
+                            <span aria-hidden="true">›</span>
+                        </button>
+                    </div>
+
+                    <div class="mb-4 flex items-center justify-end gap-2 md:hidden">
+                    <button
+                        type="button"
+                        @click="move(-1)"
+                        :disabled="!canLeft"
+                        class="inline-flex h-10 w-10 items-center justify-center rounded-full border border-slate-300 bg-white text-slate-700 shadow-sm transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-40 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
+                        aria-label="Scroll plans left"
+                    >
+                        <span aria-hidden="true">‹</span>
+                    </button>
+                    <button
+                        type="button"
+                        @click="move(1)"
+                        :disabled="!canRight"
+                        class="inline-flex h-10 w-10 items-center justify-center rounded-full border border-slate-300 bg-white text-slate-700 shadow-sm transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-40 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
+                        aria-label="Scroll plans right"
+                    >
+                        <span aria-hidden="true">›</span>
+                    </button>
                 </div>
-            @endauth
-            <div class="mx-auto mt-14 grid max-w-5xl grid-cols-1 gap-6 lg:grid-cols-3 lg:items-stretch lg:gap-5">
+
+                <div
+                    class="no-scrollbar flex snap-x snap-mandatory gap-5 overflow-x-auto overflow-y-visible px-1 pb-2 pt-4"
+                    x-ref="track"
+                    @scroll.debounce.100ms="check()"
+                    @resize.window.debounce.150ms="check()"
+                >
                 @foreach ($pricingPlans as $plan)
                     @php
                         $slug = strtolower((string) ($plan->slug ?? ''));
@@ -283,7 +269,7 @@
                         $marketingRibbonLabel = $pricingMarketingBadgeLabel($plan);
                     @endphp
                     <article
-                        class="relative flex min-w-0 flex-col rounded-2xl border bg-white shadow-lg transition-shadow dark:bg-slate-800/95
+                        class="relative flex w-[85vw] min-w-[85vw] snap-start flex-col rounded-2xl border bg-white shadow-lg transition-shadow sm:w-[22rem] sm:min-w-[22rem] lg:w-[calc((100%-3.75rem)/4)] lg:min-w-[calc((100%-3.75rem)/4)] dark:bg-slate-800/95
                             {{ $isGold
                                 ? 'z-10 border-amber-400/90 shadow-xl shadow-amber-500/10 ring-2 ring-amber-400/50 dark:border-amber-500/60 dark:ring-amber-500/40 lg:scale-[1.03] lg:py-1'
                                 : 'border-slate-200 dark:border-slate-700' }}
@@ -447,6 +433,8 @@
                         </div>
                     </article>
                 @endforeach
+                </div>
+                </div>
             </div>
         @endif
 

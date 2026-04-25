@@ -37,7 +37,7 @@
                 </thead>
                 <tbody>
                     @forelse ($items as $item)
-                        <tr class="border-b border-gray-100 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700/30">
+                        <tr x-data="{ showEditModal: false }" class="border-b border-gray-100 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700/30">
                             <td class="py-2 px-2 align-top text-gray-800 dark:text-gray-200 tabular-nums">{{ $item->id }}</td>
                             <td class="py-2 px-2 align-top min-w-0 break-words text-gray-700 dark:text-gray-300">{{ $item->religion?->label ?? '—' }}</td>
                             <td class="py-2 px-2 align-top min-w-0 break-all text-gray-700 dark:text-gray-300" title="{{ $item->key }}">{{ $item->key }}</td>
@@ -53,7 +53,7 @@
                             </td>
                             <td class="py-2 px-2 align-top min-w-0">
                                 <div class="flex flex-col gap-1 items-start">
-                                    <a href="{{ route('admin.master.castes.edit', $item) }}" class="text-xs sm:text-sm text-indigo-600 hover:text-indigo-800 dark:text-indigo-400 whitespace-nowrap">Edit</a>
+                                    <button type="button" @click="showEditModal = true" class="text-xs sm:text-sm text-indigo-600 hover:text-indigo-800 dark:text-indigo-400 whitespace-nowrap">Edit</button>
                                     @if ($item->is_active)
                                         <form method="POST" action="{{ route('admin.master.castes.disable', $item) }}" class="inline">
                                             @csrf
@@ -65,6 +65,32 @@
                                             <button type="submit" class="text-xs sm:text-sm text-emerald-600 hover:text-emerald-800 dark:text-emerald-400 whitespace-nowrap">Enable</button>
                                         </form>
                                     @endif
+                                </div>
+
+                                <div
+                                    x-show="showEditModal"
+                                    x-cloak
+                                    class="fixed inset-0 z-50 flex items-center justify-center bg-black/45 px-4"
+                                    @click.self="showEditModal = false"
+                                    @keydown.escape.window="showEditModal = false"
+                                >
+                                    <div class="w-full max-w-xl rounded-lg bg-white p-4 shadow-xl dark:bg-gray-800">
+                                        <h3 class="text-sm font-semibold text-gray-900 dark:text-gray-100">Edit caste</h3>
+                                        <form method="POST" action="{{ route('admin.master.castes.update', $item) }}" class="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2">
+                                            @csrf
+                                            @method('PUT')
+                                            <select name="religion_id" required class="w-full rounded-md border-gray-300 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100">
+                                                @foreach ($religions as $r)
+                                                    <option value="{{ $r->id }}" {{ (int) $item->religion_id === (int) $r->id ? 'selected' : '' }}>{{ $r->label }}</option>
+                                                @endforeach
+                                            </select>
+                                            <input type="text" name="label" value="{{ $item->label }}" required class="w-full rounded-md border-gray-300 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100">
+                                            <div class="md:col-span-2 flex items-center justify-end gap-2">
+                                                <button type="button" @click="showEditModal = false" class="rounded-md border border-gray-300 px-3 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-100 dark:border-gray-600 dark:text-gray-200 dark:hover:bg-gray-700">Cancel</button>
+                                                <button type="submit" class="rounded-md bg-indigo-700 px-3 py-2 text-xs font-semibold text-white hover:bg-indigo-600">Save</button>
+                                            </div>
+                                        </form>
+                                    </div>
                                 </div>
                             </td>
                         </tr>

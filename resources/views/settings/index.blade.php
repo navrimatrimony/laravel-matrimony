@@ -12,15 +12,29 @@
             </p>
         </div>
 
-        @if (session('warning'))
-            <div class="mb-6 p-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-lg">
-                {{ session('warning') }}
-            </div>
-        @endif
+        @php
+            $settingsSummaryItems = [];
 
-        @if (!$hasProfile)
-            <div class="mb-6 p-4 bg-gray-50 dark:bg-gray-700/30 border border-gray-200 dark:border-gray-600 rounded-lg">
-                {{ __('Create/update your matrimony profile first. Privacy & communication settings are profile-based.') }}
+            if (session('warning')) {
+                $settingsSummaryItems[] = [
+                    'severity' => 'warning',
+                    'message' => (string) session('warning'),
+                ];
+            }
+
+            if (!$hasProfile) {
+                $settingsSummaryItems[] = [
+                    'severity' => 'info',
+                    'message' => __('Create/update your matrimony profile first. Privacy & communication settings are profile-based.'),
+                    'action_url' => route('matrimony.profile.wizard.section', ['section' => 'full']),
+                    'action_label' => __('nav.edit_profile'),
+                ];
+            }
+        @endphp
+
+        @if (!empty($settingsSummaryItems))
+            <div class="mb-6">
+                <x-notification-summary :items="$settingsSummaryItems" variant="cards" :columns="2" />
             </div>
         @endif
 

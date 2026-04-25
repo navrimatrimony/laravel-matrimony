@@ -7,6 +7,7 @@
     aria-hidden="true"
     data-user-id="{{ (int) auth()->id() }}"
     data-suppress-route="{{ ($suppressWhoViewedBubble ?? false) ? '1' : '0' }}"
+    data-mobile-clean-mode="{{ ($mobileCleanMode ?? true) ? '1' : '0' }}"
     data-who-viewed-url="{{ route('who-viewed.index') }}"
 >
     <div class="pointer-events-auto flex gap-2 rounded-2xl border border-indigo-200/90 bg-white/95 px-3 py-2.5 shadow-[0_16px_40px_-18px_rgba(67,56,202,0.45)] backdrop-blur-sm dark:border-indigo-900/70 dark:bg-gray-900/95">
@@ -39,6 +40,13 @@
 (function () {
     const root = document.getElementById('who-viewed-bubble-root');
     if (!root) return;
+    const mobileCleanMode = root.dataset.mobileCleanMode === '1';
+    const isMobile = window.matchMedia('(max-width: 767px)').matches;
+    if (mobileCleanMode && isMobile) {
+        root.classList.add('hidden');
+        root.setAttribute('aria-hidden', 'true');
+        return;
+    }
 
     const userId = root.dataset.userId || '0';
     const storageKey = 'wv_bubble_ack_v2_u' + userId;
