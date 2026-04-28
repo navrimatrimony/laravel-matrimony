@@ -2,9 +2,15 @@
 
 namespace App\Services\Parsing;
 
+use App\Models\City;
 use App\Services\BiodataParserService;
 use App\Services\ControlledOptions\ControlledOptionNormalizer;
+use App\Services\EducationService;
+use App\Services\Location\LocationNormalizationService;
+use App\Services\Location\LocationOpenPlaceSuggestionService;
+use App\Services\OccupationService;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Schema;
 
 /**
  * Deterministic intake snapshot normalizer for controlled fields.
@@ -12,44 +18,66 @@ use Illuminate\Support\Facades\Log;
  */
 class IntakeControlledFieldNormalizer
 {
+    private ?int $openPlaceSuggestionUserId = null;
+
     public function __construct(
         private ControlledOptionNormalizer $controlled,
         private IntakeParsedSnapshotSkeleton $skeleton,
+        private EducationService $education,
+        private OccupationService $occupation,
+        private LocationNormalizationService $locationNormalization,
+        private LocationOpenPlaceSuggestionService $openPlaceSuggestions,
     ) {}
 
-    public function normalizeSnapshot(array $snapshot): array
+    /**
+     * @param  array<string, mixed>  $snapshot
+     * @return array<string, mixed>
+     */
+    public function normalizeSnapshot(array $snapshot, ?int $suggestedByUserId = null): array
     {
-        $out = $this->skeleton->ensure($snapshot);
-        $out = $this->migrateLegacyAiSnapshot($out);
-        $out['core'] = $this->normalizeCore(is_array($out['core'] ?? null) ? $out['core'] : []);
-        $out['horoscope'] = $this->normalizeHoroscopeRows(is_array($out['horoscope'] ?? null) ? $out['horoscope'] : []);
-        $out['contacts'] = $this->normalizeContacts(is_array($out['contacts'] ?? null) ? $out['contacts'] : []);
-        $out['education_history'] = $this->normalizeEducationRows(is_array($out['education_history'] ?? null) ? $out['education_history'] : []);
-        $out['career_history'] = $this->normalizeCareerRows(is_array($out['career_history'] ?? null) ? $out['career_history'] : []);
-        [$out['relatives'], $out['relatives_sectioned']] = $this->normalizeRelativesRows(is_array($out['relatives'] ?? null) ? $out['relatives'] : []);
-        $out['relatives_parents_family'] = $this->flattenSectionedRelatives($out['relatives_sectioned']['paternal'] ?? []);
-        $out['relatives_maternal_family'] = $this->flattenSectionedRelatives($out['relatives_sectioned']['maternal'] ?? []);
-        $this->fillParentNamesFromRelatives($out);
-        $this->reconcilePrimaryContactVersusRelatives($out);
+        $prevUserId = $this->openPlaceSuggestionUserId;
+        $this->openPlaceSuggestionUserId = ($suggestedByUserId !== null && $suggestedByUserId > 0)
+            ? $suggestedByUserId
+            : null;
+        try {
+            $out = $this->skeleton->ensure($snapshot);
+            $out = $this->migrateLegacyAiSnapshot($out);
+            $out['core'] = $this->normalizeCore(is_array($out['core'] ?? null) ? $out['core'] : []);
+            $this->normalizeBirthPlace($out);
+            $this->normalizeNativePlace($out);
+            $this->normalizeAddressRows($out);
+            $out['horoscope'] = $this->normalizeHoroscopeRows(is_array($out['horoscope'] ?? null) ? $out['horoscope'] : []);
+            $out['contacts'] = $this->normalizeContacts(is_array($out['contacts'] ?? null) ? $out['contacts'] : []);
+            $out['education_history'] = $this->normalizeEducationRows(is_array($out['education_history'] ?? null) ? $out['education_history'] : []);
+            $out['career_history'] = $this->normalizeCareerRows(is_array($out['career_history'] ?? null) ? $out['career_history'] : []);
+            $this->normalizeWorkLocation($out);
+            [$out['relatives'], $out['relatives_sectioned']] = $this->normalizeRelativesRows(is_array($out['relatives'] ?? null) ? $out['relatives'] : []);
+            $out['relatives_parents_family'] = $this->flattenSectionedRelatives($out['relatives_sectioned']['paternal'] ?? []);
+            $out['relatives_maternal_family'] = $this->flattenSectionedRelatives($out['relatives_sectioned']['maternal'] ?? []);
+            $this->fillParentNamesFromRelatives($out);
+            $this->reconcilePrimaryContactVersusRelatives($out);
 
-        $matchedCount = 0;
-        $unmatchedCritical = [];
-        foreach (['gender_id', 'religion_id', 'caste_id', 'sub_caste_id', 'marital_status_id'] as $k) {
-            if (! empty($out['core'][$k])) {
-                $matchedCount++;
-            } else {
-                $rawKey = str_replace('_id', '', $k);
-                if (trim((string) ($out['core'][$rawKey] ?? '')) !== '') {
-                    $unmatchedCritical[] = $k;
+            $matchedCount = 0;
+            $unmatchedCritical = [];
+            foreach (['gender_id', 'religion_id', 'caste_id', 'sub_caste_id', 'marital_status_id'] as $k) {
+                if (! empty($out['core'][$k])) {
+                    $matchedCount++;
+                } else {
+                    $rawKey = str_replace('_id', '', $k);
+                    if (trim((string) ($out['core'][$rawKey] ?? '')) !== '') {
+                        $unmatchedCritical[] = $k;
+                    }
                 }
             }
-        }
-        Log::debug('IntakeControlledFieldNormalizer: snapshot normalized', [
-            'matched_controlled_core_ids' => $matchedCount,
-            'unmatched_critical' => $unmatchedCritical,
-        ]);
+            Log::debug('IntakeControlledFieldNormalizer: snapshot normalized', [
+                'matched_controlled_core_ids' => $matchedCount,
+                'unmatched_critical' => $unmatchedCritical,
+            ]);
 
-        return $out;
+            return $out;
+        } finally {
+            $this->openPlaceSuggestionUserId = $prevUserId;
+        }
     }
 
     /**
@@ -59,15 +87,78 @@ class IntakeControlledFieldNormalizer
      * @param  array<string, mixed>  $snapshot
      * @return array<string, mixed>
      */
-    public function finalizePostSsotSnapshot(array $snapshot): array
+    public function finalizePostSsotSnapshot(array $snapshot, ?int $suggestedByUserId = null): array
     {
-        $snapshot = $this->migrateLegacyAiSnapshot($snapshot);
-        $snapshot['contacts'] = $this->normalizeContacts(is_array($snapshot['contacts'] ?? null) ? $snapshot['contacts'] : []);
-        $snapshot['horoscope'] = $this->normalizeHoroscopeRows(is_array($snapshot['horoscope'] ?? null) ? $snapshot['horoscope'] : []);
-        $this->fillParentNamesFromRelatives($snapshot);
-        $this->reconcilePrimaryContactVersusRelatives($snapshot);
+        $prevUserId = $this->openPlaceSuggestionUserId;
+        $this->openPlaceSuggestionUserId = ($suggestedByUserId !== null && $suggestedByUserId > 0)
+            ? $suggestedByUserId
+            : null;
+        try {
+            $snapshot = $this->migrateLegacyAiSnapshot($snapshot);
+            if (! is_array($snapshot['core'] ?? null)) {
+                $snapshot['core'] = [];
+            }
+            $this->normalizeBirthPlace($snapshot);
+            $this->normalizeNativePlace($snapshot);
+            $this->normalizeAddressRows($snapshot);
+            $snapshot['contacts'] = $this->normalizeContacts(is_array($snapshot['contacts'] ?? null) ? $snapshot['contacts'] : []);
+            $snapshot['horoscope'] = $this->normalizeHoroscopeRows(is_array($snapshot['horoscope'] ?? null) ? $snapshot['horoscope'] : []);
+            $snapshot['career_history'] = $this->normalizeCareerRows(is_array($snapshot['career_history'] ?? null) ? $snapshot['career_history'] : []);
+            $this->normalizeWorkLocation($snapshot);
+            $this->fillParentNamesFromRelatives($snapshot);
+            $this->reconcilePrimaryContactVersusRelatives($snapshot);
 
-        return $snapshot;
+            return $snapshot;
+        } finally {
+            $this->openPlaceSuggestionUserId = $prevUserId;
+        }
+    }
+
+    /**
+     * @param  array{country_id?: int|null, state_id?: int|null, district_id?: int|null, taluka_id?: int|null}  $optionalHierarchy
+     */
+    private function recordUnresolvedLocationSuggestion(string $rawInput, string $fieldNameForLog, array $optionalHierarchy = []): void
+    {
+        if ($this->openPlaceSuggestionUserId === null) {
+            return;
+        }
+        if (! Schema::hasTable('location_open_place_suggestions')) {
+            return;
+        }
+        $trimmed = trim($rawInput);
+        if ($trimmed === '') {
+            return;
+        }
+        try {
+            $this->openPlaceSuggestions->recordOrBumpUsage(
+                $trimmed,
+                $this->openPlaceSuggestionUserId,
+                $optionalHierarchy,
+                'none',
+                null,
+            );
+        } catch (\Throwable $e) {
+            Log::warning('IntakeControlledFieldNormalizer: open place suggestion record failed', [
+                'field' => $fieldNameForLog,
+                'error' => $e->getMessage(),
+            ]);
+        }
+    }
+
+    /**
+     * @param  array<string, mixed>  $addr
+     * @return array{country_id?: int, state_id?: int, district_id?: int, taluka_id?: int}
+     */
+    private function addressRowHierarchyHint(array $addr): array
+    {
+        $out = [];
+        foreach (['country_id', 'state_id', 'district_id', 'taluka_id'] as $k) {
+            if (! empty($addr[$k]) && is_numeric($addr[$k])) {
+                $out[$k] = (int) $addr[$k];
+            }
+        }
+
+        return $out;
     }
 
     public function normalizeCore(array $core): array
@@ -129,6 +220,293 @@ class IntakeControlledFieldNormalizer
         }
 
         return $out;
+    }
+
+    /**
+     * Birth place text → {@see LocationNormalizationService} (alias + city→district/state). Sets hierarchy ids or {@code birth_place_text}.
+     *
+     * @param  array<string, mixed>  $snapshot
+     */
+    public function normalizeBirthPlace(array &$snapshot): void
+    {
+        if (! is_array($snapshot['core'] ?? null)) {
+            $snapshot['core'] = [];
+        }
+        $core = &$snapshot['core'];
+        if (! empty($core['birth_city_id']) && is_numeric($core['birth_city_id'])) {
+            return;
+        }
+
+        $raw = $this->extractPlaceTextFromCoreOrSnapshot($core, $snapshot['birth_place'] ?? null);
+        if ($raw === null || $raw === '') {
+            return;
+        }
+
+        $res = $this->locationNormalization->normalizeFromText($raw);
+        if (($res['confidence'] ?? 0.0) >= 0.80 && $res['matched'] && $res['city_id'] !== null) {
+            $cityId = (int) $res['city_id'];
+            $core['birth_city_id'] = $cityId;
+            $core['birth_district_id'] = $res['district_id'] ?? null;
+            $core['birth_state_id'] = $res['state_id'] ?? null;
+            if (isset($res['taluka_id']) && $res['taluka_id'] !== null) {
+                $core['birth_taluka_id'] = (int) $res['taluka_id'];
+            } else {
+                $city = City::query()->find($cityId);
+                if ($city !== null && $city->taluka_id !== null) {
+                    $core['birth_taluka_id'] = (int) $city->taluka_id;
+                }
+            }
+            if (! is_array($snapshot['birth_place'] ?? null)) {
+                $snapshot['birth_place'] = [];
+            }
+            $snapshot['birth_place']['city_id'] = $cityId;
+            $snapshot['birth_place']['taluka_id'] = $core['birth_taluka_id'] ?? null;
+            $snapshot['birth_place']['district_id'] = $res['district_id'] ?? null;
+            $snapshot['birth_place']['state_id'] = $res['state_id'] ?? null;
+
+            return;
+        }
+
+        $existingText = isset($core['birth_place_text']) && is_string($core['birth_place_text'])
+            ? trim($core['birth_place_text'])
+            : '';
+        if ($existingText === '') {
+            $core['birth_place_text'] = $raw;
+        }
+        Log::debug('Unknown location input', [
+            'field_name' => 'birth_place',
+            'raw_input' => $raw,
+        ]);
+        $this->recordUnresolvedLocationSuggestion($raw, 'birth_place', []);
+    }
+
+    /**
+     * Native place text → {@see LocationNormalizationService}. Sets native hierarchy ids or preserves text on {@code native_place}.
+     *
+     * @param  array<string, mixed>  $snapshot
+     */
+    public function normalizeNativePlace(array &$snapshot): void
+    {
+        if (! is_array($snapshot['core'] ?? null)) {
+            $snapshot['core'] = [];
+        }
+        $core = &$snapshot['core'];
+        if (! empty($core['native_city_id']) && is_numeric($core['native_city_id'])) {
+            return;
+        }
+
+        $raw = null;
+        if (isset($snapshot['native_place']) && is_array($snapshot['native_place'])) {
+            $raw = $this->extractScalarPlaceText($snapshot['native_place']);
+        }
+        if (($raw === null || $raw === '') && ! empty($core['native_place']) && is_scalar($core['native_place'])) {
+            $raw = trim((string) $core['native_place']);
+        }
+        if ($raw === null || $raw === '') {
+            return;
+        }
+
+        $res = $this->locationNormalization->normalizeFromText($raw);
+        if (($res['confidence'] ?? 0.0) >= 0.80 && $res['matched'] && $res['city_id'] !== null) {
+            $cityId = (int) $res['city_id'];
+            $core['native_city_id'] = $cityId;
+            $core['native_district_id'] = $res['district_id'] ?? null;
+            $core['native_state_id'] = $res['state_id'] ?? null;
+            if (isset($res['taluka_id']) && $res['taluka_id'] !== null) {
+                $core['native_taluka_id'] = (int) $res['taluka_id'];
+            } else {
+                $city = City::query()->find($cityId);
+                if ($city !== null && $city->taluka_id !== null) {
+                    $core['native_taluka_id'] = (int) $city->taluka_id;
+                }
+            }
+            if (! is_array($snapshot['native_place'] ?? null)) {
+                $snapshot['native_place'] = [];
+            }
+            $snapshot['native_place']['city_id'] = $cityId;
+            $snapshot['native_place']['taluka_id'] = $core['native_taluka_id'] ?? null;
+            $snapshot['native_place']['district_id'] = $res['district_id'] ?? null;
+            $snapshot['native_place']['state_id'] = $res['state_id'] ?? null;
+
+            return;
+        }
+
+        if (! is_array($snapshot['native_place'] ?? null)) {
+            $snapshot['native_place'] = [];
+        }
+        $np = &$snapshot['native_place'];
+        if (empty($np['raw']) || ! is_string($np['raw']) || trim($np['raw']) === '') {
+            $np['raw'] = $raw;
+        }
+        if (empty($np['address_line']) || ! is_string($np['address_line']) || trim($np['address_line']) === '') {
+            $np['address_line'] = $raw;
+        }
+        Log::debug('Unknown location input', [
+            'field_name' => 'native_place',
+            'raw_input' => $raw,
+        ]);
+        $this->recordUnresolvedLocationSuggestion($raw, 'native_place', []);
+    }
+
+    /**
+     * Intake `addresses[]`: optional place string → city + hierarchy via {@see LocationNormalizationService}.
+     * Preserves `address_line` / `raw` when unmatched or low confidence.
+     *
+     * @param  array<string, mixed>  $snapshot
+     */
+    public function normalizeAddressRows(array &$snapshot): void
+    {
+        $list = $snapshot['addresses'] ?? null;
+        if (! is_array($list) || $list === []) {
+            return;
+        }
+        foreach ($list as $i => $addr) {
+            if (! is_array($addr)) {
+                continue;
+            }
+            if (! empty($addr['city_id']) && is_numeric($addr['city_id'])) {
+                continue;
+            }
+            $raw = $this->extractAddressPlaceCandidate($addr);
+            if ($raw === null || $raw === '') {
+                continue;
+            }
+            $res = $this->locationNormalization->normalizeFromText($raw);
+            if (($res['confidence'] ?? 0.0) >= 0.80 && ($res['matched'] ?? false) && ($res['city_id'] ?? null) !== null) {
+                $addr['city_id'] = (int) $res['city_id'];
+                $addr['district_id'] = $res['district_id'] ?? null;
+                $addr['state_id'] = $res['state_id'] ?? null;
+                $addr['country_id'] = $res['country_id'] ?? null;
+                if (isset($res['taluka_id']) && $res['taluka_id'] !== null) {
+                    $addr['taluka_id'] = (int) $res['taluka_id'];
+                }
+                $snapshot['addresses'][$i] = $addr;
+
+                continue;
+            }
+            Log::debug('Unknown location input', [
+                'field_name' => 'addresses.'.$i,
+                'raw_input' => $raw,
+            ]);
+            $this->recordUnresolvedLocationSuggestion($raw, 'addresses.'.$i, $this->addressRowHierarchyHint($addr));
+        }
+    }
+
+    /**
+     * Core `work_location_text` (or first career row location) → `work_city_id` / `work_state_id` when alias match is strong.
+     *
+     * @param  array<string, mixed>  $snapshot
+     */
+    public function normalizeWorkLocation(array &$snapshot): void
+    {
+        if (! is_array($snapshot['core'] ?? null)) {
+            $snapshot['core'] = [];
+        }
+        $core = &$snapshot['core'];
+        if (! empty($core['work_city_id']) && is_numeric($core['work_city_id'])) {
+            return;
+        }
+        $raw = trim((string) ($core['work_location_text'] ?? ''));
+        if ($raw === '') {
+            $ch = $snapshot['career_history'] ?? [];
+            if (is_array($ch) && isset($ch[0]) && is_array($ch[0])) {
+                $row0 = $ch[0];
+                $raw = trim((string) ($row0['work_location_text'] ?? $row0['location'] ?? ''));
+            }
+        }
+        if ($raw === '') {
+            return;
+        }
+        $res = $this->locationNormalization->normalizeFromText($raw);
+        if (($res['confidence'] ?? 0.0) < 0.80 || ! ($res['matched'] ?? false) || ($res['city_id'] ?? null) === null) {
+            Log::debug('Unknown location input', [
+                'field_name' => 'work_location',
+                'raw_input' => $raw,
+            ]);
+            $this->recordUnresolvedLocationSuggestion($raw, 'work_location', []);
+
+            return;
+        }
+        $core['work_city_id'] = (int) $res['city_id'];
+        $core['work_state_id'] = $res['state_id'] ?? null;
+        if (is_array($snapshot['career_history'] ?? null) && isset($snapshot['career_history'][0]) && is_array($snapshot['career_history'][0])) {
+            $loc0 = trim((string) ($snapshot['career_history'][0]['work_location_text'] ?? $snapshot['career_history'][0]['location'] ?? ''));
+            if ($loc0 === '' || $loc0 === $raw) {
+                $snapshot['career_history'][0]['city_id'] = (int) $res['city_id'];
+            }
+        }
+    }
+
+    /**
+     * Prefer structured place keys; last resort: short single-line {@code address_line} (no comma).
+     *
+     * @param  array<string, mixed>  $addr
+     */
+    private function extractAddressPlaceCandidate(array $addr): ?string
+    {
+        foreach (['city', 'place', 'location', 'town', 'village_name'] as $k) {
+            $v = $addr[$k] ?? null;
+            if (is_string($v)) {
+                $t = trim($v);
+                if ($t !== '') {
+                    return $t;
+                }
+            }
+        }
+        $v = $addr['village'] ?? null;
+        if (is_string($v)) {
+            $t = trim($v);
+            if ($t !== '') {
+                return $t;
+            }
+        }
+        $line = isset($addr['address_line']) && is_string($addr['address_line']) ? trim($addr['address_line']) : '';
+        if ($line !== '' && mb_strlen($line, 'UTF-8') <= 48 && mb_strpos($line, ',') === false) {
+            return $line;
+        }
+
+        return null;
+    }
+
+    /**
+     * @param  array<string, mixed>  $core
+     */
+    private function extractPlaceTextFromCoreOrSnapshot(array $core, mixed $birthPlaceSlice): ?string
+    {
+        if (! empty($core['birth_place']) && is_scalar($core['birth_place'])) {
+            $t = trim((string) $core['birth_place']);
+            if ($t !== '') {
+                return $t;
+            }
+        }
+        if (! empty($core['birth_place_text']) && is_scalar($core['birth_place_text'])) {
+            $t = trim((string) $core['birth_place_text']);
+            if ($t !== '') {
+                return $t;
+            }
+        }
+        if (is_array($birthPlaceSlice)) {
+            return $this->extractScalarPlaceText($birthPlaceSlice);
+        }
+
+        return null;
+    }
+
+    /**
+     * @param  array<string, mixed>  $place
+     */
+    private function extractScalarPlaceText(array $place): ?string
+    {
+        foreach (['raw', 'address_line', 'label', 'city_text', 'name'] as $k) {
+            if (! empty($place[$k]) && is_string($place[$k])) {
+                $t = trim($place[$k]);
+                if ($t !== '') {
+                    return $t;
+                }
+            }
+        }
+
+        return null;
     }
 
     public function normalizeHoroscopeRows(array $rows): array
@@ -287,9 +665,9 @@ class IntakeControlledFieldNormalizer
                 continue;
             }
             if (empty($row['degree_id']) && ! empty($row['degree'])) {
-                $m = $this->controlled->findActiveMasterExact('master_degrees', (string) $row['degree']);
-                if ($m !== null) {
-                    $rows[$i]['degree_id'] = (int) $m['id'];
+                $deg = $this->education->findDegreeMatch((string) $row['degree']);
+                if ($deg !== null) {
+                    $rows[$i]['degree_id'] = (int) $deg->id;
                 }
             }
         }
@@ -322,6 +700,23 @@ class IntakeControlledFieldNormalizer
                 $m = $this->controlled->findActiveMasterExact('master_employment_types', (string) $row['employment_type']);
                 if ($m !== null) {
                     $rows[$i]['employment_type_id'] = (int) $m['id'];
+                }
+            }
+            if (empty($row['occupation_master_id']) && ! empty($row['occupation_title'])) {
+                $occ = $this->occupation->findOccupationMasterForIntake((string) $row['occupation_title']);
+                if ($occ !== null) {
+                    $rows[$i]['occupation_master_id'] = (int) $occ->id;
+                }
+            }
+            if (empty($rows[$i]['city_id']) || ! is_numeric($rows[$i]['city_id'])) {
+                $locRaw = trim((string) ($rows[$i]['location'] ?? $rows[$i]['work_location_text'] ?? ''));
+                if ($locRaw !== '') {
+                    $locRes = $this->locationNormalization->normalizeFromText($locRaw);
+                    if (($locRes['confidence'] ?? 0.0) >= 0.80 && ($locRes['matched'] ?? false) && ($locRes['city_id'] ?? null) !== null) {
+                        $rows[$i]['city_id'] = (int) $locRes['city_id'];
+                    } else {
+                        $this->recordUnresolvedLocationSuggestion($locRaw, 'career_history.'.$i, []);
+                    }
                 }
             }
         }
@@ -708,8 +1103,17 @@ class IntakeControlledFieldNormalizer
         $trimPunct = preg_replace('/^[।]+|[।]+$/u', '', $trimPunct) ?? $trimPunct;
         $trimPunct = trim($trimPunct);
         $candidates = array_values(array_unique(array_filter([$raw, $compressed, $trimPunct], fn ($s) => $s !== '')));
+        $context = [];
+        if ($textKey === 'caste') {
+            $rid = $core['religion_id'] ?? null;
+            $context['religion_id'] = is_numeric($rid) ? (int) $rid : null;
+        }
+        if ($textKey === 'sub_caste') {
+            $cid = $core['caste_id'] ?? null;
+            $context['caste_id'] = is_numeric($cid) ? (int) $cid : null;
+        }
         foreach ($candidates as $candidate) {
-            $resolved = $this->controlled->resolveControlledCoreValue($textKey, $candidate);
+            $resolved = $this->controlled->resolveControlledCoreValue($textKey, $candidate, $context);
             if (! empty($resolved['matched']) && ! empty($resolved['id'])) {
                 $core[$idKey] = (int) $resolved['id'];
 

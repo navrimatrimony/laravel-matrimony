@@ -7,6 +7,7 @@ use App\Models\SubCaste;
 use App\Models\User;
 use App\Services\MasterData\MasterDataTranslationImportService;
 use App\Services\MasterData\ReligionCasteSubCasteResolver;
+use App\Support\MasterData\ReligionBilingualCatalog;
 use App\Support\MasterData\ReligionCasteSubcasteSlugger;
 use Illuminate\Support\Facades\Artisan;
 use Laravel\Sanctum\Sanctum;
@@ -47,22 +48,29 @@ test('caste display_label prefers English when locale is en even if Marathi pres
     expect($c->display_label)->toBe('माळी');
 });
 
-test('translation import service updates label_en label_mr and legacy label', function () {
+test('translation import service applies religion labels from bilingual catalog and ignores json religion rows', function () {
+    $catalog = ReligionBilingualCatalog::load();
+    expect($catalog)->not->toBeEmpty();
+    expect($catalog)->toHaveKey('hindu');
+
+    $wantEn = $catalog['hindu']['label_en'];
+    $wantMr = $catalog['hindu']['label_mr'];
+
     $rel = Religion::create([
-        'key' => 't-import',
-        'label' => 'Old',
-        'label_en' => 'Old',
-        'label_mr' => null,
+        'key' => 'hindu',
+        'label' => 'Wrong',
+        'label_en' => 'Wrong',
+        'label_mr' => 'गलत',
         'is_active' => true,
     ]);
 
     app(MasterDataTranslationImportService::class)->importFromDecodedJson([
         [
             'entity_type' => 'religion',
-            'key' => 't-import',
+            'key' => 'hindu',
             'scope' => [],
-            'label_en' => 'New English',
-            'label_mr' => 'नवा',
+            'label_en' => 'JSON English',
+            'label_mr' => 'जेसन',
             'aliases_en' => [],
             'aliases_mr' => [],
             'ocr_variants' => [],
@@ -70,15 +78,15 @@ test('translation import service updates label_en label_mr and legacy label', fu
     ]);
 
     $rel->refresh();
-    expect($rel->label_en)->toBe('New English');
-    expect($rel->label_mr)->toBe('नवा');
-    expect($rel->label)->toBe('New English');
+    expect($rel->label_en)->toBe($wantEn);
+    expect($rel->label_mr)->toBe($wantMr);
+    expect($rel->label)->toBe($wantEn);
 });
 
 test('master import translations artisan command succeeds when JSON exists', function () {
     $exit = Artisan::call('master:import-religion-caste-subcaste-translations');
     expect($exit)->toBe(0);
-    expect(Artisan::output())->toContain('Translations imported.');
+    expect(Artisan::output())->toContain('Bilingual labels synced from religion_caste_subcaste_seed_*.json');
 });
 
 test('GET api v1 castes returns locale label plus label_en and label_mr', function () {

@@ -68,7 +68,7 @@ class AdminEducationOccupationController extends Controller
             ->get();
 
         $educationDegrees = EducationDegree::query()
-            ->with('category:id,name')
+            ->with('category:id,name,name_mr')
             ->whereNotNull('code')
             ->where('code', '!=', '');
 
@@ -144,7 +144,13 @@ class AdminEducationOccupationController extends Controller
         $occupationCategories = OccupationCategory::query()
             ->with([
                 'workingWithType:id,name',
-                'occupations' => fn ($q) => $q->orderBy('name'),
+                'occupations' => function ($q) use ($hasOccupationSortOrder) {
+                    if ($hasOccupationSortOrder) {
+                        $q->orderBy('sort_order')->orderBy('name');
+                    } else {
+                        $q->orderBy('name');
+                    }
+                },
             ]);
 
         if ($categorySortBy === 'name_asc') {
@@ -164,8 +170,12 @@ class AdminEducationOccupationController extends Controller
         $occupationCategories = $occupationCategories
             ->get();
 
+        $categorySelect = ['id', 'name'];
+        if (Schema::hasColumn('occupation_categories', 'name_mr')) {
+            $categorySelect[] = 'name_mr';
+        }
         $occupations = OccupationMaster::query()
-            ->with('category:id,name');
+            ->with(['category' => fn ($q) => $q->select($categorySelect)]);
 
         if ($sortBy === 'sort_order' && $hasOccupationSortOrder) {
             $occupations
@@ -175,10 +185,10 @@ class AdminEducationOccupationController extends Controller
             $occupations->orderByDesc('name');
         } elseif ($sortBy === 'category') {
             $occupations
-                ->join('occupation_categories as oc', 'oc.id', '=', 'occupation_masters.category_id')
+                ->join('occupation_categories as oc', 'oc.id', '=', 'occupation_master.category_id')
                 ->orderBy('oc.name')
-                ->orderBy('occupation_masters.name')
-                ->select('occupation_masters.*');
+                ->orderBy('occupation_master.name')
+                ->select('occupation_master.*');
         } else {
             $occupations->orderBy('name');
         }
@@ -209,6 +219,7 @@ class AdminEducationOccupationController extends Controller
     {
         $data = $request->validate([
             'name' => ['required', 'string', 'max:128'],
+            'name_mr' => ['nullable', 'string', 'max:128'],
             'sort_order' => ['nullable', 'integer', 'min:0', 'max:100000'],
             'is_active' => ['nullable', 'in:0,1'],
         ]);
@@ -224,8 +235,11 @@ class AdminEducationOccupationController extends Controller
             $slug = $baseSlug.'-'.$i;
         }
 
+        $nameMr = trim((string) ($data['name_mr'] ?? ''));
+
         EducationCategory::query()->create([
             'name' => trim((string) $data['name']),
+            'name_mr' => $nameMr !== '' ? $nameMr : null,
             'slug' => $slug,
             'sort_order' => (int) ($data['sort_order'] ?? 0),
             'is_active' => $request->boolean('is_active', true),
@@ -238,6 +252,7 @@ class AdminEducationOccupationController extends Controller
     {
         $data = $request->validate([
             'name' => ['required', 'string', 'max:128'],
+            'name_mr' => ['nullable', 'string', 'max:128'],
             'sort_order' => ['nullable', 'integer', 'min:0', 'max:100000'],
             'is_active' => ['nullable', 'in:0,1'],
         ]);
@@ -253,8 +268,11 @@ class AdminEducationOccupationController extends Controller
             $slug = $baseSlug.'-'.$i;
         }
 
+        $nameMr = trim((string) ($data['name_mr'] ?? ''));
+
         $category->update([
             'name' => trim((string) $data['name']),
+            'name_mr' => $nameMr !== '' ? $nameMr : null,
             'slug' => $slug,
             'sort_order' => (int) ($data['sort_order'] ?? 0),
             'is_active' => $request->boolean('is_active'),
@@ -284,8 +302,11 @@ class AdminEducationOccupationController extends Controller
                 'max:128',
                 Rule::unique('education_degrees', 'code')->where(fn ($q) => $q->where('category_id', (int) $request->input('category_id'))),
             ],
+            'code_mr' => ['nullable', 'string', 'max:128'],
             'title' => ['nullable', 'string', 'max:128'],
+            'title_mr' => ['nullable', 'string', 'max:255'],
             'full_form' => ['nullable', 'string', 'max:255'],
+            'full_form_mr' => ['nullable', 'string', 'max:2000'],
             'sort_order' => ['nullable', 'integer', 'min:0', 'max:100000'],
         ]);
 
@@ -294,12 +315,18 @@ class AdminEducationOccupationController extends Controller
         if ($title === '') {
             $title = $code;
         }
+        $codeMr = trim((string) ($data['code_mr'] ?? ''));
+        $titleMr = trim((string) ($data['title_mr'] ?? ''));
+        $fullFormMr = trim((string) ($data['full_form_mr'] ?? ''));
 
         EducationDegree::query()->create([
             'category_id' => (int) $data['category_id'],
             'code' => $code,
+            'code_mr' => $codeMr !== '' ? $codeMr : null,
             'title' => $title,
+            'title_mr' => $titleMr !== '' ? $titleMr : null,
             'full_form' => filled($data['full_form'] ?? null) ? trim((string) $data['full_form']) : null,
+            'full_form_mr' => $fullFormMr !== '' ? $fullFormMr : null,
             'sort_order' => (int) ($data['sort_order'] ?? 0),
         ]);
 
@@ -318,8 +345,11 @@ class AdminEducationOccupationController extends Controller
                     ->where(fn ($q) => $q->where('category_id', (int) $request->input('category_id')))
                     ->ignore($degree->id),
             ],
+            'code_mr' => ['nullable', 'string', 'max:128'],
             'title' => ['nullable', 'string', 'max:128'],
+            'title_mr' => ['nullable', 'string', 'max:255'],
             'full_form' => ['nullable', 'string', 'max:255'],
+            'full_form_mr' => ['nullable', 'string', 'max:2000'],
             'sort_order' => ['nullable', 'integer', 'min:0', 'max:100000'],
         ]);
 
@@ -328,12 +358,18 @@ class AdminEducationOccupationController extends Controller
         if ($title === '') {
             $title = $code;
         }
+        $codeMr = trim((string) ($data['code_mr'] ?? ''));
+        $titleMr = trim((string) ($data['title_mr'] ?? ''));
+        $fullFormMr = trim((string) ($data['full_form_mr'] ?? ''));
 
         $degree->update([
             'category_id' => (int) $data['category_id'],
             'code' => $code,
+            'code_mr' => $codeMr !== '' ? $codeMr : null,
             'title' => $title,
+            'title_mr' => $titleMr !== '' ? $titleMr : null,
             'full_form' => filled($data['full_form'] ?? null) ? trim((string) $data['full_form']) : null,
+            'full_form_mr' => $fullFormMr !== '' ? $fullFormMr : null,
             'sort_order' => (int) ($data['sort_order'] ?? 0),
         ]);
 
@@ -368,34 +404,52 @@ class AdminEducationOccupationController extends Controller
 
     public function storeOccupationCategory(Request $request): RedirectResponse
     {
-        $data = $request->validate([
+        $rules = [
             'name' => ['required', 'string', 'max:128'],
             'sort_order' => ['nullable', 'integer', 'min:0', 'max:100000'],
             'legacy_working_with_type_id' => ['nullable', 'integer', Rule::exists('working_with_types', 'id')],
-        ]);
+        ];
+        if (Schema::hasColumn('occupation_categories', 'name_mr')) {
+            $rules['name_mr'] = ['nullable', 'string', 'max:128'];
+        }
+        $data = $request->validate($rules);
 
-        OccupationCategory::query()->create([
+        $row = [
             'name' => trim((string) $data['name']),
             'sort_order' => (int) ($data['sort_order'] ?? 0),
             'legacy_working_with_type_id' => $data['legacy_working_with_type_id'] ?? null,
-        ]);
+        ];
+        if (Schema::hasColumn('occupation_categories', 'name_mr')) {
+            $nm = trim((string) ($data['name_mr'] ?? ''));
+            $row['name_mr'] = $nm !== '' ? $nm : null;
+        }
+        OccupationCategory::query()->create($row);
 
         return back()->with('success', 'Occupation category (workplace) added.');
     }
 
     public function updateOccupationCategory(Request $request, OccupationCategory $category): RedirectResponse
     {
-        $data = $request->validate([
+        $rules = [
             'name' => ['required', 'string', 'max:128'],
             'sort_order' => ['nullable', 'integer', 'min:0', 'max:100000'],
             'legacy_working_with_type_id' => ['nullable', 'integer', Rule::exists('working_with_types', 'id')],
-        ]);
+        ];
+        if (Schema::hasColumn('occupation_categories', 'name_mr')) {
+            $rules['name_mr'] = ['nullable', 'string', 'max:128'];
+        }
+        $data = $request->validate($rules);
 
-        $category->update([
+        $row = [
             'name' => trim((string) $data['name']),
             'sort_order' => (int) ($data['sort_order'] ?? 0),
             'legacy_working_with_type_id' => $data['legacy_working_with_type_id'] ?? null,
-        ]);
+        ];
+        if (Schema::hasColumn('occupation_categories', 'name_mr')) {
+            $nm = trim((string) ($data['name_mr'] ?? ''));
+            $row['name_mr'] = $nm !== '' ? $nm : null;
+        }
+        $category->update($row);
 
         return back()->with('success', 'Occupation category updated.');
     }
@@ -414,12 +468,16 @@ class AdminEducationOccupationController extends Controller
     public function storeOccupation(Request $request): RedirectResponse
     {
         $hasOccupationSortOrder = Schema::hasTable('occupation_master') && Schema::hasColumn('occupation_master', 'sort_order');
+        $hasOccMr = Schema::hasTable('occupation_master') && Schema::hasColumn('occupation_master', 'name_mr');
         $rules = [
             'name' => ['required', 'string', 'max:160'],
             'category_id' => ['required', 'integer', Rule::exists('occupation_categories', 'id')],
         ];
         if ($hasOccupationSortOrder) {
             $rules['sort_order'] = ['nullable', 'integer', 'min:0', 'max:100000'];
+        }
+        if ($hasOccMr) {
+            $rules['name_mr'] = ['nullable', 'string', 'max:255'];
         }
         $data = $request->validate($rules);
 
@@ -431,6 +489,10 @@ class AdminEducationOccupationController extends Controller
         ];
         if ($hasOccupationSortOrder) {
             $payload['sort_order'] = (int) ($data['sort_order'] ?? 0);
+        }
+        if ($hasOccMr) {
+            $mr = trim((string) ($data['name_mr'] ?? ''));
+            $payload['name_mr'] = $mr !== '' ? $mr : null;
         }
         OccupationMaster::query()->create($payload);
 
@@ -440,12 +502,16 @@ class AdminEducationOccupationController extends Controller
     public function updateOccupation(Request $request, OccupationMaster $occupation): RedirectResponse
     {
         $hasOccupationSortOrder = Schema::hasTable('occupation_master') && Schema::hasColumn('occupation_master', 'sort_order');
+        $hasOccMr = Schema::hasTable('occupation_master') && Schema::hasColumn('occupation_master', 'name_mr');
         $rules = [
             'name' => ['required', 'string', 'max:160'],
             'category_id' => ['required', 'integer', Rule::exists('occupation_categories', 'id')],
         ];
         if ($hasOccupationSortOrder) {
             $rules['sort_order'] = ['nullable', 'integer', 'min:0', 'max:100000'];
+        }
+        if ($hasOccMr) {
+            $rules['name_mr'] = ['nullable', 'string', 'max:255'];
         }
         $data = $request->validate($rules);
 
@@ -457,6 +523,10 @@ class AdminEducationOccupationController extends Controller
         ];
         if ($hasOccupationSortOrder) {
             $payload['sort_order'] = (int) ($data['sort_order'] ?? 0);
+        }
+        if ($hasOccMr) {
+            $mr = trim((string) ($data['name_mr'] ?? ''));
+            $payload['name_mr'] = $mr !== '' ? $mr : null;
         }
         $occupation->update($payload);
 
@@ -501,4 +571,3 @@ class AdminEducationOccupationController extends Controller
             ->update([$column => $toId]);
     }
 }
-

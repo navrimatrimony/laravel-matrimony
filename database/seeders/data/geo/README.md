@@ -33,7 +33,7 @@ Seeder लिहिताना ही structure वापरावी:
 
 तुमच्या JSON मध्ये जर **id आधीच असेल** तर तो वापरता येईल; नाहीतर seeder मध्ये auto `id` देखील देता येतील. Parent reference साठी:
 
-- **districts:** प्रत्येक row मध्ये `state_id` किंवा state code/name — जे state शी match करेल
+- **districts:** प्रत्येक row मध्ये **`statecode`** (`states.json` शी जुळणारा). अनेक राज्ये असतील तेव्हा हे आवश्यक; फक्त एकच राज्य असेल तर `statecode` शिवायचे जुने JSON पण चालते (fallback).
 - **talukas:** `district_id` किंवा district code/name
 - **villages:** `taluka_id` किंवा taluka code/name
 

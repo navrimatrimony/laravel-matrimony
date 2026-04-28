@@ -1,0 +1,93 @@
+[
+  {
+    "id": 1,
+    "key": "bahai",
+    "is_active": 1,
+    "label_en": "Bahai",
+    "label_mr": "बहाई"
+  },
+  {
+    "id": 2,
+    "key": "buddhist",
+    "is_active": 1,
+    "label_en": "Buddhist",
+    "label_mr": "बौद्ध"
+  },
+  {
+    "id": 3,
+    "key": "christian",
+    "is_active": 1,
+    "label_en": "Christian",
+    "label_mr": "ख्रिश्चन"
+  },
+  {
+    "id": 4,
+    "key": "hindu",
+    "is_active": 1,
+    "label_en": "Hindu",
+    "label_mr": "हिंदू"
+  },
+  {
+    "id": 5,
+    "key": "jain",
+    "is_active": 1,
+    "label_en": "Jain",
+    "label_mr": "जैन"
+  },
+  {
+    "id": 6,
+    "key": "jewish",
+    "is_active": 1,
+    "label_en": "Jewish",
+    "label_mr": "ज्यू"
+  },
+  {
+    "id": 7,
+    "key": "muslim",
+    "is_active": 1,
+    "label_en": "Muslim",
+    "label_mr": "मुस्लिम"
+  },
+  {
+    "id": 8,
+    "key": "no-religion",
+    "is_active": 1,
+    "label_en": "No Religion",
+    "label_mr": "निधर्मी"
+  },
+  {
+    "id": 9,
+    "key": "parsi",
+    "is_active": 1,
+    "label_en": "Parsi",
+    "label_mr": "पारशी"
+  },
+  {
+    "id": 10,
+    "key": "sikh",
+    "is_active": 1,
+    "label_en": "Sikh",
+    "label_mr": "शीख"
+  },
+  {
+    "id": 11,
+    "key": "spiritual-not-religious",
+    "is_active": 1,
+    "label_en": "Spiritual - not religious",
+    "label_mr": "आध्यात्मिक"
+  },
+  {
+    "id": 12,
+    "key": "tribal",
+    "is_active": 1,
+    "label_en": "Tribal",
+    "label_mr": "आदिवासी"
+  },
+  {
+    "id": 13,
+    "key": "zoroastrian",
+    "is_active": 1,
+    "label_en": "Zoroastrian",
+    "label_mr": "झोरोस्ट्रियन"
+  }
+]

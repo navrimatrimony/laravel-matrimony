@@ -10,7 +10,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  */
 class Country extends Model
 {
-    protected $fillable = ['name'];
+    protected $fillable = ['name', 'name_mr', 'iso_alpha2'];
 
     /**
      * A country has many states.

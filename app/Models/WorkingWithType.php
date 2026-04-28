@@ -12,7 +12,7 @@ class WorkingWithType extends Model
 {
     protected $table = 'working_with_types';
 
-    protected $fillable = ['name', 'slug', 'sort_order', 'is_active'];
+    protected $fillable = ['name', 'name_mr', 'slug', 'sort_order', 'is_active'];
 
     protected $casts = [
         'is_active' => 'boolean',

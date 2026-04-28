@@ -30,7 +30,7 @@
                             <td class="py-3 px-4 text-gray-700 dark:text-gray-300">{{ $item->key }}</td>
                             <td class="py-3 px-4 text-gray-700 dark:text-gray-300">{{ $item->label }}</td>
                             <td class="py-3 px-4 text-gray-700 dark:text-gray-300">{{ $item->label_en ?? $item->label }}</td>
-                            <td class="py-3 px-4 text-gray-700 dark:text-gray-300">{{ $item->label_mr ?? '—' }}</td>
+                            <td class="py-3 px-4 text-gray-700 dark:text-gray-300" lang="mr">{{ $item->label_mr ?? '—' }}</td>
                             <td class="py-3 px-4">
                                 @if ($item->is_active)
                                     <span class="text-emerald-600 dark:text-emerald-400">Active</span>

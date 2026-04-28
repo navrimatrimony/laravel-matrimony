@@ -54,6 +54,19 @@ class SubscriptionPlansSeeder extends Seeder
     /**
      * @return array<string, string>
      */
+    private static function catalogPlanNameMr(string $tier, string $gender): string
+    {
+        $g = $gender === 'male' ? 'पुरुष' : 'स्त्री';
+
+        return match ($tier) {
+            'free' => 'फ्री ('.$g.')',
+            'basic' => 'बेसिक ('.$g.')',
+            'silver' => 'सिल्वर ('.$g.')',
+            'gold' => 'गोल्ड ('.$g.')',
+            default => ucfirst($tier).' ('.$g.')',
+        };
+    }
+
     private static function zeroFeatureBase(): array
     {
         return array_fill_keys(PlanFeatureKeys::all(), '0');
@@ -182,6 +195,7 @@ class SubscriptionPlansSeeder extends Seeder
                 }
                 $defs[] = [
                     'name' => $name,
+                    'name_mr' => self::catalogPlanNameMr($tier, $gender),
                     'slug' => $slug,
                     'applies_to_gender' => $applies,
                     'price' => $price,
@@ -205,6 +219,10 @@ class SubscriptionPlansSeeder extends Seeder
         foreach ($defs as $row) {
             $features = $row['features'];
             unset($row['features']);
+
+            if (! Schema::hasColumn('plans', 'name_mr')) {
+                unset($row['name_mr']);
+            }
 
             $plan = Plan::query()->create($row);
 

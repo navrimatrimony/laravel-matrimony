@@ -366,7 +366,7 @@ class IntakeApprovalService
                     'snapshot_schema_version' => 1,
                     'core' => [$key => $pending['core'][$key]],
                 ];
-                $snapshot = $this->pipeline->normalizeSnapshotForStorage($rawSnapshot);
+                $snapshot = $this->pipeline->normalizeSnapshotForStorage($rawSnapshot, $actorUserId);
                 $coreOut = $snapshot['core'] ?? [];
                 if (! array_key_exists($key, $coreOut)) {
                     return ['ok' => false, 'message' => "Normalize dropped core key: {$key}"];
@@ -388,7 +388,7 @@ class IntakeApprovalService
                     'snapshot_schema_version' => 1,
                     'core' => [$key => $incoming],
                 ];
-                $snapshot = $this->pipeline->normalizeSnapshotForStorage($rawSnapshot);
+                $snapshot = $this->pipeline->normalizeSnapshotForStorage($rawSnapshot, $actorUserId);
                 $coreOut = $snapshot['core'] ?? [];
                 if (! array_key_exists($key, $coreOut)) {
                     return ['ok' => false, 'message' => "Normalize dropped cfs key: {$key}"];
@@ -414,7 +414,7 @@ class IntakeApprovalService
                         'snapshot_schema_version' => 1,
                         'core' => ['other_relatives_text' => $pending[$key]],
                     ];
-                    $normalized = $this->pipeline->normalizeSnapshotForStorage($raw);
+                    $normalized = $this->pipeline->normalizeSnapshotForStorage($raw, $actorUserId);
                     $val = $normalized['core']['other_relatives_text'] ?? $pending[$key];
                     $applySnapshot = [
                         'snapshot_schema_version' => 1,
@@ -425,7 +425,7 @@ class IntakeApprovalService
                         'snapshot_schema_version' => 1,
                         $key => $pending[$key],
                     ];
-                    $normalized = $this->pipeline->normalizeSnapshotForStorage($raw);
+                    $normalized = $this->pipeline->normalizeSnapshotForStorage($raw, $actorUserId);
                     $val = $normalized[$key] ?? $pending[$key];
                     $applySnapshot = [
                         'snapshot_schema_version' => 1,
@@ -443,7 +443,7 @@ class IntakeApprovalService
                     'snapshot_schema_version' => 1,
                     $key => $pending['entities'][$key],
                 ];
-                $normalized = $this->pipeline->normalizeSnapshotForStorage($raw);
+                $normalized = $this->pipeline->normalizeSnapshotForStorage($raw, $actorUserId);
                 $val = $normalized[$key] ?? $pending['entities'][$key];
                 $applySnapshot = [
                     'snapshot_schema_version' => 1,

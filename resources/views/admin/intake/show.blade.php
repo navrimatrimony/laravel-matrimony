@@ -241,6 +241,49 @@
         </div>
     </div>
 
+    @if (! empty($unresolvedLocationOptions) && is_array($unresolvedLocationOptions))
+        <div class="bg-amber-900/20 border border-amber-700 rounded-xl p-5 mb-6">
+            <h2 class="text-sm font-semibold text-amber-100 mb-1">Resolve unresolved locations</h2>
+            <p class="text-xs text-amber-200/80 mb-3">Quick resolve candidates from search. This updates intake approval snapshot only.</p>
+            <div class="space-y-4">
+                @foreach ($unresolvedLocationOptions as $loc)
+                    @php
+                        $opts = is_array($loc['options'] ?? null) ? $loc['options'] : [];
+                    @endphp
+                    <div class="rounded-lg border border-amber-700/70 bg-gray-900/40 p-3">
+                        <div class="text-xs text-gray-400 mb-1">{{ $loc['label'] ?? ($loc['field_key'] ?? 'Location') }}</div>
+                        <div class="text-sm font-semibold text-gray-100 mb-2">"{{ $loc['raw_input'] ?? '' }}"</div>
+                        <div class="flex gap-2 mb-2">
+                            <input
+                                type="text"
+                                class="admin-intake-loc-search-input flex-1 px-2 py-1.5 text-xs rounded border border-gray-600 bg-gray-900 text-gray-100"
+                                value="{{ $loc['raw_input'] ?? '' }}"
+                                placeholder="Search more"
+                            >
+                            <button type="button" class="admin-intake-loc-search-btn px-2.5 py-1.5 text-xs rounded border border-gray-600">Search more</button>
+                        </div>
+                        @if ($opts !== [])
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-2 admin-intake-loc-options-list">
+                                @foreach ($opts as $opt)
+                                    <button
+                                        type="button"
+                                        class="admin-intake-loc-resolve-btn text-left px-3 py-2 rounded border border-gray-600 hover:bg-gray-800 text-xs text-gray-100"
+                                        data-field="{{ $loc['field_key'] ?? '' }}"
+                                        data-city-id="{{ $opt['city_id'] ?? '' }}"
+                                    >
+                                        {{ ($opt['display_label'] ?? $opt['name'] ?? $opt['city_name'] ?? '—') }}
+                                    </button>
+                                @endforeach
+                            </div>
+                        @else
+                            <p class="text-xs text-gray-300 admin-intake-loc-empty-note">No quick matches. Use open place suggestions flow if needed.</p>
+                        @endif
+                    </div>
+                @endforeach
+            </div>
+        </div>
+    @endif
+
     @php
         $govProfile = $attachedProfile ?? $intake->profile;
         $govPendingConflicts = (int) ($pendingConflictCount ?? 0);
@@ -628,4 +671,102 @@
         <pre class="bg-black/40 p-3 rounded overflow-auto max-h-[32rem] text-xs text-gray-100">{{ json_encode($intake->parsed_json, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE) }}</pre>
     </div>
 </div>
+
+<script>
+(function () {
+    var resolveUrl = @json(route('admin.biodata-intakes.resolve-location', $intake));
+    var locationSearchApiUrl = @json(url('/api/internal/location/search'));
+    function bindResolveButtons(root) {
+    root.querySelectorAll('.admin-intake-loc-resolve-btn').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            var field = btn.getAttribute('data-field');
+            var cityId = btn.getAttribute('data-city-id');
+            if (!field || !cityId) return;
+            root.querySelectorAll('.admin-intake-loc-resolve-btn').forEach(function (other) {
+                other.classList.remove('ring-2', 'ring-emerald-500', 'bg-emerald-900/20');
+            });
+            btn.classList.add('ring-2', 'ring-emerald-500', 'bg-emerald-900/20');
+            btn.disabled = true;
+            fetch(resolveUrl, {
+                method: 'PATCH',
+                credentials: 'same-origin',
+                headers: {
+                    'Accept': 'application/json',
+                    'Content-Type': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || ''
+                },
+                body: JSON.stringify({ field: field, city_id: parseInt(cityId, 10) })
+            }).then(function (r) { return r.json().then(function (j) { return { ok: r.ok, data: j }; }); })
+                .then(function (res) {
+                    if (res.ok && res.data && res.data.success) {
+                        window.location.reload();
+                    } else {
+                        btn.disabled = false;
+                        window.alert((res.data && res.data.message) ? res.data.message : 'Could not resolve this location.');
+                    }
+                }).catch(function () {
+                    btn.disabled = false;
+                    window.alert('Network error while resolving location.');
+                });
+        });
+    });
+    }
+
+    document.querySelectorAll('.admin-intake-loc-search-btn').forEach(function (searchBtn) {
+        searchBtn.addEventListener('click', function () {
+            var card = searchBtn.closest('.rounded-lg');
+            if (!card) return;
+            var input = card.querySelector('.admin-intake-loc-search-input');
+            var list = card.querySelector('.admin-intake-loc-options-list');
+            var empty = card.querySelector('.admin-intake-loc-empty-note');
+            var seedBtn = card.querySelector('.admin-intake-loc-resolve-btn');
+            var field = seedBtn ? seedBtn.getAttribute('data-field') : '';
+            var q = input ? String(input.value || '').trim() : '';
+            if (!q || !field) return;
+            var originalSearchLabel = searchBtn.textContent;
+            searchBtn.disabled = true;
+            searchBtn.textContent = 'Searching...';
+            fetch(locationSearchApiUrl + '?q=' + encodeURIComponent(q), {
+                method: 'GET',
+                credentials: 'same-origin',
+                headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }
+            }).then(function (r) { return r.json(); })
+                .then(function (data) {
+                    var results = Array.isArray(data && data.results) ? data.results.slice(0, 10) : [];
+                    if (!list) {
+                        list = document.createElement('div');
+                        list.className = 'grid grid-cols-1 md:grid-cols-2 gap-2 admin-intake-loc-options-list';
+                        card.appendChild(list);
+                    }
+                    list.innerHTML = '';
+                    if (results.length === 0) {
+                        if (!empty) {
+                            empty = document.createElement('p');
+                            empty.className = 'text-xs text-gray-300 admin-intake-loc-empty-note';
+                            card.appendChild(empty);
+                        }
+                        empty.textContent = 'ही जागा सापडली नाही. नवीन म्हणून सबमिट करा';
+                        return;
+                    }
+                    if (empty) empty.textContent = '';
+                    results.forEach(function (opt) {
+                        var b = document.createElement('button');
+                        b.type = 'button';
+                        b.className = 'admin-intake-loc-resolve-btn text-left px-3 py-2 rounded border border-gray-600 hover:bg-gray-800 text-xs text-gray-100';
+                        b.setAttribute('data-field', field);
+                        b.setAttribute('data-city-id', String(opt.city_id || ''));
+                        b.textContent = String(opt.display_label || opt.name || opt.city_name || '—');
+                        list.appendChild(b);
+                    });
+                    bindResolveButtons(card);
+                }).finally(function () {
+                    searchBtn.disabled = false;
+                    searchBtn.textContent = originalSearchLabel;
+                });
+        });
+    });
+    bindResolveButtons(document);
+})();
+</script>
 @endsection

@@ -298,7 +298,12 @@ class AiFirstBiodataParser implements BiodataParserInterface
 
                 // Final SSOT shape then deterministic intake controlled-field normalization.
                 $result = $this->ensureSsotShape($aiResult);
-                $result = $this->intakeControlledFieldNormalizer->normalizeSnapshot($result);
+                $suggestedByUserId = null;
+                if (isset($context['suggested_by_user_id']) && is_numeric($context['suggested_by_user_id'])) {
+                    $sid = (int) $context['suggested_by_user_id'];
+                    $suggestedByUserId = $sid > 0 ? $sid : null;
+                }
+                $result = $this->intakeControlledFieldNormalizer->normalizeSnapshot($result, $suggestedByUserId);
 
                 // Clear education institution / career location when AI mis-parsed horoscope terms (devak/gotra).
                 $result['education_history'] = BiodataParserService::sanitizeEducationInstitutionFromDevakStatic($result['education_history'] ?? []);

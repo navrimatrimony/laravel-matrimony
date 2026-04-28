@@ -52,7 +52,7 @@ class LocationHierarchyController extends Controller
                 'state_ids.*' => ['integer', 'exists:states,id'],
             ]);
             $ids = array_values(array_unique(array_map('intval', $request->input('state_ids', []))));
-            $districts = District::whereIn('state_id', $ids)->orderBy('name')->get(['id', 'name', 'state_id']);
+            $districts = District::whereIn('state_id', $ids)->orderBy('name')->get(['id', 'name', 'slug', 'state_id']);
 
             return response()->json([
                 'success' => true,
@@ -66,7 +66,7 @@ class LocationHierarchyController extends Controller
 
         $districts = District::where('state_id', $request->integer('state_id'))
             ->orderBy('name')
-            ->get(['id', 'name', 'state_id']);
+            ->get(['id', 'name', 'slug', 'state_id']);
 
         return response()->json([
             'success' => true,

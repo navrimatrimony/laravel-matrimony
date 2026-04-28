@@ -11,6 +11,7 @@ class OccupationMaster extends Model
 
     protected $fillable = [
         'name',
+        'name_mr',
         'normalized_name',
         'category_id',
         'sort_order',

@@ -16,9 +16,8 @@
         return m ? m.getAttribute('content') : '';
     }
 
-    function buildLine(item) {
-        var cityName = item.city_name || item.label || item.name || '';
-        return cityName + ', ' + (item.taluka_name || '') + ', ' + (item.district_name || '') + ', ' + (item.state_name || '');
+    function labelFromItem(item) {
+        return (item && (item.display_label || item.label || item.name || item.city_name)) ? String(item.display_label || item.label || item.name || item.city_name) : '';
     }
 
     function openSuggestModal(wrapper, name) {
@@ -219,9 +218,9 @@
             var cityId = item.city_id || item.id || '';
             var div = document.createElement('div');
             div.className = 'p-2 border-b border-gray-200 dark:border-gray-600 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700';
-            div.textContent = buildLine(item);
+            div.textContent = labelFromItem(item);
             div.addEventListener('click', function () {
-                onSelect(item, buildLine(item));
+                onSelect(item, labelFromItem(item));
             });
             resultsEl.appendChild(div);
         });
@@ -427,7 +426,7 @@
                                         '<button type="button" class="location-gps-alt block w-full text-left mt-1 px-2 py-1 text-sm border border-gray-200 dark:border-gray-600 rounded hover:bg-gray-50 dark:hover:bg-gray-700" data-alt-idx="' +
                                         i +
                                         '">' +
-                                        buildLine(alt) +
+                                        labelFromItem(alt).replace(/</g, '&lt;') +
                                         '</button>';
                                 });
 
@@ -447,7 +446,7 @@
                                 var applyBtn = gpsPanel.querySelector('.location-gps-apply');
                                 if (applyBtn) {
                                     applyBtn.addEventListener('click', function () {
-                                        applyCanonicalSelection(primaryItem, data.display_label || buildLine(primaryItem));
+                                        applyCanonicalSelection(primaryItem, data.display_label || labelFromItem(primaryItem));
                                         hideGpsPanel();
                                     });
                                 }
@@ -462,7 +461,7 @@
                                         var idx = parseInt(btn.getAttribute('data-alt-idx'), 10);
                                         var alt = alts[idx];
                                         if (!alt) return;
-                                        applyCanonicalSelection(alt, buildLine(alt));
+                                        applyCanonicalSelection(alt, alt.display_label || labelFromItem(alt));
                                         hideGpsPanel();
                                     });
                                 });

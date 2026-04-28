@@ -8,18 +8,30 @@
 @php
     use App\Models\EducationCategory;
 
+    $localeMr = app()->getLocale() === 'mr';
+
     $categories = EducationCategory::where('is_active', true)
         ->with(['degrees' => fn ($q) => $q->orderBy('sort_order')])
         ->orderBy('sort_order')
         ->get();
 
-    $degreesPayload = $categories->flatMap(function ($cat) {
-        return $cat->degrees->map(function ($d) use ($cat) {
+    $degreesPayload = $categories->flatMap(function ($cat) use ($localeMr) {
+        return $cat->degrees->map(function ($d) use ($cat, $localeMr) {
+            $title = ($localeMr && filled($d->title_mr)) ? $d->title_mr : $d->title;
+            $fullForm = ($localeMr && filled($d->full_form_mr)) ? $d->full_form_mr : ($d->full_form ?? '');
+            $category = ($localeMr && filled($cat->name_mr)) ? $cat->name_mr : $cat->name;
+
             return [
                 'code' => $d->code,
-                'title' => $d->title,
-                'full_form' => $d->full_form ?? '',
-                'category' => $cat->name,
+                'title' => $title,
+                'full_form' => $fullForm,
+                'category' => $category,
+                'title_en' => $d->title,
+                'code_en' => $d->code,
+                'full_form_en' => $d->full_form ?? '',
+                'title_mr' => $d->title_mr ?? '',
+                'code_mr' => $d->code_mr ?? '',
+                'full_form_mr' => $d->full_form_mr ?? '',
             ];
         });
     })->values();
@@ -82,7 +94,9 @@
         var out = [];
         for (var i = 0; i < degrees.length; i++) {
             var d = degrees[i];
-            var hay = norm(d.title) + ' ' + norm(d.code) + ' ' + norm(d.full_form);
+            var hay = norm(d.title) + ' ' + norm(d.code) + ' ' + norm(d.full_form)
+                + ' ' + norm(d.title_en) + ' ' + norm(d.code_en) + ' ' + norm(d.full_form_en)
+                + ' ' + norm(d.title_mr) + ' ' + norm(d.code_mr) + ' ' + norm(d.full_form_mr);
             if (hay.indexOf(qq) !== -1) out.push(d);
             if (out.length >= 60) break;
         }

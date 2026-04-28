@@ -31,6 +31,8 @@ class FullOnboardingRegistrationE2ETest extends TestCase
     {
         $this->seed(\Database\Seeders\ReligionCasteSubCasteSeeder::class);
         $this->seed(\Database\Seeders\MasterLookupSeeder::class);
+        $this->seed(\Database\Seeders\CountriesMasterSeeder::class);
+        $this->seed(\Database\Seeders\IndianStatesMasterSeeder::class);
         $this->seed(\Database\Seeders\LocationSeeder::class);
         $this->seed(\Database\Seeders\EducationSeeder::class);
         $this->seed(\Database\Seeders\EducationCareerTemporarySeeder::class);

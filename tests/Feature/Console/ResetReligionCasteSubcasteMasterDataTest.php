@@ -36,6 +36,13 @@ test('master:reset-religion-caste-subcaste imports canonical TSV with --force-lo
     expect($ismaili)->not->toBeNull();
     expect($ismaili->status)->toBe('approved');
     expect((bool) $ismaili->is_active)->toBeTrue();
+
+    // Reset reapplies Marathi from religion_caste_subcaste_seed_subcastes.json when keys align with TSV.
+    expect($ismaili->label_mr)->toBe('इस्माईली');
+
+    $sunni = Caste::where('religion_id', $muslim->id)->where('key', 'sunni')->first();
+    expect($sunni)->not->toBeNull();
+    expect($sunni->label_mr)->toBe('सुन्नी');
 });
 
 test('master:reset-religion-caste-subcaste clears profile and pivot mappings before reimport', function () {

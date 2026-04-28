@@ -91,6 +91,8 @@ Route::middleware(['auth', \App\Http\Middleware\EnforceCardOnboarding::class])->
         ->name('intake.apply-suggestion');
     Route::post('/intake/reject-suggestion/{intake}', [IntakeController::class, 'rejectPendingIntakeSuggestion'])
         ->name('intake.reject-suggestion');
+    Route::patch('/intake/resolve-location/{intake}', [IntakeController::class, 'resolveLocationSuggestion'])
+        ->name('intake.resolve-location');
 
     Route::get('/api/intake-status/{intake}', function (BiodataIntake $intake) {
         return response()->json([

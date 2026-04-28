@@ -49,7 +49,7 @@ class IntakeApprovalService
         }
 
         // Phase-5: Normalize full snapshot controlled fields deterministically (non-destructive).
-        $approvalSnapshot = app(IntakePipelineService::class)->normalizeApprovedSnapshot($approvalSnapshot);
+        $approvalSnapshot = app(IntakePipelineService::class)->normalizeApprovedSnapshot($approvalSnapshot, $userId);
 
         $manualEdits = 0;
         $autoFilled = 0;

@@ -27,7 +27,9 @@ class OccupationController extends Controller
             'results' => $result['occupations']->map(fn ($o) => [
                 'id' => $o->id,
                 'name' => $o->name,
+                'name_mr' => $o->name_mr ?? null,
                 'category' => optional($o->category)->name,
+                'category_mr' => optional($o->category)->name_mr ?? null,
             ])->values()->all(),
             'suggestion' => $result['suggestion'],
         ]);

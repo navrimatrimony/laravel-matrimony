@@ -1,0 +1,24 @@
+---
+description: Guard the single intake controlled-field normalization pipeline (PHASE-5).
+alwaysApply: false
+globs: app/Services/Parsing/IntakeControlledFieldNormalizer.php,app/Services/ControlledOptions/**/*.php,app/Services/EducationService.php,app/Services/OccupationService.php,app/Support/MasterData/MasterDataAliasNormalizer.php,docs/INTAKE-NORMALIZATION-SSOT.md
+---
+
+# Intake normalization engine — do not fragment
+
+## SSOT
+
+- **Orchestrator:** `App\Services\Parsing\IntakeControlledFieldNormalizer` — all intake snapshot steps for controlled fields (core, horoscope rows, education rows, career rows, …).
+- **Controlled masters:** `App\Services\ControlledOptions\ControlledOptionNormalizer` + `ControlledOptionEngine` + `ControlledMasterDbAliasResolver` (religion/caste/sub-caste DB aliases).
+- **Education / occupation text → IDs:** `EducationService::findDegreeMatch`, `OccupationService::findOccupationMasterForIntake` (DB alias tables + existing search), called **from** the orchestrator path.
+
+## Before you change
+
+1. Read `docs/INTAKE-NORMALIZATION-SSOT.md`.
+2. Prefer **extending** these classes over adding controller-level or ad hoc `DB::table` resolution for intake canonical IDs.
+3. New alias domains → **new additive migration** + FK alias table + hook from the orchestrator or an existing approved service (not a duplicate resolver).
+4. Add or extend **tests** under `tests/Feature/Intake/` or relevant unit tests when behavior changes.
+
+## Not done (do not assume complete)
+
+City/address FK wiring, horoscope DB-backed aliases, unknown-intake persistence, admin/CLI alias management — roadmap; see SSOT “Completion status”.

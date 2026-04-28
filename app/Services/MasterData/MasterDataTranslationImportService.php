@@ -3,11 +3,13 @@
 namespace App\Services\MasterData;
 
 use App\Models\Caste;
-use App\Models\Religion;
-use App\Models\SubCaste;
-use App\Models\ReligionAlias;
 use App\Models\CasteAlias;
+use App\Models\Religion;
+use App\Models\ReligionAlias;
+use App\Models\SubCaste;
 use App\Models\SubCasteAlias;
+use App\Support\MasterData\MasterDataAliasNormalizer;
+use App\Support\MasterData\ReligionBilingualCatalog;
 use Illuminate\Support\Facades\DB;
 
 class MasterDataTranslationImportService
@@ -17,11 +19,70 @@ class MasterDataTranslationImportService
      */
     public function importFromDecodedJson(array $entries): void
     {
+        $entries = $this->mergeReligionRowsFromBilingualCatalog($entries);
+
         DB::transaction(function () use ($entries) {
             foreach ($entries as $row) {
                 $this->importOne($row);
             }
         });
+    }
+
+    /**
+     * Religion labels + aliases come only from {@see ReligionBilingualCatalog};
+     * JSON entries with entity_type religion are ignored to avoid drift.
+     *
+     * @param  list<array<string, mixed>>  $entries
+     * @return list<array<string, mixed>>
+     */
+    private function mergeReligionRowsFromBilingualCatalog(array $entries): array
+    {
+        $catalog = ReligionBilingualCatalog::load();
+        $rest = array_values(array_filter(
+            $entries,
+            fn ($r) => ($r['entity_type'] ?? '') !== 'religion'
+        ));
+
+        if ($catalog === []) {
+            return $entries;
+        }
+
+        $prefix = [];
+        foreach ($catalog as $key => $meta) {
+            $key = trim((string) $key);
+            $labelEn = trim((string) ($meta['label_en'] ?? ''));
+            if ($key === '' || $labelEn === '') {
+                continue;
+            }
+            $mr = trim((string) ($meta['label_mr'] ?? ''));
+            $labelMr = $mr !== '' ? $mr : null;
+            $prefix[] = $this->religionImportRowFromCatalog($key, $labelEn, $labelMr);
+        }
+
+        return array_merge($prefix, $rest);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function religionImportRowFromCatalog(string $key, string $labelEn, ?string $labelMr): array
+    {
+        $aliasesEn = array_values(array_unique(array_filter([
+            $labelEn,
+            mb_strtolower($labelEn),
+        ])));
+        $aliasesMr = array_values(array_unique(array_filter($labelMr !== null && $labelMr !== '' ? [$labelMr] : [])));
+
+        return [
+            'entity_type' => 'religion',
+            'key' => $key,
+            'scope' => [],
+            'label_en' => $labelEn,
+            'label_mr' => $labelMr,
+            'aliases_en' => $aliasesEn,
+            'aliases_mr' => $aliasesMr,
+            'ocr_variants' => array_values(array_unique(array_filter(array_merge($aliasesEn, $aliasesMr)))),
+        ];
     }
 
     /**
@@ -145,7 +206,7 @@ class MasterDataTranslationImportService
                 if (! is_string($alias) || trim($alias) === '') {
                     continue;
                 }
-                $norm = $this->normalizeAlias($alias);
+                $norm = MasterDataAliasNormalizer::normalizeForStoredAlias($alias);
                 if ($norm === '') {
                     continue;
                 }
@@ -166,13 +227,5 @@ class MasterDataTranslationImportService
                 }
             }
         }
-    }
-
-    private function normalizeAlias(string $s): string
-    {
-        $t = mb_strtolower(trim($s));
-        $t = preg_replace('/\s+/u', ' ', $t) ?? $t;
-
-        return $t;
     }
 }

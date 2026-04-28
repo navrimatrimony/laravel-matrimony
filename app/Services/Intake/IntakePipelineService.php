@@ -32,7 +32,12 @@ class IntakePipelineService
     public function process(MatrimonyProfile $profile, array $input, array $context = []): array
     {
         $parsed = $this->parse($input, $context);
-        $normalized = $this->normalize($parsed);
+        $suggestedByUserId = array_key_exists('suggested_by_user_id', $context)
+            ? ($context['suggested_by_user_id'] !== null && (int) $context['suggested_by_user_id'] > 0
+                ? (int) $context['suggested_by_user_id']
+                : null)
+            : (($profile->user_id !== null && (int) $profile->user_id > 0) ? (int) $profile->user_id : null);
+        $normalized = $this->normalize($parsed, $suggestedByUserId);
         $mapped = $this->applyDictionary($normalized);
 
         $explicitDelta = array_key_exists('suggestion_delta', $context);
@@ -81,9 +86,9 @@ class IntakePipelineService
      * @param  array<string, mixed>  $snapshot
      * @return array<string, mixed>
      */
-    public function normalizeApprovedSnapshot(array $snapshot): array
+    public function normalizeApprovedSnapshot(array $snapshot, ?int $suggestedByUserId = null): array
     {
-        $out = $this->controlledFieldNormalizer->normalizeSnapshot($snapshot);
+        $out = $this->controlledFieldNormalizer->normalizeSnapshot($snapshot, $suggestedByUserId);
         if (isset($out['core']['full_name']) && is_string($out['core']['full_name'])) {
             $cleaned = preg_replace('/\s*तपासा\s*/u', ' ', $out['core']['full_name']);
             $cleaned = preg_replace('/\s+/u', ' ', trim((string) $cleaned));
@@ -101,9 +106,9 @@ class IntakePipelineService
      * @param  array<string, mixed>  $snapshot
      * @return array<string, mixed>
      */
-    public function normalizeSnapshotForStorage(array $snapshot): array
+    public function normalizeSnapshotForStorage(array $snapshot, ?int $suggestedByUserId = null): array
     {
-        return $this->normalizeApprovedSnapshot($snapshot);
+        return $this->normalizeApprovedSnapshot($snapshot, $suggestedByUserId);
     }
 
     /**
@@ -146,13 +151,13 @@ class IntakePipelineService
      * @param  array<string, mixed>  $data
      * @return array<string, mixed>
      */
-    private function normalize(array $data): array
+    private function normalize(array $data, ?int $suggestedByUserId = null): array
     {
         if ($data === []) {
             return [];
         }
 
-        return $this->normalizeApprovedSnapshot($data);
+        return $this->normalizeApprovedSnapshot($data, $suggestedByUserId);
     }
 
     /**

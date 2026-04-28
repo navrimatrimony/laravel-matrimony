@@ -12,7 +12,7 @@ class College extends Model
 {
     protected $table = 'colleges';
 
-    protected $fillable = ['name', 'slug', 'city', 'state', 'sort_order', 'is_active'];
+    protected $fillable = ['name', 'name_mr', 'slug', 'city', 'state', 'sort_order', 'is_active'];
 
     protected $casts = [
         'is_active' => 'boolean',

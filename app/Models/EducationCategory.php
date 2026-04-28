@@ -12,7 +12,7 @@ class EducationCategory extends Model
 {
     protected $table = 'education_categories';
 
-    protected $fillable = ['name', 'slug', 'sort_order', 'is_active'];
+    protected $fillable = ['name', 'name_mr', 'slug', 'sort_order', 'is_active'];
 
     protected $casts = [
         'is_active' => 'boolean',

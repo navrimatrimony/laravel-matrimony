@@ -33,6 +33,7 @@ class Plan extends Model
 
     protected $fillable = [
         'name',
+        'name_mr',
         'description',
         'slug',
         'tier',

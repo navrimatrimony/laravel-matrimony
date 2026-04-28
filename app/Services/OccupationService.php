@@ -6,7 +6,9 @@ use App\Models\OccupationCategory;
 use App\Models\OccupationCustom;
 use App\Models\OccupationMaster;
 use App\Models\Profession;
+use App\Support\MasterData\MasterDataAliasNormalizer;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
@@ -20,6 +22,37 @@ class OccupationService
      *
      * @return array{occupations: \Illuminate\Support\Collection<int, OccupationMaster>, suggestion: ?string}
      */
+    /**
+     * Intake / OCR: resolve free-text title to a single master row when a DB alias row exists.
+     */
+    public function findOccupationMasterForIntake(string $raw): ?OccupationMaster
+    {
+        $raw = trim($raw);
+        if ($raw === '') {
+            return null;
+        }
+
+        if (Schema::hasTable('occupation_master_aliases')) {
+            foreach (MasterDataAliasNormalizer::normalizedLookupCandidates($raw) as $norm) {
+                if ($norm === '') {
+                    continue;
+                }
+                $mid = DB::table('occupation_master_aliases')
+                    ->where('is_active', true)
+                    ->where('normalized_alias', $norm)
+                    ->value('occupation_master_id');
+                if ($mid !== null) {
+                    $row = OccupationMaster::query()->with('category')->find((int) $mid);
+                    if ($row !== null) {
+                        return $row;
+                    }
+                }
+            }
+        }
+
+        return null;
+    }
+
     public function search(string $query, int $limit = 10): array
     {
         $q = trim($query);
@@ -40,6 +73,9 @@ class OccupationService
             ->where(function ($w) use ($safeLowerLike, $qNorm) {
                 $w->whereRaw('LOWER(name) LIKE ?', [$safeLowerLike])
                     ->orWhereRaw('LOWER(COALESCE(normalized_name, "")) LIKE ?', [$safeLowerLike]);
+                if (Schema::hasColumn('occupation_master', 'name_mr')) {
+                    $w->orWhereRaw('LOWER(COALESCE(name_mr, "")) LIKE ?', [$safeLowerLike]);
+                }
                 if ($qNorm !== '') {
                     $w->orWhereRaw(
                         "REPLACE(REPLACE(LOWER(name), '.', ''), ' ', '') LIKE ?",
@@ -108,10 +144,15 @@ class OccupationService
     {
         $occupation->loadMissing('category');
 
+        $catCols = ['id', 'name'];
+        if (Schema::hasColumn('occupation_categories', 'name_mr')) {
+            $catCols[] = 'name_mr';
+        }
+
         $categories = OccupationCategory::query()
             ->orderBy('sort_order')
             ->orderBy('name')
-            ->get(['id', 'name']);
+            ->get($catCols);
 
         $cat = $occupation->category;
 
@@ -119,11 +160,13 @@ class OccupationService
             'category' => $cat ? [
                 'id' => $cat->id,
                 'name' => $cat->name,
+                'name_mr' => Schema::hasColumn('occupation_categories', 'name_mr') ? ($cat->name_mr ?? null) : null,
                 'icon' => $this->categoryDisplayIcon($cat->name),
             ] : null,
             'categories' => $categories->map(fn ($c) => [
                 'id' => $c->id,
                 'name' => $c->name,
+                'name_mr' => Schema::hasColumn('occupation_categories', 'name_mr') ? ($c->name_mr ?? null) : null,
                 'icon' => $this->categoryDisplayIcon($c->name),
             ])->values()->all(),
         ];

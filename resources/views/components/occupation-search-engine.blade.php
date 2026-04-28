@@ -112,7 +112,7 @@
     ];
 
     $selectSurface = $formFieldStyle
-        ? 'w-full rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-3 py-2 text-sm h-10 box-border'
+        ? 'w-full occupation-ts-source'
         : ($compact
             ? 'w-full rounded-lg border border-gray-300 dark:border-gray-600 dark:bg-gray-700 px-3 py-2 text-sm min-h-[40px]'
             : 'w-full rounded-xl border border-gray-300 dark:border-gray-600 dark:bg-gray-700 px-4 py-3 text-base min-h-[48px]');
@@ -162,6 +162,22 @@
         <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/tom-select@2.3.1/dist/css/tom-select.default.min.css" crossorigin="anonymous">
         <script src="https://cdn.jsdelivr.net/npm/tom-select@2.3.1/dist/js/tom-select.complete.min.js" crossorigin="anonymous"></script>
         <style>
+            /*
+             * Defensive fallback: even if Tom Select base CSS is delayed/unavailable,
+             * keep the original <select> visually hidden after init to avoid double-layer boxes.
+             */
+            .occupation-engine-root select.tomselected,
+            .occupation-engine-root select.ts-hidden-accessible {
+                position: absolute !important;
+                width: 1px !important;
+                height: 1px !important;
+                padding: 0 !important;
+                margin: -1px !important;
+                overflow: hidden !important;
+                clip: rect(0, 0, 0, 0) !important;
+                white-space: nowrap !important;
+                border: 0 !important;
+            }
             .ts-dropdown-content .occupation-option-create { cursor: pointer; }
             .ts-dropdown-content .option.active .occupation-option-create {
                 outline: 2px solid rgb(16 185 129 / 0.45);
@@ -190,9 +206,18 @@
             .occupation-engine--form-field .ts-wrapper {
                 margin-bottom: 0;
                 width: 100%;
+                display: block;
+                position: relative;
+                z-index: 0 !important;
                 vertical-align: middle;
+                border: 0 !important;
+                padding: 0 !important;
+                background: transparent !important;
+                box-shadow: none !important;
             }
             .occupation-engine--form-field .ts-wrapper.single .ts-control {
+                position: relative;
+                z-index: 0 !important;
                 height: 40px !important;
                 min-height: 40px !important;
                 max-height: 40px !important;
@@ -233,6 +258,29 @@
             }
             .dark .occupation-engine--form-field .ts-wrapper.single.input-active .ts-control {
                 background-color: rgb(55 65 81) !important;
+            }
+            /* Keep closed control below nearby panels/sections; only the dropdown should float above. */
+            .occupation-engine--form-field .ts-wrapper.dropdown-active {
+                z-index: 10060 !important;
+            }
+            /* Native <select> fallback styling only when Tom Select is not initialized yet. */
+            .occupation-engine--form-field select.occupation-ts-source:not(.tomselected) {
+                width: 100%;
+                height: 40px;
+                min-height: 40px;
+                border-radius: 0.25rem;
+                border: 1px solid rgb(209 213 219);
+                padding: 0.5rem 2rem 0.5rem 0.75rem;
+                font-size: 0.875rem;
+                line-height: 1.25rem;
+                box-sizing: border-box;
+                background-color: #ffffff;
+                color: rgb(17 24 39);
+            }
+            .dark .occupation-engine--form-field select.occupation-ts-source:not(.tomselected) {
+                border-color: rgb(75 85 99);
+                background-color: rgb(55 65 81);
+                color: rgb(243 244 246);
             }
             .occupation-engine--form-field [data-occupation-category-mount] .occupation-category-current {
                 overflow: hidden;

@@ -2,9 +2,9 @@
 
 namespace App\Services\ControlledOptions;
 
-use App\Services\ControlledOptions\ControlledOptionEngine;
 use Illuminate\Support\Facades\App;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 
 /**
@@ -19,6 +19,10 @@ use Illuminate\Support\Str;
  */
 class ControlledOptionNormalizer
 {
+    public function __construct(
+        private readonly ControlledMasterDbAliasResolver $masterDbAliases,
+    ) {}
+
     /** @var array<string,string> */
     private const CORE_FIELD_TO_ENGINE_KEY = [
         'gender' => 'core.gender',
@@ -40,9 +44,9 @@ class ControlledOptionNormalizer
     /**
      * Normalize a single controlled-option value against a master table.
      *
-     * @param  string       $fieldIdentifier   Logical field id, e.g. 'horoscope.nadi', 'horoscope.gan'
-     * @param  string|null  $rawValue         Raw OCR / AI / free-text value
-     * @param  string       $masterTable      DB table name (e.g. 'master_nadis')
+     * @param  string  $fieldIdentifier  Logical field id, e.g. 'horoscope.nadi', 'horoscope.gan'
+     * @param  string|null  $rawValue  Raw OCR / AI / free-text value
+     * @param  string  $masterTable  DB table name (e.g. 'master_nadis')
      * @return array{
      *   matched: bool,
      *   canonical_key: string|null,
@@ -314,11 +318,13 @@ class ControlledOptionNormalizer
         $unique = array_values(array_unique($matches));
         if (count($unique) === 1) {
             $confidenceNote = 'synonym_match';
+
             return $unique[0];
         }
 
         // Ambiguous or no match.
         $confidenceNote = $unique === [] ? 'no_synonym_match' : 'ambiguous_synonym_match';
+
         return null;
     }
 
@@ -346,6 +352,7 @@ class ControlledOptionNormalizer
         $candidateLabel = mb_strtolower($trimmed, 'UTF-8');
         $byLabel = $masters->first(function ($row) use ($candidateLabel) {
             $label = mb_strtolower(trim((string) ($row->label ?? '')), 'UTF-8');
+
             return $label !== '' && $label === $candidateLabel;
         });
 
@@ -403,7 +410,7 @@ class ControlledOptionNormalizer
             return ['en' => $default, 'mr' => $default];
         }
 
-        $baseKey = 'components.horoscope.options.' . $optionField . '.' . $canonicalKey;
+        $baseKey = 'components.horoscope.options.'.$optionField.'.'.$canonicalKey;
 
         // Force-look up both locales explicitly.
         $en = App::getLocale() === 'en'
@@ -425,7 +432,7 @@ class ControlledOptionNormalizer
      *
      * @return array{matched: bool, id: int|null, key: string|null, label: string|null, note: string}
      */
-    public function resolveControlledCoreValue(string $logicalField, ?string $rawValue): array
+    public function resolveControlledCoreValue(string $logicalField, ?string $rawValue, array $context = []): array
     {
         $raw = trim((string) ($rawValue ?? ''));
         if ($raw === '') {
@@ -448,6 +455,29 @@ class ControlledOptionNormalizer
                 }
             } catch (\Throwable) {
                 // In lightweight test environments master tables may be absent.
+            }
+        }
+
+        if (in_array($logicalField, ['religion', 'caste', 'sub_caste'], true)) {
+            $dbId = $this->masterDbAliases->resolveReligionCasteSubCasteId($logicalField, $raw, $context);
+            if ($dbId !== null) {
+                $table = $this->masterTableForLogicalField($logicalField);
+                if ($table !== null && Schema::hasTable($table)) {
+                    $q = DB::table($table)->where('id', $dbId);
+                    if (Schema::hasColumn($table, 'is_active')) {
+                        $q->where('is_active', true);
+                    }
+                    $row = $q->first(['id', 'key', 'label']);
+                    if ($row) {
+                        return [
+                            'matched' => true,
+                            'id' => (int) $row->id,
+                            'key' => (string) ($row->key ?? ''),
+                            'label' => (string) ($row->label ?? ''),
+                            'note' => 'db_alias_match',
+                        ];
+                    }
+                }
             }
         }
 
@@ -588,7 +618,7 @@ class ControlledOptionNormalizer
         }
         $v = str_replace(['_', '-', '/', '(', ')', ':', '.'], ' ', $v);
         $v = preg_replace('/\s+/u', ' ', $v) ?? $v;
+
         return trim($v);
     }
 }
-

@@ -13,6 +13,7 @@
 @php
     use App\Models\EducationCategory;
 
+    $localeMr = app()->getLocale() === 'mr';
     $categories = $categories ?? EducationCategory::where('is_active', true)->with(['degrees' => fn ($q) => $q->orderBy('sort_order')])->orderBy('sort_order')->get();
     $namePrefix = $namePrefix ?? '';
     $n = fn($base) => $namePrefix ? $namePrefix.'['.$base.']' : $base;
@@ -28,7 +29,8 @@
                 <select name="{{ $n($categoryName) }}" class="{{ $inputCls }} education-category-select">
                     <option value="">{{ __('components.education.select_category') }}</option>
                     @foreach($categories as $cat)
-                        <option value="{{ $cat->name }}" {{ (string)$selectedCategory === (string)$cat->name ? 'selected' : '' }}>{{ $cat->name }}</option>
+                        @php $catLabel = ($localeMr && filled($cat->name_mr)) ? $cat->name_mr : $cat->name; @endphp
+                        <option value="{{ $cat->name }}" {{ (string)$selectedCategory === (string)$cat->name ? 'selected' : '' }}>{{ $catLabel }}</option>
                     @endforeach
                 </select>
             </div>
@@ -38,7 +40,11 @@
                     <option value="">{{ __('components.education.select_degree') }}</option>
                     @foreach($categories as $cat)
                         @foreach($cat->degrees as $deg)
-                            <option value="{{ $deg->code }}" data-category="{{ $cat->name }}" data-fullform="{{ e($deg->full_form ?? '') }}" {{ (string)$selectedDegree === (string)$deg->code ? 'selected' : '' }}>{{ $deg->title }}</option>
+                            @php
+                                $degTitle = ($localeMr && filled($deg->title_mr)) ? $deg->title_mr : $deg->title;
+                                $degFull = ($localeMr && filled($deg->full_form_mr)) ? $deg->full_form_mr : ($deg->full_form ?? '');
+                            @endphp
+                            <option value="{{ $deg->code }}" data-category="{{ $cat->name }}" data-fullform="{{ e($degFull) }}" {{ (string)$selectedDegree === (string)$deg->code ? 'selected' : '' }}>{{ $degTitle }}</option>
                         @endforeach
                     @endforeach
                 </select>
@@ -83,9 +89,11 @@
             <select name="{{ $n($degreeName) }}" class="{{ $inputCls }}">
                 <option value="">{{ __('components.education.select_degree') }}</option>
                 @foreach($categories as $cat)
-                    <optgroup label="{{ $cat->name }}">
+                    @php $ogLabel = ($localeMr && filled($cat->name_mr)) ? $cat->name_mr : $cat->name; @endphp
+                    <optgroup label="{{ $ogLabel }}">
                         @foreach($cat->degrees as $deg)
-                            <option value="{{ $deg->code }}" {{ (string)$selectedDegree === (string)$deg->code ? 'selected' : '' }}>{{ $deg->title }}</option>
+                            @php $degTitleG = ($localeMr && filled($deg->title_mr)) ? $deg->title_mr : $deg->title; @endphp
+                            <option value="{{ $deg->code }}" {{ (string)$selectedDegree === (string)$deg->code ? 'selected' : '' }}>{{ $degTitleG }}</option>
                         @endforeach
                     </optgroup>
                 @endforeach

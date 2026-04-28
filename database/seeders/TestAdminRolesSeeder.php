@@ -9,6 +9,9 @@ use Illuminate\Support\Facades\Hash;
 
 class TestAdminRolesSeeder extends Seeder
 {
+    /** Shared login for all seeded admin test accounts (local / staging only). */
+    private const ADMIN_SEED_PASSWORD = 'Password@123';
+
     /**
      * Run the database seeds.
      */
@@ -20,7 +23,7 @@ class TestAdminRolesSeeder extends Seeder
             ['email' => 'super_admin_test@example.com'],
             [
                 'name' => 'Super Admin Test',
-                'password' => Hash::make('Password@123'),
+                'password' => Hash::make(self::ADMIN_SEED_PASSWORD),
                 'gender' => 'Male',
                 'is_admin' => true,
                 'admin_role' => 'super_admin',
@@ -31,7 +34,7 @@ class TestAdminRolesSeeder extends Seeder
             ['email' => 'data_admin_test@example.com'],
             [
                 'name' => 'Data Admin Test',
-                'password' => Hash::make('Password@123'),
+                'password' => Hash::make(self::ADMIN_SEED_PASSWORD),
                 'gender' => 'Male',
                 'is_admin' => true,
                 'admin_role' => 'data_admin',
@@ -42,7 +45,7 @@ class TestAdminRolesSeeder extends Seeder
             ['email' => 'auditor_test@example.com'],
             [
                 'name' => 'Auditor Test',
-                'password' => Hash::make('Password@123'),
+                'password' => Hash::make(self::ADMIN_SEED_PASSWORD),
                 'gender' => 'Male',
                 'is_admin' => true,
                 'admin_role' => 'auditor',

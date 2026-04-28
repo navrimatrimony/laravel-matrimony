@@ -11,7 +11,7 @@ return new class extends Migration
     {
         $driver = Schema::getConnection()->getDriverName();
 
-        if (Schema::hasTable('subscriptions') && $driver === 'mysql') {
+        /*if (Schema::hasTable('subscriptions') && $driver === 'mysql') {
             // MySQL lacks partial unique indexes; enforce "only one active row per user" via generated nullable key.
             if (! Schema::hasColumn('subscriptions', 'active_user_guard')) {
                 DB::statement("ALTER TABLE subscriptions ADD COLUMN active_user_guard BIGINT GENERATED ALWAYS AS (CASE WHEN status = 'active' THEN user_id ELSE NULL END) STORED");
@@ -19,7 +19,7 @@ return new class extends Migration
             if (! $this->mysqlIndexExists('subscriptions', 'subscriptions_one_active_user_mysql')) {
                 DB::statement('CREATE UNIQUE INDEX subscriptions_one_active_user_mysql ON subscriptions (active_user_guard)');
             }
-        }
+        } */
 
         if (Schema::hasTable('payments')) {
             $this->dedupeByTxnid('payments', 'txnid');
@@ -184,4 +184,3 @@ return new class extends Migration
         return false;
     }
 };
-

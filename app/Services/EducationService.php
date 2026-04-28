@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\EducationDegree;
 use App\Models\MatrimonyProfile;
+use App\Support\MasterData\MasterDataAliasNormalizer;
 use Illuminate\Http\Request;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Collection;
@@ -15,7 +16,7 @@ use Illuminate\Support\Facades\Schema;
  * Uses {@see EducationDegree} / education_categories only (no duplicate educations master).
  *
  * PART 0 — SSOT / tables (read-only audit; never drop tables from here):
- * - `education_degrees` + `education_categories`: ACTIVE. Used by EducationService search/ranking,
+ * - `education_degrees` + `education_categories`: ACTIVE (includes optional `name_mr`, `code_mr`, `title_mr`, `full_form_mr`). Used by EducationService search/ranking,
  *   {@see \App\Http\Controllers\Api\EducationDegreeSearchController}, onboarding step 4 (FK `education_degree_id`).
  * - `educations`: LEGACY duplicate master (if still present in DB). Not queried by EducationService or
  *   `/api/education-degrees/search`. Cleanup is manual / separate Artisan command only.
@@ -87,6 +88,24 @@ class EducationService
             return null;
         }
 
+        if (Schema::hasTable('education_degree_aliases')) {
+            foreach (MasterDataAliasNormalizer::normalizedLookupCandidates($effective) as $norm) {
+                if ($norm === '') {
+                    continue;
+                }
+                $degreeId = DB::table('education_degree_aliases')
+                    ->where('is_active', true)
+                    ->where('normalized_alias', $norm)
+                    ->value('education_degree_id');
+                if ($degreeId !== null) {
+                    $byAlias = EducationDegree::query()->with('category')->find((int) $degreeId);
+                    if ($byAlias !== null) {
+                        return $byAlias;
+                    }
+                }
+            }
+        }
+
         $key = $this->normalize($effective);
         if ($key === '') {
             return null;
@@ -99,8 +118,12 @@ class EducationService
             ->where(function ($sub) use ($key, $qLower) {
                 $sub->whereRaw('REPLACE(REPLACE(LOWER(code), \'.\', \'\'), \' \', \'\') = ?', [$key])
                     ->orWhereRaw('REPLACE(REPLACE(LOWER(title), \'.\', \'\'), \' \', \'\') = ?', [$key])
+                    ->orWhereRaw('REPLACE(REPLACE(LOWER(COALESCE(code_mr, \'\')), \'.\', \'\'), \' \', \'\') = ?', [$key])
+                    ->orWhereRaw('REPLACE(REPLACE(LOWER(COALESCE(title_mr, \'\')), \'.\', \'\'), \' \', \'\') = ?', [$key])
                     ->orWhereRaw('LOWER(code) LIKE ?', ['%'.$qLower.'%'])
-                    ->orWhereRaw('LOWER(title) LIKE ?', ['%'.$qLower.'%']);
+                    ->orWhereRaw('LOWER(title) LIKE ?', ['%'.$qLower.'%'])
+                    ->orWhere('code_mr', 'like', '%'.$qLower.'%')
+                    ->orWhere('title_mr', 'like', '%'.$qLower.'%');
             })
             ->orderByRaw('LENGTH(code)')
             ->orderBy('title')
@@ -109,6 +132,14 @@ class EducationService
 
         foreach ($candidates as $d) {
             if ($this->normalize((string) $d->code) === $key || $this->normalize((string) $d->title) === $key) {
+                return $d;
+            }
+            $cm = (string) ($d->code_mr ?? '');
+            $tm = (string) ($d->title_mr ?? '');
+            if ($cm !== '' && $this->normalize($cm) === $key) {
+                return $d;
+            }
+            if ($tm !== '' && $this->normalize($tm) === $key) {
                 return $d;
             }
         }
@@ -157,28 +188,43 @@ class EducationService
         }
 
         $qNorm = $this->normalizeSearchToken($q);
+        $safeLowerLike = '%'.addcslashes(mb_strtolower($q), '%_\\').'%';
+        $normLike = '%'.addcslashes($qNorm, '%_\\').'%';
+        $rawLike = '%'.addcslashes($q, '%_\\').'%';
+
         if ($qNorm === '') {
+            $candidates = EducationDegree::query()
+                ->with('category')
+                ->select($columns)
+                ->where(function ($w) use ($rawLike) {
+                    $w->where('title', 'like', $rawLike)
+                        ->orWhere('code', 'like', $rawLike)
+                        ->orWhere('full_form', 'like', $rawLike)
+                        ->orWhere('title_mr', 'like', $rawLike)
+                        ->orWhere('code_mr', 'like', $rawLike)
+                        ->orWhere('full_form_mr', 'like', $rawLike);
+                })
+                ->limit(100)
+                ->get();
+
             return [
-                'degrees' => EducationDegree::query()
-                    ->with('category')
-                    ->orderBy('title')
-                    ->limit($limit)
-                    ->get($columns),
+                'degrees' => $candidates->take($limit)->values(),
                 'suggestion' => null,
             ];
         }
 
-        $safeLowerLike = '%'.addcslashes(mb_strtolower($q), '%_\\').'%';
-        $normLike = '%'.addcslashes($qNorm, '%_\\').'%';
-
         $candidates = EducationDegree::query()
             ->with('category')
             ->select($columns)
-            ->where(function ($w) use ($safeLowerLike, $normLike) {
+            ->where(function ($w) use ($safeLowerLike, $normLike, $rawLike) {
                 $w->whereRaw('LOWER(title) LIKE ?', [$safeLowerLike])
                     ->orWhereRaw('LOWER(code) LIKE ?', [$safeLowerLike])
                     ->orWhereRaw("REPLACE(REPLACE(LOWER(title), '.', ''), ' ', '') LIKE ?", [$normLike])
-                    ->orWhereRaw("REPLACE(REPLACE(LOWER(code), '.', ''), ' ', '') LIKE ?", [$normLike]);
+                    ->orWhereRaw("REPLACE(REPLACE(LOWER(code), '.', ''), ' ', '') LIKE ?", [$normLike])
+                    ->orWhere('title_mr', 'like', $rawLike)
+                    ->orWhere('code_mr', 'like', $rawLike)
+                    ->orWhere('full_form_mr', 'like', $rawLike)
+                    ->orWhere('full_form', 'like', $rawLike);
             })
             ->limit(100)
             ->get();
@@ -187,7 +233,12 @@ class EducationService
         foreach ($candidates as $degree) {
             $titleNorm = $this->normalizeSearchToken((string) ($degree->title ?? ''));
             $codeNorm = $this->normalizeSearchToken((string) ($degree->code ?? ''));
+            $titleMrNorm = $this->normalizeSearchToken((string) ($degree->title_mr ?? ''));
+            $codeMrNorm = $this->normalizeSearchToken((string) ($degree->code_mr ?? ''));
             $score = $this->degreeSearchScore($titleNorm, $codeNorm, $qNorm);
+            if ($score === null) {
+                $score = $this->degreeSearchScore($titleMrNorm, $codeMrNorm, $qNorm);
+            }
             if ($score === null) {
                 continue;
             }
@@ -563,7 +614,7 @@ class EducationService
         $profile->loadMissing('educationDegree.category');
 
         if ($profile->education_degree_id && $profile->educationDegree) {
-            return (string) ($profile->educationDegree->title ?: $profile->educationDegree->code);
+            return $this->degreeDisplayLabel($profile->educationDegree);
         }
 
         $t = trim((string) ($profile->education_text ?? ''));
@@ -588,7 +639,7 @@ class EducationService
         if ($degreeId > 0) {
             $deg = EducationDegree::query()->find($degreeId);
             if ($deg) {
-                $label = trim((string) ($deg->title ?: $deg->code));
+                $label = $this->degreeDisplayLabel($deg);
                 $extra = trim((string) ($profile->education_text ?? ''));
                 if ($extra !== '') {
                     return $label !== '' ? $label.', '.$extra : $extra;
@@ -633,5 +684,14 @@ class EducationService
         }
 
         return $out;
+    }
+
+    private function degreeDisplayLabel(EducationDegree $deg): string
+    {
+        if (app()->getLocale() === 'mr' && filled($deg->title_mr)) {
+            return trim((string) $deg->title_mr);
+        }
+
+        return trim((string) ($deg->title ?: $deg->code));
     }
 }

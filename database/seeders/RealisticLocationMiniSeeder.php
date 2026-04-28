@@ -7,6 +7,7 @@ use App\Models\Country;
 use App\Models\District;
 use App\Models\State;
 use App\Models\Taluka;
+use Database\Seeders\Support\LocationMarathiLabels;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
 
@@ -57,11 +58,19 @@ class RealisticLocationMiniSeeder extends Seeder
 
     private function seedRealisticMaharashtra(): void
     {
-        $india = Country::firstOrCreate(['name' => 'India']);
+        $mr = LocationMarathiLabels::englishToMarathi();
+        $india = Country::updateOrCreate(
+            ['iso_alpha2' => 'IN'],
+            [
+                'name' => 'India',
+                'name_mr' => $mr['India'] ?? 'भारत',
+            ]
+        );
         $maharashtra = State::firstOrCreate([
             'country_id' => $india->id,
             'name' => 'Maharashtra',
         ]);
+        LocationMarathiLabels::applyIfEmpty($maharashtra, $maharashtra->name);
 
         $districtNames = ['Pune', 'Satara', 'Sangli', 'Kolhapur', 'Nashik'];
         foreach ($districtNames as $dIndex => $districtName) {
@@ -69,6 +78,7 @@ class RealisticLocationMiniSeeder extends Seeder
                 'state_id' => $maharashtra->id,
                 'name' => $districtName,
             ]);
+            LocationMarathiLabels::applyIfEmpty($district, $district->name);
             $districtNum = $dIndex + 1;
 
             $talukaNames = $this->talukaNamesForDistrict($districtName, $districtNum);
@@ -77,6 +87,7 @@ class RealisticLocationMiniSeeder extends Seeder
                     'district_id' => $district->id,
                     'name' => $talukaName,
                 ]);
+                LocationMarathiLabels::applyIfEmpty($taluka, $taluka->name);
                 $talukaNum = $tIndex + 1;
 
                 $basePincode = 410000 + ($districtNum * 100) + (($talukaNum - 1) * 10);

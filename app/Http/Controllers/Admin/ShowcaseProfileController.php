@@ -4,12 +4,12 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\MatrimonyProfile;
+use App\Services\Maintenance\MatrimonyProfileDatabasePurger;
 use App\Services\Showcase\AutoShowcaseSettings;
 use App\Services\Showcase\ShowcaseProfileFactory;
 use Illuminate\Database\QueryException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Schema;
 
 /*
 |--------------------------------------------------------------------------
@@ -111,103 +111,8 @@ class ShowcaseProfileController extends Controller
 
         try {
             DB::transaction(function () use ($profile) {
-                $pid = (int) $profile->id;
-
-                $conversationIds = DB::table('conversations')
-                    ->where('profile_one_id', $pid)
-                    ->orWhere('profile_two_id', $pid)
-                    ->pluck('id')
-                    ->map(fn ($v) => (int) $v)
-                    ->all();
-
-                if (! empty($conversationIds)) {
-                    DB::table('messages')->whereIn('conversation_id', $conversationIds)->delete();
-                    DB::table('conversations')->whereIn('id', $conversationIds)->delete();
-                }
-
-                if (Schema::hasTable('interests')) {
-                    DB::table('interests')->where('sender_profile_id', $pid)->orWhere('receiver_profile_id', $pid)->delete();
-                }
-                if (Schema::hasTable('shortlists')) {
-                    DB::table('shortlists')->where('owner_profile_id', $pid)->orWhere('shortlisted_profile_id', $pid)->delete();
-                }
-                if (Schema::hasTable('blocks')) {
-                    DB::table('blocks')->where('blocker_profile_id', $pid)->orWhere('blocked_profile_id', $pid)->delete();
-                }
-                if (Schema::hasTable('profile_views')) {
-                    DB::table('profile_views')->where('viewer_profile_id', $pid)->orWhere('viewed_profile_id', $pid)->delete();
-                }
-                if (Schema::hasTable('hidden_profiles')) {
-                    DB::table('hidden_profiles')->where('owner_profile_id', $pid)->orWhere('hidden_profile_id', $pid)->delete();
-                }
-
-                if (Schema::hasTable('profile_photos')) {
-                    DB::table('profile_photos')->where('profile_id', $pid)->delete();
-                }
-                if (Schema::hasTable('profile_contacts')) {
-                    DB::table('profile_contacts')->where('profile_id', $pid)->delete();
-                }
-                if (Schema::hasTable('profile_preference_criteria')) {
-                    DB::table('profile_preference_criteria')->where('profile_id', $pid)->delete();
-                }
-                foreach ([
-                    'profile_preferred_religions',
-                    'profile_preferred_castes',
-                    'profile_preferred_districts',
-                    'profile_preferred_talukas',
-                    'profile_preferred_cities',
-                    'profile_preferred_states',
-                    'profile_preferred_educations',
-                ] as $tbl) {
-                    if (Schema::hasTable($tbl)) {
-                        DB::table($tbl)->where('profile_id', $pid)->delete();
-                    }
-                }
-                if (Schema::hasTable('profile_extended_attributes')) {
-                    DB::table('profile_extended_attributes')->where('profile_id', $pid)->delete();
-                }
-                if (Schema::hasTable('profile_marriages')) {
-                    DB::table('profile_marriages')->where('profile_id', $pid)->delete();
-                }
-                if (Schema::hasTable('profile_siblings')) {
-                    DB::table('profile_siblings')->where('profile_id', $pid)->delete();
-                }
-                if (Schema::hasTable('profile_relatives')) {
-                    DB::table('profile_relatives')->where('profile_id', $pid)->delete();
-                }
-                if (Schema::hasTable('profile_properties')) {
-                    DB::table('profile_properties')->where('profile_id', $pid)->delete();
-                }
-                if (Schema::hasTable('profile_horoscopes')) {
-                    DB::table('profile_horoscopes')->where('profile_id', $pid)->delete();
-                }
-
-                foreach ([
-                    ['profile_change_history', 'profile_id'],
-                    ['profile_field_locks', 'profile_id'],
-                    ['profile_visibility_settings', 'profile_id'],
-                    ['profile_preferences', 'profile_id'],
-                    ['profile_education', 'profile_id'],
-                    ['profile_career', 'profile_id'],
-                    ['profile_children', 'profile_id'],
-                    ['profile_addresses', 'profile_id'],
-                    ['profile_property_summary', 'profile_id'],
-                    ['profile_property_assets', 'profile_id'],
-                    ['profile_horoscope_data', 'profile_id'],
-                    ['profile_legal_cases', 'profile_id'],
-                    ['profile_alliance_networks', 'profile_id'],
-                    ['profile_kyc_submissions', 'matrimony_profile_id'],
-                    ['profile_verification_tag', 'matrimony_profile_id'],
-                    ['profile_verification_tag_audits', 'matrimony_profile_id'],
-                ] as [$tbl, $col]) {
-                    if (Schema::hasTable($tbl) && Schema::hasColumn($tbl, $col)) {
-                        DB::table($tbl)->where($col, $pid)->delete();
-                    }
-                }
-
-                $profile->forceDelete();
-
                 $owner = $profile->user;
+                MatrimonyProfileDatabasePurger::purge($profile);
                 if ($owner && str_ends_with((string) $owner->email, '@system.local')) {
                     $owner->forceDelete();
                 }

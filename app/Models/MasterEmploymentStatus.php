@@ -11,7 +11,7 @@ class MasterEmploymentStatus extends Model
 {
     protected $table = 'master_employment_statuses';
 
-    protected $fillable = ['name', 'code', 'sort_order', 'is_active'];
+    protected $fillable = ['name', 'name_mr', 'code', 'sort_order', 'is_active'];
 
     protected $casts = [
         'is_active' => 'boolean',

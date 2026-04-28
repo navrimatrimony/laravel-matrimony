@@ -1,0 +1,433 @@
+sr	category_en	occupation_en	category_mr	occupation_mr
+1	IT & Software	Software Engineer	IT आणि सॉफ्टवेअर	सॉफ्टवेअर इंजिनिअर
+2	IT & Software	Web Developer	IT आणि सॉफ्टवेअर	वेब डेव्हलपर
+3	IT & Software	Mobile App Developer	IT आणि सॉफ्टवेअर	मोबाईल ॲप डेव्हलपर
+4	IT & Software	Data Scientist	IT आणि सॉफ्टवेअर	डेटा सायंटिस्ट
+5	IT & Software	Data Analyst	IT आणि सॉफ्टवेअर	डेटा ॲनलिस्ट
+6	IT & Software	UI Designer	IT आणि सॉफ्टवेअर	UI डिझाइनर
+7	IT & Software	UX Designer	IT आणि सॉफ्टवेअर	UX डिझाइनर
+8	IT & Software	DevOps Engineer	IT आणि सॉफ्टवेअर	डेव्हऑप्स इंजिनिअर
+9	IT & Software	Cloud Architect	IT आणि सॉफ्टवेअर	क्लाउड आर्किटेक्ट
+10	IT & Software	Cyber Security Expert	IT आणि सॉफ्टवेअर	सायबर सिक्युरिटी एक्सपर्ट
+11	IT & Software	AI Engineer	IT आणि सॉफ्टवेअर	AI इंजिनिअर
+12	IT & Software	Machine Learning Engineer	IT आणि सॉफ्टवेअर	मशीन लर्निंग इंजिनिअर
+13	IT & Software	Software Testing Engineer	IT आणि सॉफ्टवेअर	सॉफ्टवेअर टेस्टिंग इंजिनिअर
+14	IT & Software	QA Automation Engineer	IT आणि सॉफ्टवेअर	QA ऑटोमेशन इंजिनिअर
+15	IT & Software	Product Manager	IT आणि सॉफ्टवेअर	प्रॉडक्ट मॅनेजर
+16	IT & Software	Database Administrator	IT आणि सॉफ्टवेअर	डेटाबेस ॲडमिनिस्ट्रेटर
+17	IT & Software	Game Developer	IT आणि सॉफ्टवेअर	गेम डेव्हलपर
+18	IT & Software	IT Support Executive	IT आणि सॉफ्टवेअर	IT सपोर्ट कर्मचारी
+19	IT & Software	BPO Executive	IT आणि सॉफ्टवेअर	BPO कर्मचारी
+20	IT & Software	Full Stack Developer	IT आणि सॉफ्टवेअर	फुल स्टॅक डेव्हलपर
+21	IT & Software	Blockchain Developer	IT आणि सॉफ्टवेअर	ब्लॉकचेन डेव्हलपर
+22	Business & Admin	Business Owner	व्यवसाय आणि प्रशासन	स्वतःचा मोठा व्यवसाय
+23	Business & Admin	Small Business Owner	व्यवसाय आणि प्रशासन	स्वतःचा छोटा व्यवसाय
+24	Business & Admin	CEO	व्यवसाय आणि प्रशासन	मुख्य कार्यकारी अधिकारी (CEO)
+25	Business & Admin	Managing Director	व्यवसाय आणि प्रशासन	व्यवस्थापकीय संचालक (MD)
+26	Business & Admin	General Manager	व्यवसाय आणि प्रशासन	जनरल मॅनेजर
+27	Business & Admin	HR Manager	व्यवसाय आणि प्रशासन	HR मॅनेजर
+28	Business & Admin	HR Executive	व्यवसाय आणि प्रशासन	HR एक्झिक्युटिव्ह
+29	Business & Admin	Marketing Manager	व्यवसाय आणि प्रशासन	मार्केटिंग मॅनेजर
+30	Business & Admin	Sales Executive	व्यवसाय आणि प्रशासन	सेल्स एक्झिक्युटिव्ह
+31	Business & Admin	Business Consultant	व्यवसाय आणि प्रशासन	बिझनेस कन्सल्टंट
+32	Business & Admin	Operations Manager	व्यवसाय आणि प्रशासन	ऑपरेशन्स मॅनेजर
+33	Finance & Banking	Chartered Accountant (CA)	वित्त आणि बँकिंग	चार्टर्ड अकाउंटंट (CA)
+34	Finance & Banking	Company Secretary (CS)	वित्त आणि बँकिंग	कंपनी सेक्रेटरी (CS)
+35	Finance & Banking	Investment Banker	वित्त आणि बँकिंग	इन्व्हेस्टमेंट बँकर
+36	Finance & Banking	Stock Trader	वित्त आणि बँकिंग	शेअर बाजार ट्रेडर
+37	Finance & Banking	Bank Manager	वित्त आणि बँकिंग	बँक मॅनेजर
+38	Finance & Banking	Bank Employee	वित्त आणि बँकिंग	बँक कर्मचारी
+39	Finance & Banking	Accountant	वित्त आणि बँकिंग	अकाउंटंट
+40	Finance & Banking	Financial Auditor	वित्त आणि बँकिंग	फायनान्शिअल ऑडिटर
+41	Finance & Banking	LIC Agent	वित्त आणि बँकिंग	LIC एजंट
+42	Finance & Banking	Tax Consultant	वित्त आणि बँकिंग	टॅक्स कन्सल्टंट
+43	Medical & Health	Medical Doctor (MBBS)	वैद्यकीय आणि आरोग्य	डॉक्टर (MBBS)
+44	Medical & Health	Specialist Physician (MD)	वैद्यकीय आणि आरोग्य	तज्ज्ञ डॉक्टर (MD)
+45	Medical & Health	Surgeon (MS)	वैद्यकीय आणि आरोग्य	सर्जन (शस्त्रक्रिया तज्ज्ञ)
+46	Medical & Health	Dentist (BDS)	वैद्यकीय आणि आरोग्य	दात तज्ज्ञ (BDS)
+47	Medical & Health	Ayurvedic Doctor (BAMS)	वैद्यकीय आणि आरोग्य	आयुर्वेदिक डॉक्टर (BAMS)
+48	Medical & Health	Homeopathic Doctor (BHMS)	वैद्यकीय आणि आरोग्य	होमिओपॅथिक डॉक्टर (BHMS)
+49	Medical & Health	Staff Nurse	वैद्यकीय आणि आरोग्य	स्टाफ नर्स
+50	Medical & Health	Pharmacist	वैद्यकीय आणि आरोग्य	फार्मसिस्ट (औषध विक्रेता)
+51	Medical & Health	Physiotherapist	वैद्यकीय आणि आरोग्य	फिजिओथेरपिस्ट
+52	Medical & Health	Lab Technician	वैद्यकीय आणि आरोग्य	लॅब टेक्निशियन
+53	Medical & Health	Radiologist	वैद्यकीय आणि आरोग्य	रेडिओलॉजिस्ट
+54	Medical & Health	Optometrist	वैद्यकीय आणि आरोग्य	डोळ्यांचे तज्ज्ञ
+55	Medical & Health	Veterinary Doctor	वैद्यकीय आणि आरोग्य	प्राण्यांचे डॉक्टर
+56	Engineering	Civil Engineer	अभियांत्रिकी	सिव्हिल इंजिनिअर
+57	Engineering	Mechanical Engineer	अभियांत्रिकी	मेकॅनिकल इंजिनिअर
+58	Engineering	Electrical Engineer	अभियांत्रिकी	इलेक्ट्रिकल इंजिनिअर
+59	Engineering	Electronics Engineer	अभियांत्रिकी	इलेक्ट्रॉनिक्स इंजिनिअर
+60	Engineering	Chemical Engineer	अभियांत्रिकी	केमिकल इंजिनिअर
+61	Engineering	Automobile Engineer	अभियांत्रिकी	ऑटोमोबाईल इंजिनिअर
+62	Legal & Judiciary	Advocate / Lawyer	कायदा आणि न्याय	वकील
+63	Legal & Judiciary	Judge	कायदा आणि न्याय	न्यायाधीश
+64	Education	University Professor	शिक्षण	प्रोफेसर (विद्यापीठ)
+65	Education	College Lecturer	शिक्षण	लेक्चरर (कॉलेज)
+66	Education	School Teacher	शिक्षण	शिक्षक / शिक्षिका
+67	Education	School Principal	शिक्षण	मुख्याध्यापक
+68	Education	Coaching Class Owner	शिक्षण	स्वतःचे कोचिंग क्लास
+69	Govt & Defense	Police Officer	सरकारी आणि संरक्षण	पोलीस अधिकारी
+70	Govt & Defense	Army Officer	सरकारी आणि संरक्षण	लष्करी अधिकारी
+71	Govt & Defense	Navy Officer	सरकारी आणि संरक्षण	नौदल अधिकारी
+72	Govt & Defense	Air Force Officer	सरकारी आणि संरक्षण	वायूदलातील अधिकारी
+73	Govt & Defense	IAS Officer	सरकारी आणि संरक्षण	IAS अधिकारी
+74	Govt & Defense	IPS Officer	सरकारी आणि संरक्षण	IPS अधिकारी
+75	Govt & Defense	State Govt Class 1 Officer	सरकारी आणि संरक्षण	क्लास १ अधिकारी
+76	Govt & Defense	Talathi	सरकारी आणि संरक्षण	तलाठी
+77	Govt & Defense	Gram Sevak	सरकारी आणि संरक्षण	ग्रामसेवक
+78	Agriculture	Farmer	शेती आणि जोडधंदे	बागायतदार / शेतकरी
+79	Agriculture	Dairy Farm Owner	शेती आणि जोडधंदे	दुग्धव्यवसाय मालक
+80	Agriculture	Poultry Farmer	शेती आणि जोडधंदे	कुक्कुटपालन व्यावसायिक
+81	Creative & Arts	Graphic Designer	कला आणि डिझाइन	ग्राफिक डिझाइनर
+82	Creative & Arts	Fashion Designer	कला आणि डिझाइन	फॅशन डिझाइनर
+83	Creative & Arts	Photographer	कला आणि डिझाइन	फोटोग्राफर
+84	Creative & Arts	Videographer	कला आणि डिझाइन	व्हिडिओग्राफर
+85	Creative & Arts	YouTuber / Content Creator	कला आणि डिझाइन	युट्युबर
+86	Retail & Business	Grocery Store Owner	व्यापार आणि विक्री	किराणा दुकान मालक
+87	Retail & Business	Jewellery Shop Owner	व्यापार आणि विक्री	ज्वेलरी शोरूम मालक
+88	Retail & Business	Mobile Shop Owner	व्यापार आणि विक्री	मोबाईल दुकान मालक
+89	Technical & Skilled	Plumber	तांत्रिक आणि कौशल्य	प्लंबर
+90	Technical & Skilled	Electrician	तांत्रिक आणि कौशल्य	इलेक्ट्रिशियन
+91	Personal Care	Makeup Artist	सौंदर्य सेवा	मेकअप आर्टिस्ट
+92	Personal Care	Beautician	सौंदर्य सेवा	ब्युटिशियन
+93	Personal Care	Hair Stylist	सौंदर्य सेवा	हेअर स्टायलिस्ट
+94	Personal Care	Salon Owner	सौंदर्य सेवा	सलून मालक
+95	Status	Homemaker	सद्यस्थिती / इतर	गृहिणी
+96	Status	Student (Undergraduate)	सद्यस्थिती / इतर	विद्यार्थी (UG)
+97	Status	Student (Postgraduate)	सद्यस्थिती / इतर	विद्यार्थी (PG)
+98	Status	PhD Scholar	सद्यस्थिती / इतर	PhD स्कॉलर
+99	Status	Research Scholar	सद्यस्थिती / इतर	रिसर्च स्कॉलर
+100	Status	Retired	सद्यस्थिती / इतर	निवृत्त
+101	Status	Searching for Job	सद्यस्थिती / इतर	नोकरीच्या शोधात
+102	Legal & Judiciary	Arbitrator	कायदा आणि न्याय	लवाद (Arbitrator)
+103	Legal & Judiciary	Mediator	कायदा आणि न्याय	मध्यस्थ (Mediator)
+104	Technical & Skilled	Senior Technician	तांत्रिक आणि कौशल्य	वरिष्ठ तंत्रज्ञ
+105	Technical & Skilled	Civil Contractor	तांत्रिक आणि कौशल्य	सिव्हिल कॉन्ट्रॅक्टर
+106	Technical & Skilled	Carpenter	तांत्रिक आणि कौशल्य	सुतार (Carpenter)
+109	Other Important	Freelancer	इतर महत्त्वाचे	फ्रीलान्सर
+110	Other Important	Social Media Manager	इतर महत्त्वाचे	सोशल मीडिया मॅनेजर
+111	Agriculture	Milk Dairy Owner	शेती आणि जोडधंदे	दुग्धव्यवसाय मालक
+112	Agriculture	Poultry Farm Owner	शेती आणि जोडधंदे	कुक्कुटपालन मालक
+113	Agriculture	Goat Farming Owner	शेती आणि जोडधंदे	शेळीपालन मालक
+114	Agriculture	Organic Farmer	शेती आणि जोडधंदे	सेंद्रिय शेतकरी
+115	Agriculture	Greenhouse Owner	शेती आणि जोडधंदे	ग्रीनहाऊस / पॉलीहाऊस मालक
+116	Agriculture	Nursery Owner	शेती आणि जोडधंदे	रोपवाटिका (Nursery) मालक
+117	Agriculture	Agri-Business Owner	शेती आणि जोडधंदे	कृषी सेवा केंद्र मालक
+118	Technical (Rural)	Water Pump Mechanic	तांत्रिक (ग्रामीण)	वॉटर पंप मेकॅनिक
+119	Technical (Rural)	Motor Mechanic	तांत्रिक (ग्रामीण)	मोटर मेकॅनिक
+120	Technical (Rural)	Tractor Mechanic	तांत्रिक (ग्रामीण)	ट्रॅक्टर मेकॅनिक
+121	Technical (Rural)	Heavy Vehicle Mechanic	तांत्रिक (ग्रामीण)	जड वाहन मेकॅनिक
+122	Technical (Rural)	Welder	तांत्रिक (ग्रामीण)	वेल्डर
+123	Technical (Rural)	Fabricator	तांत्रिक (ग्रामीण)	फॅब्रिकेटर
+124	Technical (Rural)	Borewell Contractor	तांत्रिक (ग्रामीण)	बोअरवेल कॉन्ट्रॅक्टर
+125	Technical (Rural)	Borewell Operator	तांत्रिक (ग्रामीण)	बोअरवेल ऑपरेटर
+126	Technical (Rural)	Mason	तांत्रिक (ग्रामीण)	गवंडी (Mason)
+127	Business (Local)	Grocery Store Owner	स्थानिक व्यवसाय	किराणा दुकान मालक
+128	Business (Local)	General Store Owner	स्थानिक व्यवसाय	जनरल स्टोअर मालक
+129	Business (Local)	Building Material Store	स्थानिक व्यवसाय	सिमेंट / बांधकाम साहित्य दुकान
+130	Business (Local)	Cloth Merchant	स्थानिक व्यवसाय	कापड व्यापारी
+131	Business (Local)	Boutique Owner	स्थानिक व्यवसाय	बुटीक मालक
+132	Business (Local)	Commission Agent	स्थानिक व्यवसाय	आडतदार (Agent)
+133	Business (Local)	Petrol Pump Owner	स्थानिक व्यवसाय	पेट्रोल पंप मालक
+134	Business (Local)	Petrol Pump Manager	स्थानिक व्यवसाय	पेट्रोल पंप मॅनेजर
+135	Logistics (Local)	Transport Business Owner	वाहतूक सेवा	ट्रान्सपोर्ट व्यावसायिक
+136	Logistics (Local)	Travels Operator	वाहतूक सेवा	ट्रॅव्हल्स ऑपरेटर
+139	Govt (Rural)	Police Patil	ग्रामीण प्रशासन	पोलीस पाटील
+140	Govt (Rural)	Anganwadi Sevika	ग्रामीण प्रशासन	अंगणवाडी सेविका
+141	Govt (Rural)	Asha Worker	ग्रामीण प्रशासन	आशा वर्कर
+142	Govt (Rural)	Agriculture Assistant	ग्रामीण प्रशासन	कृषी सहायक
+143	Govt (Rural)	Post Master	ग्रामीण प्रशासन	पोस्ट मास्तर
+144	Govt (Rural)	Postman	ग्रामीण प्रशासन	पोस्टमन
+145	Small Industry	Flour Mill Owner	लघु उद्योग	पिठाची गिरणी मालक
+146	Small Industry	Brick Kiln Owner	लघु उद्योग	वीटभट्टी मालक
+147	Small Industry	Oil Mill Owner	लघु उद्योग	तेल गिरणी मालक
+148	Small Industry	Jaggery House Owner	लघु उद्योग	गुऱ्हाळ मालक
+149	Co-operative	Credit Society Manager	सहकारी संस्था	पतसंस्था मॅनेजर
+150	Co-operative	Credit Society Staff	सहकारी संस्था	पतसंस्था कर्मचारी
+166	Co-operative	Sugar Factory Employee	सहकारी संस्था	साखर कारखाना कर्मचारी
+167	Co-operative	Dairy Co-op Secretary	सहकारी संस्था	दूध डेअरी सेक्रेटरी
+168	Media (Local)	Studio Owner	स्थानिक मीडिया	फोटोग्राफी स्टुडिओ मालक
+169	Media (Local)	CSC Center Owner	स्थानिक मीडिया	महा-ई-सेवा केंद्र मालक
+170	Media (Local)	Typing Center Owner	स्थानिक मीडिया	टायपिंग सेंटर मालक
+171	Media (Local)	Xerox Center Owner	स्थानिक मीडिया	झेरॉक्स सेंटर मालक
+172	Events	Mandap Decorator	इव्हेंट सेवा	मंडप डेकोरेटर
+173	Events	Catering Owner	इव्हेंट सेवा	कॅटरिंग मालक
+174	Retail Showroom	Automobile Showroom Owner	शोरूम आणि रिटेल	गाडी शोरूम मालक
+175	Retail Showroom	Electronics Shop Owner	शोरूम आणि रिटेल	इलेक्ट्रॉनिक्स दुकान मालक
+176	Retail Showroom	Mobile Shop Owner	शोरूम आणि रिटेल	मोबाईल दुकान मालक
+177	Retail Showroom	Jewellery Shop Owner	शोरूम आणि रिटेल	सराफ / ज्वेलरी दुकान मालक
+178	Retail Showroom	Furniture Showroom Owner	शोरूम आणि रिटेल	फर्निचर शोरूम मालक
+179	Retail Showroom	Medical Store Owner	शोरूम आणि रिटेल	मेडिकल स्टोअर मालक
+180	Education	Coaching Class Owner	शिक्षण	स्वतःचे कोचिंग क्लास
+181	Education	Computer Training Owner	शिक्षण	कॉम्प्युटर ट्रेनिंग सेंटर मालक
+182	Education	Music Academy Owner	शिक्षण	संगीत अकॅडमी मालक
+183	Education	Dance Academy Owner	शिक्षण	डान्स अकॅडमी मालक
+184	Manufacturing	MIDC Industry Owner	मॅन्युफॅक्चरिंग	MIDC कारखाना मालक
+185	Manufacturing	Food Processing Owner	मॅन्युफॅक्चरिंग	अन्न प्रक्रिया उद्योग मालक
+186	Logistics	Packaging Manager	लॉजिस्टिक	पॅकेजिंग मॅनेजर
+187	Logistics	Distribution Manager	लॉजिस्टिक	डिस्ट्रिब्युशन मॅनेजर
+188	Health	Gym Owner	आरोग्य	जिम मालक
+189	Health	Fitness Trainer	आरोग्य	फिटनेस ट्रेनर
+190	Health	Pathology Lab Owner	आरोग्य	लॅब मालक (Pathology)
+191	Health	Hospital Administrator	आरोग्य	हॉस्पिटल ॲडमिनिस्ट्रेटर
+192	Real Estate	Real Estate Builder	रिअल इस्टेट	बिल्डर (Builder)
+193	Real Estate	Real Estate Developer	रिअल इस्टेट	डेव्हलपर (Developer)
+194	Design	Interior Decorator	डिझाइन	इंटीरियर डेकोरेटर
+195	Services	Gas Agency Owner	सेवा क्षेत्र	गॅस एजन्सी मालक
+196	Services	Courier Agency Owner	सेवा क्षेत्र	कुरिअर एजन्सी मालक
+197	Services	Advertising Agency Owner	सेवा क्षेत्र	जाहिरात एजन्सी मालक
+198	Services	Flex Printing Owner	सेवा क्षेत्र	फ्लेक्स प्रिंटिंग मालक
+199	Finance (Local)	Investment Advisor	स्थानिक वित्त	इन्व्हेस्टमेंट सल्लागार
+200	Finance (Local)	Insurance Advisor	स्थानिक वित्त	इन्शुरन्स सल्लागार
+201	Finance (Local)	GST Practitioner	स्थानिक वित्त	GST प्रॅक्टिशनर
+202	Finance	NBFC Employee	वित्त सेवा	फायनान्स कंपनी कर्मचारी
+203	Hospitality	Hotel Owner	हॉस्पिटॅलिटी	हॉटेल मालक
+204	Hospitality	Restaurant Owner	हॉस्पिटॅलिटी	रेस्टॉरंट मालक
+205	Hospitality	Banquet Hall Owner	हॉस्पिटॅलिटी	मंगल कार्यालय मालक
+206	Hospitality	Marriage Hall Manager	हॉस्पिटॅलिटी	मॅरेज हॉल मॅनेजर
+207	Logistics	Tours Operator	वाहतूक आणि लॉजिस्टिक	टूर्स ऑपरेटर
+208	Logistics	Travels Operator	वाहतूक आणि लॉजिस्टिक	ट्रॅव्हल्स ऑपरेटर
+209	Logistics	Logistics Business Owner	वाहतूक आणि लॉजिस्टिक	लॉजिस्टिक व्यावसायिक
+210	Logistics	Cargo Business Owner	वाहतूक आणि लॉजिस्टिक	कार्गो व्यवसाय मालक
+211	Technical	CCTV Technician	तांत्रिक सेवा	CCTV टेक्निशियन
+212	Technical	Security Systems Installer	तांत्रिक सेवा	सिक्युरिटी सिस्टिम्स इन्स्टॉलर
+213	Renewable Energy	Solar Systems Installer	ऊर्जा क्षेत्र	सोलर सिस्टिम्स इन्स्टॉलर
+214	IT Services	Software Support Executive	IT सेवा	सॉफ्टवेअर सपोर्ट कर्मचारी
+215	Logistics	Warehouse Manager	लॉजिस्टिक	वेअरहाऊस (गोदाम) मॅनेजर
+216	Logistics	Supply Chain Coordinator	लॉजिस्टिक	सप्लाय चेन कोऑर्डिनेटर
+217	Trade	Import Business Owner	व्यापार	आयात व्यापारी
+218	Trade	Export Business Owner	व्यापार	निर्यात व्यापारी
+219	E-commerce	Delivery Partner	ई-कॉमर्स	डिलिव्हरी पार्टनर
+220	Logistics	Fleet Manager	लॉजिस्टिक	फ्लीट मॅनेजर (गाड्यांचा ताफा)
+221	Digital Media	Social Media Influencer	डिजिटल मीडिया	सोशल मीडिया इन्फ्लुएन्सर
+222	Digital Media	Digital Marketing Expert	डिजिटल मीडिया	डिजिटल मार्केटिंग एक्सपर्ट
+223	Digital Media	Video Editor	डिजिटल मीडिया	व्हिडिओ एडिटर
+224	Digital Media	Motion Graphic Artist	डिजिटल मीडिया	मोशन ग्राफिक आर्टिस्ट
+225	Entertainment	Podcast Producer	मनोरंजन	पॉडकास्ट प्रोड्युसर
+226	Entertainment	Radio Producer	मनोरंजन	रेडिओ प्रोड्युसर
+227	Health	Nutritionist	आरोग्य	आहारतज्ज्ञ (Nutritionist)
+228	Health	Dietician	आरोग्य	आहारतज्ज्ञ (Dietician)
+229	Mental Health	Mental Health Counselor	मानसिक आरोग्य	मानसिक आरोग्य समुपदेशक
+230	Fitness	Personal Trainer	फिटनेस	पर्सनल ट्रेनर
+231	Fitness	Athletics Coach	फिटनेस	खेळाचे प्रशिक्षक (Coach)
+232	Research	Scientist	संशोधन	वैज्ञानिक (Scientist)
+233	Research	Researcher	संशोधन	संशोधक (Researcher)
+234	Research	Geologist	संशोधन	भूगर्भशास्त्रज्ञ (Geologist)
+235	Research	Environmentalist	संशोधन	पर्यावरण तज्ज्ञ
+236	Research	Archaeologist	संशोधन	पुरातत्वशास्त्रज्ञ
+237	Public Safety	Firefighter	सार्वजनिक सुरक्षा	अग्निशमन जवान
+238	Public Safety	Fire Officer	सार्वजनिक सुरक्षा	अग्निशमन अधिकारी
+239	Govt Admin	Municipal Corporation Clerk	सरकारी प्रशासन	महानगरपालिका लिपिक
+240	Office Support	Administrative Assistant	ऑफिस सपोर्ट	प्रशासकीय सहाय्यक
+241	Lifestyle	Fashion Model	लाईफस्टाईल	फॅशन मॉडेल
+242	Arts	Musician	कला	संगीतकार
+243	Arts	Singer	कला	गायक / गायिका
+244	Arts	Instrumentalist	कला	वादक
+245	Traditional	Priest / Pundit	पारंपारिक सेवा	पुजारी / पंडित
+246	Traditional	Religious Head	पारंपारिक सेवा	धर्मगुरू
+247	Professional	Astrologer	प्रोफेशनल सेवा	ज्योतिषी
+248	Professional	Vastu Consultant	प्रोफेशनल सेवा	वास्तुशास्त्र सल्लागार
+249	Aviation	Airport Security Staff	विमान सेवा	एअरपोर्ट सुरक्षा कर्मचारी
+250	Marine Science	Marine Biologist	मरीन सायन्स	मरीन बायोलॉजिस्ट
+251	Marine Science	Oceanographer	मरीन सायन्स	समुद्रशास्त्रज्ञ
+252	Logistics	Custom House Agent (CHA)	लॉजिस्टिक	कस्टम हाऊस एजंट
+253	Social Service	NGO Head	सामाजिक सेवा	NGO प्रमुख
+254	Social Service	Social Worker	सामाजिक सेवा	सामाजिक कार्यकर्ता
+255	Content	Freelance Writer	कंटेंट	फ्रीलान्स लेखक
+256	Content	Translator	कंटेंट	अनुवादक (Translator)
+257	Animal Care	Pet Groomer	प्राणी सेवा	पेट ग्रूमर
+258	Animal Care	Veterinary Assistant	प्राणी सेवा	प्राण्यांच्या डॉक्टरांचे सहाय्यक
+259	Beauty	Makeup Artist	सौंदर्य सेवा	मेकअप आर्टिस्ट
+260	Beauty	Beautician	सौंदर्य सेवा	ब्युटिशियन
+261	Beauty	Hair Stylist	सौंदर्य सेवा	हेअर स्टायलिस्ट
+262	Beauty	Salon Owner	सौंदर्य सेवा	सलून मालक
+263	Fashion	Fashion Consultant	फॅशन	फॅशन कन्सल्टंट
+264	Fashion	Tailor	फॅशन	शिंपी (Tailor)
+265	Fashion	Boutique Owner	फॅशन	बुटीक मालक
+266	Fashion	Embroidery Specialist	फॅशन	भरतकाम तज्ज्ञ
+267	Transport	Commercial Driver	वाहतूक	कमर्शियल ड्रायव्हर
+268	Transport	RTO Consultant	वाहतूक	RTO कन्सल्टंट
+269	Office Support	Data Entry Operator	ऑफिस सपोर्ट	डेटा एन्ट्री ऑपरेटर
+270	Office Support	Receptionist	ऑफिस सपोर्ट	रिसेप्शनिस्ट
+271	Food Industry	Bakery Owner	अन्न उद्योग	बेकरी मालक
+272	Food Industry	Sweet Shop Owner	अन्न उद्योग	मिठाई दुकान मालक
+273	Govt Service	Food Inspector	सरकारी सेवा	अन्न निरीक्षक
+276	Technical	Mobile Repair Technician	तांत्रिक सेवा	मोबाईल रिपेअर टेक्निशियन
+278	Technical	AC Technician	तांत्रिक सेवा	AC टेक्निशियन
+279	Political	Political Worker	राजकीय	राजकीय कार्यकर्ता
+280	Political	Political Leader	राजकीय	राजकीय नेता
+281	Fishery	Fishery Business Owner	मत्स्य व्यवसाय	मासेमारी व्यवसाय मालक
+282	Fishery	Fish Processer	मत्स्य व्यवसाय	मत्स्य प्रक्रिया व्यावसायिक
+283	Education	Librarian	शिक्षण	ग्रंथपाल
+284	Education	Lab Assistant	शिक्षण	प्रयोगशाळा सहाय्यक
+285	Skilled	Goldsmith	कौशल्य	सोनार (Goldsmith)
+286	Traditional Art	Potter	पारंपारिक कला	कुंभार (Potter)
+287	Traditional Art	Weaver	पारंपारिक कला	विणकर (Weaver)
+288	Tourism	Tourist Guide	पर्यटन	टुरिस्ट गाईड
+289	Tourism	Travel Agent	पर्यटन	ट्रॅव्हल एजंट
+290	Medical	Radiologist	वैद्यकीय	रेडिओलॉजिस्ट
+291	Medical	Anesthetist	वैद्यकीय	भूलतज्ज्ञ (Anesthetist)
+292	Municipal	Health Inspector	महापालिका	स्वच्छता निरीक्षक
+293	Rural Admin	Village Development Officer	ग्रामीण प्रशासन	ग्रामविकास अधिकारी (VDO)
+294	Legal	Notary Public	कायदा	नोटरी पब्लिक
+295	Media Tech	Sound Engineer	मीडिया टेक	साऊंड इंजिनिअर
+296	Media Tech	Audio Engineer	मीडिया टेक	ऑडिओ इंजिनिअर
+297	E-commerce	Online Seller	ई-कॉमर्स	ऑनलाईन सेलर
+298	Media Art	Voice Over Artist	मीडिया कला	व्हॉइस ओव्हर आर्टिस्ट
+299	Content	Script Writer	कंटेंट	स्क्रिप्ट रायटर
+300	Content	Copywriter	कंटेंट	कॉपीरायटर
+301	Modern Tech	Drone Pilot	मॉडर्न टेक	ड्रोन पायलट
+302	Supply Chain	Procurement Manager	सप्लाय चेन	खरेदी व्यवस्थापक
+303	Supply Chain	Purchase Officer	सप्लाय चेन	खरेदी अधिकारी
+304	Supply Chain	Inventory Manager	सप्लाय चेन	इन्व्हेंटरी मॅनेजर
+306	Public Safety	Health & Safety Officer	सार्वजनिक सुरक्षा	आरोग्य आणि सुरक्षा अधिकारी
+307	Corporate Training	Corporate Trainer	कॉर्पोरेट ट्रेनिंग	कॉर्पोरेट ट्रेनर
+308	Corporate Training	Soft Skills Trainer	कॉर्पोरेट ट्रेनिंग	सॉफ्ट स्किल्स ट्रेनर
+309	Public Relations	PR Officer	जनसंपर्क	जनसंपर्क अधिकारी (PR)
+310	Public Relations	Media Planner	जनसंपर्क	मीडिया प्लॅनर
+311	Marketing	Brand Manager	मार्केटिंग	ब्रँड मॅनेजर
+312	Events	Wedding Planner	इव्हेंट मॅनेजमेंट	वेडिंग प्लॅनर
+313	Events	Event Coordinator	इव्हेंट मॅनेजमेंट	इव्हेंट कोऑर्डिनेटर
+314	Photography	Travel Photographer	फोटोग्राफी	ट्रॅव्हल फोटोग्राफर
+315	Photography	Wildlife Photographer	फोटोग्राफी	वाईल्डलाईफ फोटोग्राफर
+316	Media Production	Cinematographer	मीडिया प्रोडक्शन	सिनेमॅटोग्राफर
+317	Media Production	VFX Artist	मीडिया प्रोडक्शन	VFX आर्टिस्ट
+318	Media Production	3D Modeler	मीडिया प्रोडक्शन	3D मॉडेलिंग आर्टिस्ट
+319	Game Design	Game Designer	गेम डिझाइन	गेम डिझाइनर
+320	Modern Tech	AR/VR Developer	मॉडर्न टेक	AR/VR डेव्हलपर
+321	Writing	Technical Writer	लेखन	टेक्निकल रायटर
+322	Writing	Content Strategist	लेखन	कंटेंट स्ट्रॅटेजिस्ट
+323	Digital Marketing	SEO Specialist	डिजिटल मार्केटिंग	SEO स्पेशालिस्ट
+324	Digital Marketing	SEM Specialist	डिजिटल मार्केटिंग	SEM स्पेशालिस्ट
+325	Digital Marketing	PPC Expert	डिजिटल मार्केटिंग	PPC एक्सपर्ट
+326	Digital Marketing	Email Marketer	डिजिटल मार्केटिंग	ईमेल मार्केटर
+327	Digital Marketing	Affiliate Marketer	डिजिटल मार्केटिंग	एफिलिएट मार्केटर
+328	E-commerce	E-commerce Ops Manager	ई-कॉमर्स	ई-कॉमर्स ऑपरेशन्स मॅनेजर
+329	Finance	Stock Analyst	वित्त सेवा	स्टॉक ॲनलिस्ट
+330	Finance	Portfolio Manager	वित्त सेवा	पोर्टफोलिओ मॅनेजर
+331	Finance	Wealth Manager	वित्त सेवा	वेल्थ मॅनेजर
+332	Finance	Actuary	वित्त सेवा	ॲक्चुअरी (Actuary)
+333	Finance	Credit Analyst	वित्त सेवा	क्रेडिट ॲनलिस्ट
+334	Finance	Risk Manager	वित्त सेवा	रिस्क मॅनेजर
+335	Legal	Compliance Officer	कायदेशीर सेवा	कॉम्प्लायन्स अधिकारी
+336	Legal	Patent Attorney	कायदेशीर सेवा	पेटंट वकील
+337	Legal	IP Consultant	कायदेशीर सेवा	बौद्धिक संपदा सल्लागार (IP)
+338	Legal	Cyber Lawyer	कायदेशीर सेवा	सायबर वकील
+339	Legal	Real Estate Lawyer	कायदेशीर सेवा	रिअल इस्टेट वकील
+340	Legal	Criminal Lawyer	कायदेशीर सेवा	फौजदारी वकील
+341	Legal	Family Court Lawyer	कायदेशीर सेवा	कौटुंबिक न्यायालय वकील
+342	Legal	Tax Lawyer	कायदेशीर सेवा	टॅक्स वकील
+343	Legal	Corporate Lawyer	कायदेशीर सेवा	कॉर्पोरेट वकील
+344	Medical	Unani Practitioner (BUMS)	वैद्यकीय	युनानी डॉक्टर (BUMS)
+345	Medical	Naturopath	वैद्यकीय	निसर्गोपचार तज्ज्ञ
+346	Health Care	Speech Therapist	आरोग्य सेवा	स्पीच थेरपिस्ट
+347	Health Care	Audiologist	आरोग्य सेवा	श्रवणतज्ज्ञ (Audiologist)
+348	Psychology	Clinical Psychologist	मानसिक आरोग्य	क्लिनिकल सायकॉलॉजिस्ट
+349	Counseling	Child Counselor	समुपदेशन	बाल समुपदेशक
+350	Counseling	Career Counselor	समुपदेशन	करिअर समुपदेशक
+351	Counseling	Admissions Counselor	समुपदेशन	ॲडमिशन समुपदेशक
+352	Counseling	Education Consultant	समुपदेशन	शैक्षणिक सल्लागार
+353	Education	Special Education Teacher	शिक्षण	विशेष शिक्षक (दिव्यांग मुलांसाठी)
+354	Education	Preschool Teacher	शिक्षण	बालवाडी शिक्षक
+355	Education	Kindergarten Teacher	शिक्षण	केजी (KG) शिक्षक
+356	Education	Primary School Teacher	शिक्षण	प्राथमिक शिक्षक
+357	Education	Secondary School Teacher	शिक्षण	माध्यमिक शिक्षक
+358	Education	Higher Secondary Teacher	शिक्षण	उच्च माध्यमिक शिक्षक
+359	Fitness	Yoga Trainer	फिटनेस	योग प्रशिक्षक
+360	Fitness	Pilates Instructor	फिटनेस	पायलेट्स इन्स्ट्रक्टर
+361	Fitness	Zumba Instructor	फिटनेस	झुंबा इन्स्ट्रक्टर
+362	Lifestyle	Personal Stylist	लाईफस्टाईल	पर्सनल स्टायलिस्ट
+363	Lifestyle	Image Consultant	लाईफस्टाईल	इमेज कन्सल्टंट
+364	Architecture	Interior Architect	आर्किटेक्चर	इंटीरियर आर्किटेक्ट
+365	Architecture	Landscape Architect	आर्किटेक्चर	लँडस्केप आर्किटेक्ट
+366	Architecture	Urban Planner	आर्किटेक्चर	नगर रचनाकार (Urban Planner)
+367	Consulting	Environmental Consultant	सल्लागार	पर्यावरण सल्लागार
+368	Consulting	Sustainable Energy Consultant	सल्लागार	ऊर्जा सल्लागार
+369	Engineering	Solar Engineer	इंजिनीअरिंग	सोलर इंजिनिअर
+370	Engineering	Wind Energy Engineer	इंजिनीअरिंग	पवन ऊर्जा इंजिनिअर
+371	Environment	Waste Management Expert	पर्यावरण	कचरा व्यवस्थापन तज्ज्ञ
+372	Technical	Water Treatment Operator	तांत्रिक सेवा	जलशुद्धीकरण केंद्र ऑपरेटर
+373	Technical	Chemical Plant Operator	तांत्रिक सेवा	केमिकल प्लांट ऑपरेटर
+374	Engineering	Mining Engineer	इंजिनीअरिंग	मायनिंग इंजिनिअर
+375	Engineering	Petroleum Engineer	इंजिनीअरिंग	पेट्रोलियम इंजिनिअर
+376	Engineering	Drilling Engineer	इंजिनीअरिंग	ड्रिलिंग इंजिनिअर
+377	Engineering	Geotechnical Engineer	इंजिनीअरिंग	जिओटेक्निकल इंजिनिअर
+378	Engineering	Estimation Engineer	इंजिनीअरिंग	एस्टिमेशन इंजिनिअर
+379	Engineering	Site Engineer	इंजिनीअरिंग	साईट इंजिनिअर
+380	Engineering	Project Engineer	इंजिनीअरिंग	प्रोजेक्ट इंजिनिअर
+381	Surveying	Land Surveyor	सर्वेक्षण	भूमी मोजणीदार (Surveyor)
+382	Surveying	Quantity Surveyor	सर्वेक्षण	क्वांटिटी सर्वेअर
+383	Valuation	Jewelry Valuer	मूल्यनिर्धारण	दागिने मूल्यनिर्धारक
+384	Valuation	Real Estate Valuer	मूल्यनिर्धारण	मालमत्ता मूल्यनिर्धारक
+385	Insurance	Insurance Underwriter	विमा क्षेत्र	इन्शुरन्स अंडररायटर
+386	Insurance	Claims Adjuster	विमा क्षेत्र	क्लेम ॲडजस्टर
+387	Finance	Actuarial Analyst	वित्त सेवा	ॲक्चुअरियल ॲनलिस्ट
+388	Digital Media	Social Media Strategist	डिजिटल मीडिया	सोशल मीडिया स्ट्रॅटेजिस्ट
+389	Digital Media	Community Manager	डिजिटल मीडिया	कम्युनिटी मॅनेजर
+390	Digital Media	Influencer Manager	डिजिटल मीडिया	इन्फ्लुएन्सर मॅनेजर
+391	Entertainment	Podcast Host	मनोरंजन	पॉडकास्ट होस्ट
+392	Media	News Anchor	मीडिया	बातमी निवेदक (News Anchor)
+393	Media	News Reporter	मीडिया	बातमीदार (News Reporter)
+394	Entertainment	Dubbing Artist	मनोरंजन	डबिंग आर्टिस्ट
+395	Entertainment	Foley Artist	मनोरंजन	फोली आर्टिस्ट (ध्वनी परिणाम)
+396	Arts	Music Producer	कला	म्युझिक प्रोड्युसर
+397	Arts	Sound Mixer	कला	साऊंड मिक्सर
+398	Design	Lighting Designer	डिझाइन	लाइटिंग डिझाइनर
+399	Research	Historical Researcher	संशोधन	ऐतिहासिक संशोधक
+400	Research	Sociology Researcher	संशोधन	समाजशास्त्र संशोधक
+401	Modern Tech	Cybersecurity Auditor	मॉडर्न टेक	सायबर सिक्युरिटी ऑडिटर
+402	Govt & Defense	Field Marshal	सरकारी आणि संरक्षण	फील्ड मार्शल
+403	Govt & Defense	General	सरकारी आणि संरक्षण	जनरल
+404	Govt & Defense	Lieutenant General	सरकारी आणि संरक्षण	लेफ्टनंट जनरल
+405	Govt & Defense	Major General	सरकारी आणि संरक्षण	मेजर जनरल
+406	Govt & Defense	Brigadier	सरकारी आणि संरक्षण	ब्रिगेडियर
+407	Govt & Defense	Colonel	सरकारी आणि संरक्षण	कर्नल
+408	Govt & Defense	Lieutenant Colonel	सरकारी आणि संरक्षण	लेफ्टनंट कर्नल
+409	Govt & Defense	Major	सरकारी आणि संरक्षण	मेजर
+410	Govt & Defense	Captain	सरकारी आणि संरक्षण	कॅप्टन
+411	Govt & Defense	Lieutenant	सरकारी आणि संरक्षण	लेफ्टनंट
+412	Govt & Defense	Subedar Major	सरकारी आणि संरक्षण	सुभेदार मेजर
+413	Govt & Defense	Subedar	सरकारी आणि संरक्षण	सुभेदार
+414	Govt & Defense	Naib Subedar	सरकारी आणि संरक्षण	नायब सुभेदार
+415	Govt & Defense	Havildar	सरकारी आणि संरक्षण	हवालदार
+416	Govt & Defense	Naik	सरकारी आणि संरक्षण	नाईक
+417	Govt & Defense	Lance Naik	सरकारी आणि संरक्षण	लांस नाईक
+418	Govt & Defense	Sepoy	सरकारी आणि संरक्षण	शिपाई
+419	Govt & Defense	Rifleman	सरकारी आणि संरक्षण	रायफलमन
+420	Govt & Defense	Army Doctor	सरकारी आणि संरक्षण	आर्मी डॉक्टर
+421	Govt & Defense	Admiral of the Fleet	सरकारी आणि संरक्षण	ॲडमिरल ऑफ द फ्लीट
+422	Govt & Defense	Admiral	सरकारी आणि संरक्षण	ॲडमिरल
+423	Govt & Defense	Vice Admiral	सरकारी आणि संरक्षण	व्हाईस ॲडमिरल
+424	Govt & Defense	Rear Admiral	सरकारी आणि संरक्षण	रिअर ॲडमिरल
+425	Govt & Defense	Commodore	सरकारी आणि संरक्षण	कमोडोर
+426	Govt & Defense	Captain (Navy)	सरकारी आणि संरक्षण	कॅप्टन (नौदल)
+427	Govt & Defense	Commander	सरकारी आणि संरक्षण	कमांडर
+428	Govt & Defense	Lieutenant Commander	सरकारी आणि संरक्षण	लेफ्टनंट कमांडर
+429	Govt & Defense	Lieutenant (Navy)	सरकारी आणि संरक्षण	लेफ्टनंट (नौदल)
+430	Govt & Defense	Sub Lieutenant	सरकारी आणि संरक्षण	सब लेफ्टनंट
+431	Govt & Defense	Master Chief Petty Officer I	सरकारी आणि संरक्षण	मास्टर चीफ पेटी ऑफिसर १
+432	Govt & Defense	Master Chief Petty Officer II	सरकारी आणि संरक्षण	मास्टर चीफ पेटी ऑफिसर २
+433	Govt & Defense	Chief Petty Officer	सरकारी आणि संरक्षण	चीफ पेटी ऑफिसर
+434	Govt & Defense	Petty Officer	सरकारी आणि संरक्षण	पेटी ऑफिसर
+435	Govt & Defense	Leading Seaman	सरकारी आणि संरक्षण	लीडिंग सीमन
+436	Govt & Defense	Able Seaman	सरकारी आणि संरक्षण	एबल सीमन
+437	Govt & Defense	Seaman	सरकारी आणि संरक्षण	सीमन
+438	Govt & Defense	Marshal of the Indian Air Force	सरकारी आणि संरक्षण	मार्शल ऑफ द इंडियन एअर फोर्स
+439	Govt & Defense	Air Chief Marshal	सरकारी आणि संरक्षण	एअर चीफ मार्शल
+440	Govt & Defense	Air Marshal	सरकारी आणि संरक्षण	एअर मार्शल
+441	Govt & Defense	Air Vice Marshal	सरकारी आणि संरक्षण	एअर व्हाईस मार्शल
+442	Govt & Defense	Air Commodore	सरकारी आणि संरक्षण	एअर कमोडोर
+443	Govt & Defense	Group Captain	सरकारी आणि संरक्षण	ग्रुप कॅप्टन
+444	Govt & Defense	Wing Commander	सरकारी आणि संरक्षण	विंग कमांडर
+445	Govt & Defense	Squadron Leader	सरकारी आणि संरक्षण	स्क्वाड्रन लीडर
+446	Govt & Defense	Flight Lieutenant	सरकारी आणि संरक्षण	फ्लाईट लेफ्टनंट
+447	Govt & Defense	Flying Officer	सरकारी आणि संरक्षण	फ्लाईंग ऑफिसर
+448	Govt & Defense	Master Warrant Officer	सरकारी आणि संरक्षण	मास्टर वॉरंट ऑफिसर
+449	Govt & Defense	Warrant Officer	सरकारी आणि संरक्षण	वॉरंट ऑफिसर
+450	Govt & Defense	Junior Warrant Officer	सरकारी आणि संरक्षण	ज्युनियर वॉरंट ऑफिसर
+451	Govt & Defense	Sergeant	सरकारी आणि संरक्षण	सार्जंट
+452	Govt & Defense	Corporal	सरकारी आणि संरक्षण	कॉर्पोरल
+453	Govt & Defense	Leading Aircraftman	सरकारी आणि संरक्षण	लीडिंग एअरक्राफ्टमन
+454	Govt & Defense	Aircraftman	सरकारी आणि संरक्षण	एअरक्राफ्टमन
+455	Status	Pensioner	सद्यस्थिती / इतर	पेन्शनर

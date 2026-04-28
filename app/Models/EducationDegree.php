@@ -12,7 +12,7 @@ class EducationDegree extends Model
 {
     protected $table = 'education_degrees';
 
-    protected $fillable = ['category_id', 'code', 'title', 'full_form', 'sort_order'];
+    protected $fillable = ['category_id', 'code', 'code_mr', 'title', 'title_mr', 'full_form', 'full_form_mr', 'sort_order'];
 
     public function category()
     {

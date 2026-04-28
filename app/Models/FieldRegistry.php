@@ -23,6 +23,7 @@ class FieldRegistry extends Model
         'locked_by',
         'locked_at',
         'display_label',
+        'display_label_mr',
         'display_order',
         'category',
         'is_enabled',

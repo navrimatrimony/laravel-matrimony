@@ -470,9 +470,12 @@ class ParseIntakeJob implements ShouldQueue
                         'raw_sha256' => hash('sha256', $raw),
                     ]);
                 }
+                $uploadedBy = $intake->uploaded_by;
+                $suggestedByUserId = ($uploadedBy !== null && (int) $uploadedBy > 0) ? (int) $uploadedBy : null;
                 $parsed = $parser->parse($raw, [
                     'intake_id' => $intake->id,
                     'parser_mode' => $mode,
+                    'suggested_by_user_id' => $suggestedByUserId,
                 ]);
                 $lastException = null;
                 break;

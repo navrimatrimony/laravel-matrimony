@@ -9,7 +9,7 @@ class GenerateReligionCasteSubcasteTranslationsJson extends Command
 {
     protected $signature = 'master:generate-religion-caste-subcaste-translations-json';
 
-    protected $description = 'Generate database/data/religion_caste_subcaste_translations.json from the canonical TSV';
+    protected $description = 'Generate optional legacy database/data/religion_caste_subcaste_translations.json (aliases/OCR shape) from TSV; canonical EN/MR for seeding lives in database/seeders/data/religion_caste_subcaste_seed_*.json';
 
     public function handle(ReligionCasteSubcasteTranslationJsonGenerator $generator): int
     {

@@ -12,7 +12,7 @@ class Profession extends Model
 {
     protected $table = 'professions';
 
-    protected $fillable = ['working_with_type_id', 'name', 'slug', 'sort_order', 'is_active'];
+    protected $fillable = ['working_with_type_id', 'name', 'name_mr', 'slug', 'sort_order', 'is_active'];
 
     protected $casts = [
         'is_active' => 'boolean',

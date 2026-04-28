@@ -1,0 +1,36 @@
+<?php
+
+/** Rows 232–264 */
+
+return [
+    ['Arts / Design', 'कला / डिझाइन', 'B.FAD', 'B.FAD', 'Bachelor of Fashion and Apparel Design', 'बी.एफएडी', 'बी.एफएडी', 'फॅशन आणि अपॅरल डिझाइनमधील पदवी'],
+    ['Medicine', 'औषध', 'BCVT', 'BCVT', 'Bachelor of Cardio Vascular Technology', 'बीसीव्हीटी', 'बीसीव्हीटी', 'हृदय व रक्तवाहिन्या तंत्रज्ञान पदवी'],
+    ['Management', 'व्यवस्थापन', 'MMS', 'MMS', 'Master of Management Studies', 'एमएमएस', 'एमएमएस', 'व्यवस्थापन अभ्यासातील पदव्युत्तर पदवी'],
+    ['Management', 'व्यवस्थापन', 'MTA', 'MTA', 'Master of Tourism Administration', 'एमटीए', 'एमटीए', 'पर्यटन प्रशासन पदव्युत्तर पदवी'],
+    ['Arts / Design', 'कला / डिझाइन', 'B.J.', 'B.J.', 'Bachelor of Journalism', 'बी.जे.', 'बी.जे.', 'पत्रकारितेतील पदवी'],
+    ['Medicine', 'औषध', 'BMRIT', 'BMRIT', 'Bachelor of Medical Radiology and Imaging Technology', 'बीएमआरआयटी', 'बीएमआरआयटी', 'वैद्यकीय रेडिओलॉजी आणि इमेजिंग तंत्रज्ञानातील पदवी'],
+    ['Management', 'व्यवस्थापन', 'MTM', 'MTM', 'Master of Tourism Management', 'एमटीएम', 'एमटीएम', 'पर्यटन व्यवस्थापनातील पदव्युत्तर पदवी'],
+    ['Medicine', 'औषध', 'BMRT', 'BMRT', 'Bachelor of Medical Record Technology', 'बीएमआरटी', 'बीएमआरटी', 'वैद्यकीय रेकॉर्ड तंत्रज्ञान पदवी'],
+    ['Medicine', 'औषध', 'B.Litt', 'B.Litt', 'Bachelor of Literature', 'बी.लिट', 'बी.लिट', 'साहित्य पदवीधर'],
+    ['Medicine', 'औषध', 'BOPTM', 'BOPTM', 'Bachelor of Optometry', 'बीओपीटीएम', 'बीओपीटीएम', 'ऑप्टोमेट्री पदवीधर'],
+    ['Arts / Design', 'कला / डिझाइन', 'B.M.C.', 'B.M.C.', 'Bachelor of Mass Communication', 'बी.एम.सी.', 'बी.एम.सी.', 'मास कम्युनिकेशन पदवी'],
+    ['Arts / Design', 'कला / डिझाइन', 'B.M.M.M.C.', 'B.M.M.M.C.', 'Bachelor of Mass Media and Mass Communication', 'बी.एम.एम.एम.सी.', 'बी.एम.एम.एम.सी.', 'मास मीडिया आणि मास कम्युनिकेशनमधील पदवीधर'],
+    ['Medicine', 'औषध', 'BPH', 'BPH', 'Bachelor of Public Health', 'बीपीएच', 'बीपीएच', 'सार्वजनिक आरोग्य पदवी'],
+    ['Medicine', 'औषध', 'BPMT', 'BPMT', 'Bachelor of Paramedical Technology', 'बीपीएमटी', 'बीपीएमटी', 'पॅरामेडिकल टेक्नॉलॉजी पदवी'],
+    ['Arts / Design', 'कला / डिझाइन', 'BCT & CA', 'BCT & CA', 'Bachelor of Catering Technology and Culinary Arts', 'बीसीटी आणि सीए', 'बीसीटी आणि सीए', 'केटरिंग तंत्रज्ञान आणि पाककला पदवी'],
+    ['Medicine', 'औषध', 'BPO', 'BPO', 'Bachelor of Prosthetics and Orthotics', 'बीपीओ', 'बीपीओ', 'प्रोस्थेटिक्स आणि ऑर्थोटिक्समधील पदवीधर'],
+    ['Medicine', 'औषध', 'BRDIT', 'BRDIT', 'Bachelor of Radio Diagnosis and Imaging Technology', 'बीआरडीआयटी', 'बीआरडीआयटी', 'रेडिओ निदान आणि इमेजिंग तंत्रज्ञान पदवीधर'],
+    ['Arts / Design', 'कला / डिझाइन', 'BPA', 'BPA', 'Bachelor of Performing Arts', 'बीपीए', 'बीपीए', 'कला सादरीकरण पदवी'],
+    ['Arts / Design', 'कला / डिझाइन', 'D.Voc', 'D.Voc', 'Diploma in Vocation', 'डी.व्होक', 'डी.व्होक', 'व्यावसायिक पदविका'],
+    ['Arts / Design', 'कला / डिझाइन', 'ETT', 'ETT', 'Elementary Teacher Training', 'ईटीटी', 'ईटीटी', 'प्राथमिक शिक्षक प्रशिक्षण'],
+    ['Medicine', 'औषध', 'M.Optom.', 'M.Optom.', 'Master of Optometry', 'एम.ऑप्टोम.', 'एम.ऑप्टोम.', 'ऑप्टोमेट्रीचे मास्टर'],
+    ['Arts / Design', 'कला / डिझाइन', 'M.F.Sc.', 'M.F.Sc.', 'Master of Fisheries Science', 'एम.एफ.एस्सी.', 'एम.एफ.एस्सी.', 'मत्स्यविज्ञान पदव्युत्तर पदवी'],
+    ['Arts / Design', 'कला / डिझाइन', 'M.FTech', 'M.FTech', 'Master of Fashion Technology', 'एम.एफ.टेक', 'एम.एफ.टेक', 'फॅशन टेक्नॉलॉजीमध्ये पदव्युत्तर पदवी'],
+    ['Arts / Design', 'कला / डिझाइन', 'M.H.Sc.', 'M.H.Sc.', 'Master of Home Science', 'एम.एच.एस्सी.', 'एम.एच.एस्सी.', 'गृहविज्ञान पदव्युत्तर पदवी'],
+    ['Arts / Design', 'कला / डिझाइन', 'M.Lib.Sc.', 'M.Lib.Sc.', 'Master of Library Science', 'एम.लिब.एससी.', 'एम.लिब.एससी.', 'ग्रंथालय विज्ञान पदव्युत्तर पदवी'],
+    ['Arts / Design', 'कला / डिझाइन', 'M.M.C.', 'M.M.C.', 'Master of Mass Communication', 'एम.एम.सी.', 'एम.एम.सी.', 'मास कम्युनिकेशनमधील पदव्युत्तर पदवी'],
+    ['Arts / Design', 'कला / डिझाइन', 'M.O.L.', 'M.O.L.', 'Master of Oriental Learning', 'एम.ओ.एल.', 'एम.ओ.एल.', 'प्राच्य शिक्षणाचे मास्टर'],
+    ['Arts / Design', 'कला / डिझाइन', 'MID', 'MID', 'Master of Interior Design', 'एमआयडी', 'एमआयडी', 'मास्टर ऑफ इंटिरियर डिझाइन'],
+    ['Arts / Design', 'कला / डिझाइन', 'P.P.T.T.C', 'P.P.T.T.C', 'Pre-Primary Teacher Training Certificate', 'पी.पी.टी.टी.सी.', 'पी.पी.टी.टी.सी.', 'पूर्व-प्राथमिक शिक्षक प्रशिक्षण प्रमाणपत्र'],
+    ['Arts / Design', 'कला / डिझाइन', 'TTC', 'TTC', 'Teacher Training Certificate', 'टीटीसी', 'टीटीसी', 'शिक्षक प्रशिक्षण प्रमाणपत्र'],
+];

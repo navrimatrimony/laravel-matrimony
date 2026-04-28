@@ -40,7 +40,7 @@ function resetClonedOccupationRoot(root) {
     selNew.autocomplete = 'off';
     const formField = formFieldLayout;
     selNew.className = formField
-        ? 'w-full rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-3 py-2 text-sm h-10 min-h-[2.5rem] box-border'
+        ? 'w-full occupation-ts-source'
         : 'w-full rounded-lg border border-gray-300 dark:border-gray-600 dark:bg-gray-700 px-3 py-2 text-sm min-h-[40px]';
     const cat = document.createElement('div');
     cat.id = 'occupation-category-' + Math.random().toString(36).slice(2, 11);

@@ -12,7 +12,7 @@ class IncomeRange extends Model
 {
     protected $table = 'income_ranges';
 
-    protected $fillable = ['name', 'slug', 'sort_order', 'is_active'];
+    protected $fillable = ['name', 'name_mr', 'slug', 'sort_order', 'is_active'];
 
     protected $casts = [
         'is_active' => 'boolean',

@@ -2,6 +2,7 @@
 
 namespace App\Services\MasterData;
 
+use App\Support\MasterData\ReligionBilingualCatalog;
 use App\Support\MasterData\ReligionCasteSubcasteSlugger;
 use App\Support\MasterData\RomanToDevanagariApprox;
 
@@ -22,9 +23,23 @@ class ReligionCasteSubcasteTranslationJsonGenerator
         $parsed = $this->parseTsv($absolutePath);
         $entries = [];
 
-        foreach ($parsed['religions'] as $relLabel) {
-            $key = $this->slugger->makeKey($relLabel);
-            $entries[] = $this->makeEntry('religion', $key, [], $relLabel);
+        $bilingual = ReligionBilingualCatalog::load();
+        if ($bilingual !== []) {
+            foreach ($bilingual as $key => $meta) {
+                $key = trim((string) $key);
+                $labelEn = trim((string) ($meta['label_en'] ?? ''));
+                if ($key === '' || $labelEn === '') {
+                    continue;
+                }
+                $mrRaw = trim((string) ($meta['label_mr'] ?? ''));
+                $labelMr = $mrRaw !== '' ? $mrRaw : $this->marathiForEnglish($labelEn);
+                $entries[] = $this->makeReligionEntryWithKey($key, $labelEn, $labelMr);
+            }
+        } else {
+            foreach ($parsed['religions'] as $relLabel) {
+                $key = $this->slugger->makeKey($relLabel);
+                $entries[] = $this->makeEntry('religion', $key, [], $relLabel);
+            }
         }
 
         foreach ($parsed['castes'] as $row) {
@@ -118,6 +133,33 @@ class ReligionCasteSubcasteTranslationJsonGenerator
             'religions' => $religions,
             'castes' => $castes,
             'subcastes' => $subcastes,
+        ];
+    }
+
+    /**
+     * @param  array<string, string>  $scope
+     * @return array<string, mixed>
+     */
+    /**
+     * Religion row with an explicit stable key (matches {@see ReligionBilingualCatalog}).
+     *
+     * @return array<string, mixed>
+     */
+    private function makeReligionEntryWithKey(string $key, string $labelEn, string $labelMr): array
+    {
+        $aliasesEn = $this->buildAliasesEn($labelEn);
+        $aliasesMr = array_values(array_unique(array_filter([$labelMr])));
+        $ocr = $this->buildOcrVariants($labelEn, $aliasesEn);
+
+        return [
+            'entity_type' => 'religion',
+            'key' => $key,
+            'scope' => [],
+            'label_en' => $labelEn,
+            'label_mr' => $labelMr,
+            'aliases_en' => $aliasesEn,
+            'aliases_mr' => $aliasesMr,
+            'ocr_variants' => $ocr,
         ];
     }
 

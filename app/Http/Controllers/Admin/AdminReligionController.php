@@ -15,6 +15,7 @@ class AdminReligionController extends Controller
     public function index(): View
     {
         $items = Religion::orderBy('label')->get();
+
         return view('admin.master.religions.index', compact('items'));
     }
 
@@ -25,17 +26,22 @@ class AdminReligionController extends Controller
 
     public function store(Request $request, ReligionCasteSubcasteSlugger $slugger): RedirectResponse
     {
-        $request->validate([
-            'label' => ['required', 'string', 'max:255', Rule::unique('religions', 'label')],
+        $data = $request->validate([
+            'label_en' => ['required', 'string', 'max:255', Rule::unique('religions', 'label_en')],
+            'label_mr' => ['nullable', 'string', 'max:255'],
         ]);
-        $label = $slugger->normalizeLabel($request->input('label'));
+        $labelEn = $slugger->normalizeLabel($data['label_en']);
+        $labelMr = isset($data['label_mr']) ? trim((string) $data['label_mr']) : '';
+        $labelMr = $labelMr !== '' ? $labelMr : null;
+
         Religion::create([
-            'key' => $slugger->makeKey($label),
-            'label' => $label,
-            'label_en' => $label,
-            'label_mr' => null,
+            'key' => $slugger->makeKey($labelEn),
+            'label' => $labelEn,
+            'label_en' => $labelEn,
+            'label_mr' => $labelMr,
             'is_active' => true,
         ]);
+
         return redirect()->route('admin.master.religions.index')->with('success', 'Religion added.');
     }
 
@@ -46,27 +52,35 @@ class AdminReligionController extends Controller
 
     public function update(Request $request, Religion $religion, ReligionCasteSubcasteSlugger $slugger): RedirectResponse
     {
-        $request->validate([
-            'label' => ['required', 'string', 'max:255', Rule::unique('religions', 'label')->ignore($religion->id)],
+        $data = $request->validate([
+            'label_en' => ['required', 'string', 'max:255', Rule::unique('religions', 'label_en')->ignore($religion->id)],
+            'label_mr' => ['nullable', 'string', 'max:255'],
         ]);
-        $label = $slugger->normalizeLabel($request->input('label'));
+        $labelEn = $slugger->normalizeLabel($data['label_en']);
+        $labelMr = isset($data['label_mr']) ? trim((string) $data['label_mr']) : '';
+        $labelMr = $labelMr !== '' ? $labelMr : null;
+
         $religion->update([
-            'key' => $slugger->makeKey($label),
-            'label' => $label,
-            'label_en' => $label,
+            'key' => $slugger->makeKey($labelEn),
+            'label' => $labelEn,
+            'label_en' => $labelEn,
+            'label_mr' => $labelMr,
         ]);
+
         return redirect()->route('admin.master.religions.index')->with('success', 'Religion updated.');
     }
 
     public function disable(Request $request, Religion $religion): RedirectResponse
     {
         $religion->update(['is_active' => false]);
+
         return redirect()->route('admin.master.religions.index')->with('success', 'Religion disabled.');
     }
 
     public function enable(Request $request, Religion $religion): RedirectResponse
     {
         $religion->update(['is_active' => true]);
+
         return redirect()->route('admin.master.religions.index')->with('success', 'Religion enabled.');
     }
 }

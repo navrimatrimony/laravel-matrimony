@@ -7,6 +7,7 @@ use App\Models\AdminSetting;
 use App\Models\BiodataIntake;
 use App\Services\EducationService;
 use App\Services\Intake\IntakeExtractionReuseResolver;
+use App\Services\Intake\IntakeLocationSuggestionLayerService;
 use App\Services\Intake\IntakePipelineService;
 use App\Services\Intake\IntakeReviewParseInputTextResolver;
 use App\Services\IntakeApprovalService;
@@ -1383,6 +1384,8 @@ class IntakeController extends Controller
             && ! $manualPreparedExists;
 
         $showIntakeReextractAction = app(ProviderResolver::class)->parseJobUsesAiVisionExtraction();
+        $unresolvedLocationOptions = app(IntakeLocationSuggestionLayerService::class)
+            ->unresolvedCandidates($intake, 7);
 
         if (IntakeDobTrace::enabled((int) $intake->id)) {
             $parsedCoreDob = is_array($data['core'] ?? null) ? ($data['core']['date_of_birth'] ?? null) : null;
@@ -1490,7 +1493,8 @@ class IntakeController extends Controller
             'districtsByState',
             'stateIdToCountryId',
             'otherRelativesText',
-            'birthPlaceDisplay'
+            'birthPlaceDisplay',
+            'unresolvedLocationOptions'
         ));
     }
 
@@ -1669,7 +1673,10 @@ class IntakeController extends Controller
                 $snapshot['preferences'] = [$prefRow];
             }
             $snapshot = $this->mergeSnapshotCoreEducationFromMultiselect($snapshot);
-            $snapshot = $this->normalizeApprovalSnapshot(array_merge($base, $snapshot));
+            $snapshot = $this->normalizeApprovalSnapshot(
+                array_merge($base, $snapshot),
+                auth()->check() ? (int) auth()->id() : null,
+            );
             $core = $snapshot['core'] ?? [];
             if (is_array($core)) {
                 // Ensure birth_place text from parsed base is in core when form didn't send it (birth place typeahead has no name for display-only input).
@@ -1789,7 +1796,7 @@ class IntakeController extends Controller
      * Horoscope: array of rows for MutationService; if submitted as array use it, else [].
      * property_summary, extended_narrative remain scalar.
      */
-    private function normalizeApprovalSnapshot(array $snapshot): array
+    private function normalizeApprovalSnapshot(array $snapshot, ?int $suggestedByUserId = null): array
     {
         $keys = [
             'core',
@@ -1891,7 +1898,7 @@ class IntakeController extends Controller
         }
 
         // Centralized deterministic controlled-field normalization for full snapshot.
-        return app(IntakePipelineService::class)->normalizeSnapshotForStorage($out);
+        return app(IntakePipelineService::class)->normalizeSnapshotForStorage($out, $suggestedByUserId);
     }
 
     /**
@@ -2993,6 +3000,43 @@ class IntakeController extends Controller
         }
 
         return view('intake.status', compact('intake', 'ocrPresetFeedback', 'profile', 'pendingSuggestions', 'parseInputDebug', 'parseInputTextPreview'));
+    }
+
+    /**
+     * UI suggestion layer: persist user/admin explicit location choice on intake snapshot.
+     */
+    public function resolveLocationSuggestion(Request $request, BiodataIntake $intake, IntakeLocationSuggestionLayerService $resolver)
+    {
+        $isOwner = (int) $intake->uploaded_by === (int) auth()->id();
+        $isAdmin = auth()->user()?->isAnyAdmin() ?? false;
+        if (! $isOwner && ! $isAdmin) {
+            abort(403, __('intake.only_preview_own'));
+        }
+
+        if ((bool) $intake->approved_by_user) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Intake is already approved and cannot be edited.',
+            ], 422);
+        }
+
+        $validated = $request->validate([
+            'field' => ['required', 'string', 'max:64'],
+            'city_id' => ['required', 'integer', 'exists:cities,id'],
+        ]);
+
+        $result = $resolver->resolveFieldToCity($intake, (string) $validated['field'], (int) $validated['city_id']);
+        if (! ($result['ok'] ?? false)) {
+            return response()->json([
+                'success' => false,
+                'message' => (string) ($result['message'] ?? 'Could not resolve location field.'),
+            ], 422);
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Location resolved.',
+        ]);
     }
 
     /**

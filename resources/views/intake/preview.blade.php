@@ -553,6 +553,10 @@
     const requiredSelectors = requiredCorrectionFields.length ? requiredCorrectionFields.map(function(f) { return 'input[name="snapshot[core][' + fieldToName(f) + ']"]'; }).join(',') : '';
     const placeholderNotFound = @json($placeholderNotFound ?? '⟪NOT FOUND IN OCR⟫');
     const placeholderSelectRequired = @json($placeholderSelectRequired ?? '⟪SELECT REQUIRED⟫');
+    const resolveLocationUrl = @json(route('intake.resolve-location', $intake));
+    const locationSearchApiUrl = @json(url('/api/internal/location/search'));
+    const unresolvedLocationOptions = @json($unresolvedLocationOptions ?? []);
+    const suggestionMapData = @json($suggestionMap ?? []);
 
     function isScrolledToBottom() {
         if (!anchor) return false;
@@ -657,6 +661,241 @@ document.querySelectorAll('.use-candidate-btn').forEach(function(btn) {
     form.querySelectorAll('.remove-row').forEach(function(btn) {
         btn.addEventListener('click', function() { btn.closest('.contact-row, .child-row, .education-row, .career-row, .address-row, .preference-row')?.remove(); });
     });
+
+    function bindResolveButtons(root) {
+    root.querySelectorAll('.intake-loc-resolve-btn').forEach(function(btn) {
+        if (btn.dataset.boundResolve === '1') return;
+        btn.dataset.boundResolve = '1';
+        btn.addEventListener('click', function() {
+            var field = btn.getAttribute('data-field');
+            var cityId = btn.getAttribute('data-city-id');
+            if (!field || !cityId) return;
+            root.querySelectorAll('.intake-loc-resolve-btn').forEach(function(other) {
+                other.classList.remove('ring-2', 'ring-emerald-500', 'bg-emerald-50');
+            });
+            btn.classList.add('ring-2', 'ring-emerald-500', 'bg-emerald-50');
+            btn.disabled = true;
+            fetch(resolveLocationUrl, {
+                method: 'PATCH',
+                credentials: 'same-origin',
+                headers: {
+                    'Accept': 'application/json',
+                    'Content-Type': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || ''
+                },
+                body: JSON.stringify({ field: field, city_id: parseInt(cityId, 10) })
+            }).then(function(r){ return r.json().then(function(j){ return { ok: r.ok, data: j }; }); })
+              .then(function(res) {
+                  if (res.ok && res.data && res.data.success) {
+                      window.location.reload();
+                  } else {
+                      btn.disabled = false;
+                      window.alert((res.data && res.data.message) ? res.data.message : 'Could not resolve this location.');
+                  }
+              }).catch(function() {
+                  btn.disabled = false;
+                  window.alert('Network error while resolving location.');
+              });
+        });
+    });
+    }
+
+    function renderInlineLocationUi(targetWrap, loc) {
+        if (!targetWrap || !loc) return;
+        targetWrap.classList.add('bg-amber-50', 'dark:bg-amber-950/20', 'border', 'border-amber-300', 'dark:border-amber-700', 'rounded-lg', 'p-2');
+        var box = document.createElement('div');
+        box.className = 'mt-2 rounded-md border border-amber-200 dark:border-amber-800 bg-white/80 dark:bg-gray-900/40 p-2';
+        var opts = Array.isArray(loc.options) ? loc.options : [];
+        var raw = String(loc.raw_input || '').trim();
+        box.innerHTML = ''
+            + '<p class="text-xs font-semibold text-amber-900 dark:text-amber-100">Location needs confirmation</p>'
+            + '<p class="text-xs text-gray-600 dark:text-gray-300 mt-1">Detected text: "' + raw.replace(/"/g, '&quot;') + '"</p>'
+            + '<div class="flex gap-2 mt-2">'
+            + '  <input type="text" class="intake-loc-search-input flex-1 px-2 py-1.5 text-xs rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800" value="' + raw.replace(/"/g, '&quot;') + '" placeholder="Search more">'
+            + '  <button type="button" class="intake-loc-search-btn px-2.5 py-1.5 text-xs rounded border border-gray-300 dark:border-gray-600">Search more</button>'
+            + '</div>'
+            + '<div class="space-y-2 intake-loc-options-list mt-2"></div>'
+            + '<p class="text-xs text-gray-600 dark:text-gray-300 intake-loc-empty-note mt-2 hidden"></p>';
+        targetWrap.appendChild(box);
+
+        var list = box.querySelector('.intake-loc-options-list');
+        var empty = box.querySelector('.intake-loc-empty-note');
+        function renderOptions(results) {
+            list.innerHTML = '';
+            if (!Array.isArray(results) || results.length === 0) {
+                empty.classList.remove('hidden');
+                empty.textContent = 'ही जागा सापडली नाही. नवीन म्हणून सबमिट करा';
+                return;
+            }
+            empty.classList.add('hidden');
+            results.forEach(function(opt) {
+                var b = document.createElement('button');
+                b.type = 'button';
+                b.className = 'intake-loc-resolve-btn w-full text-left px-3 py-2 rounded border border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-800 text-sm';
+                b.setAttribute('data-field', String(loc.field_key || ''));
+                b.setAttribute('data-city-id', String(opt.city_id || ''));
+                b.textContent = String(opt.display_label || opt.name || opt.city_name || '—');
+                list.appendChild(b);
+            });
+            bindResolveButtons(box);
+        }
+        renderOptions(opts);
+    }
+
+    function resolveInlineTargets() {
+        if (!Array.isArray(unresolvedLocationOptions)) return;
+        unresolvedLocationOptions.forEach(function(loc) {
+            var field = String((loc && loc.field_key) || '');
+            if (!field) return;
+            if (field === 'birth_place') {
+                var wrap = form.querySelector('[data-location-context="birth"]');
+                renderInlineLocationUi(wrap, loc);
+                return;
+            }
+            if (field === 'work_location') {
+                var workInput = form.querySelector('input[name="snapshot[core][work_location_text]"]');
+                var workWrap = workInput ? (workInput.closest('.min-w-0') || workInput.parentElement) : null;
+                renderInlineLocationUi(workWrap, loc);
+                return;
+            }
+            if (field.indexOf('addresses.') === 0) {
+                var idx = field.split('.')[1];
+                var addrInput = form.querySelector('input[name="snapshot[addresses][' + idx + '][raw]"]')
+                    || form.querySelector('input[name="snapshot[addresses][' + idx + '][address_line]"]')
+                    || form.querySelector('input[name="snapshot[addresses][' + idx + '][city]"]');
+                var addrWrap = addrInput ? (addrInput.closest('.address-row') || addrInput.closest('.min-w-0') || addrInput.parentElement) : null;
+                renderInlineLocationUi(addrWrap, loc);
+            }
+        });
+    }
+
+    function pickVisibleElementByName(fieldName) {
+        var nodes = form.querySelectorAll('[name="' + fieldName + '"]');
+        for (var i = 0; i < nodes.length; i++) {
+            var n = nodes[i];
+            if (n.type !== 'hidden') return n;
+        }
+        return nodes[0] || null;
+    }
+
+    function decorateField(el, message, suggestions) {
+        if (!el) return;
+        if (el.dataset.intakeHintApplied === '1') return;
+        el.dataset.intakeHintApplied = '1';
+        var note = document.createElement('div');
+        note.className = 'mt-1 text-xs text-amber-800 dark:text-amber-200';
+        var html = '<div>' + message + '</div>';
+        if (Array.isArray(suggestions) && suggestions.length) {
+            html += '<div class="mt-1 text-[11px]">Suggestions: ' + suggestions.join(' / ') + '</div>';
+        }
+        note.innerHTML = html;
+        if (el.parentElement) {
+            el.parentElement.appendChild(note);
+        }
+    }
+
+    function applyCoreFieldAdvisories() {
+        var map = suggestionMapData && typeof suggestionMapData === 'object' ? suggestionMapData : {};
+        var fields = [
+            { key: 'religion', name: 'snapshot[core][religion_id]', fallbackSelector: '.religion-input', label: 'Religion' },
+            { key: 'caste', name: 'snapshot[core][caste_id]', fallbackSelector: '.caste-input', label: 'Caste' },
+            { key: 'sub_caste', name: 'snapshot[core][sub_caste_id]', fallbackSelector: '.subcaste-input', label: 'Sub caste' },
+            { key: 'marital_status', name: 'snapshot[core][marital_status_id]', fallbackSelector: 'select[name="snapshot[marital_status_id]"]', label: 'Marital status' },
+            { key: 'mother_tongue', name: 'snapshot[core][mother_tongue_id]', fallbackSelector: null, label: 'Mother tongue' },
+            { key: 'highest_education', name: 'snapshot[core][highest_education]', fallbackSelector: null, label: 'Highest education' },
+            { key: 'working_with_type', name: 'snapshot[core][working_with_type_id]', fallbackSelector: null, label: 'Working with' },
+            { key: 'profession', name: 'snapshot[core][profession_id]', fallbackSelector: null, label: 'Profession' },
+            { key: 'college', name: 'snapshot[core][college_id]', fallbackSelector: null, label: 'College' }
+        ];
+
+        fields.forEach(function(cfg) {
+            var el = pickVisibleElementByName(cfg.name);
+            if (!el && cfg.fallbackSelector) el = form.querySelector(cfg.fallbackSelector);
+            if (!el) return;
+
+            var rawVal = (el.value === undefined || el.value === null) ? '' : String(el.value).trim();
+            var hasValue = rawVal !== '' && rawVal !== '0';
+            var sug = map[cfg.key] || null;
+            var candidates = [];
+            if (sug && Array.isArray(sug.candidates)) {
+                for (var i = 0; i < sug.candidates.length; i++) {
+                    var v = String((sug.candidates[i] && sug.candidates[i].value) || '').trim();
+                    if (v && candidates.indexOf(v) === -1) candidates.push(v);
+                    if (candidates.length >= 3) break;
+                }
+            }
+            var needsReview = !!(sug && (sug.needs_review || sug.required_missing));
+            if (!hasValue || needsReview) {
+                var msg = !hasValue
+                    ? (cfg.label + ' unresolved. Please review and select.')
+                    : (cfg.label + ' needs review.');
+                decorateField(el, msg, candidates);
+            }
+        });
+    }
+
+    function bindSearchButtons(root) {
+    root.querySelectorAll('.intake-loc-search-btn').forEach(function(searchBtn) {
+        if (searchBtn.dataset.boundSearch === '1') return;
+        searchBtn.dataset.boundSearch = '1';
+        searchBtn.addEventListener('click', function() {
+            var card = searchBtn.closest('.rounded-md');
+            if (!card) return;
+            var input = card.querySelector('.intake-loc-search-input');
+            var list = card.querySelector('.intake-loc-options-list');
+            var empty = card.querySelector('.intake-loc-empty-note');
+            var seedBtn = card.querySelector('.intake-loc-resolve-btn');
+            var field = seedBtn ? seedBtn.getAttribute('data-field') : '';
+            var q = input ? String(input.value || '').trim() : '';
+            if (!q || !field) return;
+            var originalSearchLabel = searchBtn.textContent;
+            searchBtn.disabled = true;
+            searchBtn.textContent = 'Searching...';
+            fetch(locationSearchApiUrl + '?q=' + encodeURIComponent(q), {
+                method: 'GET',
+                credentials: 'same-origin',
+                headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }
+            }).then(function(r){ return r.json(); })
+              .then(function(data) {
+                  var results = Array.isArray(data && data.results) ? data.results.slice(0, 10) : [];
+                  if (!list) {
+                      list = document.createElement('div');
+                      list.className = 'space-y-2 intake-loc-options-list';
+                      card.appendChild(list);
+                  }
+                  list.innerHTML = '';
+                  if (results.length === 0) {
+                      if (!empty) {
+                          empty = document.createElement('p');
+                          empty.className = 'text-xs text-gray-600 dark:text-gray-300 intake-loc-empty-note';
+                          card.appendChild(empty);
+                      }
+                      empty.textContent = 'ही जागा सापडली नाही. नवीन म्हणून सबमिट करा';
+                      return;
+                  }
+                  if (empty) empty.textContent = '';
+                  results.forEach(function(opt) {
+                      var b = document.createElement('button');
+                      b.type = 'button';
+                      b.className = 'intake-loc-resolve-btn w-full text-left px-3 py-2 rounded border border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-800 text-sm';
+                      b.setAttribute('data-field', field);
+                      b.setAttribute('data-city-id', String(opt.city_id || ''));
+                      b.textContent = String(opt.display_label || opt.name || opt.city_name || '—');
+                      list.appendChild(b);
+                  });
+                  bindResolveButtons(card);
+              }).finally(function() {
+                  searchBtn.disabled = false;
+                  searchBtn.textContent = originalSearchLabel;
+              });
+        });
+    });
+    }
+    resolveInlineTargets();
+    bindSearchButtons(document);
+    bindResolveButtons(document);
+    applyCoreFieldAdvisories();
 })();
 </script>
 @endsection

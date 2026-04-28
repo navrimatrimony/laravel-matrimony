@@ -22,12 +22,18 @@
     $educationManual = old($oldKey('education_text'), $hasEducationEngine ? ($profile->education_text ?? null) : null);
 
     $degreeChipTitle = '';
+    $localeMr = app()->getLocale() === 'mr';
     if ($hasEducationEngine && $educationDegreeId) {
         if ($profile instanceof \App\Models\MatrimonyProfile && $profile->educationDegree) {
-            $degreeChipTitle = (string) ($profile->educationDegree->title ?? $profile->educationDegree->code ?? '');
+            $d = $profile->educationDegree;
+            $label = ($localeMr && filled($d->title_mr)) ? $d->title_mr : ($d->title ?? '');
+            $degreeChipTitle = (string) ($label !== '' ? $label : ($d->code ?? ''));
         } else {
             $_degRow = EducationDegree::query()->find((int) $educationDegreeId);
-            $degreeChipTitle = $_degRow ? (string) ($_degRow->title ?? $_degRow->code ?? '') : '';
+            if ($_degRow) {
+                $label = ($localeMr && filled($_degRow->title_mr)) ? $_degRow->title_mr : ($_degRow->title ?? '');
+                $degreeChipTitle = (string) ($label !== '' ? $label : ($_degRow->code ?? ''));
+            }
         }
     }
 

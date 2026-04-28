@@ -7,6 +7,7 @@ use App\Models\Country;
 use App\Models\District;
 use App\Models\State;
 use App\Models\Taluka;
+use Database\Seeders\Support\LocationMarathiLabels;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
 
@@ -21,7 +22,14 @@ class LocationStressTestSeeder extends Seeder
     public function run(): void
     {
         DB::transaction(function () {
-            $india = Country::firstOrCreate(['name' => 'India']);
+            $mr = LocationMarathiLabels::englishToMarathi();
+            $india = Country::updateOrCreate(
+                ['iso_alpha2' => 'IN'],
+                [
+                    'name' => 'India',
+                    'name_mr' => $mr['India'] ?? 'भारत',
+                ]
+            );
 
             $stateNames = ['Gujarat', 'Karnataka', 'Madhya Pradesh'];
             foreach ($stateNames as $stateName) {
@@ -29,23 +37,24 @@ class LocationStressTestSeeder extends Seeder
                     'country_id' => $india->id,
                     'name' => $stateName,
                 ]);
+                LocationMarathiLabels::applyIfEmpty($state, $state->name);
 
                 for ($d = 1; $d <= 5; $d++) {
-                    $districtName = $stateName . '-' . $d;
+                    $districtName = $stateName.'-'.$d;
                     $district = District::firstOrCreate([
                         'state_id' => $state->id,
                         'name' => $districtName,
                     ]);
 
                     for ($t = 1; $t <= 10; $t++) {
-                        $talukaName = 'Taluka-' . $d . '-' . $t;
+                        $talukaName = 'Taluka-'.$d.'-'.$t;
                         $taluka = Taluka::firstOrCreate([
                             'district_id' => $district->id,
                             'name' => $talukaName,
                         ]);
 
                         for ($v = 1; $v <= 20; $v++) {
-                            $villageName = 'Village-' . $d . '-' . $t . '-' . $v;
+                            $villageName = 'Village-'.$d.'-'.$t.'-'.$v;
                             $pincode = sprintf('%02d%02d%02d', $d, $t, $v);
                             City::firstOrCreate(
                                 [

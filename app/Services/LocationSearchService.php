@@ -7,6 +7,7 @@ use App\Models\CityAlias;
 use App\Models\District;
 use App\Models\State;
 use App\Models\Village;
+use App\Services\Location\LocationDisplayFormatter;
 
 /**
  * Location search: village/city + taluka/district, pincode, single-query prefix/partial and Marathi.
@@ -16,10 +17,19 @@ class LocationSearchService
 {
     private const MAX_RESULTS = 20;
 
+    public function __construct(
+        private readonly LocationDisplayFormatter $locationDisplayFormatter
+    ) {}
+
     /**
      * @return array{results: array<int, array{city_id: int, city_name: string, taluka_name: string, district_name: string, state_name: string}>, context_detected: array|null}
      */
-    public function search(string $query, array $preferredStateIds = [], array $preferredDistrictIds = []): array
+    public function search(
+        string $query,
+        array $preferredStateIds = [],
+        array $preferredDistrictIds = [],
+        bool $applyAmbiguousRanking = false
+    ): array
     {
         $q = strtolower(trim($query));
         $queryTrimmed = trim($query);
@@ -29,7 +39,7 @@ class LocationSearchService
 
         if (strlen($queryTrimmed) === 6 && ctype_digit($queryTrimmed)) {
             $cities = City::query()
-                ->with(['taluka.district.state.country'])
+                ->with($this->cityWithRelations())
                 ->where('pincode', $queryTrimmed)
                 ->limit(20)
                 ->get();
@@ -68,7 +78,7 @@ class LocationSearchService
                 }
             }
             if (count($rows) >= $maxResults) {
-                $rows = $this->boostResults($rows, $preferredStateIds, $preferredDistrictIds);
+                $rows = $this->applyRankingPipeline($rows, $q, $preferredStateIds, $preferredDistrictIds, $applyAmbiguousRanking);
 
                 return [
                     'results' => array_slice($rows, 0, $maxResults),
@@ -78,7 +88,7 @@ class LocationSearchService
         }
 
         $cityPrefix = City::query()
-            ->with(['taluka.district.state'])
+            ->with($this->cityWithRelations())
             ->where('name', 'like', $q.'%')
             ->orderBy('name')
             ->limit($maxResults)
@@ -88,7 +98,7 @@ class LocationSearchService
             $rows[] = $this->formatRow($city);
         }
         if (count($rows) >= $maxResults) {
-            $rows = $this->boostResults($rows, $preferredStateIds, $preferredDistrictIds);
+            $rows = $this->applyRankingPipeline($rows, $q, $preferredStateIds, $preferredDistrictIds, $applyAmbiguousRanking);
 
             return [
                 'results' => array_slice($rows, 0, $maxResults),
@@ -97,7 +107,7 @@ class LocationSearchService
         }
 
         $cityPartial = City::query()
-            ->with(['taluka.district.state'])
+            ->with($this->cityWithRelations())
             ->where('name', 'like', '%'.$q.'%')
             ->whereNotIn('id', array_keys($seen))
             ->orderBy('name')
@@ -108,7 +118,7 @@ class LocationSearchService
             $rows[] = $this->formatRow($city);
         }
         if (count($rows) >= $maxResults) {
-            $rows = $this->boostResults($rows, $preferredStateIds, $preferredDistrictIds);
+            $rows = $this->applyRankingPipeline($rows, $q, $preferredStateIds, $preferredDistrictIds, $applyAmbiguousRanking);
 
             return [
                 'results' => array_slice($rows, 0, $maxResults),
@@ -119,7 +129,11 @@ class LocationSearchService
         $aliasPrefix = CityAlias::query()
             ->where('is_active', true)
             ->where('normalized_alias', 'like', $q.'%')
-            ->with(['city.taluka.district.state'])
+            ->with([
+                'city.taluka.district.state.country',
+                'city.parentCity',
+                'city.displayMeta',
+            ])
             ->orderBy('normalized_alias')
             ->limit($maxResults)
             ->get();
@@ -132,7 +146,7 @@ class LocationSearchService
             $rows[] = $this->formatRow($city);
         }
         if (count($rows) >= $maxResults) {
-            $rows = $this->boostResults($rows, $preferredStateIds, $preferredDistrictIds);
+            $rows = $this->applyRankingPipeline($rows, $q, $preferredStateIds, $preferredDistrictIds, $applyAmbiguousRanking);
 
             return [
                 'results' => array_slice($rows, 0, $maxResults),
@@ -143,7 +157,11 @@ class LocationSearchService
         $aliasPartial = CityAlias::query()
             ->where('is_active', true)
             ->where('normalized_alias', 'like', '%'.$q.'%')
-            ->with(['city.taluka.district.state'])
+            ->with([
+                'city.taluka.district.state.country',
+                'city.parentCity',
+                'city.displayMeta',
+            ])
             ->orderBy('normalized_alias')
             ->limit($maxResults)
             ->get();
@@ -156,7 +174,7 @@ class LocationSearchService
             $rows[] = $this->formatRow($city);
         }
         if (count($rows) >= $maxResults) {
-            $rows = $this->boostResults($rows, $preferredStateIds, $preferredDistrictIds);
+            $rows = $this->applyRankingPipeline($rows, $q, $preferredStateIds, $preferredDistrictIds, $applyAmbiguousRanking);
 
             return [
                 'results' => array_slice($rows, 0, $maxResults),
@@ -171,7 +189,7 @@ class LocationSearchService
         }
 
         $context = $this->detectContext($query);
-        $rows = $this->boostResults($rows, $preferredStateIds, $preferredDistrictIds);
+        $rows = $this->applyRankingPipeline($rows, $q, $preferredStateIds, $preferredDistrictIds, $applyAmbiguousRanking);
 
         return [
             'results' => array_slice(array_values($rows), 0, $maxResults),
@@ -216,7 +234,7 @@ class LocationSearchService
                 $city = $cityCache[$key];
             } else {
                 $city = City::query()
-                    ->with(['taluka.district.state'])
+                    ->with($this->cityWithRelations())
                     ->where('taluka_id', $village->taluka_id)
                     ->whereRaw('LOWER(name) = ?', [strtolower(trim((string) $village->name_en))])
                     ->first();
@@ -303,7 +321,7 @@ class LocationSearchService
         $nameLike = '%'.strtolower($namePart).'%';
         $placeLike = '%'.strtolower($placePart).'%';
         $cities = City::query()
-            ->with(['taluka.district.state'])
+            ->with($this->cityWithRelations())
             ->whereRaw('LOWER(name) LIKE ?', [$nameLike])
             ->whereHas('taluka', function ($qb) use ($placeLike) {
                 $qb->where(function ($t) use ($placeLike) {
@@ -344,7 +362,7 @@ class LocationSearchService
         }
 
         $cities = City::query()
-            ->with(['taluka.district.state'])
+            ->with($this->cityWithRelations())
             ->whereIn('id', $cityIds)
             ->orderBy('name')
             ->limit(self::MAX_RESULTS)
@@ -403,6 +421,262 @@ class LocationSearchService
     }
 
     /**
+     * Unified ranking pipeline for location suggestions.
+     *
+     * @param  array<int, array<string, mixed>>  $rows
+     * @param  array<int, int>  $preferredStateIds
+     * @param  array<int, int>  $preferredDistrictIds
+     * @return array<int, array<string, mixed>>
+     */
+    private function applyRankingPipeline(
+        array $rows,
+        string $normalizedQuery,
+        array $preferredStateIds,
+        array $preferredDistrictIds,
+        bool $applyAmbiguousRanking
+    ): array {
+        $rows = $this->boostResults($rows, $preferredStateIds, $preferredDistrictIds);
+        $rows = $this->rankForUserIntent($rows, $normalizedQuery);
+        if ($applyAmbiguousRanking) {
+            $rows = $this->rankForAmbiguousInput($rows, $normalizedQuery);
+        }
+
+        return $rows;
+    }
+
+    /**
+     * Harmonized user-intent ranking. Keeps query collection untouched and ranks post-fetch.
+     *
+     * @param  array<int, array<string, mixed>>  $rows
+     * @return array<int, array<string, mixed>>
+     */
+    private function rankForUserIntent(array $rows, string $query): array
+    {
+        $queryKey = $this->rankKey($query);
+        if ($rows === [] || $queryKey === '') {
+            return $rows;
+        }
+
+        $cityIds = array_values(array_unique(array_map(static fn ($row) => (int) ($row['city_id'] ?? 0), $rows)));
+        $cityIds = array_values(array_filter($cityIds, static fn (int $id) => $id > 0));
+        if ($cityIds === []) {
+            return $rows;
+        }
+
+        $cities = City::query()
+            ->with(['taluka.district.state', 'displayMeta'])
+            ->whereIn('id', $cityIds)
+            ->get(['id', 'name', 'taluka_id', 'parent_city_id']);
+
+        $signalByCityId = [];
+        $talukaIds = [];
+        $cityNameKeys = [];
+        foreach ($cities as $city) {
+            $cityNameKey = $this->rankKey((string) $city->name);
+            $talukaNameKey = $this->rankKey((string) ($city->taluka?->name ?? ''));
+            $stateNameKey = $this->rankKey((string) ($city->taluka?->district?->state?->name ?? ''));
+            $signalByCityId[(int) $city->id] = [
+                'is_district_hq' => (bool) ($city->displayMeta?->is_district_hq ?? false),
+                'is_taluka_hq' => ($cityNameKey !== '' && $cityNameKey === $talukaNameKey),
+                'has_parent_city' => $city->parent_city_id !== null,
+                'state_name_key' => $stateNameKey,
+                'taluka_id' => (int) ($city->taluka_id ?? 0),
+                'city_name_key' => $cityNameKey,
+                'is_village' => false,
+            ];
+            if ((int) ($city->taluka_id ?? 0) > 0) {
+                $talukaIds[] = (int) $city->taluka_id;
+            }
+            if ($cityNameKey !== '') {
+                $cityNameKeys[] = $cityNameKey;
+            }
+        }
+
+        $aliasExactCityIds = CityAlias::query()
+            ->whereIn('city_id', $cityIds)
+            ->where('is_active', true)
+            ->whereIn('normalized_alias', [$queryKey, str_replace(' ', '', $queryKey)])
+            ->pluck('city_id')
+            ->map(static fn ($id) => (int) $id)
+            ->unique()
+            ->values()
+            ->all();
+        $aliasExactMap = array_fill_keys($aliasExactCityIds, true);
+
+        $talukaIds = array_values(array_unique(array_filter($talukaIds, static fn (int $id) => $id > 0)));
+        $cityNameKeys = array_values(array_unique(array_filter($cityNameKeys, static fn (string $v) => $v !== '')));
+        if ($talukaIds !== [] && $cityNameKeys !== []) {
+            $villages = Village::query()
+                ->whereIn('taluka_id', $talukaIds)
+                ->whereIn(\Illuminate\Support\Facades\DB::raw('LOWER(TRIM(name_en))'), $cityNameKeys)
+                ->get(['taluka_id', 'name_en']);
+            foreach ($villages as $village) {
+                $k = ((int) $village->taluka_id).'|'.$this->rankKey((string) $village->name_en);
+                foreach ($signalByCityId as $cid => $sig) {
+                    if (($sig['taluka_id'] ?? 0) === (int) $village->taluka_id
+                        && ($sig['city_name_key'] ?? '') === $this->rankKey((string) $village->name_en)) {
+                        $signalByCityId[$cid]['is_village'] = true;
+                    }
+                }
+            }
+        }
+
+        $sameNameCounts = [];
+        foreach ($rows as $row) {
+            $nameKey = $this->rankKey((string) ($row['name'] ?? $row['city_name'] ?? ''));
+            if ($nameKey !== '') {
+                $sameNameCounts[$nameKey] = ($sameNameCounts[$nameKey] ?? 0) + 1;
+            }
+        }
+
+        $scored = [];
+        foreach ($rows as $idx => $row) {
+            $cityId = (int) ($row['city_id'] ?? 0);
+            $name = (string) ($row['name'] ?? $row['city_name'] ?? '');
+            $nameKey = $this->rankKey($name);
+            $score = 0;
+
+            // A) String quality
+            if ($nameKey !== '' && $nameKey === $queryKey) {
+                $score += 100;
+            } elseif ($nameKey !== '' && str_starts_with($nameKey, $queryKey)) {
+                $score += 70;
+            } elseif ($nameKey !== '' && str_contains($nameKey, $queryKey)) {
+                $score += 50;
+            }
+            if (isset($aliasExactMap[$cityId])) {
+                $score += 90;
+            }
+            $lenDiff = abs(mb_strlen($nameKey, 'UTF-8') - mb_strlen($queryKey, 'UTF-8'));
+            $score += max(5, 15 - ($lenDiff * 2));
+
+            // B/C/D) Admin/meta + administrative relevance + geography hints.
+            $sig = $signalByCityId[$cityId] ?? null;
+            $isDistrictHq = (bool) ($sig['is_district_hq'] ?? false);
+            $isTalukaHq = (bool) ($sig['is_taluka_hq'] ?? false);
+            $hasParent = (bool) ($sig['has_parent_city'] ?? false);
+            $isVillage = (bool) ($sig['is_village'] ?? false);
+            if ($isDistrictHq) {
+                $score += 80;
+            }
+            if ($isTalukaHq) {
+                $score += 60;
+            }
+            if ($hasParent) {
+                $score += 40;
+            }
+            if ($isVillage) {
+                $score -= 20;
+            }
+            if (($sig['state_name_key'] ?? '') === 'maharashtra') {
+                $score += 10;
+            }
+
+            // Same-name disambiguation.
+            if (($sameNameCounts[$nameKey] ?? 0) > 1) {
+                if ($isDistrictHq) {
+                    $score += 20;
+                } elseif ($isTalukaHq) {
+                    $score += 15;
+                }
+                if ($hasParent) {
+                    $score += 12;
+                }
+                if (! $isVillage) {
+                    $score += 8;
+                }
+            }
+
+            $scored[] = [
+                'row' => $row,
+                'score' => $score,
+                'idx' => $idx,
+                'name_len' => mb_strlen($nameKey, 'UTF-8'),
+                'district_id' => (int) ($row['district_id'] ?? PHP_INT_MAX),
+                'taluka_id' => (int) ($row['taluka_id'] ?? PHP_INT_MAX),
+                'city_id' => $cityId > 0 ? $cityId : PHP_INT_MAX,
+            ];
+        }
+
+        usort($scored, static function (array $a, array $b): int {
+            if ($a['score'] !== $b['score']) {
+                return $b['score'] <=> $a['score'];
+            }
+            if ($a['name_len'] !== $b['name_len']) {
+                return $a['name_len'] <=> $b['name_len'];
+            }
+            if ($a['district_id'] !== $b['district_id']) {
+                return $a['district_id'] <=> $b['district_id'];
+            }
+            if ($a['taluka_id'] !== $b['taluka_id']) {
+                return $a['taluka_id'] <=> $b['taluka_id'];
+            }
+            if ($a['city_id'] !== $b['city_id']) {
+                return $a['city_id'] <=> $b['city_id'];
+            }
+            return $a['idx'] <=> $b['idx'];
+        });
+
+        return array_map(static fn (array $item) => $item['row'], $scored);
+    }
+
+    private function rankKey(string $value): string
+    {
+        $v = mb_strtolower(trim($value), 'UTF-8');
+        $v = trim((string) (preg_replace('/\s+city$/u', '', $v) ?? $v));
+        $v = preg_replace('/[\x{200B}\x{200C}\x{200D}\x{FEFF}]/u', '', $v) ?? $v;
+        $v = preg_replace('/[^\p{L}\p{M}\p{N}]+/u', ' ', $v) ?? $v;
+
+        return trim((string) (preg_replace('/\s+/u', ' ', $v) ?? $v));
+    }
+
+    /**
+     * Ranking tweak for ambiguous text: exact city first, district-hint next.
+     *
+     * @param  array<int, array<string, mixed>>  $rows
+     * @return array<int, array<string, mixed>>
+     */
+    private function rankForAmbiguousInput(array $rows, string $normalizedQuery): array
+    {
+        $normalizedQuery = strtolower(trim($normalizedQuery));
+        if ($rows === [] || $normalizedQuery === '') {
+            return $rows;
+        }
+
+        $tokens = array_values(array_filter(preg_split('/\s+/', $normalizedQuery, -1, PREG_SPLIT_NO_EMPTY)));
+        $districtHint = count($tokens) >= 2 ? (string) end($tokens) : '';
+
+        $scored = [];
+        foreach ($rows as $idx => $row) {
+            $score = 0;
+            $city = strtolower(trim((string) ($row['city_name'] ?? '')));
+            $district = strtolower(trim((string) ($row['district_name'] ?? '')));
+
+            if ($city !== '' && $city === $normalizedQuery) {
+                $score += 20;
+            } elseif ($city !== '' && str_starts_with($city, $normalizedQuery)) {
+                $score += 10;
+            }
+
+            if ($districtHint !== '' && $district !== '' && str_contains($district, $districtHint)) {
+                $score += 8;
+            }
+
+            $scored[] = ['row' => $row, 'score' => $score, 'idx' => $idx];
+        }
+
+        usort($scored, static function ($a, $b) {
+            if ($a['score'] === $b['score']) {
+                return $a['idx'] <=> $b['idx'];
+            }
+
+            return $b['score'] <=> $a['score'];
+        });
+
+        return array_map(static fn ($item) => $item['row'], $scored);
+    }
+
+    /**
      * Public wrapper for GPS/canonical flows — same shape as manual typeahead rows.
      *
      * @return array{city_id: int, city_name: string, taluka_id: int, taluka_name: string, district_id: int, district_name: string, state_id: int, state_name: string, country_id: int}
@@ -443,8 +717,12 @@ class LocationSearchService
             }
         }
 
+        $displayLabel = $this->locationDisplayFormatter->formatCityLine($city);
+
         return [
+            'id' => (int) $city->id,
             'city_id' => (int) $city->id,
+            'name' => $cityName,
             'city_name' => $cityName,
             'taluka_id' => $taluka ? (int) $taluka->id : 0,
             'taluka_name' => $locale === 'mr' && $taluka && $taluka->name_mr ? $taluka->name_mr : ($taluka->name ?? ''),
@@ -453,6 +731,15 @@ class LocationSearchService
             'state_id' => $state ? (int) $state->id : 0,
             'state_name' => $locale === 'mr' && $state && $state->name_mr ? $state->name_mr : ($state->name ?? ''),
             'country_id' => $state ? (int) $state->country_id : 0,
+            'display_label' => $displayLabel,
         ];
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    private function cityWithRelations(): array
+    {
+        return ['taluka.district.state.country', 'parentCity', 'displayMeta'];
     }
 }

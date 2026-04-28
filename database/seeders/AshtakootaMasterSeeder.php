@@ -27,15 +27,15 @@ class AshtakootaMasterSeeder extends Seeder
             return;
         }
         $rows = [
-            ['key' => 'brahmin', 'label' => 'Brahmin (ब्राह्मण)'],
-            ['key' => 'kshatriya', 'label' => 'Kshatriya (क्षत्रिय)'],
-            ['key' => 'vaishya', 'label' => 'Vaishya (वैश्य)'],
-            ['key' => 'shudra', 'label' => 'Shudra (शूद्र)'],
+            ['key' => 'brahmin', 'label' => 'Brahmin (ब्राह्मण)', 'label_mr' => 'ब्राह्मण'],
+            ['key' => 'kshatriya', 'label' => 'Kshatriya (क्षत्रिय)', 'label_mr' => 'क्षत्रिय'],
+            ['key' => 'vaishya', 'label' => 'Vaishya (वैश्य)', 'label_mr' => 'वैश्य'],
+            ['key' => 'shudra', 'label' => 'Shudra (शूद्र)', 'label_mr' => 'शूद्र'],
         ];
         foreach ($rows as $row) {
             DB::table('master_varnas')->updateOrInsert(
                 ['key' => $row['key']],
-                array_merge($row, ['is_active' => true, 'created_at' => now(), 'updated_at' => now()])
+                $this->mergeAshtakootaRow($row, 'master_varnas')
             );
         }
     }
@@ -46,16 +46,16 @@ class AshtakootaMasterSeeder extends Seeder
             return;
         }
         $rows = [
-            ['key' => 'chatushpada', 'label' => 'Chatushpad (चतुष्पाद)'],
-            ['key' => 'manav', 'label' => 'Manav / Nar (मानव/नर)'],
-            ['key' => 'jalachar', 'label' => 'Jalachar (जलचर)'],
-            ['key' => 'vanchar', 'label' => 'Vanchar (वनचर)'],
-            ['key' => 'keet', 'label' => 'Keetak (कीटक)'],
+            ['key' => 'chatushpada', 'label' => 'Chatushpad (चतुष्पाद)', 'label_mr' => 'चतुष्पाद'],
+            ['key' => 'manav', 'label' => 'Manav / Nar (मानव/नर)', 'label_mr' => 'मानव / नर'],
+            ['key' => 'jalachar', 'label' => 'Jalachar (जलचर)', 'label_mr' => 'जलचर'],
+            ['key' => 'vanchar', 'label' => 'Vanchar (वनचर)', 'label_mr' => 'वनचर'],
+            ['key' => 'keet', 'label' => 'Keetak (कीटक)', 'label_mr' => 'कीटक'],
         ];
         foreach ($rows as $row) {
             DB::table('master_vashyas')->updateOrInsert(
                 ['key' => $row['key']],
-                array_merge($row, ['is_active' => true, 'created_at' => now(), 'updated_at' => now()])
+                $this->mergeAshtakootaRow($row, 'master_vashyas')
             );
         }
     }
@@ -66,22 +66,32 @@ class AshtakootaMasterSeeder extends Seeder
             return;
         }
         $rows = [
-            ['key' => 'sun', 'label' => 'Sun (सूर्य)'],
-            ['key' => 'moon', 'label' => 'Moon (चंद्र)'],
-            ['key' => 'mars', 'label' => 'Mars (मंगळ)'],
-            ['key' => 'mercury', 'label' => 'Mercury (बुध)'],
-            ['key' => 'jupiter', 'label' => 'Jupiter (गुरु)'],
-            ['key' => 'venus', 'label' => 'Venus (शुक्र)'],
-            ['key' => 'saturn', 'label' => 'Saturn (शनी)'],
-            ['key' => 'rahu', 'label' => 'Rahu (राहू)'],
-            ['key' => 'ketu', 'label' => 'Ketu (केतू)'],
+            ['key' => 'sun', 'label' => 'Sun (सूर्य)', 'label_mr' => 'सूर्य'],
+            ['key' => 'moon', 'label' => 'Moon (चंद्र)', 'label_mr' => 'चंद्र'],
+            ['key' => 'mars', 'label' => 'Mars (मंगळ)', 'label_mr' => 'मंगळ'],
+            ['key' => 'mercury', 'label' => 'Mercury (बुध)', 'label_mr' => 'बुध'],
+            ['key' => 'jupiter', 'label' => 'Jupiter (गुरु)', 'label_mr' => 'गुरु'],
+            ['key' => 'venus', 'label' => 'Venus (शुक्र)', 'label_mr' => 'शुक्र'],
+            ['key' => 'saturn', 'label' => 'Saturn (शनी)', 'label_mr' => 'शनी'],
+            ['key' => 'rahu', 'label' => 'Rahu (राहू)', 'label_mr' => 'राहू'],
+            ['key' => 'ketu', 'label' => 'Ketu (केतू)', 'label_mr' => 'केतू'],
         ];
         foreach ($rows as $row) {
             DB::table('master_rashi_lords')->updateOrInsert(
                 ['key' => $row['key']],
-                array_merge($row, ['is_active' => true, 'created_at' => now(), 'updated_at' => now()])
+                $this->mergeAshtakootaRow($row, 'master_rashi_lords')
             );
         }
+    }
+
+    /** @param  array<string, mixed>  $row */
+    private function mergeAshtakootaRow(array $row, string $table): array
+    {
+        if (! Schema::hasColumn($table, 'label_mr')) {
+            unset($row['label_mr']);
+        }
+
+        return array_merge($row, ['is_active' => true, 'created_at' => now(), 'updated_at' => now()]);
     }
 
     /** Rashi key => [varna_key, vashya_key, rashi_lord_key]. Mesh=Kshatriya,Chatushpada,Mars; ... */

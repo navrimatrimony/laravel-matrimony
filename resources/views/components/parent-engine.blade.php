@@ -55,7 +55,7 @@
     </div>
 
     {{-- Line 2: Father — extra info + up to 3 contact numbers (+ adds in-context) --}}
-    <div class="flex flex-col md:flex-row md:items-end gap-3 md:gap-4">
+    <div class="flex flex-col md:flex-row md:items-start gap-3 md:gap-4">
         <div class="flex-1">
             <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Father Extra Information</label>
             <input type="text" name="{{ $n('father_extra_info') }}" value="{{ $u8(old($oldK('father_extra_info'), $profile->father_extra_info ?? '')) }}" maxlength="255" placeholder="e.g. Retired from MSEB, Kolhapur" class="w-full rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-3 py-2">
@@ -73,6 +73,7 @@
                         <x-profile.contact-field
                             :name="$nameNum"
                             :value="$fatherContacts[$i] ?? ''"
+                            variant="inline"
                             label=""
                             placeholder="10-digit"
                             :showCountryCode="true"
@@ -106,7 +107,7 @@
     </div>
 
     {{-- Line 4: Mother — extra info + up to 3 contact numbers (+ adds in-context) --}}
-    <div class="flex flex-col md:flex-row md:items-end gap-3 md:gap-4">
+    <div class="flex flex-col md:flex-row md:items-start gap-3 md:gap-4">
         <div class="flex-1">
             <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Mother Extra Information</label>
             <input type="text" name="{{ $n('mother_extra_info') }}" value="{{ $u8(old($oldK('mother_extra_info'), $profile->mother_extra_info ?? '')) }}" maxlength="255" placeholder="e.g. Housewife, stays with son in Pune" class="w-full rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-3 py-2">
@@ -124,6 +125,7 @@
                         <x-profile.contact-field
                             :name="$nameNum"
                             :value="$motherContacts[$i] ?? ''"
+                            variant="inline"
                             label=""
                             placeholder="10-digit"
                             :showCountryCode="true"
@@ -164,7 +166,7 @@
 
 <template id="parent-father-slot-tpl">
     <div class="parent-contact-slot shrink-0" data-slot-index="">
-        <div class="contact-field-engine border border-gray-200 dark:border-gray-600 rounded-lg p-3">
+        <div class="contact-field-engine contact-field-engine--inline">
             <div class="flex items-center gap-1.5 flex-nowrap contact-master-field">
                 <input type="text" inputmode="tel" maxlength="5" value="+91" name="__FATHER_CC__" placeholder="+91" class="text-xs text-gray-600 dark:text-gray-400 border border-gray-300 dark:border-gray-600 rounded py-1.5 bg-gray-50 dark:bg-gray-700 h-9 box-border text-center shrink-0" style="flex:0 0 2.25rem; width:2.25rem; min-width:2.25rem; max-width:2.25rem;">
                 <input type="text" inputmode="numeric" pattern="[0-9]*" maxlength="10" name="__FATHER_NAME__" placeholder="{{ __('components.relation.ten_digit') }}" data-contact-engine class="h-9 rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-2 py-1.5 text-sm min-w-0 flex-1">
@@ -188,7 +190,7 @@
 </template>
 <template id="parent-mother-slot-tpl">
     <div class="parent-contact-slot shrink-0" data-slot-index="">
-        <div class="contact-field-engine border border-gray-200 dark:border-gray-600 rounded-lg p-3">
+        <div class="contact-field-engine contact-field-engine--inline">
             <div class="flex items-center gap-1.5 flex-nowrap contact-master-field">
                 <input type="text" inputmode="tel" maxlength="5" value="+91" name="__MOTHER_CC__" placeholder="+91" class="text-xs text-gray-600 dark:text-gray-400 border border-gray-300 dark:border-gray-600 rounded py-1.5 bg-gray-50 dark:bg-gray-700 h-9 box-border text-center shrink-0" style="flex:0 0 2.25rem; width:2.25rem; min-width:2.25rem; max-width:2.25rem;">
                 <input type="text" inputmode="numeric" pattern="[0-9]*" maxlength="10" name="__MOTHER_NAME__" placeholder="{{ __('components.relation.ten_digit') }}" data-contact-engine class="h-9 rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-2 py-1.5 text-sm min-w-0 flex-1">

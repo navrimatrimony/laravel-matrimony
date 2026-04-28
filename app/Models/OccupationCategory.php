@@ -12,6 +12,7 @@ class OccupationCategory extends Model
 
     protected $fillable = [
         'name',
+        'name_mr',
         'sort_order',
         'legacy_working_with_type_id',
     ];

@@ -85,6 +85,25 @@ export function initSearchableSingleSelect(opts) {
             .replace(/"/g, '&quot;');
     }
 
+    function occLangMr() {
+        const lang = (document.documentElement.lang || '').toLowerCase();
+        return lang === 'mr' || lang.indexOf('mr-') === 0;
+    }
+
+    function occCategoryLabel(c) {
+        if (c && occLangMr() && c.name_mr) {
+            return String(c.name_mr);
+        }
+        return String((c && c.name) || '');
+    }
+
+    function occRowLabel(row) {
+        if (row && occLangMr() && row.name_mr) {
+            return String(row.name_mr);
+        }
+        return String((row && row.name) || '');
+    }
+
     function syncHiddens(val) {
         if (!hiddenMaster || !hiddenCustom) {
             return;
@@ -140,7 +159,7 @@ export function initSearchableSingleSelect(opts) {
         }
         const cat = payload && payload.category;
         const cats = (payload && payload.categories) || [];
-        const currentName = cat ? cat.name : '—';
+        const currentName = cat ? occCategoryLabel(cat) : '—';
         const currentIcon = cat && cat.icon ? cat.icon : '📋';
 
         if (compactCm) {
@@ -156,7 +175,7 @@ export function initSearchableSingleSelect(opts) {
                 '">';
             cats.forEach((c) => {
                 const ic = c.icon || '📋';
-                const nm = c.name || '';
+                const nm = occCategoryLabel(c);
                 const selAttr = cat && String(cat.id) === String(c.id) ? ' selected' : '';
                 htmlCm +=
                     '<option value="' +
@@ -218,7 +237,7 @@ export function initSearchableSingleSelect(opts) {
             '">';
         cats.forEach((c) => {
             const ic = c.icon || '📋';
-            const nm = c.name || '';
+            const nm = occCategoryLabel(c);
             const selAttr = cat && String(cat.id) === String(c.id) ? ' selected' : '';
             html +=
                 '<option value="' +
@@ -417,7 +436,7 @@ export function initSearchableSingleSelect(opts) {
                     lastSearchReturnedMatches = rows.length > 0;
                     const mapped = rows.map((row) => ({
                         value: 'm:' + row.id,
-                        text: row.name,
+                        text: occRowLabel(row),
                     }));
                     callback(mapped);
                 })

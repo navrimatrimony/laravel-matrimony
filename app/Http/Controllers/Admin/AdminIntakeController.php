@@ -10,6 +10,7 @@ use App\Models\ConflictRecord;
 use App\Models\MatrimonyProfile;
 use App\Services\ExtendedFieldService;
 use App\Services\Intake\IntakeExtractionReuseResolver;
+use App\Services\Intake\IntakeLocationSuggestionLayerService;
 use App\Services\Intake\IntakeReviewParseInputTextResolver;
 use App\Services\IntakeApprovalService;
 use App\Services\IntakeManualOcrPreparedService;
@@ -139,6 +140,8 @@ class AdminIntakeController extends Controller
             'profile_attached' => (bool) $attachedProfile,
             'member_suggestion_page_available' => true,
         ];
+        $unresolvedLocationOptions = app(IntakeLocationSuggestionLayerService::class)
+            ->unresolvedCandidates($intake, 7);
 
         $requireAdminBeforeAttach = AdminSetting::getBool('intake_require_admin_before_attach', false);
         $snapshotOk = ! empty($intake->approval_snapshot_json) && is_array($intake->approval_snapshot_json);
@@ -170,6 +173,7 @@ class AdminIntakeController extends Controller
             'pendingSuggestionsPresent',
             'pendingSuggestionsCount',
             'pendingSuggestionsAdminSummary',
+            'unresolvedLocationOptions',
             'requireAdminBeforeAttach',
             'applyReadiness',
         ));
@@ -337,6 +341,38 @@ class AdminIntakeController extends Controller
         }
 
         return $redirect->with('success', 'Intake apply pipeline triggered.');
+    }
+
+    /**
+     * Admin-side explicit intake location resolve into approval_snapshot_json.
+     */
+    public function resolveLocationSuggestion(Request $request, BiodataIntake $intake)
+    {
+        if ((bool) $intake->approved_by_user) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Intake is already approved and cannot be edited.',
+            ], 422);
+        }
+
+        $validated = $request->validate([
+            'field' => ['required', 'string', 'max:64'],
+            'city_id' => ['required', 'integer', 'exists:cities,id'],
+        ]);
+
+        $resolver = app(IntakeLocationSuggestionLayerService::class);
+        $result = $resolver->resolveFieldToCity($intake, (string) $validated['field'], (int) $validated['city_id']);
+        if (! ($result['ok'] ?? false)) {
+            return response()->json([
+                'success' => false,
+                'message' => (string) ($result['message'] ?? 'Could not resolve location field.'),
+            ], 422);
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Location resolved.',
+        ]);
     }
 
     /** @var list<string> */

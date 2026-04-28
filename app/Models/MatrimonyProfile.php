@@ -4,12 +4,14 @@ namespace App\Models;
 
 use App\Casts\MojibakeSafeUtf8String;
 use App\Services\ConflictDetectionService;
+use App\Services\Location\LocationDisplayFormatter;
 use App\Services\ProfileFieldLockService;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\ValidationException;
 
 /*
@@ -504,6 +506,24 @@ class MatrimonyProfile extends Model
     }
 
     /**
+     * Eager-load paths for {@see LocationDisplayFormatter} (parent metro + optional meta overrides).
+     *
+     * @return list<string>
+     */
+    public static function withRelationsForLocationDisplay(): array
+    {
+        $with = ['taluka.district.state.country'];
+        if (Schema::hasColumn('cities', 'parent_city_id')) {
+            $with[] = 'parentCity';
+        }
+        if (Schema::hasTable('city_display_meta')) {
+            $with[] = 'displayMeta';
+        }
+
+        return $with;
+    }
+
+    /**
      * Human-readable current residence line (city, taluka, district, state) for location typeahead `value=`.
      * Matches the label shape used when a row is picked in JS (village/city first).
      */
@@ -515,6 +535,12 @@ class MatrimonyProfile extends Model
     ): string {
         if (! $cityId && ! $talukaId && ! $districtId && ! $stateId) {
             return '';
+        }
+        if ($cityId) {
+            $city = City::query()->with(self::withRelationsForLocationDisplay())->find((int) $cityId);
+            if ($city !== null) {
+                return app(LocationDisplayFormatter::class)->formatCityLine($city);
+            }
         }
         $parts = [];
         if ($cityId) {
@@ -597,6 +623,64 @@ class MatrimonyProfile extends Model
             $this->district_id ? (int) $this->district_id : null,
             $this->state_id ? (int) $this->state_id : null,
         );
+    }
+
+    /**
+     * Birth place line using {@see LocationDisplayFormatter} when `birth_city_id` resolves to a row.
+     */
+    public function birthLocationDisplayLine(): string
+    {
+        if ($this->birth_city_id) {
+            $city = City::query()->with(self::withRelationsForLocationDisplay())->find((int) $this->birth_city_id);
+            if ($city !== null) {
+                return app(LocationDisplayFormatter::class)->formatCityLine($city);
+            }
+        }
+
+        return trim(implode(', ', array_values(array_filter([
+            $this->birthCity?->name,
+            $this->birthTaluka?->name,
+            $this->birthDistrict?->name,
+            $this->birthState?->name,
+        ], static fn ($x) => $x !== null && $x !== ''))));
+    }
+
+    /**
+     * Native place line using {@see LocationDisplayFormatter} when `native_city_id` resolves.
+     */
+    public function nativeLocationDisplayLine(): string
+    {
+        if ($this->native_city_id) {
+            $city = City::query()->with(self::withRelationsForLocationDisplay())->find((int) $this->native_city_id);
+            if ($city !== null) {
+                return app(LocationDisplayFormatter::class)->formatCityLine($city);
+            }
+        }
+
+        return trim(implode(', ', array_values(array_filter([
+            $this->nativeCity?->name,
+            $this->nativeTaluka?->name,
+            $this->nativeDistrict?->name,
+            $this->nativeState?->name,
+        ], static fn ($x) => $x !== null && $x !== ''))));
+    }
+
+    /**
+     * Work location: formatted city hierarchy when `work_city_id` exists, else city + state names.
+     */
+    public function workLocationDisplayLine(): string
+    {
+        if ($this->work_city_id) {
+            $city = City::query()->with(self::withRelationsForLocationDisplay())->find((int) $this->work_city_id);
+            if ($city !== null) {
+                return app(LocationDisplayFormatter::class)->formatCityLine($city);
+            }
+        }
+
+        $workCityName = $this->work_city_id ? City::query()->whereKey($this->work_city_id)->value('name') : null;
+        $workStateName = $this->work_state_id ? State::query()->whereKey($this->work_state_id)->value('name') : null;
+
+        return trim(implode(', ', array_values(array_filter([$workCityName, $workStateName], static fn ($x) => $x !== null && $x !== ''))));
     }
 
     public function birthCity()

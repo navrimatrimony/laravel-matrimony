@@ -4,6 +4,7 @@ namespace Database\Seeders;
 
 use App\Models\FieldRegistry;
 use Illuminate\Database\Seeder;
+use Illuminate\Support\Facades\Schema;
 
 /**
  * Phase-3 Day 1 — CORE Field Registry Seeder.
@@ -285,20 +286,35 @@ class FieldRegistryCoreSeeder extends Seeder
         'is_system_overwritable',
         'lock_after_user_edit',
         'display_label',
+        'display_label_mr',
         'display_order',
         'category',
         'is_archived',
-        'replaced_by_field',
         'updated_at',
     ];
 
     public function run(): void
     {
         $now = now();
+        $displayMrPath = database_path('seeders/data/field_registry_display_label_mr.php');
+        $displayMr = is_readable($displayMrPath) ? require $displayMrPath : [];
+        if (! is_array($displayMr)) {
+            $displayMr = [];
+        }
+
+        $hasDisplayMr = Schema::hasColumn('field_registry', 'display_label_mr');
 
         foreach (self::CORE_FIELDS as $row) {
+            $fk = $row['field_key'] ?? '';
+            if ($hasDisplayMr && $fk !== '' && isset($displayMr[$fk])) {
+                $row['display_label_mr'] = $displayMr[$fk];
+            }
             $row['created_at'] = $now;
             $row['updated_at'] = $now;
+
+            if (! $hasDisplayMr) {
+                unset($row['display_label_mr']);
+            }
 
             $existing = FieldRegistry::where('field_key', $row['field_key'])->first();
 

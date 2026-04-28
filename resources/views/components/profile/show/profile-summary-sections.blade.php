@@ -1,13 +1,7 @@
 @php
     $publicMatrimonyLayout = $publicMatrimonyLayout ?? false;
     $profile->loadMissing(['city', 'district', 'state', 'taluka', 'country', 'maritalStatus', 'religion', 'caste', 'subCaste', 'familyType', 'complexion', 'physicalBuild', 'bloodGroup', 'seriousIntent', 'diet', 'smokingStatus', 'drinkingStatus', 'birthCity', 'birthTaluka', 'birthDistrict', 'birthState', 'nativeCity', 'nativeTaluka', 'nativeDistrict', 'nativeState', 'profession']);
-    $locationLine = \App\Support\ProfileDisplayCopy::formatResidenceDisplay(
-        $profile->city?->name,
-        $profile->taluka?->name,
-        $profile->district?->name,
-        $profile->state?->name,
-        $profile->country?->name,
-    );
+    $locationLine = $profile->residenceLocationDisplayLine();
     $age = null;
     if ($dateOfBirthVisible && ($profile->date_of_birth ?? '') !== '') {
         try {
@@ -39,9 +33,7 @@
         }
     }
     $overviewHighlights = array_slice(array_values(array_filter($overviewHighlights)), 0, 5);
-    $workCityName = $profile->work_city_id ? \App\Models\City::where('id', $profile->work_city_id)->value('name') : null;
-    $workStateName = $profile->work_state_id ? \App\Models\State::where('id', $profile->work_state_id)->value('name') : null;
-    $workLocationLine = trim(implode(', ', array_filter([$workCityName, $workStateName])));
+    $workLocationLine = $profile->workLocationDisplayLine();
     $hasWorkLocation = $workLocationLine !== '';
     $siblings = $profile->siblings ?? collect();
     $brothersFromEngine = $siblings->where('relation_type', 'brother')->count();
@@ -76,29 +68,15 @@
         $article = preg_match('/^[aeiou]/i', $ft) ? 'an' : 'a';
         $familySubtitle = __('profile.show_family_summary_type', ['article' => $article, 'type' => $ft]);
     }
-    $birthPlaceLine = implode(', ', array_filter([
-        $profile->birthCity?->name,
-        $profile->birthTaluka?->name,
-        $profile->birthDistrict?->name,
-        $profile->birthState?->name,
-    ]));
-    $nativePlaceLine = implode(', ', array_filter([
-        $profile->nativeCity?->name,
-        $profile->nativeTaluka?->name,
-        $profile->nativeDistrict?->name,
-        $profile->nativeState?->name,
-    ]));
+    $birthPlaceLine = $profile->birthLocationDisplayLine();
+    $nativePlaceLine = $profile->nativeLocationDisplayLine();
     $hasBirthPlace = $birthPlaceLine !== '' || $profile->birth_city_id || $profile->birth_taluka_id || $profile->birth_district_id || $profile->birth_state_id;
     $hasNativePlace = $nativePlaceLine !== '' || $profile->native_city_id || $profile->native_taluka_id || $profile->native_district_id || $profile->native_state_id;
     $hasPhysical = ($heightVisible && ($profile->height_cm ?? '') !== '') || ($profile->weight_kg ?? null) !== null || $profile->complexion || $profile->physicalBuild || $profile->bloodGroup;
     $hasBasicSection = ($dateOfBirthVisible && ($profile->date_of_birth ?? '') !== '') || (($profile->birth_time ?? '') !== '') || ($maritalStatusVisible && $profile->maritalStatus) || $profile->religion || $profile->caste || $profile->subCaste || $profile->seriousIntent;
     $basicSubtitle = null;
     if ($maritalStatusVisible && $profile->maritalStatus) {
-        $place = \App\Support\ProfileDisplayCopy::compactLocationLine(
-            $profile->city?->name,
-            $profile->district?->name,
-            $profile->state?->name
-        );
+        $place = $profile->residenceLocationDisplayLine();
         if ($place !== '') {
             $basicSubtitle = __('profile.show_basic_summary', ['marital' => $profile->maritalStatus->label ?? '', 'place' => $place]);
         }

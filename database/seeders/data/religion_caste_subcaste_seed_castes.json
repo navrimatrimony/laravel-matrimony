@@ -1,0 +1,4882 @@
+[
+    {
+        "entity_type": "caste",
+        "ID": 53,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "24-manai-telugu-chettiar",
+        "Label (legacy)": "24 Manai Telugu Chettiar",
+        "label_en": "24 Manai Telugu Chettiar",
+        "label_mr": "२४ मनै तेलगू चेट्टियार"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 54,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "adi-andhra",
+        "Label (legacy)": "Adi Andhra",
+        "label_en": "Adi Andhra",
+        "label_mr": "आदि आंध्र"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 55,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "adi-dharmi",
+        "Label (legacy)": "Adi Dharmi",
+        "label_en": "Adi Dharmi",
+        "label_mr": "आदि धर्मी"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 56,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "adi-dravida",
+        "Label (legacy)": "Adi Dravida",
+        "label_en": "Adi Dravida",
+        "label_mr": "आदि द्रविड"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 57,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "adi-karnataka",
+        "Label (legacy)": "Adi Karnataka",
+        "label_en": "Adi Karnataka",
+        "label_mr": "आदि कर्नाटक"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 58,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "agamudayar",
+        "Label (legacy)": "Agamudayar",
+        "label_en": "Agamudayar",
+        "label_mr": "अगमुदयार"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 59,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "agnikula-kshatriya",
+        "Label (legacy)": "Agnikula Kshatriya",
+        "label_en": "Agnikula Kshatriya",
+        "label_mr": "अग्निकुला क्षत्रिय"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 60,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "agri",
+        "Label (legacy)": "Agri",
+        "label_en": "Agri",
+        "label_mr": "कृषी"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 61,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "ahir",
+        "Label (legacy)": "Ahir",
+        "label_en": "Ahir",
+        "label_mr": "अहिर"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 470,
+        "religion_key": "sikh",
+        "religion_key Marathi": "शीख",
+        "key": "ahluwalia",
+        "Label (legacy)": "Ahluwalia",
+        "label_en": "Ahluwalia",
+        "label_mr": "अहलुवालिया"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 62,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "ahom",
+        "Label (legacy)": "Ahom",
+        "label_en": "Ahom",
+        "label_mr": "अहोम"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 63,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "ambalavasi",
+        "Label (legacy)": "Ambalavasi",
+        "label_en": "Ambalavasi",
+        "label_mr": "अंबालावासी"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 4,
+        "religion_key": "christian",
+        "religion_key Marathi": "ख्रिश्चन",
+        "key": "anglo-indian",
+        "Label (legacy)": "Anglo Indian",
+        "label_en": "Anglo Indian",
+        "label_mr": "अँग्लो इंडियन"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 430,
+        "religion_key": "muslim",
+        "religion_key Marathi": "मुस्लिम",
+        "key": "ansari",
+        "Label (legacy)": "Ansari",
+        "label_en": "Ansari",
+        "label_mr": "अन्सारी"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 431,
+        "religion_key": "muslim",
+        "religion_key Marathi": "मुस्लिम",
+        "key": "arain",
+        "Label (legacy)": "Arain",
+        "label_en": "Arain",
+        "label_mr": "अरेन"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 64,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "arcot",
+        "Label (legacy)": "Arcot",
+        "label_en": "Arcot",
+        "label_mr": "आर्कोट"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 65,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "arekatica",
+        "Label (legacy)": "Arekatica",
+        "label_en": "Arekatica",
+        "label_mr": "अरेकाटिका"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 471,
+        "religion_key": "sikh",
+        "religion_key Marathi": "शीख",
+        "key": "arora",
+        "Label (legacy)": "Arora",
+        "label_en": "Arora",
+        "label_mr": "अरोरा"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 66,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "arunthathiyar",
+        "Label (legacy)": "Arunthathiyar",
+        "label_en": "Arunthathiyar",
+        "label_mr": "अरुंधथियार"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 67,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "arya-vysya",
+        "Label (legacy)": "Arya Vysya",
+        "label_en": "Arya Vysya",
+        "label_mr": "आर्य वैश्य"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 68,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "aryasamaj",
+        "Label (legacy)": "Aryasamaj",
+        "label_en": "Aryasamaj",
+        "label_mr": "आर्यसमाज"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 432,
+        "religion_key": "muslim",
+        "religion_key Marathi": "मुस्लिम",
+        "key": "awan",
+        "Label (legacy)": "Awan",
+        "label_en": "Awan",
+        "label_mr": "अवान"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 69,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "ayyaraka",
+        "Label (legacy)": "Ayyaraka",
+        "label_en": "Ayyaraka",
+        "label_mr": "अय्यराका"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 70,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "badaga",
+        "Label (legacy)": "Badaga",
+        "label_en": "Badaga",
+        "label_mr": "बडगा"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 71,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "baghelpalgaderiya",
+        "Label (legacy)": "Baghel\/Pal\/Gaderiya",
+        "label_en": "Baghel\/Pal\/Gaderiya",
+        "label_mr": "बघेल\/पाल\/गडेरिया"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 1,
+        "religion_key": "bahai",
+        "religion_key Marathi": "बहाई",
+        "key": "bahai",
+        "Label (legacy)": "Bahai",
+        "label_en": "Bahai",
+        "label_mr": "बहाई"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 72,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "bahi",
+        "Label (legacy)": "Bahi",
+        "label_en": "Bahi",
+        "label_mr": "बही"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 73,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "baidya",
+        "Label (legacy)": "Baidya",
+        "label_en": "Baidya",
+        "label_mr": "बैद्य"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 464,
+        "religion_key": "muslim",
+        "religion_key Marathi": "मुस्लिम",
+        "key": "baig",
+        "Label (legacy)": "Baig",
+        "label_en": "Baig",
+        "label_mr": "बैग"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 74,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "baishnab",
+        "Label (legacy)": "Baishnab",
+        "label_en": "Baishnab",
+        "label_mr": "बैष्णब"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 75,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "baishya",
+        "Label (legacy)": "Baishya",
+        "label_en": "Baishya",
+        "label_mr": "बैश्या"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 76,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "bajantri",
+        "Label (legacy)": "Bajantri",
+        "label_en": "Bajantri",
+        "label_mr": "बाजनत्री"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 77,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "balija",
+        "Label (legacy)": "Balija",
+        "label_en": "Balija",
+        "label_mr": "बालिजा"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 78,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "banayat-oriya",
+        "Label (legacy)": "Banayat Oriya",
+        "label_en": "Banayat Oriya",
+        "label_mr": "बनायत ओरिया"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 79,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "banik",
+        "Label (legacy)": "Banik",
+        "label_en": "Banik",
+        "label_mr": "बनिक"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 80,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "baniya",
+        "Label (legacy)": "Baniya",
+        "label_en": "Baniya",
+        "label_mr": "बनिया"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 81,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "barai",
+        "Label (legacy)": "Barai",
+        "label_en": "Barai",
+        "label_mr": "बारई"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 82,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "bari",
+        "Label (legacy)": "Bari",
+        "label_en": "Bari",
+        "label_mr": "बारी"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 83,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "barnwal",
+        "Label (legacy)": "Barnwal",
+        "label_en": "Barnwal",
+        "label_mr": "बर्नवाल"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 84,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "barujibi",
+        "Label (legacy)": "Barujibi",
+        "label_en": "Barujibi",
+        "label_mr": "बारुजीबी"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 5,
+        "religion_key": "christian",
+        "religion_key Marathi": "ख्रिश्चन",
+        "key": "basel-mission",
+        "Label (legacy)": "Basel Mission",
+        "label_en": "Basel Mission",
+        "label_mr": "बासेल मिशन"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 433,
+        "religion_key": "muslim",
+        "religion_key Marathi": "मुस्लिम",
+        "key": "bengali",
+        "Label (legacy)": "Bengali",
+        "label_en": "Bengali",
+        "label_mr": "बंगाली"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 85,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "besta",
+        "Label (legacy)": "Besta",
+        "label_en": "Besta",
+        "label_mr": "बेस्टा"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 86,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "bhandari",
+        "Label (legacy)": "Bhandari",
+        "label_en": "Bhandari",
+        "label_mr": "भंडारी"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 87,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "bhatia",
+        "Label (legacy)": "Bhatia",
+        "label_en": "Bhatia",
+        "label_mr": "भाटिया"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 88,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "bhatraju",
+        "Label (legacy)": "Bhatraju",
+        "label_en": "Bhatraju",
+        "label_mr": "भत्राजू"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 89,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "bhavsar",
+        "Label (legacy)": "Bhavsar",
+        "label_en": "Bhavsar",
+        "label_mr": "भावसार"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 90,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "bhovi",
+        "Label (legacy)": "Bhovi",
+        "label_en": "Bhovi",
+        "label_mr": "भोवी"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 91,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "billava",
+        "Label (legacy)": "Billava",
+        "label_en": "Billava",
+        "label_mr": "बिल्लवा"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 6,
+        "religion_key": "christian",
+        "religion_key Marathi": "ख्रिश्चन",
+        "key": "born-again",
+        "Label (legacy)": "Born Again",
+        "label_en": "Born Again",
+        "label_mr": "पुनर्जन्म"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 92,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "boya",
+        "Label (legacy)": "Boya",
+        "label_en": "Boya",
+        "label_mr": "बोया"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 93,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "boyer",
+        "Label (legacy)": "Boyer",
+        "label_en": "Boyer",
+        "label_mr": "बॉयर"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 94,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "brahmbatt",
+        "Label (legacy)": "Brahmbatt",
+        "label_en": "Brahmbatt",
+        "label_mr": "ब्रह्मबट"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 95,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "brahmin",
+        "Label (legacy)": "Brahmin",
+        "label_en": "Brahmin",
+        "label_mr": "ब्राह्मण"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 96,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "brahmo",
+        "Label (legacy)": "Brahmo",
+        "label_en": "Brahmo",
+        "label_mr": "ब्राह्मो"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 7,
+        "religion_key": "christian",
+        "religion_key Marathi": "ख्रिश्चन",
+        "key": "bretheren",
+        "Label (legacy)": "Bretheren",
+        "label_en": "Bretheren",
+        "label_mr": "बंधूंनो"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 97,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "buddar",
+        "Label (legacy)": "Buddar",
+        "label_en": "Buddar",
+        "label_mr": "बुद्दार"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 2,
+        "religion_key": "buddhist",
+        "religion_key Marathi": "बौद्ध",
+        "key": "buddhist",
+        "Label (legacy)": "Buddhist",
+        "label_en": "Buddhist",
+        "label_mr": "बौद्ध"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 98,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "bunt-shetty",
+        "Label (legacy)": "Bunt (Shetty)",
+        "label_en": "Bunt (Shetty)",
+        "label_mr": "बंट (शेट्टी)"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 8,
+        "religion_key": "christian",
+        "religion_key Marathi": "ख्रिश्चन",
+        "key": "cannonite",
+        "Label (legacy)": "Cannonite",
+        "label_en": "Cannonite",
+        "label_mr": "कॅनोनाइट"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 9,
+        "religion_key": "christian",
+        "religion_key Marathi": "ख्रिश्चन",
+        "key": "catholic",
+        "Label (legacy)": "Catholic",
+        "label_en": "Catholic",
+        "label_mr": "कॅथोलिक"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 10,
+        "religion_key": "christian",
+        "religion_key Marathi": "ख्रिश्चन",
+        "key": "catholic-knanya",
+        "Label (legacy)": "Catholic Knanya",
+        "label_en": "Catholic Knanya",
+        "label_mr": "कॅथोलिक कनान्या"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 11,
+        "religion_key": "christian",
+        "religion_key Marathi": "ख्रिश्चन",
+        "key": "catholic-malankara",
+        "Label (legacy)": "Catholic Malankara",
+        "label_en": "Catholic Malankara",
+        "label_mr": "कॅथोलिक मलंकरा"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 99,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "chalawadi-holeya",
+        "Label (legacy)": "Chalawadi Holeya",
+        "label_en": "Chalawadi Holeya",
+        "label_mr": "चलावडी होलेया"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 12,
+        "religion_key": "christian",
+        "religion_key Marathi": "ख्रिश्चन",
+        "key": "chaldean-syrian",
+        "Label (legacy)": "Chaldean Syrian",
+        "label_en": "Chaldean Syrian",
+        "label_mr": "चाल्डियन सीरियन"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 100,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "chambhar",
+        "Label (legacy)": "Chambhar",
+        "label_en": "Chambhar",
+        "label_mr": "चंभार"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 101,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "chandravanshi-kahar",
+        "Label (legacy)": "Chandravanshi Kahar",
+        "label_en": "Chandravanshi Kahar",
+        "label_mr": "चंद्रवंशी कहार"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 102,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "chasa",
+        "Label (legacy)": "Chasa",
+        "label_en": "Chasa",
+        "label_mr": "चासा"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 103,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "chattada-sri-vaishnava",
+        "Label (legacy)": "Chattada Sri Vaishnava",
+        "label_en": "Chattada Sri Vaishnava",
+        "label_mr": "चट्टाडा श्री वैष्णव"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 104,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "chaudary",
+        "Label (legacy)": "Chaudary",
+        "label_en": "Chaudary",
+        "label_mr": "चौधरी"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 105,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "chaurasia",
+        "Label (legacy)": "Chaurasia",
+        "label_en": "Chaurasia",
+        "label_mr": "चौरसिया"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 419,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "chekkala",
+        "Label (legacy)": "Chekkala",
+        "label_en": "Chekkala",
+        "label_mr": "चेक्कला"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 106,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "chennadasar",
+        "Label (legacy)": "Chennadasar",
+        "label_en": "Chennadasar",
+        "label_mr": "चेन्नदासर"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 13,
+        "religion_key": "christian",
+        "religion_key Marathi": "ख्रिश्चन",
+        "key": "cheramar",
+        "Label (legacy)": "Cheramar",
+        "label_en": "Cheramar",
+        "label_mr": "चेरामार"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 107,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "chettiar",
+        "Label (legacy)": "Chettiar",
+        "label_en": "Chettiar",
+        "label_mr": "चेट्टियार"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 108,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "chhetri",
+        "Label (legacy)": "Chhetri",
+        "label_en": "Chhetri",
+        "label_mr": "छेत्री"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 109,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "chippolumera",
+        "Label (legacy)": "Chippolu\/Mera",
+        "label_en": "Chippolu\/Mera",
+        "label_mr": "चिप्पोलू\/मेरा"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 14,
+        "religion_key": "christian",
+        "religion_key Marathi": "ख्रिश्चन",
+        "key": "christian",
+        "Label (legacy)": "Christian",
+        "label_en": "Christian",
+        "label_mr": "ख्रिश्चन"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 15,
+        "religion_key": "christian",
+        "religion_key Marathi": "ख्रिश्चन",
+        "key": "christian-nadar",
+        "Label (legacy)": "Christian Nadar",
+        "label_en": "Christian Nadar",
+        "label_mr": "ख्रिश्चन नाडर"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 16,
+        "religion_key": "christian",
+        "religion_key Marathi": "ख्रिश्चन",
+        "key": "church-of-north-india-cni",
+        "Label (legacy)": "Church of North India (CNI)",
+        "label_en": "Church of North India (CNI)",
+        "label_mr": "चर्च ऑफ नॉर्थ इंडिया (सीएनआय)"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 17,
+        "religion_key": "christian",
+        "religion_key Marathi": "ख्रिश्चन",
+        "key": "church-of-south-india-csi",
+        "Label (legacy)": "Church of South India (CSI)",
+        "label_en": "Church of South India (CSI)",
+        "label_mr": "चर्च ऑफ साऊथ इंडिया (CSI)"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 110,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "ckp",
+        "Label (legacy)": "CKP",
+        "label_en": "CKP",
+        "label_mr": "सीकेपी"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 472,
+        "religion_key": "sikh",
+        "religion_key Marathi": "शीख",
+        "key": "clean-shaven",
+        "Label (legacy)": "Clean Shaven",
+        "label_en": "Clean Shaven",
+        "label_mr": "क्लीन शेव्ह"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 18,
+        "religion_key": "christian",
+        "religion_key Marathi": "ख्रिश्चन",
+        "key": "cms",
+        "Label (legacy)": "CMS",
+        "label_en": "CMS",
+        "label_mr": "सीएमएस"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 19,
+        "religion_key": "christian",
+        "religion_key Marathi": "ख्रिश्चन",
+        "key": "convert",
+        "Label (legacy)": "Convert",
+        "label_en": "Convert",
+        "label_mr": "रूपांतरित करा"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 111,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "coorgi",
+        "Label (legacy)": "Coorgi",
+        "label_en": "Coorgi",
+        "label_mr": "कुर्ग"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 434,
+        "religion_key": "muslim",
+        "religion_key Marathi": "मुस्लिम",
+        "key": "dawoodi-bohra",
+        "Label (legacy)": "Dawoodi Bohra",
+        "label_en": "Dawoodi Bohra",
+        "label_mr": "दाऊदी बोहरा"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 435,
+        "religion_key": "muslim",
+        "religion_key Marathi": "मुस्लिम",
+        "key": "dekkani",
+        "Label (legacy)": "Dekkani",
+        "label_en": "Dekkani",
+        "label_mr": "देक्कानी"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 112,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "devadiga",
+        "Label (legacy)": "Devadiga",
+        "label_en": "Devadiga",
+        "label_mr": "देवदिगा"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 113,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "devanga",
+        "Label (legacy)": "Devanga",
+        "label_en": "Devanga",
+        "label_mr": "देवांगा"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 114,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "devarthevarmukkulathor",
+        "Label (legacy)": "Devar\/Thevar\/Mukkulathor",
+        "label_en": "Devar\/Thevar\/Mukkulathor",
+        "label_mr": "देवर\/थेवर\/मुक्कूलाथोर"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 115,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "devendra-kula-vellalar",
+        "Label (legacy)": "Devendra Kula Vellalar",
+        "label_en": "Devendra Kula Vellalar",
+        "label_mr": "देवेंद्र कुला वेल्लार"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 116,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "dhangar",
+        "Label (legacy)": "Dhangar",
+        "label_en": "Dhangar",
+        "label_mr": "धनगर"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 117,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "dheevara",
+        "Label (legacy)": "Dheevara",
+        "label_en": "Dheevara",
+        "label_mr": "धीवरा"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 118,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "dhiman",
+        "Label (legacy)": "Dhiman",
+        "label_en": "Dhiman",
+        "label_mr": "धीमान"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 119,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "dhoba",
+        "Label (legacy)": "Dhoba",
+        "label_en": "Dhoba",
+        "label_mr": "धोबा"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 120,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "dhobi",
+        "Label (legacy)": "Dhobi",
+        "label_en": "Dhobi",
+        "label_mr": "धोबी"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 422,
+        "religion_key": "jain",
+        "religion_key Marathi": "जैन",
+        "key": "digambar",
+        "Label (legacy)": "Digambar",
+        "label_en": "Digambar",
+        "label_mr": "दिगंबर"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 121,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "dommala",
+        "Label (legacy)": "Dommala",
+        "label_en": "Dommala",
+        "label_mr": "डोम्माला"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 436,
+        "religion_key": "muslim",
+        "religion_key Marathi": "मुस्लिम",
+        "key": "dudekula",
+        "Label (legacy)": "Dudekula",
+        "label_en": "Dudekula",
+        "label_mr": "डुडेकुला"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 122,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "dusadh",
+        "Label (legacy)": "Dusadh",
+        "label_en": "Dusadh",
+        "label_mr": "दुसाध"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 123,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "ediga",
+        "Label (legacy)": "Ediga",
+        "label_en": "Ediga",
+        "label_mr": "एडिगा"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 20,
+        "religion_key": "christian",
+        "religion_key Marathi": "ख्रिश्चन",
+        "key": "evangelical",
+        "Label (legacy)": "Evangelical",
+        "label_en": "Evangelical",
+        "label_mr": "इव्हँजेलिकल"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 124,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "ezhava",
+        "Label (legacy)": "Ezhava",
+        "label_en": "Ezhava",
+        "label_mr": "एझावा"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 125,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "ezhuthachan",
+        "Label (legacy)": "Ezhuthachan",
+        "label_en": "Ezhuthachan",
+        "label_mr": "एझुथाचन"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 465,
+        "religion_key": "muslim",
+        "religion_key Marathi": "मुस्लिम",
+        "key": "farooqui",
+        "Label (legacy)": "Farooqui",
+        "label_en": "Farooqui",
+        "label_mr": "फारुकी"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 126,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "gabit",
+        "Label (legacy)": "Gabit",
+        "label_en": "Gabit",
+        "label_mr": "गॅबिट"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 127,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "ganakar",
+        "Label (legacy)": "Ganakar",
+        "label_en": "Ganakar",
+        "label_mr": "गणकर"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 128,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "gandla",
+        "Label (legacy)": "Gandla",
+        "label_en": "Gandla",
+        "label_mr": "गांडला"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 129,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "ganiga",
+        "Label (legacy)": "Ganiga",
+        "label_en": "Ganiga",
+        "label_mr": "गणिगा"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 130,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "garhwali",
+        "Label (legacy)": "Garhwali",
+        "label_en": "Garhwali",
+        "label_mr": "गढवाली"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 131,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "gatti",
+        "Label (legacy)": "Gatti",
+        "label_en": "Gatti",
+        "label_mr": "गट्टी"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 132,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "gavali",
+        "Label (legacy)": "Gavali",
+        "label_en": "Gavali",
+        "label_mr": "गवली"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 133,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "gavara",
+        "Label (legacy)": "Gavara",
+        "label_en": "Gavara",
+        "label_mr": "गवारा"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 134,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "ghumar",
+        "Label (legacy)": "Ghumar",
+        "label_en": "Ghumar",
+        "label_mr": "घुमर"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 135,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "goala",
+        "Label (legacy)": "Goala",
+        "label_en": "Goala",
+        "label_mr": "गोआला"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 136,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "goan",
+        "Label (legacy)": "Goan",
+        "label_en": "Goan",
+        "label_mr": "गोव्याचे"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 137,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "goswami",
+        "Label (legacy)": "Goswami",
+        "label_en": "Goswami",
+        "label_mr": "गोस्वामी"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 138,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "goud",
+        "Label (legacy)": "Goud",
+        "label_en": "Goud",
+        "label_mr": "गौड"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 139,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "gounder",
+        "Label (legacy)": "Gounder",
+        "label_en": "Gounder",
+        "label_mr": "गौंडर"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 140,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "gowda",
+        "Label (legacy)": "Gowda",
+        "label_en": "Gowda",
+        "label_mr": "गौडा"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 141,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "gramani",
+        "Label (legacy)": "Gramani",
+        "label_en": "Gramani",
+        "label_mr": "ग्रामणी"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 142,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "gudia",
+        "Label (legacy)": "Gudia",
+        "label_en": "Gudia",
+        "label_mr": "गुडिया"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 143,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "gujarati",
+        "Label (legacy)": "Gujarati",
+        "label_en": "Gujarati",
+        "label_mr": "गुजराती"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 144,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "gujjar",
+        "Label (legacy)": "Gujjar",
+        "label_en": "Gujjar",
+        "label_mr": "गुज्जर"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 145,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "gupta",
+        "Label (legacy)": "Gupta",
+        "label_en": "Gupta",
+        "label_mr": "गुप्ता"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 146,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "guptan",
+        "Label (legacy)": "Guptan",
+        "label_en": "Guptan",
+        "label_mr": "गुप्तन"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 416,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "gurav",
+        "Label (legacy)": "Gurav",
+        "label_en": "Gurav",
+        "label_mr": "गुरव"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 147,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "gurjar",
+        "Label (legacy)": "Gurjar",
+        "label_en": "Gurjar",
+        "label_mr": "गुर्जर"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 473,
+        "religion_key": "sikh",
+        "religion_key Marathi": "शीख",
+        "key": "gursikh",
+        "Label (legacy)": "Gursikh",
+        "label_en": "Gursikh",
+        "label_mr": "गुरसिख"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 148,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "halwai",
+        "Label (legacy)": "Halwai",
+        "label_en": "Halwai",
+        "label_mr": "हलवाई"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 149,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "hegde",
+        "Label (legacy)": "Hegde",
+        "label_en": "Hegde",
+        "label_mr": "हेगडे"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 150,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "helava",
+        "Label (legacy)": "Helava",
+        "label_en": "Helava",
+        "label_mr": "हेलावा"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 151,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "hindu",
+        "Label (legacy)": "Hindu",
+        "label_en": "Hindu",
+        "label_mr": "हिंदू"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 152,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "hugar-jeer",
+        "Label (legacy)": "Hugar (Jeer)",
+        "label_en": "Hugar (Jeer)",
+        "label_mr": "हुगर (जीर)"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 21,
+        "religion_key": "christian",
+        "religion_key Marathi": "ख्रिश्चन",
+        "key": "indian-orthodox",
+        "Label (legacy)": "Indian Orthodox",
+        "label_en": "Indian Orthodox",
+        "label_mr": "भारतीय ऑर्थोडॉक्स"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 22,
+        "religion_key": "christian",
+        "religion_key Marathi": "ख्रिश्चन",
+        "key": "intercaste",
+        "Label (legacy)": "Intercaste",
+        "label_en": "Intercaste",
+        "label_mr": "आंतरजातीय"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 23,
+        "religion_key": "christian",
+        "religion_key Marathi": "ख्रिश्चन",
+        "key": "ipc",
+        "Label (legacy)": "IPC",
+        "label_en": "IPC",
+        "label_mr": "आयपीसी"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 153,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "jaalari",
+        "Label (legacy)": "Jaalari",
+        "label_en": "Jaalari",
+        "label_mr": "जालारी"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 24,
+        "religion_key": "christian",
+        "religion_key Marathi": "ख्रिश्चन",
+        "key": "jacobite",
+        "Label (legacy)": "Jacobite",
+        "label_en": "Jacobite",
+        "label_mr": "जेकोबाइट"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 25,
+        "religion_key": "christian",
+        "religion_key Marathi": "ख्रिश्चन",
+        "key": "jacobite-knanya",
+        "Label (legacy)": "Jacobite Knanya",
+        "label_en": "Jacobite Knanya",
+        "label_mr": "जेकोबाइट कनान्या"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 423,
+        "religion_key": "jain",
+        "religion_key Marathi": "जैन",
+        "key": "jain",
+        "Label (legacy)": "Jain",
+        "label_en": "Jain",
+        "label_mr": "जैन"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 154,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "jaiswal",
+        "Label (legacy)": "Jaiswal",
+        "label_en": "Jaiswal",
+        "label_mr": "जयस्वाल"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 155,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "jandra",
+        "Label (legacy)": "Jandra",
+        "label_en": "Jandra",
+        "label_mr": "जंद्रा"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 156,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "jangam",
+        "Label (legacy)": "Jangam",
+        "label_en": "Jangam",
+        "label_mr": "जंगम"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 437,
+        "religion_key": "muslim",
+        "religion_key Marathi": "मुस्लिम",
+        "key": "jat",
+        "Label (legacy)": "Jat",
+        "label_en": "Jat",
+        "label_mr": "जात"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 157,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "jatav",
+        "Label (legacy)": "Jatav",
+        "label_en": "Jatav",
+        "label_mr": "जातव"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 158,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "jetty-malla",
+        "Label (legacy)": "Jetty Malla",
+        "label_en": "Jetty Malla",
+        "label_mr": "जेट्टी मल्ला"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 429,
+        "religion_key": "jewish",
+        "religion_key Marathi": "ज्यू",
+        "key": "jewish",
+        "Label (legacy)": "Jewish",
+        "label_en": "Jewish",
+        "label_mr": "ज्यू"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 159,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "kachara",
+        "Label (legacy)": "Kachara",
+        "label_en": "Kachara",
+        "label_mr": "कचरा"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 160,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "kaibarta",
+        "Label (legacy)": "Kaibarta",
+        "label_en": "Kaibarta",
+        "label_mr": "कैबर्ता"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 161,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "kakkalan",
+        "Label (legacy)": "Kakkalan",
+        "label_en": "Kakkalan",
+        "label_mr": "कक्कलन"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 162,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "kalar",
+        "Label (legacy)": "Kalar",
+        "label_en": "Kalar",
+        "label_mr": "कलार"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 163,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "kalinga",
+        "Label (legacy)": "Kalinga",
+        "label_en": "Kalinga",
+        "label_mr": "कलिंग"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 164,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "kalinga-vysya",
+        "Label (legacy)": "Kalinga Vysya",
+        "label_en": "Kalinga Vysya",
+        "label_mr": "कलिंग वैश्य"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 165,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "kalita",
+        "Label (legacy)": "Kalita",
+        "label_en": "Kalita",
+        "label_mr": "कलिता"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 166,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "kalwar",
+        "Label (legacy)": "Kalwar",
+        "label_en": "Kalwar",
+        "label_mr": "कलवार"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 474,
+        "religion_key": "sikh",
+        "religion_key Marathi": "शीख",
+        "key": "kamboj",
+        "Label (legacy)": "Kamboj",
+        "label_en": "Kamboj",
+        "label_mr": "कंबोज"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 167,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "kamma",
+        "Label (legacy)": "Kamma",
+        "label_en": "Kamma",
+        "label_mr": "कम्मा"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 168,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "kamma-naidu",
+        "Label (legacy)": "Kamma Naidu",
+        "label_en": "Kamma Naidu",
+        "label_mr": "कम्मा नायडू"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 169,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "kammala",
+        "Label (legacy)": "Kammala",
+        "label_en": "Kammala",
+        "label_mr": "कम्मला"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 170,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "kaniyan",
+        "Label (legacy)": "Kaniyan",
+        "label_en": "Kaniyan",
+        "label_mr": "कनियान"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 171,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "kannada-mogaveera",
+        "Label (legacy)": "Kannada Mogaveera",
+        "label_en": "Kannada Mogaveera",
+        "label_mr": "कन्नड मोगवीरा"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 172,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "kansari",
+        "Label (legacy)": "Kansari",
+        "label_en": "Kansari",
+        "label_mr": "कंसारी"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 173,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "kanu",
+        "Label (legacy)": "Kanu",
+        "label_en": "Kanu",
+        "label_mr": "कानू"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 174,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "kapu",
+        "Label (legacy)": "Kapu",
+        "label_en": "Kapu",
+        "label_mr": "कापू"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 175,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "kapu-naidu",
+        "Label (legacy)": "Kapu Naidu",
+        "label_en": "Kapu Naidu",
+        "label_mr": "कापू नायडू"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 176,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "karana",
+        "Label (legacy)": "Karana",
+        "label_en": "Karana",
+        "label_mr": "करणा"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 177,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "karmakar",
+        "Label (legacy)": "Karmakar",
+        "label_en": "Karmakar",
+        "label_mr": "कर्माकर"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 178,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "kartha",
+        "Label (legacy)": "Kartha",
+        "label_en": "Kartha",
+        "label_mr": "कार्था"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 179,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "karuneegar",
+        "Label (legacy)": "Karuneegar",
+        "label_en": "Karuneegar",
+        "label_mr": "करुणीगर"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 180,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "kasar",
+        "Label (legacy)": "Kasar",
+        "label_en": "Kasar",
+        "label_mr": "कासार"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 181,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "kashyap",
+        "Label (legacy)": "Kashyap",
+        "label_en": "Kashyap",
+        "label_mr": "कश्यप"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 182,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "kavuthiyyaezhavathy",
+        "Label (legacy)": "Kavuthiyya\/Ezhavathy",
+        "label_en": "Kavuthiyya\/Ezhavathy",
+        "label_mr": "कवुथिय्या\/एझवथी"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 183,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "kayastha",
+        "Label (legacy)": "Kayastha",
+        "label_en": "Kayastha",
+        "label_mr": "कायस्थ"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 475,
+        "religion_key": "sikh",
+        "religion_key Marathi": "शीख",
+        "key": "kesadhari",
+        "Label (legacy)": "Kesadhari",
+        "label_en": "Kesadhari",
+        "label_mr": "केसाधारी"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 184,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "khandayat",
+        "Label (legacy)": "Khandayat",
+        "label_en": "Khandayat",
+        "label_mr": "खंडायत"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 185,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "khandelwal",
+        "Label (legacy)": "Khandelwal",
+        "label_en": "Khandelwal",
+        "label_mr": "खंडेलवाल"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 186,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "kharwar",
+        "Label (legacy)": "Kharwar",
+        "label_en": "Kharwar",
+        "label_mr": "खरवार"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 187,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "khatik",
+        "Label (legacy)": "Khatik",
+        "label_en": "Khatik",
+        "label_mr": "खाटिक"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 476,
+        "religion_key": "sikh",
+        "religion_key Marathi": "शीख",
+        "key": "khatri",
+        "Label (legacy)": "Khatri",
+        "label_en": "Khatri",
+        "label_mr": "खत्री"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 438,
+        "religion_key": "muslim",
+        "religion_key Marathi": "मुस्लिम",
+        "key": "khoja",
+        "Label (legacy)": "Khoja",
+        "label_en": "Khoja",
+        "label_mr": "खोजा"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 188,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "kirar",
+        "Label (legacy)": "Kirar",
+        "label_en": "Kirar",
+        "label_mr": "किरार"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 26,
+        "religion_key": "christian",
+        "religion_key Marathi": "ख्रिश्चन",
+        "key": "knanaya",
+        "Label (legacy)": "Knanaya",
+        "label_en": "Knanaya",
+        "label_mr": "कनाया"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 27,
+        "religion_key": "christian",
+        "religion_key Marathi": "ख्रिश्चन",
+        "key": "knanaya-catholic",
+        "Label (legacy)": "Knanaya Catholic",
+        "label_en": "Knanaya Catholic",
+        "label_mr": "कनाया कॅथोलिक"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 28,
+        "religion_key": "christian",
+        "religion_key Marathi": "ख्रिश्चन",
+        "key": "knanaya-jacobite",
+        "Label (legacy)": "Knanaya Jacobite",
+        "label_en": "Knanaya Jacobite",
+        "label_mr": "कनाया जेकोबाइट"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 29,
+        "religion_key": "christian",
+        "religion_key Marathi": "ख्रिश्चन",
+        "key": "knanaya-pentecostal",
+        "Label (legacy)": "Knanaya Pentecostal",
+        "label_en": "Knanaya Pentecostal",
+        "label_mr": "कनाया पेंटेकोस्टल"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 30,
+        "religion_key": "christian",
+        "religion_key Marathi": "ख्रिश्चन",
+        "key": "knanya",
+        "Label (legacy)": "Knanya",
+        "label_en": "Knanya",
+        "label_mr": "कन्या"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 189,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "koli",
+        "Label (legacy)": "Koli",
+        "label_en": "Koli",
+        "label_mr": "कोळी"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 190,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "koli-patel",
+        "Label (legacy)": "Koli Patel",
+        "label_en": "Koli Patel",
+        "label_mr": "कोळी पटेल"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 191,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "kongu-vellala-gounder",
+        "Label (legacy)": "Kongu Vellala Gounder",
+        "label_en": "Kongu Vellala Gounder",
+        "label_mr": "कोंगु वेल्लाला गौंडर"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 192,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "konkani",
+        "Label (legacy)": "Konkani",
+        "label_en": "Konkani",
+        "label_mr": "कोकणी"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 193,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "korama",
+        "Label (legacy)": "Korama",
+        "label_en": "Korama",
+        "label_mr": "कोरामा"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 194,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "kori",
+        "Label (legacy)": "Kori",
+        "label_en": "Kori",
+        "label_mr": "कोरी"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 195,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "koshti",
+        "Label (legacy)": "Koshti",
+        "label_en": "Koshti",
+        "label_mr": "कोष्टी"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 196,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "krishnavaka",
+        "Label (legacy)": "Krishnavaka",
+        "label_en": "Krishnavaka",
+        "label_mr": "कृष्णवाक"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 414,
+        "religion_key": "sikh",
+        "religion_key Marathi": "शीख",
+        "key": "kshatriya",
+        "Label (legacy)": "Kshatriya",
+        "label_en": "Kshatriya",
+        "label_mr": "क्षत्रिय"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 477,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "kshatriya",
+        "Label (legacy)": "Kshatriya",
+        "label_en": "Kshatriya",
+        "label_mr": "क्षत्रिय"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 197,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "kshatriyarajuvarma",
+        "Label (legacy)": "Kshatriya\/Raju\/Varma",
+        "label_en": "Kshatriya\/Raju\/Varma",
+        "label_mr": "क्षत्रिय\/राजू\/वर्मा"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 198,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "kudumbi",
+        "Label (legacy)": "Kudumbi",
+        "label_en": "Kudumbi",
+        "label_mr": "कुडुंबी"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 199,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "kulal",
+        "Label (legacy)": "Kulal",
+        "label_en": "Kulal",
+        "label_mr": "कुलाल"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 200,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "kulalar",
+        "Label (legacy)": "Kulalar",
+        "label_en": "Kulalar",
+        "label_mr": "कुललार"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 201,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "kulita",
+        "Label (legacy)": "Kulita",
+        "label_en": "Kulita",
+        "label_mr": "कुलिता"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 202,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "kumawat",
+        "Label (legacy)": "Kumawat",
+        "label_en": "Kumawat",
+        "label_mr": "कुमावत"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 203,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "kumbara",
+        "Label (legacy)": "Kumbara",
+        "label_en": "Kumbara",
+        "label_mr": "कुंबारा"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 204,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "kumbhakarkumbhar",
+        "Label (legacy)": "Kumbhakar\/Kumbhar",
+        "label_en": "Kumbhakar\/Kumbhar",
+        "label_mr": "कुंभकर\/कुंभर"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 205,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "kumhar",
+        "Label (legacy)": "Kumhar",
+        "label_en": "Kumhar",
+        "label_mr": "कुम्हार"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 206,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "kummari",
+        "Label (legacy)": "Kummari",
+        "label_en": "Kummari",
+        "label_mr": "कुम्मारी"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 207,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "kunbi",
+        "Label (legacy)": "Kunbi",
+        "label_en": "Kunbi",
+        "label_mr": "कुनबी"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 208,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "kurava",
+        "Label (legacy)": "Kurava",
+        "label_en": "Kurava",
+        "label_mr": "कुरवा"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 209,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "kuravan",
+        "Label (legacy)": "Kuravan",
+        "label_en": "Kuravan",
+        "label_mr": "कुरवन"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 210,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "kurmi",
+        "Label (legacy)": "Kurmi",
+        "label_en": "Kurmi",
+        "label_mr": "कुर्मी"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 211,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "kurmi-kshatriya",
+        "Label (legacy)": "Kurmi Kshatriya",
+        "label_en": "Kurmi Kshatriya",
+        "label_mr": "कुर्मी क्षत्रिय"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 212,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "kuruba",
+        "Label (legacy)": "Kuruba",
+        "label_en": "Kuruba",
+        "label_mr": "कुरुबा"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 213,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "kuruhina-shetty",
+        "Label (legacy)": "Kuruhina Shetty",
+        "label_en": "Kuruhina Shetty",
+        "label_mr": "कुरुहिना शेट्टी"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 214,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "kurumbar",
+        "Label (legacy)": "Kurumbar",
+        "label_en": "Kurumbar",
+        "label_mr": "कुरुंबर"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 215,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "kurup",
+        "Label (legacy)": "Kurup",
+        "label_en": "Kurup",
+        "label_mr": "कुरुप"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 216,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "kushwaha",
+        "Label (legacy)": "Kushwaha",
+        "label_en": "Kushwaha",
+        "label_mr": "कुशवाहा"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 217,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "kutchi",
+        "Label (legacy)": "Kutchi",
+        "label_en": "Kutchi",
+        "label_mr": "कुच्ची"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 478,
+        "religion_key": "sikh",
+        "religion_key Marathi": "शीख",
+        "key": "labana",
+        "Label (legacy)": "Labana",
+        "label_en": "Labana",
+        "label_mr": "लबाना"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 218,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "lambadibanjara",
+        "Label (legacy)": "Lambadi\/Banjara",
+        "label_en": "Lambadi\/Banjara",
+        "label_mr": "लंबडी\/बंजारा"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 219,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "lambani",
+        "Label (legacy)": "Lambani",
+        "label_en": "Lambani",
+        "label_mr": "लंबानी"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 31,
+        "religion_key": "christian",
+        "religion_key Marathi": "ख्रिश्चन",
+        "key": "latin-catholic",
+        "Label (legacy)": "Latin Catholic",
+        "label_en": "Latin Catholic",
+        "label_mr": "लॅटिन कॅथोलिक"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 439,
+        "religion_key": "muslim",
+        "religion_key Marathi": "मुस्लिम",
+        "key": "lebbai",
+        "Label (legacy)": "Lebbai",
+        "label_en": "Lebbai",
+        "label_mr": "लेब्बाई"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 220,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "leva-patil",
+        "Label (legacy)": "Leva Patil",
+        "label_en": "Leva Patil",
+        "label_mr": "लेवा पाटील"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 418,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "lingayat",
+        "Label (legacy)": "Lingayat",
+        "label_en": "Lingayat",
+        "label_mr": "लिंगायत"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 221,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "lingayath",
+        "Label (legacy)": "Lingayath",
+        "label_en": "Lingayath",
+        "label_mr": "लिंगायत"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 222,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "lohana",
+        "Label (legacy)": "Lohana",
+        "label_en": "Lohana",
+        "label_mr": "लोहना"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 223,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "lohar",
+        "Label (legacy)": "Lohar",
+        "label_en": "Lohar",
+        "label_mr": "लोहार"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 224,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "loniyalonialunia",
+        "Label (legacy)": "Loniya\/Lonia\/Lunia",
+        "label_en": "Loniya\/Lonia\/Lunia",
+        "label_mr": "लोनिया\/लोनिया\/लुनिया"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 225,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "lubana",
+        "Label (legacy)": "Lubana",
+        "label_en": "Lubana",
+        "label_mr": "लुबाना"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 226,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "madhesiya",
+        "Label (legacy)": "Madhesiya",
+        "label_en": "Madhesiya",
+        "label_mr": "मधेसिया"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 227,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "madiga",
+        "Label (legacy)": "Madiga",
+        "label_en": "Madiga",
+        "label_mr": "मदिगा"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 228,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "mahajan",
+        "Label (legacy)": "Mahajan",
+        "label_en": "Mahajan",
+        "label_mr": "महाजन"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 229,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "mahar",
+        "Label (legacy)": "Mahar",
+        "label_en": "Mahar",
+        "label_mr": "महार"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 230,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "maharashtrian",
+        "Label (legacy)": "Maharashtrian",
+        "label_en": "Maharashtrian",
+        "label_mr": "महाराष्ट्रीयन"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 231,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "mahendra",
+        "Label (legacy)": "Mahendra",
+        "label_en": "Mahendra",
+        "label_mr": "महेंद्र"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 232,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "maheshwari",
+        "Label (legacy)": "Maheshwari",
+        "label_en": "Maheshwari",
+        "label_mr": "महेश्वरी"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 233,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "mahindra",
+        "Label (legacy)": "Mahindra",
+        "label_en": "Mahindra",
+        "label_mr": "महिंद्रा"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 234,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "mahishya",
+        "Label (legacy)": "Mahishya",
+        "label_en": "Mahishya",
+        "label_mr": "महिष्य"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 235,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "majabi",
+        "Label (legacy)": "Majabi",
+        "label_en": "Majabi",
+        "label_mr": "मजाबी"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 236,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "mala",
+        "Label (legacy)": "Mala",
+        "label_en": "Mala",
+        "label_mr": "मला"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 32,
+        "religion_key": "christian",
+        "religion_key Marathi": "ख्रिश्चन",
+        "key": "malankara",
+        "Label (legacy)": "Malankara",
+        "label_en": "Malankara",
+        "label_mr": "मलंकरा"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 33,
+        "religion_key": "christian",
+        "religion_key Marathi": "ख्रिश्चन",
+        "key": "malankara-catholic",
+        "Label (legacy)": "Malankara Catholic",
+        "label_en": "Malankara Catholic",
+        "label_mr": "मलंकरा कॅथोलिक"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 237,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "malayalee-variar",
+        "Label (legacy)": "Malayalee Variar",
+        "label_en": "Malayalee Variar",
+        "label_mr": "मल्याळी वेरियर"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 238,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "mali",
+        "Label (legacy)": "Mali",
+        "label_en": "Mali",
+        "label_mr": "माली"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 239,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "mallah",
+        "Label (legacy)": "Mallah",
+        "label_en": "Mallah",
+        "label_mr": "मल्लाह"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 240,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "mangalorean",
+        "Label (legacy)": "Mangalorean",
+        "label_en": "Mangalorean",
+        "label_mr": "मंगळूरियन"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 34,
+        "religion_key": "christian",
+        "religion_key Marathi": "ख्रिश्चन",
+        "key": "manglorean",
+        "Label (legacy)": "Manglorean",
+        "label_en": "Manglorean",
+        "label_mr": "मंगलोरियन"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 241,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "maniyani",
+        "Label (legacy)": "Maniyani",
+        "label_en": "Maniyani",
+        "label_mr": "मनियानी"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 242,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "mannadiar",
+        "Label (legacy)": "Mannadiar",
+        "label_en": "Mannadiar",
+        "label_mr": "मन्नाडियार"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 243,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "mannan",
+        "Label (legacy)": "Mannan",
+        "label_en": "Mannan",
+        "label_mr": "मन्नान"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 440,
+        "religion_key": "muslim",
+        "religion_key Marathi": "मुस्लिम",
+        "key": "mapila",
+        "Label (legacy)": "Mapila",
+        "label_en": "Mapila",
+        "label_mr": "मापिला"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 441,
+        "religion_key": "muslim",
+        "religion_key Marathi": "मुस्लिम",
+        "key": "maraicar",
+        "Label (legacy)": "Maraicar",
+        "label_en": "Maraicar",
+        "label_mr": "मराकार"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 244,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "marar",
+        "Label (legacy)": "Marar",
+        "label_en": "Marar",
+        "label_mr": "मारार"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 412,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "maratha",
+        "Label (legacy)": "Maratha",
+        "label_en": "Maratha",
+        "label_mr": "मराठा"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 35,
+        "religion_key": "christian",
+        "religion_key Marathi": "ख्रिश्चन",
+        "key": "marthoma",
+        "Label (legacy)": "Marthoma",
+        "label_en": "Marthoma",
+        "label_mr": "मार्थोमा"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 245,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "maruthuvar",
+        "Label (legacy)": "Maruthuvar",
+        "label_en": "Maruthuvar",
+        "label_mr": "मरुथुवर"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 246,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "marvar",
+        "Label (legacy)": "Marvar",
+        "label_en": "Marvar",
+        "label_mr": "मारवर"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 247,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "marwari",
+        "Label (legacy)": "Marwari",
+        "label_en": "Marwari",
+        "label_mr": "मारवाडी"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 248,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "matang",
+        "Label (legacy)": "Matang",
+        "label_en": "Matang",
+        "label_mr": "मातंग"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 249,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "maurya",
+        "Label (legacy)": "Maurya",
+        "label_en": "Maurya",
+        "label_mr": "मौर्य"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 479,
+        "religion_key": "sikh",
+        "religion_key Marathi": "शीख",
+        "key": "mazhbimajabi",
+        "Label (legacy)": "Mazhbi\/Majabi",
+        "label_en": "Mazhbi\/Majabi",
+        "label_mr": "माझबी\/मजाबी"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 250,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "meda",
+        "Label (legacy)": "Meda",
+        "label_en": "Meda",
+        "label_mr": "मेडा"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 251,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "medara",
+        "Label (legacy)": "Medara",
+        "label_en": "Medara",
+        "label_mr": "मेडारा"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 252,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "meena",
+        "Label (legacy)": "Meena",
+        "label_en": "Meena",
+        "label_mr": "मीना"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 253,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "meenavar",
+        "Label (legacy)": "Meenavar",
+        "label_en": "Meenavar",
+        "label_mr": "मीनावर"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 254,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "meghwal",
+        "Label (legacy)": "Meghwal",
+        "label_en": "Meghwal",
+        "label_mr": "मेघवाल"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 255,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "mehra",
+        "Label (legacy)": "Mehra",
+        "label_en": "Mehra",
+        "label_mr": "मेहरा"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 442,
+        "religion_key": "muslim",
+        "religion_key Marathi": "मुस्लिम",
+        "key": "memon",
+        "Label (legacy)": "Memon",
+        "label_en": "Memon",
+        "label_mr": "मेमन"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 256,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "menon",
+        "Label (legacy)": "Menon",
+        "label_en": "Menon",
+        "label_mr": "मेनन"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 257,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "meru-darji",
+        "Label (legacy)": "Meru Darji",
+        "label_en": "Meru Darji",
+        "label_mr": "मेरू दर्जी"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 36,
+        "religion_key": "christian",
+        "religion_key Marathi": "ख्रिश्चन",
+        "key": "methodist",
+        "Label (legacy)": "Methodist",
+        "label_en": "Methodist",
+        "label_mr": "मेथोडिस्ट"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 466,
+        "religion_key": "muslim",
+        "religion_key Marathi": "मुस्लिम",
+        "key": "mirza",
+        "Label (legacy)": "Mirza",
+        "label_en": "Mirza",
+        "label_mr": "मिर्झा"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 258,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "modak",
+        "Label (legacy)": "Modak",
+        "label_en": "Modak",
+        "label_mr": "मोदक"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 259,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "mogaveera",
+        "Label (legacy)": "Mogaveera",
+        "label_en": "Mogaveera",
+        "label_mr": "मोगावीरा"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 260,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "monchi",
+        "Label (legacy)": "Monchi",
+        "label_en": "Monchi",
+        "label_mr": "मोंची"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 37,
+        "religion_key": "christian",
+        "religion_key Marathi": "ख्रिश्चन",
+        "key": "mormon",
+        "Label (legacy)": "Mormon",
+        "label_en": "Mormon",
+        "label_mr": "मॉर्मन"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 261,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "mudaliar",
+        "Label (legacy)": "Mudaliar",
+        "label_en": "Mudaliar",
+        "label_mr": "मुदलियार"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 262,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "mudiraj",
+        "Label (legacy)": "Mudiraj",
+        "label_en": "Mudiraj",
+        "label_mr": "मुदिराज"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 443,
+        "religion_key": "muslim",
+        "religion_key Marathi": "मुस्लिम",
+        "key": "mughal",
+        "Label (legacy)": "Mughal",
+        "label_en": "Mughal",
+        "label_mr": "मुघल"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 263,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "munnuru-kapu",
+        "Label (legacy)": "Munnuru Kapu",
+        "label_en": "Munnuru Kapu",
+        "label_mr": "मुन्नुरु कापू"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 444,
+        "religion_key": "muslim",
+        "religion_key Marathi": "मुस्लिम",
+        "key": "muslim",
+        "Label (legacy)": "Muslim",
+        "label_en": "Muslim",
+        "label_mr": "मुस्लिम"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 264,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "muthuraja",
+        "Label (legacy)": "Muthuraja",
+        "label_en": "Muthuraja",
+        "label_mr": "मुथुराजा"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 265,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "naagavamsam",
+        "Label (legacy)": "Naagavamsam",
+        "label_en": "Naagavamsam",
+        "label_mr": "नागवंसम"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 38,
+        "religion_key": "christian",
+        "religion_key Marathi": "ख्रिश्चन",
+        "key": "nadar",
+        "Label (legacy)": "Nadar",
+        "label_en": "Nadar",
+        "label_mr": "नादार"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 266,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "nagaralu",
+        "Label (legacy)": "Nagaralu",
+        "label_en": "Nagaralu",
+        "label_mr": "नागरालू"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 267,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "nai",
+        "Label (legacy)": "Nai",
+        "label_en": "Nai",
+        "label_mr": "नाई"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 268,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "naicken",
+        "Label (legacy)": "Naicken",
+        "label_en": "Naicken",
+        "label_mr": "नायकेन"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 269,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "naicker",
+        "Label (legacy)": "Naicker",
+        "label_en": "Naicker",
+        "label_mr": "नायकर"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 270,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "naidu",
+        "Label (legacy)": "Naidu",
+        "label_en": "Naidu",
+        "label_mr": "नायडू"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 271,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "naik",
+        "Label (legacy)": "Naik",
+        "label_en": "Naik",
+        "label_mr": "नाईक"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 272,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "nair",
+        "Label (legacy)": "Nair",
+        "label_en": "Nair",
+        "label_mr": "नायर"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 273,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "namasudra",
+        "Label (legacy)": "Namasudra",
+        "label_en": "Namasudra",
+        "label_mr": "नामासुद्र"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 274,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "nambiar",
+        "Label (legacy)": "Nambiar",
+        "label_en": "Nambiar",
+        "label_mr": "नाम्बियार"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 275,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "nambisan",
+        "Label (legacy)": "Nambisan",
+        "label_en": "Nambisan",
+        "label_mr": "नाम्बिसन"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 276,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "namdev",
+        "Label (legacy)": "Namdev",
+        "label_en": "Namdev",
+        "label_mr": "नामदेव"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 277,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "namosudra",
+        "Label (legacy)": "Namosudra",
+        "label_en": "Namosudra",
+        "label_mr": "नमोसुद्र"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 278,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "napit",
+        "Label (legacy)": "Napit",
+        "label_en": "Napit",
+        "label_mr": "नापिट"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 279,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "nayak",
+        "Label (legacy)": "Nayak",
+        "label_en": "Nayak",
+        "label_mr": "नायक"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 280,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "nayaknaik",
+        "Label (legacy)": "Nayak\/Naik",
+        "label_en": "Nayak\/Naik",
+        "label_mr": "नायक\/नाईक"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 281,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "nayaka",
+        "Label (legacy)": "Nayaka",
+        "label_en": "Nayaka",
+        "label_mr": "नायका"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 282,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "neeli",
+        "Label (legacy)": "Neeli",
+        "label_en": "Neeli",
+        "label_mr": "नीली"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 3,
+        "religion_key": "buddhist",
+        "religion_key Marathi": "बौद्ध",
+        "key": "neo-buddhist",
+        "Label (legacy)": "Neo-Buddhist",
+        "label_en": "Neo-Buddhist",
+        "label_mr": "नव-बौद्ध"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 283,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "nepali",
+        "Label (legacy)": "Nepali",
+        "label_en": "Nepali",
+        "label_mr": "नेपाळी"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 284,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "nhavi",
+        "Label (legacy)": "Nhavi",
+        "label_en": "Nhavi",
+        "label_mr": "न्हावी"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 413,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "obc",
+        "Label (legacy)": "OBC",
+        "label_en": "OBC",
+        "label_mr": "ओबीसी"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 39,
+        "religion_key": "christian",
+        "religion_key Marathi": "ख्रिश्चन",
+        "key": "orthodox",
+        "Label (legacy)": "Orthodox",
+        "label_en": "Orthodox",
+        "label_mr": "ऑर्थोडॉक्स"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 285,
+        "religion_key": "jain",
+        "religion_key Marathi": "जैन",
+        "key": "oswal",
+        "Label (legacy)": "Oswal",
+        "label_en": "Oswal",
+        "label_mr": "ओसवाल"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 427,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "oswal",
+        "Label (legacy)": "Oswal",
+        "label_en": "Oswal",
+        "label_mr": "ओसवाल"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 286,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "otari",
+        "Label (legacy)": "Otari",
+        "label_en": "Otari",
+        "label_mr": "ओतारी"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 287,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "other",
+        "Label (legacy)": "Other",
+        "label_en": "Other",
+        "label_mr": "इतर"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 288,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "padmasali",
+        "Label (legacy)": "Padmasali",
+        "label_en": "Padmasali",
+        "label_mr": "पद्मसाली"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 289,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "panchal",
+        "Label (legacy)": "Panchal",
+        "label_en": "Panchal",
+        "label_mr": "पांचाल"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 290,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "pandaram",
+        "Label (legacy)": "Pandaram",
+        "label_en": "Pandaram",
+        "label_mr": "पंडारम"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 291,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "panicker",
+        "Label (legacy)": "Panicker",
+        "label_en": "Panicker",
+        "label_mr": "पॅनिकर"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 292,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "paravan",
+        "Label (legacy)": "Paravan",
+        "label_en": "Paravan",
+        "label_mr": "परवन"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 293,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "parit",
+        "Label (legacy)": "Parit",
+        "label_en": "Parit",
+        "label_mr": "पारिट"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 294,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "parkava-kulam",
+        "Label (legacy)": "Parkava Kulam",
+        "label_en": "Parkava Kulam",
+        "label_mr": "पार्कावा कुलम"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 469,
+        "religion_key": "parsi",
+        "religion_key Marathi": "पारशी",
+        "key": "parsi",
+        "Label (legacy)": "Parsi",
+        "label_en": "Parsi",
+        "label_mr": "पारसी"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 295,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "partraj",
+        "Label (legacy)": "Partraj",
+        "label_en": "Partraj",
+        "label_mr": "परतराज"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 296,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "pasi",
+        "Label (legacy)": "Pasi",
+        "label_en": "Pasi",
+        "label_mr": "पासी"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 297,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "paswan",
+        "Label (legacy)": "Paswan",
+        "label_en": "Paswan",
+        "label_mr": "पसवान"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 298,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "patel",
+        "Label (legacy)": "Patel",
+        "label_en": "Patel",
+        "label_mr": "पटेल"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 445,
+        "religion_key": "muslim",
+        "religion_key Marathi": "मुस्लिम",
+        "key": "pathan",
+        "Label (legacy)": "Pathan",
+        "label_en": "Pathan",
+        "label_mr": "पठाण"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 299,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "patnaick",
+        "Label (legacy)": "Patnaick",
+        "label_en": "Patnaick",
+        "label_mr": "पटनायक"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 300,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "patra",
+        "Label (legacy)": "Patra",
+        "label_en": "Patra",
+        "label_mr": "पात्रा"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 301,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "patwa",
+        "Label (legacy)": "Patwa",
+        "label_en": "Patwa",
+        "label_mr": "पटवा"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 40,
+        "religion_key": "christian",
+        "religion_key Marathi": "ख्रिश्चन",
+        "key": "pentecost",
+        "Label (legacy)": "Pentecost",
+        "label_en": "Pentecost",
+        "label_mr": "पेंटेकोस्ट"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 302,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "perika",
+        "Label (legacy)": "Perika",
+        "label_en": "Perika",
+        "label_mr": "पेरिका"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 303,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "pillai",
+        "Label (legacy)": "Pillai",
+        "label_en": "Pillai",
+        "label_mr": "पिल्लई"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 304,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "pisharody",
+        "Label (legacy)": "Pisharody",
+        "label_en": "Pisharody",
+        "label_mr": "पिशारोडी"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 305,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "poduval",
+        "Label (legacy)": "Poduval",
+        "label_en": "Poduval",
+        "label_mr": "पोडुवाल"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 306,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "poosala",
+        "Label (legacy)": "Poosala",
+        "label_en": "Poosala",
+        "label_mr": "पूसाला"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 424,
+        "religion_key": "jain",
+        "religion_key Marathi": "जैन",
+        "key": "porwal",
+        "Label (legacy)": "Porwal",
+        "label_en": "Porwal",
+        "label_mr": "पोरवाल"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 307,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "prajapati",
+        "Label (legacy)": "Prajapati",
+        "label_en": "Prajapati",
+        "label_mr": "प्रजापती"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 41,
+        "religion_key": "christian",
+        "religion_key Marathi": "ख्रिश्चन",
+        "key": "presbyterian",
+        "Label (legacy)": "Presbyterian",
+        "label_en": "Presbyterian",
+        "label_mr": "प्रेस्बिटेरियन"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 42,
+        "religion_key": "christian",
+        "religion_key Marathi": "ख्रिश्चन",
+        "key": "protestant",
+        "Label (legacy)": "Protestant",
+        "label_en": "Protestant",
+        "label_mr": "प्रोटेस्टंट"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 308,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "pulaya",
+        "Label (legacy)": "Pulaya",
+        "label_en": "Pulaya",
+        "label_mr": "पुलया"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 309,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "punjabi",
+        "Label (legacy)": "Punjabi",
+        "label_en": "Punjabi",
+        "label_mr": "पंजाबी"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 446,
+        "religion_key": "muslim",
+        "religion_key Marathi": "मुस्लिम",
+        "key": "qureshi",
+        "Label (legacy)": "Qureshi",
+        "label_en": "Qureshi",
+        "label_mr": "कुरेशी"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 310,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "raigar",
+        "Label (legacy)": "Raigar",
+        "label_en": "Raigar",
+        "label_mr": "रायगर"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 311,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "rajaka",
+        "Label (legacy)": "Rajaka",
+        "label_en": "Rajaka",
+        "label_mr": "राजका"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 312,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "rajakachakalidhobi",
+        "Label (legacy)": "Rajaka\/Chakali\/Dhobi",
+        "label_en": "Rajaka\/Chakali\/Dhobi",
+        "label_mr": "रजका\/चकली\/धोबी"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 313,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "rajbhar",
+        "Label (legacy)": "Rajbhar",
+        "label_en": "Rajbhar",
+        "label_mr": "राजभर"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 415,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "rajput",
+        "Label (legacy)": "Rajput",
+        "label_en": "Rajput",
+        "label_mr": "राजपूत"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 447,
+        "religion_key": "muslim",
+        "religion_key Marathi": "मुस्लिम",
+        "key": "rajput",
+        "Label (legacy)": "Rajput",
+        "label_en": "Rajput",
+        "label_mr": "राजपूत"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 480,
+        "religion_key": "sikh",
+        "religion_key Marathi": "शीख",
+        "key": "ramdasia",
+        "Label (legacy)": "Ramdasia",
+        "label_en": "Ramdasia",
+        "label_mr": "रामदासिया"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 481,
+        "religion_key": "sikh",
+        "religion_key Marathi": "शीख",
+        "key": "ramgharia",
+        "Label (legacy)": "Ramgharia",
+        "label_en": "Ramgharia",
+        "label_mr": "रामघरिया"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 314,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "rauniyar",
+        "Label (legacy)": "Rauniyar",
+        "label_en": "Rauniyar",
+        "label_mr": "रौनियार"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 482,
+        "religion_key": "sikh",
+        "religion_key Marathi": "शीख",
+        "key": "ravidasia",
+        "Label (legacy)": "Ravidasia",
+        "label_en": "Ravidasia",
+        "label_mr": "रविदासिया"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 315,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "rawat",
+        "Label (legacy)": "Rawat",
+        "label_en": "Rawat",
+        "label_mr": "रावत"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 43,
+        "religion_key": "christian",
+        "religion_key Marathi": "ख्रिश्चन",
+        "key": "rcsc",
+        "Label (legacy)": "RCSC",
+        "label_en": "RCSC",
+        "label_mr": "आरसीएससी"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 316,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "reddiar",
+        "Label (legacy)": "Reddiar",
+        "label_en": "Reddiar",
+        "label_mr": "रेड्डियार"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 317,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "reddy",
+        "Label (legacy)": "Reddy",
+        "label_en": "Reddy",
+        "label_mr": "रेड्डी"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 318,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "relli",
+        "Label (legacy)": "Relli",
+        "label_en": "Relli",
+        "label_mr": "रेली"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 44,
+        "religion_key": "christian",
+        "religion_key Marathi": "ख्रिश्चन",
+        "key": "roman-catholic",
+        "Label (legacy)": "Roman Catholic",
+        "label_en": "Roman Catholic",
+        "label_mr": "रोमन कॅथोलिक"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 448,
+        "religion_key": "muslim",
+        "religion_key Marathi": "मुस्लिम",
+        "key": "rowther",
+        "Label (legacy)": "Rowther",
+        "label_en": "Rowther",
+        "label_mr": "रॉथर"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 319,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "sadgop",
+        "Label (legacy)": "Sadgop",
+        "label_en": "Sadgop",
+        "label_mr": "सदगॉप"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 421,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "sagara",
+        "Label (legacy)": "Sagara",
+        "label_en": "Sagara",
+        "label_mr": "सागरा"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 320,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "saha",
+        "Label (legacy)": "Saha",
+        "label_en": "Saha",
+        "label_mr": "साहा"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 321,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "sahu",
+        "Label (legacy)": "Sahu",
+        "label_en": "Sahu",
+        "label_mr": "साहू"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 483,
+        "religion_key": "sikh",
+        "religion_key Marathi": "शीख",
+        "key": "saini",
+        "Label (legacy)": "Saini",
+        "label_en": "Saini",
+        "label_mr": "सैनी"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 322,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "saiva-vellala",
+        "Label (legacy)": "Saiva Vellala",
+        "label_en": "Saiva Vellala",
+        "label_mr": "शैव वेल्लाला"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 323,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "saliya",
+        "Label (legacy)": "Saliya",
+        "label_en": "Saliya",
+        "label_mr": "सालिया"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 45,
+        "religion_key": "christian",
+        "religion_key Marathi": "ख्रिश्चन",
+        "key": "salvation-army",
+        "Label (legacy)": "Salvation Army",
+        "label_en": "Salvation Army",
+        "label_mr": "साल्व्हेशन आर्मी"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 324,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "sambava",
+        "Label (legacy)": "Sambava",
+        "label_en": "Sambava",
+        "label_mr": "संबवा"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 325,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "satnami",
+        "Label (legacy)": "Satnami",
+        "label_en": "Satnami",
+        "label_mr": "सतनामी"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 326,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "savji",
+        "Label (legacy)": "Savji",
+        "label_en": "Savji",
+        "label_mr": "सावजी"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 46,
+        "religion_key": "christian",
+        "religion_key Marathi": "ख्रिश्चन",
+        "key": "scheduled-caste-sc",
+        "Label (legacy)": "Scheduled Caste (SC)",
+        "label_en": "Scheduled Caste (SC)",
+        "label_mr": "अनुसूचित जाती (SC)"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 47,
+        "religion_key": "christian",
+        "religion_key Marathi": "ख्रिश्चन",
+        "key": "scheduled-tribe-st",
+        "Label (legacy)": "Scheduled Tribe (ST)",
+        "label_en": "Scheduled Tribe (ST)",
+        "label_mr": "अनुसूचित जमाती (एसटी)"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 327,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "senai-thalaivar",
+        "Label (legacy)": "Senai Thalaivar",
+        "label_en": "Senai Thalaivar",
+        "label_mr": "सेनाई थलायवर"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 328,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "sepahia",
+        "Label (legacy)": "Sepahia",
+        "label_en": "Sepahia",
+        "label_mr": "सेपाहिया"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 329,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "setti-balija",
+        "Label (legacy)": "Setti Balija",
+        "label_en": "Setti Balija",
+        "label_mr": "सेट्टी बालिजा"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 48,
+        "religion_key": "christian",
+        "religion_key Marathi": "ख्रिश्चन",
+        "key": "seventh-day-adventist",
+        "Label (legacy)": "Seventh day Adventist",
+        "label_en": "Seventh day Adventist",
+        "label_mr": "सेव्हन्थ डे ॲडव्हेंटिस्ट"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 449,
+        "religion_key": "muslim",
+        "religion_key Marathi": "मुस्लिम",
+        "key": "shafi",
+        "Label (legacy)": "Shafi",
+        "label_en": "Shafi",
+        "label_mr": "शफी"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 330,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "shah",
+        "Label (legacy)": "Shah",
+        "label_en": "Shah",
+        "label_mr": "शाह"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 467,
+        "religion_key": "muslim",
+        "religion_key Marathi": "मुस्लिम",
+        "key": "shaikh",
+        "Label (legacy)": "Shaikh",
+        "label_en": "Shaikh",
+        "label_mr": "शेख"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 450,
+        "religion_key": "muslim",
+        "religion_key Marathi": "मुस्लिम",
+        "key": "sheikh",
+        "Label (legacy)": "Sheikh",
+        "label_en": "Sheikh",
+        "label_mr": "शेख"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 451,
+        "religion_key": "muslim",
+        "religion_key Marathi": "मुस्लिम",
+        "key": "shia",
+        "Label (legacy)": "Shia",
+        "label_en": "Shia",
+        "label_mr": "शिया"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 452,
+        "religion_key": "muslim",
+        "religion_key Marathi": "मुस्लिम",
+        "key": "shia-bohra",
+        "Label (legacy)": "Shia Bohra",
+        "label_en": "Shia Bohra",
+        "label_mr": "शिया बोहरा"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 453,
+        "religion_key": "muslim",
+        "religion_key Marathi": "मुस्लिम",
+        "key": "shia-imami-ismaili",
+        "Label (legacy)": "Shia Imami Ismaili",
+        "label_en": "Shia Imami Ismaili",
+        "label_mr": "शिया इमामी इस्माईली"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 454,
+        "religion_key": "muslim",
+        "religion_key Marathi": "मुस्लिम",
+        "key": "shia-ithna-ashariyyah",
+        "Label (legacy)": "Shia Ithna ashariyyah",
+        "label_en": "Shia Ithna ashariyyah",
+        "label_mr": "शिया इथना अशारीय्या"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 455,
+        "religion_key": "muslim",
+        "religion_key Marathi": "मुस्लिम",
+        "key": "shia-zaidi",
+        "Label (legacy)": "Shia Zaidi",
+        "label_en": "Shia Zaidi",
+        "label_mr": "शिया झैदी"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 331,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "shilpkar",
+        "Label (legacy)": "Shilpkar",
+        "label_en": "Shilpkar",
+        "label_mr": "शिल्पकार"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 332,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "shimpi",
+        "Label (legacy)": "Shimpi",
+        "label_en": "Shimpi",
+        "label_mr": "शिंपी"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 428,
+        "religion_key": "jain",
+        "religion_key Marathi": "जैन",
+        "key": "shrimal",
+        "Label (legacy)": "Shrimal",
+        "label_en": "Shrimal",
+        "label_mr": "श्रीमल"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 425,
+        "religion_key": "jain",
+        "religion_key Marathi": "जैन",
+        "key": "shwetamber",
+        "Label (legacy)": "Shwetamber",
+        "label_en": "Shwetamber",
+        "label_mr": "श्वेतांबर"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 456,
+        "religion_key": "muslim",
+        "religion_key Marathi": "मुस्लिम",
+        "key": "siddiqui",
+        "Label (legacy)": "Siddiqui",
+        "label_en": "Siddiqui",
+        "label_mr": "सिद्दिकी"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 484,
+        "religion_key": "sikh",
+        "religion_key Marathi": "शीख",
+        "key": "sikh",
+        "Label (legacy)": "Sikh",
+        "label_en": "Sikh",
+        "label_mr": "शीख"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 333,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "sindhi",
+        "Label (legacy)": "Sindhi",
+        "label_en": "Sindhi",
+        "label_mr": "सिंधी"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 334,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "sindhi-amil",
+        "Label (legacy)": "Sindhi-Amil",
+        "label_en": "Sindhi-Amil",
+        "label_mr": "सिंधी-अमिल"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 335,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "sindhi-baibhand",
+        "Label (legacy)": "Sindhi-Baibhand",
+        "label_en": "Sindhi-Baibhand",
+        "label_mr": "सिंधी-बैभंड"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 336,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "sindhi-larkana",
+        "Label (legacy)": "Sindhi-Larkana",
+        "label_en": "Sindhi-Larkana",
+        "label_mr": "सिंधी-लारकाना"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 337,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "sindhi-sahiti",
+        "Label (legacy)": "Sindhi-Sahiti",
+        "label_en": "Sindhi-Sahiti",
+        "label_mr": "सिंधी-साहिती"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 338,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "sindhi-sakkhar",
+        "Label (legacy)": "Sindhi-Sakkhar",
+        "label_en": "Sindhi-Sakkhar",
+        "label_mr": "सिंधी-सक्कर"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 339,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "sindhi-shikarpuri",
+        "Label (legacy)": "Sindhi-Shikarpuri",
+        "label_en": "Sindhi-Shikarpuri",
+        "label_mr": "सिंधी-शिकारपुरी"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 340,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "somvanshi",
+        "Label (legacy)": "Somvanshi",
+        "label_en": "Somvanshi",
+        "label_mr": "सोमवंशी"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 341,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "sonar",
+        "Label (legacy)": "Sonar",
+        "label_en": "Sonar",
+        "label_mr": "सोनार"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 342,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "soni",
+        "Label (legacy)": "Soni",
+        "label_en": "Soni",
+        "label_mr": "सोनी"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 343,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "sourashtra",
+        "Label (legacy)": "Sourashtra",
+        "label_en": "Sourashtra",
+        "label_mr": "सौराष्ट्र"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 344,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "sowrashtra",
+        "Label (legacy)": "Sowrashtra",
+        "label_en": "Sowrashtra",
+        "label_mr": "सौराष्ट्र"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 345,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "sozhiya-vellalar",
+        "Label (legacy)": "Sozhiya Vellalar",
+        "label_en": "Sozhiya Vellalar",
+        "label_mr": "सोझिया वेल्लार"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 485,
+        "religion_key": "spiritual-not-religious",
+        "religion_key Marathi": "आध्यात्मिक (धार्मिक नाही)",
+        "key": "spiritual-not-religious",
+        "Label (legacy)": "Spiritual - not religious",
+        "label_en": "Spiritual - not religious",
+        "label_mr": "आध्यात्मिक - धार्मिक नव्हे"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 346,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "sri-vaishnava",
+        "Label (legacy)": "Sri Vaishnava",
+        "label_en": "Sri Vaishnava",
+        "label_mr": "श्री वैष्णव"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 347,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "srisayana",
+        "Label (legacy)": "Srisayana",
+        "label_en": "Srisayana",
+        "label_mr": "श्रीशयन"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 348,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "ssk",
+        "Label (legacy)": "SSK",
+        "label_en": "SSK",
+        "label_mr": "एसएसके"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 349,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "subarna-banik",
+        "Label (legacy)": "Subarna Banik",
+        "label_en": "Subarna Banik",
+        "label_mr": "सुवर्ण बनिक"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 350,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "sugali-naika",
+        "Label (legacy)": "Sugali (Naika)",
+        "label_en": "Sugali (Naika)",
+        "label_mr": "सुगाली (नायिका)"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 351,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "sundhi",
+        "Label (legacy)": "Sundhi",
+        "label_en": "Sundhi",
+        "label_mr": "सुंधी"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 457,
+        "religion_key": "muslim",
+        "religion_key Marathi": "मुस्लिम",
+        "key": "sunni",
+        "Label (legacy)": "Sunni",
+        "label_en": "Sunni",
+        "label_mr": "सुन्नी"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 458,
+        "religion_key": "muslim",
+        "religion_key Marathi": "मुस्लिम",
+        "key": "sunni-ehle-hadith",
+        "Label (legacy)": "Sunni Ehle-Hadith",
+        "label_en": "Sunni Ehle-Hadith",
+        "label_mr": "सुन्नी एहले-हदीस"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 459,
+        "religion_key": "muslim",
+        "religion_key Marathi": "मुस्लिम",
+        "key": "sunni-hanafi",
+        "Label (legacy)": "Sunni Hanafi",
+        "label_en": "Sunni Hanafi",
+        "label_mr": "सुन्नी हनाफी"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 460,
+        "religion_key": "muslim",
+        "religion_key Marathi": "मुस्लिम",
+        "key": "sunni-hunbali",
+        "Label (legacy)": "Sunni Hunbali",
+        "label_en": "Sunni Hunbali",
+        "label_mr": "सुन्नी हुनबली"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 461,
+        "religion_key": "muslim",
+        "religion_key Marathi": "मुस्लिम",
+        "key": "sunni-maliki",
+        "Label (legacy)": "Sunni Maliki",
+        "label_en": "Sunni Maliki",
+        "label_mr": "सुन्नी मालकी"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 462,
+        "religion_key": "muslim",
+        "religion_key Marathi": "मुस्लिम",
+        "key": "sunni-shafi",
+        "Label (legacy)": "Sunni Shafi",
+        "label_en": "Sunni Shafi",
+        "label_mr": "सुन्नी शफी"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 352,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "surya-balija",
+        "Label (legacy)": "Surya Balija",
+        "label_en": "Surya Balija",
+        "label_mr": "सूर्य बालिजा"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 353,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "sutar",
+        "Label (legacy)": "Sutar",
+        "label_en": "Sutar",
+        "label_mr": "सुतार"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 354,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "suthar",
+        "Label (legacy)": "Suthar",
+        "label_en": "Suthar",
+        "label_mr": "सुथार"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 355,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "swakula-sali",
+        "Label (legacy)": "Swakula Sali",
+        "label_en": "Swakula Sali",
+        "label_mr": "स्वकुला साली"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 356,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "swarnakar",
+        "Label (legacy)": "Swarnakar",
+        "label_en": "Swarnakar",
+        "label_mr": "स्वर्णकर"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 463,
+        "religion_key": "muslim",
+        "religion_key Marathi": "मुस्लिम",
+        "key": "syed",
+        "Label (legacy)": "Syed",
+        "label_en": "Syed",
+        "label_mr": "सय्यद"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 49,
+        "religion_key": "christian",
+        "religion_key Marathi": "ख्रिश्चन",
+        "key": "syrian",
+        "Label (legacy)": "Syrian",
+        "label_en": "Syrian",
+        "label_mr": "सीरियन"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 50,
+        "religion_key": "christian",
+        "religion_key Marathi": "ख्रिश्चन",
+        "key": "syrian-catholic",
+        "Label (legacy)": "Syrian Catholic",
+        "label_en": "Syrian Catholic",
+        "label_mr": "सीरियन कॅथोलिक"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 51,
+        "religion_key": "christian",
+        "religion_key Marathi": "ख्रिश्चन",
+        "key": "syrian-orthodox",
+        "Label (legacy)": "Syrian Orthodox",
+        "label_en": "Syrian Orthodox",
+        "label_mr": "सीरियन ऑर्थोडॉक्स"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 52,
+        "religion_key": "christian",
+        "religion_key Marathi": "ख्रिश्चन",
+        "key": "syro-malabar",
+        "Label (legacy)": "Syro Malabar",
+        "label_en": "Syro Malabar",
+        "label_mr": "सिरो मलबार"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 357,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "tamboli",
+        "Label (legacy)": "Tamboli",
+        "label_en": "Tamboli",
+        "label_mr": "तांबोळी"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 358,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "tamil-yadava",
+        "Label (legacy)": "Tamil Yadava",
+        "label_en": "Tamil Yadava",
+        "label_mr": "तमिळ यादव"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 359,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "tanti",
+        "Label (legacy)": "Tanti",
+        "label_en": "Tanti",
+        "label_mr": "तांती"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 360,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "tantuway",
+        "Label (legacy)": "Tantuway",
+        "label_en": "Tantuway",
+        "label_mr": "तांतुवे"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 361,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "telaga",
+        "Label (legacy)": "Telaga",
+        "label_en": "Telaga",
+        "label_mr": "तेलगा"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 362,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "teli",
+        "Label (legacy)": "Teli",
+        "label_en": "Teli",
+        "label_mr": "तेली"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 363,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "telugu",
+        "Label (legacy)": "Telugu",
+        "label_en": "Telugu",
+        "label_mr": "तेलगू"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 364,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "thachar",
+        "Label (legacy)": "Thachar",
+        "label_en": "Thachar",
+        "label_mr": "थाचर"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 365,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "thakkar",
+        "Label (legacy)": "Thakkar",
+        "label_en": "Thakkar",
+        "label_mr": "ठक्कर"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 366,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "thakur",
+        "Label (legacy)": "Thakur",
+        "label_en": "Thakur",
+        "label_mr": "ठाकूर"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 367,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "thandan",
+        "Label (legacy)": "Thandan",
+        "label_en": "Thandan",
+        "label_mr": "थंडन"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 368,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "thigala",
+        "Label (legacy)": "Thigala",
+        "label_en": "Thigala",
+        "label_mr": "थिगला"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 369,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "thiyya",
+        "Label (legacy)": "Thiyya",
+        "label_en": "Thiyya",
+        "label_mr": "थिय्या"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 370,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "thuluva-vellala",
+        "Label (legacy)": "Thuluva Vellala",
+        "label_en": "Thuluva Vellala",
+        "label_mr": "थुलुवा वेल्लाला"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 371,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "tili",
+        "Label (legacy)": "Tili",
+        "label_en": "Tili",
+        "label_mr": "तिली"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 372,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "togata",
+        "Label (legacy)": "Togata",
+        "label_en": "Togata",
+        "label_mr": "टोगाटा"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 486,
+        "religion_key": "tribal",
+        "religion_key Marathi": "आदिवासी",
+        "key": "tribal",
+        "Label (legacy)": "Tribal",
+        "label_en": "Tribal",
+        "label_mr": "आदिवासी"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 373,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "turupu-kapu",
+        "Label (legacy)": "Turupu Kapu",
+        "label_en": "Turupu Kapu",
+        "label_mr": "तुरुपु कापू"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 374,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "udayar",
+        "Label (legacy)": "Udayar",
+        "label_en": "Udayar",
+        "label_mr": "उदयर"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 375,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "urali-gounder",
+        "Label (legacy)": "Urali Gounder",
+        "label_en": "Urali Gounder",
+        "label_mr": "उराली गौंडर"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 376,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "urs",
+        "Label (legacy)": "Urs",
+        "label_en": "Urs",
+        "label_mr": "उर्स"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 468,
+        "religion_key": "muslim",
+        "religion_key Marathi": "मुस्लिम",
+        "key": "usmani",
+        "Label (legacy)": "Usmani",
+        "label_en": "Usmani",
+        "label_mr": "उस्मानी"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 377,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "vada-balija",
+        "Label (legacy)": "Vada Balija",
+        "label_en": "Vada Balija",
+        "label_mr": "वडा बालिजा"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 378,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "vadagalai",
+        "Label (legacy)": "Vadagalai",
+        "label_en": "Vadagalai",
+        "label_mr": "वडागलाई"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 379,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "vaddera",
+        "Label (legacy)": "Vaddera",
+        "label_en": "Vaddera",
+        "label_mr": "वड्डेरा"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 380,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "vaduka",
+        "Label (legacy)": "Vaduka",
+        "label_en": "Vaduka",
+        "label_mr": "वडुका"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 381,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "vaish",
+        "Label (legacy)": "Vaish",
+        "label_en": "Vaish",
+        "label_mr": "वैश"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 382,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "vaishnav",
+        "Label (legacy)": "Vaishnav",
+        "label_en": "Vaishnav",
+        "label_mr": "वैष्णव"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 383,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "vaishya",
+        "Label (legacy)": "Vaishya",
+        "label_en": "Vaishya",
+        "label_mr": "वैश्य"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 384,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "vallala",
+        "Label (legacy)": "Vallala",
+        "label_en": "Vallala",
+        "label_mr": "वल्लाला"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 385,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "valluvan",
+        "Label (legacy)": "Valluvan",
+        "label_en": "Valluvan",
+        "label_mr": "वल्लुवन"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 386,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "valmiki",
+        "Label (legacy)": "Valmiki",
+        "label_en": "Valmiki",
+        "label_mr": "वाल्मिकी"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 426,
+        "religion_key": "jain",
+        "religion_key Marathi": "जैन",
+        "key": "vania",
+        "Label (legacy)": "Vania",
+        "label_en": "Vania",
+        "label_mr": "वानिया"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 387,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "vanika-vyshya",
+        "Label (legacy)": "Vanika Vyshya",
+        "label_en": "Vanika Vyshya",
+        "label_mr": "वनिका वैश्य"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 388,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "vaniya-chettiar",
+        "Label (legacy)": "Vaniya Chettiar",
+        "label_en": "Vaniya Chettiar",
+        "label_mr": "वानिया चेट्टियार"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 389,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "vanjara",
+        "Label (legacy)": "Vanjara",
+        "label_en": "Vanjara",
+        "label_mr": "वंजरा"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 417,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "vanjari",
+        "Label (legacy)": "Vanjari",
+        "label_en": "Vanjari",
+        "label_mr": "वंजारी"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 390,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "vankar",
+        "Label (legacy)": "Vankar",
+        "label_en": "Vankar",
+        "label_mr": "वणकर"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 391,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "vannan",
+        "Label (legacy)": "Vannan",
+        "label_en": "Vannan",
+        "label_mr": "वन्नन"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 392,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "vannar",
+        "Label (legacy)": "Vannar",
+        "label_en": "Vannar",
+        "label_mr": "वन्नर"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 393,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "vanniyakullak-kshatriya",
+        "Label (legacy)": "Vanniyakullak Kshatriya",
+        "label_en": "Vanniyakullak Kshatriya",
+        "label_mr": "वन्नियाकुल्लक क्षत्रिय"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 394,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "vanniyar",
+        "Label (legacy)": "Vanniyar",
+        "label_en": "Vanniyar",
+        "label_mr": "वन्नियार"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 395,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "variar",
+        "Label (legacy)": "Variar",
+        "label_en": "Variar",
+        "label_mr": "व्हेरिआर"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 396,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "varshney",
+        "Label (legacy)": "Varshney",
+        "label_en": "Varshney",
+        "label_mr": "वर्ष्णेय"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 397,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "veera-saivam",
+        "Label (legacy)": "Veera Saivam",
+        "label_en": "Veera Saivam",
+        "label_mr": "वीरा शैवम्"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 398,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "veerashaiva",
+        "Label (legacy)": "Veerashaiva",
+        "label_en": "Veerashaiva",
+        "label_mr": "वीरशैव"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 399,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "velaan",
+        "Label (legacy)": "Velaan",
+        "label_en": "Velaan",
+        "label_mr": "वेलान"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 400,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "velama",
+        "Label (legacy)": "Velama",
+        "label_en": "Velama",
+        "label_mr": "वेलामा"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 401,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "velar",
+        "Label (legacy)": "Velar",
+        "label_en": "Velar",
+        "label_mr": "वेलार"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 402,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "vellalar",
+        "Label (legacy)": "Vellalar",
+        "label_en": "Vellalar",
+        "label_mr": "वेल्लार"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 420,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "veluthedathu",
+        "Label (legacy)": "Veluthedathu",
+        "label_en": "Veluthedathu",
+        "label_mr": "वेलुथेदाथू"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 403,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "vettuva-gounder",
+        "Label (legacy)": "Vettuva Gounder",
+        "label_en": "Vettuva Gounder",
+        "label_mr": "वेट्टुवा गौंडर"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 404,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "vishwakarma",
+        "Label (legacy)": "Vishwakarma",
+        "label_en": "Vishwakarma",
+        "label_mr": "विश्वकर्मा"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 405,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "viswabrahmin",
+        "Label (legacy)": "Viswabrahmin",
+        "label_en": "Viswabrahmin",
+        "label_mr": "विश्वब्राह्मण"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 406,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "vokaliga",
+        "Label (legacy)": "Vokaliga",
+        "label_en": "Vokaliga",
+        "label_mr": "वोकालिगा"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 407,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "vokkaliga",
+        "Label (legacy)": "Vokkaliga",
+        "label_en": "Vokkaliga",
+        "label_mr": "वोक्कालिगा"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 408,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "vysya",
+        "Label (legacy)": "Vysya",
+        "label_en": "Vysya",
+        "label_mr": "वैश्य"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 409,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "waada-balija",
+        "Label (legacy)": "Waada Balija",
+        "label_en": "Waada Balija",
+        "label_mr": "वादा बालिजा"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 410,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "yadav",
+        "Label (legacy)": "Yadav",
+        "label_en": "Yadav",
+        "label_mr": "यादव"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 411,
+        "religion_key": "hindu",
+        "religion_key Marathi": "हिंदू",
+        "key": "yellapu",
+        "Label (legacy)": "Yellapu",
+        "label_en": "Yellapu",
+        "label_mr": "येल्लापू"
+    },
+    {
+        "entity_type": "caste",
+        "ID": 487,
+        "religion_key": "zoroastrian",
+        "religion_key Marathi": "झोरोस्ट्रियन",
+        "key": "zoroastrian",
+        "Label (legacy)": "Zoroastrian",
+        "label_en": "Zoroastrian",
+        "label_mr": "झोरोस्ट्रियन"
+    },
+    {
+        "entity_type": "caste",
+        "ID": "",
+        "religion_key": "zoroastrian",
+        "religion_key Marathi": "",
+        "key": "",
+        "Label (legacy)": "",
+        "label_en": "",
+        "label_mr": ""
+    }
+]

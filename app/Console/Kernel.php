@@ -17,7 +17,10 @@ class Kernel extends ConsoleKernel
         \App\Console\Commands\SeedOcrBaselinePatterns::class,
         \App\Console\Commands\PurgeOldIntakeFiles::class,
         \App\Console\Commands\IntakeAuditCommand::class,
-		\App\Console\Commands\ShowcaseChatTickCommand::class,
+        \App\Console\Commands\ShowcaseChatTickCommand::class,
+        \App\Console\Commands\MarkOpenPlaceAutoCandidatesCommand::class,
+        \App\Console\Commands\PromoteOpenPlaceSuggestionsCommand::class,
+        \App\Console\Commands\VerifyGeoIntegrityCommand::class,
     ];
 
     /**
@@ -30,11 +33,12 @@ class Kernel extends ConsoleKernel
         $schedule->command('subscriptions:expire')->daily();
         $schedule->command('engagement:inactive-reminders')->dailyAt('09:15');
         $schedule->command('engagement:new-match-digest')->dailyAt('11:45');
-		$schedule->command('showcase-chat:tick')->everyMinute();
+        $schedule->command('showcase-chat:tick')->everyMinute();
         $schedule->command('showcase:respond-incoming-interests')->everyFifteenMinutes();
         $schedule->command('showcase:send-outgoing-interests')->everyFifteenMinutes();
+        $schedule->command('location:mark-open-place-auto-candidates')->hourly();
     }
-	
+
 
     /**
      * Register the commands for the application.

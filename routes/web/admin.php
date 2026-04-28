@@ -32,6 +32,7 @@ use App\Http\Controllers\Admin\HelpCentreTicketController;
 use App\Http\Controllers\Admin\HomepageImageController;
 use App\Http\Controllers\Admin\IntakeReviewController;
 use App\Http\Controllers\Admin\LocationSuggestionWebController;
+use App\Http\Controllers\Admin\OpenPlaceSuggestionWebController;
 use App\Http\Controllers\Admin\MatchBoostController;
 use App\Http\Controllers\Admin\MatchingEngineController;
 use App\Http\Controllers\Admin\ModerationLearningController;
@@ -52,6 +53,7 @@ use App\Http\Controllers\Admin\TranslationController;
 use App\Http\Controllers\Admin\UserWalletController;
 use App\Http\Controllers\Internal\Admin\CityAliasAdminController;
 use App\Http\Controllers\Internal\Admin\LocationSuggestionAdminController;
+use App\Http\Controllers\Internal\Admin\OpenPlaceSuggestionAdminController;
 use App\Http\Controllers\PaymentController;
 use App\Http\Controllers\PaymentDisputeController;
 use Illuminate\Support\Facades\Route;
@@ -284,6 +286,9 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
     Route::get('/location-suggestions', [LocationSuggestionWebController::class, 'index'])
         ->name('location-suggestions.index');
 
+    Route::get('/open-place-suggestions', [OpenPlaceSuggestionWebController::class, 'index'])
+        ->name('open-place-suggestions.index');
+
     Route::get('/governance-dashboard', [GovernanceDashboardController::class, 'index'])
         ->name('governance-dashboard');
 
@@ -337,6 +342,12 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
         Route::get('/location-suggestions', [LocationSuggestionAdminController::class, 'index']);
         Route::post('/location-suggestions/{id}/approve', [LocationSuggestionAdminController::class, 'approve']);
         Route::post('/location-suggestions/{id}/reject', [LocationSuggestionAdminController::class, 'reject']);
+        Route::get('/open-place-suggestions/city-search', [OpenPlaceSuggestionAdminController::class, 'citySearch']);
+        Route::get('/open-place-suggestions', [OpenPlaceSuggestionAdminController::class, 'index']);
+        Route::post('/open-place-suggestions/{id}/approve-as-city', [OpenPlaceSuggestionAdminController::class, 'approveAsCity']);
+        Route::post('/open-place-suggestions/{id}/map-to-city', [OpenPlaceSuggestionAdminController::class, 'mapToCity']);
+        Route::post('/open-place-suggestions/{id}/reject', [OpenPlaceSuggestionAdminController::class, 'reject']);
+        Route::post('/open-place-suggestions/{id}/merge', [OpenPlaceSuggestionAdminController::class, 'merge']);
         Route::post('/cities/{cityId}/aliases', [CityAliasAdminController::class, 'store']);
     });
 
@@ -517,6 +528,7 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
     Route::post('/biodata-intakes/{intake}/reparse', [AdminIntakeController::class, 'reparse'])->name('biodata-intakes.reparse');
     Route::post('/biodata-intakes/{intake}/re-extract', [AdminIntakeController::class, 'reExtract'])->name('biodata-intakes.re-extract');
     Route::post('/biodata-intakes/{intake}/apply', [AdminIntakeController::class, 'applyToProfile'])->name('biodata-intakes.apply');
+    Route::patch('/biodata-intakes/{intake}/resolve-location', [AdminIntakeController::class, 'resolveLocationSuggestion'])->name('biodata-intakes.resolve-location');
     Route::get('/biodata-intakes/{intake}/suggestions-review', [AdminSuggestionReviewController::class, 'show'])->name('suggestions.review');
     Route::post('/biodata-intakes/{intake}/suggestions-review/apply', [AdminSuggestionReviewController::class, 'apply'])->name('suggestions.review.apply');
 
