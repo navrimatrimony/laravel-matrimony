@@ -47,11 +47,11 @@ class OnboardingValidationRedirectGuardTest extends TestCase
 
         $response = $this->actingAs($user)->post(route('matrimony.onboarding.store', ['step' => 3]), [
             'religion_id' => (string) $religion->id,
-            'height_cm' => '170',
+            'height_cm' => '400',
             'location_input' => 'Pune',
         ]);
 
-        $response->assertSessionHasErrors();
+        $response->assertSessionHasErrors('height_cm');
         $response->assertRedirect(route('matrimony.onboarding.show', ['step' => 3]));
 
         $path = (string) parse_url((string) $response->headers->get('Location'), PHP_URL_PATH);

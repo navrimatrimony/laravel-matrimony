@@ -139,7 +139,45 @@ class OnboardingFlowTest extends TestCase
         $response->assertSessionHasNoErrors();
     }
 
-    public function test_onboarding_validation_for_children_stays_on_submitted_step_three(): void
+    public function test_onboarding_step_two_does_not_require_location_fields(): void
+    {
+        $this->seed(\Database\Seeders\MasterLookupSeeder::class);
+
+        $user = User::factory()->create();
+        $genderId = MasterGender::where('key', 'male')->where('is_active', true)->value('id');
+        $neverId = MasterMaritalStatus::where('key', 'never_married')->value('id');
+
+        if (! $genderId || ! $neverId) {
+            $this->markTestSkipped('Seed data incomplete.');
+        }
+
+        MatrimonyProfile::factory()->create([
+            'user_id' => $user->id,
+            'full_name' => '',
+            'marital_status_id' => $neverId,
+        ]);
+
+        $response = $this->actingAs($user)->post(route('matrimony.onboarding.store', ['step' => 2]), [
+            'full_name' => 'Card Step One',
+            'gender_id' => (string) $genderId,
+            'date_of_birth' => '1995-08-20',
+            'marital_status_id' => (string) $neverId,
+            'marriages' => [
+                [
+                    'marriage_year' => '',
+                    'divorce_year' => '',
+                    'separation_year' => '',
+                    'spouse_death_year' => '',
+                    'divorce_status' => '',
+                ],
+            ],
+        ]);
+
+        $response->assertRedirect(route('matrimony.onboarding.show', ['step' => 3]));
+        $response->assertSessionHasNoErrors();
+    }
+
+    public function test_onboarding_step_three_succeeds_when_has_children_yes_without_child_rows(): void
     {
         $this->seed(\Database\Seeders\MasterLookupSeeder::class);
         $this->seed(\Database\Seeders\ReligionCasteSubCasteSeeder::class);
@@ -167,12 +205,8 @@ class OnboardingFlowTest extends TestCase
             'location_input' => 'Pune',
         ]);
 
-        $response->assertRedirect(route('matrimony.onboarding.show', ['step' => 3]));
-        $response->assertSessionHasErrors('children');
-        $response2 = $this->actingAs($user)->get(route('matrimony.onboarding.show', ['step' => 3]));
-        $response2->assertOk();
-        // URL step 3 is displayed as "Step 2 of 3" in the onboarding header.
-        $response2->assertSee('Step 2 of 3', false);
+        $response->assertRedirect(route('matrimony.onboarding.show', ['step' => 4]));
+        $response->assertSessionHasNoErrors();
         $this->assertDatabaseHas('matrimony_profiles', [
             'user_id' => $user->id,
             'marital_status_id' => $divorcedId,
@@ -191,6 +225,8 @@ class OnboardingFlowTest extends TestCase
 
     public function test_onboarding_step_four_success_redirects_to_photo_upload(): void
     {
+        \App\Models\AdminSetting::setValue('onboarding_photo_required', '1');
+
         $this->seed(\Database\Seeders\MasterLookupSeeder::class);
         $this->seed(\Database\Seeders\EducationSeeder::class);
         $this->seed(\Database\Seeders\EducationCareerTemporarySeeder::class);
@@ -214,6 +250,35 @@ class OnboardingFlowTest extends TestCase
         $response->assertRedirect(route('matrimony.profile.upload-photo', ['from' => 'onboarding']));
         $response->assertSessionHasNoErrors();
         $response->assertSessionHas('info', __('onboarding.after_cards_redirect_photos'));
+    }
+
+    public function test_onboarding_step_four_skips_photo_when_onboarding_photo_not_required(): void
+    {
+        \App\Models\AdminSetting::setValue('onboarding_photo_required', '0');
+
+        $this->seed(\Database\Seeders\MasterLookupSeeder::class);
+        $this->seed(\Database\Seeders\EducationSeeder::class);
+        $this->seed(\Database\Seeders\EducationCareerTemporarySeeder::class);
+
+        $user = User::factory()->create();
+        MatrimonyProfile::factory()->create(['user_id' => $user->id]);
+
+        $degreeCode = \App\Models\EducationDegree::query()->value('code');
+        $wwId = \Illuminate\Support\Facades\DB::table('working_with_types')->where('is_active', true)->value('id');
+        $profId = \Illuminate\Support\Facades\DB::table('professions')->where('is_active', true)->value('id');
+        if (! $degreeCode || ! $wwId || ! $profId) {
+            $this->markTestSkipped('Education / career seed incomplete.');
+        }
+
+        $response = $this->actingAs($user)->post(route('matrimony.onboarding.store', ['step' => 4]), [
+            'highest_education' => $degreeCode,
+            'working_with_type_id' => (string) $wwId,
+            'profession_id' => (string) $profId,
+        ]);
+
+        $response->assertRedirect(route('matrimony.onboarding.complete'));
+        $response->assertSessionHasNoErrors();
+        $response->assertSessionHas('success', __('onboarding.all_set'));
     }
 
     public function test_onboarding_step_five_route_is_removed(): void
@@ -241,6 +306,7 @@ class OnboardingFlowTest extends TestCase
     public function test_profile_show_displays_child_living_with_label_when_present(): void
     {
         $this->seed(\Database\Seeders\MasterLookupSeeder::class);
+        $this->seed(\Database\Seeders\SubscriptionPlansSeeder::class);
 
         $livingWithId = MasterChildLivingWith::where('key', 'with_parent')->value('id')
             ?? MasterChildLivingWith::query()->value('id');
@@ -270,6 +336,8 @@ class OnboardingFlowTest extends TestCase
 
     public function test_profile_show_displays_detailed_completion_label_for_own_profile(): void
     {
+        $this->seed(\Database\Seeders\SubscriptionPlansSeeder::class);
+
         $user = User::factory()->create();
         $profile = MatrimonyProfile::factory()->create(['user_id' => $user->id]);
 

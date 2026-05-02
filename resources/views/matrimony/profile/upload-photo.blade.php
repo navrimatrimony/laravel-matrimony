@@ -85,10 +85,12 @@ body.upload-landscape .upload-gallery-col {
                style="display: inline-flex; align-items: center; gap: 8px; padding: 12px 18px; background: #ffffff; border: 1px solid #e5e7eb; border-radius: 12px; color: #374151; font-weight: 700; font-size: 14px; text-decoration: none; box-shadow: 0 2px 8px rgba(0,0,0,0.06);">
                 ← {{ __('onboarding.photo_flow_edit_step5') }}
             </a>
+            @if (! ($onboardingPhotoRequired ?? false))
             <a href="{{ route('matrimony.onboarding.complete') }}"
                style="display: inline-flex; align-items: center; gap: 8px; padding: 12px 18px; background: linear-gradient(90deg, #4f46e5, #7c3aed); border: 1px solid #6366f1; border-radius: 12px; color: #ffffff; font-weight: 700; font-size: 14px; text-decoration: none; box-shadow: 0 2px 10px rgba(79, 70, 229, 0.35);">
                 {{ __('onboarding.photo_flow_finish') }}
             </a>
+            @endif
         </div>
     @endif
     <div id="uploadManagerPage" style="max-width: 520px; margin: 0 auto;">
@@ -287,11 +289,21 @@ body.upload-landscape .upload-gallery-col {
                 </button>
             </form>
 
-            {{-- Secondary action --}}
+            {{-- Secondary action: must clear onboarding lock — profile.show alone traps users when photo phase is enforced --}}
             <div style="margin-top: 20px; padding-top: 20px; border-top: 1px solid #f3f4f6;">
-                <a href="{{ route('matrimony.profile.show', $profile->id) }}" style="font-size: 13px; color: #9ca3af; text-decoration: none;">
-                    {{ __('wizard.skip_for_now') }} →
-                </a>
+                @php
+                    $skipUploadHref = route('matrimony.profile.show', $profile->id);
+                    if (! empty($fromOnboarding) && ! ($onboardingPhotoRequired ?? false)) {
+                        $skipUploadHref = route('matrimony.onboarding.complete');
+                    }
+                @endphp
+                @if (! empty($fromOnboarding) && ($onboardingPhotoRequired ?? false))
+                    <p style="font-size: 13px; color: #6b7280; margin: 0;">{{ __('onboarding.photo_required_by_site') }}</p>
+                @else
+                    <a href="{{ $skipUploadHref }}" style="font-size: 13px; color: #9ca3af; text-decoration: none;">
+                        {{ __('wizard.skip_for_now') }} →
+                    </a>
+                @endif
             </div>
         </div>
 

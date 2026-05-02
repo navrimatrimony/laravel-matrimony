@@ -20,7 +20,8 @@ trait RedirectsUnprofiledUsers
         // Relative URL so redirect stays on the same host the user used (e.g. 127.0.0.1 vs localhost).
         $wizardUrl = route('matrimony.onboarding.show', ['step' => 2], absolute: false);
         $redirectToVerify = AdminSetting::getBool('redirect_to_mobile_verify_after_registration', true);
-        $mobileMode = AdminSetting::getValue('mobile_verification_mode', 'off');
+        // Must match MobileOtpController + AdminSettingSeeder default when no DB row exists ("off" skipped OTP entirely).
+        $mobileMode = AdminSetting::getValue('mobile_verification_mode', 'dev_show');
 
         session()->put('wizard_minimal', true);
 

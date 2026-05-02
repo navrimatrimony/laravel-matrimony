@@ -26,6 +26,13 @@ use Illuminate\Validation\Rule;
  */
 class ProfileWizardController extends Controller
 {
+    /**
+     * Request attribute set by onboarding card step 2 only — that screen has no residence fields (location is card step 3).
+     *
+     * @see OnboardingController::snapshotStep2()
+     */
+    public const SKIP_BASIC_INFO_RESIDENCE_VALIDATION = 'skip_basic_info_residence_validation';
+
     /** @deprecated Use FieldCatalogService::getSectionKeys() for canonical list. Kept for allowed list fallback. */
     private const SECTIONS = [
         'basic-info',
@@ -1040,7 +1047,9 @@ class ProfileWizardController extends Controller
             'mother_tongue_id' => ['nullable', Rule::exists('master_mother_tongues', 'id')->where(fn ($q) => $q->where('is_active', true))],
         ]);
 
-        $this->validateResidenceCoreForSnapshot($request);
+        if (! $request->attributes->get(self::SKIP_BASIC_INFO_RESIDENCE_VALIDATION)) {
+            $this->validateResidenceCoreForSnapshot($request);
+        }
 
         $birthTimeValue = $request->filled('birth_time') ? trim($request->input('birth_time')) : null;
         if ($birthTimeValue === '') {
@@ -2219,11 +2228,7 @@ class ProfileWizardController extends Controller
             }
         }
 
-        if ($hasChildrenBool && $statusKey && in_array($statusKey, $statusesRequiringChildren, true) && count($children) === 0) {
-            throw \Illuminate\Validation\ValidationException::withMessages([
-                'children' => [__('wizard.children_at_least_one_required')],
-            ]);
-        }
+        // Has children = Yes with zero rows allowed — guard: .cursor/rules/ONBOARDING-MARITAL-CHILDREN-OPTIONAL.mdc + MaritalEngineValidationTest.
 
         return [
             'core' => $core,

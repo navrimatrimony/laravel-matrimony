@@ -3,6 +3,7 @@
 namespace App\Http\Middleware;
 
 use App\Models\MatrimonyProfile;
+use App\Services\Admin\AdminSettingService;
 use Closure;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -28,7 +29,16 @@ class EnforceCardOnboarding
             return $next($request);
         }
 
-        if ($this->isAllowedDuringOnboarding($request, (int) $step)) {
+        $step = (int) $step;
+        if (! AdminSettingService::isOnboardingPhotoRequired()) {
+            if ($step === MatrimonyProfile::CARD_ONBOARDING_PHOTO_RESUME_STEP || $step === 6 || $step === 7) {
+                MatrimonyProfile::query()->where('user_id', $user->id)->update(['card_onboarding_resume_step' => null]);
+
+                return $next($request);
+            }
+        }
+
+        if ($this->isAllowedDuringOnboarding($request, $step)) {
             return $next($request);
         }
 

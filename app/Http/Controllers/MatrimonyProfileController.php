@@ -452,6 +452,7 @@ class MatrimonyProfileController extends Controller
         $photoLimitReached = $currentPhotoCount >= $photoMaxPerProfile;
 
         $fromOnboarding = $request->query('from') === 'onboarding';
+        $onboardingPhotoRequired = AdminSettingService::isOnboardingPhotoRequired();
 
         return view('matrimony.profile.upload-photo', [
             'profile' => $profile,
@@ -462,6 +463,7 @@ class MatrimonyProfileController extends Controller
             'photoSlotsRemaining' => $photoSlotsRemaining,
             'photoLimitReached' => $photoLimitReached,
             'fromOnboarding' => $fromOnboarding,
+            'onboardingPhotoRequired' => $onboardingPhotoRequired,
             'primaryPhotoProcessing' => $primaryPhotoProcessing,
             'primaryOnlyOnCoreColumn' => $primaryOnlyOnCoreColumn,
         ]);

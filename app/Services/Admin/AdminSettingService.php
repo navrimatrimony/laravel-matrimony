@@ -36,6 +36,15 @@ class AdminSettingService
     }
 
     /**
+     * When true, after onboarding cards members must upload a photo before the app unlocks (middleware holds them on upload-photo).
+     * When false (default), step 4 finishes into onboarding.complete without the photo step; skip links clear onboarding.
+     */
+    public static function isOnboardingPhotoRequired(): bool
+    {
+        return AdminSetting::getBool('onboarding_photo_required', false);
+    }
+
+    /**
      * Check if profile should be suspended after edit.
      * When true, profile edits trigger suspension for review.
      */

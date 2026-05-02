@@ -223,10 +223,12 @@ class AdminSettingsController extends Controller
         $aiProvider = in_array($aiProvider, ['openai', 'sarvam'], true) ? $aiProvider : 'openai';
 
         $verifySafeAi = AdminSetting::getBool('photo_verify_safe_with_secondary_ai', false);
+        $onboardingPhotoRequired = AdminSetting::getBool('onboarding_photo_required', false);
 
         return view('admin.photo-approval-settings.index', [
             'photoApprovalRequired' => $required,
             'photoVerifySafeWithSecondaryAi' => $verifySafeAi,
+            'onboardingPhotoRequired' => $onboardingPhotoRequired,
             'photoPrimaryRequired' => $primaryRequired,
             'photoMaxPerProfile' => max(1, $maxPerProfile),
             'photoMaxUploadMb' => max(1, $maxUploadMb),
@@ -455,6 +457,7 @@ class AdminSettingsController extends Controller
             'photo_max_edge_px' => 'required|integer|min:400|max:2400',
             'photo_moderation_mode' => ['required', 'string', Rule::in(['auto', 'manual'])],
             'photo_ai_provider' => ['required', 'string', Rule::in(['openai', 'sarvam'])],
+            'onboarding_photo_required' => 'nullable|in:0,1',
         ]);
 
         $value = $request->has('photo_approval_required') ? '1' : '0';
@@ -473,13 +476,15 @@ class AdminSettingsController extends Controller
         AdminSetting::setValue('photo_max_edge_px', $maxEdgePx);
         AdminSetting::setValue('photo_moderation_mode', $moderationMode);
         AdminSetting::setValue('photo_ai_provider', $aiProvider);
+        $onboardingPhotoRequiredVal = $request->has('onboarding_photo_required') ? '1' : '0';
+        AdminSetting::setValue('onboarding_photo_required', $onboardingPhotoRequiredVal);
 
         AuditLogService::log(
             $request->user(),
             'update_photo_approval_settings',
             'AdminSetting',
             null,
-            "photo_approval_required={$value}, photo_verify_safe_with_secondary_ai={$verifySafeAi}, photo_primary_required={$primaryRequired}, photo_max_per_profile={$maxPerProfile}, photo_max_upload_mb={$maxUploadMb}, photo_max_edge_px={$maxEdgePx}, photo_moderation_mode={$moderationMode}, photo_ai_provider={$aiProvider}",
+            "photo_approval_required={$value}, photo_verify_safe_with_secondary_ai={$verifySafeAi}, photo_primary_required={$primaryRequired}, photo_max_per_profile={$maxPerProfile}, photo_max_upload_mb={$maxUploadMb}, photo_max_edge_px={$maxEdgePx}, photo_moderation_mode={$moderationMode}, photo_ai_provider={$aiProvider}, onboarding_photo_required={$onboardingPhotoRequiredVal}",
             false
         );
 
@@ -493,7 +498,7 @@ class AdminSettingsController extends Controller
     public function mobileVerificationSettings()
     {
         $redirectAfterRegister = AdminSetting::getBool('redirect_to_mobile_verify_after_registration', true);
-        $mode = AdminSetting::getValue('mobile_verification_mode', 'off');
+        $mode = AdminSetting::getValue('mobile_verification_mode', 'dev_show');
 
         return view('admin.mobile-verification-settings.index', [
             'redirectAfterRegister' => $redirectAfterRegister,
@@ -508,7 +513,7 @@ class AdminSettingsController extends Controller
             'mobile_verification_mode' => 'required|in:off,dev_show,live',
         ]);
         $redirect = $request->boolean('redirect_to_mobile_verify_after_registration');
-        $mode = $request->input('mobile_verification_mode', 'off');
+        $mode = $request->input('mobile_verification_mode', 'dev_show');
         AdminSetting::setValue('redirect_to_mobile_verify_after_registration', $redirect ? '1' : '0');
         AdminSetting::setValue('mobile_verification_mode', $mode);
         AuditLogService::log(

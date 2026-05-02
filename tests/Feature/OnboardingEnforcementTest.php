@@ -13,6 +13,8 @@ class OnboardingEnforcementTest extends TestCase
 
     public function test_legacy_resume_step_six_redirects_to_photo_upload(): void
     {
+        \App\Models\AdminSetting::setValue('onboarding_photo_required', '1');
+
         $user = User::factory()->create();
         MatrimonyProfile::factory()->create([
             'user_id' => $user->id,
@@ -28,6 +30,8 @@ class OnboardingEnforcementTest extends TestCase
 
     public function test_photo_phase_redirects_to_upload_photo_with_from_onboarding(): void
     {
+        \App\Models\AdminSetting::setValue('onboarding_photo_required', '1');
+
         $user = User::factory()->create();
         MatrimonyProfile::factory()->create([
             'user_id' => $user->id,

@@ -120,6 +120,20 @@
             </div>
         </div>
 
+        <div class="p-4 bg-gray-50 dark:bg-gray-700/30 rounded-lg border border-gray-200 dark:border-gray-600 space-y-2">
+            <p class="font-semibold text-sm text-gray-800 dark:text-gray-100">Onboarding</p>
+            <label class="inline-flex items-start gap-3 text-sm text-gray-800 dark:text-gray-100 cursor-pointer">
+                <input type="checkbox" name="onboarding_photo_required" value="1" {{ ! empty($onboardingPhotoRequired) ? 'checked' : '' }} class="mt-1 rounded border-gray-300 dark:border-gray-600">
+                <span>
+                    <span class="font-semibold block">Require profile photo to finish onboarding</span>
+                    <span class="text-xs text-gray-600 dark:text-gray-400">
+                        When <strong>off</strong> (default), members can skip the photo step after the profile cards and go straight to their profile. When <strong>on</strong>, they stay on the upload page until they upload (or use Finish only when the policy allows — with this on, skip without upload is disabled).
+                    </span>
+                </span>
+            </label>
+            <p class="text-xs text-gray-500 dark:text-gray-400">Stored as <code class="text-xs">onboarding_photo_required</code>.</p>
+        </div>
+
         <div class="pt-2">
             <button type="submit" style="background-color: #4f46e5; color: white; padding: 12px 24px; border-radius: 6px; font-weight: 600; font-size: 16px; border: none; cursor: pointer; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);">
                 Save settings

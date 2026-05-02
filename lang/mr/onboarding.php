@@ -14,6 +14,9 @@ return [
     'education_examples' => 'उदा. बी.ई., एम.कॉम, डिप्लोमा, पीएच.डी.',
     'run_migrations_education' => 'शिक्षण शोध फील्डसाठी डेटाबेस मायग्रेशन्स आवश्यक आहेत. कृपया `php artisan migrate` चालवा.',
 
+    'dob_placeholder' => 'DD/MM/YYYY',
+    'dob_open_calendar' => 'कॅलेंडर उघडा',
+    'dob_format_hint' => 'दिवस, महिना, वर्ष टाइप करा; `/` आपोआप येतील. किंवा कॅलेंडर चिन्हावर टॅप करा.',
     'step2_title' => 'उमेदवाराबद्दल',
     'step2_sub' => 'योग्य जुळण्या दाखवण्यास मदत होते.',
     'step3_title' => 'समाज, उंची व ठिकाण',
@@ -30,6 +33,7 @@ return [
     'after_step7_redirect_photos' => 'पुढे: प्रोफाइल फोटो जोडा. त्या पेजवरून हवे असल्यास वगळू शकता.',
     'photo_flow_edit_step5' => 'शिक्षण व काम परत बदला',
     'photo_flow_finish' => 'ऑनबोर्डिंग पूर्ण करा',
+    'photo_required_by_site' => 'या साइटसाठी पुढे जाण्याआधी प्रोफाइल फोटो आवश्यक आहे. वर फोटो अपलोड करा.',
     'step6_title' => 'About me',
     'step6_sub' => 'लहान परिचय भरा, किंवा one-click template वापरा.',
     'step6_hint' => 'एक क्लिकमध्ये template निवडा, किंवा स्वतःच्या शब्दांत लिहा.',

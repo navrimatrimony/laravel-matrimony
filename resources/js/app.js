@@ -96,3 +96,16 @@ if (document.readyState === 'loading') {
 } else {
     initRuleActionFlash();
 }
+
+function initOnboardingDobWhenPresent() {
+    if (!document.querySelector('[data-onboarding-dob-wrap]')) {
+        return;
+    }
+    import('./onboarding-dob-picker.js').then((m) => m.initOnboardingDobPickers());
+}
+
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initOnboardingDobWhenPresent);
+} else {
+    initOnboardingDobWhenPresent();
+}

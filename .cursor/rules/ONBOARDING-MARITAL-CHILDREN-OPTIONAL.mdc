@@ -1,0 +1,18 @@
+---
+description: Has children = Yes must not require filled child rows; marital snapshot guard.
+alwaysApply: true
+---
+
+# Marital engine — children details optional
+
+When marital status is one of divorced / annulled / separated / widowed and the user answers **Has children = Yes**, **do not** require at least one row in the children block. Tyampurti to fill karnyasathi zabardasti naka; user nantar "Edit profile" madhe bhru shakto.
+
+- **Never** reintroduce a check like `count($children) === 0` throw with `wizard.children_at_least_one_required` in `ProfileWizardController::buildMarriagesSnapshot()`.
+- Card onboarding step 3 already collects community/height/location; child rows are not part of that card’s UI in the same way as full wizard — blocking save on empty child rows confuses users.
+
+**Guard tests (must stay green):**
+
+- `tests/Feature/MaritalEngineValidationTest.php` — `divorced has_children yes with zero children rows is allowed`
+- `tests/Feature/OnboardingFlowTest.php` — `onboarding step three succeeds when has children yes without child rows`
+
+If product ever needs "at least one child" again, it must be a **new explicit requirement** with tests and copy updated — not a silent regression.

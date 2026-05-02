@@ -1,0 +1,18 @@
+---
+description: Registration onboarding DOB — IMask DD/MM/YYYY, hidden ISO submit, Flatpickr only via calendar button (anchor ~25 years ago).
+alwaysApply: true
+---
+
+# Onboarding date of birth (step 2)
+
+- **Do not** server-autofill a full `Y-m-d` when the profile has no DOB: the **hidden** `input[name="date_of_birth"]` stays `value=""` until the user completes a valid date.
+- **Do** render a **wrapper** `data-onboarding-dob-wrap` with:
+  - `data-dob-anchor-year` (typically `(int) now()->subYears(25)->format('Y')`) for “open calendar” near ~25 years ago when empty
+  - `data-dob-min` / `data-dob-max` as `Y-m-d` bounds for age rules
+- **Visible field:** `data-onboarding-dob-display`, `type="text"`, `inputmode="numeric"`, placeholder **DD/MM/YYYY**; when repopulating from server ISO, show **d/m/Y** in the display input only.
+- **Submit field:** `type="hidden"` `name="date_of_birth"` — ISO `Y-m-d` when valid; empty when incomplete or invalid.
+- **Calendar:** `button[type="button"]` with `data-onboarding-dob-calendar` + accessible label; **do not** attach Flatpickr to the visible text field. JS uses a screen-reader-only hook input and `positionElement: button`.
+- **JS:** `resources/js/onboarding-dob-picker.js` — **IMask** pattern `d{/}m{/}Y` with day/month/year blocks bounded by min/max year; **Flatpickr** `clickOpens: false`, opened only from the button; `onOpen` → `jumpToDate` when still empty; `disableMobile: true` (native mobile pickers ignore custom year anchoring).
+- **Bootstrap:** `resources/js/app.js` — `initOnboardingDobWhenPresent` must check **`[data-onboarding-dob-wrap]`** (not the old `data-onboarding-dob`).
+
+**Guard:** `OnboardingDobPickerGuardTest` asserts wrap, display, calendar, numeric mode, hidden empty ISO, and anchor year on onboarding step 2.

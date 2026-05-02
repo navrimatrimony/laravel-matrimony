@@ -1,9 +1,9 @@
 <?php
 
-use App\Models\MatrimonyProfile;
+use App\Models\MasterChildLivingWith;
 use App\Models\MasterGender;
 use App\Models\MasterMaritalStatus;
-use App\Models\MasterChildLivingWith;
+use App\Models\MatrimonyProfile;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
 
@@ -11,7 +11,7 @@ beforeEach(function () {
     $this->seed(\Database\Seeders\MasterLookupSeeder::class);
 });
 
-test('divorced without has_children returns validation error', function () {
+test('divorced without has_children in post is allowed', function () {
     $user = User::factory()->create();
     $profile = MatrimonyProfile::factory()->create(['user_id' => $user->id]);
     $divorcedId = MasterMaritalStatus::where('key', 'divorced')->value('id');
@@ -24,15 +24,16 @@ test('divorced without has_children returns validation error', function () {
         'full_name' => $profile->full_name,
         'gender_id' => $genderId,
         'marital_status_id' => $divorcedId,
+        'location_input' => 'Pune',
         'marriages' => [
             ['id' => null, 'marriage_year' => '', 'divorce_year' => '', 'divorce_status' => ''],
         ],
     ]);
 
-    $response->assertSessionHasErrors('has_children');
+    $response->assertSessionHasNoErrors();
 });
 
-test('divorced has_children yes with zero children rows returns validation error', function () {
+test('divorced has_children yes with zero children rows is allowed', function () {
     $user = User::factory()->create();
     $profile = MatrimonyProfile::factory()->create(['user_id' => $user->id]);
     $divorcedId = MasterMaritalStatus::where('key', 'divorced')->value('id');
@@ -45,6 +46,7 @@ test('divorced has_children yes with zero children rows returns validation error
         'full_name' => $profile->full_name,
         'gender_id' => $genderId,
         'marital_status_id' => $divorcedId,
+        'location_input' => 'Pune',
         'has_children' => '1',
         'marriages' => [
             ['id' => null, 'marriage_year' => '', 'divorce_year' => '', 'divorce_status' => ''],
@@ -52,7 +54,7 @@ test('divorced has_children yes with zero children rows returns validation error
         'children' => [],
     ]);
 
-    $response->assertSessionHasErrors('children');
+    $response->assertSessionHasNoErrors();
 });
 
 test('divorced has_children no deletes existing children rows', function () {
@@ -87,6 +89,7 @@ test('divorced has_children no deletes existing children rows', function () {
         'full_name' => $profile->full_name,
         'gender_id' => $genderId,
         'marital_status_id' => $divorcedId,
+        'location_input' => 'Pune',
         'has_children' => '0',
         'marriages' => [
             ['id' => null, 'marriage_year' => '2010', 'divorce_year' => '2015', 'divorce_status' => ''],
@@ -111,6 +114,7 @@ test('year sanity divorce_year less than marriage_year returns validation error'
         'full_name' => $profile->full_name,
         'gender_id' => $genderId,
         'marital_status_id' => $divorcedId,
+        'location_input' => 'Pune',
         'has_children' => '0',
         'marriages' => [
             ['id' => null, 'marriage_year' => '2010', 'divorce_year' => '2005', 'divorce_status' => ''],
@@ -134,6 +138,7 @@ test('year sanity separation_year less than marriage_year returns validation err
         'full_name' => $profile->full_name,
         'gender_id' => $genderId,
         'marital_status_id' => $separatedId,
+        'location_input' => 'Pune',
         'has_children' => '0',
         'marriages' => [
             ['id' => null, 'marriage_year' => '2012', 'separation_year' => '2010', 'divorce_status' => ''],

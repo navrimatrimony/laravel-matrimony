@@ -7,6 +7,7 @@
     'privacyEnabled' => true,
     'periodOptions' => null,
     'valueTypeOptions' => null,
+    'emptyValueTypeDefault' => null,
     'disabled' => false,
     'helpText' => null,
     'readOnly' => false,
@@ -57,7 +58,8 @@
     $periodRaw = old($oldKey('period'), $v('period')) ?: 'annual';
     $valueTypeRaw = old($oldKey('value_type'), $v('value_type'));
     if ($valueTypeRaw === null || $valueTypeRaw === '') {
-        $valueTypeRaw = ($v('amount') !== null || $v('min_amount') !== null || ($prefix === 'income' ? ($profile->annual_income ?? null) : ($profile->family_income ?? null)) !== null) ? 'exact' : 'undisclosed';
+        $whenEmptyType = $emptyValueTypeDefault ?? 'undisclosed';
+        $valueTypeRaw = ($v('amount') !== null || $v('min_amount') !== null || ($prefix === 'income' ? ($profile->annual_income ?? null) : ($profile->family_income ?? null)) !== null) ? 'exact' : $whenEmptyType;
     }
     $currencyIdRaw = old($oldKey('currency_id'), $v('currency_id'));
     $privateRaw = old($oldKey('private'), $v('private'));

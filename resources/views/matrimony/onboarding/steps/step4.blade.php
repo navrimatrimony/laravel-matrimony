@@ -27,6 +27,7 @@
         <x-income-engine
             :label="__('onboarding.career_income_label')"
             name-prefix="income"
+            empty-value-type-default="approximate"
             :profile="$profile"
             :currencies="$currencies ?? collect()"
             :help-text="__('onboarding.career_income_help')"

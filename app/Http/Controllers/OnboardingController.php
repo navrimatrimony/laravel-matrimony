@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\MasterMaritalStatus;
 use App\Models\MatrimonyProfile;
 use App\Models\ProfileMarriage;
+use App\Services\Admin\AdminSettingService;
 use App\Services\EducationService;
 use App\Services\MutationService;
 use App\Services\ProfileLifecycleService;
@@ -153,10 +154,15 @@ class OnboardingController extends Controller
         }
 
         if ($step === 4) {
-            $profile->forceFill(['card_onboarding_resume_step' => MatrimonyProfile::CARD_ONBOARDING_PHOTO_RESUME_STEP])->saveQuietly();
+            if (AdminSettingService::isOnboardingPhotoRequired()) {
+                $profile->forceFill(['card_onboarding_resume_step' => MatrimonyProfile::CARD_ONBOARDING_PHOTO_RESUME_STEP])->saveQuietly();
 
-            return redirect()->route('matrimony.profile.upload-photo', ['from' => 'onboarding'])
-                ->with('info', __('onboarding.after_cards_redirect_photos'));
+                return redirect()->route('matrimony.profile.upload-photo', ['from' => 'onboarding'])
+                    ->with('info', __('onboarding.after_cards_redirect_photos'));
+            }
+
+            return redirect()->route('matrimony.onboarding.complete')
+                ->with('success', __('onboarding.all_set'));
         }
 
         return redirect()->route('matrimony.onboarding.show', ['step' => $step + 1])
@@ -197,6 +203,9 @@ class OnboardingController extends Controller
     private function snapshotStep2(Request $request, MatrimonyProfile $profile, ProfileWizardController $wizard): array
     {
         $this->hydrateBasicInfoContext($request, $profile);
+
+        // Card "step 1 of 3" has no residence UI; location is captured on step 3. Skip residence-only rules here.
+        $request->attributes->set(ProfileWizardController::SKIP_BASIC_INFO_RESIDENCE_VALIDATION, true);
 
         return $wizard->buildSnapshotForSection($request, 'basic-info', $profile);
     }

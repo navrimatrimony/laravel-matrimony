@@ -14,6 +14,9 @@ return [
     'education_examples' => 'e.g. B.E., M.Com, Diploma, Ph.D.',
     'run_migrations_education' => 'Database migrations are required before the education search field is available. Please run `php artisan migrate`.',
 
+    'dob_placeholder' => 'DD/MM/YYYY',
+    'dob_open_calendar' => 'Open calendar',
+    'dob_format_hint' => 'Type day, month, and year; slashes are added for you. Or tap the calendar icon.',
     'step2_title' => 'About the candidate',
     'step2_sub' => 'This helps us show the right matches.',
     'step3_title' => 'Community, height & location',
@@ -30,6 +33,7 @@ return [
     'after_step7_redirect_photos' => 'Next: add a profile photo. You can skip and finish anytime from that page.',
     'photo_flow_edit_step5' => 'Back to education & work',
     'photo_flow_finish' => 'Finish onboarding',
+    'photo_required_by_site' => 'This site requires a profile photo before you can leave this step. Upload a photo above.',
     'step6_title' => 'About me',
     'step6_sub' => 'Write a short introduction, or use one-tap templates.',
     'step6_hint' => 'Choose a ready template with one click, or write your own introduction in your own words.',
