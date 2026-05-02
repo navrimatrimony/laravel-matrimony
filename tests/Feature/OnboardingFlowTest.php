@@ -132,13 +132,14 @@ class OnboardingFlowTest extends TestCase
             'caste_id' => '',
             'sub_caste_id' => '',
             'height_cm' => '170',
+            'location_input' => 'Pune',
         ]);
 
         $response->assertRedirect(route('matrimony.onboarding.show', ['step' => 4]));
         $response->assertSessionHasNoErrors();
     }
 
-    public function test_onboarding_validation_for_children_redirects_to_step_two_not_three(): void
+    public function test_onboarding_validation_for_children_stays_on_submitted_step_three(): void
     {
         $this->seed(\Database\Seeders\MasterLookupSeeder::class);
         $this->seed(\Database\Seeders\ReligionCasteSubCasteSeeder::class);
@@ -162,13 +163,16 @@ class OnboardingFlowTest extends TestCase
 
         $response = $this->actingAs($user)->post(route('matrimony.onboarding.store', ['step' => 3]), [
             'religion_id' => (string) $religion->id,
+            'height_cm' => '170',
+            'location_input' => 'Pune',
         ]);
 
-        $response->assertRedirect(route('matrimony.onboarding.show', ['step' => 2]));
+        $response->assertRedirect(route('matrimony.onboarding.show', ['step' => 3]));
         $response->assertSessionHasErrors('children');
-        $response2 = $this->actingAs($user)->get(route('matrimony.onboarding.show', ['step' => 2]));
+        $response2 = $this->actingAs($user)->get(route('matrimony.onboarding.show', ['step' => 3]));
         $response2->assertOk();
-        $response2->assertSee('name="marital_status_id" value="'.$divorcedId.'"', false);
+        // URL step 3 is displayed as "Step 2 of 3" in the onboarding header.
+        $response2->assertSee('Step 2 of 3', false);
         $this->assertDatabaseHas('matrimony_profiles', [
             'user_id' => $user->id,
             'marital_status_id' => $divorcedId,

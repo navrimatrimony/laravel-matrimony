@@ -144,9 +144,10 @@ class OnboardingController extends Controller
                 app(MutationService::class)->applyManualSnapshot($profile, $snapshot, (int) $user->id, 'manual');
             });
         } catch (ValidationException $e) {
-            $redirectStep = $this->onboardingStepForValidationErrors($e->errors(), $step);
-
-            return redirect()->route('matrimony.onboarding.show', ['step' => $redirectStep])
+            // Always return to the submitted onboarding card so validation feedback matches the user's context
+            // (do not send users to an earlier card based on which field keys failed).
+            // Guard: tests/Feature/OnboardingValidationRedirectGuardTest.php — do not revert to per-key step routing.
+            return redirect()->route('matrimony.onboarding.show', ['step' => $step])
                 ->withErrors($e->errors())
                 ->withInput();
         }
@@ -347,52 +348,6 @@ class OnboardingController extends Controller
         }
 
         return $out;
-    }
-
-    /**
-     * Send the user to the onboarding card that actually contains the failing fields.
-     *
-     * @param  array<string, array<int, string>>  $errors
-     */
-    private function onboardingStepForValidationErrors(array $errors, int $submittedStep): int
-    {
-        $steps = [];
-        foreach (array_keys($errors) as $key) {
-            if ($this->validationErrorKeyBelongsToOnboardingStep($key, 2)) {
-                $steps[2] = true;
-            }
-            if ($this->validationErrorKeyBelongsToOnboardingStep($key, 3)) {
-                $steps[3] = true;
-            }
-            if ($this->validationErrorKeyBelongsToOnboardingStep($key, 4)) {
-                $steps[4] = true;
-            }
-        }
-
-        if ($steps === []) {
-            return $submittedStep;
-        }
-
-        return (int) min(array_keys($steps));
-    }
-
-    private function validationErrorKeyBelongsToOnboardingStep(string $key, int $step): bool
-    {
-        return match ($step) {
-            2 => (bool) preg_match(
-                '/^(full_name|gender_id|date_of_birth|birth_time|mother_tongue_id|marital_status_id|has_children|marriages|children)(\.|$)/',
-                $key
-            ),
-            3 => (bool) preg_match(
-                '/^(religion_id|caste_id|sub_caste_id|height_cm|complexion_id|blood_group_id|physical_build_id|spectacles_lens|physical_condition|diet_id|smoking_status_id|drinking_status_id|weight_kg|country_id|state_id|district_id|taluka_id|location_id|address_line|wizard_residence_display)(\.|$)/',
-                $key
-            ),
-            4 => (bool) preg_match(
-                '/^(highest_education|highest_education_other|highest_education_id|highest_education_text|education_degree_id|education_text|education_slots|education_degree_ids|education_custom|education_master_id|education_manual_text|specialization|occupation_master_id|occupation_custom_id|working_with_type_id|profession_id|company_name|annual_income|income_range_id|income_currency_id|income_private|college_id|work_city_id|work_state_id|income_period|income_value_type|income_amount|income_min_amount|income_max_amount|income_[a-z0-9_]+|education_category)(\.|$)/',
-                $key
-            ),
-            default => false,
-        };
     }
 
     private function hydratePhysicalAddressContext(Request $request, MatrimonyProfile $profile): void

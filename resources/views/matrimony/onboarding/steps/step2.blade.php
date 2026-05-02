@@ -48,6 +48,9 @@
                 try { $dobValue = \Carbon\Carbon::parse($dobRaw)->format('Y-m-d'); } catch (\Throwable $e) { $dobValue = ''; }
             }
             $dobValue = old('date_of_birth', $dobValue);
+            if (trim((string) $dobValue) === '') {
+                $dobValue = now()->subYears(25)->format('Y-m-d');
+            }
         @endphp
         <input type="date" name="date_of_birth" value="{{ $dobValue }}"
             min="{{ $yMin }}-01-01" max="{{ $yMax }}-12-31"

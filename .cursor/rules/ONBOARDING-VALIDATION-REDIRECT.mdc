@@ -1,0 +1,13 @@
+---
+description: Onboarding validation must redirect to the submitted step only (never an earlier card).
+alwaysApply: true
+---
+
+# Onboarding validation redirect (non-negotiable)
+
+In `app/Http/Controllers/OnboardingController.php` → `store()`, for `ValidationException`:
+
+- **Always** `redirect()->route('matrimony.onboarding.show', ['step' => $step])` using the **same** `$step` as the incoming POST route parameter.
+- **Never** reintroduce logic that picks a different step (e.g. mapping error keys to cards, `min()` of steps, or "earliest failing field" routing). That pattern sent users from step 3 back to step 2 and broke UX.
+
+**Guard:** `tests/Feature/OnboardingValidationRedirectGuardTest.php` must keep passing. If you change this behavior, update the test intentionally and document why.
