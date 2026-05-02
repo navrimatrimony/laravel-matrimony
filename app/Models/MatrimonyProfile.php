@@ -29,6 +29,10 @@ use Illuminate\Validation\ValidationException;
 |
 */
 
+/**
+ * @property int|null $location_id Canonical residence ({@see Location} / {@code addresses}.id).
+ * @property int|null $city_id      @deprecated Legacy column; not mass-assignable. Use location_id.
+ */
 class MatrimonyProfile extends Model
 {
     use HasFactory, SoftDeletes;
@@ -127,7 +131,7 @@ class MatrimonyProfile extends Model
         'state_id',
         'district_id',
         'taluka_id',
-        'city_id',
+        'location_id',
         'address_line',
         'birth_city_id',
         'birth_taluka_id',
@@ -506,6 +510,14 @@ class MatrimonyProfile extends Model
     }
 
     /**
+     * Canonical current residence in the unified {@see Location} table.
+     */
+    public function location()
+    {
+        return $this->belongsTo(Location::class, 'location_id');
+    }
+
+    /**
      * Eager-load paths for {@see LocationDisplayFormatter} (parent metro + optional meta overrides).
      *
      * @return list<string>
@@ -524,42 +536,6 @@ class MatrimonyProfile extends Model
     }
 
     /**
-     * Human-readable current residence line (city, taluka, district, state) for location typeahead `value=`.
-     * Matches the label shape used when a row is picked in JS (village/city first).
-     */
-    public static function residenceLocationDisplayLineFromIds(
-        mixed $cityId,
-        mixed $talukaId,
-        mixed $districtId,
-        mixed $stateId,
-    ): string {
-        if (! $cityId && ! $talukaId && ! $districtId && ! $stateId) {
-            return '';
-        }
-        if ($cityId) {
-            $city = City::query()->with(self::withRelationsForLocationDisplay())->find((int) $cityId);
-            if ($city !== null) {
-                return app(LocationDisplayFormatter::class)->formatCityLine($city);
-            }
-        }
-        $parts = [];
-        if ($cityId) {
-            $parts[] = (string) (City::query()->where('id', (int) $cityId)->value('name') ?? '');
-        }
-        if ($talukaId) {
-            $parts[] = (string) (Taluka::query()->where('id', (int) $talukaId)->value('name') ?? '');
-        }
-        if ($districtId) {
-            $parts[] = (string) (District::query()->where('id', (int) $districtId)->value('name') ?? '');
-        }
-        if ($stateId) {
-            $parts[] = (string) (State::query()->where('id', (int) $stateId)->value('name') ?? '');
-        }
-
-        return implode(', ', array_values(array_filter($parts, static fn ($p) => $p !== '')));
-    }
-
-    /**
      * Shared by wizard basic_info and intake preview (where $profile may be a stdClass snapshot row).
      *
      * @param  self|object  $profileOrRow
@@ -572,27 +548,32 @@ class MatrimonyProfile extends Model
         if (! is_object($profileOrRow)) {
             return '';
         }
+        $lid = $profileOrRow->location_id ?? null;
+        if (! $lid || ! Schema::hasTable(Location::geoTable())) {
+            return '';
+        }
+        $loc = Location::query()->find((int) $lid);
+        if ($loc === null) {
+            return '';
+        }
 
-        return self::residenceLocationDisplayLineFromIds(
-            $profileOrRow->city_id ?? null,
-            $profileOrRow->taluka_id ?? null,
-            $profileOrRow->district_id ?? null,
-            $profileOrRow->state_id ?? null,
-        );
+        return app(\App\Services\Location\LocationService::class)->getDisplayLabel($loc);
     }
 
     /**
-     * Human-readable current residence line (city, taluka, district, state) for location typeahead `value=`.
-     * Matches the label shape used when a row is picked in JS (village/city first).
+     * Human-readable current residence line from canonical {@see Location} only.
      */
     public function residenceLocationDisplayLine(): string
     {
-        return self::residenceLocationDisplayLineFromIds(
-            $this->city_id,
-            $this->taluka_id,
-            $this->district_id,
-            $this->state_id,
-        );
+        if (! $this->location_id || ! Schema::hasTable(Location::geoTable())) {
+            return '';
+        }
+        $loc = Location::query()->find((int) $this->location_id);
+        if ($loc === null) {
+            return '';
+        }
+
+        return app(\App\Services\Location\LocationService::class)->getDisplayLabel($loc);
     }
 
     /**

@@ -1,12 +1,14 @@
 /**
  * Reusable location/address typeahead — single component, used in wizard (residence/work/native)
- * and alliance rows. Local DB search: /api/internal/location/search.
+ * and alliance rows. Search API reads canonical geo rows ({@code addresses}: name, slug, name_mr; aliases optional).
+ * URLs come from Blade {@code data-search-url} so subdirectory installs (e.g. /project/public) resolve correctly.
  * GPS assist (auth): POST web route data-resolve-url — suggestion only; form save → MutationService.
  */
 (function () {
     'use strict';
 
-    var SEARCH_URL = '/api/internal/location/search';
+    var SEARCH_URL = '/api/location/search';
+    var SUGGEST_URL = '/api/location/suggestions';
     var APP_LOCALE = (document.documentElement && document.documentElement.lang) ? document.documentElement.lang.split('-')[0] : 'en';
     var DEBOUNCE_MS = 500;
     var MIN_SEARCH_CHARS = 3;
@@ -17,7 +19,29 @@
     }
 
     function labelFromItem(item) {
-        return (item && (item.display_label || item.label || item.name || item.city_name)) ? String(item.display_label || item.label || item.name || item.city_name) : '';
+        return (item && item.display_label) ? String(item.display_label) : '';
+    }
+
+    /** Full URL with q + locale; prefers {@code data-search-url} from wrapper (Laravel url()). */
+    function locationSearchRequestUrl(wrapper, q, locale) {
+        var base = (wrapper && wrapper.dataset && wrapper.dataset.searchUrl) ? wrapper.dataset.searchUrl : SEARCH_URL;
+        try {
+            var u = (base.indexOf('http') === 0) ? new URL(base) : new URL(base, window.location.href);
+            u.searchParams.set('q', q);
+            u.searchParams.set('locale', locale);
+            return u.toString();
+        } catch (e) {
+            return base + (base.indexOf('?') >= 0 ? '&' : '?') + 'q=' + encodeURIComponent(q) + '&locale=' + encodeURIComponent(locale);
+        }
+    }
+
+    function clearCanonicalSelection(wrapper) {
+        wrapper.querySelectorAll('.location-hidden-location-id').forEach(function (el) { el.value = ''; });
+        wrapper.querySelectorAll('.location-hidden-location-input').forEach(function (el) { el.value = ''; });
+        wrapper.querySelectorAll('.location-hidden-city').forEach(function (el) { el.value = ''; });
+        wrapper.querySelectorAll('.location-hidden-work-city').forEach(function (el) { el.value = ''; });
+        wrapper.querySelectorAll('.location-hidden-native-city').forEach(function (el) { el.value = ''; });
+        wrapper.querySelectorAll('.location-hidden-birth-city').forEach(function (el) { el.value = ''; });
     }
 
     function openSuggestModal(wrapper, name) {
@@ -36,6 +60,12 @@
         var successEl = modal.querySelector('.location-suggest-success');
 
         nameDisplay.textContent = name;
+
+        var ds = wrapper.dataset || {};
+        var urlStates = ds.urlInternalStates || '/api/internal/location/states';
+        var urlDistricts = ds.urlInternalDistricts || '/api/internal/location/districts';
+        var urlTalukas = ds.urlInternalTalukas || '/api/internal/location/talukas';
+        var urlSuggestPost = ds.urlInternalSuggest || '/api/internal/location/suggest';
 
         function close() {
             backdrop.remove();
@@ -61,7 +91,7 @@
         }
 
         function loadStates(selectedId) {
-            fetch('/api/internal/location/states', { headers: { 'Accept': 'application/json' } })
+            fetch(urlStates, { headers: { 'Accept': 'application/json' } })
                 .then(function (r) { return r.json(); })
                 .then(function (data) {
                     if (!data.success || !Array.isArray(data.data)) return;
@@ -84,7 +114,7 @@
             districtSelect.innerHTML = '<option value=\"\">Select district</option>';
             talukaSelect.innerHTML = '<option value=\"\">Select taluka</option>';
             if (!stateId) return;
-            fetch('/api/internal/location/districts?state_id=' + encodeURIComponent(stateId), { headers: { 'Accept': 'application/json' } })
+            fetch(urlDistricts + '?state_id=' + encodeURIComponent(stateId), { headers: { 'Accept': 'application/json' } })
                 .then(function (r) { return r.json(); })
                 .then(function (data) {
                     if (!data.success || !Array.isArray(data.data)) return;
@@ -105,7 +135,7 @@
         function loadTalukas(districtId, selectedId) {
             talukaSelect.innerHTML = '<option value=\"\">Select taluka</option>';
             if (!districtId) return;
-            fetch('/api/internal/location/talukas?district_id=' + encodeURIComponent(districtId), { headers: { 'Accept': 'application/json' } })
+            fetch(urlTalukas + '?district_id=' + encodeURIComponent(districtId), { headers: { 'Accept': 'application/json' } })
                 .then(function (r) { return r.json(); })
                 .then(function (data) {
                     if (!data.success || !Array.isArray(data.data)) return;
@@ -161,7 +191,7 @@
                 suggestion_type: 'village',
             };
 
-            fetch('/api/internal/location/suggest', {
+            fetch(urlSuggestPost, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -190,16 +220,16 @@
         inner.focus();
     }
 
-    function renderResults(wrapper, resultsEl, data, onSelect) {
-        if (!data.success || !data.data || data.data.length === 0) {
+    function renderResults(wrapper, resultsEl, items, onSelect) {
+        if (!Array.isArray(items) || items.length === 0) {
             var q = (wrapper.querySelector('.location-typeahead-input').value || '').trim();
             var html = '<div class="p-2 text-gray-500">No matches</div>';
             if (q.length >= 3) {
                 html += '' +
                     '<button type="button" class="w-full text-left px-3 py-2 text-sm bg-rose-50 hover:bg-rose-100 text-rose-700 border-t border-rose-200 location-suggest-btn" data-suggest-name="' + q.replace(/"/g, '&quot;') + '">' +
-                    '➕ Add "' + q.replace(/</g, '&lt;').replace(/>/g, '&gt;') + '" as village / city' +
+                    'Add this location' +
                     '</button>' +
-                    '<div class="px-3 py-1 text-xs text-gray-500">We’ll send this to admin for approval.</div>';
+                    '<div class="px-3 py-1 text-xs text-gray-500">Saved for review. It will be added after validation.</div>';
             }
             resultsEl.innerHTML = html;
             resultsEl.classList.remove('hidden');
@@ -208,14 +238,39 @@
             var suggestBtn = resultsEl.querySelector('.location-suggest-btn');
             if (suggestBtn) {
                 suggestBtn.addEventListener('click', function () {
-                    openSuggestModal(wrapper, suggestBtn.getAttribute('data-suggest-name') || q);
+                    var inputText = suggestBtn.getAttribute('data-suggest-name') || q;
+                    var suggestPost = (wrapper.dataset && wrapper.dataset.suggestUrl) ? wrapper.dataset.suggestUrl : SUGGEST_URL;
+                    fetch(suggestPost, {
+                        method: 'POST',
+                        credentials: 'same-origin',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Accept': 'application/json',
+                            'X-Requested-With': 'XMLHttpRequest',
+                            'X-CSRF-TOKEN': csrfToken()
+                        },
+                        body: JSON.stringify({ input_text: inputText }),
+                    })
+                        .then(function (r) { return r.json(); })
+                        .then(function (resp) {
+                            if (resp && resp.success) {
+                                resultsEl.innerHTML = '<div class="p-2 text-emerald-700">Location submitted for review.</div>';
+                                clearCanonicalSelection(wrapper);
+                                var locationInputHidden = wrapper.querySelector('.location-hidden-location-input');
+                                if (locationInputHidden) locationInputHidden.value = inputText;
+                            } else {
+                                resultsEl.innerHTML = '<div class="p-2 text-red-600">Could not save suggestion.</div>';
+                            }
+                        })
+                        .catch(function () {
+                            resultsEl.innerHTML = '<div class="p-2 text-red-600">Network error while saving suggestion.</div>';
+                        });
                 });
             }
             return;
         }
         resultsEl.innerHTML = '';
-        data.data.forEach(function (item) {
-            var cityId = item.city_id || item.id || '';
+        items.forEach(function (item) {
             var div = document.createElement('div');
             div.className = 'p-2 border-b border-gray-200 dark:border-gray-600 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700';
             div.textContent = labelFromItem(item);
@@ -247,28 +302,31 @@
             resultsEl.classList.add('hidden');
             resultsEl.style.display = 'none';
 
+            var locationId = item.location_id || item.city_id || item.id || '';
             var cityId = item.city_id || item.id || '';
             var talukaId = item.taluka_id || '';
             var districtId = item.district_id || '';
             var stateId = item.state_id || '';
             var countryId = item.country_id || '';
+            var locationHidden = wrapper.querySelector('.location-hidden-location-id');
+            if (locationHidden) locationHidden.value = locationId;
+            var locationInputHidden = wrapper.querySelector('.location-hidden-location-input');
+            if (locationInputHidden) locationInputHidden.value = '';
 
             if (context === 'residence') {
                 var country = wrapper.querySelector('.location-hidden-country');
                 var state = wrapper.querySelector('.location-hidden-state');
                 var district = wrapper.querySelector('.location-hidden-district');
                 var taluka = wrapper.querySelector('.location-hidden-taluka');
-                var city = wrapper.querySelector('.location-hidden-city');
                 if (country) country.value = countryId;
                 if (state) state.value = stateId;
                 if (district) district.value = districtId;
                 if (taluka) taluka.value = talukaId;
-                if (city) city.value = cityId;
                 wrapper.dataset.resCountryId = countryId || '';
                 wrapper.dataset.resStateId = stateId || '';
                 wrapper.dataset.resDistrictId = districtId || '';
                 wrapper.dataset.resTalukaId = talukaId || '';
-                wrapper.dataset.resCityId = cityId || '';
+                wrapper.dataset.resLocationId = locationId || '';
             } else if (context === 'work') {
                 var workCity = wrapper.querySelector('.location-hidden-work-city');
                 var workState = wrapper.querySelector('.location-hidden-work-state');
@@ -294,11 +352,9 @@
                 if (bState) bState.value = stateId;
                 clearIntakeBirthPlaceText(wrapper);
             } else if (context === 'alliance') {
-                var c = wrapper.querySelector('.location-hidden-city');
                 var t = wrapper.querySelector('.location-hidden-taluka');
                 var d = wrapper.querySelector('.location-hidden-district');
                 var s = wrapper.querySelector('.location-hidden-state');
-                if (c) c.value = cityId;
                 if (t) t.value = talukaId;
                 if (d) d.value = districtId;
                 if (s) s.value = stateId;
@@ -342,6 +398,7 @@
 
         function itemFromResolvePayload(payload) {
             return {
+                location_id: payload.location_id || payload.city_id || payload.id,
                 city_id: payload.city_id,
                 taluka_id: payload.taluka_id,
                 district_id: payload.district_id,
@@ -501,18 +558,32 @@
         input.addEventListener('input', function () {
             clearTimeout(debounce);
             var q = input.value.trim();
+            clearCanonicalSelection(wrapper);
+            var locationInputHidden = wrapper.querySelector('.location-hidden-location-input');
+            if (locationInputHidden) locationInputHidden.value = q;
             if (q.length < MIN_SEARCH_CHARS) {
                 resultsEl.classList.add('hidden');
                 resultsEl.style.display = 'none';
                 return;
             }
             debounce = setTimeout(function () {
-                fetch(SEARCH_URL + '?q=' + encodeURIComponent(q) + '&locale=' + encodeURIComponent(APP_LOCALE), {
+                fetch(locationSearchRequestUrl(wrapper, q, APP_LOCALE), {
                     headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }
                 })
-                    .then(function (r) { return r.json(); })
-                    .then(function (data) {
-                        renderResults(wrapper, resultsEl, data, onSelect);
+                    .then(function (r) {
+                        if (!r.ok) {
+                            throw new Error('search HTTP ' + r.status);
+                        }
+                        return r.json();
+                    })
+                    .then(function (items) {
+                        if (!Array.isArray(items)) {
+                            items = [];
+                        }
+                        renderResults(wrapper, resultsEl, items, onSelect);
+                    })
+                    .catch(function () {
+                        renderResults(wrapper, resultsEl, [], onSelect);
                     });
             }, DEBOUNCE_MS);
         });
@@ -534,12 +605,12 @@
             var hs = wrapper.querySelector('.location-hidden-state');
             var hd = wrapper.querySelector('.location-hidden-district');
             var ht = wrapper.querySelector('.location-hidden-taluka');
-            var hcity = wrapper.querySelector('.location-hidden-city');
+            var hlid = wrapper.querySelector('.location-hidden-location-id');
             if (hc && hc.value) wrapper.dataset.resCountryId = hc.value;
             if (hs && hs.value) wrapper.dataset.resStateId = hs.value;
             if (hd && hd.value) wrapper.dataset.resDistrictId = hd.value;
             if (ht && ht.value) wrapper.dataset.resTalukaId = ht.value;
-            if (hcity && hcity.value) wrapper.dataset.resCityId = hcity.value;
+            if (hlid && hlid.value) wrapper.dataset.resLocationId = hlid.value;
         }
     }
 
@@ -572,7 +643,7 @@
             var state = wrapper.querySelector('.location-hidden-state');
             var district = wrapper.querySelector('.location-hidden-district');
             var taluka = wrapper.querySelector('.location-hidden-taluka');
-            var city = wrapper.querySelector('.location-hidden-city');
+            var lid = wrapper.querySelector('.location-hidden-location-id');
             if (country && !String(country.value || '').trim() && wrapper.dataset.resCountryId) {
                 country.value = wrapper.dataset.resCountryId;
             }
@@ -585,8 +656,8 @@
             if (taluka && !String(taluka.value || '').trim() && wrapper.dataset.resTalukaId) {
                 taluka.value = wrapper.dataset.resTalukaId;
             }
-            if (city && !String(city.value || '').trim() && wrapper.dataset.resCityId) {
-                city.value = wrapper.dataset.resCityId;
+            if (lid && !String(lid.value || '').trim() && wrapper.dataset.resLocationId) {
+                lid.value = wrapper.dataset.resLocationId;
             }
         });
     }
@@ -598,6 +669,25 @@
     document.addEventListener('submit', function (e) {
         var t = e.target;
         if (!t || t.tagName !== 'FORM') return;
+        var invalidSelection = false;
+        t.querySelectorAll('.location-typeahead-wrapper').forEach(function (wrapper) {
+            var vis = wrapper.querySelector('.location-typeahead-input');
+            var locationIdEl = wrapper.querySelector('.location-hidden-location-id');
+            var locationInputEl = wrapper.querySelector('.location-hidden-location-input');
+            if (!vis || !locationIdEl || !locationInputEl) return;
+
+            var typed = (vis.value || '').trim();
+            var locationId = (locationIdEl.value || '').trim();
+            var locationInput = (locationInputEl.value || '').trim();
+            if (typed !== '' && locationId === '' && locationInput === '') {
+                invalidSelection = true;
+            }
+        });
+        if (invalidSelection) {
+            e.preventDefault();
+            window.alert('Please select a location from suggestions');
+            return;
+        }
         restoreResidenceHiddensFromDataset(t);
         syncLocationDisplaySyncTargets(t);
     }, true);

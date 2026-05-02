@@ -293,7 +293,7 @@ class OnboardingController extends Controller
             'state_id' => $request->filled('state_id') ? $request->input('state_id') : $profile->state_id,
             'district_id' => $request->filled('district_id') ? $request->input('district_id') : $profile->district_id,
             'taluka_id' => $request->filled('taluka_id') ? $request->input('taluka_id') : $profile->taluka_id,
-            'city_id' => $request->filled('city_id') ? $request->input('city_id') : $profile->city_id,
+            'location_id' => $request->filled('location_id') ? $request->input('location_id') : $profile->location_id,
             'address_line' => $request->filled('address_line') ? $request->input('address_line') : $profile->address_line,
         ]);
 
@@ -384,7 +384,7 @@ class OnboardingController extends Controller
                 $key
             ),
             3 => (bool) preg_match(
-                '/^(religion_id|caste_id|sub_caste_id|height_cm|complexion_id|blood_group_id|physical_build_id|spectacles_lens|physical_condition|diet_id|smoking_status_id|drinking_status_id|weight_kg|country_id|state_id|district_id|taluka_id|city_id|address_line|wizard_residence_display)(\.|$)/',
+                '/^(religion_id|caste_id|sub_caste_id|height_cm|complexion_id|blood_group_id|physical_build_id|spectacles_lens|physical_condition|diet_id|smoking_status_id|drinking_status_id|weight_kg|country_id|state_id|district_id|taluka_id|location_id|address_line|wizard_residence_display)(\.|$)/',
                 $key
             ),
             4 => (bool) preg_match(
@@ -421,7 +421,7 @@ class OnboardingController extends Controller
             'state_id' => $coalesce($request->input('state_id'), $profile->state_id),
             'district_id' => $coalesce($request->input('district_id'), $profile->district_id),
             'taluka_id' => $coalesce($request->input('taluka_id'), $profile->taluka_id),
-            'city_id' => $coalesce($request->input('city_id'), $profile->city_id),
+            'location_id' => $coalesce($request->input('location_id'), $profile->location_id),
             'address_line' => $request->filled('address_line') ? trim((string) $request->input('address_line')) : $profile->address_line,
         ]);
     }

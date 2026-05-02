@@ -1,0 +1,38 @@
+[
+  {
+    "slug": "pune-city",
+    "name": "Pune",
+    "type": "city",
+    "parent_slug": "haveli-pune",
+    "level": 4
+  },
+  {
+    "slug": "mumbai-city",
+    "name": "Mumbai",
+    "type": "city",
+    "parent_slug": "mumbai-city-taluka",
+    "level": 4
+  },
+  {
+    "slug": "nagpur-city",
+    "name": "Nagpur",
+    "type": "city",
+    "parent_slug": "nagpur-urban-nagpur",
+    "level": 4
+  },
+  {
+    "slug": "nashik-city",
+    "name": "Nashik",
+    "type": "city",
+    "parent_slug": "nashik-taluka",
+    "level": 4
+  },
+  {
+    "slug": "kolhapur-city",
+    "name": "Kolhapur",
+    "type": "city",
+    "parent_slug": "karvir-kolhapur",
+    "level": 4
+  }
+]
+

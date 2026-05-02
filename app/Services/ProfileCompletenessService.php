@@ -92,7 +92,8 @@ class ProfileCompletenessService
                 return false;
 
             case 'location':
-                return $profile->city_id !== null;
+                return Schema::hasColumn('matrimony_profiles', 'location_id')
+                    && $profile->location_id !== null;
 
             case 'profile_photo':
                 return $profile->profile_photo !== null && $profile->profile_photo !== ''
@@ -238,7 +239,11 @@ class ProfileCompletenessService
                 return "(CASE WHEN {$cond} THEN 1 ELSE 0 END)";
 
             case 'location':
-                return "(CASE WHEN {$table}.city_id IS NOT NULL THEN 1 ELSE 0 END)";
+                if (Schema::hasColumn('matrimony_profiles', 'location_id')) {
+                    return "(CASE WHEN {$table}.location_id IS NOT NULL THEN 1 ELSE 0 END)";
+                }
+
+                return '(0)';
 
             case 'profile_photo':
                 return "(CASE WHEN COALESCE(TRIM({$table}.profile_photo),'') != '' AND ({$table}.photo_approved = 1 OR {$table}.photo_approved IS TRUE) THEN 1 ELSE 0 END)";

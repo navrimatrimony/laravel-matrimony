@@ -100,8 +100,8 @@ class MatrimonyProfileSearchQueryService
             if ($request->filled('taluka_id') && $geoActive('taluka_id')) {
                 $query->where('taluka_id', (int) $request->taluka_id);
             }
-            if ($request->filled('city_id') && $geoActive('city_id')) {
-                $query->where('city_id', (int) $request->city_id);
+            if ($request->filled('location_id') && $geoActive('city_id')) {
+                $query->where('location_id', (int) $request->location_id);
             }
         }
 

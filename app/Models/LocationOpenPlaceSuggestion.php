@@ -24,8 +24,12 @@ class LocationOpenPlaceSuggestion extends Model
         'district_id',
         'taluka_id',
         'resolved_city_id',
+        'resolved_location_id',
         'match_type',
         'confidence_score',
+        'suggested_type',
+        'suggested_parent_id',
+        'analysis_json',
         'status',
         'usage_count',
         'suggested_by',
@@ -39,6 +43,7 @@ class LocationOpenPlaceSuggestion extends Model
         return [
             'confidence_score' => 'float',
             'admin_reviewed_at' => 'datetime',
+            'analysis_json' => 'array',
         ];
     }
 
@@ -65,6 +70,16 @@ class LocationOpenPlaceSuggestion extends Model
     public function resolvedCity(): BelongsTo
     {
         return $this->belongsTo(City::class, 'resolved_city_id');
+    }
+
+    public function resolvedLocation(): BelongsTo
+    {
+        return $this->belongsTo(Location::class, 'resolved_location_id');
+    }
+
+    public function suggestedParent(): BelongsTo
+    {
+        return $this->belongsTo(Location::class, 'suggested_parent_id');
     }
 
     public function suggestedBy(): BelongsTo

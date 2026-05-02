@@ -51,6 +51,8 @@ use App\Http\Controllers\Admin\ShowcaseProfileController;
 use App\Http\Controllers\Admin\SubCasteAdminController;
 use App\Http\Controllers\Admin\TranslationController;
 use App\Http\Controllers\Admin\UserWalletController;
+use App\Http\Controllers\Admin\LocationManageWebController;
+use App\Http\Controllers\Internal\Admin\CanonicalLocationAdminController;
 use App\Http\Controllers\Internal\Admin\CityAliasAdminController;
 use App\Http\Controllers\Internal\Admin\LocationSuggestionAdminController;
 use App\Http\Controllers\Internal\Admin\OpenPlaceSuggestionAdminController;
@@ -289,6 +291,13 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
     Route::get('/open-place-suggestions', [OpenPlaceSuggestionWebController::class, 'index'])
         ->name('open-place-suggestions.index');
 
+    Route::get('/locations', [LocationManageWebController::class, 'index'])
+        ->name('locations.index');
+    Route::get('/locations/merge', [LocationManageWebController::class, 'merge'])
+        ->name('locations.merge');
+    Route::get('/locations/{location}/edit', [LocationManageWebController::class, 'edit'])
+        ->name('locations.edit');
+
     Route::get('/governance-dashboard', [GovernanceDashboardController::class, 'index'])
         ->name('governance-dashboard');
 
@@ -346,9 +355,16 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
         Route::get('/open-place-suggestions', [OpenPlaceSuggestionAdminController::class, 'index']);
         Route::post('/open-place-suggestions/{id}/approve-as-city', [OpenPlaceSuggestionAdminController::class, 'approveAsCity']);
         Route::post('/open-place-suggestions/{id}/map-to-city', [OpenPlaceSuggestionAdminController::class, 'mapToCity']);
+        Route::post('/open-place-suggestions/{id}/map-recommended', [OpenPlaceSuggestionAdminController::class, 'mapRecommended']);
         Route::post('/open-place-suggestions/{id}/reject', [OpenPlaceSuggestionAdminController::class, 'reject']);
         Route::post('/open-place-suggestions/{id}/merge', [OpenPlaceSuggestionAdminController::class, 'merge']);
         Route::post('/cities/{cityId}/aliases', [CityAliasAdminController::class, 'store']);
+
+        Route::get('/locations', [CanonicalLocationAdminController::class, 'index']);
+        Route::get('/locations/{location}', [CanonicalLocationAdminController::class, 'show']);
+        Route::patch('/locations/{location}', [CanonicalLocationAdminController::class, 'update']);
+        Route::post('/locations/{location}/merge', [CanonicalLocationAdminController::class, 'merge']);
+        Route::get('/locations/{location}/possible-duplicates', [CanonicalLocationAdminController::class, 'possibleDuplicates']);
     });
 
     Route::get('/auto-showcase-settings', [AutoShowcaseSettingsController::class, 'edit'])->name('auto-showcase-settings.edit');

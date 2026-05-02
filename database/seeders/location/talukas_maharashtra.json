@@ -1,0 +1,59 @@
+[
+  {
+    "slug": "haveli-pune",
+    "name": "Haveli",
+    "type": "taluka",
+    "parent_slug": "pune-district",
+    "level": 3
+  },
+  {
+    "slug": "mulshi-pune",
+    "name": "Mulshi",
+    "type": "taluka",
+    "parent_slug": "pune-district",
+    "level": 3
+  },
+  {
+    "slug": "mawal-pune",
+    "name": "Mawal",
+    "type": "taluka",
+    "parent_slug": "pune-district",
+    "level": 3
+  },
+  {
+    "slug": "andheri-mumbai-suburban",
+    "name": "Andheri",
+    "type": "taluka",
+    "parent_slug": "mumbai-suburban-district",
+    "level": 3
+  },
+  {
+    "slug": "mumbai-city-taluka",
+    "name": "Mumbai",
+    "type": "taluka",
+    "parent_slug": "mumbai-city-district",
+    "level": 3
+  },
+  {
+    "slug": "nagpur-urban-nagpur",
+    "name": "Nagpur Urban",
+    "type": "taluka",
+    "parent_slug": "nagpur-district",
+    "level": 3
+  },
+  {
+    "slug": "nashik-taluka",
+    "name": "Nashik",
+    "type": "taluka",
+    "parent_slug": "nashik-district",
+    "level": 3
+  },
+  {
+    "slug": "karvir-kolhapur",
+    "name": "Karvir",
+    "type": "taluka",
+    "parent_slug": "kolhapur-district",
+    "level": 3
+  }
+]
+

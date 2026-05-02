@@ -205,6 +205,13 @@ class ConflictDetectionService
                 ->where('is_primary', true)
                 ->value('phone_number');
         }
+        if ($fieldKey === 'location') {
+            if (\Illuminate\Support\Facades\Schema::hasColumn($profile->getTable(), 'location_id')) {
+                return $profile->getAttribute('location_id');
+            }
+
+            return null;
+        }
 
         return $profile->getAttribute($fieldKey);
     }

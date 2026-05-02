@@ -189,7 +189,7 @@
         $nameAddressLine = $corePrefix ? $corePrefix . '[address_line]' : 'address_line';
         $addressLineVal = old($oldPrefix.'address_line', $profile->address_line ?? ($coreData['address_line'] ?? ''));
         $residenceDisplay = old($oldPrefix.'wizard_residence_display', $residencePlaceDisplay ?? \App\Models\MatrimonyProfile::residenceLocationDisplayLineFor($profile));
-        $resCityId = old($oldPrefix.'city_id', $profile->city_id ?? '');
+        $resLocationId = old($oldPrefix.'location_id', $profile->location_id ?? '');
         $resTalukaId = old($oldPrefix.'taluka_id', $profile->taluka_id ?? '');
         $resDistrictId = old($oldPrefix.'district_id', $profile->district_id ?? '');
         $resStateId = old($oldPrefix.'state_id', $profile->state_id ?? '');
@@ -229,7 +229,7 @@
                 :data-birth-district-id="null"
                 :data-birth-state-id="null"
                 :dataCountryId="$resCountryId"
-                :data-city-id="$resCityId"
+                :data-city-id="$resLocationId"
                 :data-taluka-id="$resTalukaId"
                 :data-district-id="$resDistrictId"
                 :data-state-id="$resStateId"

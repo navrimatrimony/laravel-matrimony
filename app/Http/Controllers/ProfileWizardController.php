@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Location;
 use App\Models\MatrimonyProfile;
 use App\Services\CareerHistoryRowNormalizer;
 use App\Services\EducationService;
@@ -1060,6 +1061,7 @@ class ProfileWizardController extends Controller
 
         // Current residence (district/taluka/city + address line) — same fields as location snapshot; rendered on Basic info.
         $core = array_merge($core, $this->residenceCoreFromRequest($request));
+        $core = $this->applyLocationSelectionResolution($core);
 
         // Merge full marital engine snapshot (marital_status_id, has_children, marriages, children)
         $marriagesSnapshot = $this->buildMarriagesSnapshot($request);
@@ -1118,32 +1120,46 @@ class ProfileWizardController extends Controller
         $toInt = fn ($v) => $v !== null && $v !== '' ? (int) $v : null;
         $addr = $this->residenceScalarFromRequest($request, 'address_line');
         $addressLine = ($addr !== null && trim((string) $addr) !== '') ? trim((string) $addr) : null;
+        $locationId = $toInt($this->residenceScalarFromRequest($request, 'location_id'));
+        $locationInputRaw = $this->residenceScalarFromRequest($request, 'location_input');
+        $locationInput = ($locationInputRaw !== null && trim((string) $locationInputRaw) !== '') ? trim((string) $locationInputRaw) : null;
 
         return [
+            'location_id' => $locationId,
+            'location_input' => $locationInput,
             'country_id' => $toInt($this->residenceScalarFromRequest($request, 'country_id')),
             'state_id' => $toInt($this->residenceScalarFromRequest($request, 'state_id')),
             'district_id' => $toInt($this->residenceScalarFromRequest($request, 'district_id')),
             'taluka_id' => $toInt($this->residenceScalarFromRequest($request, 'taluka_id')),
-            'city_id' => $toInt($this->residenceScalarFromRequest($request, 'city_id')),
             'address_line' => $addressLine,
         ];
     }
 
     private function validateResidenceCoreForSnapshot(Request $request): void
     {
-        $keys = ['country_id', 'state_id', 'district_id', 'taluka_id', 'city_id', 'address_line'];
+        $keys = ['country_id', 'state_id', 'district_id', 'taluka_id', 'location_id', 'location_input', 'address_line'];
         $data = [];
         foreach ($keys as $k) {
             $data[$k] = $this->residenceScalarFromRequest($request, $k);
         }
         Validator::make($data, [
+            'location_id' => ['required_without:location_input', 'nullable', 'integer', 'exists:'.Location::geoTable().',id'],
+            'location_input' => ['required_without:location_id', 'nullable', 'string', 'min:2', 'max:255'],
             'country_id' => ['nullable', 'exists:countries,id'],
             'state_id' => ['nullable', 'exists:states,id'],
             'district_id' => ['nullable', 'exists:districts,id'],
             'taluka_id' => ['nullable', 'exists:talukas,id'],
-            'city_id' => ['nullable', 'exists:cities,id'],
             'address_line' => ['nullable', 'string', 'max:255'],
         ])->validate();
+
+        $locationId = $data['location_id'] ?? null;
+        $locationInput = $data['location_input'] ?? null;
+        if (! empty($locationId) && ! empty($locationInput)) {
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'location_id' => ['Do not send location_id and location_input together.'],
+                'location_input' => ['Do not send location_id and location_input together.'],
+            ]);
+        }
     }
 
     private function buildPhysicalSnapshot(Request $request, MatrimonyProfile $profile): array
@@ -1772,6 +1788,7 @@ class ProfileWizardController extends Controller
         ]);
 
         $core = $this->residenceCoreFromRequest($request);
+        $core = $this->applyLocationSelectionResolution($core);
         $core['work_city_id'] = $request->filled('work_city_id') ? (int) $request->input('work_city_id') : null;
         $core['work_state_id'] = $request->filled('work_state_id') ? (int) $request->input('work_state_id') : null;
         $core = array_map(fn ($v) => $v === '' ? null : $v, $core);
@@ -1812,6 +1829,32 @@ class ProfileWizardController extends Controller
         return [
             'preferences' => PartnerPreferenceSnapshotBuilder::validateAndBuildRow($request),
         ];
+    }
+
+    /**
+     * Resolve strict location selection outcome:
+     * - known select: keep canonical location_id
+     * - unknown input: record suggestion and clear location_id
+     */
+    private function applyLocationSelectionResolution(array $core): array
+    {
+        if (! empty($core['location_input']) && empty($core['location_id'])) {
+            $suggestedByUserId = (int) (auth()->id() ?? 0);
+            if ($suggestedByUserId > 0) {
+                app(\App\Services\Location\LocationOpenPlaceSuggestionService::class)->recordOrBumpUsage(
+                    rawInput: (string) $core['location_input'],
+                    suggestedByUserId: $suggestedByUserId
+                );
+            }
+            $core['location_pending'] = true;
+            $core['location_id'] = null;
+
+            return $core;
+        }
+
+        $core['location_pending'] = false;
+
+        return $core;
     }
 
     private function buildAboutMeSnapshot(Request $request, MatrimonyProfile $profile): array

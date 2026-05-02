@@ -3,9 +3,12 @@
 namespace App\Services;
 
 use App\Models\District;
+use App\Models\Location;
 use App\Models\MasterMaritalStatus;
 use App\Models\MatrimonyProfile;
+use App\Services\Location\LocationService;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 /**
  * Compute non-persistent partner preference suggestions from the profile.
@@ -138,10 +141,23 @@ class PartnerPreferenceSuggestionService
 
             return null;
         }
-        if (! empty($profile->city_id)) {
-            $districtId = DB::table('cities')->where('id', $profile->city_id)->value('district_id');
-            if ($districtId && District::query()->whereKey((int) $districtId)->exists()) {
-                return (int) $districtId;
+        if (! empty($profile->location_id) && Schema::hasTable(Location::geoTable())) {
+            $loc = Location::query()->find((int) $profile->location_id);
+            if ($loc !== null) {
+                $h = app(LocationService::class)->getFullHierarchy($loc);
+                $districtNode = $h['district'] ?? null;
+                $stateNode = $h['state'] ?? null;
+                if ($districtNode !== null && $stateNode !== null) {
+                    $district = District::query()
+                        ->whereRaw('LOWER(TRIM(name)) = ?', [mb_strtolower(trim((string) $districtNode->name), 'UTF-8')])
+                        ->whereHas('state', function ($q) use ($stateNode): void {
+                            $q->whereRaw('LOWER(TRIM(name)) = ?', [mb_strtolower(trim((string) $stateNode->name), 'UTF-8')]);
+                        })
+                        ->first();
+                    if ($district !== null) {
+                        return (int) $district->id;
+                    }
+                }
             }
         }
 
@@ -262,9 +278,7 @@ class PartnerPreferenceSuggestionService
             $out['preferred_income_max'] = null;
         }
 
-        if (! empty($profile->city_id)) {
-            $out['preferred_city_id'] = (int) $profile->city_id;
-        } elseif (! empty($profile->native_city_id)) {
+        if (! empty($profile->native_city_id)) {
             $out['preferred_city_id'] = (int) $profile->native_city_id;
         }
 

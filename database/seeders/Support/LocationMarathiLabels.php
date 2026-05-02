@@ -4,6 +4,7 @@ namespace Database\Seeders\Support;
 
 use App\Models\City;
 use App\Models\District;
+use App\Models\Location;
 use App\Models\State;
 use App\Models\Taluka;
 use App\Models\Village;
@@ -334,5 +335,57 @@ final class LocationMarathiLabels
         }
         $model->setAttribute('name_mr', $mr);
         $model->save();
+    }
+
+    /**
+     * Fills {@see Location} ({@code addresses}.name_mr) from packaged English→Marathi maps (states, districts, cities in {@see englishToMarathi()}, talukas via district+taluqa composite).
+     */
+    public static function syncLocationsTableNameMr(): void
+    {
+        $geo = Location::geoTable();
+        if (! Schema::hasTable($geo) || ! Schema::hasColumn($geo, 'name_mr')) {
+            return;
+        }
+
+        $simpleMap = array_merge(
+            self::englishToMarathi(),
+            self::indiaStateEnglishToMarathi(),
+            self::indiaDistrictEnglishToMarathi()
+        );
+
+        $sep = self::TALUKA_COMPOSITE_SEP;
+        $talukaMap = self::indiaTalukaCompositeKeyToMarathi();
+
+        Location::query()->orderBy('id')->chunkById(200, function ($locations) use ($simpleMap, $talukaMap, $sep): void {
+            foreach ($locations as $loc) {
+                $name = trim((string) $loc->name);
+                if ($name === '') {
+                    continue;
+                }
+
+                $mr = null;
+                if ((string) $loc->type === 'taluka') {
+                    $loc->loadMissing('parent');
+                    $parent = $loc->parent;
+                    $dName = $parent !== null && (string) $parent->type === 'district'
+                        ? trim((string) $parent->name)
+                        : '';
+                    if ($dName !== '') {
+                        $mr = $talukaMap[$dName.$sep.$name] ?? null;
+                    }
+                } else {
+                    $mr = $simpleMap[$name] ?? null;
+                }
+
+                if ($mr === null || trim((string) $mr) === '') {
+                    continue;
+                }
+                $mr = trim((string) $mr);
+                if ((string) ($loc->name_mr ?? '') !== $mr) {
+                    $loc->name_mr = $mr;
+                    $loc->save();
+                }
+            }
+        });
     }
 }

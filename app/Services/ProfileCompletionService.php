@@ -92,7 +92,7 @@ class ProfileCompletionService
 
     private static function sectionLocationFilled(MatrimonyProfile $profile): bool
     {
-        if (($profile->city_id ?? null)) {
+        if (($profile->location_id ?? null)) {
             return true;
         }
         $hasVillage = DB::table('profile_addresses')

@@ -2,8 +2,10 @@
 
 namespace App\Support;
 
+use App\Models\Location;
 use App\Models\MatrimonyProfile;
 use App\Services\Location\LocationDisplayFormatter;
+use App\Services\Location\LocationService;
 use Illuminate\Support\Str;
 
 /**
@@ -17,16 +19,20 @@ class ProfileDisplayCopy
     public static function headline(MatrimonyProfile $p): string
     {
         $p->loadMissing(['district', 'state', 'maritalStatus', 'profession']);
-        $p->loadMissing(['city' => function ($q) {
-            $q->with(MatrimonyProfile::withRelationsForLocationDisplay());
-        }]);
-        $loc = ($p->city_id && $p->city)
-            ? app(LocationDisplayFormatter::class)->formatCityLine($p->city)
-            : self::compactLocationLine(
-                $p->city?->name,
+        $loc = '';
+        if ($p->location_id) {
+            $node = Location::query()->find((int) $p->location_id);
+            if ($node) {
+                $loc = app(LocationService::class)->getDisplayLabel($node);
+            }
+        }
+        if ($loc === '') {
+            $loc = self::compactLocationLine(
+                null,
                 $p->district?->name,
                 $p->state?->name
             );
+        }
         $occ = $p->occupation_title ?: ($p->profession?->name ?? '');
         $parts = array_filter([
             self::formatEducationPhrase($p->highest_education ?: null),
@@ -50,9 +56,6 @@ class ProfileDisplayCopy
         $name = self::formatPersonName($name);
 
         $p->loadMissing(['district', 'state', 'familyType', 'gender']);
-        $p->loadMissing(['city' => function ($q) {
-            $q->with(MatrimonyProfile::withRelationsForLocationDisplay());
-        }]);
 
         $edu = ($p->highest_education ?? '') !== ''
             ? self::formatEducationPhrase($p->highest_education)
@@ -60,13 +63,20 @@ class ProfileDisplayCopy
         $occ = ($p->occupation_title ?? '') !== ''
             ? self::formatOccupationPhrase($p->occupation_title)
             : null;
-        $loc = ($p->city_id && $p->city)
-            ? app(LocationDisplayFormatter::class)->formatCityLine($p->city)
-            : self::compactLocationLine(
-                $p->city?->name,
+        $loc = '';
+        if ($p->location_id) {
+            $node = Location::query()->find((int) $p->location_id);
+            if ($node) {
+                $loc = app(LocationService::class)->getDisplayLabel($node);
+            }
+        }
+        if ($loc === '') {
+            $loc = self::compactLocationLine(
+                null,
                 $p->district?->name,
                 $p->state?->name
             );
+        }
 
         $familyClause = null;
         if ($p->familyType && ($p->familyType->label ?? '') !== '') {

@@ -76,29 +76,38 @@
         $roundedClass = 'rounded-lg';
     }
 @endphp
-<div class="{{ $wrapperClass }} space-y-0 {{ $roundedClass }} {{ $paddingClass }} {{ $borderClass }}" data-location-context="{{ $context }}" data-name-prefix="{{ $namePrefix }}" @if($showGps) data-resolve-url="{{ $resolveUrlResolved }}" data-gps="1" @endif @if(!empty($displaySyncName)) data-display-sync-name="{{ $displaySyncName }}" @endif>
+{{-- API paths must use url() so subdirectory installs (e.g. /project/public) resolve /api/* correctly. Search hits addresses.name, slug, name_mr (+ aliases when present). --}}
+<div class="{{ $wrapperClass }} space-y-0 {{ $roundedClass }} {{ $paddingClass }} {{ $borderClass }}" data-location-context="{{ $context }}" data-name-prefix="{{ $namePrefix }}" data-search-url="{{ url('/api/location/search') }}" data-suggest-url="{{ url('/api/location/suggestions') }}" data-url-internal-states="{{ url('/api/internal/location/states') }}" data-url-internal-districts="{{ url('/api/internal/location/districts') }}" data-url-internal-talukas="{{ url('/api/internal/location/talukas') }}" data-url-internal-suggest="{{ url('/api/internal/location/suggest') }}" @if($showGps) data-resolve-url="{{ $resolveUrlResolved }}" data-gps="1" @endif @if(!empty($displaySyncName)) data-display-sync-name="{{ $displaySyncName }}" @endif>
     @if ($context === 'residence')
+        <input type="hidden" name="{{ $namePrefix !== '' ? $namePrefix . '[location_id]' : 'location_id' }}" class="location-hidden-location-id" value="{{ $dataCityId }}">
+        <input type="hidden" name="{{ $namePrefix !== '' ? $namePrefix . '[location_input]' : 'location_input' }}" class="location-hidden-location-input" value="">
         <input type="hidden" name="{{ $namePrefix !== '' ? $namePrefix . '[country_id]' : 'country_id' }}" class="location-hidden-country" value="{{ $dataCountryId }}">
         <input type="hidden" name="{{ $namePrefix !== '' ? $namePrefix . '[state_id]' : 'state_id' }}" class="location-hidden-state" value="{{ $dataStateId }}">
         <input type="hidden" name="{{ $namePrefix !== '' ? $namePrefix . '[district_id]' : 'district_id' }}" class="location-hidden-district" value="{{ $dataDistrictId }}">
         <input type="hidden" name="{{ $namePrefix !== '' ? $namePrefix . '[taluka_id]' : 'taluka_id' }}" class="location-hidden-taluka" value="{{ $dataTalukaId }}">
-        <input type="hidden" name="{{ $namePrefix !== '' ? $namePrefix . '[city_id]' : 'city_id' }}" class="location-hidden-city" value="{{ $dataCityId }}">
     @elseif ($context === 'work')
+        <input type="hidden" name="work_location_id" class="location-hidden-location-id" value="{{ $attributes->get('data-work-city-id', '') }}">
+        <input type="hidden" name="work_location_input" class="location-hidden-location-input" value="">
         <input type="hidden" name="work_city_id" class="location-hidden-work-city" value="{{ $attributes->get('data-work-city-id', '') }}">
         <input type="hidden" name="work_state_id" class="location-hidden-work-state" value="{{ $attributes->get('data-work-state-id', '') }}">
     @elseif ($context === 'native')
+        <input type="hidden" name="native_location_id" class="location-hidden-location-id" value="{{ $attributes->get('data-native-city-id', '') }}">
+        <input type="hidden" name="native_location_input" class="location-hidden-location-input" value="">
         <input type="hidden" name="native_city_id" class="location-hidden-native-city" value="{{ $attributes->get('data-native-city-id', '') }}">
         <input type="hidden" name="native_taluka_id" class="location-hidden-native-taluka" value="{{ $attributes->get('data-native-taluka-id', '') }}">
         <input type="hidden" name="native_district_id" class="location-hidden-native-district" value="{{ $attributes->get('data-native-district-id', '') }}">
         <input type="hidden" name="native_state_id" class="location-hidden-native-state" value="{{ $attributes->get('data-native-state-id', '') }}">
     @elseif ($context === 'birth')
         @php $birthName = $namePrefix !== '' ? $namePrefix . '[birth_city_id]' : 'birth_city_id'; $birthT = $namePrefix !== '' ? $namePrefix . '[birth_taluka_id]' : 'birth_taluka_id'; $birthD = $namePrefix !== '' ? $namePrefix . '[birth_district_id]' : 'birth_district_id'; $birthS = $namePrefix !== '' ? $namePrefix . '[birth_state_id]' : 'birth_state_id'; @endphp
+        <input type="hidden" name="{{ $namePrefix !== '' ? $namePrefix . '[birth_location_id]' : 'birth_location_id' }}" class="location-hidden-location-id" value="{{ $attributes->get('data-birth-city-id', '') }}">
+        <input type="hidden" name="{{ $namePrefix !== '' ? $namePrefix . '[birth_location_input]' : 'birth_location_input' }}" class="location-hidden-location-input" value="">
         <input type="hidden" name="{{ $birthName }}" class="location-hidden-birth-city" value="{{ $attributes->get('data-birth-city-id', '') }}">
         <input type="hidden" name="{{ $birthT }}" class="location-hidden-birth-taluka" value="{{ $attributes->get('data-birth-taluka-id', '') }}">
         <input type="hidden" name="{{ $birthD }}" class="location-hidden-birth-district" value="{{ $attributes->get('data-birth-district-id', '') }}">
         <input type="hidden" name="{{ $birthS }}" class="location-hidden-birth-state" value="{{ $attributes->get('data-birth-state-id', '') }}">
     @elseif ($context === 'alliance' && $namePrefix !== '')
-        <input type="hidden" name="{{ $namePrefix }}[city_id]" class="location-hidden-city" value="{{ $dataCityId }}">
+        <input type="hidden" name="{{ $namePrefix }}[location_id]" class="location-hidden-location-id" value="{{ $dataCityId }}">
+        <input type="hidden" name="{{ $namePrefix }}[location_input]" class="location-hidden-location-input" value="">
         <input type="hidden" name="{{ $namePrefix }}[taluka_id]" class="location-hidden-taluka" value="{{ $dataTalukaId }}">
         <input type="hidden" name="{{ $namePrefix }}[district_id]" class="location-hidden-district" value="{{ $dataDistrictId }}">
         <input type="hidden" name="{{ $namePrefix }}[state_id]" class="location-hidden-state" value="{{ $dataStateId }}">

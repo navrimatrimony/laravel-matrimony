@@ -107,8 +107,8 @@ class MatchBoostService
             return true;
         }
 
-        $cA = (int) ($a->city_id ?? 0);
-        $cB = (int) ($b->city_id ?? 0);
+        $cA = (int) ($a->location_id ?? 0);
+        $cB = (int) ($b->location_id ?? 0);
         if ($cA > 0 && $cA === $cB) {
             return true;
         }

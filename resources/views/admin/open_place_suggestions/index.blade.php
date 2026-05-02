@@ -4,7 +4,7 @@
 <div class="bg-white dark:bg-gray-800 shadow rounded-lg overflow-hidden">
     <div class="p-6">
         <h1 class="text-2xl font-bold text-gray-800 dark:text-gray-100 mb-2">Open place suggestions</h1>
-        <p class="text-sm text-gray-600 dark:text-gray-400 mb-6">Free-text locations from intake → review → city or alias.</p>
+        <p class="text-sm text-gray-600 dark:text-gray-400 mb-6">Free-text locations from intake → ranked by usage and recency → duplicate detection, learned patterns, and one-click map when confidence is high.</p>
 
         <div class="flex flex-wrap gap-2 mb-3">
             <button type="button" class="filter-status px-4 py-2 rounded-lg text-sm font-medium bg-indigo-600 text-white" data-status="pending">Pending</button>
@@ -45,8 +45,10 @@
                         <th class="text-left py-3 px-3 font-semibold text-gray-700 dark:text-gray-300 text-sm">Raw</th>
                         <th class="text-left py-3 px-3 font-semibold text-gray-700 dark:text-gray-300 text-sm">Normalized</th>
                         <th class="text-left py-3 px-3 font-semibold text-gray-700 dark:text-gray-300 text-sm">Usage</th>
+                        <th class="text-left py-3 px-3 font-semibold text-gray-700 dark:text-gray-300 text-sm">Conf.</th>
                         <th class="text-left py-3 px-3 font-semibold text-gray-700 dark:text-gray-300 text-sm">Status</th>
                         <th class="text-left py-3 px-3 font-semibold text-gray-700 dark:text-gray-300 text-sm">City</th>
+                        <th class="text-left py-3 px-3 font-semibold text-gray-700 dark:text-gray-300 text-sm">Auto hint</th>
                         <th class="text-left py-3 px-3 font-semibold text-gray-700 dark:text-gray-300 text-sm">Match</th>
                         <th class="text-left py-3 px-3 font-semibold text-gray-700 dark:text-gray-300 text-sm">Created</th>
                         <th class="text-left py-3 px-3 font-semibold text-gray-700 dark:text-gray-300 text-sm">Actions</th>
@@ -54,7 +56,7 @@
                 </thead>
                 <tbody id="ops-tbody">
                     <tr>
-                        <td colspan="9" class="py-8 px-4 text-center text-gray-500">Loading…</td>
+                        <td colspan="11" class="py-8 px-4 text-center text-gray-500">Loading…</td>
                     </tr>
                 </tbody>
             </table>
@@ -196,32 +198,62 @@
         return div.innerHTML;
     }
 
+    function autoHintText(item) {
+        var a = item.analysis_json;
+        if (!a || typeof a !== 'object') return '—';
+        var bits = [];
+        if (a.confidence_basis) {
+            bits.push(escapeHtml(String(a.confidence_basis)));
+        }
+        var dc = a.duplicate_candidates;
+        if (Array.isArray(dc) && dc.length) {
+            var c0 = dc[0];
+            if (c0 && c0.kind === 'city') {
+                bits.push('#' + c0.id + ' ' + escapeHtml(c0.name || '') + (c0.score != null ? ' · ' + c0.score : ''));
+            } else if (c0 && c0.kind === 'location') {
+                bits.push('loc #' + c0.id + ' ' + escapeHtml(c0.display_label || c0.name || ''));
+            }
+        }
+        return bits.length ? bits.join(' · ') : '—';
+    }
+
     function renderRow(item) {
         var raw = escapeHtml(item.raw_input);
         var norm = escapeHtml(item.normalized_input);
         var usage = escapeHtml(String(item.usage_count));
+        var confCell = (item.confidence_score != null && item.confidence_score !== '') ? escapeHtml(String(Math.round(Number(item.confidence_score) * 1000) / 1000)) : '—';
         var st = escapeHtml(item.status);
         var statusLabel = st;
         if (item.status === 'auto_candidate') {
             statusLabel = 'auto_candidate (Auto suggested — approve?)';
         }
         var city = item.resolved_city_id ? ('#' + item.resolved_city_id + (item.resolved_city && item.resolved_city.name ? ' ' + escapeHtml(item.resolved_city.name) : '')) : '—';
+        var hint = autoHintText(item);
         var mt = escapeHtml(item.match_type || '—');
         var created = item.created_at ? escapeHtml(item.created_at.replace('T', ' ').slice(0, 19)) : '—';
         var actions = '—';
-        if ((item.status === 'pending' || item.status === 'auto_candidate') && !item.merged_into_suggestion_id) {
-            actions = '<button type="button" class="op-appr px-2 py-1 rounded text-xs font-medium bg-emerald-600 text-white mr-1" data-id="' + item.id + '">New city</button>' +
+        var open = (item.status === 'pending' || item.status === 'auto_candidate') && !item.merged_into_suggestion_id;
+        var unresolved = !item.resolved_city_id;
+        if (open && unresolved) {
+            var a = item.analysis_json || {};
+            var quick = (a.recommended_action === 'map' && (a.recommended_city_id || (Array.isArray(a.duplicate_candidates) && a.duplicate_candidates.some(function (r) { return r && r.kind === 'city' && Number(r.score) >= 0.76; }))));
+            actions = (quick ? '<button type="button" class="op-quick px-2 py-1 rounded text-xs font-medium bg-violet-600 text-white mr-1" data-id="' + item.id + '" title="Map using auto-analysis">Quick map</button>' : '') +
+                '<button type="button" class="op-appr px-2 py-1 rounded text-xs font-medium bg-emerald-600 text-white mr-1" data-id="' + item.id + '">New city</button>' +
                 '<button type="button" class="op-map px-2 py-1 rounded text-xs font-medium bg-indigo-600 text-white mr-1" data-id="' + item.id + '">Map</button>' +
                 '<button type="button" class="op-merge px-2 py-1 rounded text-xs font-medium bg-amber-600 text-white mr-1" data-id="' + item.id + '">Merge</button>' +
                 '<button type="button" class="op-rej px-2 py-1 rounded text-xs font-medium bg-red-600 text-white" data-id="' + item.id + '">Reject</button>';
+        } else if (open && !unresolved) {
+            actions = '<span class="text-xs text-gray-500">Resolved</span>';
         }
         return '<tr class="border-b border-gray-100 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700/30">' +
             '<td class="py-2 px-3 text-sm">' + item.id + '</td>' +
             '<td class="py-2 px-3 text-sm max-w-[200px] break-words">' + raw + '</td>' +
             '<td class="py-2 px-3 text-sm">' + norm + '</td>' +
             '<td class="py-2 px-3 text-sm">' + usage + '</td>' +
+            '<td class="py-2 px-3 text-sm">' + confCell + '</td>' +
             '<td class="py-2 px-3 text-sm">' + statusLabel + '</td>' +
             '<td class="py-2 px-3 text-sm">' + city + '</td>' +
+            '<td class="py-2 px-3 text-sm max-w-[220px] text-xs">' + hint + '</td>' +
             '<td class="py-2 px-3 text-sm">' + mt + '</td>' +
             '<td class="py-2 px-3 text-sm whitespace-nowrap">' + created + '</td>' +
             '<td class="py-2 px-3 text-sm whitespace-nowrap">' + actions + '</td>' +
@@ -259,7 +291,7 @@
     function loadByUrl(url) {
         fetchError.classList.add('hidden');
         loadingEl.classList.remove('hidden');
-        tbody.innerHTML = '<tr><td colspan="9" class="py-8 px-4 text-center text-gray-500">Loading…</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="11" class="py-8 px-4 text-center text-gray-500">Loading…</td></tr>';
 
         fetch(url, { credentials: 'same-origin', headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' } })
             .then(function (res) { return res.json().then(function (data) { return { ok: res.ok, data: data }; }); })
@@ -268,12 +300,12 @@
                 if (!result.ok || !result.data.success) {
                     fetchError.textContent = (result.data && result.data.message) ? result.data.message : GENERIC_ERR;
                     fetchError.classList.remove('hidden');
-                    tbody.innerHTML = '<tr><td colspan="9" class="py-8 px-4 text-center text-gray-500">—</td></tr>';
+                    tbody.innerHTML = '<tr><td colspan="11" class="py-8 px-4 text-center text-gray-500">—</td></tr>';
                     return;
                 }
                 var payload = result.data.data || {};
                 var items = Array.isArray(payload.data) ? payload.data : [];
-                tbody.innerHTML = items.length ? items.map(renderRow).join('') : '<tr><td colspan="9" class="py-8 px-4 text-center text-gray-500">No rows.</td></tr>';
+                tbody.innerHTML = items.length ? items.map(renderRow).join('') : '<tr><td colspan="11" class="py-8 px-4 text-center text-gray-500">No rows.</td></tr>';
                 renderPagination(payload);
             })
             .catch(function () {
@@ -330,6 +362,18 @@
             postJson(INTERNAL + '/' + id + '/reject', {}).then(function (r) {
                 if (r.data && r.data.success) {
                     toastOk(r.data.message || 'Rejected');
+                    loadData();
+                } else {
+                    toastErr(r.data && r.data.message);
+                }
+            }).catch(function () { toastErr(NETWORK_ERR); });
+        }
+        if (t.classList.contains('op-quick')) {
+            var qid = t.getAttribute('data-id');
+            if (!qid || !confirm('Map suggestion #' + qid + ' using the recommended city from analysis?')) return;
+            postJson(INTERNAL + '/' + qid + '/map-recommended', {}).then(function (r) {
+                if (r.data && r.data.success) {
+                    toastOk(r.data.message || 'Mapped');
                     loadData();
                 } else {
                     toastErr(r.data && r.data.message);

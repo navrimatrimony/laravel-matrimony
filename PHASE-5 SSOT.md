@@ -12186,3 +12186,95 @@ SUCCESS CRITERIA:
 - Any hierarchy can be traversed upward
 - Display labels are generated purely from DB structure
 - System works for all Indian locations (village to metro)
+==========================
+
+
+
+
+We need to update the Location Geo Master Plan (SSOT) to include the PINCODE system.
+
+This is a documentation-level update to ensure future consistency and avoid architectural drift.
+
+----------------------------------------
+
+ADD NEW SECTION IN SSOT:
+
+## PINCODE SYSTEM (MANDATORY)
+
+Purpose:
+- Provide precise geographic identity
+- Enable nearby search (future)
+- Avoid ambiguity for same-name places
+- Improve normalization accuracy
+
+----------------------------------------
+
+TABLE: pincodes
+
+FIELDS:
+
+- id (bigint, primary)
+- pincode (string, indexed)
+- place_id (FK to places.id)
+- latitude (decimal, nullable)
+- longitude (decimal, nullable)
+- is_primary (boolean, default false)
+- created_at
+- updated_at
+
+----------------------------------------
+
+RELATIONSHIP:
+
+Place → hasMany pincodes  
+Pincode → belongsTo place
+
+----------------------------------------
+
+RULES:
+
+1. A place can have multiple pincodes  
+2. A pincode belongs to only one place  
+3. Combination (pincode, place_id) must be unique  
+4. Pincode must NOT be stored inside `places` table  
+5. `places` = hierarchy  
+   `pincodes` = precision layer  
+
+----------------------------------------
+
+USAGE GUIDELINES:
+
+- Location search may optionally include pincode
+- Nearby search (future) will rely on latitude/longitude
+- When ambiguity occurs:
+  same name → differentiate using pincode
+
+----------------------------------------
+
+FUTURE CAPABILITIES ENABLED:
+
+- Nearby profile search
+- Radius-based filtering
+- Smart matching by locality
+- OCR-assisted location correction
+
+----------------------------------------
+
+NON-NEGOTIABLE:
+
+- Do not merge pincodes into places
+- Do not duplicate pincode data
+- Do not store location precision in UI layer
+
+----------------------------------------
+
+Also update "SUCCESS CRITERIA":
+
+Add:
+- Each place can be mapped to one or more pincodes
+- System can resolve ambiguity using pincode
+
+----------------------------------------
+
+Ensure this section is clearly visible in the SSOT document.
+Do not remove existing structure; only extend it.

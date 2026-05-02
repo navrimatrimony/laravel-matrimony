@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\Location;
 use App\Models\MatrimonyProfile;
 use App\Services\ProfileLifecycleService;
 use App\Services\ProfileVisibilityPolicyService;
@@ -19,7 +20,7 @@ class MatrimonyProfileApiController extends Controller
     private function buildManualSnapshotFromApi(Request $request, MatrimonyProfile $profile): array
     {
         $core = [];
-        $coreFields = ['full_name', 'date_of_birth', 'caste', 'highest_education', 'country_id', 'state_id', 'district_id', 'taluka_id', 'city_id'];
+        $coreFields = ['full_name', 'date_of_birth', 'caste', 'highest_education', 'country_id', 'state_id', 'district_id', 'taluka_id', 'location_id'];
         foreach ($coreFields as $key) {
             if (! $request->has($key)) {
                 continue;
@@ -51,10 +52,10 @@ class MatrimonyProfileApiController extends Controller
             'state_id' => ['required', 'exists:states,id'],
             'district_id' => ['nullable', 'exists:districts,id'],
             'taluka_id' => ['nullable', 'exists:talukas,id'],
-            'city_id' => ['required', 'exists:cities,id'],
+            'location_id' => ['required', 'exists:'.Location::geoTable().',id'],
         ]);
 
-        // Phase-4 Day-8: Validate location hierarchy integrity
+        // Phase-4 Day-8: Validate location hierarchy integrity (legacy geo columns when posted)
         $this->validateLocationHierarchy($request);
 
         $user = $request->user(); // sanctum authenticated user
@@ -80,11 +81,11 @@ class MatrimonyProfileApiController extends Controller
             'state_id' => $request->state_id,
             'district_id' => $request->district_id,
             'taluka_id' => $request->taluka_id,
-            'city_id' => $request->city_id,
+            'location_id' => $request->location_id,
         ]);
 
         // Day-6 BUGFIX-B FINAL: API create initial history (Law 9) — प्रत्येक initial field साठी एक row
-        $initialFields = ['full_name', 'date_of_birth', 'caste', 'highest_education', 'country_id', 'state_id', 'district_id', 'taluka_id', 'city_id'];
+        $initialFields = ['full_name', 'date_of_birth', 'caste', 'highest_education', 'country_id', 'state_id', 'district_id', 'taluka_id', 'location_id'];
         foreach ($initialFields as $fieldKey) {
             $newVal = $profile->$fieldKey;
             if ($newVal instanceof \Carbon\Carbon) {
@@ -151,11 +152,11 @@ class MatrimonyProfileApiController extends Controller
             'state_id' => ['sometimes', 'required', 'exists:states,id'],
             'district_id' => ['nullable', 'exists:districts,id'],
             'taluka_id' => ['nullable', 'exists:talukas,id'],
-            'city_id' => ['sometimes', 'required', 'exists:cities,id'],
+            'location_id' => ['sometimes', 'required', 'exists:'.Location::geoTable().',id'],
         ]);
 
         // Phase-4 Day-8: Validate location hierarchy integrity if any location field provided
-        if ($request->hasAny(['country_id', 'state_id', 'district_id', 'taluka_id', 'city_id'])) {
+        if ($request->hasAny(['country_id', 'state_id', 'district_id', 'taluka_id', 'location_id'])) {
             $this->validateLocationHierarchy($request);
         }
 
@@ -286,8 +287,8 @@ class MatrimonyProfileApiController extends Controller
         if ($request->filled('taluka_id')) {
             $query->where('taluka_id', $request->taluka_id);
         }
-        if ($request->filled('city_id')) {
-            $query->where('city_id', $request->city_id);
+        if ($request->filled('location_id')) {
+            $query->where('location_id', $request->location_id);
         }
 
         // Age filter (from date_of_birth)
@@ -323,7 +324,7 @@ class MatrimonyProfileApiController extends Controller
                 'state_id' => $profile->state_id,
                 'district_id' => $profile->district_id,
                 'taluka_id' => $profile->taluka_id,
-                'city_id' => $profile->city_id,
+                'location_id' => $profile->location_id,
                 'profile_photo' => ($profile->profile_photo && $profile->photo_approved !== false) ? $profile->profile_photo : null,
                 'created_at' => $profile->created_at,
                 'updated_at' => $profile->updated_at,
@@ -392,7 +393,7 @@ class MatrimonyProfileApiController extends Controller
             'state_id' => $profile->state_id,
             'district_id' => $profile->district_id,
             'taluka_id' => $profile->taluka_id,
-            'city_id' => $profile->city_id,
+            'location_id' => $profile->location_id,
             'profile_photo' => ($profile->profile_photo && $profile->photo_approved !== false) ? $profile->profile_photo : null,
             'created_at' => $profile->created_at,
             'updated_at' => $profile->updated_at,
@@ -409,16 +410,6 @@ class MatrimonyProfileApiController extends Controller
      */
     private function validateLocationHierarchy(Request $request): void
     {
-        // If city provided, validate it belongs to the selected taluka (if provided)
-        if ($request->filled('city_id') && $request->filled('taluka_id')) {
-            $city = \App\Models\City::find($request->city_id);
-            if ($city && $city->taluka_id != $request->taluka_id) {
-                throw \Illuminate\Validation\ValidationException::withMessages([
-                    'city_id' => 'Selected city does not belong to the selected taluka.',
-                ]);
-            }
-        }
-
         // If taluka provided, validate it belongs to the selected district (if provided)
         if ($request->filled('taluka_id') && $request->filled('district_id')) {
             $taluka = \App\Models\Taluka::find($request->taluka_id);

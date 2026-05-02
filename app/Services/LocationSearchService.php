@@ -8,6 +8,7 @@ use App\Models\District;
 use App\Models\State;
 use App\Models\Village;
 use App\Services\Location\LocationDisplayFormatter;
+use Illuminate\Support\Facades\Schema;
 
 /**
  * Location search: village/city + taluka/district, pincode, single-query prefix/partial and Marathi.
@@ -129,11 +130,7 @@ class LocationSearchService
         $aliasPrefix = CityAlias::query()
             ->where('is_active', true)
             ->where('normalized_alias', 'like', $q.'%')
-            ->with([
-                'city.taluka.district.state.country',
-                'city.parentCity',
-                'city.displayMeta',
-            ])
+            ->with($this->aliasCityEagerLoad())
             ->orderBy('normalized_alias')
             ->limit($maxResults)
             ->get();
@@ -157,11 +154,7 @@ class LocationSearchService
         $aliasPartial = CityAlias::query()
             ->where('is_active', true)
             ->where('normalized_alias', 'like', '%'.$q.'%')
-            ->with([
-                'city.taluka.district.state.country',
-                'city.parentCity',
-                'city.displayMeta',
-            ])
+            ->with($this->aliasCityEagerLoad())
             ->orderBy('normalized_alias')
             ->limit($maxResults)
             ->get();
@@ -463,8 +456,13 @@ class LocationSearchService
             return $rows;
         }
 
+        $cityRankWith = ['taluka.district.state'];
+        if (Schema::hasTable('city_display_meta')) {
+            $cityRankWith[] = 'displayMeta';
+        }
+
         $cities = City::query()
-            ->with(['taluka.district.state', 'displayMeta'])
+            ->with($cityRankWith)
             ->whereIn('id', $cityIds)
             ->get(['id', 'name', 'taluka_id', 'parent_city_id']);
 
@@ -740,6 +738,27 @@ class LocationSearchService
      */
     private function cityWithRelations(): array
     {
-        return ['taluka.district.state.country', 'parentCity', 'displayMeta'];
+        $relations = ['taluka.district.state.country', 'parentCity'];
+        if (Schema::hasTable('city_display_meta')) {
+            $relations[] = 'displayMeta';
+        }
+
+        return $relations;
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    private function aliasCityEagerLoad(): array
+    {
+        $relations = [
+            'city.taluka.district.state.country',
+            'city.parentCity',
+        ];
+        if (Schema::hasTable('city_display_meta')) {
+            $relations[] = 'city.displayMeta';
+        }
+
+        return $relations;
     }
 }

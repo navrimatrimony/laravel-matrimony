@@ -6,7 +6,9 @@ use App\Models\City;
 use App\Models\CityAlias;
 use App\Models\LocationOpenPlaceSuggestion;
 use App\Models\Taluka;
+use App\Services\Location\LocationAliasGeneratorService;
 use App\Services\Location\LocationNormalizationService;
+use App\Services\Location\LocationSuggestionPatternLearningService;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -21,6 +23,8 @@ class LocationOpenPlaceApprovalService
 
     public function __construct(
         private LocationNormalizationService $locationNormalization,
+        private LocationSuggestionPatternLearningService $patternLearning,
+        private LocationAliasGeneratorService $locationAliasGenerator,
     ) {}
 
     /**
@@ -82,14 +86,76 @@ class LocationOpenPlaceApprovalService
                 'admin_reviewed_by' => $adminUserId,
                 'admin_reviewed_at' => now(),
             ]);
+
+            $suggestion->refresh();
+            $this->patternLearning->recordFromApprovedSuggestion($suggestion);
+
+            $city->loadMissing(['taluka.district.state']);
+            $this->locationAliasGenerator->syncFromApprovedSuggestion($city, $suggestion);
         });
     }
 
     /**
-     * Attach the suggestion's normalized key to an existing city and mark approved.
+     * Map using analysis_json recommendation (admin one-click) when confidence rules pass.
      *
      * @throws \RuntimeException
      */
+    public function mapUsingRecommendation(int $suggestionId, int $adminUserId, float $minConfidence = 0.76): void
+    {
+        $suggestion = LocationOpenPlaceSuggestion::query()->whereKey($suggestionId)->firstOrFail();
+        $analysis = $suggestion->analysis_json;
+        if (! is_array($analysis)) {
+            throw new \RuntimeException('No analysis payload on this suggestion.');
+        }
+
+        $basis = (string) ($analysis['confidence_basis'] ?? '');
+        $trustWithoutScore = in_array($basis, ['learned_pattern', 'alias'], true);
+
+        $cityId = isset($analysis['recommended_city_id']) ? (int) $analysis['recommended_city_id'] : 0;
+        $scoreForRecommended = $this->scoreForCityInAnalysis($analysis, $cityId);
+
+        if ($cityId <= 0 || (! $trustWithoutScore && $scoreForRecommended < $minConfidence)) {
+            $cityId = 0;
+            if (! empty($analysis['duplicate_candidates']) && is_array($analysis['duplicate_candidates'])) {
+                foreach ($analysis['duplicate_candidates'] as $row) {
+                    if (! is_array($row)) {
+                        continue;
+                    }
+                    if (($row['kind'] ?? '') === 'city' && (float) ($row['score'] ?? 0) >= $minConfidence) {
+                        $cityId = (int) ($row['id'] ?? 0);
+                        break;
+                    }
+                }
+            }
+        }
+
+        if ($cityId <= 0) {
+            throw new \RuntimeException('No suitable recommended city for one-click map.');
+        }
+
+        $this->mapToExistingCity($suggestionId, $adminUserId, $cityId);
+    }
+
+    /**
+     * @param  array<string, mixed>  $analysis
+     */
+    private function scoreForCityInAnalysis(array $analysis, int $cityId): float
+    {
+        if ($cityId <= 0) {
+            return 0.0;
+        }
+        foreach ($analysis['duplicate_candidates'] ?? [] as $row) {
+            if (! is_array($row)) {
+                continue;
+            }
+            if (($row['kind'] ?? '') === 'city' && (int) ($row['id'] ?? 0) === $cityId) {
+                return (float) ($row['score'] ?? 0);
+            }
+        }
+
+        return 0.0;
+    }
+
     public function mapToExistingCity(int $suggestionId, int $adminUserId, int $cityId): void
     {
         DB::transaction(function () use ($suggestionId, $adminUserId, $cityId): void {
@@ -109,6 +175,12 @@ class LocationOpenPlaceApprovalService
                 'admin_reviewed_by' => $adminUserId,
                 'admin_reviewed_at' => now(),
             ]);
+
+            $suggestion->refresh();
+            $this->patternLearning->recordFromApprovedSuggestion($suggestion);
+
+            $city->loadMissing(['taluka.district.state']);
+            $this->locationAliasGenerator->syncFromApprovedSuggestion($city, $suggestion);
         });
     }
 
@@ -164,6 +236,7 @@ class LocationOpenPlaceApprovalService
             $incrementBy = max(0, (int) $source->usage_count);
             if ($incrementBy > 0) {
                 $target->increment('usage_count', $incrementBy);
+                $target->touch();
             }
 
             $source->update([

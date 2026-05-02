@@ -121,11 +121,74 @@ This system must support:
 
 ----------------------------------------
 
+## PINCODE SYSTEM (MANDATORY)
+
+Purpose:
+- Provide precise geographic identity
+- Enable future nearby search
+- Resolve same-name ambiguity
+- Improve normalization accuracy
+
+----------------------------------------
+
+TABLE: pincodes
+
+FIELDS:
+
+- id (bigint, primary)
+- pincode (string, indexed)
+- place_id (FK to places.id)
+- latitude (decimal, nullable)
+- longitude (decimal, nullable)
+- is_primary (boolean, default false)
+- created_at
+- updated_at
+
+----------------------------------------
+
+RELATIONSHIPS:
+
+Place → hasMany pincodes
+Pincode → belongsTo place
+
+----------------------------------------
+
+RULES:
+
+1. A place can have multiple pincodes
+2. A pincode belongs to only one place
+3. (pincode, place_id) must be unique
+4. Do NOT store pincode inside places table
+5. `places` = hierarchy layer
+   `pincodes` = precision layer
+
+----------------------------------------
+
+USAGE GUIDELINES:
+
+- Location search may optionally include pincode
+- Same-name places must be disambiguated using pincode
+- Future nearby search will use latitude/longitude
+
+----------------------------------------
+
+FUTURE CAPABILITIES:
+
+- Nearby profile search
+- Radius-based filtering
+- Smart locality matching
+- OCR-based correction
+
+----------------------------------------
+
 NON-NEGOTIABLE:
 
 - No UI-based concatenation logic
 - No dynamic guessing of location type
 - No duplicate entries
+- No merging pincodes into places
+- No duplicate pincode storage
+- No UI-level location guessing
 
 ----------------------------------------
 
@@ -135,3 +198,5 @@ SUCCESS CRITERIA:
 - Any hierarchy can be traversed upward
 - Display labels are generated purely from DB structure
 - System works for all Indian locations (village to metro)
+- Each place maps to one or more pincodes
+- System can resolve ambiguity using pincode

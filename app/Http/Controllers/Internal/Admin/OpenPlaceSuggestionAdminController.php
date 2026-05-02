@@ -29,7 +29,7 @@ class OpenPlaceSuggestionAdminController extends Controller
         $highPriority = $request->boolean('high_priority');
 
         $query = LocationOpenPlaceSuggestion::query()
-            ->with(['resolvedCity', 'suggestedBy', 'mergedInto'])
+            ->with(['resolvedCity', 'resolvedLocation', 'suggestedParent', 'suggestedBy', 'mergedInto'])
             ->orderByDesc('usage_count')
             ->orderByDesc('created_at');
 
@@ -150,6 +150,34 @@ class OpenPlaceSuggestionAdminController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => 'Suggestion or city not found, or suggestion not pending.',
+            ], 404);
+        } catch (\RuntimeException $e) {
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage(),
+            ], 422);
+        }
+    }
+
+    /**
+     * One-click map using auto-analysis (learned pattern or high-confidence duplicate).
+     */
+    public function mapRecommended(Request $request, int $id): JsonResponse
+    {
+        try {
+            $this->approvalService->mapUsingRecommendation(
+                $id,
+                (int) $request->user()->id,
+            );
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Mapped using recommendation.',
+            ]);
+        } catch (ModelNotFoundException) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Suggestion not found or not pending.',
             ], 404);
         } catch (\RuntimeException $e) {
             return response()->json([

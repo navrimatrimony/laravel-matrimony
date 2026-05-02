@@ -1,0 +1,73 @@
+[
+  {
+    "pincode": "411057",
+    "place_slug": "wakad-pune",
+    "latitude": 18.5912,
+    "longitude": 73.7400,
+    "is_primary": true
+  },
+  {
+    "pincode": "411045",
+    "place_slug": "baner-pune",
+    "latitude": 18.5308,
+    "longitude": 73.8475,
+    "is_primary": true
+  },
+  {
+    "pincode": "411014",
+    "place_slug": "kothrud-pune",
+    "latitude": 18.5204,
+    "longitude": 73.8567,
+    "is_primary": true
+  },
+  {
+    "pincode": "411037",
+    "place_slug": "wagholi-pune",
+    "latitude": 18.5740,
+    "longitude": 73.9855,
+    "is_primary": true
+  },
+  {
+    "pincode": "411021",
+    "place_slug": "hinjewadi-pune",
+    "latitude": 18.5910,
+    "longitude": 73.7389,
+    "is_primary": true
+  },
+  {
+    "pincode": "411001",
+    "place_slug": "pune-city",
+    "latitude": 18.5204,
+    "longitude": 73.8567,
+    "is_primary": true
+  },
+  {
+    "pincode": "400001",
+    "place_slug": "mumbai-city",
+    "latitude": 18.9388,
+    "longitude": 72.8354,
+    "is_primary": true
+  },
+  {
+    "pincode": "440001",
+    "place_slug": "nagpur-city",
+    "latitude": 21.1458,
+    "longitude": 79.0882,
+    "is_primary": true
+  },
+  {
+    "pincode": "422001",
+    "place_slug": "nashik-city",
+    "latitude": 19.9975,
+    "longitude": 73.7898,
+    "is_primary": true
+  },
+  {
+    "pincode": "416003",
+    "place_slug": "kolhapur-city",
+    "latitude": 16.7050,
+    "longitude": 74.2433,
+    "is_primary": true
+  }
+]
+

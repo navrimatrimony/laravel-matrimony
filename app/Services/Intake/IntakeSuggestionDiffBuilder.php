@@ -167,7 +167,11 @@ class IntakeSuggestionDiffBuilder
                 ->value('phone_number');
         }
         if ($fieldKey === 'location') {
-            return $profile->city_id ?? $profile->state_id ?? $profile->country_id ?? null;
+            if (Schema::hasColumn('matrimony_profiles', 'location_id')) {
+                return $profile->getAttribute('location_id');
+            }
+
+            return null;
         }
 
         return $profile->getAttribute($fieldKey);

@@ -1,14 +1,17 @@
 <?php
 
 use App\Http\Controllers\Api\AuthController;
+use App\Http\Controllers\Api\LocationController;
+use App\Http\Controllers\Api\NearbyProfileController;
+use App\Http\Controllers\Api\LocationSuggestionController as ApiLocationSuggestionController;
 use App\Http\Controllers\Api\EducationDegreeSearchController;
 use App\Http\Controllers\OccupationController;
 use App\Http\Controllers\Api\MasterEducationController;
 use App\Http\Controllers\Api\ModerationConfigController;
-use App\Http\Controllers\Api\V1\LocationController;
+use App\Http\Controllers\Api\V1\LocationController as V1LocationController;
 use App\Http\Controllers\Internal\LocationHierarchyController;
 use App\Http\Controllers\Internal\LocationSearchController;
-use App\Http\Controllers\Internal\LocationSuggestionController;
+use App\Http\Controllers\Internal\LocationSuggestionController as InternalLocationSuggestionController;
 use App\Http\Controllers\Webhooks\MetaWhatsAppWebhookController;
 use Illuminate\Support\Facades\Route;
 
@@ -24,12 +27,17 @@ Route::get('/moderation-config', ModerationConfigController::class);
 Route::get('/webhooks/whatsapp', [MetaWhatsAppWebhookController::class, 'verify']);
 Route::post('/webhooks/whatsapp', [MetaWhatsAppWebhookController::class, 'handle']);
 
+Route::get('/location/search', [LocationController::class, 'search']);
+Route::get('/location/nearby', [LocationController::class, 'nearby']);
+Route::get('/profiles/nearby', [NearbyProfileController::class, 'index']);
+Route::post('/location/suggestions', [ApiLocationSuggestionController::class, 'store']);
+
 Route::get('/internal/location/search', [LocationSearchController::class, 'search']);
 Route::get('/internal/location/states', [LocationHierarchyController::class, 'states']);
 Route::get('/internal/location/districts', [LocationHierarchyController::class, 'districts']);
 Route::get('/internal/location/talukas', [LocationHierarchyController::class, 'talukas']);
 Route::get('/internal/location/cities', [LocationHierarchyController::class, 'cities']);
-Route::post('/internal/location/suggest', [LocationSuggestionController::class, 'store']);
+Route::post('/internal/location/suggest', [InternalLocationSuggestionController::class, 'store']);
 
 /*
 | Master education hierarchy (Shaadi.com-style). Public read-only.
@@ -67,7 +75,7 @@ Route::prefix('v1')->group(function () {
         ]);
     });
 
-    Route::get('/locations/cities', [LocationController::class, 'cities']);
+    Route::get('/locations/cities', [V1LocationController::class, 'cities']);
 
     require __DIR__.'/api/member.php';
     require __DIR__.'/api/admin.php';

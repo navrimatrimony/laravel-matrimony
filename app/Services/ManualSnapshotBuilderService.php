@@ -78,7 +78,7 @@ class ManualSnapshotBuilderService
         $core['state_id'] = $request->input('state_id') ?: null;
         $core['district_id'] = $request->input('district_id') ?: null;
         $core['taluka_id'] = $request->input('taluka_id') ?: null;
-        $core['city_id'] = $request->input('city_id') ?: null;
+        $core['location_id'] = $request->input('location_id') ?: null;
         $core['address_line'] = $request->filled('address_line') ? trim($request->input('address_line')) : null;
         $core['work_city_id'] = $request->input('work_city_id') ?: null;
         $core['work_state_id'] = $request->input('work_state_id') ?: null;

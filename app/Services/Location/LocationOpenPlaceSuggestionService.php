@@ -4,6 +4,7 @@ namespace App\Services\Location;
 
 use App\Models\LocationOpenPlaceSuggestion;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 /**
  * Records ambiguous place strings (e.g. Wakad), merges duplicate normalized keys, bumps usage for analytics / auto-promote rules.
@@ -16,6 +17,7 @@ class LocationOpenPlaceSuggestionService
 
     public function __construct(
         private readonly LocationNormalizationService $locationNormalization,
+        private readonly OpenPlaceSuggestionAnalysisService $analysis,
     ) {}
 
     /**
@@ -35,7 +37,11 @@ class LocationOpenPlaceSuggestionService
         array $optionalHierarchy = [],
         string $matchType = 'none',
         ?float $confidenceScore = null,
-    ): LocationOpenPlaceSuggestion {
+    ): ?LocationOpenPlaceSuggestion {
+        if (! Schema::hasTable((new LocationOpenPlaceSuggestion)->getTable())) {
+            return null;
+        }
+
         $normalized = $this->locationNormalization->mergeKeyFromRaw($rawInput);
         $aliasHit = $this->locationNormalization->normalizeFromText($rawInput);
 
@@ -47,6 +53,7 @@ class LocationOpenPlaceSuggestionService
 
             if ($existing !== null) {
                 $existing->increment('usage_count');
+                $existing->touch();
                 $existing->refresh();
 
                 return $existing;
@@ -62,7 +69,7 @@ class LocationOpenPlaceSuggestionService
             $effectiveMatch = $resolved ? 'alias' : $matchType;
             $effectiveConfidence = $resolved ? $aliasHit['confidence'] : $confidenceScore;
 
-            return LocationOpenPlaceSuggestion::query()->create([
+            $created = LocationOpenPlaceSuggestion::query()->create([
                 'raw_input' => $rawInput,
                 'normalized_input' => $normalized,
                 'country_id' => $countryId,
@@ -76,6 +83,11 @@ class LocationOpenPlaceSuggestionService
                 'usage_count' => 1,
                 'suggested_by' => $suggestedByUserId,
             ]);
+
+            $created->refresh();
+            $this->analysis->enrichNewSuggestion($created);
+
+            return $created->fresh();
         });
     }
 }
