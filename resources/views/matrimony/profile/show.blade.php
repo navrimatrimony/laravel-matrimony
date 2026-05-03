@@ -9,6 +9,7 @@
     $contactGateAllowed = $viewerUser && (($gateStates['contact_view_limit']['allowed'] ?? false));
     $chatSendGateAllowed = $viewerUser && (($gateStates['chat_send_limit']['allowed'] ?? false));
     $chatReadGateAllowed = $viewerUser && (($gateStates['chat_can_read']['allowed'] ?? false));
+    $hasIncomingMessageFromViewedProfile = (bool) ($hasIncomingMessageFromViewedProfile ?? false);
     $whoViewedGateAllowed = $viewerUser && (($gateStates['who_viewed_me_access']['allowed'] ?? false));
     $profileViewGateLocked = $viewerUser
         && ! ($isOwnProfile ?? false)
@@ -631,33 +632,46 @@
             >
                 <p class="text-[10px] font-semibold uppercase tracking-[0.2em] text-stone-400 dark:text-stone-500">{{ __('profile.hero_actions_rail_title') }}</p>
 
-                <div class="flex items-center gap-2.5 rounded-2xl border border-stone-200/90 bg-white px-3 py-2.5 text-left shadow-sm ring-1 ring-stone-100/80 dark:border-gray-600 dark:bg-gray-800/90 dark:ring-gray-700/50">
+                @php
+                    $interestGs = $gateStates['interest_send_limit'] ?? [];
+                    $chatGs = $gateStates['chat_send_limit'] ?? [];
+                    $railQuotaLine = static function (array $g): string {
+                        if (! empty($g['unlimited'])) {
+                            return __('profile.rail_usage_unlimited');
+                        }
+
+                        return __('profile.rail_usage_quota', [
+                            'remaining' => (int) ($g['remaining'] ?? 0),
+                            'limit' => (int) ($g['limit'] ?? 0),
+                            'used' => (int) ($g['used'] ?? 0),
+                        ]);
+                    };
+                    $slCount = (int) ($viewerShortlistTotalCount ?? 0);
+                    $shortlistUsageLine = __('profile.rail_shortlist_note', ['count' => $slCount]);
+                @endphp
+
+                <div class="flex min-h-[3.25rem] w-full items-center gap-2.5 rounded-2xl border border-rose-200/90 bg-white px-3 py-2.5 text-left shadow-sm ring-1 ring-rose-100/75 dark:border-rose-900/35 dark:bg-gray-800/90 dark:ring-rose-900/25">
                     <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-rose-100 text-rose-700 dark:bg-rose-950/50 dark:text-rose-300" aria-hidden="true">
                         <svg class="h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M21 8.25c0-2.485-2.099-4.5-4.688-4.5-1.935 0-3.597 1.126-4.312 2.733-.715-1.607-2.377-2.733-4.313-2.733C5.1 3.75 3 5.765 3 8.25c0 7.22 9 12 9 12s9-4.78 9-12z"/></svg>
                     </span>
-                    <div class="min-w-0">
-                        <p class="text-[11px] font-semibold uppercase tracking-wide text-stone-500 dark:text-stone-400">{{ __('profile.interest_rail_heading') }}</p>
-                        <p class="truncate text-sm font-semibold text-stone-900 dark:text-stone-100">{{ $interestAlreadySent ? __('Interest Sent') : __('profile.interest_not_sent_yet') }}</p>
+                    <div class="min-w-0 flex-1">
+                        <p class="text-[11px] font-semibold uppercase tracking-wide text-rose-600/90 dark:text-rose-400/90">{{ __('profile.interest_rail_heading') }}</p>
+                        <p class="truncate text-xs font-semibold text-stone-900 dark:text-stone-100">{{ $railQuotaLine($interestGs) }}</p>
                     </div>
                 </div>
-                @if (auth()->check() && $viewerUser && ! ($gateStates['interest_send_limit']['unlimited'] ?? false))
-                    <p class="text-center text-[11px] leading-snug text-stone-500 dark:text-stone-400">
-                        {{ __('profile.feature_gate_interest_used_today', ['used' => (int) ($gateStates['interest_send_limit']['used'] ?? 0), 'limit' => (int) ($gateStates['interest_send_limit']['limit'] ?? 0)]) }}
-                    </p>
-                @endif
 
                 @if (! $contactRequestDisabled && $contactRequestState !== null && ($contactAccess['show_contact_request_rail'] ?? false))
                     @if ($crState === 'none' || ($crState === 'expired' && ! $cooldownEndsAt) || $crState === 'cancelled')
                         @if ($canSendContactRequest ?? false)
                             <button
                                 type="button"
-                                class="inline-flex w-full items-center justify-center gap-2 rounded-2xl border border-emerald-200/90 bg-white px-3 py-2.5 text-sm font-semibold text-emerald-800 shadow-sm ring-1 ring-emerald-100/80 transition hover:bg-emerald-50/90 dark:border-emerald-800/60 dark:bg-gray-800 dark:text-emerald-200 dark:ring-emerald-900/40 dark:hover:bg-emerald-950/30"
+                                class="inline-flex min-h-[3.25rem] w-full items-center justify-start gap-2.5 rounded-2xl border border-emerald-200/90 bg-white px-3 py-2.5 text-left text-sm font-semibold text-emerald-800 shadow-sm ring-1 ring-emerald-100/80 transition hover:bg-emerald-50/90 dark:border-emerald-800/60 dark:bg-gray-800 dark:text-emerald-200 dark:ring-emerald-900/40 dark:hover:bg-emerald-950/30"
                                 @click="$root.openRequestModal = true"
                             >
                                 <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300" aria-hidden="true">
                                     <svg class="h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M21.75 6.75v10.5a2.25 2.25 0 0 1-2.25 2.25h-15a2.25 2.25 0 0 1-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0 0 19.5 4.5h-15a2.25 2.25 0 0 0-2.25 2.25m19.5 0v.243a2.25 2.25 0 0 1-1.07 1.916l-7.5 4.615a2.25 2.25 0 0 1-2.36 0L3.32 8.91a2.25 2.25 0 0 1-1.07-1.916V6.75"/></svg>
                                 </span>
-                                {{ __('Request Contact') }}
+                                <span class="min-w-0 flex-1 leading-snug">{{ __('Request Contact') }}</span>
                             </button>
                         @else
                             <div class="rounded-2xl border border-stone-200/80 bg-white/90 px-3 py-2.5 text-center text-xs text-stone-500 dark:border-gray-600 dark:bg-gray-800 dark:text-stone-400">
@@ -671,18 +685,23 @@
                         @if ($crRequest)
                             <form method="POST" action="{{ route('contact-requests.cancel', $crRequest) }}" class="w-full">
                                 @csrf
-                                <button type="submit" class="w-full rounded-2xl border border-stone-200 bg-white px-3 py-2 text-xs font-medium text-stone-700 shadow-sm dark:border-gray-600 dark:bg-gray-800 dark:text-stone-200">{{ __('Cancel request') }}</button>
+                                <button type="submit" class="inline-flex min-h-[3.25rem] w-full items-center justify-start gap-2.5 rounded-2xl border border-stone-200 bg-white px-3 py-2.5 text-left text-sm font-semibold text-stone-700 shadow-sm ring-1 ring-stone-100/80 dark:border-gray-600 dark:bg-gray-800 dark:text-stone-200 dark:ring-gray-700/50">
+                                    <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-stone-100 text-stone-600 dark:bg-stone-800 dark:text-stone-300" aria-hidden="true">
+                                        <svg class="h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12"/></svg>
+                                    </span>
+                                    <span class="min-w-0 flex-1 leading-snug">{{ __('Cancel request') }}</span>
+                                </button>
                             </form>
                         @endif
                     @elseif ($crState === 'accepted' && $crGrant)
                         <a
                             href="{{ route('matrimony.profile.show', $profile) }}#profile-contact-panel"
-                            class="inline-flex w-full items-center justify-center gap-2 rounded-2xl border border-emerald-200/90 bg-emerald-600 px-3 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-700 dark:border-emerald-700 dark:bg-emerald-700"
+                            class="inline-flex min-h-[3.25rem] w-full items-center justify-start gap-2.5 rounded-2xl border border-emerald-200/90 bg-emerald-600 px-3 py-2.5 text-left text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-700 dark:border-emerald-700 dark:bg-emerald-700"
                         >
                             <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/20" aria-hidden="true">
                                 <svg class="h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 6.75c0 8.284 6.716 15 15 15h2.25a2.25 2.25 0 0 0 2.25-2.25v-1.372c0-.516-.351-.966-.852-1.091l-4.423-1.106c-.44-.11-.902.055-1.173.417l-.97 1.293c-.282.376-.769.542-1.21.38a12.035 12.035 0 0 1-7.143-7.143c-.162-.441.004-.928.38-1.21l1.293-.97c.363-.271.527-.734.417-1.173L6.963 3.102a1.125 1.125 0 0 0-1.091-.852H4.5A2.25 2.25 0 0 0 2.25 4.5v2.25Z"/></svg>
                             </span>
-                            {{ __('View Contact') }}
+                            <span class="min-w-0 flex-1 leading-snug">{{ __('View Contact') }}</span>
                         </a>
                     @elseif ($crState === 'rejected')
                         <p class="rounded-2xl border border-red-200/80 bg-red-50 px-3 py-2 text-center text-xs font-medium text-red-800 dark:border-red-900 dark:bg-red-950/40 dark:text-red-200">{{ __('Request Rejected') }}</p>
@@ -694,10 +713,13 @@
                         @if (! $cooldownEndsAt)
                             <button
                                 type="button"
-                                class="w-full rounded-2xl border border-emerald-200 bg-white px-3 py-2 text-sm font-semibold text-emerald-800 dark:border-emerald-800 dark:bg-gray-800 dark:text-emerald-200"
+                                class="inline-flex min-h-[3.25rem] w-full items-center justify-start gap-2.5 rounded-2xl border border-emerald-200/90 bg-white px-3 py-2.5 text-left text-sm font-semibold text-emerald-800 shadow-sm ring-1 ring-emerald-100/80 transition hover:bg-emerald-50/90 dark:border-emerald-800/60 dark:bg-gray-800 dark:text-emerald-200 dark:ring-emerald-900/40 dark:hover:bg-emerald-950/30"
                                 @click="$root.openRequestModal = true"
                             >
-                                {{ __('Request again') }}
+                                <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300" aria-hidden="true">
+                                    <svg class="h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M21.75 6.75v10.5a2.25 2.25 0 0 1-2.25 2.25h-15a2.25 2.25 0 0 1-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0 0 19.5 4.5h-15a2.25 2.25 0 0 0-2.25 2.25m19.5 0v.243a2.25 2.25 0 0 1-1.07 1.916l-7.5 4.615a2.25 2.25 0 0 1-2.36 0L3.32 8.91a2.25 2.25 0 0 1-1.07-1.916V6.75"/></svg>
+                                </span>
+                                <span class="min-w-0 flex-1 leading-snug">{{ __('Request again') }}</span>
                             </button>
                         @endif
                     @elseif ($crState === 'revoked')
@@ -705,20 +727,26 @@
                     @endif
                 @endif
 
-                @if (! ($isOwnProfile ?? false) && ($contactAccess['show_mediator_cta'] ?? false) && ! ($contactAccess['show_no_one_copy'] ?? false))
+                @if (! ($isOwnProfile ?? false) && ($contactAccess['show_mediator_cta'] ?? false) && ! ($contactAccess['show_no_one_copy'] ?? false) && ! ($contactAccess['needs_upgrade'] ?? false))
                     @if ($contactAccess['needs_upgrade_for_mediator'] ?? false)
                         <button
                             type="button"
-                            class="inline-flex w-full items-center justify-center gap-2 rounded-2xl border border-amber-200/90 bg-amber-50 px-3 py-2.5 text-xs font-semibold text-amber-900 shadow-sm dark:border-amber-800/60 dark:bg-amber-950/40 dark:text-amber-100"
+                            class="inline-flex min-h-[3.25rem] w-full items-center justify-start gap-2.5 rounded-2xl border border-amber-200/90 bg-amber-50 px-3 py-2.5 text-left text-sm font-semibold text-amber-900 shadow-sm ring-1 ring-amber-100/80 dark:border-amber-800/60 dark:bg-amber-950/40 dark:text-amber-100 dark:ring-amber-900/40"
                             @click="$root.showContactUpgradeModal = true"
                         >
-                            {{ __('contact_access.mediator_heading') }} — {{ __('contact_access.upgrade_plans') }}
+                            <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-amber-200/80 text-amber-900 dark:bg-amber-800/60 dark:text-amber-100" aria-hidden="true">
+                                <svg class="h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M9.813 15.904 9 18.75l-.813-2.846a4.5 4.5 0 0 0-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 0 0 3.09-3.09L9 5.25l.813 2.847a4.5 4.5 0 0 0 3.09 3.09L15.75 12l-2.847.813a4.5 4.5 0 0 0-3.09 3.09ZM18.259 8.715 18 9.75l-.259-1.035a3.375 3.375 0 0 0-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 0 0 2.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 0 0 2.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 0 0-2.456 2.456ZM16.894 20.567 16.5 21.75l-.394-1.183a2.25 2.25 0 0 0-1.423-1.423L13.5 18.75l1.183-.394a2.25 2.25 0 0 0 1.423-1.423l.394-1.183.394 1.183a2.25 2.25 0 0 0 1.423 1.423l1.183.394-1.183.394a2.25 2.25 0 0 0-1.423 1.423Z"/></svg>
+                            </span>
+                            <span class="min-w-0 flex-1 text-left leading-snug">{{ __('contact_access.mediator_heading') }} — {{ __('contact_access.upgrade_plans') }}</span>
                         </button>
                     @else
                         <form method="POST" action="{{ route('matrimony.profile.mediator-request', $profile) }}" class="w-full">
                             @csrf
-                            <button type="submit" class="inline-flex w-full items-center justify-center gap-2 rounded-2xl border border-violet-200/90 bg-white px-3 py-2.5 text-xs font-semibold text-violet-900 shadow-sm ring-1 ring-violet-100/80 transition hover:bg-violet-50/90 dark:border-violet-800/60 dark:bg-gray-800 dark:text-violet-200 dark:ring-violet-900/40">
-                                {{ __('contact_access.mediator_submit') }}
+                            <button type="submit" class="inline-flex min-h-[3.25rem] w-full items-center justify-start gap-2.5 rounded-2xl border border-violet-200/90 bg-white px-3 py-2.5 text-left text-sm font-semibold text-violet-900 shadow-sm ring-1 ring-violet-100/80 transition hover:bg-violet-50/90 dark:border-violet-800/60 dark:bg-gray-800 dark:text-violet-200 dark:ring-violet-900/40">
+                                <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-violet-100 text-violet-700 dark:bg-violet-950/50 dark:text-violet-300" aria-hidden="true">
+                                    <svg class="h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M20.25 8.511c.884.284 1.5 1.128 1.5 2.097v4.286c0 1.136-.847 2.1-1.98 2.193-.34.027-.68.052-1.02.072v3.091l-3-3c-1.354 0-2.694-.055-4.02-.163a2.115 2.115 0 0 1-.825-.242m9.345-8.334a2.126 2.126 0 0 0-.476-.095 48.64 48.64 0 0 0-8.048 0c-1.131.094-1.976 1.057-1.976 2.192v4.286c0 .837.46 1.58 1.155 1.951m9.345-8.334V6.637c0-1.621-1.152-3.026-2.76-3.235A48.455 48.455 0 0 0 11.25 3c-2.115 0-4.198.137-6.24.402-1.608.209-2.76 1.614-2.76 3.235v6.226c0 1.621 1.152 3.026 2.76 3.235.577.075 1.157.14 1.74.194V21l4.155-4.155"/></svg>
+                                </span>
+                                <span class="min-w-0 flex-1 leading-snug">{{ __('contact_access.mediator_submit') }}</span>
                             </button>
                         </form>
                     @endif
@@ -735,14 +763,17 @@
                 @else
                     <form method="POST" action="{{ route('chat.start', ['matrimony_profile' => $profile->id]) }}" class="w-full">
                         @csrf
-                        <button type="submit" class="inline-flex w-full items-center justify-center gap-2 rounded-2xl border border-indigo-200/90 bg-white px-3 py-2.5 text-sm font-semibold text-indigo-800 shadow-sm ring-1 ring-indigo-100/70 transition hover:bg-indigo-50/90 dark:border-indigo-800/60 dark:bg-gray-800 dark:text-indigo-200 dark:ring-indigo-900/35 dark:hover:bg-indigo-950/25">
+                        <button type="submit" class="inline-flex min-h-[3.25rem] w-full items-center justify-start gap-2.5 rounded-2xl border border-indigo-200/90 bg-white px-3 py-2.5 text-left shadow-sm ring-1 ring-indigo-100/75 transition hover:bg-indigo-50/90 dark:border-indigo-800/55 dark:bg-gray-800 dark:ring-indigo-900/35 dark:hover:bg-indigo-950/25">
                             <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-indigo-100 text-indigo-700 dark:bg-indigo-950/50 dark:text-indigo-300" aria-hidden="true">
                                 <svg class="h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 12.76c0 1.6 1.123 2.95 2.63 3.217.42.074.797.31 1.046.66l.85 1.19c.34.477.99.596 1.48.272l2.155-1.43c.33-.219.73-.29 1.11-.2 1.04.246 2.17.246 3.21 0 .38-.09.78-.02 1.11.2l2.155 1.43c.49.324 1.14.205 1.48-.272l.85-1.19c.249-.35.626-.586 1.046-.66 1.507-.267 2.63-1.618 2.63-3.217V6.99c0-1.86-1.51-3.37-3.37-3.37H5.62c-1.86 0-3.37 1.51-3.37 3.37v5.77Z"/></svg>
                             </span>
-                            {{ __('Chat') }}
+                            <span class="min-w-0 flex-1">
+                                <span class="block text-[11px] font-semibold uppercase tracking-wide text-indigo-700 dark:text-indigo-300/95">{{ __('Chat') }}</span>
+                                <span class="block truncate text-xs font-semibold text-stone-900 dark:text-stone-100">{{ $railQuotaLine($chatGs) }}</span>
+                            </span>
                         </button>
                     </form>
-                    @if ($viewerUser && ! $chatReadGateAllowed)
+                    @if ($viewerUser && ! $chatReadGateAllowed && $hasIncomingMessageFromViewedProfile)
                         <p class="mt-2 rounded-lg border border-amber-200/80 bg-amber-50/90 px-2 py-1.5 text-center text-[11px] font-medium text-amber-950 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-100" role="status">
                             {{ __('profile.feature_gate_chat_read_locked') }}
                             <a href="{{ route('plans.index') }}" class="font-semibold text-indigo-700 underline dark:text-indigo-300">{{ __('profile.feature_gate_upgrade_plan') }}</a>
@@ -755,28 +786,31 @@
                         <form method="POST" action="{{ route('shortlist.destroy', $profile) }}" class="w-full">
                             @csrf
                             @method('DELETE')
-                            <button type="submit" class="inline-flex w-full items-center justify-center gap-2 rounded-2xl border border-stone-200 bg-white px-3 py-2.5 text-sm font-medium text-stone-700 shadow-sm dark:border-gray-600 dark:bg-gray-800 dark:text-stone-200">
-                                <svg class="h-4 w-4 text-stone-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M3 3v1.5M3 21v-6m0 0 2.25-.75M17.25 3 21 7.5m0 0L17.25 12M21 7.5H3"/></svg>
-                                {{ __('Remove from shortlist') }}
+                            <button type="submit" class="inline-flex min-h-[3.25rem] w-full items-center justify-start gap-2.5 rounded-2xl border border-amber-200/90 bg-white px-3 py-2.5 text-left shadow-sm ring-1 ring-amber-100/80 transition hover:bg-amber-50/90 dark:border-amber-800/55 dark:bg-gray-800 dark:ring-amber-900/35 dark:hover:bg-amber-950/20">
+                                <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-amber-100 text-amber-800 dark:bg-amber-950/45 dark:text-amber-200" aria-hidden="true">
+                                    <svg class="h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M3 3v1.5M3 21v-6m0 0 2.25-.75M17.25 3 21 7.5m0 0L17.25 12M21 7.5H3"/></svg>
+                                </span>
+                                <span class="min-w-0 flex-1">
+                                    <span class="block text-[11px] font-semibold uppercase tracking-wide text-amber-800/95 dark:text-amber-200/90">{{ __('Remove from shortlist') }}</span>
+                                    <span class="block truncate text-xs font-semibold text-stone-900 dark:text-stone-100">{{ $shortlistUsageLine }}</span>
+                                </span>
                             </button>
                         </form>
                     @else
                         <form method="POST" action="{{ route('shortlist.store', $profile) }}" class="w-full">
                             @csrf
-                            <button type="submit" class="inline-flex w-full items-center justify-center gap-2 rounded-2xl border border-sky-200/90 bg-white px-3 py-2.5 text-sm font-medium text-sky-800 shadow-sm dark:border-sky-800 dark:bg-gray-800 dark:text-sky-200">
-                                <svg class="h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/></svg>
-                                {{ __('Add to shortlist') }}
+                            <button type="submit" class="inline-flex min-h-[3.25rem] w-full items-center justify-start gap-2.5 rounded-2xl border border-sky-200/90 bg-white px-3 py-2.5 text-left shadow-sm ring-1 ring-sky-100/80 transition hover:bg-sky-50/90 dark:border-sky-800 dark:bg-gray-800 dark:ring-sky-900/35 dark:hover:bg-sky-950/25">
+                                <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-sky-100 text-sky-700 dark:bg-sky-950/50 dark:text-sky-300" aria-hidden="true">
+                                    <svg class="h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/></svg>
+                                </span>
+                                <span class="min-w-0 flex-1">
+                                    <span class="block text-[11px] font-semibold uppercase tracking-wide text-sky-800 dark:text-sky-200/95">{{ __('Add to shortlist') }}</span>
+                                    <span class="block truncate text-xs font-semibold text-stone-900 dark:text-stone-100">{{ $shortlistUsageLine }}</span>
+                                </span>
                             </button>
                         </form>
                     @endif
                 @endisset
-
-                <form method="POST" action="{{ route('blocks.store', $profile) }}" class="w-full">
-                    @csrf
-                    <button type="submit" class="inline-flex w-full items-center justify-center gap-2 rounded-2xl border border-stone-200/90 bg-white px-3 py-2 text-xs font-medium text-stone-600 dark:border-gray-600 dark:bg-gray-800 dark:text-stone-400">
-                        {{ __('Block') }}
-                    </button>
-                </form>
             </aside>
         @elseif (! ($isOwnProfile ?? false))
             <aside class="flex w-full shrink-0 flex-col justify-center gap-2 border-t border-stone-200/80 bg-stone-50/60 px-4 py-4 dark:border-gray-700/70 dark:bg-gray-900/50 lg:mt-0 lg:w-36 lg:border-l lg:border-t-0 lg:px-3 lg:py-6" aria-label="{{ __('profile.decision_zone_label') }}">
@@ -806,11 +840,6 @@
                                     @csrf
                                     <button type="submit" class="w-full rounded-xl bg-rose-600 px-6 py-3 text-sm font-semibold text-white shadow-md shadow-rose-600/25 transition hover:bg-rose-700 focus:outline-none focus:ring-2 focus:ring-rose-400 focus:ring-offset-2 dark:focus:ring-offset-gray-900">{{ __('Send Interest') }}</button>
                                 </form>
-                            @endif
-                            @if ($viewerUser && ! ($gateStates['interest_send_limit']['unlimited'] ?? false))
-                                <p class="mt-2 text-center text-xs text-stone-600 dark:text-stone-400">
-                                    {{ __('profile.feature_gate_interest_used_today', ['used' => (int) ($gateStates['interest_send_limit']['used'] ?? 0), 'limit' => (int) ($gateStates['interest_send_limit']['limit'] ?? 0)]) }}
-                                </p>
                             @endif
                         @else
                             <a href="{{ route('login') }}" class="inline-flex w-full items-center justify-center rounded-xl border border-rose-200 bg-white px-5 py-3 text-sm font-semibold text-rose-900 shadow-sm dark:border-rose-900/45 dark:bg-gray-800 dark:text-rose-100">{{ __('Login') }} — {{ __('Send Interest') }}</a>
@@ -1085,21 +1114,34 @@
                         </p>
                     </div>
                 @elseif (($contactAccess['needs_upgrade'] ?? false))
-                    <div class="text-center">
-                        <p class="text-xl font-bold tracking-wider text-stone-900 dark:text-stone-100">
-                            {{ $masked }} <span class="text-stone-400" aria-hidden="true">🔒</span>
-                        </p>
-                        <p class="text-sm text-gray-500 mt-2 dark:text-gray-400">
-                            {{ __('contact_access.unlock_required') }}
-                        </p>
-                        <a href="{{ route('plans.index') }}"
-                            class="mt-3 inline-flex items-center justify-center rounded-lg bg-indigo-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 dark:focus:ring-offset-gray-900">
-                            {{ __('contact_access.upgrade_plan_button') }}
-                        </a>
+                    @php
+                        $_contactMediatorVisible = ! ($isOwnProfile ?? false) && ($contactAccess['show_mediator_cta'] ?? false);
+                        $_contactPrimarySpan = $_contactMediatorVisible ? 'md:col-span-7' : 'md:col-span-10';
+                    @endphp
+                    <div class="grid gap-3 md:grid-cols-10 md:items-stretch">
+                        <div class="{{ $_contactPrimarySpan }} rounded-xl border border-stone-100/95 bg-stone-50/70 px-4 py-5 text-center dark:border-gray-700/70 dark:bg-gray-900/45 md:flex md:h-full md:flex-col md:justify-center">
+                            <p class="text-xl font-bold tracking-wider text-stone-900 dark:text-stone-100">
+                                {{ $masked }} <span class="text-stone-400" aria-hidden="true">🔒</span>
+                            </p>
+                            <p class="text-sm text-gray-500 mt-2 dark:text-gray-400">
+                                {{ __('contact_access.unlock_required') }}
+                            </p>
+                            <a href="{{ route('plans.index') }}"
+                                class="mt-3 inline-flex items-center justify-center rounded-lg bg-indigo-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 dark:focus:ring-offset-gray-900">
+                                {{ __('contact_access.upgrade_plan_button') }}
+                            </a>
+                        </div>
+                        @if ($_contactMediatorVisible)
+                            @include('matrimony.profile.partials.contact-mediator-cta')
+                        @endif
                     </div>
                 @elseif (($contactAccess['show_no_one_copy'] ?? false))
+                    @php
+                        $_noOneMediatorVisible = ! ($isOwnProfile ?? false) && ($contactAccess['show_mediator_cta'] ?? false);
+                        $_noOnePrimarySpan = $_noOneMediatorVisible ? 'md:col-span-7' : 'md:col-span-10';
+                    @endphp
                     <div class="grid gap-3 md:grid-cols-10 md:items-stretch">
-                        <div class="rounded-2xl border border-stone-200/90 bg-stone-50/85 px-4 py-5 text-center dark:border-gray-700 dark:bg-gray-900/45 md:col-span-7 md:flex md:h-full md:flex-col md:justify-center">
+                        <div class="rounded-2xl border border-stone-200/90 bg-stone-50/85 px-4 py-5 text-center dark:border-gray-700 dark:bg-gray-900/45 {{ $_noOnePrimarySpan }} md:flex md:h-full md:flex-col md:justify-center">
                             <p class="text-2xl font-bold tracking-wider text-stone-900 dark:text-stone-100">
                                 {{ $masked }} <span class="text-stone-400" aria-hidden="true">🔒</span>
                             </p>
@@ -1111,42 +1153,8 @@
                             </p>
                         </div>
 
-                        @if (! ($isOwnProfile ?? false) && ($contactAccess['show_mediator_cta'] ?? false))
-                            <div class="rounded-2xl border border-violet-200/90 bg-gradient-to-br from-violet-50/95 via-white to-indigo-50/70 px-3 py-3 shadow-[0_14px_34px_-24px_rgba(109,40,217,0.55)] ring-1 ring-violet-100/80 backdrop-blur-sm dark:border-violet-800/60 dark:from-violet-950/35 dark:via-gray-900 dark:to-indigo-950/20 dark:ring-violet-900/40 md:col-span-3 md:flex md:h-full md:flex-col md:px-3.5 md:py-3.5">
-                                <div class="flex items-start gap-2">
-                                    <span class="mt-0.5 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-emerald-500/15 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300" aria-hidden="true">
-                                        <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="currentColor">
-                                            <path d="M12.04 2.002c-5.523 0-9.999 4.305-9.999 9.613 0 1.864.56 3.604 1.526 5.071L2 22l5.56-1.456a10.19 10.19 0 0 0 4.48 1.03h.004c5.52 0 9.996-4.305 9.996-9.613s-4.477-9.959-10-9.959Zm5.84 13.784c-.24.665-1.2 1.227-1.66 1.3-.425.067-.95.095-1.534-.09-.355-.113-.812-.262-1.404-.51-2.47-1.032-4.08-3.59-4.205-3.758-.122-.168-.998-1.324-.998-2.526 0-1.203.64-1.792.868-2.036.229-.244.5-.305.665-.305.168 0 .334.002.48.01.154.008.36-.058.563.415.208.498.707 1.722.769 1.846.063.124.104.272.02.44-.083.168-.125.272-.25.417-.124.145-.262.324-.374.434-.126.124-.257.259-.111.507.146.248.65 1.053 1.394 1.707.957.84 1.765 1.102 2.013 1.227.249.125.394.105.54-.063.146-.168.624-.706.79-.95.166-.243.333-.204.562-.122.229.083 1.45.672 1.699.794.248.124.414.186.477.29.062.104.062.604-.178 1.269Z"/>
-                                        </svg>
-                                    </span>
-                                    <p class="text-[10px] font-semibold uppercase tracking-[0.18em] text-violet-700 dark:text-violet-300 sm:text-[11px]">{{ __('contact_access.mediator_heading') }}</p>
-                                </div>
-                                <p class="mt-1.5 text-[11px] leading-4 text-violet-900/90 dark:text-violet-100 sm:text-xs sm:leading-5">
-                                    {{ __('contact_access.mediator_side_note') }}
-                                </p>
-                                @if (auth()->check())
-                                    @if ($contactAccess['needs_upgrade_for_mediator'] ?? false)
-                                        <button
-                                            type="button"
-                                            class="mt-auto inline-flex w-full items-center justify-center rounded-xl border border-amber-200/90 bg-amber-50 px-2.5 py-2 text-[11px] font-semibold text-amber-900 transition hover:bg-amber-100 dark:border-amber-800/60 dark:bg-amber-950/40 dark:text-amber-100 dark:hover:bg-amber-950/60 sm:text-xs"
-                                            @click="$root.showContactUpgradeModal = true"
-                                        >
-                                            {{ __('contact_access.upgrade_plans') }}
-                                        </button>
-                                    @else
-                                        <form method="POST" action="{{ route('matrimony.profile.mediator-request', $profile) }}" class="mt-auto">
-                                            @csrf
-                                            <button type="submit" class="inline-flex w-full items-center justify-center rounded-xl bg-violet-600 px-2.5 py-2 text-[13px] font-semibold text-white shadow-sm transition hover:bg-violet-700 sm:text-sm">
-                                                <span class="block text-center leading-4 sm:leading-5">Send matchmaking<br>request</span>
-                                            </button>
-                                        </form>
-                                    @endif
-                                @else
-                                    <a href="{{ route('login') }}" class="mt-auto inline-flex w-full items-center justify-center rounded-xl bg-violet-600 px-2.5 py-2 text-[11px] font-semibold text-white shadow-sm transition hover:bg-violet-700 sm:text-xs">
-                                        {{ __('Login') }}
-                                    </a>
-                                @endif
-                            </div>
+                        @if ($_noOneMediatorVisible)
+                            @include('matrimony.profile.partials.contact-mediator-cta')
                         @endif
                     </div>
                 @elseif (($contactAccess['paid_reveal_blocked_pending_matchmaking'] ?? false))

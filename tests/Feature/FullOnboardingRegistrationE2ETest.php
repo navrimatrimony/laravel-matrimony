@@ -117,11 +117,12 @@ class FullOnboardingRegistrationE2ETest extends TestCase
             'profession_id' => (string) $profId,
             'company_name' => 'E2E Company Pvt Ltd',
         ]);
-        $step4->assertRedirect(route('matrimony.onboarding.complete'));
+        $step4->assertRedirect(route('matrimony.profile.upload-photo', ['from' => 'onboarding']));
         $step4->assertSessionHasNoErrors();
 
         $profile = MatrimonyProfile::where('user_id', $user->id)->first();
         $this->assertNotNull($profile);
+        $this->assertSame(MatrimonyProfile::CARD_ONBOARDING_PHOTO_RESUME_STEP, (int) ($profile->card_onboarding_resume_step ?? 0));
 
         $this->assertDatabaseHas('matrimony_profiles', [
             'id' => $profile->id,

@@ -252,7 +252,7 @@ class OnboardingFlowTest extends TestCase
         $response->assertSessionHas('info', __('onboarding.after_cards_redirect_photos'));
     }
 
-    public function test_onboarding_step_four_skips_photo_when_onboarding_photo_not_required(): void
+    public function test_onboarding_step_four_always_goes_to_photo_then_can_finish_without_upload_when_optional(): void
     {
         \App\Models\AdminSetting::setValue('onboarding_photo_required', '0');
 
@@ -276,9 +276,36 @@ class OnboardingFlowTest extends TestCase
             'profession_id' => (string) $profId,
         ]);
 
-        $response->assertRedirect(route('matrimony.onboarding.complete'));
+        $response->assertRedirect(route('matrimony.profile.upload-photo', ['from' => 'onboarding']));
         $response->assertSessionHasNoErrors();
-        $response->assertSessionHas('success', __('onboarding.all_set'));
+        $response->assertSessionHas('info', __('onboarding.after_cards_redirect_photos'));
+
+        $profile = MatrimonyProfile::where('user_id', $user->id)->first();
+        $this->assertSame(MatrimonyProfile::CARD_ONBOARDING_PHOTO_RESUME_STEP, (int) ($profile?->card_onboarding_resume_step ?? 0));
+
+        $done = $this->actingAs($user)->get(route('matrimony.onboarding.complete'));
+        $done->assertRedirect(route('matrimony.profile.show', $profile->id));
+        $done->assertSessionHas('success', __('onboarding.all_set'));
+        $this->assertNull($profile->fresh()->card_onboarding_resume_step);
+    }
+
+    public function test_onboarding_complete_without_photo_blocked_when_photo_required(): void
+    {
+        \App\Models\AdminSetting::setValue('onboarding_photo_required', '1');
+
+        $user = User::factory()->create();
+        $profile = MatrimonyProfile::factory()->create([
+            'user_id' => $user->id,
+            'card_onboarding_resume_step' => MatrimonyProfile::CARD_ONBOARDING_PHOTO_RESUME_STEP,
+        ]);
+
+        $blocked = $this->actingAs($user)->get(route('matrimony.onboarding.complete'));
+        $blocked->assertRedirect(route('matrimony.profile.upload-photo', ['from' => 'onboarding']));
+        $blocked->assertSessionHas('error', __('onboarding.photo_required_by_site'));
+        $this->assertSame(
+            MatrimonyProfile::CARD_ONBOARDING_PHOTO_RESUME_STEP,
+            (int) ($profile->fresh()->card_onboarding_resume_step ?? 0)
+        );
     }
 
     public function test_onboarding_step_five_route_is_removed(): void

@@ -127,7 +127,7 @@
                 <span>
                     <span class="font-semibold block">Require profile photo to finish onboarding</span>
                     <span class="text-xs text-gray-600 dark:text-gray-400">
-                        When <strong>off</strong> (default), members can skip the photo step after the profile cards and go straight to their profile. When <strong>on</strong>, they stay on the upload page until they upload (or use Finish only when the policy allows — with this on, skip without upload is disabled).
+                        After the last profile card, everyone sees the photo upload page. When this is <strong>off</strong> (default), “Finish onboarding” / “Skip for now” can exit without a photo. When <strong>on</strong>, those actions keep them on the upload page with an error until they add at least one photo.
                     </span>
                 </span>
             </label>

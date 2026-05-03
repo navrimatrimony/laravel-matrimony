@@ -36,8 +36,9 @@ class AdminSettingService
     }
 
     /**
-     * When true, after onboarding cards members must upload a photo before the app unlocks (middleware holds them on upload-photo).
-     * When false (default), step 4 finishes into onboarding.complete without the photo step; skip links clear onboarding.
+     * When true, members cannot use Finish / “Skip for now” (matrimony.onboarding.complete) during the photo handoff
+     * until they have at least one stored photo. When false (default), they may finish onboarding without uploading.
+     * After the last card, everyone is sent to the photo upload page; this flag only controls skipping without a photo.
      */
     public static function isOnboardingPhotoRequired(): bool
     {

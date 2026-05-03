@@ -45,6 +45,23 @@ class OnboardingEnforcementTest extends TestCase
             ->assertSessionHas('info', __('onboarding.resume_photo_notice'));
     }
 
+    public function test_photo_phase_still_enforced_when_onboarding_photo_not_required(): void
+    {
+        \App\Models\AdminSetting::setValue('onboarding_photo_required', '0');
+
+        $user = User::factory()->create();
+        MatrimonyProfile::factory()->create([
+            'user_id' => $user->id,
+            'lifecycle_state' => 'draft',
+            'card_onboarding_resume_step' => MatrimonyProfile::CARD_ONBOARDING_PHOTO_RESUME_STEP,
+        ]);
+
+        $this->actingAs($user)
+            ->get(route('matrimony.profiles.index'))
+            ->assertRedirect(route('matrimony.profile.upload-photo', ['from' => 'onboarding']))
+            ->assertSessionHas('info', __('onboarding.resume_photo_notice'));
+    }
+
     public function test_onboarding_complete_clears_resume_pointer(): void
     {
         $user = User::factory()->create();

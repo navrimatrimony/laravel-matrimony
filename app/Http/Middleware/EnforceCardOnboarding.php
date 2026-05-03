@@ -3,14 +3,14 @@
 namespace App\Http\Middleware;
 
 use App\Models\MatrimonyProfile;
-use App\Services\Admin\AdminSettingService;
 use Closure;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
 
 /**
  * While card_onboarding_resume_step is set, keep the member inside onboarding or photo handoff
- * until they explicitly finish (onboarding.complete). No dashboard/search/menu escape.
+ * until they upload (first batch releases the lock) or finish via matrimony.onboarding.complete
+ * when the site allows skipping without a photo. No dashboard/search/menu escape.
  */
 class EnforceCardOnboarding
 {
@@ -30,13 +30,6 @@ class EnforceCardOnboarding
         }
 
         $step = (int) $step;
-        if (! AdminSettingService::isOnboardingPhotoRequired()) {
-            if ($step === MatrimonyProfile::CARD_ONBOARDING_PHOTO_RESUME_STEP || $step === 6 || $step === 7) {
-                MatrimonyProfile::query()->where('user_id', $user->id)->update(['card_onboarding_resume_step' => null]);
-
-                return $next($request);
-            }
-        }
 
         if ($this->isAllowedDuringOnboarding($request, $step)) {
             return $next($request);

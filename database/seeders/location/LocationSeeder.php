@@ -157,4 +157,3 @@ class LocationSeeder extends Seeder
         return $value;
     }
 }
-

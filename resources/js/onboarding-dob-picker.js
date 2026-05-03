@@ -25,7 +25,7 @@ function isoToDisplay(iso) {
 
 /** @param {string} str */
 function parseDisplayToDate(str) {
-    const m = str.trim().match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+    const m = str.trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
     if (!m) {
         return null;
     }
@@ -74,15 +74,36 @@ export function initOnboardingDobPickers(root = document) {
             display.value = isoToDisplay(hidden.value);
         }
 
+        const hasSavedIso = Boolean(String(hidden.value || '').trim());
+
         const mask = IMask(display, {
             mask: 'd{/}m{/}Y',
-            lazy: false,
+            lazy: !hasSavedIso,
             blocks: {
-                d: { mask: IMask.MaskedRange, from: 1, to: 31, maxLength: 2 },
-                m: { mask: IMask.MaskedRange, from: 1, to: 12, maxLength: 2 },
+                d: { mask: IMask.MaskedRange, from: 1, to: 31, maxLength: 2, autofix: 'pad' },
+                m: { mask: IMask.MaskedRange, from: 1, to: 12, maxLength: 2, autofix: 'pad' },
                 Y: { mask: IMask.MaskedRange, from: minYear, to: maxYear, maxLength: 4 },
             },
         });
+
+        function expandMaskForTyping() {
+            mask.updateOptions({ lazy: false });
+        }
+
+        function collapseMaskIfNoDigits() {
+            const digits = String(display.value || '').replace(/\D/g, '');
+            if (digits.length > 0) {
+                return;
+            }
+            mask.updateOptions({ lazy: true });
+            display.value = '';
+            mask.updateValue();
+            syncHiddenFromMask();
+        }
+
+        display.addEventListener('focus', expandMaskForTyping);
+        display.addEventListener('input', expandMaskForTyping);
+        display.addEventListener('blur', collapseMaskIfNoDigits);
 
         /** @param {Date} dt */
         function inRange(dt) {
@@ -134,6 +155,7 @@ export function initOnboardingDobPickers(root = document) {
                 }
                 const d = selectedDates[0];
                 hidden.value = instance.formatDate(d, 'Y-m-d');
+                mask.updateOptions({ lazy: false });
                 mask.value = `${pad2(d.getDate())}/${pad2(d.getMonth() + 1)}/${d.getFullYear()}`;
             },
         });

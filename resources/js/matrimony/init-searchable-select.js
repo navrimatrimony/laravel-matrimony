@@ -449,6 +449,11 @@ export function initSearchableSingleSelect(opts) {
                     callback();
                 });
         },
+        onItemAdd: function () {
+            if (typeof this.close === 'function') {
+                this.close();
+            }
+        },
         onChange: function (val) {
             syncHiddens(val);
             if (!val) {

@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\MasterMaritalStatus;
 use App\Models\MatrimonyProfile;
 use App\Models\ProfileMarriage;
+use App\Models\ProfilePhoto;
 use App\Services\Admin\AdminSettingService;
 use App\Services\EducationService;
 use App\Services\MutationService;
@@ -17,8 +18,9 @@ use Illuminate\Validation\ValidationException;
 /**
  * Card onboarding (URL steps 2–4; displayed as “Step 1–3 of 3” after OTP).
  * Step 3 = community + height + location (no detailed address). Step 4 = education & career.
- * Step 4 completion → photo upload.
- * Finish: GET matrimony.onboarding.complete (from photo page when coming from onboarding).
+ * Step 4 completion → always redirect to photo upload (resume pointer = photo phase).
+ * Finish / “Skip for now”: GET matrimony.onboarding.complete — allowed without a photo only when
+ * `onboarding_photo_required` is off; when on, same route is rejected until a photo exists.
  */
 class OnboardingController extends Controller
 {
@@ -101,6 +103,17 @@ class OnboardingController extends Controller
 
         $profile = auth()->user()->matrimonyProfile;
         if ($profile) {
+            $profile->refresh();
+            $inPhotoHandoff = (int) ($profile->card_onboarding_resume_step ?? 0) === MatrimonyProfile::CARD_ONBOARDING_PHOTO_RESUME_STEP;
+            if (
+                $inPhotoHandoff
+                && AdminSettingService::isOnboardingPhotoRequired()
+                && ! $this->profileHasAtLeastOneStoredPhoto($profile)
+            ) {
+                return redirect()->route('matrimony.profile.upload-photo', ['from' => 'onboarding'])
+                    ->with('error', __('onboarding.photo_required_by_site'));
+            }
+
             $profile->forceFill(['card_onboarding_resume_step' => null])->saveQuietly();
         }
 
@@ -154,15 +167,10 @@ class OnboardingController extends Controller
         }
 
         if ($step === 4) {
-            if (AdminSettingService::isOnboardingPhotoRequired()) {
-                $profile->forceFill(['card_onboarding_resume_step' => MatrimonyProfile::CARD_ONBOARDING_PHOTO_RESUME_STEP])->saveQuietly();
+            $profile->forceFill(['card_onboarding_resume_step' => MatrimonyProfile::CARD_ONBOARDING_PHOTO_RESUME_STEP])->saveQuietly();
 
-                return redirect()->route('matrimony.profile.upload-photo', ['from' => 'onboarding'])
-                    ->with('info', __('onboarding.after_cards_redirect_photos'));
-            }
-
-            return redirect()->route('matrimony.onboarding.complete')
-                ->with('success', __('onboarding.all_set'));
+            return redirect()->route('matrimony.profile.upload-photo', ['from' => 'onboarding'])
+                ->with('info', __('onboarding.after_cards_redirect_photos'));
         }
 
         return redirect()->route('matrimony.onboarding.show', ['step' => $step + 1])
@@ -198,6 +206,19 @@ class OnboardingController extends Controller
         }
 
         return false;
+    }
+
+    /**
+     * True when the profile already has a stored primary path or at least one gallery row
+     * (includes pending/… placeholders while processing).
+     */
+    private function profileHasAtLeastOneStoredPhoto(MatrimonyProfile $profile): bool
+    {
+        if (ProfilePhoto::query()->where('profile_id', $profile->id)->exists()) {
+            return true;
+        }
+
+        return trim((string) ($profile->profile_photo ?? '')) !== '';
     }
 
     private function snapshotStep2(Request $request, MatrimonyProfile $profile, ProfileWizardController $wizard): array

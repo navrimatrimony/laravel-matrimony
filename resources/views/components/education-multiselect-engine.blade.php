@@ -486,6 +486,9 @@
             onItemAdd: function () {
                 this.setTextboxValue('');
                 this.refreshOptions(false);
+                if (typeof this.close === 'function') {
+                    this.close();
+                }
             },
             onChange: function () {
                 syncArrayHiddens(ts);

@@ -10,6 +10,7 @@ use App\Models\FieldRegistry;
 use App\Models\Interest;
 use App\Models\MasterMaritalStatus;
 use App\Models\MatrimonyProfile;
+use App\Models\Message;
 use App\Models\Profession;
 use App\Models\ProfilePhoto;
 use App\Models\Religion;
@@ -1193,10 +1194,12 @@ class MatrimonyProfileController extends Controller
         }
 
         $inShortlist = false;
+        $viewerShortlistTotalCount = 0;
         if (! $isOwnProfile && $user->matrimonyProfile) {
             $inShortlist = Shortlist::where('owner_profile_id', $user->matrimonyProfile->id)
                 ->where('shortlisted_profile_id', $profile->id)
                 ->exists();
+            $viewerShortlistTotalCount = (int) Shortlist::where('owner_profile_id', $user->matrimonyProfile->id)->count();
         }
 
         if (! $isOwnProfile && $user->matrimonyProfile) {
@@ -1421,6 +1424,14 @@ class MatrimonyProfileController extends Controller
             ? app(MemberPresencePresentationService::class)->buildProfileHeroPresence($profile->user)
             : null;
 
+        $hasIncomingMessageFromViewedProfile = false;
+        if (! $isOwnProfile && $user->matrimonyProfile) {
+            $hasIncomingMessageFromViewedProfile = Message::query()
+                ->where('sender_profile_id', $profile->id)
+                ->where('receiver_profile_id', $user->matrimonyProfile->id)
+                ->exists();
+        }
+
         return view(
             'matrimony.profile.show',
             [
@@ -1432,6 +1443,7 @@ class MatrimonyProfileController extends Controller
                 'interestAlreadySent' => $interestAlreadySent,
                 'hasAlreadyReported' => $hasAlreadyReported,
                 'inShortlist' => $inShortlist,
+                'viewerShortlistTotalCount' => $viewerShortlistTotalCount,
                 'extendedValues' => $extendedValues,
                 'extendedMeta' => $extendedMeta,
                 'extendedAttributes' => $extendedAttributes,
@@ -1478,6 +1490,7 @@ class MatrimonyProfileController extends Controller
                 'canProfileWhatsappDirect' => $canProfileWhatsappDirect,
                 'whatsappWaMeHref' => $whatsappWaMeHref,
                 'profileOwnerPresence' => $profileOwnerPresence,
+                'hasIncomingMessageFromViewedProfile' => $hasIncomingMessageFromViewedProfile,
             ]
         );
     }
