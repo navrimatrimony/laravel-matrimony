@@ -145,6 +145,12 @@
                 {{-- Intake: submit birth_place text when user didn't select a city (typeahead display has no name). --}}
                 <input type="hidden" name="{{ $corePrefix }}[birth_place]" id="intake_birth_place_text" value="{{ (empty($profile->birth_city_id) && !empty(trim($birthPlaceDisplay ?? ''))) ? e($birthPlaceDisplay) : '' }}">
             @endif
+            @php
+                $birthHints = ['location_id' => '', 'country_id' => '', 'state_id' => '', 'district_id' => '', 'taluka_id' => ''];
+                if ($profile instanceof \App\Models\MatrimonyProfile) {
+                    $birthHints = $profile->birthCityHierarchyHints();
+                }
+            @endphp
             <x-profile.location-typeahead
                 context="birth"
                 :namePrefix="$corePrefix"
@@ -154,9 +160,9 @@
                 :noBorder="true"
                 :compactRow="true"
                 :data-birth-city-id="old($oldPrefix.'birth_city_id', $profile->birth_city_id ?? '')"
-                :data-birth-taluka-id="old($oldPrefix.'birth_taluka_id', $profile->birth_taluka_id ?? '')"
-                :data-birth-district-id="old($oldPrefix.'birth_district_id', $profile->birth_district_id ?? '')"
-                :data-birth-state-id="old($oldPrefix.'birth_state_id', $profile->birth_state_id ?? '')"
+                :data-birth-taluka-id="$birthHints['taluka_id']"
+                :data-birth-district-id="$birthHints['district_id']"
+                :data-birth-state-id="$birthHints['state_id']"
             />
         </div>
     </div>
@@ -189,11 +195,11 @@
         $nameAddressLine = $corePrefix ? $corePrefix . '[address_line]' : 'address_line';
         $addressLineVal = old($oldPrefix.'address_line', $profile->address_line ?? ($coreData['address_line'] ?? ''));
         $residenceDisplay = old($oldPrefix.'wizard_residence_display', $residencePlaceDisplay ?? \App\Models\MatrimonyProfile::residenceLocationDisplayLineFor($profile));
-        $resLocationId = old($oldPrefix.'location_id', $profile->location_id ?? '');
-        $resTalukaId = old($oldPrefix.'taluka_id', $profile->taluka_id ?? '');
-        $resDistrictId = old($oldPrefix.'district_id', $profile->district_id ?? '');
-        $resStateId = old($oldPrefix.'state_id', $profile->state_id ?? '');
-        $resCountryId = old($oldPrefix.'country_id', $profile->country_id ?? '');
+        $resHints = ['location_id' => '', 'country_id' => '', 'state_id' => '', 'district_id' => '', 'taluka_id' => ''];
+        if ($profile instanceof \App\Models\MatrimonyProfile) {
+            $resHints = $profile->residenceLocationHierarchyHints();
+        }
+        $resHints['location_id'] = (string) old($oldPrefix.'location_id', $resHints['location_id']);
     @endphp
     <div class="grid grid-cols-1 md:grid-cols-3 gap-3 items-start">
         <div class="min-w-0">
@@ -224,15 +230,11 @@
                 label=""
                 :noBorder="true"
                 :compactRow="true"
-                :data-birth-city-id="null"
-                :data-birth-taluka-id="null"
-                :data-birth-district-id="null"
-                :data-birth-state-id="null"
-                :dataCountryId="$resCountryId"
-                :data-city-id="$resLocationId"
-                :data-taluka-id="$resTalukaId"
-                :data-district-id="$resDistrictId"
-                :data-state-id="$resStateId"
+                :dataLocationId="$resHints['location_id']"
+                :dataCountryId="$resHints['country_id']"
+                :dataStateId="$resHints['state_id']"
+                :dataDistrictId="$resHints['district_id']"
+                :dataTalukaId="$resHints['taluka_id']"
             />
         </div>
     </div>

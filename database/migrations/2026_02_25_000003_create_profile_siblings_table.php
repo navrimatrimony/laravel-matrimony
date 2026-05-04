@@ -16,7 +16,7 @@ return new class extends Migration
             $table->string('gender', 20)->nullable(); // male, female
             $table->string('marital_status', 20)->nullable(); // unmarried, married
             $table->string('occupation')->nullable();
-            $table->foreignId('city_id')->nullable()->constrained('cities')->nullOnDelete();
+            $table->foreignId('city_id')->nullable()->constrained('addresses')->nullOnDelete();
             $table->text('notes')->nullable();
             $table->timestamps();
 

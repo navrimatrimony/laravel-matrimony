@@ -68,8 +68,7 @@ class MutationService
     /** Fallback CORE keys when registry has no CORE rows. Phase-5: *_id for master lookups. address_line so intake address shows in wizard. */
     private const FALLBACK_CORE_KEYS = [
         'full_name', 'gender_id', 'date_of_birth', 'birth_time', 'marital_status_id', 'has_children', 'has_siblings', 'highest_education',
-        'education_degree_id', 'education_text',
-        'location', 'religion_id', 'caste_id', 'sub_caste_id', 'mother_tongue_id', 'height_cm', 'profile_photo',
+        'location', 'location_id', 'religion_id', 'caste_id', 'sub_caste_id', 'mother_tongue_id', 'height_cm', 'profile_photo',
         'complexion_id', 'physical_build_id', 'blood_group_id', 'diet_id', 'smoking_status_id', 'drinking_status_id', 'family_type_id', 'income_currency_id',
         'address_line', 'annual_income', 'family_income', 'income_private', 'family_income_private',
         'birth_place_text', 'work_location_text',
@@ -332,15 +331,6 @@ class MutationService
                     $bp = $snapshot['birth_place'];
                     if (Schema::hasColumn($tableName, 'birth_city_id')) {
                         $profile->birth_city_id = isset($bp['city_id']) ? (int) $bp['city_id'] : null;
-                    }
-                    if (Schema::hasColumn($tableName, 'birth_taluka_id')) {
-                        $profile->birth_taluka_id = isset($bp['taluka_id']) ? (int) $bp['taluka_id'] : null;
-                    }
-                    if (Schema::hasColumn($tableName, 'birth_district_id')) {
-                        $profile->birth_district_id = isset($bp['district_id']) ? (int) $bp['district_id'] : null;
-                    }
-                    if (Schema::hasColumn($tableName, 'birth_state_id')) {
-                        $profile->birth_state_id = isset($bp['state_id']) ? (int) $bp['state_id'] : null;
                     }
                     $placeUpdated = true;
                 }
@@ -829,22 +819,13 @@ class MutationService
                 if (isset($snapshot['birth_place']) && is_array($snapshot['birth_place']) && $hasAnyPlaceValue($snapshot['birth_place'])) {
                     $birthFromCore = [
                         'city_id' => isset($proposedCore['birth_city_id']) ? (int) $proposedCore['birth_city_id'] : null,
-                        'taluka_id' => isset($proposedCore['birth_taluka_id']) ? (int) $proposedCore['birth_taluka_id'] : null,
-                        'district_id' => isset($proposedCore['birth_district_id']) ? (int) $proposedCore['birth_district_id'] : null,
-                        'state_id' => isset($proposedCore['birth_state_id']) ? (int) $proposedCore['birth_state_id'] : null,
+                        'taluka_id' => null,
+                        'district_id' => null,
+                        'state_id' => null,
                     ];
                     $bp = $hasAnyPlaceValue($birthFromCore) ? $birthFromCore : $snapshot['birth_place'];
                     if (Schema::hasColumn($tableName, 'birth_city_id')) {
                         $profile->birth_city_id = isset($bp['city_id']) ? (int) $bp['city_id'] : null;
-                    }
-                    if (Schema::hasColumn($tableName, 'birth_taluka_id')) {
-                        $profile->birth_taluka_id = isset($bp['taluka_id']) ? (int) $bp['taluka_id'] : null;
-                    }
-                    if (Schema::hasColumn($tableName, 'birth_district_id')) {
-                        $profile->birth_district_id = isset($bp['district_id']) ? (int) $bp['district_id'] : null;
-                    }
-                    if (Schema::hasColumn($tableName, 'birth_state_id')) {
-                        $profile->birth_state_id = isset($bp['state_id']) ? (int) $bp['state_id'] : null;
                     }
                     $placeUpdated = true;
                 }
@@ -1891,7 +1872,7 @@ class MutationService
         $profileId = $profile->id;
 
         if (Schema::hasTable('profile_preference_criteria')) {
-            $allowed = ['preferred_age_min', 'preferred_age_max', 'preferred_height_min_cm', 'preferred_height_max_cm', 'preferred_income_min', 'preferred_income_max', 'preferred_education', 'preferred_city_id', 'willing_to_relocate', 'settled_city_preference_id', 'marriage_type_preference_id', 'preferred_marital_status_id', 'partner_profile_with_children', 'preferred_profile_managed_by'];
+            $allowed = ['preferred_age_min', 'preferred_age_max', 'preferred_height_min_cm', 'preferred_height_max_cm', 'preferred_income_min', 'preferred_income_max', 'preferred_city_id', 'willing_to_relocate', 'settled_city_preference_id', 'marriage_type_preference_id', 'preferred_marital_status_id', 'partner_profile_with_children', 'preferred_profile_managed_by'];
             $data = [];
             foreach ($allowed as $col) {
                 if (array_key_exists($col, $proposed)) {
@@ -1933,9 +1914,8 @@ class MutationService
             'profile_preferred_states' => ['preferred_state_ids', 'state_id'],
             'profile_preferred_districts' => ['preferred_district_ids', 'district_id'],
             'profile_preferred_talukas' => ['preferred_taluka_ids', 'taluka_id'],
-            'profile_preferred_master_education' => ['preferred_master_education_ids', 'master_education_id'],
-            'profile_preferred_working_with_types' => ['preferred_working_with_type_ids', 'working_with_type_id'],
-            'profile_preferred_professions' => ['preferred_profession_ids', 'profession_id'],
+            'profile_preferred_education_degrees' => ['preferred_education_degree_ids', 'education_degree_id'],
+            'profile_preferred_occupation_master' => ['preferred_occupation_master_ids', 'occupation_master_id'],
             'profile_preferred_diets' => ['preferred_diet_ids', 'diet_id'],
             'profile_preferred_marital_statuses' => ['preferred_marital_status_ids', 'marital_status_id'],
         ];
@@ -3016,7 +2996,7 @@ class MutationService
         if (trim((string) ($profile->birth_place_text ?? '')) !== '') {
             return true;
         }
-        foreach (['birth_city_id', 'birth_taluka_id', 'birth_district_id', 'birth_state_id'] as $col) {
+        foreach (['birth_city_id'] as $col) {
             $v = $profile->getAttribute($col);
             if ($v !== null && $v !== '' && (int) $v !== 0) {
                 return true;

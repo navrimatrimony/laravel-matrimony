@@ -14,10 +14,10 @@ return new class extends Migration
                 ->constrained('matrimony_profiles')
                 ->restrictOnDelete();
             $table->string('surname');
-            $table->foreignId('city_id')->nullable()->constrained('cities')->nullOnDelete();
-            $table->foreignId('taluka_id')->nullable()->constrained('talukas')->nullOnDelete();
-            $table->foreignId('district_id')->nullable()->constrained('districts')->nullOnDelete();
-            $table->foreignId('state_id')->nullable()->constrained('states')->nullOnDelete();
+            $table->foreignId('city_id')->nullable()->constrained('addresses')->nullOnDelete();
+            $table->foreignId('taluka_id')->nullable()->constrained('addresses')->nullOnDelete();
+            $table->foreignId('district_id')->nullable()->constrained('addresses')->nullOnDelete();
+            $table->foreignId('state_id')->nullable()->constrained('addresses')->nullOnDelete();
             $table->text('notes')->nullable();
             $table->timestamps();
 

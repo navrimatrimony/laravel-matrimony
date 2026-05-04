@@ -17,7 +17,7 @@ use Illuminate\Support\Facades\Schema;
  *
  * PART 0 — SSOT / tables (read-only audit; never drop tables from here):
  * - `education_degrees` + `education_categories`: ACTIVE (includes optional `name_mr`, `code_mr`, `title_mr`, `full_form_mr`). Used by EducationService search/ranking,
- *   {@see \App\Http\Controllers\Api\EducationDegreeSearchController}, onboarding step 4 (FK `education_degree_id`).
+ *   {@see \App\Http\Controllers\Api\EducationDegreeSearchController}, onboarding step 4 (persists to `highest_education` text).
  * - `educations`: LEGACY duplicate master (if still present in DB). Not queried by EducationService or
  *   `/api/education-degrees/search`. Cleanup is manual / separate Artisan command only.
  */
@@ -346,15 +346,14 @@ class EducationService
 
     /**
      * Reads Tom Select multi education payload (ordered {@code education_slots} JSON + legacy parallel arrays),
-     * flattens into canonical {@code education_degree_id}, {@code education_text}, {@code highest_education},
-     * {@code highest_education_text}, {@code highest_education_id}, {@code highest_education_other} on the root request.
+     * and merges into {@code highest_education} / {@code highest_education_other} on the root request.
      *
      * @param  string|null  $dotPrefix  e.g. {@code snapshot.core}; {@code null} for flat onboarding/wizard names.
      * @return bool True when multiselect payload was present and merged (including explicit empty selection).
      */
     public function mergeMultiselectEducationIntoRequest(Request $request, ?string $dotPrefix = null): bool
     {
-        if (! Schema::hasColumn('matrimony_profiles', 'education_degree_id')) {
+        if (! Schema::hasColumn('matrimony_profiles', 'highest_education')) {
             return false;
         }
 
@@ -413,15 +412,10 @@ class EducationService
         }
 
         if ($slots === []) {
-            $merge = [
-                'education_degree_id' => null,
-                'education_text' => null,
-                'highest_education_id' => null,
-                'highest_education_text' => null,
+            $request->merge([
                 'highest_education' => null,
                 'highest_education_other' => null,
-            ];
-            $request->merge($merge);
+            ]);
 
             return true;
         }
@@ -486,12 +480,12 @@ class EducationService
 
         if ($primaryDegreeId === null) {
             $resolved = $this->resolveDegreeSelection(null, $educationText ?? '');
+            $line = $resolved['legacy_highest_education'];
+            if (($line === null || $line === '') && ! empty($resolved['education_text'])) {
+                $line = mb_substr((string) $resolved['education_text'], 0, 255);
+            }
             $request->merge([
-                'education_degree_id' => $resolved['education_degree_id'],
-                'education_text' => $resolved['education_text'],
-                'highest_education_id' => null,
-                'highest_education_text' => $resolved['mirror_highest_education_text'],
-                'highest_education' => $resolved['legacy_highest_education'],
+                'highest_education' => $line,
                 'highest_education_other' => null,
             ]);
 
@@ -505,10 +499,6 @@ class EducationService
         }
 
         $request->merge([
-            'education_degree_id' => $primaryDegreeId,
-            'education_text' => ($educationText !== null && $educationText !== '') ? $educationText : null,
-            'highest_education_id' => null,
-            'highest_education_text' => null,
             'highest_education' => $legacyLine ?: $primaryTitle,
             'highest_education_other' => null,
         ]);
@@ -611,22 +601,6 @@ class EducationService
      */
     public function displayHighestEducation(MatrimonyProfile $profile): string
     {
-        $profile->loadMissing('educationDegree.category');
-
-        if ($profile->education_degree_id && $profile->educationDegree) {
-            return $this->degreeDisplayLabel($profile->educationDegree);
-        }
-
-        $t = trim((string) ($profile->education_text ?? ''));
-        if ($t !== '') {
-            return $t;
-        }
-
-        $t = trim((string) ($profile->highest_education_text ?? ''));
-        if ($t !== '') {
-            return $t;
-        }
-
         return trim((string) ($profile->highest_education ?? ''));
     }
 
@@ -635,30 +609,6 @@ class EducationService
      */
     public function formatEducationDisplayLineFromObject(object $profile): string
     {
-        $degreeId = isset($profile->education_degree_id) ? (int) $profile->education_degree_id : 0;
-        if ($degreeId > 0) {
-            $deg = EducationDegree::query()->find($degreeId);
-            if ($deg) {
-                $label = $this->degreeDisplayLabel($deg);
-                $extra = trim((string) ($profile->education_text ?? ''));
-                if ($extra !== '') {
-                    return $label !== '' ? $label.', '.$extra : $extra;
-                }
-
-                return $label !== '' ? $label : $extra;
-            }
-        }
-
-        $t = trim((string) ($profile->education_text ?? ''));
-        if ($t !== '') {
-            return $t;
-        }
-
-        $t = trim((string) ($profile->highest_education_text ?? ''));
-        if ($t !== '') {
-            return $t;
-        }
-
         return trim((string) ($profile->highest_education ?? ''));
     }
 
@@ -669,21 +619,17 @@ class EducationService
      */
     public function distinctManualEducationTexts(): Collection
     {
-        $out = collect();
-
-        if (Schema::hasColumn('matrimony_profiles', 'education_text')) {
-            $out = $out->merge(
-                DB::table('matrimony_profiles')
-                    ->selectRaw('education_text as text, COUNT(*) as cnt')
-                    ->whereNotNull('education_text')
-                    ->where('education_text', '!=', '')
-                    ->groupBy('education_text')
-                    ->orderByDesc('cnt')
-                    ->get()
-            );
+        if (! Schema::hasColumn('matrimony_profiles', 'highest_education')) {
+            return collect();
         }
 
-        return $out;
+        return DB::table('matrimony_profiles')
+            ->selectRaw('highest_education as text, COUNT(*) as cnt')
+            ->whereNotNull('highest_education')
+            ->where('highest_education', '!=', '')
+            ->groupBy('highest_education')
+            ->orderByDesc('cnt')
+            ->get();
     }
 
     private function degreeDisplayLabel(EducationDegree $deg): string

@@ -38,7 +38,7 @@ return new class extends Migration
                     $table->boolean('willing_to_relocate')->nullable()->after('preferred_city_id');
                 }
                 if (! Schema::hasColumn($criteria, 'settled_city_preference_id')) {
-                    $table->foreignId('settled_city_preference_id')->nullable()->after('willing_to_relocate')->constrained('cities')->nullOnDelete();
+                    $table->foreignId('settled_city_preference_id')->nullable()->after('willing_to_relocate')->constrained('addresses')->nullOnDelete();
                 }
                 if (! Schema::hasColumn($criteria, 'marriage_type_preference_id')) {
                     $table->foreignId('marriage_type_preference_id')->nullable()->after('settled_city_preference_id')->constrained('master_marriage_type_preferences')->nullOnDelete();

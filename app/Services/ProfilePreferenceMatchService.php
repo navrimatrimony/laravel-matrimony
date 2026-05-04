@@ -4,7 +4,9 @@ namespace App\Services;
 
 use App\Models\Caste;
 use App\Models\District;
-use App\Models\MasterEducation;
+use App\Models\EducationDegree;
+use App\Models\OccupationMaster;
+use App\Models\Location;
 use App\Models\MasterMaritalStatus;
 use App\Models\MatrimonyProfile;
 use App\Models\Religion;
@@ -39,7 +41,7 @@ class ProfilePreferenceMatchService
     {
         $viewerProfile->loadMissing([
             'gender', 'maritalStatus', 'religion', 'caste', 'subCaste', 'diet', 'profession',
-            'country', 'state', 'district', 'taluka', 'city',
+            'location',
         ]);
 
         $pref = $targetPreferencesOverride ?? self::loadTargetPreferences($targetProfile->id);
@@ -62,8 +64,8 @@ class ProfilePreferenceMatchService
 
         $groups['location'][] = self::rowLocation($viewerProfile, $pref);
 
-        $groups['education_career'][] = self::rowEducation($viewerProfile, $pref['master_education_ids']);
-        $groups['education_career'][] = self::rowProfession($viewerProfile, $pref['profession_ids']);
+        $groups['education_career'][] = self::rowEducation($viewerProfile, $pref);
+        $groups['education_career'][] = self::rowProfession($viewerProfile, $pref);
         $groups['education_career'][] = self::rowIncome($viewerProfile, $criteria);
 
         $groups['lifestyle'][] = self::rowDiet($viewerProfile, $pref['diet_ids']);
@@ -124,11 +126,11 @@ class ProfilePreferenceMatchService
             ? DB::table('profile_preferred_talukas')->where('profile_id', $targetProfileId)->pluck('taluka_id')->map(fn ($id) => (int) $id)->all()
             : [];
 
-        $masterEducationIds = Schema::hasTable('profile_preferred_master_education')
-            ? DB::table('profile_preferred_master_education')->where('profile_id', $targetProfileId)->pluck('master_education_id')->map(fn ($id) => (int) $id)->all()
+        $educationDegreeIds = Schema::hasTable('profile_preferred_education_degrees')
+            ? DB::table('profile_preferred_education_degrees')->where('profile_id', $targetProfileId)->pluck('education_degree_id')->map(fn ($id) => (int) $id)->all()
             : [];
-        $professionIds = Schema::hasTable('profile_preferred_professions')
-            ? DB::table('profile_preferred_professions')->where('profile_id', $targetProfileId)->pluck('profession_id')->map(fn ($id) => (int) $id)->all()
+        $occupationMasterIds = Schema::hasTable('profile_preferred_occupation_master')
+            ? DB::table('profile_preferred_occupation_master')->where('profile_id', $targetProfileId)->pluck('occupation_master_id')->map(fn ($id) => (int) $id)->all()
             : [];
         $dietIds = Schema::hasTable('profile_preferred_diets')
             ? DB::table('profile_preferred_diets')->where('profile_id', $targetProfileId)->pluck('diet_id')->map(fn ($id) => (int) $id)->all()
@@ -146,8 +148,8 @@ class ProfilePreferenceMatchService
             'country_ids' => $countryIds,
             'state_ids' => $stateIds,
             'taluka_ids' => $talukaIds,
-            'master_education_ids' => $masterEducationIds,
-            'profession_ids' => $professionIds,
+            'education_degree_ids' => $educationDegreeIds,
+            'occupation_master_ids' => $occupationMasterIds,
             'diet_ids' => $dietIds,
             'marital_status_ids' => $maritalStatusIds,
         ];
@@ -155,7 +157,7 @@ class ProfilePreferenceMatchService
 
     private static function targetHasAnyPreference(array $pref, ?object $criteria): bool
     {
-        foreach (['religion_ids', 'caste_ids', 'district_ids', 'country_ids', 'state_ids', 'taluka_ids', 'master_education_ids', 'profession_ids', 'diet_ids', 'marital_status_ids'] as $k) {
+        foreach (['religion_ids', 'caste_ids', 'district_ids', 'country_ids', 'state_ids', 'taluka_ids', 'education_degree_ids', 'occupation_master_ids', 'diet_ids', 'marital_status_ids'] as $k) {
             if (! empty($pref[$k])) {
                 return true;
             }
@@ -346,48 +348,50 @@ class ProfilePreferenceMatchService
             $their = __('preference_match.open_to_all');
         }
 
-        $yParts = array_filter([
-            $viewer->country?->name,
-            $viewer->state?->name,
-            $viewer->district?->name,
-            $viewer->city?->name,
-        ]);
-        $yours = $yParts !== [] ? implode(', ', $yParts) : __('preference_match.value_unknown');
+        $yours = MatrimonyProfile::residenceLocationDisplayLineFor($viewer);
+        if ($yours === '') {
+            $yours = __('preference_match.value_unknown');
+        }
 
         $hasAny = $dIds !== [] || $sIds !== [] || $cIds !== [] || $tIds !== [];
-        if (! $viewer->country_id && ! $viewer->state_id && ! $viewer->district_id && ! $viewer->city_id) {
+        if (! $viewer->location_id) {
             return self::row('location', __('preference_match.field_location'), $their, $yours, self::STRICT_OPEN, self::STATUS_UNKNOWN, __('preference_match.reason_missing_location'));
         }
         if (! $hasAny) {
             return self::row('location', __('preference_match.field_location'), $their, $yours, self::STRICT_OPEN, self::STATUS_FLEXIBLE, __('preference_match.reason_pref_open'));
         }
 
-        $vd = (int) ($viewer->district_id ?? 0);
+        $g = $viewer->residenceGeoAddressIds();
+        $vd = (int) ($g['district_id'] ?? 0);
         if ($vd > 0 && $dIds !== [] && in_array($vd, $dIds, true)) {
             return self::row('location', __('preference_match.field_location'), $their, $yours, self::STRICT_MUST_MATCH, self::STATUS_MATCH, null);
         }
 
-        $vs = (int) ($viewer->state_id ?? 0);
+        $vs = (int) ($g['state_id'] ?? 0);
         if ($vs > 0 && $sIds !== [] && in_array($vs, $sIds, true)) {
             return self::row('location', __('preference_match.field_location'), $their, $yours, self::STRICT_MUST_MATCH, self::STATUS_FLEXIBLE, __('preference_match.reason_location_state_aligns'));
         }
         if ($vd > 0 && $dIds !== []) {
-            $dStateIds = District::query()->whereIn('id', $dIds)->pluck('state_id')->unique()->filter()->all();
+            $dStateIds = District::query()->whereIn('id', $dIds)->pluck('parent_id')->unique()->filter()->all();
             if ($vs > 0 && in_array($vs, array_map('intval', $dStateIds), true)) {
                 return self::row('location', __('preference_match.field_location'), $their, $yours, self::STRICT_MUST_MATCH, self::STATUS_FLEXIBLE, __('preference_match.reason_location_same_state'));
             }
         }
 
-        $vc = (int) ($viewer->country_id ?? 0);
+        $vc = (int) ($g['country_id'] ?? 0);
         if ($vc > 0 && $cIds !== [] && in_array($vc, $cIds, true)) {
             return self::row('location', __('preference_match.field_location'), $their, $yours, self::STRICT_MUST_MATCH, self::STATUS_FLEXIBLE, __('preference_match.reason_location_country_aligns'));
         }
 
         if ($vd > 0 && $dIds !== []) {
-            $prefCountries = DB::table('districts')
-                ->join('states', 'states.id', '=', 'districts.state_id')
-                ->whereIn('districts.id', $dIds)
-                ->pluck('states.country_id')
+            $geo = Location::geoTable();
+            $prefCountries = DB::table($geo.' as d')
+                ->join($geo.' as s', function ($join): void {
+                    $join->on('s.id', '=', 'd.parent_id')->where('s.type', '=', 'state');
+                })
+                ->where('d.type', 'district')
+                ->whereIn('d.id', $dIds)
+                ->pluck('s.parent_id')
                 ->unique()
                 ->filter()
                 ->map(fn ($id) => (int) $id)
@@ -406,50 +410,100 @@ class ProfilePreferenceMatchService
     private static function describeLocationPreference(array $pref): string
     {
         $parts = [];
+        $geo = Location::geoTable();
         if ($pref['country_ids'] !== []) {
-            $parts[] = DB::table('countries')->whereIn('id', $pref['country_ids'])->pluck('name')->filter()->implode(', ');
+            $parts[] = DB::table($geo)->where('type', 'country')->whereIn('id', $pref['country_ids'])->pluck('name')->filter()->implode(', ');
         }
         if ($pref['state_ids'] !== []) {
-            $parts[] = DB::table('states')->whereIn('id', $pref['state_ids'])->pluck('name')->filter()->implode(', ');
+            $parts[] = DB::table($geo)->where('type', 'state')->whereIn('id', $pref['state_ids'])->pluck('name')->filter()->implode(', ');
         }
         if ($pref['district_ids'] !== []) {
-            $parts[] = DB::table('districts')->whereIn('id', $pref['district_ids'])->pluck('name')->filter()->implode(', ');
+            $parts[] = DB::table($geo)->where('type', 'district')->whereIn('id', $pref['district_ids'])->pluck('name')->filter()->implode(', ');
         }
         if ($pref['taluka_ids'] !== []) {
-            $parts[] = DB::table('talukas')->whereIn('id', $pref['taluka_ids'])->pluck('name')->filter()->implode(', ');
+            $parts[] = DB::table($geo)->where('type', 'taluka')->whereIn('id', $pref['taluka_ids'])->pluck('name')->filter()->implode(', ');
         }
 
         return trim(implode(' · ', array_filter($parts)));
     }
 
     /**
-     * @param  array<int, int>  $masterEducationIds
+     * @param  array<string, mixed>  $pref
      * @return array<string, mixed>
      */
-    private static function rowEducation(MatrimonyProfile $viewer, array $masterEducationIds): array
+    private static function rowEducation(MatrimonyProfile $viewer, array $pref): array
     {
-        $their = self::labelsForIds('master_education', $masterEducationIds, 'name');
+        $degreeIds = array_map('intval', $pref['education_degree_ids'] ?? []);
+
+        return self::rowEducationDegrees($viewer, $degreeIds);
+    }
+
+    /**
+     * Best-effort primary degree id from {@see MatrimonyProfile::highest_education} text (first comma-separated segment).
+     */
+    private static function resolveViewerPrimaryDegreeId(MatrimonyProfile $viewer): ?int
+    {
+        $line = trim((string) ($viewer->highest_education ?? ''));
+        if ($line === '') {
+            return null;
+        }
+        $first = trim(explode(',', $line)[0]);
+        if ($first === '') {
+            return null;
+        }
+        $match = app(EducationService::class)->findDegreeMatch($first);
+
+        return $match ? (int) $match->id : null;
+    }
+
+    /**
+     * @param  array<int, int>  $degreeIds
+     * @return array<string, mixed>
+     */
+    private static function rowEducationDegrees(MatrimonyProfile $viewer, array $degreeIds): array
+    {
+        $degreeIds = array_values(array_unique(array_filter($degreeIds, fn ($id) => (int) $id > 0)));
+        if ($degreeIds === []) {
+            $their = __('preference_match.open_to_all');
+            $viewerDegreeId = self::resolveViewerPrimaryDegreeId($viewer);
+            $viewerDegree = $viewerDegreeId ? EducationDegree::query()->find($viewerDegreeId) : null;
+            $yours = $viewerDegree
+                ? (string) ($viewerDegree->title ?? '')
+                : trim((string) ($viewer->highest_education ?? ''));
+            if ($yours === '') {
+                $yours = __('preference_match.value_unknown');
+            }
+            if ($viewerDegreeId === null) {
+                return self::row('education', __('preference_match.field_education'), $their, $yours, self::STRICT_OPEN, self::STATUS_UNKNOWN, __('preference_match.reason_education_not_mapped'));
+            }
+
+            return self::row('education', __('preference_match.field_education'), $their, $yours, self::STRICT_OPEN, self::STATUS_FLEXIBLE, __('preference_match.reason_pref_open'));
+        }
+
+        $their = self::labelsForIds('education_degrees', $degreeIds, 'title');
         if ($their === '') {
             $their = __('preference_match.open_to_all');
         }
 
-        $viewerMeId = self::resolveViewerMasterEducationId($viewer);
-        $yours = $viewerMeId
-            ? (string) (MasterEducation::query()->whereKey($viewerMeId)->value('name') ?? $viewer->highest_education)
-            : (string) ($viewer->highest_education ?: __('preference_match.value_unknown'));
-
-        if ($masterEducationIds === []) {
-            return self::row('education', __('preference_match.field_education'), $their, $yours, self::STRICT_OPEN, self::STATUS_FLEXIBLE, __('preference_match.reason_pref_open'));
+        $viewerDegreeId = self::resolveViewerPrimaryDegreeId($viewer);
+        $viewerDegree = $viewerDegreeId ? EducationDegree::query()->find($viewerDegreeId) : null;
+        $yours = $viewerDegree
+            ? (string) ($viewerDegree->title ?? '')
+            : trim((string) ($viewer->highest_education ?? ''));
+        if ($yours === '') {
+            $yours = __('preference_match.value_unknown');
         }
-        if ($viewerMeId === null) {
+
+        if ($viewerDegreeId === null) {
             return self::row('education', __('preference_match.field_education'), $their, $yours, self::STRICT_PREFERRED, self::STATUS_UNKNOWN, __('preference_match.reason_education_not_mapped'));
         }
-        if (in_array($viewerMeId, $masterEducationIds, true)) {
+
+        if (in_array($viewerDegreeId, $degreeIds, true)) {
             return self::row('education', __('preference_match.field_education'), $their, $yours, self::STRICT_PREFERRED, self::STATUS_MATCH, null);
         }
 
-        $vSort = (int) (MasterEducation::query()->whereKey($viewerMeId)->value('sort_order') ?? 0);
-        $minPrefSort = (int) MasterEducation::query()->whereIn('id', $masterEducationIds)->min('sort_order');
+        $vSort = (int) ($viewerDegree->sort_order ?? 0);
+        $minPrefSort = (int) EducationDegree::query()->whereIn('id', $degreeIds)->min('sort_order');
         if ($vSort > 0 && $minPrefSort > 0 && $vSort >= $minPrefSort - 1) {
             return self::row('education', __('preference_match.field_education'), $their, $yours, self::STRICT_PREFERRED, self::STATUS_FLEXIBLE, __('preference_match.reason_education_close'));
         }
@@ -460,50 +514,45 @@ class ProfilePreferenceMatchService
         return self::row('education', __('preference_match.field_education'), $their, $yours, self::STRICT_PREFERRED, self::STATUS_FLEXIBLE, __('preference_match.reason_education_not_listed'));
     }
 
-    private static function resolveViewerMasterEducationId(MatrimonyProfile $viewer): ?int
+    /**
+     * @param  array<string, mixed>  $pref
+     * @return array<string, mixed>
+     */
+    private static function rowProfession(MatrimonyProfile $viewer, array $pref): array
     {
-        $raw = trim((string) ($viewer->highest_education ?? ''));
-        if ($raw === '') {
-            return null;
-        }
-        $lower = mb_strtolower($raw);
-        $bestId = null;
-        $bestOrder = -1;
-        foreach (MasterEducation::query()->where('is_active', true)->orderBy('sort_order')->get(['id', 'name', 'sort_order']) as $me) {
-            $name = mb_strtolower((string) $me->name);
-            if ($name !== '' && (str_contains($lower, $name) || str_contains($name, $lower))) {
-                $so = (int) $me->sort_order;
-                if ($so >= $bestOrder) {
-                    $bestOrder = $so;
-                    $bestId = (int) $me->id;
-                }
-            }
-        }
+        $occIds = array_map('intval', $pref['occupation_master_ids'] ?? []);
 
-        return $bestId;
+        return self::rowOccupationMasterPreferences($viewer, $occIds);
     }
 
     /**
-     * @param  array<int, int>  $professionIds
+     * @param  array<int, int>  $occupationMasterIds
      * @return array<string, mixed>
      */
-    private static function rowProfession(MatrimonyProfile $viewer, array $professionIds): array
+    private static function rowOccupationMasterPreferences(MatrimonyProfile $viewer, array $occupationMasterIds): array
     {
-        $their = self::labelsForIds('professions', $professionIds, 'name');
+        $occupationMasterIds = array_values(array_unique(array_filter($occupationMasterIds, fn ($id) => (int) $id > 0)));
+        $their = self::labelsForIds('occupation_master', $occupationMasterIds, 'name');
         if ($their === '') {
             $their = __('preference_match.open_to_all');
         }
-        $yours = $viewer->profession_id
-            ? (string) ($viewer->profession?->name ?? DB::table('professions')->where('id', $viewer->profession_id)->value('name') ?? __('preference_match.value_unknown'))
-            : __('preference_match.value_unknown');
 
-        if (! $viewer->profession_id) {
-            return self::row('profession', __('preference_match.field_profession'), $their, $yours, self::STRICT_OPEN, self::STATUS_UNKNOWN, __('preference_match.reason_missing_profession'));
+        $viewer->loadMissing(['occupationMaster', 'profession']);
+        $viewerOccId = isset($viewer->occupation_master_id) ? (int) $viewer->occupation_master_id : null;
+        $yours = $viewerOccId
+            ? (string) (OccupationMaster::query()->whereKey($viewerOccId)->value('name') ?? $viewer->occupationMaster?->name ?? '')
+            : (string) ($viewer->profession?->name ?? '');
+        if ($yours === '') {
+            $yours = __('preference_match.value_unknown');
         }
-        if ($professionIds === []) {
+
+        if ($viewerOccId === null || $viewerOccId <= 0) {
+            return self::row('profession', __('preference_match.field_profession'), $their, $yours, self::STRICT_PREFERRED, self::STATUS_UNKNOWN, __('preference_match.reason_missing_profession'));
+        }
+        if ($occupationMasterIds === []) {
             return self::row('profession', __('preference_match.field_profession'), $their, $yours, self::STRICT_OPEN, self::STATUS_FLEXIBLE, __('preference_match.reason_pref_open'));
         }
-        if (in_array((int) $viewer->profession_id, $professionIds, true)) {
+        if (in_array($viewerOccId, $occupationMasterIds, true)) {
             return self::row('profession', __('preference_match.field_profession'), $their, $yours, self::STRICT_PREFERRED, self::STATUS_MATCH, null);
         }
 

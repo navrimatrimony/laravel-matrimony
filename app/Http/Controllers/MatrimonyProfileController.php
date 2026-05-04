@@ -6,6 +6,7 @@ use App\Models\Caste;
 use App\Models\City;
 use App\Models\Country;
 use App\Models\District;
+use App\Models\EducationCategory;
 use App\Models\FieldRegistry;
 use App\Models\Interest;
 use App\Models\MasterMaritalStatus;
@@ -201,7 +202,7 @@ class MatrimonyProfileController extends Controller
         $core = [];
         $coreKeys = [
             'full_name', 'date_of_birth', 'gender_id', 'marital_status_id', 'highest_education',
-            'country_id', 'state_id', 'district_id', 'taluka_id', 'city_id',
+            'location_id', 'address_line',
             'religion_id', 'caste_id', 'sub_caste_id', 'height_cm', 'profile_photo', 'serious_intent_id',
             'photo_approved', 'photo_rejected_at', 'photo_rejection_reason', 'is_suspended',
         ];
@@ -228,16 +229,6 @@ class MatrimonyProfileController extends Controller
                 $core[$key] = $val === '' ? null : $val;
             }
         }
-        if ($request->has('country_id') || $request->has('state_id') || $request->has('city_id')) {
-            if (isset($enabledMap['location'])) {
-                $core['country_id'] = $core['country_id'] ?? $request->input('country_id');
-                $core['state_id'] = $core['state_id'] ?? $request->input('state_id');
-                $core['district_id'] = $core['district_id'] ?? $request->input('district_id');
-                $core['taluka_id'] = $core['taluka_id'] ?? $request->input('taluka_id');
-                $core['city_id'] = $core['city_id'] ?? $request->input('city_id');
-            }
-        }
-
         $contacts = [];
         if ($request->has('primary_contact_phone') || $request->has('primary_contact_number')) {
             $phone = trim((string) ($request->input('primary_contact_phone') ?? $request->input('primary_contact_number') ?? ''));
@@ -1094,6 +1085,7 @@ class MatrimonyProfileController extends Controller
             'district',
             'state',
             'country',
+            'location',
             'profession',
             'workingWithType',
             'motherTongue',
@@ -1107,17 +1099,14 @@ class MatrimonyProfileController extends Controller
         $preferredReligionIds = \Illuminate\Support\Facades\DB::table('profile_preferred_religions')->where('profile_id', $profile->id)->pluck('religion_id')->all();
         $preferredCasteIds = \Illuminate\Support\Facades\DB::table('profile_preferred_castes')->where('profile_id', $profile->id)->pluck('caste_id')->all();
         $preferredDistrictIds = \Illuminate\Support\Facades\DB::table('profile_preferred_districts')->where('profile_id', $profile->id)->pluck('district_id')->all();
-        $preferredMasterEducationIds = Schema::hasTable('profile_preferred_master_education')
-            ? \Illuminate\Support\Facades\DB::table('profile_preferred_master_education')->where('profile_id', $profile->id)->pluck('master_education_id')->all()
+        $preferredEducationDegreeIds = Schema::hasTable('profile_preferred_education_degrees')
+            ? \Illuminate\Support\Facades\DB::table('profile_preferred_education_degrees')->where('profile_id', $profile->id)->pluck('education_degree_id')->map(fn ($id) => (int) $id)->all()
+            : [];
+        $preferredOccupationMasterIds = Schema::hasTable('profile_preferred_occupation_master')
+            ? \Illuminate\Support\Facades\DB::table('profile_preferred_occupation_master')->where('profile_id', $profile->id)->pluck('occupation_master_id')->map(fn ($id) => (int) $id)->all()
             : [];
         $preferredDietIds = Schema::hasTable('profile_preferred_diets')
             ? \Illuminate\Support\Facades\DB::table('profile_preferred_diets')->where('profile_id', $profile->id)->pluck('diet_id')->all()
-            : [];
-        $preferredProfessionIds = Schema::hasTable('profile_preferred_professions')
-            ? \Illuminate\Support\Facades\DB::table('profile_preferred_professions')->where('profile_id', $profile->id)->pluck('profession_id')->all()
-            : [];
-        $preferredWorkingWithTypeIds = Schema::hasTable('profile_preferred_working_with_types')
-            ? \Illuminate\Support\Facades\DB::table('profile_preferred_working_with_types')->where('profile_id', $profile->id)->pluck('working_with_type_id')->all()
             : [];
         $preferredMaritalStatusIds = Schema::hasTable('profile_preferred_marital_statuses')
             ? \Illuminate\Support\Facades\DB::table('profile_preferred_marital_statuses')->where('profile_id', $profile->id)->pluck('marital_status_id')->map(fn ($id) => (int) $id)->all()
@@ -1410,10 +1399,9 @@ class MatrimonyProfileController extends Controller
             'preferred_religion_ids' => $preferredReligionIds,
             'preferred_caste_ids' => $preferredCasteIds,
             'preferred_district_ids' => $preferredDistrictIds,
-            'preferred_master_education_ids' => $preferredMasterEducationIds,
+            'preferred_education_degree_ids' => $preferredEducationDegreeIds,
+            'preferred_occupation_master_ids' => $preferredOccupationMasterIds,
             'preferred_diet_ids' => $preferredDietIds,
-            'preferred_profession_ids' => $preferredProfessionIds,
-            'preferred_working_with_type_ids' => $preferredWorkingWithTypeIds,
             'preferred_marital_status_ids' => $preferredMaritalStatusIds,
             'extended_attributes' => $extendedAttributes,
             'extended_values' => $extendedValues,
@@ -1452,10 +1440,9 @@ class MatrimonyProfileController extends Controller
                 'preferredReligionIds' => $preferredReligionIds,
                 'preferredCasteIds' => $preferredCasteIds,
                 'preferredDistrictIds' => $preferredDistrictIds,
-                'preferredMasterEducationIds' => $preferredMasterEducationIds,
+                'preferredEducationDegreeIds' => $preferredEducationDegreeIds,
+                'preferredOccupationMasterIds' => $preferredOccupationMasterIds,
                 'preferredDietIds' => $preferredDietIds,
-                'preferredProfessionIds' => $preferredProfessionIds,
-                'preferredWorkingWithTypeIds' => $preferredWorkingWithTypeIds,
                 'preferredMaritalStatusIds' => $preferredMaritalStatusIds,
                 'completion' => $completion,
                 'profilePhotoVisible' => $profilePhotoVisible,
@@ -1592,6 +1579,7 @@ class MatrimonyProfileController extends Controller
             'district',
             'taluka',
             'city',
+            'location',
             'gender',
             'maritalStatus',
             'religion',
@@ -1626,7 +1614,7 @@ class MatrimonyProfileController extends Controller
             return $listedProfile;
         }));
 
-        // Lookup lists for filter controls (read-only; same keys as request inputs above)
+        // Lookup lists for filter controls (read-only; `address*` collections are rows from `addresses` via typed models)
         $locationLookups = $this->buildProfileSearchLocationLookups($request);
         $religions = Religion::query()
             ->where(function ($q) {
@@ -1656,6 +1644,16 @@ class MatrimonyProfileController extends Controller
         $seriousIntents = SeriousIntent::query()
             ->orderBy('name')
             ->get();
+        $educationCategoriesForSearch = EducationCategory::query()
+            ->where(function ($q) {
+                $q->whereNull('is_active')->orWhere('is_active', true);
+            })
+            ->orderBy('sort_order')
+            ->orderBy('name')
+            ->with(['degrees' => function ($q) {
+                $q->orderBy('sort_order')->orderBy('title');
+            }])
+            ->get();
         $maritalStatuses = MasterMaritalStatus::query()
             ->where('is_active', true)
             ->orderBy('id')
@@ -1677,7 +1675,8 @@ class MatrimonyProfileController extends Controller
             'seriousIntents',
             'maritalStatuses',
             'resolvedMaritalStatusId',
-            'sort'
+            'sort',
+            'educationCategoriesForSearch'
         ), $locationLookups, [
             'canAdvancedProfileSearch' => (bool) $request->attributes->get('advanced_profile_search', false),
         ]));
@@ -1782,54 +1781,54 @@ class MatrimonyProfileController extends Controller
         $listDistrictId = $hintDistrict;
         $listTalukaId = $hintTaluka;
 
-        $countries = Country::query()->orderBy('name')->get();
+        $addressCountries = Country::query()->orderBy('name')->get();
 
-        $states = collect();
+        $addressStates = collect();
         if ($listCountryId) {
-            $states = State::query()->where('country_id', $listCountryId)->orderBy('name')->get();
+            $addressStates = State::query()->where('parent_id', $listCountryId)->orderBy('name')->get();
         } elseif ($listStateId) {
             $st = State::query()->find($listStateId);
             if ($st) {
-                $states = State::query()->where('country_id', $st->country_id)->orderBy('name')->get();
+                $addressStates = State::query()->where('parent_id', (int) $st->parent_id)->orderBy('name')->get();
             }
         }
 
-        $districts = collect();
+        $addressDistricts = collect();
         if ($listStateId) {
-            $districts = District::query()->where('state_id', $listStateId)->orderBy('name')->get();
+            $addressDistricts = District::query()->where('parent_id', $listStateId)->orderBy('name')->get();
         } elseif ($listDistrictId) {
             $d = District::query()->find($listDistrictId);
             if ($d) {
-                $districts = District::query()->where('state_id', $d->state_id)->orderBy('name')->get();
+                $addressDistricts = District::query()->where('parent_id', (int) $d->parent_id)->orderBy('name')->get();
             }
         }
 
-        $talukas = collect();
+        $addressTalukas = collect();
         if ($listDistrictId) {
-            $talukas = Taluka::query()->where('district_id', $listDistrictId)->orderBy('name')->get();
+            $addressTalukas = Taluka::query()->where('parent_id', $listDistrictId)->orderBy('name')->get();
         } elseif ($listTalukaId) {
             $t = Taluka::query()->find($listTalukaId);
             if ($t) {
-                $talukas = Taluka::query()->where('district_id', $t->district_id)->orderBy('name')->get();
+                $addressTalukas = Taluka::query()->where('parent_id', (int) $t->parent_id)->orderBy('name')->get();
             }
         }
 
-        $cities = collect();
+        $addressCities = collect();
         if ($listTalukaId) {
-            $cities = City::query()->where('taluka_id', $listTalukaId)->orderBy('name')->get();
+            $addressCities = City::query()->where('parent_id', $listTalukaId)->orderBy('name')->get();
         } elseif ($hintCity) {
             $c = City::query()->find($hintCity);
             if ($c) {
-                $cities = City::query()->where('taluka_id', $c->taluka_id)->orderBy('name')->get();
+                $addressCities = City::query()->where('parent_id', (int) $c->parent_id)->orderBy('name')->get();
             }
         }
 
         return [
-            'countries' => $countries,
-            'states' => $states,
-            'districts' => $districts,
-            'talukas' => $talukas,
-            'cities' => $cities,
+            'addressCountries' => $addressCountries,
+            'addressStates' => $addressStates,
+            'addressDistricts' => $addressDistricts,
+            'addressTalukas' => $addressTalukas,
+            'addressCities' => $addressCities,
             'locationDisplayCountryId' => $displayCountryId,
             'locationDisplayStateId' => $displayStateId,
             'locationDisplayDistrictId' => $displayDistrictId,

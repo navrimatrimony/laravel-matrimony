@@ -9,8 +9,8 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
 /**
- * Backfill matrimony_profiles.education_degree_id / education_text from legacy columns
- * and optional educations master rows. Run after add_education_degree_columns migration.
+ * Historical: backfilled matrimony_profiles FK/text columns from legacy data.
+ * After consolidation, own qualification lives only in {@see MatrimonyProfile::$highest_education}.
  */
 class MigrateEducationToDegreesCommand extends Command
 {
@@ -21,9 +21,9 @@ class MigrateEducationToDegreesCommand extends Command
     public function handle(EducationService $educationService): int
     {
         if (! Schema::hasColumn('matrimony_profiles', 'education_degree_id')) {
-            $this->error('Run migrations first (education_degree_id column missing).');
+            $this->info('Own education is stored only in highest_education; education_degree_id was removed. Nothing to migrate.');
 
-            return self::FAILURE;
+            return self::SUCCESS;
         }
 
         $force = (bool) $this->option('force');

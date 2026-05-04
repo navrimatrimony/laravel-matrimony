@@ -49,11 +49,11 @@ return new class extends Migration
         });
 
         Schema::table('profile_addresses', function (Blueprint $table) {
-            $table->foreign('country_id')->references('id')->on('countries')->nullOnDelete();
-            $table->foreign('state_id')->references('id')->on('states')->nullOnDelete();
-            $table->foreign('district_id')->references('id')->on('districts')->nullOnDelete();
-            $table->foreign('taluka_id')->references('id')->on('talukas')->nullOnDelete();
-            $table->foreign('city_id')->references('id')->on('cities')->nullOnDelete();
+            $table->foreign('country_id')->references('id')->on('addresses')->nullOnDelete();
+            $table->foreign('state_id')->references('id')->on('addresses')->nullOnDelete();
+            $table->foreign('district_id')->references('id')->on('addresses')->nullOnDelete();
+            $table->foreign('taluka_id')->references('id')->on('addresses')->nullOnDelete();
+            $table->foreign('city_id')->references('id')->on('addresses')->nullOnDelete();
         });
     }
 

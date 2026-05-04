@@ -67,7 +67,7 @@ class RealisticLocationMiniSeeder extends Seeder
             ]
         );
         $maharashtra = State::firstOrCreate([
-            'country_id' => $india->id,
+            'parent_id' => $india->id,
             'name' => 'Maharashtra',
         ]);
         LocationMarathiLabels::applyIfEmpty($maharashtra, $maharashtra->name);
@@ -75,7 +75,7 @@ class RealisticLocationMiniSeeder extends Seeder
         $districtNames = ['Pune', 'Satara', 'Sangli', 'Kolhapur', 'Nashik'];
         foreach ($districtNames as $dIndex => $districtName) {
             $district = District::firstOrCreate([
-                'state_id' => $maharashtra->id,
+                'parent_id' => $maharashtra->id,
                 'name' => $districtName,
             ]);
             LocationMarathiLabels::applyIfEmpty($district, $district->name);
@@ -84,7 +84,7 @@ class RealisticLocationMiniSeeder extends Seeder
             $talukaNames = $this->talukaNamesForDistrict($districtName, $districtNum);
             foreach ($talukaNames as $tIndex => $talukaName) {
                 $taluka = Taluka::firstOrCreate([
-                    'district_id' => $district->id,
+                    'parent_id' => $district->id,
                     'name' => $talukaName,
                 ]);
                 LocationMarathiLabels::applyIfEmpty($taluka, $taluka->name);
@@ -96,7 +96,7 @@ class RealisticLocationMiniSeeder extends Seeder
                     $pincode = str_pad((string) ($basePincode + $v), 6, '0', STR_PAD_LEFT);
                     City::firstOrCreate(
                         [
-                            'taluka_id' => $taluka->id,
+                            'parent_id' => $taluka->id,
                             'name' => $villageName,
                         ],
                         ['pincode' => $pincode]

@@ -312,7 +312,7 @@
                         </select>
                     </div>
                     <div class="md:col-span-2">
-                        @if (\Illuminate\Support\Facades\Schema::hasColumn('matrimony_profiles', 'education_degree_id'))
+                        @if (\Illuminate\Support\Facades\Schema::hasColumn('matrimony_profiles', 'highest_education'))
                             <x-education-multiselect-engine :profile="$matrimonyProfile" form-selector="#admin-profile-edit-form" />
                         @else
                             <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Education</label>
@@ -562,10 +562,8 @@
                 <p class="text-gray-500 text-sm">Location</p>
                 <p class="font-medium text-base whitespace-pre-line">
                     @php
-                        $line1 = trim(implode(', ', array_filter([$matrimonyProfile->city?->name, $matrimonyProfile->taluka?->name])));
-                        $line2 = trim(implode(', ', array_filter([$matrimonyProfile->district?->name, $matrimonyProfile->state?->name])));
-                        $line3 = $matrimonyProfile->country?->name ? trim($matrimonyProfile->country->name) : '';
-                        $locationText = ($line1 || $line2 || $line3) ? implode("\n", array_filter([$line1, $line2, $line3])) : '—';
+                        $locationText = trim(\App\Support\ProfileDisplayCopy::profileResidenceDisplayLine($matrimonyProfile));
+                        $locationText = $locationText !== '' ? $locationText : '—';
                     @endphp
                     {{ $locationText }}
                     @if ($matrimonyProfile->admin_edited_fields && in_array('location', $matrimonyProfile->admin_edited_fields ?? []))

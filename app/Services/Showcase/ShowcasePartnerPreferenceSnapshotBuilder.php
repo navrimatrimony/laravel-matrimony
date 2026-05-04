@@ -177,9 +177,8 @@ class ShowcasePartnerPreferenceSnapshotBuilder
         $p['preferred_state_ids'] = array_values(array_unique(array_filter(array_map('intval', $p['preferred_state_ids'] ?? []))));
         $p['preferred_district_ids'] = array_values(array_unique(array_filter(array_map('intval', $p['preferred_district_ids'] ?? []))));
         $p['preferred_taluka_ids'] = array_values(array_unique(array_filter(array_map('intval', $p['preferred_taluka_ids'] ?? []))));
-        $p['preferred_master_education_ids'] = array_values(array_unique(array_filter(array_map('intval', $p['preferred_master_education_ids'] ?? []))));
-        $p['preferred_working_with_type_ids'] = array_values(array_unique(array_filter(array_map('intval', $p['preferred_working_with_type_ids'] ?? []))));
-        $p['preferred_profession_ids'] = array_values(array_unique(array_filter(array_map('intval', $p['preferred_profession_ids'] ?? []))));
+        $p['preferred_education_degree_ids'] = array_values(array_unique(array_filter(array_map('intval', $p['preferred_education_degree_ids'] ?? []))));
+        $p['preferred_occupation_master_ids'] = array_values(array_unique(array_filter(array_map('intval', $p['preferred_occupation_master_ids'] ?? []))));
         $p['preferred_diet_ids'] = array_values(array_unique(array_filter(array_map('intval', $p['preferred_diet_ids'] ?? []))));
         $p['preferred_marital_status_ids'] = array_values(array_unique(array_filter(array_map('intval', $p['preferred_marital_status_ids'] ?? []))));
 

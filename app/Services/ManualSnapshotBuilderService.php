@@ -74,12 +74,13 @@ class ManualSnapshotBuilderService
         $core['mother_contact_2'] = trim((string) ($request->input('mother_contact_2') ?? '')) ?: null;
         $core['mother_contact_3'] = trim((string) ($request->input('mother_contact_3') ?? '')) ?: null;
         $core['family_type_id'] = $request->input('family_type_id') ? (int) $request->input('family_type_id') : null;
-        $core['country_id'] = $request->input('country_id') ?: null;
-        $core['state_id'] = $request->input('state_id') ?: null;
-        $core['district_id'] = $request->input('district_id') ?: null;
-        $core['taluka_id'] = $request->input('taluka_id') ?: null;
-        $core['location_id'] = $request->input('location_id') ?: null;
-        $core['address_line'] = $request->filled('address_line') ? trim($request->input('address_line')) : null;
+        $core['country_id'] = ($v = $this->rawCoreInput($request, 'country_id')) !== null && $v !== '' ? $v : null;
+        $core['state_id'] = ($v = $this->rawCoreInput($request, 'state_id')) !== null && $v !== '' ? $v : null;
+        $core['district_id'] = ($v = $this->rawCoreInput($request, 'district_id')) !== null && $v !== '' ? $v : null;
+        $core['taluka_id'] = ($v = $this->rawCoreInput($request, 'taluka_id')) !== null && $v !== '' ? $v : null;
+        $core['location_id'] = ($v = $this->rawCoreInput($request, 'location_id')) !== null && $v !== '' ? $v : null;
+        $addrRaw = $this->rawCoreInput($request, 'address_line');
+        $core['address_line'] = $addrRaw !== null && trim((string) $addrRaw) !== '' ? trim((string) $addrRaw) : null;
         $core['work_city_id'] = $request->input('work_city_id') ?: null;
         $core['work_state_id'] = $request->input('work_state_id') ?: null;
         if (Schema::hasColumn('matrimony_profiles', 'work_location_text')) {
@@ -229,12 +230,12 @@ class ManualSnapshotBuilderService
         }
 
         $birth_place = null;
-        if ($request->has('birth_city_id') || $request->has('birth_state_id')) {
+        if ($request->has('birth_city_id')) {
             $birth_place = [
                 'city_id' => $request->input('birth_city_id') ? (int) $request->input('birth_city_id') : null,
-                'taluka_id' => $request->input('birth_taluka_id') ? (int) $request->input('birth_taluka_id') : null,
-                'district_id' => $request->input('birth_district_id') ? (int) $request->input('birth_district_id') : null,
-                'state_id' => $request->input('birth_state_id') ? (int) $request->input('birth_state_id') : null,
+                'taluka_id' => null,
+                'district_id' => null,
+                'state_id' => null,
             ];
         }
 
@@ -365,6 +366,23 @@ class ManualSnapshotBuilderService
             'extended_narrative' => $extended_narrative,
             'marriages' => $marriages,
         ];
+    }
+
+    /**
+     * Read one core scalar from intake-style {@code snapshot[core][key]}, wizard {@code core[key]}, or flat {@code key}.
+     * Intake preview and prefixed wizard sections post nested names; flat keys are used for single-section wizard saves.
+     *
+     * @return mixed|null Null when the key is absent from all three shapes (not the same as an explicit empty string).
+     */
+    private function rawCoreInput(Request $request, string $key): mixed
+    {
+        foreach (['snapshot.core.'.$key, 'core.'.$key, $key] as $path) {
+            if ($request->exists($path)) {
+                return $request->input($path);
+            }
+        }
+
+        return null;
     }
 
     /**

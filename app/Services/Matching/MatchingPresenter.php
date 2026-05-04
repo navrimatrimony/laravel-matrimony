@@ -6,6 +6,7 @@ use App\Models\MatrimonyProfile;
 use App\Models\User;
 use App\Services\MatchingEngine;
 use App\Services\RuleEngineService;
+use App\Support\ProfileDisplayCopy;
 use Carbon\Carbon;
 
 /**
@@ -183,11 +184,12 @@ class MatchingPresenter
     {
         $cg = [];
         if (($breakdown[MatchingEngine::RULE_MATCHING_LOCATION] ?? 0) > 0) {
+            $viewedLocationLine = trim(ProfileDisplayCopy::profileResidenceDisplayLine($viewed));
             $cg[] = [
                 'field' => 'location',
                 'label' => 'Location',
                 'icon' => '📍',
-                'value' => $viewed->city_id ? (string) ($viewed->city?->name ?? '—') : (string) ($viewed->state?->name ?? '—'),
+                'value' => $viewedLocationLine !== '' ? $viewedLocationLine : ($viewed->city_id ? (string) ($viewed->city?->name ?? '—') : (string) ($viewed->state?->name ?? '—')),
             ];
         }
         if (($breakdown[MatchingEngine::RULE_MATCHING_EDUCATION] ?? 0) > 0) {
@@ -301,8 +303,14 @@ class MatchingPresenter
             $addRow('Career & location', 'Occupation', $theirOccupation, $yourOccupation, $status);
         }
 
-        $viewerLocation = implode(', ', array_filter([$viewer->city?->name, $viewer->state?->name]));
-        $viewedLocation = implode(', ', array_filter([$viewed->city?->name, $viewed->state?->name]));
+        $viewerLocation = trim(ProfileDisplayCopy::profileResidenceDisplayLine($viewer));
+        $viewedLocation = trim(ProfileDisplayCopy::profileResidenceDisplayLine($viewed));
+        if ($viewerLocation === '') {
+            $viewerLocation = implode(', ', array_filter([$viewer->city?->name, $viewer->state?->name]));
+        }
+        if ($viewedLocation === '') {
+            $viewedLocation = implode(', ', array_filter([$viewed->city?->name, $viewed->state?->name]));
+        }
         if ($viewedLocation !== '' || $viewerLocation !== '') {
             $sameCity = ($viewed->city_id && $viewer->city_id) ? ((int) $viewed->city_id === (int) $viewer->city_id) : false;
             $sameState = ($viewed->state_id && $viewer->state_id) ? ((int) $viewed->state_id === (int) $viewer->state_id) : false;

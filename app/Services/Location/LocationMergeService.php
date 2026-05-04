@@ -8,7 +8,6 @@ use App\Models\LocationOpenPlaceSuggestion;
 use App\Models\LocationSuggestionApprovalPattern;
 use App\Models\LocationUsageStat;
 use App\Models\MatrimonyProfile;
-use App\Models\Pincode;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
@@ -77,33 +76,19 @@ class LocationMergeService
 
     private function rewritePinCodes(int $sourceId, int $targetId): void
     {
-        if (! Schema::hasTable('pincodes')) {
+        $source = Location::query()->whereKey($sourceId)->first();
+        $target = Location::query()->whereKey($targetId)->first();
+        if ($source === null || $target === null) {
             return;
         }
 
-        foreach (Pincode::query()->where('place_id', $sourceId)->cursor() as $pin) {
-            $existing = Pincode::query()
-                ->where('place_id', $targetId)
-                ->where('pincode', $pin->pincode)
-                ->first();
-
-            if ($existing !== null) {
-                if ($existing->latitude === null && $pin->latitude !== null) {
-                    $existing->latitude = $pin->latitude;
-                }
-                if ($existing->longitude === null && $pin->longitude !== null) {
-                    $existing->longitude = $pin->longitude;
-                }
-                if (! $existing->is_primary && $pin->is_primary) {
-                    $existing->is_primary = true;
-                }
-                $existing->save();
-                $pin->delete();
-            } else {
-                $pin->place_id = $targetId;
-                $pin->save();
+        foreach (['pincode', 'latitude', 'longitude'] as $col) {
+            if (($target->{$col} ?? null) === null && ($source->{$col} ?? null) !== null) {
+                $target->{$col} = $source->{$col};
             }
         }
+
+        $target->save();
     }
 
     private function mergeAliases(int $sourceId, int $targetId): void

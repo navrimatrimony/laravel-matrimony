@@ -3,8 +3,8 @@
 namespace App\Services;
 
 use App\Models\City;
-use App\Models\CityAlias;
 use App\Models\District;
+use App\Models\LocationAlias;
 use App\Models\State;
 use App\Models\Village;
 use App\Services\Location\LocationDisplayFormatter;
@@ -30,8 +30,7 @@ class LocationSearchService
         array $preferredStateIds = [],
         array $preferredDistrictIds = [],
         bool $applyAmbiguousRanking = false
-    ): array
-    {
+    ): array {
         $q = strtolower(trim($query));
         $queryTrimmed = trim($query);
         if ($q === '') {
@@ -127,15 +126,19 @@ class LocationSearchService
             ];
         }
 
-        $aliasPrefix = CityAlias::query()
+        $aliasPrefix = LocationAlias::query()
             ->where('is_active', true)
             ->where('normalized_alias', 'like', $q.'%')
-            ->with($this->aliasCityEagerLoad())
+            ->with(['location'])
             ->orderBy('normalized_alias')
             ->limit($maxResults)
             ->get();
         foreach ($aliasPrefix as $alias) {
-            $city = $alias->city;
+            $loc = $alias->location;
+            if ($loc === null || $loc->type !== 'city') {
+                continue;
+            }
+            $city = City::query()->with($this->cityWithRelations())->find($loc->id);
             if (! $city || isset($seen[$city->id])) {
                 continue;
             }
@@ -151,15 +154,19 @@ class LocationSearchService
             ];
         }
 
-        $aliasPartial = CityAlias::query()
+        $aliasPartial = LocationAlias::query()
             ->where('is_active', true)
             ->where('normalized_alias', 'like', '%'.$q.'%')
-            ->with($this->aliasCityEagerLoad())
+            ->with(['location'])
             ->orderBy('normalized_alias')
             ->limit($maxResults)
             ->get();
         foreach ($aliasPartial as $alias) {
-            $city = $alias->city;
+            $loc = $alias->location;
+            if ($loc === null || $loc->type !== 'city') {
+                continue;
+            }
+            $city = City::query()->with($this->cityWithRelations())->find($loc->id);
             if (! $city || isset($seen[$city->id])) {
                 continue;
             }
@@ -222,13 +229,13 @@ class LocationSearchService
                 break;
             }
 
-            $key = $village->taluka_id.'|'.strtolower(trim((string) $village->name_en));
+            $key = $village->parent_id.'|'.strtolower(trim((string) $village->name_en));
             if (isset($cityCache[$key])) {
                 $city = $cityCache[$key];
             } else {
                 $city = City::query()
                     ->with($this->cityWithRelations())
-                    ->where('taluka_id', $village->taluka_id)
+                    ->where('parent_id', $village->parent_id)
                     ->whereRaw('LOWER(name) = ?', [strtolower(trim((string) $village->name_en))])
                     ->first();
                 $cityCache[$key] = $city;
@@ -457,14 +464,14 @@ class LocationSearchService
         }
 
         $cityRankWith = ['taluka.district.state'];
-        if (Schema::hasTable('city_display_meta')) {
+        if (Schema::hasTable('location_display_meta')) {
             $cityRankWith[] = 'displayMeta';
         }
 
         $cities = City::query()
             ->with($cityRankWith)
             ->whereIn('id', $cityIds)
-            ->get(['id', 'name', 'taluka_id', 'parent_city_id']);
+            ->get(['id', 'name', 'parent_id', 'parent_city_id']);
 
         $signalByCityId = [];
         $talukaIds = [];
@@ -478,23 +485,23 @@ class LocationSearchService
                 'is_taluka_hq' => ($cityNameKey !== '' && $cityNameKey === $talukaNameKey),
                 'has_parent_city' => $city->parent_city_id !== null,
                 'state_name_key' => $stateNameKey,
-                'taluka_id' => (int) ($city->taluka_id ?? 0),
+                'taluka_id' => (int) ($city->parent_id ?? 0),
                 'city_name_key' => $cityNameKey,
                 'is_village' => false,
             ];
-            if ((int) ($city->taluka_id ?? 0) > 0) {
-                $talukaIds[] = (int) $city->taluka_id;
+            if ((int) ($city->parent_id ?? 0) > 0) {
+                $talukaIds[] = (int) $city->parent_id;
             }
             if ($cityNameKey !== '') {
                 $cityNameKeys[] = $cityNameKey;
             }
         }
 
-        $aliasExactCityIds = CityAlias::query()
-            ->whereIn('city_id', $cityIds)
+        $aliasExactCityIds = LocationAlias::query()
+            ->whereIn('location_id', $cityIds)
             ->where('is_active', true)
             ->whereIn('normalized_alias', [$queryKey, str_replace(' ', '', $queryKey)])
-            ->pluck('city_id')
+            ->pluck('location_id')
             ->map(static fn ($id) => (int) $id)
             ->unique()
             ->values()
@@ -505,13 +512,13 @@ class LocationSearchService
         $cityNameKeys = array_values(array_unique(array_filter($cityNameKeys, static fn (string $v) => $v !== '')));
         if ($talukaIds !== [] && $cityNameKeys !== []) {
             $villages = Village::query()
-                ->whereIn('taluka_id', $talukaIds)
+                ->whereIn('parent_id', $talukaIds)
                 ->whereIn(\Illuminate\Support\Facades\DB::raw('LOWER(TRIM(name_en))'), $cityNameKeys)
-                ->get(['taluka_id', 'name_en']);
+                ->get(['parent_id', 'name_en']);
             foreach ($villages as $village) {
-                $k = ((int) $village->taluka_id).'|'.$this->rankKey((string) $village->name_en);
+                $k = ((int) $village->parent_id).'|'.$this->rankKey((string) $village->name_en);
                 foreach ($signalByCityId as $cid => $sig) {
-                    if (($sig['taluka_id'] ?? 0) === (int) $village->taluka_id
+                    if (($sig['taluka_id'] ?? 0) === (int) $village->parent_id
                         && ($sig['city_name_key'] ?? '') === $this->rankKey((string) $village->name_en)) {
                         $signalByCityId[$cid]['is_village'] = true;
                     }
@@ -612,6 +619,7 @@ class LocationSearchService
             if ($a['city_id'] !== $b['city_id']) {
                 return $a['city_id'] <=> $b['city_id'];
             }
+
             return $a['idx'] <=> $b['idx'];
         });
 
@@ -697,7 +705,7 @@ class LocationSearchService
         $cityName = $city->name ?? '';
         if ($locale === 'mr') {
             static $villageCache = [];
-            $cacheKey = $city->taluka_id.'|'.strtolower(trim((string) $city->name));
+            $cacheKey = $city->parent_id.'|'.strtolower(trim((string) $city->name));
             if (array_key_exists($cacheKey, $villageCache)) {
                 $cached = $villageCache[$cacheKey];
                 if ($cached !== null) {
@@ -705,7 +713,7 @@ class LocationSearchService
                 }
             } else {
                 $match = Village::query()
-                    ->where('taluka_id', $city->taluka_id)
+                    ->where('parent_id', $city->parent_id)
                     ->whereRaw('LOWER(name_en) = ?', [strtolower(trim((string) $city->name))])
                     ->first();
                 $villageCache[$cacheKey] = $match && $match->name_mr ? $match->name_mr : null;
@@ -739,24 +747,8 @@ class LocationSearchService
     private function cityWithRelations(): array
     {
         $relations = ['taluka.district.state.country', 'parentCity'];
-        if (Schema::hasTable('city_display_meta')) {
+        if (Schema::hasTable('location_display_meta')) {
             $relations[] = 'displayMeta';
-        }
-
-        return $relations;
-    }
-
-    /**
-     * @return array<int, string>
-     */
-    private function aliasCityEagerLoad(): array
-    {
-        $relations = [
-            'city.taluka.district.state.country',
-            'city.parentCity',
-        ];
-        if (Schema::hasTable('city_display_meta')) {
-            $relations[] = 'city.displayMeta';
         }
 
         return $relations;

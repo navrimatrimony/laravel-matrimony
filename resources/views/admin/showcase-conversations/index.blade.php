@@ -24,7 +24,7 @@
                         $p2 = $profiles[$c->profile_two_id] ?? null;
                         $showcase = ($p1 && $p1->isShowcaseProfile()) ? $p1 : (($p2 && $p2->isShowcaseProfile()) ? $p2 : null);
                         $other = ($showcase && (int) $showcase->id === (int) ($p1?->id ?? 0)) ? $p2 : $p1;
-                        $state = ($states[$c->id] ?? collect())->firstWhere('showcase_profile_id', $showcase?->id);
+                        $state = ($conversationStatesById[$c->id] ?? collect())->firstWhere('showcase_profile_id', $showcase?->id);
                     @endphp
                     <tr>
                         <td class="py-3 pr-4 text-gray-800 dark:text-gray-200">#{{ $c->id }}</td>

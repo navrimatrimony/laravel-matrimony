@@ -36,16 +36,8 @@ class AdminEducationOccupationController extends Controller
             $categorySortBy = 'sort_order';
         }
 
+        // Profiles store qualification as free-text {@see matrimony_profiles.highest_education}; per-degree counts need LIKE scans — omit for list performance.
         $educationUsageCounts = [];
-        if (Schema::hasTable('matrimony_profiles') && Schema::hasColumn('matrimony_profiles', 'education_degree_id')) {
-            $educationUsageCounts = DB::table('matrimony_profiles')
-                ->whereNotNull('education_degree_id')
-                ->select('education_degree_id', DB::raw('COUNT(*) as total'))
-                ->groupBy('education_degree_id')
-                ->pluck('total', 'education_degree_id')
-                ->map(fn ($v) => (int) $v)
-                ->all();
-        }
 
         $educationCategories = EducationCategory::query()
             ->with(['degrees' => fn ($q) => $q
@@ -390,10 +382,36 @@ class AdminEducationOccupationController extends Controller
         $replacementId = (int) $data['replacement_degree_id'];
 
         DB::transaction(function () use ($degree, $replacementId) {
-            if (Schema::hasTable('matrimony_profiles') && Schema::hasColumn('matrimony_profiles', 'education_degree_id')) {
-                DB::table('matrimony_profiles')
-                    ->where('education_degree_id', $degree->id)
-                    ->update(['education_degree_id' => $replacementId]);
+            if (Schema::hasTable('matrimony_profiles') && Schema::hasColumn('matrimony_profiles', 'highest_education')) {
+                $replacement = \App\Models\EducationDegree::query()->find($replacementId);
+                $newLabel = $replacement ? trim((string) ($replacement->title ?: $replacement->code ?? '')) : '';
+                $oldLabels = array_unique(array_filter(array_map('trim', [
+                    (string) ($degree->title ?? ''),
+                    (string) ($degree->code ?? ''),
+                    (string) ($degree->title_mr ?? ''),
+                    (string) ($degree->code_mr ?? ''),
+                ]), static fn ($s) => $s !== ''));
+
+                \App\Models\MatrimonyProfile::query()
+                    ->where(function ($q) use ($oldLabels): void {
+                        foreach ($oldLabels as $lab) {
+                            $q->orWhere('highest_education', 'like', '%'.addcslashes($lab, '%_\\').'%');
+                        }
+                    })
+                    ->orderBy('id')
+                    ->chunkById(150, function ($profiles) use ($oldLabels, $newLabel): void {
+                        foreach ($profiles as $prof) {
+                            $h = (string) ($prof->highest_education ?? '');
+                            foreach ($oldLabels as $old) {
+                                if ($old === '') {
+                                    continue;
+                                }
+                                $h = str_ireplace($old, $newLabel !== '' ? $newLabel : $old, $h);
+                            }
+                            $prof->highest_education = mb_substr(trim($h), 0, 255);
+                            $prof->saveQuietly();
+                        }
+                    });
             }
 
             $degree->delete();

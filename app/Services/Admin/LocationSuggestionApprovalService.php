@@ -3,7 +3,7 @@
 namespace App\Services\Admin;
 
 use App\Models\City;
-use App\Models\CityAlias;
+use App\Models\LocationAlias;
 use App\Models\LocationSuggestion;
 use Illuminate\Support\Facades\DB;
 
@@ -26,9 +26,9 @@ class LocationSuggestionApprovalService
                 throw new \RuntimeException('Location already exists in canonical data.');
             }
 
-            if (CityAlias::where('normalized_alias', $normalized)
-                ->whereHas('city', function ($q) use ($suggestion) {
-                    $q->where('taluka_id', $suggestion->taluka_id);
+            if (LocationAlias::where('normalized_alias', $normalized)
+                ->whereHas('location', function ($q) use ($suggestion) {
+                    $q->where('parent_id', (int) $suggestion->taluka_id)->where('type', 'city');
                 })
                 ->exists()) {
                 throw new \RuntimeException('Location already exists in canonical data.');

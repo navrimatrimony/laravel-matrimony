@@ -246,21 +246,20 @@ class IntakeControlledFieldNormalizer
         if (($res['confidence'] ?? 0.0) >= 0.80 && $res['matched'] && $res['city_id'] !== null) {
             $cityId = (int) $res['city_id'];
             $core['birth_city_id'] = $cityId;
-            $core['birth_district_id'] = $res['district_id'] ?? null;
-            $core['birth_state_id'] = $res['state_id'] ?? null;
+            $talukaForSnapshot = null;
             if (isset($res['taluka_id']) && $res['taluka_id'] !== null) {
-                $core['birth_taluka_id'] = (int) $res['taluka_id'];
+                $talukaForSnapshot = (int) $res['taluka_id'];
             } else {
                 $city = City::query()->find($cityId);
-                if ($city !== null && $city->taluka_id !== null) {
-                    $core['birth_taluka_id'] = (int) $city->taluka_id;
+                if ($city !== null && $city->parent_id !== null) {
+                    $talukaForSnapshot = (int) $city->parent_id;
                 }
             }
             if (! is_array($snapshot['birth_place'] ?? null)) {
                 $snapshot['birth_place'] = [];
             }
             $snapshot['birth_place']['city_id'] = $cityId;
-            $snapshot['birth_place']['taluka_id'] = $core['birth_taluka_id'] ?? null;
+            $snapshot['birth_place']['taluka_id'] = $talukaForSnapshot;
             $snapshot['birth_place']['district_id'] = $res['district_id'] ?? null;
             $snapshot['birth_place']['state_id'] = $res['state_id'] ?? null;
 
@@ -316,8 +315,8 @@ class IntakeControlledFieldNormalizer
                 $core['native_taluka_id'] = (int) $res['taluka_id'];
             } else {
                 $city = City::query()->find($cityId);
-                if ($city !== null && $city->taluka_id !== null) {
-                    $core['native_taluka_id'] = (int) $city->taluka_id;
+                if ($city !== null && $city->parent_id !== null) {
+                    $core['native_taluka_id'] = (int) $city->parent_id;
                 }
             }
             if (! is_array($snapshot['native_place'] ?? null)) {

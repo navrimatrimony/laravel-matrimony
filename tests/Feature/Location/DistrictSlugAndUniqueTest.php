@@ -59,7 +59,7 @@ class DistrictSlugAndUniqueTest extends TestCase
             'name_mr' => null,
         ]);
 
-        $this->assertSame('mumbai-suburban', District::query()->where('state_id', $mh->id)->where('name', 'Mumbai Suburban')->first()?->slug);
+        $this->assertSame('mumbai-suburban', District::query()->where('parent_id', $mh->id)->where('name', 'Mumbai Suburban')->first()?->slug);
         $this->assertSame('mumbai-suburban-2', $second->fresh()->slug);
     }
 

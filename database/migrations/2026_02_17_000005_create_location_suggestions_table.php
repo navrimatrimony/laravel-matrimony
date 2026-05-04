@@ -23,10 +23,10 @@ return new class extends Migration
             $table->timestamp('admin_reviewed_at')->nullable();
             $table->timestamps();
 
-            $table->foreign('country_id')->references('id')->on('countries')->onDelete('restrict');
-            $table->foreign('state_id')->references('id')->on('states')->onDelete('restrict');
-            $table->foreign('district_id')->references('id')->on('districts')->onDelete('restrict');
-            $table->foreign('taluka_id')->references('id')->on('talukas')->onDelete('restrict');
+            $table->foreign('country_id')->references('id')->on('addresses')->onDelete('restrict');
+            $table->foreign('state_id')->references('id')->on('addresses')->onDelete('restrict');
+            $table->foreign('district_id')->references('id')->on('addresses')->onDelete('restrict');
+            $table->foreign('taluka_id')->references('id')->on('addresses')->onDelete('restrict');
             $table->foreign('suggested_by')->references('id')->on('users')->onDelete('restrict');
             $table->foreign('admin_reviewed_by')->references('id')->on('users')->onDelete('set null');
 

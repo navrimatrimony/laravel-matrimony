@@ -58,7 +58,11 @@ class AdminProfileModerationController extends Controller
     {
         $perPage = (int) $request->input('per_page', 15);
         $perPage = $perPage >= 1 && $perPage <= 100 ? $perPage : 15;
-        $profiles = MatrimonyProfile::withTrashed()->with(['country', 'state', 'district', 'taluka', 'city'])->latest()->paginate($perPage)->withQueryString();
+        $profiles = MatrimonyProfile::withTrashed()
+            ->with(['location', 'country', 'state', 'district', 'taluka', 'city'])
+            ->latest()
+            ->paginate($perPage)
+            ->withQueryString();
 
         return view('admin.profiles.index', compact('profiles'));
     }
@@ -685,7 +689,7 @@ class AdminProfileModerationController extends Controller
         $admin = auth()->user();
 
         $this->adminProfileEditGovernance->mergeMaritalStatusFromLegacyRequest($request);
-        if (\Illuminate\Support\Facades\Schema::hasColumn('matrimony_profiles', 'education_degree_id')) {
+        if (\Illuminate\Support\Facades\Schema::hasColumn('matrimony_profiles', 'highest_education')) {
             app(\App\Services\EducationService::class)->mergeMultiselectEducationIntoRequest($request);
         }
         $originalData = $this->adminProfileEditGovernance->buildOriginalCoreSnapshot($profile);
@@ -700,10 +704,8 @@ class AdminProfileModerationController extends Controller
             $validationRules['date_of_birth'] = 'nullable|date';
             $validationRules['marital_status_id'] = ['nullable', Rule::exists('master_marital_statuses', 'id')->where(fn ($q) => $q->where('is_active', true))];
             $validationRules['highest_education'] = 'nullable|string|max:255';
-            if (\Illuminate\Support\Facades\Schema::hasColumn('matrimony_profiles', 'education_degree_id')) {
+            if (\Illuminate\Support\Facades\Schema::hasColumn('matrimony_profiles', 'highest_education')) {
                 $validationRules['education_slots'] = 'nullable|string|max:8192';
-                $validationRules['education_degree_id'] = ['nullable', 'integer', Rule::exists('education_degrees', 'id')];
-                $validationRules['education_text'] = 'nullable|string|max:512';
             }
             $validationRules['location'] = 'nullable|string|max:255';
             $validationRules['religion_id'] = ['nullable', 'exists:religions,id'];

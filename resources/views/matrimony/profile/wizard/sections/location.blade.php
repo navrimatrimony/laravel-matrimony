@@ -1,8 +1,12 @@
 {{-- Residence / work / native: same CORE keys as ProfileWizardController::buildLocationSnapshot (flat names; optional core[...] via residenceScalarFromRequest). --}}
 @php
-    $residenceDisplay = $residencePlaceDisplay ?? old('wizard_residence_display', $profile->city?->name ?? '');
+    $residenceDisplay = $residencePlaceDisplay ?? old('wizard_residence_display', \App\Models\MatrimonyProfile::residenceLocationDisplayLineFor($profile));
     $workDisplay = $workPlaceDisplay ?? old('wizard_work_place_display', $workCityName ?? '');
     $nativeDisplay = $nativePlaceTypeaheadDisplay ?? old('wizard_native_place_display', $nativePlaceDisplay ?? '');
+    $resHints = ['location_id' => '', 'country_id' => '', 'state_id' => '', 'district_id' => '', 'taluka_id' => ''];
+    if ($profile instanceof \App\Models\MatrimonyProfile) {
+        $resHints = $profile->residenceLocationHierarchyHints();
+    }
 @endphp
 <div class="space-y-8">
     <div>
@@ -26,11 +30,11 @@
                     label=""
                     :noBorder="true"
                     :compactRow="true"
-                    :dataCountryId="$profile->country_id"
-                    :dataStateId="$profile->state_id"
-                    :dataDistrictId="$profile->district_id"
-                    :dataTalukaId="$profile->taluka_id"
-                    :dataCityId="$profile->city_id"
+                    :dataLocationId="$resHints['location_id']"
+                    :dataCountryId="$resHints['country_id']"
+                    :dataStateId="$resHints['state_id']"
+                    :dataDistrictId="$resHints['district_id']"
+                    :dataTalukaId="$resHints['taluka_id']"
                 />
             </div>
         </div>

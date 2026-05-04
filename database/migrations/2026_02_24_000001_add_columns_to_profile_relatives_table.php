@@ -13,10 +13,10 @@ return new class extends Migration
         }
         Schema::table('profile_relatives', function (Blueprint $table) {
             if (! Schema::hasColumn('profile_relatives', 'city_id')) {
-                $table->foreignId('city_id')->nullable()->after('occupation')->constrained('cities')->nullOnDelete();
+                $table->foreignId('city_id')->nullable()->after('occupation')->constrained('addresses')->nullOnDelete();
             }
             if (! Schema::hasColumn('profile_relatives', 'state_id')) {
-                $table->foreignId('state_id')->nullable()->after('city_id')->constrained('states')->nullOnDelete();
+                $table->foreignId('state_id')->nullable()->after('city_id')->constrained('addresses')->nullOnDelete();
             }
             if (! Schema::hasColumn('profile_relatives', 'contact_number')) {
                 $table->string('contact_number')->nullable()->after('state_id');

@@ -9,7 +9,7 @@ use Illuminate\Support\Facades\Schema;
 /**
  * Records ambiguous place strings (e.g. Wakad), merges duplicate normalized keys, bumps usage for analytics / auto-promote rules.
  *
- * Normalization matches {@see LocationNormalizationService::mergeKeyFromRaw} so keys align with `city_aliases` lookups.
+ * Normalization matches {@see LocationNormalizationService::mergeKeyFromRaw} so keys align with location_aliases lookups.
  */
 class LocationOpenPlaceSuggestionService
 {
@@ -65,6 +65,10 @@ class LocationOpenPlaceSuggestionService
             $districtId = $optionalHierarchy['district_id'] ?? ($resolved ? $aliasHit['district_id'] : null);
             $talukaId = $optionalHierarchy['taluka_id'] ?? ($resolved ? $aliasHit['taluka_id'] : null);
             $resolvedCityId = $resolved ? $aliasHit['city_id'] : null;
+            $resolvedLocationId = null;
+            if ($resolved && $resolvedCityId === null && ! empty($aliasHit['location_id'])) {
+                $resolvedLocationId = (int) $aliasHit['location_id'];
+            }
 
             $effectiveMatch = $resolved ? 'alias' : $matchType;
             $effectiveConfidence = $resolved ? $aliasHit['confidence'] : $confidenceScore;
@@ -77,6 +81,7 @@ class LocationOpenPlaceSuggestionService
                 'district_id' => $districtId,
                 'taluka_id' => $talukaId,
                 'resolved_city_id' => $resolvedCityId,
+                'resolved_location_id' => $resolvedLocationId,
                 'match_type' => $effectiveMatch,
                 'confidence_score' => $effectiveConfidence,
                 'status' => 'pending',

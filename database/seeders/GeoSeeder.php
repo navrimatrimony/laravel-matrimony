@@ -3,9 +3,9 @@
 namespace Database\Seeders;
 
 use App\Models\City;
-use App\Models\CityAlias;
 use App\Models\Country;
 use App\Models\District;
+use App\Models\LocationAlias;
 use App\Models\State;
 use App\Models\Taluka;
 use App\Models\Village;
@@ -88,7 +88,7 @@ class GeoSeeder extends Seeder
             }
             $seen[$code] = true;
             $state = State::firstOrCreate(
-                ['country_id' => $countryId, 'name' => $nameEn]
+                ['parent_id' => $countryId, 'name' => $nameEn]
             );
             if ($nameMr && ! $state->name_mr) {
                 $state->name_mr = trim($nameMr);
@@ -140,7 +140,7 @@ class GeoSeeder extends Seeder
                 continue;
             }
             $district = District::firstOrCreate(
-                ['state_id' => $stateId, 'name' => $nameEn],
+                ['parent_id' => $stateId, 'name' => $nameEn],
             );
             if ($nameMr && ! $district->name_mr) {
                 $district->name_mr = trim($nameMr);
@@ -185,7 +185,7 @@ class GeoSeeder extends Seeder
                 continue;
             }
             $taluka = Taluka::firstOrCreate(
-                ['district_id' => $districtId, 'name' => $nameEn]
+                ['parent_id' => $districtId, 'name' => $nameEn]
             );
             if ($nameMr && ! $taluka->name_mr) {
                 $taluka->name_mr = trim($nameMr);
@@ -239,7 +239,7 @@ class GeoSeeder extends Seeder
             $village = Village::updateOrCreate(
                 ['lgd_code' => $lgdCode],
                 [
-                    'taluka_id' => $talukaId,
+                    'parent_id' => $talukaId,
                     'name_en' => trim($nameEn),
                     'name_mr' => $nameMr ? trim($nameMr) : null,
                     'name' => trim($nameEn),
@@ -250,7 +250,7 @@ class GeoSeeder extends Seeder
             // Mirror into cities table so existing location search (city-based) sees this place.
             City::firstOrCreate(
                 [
-                    'taluka_id' => $talukaId,
+                    'parent_id' => $talukaId,
                     'name' => trim($nameEn),
                 ]
             );
@@ -307,22 +307,24 @@ class GeoSeeder extends Seeder
 
             if ($stateCode === '' || $districtName === '' || $talukaName === '' || $cityName === '') {
                 $skipped++;
+
                 continue;
             }
             $stateId = $stateCodeToId[$stateCode] ?? null;
             if ($stateId === null) {
                 $skipped++;
+
                 continue;
             }
 
             $district = District::firstOrCreate(
-                ['state_id' => (int) $stateId, 'name' => $districtName]
+                ['parent_id' => (int) $stateId, 'name' => $districtName]
             );
             $taluka = Taluka::firstOrCreate(
-                ['district_id' => (int) $district->id, 'name' => $talukaName]
+                ['parent_id' => (int) $district->id, 'name' => $talukaName]
             );
             $city = City::firstOrCreate(
-                ['taluka_id' => (int) $taluka->id, 'name' => $cityName]
+                ['parent_id' => (int) $taluka->id, 'name' => $cityName]
             );
 
             foreach ($aliases as $aliasValue) {
@@ -337,9 +339,9 @@ class GeoSeeder extends Seeder
                 if ($normalizedAlias === '') {
                     continue;
                 }
-                CityAlias::query()->firstOrCreate(
-                    ['city_id' => (int) $city->id, 'normalized_alias' => $normalizedAlias],
-                    ['alias_name' => $aliasName, 'is_active' => true]
+                LocationAlias::query()->firstOrCreate(
+                    ['location_id' => (int) $city->id, 'normalized_alias' => $normalizedAlias],
+                    ['alias' => $aliasName, 'is_active' => true]
                 );
             }
 

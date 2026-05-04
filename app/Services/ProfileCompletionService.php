@@ -110,8 +110,15 @@ class ProfileCompletionService
             ($criteria->preferred_city_id ?? null) !== null
             || ($criteria->preferred_age_min ?? null) !== null
             || ($criteria->preferred_age_max ?? null) !== null
-            || ($criteria->preferred_education ?? '') !== ''
         )) {
+            return true;
+        }
+        if (Schema::hasTable('profile_preferred_education_degrees')
+            && DB::table('profile_preferred_education_degrees')->where('profile_id', $profile->id)->exists()) {
+            return true;
+        }
+        if (Schema::hasTable('profile_preferred_occupation_master')
+            && DB::table('profile_preferred_occupation_master')->where('profile_id', $profile->id)->exists()) {
             return true;
         }
         if (DB::table('profile_preferred_religions')->where('profile_id', $profile->id)->exists()) {

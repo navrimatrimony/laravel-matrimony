@@ -9,6 +9,7 @@ use Illuminate\Support\Str;
 class BackfillProfilePreferences extends Command
 {
     protected $signature = 'backfill:preferences';
+
     protected $description = 'Backfill profile preferences into pivot tables';
 
     public function handle()
@@ -45,21 +46,19 @@ class BackfillProfilePreferences extends Command
                 // ========================
                 if ($pref->preferred_city) {
 
-                    $city = DB::table('cities')
+                    $city = \App\Models\City::query()
                         ->whereRaw('LOWER(name) = ?', [strtolower(trim($pref->preferred_city))])
                         ->first();
 
                     if ($city) {
 
-                        $taluka = DB::table('talukas')
-                            ->where('id', $city->taluka_id)
-                            ->first();
+                        $taluka = \App\Models\Taluka::query()->find((int) $city->parent_id);
 
                         if ($taluka) {
 
                             DB::table('profile_preferred_districts')->insert([
                                 'profile_id' => $pref->profile_id,
-                                'district_id' => $taluka->district_id,
+                                'district_id' => $taluka->parent_id,
                                 'created_at' => now(),
                                 'updated_at' => now(),
                             ]);

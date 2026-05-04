@@ -2,7 +2,6 @@
 
 namespace App\Console\Commands;
 
-use App\Models\Pincode;
 use App\Models\Location;
 use Database\Seeders\Location\LocationSeeder;
 use Database\Seeders\PincodeSeeder;
@@ -13,7 +12,7 @@ class SeedMaharashtraLocations extends Command
 {
     protected $signature = 'location:seed-maharashtra {--force : Seed even when the geo SSOT table already has data}';
 
-    protected $description = 'Seed Maharashtra sample location dataset (addresses + pincodes) in controlled order';
+    protected $description = 'Seed Maharashtra sample location dataset (addresses rows + pincode/lat/lng) in controlled order';
 
     public function handle(): int
     {
@@ -41,7 +40,7 @@ class SeedMaharashtraLocations extends Command
         $this->line('Districts: '.$this->countByType('district'));
         $this->line('Talukas: '.$this->countByType('taluka'));
         $this->line('Locations (city+suburb+village): '.$this->countLocationsLeaf());
-        $this->line('Pincodes: '.Pincode::query()->count());
+        $this->line('Rows with pincode set: '.Location::query()->whereNotNull('pincode')->count());
 
         return self::SUCCESS;
     }
@@ -50,11 +49,6 @@ class SeedMaharashtraLocations extends Command
     {
         if (! Schema::hasTable(Location::geoTable())) {
             $this->error('Geographic SSOT table "'.Location::geoTable().'" is missing. Run migrations first.');
-
-            return false;
-        }
-        if (! Schema::hasTable('pincodes')) {
-            $this->error('Table "pincodes" is missing. Run migrations first.');
 
             return false;
         }
@@ -125,4 +119,3 @@ class SeedMaharashtraLocations extends Command
         return Location::query()->whereIn('type', ['city', 'suburb', 'village'])->count();
     }
 }
-

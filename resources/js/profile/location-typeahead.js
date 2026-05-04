@@ -8,7 +8,6 @@
     'use strict';
 
     var SEARCH_URL = '/api/location/search';
-    var SUGGEST_URL = '/api/location/suggestions';
     var APP_LOCALE = (document.documentElement && document.documentElement.lang) ? document.documentElement.lang.split('-')[0] : 'en';
     var DEBOUNCE_MS = 500;
     var MIN_SEARCH_CHARS = 3;
@@ -44,6 +43,198 @@
         wrapper.querySelectorAll('.location-hidden-birth-city').forEach(function (el) { el.value = ''; });
     }
 
+    /** Match {@see LocationFormatterService} joinDistinct: comma-separated, de-dupe case-insensitive. */
+    function joinDistinctParts(parts) {
+        var clean = [];
+        for (var i = 0; i < parts.length; i++) {
+            var value = String(parts[i] != null ? parts[i] : '').trim();
+            if (value === '') {
+                continue;
+            }
+            var last = clean[clean.length - 1];
+            if (last !== undefined && String(last).toLowerCase() === value.toLowerCase()) {
+                continue;
+            }
+            clean.push(value);
+        }
+        return clean.join(', ');
+    }
+
+    function escapeHtml(s) {
+        return String(s)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;');
+    }
+
+    /**
+     * After “Add place” API success: one line for {@code location_input} (pending admin) + hierarchy hiddens;
+     * optional PIN suffix; residence summary strip (amber/sky) for review state.
+     */
+    function applyPendingPlaceFromModal(wrapper, detail) {
+        var placeName = String(detail.placeName || '').trim();
+        var stateName = String(detail.stateName || '').trim();
+        var districtName = String(detail.districtName || '').trim();
+        var talukaName = String(detail.talukaName || '').trim();
+        var pinDigits = String(detail.pinDigits || '').replace(/\D+/g, '');
+        var stateId = String(detail.stateId || '').trim();
+        var districtId = String(detail.districtId || '').trim();
+        var talukaId = String(detail.talukaId || '').trim();
+        var suggestionId = detail.suggestionId != null ? detail.suggestionId : null;
+        var context = wrapper.dataset.locationContext || 'residence';
+        var countryId = String(wrapper.dataset.defaultCountryId || '').trim();
+
+        var displayBody = joinDistinctParts([placeName, talukaName, districtName, stateName]);
+        var storageLine = displayBody;
+        if (pinDigits !== '') {
+            storageLine = storageLine === '' ? pinDigits : (storageLine + ' ' + pinDigits);
+        }
+        if (storageLine.length > 255) {
+            storageLine = storageLine.slice(0, 255);
+        }
+
+        var vis = wrapper.querySelector('.location-typeahead-input');
+        if (vis) {
+            vis.value = storageLine;
+        }
+        wrapper.querySelectorAll('.location-hidden-location-input').forEach(function (el) {
+            el.value = storageLine;
+        });
+        wrapper.querySelectorAll('.location-hidden-location-id').forEach(function (el) {
+            el.value = '';
+        });
+
+        if (context === 'residence') {
+            var country = wrapper.querySelector('.location-hidden-country');
+            var state = wrapper.querySelector('.location-hidden-state');
+            var district = wrapper.querySelector('.location-hidden-district');
+            var taluka = wrapper.querySelector('.location-hidden-taluka');
+            if (country && countryId) {
+                country.value = countryId;
+            }
+            if (state) {
+                state.value = stateId;
+            }
+            if (district) {
+                district.value = districtId;
+            }
+            if (taluka) {
+                taluka.value = talukaId;
+            }
+            wrapper.dataset.resCountryId = country && country.value ? country.value : '';
+            wrapper.dataset.resStateId = state && state.value ? state.value : '';
+            wrapper.dataset.resDistrictId = district && district.value ? district.value : '';
+            wrapper.dataset.resTalukaId = taluka && taluka.value ? taluka.value : '';
+            wrapper.dataset.resLocationId = '';
+        } else if (context === 'work') {
+            var wCity = wrapper.querySelector('.location-hidden-work-city');
+            var wState = wrapper.querySelector('.location-hidden-work-state');
+            if (wCity) {
+                wCity.value = '';
+            }
+            if (wState) {
+                wState.value = stateId;
+            }
+        } else if (context === 'native') {
+            var nCity = wrapper.querySelector('.location-hidden-native-city');
+            var nTaluka = wrapper.querySelector('.location-hidden-native-taluka');
+            var nDistrict = wrapper.querySelector('.location-hidden-native-district');
+            var nState = wrapper.querySelector('.location-hidden-native-state');
+            if (nCity) {
+                nCity.value = '';
+            }
+            if (nTaluka) {
+                nTaluka.value = talukaId;
+            }
+            if (nDistrict) {
+                nDistrict.value = districtId;
+            }
+            if (nState) {
+                nState.value = stateId;
+            }
+        } else if (context === 'birth') {
+            var bCity = wrapper.querySelector('.location-hidden-birth-city');
+            var bTaluka = wrapper.querySelector('.location-hidden-birth-taluka');
+            var bDistrict = wrapper.querySelector('.location-hidden-birth-district');
+            var bState = wrapper.querySelector('.location-hidden-birth-state');
+            if (bCity) {
+                bCity.value = '';
+            }
+            if (bTaluka) {
+                bTaluka.value = talukaId;
+            }
+            if (bDistrict) {
+                bDistrict.value = districtId;
+            }
+            if (bState) {
+                bState.value = stateId;
+            }
+        } else if (context === 'alliance') {
+            var at = wrapper.querySelector('.location-hidden-taluka');
+            var ad = wrapper.querySelector('.location-hidden-district');
+            var ast = wrapper.querySelector('.location-hidden-state');
+            if (at) {
+                at.value = talukaId;
+            }
+            if (ad) {
+                ad.value = districtId;
+            }
+            if (ast) {
+                ast.value = stateId;
+            }
+            var row = wrapper.closest('.property-asset-row');
+            if (row) {
+                var sync = row.querySelector('.location-display-sync');
+                if (sync) {
+                    sync.value = storageLine;
+                }
+            }
+        }
+
+        var summary = wrapper.querySelector('[data-location-pending-summary]');
+        if (summary) {
+            summary.classList.remove('hidden');
+            var pinHtml = '';
+            if (pinDigits !== '') {
+                pinHtml =
+                    '<span class="text-emerald-600 dark:text-emerald-400 font-semibold tabular-nums">PIN ' +
+                    escapeHtml(pinDigits) +
+                    '</span>';
+            } else {
+                pinHtml =
+                    '<span class="text-sky-600 dark:text-sky-400 font-medium">' +
+                    'Pin optional — not set' +
+                    '</span>';
+            }
+            var refHtml =
+                suggestionId != null
+                    ? '<span class="text-gray-500 dark:text-gray-400 ml-1 tabular-nums">#' +
+                      escapeHtml(String(suggestionId)) +
+                      '</span>'
+                    : '';
+            summary.innerHTML =
+                '<div class="flex flex-wrap items-center gap-x-2 gap-y-1">' +
+                '<span class="inline-flex items-center rounded-full bg-sky-50 dark:bg-sky-950/40 text-sky-800 dark:text-sky-200 px-2 py-0.5 text-[11px] font-medium">' +
+                'Pending admin review' +
+                '</span>' +
+                pinHtml +
+                refHtml +
+                '</div>' +
+                '<div class="text-[11px] mt-0.5 leading-snug">' +
+                escapeHtml(displayBody) +
+                '</div>';
+        }
+    }
+
+    function clearPendingSummary(wrapper) {
+        var summary = wrapper.querySelector('[data-location-pending-summary]');
+        if (summary) {
+            summary.classList.add('hidden');
+            summary.innerHTML = '';
+        }
+    }
+
     function openSuggestModal(wrapper, name) {
         var tpl = document.getElementById('location-suggest-modal-template');
         if (!tpl) return;
@@ -56,6 +247,8 @@
         var stateSelect = modal.querySelector('.location-suggest-state');
         var districtSelect = modal.querySelector('.location-suggest-district');
         var talukaSelect = modal.querySelector('.location-suggest-taluka');
+        var placeTypeSelect = modal.querySelector('.location-suggest-place-type');
+        var pincodeInput = modal.querySelector('.location-suggest-pincode');
         var errorEl = modal.querySelector('.location-suggest-error');
         var successEl = modal.querySelector('.location-suggest-success');
 
@@ -90,8 +283,12 @@
             if (errorEl) errorEl.classList.add('hidden');
         }
 
-        function loadStates(selectedId) {
-            fetch(urlStates, { headers: { 'Accept': 'application/json' } })
+        function loadStates(countryParentId, selectedId) {
+            var u = urlStates;
+            if (countryParentId) {
+                u = urlStates + (urlStates.indexOf('?') >= 0 ? '&' : '?') + 'parent_ids[]=' + encodeURIComponent(countryParentId);
+            }
+            fetch(u, { headers: { 'Accept': 'application/json' } })
                 .then(function (r) { return r.json(); })
                 .then(function (data) {
                     if (!data.success || !Array.isArray(data.data)) return;
@@ -114,7 +311,7 @@
             districtSelect.innerHTML = '<option value=\"\">Select district</option>';
             talukaSelect.innerHTML = '<option value=\"\">Select taluka</option>';
             if (!stateId) return;
-            fetch(urlDistricts + '?state_id=' + encodeURIComponent(stateId), { headers: { 'Accept': 'application/json' } })
+            fetch(urlDistricts + '?parent_id=' + encodeURIComponent(stateId), { headers: { 'Accept': 'application/json' } })
                 .then(function (r) { return r.json(); })
                 .then(function (data) {
                     if (!data.success || !Array.isArray(data.data)) return;
@@ -135,7 +332,7 @@
         function loadTalukas(districtId, selectedId) {
             talukaSelect.innerHTML = '<option value=\"\">Select taluka</option>';
             if (!districtId) return;
-            fetch(urlTalukas + '?district_id=' + encodeURIComponent(districtId), { headers: { 'Accept': 'application/json' } })
+            fetch(urlTalukas + '?parent_id=' + encodeURIComponent(districtId), { headers: { 'Accept': 'application/json' } })
                 .then(function (r) { return r.json(); })
                 .then(function (data) {
                     if (!data.success || !Array.isArray(data.data)) return;
@@ -159,13 +356,32 @@
             loadTalukas(districtSelect.value, null);
         });
 
+        if (placeTypeSelect) {
+            placeTypeSelect.value = 'village';
+        }
+        if (pincodeInput) {
+            pincodeInput.value = '';
+        }
+
         // Try to preselect from wrapper hidden fields / profile context if available
-        var stateHidden = (wrapper.querySelector('.location-hidden-state') || {}).value || '';
-        var districtHidden = (wrapper.querySelector('.location-hidden-district') || {}).value || '';
-        var talukaHidden = (wrapper.querySelector('.location-hidden-taluka') || {}).value || '';
-        loadStates(stateHidden || null);
-        if (stateHidden) {
-            loadDistricts(stateHidden, districtHidden || null);
+        var stateEl = wrapper.querySelector('.location-hidden-state')
+            || wrapper.querySelector('.location-hidden-birth-state')
+            || wrapper.querySelector('.location-hidden-native-state');
+        var districtEl = wrapper.querySelector('.location-hidden-district')
+            || wrapper.querySelector('.location-hidden-birth-district')
+            || wrapper.querySelector('.location-hidden-native-district');
+        var talukaEl = wrapper.querySelector('.location-hidden-taluka')
+            || wrapper.querySelector('.location-hidden-birth-taluka')
+            || wrapper.querySelector('.location-hidden-native-taluka');
+        var defaultCountryId = wrapper.dataset.defaultCountryId || '';
+        var defaultStateId = wrapper.dataset.defaultStateId || '';
+        var stateHidden = (stateEl && stateEl.value) ? stateEl.value : '';
+        var districtHidden = (districtEl && districtEl.value) ? districtEl.value : '';
+        var talukaHidden = (talukaEl && talukaEl.value) ? talukaEl.value : '';
+        var effectiveStateId = stateHidden || defaultStateId || '';
+        loadStates(defaultCountryId, effectiveStateId || null);
+        if (effectiveStateId) {
+            loadDistricts(effectiveStateId, districtHidden || null);
             if (districtHidden) {
                 loadTalukas(districtHidden, talukaHidden || null);
             }
@@ -180,16 +396,18 @@
                 return;
             }
 
-            var context = wrapper.dataset.locationContext || 'residence';
-            var countryId = (wrapper.querySelector('.location-hidden-country') || {}).value || 1;
+            var placeType = (placeTypeSelect && placeTypeSelect.value) ? placeTypeSelect.value : 'village';
+            var pinRaw = (pincodeInput && pincodeInput.value) ? String(pincodeInput.value).trim() : '';
             var payload = {
                 suggested_name: name,
-                country_id: countryId || 1,
                 state_id: stateId,
                 district_id: districtId,
                 taluka_id: talukaId,
-                suggestion_type: 'village',
+                suggestion_type: placeType === 'city' ? 'city' : 'village',
             };
+            if (pinRaw !== '') {
+                payload.suggested_pincode = pinRaw;
+            }
 
             fetch(urlSuggestPost, {
                 method: 'POST',
@@ -197,12 +415,31 @@
                     'Content-Type': 'application/json',
                     'Accept': 'application/json',
                     'X-Requested-With': 'XMLHttpRequest',
-                    'X-CSRF-TOKEN': document.querySelector('meta[name=\"csrf-token\"]') ? document.querySelector('meta[name=\"csrf-token\"]').getAttribute('content') : ''
+                    'X-CSRF-TOKEN': csrfToken(),
                 },
                 body: JSON.stringify(payload),
             }).then(function (r) { return r.json(); })
                 .then(function (data) {
                     if (data && data.success) {
+                        var pinDigits = pinRaw !== '' ? String(pinRaw).replace(/\D+/g, '') : '';
+                        function selectedLabel(sel) {
+                            if (!sel || !sel.options || sel.selectedIndex < 0) {
+                                return '';
+                            }
+                            var o = sel.options[sel.selectedIndex];
+                            return o ? String(o.text || '').trim() : '';
+                        }
+                        applyPendingPlaceFromModal(wrapper, {
+                            placeName: name,
+                            stateId: stateId,
+                            districtId: districtId,
+                            talukaId: talukaId,
+                            stateName: selectedLabel(stateSelect),
+                            districtName: selectedLabel(districtSelect),
+                            talukaName: selectedLabel(talukaSelect),
+                            pinDigits: pinDigits,
+                            suggestionId: data.data && data.data.suggestion_id != null ? data.data.suggestion_id : null,
+                        });
                         setSuccess('Thanks! Location submitted for admin approval.');
                         setTimeout(close, 900);
                     } else {
@@ -220,65 +457,59 @@
         inner.focus();
     }
 
-    function renderResults(wrapper, resultsEl, items, onSelect) {
-        if (!Array.isArray(items) || items.length === 0) {
-            var q = (wrapper.querySelector('.location-typeahead-input').value || '').trim();
-            var html = '<div class="p-2 text-gray-500">No matches</div>';
-            if (q.length >= 3) {
-                html += '' +
-                    '<button type="button" class="w-full text-left px-3 py-2 text-sm bg-rose-50 hover:bg-rose-100 text-rose-700 border-t border-rose-200 location-suggest-btn" data-suggest-name="' + q.replace(/"/g, '&quot;') + '">' +
-                    'Add this location' +
-                    '</button>' +
-                    '<div class="px-3 py-1 text-xs text-gray-500">Saved for review. It will be added after validation.</div>';
-            }
-            resultsEl.innerHTML = html;
-            resultsEl.classList.remove('hidden');
-            resultsEl.style.display = 'block';
-
-            var suggestBtn = resultsEl.querySelector('.location-suggest-btn');
-            if (suggestBtn) {
-                suggestBtn.addEventListener('click', function () {
-                    var inputText = suggestBtn.getAttribute('data-suggest-name') || q;
-                    var suggestPost = (wrapper.dataset && wrapper.dataset.suggestUrl) ? wrapper.dataset.suggestUrl : SUGGEST_URL;
-                    fetch(suggestPost, {
-                        method: 'POST',
-                        credentials: 'same-origin',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'Accept': 'application/json',
-                            'X-Requested-With': 'XMLHttpRequest',
-                            'X-CSRF-TOKEN': csrfToken()
-                        },
-                        body: JSON.stringify({ input_text: inputText }),
-                    })
-                        .then(function (r) { return r.json(); })
-                        .then(function (resp) {
-                            if (resp && resp.success) {
-                                resultsEl.innerHTML = '<div class="p-2 text-emerald-700">Location submitted for review.</div>';
-                                clearCanonicalSelection(wrapper);
-                                var locationInputHidden = wrapper.querySelector('.location-hidden-location-input');
-                                if (locationInputHidden) locationInputHidden.value = inputText;
-                            } else {
-                                resultsEl.innerHTML = '<div class="p-2 text-red-600">Could not save suggestion.</div>';
-                            }
-                        })
-                        .catch(function () {
-                            resultsEl.innerHTML = '<div class="p-2 text-red-600">Network error while saving suggestion.</div>';
-                        });
-                });
-            }
+    /**
+     * New place under a chosen state/district/taluka (admin review). Shown when query length >= 3,
+     * including when other matches exist — same name can exist in different talukas.
+     */
+    function appendAddPlaceFormCta(wrapper, resultsEl, q) {
+        if (!q || String(q).trim().length < 3) {
             return;
         }
-        resultsEl.innerHTML = '';
-        items.forEach(function (item) {
-            var div = document.createElement('div');
-            div.className = 'p-2 border-b border-gray-200 dark:border-gray-600 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700';
-            div.textContent = labelFromItem(item);
-            div.addEventListener('click', function () {
-                onSelect(item, labelFromItem(item));
-            });
-            resultsEl.appendChild(div);
+        var name = String(q).trim();
+        var btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'w-full text-left px-3 py-2 text-sm bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/40 dark:hover:bg-rose-950/60 text-rose-700 dark:text-rose-300 border-t border-rose-200 dark:border-rose-800 location-suggest-btn';
+        btn.setAttribute('data-suggest-name', name);
+        btn.textContent = '+ Add this place (form)…';
+
+        var hint = document.createElement('div');
+        hint.className = 'px-3 py-1 text-xs text-gray-500 dark:text-gray-400';
+        hint.textContent = 'Opens a short form: state, district, taluka, place type, optional pincode. Sent for admin review.';
+
+        resultsEl.appendChild(btn);
+        resultsEl.appendChild(hint);
+
+        btn.addEventListener('click', function () {
+            var inputText = btn.getAttribute('data-suggest-name') || name;
+            resultsEl.classList.add('hidden');
+            resultsEl.style.display = 'none';
+            openSuggestModal(wrapper, inputText);
         });
+    }
+
+    function renderResults(wrapper, resultsEl, items, onSelect) {
+        var q = (wrapper.querySelector('.location-typeahead-input').value || '').trim();
+        resultsEl.innerHTML = '';
+
+        if (!Array.isArray(items) || items.length === 0) {
+            var empty = document.createElement('div');
+            empty.className = 'p-2 text-gray-500 dark:text-gray-400';
+            empty.textContent = 'No matches';
+            resultsEl.appendChild(empty);
+        } else {
+            items.forEach(function (item) {
+                var div = document.createElement('div');
+                div.className = 'p-2 border-b border-gray-200 dark:border-gray-600 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700';
+                div.textContent = labelFromItem(item);
+                div.addEventListener('click', function () {
+                    onSelect(item, labelFromItem(item));
+                });
+                resultsEl.appendChild(div);
+            });
+        }
+
+        appendAddPlaceFormCta(wrapper, resultsEl, q);
+
         resultsEl.classList.remove('hidden');
         resultsEl.style.display = 'block';
     }
@@ -298,6 +529,7 @@
         }
 
         function applyCanonicalSelection(item, displayLabel) {
+            clearPendingSummary(wrapper);
             input.value = displayLabel;
             resultsEl.classList.add('hidden');
             resultsEl.style.display = 'none';
@@ -557,6 +789,7 @@
         var debounce = null;
         input.addEventListener('input', function () {
             clearTimeout(debounce);
+            clearPendingSummary(wrapper);
             var q = input.value.trim();
             clearCanonicalSelection(wrapper);
             var locationInputHidden = wrapper.querySelector('.location-hidden-location-input');

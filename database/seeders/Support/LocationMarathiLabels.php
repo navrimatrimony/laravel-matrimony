@@ -229,7 +229,7 @@ final class LocationMarathiLabels
      */
     public static function syncIndianVillageNameMrFromGeoJson(): void
     {
-        if (! Schema::hasTable('villages')) {
+        if (! Schema::hasTable('addresses') || ! Schema::hasColumn('addresses', 'lgd_code')) {
             return;
         }
         $path = database_path('seeders/data/geo/villages.json');
@@ -278,23 +278,35 @@ final class LocationMarathiLabels
      */
     public static function syncIndianCityNameMrFromVillageMirror(): void
     {
-        if (! Schema::hasTable('cities') || ! Schema::hasColumn('cities', 'name_mr') || ! Schema::hasTable('villages')) {
+        if (! Schema::hasTable('addresses') || ! Schema::hasColumn('addresses', 'name_mr')) {
             return;
         }
         $driver = Schema::getConnection()->getDriverName();
         if ($driver === 'mysql') {
             DB::statement(
-                'UPDATE cities c INNER JOIN villages v ON v.taluka_id = c.taluka_id AND v.name_en = c.name '.
-                "SET c.name_mr = v.name_mr WHERE v.name_mr IS NOT NULL AND TRIM(v.name_mr) <> ''"
+                "UPDATE addresses c
+                 INNER JOIN addresses v ON v.type = 'village' AND c.type = 'city'
+                    AND c.parent_id = v.parent_id
+                    AND LOWER(TRIM(c.name)) = LOWER(TRIM(COALESCE(NULLIF(TRIM(v.name_en), ''), v.name)))
+                 SET c.name_mr = v.name_mr
+                 WHERE v.name_mr IS NOT NULL AND TRIM(v.name_mr) <> ''"
             );
 
             return;
         }
-        City::query()->with('taluka:id')->chunkById(200, function ($cities): void {
+        City::query()->chunkById(200, function ($cities): void {
             foreach ($cities as $city) {
+                $talukaId = (int) ($city->parent_id ?? 0);
+                if ($talukaId <= 0) {
+                    continue;
+                }
                 $mr = Village::query()
-                    ->where('taluka_id', $city->taluka_id)
-                    ->where('name_en', $city->name)
+                    ->where('parent_id', $talukaId)
+                    ->where(function ($q) use ($city): void {
+                        $name = trim((string) $city->name);
+                        $q->whereRaw('LOWER(TRIM(name)) = ?', [mb_strtolower($name, 'UTF-8')])
+                            ->orWhere('name_en', $city->name);
+                    })
                     ->value('name_mr');
                 if ($mr === null || trim((string) $mr) === '') {
                     continue;

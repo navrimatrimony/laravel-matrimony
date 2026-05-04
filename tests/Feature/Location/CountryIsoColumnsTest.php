@@ -12,10 +12,10 @@ class CountryIsoColumnsTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_countries_table_has_iso_and_marathi_columns(): void
+    public function test_addresses_geo_table_has_iso_and_marathi_columns(): void
     {
-        $this->assertTrue(Schema::hasColumn('countries', 'name_mr'));
-        $this->assertTrue(Schema::hasColumn('countries', 'iso_alpha2'));
+        $this->assertTrue(Schema::hasColumn('addresses', 'name_mr'));
+        $this->assertTrue(Schema::hasColumn('addresses', 'iso_alpha2'));
     }
 
     public function test_minimal_location_seeder_sets_india_iso_and_marathi(): void

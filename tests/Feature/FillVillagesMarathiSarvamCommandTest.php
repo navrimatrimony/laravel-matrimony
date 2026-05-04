@@ -22,8 +22,9 @@ class FillVillagesMarathiSarvamCommandTest extends TestCase
 
     public function test_command_updates_village_name_mr_from_sarvam_batch(): void
     {
-        if (! Schema::hasTable('villages') || ! Schema::hasColumn('villages', 'name_mr')) {
-            $this->markTestSkipped('villages.name_mr not available.');
+        $geo = (new Village)->getTable();
+        if (! Schema::hasTable($geo) || ! Schema::hasColumn($geo, 'name_mr')) {
+            $this->markTestSkipped('Geographic SSOT name_mr not available.');
         }
 
         $this->seed(MasterLookupSeeder::class);

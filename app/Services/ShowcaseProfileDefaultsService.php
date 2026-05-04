@@ -11,8 +11,8 @@ use App\Models\MasterBloodGroup;
 use App\Models\MasterComplexion;
 use App\Models\MasterDiet;
 use App\Models\MasterDrinkingStatus;
-use App\Models\MasterFamilyType;
 use App\Models\MasterEducation;
+use App\Models\MasterFamilyType;
 use App\Models\MasterGender;
 use App\Models\MasterIncomeCurrency;
 use App\Models\MasterMaritalStatus;
@@ -592,8 +592,14 @@ class ShowcaseProfileDefaultsService
 
         $dietId = $profile->diet_id ? (int) $profile->diet_id : null;
         $religionId = $profile->religion_id ? (int) $profile->religion_id : null;
-        $workingWithTypeId = $profile->working_with_type_id ? (int) $profile->working_with_type_id : null;
-        $professionId = $profile->profession_id ? (int) $profile->profession_id : null;
+        $educationDegreeId = null;
+        $eduLine = trim((string) ($profile->highest_education ?? ''));
+        if ($eduLine !== '') {
+            $first = trim(explode(',', $eduLine)[0]);
+            $m = $first !== '' ? app(\App\Services\EducationService::class)->findDegreeMatch($first) : null;
+            $educationDegreeId = $m ? (int) $m->id : null;
+        }
+        $occupationMasterId = isset($profile->occupation_master_id) ? (int) $profile->occupation_master_id : null;
 
         return [
             'extended_narrative' => [[
@@ -609,7 +615,6 @@ class ShowcaseProfileDefaultsService
                 'preferred_height_max_cm' => $prefHeightMax,
                 'preferred_income_min' => null,
                 'preferred_income_max' => null,
-                'preferred_education' => null,
                 'preferred_city_id' => null,
                 'willing_to_relocate' => null,
                 'marriage_type_preference_id' => null,
@@ -623,9 +628,8 @@ class ShowcaseProfileDefaultsService
                 'preferred_state_ids' => [],
                 'preferred_district_ids' => [],
                 'preferred_taluka_ids' => [],
-                'preferred_master_education_ids' => [],
-                'preferred_working_with_type_ids' => $workingWithTypeId ? [$workingWithTypeId] : [],
-                'preferred_profession_ids' => $professionId ? [$professionId] : [],
+                'preferred_education_degree_ids' => ($educationDegreeId > 0) ? [$educationDegreeId] : [],
+                'preferred_occupation_master_ids' => ($occupationMasterId > 0) ? [$occupationMasterId] : [],
                 'preferred_diet_ids' => $dietId ? [$dietId] : [],
             ],
         ];
@@ -835,16 +839,19 @@ class ShowcaseProfileDefaultsService
             $stateId = $district->state_id ? (int) $district->state_id : null;
             $countryId = null;
             if ($stateId) {
-                $countryId = (int) (State::query()->where('id', $stateId)->value('country_id') ?? 0) ?: null;
+                $countryId = (int) (State::query()->whereKey($stateId)->value('parent_id') ?? 0) ?: null;
             }
 
             $districtName = strtolower(trim((string) ($district->name ?? '')));
 
-            $candidate = DB::table('cities')
-                ->join('talukas', 'cities.taluka_id', '=', 'talukas.id')
-                ->where('talukas.district_id', $districtId)
-                ->whereNotNull('cities.name')
-                ->select('cities.id as city_id', 'cities.name as city_name', 'cities.taluka_id as taluka_id')
+            $addr = \App\Models\Location::geoTable();
+            $candidate = DB::table($addr.' as city')
+                ->join($addr.' as taluka', 'city.parent_id', '=', 'taluka.id')
+                ->where('city.type', 'city')
+                ->where('taluka.type', 'taluka')
+                ->where('taluka.parent_id', $districtId)
+                ->whereNotNull('city.name')
+                ->select('city.id as city_id', 'city.name as city_name', 'city.parent_id as taluka_id')
                 ->get();
 
             if ($candidate->isEmpty()) {
@@ -1026,11 +1033,11 @@ class ShowcaseProfileDefaultsService
         if (! $country) {
             return ['country_id' => null, 'state_id' => null, 'district_id' => null, 'taluka_id' => null, 'city_id' => null];
         }
-        $state = State::where('country_id', $country->id)->inRandomOrder()->first();
+        $state = State::where('parent_id', $country->id)->inRandomOrder()->first();
         if (! $state) {
             return ['country_id' => $country->id, 'state_id' => null, 'district_id' => null, 'taluka_id' => null, 'city_id' => null];
         }
-        $district = District::where('state_id', $state->id)->inRandomOrder()->first();
+        $district = District::where('parent_id', $state->id)->inRandomOrder()->first();
         if (! $district) {
             return ['country_id' => $country->id, 'state_id' => $state->id, 'district_id' => null, 'taluka_id' => null, 'city_id' => null];
         }

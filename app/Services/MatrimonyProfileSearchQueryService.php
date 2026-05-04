@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\EducationDegree;
 use App\Models\HiddenProfile;
 use App\Models\MasterMaritalStatus;
 use App\Models\MatrimonyProfile;
@@ -89,16 +90,16 @@ class MatrimonyProfileSearchQueryService
 
         if ($isSearchable('location')) {
             if ($request->filled('country_id') && $geoActive('country_id')) {
-                $query->where('country_id', (int) $request->country_id);
+                $query->whereResidenceUnderAncestor((int) $request->country_id);
             }
             if ($request->filled('state_id') && $geoActive('state_id')) {
-                $query->where('state_id', (int) $request->state_id);
+                $query->whereResidenceUnderAncestor((int) $request->state_id);
             }
             if ($request->filled('district_id') && $geoActive('district_id')) {
-                $query->where('district_id', (int) $request->district_id);
+                $query->whereResidenceUnderAncestor((int) $request->district_id);
             }
             if ($request->filled('taluka_id') && $geoActive('taluka_id')) {
-                $query->where('taluka_id', (int) $request->taluka_id);
+                $query->whereResidenceUnderAncestor((int) $request->taluka_id);
             }
             if ($request->filled('location_id') && $geoActive('city_id')) {
                 $query->where('location_id', (int) $request->location_id);
@@ -135,8 +136,40 @@ class MatrimonyProfileSearchQueryService
             }
         }
 
-        if ($advancedProfileSearch && (! $strict || $inStrict('education')) && $isSearchable('education') && $request->filled('education')) {
-            $query->where('highest_education', $request->input('education'));
+        if ($advancedProfileSearch && (! $strict || $inStrict('education')) && $isSearchable('education')) {
+            if ($request->filled('education_degree_id')) {
+                $deg = EducationDegree::query()->find((int) $request->input('education_degree_id'));
+                if ($deg) {
+                    $labels = array_unique(array_filter(array_map('trim', [
+                        (string) ($deg->title ?? ''),
+                        (string) ($deg->code ?? ''),
+                        (string) ($deg->title_mr ?? ''),
+                        (string) ($deg->code_mr ?? ''),
+                    ]), static fn ($s) => $s !== ''));
+                    $query->where(function ($q) use ($labels): void {
+                        foreach ($labels as $lab) {
+                            $q->orWhere('highest_education', 'like', '%'.addcslashes($lab, '%_\\').'%');
+                        }
+                    });
+                }
+            } elseif ($request->filled('education_category_id')) {
+                $catId = (int) $request->input('education_category_id');
+                $degrees = EducationDegree::query()->where('category_id', $catId)->get(['title', 'code', 'title_mr', 'code_mr']);
+                $query->where(function ($q) use ($degrees): void {
+                    foreach ($degrees as $deg) {
+                        foreach (array_unique(array_filter(array_map('trim', [
+                            (string) ($deg->title ?? ''),
+                            (string) ($deg->code ?? ''),
+                        ]))) as $lab) {
+                            if ($lab !== '') {
+                                $q->orWhere('highest_education', 'like', '%'.addcslashes($lab, '%_\\').'%');
+                            }
+                        }
+                    }
+                });
+            } elseif ($request->filled('education')) {
+                $query->where('highest_education', $request->input('education'));
+            }
         }
 
         if ((! $strict || $inStrict('profession_id')) && $isSearchable('profession_id') && $request->filled('profession_id')) {

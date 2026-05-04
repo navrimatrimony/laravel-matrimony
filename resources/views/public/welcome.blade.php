@@ -29,8 +29,8 @@
     <body class="min-h-screen flex flex-col bg-[#f5f5f5] dark:bg-[#111] text-[#333] dark:text-[#e5e5e5]">
         @php
             $castes = $castes ?? collect();
-            $states = $states ?? collect();
-            $districts = $districts ?? collect();
+            $addressStates = $addressStates ?? collect();
+            $addressDistricts = $addressDistricts ?? collect();
             $defaultCountry = $defaultCountry ?? null;
             $homepageImages = $homepageImages ?? [];
             $heroPath = ! empty($homepageImages['hero'] ?? null)
@@ -124,7 +124,7 @@
                                 <select id="welcome-search-state" name="state_id"
                                     class="w-full border border-[#e3e3e0] dark:border-[#3E3E3A] rounded px-3 py-2 bg-white dark:bg-[#161615] text-[#1b1b18] dark:text-[#EDEDEC] focus:outline-none focus:ring-2 focus:ring-[var(--brand-red)]">
                                     <option value="">{{ __('search.any') }}</option>
-                                    @foreach ($states as $st)
+                                    @foreach ($addressStates as $st)
                                         <option value="{{ $st->id }}" {{ (string) request('state_id') === (string) $st->id ? 'selected' : '' }}>{{ $st->name }}</option>
                                     @endforeach
                                 </select>
@@ -134,7 +134,7 @@
                                 <select id="welcome-search-district" name="district_id"
                                     class="w-full border border-[#e3e3e0] dark:border-[#3E3E3A] rounded px-3 py-2 bg-white dark:bg-[#161615] text-[#1b1b18] dark:text-[#EDEDEC] focus:outline-none focus:ring-2 focus:ring-[var(--brand-red)]">
                                     <option value="">{{ __('search.any') }}</option>
-                                    @foreach ($districts as $d)
+                                    @foreach ($addressDistricts as $d)
                                         <option value="{{ $d->id }}" {{ (string) request('district_id') === (string) $d->id ? 'selected' : '' }}>{{ $d->name }}</option>
                                     @endforeach
                                 </select>
@@ -265,7 +265,7 @@
             </div>
         </footer>
 
-        @if (($states ?? collect())->isNotEmpty())
+        @if (($addressStates ?? collect())->isNotEmpty())
             <script>
                 (function () {
                     var stateEl = document.getElementById('welcome-search-state');
@@ -277,7 +277,7 @@
                         var sid = stateEl.value;
                         distEl.innerHTML = '<option value="">' + anyLabel + '</option>';
                         if (!sid) return;
-                        fetch(apiDistricts + '?state_id=' + encodeURIComponent(sid), {
+                        fetch(apiDistricts + '?parent_id=' + encodeURIComponent(sid), {
                             headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
                             credentials: 'same-origin',
                         })

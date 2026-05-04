@@ -615,9 +615,6 @@ class IntakeApprovalService
         return match ($blobKey) {
             'birth_place' => $this->scalarDisplay([
                 'birth_city_id' => $profile->birth_city_id,
-                'birth_taluka_id' => $profile->birth_taluka_id,
-                'birth_district_id' => $profile->birth_district_id,
-                'birth_state_id' => $profile->birth_state_id,
                 'text' => $profile->birth_place_text,
             ]),
             'native_place' => $this->scalarDisplay([

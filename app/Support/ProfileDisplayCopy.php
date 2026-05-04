@@ -4,8 +4,7 @@ namespace App\Support;
 
 use App\Models\Location;
 use App\Models\MatrimonyProfile;
-use App\Services\Location\LocationDisplayFormatter;
-use App\Services\Location\LocationService;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 
 /**
@@ -14,18 +13,35 @@ use Illuminate\Support\Str;
 class ProfileDisplayCopy
 {
     /**
+     * Canonical residence line: SSOT {@code addresses} row via {@code location_id}, else legacy flat columns.
+     */
+    public static function profileResidenceDisplayLine(MatrimonyProfile $p): string
+    {
+        $p->loadMissing(['city', 'taluka', 'district', 'state', 'country']);
+
+        if ($p->location_id && Schema::hasTable(Location::geoTable())) {
+            $canonical = $p->residenceLocationDisplayLine();
+            if ($canonical !== '') {
+                return $canonical;
+            }
+        }
+
+        return self::formatResidenceDisplay(
+            $p->city?->name,
+            $p->taluka?->name,
+            $p->district?->name,
+            $p->state?->name,
+            $p->country?->name
+        );
+    }
+
+    /**
      * One-line headline: education • occupation • location • marital (when present).
      */
     public static function headline(MatrimonyProfile $p): string
     {
         $p->loadMissing(['district', 'state', 'maritalStatus', 'profession']);
-        $loc = '';
-        if ($p->location_id) {
-            $node = Location::query()->find((int) $p->location_id);
-            if ($node) {
-                $loc = app(LocationService::class)->getDisplayLabel($node);
-            }
-        }
+        $loc = self::profileResidenceDisplayLine($p);
         if ($loc === '') {
             $loc = self::compactLocationLine(
                 null,
@@ -63,13 +79,7 @@ class ProfileDisplayCopy
         $occ = ($p->occupation_title ?? '') !== ''
             ? self::formatOccupationPhrase($p->occupation_title)
             : null;
-        $loc = '';
-        if ($p->location_id) {
-            $node = Location::query()->find((int) $p->location_id);
-            if ($node) {
-                $loc = app(LocationService::class)->getDisplayLabel($node);
-            }
-        }
+        $loc = self::profileResidenceDisplayLine($p);
         if ($loc === '') {
             $loc = self::compactLocationLine(
                 null,

@@ -10,27 +10,27 @@ return new class extends Migration
 {
     public function up(): void
     {
-        if (Schema::hasTable('matrimony_profiles') && Schema::hasTable('locations')
+        if (Schema::hasTable('matrimony_profiles') && Schema::hasTable('addresses')
             && ! Schema::hasColumn('matrimony_profiles', 'location_id')) {
             Schema::table('matrimony_profiles', function (Blueprint $table) {
                 $table->unsignedBigInteger('location_id')->nullable()->after('city_id');
             });
 
             Schema::table('matrimony_profiles', function (Blueprint $table) {
-                $table->foreign('location_id')->references('id')->on('locations')->nullOnDelete();
+                $table->foreign('location_id')->references('id')->on('addresses')->nullOnDelete();
             });
         }
 
         if (Schema::hasTable('matrimony_profiles') && Schema::hasColumn('matrimony_profiles', 'location_id')
-            && Schema::hasTable('locations')) {
+            && Schema::hasTable('addresses')) {
             DB::statement(
                 'UPDATE matrimony_profiles SET location_id = city_id '
                 .'WHERE city_id IS NOT NULL AND location_id IS NULL '
-                .'AND EXISTS (SELECT 1 FROM locations WHERE locations.id = matrimony_profiles.city_id)'
+                .'AND EXISTS (SELECT 1 FROM addresses WHERE addresses.id = matrimony_profiles.city_id)'
             );
         }
 
-        if (Schema::hasTable('locations')) {
+        if (Schema::hasTable('addresses')) {
             /** @var LocationSsotNormalizationService $normalize */
             $normalize = app(LocationSsotNormalizationService::class);
             $normalize->normalizeNamesSlugsLevels();
@@ -55,9 +55,9 @@ return new class extends Migration
             });
         }
 
-        if (Schema::hasTable('locations') && Schema::hasIndex('locations', 'locations_parent_name_type_unique')) {
-            Schema::table('locations', function (Blueprint $table) {
-                $table->dropUnique('locations_parent_name_type_unique');
+        if (Schema::hasTable('addresses') && Schema::hasIndex('addresses', 'addresses_parent_name_type_unique')) {
+            Schema::table('addresses', function (Blueprint $table) {
+                $table->dropUnique('addresses_parent_name_type_unique');
             });
         }
     }

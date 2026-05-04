@@ -3,7 +3,7 @@
 namespace App\Services\Admin;
 
 use App\Models\City;
-use App\Models\CityAlias;
+use App\Models\LocationAlias;
 use App\Models\LocationOpenPlaceSuggestion;
 use App\Models\Taluka;
 use App\Services\Location\LocationAliasGeneratorService;
@@ -12,9 +12,9 @@ use App\Services\Location\LocationSuggestionPatternLearningService;
 use Illuminate\Support\Facades\DB;
 
 /**
- * Admin promotion for {@see LocationOpenPlaceSuggestion}: new {@see City} + {@see CityAlias}, or alias-only map.
+ * Admin promotion for {@see LocationOpenPlaceSuggestion}: new {@see City} + {@see LocationAlias}, or alias-only map.
  *
- * Alias keys use {@see LocationNormalizationService::mergeKeyFromRaw} — same contract as intake + `city_aliases`.
+ * Alias keys use {@see LocationNormalizationService::mergeKeyFromRaw} — same contract as intake + {@code location_aliases}.
  */
 class LocationOpenPlaceApprovalService
 {
@@ -38,10 +38,10 @@ class LocationOpenPlaceApprovalService
             $suggestion = $this->lockPendingResolvable($suggestionId);
 
             $taluka = Taluka::query()->with('district')->whereKey($talukaId)->firstOrFail();
-            if ($districtIdForValidation !== null && (int) $taluka->district_id !== (int) $districtIdForValidation) {
+            if ($districtIdForValidation !== null && (int) $taluka->parent_id !== (int) $districtIdForValidation) {
                 throw new \RuntimeException('Selected taluka does not belong to the chosen district.');
             }
-            if ($suggestion->district_id !== null && (int) $suggestion->district_id !== (int) $taluka->district_id) {
+            if ($suggestion->district_id !== null && (int) $suggestion->district_id !== (int) $taluka->parent_id) {
                 throw new \RuntimeException('Suggestion context district does not match the selected taluka’s district. Pick the matching hierarchy or map to an existing city instead.');
             }
 
@@ -52,16 +52,16 @@ class LocationOpenPlaceApprovalService
 
             $nameKey = mb_strtolower(trim($cityName), 'UTF-8');
             $cityExists = City::query()
-                ->where('taluka_id', $taluka->id)
+                ->where('parent_id', $taluka->id)
                 ->whereRaw('LOWER(TRIM(name)) = ?', [$nameKey])
                 ->exists();
             if ($cityExists) {
                 throw new \RuntimeException('A city with this name already exists in the selected taluka. Use “Map to existing city” or pick another taluka.');
             }
 
-            if (CityAlias::query()
+            if (LocationAlias::query()
                 ->where('is_active', true)
-                ->whereHas('city', fn ($q) => $q->where('taluka_id', $taluka->id))
+                ->whereHas('location', fn ($q) => $q->where('parent_id', (int) $taluka->id)->where('type', 'city'))
                 ->where('normalized_alias', $suggestion->normalized_input)
                 ->exists()) {
                 throw new \RuntimeException('This alias already exists for a city in this taluka.');
@@ -265,19 +265,18 @@ class LocationOpenPlaceApprovalService
     }
 
     /**
-     * {@see CityAlias} is unique per (city_id, normalized_alias), but {@see LocationNormalizationService}
+     * {@see LocationAlias} is unique per (location_id, normalized_alias), but {@see LocationNormalizationService}
      * resolves globally by normalized_alias — a second active row for another city breaks lookup semantics.
-     */
-    /**
+     *
      * @param  int|null  $allowedCityId  When set, active aliases on this city are ignored (same-city idempotent attach).
      */
     private function assertAliasNormalizedNotActiveElsewhere(string $normalizedAlias, ?int $allowedCityId): void
     {
-        $q = CityAlias::query()
+        $q = LocationAlias::query()
             ->where('normalized_alias', $normalizedAlias)
             ->where('is_active', true);
         if ($allowedCityId !== null) {
-            $q->where('city_id', '!=', $allowedCityId);
+            $q->where('location_id', '!=', $allowedCityId);
         }
         if ($q->exists()) {
             throw new \RuntimeException(
@@ -293,13 +292,13 @@ class LocationOpenPlaceApprovalService
             $aliasName = $city->name;
         }
 
-        CityAlias::query()->firstOrCreate(
+        LocationAlias::query()->firstOrCreate(
             [
-                'city_id' => $city->id,
+                'location_id' => $city->id,
                 'normalized_alias' => $normalized,
             ],
             [
-                'alias_name' => mb_substr($aliasName, 0, 190),
+                'alias' => mb_substr($aliasName, 0, 190),
                 'is_active' => true,
             ],
         );

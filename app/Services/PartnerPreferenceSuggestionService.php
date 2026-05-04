@@ -3,12 +3,9 @@
 namespace App\Services;
 
 use App\Models\District;
-use App\Models\Location;
 use App\Models\MasterMaritalStatus;
 use App\Models\MatrimonyProfile;
-use App\Services\Location\LocationService;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Schema;
 
 /**
  * Compute non-persistent partner preference suggestions from the profile.
@@ -129,39 +126,13 @@ class PartnerPreferenceSuggestionService
     }
 
     /**
-     * Member's residence district: profile.district_id, else city→district. Validates districts.id.
+     * Member's residence district ({@code addresses}.id) derived from {@see MatrimonyProfile::location_id}.
      */
     public static function resolveProfileDistrictId(MatrimonyProfile $profile): ?int
     {
-        if (! empty($profile->district_id)) {
-            $id = (int) $profile->district_id;
-            if ($id > 0 && District::query()->whereKey($id)->exists()) {
-                return $id;
-            }
+        $id = $profile->residenceGeoAddressIds()['district_id'] ?? null;
 
-            return null;
-        }
-        if (! empty($profile->location_id) && Schema::hasTable(Location::geoTable())) {
-            $loc = Location::query()->find((int) $profile->location_id);
-            if ($loc !== null) {
-                $h = app(LocationService::class)->getFullHierarchy($loc);
-                $districtNode = $h['district'] ?? null;
-                $stateNode = $h['state'] ?? null;
-                if ($districtNode !== null && $stateNode !== null) {
-                    $district = District::query()
-                        ->whereRaw('LOWER(TRIM(name)) = ?', [mb_strtolower(trim((string) $districtNode->name), 'UTF-8')])
-                        ->whereHas('state', function ($q) use ($stateNode): void {
-                            $q->whereRaw('LOWER(TRIM(name)) = ?', [mb_strtolower(trim((string) $stateNode->name), 'UTF-8')]);
-                        })
-                        ->first();
-                    if ($district !== null) {
-                        return (int) $district->id;
-                    }
-                }
-            }
-        }
-
-        return null;
+        return ($id !== null && $id > 0) ? $id : null;
     }
 
     /**
@@ -238,8 +209,6 @@ class PartnerPreferenceSuggestionService
             'preferred_height_max_cm' => null,
             'preferred_income_min' => null,
             'preferred_income_max' => null,
-            /** Legacy criteria column; partner "education preference" uses master-education pivots — default open to all (null). */
-            'preferred_education' => null,
             'preferred_city_id' => null,
             'preferred_religion_ids' => [],
             'preferred_caste_ids' => [],
@@ -247,7 +216,8 @@ class PartnerPreferenceSuggestionService
             'preferred_state_ids' => $location['preferred_state_ids'],
             'preferred_district_ids' => $location['preferred_district_ids'],
             'preferred_taluka_ids' => $location['preferred_taluka_ids'],
-            'preferred_master_education_ids' => [],
+            'preferred_education_degree_ids' => [],
+            'preferred_occupation_master_ids' => [],
             'preferred_diet_ids' => self::defaultPreferredDietIds($profile),
             'preferred_marital_status_id' => null,
             'preferred_marital_status_ids' => [],

@@ -18,6 +18,7 @@ use App\Services\Parsing\ProviderResolver;
 use App\Services\Preview\PreviewSectionMapper;
 use App\Support\IntakeDobTrace;
 use App\Support\IntakePreviewDiagnosticsPresenter;
+use App\Support\Validation\AddressHierarchyRules;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
@@ -658,9 +659,6 @@ class IntakeController extends Controller
             'gender_id' => $coreData['gender_id'] ?? null,
             'birth_time' => is_scalar($coreData['birth_time'] ?? null) ? trim((string) $coreData['birth_time']) : '',
             'birth_city_id' => $coreData['birth_city_id'] ?? null,
-            'birth_taluka_id' => $coreData['birth_taluka_id'] ?? null,
-            'birth_district_id' => $coreData['birth_district_id'] ?? null,
-            'birth_state_id' => $coreData['birth_state_id'] ?? null,
             'religion_id' => $coreData['religion_id'] ?? '',
             'caste_id' => $coreData['caste_id'] ?? '',
             'sub_caste_id' => $coreData['sub_caste_id'] ?? '',
@@ -683,7 +681,7 @@ class IntakeController extends Controller
         }
         $intakeProfile->birthPlaceDisplay = '';
         if (! empty($intakeProfile->birth_city_id)) {
-            $intakeProfile->birthPlaceDisplay = \App\Models\City::where('id', $intakeProfile->birth_city_id)->value('name') ?? '';
+            $intakeProfile->birthPlaceDisplay = \App\Models\Location::query()->find($intakeProfile->birth_city_id)?->localizedName() ?? '';
         }
         // Resolve birth_place string (from parser) to location IDs so Basic Info birth-place typeahead shows value.
         if (empty($intakeProfile->birth_city_id) && ! empty($intakeProfile->birth_place) && is_scalar($intakeProfile->birth_place)) {
@@ -696,16 +694,7 @@ class IntakeController extends Controller
                 $city = $cityQuery->first();
                 if ($city) {
                     $intakeProfile->birth_city_id = $city->id;
-                    $intakeProfile->birth_taluka_id = $city->taluka_id;
                     $intakeProfile->birthPlaceDisplay = $city->name ?? '';
-                    $taluka = $city->taluka;
-                    if ($taluka) {
-                        $intakeProfile->birth_district_id = $taluka->district_id ?? null;
-                        $district = $taluka->district;
-                        if ($district) {
-                            $intakeProfile->birth_state_id = $district->state_id ?? null;
-                        }
-                    }
                 } else {
                     $intakeProfile->birthPlaceDisplay = $birthPlaceStr;
                 }
@@ -1706,12 +1695,12 @@ class IntakeController extends Controller
             }
             // Build birth_place from core for MutationService (same shape as wizard buildBasicInfoSnapshot).
             $core = $snapshot['core'] ?? [];
-            if (! empty($core['birth_city_id']) || ! empty($core['birth_state_id'])) {
+            if (! empty($core['birth_city_id'])) {
                 $snapshot['birth_place'] = [
                     'city_id' => isset($core['birth_city_id']) ? (int) $core['birth_city_id'] : null,
-                    'taluka_id' => isset($core['birth_taluka_id']) ? (int) $core['birth_taluka_id'] : null,
-                    'district_id' => isset($core['birth_district_id']) ? (int) $core['birth_district_id'] : null,
-                    'state_id' => isset($core['birth_state_id']) ? (int) $core['birth_state_id'] : null,
+                    'taluka_id' => null,
+                    'district_id' => null,
+                    'state_id' => null,
                 ];
             } elseif (! empty($core['birth_place']) && is_scalar($core['birth_place']) && trim((string) $core['birth_place']) !== '') {
                 // Resolve birth place text (e.g. "माळीनगर. ता.- माळशिरस, जि.सोलापूर") to IDs so edit shows place.
@@ -1729,18 +1718,11 @@ class IntakeController extends Controller
                 if ($city) {
                     $snapshot['birth_place'] = [
                         'city_id' => $city->id,
-                        'taluka_id' => $city->taluka_id ?? null,
-                        'district_id' => $city->taluka?->district_id ?? null,
-                        'state_id' => $city->taluka?->district?->state_id ?? null,
+                        'taluka_id' => null,
+                        'district_id' => null,
+                        'state_id' => null,
                     ];
                     $core['birth_city_id'] = $city->id;
-                    $core['birth_taluka_id'] = $city->taluka_id;
-                    if ($city->taluka) {
-                        $core['birth_district_id'] = $city->taluka->district_id;
-                        if ($city->taluka->district) {
-                            $core['birth_state_id'] = $city->taluka->district->state_id;
-                        }
-                    }
                     $core['birth_place_text'] = $birthStr;
                     $snapshot['core'] = $core;
                 } else {
@@ -1765,7 +1747,7 @@ class IntakeController extends Controller
      */
     private function mergeSnapshotCoreEducationFromMultiselect(array $snapshot): array
     {
-        if (! Schema::hasColumn('matrimony_profiles', 'education_degree_id')) {
+        if (! Schema::hasColumn('matrimony_profiles', 'highest_education')) {
             return $snapshot;
         }
         $core = $snapshot['core'] ?? null;
@@ -1777,11 +1759,7 @@ class IntakeController extends Controller
         if (! $edu->mergeMultiselectEducationIntoRequest($fake, 'snapshot.core')) {
             return $snapshot;
         }
-        $core['education_degree_id'] = $fake->input('education_degree_id');
-        $core['education_text'] = $fake->input('education_text');
         $core['highest_education'] = $fake->input('highest_education');
-        $core['highest_education_text'] = $fake->input('highest_education_text');
-        $core['highest_education_id'] = $fake->input('highest_education_id');
         $core['highest_education_other'] = $fake->input('highest_education_other');
         foreach (['education_slots', 'education_degree_ids', 'education_custom'] as $rk) {
             unset($core[$rk]);
@@ -2465,14 +2443,19 @@ class IntakeController extends Controller
         $cityToken = $secondLast ?? $last;
         $districtToken = $last;
 
-        // 2) CityAlias मधून normalized aliases वापरून जास्त smart matching करता येऊ शकेल; आत्ता direct alias_name match.
+        // 2) location_aliases मधून normalized aliases वापरून जास्त smart matching करता येऊ शकेल; आत्ता direct alias match.
         $city = null;
         try {
-            $city = \App\Models\CityAlias::query()
+            $aliasRow = \App\Models\LocationAlias::query()
                 ->where('is_active', true)
                 ->whereRaw('normalized_alias = ?', [$cityToken])
-                ->with('city.taluka.district.state')
-                ->first()?->city;
+                ->with('location')
+                ->first();
+            if ($aliasRow && $aliasRow->location && $aliasRow->location->type === 'city') {
+                $city = \App\Models\City::query()
+                    ->with('taluka.district.state')
+                    ->find($aliasRow->location_id);
+            }
         } catch (\Throwable $e) {
             $city = null;
         }
@@ -2501,7 +2484,7 @@ class IntakeController extends Controller
                     ->first();
                 if ($district) {
                     $city = \App\Models\City::query()
-                        ->whereHas('taluka', fn ($q) => $q->where('district_id', $district->id))
+                        ->whereHas('taluka', fn ($q) => $q->where('parent_id', $district->id))
                         ->whereRaw('LOWER(name) LIKE ?', ['pune city%'])
                         ->with('taluka.district.state')
                         ->first();
@@ -3022,7 +3005,7 @@ class IntakeController extends Controller
 
         $validated = $request->validate([
             'field' => ['required', 'string', 'max:64'],
-            'city_id' => ['required', 'integer', 'exists:cities,id'],
+            'city_id' => ['required', 'integer', AddressHierarchyRules::existsCityId()],
         ]);
 
         $result = $resolver->resolveFieldToCity($intake, (string) $validated['field'], (int) $validated['city_id']);

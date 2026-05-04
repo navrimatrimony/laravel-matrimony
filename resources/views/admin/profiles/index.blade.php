@@ -27,14 +27,8 @@
                             <td class="px-4 py-2 text-sm text-gray-600 dark:text-gray-400">{{ ucfirst($profile->gender ?? '—') }}</td>
                             <td class="px-4 py-2 text-sm text-gray-600 dark:text-gray-400">
                                 @php
-                                    $c = $profile->city?->name ?? null;
-                                    $t = $profile->taluka?->name ?? null;
-                                    $d = $profile->district?->name ?? null;
-                                    $s = $profile->state?->name ?? null;
-                                    $co = $profile->country?->name ?? null;
-                                    $l1 = trim(implode(', ', array_filter([$c, $t])));
-                                    $l2 = trim(implode(', ', array_filter([$d, $s])));
-                                    $locText = ($l1 || $l2 || $co) ? implode(' — ', array_filter([$l1, $l2, $co])) : '—';
+                                    $locText = trim(\App\Support\ProfileDisplayCopy::profileResidenceDisplayLine($profile));
+                                    $locText = $locText !== '' ? $locText : '—';
                                 @endphp
                                 {{ $locText }}
                             </td>

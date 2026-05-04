@@ -47,7 +47,7 @@ class ShowcaseConversationController extends Controller
             ->get()
             ->keyBy('id');
 
-        $states = ShowcaseConversationState::query()
+        $conversationStatesById = ShowcaseConversationState::query()
             ->whereIn('conversation_id', $conversations->pluck('id')->all())
             ->get()
             ->groupBy('conversation_id');
@@ -55,7 +55,7 @@ class ShowcaseConversationController extends Controller
         return view('admin.showcase-conversations.index', [
             'conversations' => $conversations,
             'profiles' => $profiles,
-            'states' => $states,
+            'conversationStatesById' => $conversationStatesById,
         ]);
     }
 
@@ -171,4 +171,3 @@ class ShowcaseConversationController extends Controller
         return back()->with('success', 'Reply sent as showcase profile.');
     }
 }
-

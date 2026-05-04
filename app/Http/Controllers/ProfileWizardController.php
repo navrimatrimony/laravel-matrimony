@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Location;
 use App\Models\MatrimonyProfile;
+use App\Models\OccupationCategory;
 use App\Services\CareerHistoryRowNormalizer;
 use App\Services\EducationService;
 use App\Services\FieldCatalogService;
@@ -13,6 +14,7 @@ use App\Services\PartnerPreferenceSnapshotBuilder;
 use App\Services\ProfileCompletionEngine;
 use App\Services\ProfileCompletionService;
 use App\Support\ErrorFactory;
+use App\Support\Validation\AddressHierarchyRules;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -651,15 +653,15 @@ class ProfileWizardController extends Controller
                 ];
                 break;
             case 'location':
-                $data['countries'] = \App\Models\Country::all();
-                $data['states'] = \App\Models\State::all();
-                $data['districts'] = \App\Models\District::all();
-                $data['talukas'] = \App\Models\Taluka::all();
-                $data['cities'] = \App\Models\City::all();
+                // Geo hierarchy rows live only in `addresses` (via Eloquent Country/State/…); do not load duplicate “master lists”.
                 $profile->loadMissing(['city', 'nativeCity', 'addresses.village']);
                 $data['profileAddresses'] = $profile->addresses;
-                $data['workCityName'] = $profile->work_city_id ? \App\Models\City::where('id', $profile->work_city_id)->value('name') : '';
-                $data['nativePlaceDisplay'] = $profile->native_city_id ? \App\Models\City::where('id', $profile->native_city_id)->value('name') : '';
+                $data['workCityName'] = $profile->work_city_id
+                    ? (Location::query()->find($profile->work_city_id)?->localizedName() ?? '')
+                    : '';
+                $data['nativePlaceDisplay'] = $profile->native_city_id
+                    ? (Location::query()->find($profile->native_city_id)?->localizedName() ?? '')
+                    : '';
                 $data['residencePlaceDisplay'] = old('wizard_residence_display', $profile->residenceLocationDisplayLine());
                 $data['workPlaceDisplay'] = old('wizard_work_place_display', $data['workCityName'] ?? '');
                 $data['nativePlaceTypeaheadDisplay'] = old('wizard_native_place_display', $data['nativePlaceDisplay'] ?? '');
@@ -750,14 +752,11 @@ class ProfileWizardController extends Controller
                 $preferredTalukaIds = Schema::hasTable('profile_preferred_talukas')
                     ? DB::table('profile_preferred_talukas')->where('profile_id', $profile->id)->pluck('taluka_id')->all()
                     : [];
-                $preferredMasterEducationIds = Schema::hasTable('profile_preferred_master_education')
-                    ? DB::table('profile_preferred_master_education')->where('profile_id', $profile->id)->pluck('master_education_id')->all()
+                $preferredEducationDegreeIds = Schema::hasTable('profile_preferred_education_degrees')
+                    ? DB::table('profile_preferred_education_degrees')->where('profile_id', $profile->id)->pluck('education_degree_id')->all()
                     : [];
-                $preferredWorkingWithTypeIds = Schema::hasTable('profile_preferred_working_with_types')
-                    ? DB::table('profile_preferred_working_with_types')->where('profile_id', $profile->id)->pluck('working_with_type_id')->all()
-                    : [];
-                $preferredProfessionIds = Schema::hasTable('profile_preferred_professions')
-                    ? DB::table('profile_preferred_professions')->where('profile_id', $profile->id)->pluck('profession_id')->all()
+                $preferredOccupationMasterIds = Schema::hasTable('profile_preferred_occupation_master')
+                    ? DB::table('profile_preferred_occupation_master')->where('profile_id', $profile->id)->pluck('occupation_master_id')->all()
                     : [];
                 $preferredDietIds = Schema::hasTable('profile_preferred_diets')
                     ? DB::table('profile_preferred_diets')->where('profile_id', $profile->id)->pluck('diet_id')->all()
@@ -770,7 +769,7 @@ class ProfileWizardController extends Controller
 
                 $wasCompletelyEmpty = ! $criteria && empty($preferredReligionIds) && empty($preferredCasteIds) && empty($preferredDistrictIds)
                     && empty($preferredCountryIds) && empty($preferredStateIds) && empty($preferredTalukaIds)
-                    && empty($preferredMasterEducationIds) && empty($preferredWorkingWithTypeIds) && empty($preferredProfessionIds)
+                    && empty($preferredEducationDegreeIds) && empty($preferredOccupationMasterIds)
                     && empty($preferredDietIds) && empty($preferredMaritalStatusIdsFromDb)
                     && ($criteria?->preferred_marital_status_id ?? null) === null;
 
@@ -819,9 +818,8 @@ class ProfileWizardController extends Controller
                 $data['preferredCountryIds'] = $preferredCountryIds;
                 $data['preferredStateIds'] = $preferredStateIds;
                 $data['preferredTalukaIds'] = $preferredTalukaIds;
-                $data['preferredMasterEducationIds'] = $preferredMasterEducationIds;
-                $data['preferredWorkingWithTypeIds'] = $preferredWorkingWithTypeIds;
-                $data['preferredProfessionIds'] = $preferredProfessionIds;
+                $data['preferredEducationDegreeIds'] = $preferredEducationDegreeIds;
+                $data['preferredOccupationMasterIds'] = $preferredOccupationMasterIds;
                 $data['preferredDietIds'] = $preferredDietIds;
                 $data['partnerDietOptions'] = \App\Models\MasterDiet::where('is_active', true)->orderBy('sort_order')->orderBy('label')->get();
 
@@ -830,12 +828,19 @@ class ProfileWizardController extends Controller
                 $preferredDistrictIds = array_values(array_unique(array_map('intval', $preferredDistrictIds)));
                 $preferredTalukaIds = array_values(array_unique(array_map('intval', $preferredTalukaIds)));
 
-                $data['allCountries'] = \App\Models\Country::query()->orderBy('name')->get();
+                // SSOT: countries are rows in `addresses` (type=country), not the legacy `countries` table.
+                $data['allCountries'] = Location::query()
+                    ->where('type', 'country')
+                    ->where(function ($q) {
+                        $q->whereNull('is_active')->orWhere('is_active', true);
+                    })
+                    ->orderBy('name')
+                    ->get();
                 $data['partnerLocationInitialStates'] = $preferredStateIds !== [] || $preferredCountryIds !== []
                     ? \App\Models\State::query()
                         ->where(function ($q) use ($preferredCountryIds, $preferredStateIds) {
                             if ($preferredCountryIds !== []) {
-                                $q->whereIn('country_id', $preferredCountryIds);
+                                $q->whereIn('parent_id', $preferredCountryIds);
                             }
                             if ($preferredStateIds !== []) {
                                 $q->orWhereIn('id', $preferredStateIds);
@@ -848,7 +853,7 @@ class ProfileWizardController extends Controller
                     ? \App\Models\District::query()
                         ->where(function ($q) use ($preferredStateIds, $preferredDistrictIds) {
                             if ($preferredStateIds !== []) {
-                                $q->whereIn('state_id', $preferredStateIds);
+                                $q->whereIn('parent_id', $preferredStateIds);
                             }
                             if ($preferredDistrictIds !== []) {
                                 $q->orWhereIn('id', $preferredDistrictIds);
@@ -861,7 +866,7 @@ class ProfileWizardController extends Controller
                     ? \App\Models\Taluka::query()
                         ->where(function ($q) use ($preferredDistrictIds, $preferredTalukaIds) {
                             if ($preferredDistrictIds !== []) {
-                                $q->whereIn('district_id', $preferredDistrictIds);
+                                $q->whereIn('parent_id', $preferredDistrictIds);
                             }
                             if ($preferredTalukaIds !== []) {
                                 $q->orWhereIn('id', $preferredTalukaIds);
@@ -871,26 +876,35 @@ class ProfileWizardController extends Controller
                         ->get()
                     : collect();
                 $data['partnerLocationStateById'] = $data['partnerLocationInitialStates']->mapWithKeys(
-                    fn ($s) => [$s->id => ['id' => $s->id, 'name' => $s->name, 'country_id' => $s->country_id]]
+                    fn ($s) => [$s->id => ['id' => $s->id, 'name' => $s->name, 'parent_id' => (int) $s->parent_id]]
                 )->all();
                 $data['partnerLocationDistrictById'] = $data['partnerLocationInitialDistricts']->mapWithKeys(
-                    fn ($d) => [$d->id => ['id' => $d->id, 'name' => $d->name, 'state_id' => $d->state_id]]
+                    fn ($d) => [$d->id => ['id' => $d->id, 'name' => $d->name, 'parent_id' => (int) $d->parent_id]]
                 )->all();
                 $data['partnerLocationTalukaById'] = $data['partnerLocationInitialTalukas']->mapWithKeys(
-                    fn ($t) => [$t->id => ['id' => $t->id, 'name' => $t->name, 'district_id' => $t->district_id]]
+                    fn ($t) => [$t->id => ['id' => $t->id, 'name' => $t->name, 'parent_id' => (int) $t->parent_id]]
                 )->all();
                 $data['partnerLocationApiBase'] = url('/api/internal/location');
 
-                $partnerProfessions = \App\Models\Profession::where('is_active', true)->with('workingWithType')->orderBy('sort_order')->orderBy('name')->get();
-                $data['masterEducationOptions'] = \App\Models\MasterEducation::where('is_active', true)->orderBy('sort_order')->orderBy('name')->get();
-                $data['workingWithTypes'] = \App\Models\WorkingWithType::where('is_active', true)->orderBy('sort_order')->orderBy('name')->get();
-                $data['partnerProfessions'] = $partnerProfessions;
-                $data['partnerProfessionsByWorkingWithType'] = $partnerProfessions->groupBy('working_with_type_id')->map(
-                    fn ($group) => $group->map(fn ($p) => ['id' => $p->id, 'name' => $p->name, 'working_with_type_id' => $p->working_with_type_id])->values()->all()
-                )->all();
-                $data['partnerProfessionById'] = $partnerProfessions->keyBy('id')->map(
-                    fn ($p) => ['id' => $p->id, 'name' => $p->name, 'working_with_type_id' => $p->working_with_type_id]
-                )->all();
+                $data['educationCategoriesPartnerPrefs'] = \App\Models\EducationCategory::query()
+                    ->where(function ($q) {
+                        $q->whereNull('is_active')->orWhere('is_active', true);
+                    })
+                    ->orderBy('sort_order')
+                    ->orderBy('name')
+                    ->with(['degrees' => function ($q) {
+                        $q->orderBy('sort_order')->orderBy('title');
+                    }])
+                    ->get();
+                $data['occupationCategoriesPartnerPrefs'] = Schema::hasTable('occupation_categories') && Schema::hasTable('occupation_master')
+                    ? OccupationCategory::query()
+                        ->orderBy('sort_order')
+                        ->orderBy('name')
+                        ->with(['occupations' => function ($q) {
+                            $q->orderBy('sort_order')->orderBy('name');
+                        }])
+                        ->get()
+                    : collect();
 
                 $data['preferredMaritalStatusIds'] = collect(old('preferred_marital_status_ids', $preferredMaritalStatusIdsMerged))
                     ->map(fn ($id) => (int) $id)->filter(fn ($id) => $id > 0)->unique()->values()->all();
@@ -945,24 +959,11 @@ class ProfileWizardController extends Controller
      */
     private function buildBirthPlaceDisplay(MatrimonyProfile $profile): string
     {
-        if (! $profile->birth_city_id && ! $profile->birth_taluka_id && ! $profile->birth_district_id && ! $profile->birth_state_id) {
+        if (! $profile->birth_city_id) {
             return trim((string) ($profile->birth_place_text ?? ''));
         }
-        $parts = [];
-        if ($profile->birth_city_id) {
-            $parts[] = \App\Models\City::where('id', $profile->birth_city_id)->value('name') ?? '';
-        }
-        if ($profile->birth_taluka_id) {
-            $parts[] = \App\Models\Taluka::where('id', $profile->birth_taluka_id)->value('name') ?? '';
-        }
-        if ($profile->birth_district_id) {
-            $parts[] = \App\Models\District::where('id', $profile->birth_district_id)->value('name') ?? '';
-        }
-        if ($profile->birth_state_id) {
-            $parts[] = \App\Models\State::where('id', $profile->birth_state_id)->value('name') ?? '';
-        }
 
-        return implode(', ', array_filter($parts));
+        return $profile->birthLocationDisplayLine();
     }
 
     /**
@@ -1078,19 +1079,19 @@ class ProfileWizardController extends Controller
         $core['has_children'] = $marriagesSnapshot['core']['has_children'] ?? null;
 
         $birth_place = null;
-        if ($request->filled('birth_state_id') || $request->filled('birth_city_id')) {
+        if ($request->filled('birth_city_id')) {
             $birth_place = [
                 'city_id' => $request->input('birth_city_id') ? (int) $request->input('birth_city_id') : null,
-                'taluka_id' => $request->input('birth_taluka_id') ? (int) $request->input('birth_taluka_id') : null,
-                'district_id' => $request->input('birth_district_id') ? (int) $request->input('birth_district_id') : null,
-                'state_id' => $request->input('birth_state_id') ? (int) $request->input('birth_state_id') : null,
+                'taluka_id' => null,
+                'district_id' => null,
+                'state_id' => null,
             ];
-        } elseif ($profile->birth_city_id || $profile->birth_state_id) {
+        } elseif ($profile->birth_city_id) {
             $birth_place = [
                 'city_id' => $profile->birth_city_id,
-                'taluka_id' => $profile->birth_taluka_id,
-                'district_id' => $profile->birth_district_id,
-                'state_id' => $profile->birth_state_id,
+                'taluka_id' => null,
+                'district_id' => null,
+                'state_id' => null,
             ];
         }
 
@@ -1136,28 +1137,21 @@ class ProfileWizardController extends Controller
         return [
             'location_id' => $locationId,
             'location_input' => $locationInput,
-            'country_id' => $toInt($this->residenceScalarFromRequest($request, 'country_id')),
-            'state_id' => $toInt($this->residenceScalarFromRequest($request, 'state_id')),
-            'district_id' => $toInt($this->residenceScalarFromRequest($request, 'district_id')),
-            'taluka_id' => $toInt($this->residenceScalarFromRequest($request, 'taluka_id')),
             'address_line' => $addressLine,
         ];
     }
 
     private function validateResidenceCoreForSnapshot(Request $request): void
     {
-        $keys = ['country_id', 'state_id', 'district_id', 'taluka_id', 'location_id', 'location_input', 'address_line'];
+        $keys = ['location_id', 'location_input', 'address_line'];
         $data = [];
         foreach ($keys as $k) {
             $data[$k] = $this->residenceScalarFromRequest($request, $k);
         }
+        $geo = Location::geoTable();
         Validator::make($data, [
-            'location_id' => ['required_without:location_input', 'nullable', 'integer', 'exists:'.Location::geoTable().',id'],
+            'location_id' => ['required_without:location_input', 'nullable', 'integer', Rule::exists($geo, 'id')],
             'location_input' => ['required_without:location_id', 'nullable', 'string', 'min:2', 'max:255'],
-            'country_id' => ['nullable', 'exists:countries,id'],
-            'state_id' => ['nullable', 'exists:states,id'],
-            'district_id' => ['nullable', 'exists:districts,id'],
-            'taluka_id' => ['nullable', 'exists:talukas,id'],
             'address_line' => ['nullable', 'string', 'max:255'],
         ])->validate();
 
@@ -1215,7 +1209,7 @@ class ProfileWizardController extends Controller
 
     private function buildEducationCareerSnapshot(Request $request, MatrimonyProfile $profile): array
     {
-        if (Schema::hasColumn('matrimony_profiles', 'education_degree_id')) {
+        if (Schema::hasColumn('matrimony_profiles', 'highest_education')) {
             $educationService = app(EducationService::class);
             if (! $educationService->mergeMultiselectEducationIntoRequest($request)) {
                 $educationService->mergeMultiselectEducationIntoRequest($request, 'snapshot.core');
@@ -1268,11 +1262,9 @@ class ProfileWizardController extends Controller
                 }
             }
         }
-        if (Schema::hasColumn('matrimony_profiles', 'education_degree_id')) {
+        if (Schema::hasColumn('matrimony_profiles', 'highest_education')) {
             $request->validate([
                 'education_slots' => ['nullable', 'string', 'max:8192'],
-                'education_degree_id' => ['nullable', 'integer', Rule::exists('education_degrees', 'id')],
-                'education_text' => ['nullable', 'string', 'max:512'],
             ]);
         }
         $incomeEngineService = app(\App\Services\IncomeEngineService::class);
@@ -1295,14 +1287,6 @@ class ProfileWizardController extends Controller
             'work_city_id' => $workCityId,
             'work_state_id' => $workStateId,
         ];
-        if (Schema::hasColumn('matrimony_profiles', 'highest_education_id')) {
-            $core['highest_education_id'] = $request->filled('highest_education_id') ? (int) $request->input('highest_education_id') : null;
-            $core['highest_education_text'] = $request->filled('highest_education_text') ? trim((string) $request->input('highest_education_text')) ?: null : null;
-        }
-        if (Schema::hasColumn('matrimony_profiles', 'education_degree_id')) {
-            $core['education_degree_id'] = $request->filled('education_degree_id') ? (int) $request->input('education_degree_id') : null;
-            $core['education_text'] = $request->filled('education_text') ? trim((string) $request->input('education_text')) ?: null : null;
-        }
         if (Schema::hasColumn('matrimony_profiles', 'work_location_text')) {
             $wlt = trim((string) $request->input('work_location_text', ''));
             $core['work_location_text'] = $wlt !== '' ? mb_substr($wlt, 0, 255) : null;
@@ -1405,7 +1389,7 @@ class ProfileWizardController extends Controller
 
     private function buildPersonalFamilySnapshot(Request $request, MatrimonyProfile $profile): array
     {
-        if (Schema::hasColumn('matrimony_profiles', 'education_degree_id')) {
+        if (Schema::hasColumn('matrimony_profiles', 'highest_education')) {
             $educationService = app(EducationService::class);
             if (! $educationService->mergeMultiselectEducationIntoRequest($request)) {
                 $educationService->mergeMultiselectEducationIntoRequest($request, 'snapshot.core');
@@ -1464,11 +1448,9 @@ class ProfileWizardController extends Controller
                 }
             }
         }
-        if (Schema::hasColumn('matrimony_profiles', 'education_degree_id')) {
+        if (Schema::hasColumn('matrimony_profiles', 'highest_education')) {
             $request->validate([
                 'education_slots' => ['nullable', 'string', 'max:8192'],
-                'education_degree_id' => ['nullable', 'integer', Rule::exists('education_degrees', 'id')],
-                'education_text' => ['nullable', 'string', 'max:512'],
             ]);
         }
         $incomeEngineService = app(\App\Services\IncomeEngineService::class);
@@ -1493,14 +1475,6 @@ class ProfileWizardController extends Controller
             'family_income' => $request->filled('family_income') ? (float) $request->input('family_income') : null,
             'income_currency_id' => $request->input('income_currency_id') ? (int) $request->input('income_currency_id') : (\App\Models\MasterIncomeCurrency::where('code', 'INR')->value('id')),
         ];
-        if (Schema::hasColumn('matrimony_profiles', 'highest_education_id')) {
-            $core['highest_education_id'] = $request->filled('highest_education_id') ? (int) $request->input('highest_education_id') : null;
-            $core['highest_education_text'] = $request->filled('highest_education_text') ? trim((string) $request->input('highest_education_text')) ?: null : null;
-        }
-        if (Schema::hasColumn('matrimony_profiles', 'education_degree_id')) {
-            $core['education_degree_id'] = $request->filled('education_degree_id') ? (int) $request->input('education_degree_id') : null;
-            $core['education_text'] = $request->filled('education_text') ? trim((string) $request->input('education_text')) ?: null : null;
-        }
         if ($hasOccEngine) {
             $core['occupation_master_id'] = $request->filled('occupation_master_id') ? (int) $request->input('occupation_master_id') : null;
             $core['occupation_custom_id'] = $request->filled('occupation_custom_id') ? (int) $request->input('occupation_custom_id') : null;
@@ -1792,8 +1766,8 @@ class ProfileWizardController extends Controller
     {
         $this->validateResidenceCoreForSnapshot($request);
         $request->validate([
-            'work_city_id' => ['nullable', 'exists:cities,id'],
-            'work_state_id' => ['nullable', 'exists:states,id'],
+            'work_city_id' => ['nullable', AddressHierarchyRules::existsCityId()],
+            'work_state_id' => ['nullable', AddressHierarchyRules::existsStateId()],
         ]);
 
         $core = $this->residenceCoreFromRequest($request);
@@ -1944,13 +1918,9 @@ class ProfileWizardController extends Controller
         }
 
         $core = [];
-        if ($request->has('city_id') || $request->has('address_line') || $request->has('state_id')) {
+        if ($request->has('location_id') || $request->has('address_line')) {
             $core = [
-                'country_id' => $request->input('country_id') ?: null,
-                'state_id' => $request->input('state_id') ?: null,
-                'district_id' => $request->input('district_id') ?: null,
-                'taluka_id' => $request->input('taluka_id') ?: null,
-                'city_id' => $request->input('city_id') ?: null,
+                'location_id' => $request->filled('location_id') ? (int) $request->input('location_id') : null,
                 'address_line' => $request->filled('address_line') ? trim($request->input('address_line')) : null,
             ];
             $core = array_map(fn ($v) => $v === '' ? null : $v, $core);

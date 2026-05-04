@@ -77,31 +77,28 @@ class IntakeLocationSuggestionLayerService
         }
         $core = &$snapshot['core'];
 
-        $districtId = $city->taluka?->district_id;
-        $stateId = $city->taluka?->district?->state_id;
-        $countryId = $city->taluka?->district?->state?->country_id;
+        $districtId = $city->taluka?->parent_id;
+        $stateId = $city->taluka?->district?->parent_id;
+        $countryId = $city->taluka?->district?->state?->parent_id;
 
         if ($fieldKey === 'birth_place') {
             if (! empty($core['birth_city_id'])) {
                 return ['ok' => false, 'message' => 'Birth place is already resolved.'];
             }
             $core['birth_city_id'] = (int) $city->id;
-            $core['birth_taluka_id'] = $city->taluka_id !== null ? (int) $city->taluka_id : null;
-            $core['birth_district_id'] = $districtId !== null ? (int) $districtId : null;
-            $core['birth_state_id'] = $stateId !== null ? (int) $stateId : null;
             if (! is_array($snapshot['birth_place'] ?? null)) {
                 $snapshot['birth_place'] = [];
             }
             $snapshot['birth_place']['city_id'] = (int) $city->id;
-            $snapshot['birth_place']['taluka_id'] = $core['birth_taluka_id'];
-            $snapshot['birth_place']['district_id'] = $core['birth_district_id'];
-            $snapshot['birth_place']['state_id'] = $core['birth_state_id'];
+            $snapshot['birth_place']['taluka_id'] = $city->parent_id !== null ? (int) $city->parent_id : null;
+            $snapshot['birth_place']['district_id'] = $districtId !== null ? (int) $districtId : null;
+            $snapshot['birth_place']['state_id'] = $stateId !== null ? (int) $stateId : null;
         } elseif ($fieldKey === 'native_place') {
             if (! empty($core['native_city_id'])) {
                 return ['ok' => false, 'message' => 'Native place is already resolved.'];
             }
             $core['native_city_id'] = (int) $city->id;
-            $core['native_taluka_id'] = $city->taluka_id !== null ? (int) $city->taluka_id : null;
+            $core['native_taluka_id'] = $city->parent_id !== null ? (int) $city->parent_id : null;
             $core['native_district_id'] = $districtId !== null ? (int) $districtId : null;
             $core['native_state_id'] = $stateId !== null ? (int) $stateId : null;
             if (! is_array($snapshot['native_place'] ?? null)) {
@@ -130,7 +127,7 @@ class IntakeLocationSuggestionLayerService
                 return ['ok' => false, 'message' => 'Address row is already resolved.'];
             }
             $snapshot['addresses'][$idx]['city_id'] = (int) $city->id;
-            $snapshot['addresses'][$idx]['taluka_id'] = $city->taluka_id !== null ? (int) $city->taluka_id : null;
+            $snapshot['addresses'][$idx]['taluka_id'] = $city->parent_id !== null ? (int) $city->parent_id : null;
             $snapshot['addresses'][$idx]['district_id'] = $districtId !== null ? (int) $districtId : null;
             $snapshot['addresses'][$idx]['state_id'] = $stateId !== null ? (int) $stateId : null;
             $snapshot['addresses'][$idx]['country_id'] = $countryId !== null ? (int) $countryId : null;

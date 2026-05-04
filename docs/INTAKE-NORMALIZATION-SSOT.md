@@ -61,7 +61,8 @@ this order (where applicable):
 1. **Normalize text** — trim, collapse whitespace, safe punctuation (reuse
    existing helpers where present).
 2. **Alias lookup (DB)** — when an alias table exists for that domain
-   (`religion_aliases`, `caste_aliases`, `sub_caste_aliases`, `city_aliases`,
+   (`religion_aliases`, `caste_aliases`, `sub_caste_aliases`, `location_aliases`
+   (geo aliases on `addresses.id`),
    future `education_*_aliases`, etc.).
 3. **Exact match** — key/label/`code`/`title`/`name_mr` as defined for that
    table (domain service or `ControlledOptionNormalizer`).
@@ -103,10 +104,12 @@ Alias tables **in this repo** (domain tables; avoid duplicate parallel systems):
   `ControlledMasterDbAliasResolver` (after engine match, before static PHP maps).
   Caste/sub-caste alias queries use `religion_id` / `caste_id` from core when
   present to reduce ambiguity.
-- `city_aliases` — consumed for **birth** / **native** place text via
+- `location_aliases` — geo text variants keyed by `addresses.id` (typically city-level leaves),
+  consumed for **birth** / **native** place text via
   `App\Services\Location\LocationNormalizationService` (called from
-  `IntakeControlledFieldNormalizer`). **Current address** / `addresses[]` /
-  **work location** FK wiring is still separate (next steps below).
+  `IntakeControlledFieldNormalizer`). Canonical hierarchy for all geo lives in the
+  **`addresses`** table (`parent_id` chain); **current address** / `addresses[]` /
+  **work location** FK wiring may still use separate profile columns that point at the same id space.
 - `education_degree_aliases` — read in `EducationService::findDegreeMatch`
   (intake `education_history` → `degree_id`).
 - `occupation_master_aliases` — read in `OccupationService::findOccupationMasterForIntake`

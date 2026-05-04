@@ -11,14 +11,14 @@ return new class extends Migration
 {
     public function up(): void
     {
-        if (! Schema::hasTable('locations')) {
+        if (! Schema::hasTable('addresses')) {
             return;
         }
 
         if (! Schema::hasTable('location_usage_stats')) {
             Schema::create('location_usage_stats', function (Blueprint $table) {
                 $table->id();
-                $table->foreignId('location_id')->unique()->constrained('locations')->cascadeOnDelete();
+                $table->foreignId('location_id')->unique()->constrained('addresses')->cascadeOnDelete();
                 $table->unsignedInteger('usage_count')->default(0);
                 $table->timestamp('last_used_at')->nullable();
                 $table->timestamps();
@@ -30,7 +30,7 @@ return new class extends Migration
         if (! Schema::hasTable('location_aliases')) {
             Schema::create('location_aliases', function (Blueprint $table) {
                 $table->id();
-                $table->foreignId('location_id')->constrained('locations')->cascadeOnDelete();
+                $table->foreignId('location_id')->constrained('addresses')->cascadeOnDelete();
                 $table->string('alias', 255);
                 $table->string('normalized_alias', 255);
                 $table->timestamps();

@@ -12,9 +12,9 @@ return new class extends Migration
             $table->id();
 
             $table->foreignId('profile_id')
-                  ->unique()
-                  ->constrained('matrimony_profiles')
-                  ->cascadeOnDelete();
+                ->unique()
+                ->constrained('matrimony_profiles')
+                ->cascadeOnDelete();
 
             $table->unsignedTinyInteger('preferred_age_min')->nullable();
             $table->unsignedTinyInteger('preferred_age_max')->nullable();
@@ -25,9 +25,9 @@ return new class extends Migration
             $table->string('preferred_education')->nullable();
 
             $table->foreignId('preferred_city_id')
-                  ->nullable()
-                  ->constrained('cities')
-                  ->nullOnDelete();
+                ->nullable()
+                ->constrained('addresses')
+                ->nullOnDelete();
 
             $table->timestamps();
         });

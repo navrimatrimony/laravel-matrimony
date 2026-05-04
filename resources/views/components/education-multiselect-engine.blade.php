@@ -6,6 +6,7 @@
 ])
 @php
     use App\Models\EducationDegree;
+    use App\Services\EducationService;
     use Illuminate\Support\Facades\Schema;
 
     $suffix = $suffix ?? substr(bin2hex(random_bytes(8)), 0, 12);
@@ -13,53 +14,27 @@
         ? str_replace(']', '', str_replace('[', '.', $namePrefix.'['.$key.']'))
         : $key;
 
-    $hasEducationEngine = Schema::hasColumn('matrimony_profiles', 'education_degree_id');
-    if ($profile instanceof \App\Models\MatrimonyProfile) {
-        $profile->loadMissing('educationDegree');
-    }
-
-    $educationDegreeId = old($oldKey('education_degree_id'), $hasEducationEngine ? ($profile->education_degree_id ?? null) : null);
-    $educationManual = old($oldKey('education_text'), $hasEducationEngine ? ($profile->education_text ?? null) : null);
-
-    $degreeChipTitle = '';
+    $hasEducationEngine = Schema::hasColumn('matrimony_profiles', 'highest_education');
+    $educationService = app(EducationService::class);
     $localeMr = app()->getLocale() === 'mr';
-    if ($hasEducationEngine && $educationDegreeId) {
-        if ($profile instanceof \App\Models\MatrimonyProfile && $profile->educationDegree) {
-            $d = $profile->educationDegree;
-            $label = ($localeMr && filled($d->title_mr)) ? $d->title_mr : ($d->title ?? '');
-            $degreeChipTitle = (string) ($label !== '' ? $label : ($d->code ?? ''));
-        } else {
-            $_degRow = EducationDegree::query()->find((int) $educationDegreeId);
-            if ($_degRow) {
-                $label = ($localeMr && filled($_degRow->title_mr)) ? $_degRow->title_mr : ($_degRow->title ?? '');
-                $degreeChipTitle = (string) ($label !== '' ? $label : ($_degRow->code ?? ''));
-            }
-        }
-    }
 
     $initialEducationChips = [];
-    if ($hasEducationEngine && $educationDegreeId) {
-        $initialEducationChips[] = [
-            'id' => (int) $educationDegreeId,
-            'name' => $degreeChipTitle,
-            'custom' => false,
-        ];
-    }
-    if ($hasEducationEngine && $educationManual) {
-        $parts = preg_split('/[,\\s]+/', trim((string) $educationManual), -1, PREG_SPLIT_NO_EMPTY);
-        foreach ($parts as $part) {
-            $initialEducationChips[] = [
-                'id' => 'custom:'.rawurlencode($part),
-                'name' => $part,
-                'custom' => true,
-            ];
-        }
-    }
-    if ($hasEducationEngine && $initialEducationChips === []) {
-        $legacyHe = trim((string) old($oldKey('highest_education'), $profile->highest_education ?? ''));
-        if ($legacyHe !== '') {
-            $parts = preg_split('/[,\\s]+/', $legacyHe, -1, PREG_SPLIT_NO_EMPTY);
-            foreach ($parts as $part) {
+    $legacyHe = trim((string) old($oldKey('highest_education'), $profile->highest_education ?? ''));
+    if ($hasEducationEngine && $legacyHe !== '') {
+        foreach (array_map('trim', explode(',', $legacyHe)) as $part) {
+            if ($part === '') {
+                continue;
+            }
+            $match = $educationService->findDegreeMatch($part);
+            if ($match !== null) {
+                $d = $match;
+                $label = ($localeMr && filled($d->title_mr)) ? (string) $d->title_mr : (string) ($d->title ?? $d->code ?? '');
+                $initialEducationChips[] = [
+                    'id' => (int) $d->id,
+                    'name' => $label !== '' ? $label : (string) ($d->code ?? ''),
+                    'custom' => false,
+                ];
+            } else {
                 $initialEducationChips[] = [
                     'id' => 'custom:'.rawurlencode($part),
                     'name' => $part,
@@ -114,8 +89,6 @@
         </div>
 
         @error($oldKey('highest_education'))<p class="text-sm text-red-600">{{ $message }}</p>@enderror
-        @error($oldKey('education_degree_id'))<p class="text-sm text-red-600">{{ $message }}</p>@enderror
-        @error($oldKey('education_text'))<p class="text-sm text-red-600">{{ $message }}</p>@enderror
 
         <p class="text-xs text-gray-500 dark:text-gray-400 mt-2">{{ __('onboarding.education_examples') }}</p>
     </div>

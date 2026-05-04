@@ -4,6 +4,7 @@ namespace App\Services\Showcase;
 
 use App\Models\AdminSetting;
 use App\Models\City;
+use App\Models\Location;
 use App\Models\MatrimonyProfile;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -28,15 +29,20 @@ class ShowcaseEligibleCityPopulationService
             ->distinct()
             ->pluck('district_id');
 
+        $geo = Location::geoTable();
         $d2 = DB::table('matrimony_profiles as mp')
-            ->join('cities as c', 'c.id', '=', 'mp.city_id')
-            ->join('talukas as t', 't.id', '=', 'c.taluka_id')
+            ->join($geo.' as city', function ($join): void {
+                $join->on('city.id', '=', 'mp.city_id')->where('city.type', '=', 'city');
+            })
+            ->join($geo.' as taluka', function ($join): void {
+                $join->on('taluka.id', '=', 'city.parent_id')->where('taluka.type', '=', 'taluka');
+            })
             ->whereNotNull('mp.city_id')
             ->where(function ($q) {
                 $q->where('mp.is_showcase', false)->orWhereNull('mp.is_showcase');
             })
             ->distinct()
-            ->pluck('t.district_id');
+            ->pluck('taluka.parent_id');
 
         return $d1->merge($d2)->map(fn ($v) => (int) $v)->unique()->filter(fn ($id) => $id > 0)->values();
     }
@@ -76,18 +82,21 @@ class ShowcaseEligibleCityPopulationService
             return 0;
         }
 
+        $geo = Location::geoTable();
         $q = City::query()
-            ->join('talukas', 'talukas.id', '=', 'cities.taluka_id')
-            ->whereIn('talukas.district_id', $districtIds)
-            ->whereNull('cities.population');
+            ->join($geo.' as taluka', function ($join) use ($geo): void {
+                $join->on('taluka.id', '=', $geo.'.parent_id')->where('taluka.type', '=', 'taluka');
+            })
+            ->whereIn('taluka.parent_id', $districtIds)
+            ->whereNull($geo.'.population');
         if ($forAi) {
             $locked = $this->aiLockedDistrictIds();
             if ($locked !== []) {
-                $q->whereNotIn('talukas.district_id', $locked);
+                $q->whereNotIn('taluka.parent_id', $locked);
             }
         }
 
-        return (int) $q->selectRaw('count(distinct cities.id) as c')->value('c');
+        return (int) $q->selectRaw('count(distinct '.$geo.'.id) as c')->value('c');
     }
 
     /**
@@ -100,20 +109,23 @@ class ShowcaseEligibleCityPopulationService
             return collect();
         }
 
+        $geo = Location::geoTable();
         $q = City::query()
-            ->join('talukas', 'talukas.id', '=', 'cities.taluka_id')
-            ->whereIn('talukas.district_id', $districtIds)
-            ->whereNull('cities.population');
+            ->join($geo.' as taluka', function ($join) use ($geo): void {
+                $join->on('taluka.id', '=', $geo.'.parent_id')->where('taluka.type', '=', 'taluka');
+            })
+            ->whereIn('taluka.parent_id', $districtIds)
+            ->whereNull($geo.'.population');
         if ($forAi) {
             $locked = $this->aiLockedDistrictIds();
             if ($locked !== []) {
-                $q->whereNotIn('talukas.district_id', $locked);
+                $q->whereNotIn('taluka.parent_id', $locked);
             }
         }
 
-        return $q->orderBy('cities.id')
+        return $q->orderBy($geo.'.id')
             ->limit(max(1, $limit))
-            ->pluck('cities.id');
+            ->pluck($geo.'.id');
     }
 
     /**
@@ -129,11 +141,14 @@ class ShowcaseEligibleCityPopulationService
                 continue;
             }
             $districtId = (int) $city->taluka->district_id;
+            $geo = Location::geoTable();
             $avg = City::query()
-                ->join('talukas', 'talukas.id', '=', 'cities.taluka_id')
-                ->where('talukas.district_id', $districtId)
-                ->whereNotNull('cities.population')
-                ->avg('cities.population');
+                ->join($geo.' as taluka', function ($join) use ($geo): void {
+                    $join->on('taluka.id', '=', $geo.'.parent_id')->where('taluka.type', '=', 'taluka');
+                })
+                ->where('taluka.parent_id', $districtId)
+                ->whereNotNull($geo.'.population')
+                ->avg($geo.'.population');
             $pop = $avg ? (int) round((float) $avg) : 175_000;
             $pop = max(50_000, min(8_000_000, $pop));
             $city->population = $pop;
@@ -159,11 +174,16 @@ class ShowcaseEligibleCityPopulationService
             return 0;
         }
 
+        $geo = Location::geoTable();
         $rows = City::query()
-            ->select(['cities.id', 'cities.name', 'districts.id as district_id', 'districts.name as district_name'])
-            ->join('talukas', 'talukas.id', '=', 'cities.taluka_id')
-            ->join('districts', 'districts.id', '=', 'talukas.district_id')
-            ->whereIn('cities.id', $ids->all())
+            ->select([$geo.'.id', $geo.'.name', 'district.id as district_id', 'district.name as district_name'])
+            ->join($geo.' as taluka', function ($join) use ($geo): void {
+                $join->on('taluka.id', '=', $geo.'.parent_id')->where('taluka.type', '=', 'taluka');
+            })
+            ->join($geo.' as district', function ($join): void {
+                $join->on('district.id', '=', 'taluka.parent_id')->where('district.type', '=', 'district');
+            })
+            ->whereIn($geo.'.id', $ids->all())
             ->get();
 
         $cityToDistrict = [];

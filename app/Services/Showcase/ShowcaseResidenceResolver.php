@@ -4,6 +4,7 @@ namespace App\Services\Showcase;
 
 use App\Models\City;
 use App\Models\District;
+use App\Models\Location;
 use App\Models\Taluka;
 use Illuminate\Http\Request;
 
@@ -53,10 +54,13 @@ class ShowcaseResidenceResolver
 
         if ($request->filled('district_id')) {
             $districtId = (int) $request->district_id;
+            $geo = Location::geoTable();
             $inDistrict = City::query()
-                ->join('talukas', 'talukas.id', '=', 'cities.taluka_id')
-                ->where('cities.id', $cityId)
-                ->where('talukas.district_id', $districtId)
+                ->join($geo.' as taluka', function ($join) use ($geo): void {
+                    $join->on('taluka.id', '=', $geo.'.parent_id')->where('taluka.type', '=', 'taluka');
+                })
+                ->where($geo.'.id', $cityId)
+                ->where('taluka.parent_id', $districtId)
                 ->exists();
             if (! $inDistrict) {
                 return null;
@@ -97,23 +101,29 @@ class ShowcaseResidenceResolver
 
         $name = trim((string) $district->name);
         if ($name !== '') {
+            $geo = Location::geoTable();
             $match = City::query()
-                ->join('talukas', 'talukas.id', '=', 'cities.taluka_id')
-                ->where('talukas.district_id', $districtId)
-                ->whereRaw('LOWER(TRIM(cities.name)) = ?', [mb_strtolower($name)])
-                ->orderByDesc('cities.population')
-                ->value('cities.id');
+                ->join($geo.' as taluka', function ($join) use ($geo): void {
+                    $join->on('taluka.id', '=', $geo.'.parent_id')->where('taluka.type', '=', 'taluka');
+                })
+                ->where('taluka.parent_id', $districtId)
+                ->whereRaw('LOWER(TRIM('.$geo.'.name)) = ?', [mb_strtolower($name)])
+                ->orderByDesc($geo.'.population')
+                ->value($geo.'.id');
             if ($match) {
                 return (int) $match;
             }
         }
 
+        $geo = Location::geoTable();
         $bestPop = City::query()
-            ->join('talukas', 'talukas.id', '=', 'cities.taluka_id')
-            ->where('talukas.district_id', $districtId)
-            ->orderByRaw('COALESCE(cities.population, 0) DESC')
-            ->orderByDesc('cities.id')
-            ->value('cities.id');
+            ->join($geo.' as taluka', function ($join) use ($geo): void {
+                $join->on('taluka.id', '=', $geo.'.parent_id')->where('taluka.type', '=', 'taluka');
+            })
+            ->where('taluka.parent_id', $districtId)
+            ->orderByRaw('COALESCE('.$geo.'.population, 0) DESC')
+            ->orderByDesc($geo.'.id')
+            ->value($geo.'.id');
 
         return $bestPop ? (int) $bestPop : null;
     }
@@ -129,14 +139,17 @@ class ShowcaseResidenceResolver
             return $this->fromDistrictSeat($request);
         }
 
+        $geo = Location::geoTable();
         $id = City::query()
-            ->join('talukas', 'talukas.id', '=', 'cities.taluka_id')
-            ->where('talukas.district_id', $districtId)
-            ->whereNotNull('cities.population')
-            ->where('cities.population', '>=', $minPopulation)
-            ->orderByDesc('cities.population')
-            ->orderByDesc('cities.id')
-            ->value('cities.id');
+            ->join($geo.' as taluka', function ($join) use ($geo): void {
+                $join->on('taluka.id', '=', $geo.'.parent_id')->where('taluka.type', '=', 'taluka');
+            })
+            ->where('taluka.parent_id', $districtId)
+            ->whereNotNull($geo.'.population')
+            ->where($geo.'.population', '>=', $minPopulation)
+            ->orderByDesc($geo.'.population')
+            ->orderByDesc($geo.'.id')
+            ->value($geo.'.id');
 
         if ($id) {
             return (int) $id;

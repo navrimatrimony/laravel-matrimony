@@ -112,7 +112,7 @@
     });
 
     // Intake preview uses a stdClass "intakeProfile" — still support the Tom Select engine when the DB column exists.
-    $useDegreeMultiselectEngine = Schema::hasColumn('matrimony_profiles', 'education_degree_id')
+    $useDegreeMultiselectEngine = Schema::hasColumn('matrimony_profiles', 'highest_education')
         && is_object($profile);
 
     $hasOccupationEngine = Schema::hasColumn('matrimony_profiles', 'occupation_master_id');

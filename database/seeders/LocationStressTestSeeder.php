@@ -34,7 +34,7 @@ class LocationStressTestSeeder extends Seeder
             $stateNames = ['Gujarat', 'Karnataka', 'Madhya Pradesh'];
             foreach ($stateNames as $stateName) {
                 $state = State::firstOrCreate([
-                    'country_id' => $india->id,
+                    'parent_id' => $india->id,
                     'name' => $stateName,
                 ]);
                 LocationMarathiLabels::applyIfEmpty($state, $state->name);
@@ -42,14 +42,14 @@ class LocationStressTestSeeder extends Seeder
                 for ($d = 1; $d <= 5; $d++) {
                     $districtName = $stateName.'-'.$d;
                     $district = District::firstOrCreate([
-                        'state_id' => $state->id,
+                        'parent_id' => $state->id,
                         'name' => $districtName,
                     ]);
 
                     for ($t = 1; $t <= 10; $t++) {
                         $talukaName = 'Taluka-'.$d.'-'.$t;
                         $taluka = Taluka::firstOrCreate([
-                            'district_id' => $district->id,
+                            'parent_id' => $district->id,
                             'name' => $talukaName,
                         ]);
 
@@ -58,7 +58,7 @@ class LocationStressTestSeeder extends Seeder
                             $pincode = sprintf('%02d%02d%02d', $d, $t, $v);
                             City::firstOrCreate(
                                 [
-                                    'taluka_id' => $taluka->id,
+                                    'parent_id' => $taluka->id,
                                     'name' => $villageName,
                                 ],
                                 [

@@ -20,7 +20,7 @@ return new class extends Migration
             $table->string('occupation_title')->nullable();
             $table->string('contact_number', 30)->nullable();
             $table->string('address_line')->nullable();
-            $table->foreignId('city_id')->nullable()->constrained('cities')->nullOnDelete();
+            $table->foreignId('city_id')->nullable()->constrained('addresses')->nullOnDelete();
             $table->unsignedBigInteger('taluka_id')->nullable();
             $table->unsignedBigInteger('district_id')->nullable();
             $table->unsignedBigInteger('state_id')->nullable();

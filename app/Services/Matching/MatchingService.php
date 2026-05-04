@@ -452,18 +452,20 @@ class MatchingService
 
     private function locationProximityTier(MatrimonyProfile $seeker, MatrimonyProfile $candidate): int
     {
-        $cidS = (int) ($seeker->city_id ?? 0);
-        $cidC = (int) ($candidate->city_id ?? 0);
-        if ($cidS > 0 && $cidS === $cidC) {
+        $lidS = (int) ($seeker->location_id ?? 0);
+        $lidC = (int) ($candidate->location_id ?? 0);
+        if ($lidS > 0 && $lidS === $lidC) {
             return 3;
         }
-        $sidS = (int) ($seeker->state_id ?? 0);
-        $sidC = (int) ($candidate->state_id ?? 0);
+        $geoS = $seeker->residenceGeoAddressIds();
+        $geoC = $candidate->residenceGeoAddressIds();
+        $sidS = (int) ($geoS['state_id'] ?? 0);
+        $sidC = (int) ($geoC['state_id'] ?? 0);
         if ($sidS > 0 && $sidS === $sidC) {
             return 2;
         }
-        $coidS = (int) ($seeker->country_id ?? 0);
-        $coidC = (int) ($candidate->country_id ?? 0);
+        $coidS = (int) ($geoS['country_id'] ?? 0);
+        $coidC = (int) ($geoC['country_id'] ?? 0);
         if ($coidS > 0 && $coidS === $coidC) {
             return 1;
         }
@@ -612,11 +614,11 @@ class MatchingService
         if (Schema::hasTable('profile_preferred_talukas')) {
             $this->mergePivotIds($map, 'profile_preferred_talukas', $profileIds, 'taluka_id', 'taluka_ids');
         }
-        if (Schema::hasTable('profile_preferred_master_education')) {
-            $this->mergePivotIds($map, 'profile_preferred_master_education', $profileIds, 'master_education_id', 'master_education_ids');
+        if (Schema::hasTable('profile_preferred_education_degrees')) {
+            $this->mergePivotIds($map, 'profile_preferred_education_degrees', $profileIds, 'education_degree_id', 'education_degree_ids');
         }
-        if (Schema::hasTable('profile_preferred_professions')) {
-            $this->mergePivotIds($map, 'profile_preferred_professions', $profileIds, 'profession_id', 'profession_ids');
+        if (Schema::hasTable('profile_preferred_occupation_master')) {
+            $this->mergePivotIds($map, 'profile_preferred_occupation_master', $profileIds, 'occupation_master_id', 'occupation_master_ids');
         }
         if (Schema::hasTable('profile_preferred_diets')) {
             $this->mergePivotIds($map, 'profile_preferred_diets', $profileIds, 'diet_id', 'diet_ids');
@@ -660,8 +662,8 @@ class MatchingService
             'country_ids' => [],
             'state_ids' => [],
             'taluka_ids' => [],
-            'master_education_ids' => [],
-            'profession_ids' => [],
+            'education_degree_ids' => [],
+            'occupation_master_ids' => [],
             'diet_ids' => [],
             'marital_status_ids' => [],
         ];
@@ -796,20 +798,22 @@ class MatchingService
      */
     private function scoreLocationPart(MatrimonyProfile $a, MatrimonyProfile $b): array
     {
-        $cidA = (int) ($a->city_id ?? 0);
-        $cidB = (int) ($b->city_id ?? 0);
-        if ($cidA > 0 && $cidA === $cidB) {
+        $lidA = (int) ($a->location_id ?? 0);
+        $lidB = (int) ($b->location_id ?? 0);
+        if ($lidA > 0 && $lidA === $lidB) {
             return ['points' => self::WEIGHT_LOCATION, 'reasons' => [__('matching.reason_same_city')]];
         }
 
-        $sidA = (int) ($a->state_id ?? 0);
-        $sidB = (int) ($b->state_id ?? 0);
+        $geoA = $a->residenceGeoAddressIds();
+        $geoB = $b->residenceGeoAddressIds();
+        $sidA = (int) ($geoA['state_id'] ?? 0);
+        $sidB = (int) ($geoB['state_id'] ?? 0);
         if ($sidA > 0 && $sidA === $sidB) {
             return ['points' => (int) round(self::WEIGHT_LOCATION * 0.65), 'reasons' => [__('matching.reason_same_state')]];
         }
 
-        $coidA = (int) ($a->country_id ?? 0);
-        $coidB = (int) ($b->country_id ?? 0);
+        $coidA = (int) ($geoA['country_id'] ?? 0);
+        $coidB = (int) ($geoB['country_id'] ?? 0);
         if ($coidA > 0 && $coidA === $coidB) {
             return ['points' => (int) round(self::WEIGHT_LOCATION * 0.35), 'reasons' => [__('matching.reason_same_country')]];
         }

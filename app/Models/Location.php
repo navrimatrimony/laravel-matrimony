@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Services\Location\LocationFormatterService;
 use App\Services\Location\LocationHierarchyValidator;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Model;
@@ -12,8 +13,11 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
 /**
  * Canonical geographic hierarchy (country → … → city/suburb/village).
  *
- * Rows are stored in the {@code addresses} table (single source of truth). The {@see Location}
- * name is kept for code compatibility; this is not {@see ProfileAddress} (profile_addresses).
+ * **Only** the {@code addresses} table stores hierarchy rows (single source of truth). Do not query
+ * non-existent parallel tables such as {@code countries}, {@code states}, etc.; typed subclasses
+ * ({@see Country}, {@see State}, …) are scoped views over {@code addresses}.
+ *
+ * This is not {@see ProfileAddress} (profile_addresses — member postal rows).
  */
 class Location extends Model
 {
@@ -43,6 +47,8 @@ class Location extends Model
     protected $fillable = [
         'name',
         'name_mr',
+        'name_en',
+        'iso_alpha2',
         'slug',
         'type',
         'category',
@@ -52,12 +58,17 @@ class Location extends Model
         'district_code',
         'is_active',
         'pincode',
+        'latitude',
+        'longitude',
         'lgd_code',
+        'population',
     ];
 
     protected $casts = [
         'is_active' => 'boolean',
         'level' => 'integer',
+        'latitude' => 'float',
+        'longitude' => 'float',
     ];
 
     /**
@@ -75,6 +86,10 @@ class Location extends Model
     {
         static::saving(function (Location $location): void {
             $location->level = self::defaultLevelForType((string) $location->type);
+            // Only validate base Location rows here; subclasses normalize type/parent in their own saving hooks first.
+            if ($location::class !== self::class) {
+                return;
+            }
             app(LocationHierarchyValidator::class)->validate($location);
         });
     }
@@ -92,17 +107,15 @@ class Location extends Model
     }
 
     /**
-     * Computed label only — not stored (see also {@see \App\Services\Location\LocationService::getDisplayLabel}).
+     * Computed label only — not stored (see {@see LocationFormatterService::formatForLocation}).
      */
     public function getDisplayLabelAttribute(): string
     {
-        $this->loadMissing('parent');
-        $parent = $this->parent;
-        $parentName = $parent ? $parent->localizedName() : '';
-        $suffix = $parentName !== '' ? ', '.$parentName : '';
-        $typeLabel = $this->type !== null && $this->type !== '' ? ucfirst((string) $this->type) : '';
+        if (! $this->id) {
+            return $this->localizedName();
+        }
 
-        return trim($this->localizedName().$suffix.' ('.$typeLabel.')');
+        return app(LocationFormatterService::class)->formatForLocation($this);
     }
 
     public function parent(): BelongsTo
@@ -113,11 +126,6 @@ class Location extends Model
     public function children(): HasMany
     {
         return $this->hasMany(self::class, 'parent_id');
-    }
-
-    public function pincodes(): HasMany
-    {
-        return $this->hasMany(Pincode::class, 'place_id');
     }
 
     public function aliases(): HasMany

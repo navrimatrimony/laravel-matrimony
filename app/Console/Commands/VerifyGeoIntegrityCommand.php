@@ -3,8 +3,8 @@
 namespace App\Console\Commands;
 
 use App\Models\City;
-use App\Models\CityAlias;
 use App\Models\District;
+use App\Models\LocationAlias;
 use App\Models\State;
 use App\Models\Taluka;
 use App\Services\Location\LocationNormalizationService;
@@ -45,6 +45,7 @@ class VerifyGeoIntegrityCommand extends Command
 
             if ($stateCode === '' || $districtName === '' || $talukaName === '' || $cityName === '') {
                 $invalidStructure++;
+
                 continue;
             }
 
@@ -58,6 +59,7 @@ class VerifyGeoIntegrityCommand extends Command
             $stateName = $stateNameByCode[$this->key($stateCode)] ?? null;
             if ($stateName === null) {
                 $missingHierarchy++;
+
                 continue;
             }
 
@@ -66,33 +68,37 @@ class VerifyGeoIntegrityCommand extends Command
                 ->first();
             if ($state === null) {
                 $missingHierarchy++;
+
                 continue;
             }
 
             $district = District::query()
-                ->where('state_id', (int) $state->id)
+                ->where('parent_id', (int) $state->id)
                 ->whereRaw('LOWER(TRIM(name)) = ?', [$this->key($districtName)])
                 ->first();
             if ($district === null) {
                 $missingHierarchy++;
+
                 continue;
             }
 
             $taluka = Taluka::query()
-                ->where('district_id', (int) $district->id)
+                ->where('parent_id', (int) $district->id)
                 ->whereRaw('LOWER(TRIM(name)) = ?', [$this->key($talukaName)])
                 ->first();
             if ($taluka === null) {
                 $missingHierarchy++;
+
                 continue;
             }
 
             $city = City::query()
-                ->where('taluka_id', (int) $taluka->id)
+                ->where('parent_id', (int) $taluka->id)
                 ->whereRaw('LOWER(TRIM(name)) = ?', [$this->key($cityName)])
                 ->first();
             if ($city === null) {
                 $missingHierarchy++;
+
                 continue;
             }
 
@@ -105,8 +111,8 @@ class VerifyGeoIntegrityCommand extends Command
                     continue;
                 }
 
-                $bound = CityAlias::query()
-                    ->where('city_id', (int) $city->id)
+                $bound = LocationAlias::query()
+                    ->where('location_id', (int) $city->id)
                     ->where('normalized_alias', $normalizedAlias)
                     ->where('is_active', true)
                     ->exists();
@@ -130,10 +136,12 @@ class VerifyGeoIntegrityCommand extends Command
         $hasIssues = $invalidStructure > 0 || $duplicateKeys > 0 || $missingHierarchy > 0 || $missingAliasBindings > 0;
         if (! $hasIssues) {
             $this->info('Geo integrity verified: JSON and DB are consistent.');
+
             return self::SUCCESS;
         }
 
         $this->warn('Geo integrity issues found.');
+
         return $strict ? self::FAILURE : self::SUCCESS;
     }
 
@@ -180,4 +188,3 @@ class VerifyGeoIntegrityCommand extends Command
         return mb_strtolower(trim($value), 'UTF-8');
     }
 }
-

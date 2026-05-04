@@ -108,6 +108,11 @@ final class MatrimonyProfileDatabasePurger
             'profile_preferred_cities',
             'profile_preferred_states',
             'profile_preferred_educations',
+            'profile_preferred_master_education',
+            'profile_preferred_education_degrees',
+            'profile_preferred_occupation_master',
+            'profile_preferred_working_with_types',
+            'profile_preferred_professions',
         ] as $tbl) {
             if (Schema::hasTable($tbl)) {
                 DB::table($tbl)->where('profile_id', $pid)->delete();

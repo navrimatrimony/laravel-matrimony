@@ -16,6 +16,7 @@ class LocationSuggestion extends Model
         'state_id',
         'district_id',
         'taluka_id',
+        'suggested_pincode',
         'suggestion_type',
         'suggested_by',
         'status',

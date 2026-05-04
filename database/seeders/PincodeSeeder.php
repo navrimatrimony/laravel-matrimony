@@ -2,11 +2,13 @@
 
 namespace Database\Seeders;
 
-use App\Models\Pincode;
 use App\Models\Location;
 use Illuminate\Database\Seeder;
 use RuntimeException;
 
+/**
+ * Applies postal codes + coordinates onto {@see Location} ({@code addresses}) rows from packaged JSON.
+ */
 class PincodeSeeder extends Seeder
 {
     public function run(): void
@@ -32,17 +34,16 @@ class PincodeSeeder extends Seeder
             }
             $seen[$k] = true;
 
-            Pincode::query()->updateOrCreate(
-                [
-                    'pincode' => $pincode,
-                    'place_id' => (int) $location->id,
-                ],
-                [
-                    'latitude' => $latitude,
-                    'longitude' => $longitude,
-                    'is_primary' => $isPrimary,
-                ]
-            );
+            if ($isPrimary || $location->pincode === null || $location->pincode === '') {
+                $location->pincode = $pincode;
+            }
+            if ($latitude !== null && ($location->latitude === null || $isPrimary)) {
+                $location->latitude = $latitude;
+            }
+            if ($longitude !== null && ($location->longitude === null || $isPrimary)) {
+                $location->longitude = $longitude;
+            }
+            $location->save();
         }
     }
 
@@ -86,4 +87,3 @@ class PincodeSeeder extends Seeder
         return (float) $value;
     }
 }
-

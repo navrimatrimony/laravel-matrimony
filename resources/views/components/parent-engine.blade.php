@@ -33,6 +33,12 @@
     ];
     $motherCount = max(1, count(array_filter($motherContacts, fn($v) => trim((string)$v) !== '')));
 
+    $parentsResHints = ['location_id' => '', 'country_id' => '', 'state_id' => '', 'district_id' => '', 'taluka_id' => ''];
+    if ($profile instanceof \App\Models\MatrimonyProfile) {
+        $parentsResHints = $profile->residenceLocationHierarchyHints();
+    }
+    $parentsCityDisplay = $u8(old($oldK('wizard_parents_city_display'), \App\Models\MatrimonyProfile::residenceLocationDisplayLineFor($profile)));
+
 @endphp
 
 <div class="parent-engine border border-gray-200 dark:border-gray-600 rounded-lg p-4 space-y-5" data-name-prefix="{{ $namePrefix }}">
@@ -151,14 +157,14 @@
             :detailedPlaceholder="__('components.parents.parents_address_line')"
             detailedValue="{{ $u8(old($oldK('parents_address_line'), $profile->address_line ?? '')) }}"
             :detailedName="$namePrefix !== '' ? $namePrefix . '[parents_address_line]' : 'parents_address_line'"
-            :value="$u8(old($oldK('wizard_parents_city_display'), $profile->city?->name ?? ''))"
+            :value="$parentsCityDisplay"
             placeholder="{{ __('components.parents.parents_location_placeholder') }}"
             label="{{ __('components.parents.parents_village_city') }}"
-            :data-country-id="old($oldK('country_id'), $profile->country_id ?? null)"
-            :data-state-id="old($oldK('state_id'), $profile->state_id ?? null)"
-            :data-district-id="old($oldK('district_id'), $profile->district_id ?? null)"
-            :data-taluka-id="old($oldK('taluka_id'), $profile->taluka_id ?? null)"
-            :data-city-id="old($oldK('city_id'), $profile->city_id ?? null)"
+            :dataLocationId="old($oldK('location_id'), $parentsResHints['location_id'])"
+            :dataCountryId="old($oldK('country_id'), $parentsResHints['country_id'])"
+            :dataStateId="old($oldK('state_id'), $parentsResHints['state_id'])"
+            :dataDistrictId="old($oldK('district_id'), $parentsResHints['district_id'])"
+            :dataTalukaId="old($oldK('taluka_id'), $parentsResHints['taluka_id'])"
         />
     </div>
 

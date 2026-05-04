@@ -3,7 +3,6 @@
 namespace Tests\Feature\Admin;
 
 use App\Models\Location;
-use App\Models\Pincode;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Str;
@@ -69,11 +68,9 @@ class CanonicalLocationAdminTest extends TestCase
     {
         [$source, $target] = $this->seedTwoLocations();
 
-        $pin = Pincode::query()->create([
-            'pincode' => '4110'.random_int(10, 99),
-            'place_id' => $source->id,
-            'is_primary' => false,
-        ]);
+        $pin = '4110'.random_int(10, 99);
+        $source->pincode = $pin;
+        $source->save();
 
         $admin = User::factory()->create(['is_admin' => true]);
 
@@ -82,7 +79,7 @@ class CanonicalLocationAdminTest extends TestCase
         ])->assertOk()->assertJsonPath('success', true);
 
         $this->assertNull(Location::query()->find($source->id));
-        $this->assertSame((int) $target->id, (int) $pin->fresh()->place_id);
+        $this->assertSame($pin, Location::query()->find($target->id)?->pincode);
     }
 
     public function test_possible_duplicates_returns_json(): void

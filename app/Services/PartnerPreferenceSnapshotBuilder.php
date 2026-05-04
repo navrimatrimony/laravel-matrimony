@@ -5,9 +5,9 @@ namespace App\Services;
 use App\Models\Caste;
 use App\Models\District;
 use App\Models\MasterMaritalStatus;
-use App\Models\Profession;
 use App\Models\State;
 use App\Models\Taluka;
+use App\Support\Validation\AddressHierarchyRules;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
@@ -30,7 +30,6 @@ class PartnerPreferenceSnapshotBuilder
             'preferred_height_max_cm',
             'preferred_income_min',
             'preferred_income_max',
-            'preferred_education',
             'preferred_religion_ids',
             'preferred_caste_ids',
             'preferred_district_ids',
@@ -43,9 +42,8 @@ class PartnerPreferenceSnapshotBuilder
             'preferred_marital_status_ids',
             'partner_profile_with_children',
             'preference_preset',
-            'preferred_master_education_ids',
-            'preferred_working_with_type_ids',
-            'preferred_profession_ids',
+            'preferred_education_degree_ids',
+            'preferred_occupation_master_ids',
             'preferred_profile_managed_by',
             'preferred_diet_ids',
         ]);
@@ -70,33 +68,30 @@ class PartnerPreferenceSnapshotBuilder
             'preferred_height_max_cm' => ['nullable', 'integer', 'min:1'],
             'preferred_income_min' => ['nullable', 'numeric', 'min:0'],
             'preferred_income_max' => ['nullable', 'numeric', 'min:0'],
-            'preferred_education' => ['nullable', 'string', 'max:255'],
-            'preferred_city_id' => ['nullable', 'integer', 'exists:cities,id'],
+            'preferred_city_id' => ['nullable', 'integer', AddressHierarchyRules::existsCityId()],
             'preferred_religion_ids' => ['nullable', 'array'],
             'preferred_religion_ids.*' => ['integer', Rule::exists('religions', 'id')->where(fn ($q) => $q->where('is_active', true))],
             'preferred_caste_ids' => ['nullable', 'array'],
             'preferred_caste_ids.*' => ['integer', Rule::exists('castes', 'id')->where(fn ($q) => $q->where('is_active', true))],
             'preferred_district_ids' => ['nullable', 'array'],
-            'preferred_district_ids.*' => ['integer', 'exists:districts,id'],
+            'preferred_district_ids.*' => ['integer', AddressHierarchyRules::existsDistrictId()],
             'preferred_country_ids' => ['nullable', 'array'],
-            'preferred_country_ids.*' => ['integer', 'exists:countries,id'],
+            'preferred_country_ids.*' => ['integer', AddressHierarchyRules::existsCountryId()],
             'preferred_state_ids' => ['nullable', 'array'],
-            'preferred_state_ids.*' => ['integer', 'exists:states,id'],
+            'preferred_state_ids.*' => ['integer', AddressHierarchyRules::existsStateId()],
             'preferred_taluka_ids' => ['nullable', 'array'],
-            'preferred_taluka_ids.*' => ['integer', 'exists:talukas,id'],
-            'preferred_master_education_ids' => ['nullable', 'array'],
-            'preferred_master_education_ids.*' => ['integer', Rule::exists('master_education', 'id')->where(fn ($q) => $q->where('is_active', true))],
-            'preferred_working_with_type_ids' => ['nullable', 'array'],
-            'preferred_working_with_type_ids.*' => ['integer', Rule::exists('working_with_types', 'id')->where(fn ($q) => $q->where('is_active', true))],
-            'preferred_profession_ids' => ['nullable', 'array'],
-            'preferred_profession_ids.*' => ['integer', Rule::exists('professions', 'id')->where(fn ($q) => $q->where('is_active', true))],
+            'preferred_taluka_ids.*' => ['integer', AddressHierarchyRules::existsTalukaId()],
+            'preferred_education_degree_ids' => ['nullable', 'array'],
+            'preferred_education_degree_ids.*' => ['integer', 'exists:education_degrees,id'],
+            'preferred_occupation_master_ids' => ['nullable', 'array'],
+            'preferred_occupation_master_ids.*' => ['integer', 'exists:occupation_master,id'],
             'preferred_profile_managed_by' => ['nullable', 'string', Rule::in(['', 'self', 'parent_guardian', 'sibling', 'relative', 'friend', 'other'])],
             'preferred_diet_ids' => ['nullable', 'array'],
             'preferred_diet_ids.*' => ['integer', Rule::exists('master_diets', 'id')->where(fn ($q) => $q->where('is_active', true))],
             'willing_to_relocate' => ['nullable', 'boolean'],
-            'settled_city_preference_id' => ['nullable', 'integer', 'exists:cities,id'],
+            'settled_city_preference_id' => ['nullable', 'integer', AddressHierarchyRules::existsCityId()],
             'settled_preference' => ['nullable', 'array'],
-            'settled_preference.city_id' => ['nullable', 'integer', 'exists:cities,id'],
+            'settled_preference.city_id' => ['nullable', 'integer', AddressHierarchyRules::existsCityId()],
             'marriage_type_preference_id' => ['nullable', 'integer', Rule::exists('master_marriage_type_preferences', 'id')->where(fn ($q) => $q->where('is_active', true))],
             'preferred_marital_status_id' => ['nullable', 'integer', Rule::exists('master_marital_statuses', 'id')->where(fn ($q) => $q->where('is_active', true))],
             'preferred_marital_status_ids' => ['nullable', 'array'],
@@ -145,12 +140,8 @@ class PartnerPreferenceSnapshotBuilder
         self::validatePreferredLocationHierarchyFromArrays($countryIds, $stateIds, $districtIds, $talukaIds);
         self::validatePreferredCasteReligionCompatibility($validated);
 
-        $workingWithTypeIds = array_values(array_unique(array_map('intval', $validated['preferred_working_with_type_ids'] ?? [])));
-        $professionIds = array_values(array_unique(array_map('intval', array_filter($validated['preferred_profession_ids'] ?? []))));
-        self::expandPartnerProfessionWorkingWithParents($workingWithTypeIds, $professionIds);
-        self::validatePreferredProfessionWorkingWithFromArrays($workingWithTypeIds, $professionIds);
-
-        $masterEducationIds = array_values(array_unique(array_map('intval', $validated['preferred_master_education_ids'] ?? [])));
+        $educationDegreeIds = array_values(array_unique(array_map('intval', array_filter($validated['preferred_education_degree_ids'] ?? []))));
+        $occupationMasterIds = array_values(array_unique(array_map('intval', array_filter($validated['preferred_occupation_master_ids'] ?? []))));
 
         $dietIds = array_values(array_unique(array_map('intval', array_filter($validated['preferred_diet_ids'] ?? []))));
 
@@ -191,18 +182,14 @@ class PartnerPreferenceSnapshotBuilder
             'preferred_state_ids' => $stateIds,
             'preferred_district_ids' => $districtIds,
             'preferred_taluka_ids' => $talukaIds,
-            'preferred_master_education_ids' => $masterEducationIds,
-            'preferred_working_with_type_ids' => $workingWithTypeIds,
-            'preferred_profession_ids' => $professionIds,
+            'preferred_education_degree_ids' => $educationDegreeIds,
+            'preferred_occupation_master_ids' => $occupationMasterIds,
             'preferred_diet_ids' => $dietIds,
         ];
 
         // Only when posted (visible, enabled inputs). Omit when hidden/disabled so DB value is not cleared.
         if ($request->has('partner_profile_with_children')) {
             $row['partner_profile_with_children'] = $validated['partner_profile_with_children'] ?? null;
-        }
-        if ($request->has('preferred_education')) {
-            $row['preferred_education'] = $validated['preferred_education'] ?? null;
         }
         if ($request->has('preferred_city_id')) {
             $row['preferred_city_id'] = $validated['preferred_city_id'] ?? null;
@@ -240,7 +227,7 @@ class PartnerPreferenceSnapshotBuilder
         }
         foreach ($stateIds as $sid) {
             $s = State::query()->find($sid);
-            if (! $s || ! in_array((int) $s->country_id, $countryIds, true)) {
+            if (! $s || ! in_array((int) $s->parent_id, $countryIds, true)) {
                 throw ValidationException::withMessages([
                     'preferred_state_ids' => [__('wizard.preferred_location_state_not_in_country')],
                 ]);
@@ -253,7 +240,7 @@ class PartnerPreferenceSnapshotBuilder
         }
         foreach ($districtIds as $did) {
             $d = District::query()->find($did);
-            if (! $d || ! in_array((int) $d->state_id, $stateIds, true)) {
+            if (! $d || ! in_array((int) $d->parent_id, $stateIds, true)) {
                 throw ValidationException::withMessages([
                     'preferred_district_ids' => [__('wizard.preferred_location_district_not_in_state')],
                 ]);
@@ -266,7 +253,7 @@ class PartnerPreferenceSnapshotBuilder
         }
         foreach ($talukaIds as $tid) {
             $t = Taluka::query()->find($tid);
-            if (! $t || ! in_array((int) $t->district_id, $districtIds, true)) {
+            if (! $t || ! in_array((int) $t->parent_id, $districtIds, true)) {
                 throw ValidationException::withMessages([
                     'preferred_taluka_ids' => [__('wizard.preferred_location_taluka_not_in_district')],
                 ]);
@@ -286,63 +273,27 @@ class PartnerPreferenceSnapshotBuilder
     {
         foreach ($talukaIds as $tid) {
             $t = Taluka::query()->find($tid);
-            if ($t && $t->district_id && ! in_array((int) $t->district_id, $districtIds, true)) {
-                $districtIds[] = (int) $t->district_id;
+            if ($t && $t->parent_id && ! in_array((int) $t->parent_id, $districtIds, true)) {
+                $districtIds[] = (int) $t->parent_id;
             }
         }
         $districtIds = array_values(array_unique($districtIds));
 
         foreach ($districtIds as $did) {
             $d = District::query()->find($did);
-            if ($d && $d->state_id && ! in_array((int) $d->state_id, $stateIds, true)) {
-                $stateIds[] = (int) $d->state_id;
+            if ($d && $d->parent_id && ! in_array((int) $d->parent_id, $stateIds, true)) {
+                $stateIds[] = (int) $d->parent_id;
             }
         }
         $stateIds = array_values(array_unique($stateIds));
 
         foreach ($stateIds as $sid) {
             $s = State::query()->find($sid);
-            if ($s && $s->country_id && ! in_array((int) $s->country_id, $countryIds, true)) {
-                $countryIds[] = (int) $s->country_id;
+            if ($s && $s->parent_id && ! in_array((int) $s->parent_id, $countryIds, true)) {
+                $countryIds[] = (int) $s->parent_id;
             }
         }
         $countryIds = array_values(array_unique($countryIds));
-    }
-
-    /**
-     * @param  array<int>  $workingWithTypeIds
-     * @param  array<int>  $professionIds
-     */
-    private static function expandPartnerProfessionWorkingWithParents(array &$workingWithTypeIds, array $professionIds): void
-    {
-        foreach ($professionIds as $pid) {
-            $p = Profession::query()->find($pid);
-            if ($p && $p->working_with_type_id && ! in_array((int) $p->working_with_type_id, $workingWithTypeIds, true)) {
-                $workingWithTypeIds[] = (int) $p->working_with_type_id;
-            }
-        }
-        $workingWithTypeIds = array_values(array_unique($workingWithTypeIds));
-    }
-
-    /**
-     * @param  array<int>  $workingWithTypeIds
-     * @param  array<int>  $professionIds
-     */
-    private static function validatePreferredProfessionWorkingWithFromArrays(array $workingWithTypeIds, array $professionIds): void
-    {
-        foreach ($professionIds as $pid) {
-            $p = Profession::query()->find($pid);
-            if (! $p || ! $p->working_with_type_id) {
-                throw ValidationException::withMessages([
-                    'preferred_profession_ids' => [__('wizard.preferred_profession_invalid')],
-                ]);
-            }
-            if (! in_array((int) $p->working_with_type_id, $workingWithTypeIds, true)) {
-                throw ValidationException::withMessages([
-                    'preferred_profession_ids' => [__('wizard.preferred_profession_not_in_working_with')],
-                ]);
-            }
-        }
     }
 
     private static function validatePreferredCasteReligionCompatibility(array $validated): void

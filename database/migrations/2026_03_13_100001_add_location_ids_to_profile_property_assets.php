@@ -34,16 +34,16 @@ return new class extends Migration
 
         Schema::table($t, function (Blueprint $schema) use ($t) {
             if (Schema::hasColumn($t, 'city_id')) {
-                $schema->foreign('city_id')->references('id')->on('cities')->nullOnDelete();
+                $schema->foreign('city_id')->references('id')->on('addresses')->nullOnDelete();
             }
             if (Schema::hasColumn($t, 'taluka_id')) {
-                $schema->foreign('taluka_id')->references('id')->on('talukas')->nullOnDelete();
+                $schema->foreign('taluka_id')->references('id')->on('addresses')->nullOnDelete();
             }
             if (Schema::hasColumn($t, 'district_id')) {
-                $schema->foreign('district_id')->references('id')->on('districts')->nullOnDelete();
+                $schema->foreign('district_id')->references('id')->on('addresses')->nullOnDelete();
             }
             if (Schema::hasColumn($t, 'state_id')) {
-                $schema->foreign('state_id')->references('id')->on('states')->nullOnDelete();
+                $schema->foreign('state_id')->references('id')->on('addresses')->nullOnDelete();
             }
         });
     }
@@ -57,7 +57,7 @@ return new class extends Migration
         foreach (['city_id', 'taluka_id', 'district_id', 'state_id'] as $col) {
             if (Schema::hasColumn($t, $col)) {
                 Schema::table($t, function (Blueprint $schema) use ($t, $col) {
-                    $fk = $t . '_' . $col . '_foreign';
+                    $fk = $t.'_'.$col.'_foreign';
                     if ($this->fkExists($t, $fk)) {
                         $schema->dropForeign($fk);
                     }
@@ -73,6 +73,7 @@ return new class extends Migration
         if ($conn->getDriverName() === 'sqlite') {
             $r = $conn->select("SELECT sql FROM sqlite_master WHERE type = 'table' AND tbl_name = ?", [$table]);
             $sql = $r[0]->sql ?? '';
+
             return str_contains($sql, 'REFERENCES') && str_contains($sql, $name);
         }
         $db = $conn->getDatabaseName();
@@ -80,6 +81,7 @@ return new class extends Migration
             "SELECT CONSTRAINT_NAME FROM information_schema.TABLE_CONSTRAINTS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? AND CONSTRAINT_TYPE = 'FOREIGN KEY' AND CONSTRAINT_NAME = ?",
             [$db, $table, $name]
         );
+
         return count($result) > 0;
     }
 };

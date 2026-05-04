@@ -14,6 +14,8 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
+        // Same-origin fetch() to /api/* with session cookies (e.g. location suggestions) must see the web user.
+        $middleware->statefulApi();
         $middleware->alias([
             'admin' => \App\Http\Middleware\EnsureUserIsAdmin::class,
             'subscription.feature' => \App\Http\Middleware\EnsureSubscriptionFeature::class,

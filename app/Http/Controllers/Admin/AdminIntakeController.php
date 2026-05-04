@@ -17,6 +17,7 @@ use App\Services\IntakeManualOcrPreparedService;
 use App\Services\Parsing\ParserStrategyResolver;
 use App\Services\Parsing\ProviderResolver;
 use App\Support\IntakePreviewDiagnosticsPresenter;
+use App\Support\Validation\AddressHierarchyRules;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
@@ -357,7 +358,7 @@ class AdminIntakeController extends Controller
 
         $validated = $request->validate([
             'field' => ['required', 'string', 'max:64'],
-            'city_id' => ['required', 'integer', 'exists:cities,id'],
+            'city_id' => ['required', 'integer', AddressHierarchyRules::existsCityId()],
         ]);
 
         $resolver = app(IntakeLocationSuggestionLayerService::class);

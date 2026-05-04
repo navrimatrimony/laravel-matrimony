@@ -3,12 +3,13 @@
 namespace App\Services\Location;
 
 use App\Models\City;
-use App\Models\CityAlias;
+use App\Models\Location;
+use App\Models\LocationAlias;
 use Illuminate\Support\Facades\Schema;
 
 /**
- * PHASE-5 location normalization: {@see CityAlias} exact match, then hierarchy from {@see City} → taluka → district → state.
- * GPS is a later step.
+ * PHASE-5: alias hits live in {@code location_aliases} (FK → {@code addresses}.id).
+ * Normalizes via active alias rows, then resolves hierarchy from the matched {@see Location} leaf.
  */
 final class LocationNormalizationService
 {
@@ -16,32 +17,36 @@ final class LocationNormalizationService
 
     private const CONFIDENCE_NO_MATCH = 0.0;
 
+    public function __construct(
+        private readonly LocationService $locationService,
+    ) {}
+
     /**
-     * Resolve free text via active `city_aliases.normalized_alias` exact match, then hierarchy from the city row.
-     * Additive ambiguity policy: when multiple distinct cities match the same alias key, do not auto-resolve.
-     *
-     * @return array{matched: bool, city_id: int|null, district_id: int|null, state_id: int|null, taluka_id: int|null, country_id: int|null, confidence: float, raw_input: string, ambiguity: bool, possible_matches: array<int, array{city_id:int, city_name:string, taluka_name:string, district_name:string, state_name:string}>}
+     * @return array{matched: bool, city_id: int|null, district_id: int|null, state_id: int|null, taluka_id: int|null, country_id: int|null, confidence: float, raw_input: string, ambiguity: bool, possible_matches: array<int, array<string, mixed>>, location_id: int|null}
      */
     public function normalizeFromText(string $raw): array
     {
         $rawInput = trim($raw);
         if ($rawInput === '') {
-            return $this->result(false, null, null, null, null, null, self::CONFIDENCE_NO_MATCH, '', false, []);
+            return $this->result(false, null, null, null, null, null, self::CONFIDENCE_NO_MATCH, '', false, [], null);
         }
 
-        if (! Schema::hasTable('city_aliases')) {
-            return $this->result(false, null, null, null, null, null, self::CONFIDENCE_NO_MATCH, $rawInput, false, []);
+        if (! Schema::hasTable('location_aliases')) {
+            return $this->result(false, null, null, null, null, null, self::CONFIDENCE_NO_MATCH, $rawInput, false, [], null);
         }
 
         $normalizedKey = $this->normalizeForAliasLookup($rawInput);
         $compactKey = $this->compactLookupKey($normalizedKey);
         if ($normalizedKey === '' && $compactKey === '') {
-            return $this->result(false, null, null, null, null, null, self::CONFIDENCE_NO_MATCH, $rawInput, false, []);
+            return $this->result(false, null, null, null, null, null, self::CONFIDENCE_NO_MATCH, $rawInput, false, [], null);
         }
 
-        $aliases = CityAlias::query()
-            ->where('is_active', true)
-            ->where(function ($q) use ($normalizedKey, $compactKey) {
+        $aliasQuery = LocationAlias::query();
+        if (Schema::hasColumn((new LocationAlias)->getTable(), 'is_active')) {
+            $aliasQuery->where('is_active', true);
+        }
+        $aliases = $aliasQuery
+            ->where(function ($q) use ($normalizedKey, $compactKey): void {
                 $q->whereRaw('normalized_alias = ?', [$normalizedKey])
                     ->orWhereRaw('normalized_alias = ?', [$compactKey]);
             })
@@ -50,30 +55,22 @@ final class LocationNormalizationService
             ->get();
 
         if ($aliases->isEmpty()) {
-            return $this->result(false, null, null, null, null, null, self::CONFIDENCE_NO_MATCH, $rawInput, false, []);
+            return $this->result(false, null, null, null, null, null, self::CONFIDENCE_NO_MATCH, $rawInput, false, [], null);
         }
 
-        if (! Schema::hasTable('cities')) {
-            return $this->result(false, null, null, null, null, null, self::CONFIDENCE_NO_MATCH, $rawInput, false, []);
+        if (! Schema::hasTable('addresses')) {
+            return $this->result(false, null, null, null, null, null, self::CONFIDENCE_NO_MATCH, $rawInput, false, [], null);
         }
 
-        $candidateCityIds = $aliases
-            ->pluck('city_id')
-            ->filter(static fn ($id) => $id !== null)
-            ->map(static fn ($id) => (int) $id)
-            ->unique()
-            ->values();
+        $locationIds = $aliases->pluck('location_id')->filter()->map(static fn ($id) => (int) $id)->unique()->values();
 
-        $cities = City::query()
-            ->with(['taluka.district.state'])
-            ->whereIn('id', $candidateCityIds)
-            ->get();
+        $locations = Location::query()->whereIn('id', $locationIds)->get();
 
-        if ($cities->isEmpty()) {
-            return $this->result(false, null, null, null, null, null, self::CONFIDENCE_NO_MATCH, $rawInput, false, []);
+        if ($locations->isEmpty()) {
+            return $this->result(false, null, null, null, null, null, self::CONFIDENCE_NO_MATCH, $rawInput, false, [], null);
         }
 
-        if ($cities->count() > 1) {
+        if ($locations->count() > 1) {
             return $this->result(
                 false,
                 null,
@@ -84,23 +81,87 @@ final class LocationNormalizationService
                 self::CONFIDENCE_NO_MATCH,
                 $rawInput,
                 true,
-                $this->formatPossibleMatches($cities)
+                $this->formatPossibleMatches($locations),
+                null,
             );
         }
 
-        $city = $cities->first();
+        $loc = $locations->first();
 
-        $districtId = $city->taluka?->district_id !== null ? (int) $city->taluka->district_id : null;
-        $stateId = $city->taluka?->district?->state_id !== null ? (int) $city->taluka->district->state_id : null;
-        $talukaId = $city->taluka_id !== null ? (int) $city->taluka_id : null;
+        return $this->buildMatchFromLocation($loc, $rawInput);
+    }
+
+    /**
+     * @param  \Illuminate\Support\Collection<int, Location>  $locations
+     * @return array<int, array<string, mixed>>
+     */
+    private function formatPossibleMatches($locations): array
+    {
+        return $locations->map(function (Location $loc): array {
+            $h = $this->locationService->getFullHierarchy($loc);
+
+            return [
+                'city_id' => (int) $loc->id,
+                'city_name' => $loc->localizedName(),
+                'taluka_name' => $h['taluka'] ? $h['taluka']->localizedName() : '',
+                'district_name' => $h['district'] ? $h['district']->localizedName() : '',
+                'state_name' => $h['state'] ? $h['state']->localizedName() : '',
+            ];
+        })->values()->all();
+    }
+
+    /**
+     * @return array{matched: bool, city_id: int|null, district_id: int|null, state_id: int|null, taluka_id: int|null, country_id: int|null, confidence: float, raw_input: string, ambiguity: bool, possible_matches: array<int, array<string, mixed>>, location_id: int|null}
+     */
+    private function buildMatchFromLocation(Location $loc, string $rawInput): array
+    {
+        $locationId = (int) $loc->id;
+
+        if ($loc->type === 'city') {
+            $city = City::query()->with(['taluka.district.state.country'])->find($loc->id);
+            if ($city === null) {
+                return $this->result(false, null, null, null, null, null, self::CONFIDENCE_NO_MATCH, $rawInput, false, [], null);
+            }
+
+            $taluka = $city->taluka;
+            $district = $taluka?->district;
+            $state = $district?->state;
+            $districtId = $taluka?->parent_id !== null ? (int) $taluka->parent_id : null;
+            $stateId = $district?->parent_id !== null ? (int) $district->parent_id : null;
+            $talukaId = $city->parent_id !== null ? (int) $city->parent_id : null;
+            $countryId = $state?->parent_id !== null ? (int) $state->parent_id : null;
+
+            return $this->result(
+                true,
+                (int) $city->id,
+                $districtId,
+                $stateId,
+                $talukaId,
+                $countryId,
+                self::CONFIDENCE_ALIAS_MATCH,
+                $rawInput,
+                false,
+                [],
+                $locationId,
+            );
+        }
+
+        $h = $this->locationService->getFullHierarchy($loc);
+        $state = $h['state'];
+        $district = $h['district'];
+        $taluka = $h['taluka'];
+
+        $districtId = $district?->id !== null ? (int) $district->id : null;
+        $stateId = $state?->id !== null ? (int) $state->id : null;
+        $talukaId = $taluka?->id !== null ? (int) $taluka->id : null;
         $countryId = null;
-        if ($city->taluka?->district?->state !== null && $city->taluka->district->state->country_id !== null) {
-            $countryId = (int) $city->taluka->district->state->country_id;
+        if ($state !== null && isset($state->attributes['parent_id'])) {
+            $countryId = (int) $state->parent_id;
         }
 
         return $this->result(
             true,
-            (int) $city->id,
+            null,
             $districtId,
             $stateId,
             $talukaId,
@@ -109,11 +170,13 @@ final class LocationNormalizationService
             $rawInput,
             false,
             [],
+            $locationId,
         );
     }
 
     /**
-     * @return array{matched: bool, city_id: int|null, district_id: int|null, state_id: int|null, taluka_id: int|null, country_id: int|null, confidence: float, raw_input: string, ambiguity: bool, possible_matches: array<int, array{city_id:int, city_name:string, taluka_name:string, district_name:string, state_name:string}>}
+     * @param  array<int, array<string, mixed>>  $possibleMatches
+     * @return array{matched: bool, city_id: int|null, district_id: int|null, state_id: int|null, taluka_id: int|null, country_id: int|null, confidence: float, raw_input: string, ambiguity: bool, possible_matches: array<int, array<string, mixed>>, location_id: int|null}
      */
     private function result(
         bool $matched,
@@ -125,9 +188,9 @@ final class LocationNormalizationService
         float $confidence,
         string $rawInput,
         bool $ambiguity,
-        array $possibleMatches
-    ): array
-    {
+        array $possibleMatches,
+        ?int $locationId,
+    ): array {
         return [
             'matched' => $matched,
             'city_id' => $cityId,
@@ -139,28 +202,12 @@ final class LocationNormalizationService
             'raw_input' => $rawInput,
             'ambiguity' => $ambiguity,
             'possible_matches' => $possibleMatches,
+            'location_id' => $locationId,
         ];
     }
 
     /**
-     * @param  \Illuminate\Support\Collection<int, City>  $cities
-     * @return array<int, array{city_id:int, city_name:string, taluka_name:string, district_name:string, state_name:string}>
-     */
-    private function formatPossibleMatches($cities): array
-    {
-        return $cities->map(static function (City $city): array {
-            return [
-                'city_id' => (int) $city->id,
-                'city_name' => (string) ($city->name ?? ''),
-                'taluka_name' => (string) ($city->taluka?->name ?? ''),
-                'district_name' => (string) ($city->taluka?->district?->name ?? ''),
-                'state_name' => (string) ($city->taluka?->district?->state?->name ?? ''),
-            ];
-        })->values()->all();
-    }
-
-    /**
-     * Public merge key for suggestion dedupe — same rules as {@see normalizeForAliasLookup} / `city_aliases.normalized_alias`.
+     * Public merge key for suggestion dedupe — same rules as {@see normalizeForAliasLookup} / {@code location_aliases.normalized_alias}.
      */
     public function mergeKeyFromRaw(string $raw): string
     {
@@ -174,9 +221,7 @@ final class LocationNormalizationService
     {
         $s = str_replace('.', ' ', $s);
         $s = mb_strtolower($s, 'UTF-8');
-        // Strip zero-width/invisible codepoints that break exact Unicode compares.
         $s = preg_replace('/[\x{200B}\x{200C}\x{200D}\x{FEFF}]/u', '', $s) ?? $s;
-        // Keep combining marks (\p{M}) so Marathi matras survive (e.g. "पु   णे" -> "पु णे", not "प ण").
         $s = preg_replace('/[^\p{L}\p{M}\p{N}]+/u', ' ', $s) ?? $s;
         $s = trim((string) (preg_replace('/\s+/u', ' ', $s) ?? $s));
 

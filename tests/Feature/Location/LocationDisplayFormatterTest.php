@@ -3,14 +3,14 @@
 namespace Tests\Feature\Location;
 
 use App\Models\City;
-use App\Models\CityDisplayMeta;
 use App\Models\Country;
 use App\Models\District;
+use App\Models\LocationDisplayMeta;
 use App\Models\State;
 use App\Models\Taluka;
 use App\Services\Location\LocationDisplayFormatter;
-use Illuminate\Support\Facades\Schema;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Schema;
 use Tests\TestCase;
 
 class LocationDisplayFormatterTest extends TestCase
@@ -134,8 +134,8 @@ class LocationDisplayFormatterTest extends TestCase
 
     public function test_meta_force_district_hq_compact_even_when_city_name_differs_from_district(): void
     {
-        if (! Schema::hasTable('city_display_meta')) {
-            $this->markTestSkipped('city_display_meta migration not applied');
+        if (! Schema::hasTable('location_display_meta')) {
+            $this->markTestSkipped('location_display_meta migration not applied');
         }
 
         [, , , $mulshiTaluka] = $this->seedIndiaMaharashtraPuneDistrict();
@@ -146,8 +146,8 @@ class LocationDisplayFormatterTest extends TestCase
             'population' => 1000,
         ]);
 
-        CityDisplayMeta::query()->create([
-            'city_id' => $hqLike->id,
+        LocationDisplayMeta::query()->create([
+            'location_id' => $hqLike->id,
             'is_district_hq' => true,
             'display_priority' => 10,
         ]);
@@ -163,8 +163,8 @@ class LocationDisplayFormatterTest extends TestCase
 
     public function test_meta_hide_state_removes_state_label(): void
     {
-        if (! Schema::hasTable('city_display_meta')) {
-            $this->markTestSkipped('city_display_meta migration not applied');
+        if (! Schema::hasTable('location_display_meta')) {
+            $this->markTestSkipped('location_display_meta migration not applied');
         }
 
         [, , , $mulshiTaluka] = $this->seedIndiaMaharashtraPuneDistrict();
@@ -175,8 +175,8 @@ class LocationDisplayFormatterTest extends TestCase
             'population' => 400,
         ]);
 
-        CityDisplayMeta::query()->create([
-            'city_id' => $shivapur->id,
+        LocationDisplayMeta::query()->create([
+            'location_id' => $shivapur->id,
             'hide_state' => true,
         ]);
 
@@ -190,8 +190,8 @@ class LocationDisplayFormatterTest extends TestCase
 
     public function test_meta_hide_country_false_shows_india_for_inr(): void
     {
-        if (! Schema::hasTable('city_display_meta')) {
-            $this->markTestSkipped('city_display_meta migration not applied');
+        if (! Schema::hasTable('location_display_meta')) {
+            $this->markTestSkipped('location_display_meta migration not applied');
         }
 
         [, , , $mulshiTaluka] = $this->seedIndiaMaharashtraPuneDistrict();
@@ -202,8 +202,8 @@ class LocationDisplayFormatterTest extends TestCase
             'population' => 50,
         ]);
 
-        CityDisplayMeta::query()->create([
-            'city_id' => $city->id,
+        LocationDisplayMeta::query()->create([
+            'location_id' => $city->id,
             'is_district_hq' => true,
             'hide_country' => false,
         ]);

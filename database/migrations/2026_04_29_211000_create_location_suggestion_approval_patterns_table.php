@@ -14,7 +14,7 @@ return new class extends Migration
         Schema::create('location_suggestion_approval_patterns', function (Blueprint $table) {
             $table->id();
             $table->string('normalized_input', 255);
-            $table->foreignId('resolved_city_id')->nullable()->constrained('cities')->nullOnDelete();
+            $table->foreignId('resolved_city_id')->nullable()->constrained('addresses')->nullOnDelete();
             $table->unsignedBigInteger('resolved_location_id')->nullable();
             $table->string('suggested_type', 32)->nullable();
             $table->unsignedBigInteger('suggested_parent_id')->nullable();
@@ -26,15 +26,15 @@ return new class extends Migration
             $table->index(['confirmation_count', 'updated_at'], 'lsap_conf_cnt_upd_idx');
         });
 
-        if (Schema::hasTable('locations')) {
+        if (Schema::hasTable('addresses')) {
             Schema::table('location_suggestion_approval_patterns', function (Blueprint $table) {
                 $table->foreign('resolved_location_id', 'lsap_resolved_loc_fk')
                     ->references('id')
-                    ->on('locations')
+                    ->on('addresses')
                     ->nullOnDelete();
                 $table->foreign('suggested_parent_id', 'lsap_parent_loc_fk')
                     ->references('id')
-                    ->on('locations')
+                    ->on('addresses')
                     ->nullOnDelete();
             });
         }

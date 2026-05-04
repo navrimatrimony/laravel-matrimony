@@ -26,10 +26,13 @@
     'detailedName' => 'address_line',
     // Optional: when set, onSelect will set form input with this name to display label (e.g. preferences[preferred_city])
     'displaySyncName' => null,
+    /** Canonical residence / pick leaf {@code addresses.id} (SSOT on profile). */
+    'dataLocationId' => '',
     'dataCountryId' => '',
     'dataStateId' => '',
     'dataDistrictId' => '',
     'dataTalukaId' => '',
+    /** @deprecated Use dataLocationId for residence; kept for alliance rows. */
     'dataCityId' => '',
 ])
 @php
@@ -41,6 +44,14 @@
     $resolvedDetailedName = $namePrefix !== '' ? ($namePrefix . '[' . $detailedName . ']') : $detailedName;
     $resolveUrlResolved = $resolveUrl ?? (auth()->check() ? route('matrimony.internal.location.resolve-current') : '');
     $showGps = ($gpsAssist ?? true) && auth()->check() && $resolveUrlResolved !== '';
+    $defaultIndiaCountryId = \App\Models\Country::query()->where('iso_alpha2', 'IN')->value('id');
+    $defaultMaharashtraStateId = $defaultIndiaCountryId
+        ? \App\Models\State::query()
+            ->where('parent_id', $defaultIndiaCountryId)
+            ->whereRaw('LOWER(TRIM(name)) = ?', ['maharashtra'])
+            ->value('id')
+        : null;
+    $resolvedCountryId = filled($dataCountryId) ? $dataCountryId : ($defaultIndiaCountryId ?? '');
 @endphp
 <style>
 .location-typeahead-wrapper { position: relative; }
@@ -77,14 +88,18 @@
     }
 @endphp
 {{-- API paths must use url() so subdirectory installs (e.g. /project/public) resolve /api/* correctly. Search hits addresses.name, slug, name_mr (+ aliases when present). --}}
-<div class="{{ $wrapperClass }} space-y-0 {{ $roundedClass }} {{ $paddingClass }} {{ $borderClass }}" data-location-context="{{ $context }}" data-name-prefix="{{ $namePrefix }}" data-search-url="{{ url('/api/location/search') }}" data-suggest-url="{{ url('/api/location/suggestions') }}" data-url-internal-states="{{ url('/api/internal/location/states') }}" data-url-internal-districts="{{ url('/api/internal/location/districts') }}" data-url-internal-talukas="{{ url('/api/internal/location/talukas') }}" data-url-internal-suggest="{{ url('/api/internal/location/suggest') }}" @if($showGps) data-resolve-url="{{ $resolveUrlResolved }}" data-gps="1" @endif @if(!empty($displaySyncName)) data-display-sync-name="{{ $displaySyncName }}" @endif>
+<div class="{{ $wrapperClass }} space-y-0 {{ $roundedClass }} {{ $paddingClass }} {{ $borderClass }}" data-location-context="{{ $context }}" data-name-prefix="{{ $namePrefix }}" data-search-url="{{ url('/api/location/search') }}" data-suggest-url="{{ url('/api/location/suggestions') }}" data-url-internal-states="{{ url('/api/internal/location/states') }}" data-url-internal-districts="{{ url('/api/internal/location/districts') }}" data-url-internal-talukas="{{ url('/api/internal/location/talukas') }}" data-url-internal-suggest="{{ url('/api/internal/location/suggest') }}" @if(filled($defaultIndiaCountryId)) data-default-country-id="{{ $defaultIndiaCountryId }}" @endif @if(filled($defaultMaharashtraStateId)) data-default-state-id="{{ $defaultMaharashtraStateId }}" @endif @if($showGps) data-resolve-url="{{ $resolveUrlResolved }}" data-gps="1" @endif @if(!empty($displaySyncName)) data-display-sync-name="{{ $displaySyncName }}" @endif>
     @if ($context === 'residence')
-        <input type="hidden" name="{{ $namePrefix !== '' ? $namePrefix . '[location_id]' : 'location_id' }}" class="location-hidden-location-id" value="{{ $dataCityId }}">
+        @php
+            $resolvedLocationId = filled($dataLocationId) ? $dataLocationId : $dataCityId;
+        @endphp
+        <input type="hidden" name="{{ $namePrefix !== '' ? $namePrefix . '[location_id]' : 'location_id' }}" class="location-hidden-location-id" value="{{ $resolvedLocationId }}">
         <input type="hidden" name="{{ $namePrefix !== '' ? $namePrefix . '[location_input]' : 'location_input' }}" class="location-hidden-location-input" value="">
-        <input type="hidden" name="{{ $namePrefix !== '' ? $namePrefix . '[country_id]' : 'country_id' }}" class="location-hidden-country" value="{{ $dataCountryId }}">
-        <input type="hidden" name="{{ $namePrefix !== '' ? $namePrefix . '[state_id]' : 'state_id' }}" class="location-hidden-state" value="{{ $dataStateId }}">
-        <input type="hidden" name="{{ $namePrefix !== '' ? $namePrefix . '[district_id]' : 'district_id' }}" class="location-hidden-district" value="{{ $dataDistrictId }}">
-        <input type="hidden" name="{{ $namePrefix !== '' ? $namePrefix . '[taluka_id]' : 'taluka_id' }}" class="location-hidden-taluka" value="{{ $dataTalukaId }}">
+        {{-- Client-only hierarchy hints for JS / GPS; do not POST legacy profile column names. --}}
+        <input type="hidden" class="location-hidden-country" value="{{ $resolvedCountryId }}">
+        <input type="hidden" class="location-hidden-state" value="{{ $dataStateId }}">
+        <input type="hidden" class="location-hidden-district" value="{{ $dataDistrictId }}">
+        <input type="hidden" class="location-hidden-taluka" value="{{ $dataTalukaId }}">
     @elseif ($context === 'work')
         <input type="hidden" name="work_location_id" class="location-hidden-location-id" value="{{ $attributes->get('data-work-city-id', '') }}">
         <input type="hidden" name="work_location_input" class="location-hidden-location-input" value="">
@@ -98,13 +113,13 @@
         <input type="hidden" name="native_district_id" class="location-hidden-native-district" value="{{ $attributes->get('data-native-district-id', '') }}">
         <input type="hidden" name="native_state_id" class="location-hidden-native-state" value="{{ $attributes->get('data-native-state-id', '') }}">
     @elseif ($context === 'birth')
-        @php $birthName = $namePrefix !== '' ? $namePrefix . '[birth_city_id]' : 'birth_city_id'; $birthT = $namePrefix !== '' ? $namePrefix . '[birth_taluka_id]' : 'birth_taluka_id'; $birthD = $namePrefix !== '' ? $namePrefix . '[birth_district_id]' : 'birth_district_id'; $birthS = $namePrefix !== '' ? $namePrefix . '[birth_state_id]' : 'birth_state_id'; @endphp
-        <input type="hidden" name="{{ $namePrefix !== '' ? $namePrefix . '[birth_location_id]' : 'birth_location_id' }}" class="location-hidden-location-id" value="{{ $attributes->get('data-birth-city-id', '') }}">
+        @php $birthName = $namePrefix !== '' ? $namePrefix . '[birth_city_id]' : 'birth_city_id'; @endphp
+        <input type="hidden" name="{{ $birthName }}" class="location-hidden-location-id location-hidden-birth-city" value="{{ $attributes->get('data-birth-city-id', '') }}">
         <input type="hidden" name="{{ $namePrefix !== '' ? $namePrefix . '[birth_location_input]' : 'birth_location_input' }}" class="location-hidden-location-input" value="">
-        <input type="hidden" name="{{ $birthName }}" class="location-hidden-birth-city" value="{{ $attributes->get('data-birth-city-id', '') }}">
-        <input type="hidden" name="{{ $birthT }}" class="location-hidden-birth-taluka" value="{{ $attributes->get('data-birth-taluka-id', '') }}">
-        <input type="hidden" name="{{ $birthD }}" class="location-hidden-birth-district" value="{{ $attributes->get('data-birth-district-id', '') }}">
-        <input type="hidden" name="{{ $birthS }}" class="location-hidden-birth-state" value="{{ $attributes->get('data-birth-state-id', '') }}">
+        {{-- Optional client-only hints for ancestor chain (same classes as residence aux). --}}
+        <input type="hidden" class="location-hidden-birth-taluka" value="{{ $attributes->get('data-birth-taluka-id', '') }}">
+        <input type="hidden" class="location-hidden-birth-district" value="{{ $attributes->get('data-birth-district-id', '') }}">
+        <input type="hidden" class="location-hidden-birth-state" value="{{ $attributes->get('data-birth-state-id', '') }}">
     @elseif ($context === 'alliance' && $namePrefix !== '')
         <input type="hidden" name="{{ $namePrefix }}[location_id]" class="location-hidden-location-id" value="{{ $dataCityId }}">
         <input type="hidden" name="{{ $namePrefix }}[location_input]" class="location-hidden-location-input" value="">
@@ -179,14 +194,18 @@
             <div id="{{ $gpsPanelId }}" class="location-gps-panel mt-2 text-sm hidden"></div>
         @endif
     @endif
+    @if ($context === 'residence')
+        <div class="location-pending-summary mt-1.5 text-xs hidden text-gray-600 dark:text-gray-400 space-y-1" data-location-pending-summary aria-live="polite"></div>
+    @endif
 </div>
 
+@once
 <template id="location-suggest-modal-template">
     <div class="location-suggest-modal-backdrop"></div>
     <div class="location-suggest-modal">
         <div class="location-suggest-modal-inner border border-gray-200 dark:border-gray-600">
             <div class="px-4 py-3 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
-                <h3 class="text-sm font-semibold text-gray-800 dark:text-gray-100">Add village / city</h3>
+                <h3 class="text-sm font-semibold text-gray-800 dark:text-gray-100">Add place (review)</h3>
                 <button type="button" class="location-suggest-close text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 text-xl leading-none px-1">&times;</button>
             </div>
             <div class="px-4 py-3 space-y-3">
@@ -213,6 +232,17 @@
                             <option value="">Select taluka</option>
                         </select>
                     </div>
+                    <div>
+                        <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Place type</label>
+                        <select class="location-suggest-place-type w-full rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 px-3 py-2 text-sm">
+                            <option value="village">Village</option>
+                            <option value="city">Town / city / suburb</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Pincode (optional)</label>
+                        <input type="text" maxlength="10" inputmode="numeric" autocomplete="postal-code" placeholder="e.g. 415309" class="location-suggest-pincode w-full rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 px-3 py-2 text-sm">
+                    </div>
                 </div>
                 <div class="location-suggest-error text-xs text-red-600 dark:text-red-400 hidden"></div>
                 <div class="location-suggest-success text-xs text-emerald-600 dark:text-emerald-400 hidden"></div>
@@ -224,3 +254,4 @@
         </div>
     </div>
 </template>
+@endonce

@@ -3,7 +3,7 @@
 namespace Tests\Feature\Location;
 
 use App\Models\City;
-use App\Models\CityAlias;
+use App\Models\LocationAlias;
 use App\Models\LocationOpenPlaceSuggestion;
 use App\Models\User;
 use Database\Seeders\MinimalLocationSeeder;
@@ -20,9 +20,9 @@ class PromoteOpenPlaceSuggestionsCommandTest extends TestCase
         $user = User::factory()->create();
         $city = City::query()->where('name', 'Pune City')->firstOrFail();
 
-        CityAlias::query()->create([
-            'city_id' => $city->id,
-            'alias_name' => 'Pune',
+        LocationAlias::query()->create([
+            'location_id' => $city->id,
+            'alias' => 'Pune',
             'normalized_alias' => 'pune',
             'is_active' => true,
         ]);
@@ -66,15 +66,15 @@ class PromoteOpenPlaceSuggestionsCommandTest extends TestCase
         $user = User::factory()->create();
         $city = City::query()->where('name', 'Pune City')->firstOrFail();
 
-        CityAlias::query()->create([
-            'city_id' => $city->id,
-            'alias_name' => 'Pune',
+        LocationAlias::query()->create([
+            'location_id' => $city->id,
+            'alias' => 'Pune',
             'normalized_alias' => 'pune',
             'is_active' => true,
         ]);
-        CityAlias::query()->create([
-            'city_id' => $city->id,
-            'alias_name' => 'Pune City',
+        LocationAlias::query()->create([
+            'location_id' => $city->id,
+            'alias' => 'Pune City',
             'normalized_alias' => 'punecity',
             'is_active' => true,
         ]);
@@ -152,9 +152,9 @@ class PromoteOpenPlaceSuggestionsCommandTest extends TestCase
         $user = User::factory()->create();
         $city = City::query()->where('name', 'Pune City')->firstOrFail();
 
-        CityAlias::query()->create([
-            'city_id' => $city->id,
-            'alias_name' => 'Pune',
+        LocationAlias::query()->create([
+            'location_id' => $city->id,
+            'alias' => 'Pune',
             'normalized_alias' => 'pune',
             'is_active' => true,
         ]);
@@ -210,4 +210,3 @@ class PromoteOpenPlaceSuggestionsCommandTest extends TestCase
         return $copy;
     }
 }
-

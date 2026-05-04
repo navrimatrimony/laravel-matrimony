@@ -139,3 +139,44 @@ test('location search matches addresses.pincode when column exists', function ()
     $response->assertOk();
     $response->assertJsonFragment(['id' => $village->id]);
 });
+
+test('location multi-word search matches village plus ancestor district token', function () {
+    $suffix = str_replace('.', '_', uniqid('mt_', true));
+    $state = Location::query()->create([
+        'name' => 'Maharashtra',
+        'slug' => 'mh-mt-'.$suffix,
+        'type' => 'state',
+        'parent_id' => null,
+        'state_code' => 'MH',
+        'district_code' => null,
+        'is_active' => true,
+    ]);
+    $district = Location::query()->create([
+        'name' => 'Sangli',
+        'slug' => 'sangli-mt-'.$suffix,
+        'type' => 'district',
+        'parent_id' => $state->id,
+        'state_code' => 'MH',
+        'district_code' => 'SG',
+        'is_active' => true,
+    ]);
+    $taluka = Location::query()->create([
+        'name' => 'Miraj MT '.$suffix,
+        'slug' => 'miraj-mt-'.$suffix,
+        'type' => 'taluka',
+        'parent_id' => $district->id,
+        'is_active' => true,
+    ]);
+    $village = Location::query()->create([
+        'name' => 'Islampur',
+        'slug' => 'islampur-mt-'.$suffix,
+        'type' => 'village',
+        'parent_id' => $taluka->id,
+        'is_active' => true,
+    ]);
+
+    $response = $this->getJson('/api/location/search?q='.rawurlencode('islampur sangli'));
+
+    $response->assertOk();
+    $response->assertJsonFragment(['id' => $village->id]);
+});

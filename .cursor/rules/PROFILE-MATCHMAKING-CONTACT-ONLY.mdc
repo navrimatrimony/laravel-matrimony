@@ -1,0 +1,11 @@
+---
+description: Matchmaking request UI lives only under Contact Information, not ACTIONS rail
+globs: resources/views/matrimony/profile/show.blade.php
+alwaysApply: false
+---
+
+# Profile show — matchmaking (mediator) placement
+
+- Do **not** render the matchmaking / mediator request button (`matrimony.profile.mediator-request`, `contact_access.mediator_submit`, `show_mediator_cta`) inside the hero **ACTIONS** `<aside>` on `matrimony/profile/show.blade.php`.
+- The **only** product location for that CTA is the Contact Information section via `resources/views/matrimony/profile/partials/contact-mediator-cta.blade.php` (included next to locked / gated contact states).
+- If you need to change matchmaking UX, edit the partial or contact-section includes — never duplicate the control in the actions rail.

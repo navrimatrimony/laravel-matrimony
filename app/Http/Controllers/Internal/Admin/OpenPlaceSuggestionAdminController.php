@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\City;
 use App\Models\LocationOpenPlaceSuggestion;
 use App\Services\Admin\LocationOpenPlaceApprovalService;
+use App\Support\Validation\AddressHierarchyRules;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -100,8 +101,8 @@ class OpenPlaceSuggestionAdminController extends Controller
     public function approveAsCity(Request $request, int $id): JsonResponse
     {
         $validated = $request->validate([
-            'taluka_id' => ['required', 'integer', 'exists:talukas,id'],
-            'district_id' => ['nullable', 'integer', 'exists:districts,id'],
+            'taluka_id' => ['required', 'integer', AddressHierarchyRules::existsTalukaId()],
+            'district_id' => ['nullable', 'integer', AddressHierarchyRules::existsDistrictId()],
         ]);
 
         try {
@@ -132,7 +133,7 @@ class OpenPlaceSuggestionAdminController extends Controller
     public function mapToCity(Request $request, int $id): JsonResponse
     {
         $validated = $request->validate([
-            'city_id' => ['required', 'integer', 'exists:cities,id'],
+            'city_id' => ['required', 'integer', AddressHierarchyRules::existsCityId()],
         ]);
 
         try {

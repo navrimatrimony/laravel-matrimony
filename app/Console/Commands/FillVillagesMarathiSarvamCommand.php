@@ -19,17 +19,13 @@ class FillVillagesMarathiSarvamCommand extends Command
                             {--sleep=400 : Milliseconds to pause between batches}
                             {--mirror-cities : After saving, mirror villages.name_mr onto matching cities.name_mr}';
 
-    protected $description = 'Fill villages.name_mr using Sarvam (sarvam-m) for Maharashtra address-linked villages';
+    protected $description = 'Fill village rows (addresses.type=village) name_mr via Sarvam';
 
     public function handle(SarvamMarathiVillageNameService $sarvam): int
     {
-        if (! Schema::hasTable('villages')) {
-            $this->error('Table villages does not exist.');
-
-            return self::FAILURE;
-        }
-        if (! Schema::hasColumn('villages', 'name_mr')) {
-            $this->error('Column villages.name_mr is missing. Run migrations (ensure_villages_marathi_columns).');
+        $geo = (new Village)->getTable();
+        if (! Schema::hasTable($geo) || ! Schema::hasColumn($geo, 'name_mr')) {
+            $this->error('Geographic SSOT table ('.$geo.') or name_mr column missing.');
 
             return self::FAILURE;
         }
@@ -41,11 +37,11 @@ class FillVillagesMarathiSarvamCommand extends Command
         $sleepMs = max(0, (int) $this->option('sleep'));
 
         $q = Village::query()
-            ->select(['villages.id', 'villages.name', 'villages.name_en', 'villages.name_mr'])
+            ->select([$geo.'.id', $geo.'.name', $geo.'.name_en', $geo.'.name_mr'])
             ->with(['taluka:id,name,name_mr,district_id', 'taluka.district:id,name,name_mr']);
 
         if ($onlyAddresses && Schema::hasTable('profile_addresses')) {
-            $q->whereIn('villages.id', function ($sub): void {
+            $q->whereIn($geo.'.id', function ($sub): void {
                 $sub->select('village_id')
                     ->from('profile_addresses')
                     ->whereNotNull('village_id')
@@ -54,8 +50,8 @@ class FillVillagesMarathiSarvamCommand extends Command
         }
 
         if (! $force) {
-            $q->where(function ($w): void {
-                $w->whereNull('villages.name_mr')->orWhereRaw("TRIM(villages.name_mr) = ''");
+            $q->where(function ($w) use ($geo): void {
+                $w->whereNull($geo.'.name_mr')->orWhereRaw('TRIM('.$geo.".name_mr) = ''");
             });
         }
 
@@ -69,7 +65,7 @@ class FillVillagesMarathiSarvamCommand extends Command
         $this->info('Villages to process: '.$total.($onlyAddresses ? ' (linked from profile_addresses)' : ' (all matching rows)'));
 
         $updated = 0;
-        $q->orderBy('villages.id')->chunkById($batchSize, function ($chunk) use ($sarvam, $dry, $sleepMs, &$updated): void {
+        $q->orderBy($geo.'.id')->chunkById($batchSize, function ($chunk) use ($sarvam, $dry, $sleepMs, &$updated): void {
             $places = [];
             foreach ($chunk as $v) {
                 $label = trim((string) (($v->name_en ?: null) ?: $v->name));
@@ -123,9 +119,9 @@ class FillVillagesMarathiSarvamCommand extends Command
 
         $this->info('Done. Rows '.($dry ? 'planned' : 'updated').': '.$updated);
 
-        if (! $dry && $this->option('mirror-cities') && $updated > 0 && Schema::hasTable('cities') && Schema::hasColumn('cities', 'name_mr')) {
+        if (! $dry && $this->option('mirror-cities') && $updated > 0 && Schema::hasTable((new Village)->getTable())) {
             LocationMarathiLabels::syncIndianCityNameMrFromVillageMirror();
-            $this->info('Mirrored villages.name_mr onto matching cities.name_mr.');
+            $this->info('Mirrored village name_mr onto matching city rows (addresses SSOT).');
         }
 
         return self::SUCCESS;

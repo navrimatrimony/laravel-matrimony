@@ -129,7 +129,7 @@ class IntakeSuggestionDiffBuilder
         if (trim((string) ($profile->birth_place_text ?? '')) !== '') {
             return true;
         }
-        foreach (['birth_city_id', 'birth_taluka_id', 'birth_district_id', 'birth_state_id'] as $col) {
+        foreach (['birth_city_id'] as $col) {
             $v = $profile->getAttribute($col);
             if ($v !== null && $v !== '' && (int) $v !== 0) {
                 return true;

@@ -70,7 +70,7 @@
     }
     $birthPlaceLine = $profile->birthLocationDisplayLine();
     $nativePlaceLine = $profile->nativeLocationDisplayLine();
-    $hasBirthPlace = $birthPlaceLine !== '' || $profile->birth_city_id || $profile->birth_taluka_id || $profile->birth_district_id || $profile->birth_state_id;
+    $hasBirthPlace = $birthPlaceLine !== '' || $profile->birth_city_id;
     $hasNativePlace = $nativePlaceLine !== '' || $profile->native_city_id || $profile->native_taluka_id || $profile->native_district_id || $profile->native_state_id;
     $hasPhysical = ($heightVisible && ($profile->height_cm ?? '') !== '') || ($profile->weight_kg ?? null) !== null || $profile->complexion || $profile->physicalBuild || $profile->bloodGroup;
     $hasBasicSection = ($dateOfBirthVisible && ($profile->date_of_birth ?? '') !== '') || (($profile->birth_time ?? '') !== '') || ($maritalStatusVisible && $profile->maritalStatus) || $profile->religion || $profile->caste || $profile->subCaste || $profile->seriousIntent;
@@ -727,7 +727,6 @@
     $hasAnyPrefs = false;
     if ($hasPrefCriteria) {
         $hasAnyPrefs = ($preferenceCriteria->preferred_city_id ?? null) !== null
-            || ($preferenceCriteria->preferred_education ?? '') !== ''
             || ($preferenceCriteria->preferred_age_min ?? null) !== null
             || ($preferenceCriteria->preferred_age_max ?? null) !== null
             || ($preferenceCriteria->preferred_height_min_cm ?? null) !== null
@@ -740,7 +739,9 @@
         || !empty($preferredReligionIds ?? [])
         || !empty($preferredCasteIds ?? [])
         || !empty($preferredDistrictIds ?? [])
-        || !empty($preferredMaritalStatusIds ?? []);
+        || !empty($preferredMaritalStatusIds ?? [])
+        || !empty($preferredEducationDegreeIds ?? [])
+        || !empty($preferredOccupationMasterIds ?? []);
 @endphp
 @if ($hasAnyPrefs)
 <div class="mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
@@ -761,9 +762,6 @@
                     {{ $preferenceCriteria->preferred_height_min_cm ?? '—' }}–{{ $preferenceCriteria->preferred_height_max_cm ?? '—' }} cm
                 @endif
             </p>
-        @endif
-        @if($hasPrefCriteria && ($preferenceCriteria->preferred_education ?? '') !== '')
-            <p><span class="text-gray-500">{{ __('Education:') }}</span> {{ $preferenceCriteria->preferred_education }}</p>
         @endif
         @if($hasPrefCriteria && ($preferenceCriteria->preferred_city_id ?? null))
             @php $prefCityName = \App\Models\City::where('id', $preferenceCriteria->preferred_city_id)->value('name'); @endphp
@@ -807,6 +805,14 @@
         @if(!empty($preferredDistrictIds ?? []))
             @php $prefDistricts = \App\Models\District::whereIn('id', $preferredDistrictIds)->pluck('name')->all(); @endphp
             @if($prefDistricts)<p><span class="text-gray-500">{{ __('Districts:') }}</span> {{ implode(', ', $prefDistricts) }}</p>@endif
+        @endif
+        @if(!empty($preferredEducationDegreeIds ?? []))
+            @php $prefDegTitles = \App\Models\EducationDegree::whereIn('id', $preferredEducationDegreeIds)->orderBy('sort_order')->pluck('title')->filter()->values()->all(); @endphp
+            @if($prefDegTitles)<p><span class="text-gray-500">{{ __('Preferred qualification') }}:</span> {{ implode(', ', $prefDegTitles) }}</p>@endif
+        @endif
+        @if(!empty($preferredOccupationMasterIds ?? []))
+            @php $prefOccNames = \App\Models\OccupationMaster::whereIn('id', $preferredOccupationMasterIds)->orderBy('sort_order')->pluck('name')->filter()->values()->all(); @endphp
+            @if($prefOccNames)<p><span class="text-gray-500">{{ __('Preferred occupation') }}:</span> {{ implode(', ', $prefOccNames) }}</p>@endif
         @endif
     </div>
 </div>

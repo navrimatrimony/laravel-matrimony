@@ -51,17 +51,21 @@ class FullOnboardingRegistrationE2ETest extends TestCase
         $neverMarriedId = DB::table('master_marital_statuses')->where('key', 'never_married')->value('id');
         $degreeCode = EducationDegree::where('code', 'B.Com')->value('code') ?? EducationDegree::query()->value('code');
 
-        $puneCity = City::where('name', 'Pune')->first();
+        $puneCity = City::where('name', 'Pune')->with(['taluka.district.state.country'])->first();
         $this->assertNotNull($puneCity, 'Pune city required (LocationSeeder).');
-        $taluka = DB::table('talukas')->where('id', $puneCity->taluka_id)->first();
-        $district = DB::table('districts')->where('id', $taluka->district_id)->first();
-        $state = DB::table('states')->where('id', $district->state_id)->first();
-        $country = DB::table('countries')->where('id', $state->country_id)->first();
+        $taluka = $puneCity->taluka;
+        $district = $taluka?->district;
+        $state = $district?->state;
+        $country = $state?->country;
+        $this->assertNotNull($taluka && $district && $state && $country, 'Pune hierarchy must resolve via addresses SSOT.');
 
         $wwId = DB::table('working_with_types')->where('slug', 'private_company')->value('id');
-        $profId = DB::table('professions')->where('slug', 'software-professional')->value('id');
+        $profId = DB::table('professions')
+            ->where('slug', 'software-professional')
+            ->where('working_with_type_id', $wwId)
+            ->value('id');
         $this->assertNotNull($wwId);
-        $this->assertNotNull($profId);
+        $this->assertNotNull($profId, 'Profession software-professional must belong to private_company (EducationCareerTemporarySeeder).');
 
         $reg = $this->post(route('register'), [
             'name' => self::E2E_USER_NAME,
@@ -97,16 +101,16 @@ class FullOnboardingRegistrationE2ETest extends TestCase
         $p2 = MatrimonyProfile::where('user_id', $user->id)->first();
         $this->assertNotNull($p2?->gender_id, 'Step 2 should persist gender_id');
 
+        // Canonical residence: POST `location_id` (same as typeahead hidden), not legacy `city_id`.
         $step3 = $this->post(route('matrimony.onboarding.store', ['step' => 3]), [
             'religion_id' => (string) $religion->id,
             'caste_id' => (string) $caste->id,
             'height_cm' => '172',
-            'location_input' => 'Pune',
             'country_id' => (string) $country->id,
             'state_id' => (string) $state->id,
             'district_id' => (string) $district->id,
             'taluka_id' => (string) $taluka->id,
-            'city_id' => (string) $puneCity->id,
+            'location_id' => (string) $puneCity->id,
         ]);
         $step3->assertRedirect(route('matrimony.onboarding.show', ['step' => 4]));
         $step3->assertSessionHasNoErrors();
@@ -124,17 +128,42 @@ class FullOnboardingRegistrationE2ETest extends TestCase
         $this->assertNotNull($profile);
         $this->assertSame(MatrimonyProfile::CARD_ONBOARDING_PHOTO_RESUME_STEP, (int) ($profile->card_onboarding_resume_step ?? 0));
 
+        $this->assertDatabaseHas('users', [
+            'id' => $user->id,
+            'mobile' => $mobile,
+            'name' => self::E2E_USER_NAME,
+        ]);
+
+        $profile->refresh();
+
         $this->assertDatabaseHas('matrimony_profiles', [
             'id' => $profile->id,
+            'user_id' => $user->id,
             'full_name' => self::E2E_FULL_NAME,
             'gender_id' => $genderId,
             'marital_status_id' => $neverMarriedId,
             'religion_id' => $religion->id,
             'caste_id' => $caste->id,
             'height_cm' => 172,
-            'highest_education' => $degreeCode,
+            'country_id' => $country->id,
+            'state_id' => $state->id,
+            'district_id' => $district->id,
+            'taluka_id' => $taluka->id,
+            'location_id' => $puneCity->id,
             'company_name' => 'E2E Company Pvt Ltd',
         ]);
+
+        $this->assertNotNull($profile->highest_education, 'Education step must persist highest_education column.');
+        $this->assertSame((int) $wwId, (int) $profile->working_with_type_id);
+        $this->assertSame((int) $profId, (int) $profile->profession_id);
+
+        $this->assertSame(
+            '1992-06-15',
+            $profile->date_of_birth instanceof \Carbon\CarbonInterface
+                ? $profile->date_of_birth->format('Y-m-d')
+                : (string) $profile->date_of_birth,
+            'Step 2 DOB must persist on profile row.',
+        );
 
         // Onboarding lock blocks the full wizard until the user finishes or explicitly completes onboarding.
         $this->get(route('matrimony.onboarding.complete'))

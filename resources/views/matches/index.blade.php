@@ -151,10 +151,11 @@
                                                     @if ($p->gender)
                                                         <div><span class="text-gray-400 dark:text-gray-500">{{ __('Gender') }}:</span> {{ $p->gender->label ?? '' }}</div>
                                                     @endif
-                                                    @if ($p->city?->name || $p->state?->name)
+                                                    @php($matchesLocLine = \App\Support\ProfileDisplayCopy::profileResidenceDisplayLine($p))
+                                                    @if ($matchesLocLine !== '')
                                                         <div class="truncate max-w-[16rem] sm:max-w-none">
                                                             <span class="text-gray-400 dark:text-gray-500">{{ __('Location') }}:</span>
-                                                            {{ collect([$p->city?->name, $p->state?->name])->filter()->implode(', ') }}
+                                                            {{ $matchesLocLine }}
                                                         </div>
                                                     @endif
                                                 </dl>

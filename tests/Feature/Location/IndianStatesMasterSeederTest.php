@@ -19,10 +19,10 @@ class IndianStatesMasterSeederTest extends TestCase
         $this->seed(IndianStatesMasterSeeder::class);
 
         $india = Country::query()->where('iso_alpha2', 'IN')->firstOrFail();
-        $count = State::query()->where('country_id', $india->id)->count();
+        $count = State::query()->where('parent_id', $india->id)->count();
         $this->assertGreaterThanOrEqual(28, $count);
 
-        $mh = State::query()->where('country_id', $india->id)->where('name', 'Maharashtra')->first();
+        $mh = State::query()->where('parent_id', $india->id)->where('name', 'Maharashtra')->first();
         $this->assertNotNull($mh);
         $this->assertSame('महाराष्ट्र', $mh->name_mr);
     }

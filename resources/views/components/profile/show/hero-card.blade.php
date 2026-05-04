@@ -18,7 +18,7 @@
 ])
 
 @php
-    $profile->loadMissing(['gender', 'city', 'district', 'state', 'maritalStatus', 'religion', 'caste', 'profession']);
+    $profile->loadMissing(['gender', 'city', 'taluka', 'district', 'state', 'country', 'location', 'maritalStatus', 'religion', 'caste', 'profession']);
     $age = null;
     if (! empty($profile->date_of_birth)) {
         try {
@@ -40,7 +40,7 @@
     if ($profile->caste) {
         $chips[] = $profile->caste->label ?? '';
     }
-    $locShort = trim(implode(', ', array_filter([$profile->city?->name, $profile->district?->name])));
+    $locShort = \Illuminate\Support\Str::limit(\App\Support\ProfileDisplayCopy::profileResidenceDisplayLine($profile), 56);
     if ($locShort !== '' && ($locationVisible ?? true)) {
         $chips[] = $locShort;
     }
@@ -71,11 +71,7 @@
             32
         );
     }
-    $locIdentity = \App\Support\ProfileDisplayCopy::compactLocationLine(
-        $profile->city?->name,
-        $profile->district?->name,
-        $profile->state?->name
-    );
+    $locIdentity = \App\Support\ProfileDisplayCopy::profileResidenceDisplayLine($profile);
     if ($locIdentity !== '' && ($locationVisible ?? true)) {
         $summaryParts[] = $locIdentity;
     }

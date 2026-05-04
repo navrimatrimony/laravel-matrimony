@@ -3,8 +3,8 @@
 namespace Tests\Feature\Intake;
 
 use App\Models\City;
-use App\Models\CityAlias;
 use App\Models\Country;
+use App\Models\LocationAlias;
 use App\Services\Parsing\IntakeControlledFieldNormalizer;
 use Database\Seeders\MinimalLocationSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -19,9 +19,9 @@ class IntakeAddressWorkLocationNormalizationTest extends TestCase
         $this->seed(MinimalLocationSeeder::class);
         $city = City::query()->where('name', 'Pune City')->first();
         $this->assertNotNull($city);
-        CityAlias::query()->create([
-            'city_id' => $city->id,
-            'alias_name' => 'Pune',
+        LocationAlias::query()->create([
+            'location_id' => $city->id,
+            'alias' => 'Pune',
             'normalized_alias' => 'pune',
             'is_active' => true,
         ]);
@@ -52,9 +52,9 @@ class IntakeAddressWorkLocationNormalizationTest extends TestCase
         $this->seed(MinimalLocationSeeder::class);
         $city = City::query()->where('name', 'Pune City')->first();
         $this->assertNotNull($city);
-        CityAlias::query()->create([
-            'city_id' => $city->id,
-            'alias_name' => 'Pune',
+        LocationAlias::query()->create([
+            'location_id' => $city->id,
+            'alias' => 'Pune',
             'normalized_alias' => 'pune',
             'is_active' => true,
         ]);
@@ -78,9 +78,9 @@ class IntakeAddressWorkLocationNormalizationTest extends TestCase
         $this->seed(MinimalLocationSeeder::class);
         $city = City::query()->where('name', 'Pune City')->first();
         $this->assertNotNull($city);
-        CityAlias::query()->create([
-            'city_id' => $city->id,
-            'alias_name' => 'Pune',
+        LocationAlias::query()->create([
+            'location_id' => $city->id,
+            'alias' => 'Pune',
             'normalized_alias' => 'pune',
             'is_active' => true,
         ]);
@@ -110,15 +110,15 @@ class IntakeAddressWorkLocationNormalizationTest extends TestCase
         $other = City::query()->where('id', '!=', $pune->id)->first();
         $this->assertNotNull($other);
 
-        CityAlias::query()->create([
-            'city_id' => $pune->id,
-            'alias_name' => 'Shared Alias',
+        LocationAlias::query()->create([
+            'location_id' => $pune->id,
+            'alias' => 'Shared Alias',
             'normalized_alias' => 'sharedalias',
             'is_active' => true,
         ]);
-        CityAlias::query()->create([
-            'city_id' => $other->id,
-            'alias_name' => 'Shared Alias',
+        LocationAlias::query()->create([
+            'location_id' => $other->id,
+            'alias' => 'Shared Alias',
             'normalized_alias' => 'sharedalias',
             'is_active' => true,
         ]);

@@ -115,10 +115,10 @@
                                  class="w-24 h-24 rounded-full object-cover border-4 border-red-200 shadow-md">
                         @else
                             @php
-                                $gender = $profile->gender?->key ?? null;
-                                if ($gender === 'male') {
+                                $genderKey = $profile->gender !== null ? ($profile->gender->key ?? null) : null;
+                                if ($genderKey === 'male') {
                                     $placeholderSrc = asset('images/placeholders/male-profile.svg');
-                                } elseif ($gender === 'female') {
+                                } elseif ($genderKey === 'female') {
                                     $placeholderSrc = asset('images/placeholders/female-profile.svg');
                                 } else {
                                     $placeholderSrc = asset('images/placeholders/default-profile.svg');
@@ -143,8 +143,11 @@
                             @if ($profile->date_of_birth)
                                 <span class="bg-red-50 text-red-700 px-3 py-1 rounded-full">{{ \Carbon\Carbon::parse($profile->date_of_birth)->age }} yrs</span>
                             @endif
-                            @if ($profile->city?->name ?? $profile->state?->name)
-                                <span class="bg-red-50 text-red-700 px-3 py-1 rounded-full">{{ $profile->city?->name ?? $profile->state?->name }}</span>
+                            @php
+                                $dashLocLine = \App\Support\ProfileDisplayCopy::profileResidenceDisplayLine($profile);
+                            @endphp
+                            @if ($dashLocLine !== '')
+                                <span class="bg-red-50 text-red-700 px-3 py-1 rounded-full">{{ $dashLocLine }}</span>
                             @endif
                             @if ($profile->highest_education)
                                 <span class="bg-red-50 text-red-700 px-3 py-1 rounded-full">{{ ucfirst($profile->highest_education) }}</span>
@@ -336,8 +339,12 @@
                         @foreach ($recentUnreadChats as $row)
                             @php
                                 $other = $row['other'] ?? null;
-                                $photo = $other?->profile_photo_url ?? asset('images/placeholders/default-profile.svg');
-                                $name = $other?->full_name ?: ('Profile #' . ($other?->id ?? ''));
+                                $photo = $other !== null
+                                    ? ($other->profile_photo_url ?? asset('images/placeholders/default-profile.svg'))
+                                    : asset('images/placeholders/default-profile.svg');
+                                $name = $other !== null
+                                    ? ($other->full_name ?: ('Profile #' . $other->id))
+                                    : 'Profile #';
                                 $preview = trim((string) ($row['preview'] ?? ''));
                             @endphp
                             <a href="{{ route('chat.show', ['conversation' => $row['conversation']->id]) }}" class="block rounded-lg border border-gray-200 dark:border-gray-700 px-4 py-3 hover:bg-emerald-50/60 dark:hover:bg-emerald-950/20">
@@ -382,7 +389,9 @@
                                              class="w-14 h-14 rounded-full object-cover border-2 border-red-200">
                                     @else
                                         @php
-                                            $sG = $interest->senderProfile->gender?->key ?? null;
+                                            $sG = ($interest->senderProfile && $interest->senderProfile->gender)
+                                                ? ($interest->senderProfile->gender->key ?? null)
+                                                : null;
                                             $sP = $sG === 'male' ? asset('images/placeholders/male-profile.svg') : ($sG === 'female' ? asset('images/placeholders/female-profile.svg') : asset('images/placeholders/default-profile.svg'));
                                         @endphp
                                         <img src="{{ $sP }}" 
@@ -445,7 +454,9 @@
                                              class="w-14 h-14 rounded-full object-cover border-2 border-red-200">
                                     @else
                                         @php
-                                            $rG = $interest->receiverProfile->gender?->key ?? null;
+                                            $rG = ($interest->receiverProfile && $interest->receiverProfile->gender)
+                                                ? ($interest->receiverProfile->gender->key ?? null)
+                                                : null;
                                             $rP = $rG === 'male' ? asset('images/placeholders/male-profile.svg') : ($rG === 'female' ? asset('images/placeholders/female-profile.svg') : asset('images/placeholders/default-profile.svg'));
                                         @endphp
                                         <img src="{{ $rP }}" 

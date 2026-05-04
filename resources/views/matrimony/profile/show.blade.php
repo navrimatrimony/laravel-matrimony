@@ -297,7 +297,7 @@
             
             @if ($educationVisible)
             <div class="md:col-span-2">
-                @if (\Illuminate\Support\Facades\Schema::hasColumn('matrimony_profiles', 'education_degree_id'))
+                @if (\Illuminate\Support\Facades\Schema::hasColumn('matrimony_profiles', 'highest_education'))
                     <x-education-multiselect-engine :profile="$profile" form-selector="#admin-profile-edit-form" />
                 @else
                     <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{{ __('Education') }}</label>
@@ -309,7 +309,7 @@
             @if ($locationVisible)
             <div>
                 <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{{ __('Location') }}</label>
-                <p class="font-medium text-base text-gray-900 dark:text-gray-100">{{ implode(', ', array_filter([$profile->city?->name, $profile->taluka?->name, $profile->district?->name, $profile->state?->name, $profile->country?->name])) ?: '—' }}</p>
+                <p class="font-medium text-base text-gray-900 dark:text-gray-100">{{ \App\Support\ProfileDisplayCopy::profileResidenceDisplayLine($profile) ?: '—' }}</p>
                 <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">Edit location via profile hierarchy (country/state/city) in full edit.</p>
             </div>
             @endif
@@ -474,14 +474,7 @@
             $overviewAge = null;
         }
     }
-    $locationParts = array_filter([
-        $profile->city?->name,
-        $profile->taluka?->name,
-        $profile->district?->name,
-        $profile->state?->name,
-        $profile->country?->name,
-    ]);
-    $locationLine = implode(', ', $locationParts);
+    $locationLine = \App\Support\ProfileDisplayCopy::profileResidenceDisplayLine($profile);
     $overviewEduLine = null;
     if ($educationVisible && ($profile->highest_education ?? '') !== '') {
         $overviewEduLine = \App\Support\ProfileDisplayCopy::formatEducationPhrase($profile->highest_education);
@@ -512,11 +505,7 @@
         $scanCommunityParts[] = __('Mother tongue').': '.$profile->motherTongue->label;
     }
     $scanCommunityText = implode(', ', array_filter($scanCommunityParts));
-    $locCompact = \App\Support\ProfileDisplayCopy::compactLocationLine(
-        $profile->city?->name,
-        $profile->district?->name,
-        $profile->state?->name
-    );
+    $locCompact = \App\Support\ProfileDisplayCopy::profileResidenceDisplayLine($profile);
     $scanLivesInText = ($locationVisible && $locCompact !== '') ? __('profile.scan_lives_in').' '.$locCompact : '';
     if ($locationVisible && ($profile->address_line ?? '') !== '') {
         $scanLivesInText = $scanLivesInText !== '' ? ($profile->address_line.' · '.$scanLivesInText) : ($profile->address_line);
@@ -727,30 +716,7 @@
                     @endif
                 @endif
 
-                @if (! ($isOwnProfile ?? false) && ($contactAccess['show_mediator_cta'] ?? false) && ! ($contactAccess['show_no_one_copy'] ?? false) && ! ($contactAccess['needs_upgrade'] ?? false))
-                    @if ($contactAccess['needs_upgrade_for_mediator'] ?? false)
-                        <button
-                            type="button"
-                            class="inline-flex min-h-[3.25rem] w-full items-center justify-start gap-2.5 rounded-2xl border border-amber-200/90 bg-amber-50 px-3 py-2.5 text-left text-sm font-semibold text-amber-900 shadow-sm ring-1 ring-amber-100/80 dark:border-amber-800/60 dark:bg-amber-950/40 dark:text-amber-100 dark:ring-amber-900/40"
-                            @click="$root.showContactUpgradeModal = true"
-                        >
-                            <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-amber-200/80 text-amber-900 dark:bg-amber-800/60 dark:text-amber-100" aria-hidden="true">
-                                <svg class="h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M9.813 15.904 9 18.75l-.813-2.846a4.5 4.5 0 0 0-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 0 0 3.09-3.09L9 5.25l.813 2.847a4.5 4.5 0 0 0 3.09 3.09L15.75 12l-2.847.813a4.5 4.5 0 0 0-3.09 3.09ZM18.259 8.715 18 9.75l-.259-1.035a3.375 3.375 0 0 0-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 0 0 2.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 0 0 2.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 0 0-2.456 2.456ZM16.894 20.567 16.5 21.75l-.394-1.183a2.25 2.25 0 0 0-1.423-1.423L13.5 18.75l1.183-.394a2.25 2.25 0 0 0 1.423-1.423l.394-1.183.394 1.183a2.25 2.25 0 0 0 1.423 1.423l1.183.394-1.183.394a2.25 2.25 0 0 0-1.423 1.423Z"/></svg>
-                            </span>
-                            <span class="min-w-0 flex-1 text-left leading-snug">{{ __('contact_access.mediator_heading') }} — {{ __('contact_access.upgrade_plans') }}</span>
-                        </button>
-                    @else
-                        <form method="POST" action="{{ route('matrimony.profile.mediator-request', $profile) }}" class="w-full">
-                            @csrf
-                            <button type="submit" class="inline-flex min-h-[3.25rem] w-full items-center justify-start gap-2.5 rounded-2xl border border-violet-200/90 bg-white px-3 py-2.5 text-left text-sm font-semibold text-violet-900 shadow-sm ring-1 ring-violet-100/80 transition hover:bg-violet-50/90 dark:border-violet-800/60 dark:bg-gray-800 dark:text-violet-200 dark:ring-violet-900/40">
-                                <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-violet-100 text-violet-700 dark:bg-violet-950/50 dark:text-violet-300" aria-hidden="true">
-                                    <svg class="h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M20.25 8.511c.884.284 1.5 1.128 1.5 2.097v4.286c0 1.136-.847 2.1-1.98 2.193-.34.027-.68.052-1.02.072v3.091l-3-3c-1.354 0-2.694-.055-4.02-.163a2.115 2.115 0 0 1-.825-.242m9.345-8.334a2.126 2.126 0 0 0-.476-.095 48.64 48.64 0 0 0-8.048 0c-1.131.094-1.976 1.057-1.976 2.192v4.286c0 .837.46 1.58 1.155 1.951m9.345-8.334V6.637c0-1.621-1.152-3.026-2.76-3.235A48.455 48.455 0 0 0 11.25 3c-2.115 0-4.198.137-6.24.402-1.608.209-2.76 1.614-2.76 3.235v6.226c0 1.621 1.152 3.026 2.76 3.235.577.075 1.157.14 1.74.194V21l4.155-4.155"/></svg>
-                                </span>
-                                <span class="min-w-0 flex-1 leading-snug">{{ __('contact_access.mediator_submit') }}</span>
-                            </button>
-                        </form>
-                    @endif
-                @endif
+                {{-- Matchmaking / mediator CTA belongs only in Contact Information (@include contact-mediator-cta). Do not add it to this ACTIONS aside. --}}
 
                 @if ($userId === null || ! $chatSendGateAllowed)
                     <div class="mt-1 w-full">
@@ -927,13 +893,7 @@
         @php
             $detailNarrative = trim((string) ($extendedAttributes->narrative_about_me ?? ''));
             $detailExpectations = trim((string) ($extendedAttributes->narrative_expectations ?? ''));
-            $locationLineForAbout = isset($locationLine) ? $locationLine : implode(', ', array_filter([
-                $profile->city?->name,
-                $profile->taluka?->name,
-                $profile->district?->name,
-                $profile->state?->name,
-                $profile->country?->name,
-            ]));
+            $locationLineForAbout = isset($locationLine) ? $locationLine : \App\Support\ProfileDisplayCopy::profileResidenceDisplayLine($profile);
             $detailAboutFallback = '';
             if ($detailNarrative === '') {
                 $detailAboutFallback = implode('  |  ', array_filter([

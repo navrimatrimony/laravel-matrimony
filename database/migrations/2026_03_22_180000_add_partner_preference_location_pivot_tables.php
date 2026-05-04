@@ -12,7 +12,7 @@ return new class extends Migration
             Schema::create('profile_preferred_countries', function (Blueprint $table) {
                 $table->id();
                 $table->foreignId('profile_id')->constrained('matrimony_profiles')->cascadeOnDelete();
-                $table->foreignId('country_id')->constrained('countries')->cascadeOnDelete();
+                $table->foreignId('country_id')->constrained('addresses')->cascadeOnDelete();
                 $table->timestamps();
             });
         }
@@ -20,7 +20,7 @@ return new class extends Migration
             Schema::create('profile_preferred_states', function (Blueprint $table) {
                 $table->id();
                 $table->foreignId('profile_id')->constrained('matrimony_profiles')->cascadeOnDelete();
-                $table->foreignId('state_id')->constrained('states')->cascadeOnDelete();
+                $table->foreignId('state_id')->constrained('addresses')->cascadeOnDelete();
                 $table->timestamps();
             });
         }
@@ -28,7 +28,7 @@ return new class extends Migration
             Schema::create('profile_preferred_talukas', function (Blueprint $table) {
                 $table->id();
                 $table->foreignId('profile_id')->constrained('matrimony_profiles')->cascadeOnDelete();
-                $table->foreignId('taluka_id')->constrained('talukas')->cascadeOnDelete();
+                $table->foreignId('taluka_id')->constrained('addresses')->cascadeOnDelete();
                 $table->timestamps();
             });
         }

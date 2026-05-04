@@ -4,7 +4,6 @@ namespace App\Services\Location;
 
 use App\Models\Location;
 use App\Models\MatrimonyProfile;
-use App\Models\Pincode;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
 
@@ -69,80 +68,30 @@ class LocationService
         ];
     }
 
-    public function getDisplayLabel(Location $location): string
+    /**
+     * Walk {@see Location::parent} chain (including self) for the first row with {@code type}.
+     */
+    public function getAncestorByType(Location $location, string $type): ?Location
     {
-        $hierarchy = $this->getFullHierarchy($location);
-        $districtName = $this->localizedLocationName($hierarchy['district']);
-        $talukaName = $this->localizedLocationName($hierarchy['taluka']);
-        $stateName = $this->localizedLocationName($hierarchy['state']);
-        $cityName = $this->localizedLocationName($hierarchy['city']);
-        $placeName = $this->localizedLocationName($location);
-
-        if ($location->type === 'village') {
-            return $this->joinDistinctParts([$placeName, $talukaName, $districtName, $stateName]);
+        if ($location->type === $type) {
+            return $location;
+        }
+        foreach ($this->getAncestors($location) as $a) {
+            if ($a->type === $type) {
+                return $a;
+            }
         }
 
-        if ($location->type === 'suburb') {
-            // Suburbs often sit under a city; taluka/district disambiguate duplicate names (e.g. multiple "Wakad").
-            return $this->joinDistinctParts([$placeName, $cityName, $talukaName, $districtName, $stateName]);
-        }
-
-        if ($location->type === 'city') {
-            return $this->joinDistinctParts([$placeName, $stateName]);
-        }
-
-        if ($location->type === 'district') {
-            return $this->joinDistinctParts([$placeName, $stateName]);
-        }
-
-        return $placeName;
+        return null;
     }
 
     /**
-     * Full ancestor trail for typeahead search — every row shows place → … → state so duplicate names are distinguishable.
-     * Skips {@code country} to avoid noisy labels; uses {@see joinDistinctParts} for consecutive duplicate names.
+     * Profile / listing / search / nearby line from canonical {@see Location} ({@code addresses} row).
+     * Delegates to {@see LocationFormatterService} (tag-driven UI; {@code parent_id} structure only).
      */
-    private function searchResultDisplayLabel(Location $location): string
+    public function getDisplayLabel(Location $location): string
     {
-        $parts = [];
-        $cur = $location;
-        $guard = 0;
-
-        while ($cur !== null && $guard < 24) {
-            $t = (string) ($cur->type ?? '');
-            if ($t !== 'country') {
-                $nm = $this->localizedLocationName($cur);
-                if ($nm !== null && $nm !== '') {
-                    $parts[] = $nm;
-                }
-            }
-
-            if ($cur->parent_id === null) {
-                break;
-            }
-
-            if (! $cur->relationLoaded('parent')) {
-                $cur->load('parent');
-            }
-
-            $cur = $cur->parent;
-            $guard++;
-        }
-
-        return $this->joinDistinctParts($parts);
-    }
-
-    private function localizedLocationName(?Location $location): ?string
-    {
-        if ($location === null) {
-            return null;
-        }
-
-        if (app()->getLocale() === 'mr' && filled($location->name_mr)) {
-            return trim((string) $location->name_mr);
-        }
-
-        return trim((string) $location->name);
+        return app(LocationFormatterService::class)->formatForLocation($location);
     }
 
     public function normalizeInput(string $input): string
@@ -158,6 +107,10 @@ class LocationService
      * {@code name_mr} when present; {@code pincode} when column exists (3–8 digits from input); optional {@code location_aliases}.
      * Requires {@code is_active} truthy.
      *
+     * Multi-word queries (e.g. {@code islampur sangli}, {@code vita sangli}): candidates match the first token on the row;
+     * results are filtered so **every** token appears somewhere in the leaf + ancestor names (Marathi + English),
+     * then ranked so the intended village/town surfaces near the top.
+     *
      * @return array<int, array{id:int,name:string,type:string,display_label:string}>
      */
     public function search(string $query): array
@@ -165,6 +118,11 @@ class LocationService
         $normalized = $this->normalizeInput($query);
         if ($normalized === '') {
             return [];
+        }
+
+        $tokens = $this->distinctSearchTokens($normalized);
+        if (count($tokens) >= 2) {
+            return $this->searchMultiToken($tokens);
         }
 
         $like = '%'.$normalized.'%';
@@ -208,12 +166,12 @@ class LocationService
                 }
             )
             ->orderByRaw(
-                "CASE
+                'CASE
                     WHEN LOWER(TRIM(name)) = ? THEN 0
                     WHEN LOWER(TRIM(name)) LIKE ? THEN 1
                     WHEN LOWER(TRIM(name)) LIKE ? THEN 2
                     ELSE 3
-                END",
+                END',
                 [$normalized, $normalized.'%', '%'.$normalized.'%']
             )
             ->orderByRaw(
@@ -239,9 +197,179 @@ class LocationService
                 'id' => (int) $location->id,
                 'name' => (string) $location->name,
                 'type' => (string) $location->type,
-                'display_label' => $this->searchResultDisplayLabel($location),
+                'display_label' => $this->getDisplayLabel($location),
             ];
         })->values()->all();
+    }
+
+    /**
+     * @param  list<string>  $tokens  Lowercase tokens, length ≥ 2, de-duplicated.
+     * @return array<int, array{id:int,name:string,type:string,display_label:string}>
+     */
+    private function searchMultiToken(array $tokens): array
+    {
+        $geo = Location::geoTable();
+        $primary = $tokens[0];
+        $primaryLike = '%'.$primary.'%';
+
+        $locations = Location::query()
+            ->where('is_active', true)
+            ->where(function ($q) use ($primary, $primaryLike, $geo): void {
+                $q->where('name', 'like', $primaryLike)
+                    ->orWhere('slug', 'like', $primaryLike);
+                if (Schema::hasColumn($geo, 'name_mr')) {
+                    $q->orWhere('name_mr', 'like', $primaryLike);
+                }
+                if (Schema::hasTable('location_aliases')) {
+                    $q->orWhereExists(function ($sub) use ($primary, $primaryLike, $geo): void {
+                        $sub->selectRaw('1')
+                            ->from('location_aliases')
+                            ->whereColumn('location_aliases.location_id', $geo.'.id')
+                            ->where(function ($a) use ($primary, $primaryLike): void {
+                                $a->where('location_aliases.normalized_alias', 'like', $primaryLike)
+                                    ->orWhere('location_aliases.normalized_alias', $primary);
+                            });
+                    });
+                }
+            })
+            ->limit(220)
+            ->get();
+
+        if ($locations->isEmpty()) {
+            $locations = Location::query()
+                ->where('is_active', true)
+                ->where(function ($q) use ($tokens, $geo): void {
+                    foreach ($tokens as $t) {
+                        $tl = '%'.$t.'%';
+                        $q->orWhere(function ($inner) use ($tl, $geo): void {
+                            $inner->where('name', 'like', $tl)
+                                ->orWhere('slug', 'like', $tl);
+                            if (Schema::hasColumn($geo, 'name_mr')) {
+                                $inner->orWhere('name_mr', 'like', $tl);
+                            }
+                        });
+                    }
+                })
+                ->limit(320)
+                ->get();
+        }
+
+        $this->hydrateParentChain($locations);
+
+        $filtered = $locations->filter(function (Location $loc) use ($tokens): bool {
+            return $this->locationMatchesAllSearchTokens($loc, $tokens);
+        });
+
+        $sorted = $filtered->sort(function (Location $a, Location $b) use ($tokens): int {
+            return $this->compareMultiTokenSearchRank($a, $b, $tokens);
+        })->values();
+
+        return $sorted->take(25)->map(function (Location $location): array {
+            return [
+                'id' => (int) $location->id,
+                'name' => (string) $location->name,
+                'type' => (string) $location->type,
+                'display_label' => $this->getDisplayLabel($location),
+            ];
+        })->all();
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function distinctSearchTokens(string $normalized): array
+    {
+        $parts = preg_split('/\s+/u', $normalized, -1, PREG_SPLIT_NO_EMPTY);
+        $out = [];
+        foreach ($parts as $p) {
+            $p = trim(mb_strtolower((string) $p, 'UTF-8'));
+            if ($p === '' || mb_strlen($p) < 2) {
+                continue;
+            }
+            if (! in_array($p, $out, true)) {
+                $out[] = $p;
+            }
+        }
+
+        return $out;
+    }
+
+    /**
+     * Leaf + every ancestor localized name, lowercased (for substring token match).
+     */
+    private function locationSearchHaystack(Location $loc): string
+    {
+        $parts = [mb_strtolower(trim($loc->localizedName()), 'UTF-8')];
+        $cur = $loc->parent;
+        $guard = 0;
+        while ($cur !== null && $guard++ < 28) {
+            $parts[] = mb_strtolower(trim($cur->localizedName()), 'UTF-8');
+            if (! $cur->relationLoaded('parent')) {
+                $cur->load('parent');
+            }
+            $cur = $cur->parent;
+        }
+
+        return implode(' ', array_filter($parts, static fn (string $s): bool => $s !== ''));
+    }
+
+    /**
+     * @param  list<string>  $tokens
+     */
+    private function locationMatchesAllSearchTokens(Location $loc, array $tokens): bool
+    {
+        $haystack = $this->locationSearchHaystack($loc);
+        foreach ($tokens as $t) {
+            if (! str_contains($haystack, $t)) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /**
+     * Lower rank value = sort earlier (better).
+     *
+     * @param  list<string>  $tokens
+     */
+    private function multiTokenRank(Location $loc, array $tokens): array
+    {
+        $nameLower = mb_strtolower(trim((string) $loc->name), 'UTF-8');
+        $t0 = $tokens[0];
+        $exactName = $nameLower === $t0 ? 0 : 1;
+        $startsName = str_starts_with($nameLower, $t0) ? 0 : 1;
+        $wordBoundary = preg_match('/(^|[\s,\-])'.preg_quote($t0, '/').'($|[\s,\-])/u', $this->locationSearchHaystack($loc)) ? 0 : 1;
+
+        $typeOrder = match ((string) ($loc->type ?? '')) {
+            'village' => 0,
+            'suburb' => 1,
+            'city' => 2,
+            'taluka' => 3,
+            'district' => 4,
+            'state' => 5,
+            'country' => 6,
+            default => 7,
+        };
+
+        return [$exactName, $startsName, $wordBoundary, $typeOrder, mb_strlen($nameLower)];
+    }
+
+    /**
+     * @param  list<string>  $tokens
+     */
+    private function compareMultiTokenSearchRank(Location $a, Location $b, array $tokens): int
+    {
+        $ra = $this->multiTokenRank($a, $tokens);
+        $rb = $this->multiTokenRank($b, $tokens);
+        foreach ($ra as $i => $v) {
+            $cmp = $v <=> ($rb[$i] ?? 0);
+            if ($cmp !== 0) {
+                return $cmp;
+            }
+        }
+
+        return strcmp((string) $a->name, (string) $b->name);
     }
 
     /**
@@ -251,24 +379,14 @@ class LocationService
     {
         $radiusKm = max(1, $radiusKm);
 
-        $source = Pincode::query()
-            ->where('place_id', $locationId)
-            ->where('is_primary', true)
-            ->first();
-
-        // Fallback when primary pincode is missing.
-        if ($source === null) {
-            $source = Pincode::query()
-                ->where('place_id', $locationId)
-                ->orderBy('id')
-                ->first();
-        }
+        $source = Location::query()->whereKey($locationId)->first();
 
         if ($source === null) {
             Log::info('Nearby search skipped due to missing coordinates', [
                 'location_id' => $locationId,
-                'reason' => 'source_pincode_missing',
+                'reason' => 'source_location_missing',
             ]);
+
             return [];
         }
 
@@ -276,7 +394,6 @@ class LocationService
             Log::info('Nearby search skipped due to missing coordinates', [
                 'location_id' => $locationId,
                 'reason' => 'source_coordinates_missing',
-                'source_pincode_id' => $source->id,
             ]);
 
             return [];
@@ -285,19 +402,15 @@ class LocationService
         $sourceLat = (float) $source->latitude;
         $sourceLng = (float) $source->longitude;
 
-        $candidates = Pincode::query()
-            ->select(['place_id', 'latitude', 'longitude'])
+        $candidates = Location::query()
+            ->select(['id', 'latitude', 'longitude'])
             ->whereNotNull('latitude')
             ->whereNotNull('longitude')
-            ->where('place_id', '!=', $locationId)
+            ->where('id', '!=', $locationId)
             ->get();
 
         $distanceByLocation = [];
         foreach ($candidates as $candidate) {
-            if ($candidate->place_id === null) {
-                continue;
-            }
-
             $distance = $this->haversineDistanceKm(
                 $sourceLat,
                 $sourceLng,
@@ -309,7 +422,7 @@ class LocationService
                 continue;
             }
 
-            $candidateLocationId = (int) $candidate->place_id;
+            $candidateLocationId = (int) $candidate->id;
             if (! isset($distanceByLocation[$candidateLocationId]) || $distance < $distanceByLocation[$candidateLocationId]) {
                 $distanceByLocation[$candidateLocationId] = $distance;
             }
@@ -400,37 +513,6 @@ class LocationService
             ->all();
     }
 
-    /**
-     * @param  array<int, string|null>  $parts
-     */
-    private function joinParts(array $parts): string
-    {
-        return $this->joinDistinctParts($parts);
-    }
-
-    /**
-     * Like {@see joinParts} but drops consecutive duplicate labels (case-insensitive) so trails stay readable.
-     *
-     * @param  array<int, string|null>  $parts
-     */
-    private function joinDistinctParts(array $parts): string
-    {
-        $clean = [];
-        foreach ($parts as $part) {
-            $value = trim((string) ($part ?? ''));
-            if ($value === '') {
-                continue;
-            }
-            $last = $clean[count($clean) - 1] ?? null;
-            if ($last !== null && mb_strtolower($last, 'UTF-8') === mb_strtolower($value, 'UTF-8')) {
-                continue;
-            }
-            $clean[] = $value;
-        }
-
-        return implode(', ', $clean);
-    }
-
     private function haversineDistanceKm(float $lat1, float $lng1, float $lat2, float $lng2): float
     {
         $earthRadiusKm = 6371.0;
@@ -442,6 +524,15 @@ class LocationService
         $c = 2 * atan2(sqrt($a), sqrt(1 - $a));
 
         return $earthRadiusKm * $c;
+    }
+
+    /**
+     * Batch-load ancestors for a single {@see Location} (same logic as search/nearby hydration).
+     * Call before {@see getFullHierarchy()} when parents may not be eager-loaded.
+     */
+    public function ensureAncestorsLoaded(Location $location): void
+    {
+        $this->hydrateParentChain(collect([$location]));
     }
 
     /**
@@ -494,4 +585,3 @@ class LocationService
         }
     }
 }
-

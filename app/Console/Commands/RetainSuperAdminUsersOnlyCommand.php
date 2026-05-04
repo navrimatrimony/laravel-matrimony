@@ -2,12 +2,9 @@
 
 namespace App\Console\Commands;
 
-use App\Models\MatrimonyProfile;
 use App\Models\User;
-use App\Services\Maintenance\MatrimonyProfileDatabasePurger;
+use App\Services\Maintenance\UserAccountDatabasePurger;
 use Illuminate\Console\Command;
-use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Schema;
 
 /**
  * Deletes every {@see User} except those with {@code admin_role = super_admin}.
@@ -58,40 +55,7 @@ class RetainSuperAdminUsersOnlyCommand extends Command
         }
 
         foreach ($victims as $user) {
-            DB::transaction(function () use ($user) {
-                $uid = (int) $user->id;
-
-                foreach (MatrimonyProfile::withTrashed()->where('user_id', $uid)->cursor() as $profile) {
-                    MatrimonyProfileDatabasePurger::purge($profile);
-                }
-
-                if (Schema::hasTable('location_suggestions')) {
-                    DB::table('location_suggestions')->where('suggested_by', $uid)->delete();
-                }
-
-                if (Schema::hasTable('biodata_intakes')) {
-                    $intakeIds = DB::table('biodata_intakes')->where('uploaded_by', $uid)->pluck('id');
-                    MatrimonyProfileDatabasePurger::deleteOcrAndIntakesByIntakeIds(collect($intakeIds));
-                }
-                if (Schema::hasTable('ocr_correction_logs') && Schema::hasColumn('ocr_correction_logs', 'corrected_by')) {
-                    DB::table('ocr_correction_logs')->where('corrected_by', $uid)->delete();
-                }
-
-                if (Schema::hasTable('admin_capabilities')) {
-                    DB::table('admin_capabilities')->where('admin_id', $uid)->delete();
-                }
-                if (Schema::hasTable('admin_audit_logs')) {
-                    DB::table('admin_audit_logs')->where('admin_id', $uid)->delete();
-                }
-                if (Schema::hasTable('abuse_reports') && Schema::hasColumn('abuse_reports', 'resolved_by_admin_id')) {
-                    DB::table('abuse_reports')->where('resolved_by_admin_id', $uid)->update(['resolved_by_admin_id' => null]);
-                }
-                if (Schema::hasTable('users') && Schema::hasColumn('users', 'mobile_duplicate_of_user_id')) {
-                    DB::table('users')->where('mobile_duplicate_of_user_id', $uid)->update(['mobile_duplicate_of_user_id' => null]);
-                }
-
-                $user->forceDelete();
-            });
+            UserAccountDatabasePurger::purgeUserAccount($user);
         }
 
         $this->info('Deleted '.$victims->count().' non–super-admin user(s). Kept: '.implode(', ', $keepEmails));

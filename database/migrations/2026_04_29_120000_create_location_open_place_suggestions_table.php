@@ -17,11 +17,11 @@ return new class extends Migration
             $table->id();
             $table->text('raw_input');
             $table->string('normalized_input');
-            $table->foreignId('country_id')->nullable()->constrained('countries')->restrictOnDelete();
-            $table->foreignId('state_id')->nullable()->constrained('states')->restrictOnDelete();
-            $table->foreignId('district_id')->nullable()->constrained('districts')->restrictOnDelete();
-            $table->foreignId('taluka_id')->nullable()->constrained('talukas')->restrictOnDelete();
-            $table->foreignId('resolved_city_id')->nullable()->constrained('cities')->restrictOnDelete();
+            $table->foreignId('country_id')->nullable()->constrained('addresses')->restrictOnDelete();
+            $table->foreignId('state_id')->nullable()->constrained('addresses')->restrictOnDelete();
+            $table->foreignId('district_id')->nullable()->constrained('addresses')->restrictOnDelete();
+            $table->foreignId('taluka_id')->nullable()->constrained('addresses')->restrictOnDelete();
+            $table->foreignId('resolved_city_id')->nullable()->constrained('addresses')->restrictOnDelete();
             $table->string('match_type', 24)->default('none');
             $table->decimal('confidence_score', 8, 6)->nullable();
             $table->string('status', 24)->default('pending');

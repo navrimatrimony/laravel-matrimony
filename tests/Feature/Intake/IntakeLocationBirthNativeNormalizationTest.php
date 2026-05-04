@@ -3,8 +3,8 @@
 namespace Tests\Feature\Intake;
 
 use App\Models\City;
-use App\Models\CityAlias;
 use App\Models\Country;
+use App\Models\LocationAlias;
 use App\Services\Location\LocationNormalizationService;
 use App\Services\Parsing\IntakeControlledFieldNormalizer;
 use Database\Seeders\MinimalLocationSeeder;
@@ -20,9 +20,9 @@ class IntakeLocationBirthNativeNormalizationTest extends TestCase
         $this->seed(MinimalLocationSeeder::class);
         $city = City::query()->where('name', 'Pune City')->first();
         $this->assertNotNull($city);
-        CityAlias::query()->create([
-            'city_id' => $city->id,
-            'alias_name' => 'Pune',
+        LocationAlias::query()->create([
+            'location_id' => $city->id,
+            'alias' => 'Pune',
             'normalized_alias' => 'pune',
             'is_active' => true,
         ]);
@@ -38,9 +38,7 @@ class IntakeLocationBirthNativeNormalizationTest extends TestCase
         $city->load('taluka.district');
         $this->assertSame($city->id, (int) ($out['core']['birth_city_id'] ?? 0));
         $this->assertSame($city->id, (int) ($out['birth_place']['city_id'] ?? 0));
-        $this->assertSame((int) $city->taluka_id, (int) ($out['core']['birth_taluka_id'] ?? 0));
-        $this->assertSame((int) $city->taluka->district_id, (int) ($out['core']['birth_district_id'] ?? 0));
-        $this->assertSame((int) $city->taluka->district->state_id, (int) ($out['core']['birth_state_id'] ?? 0));
+        $this->assertSame((int) $city->taluka_id, (int) ($out['birth_place']['taluka_id'] ?? 0));
         $this->assertSame((int) $city->taluka->district_id, (int) ($out['birth_place']['district_id'] ?? 0));
         $this->assertSame((int) $city->taluka->district->state_id, (int) ($out['birth_place']['state_id'] ?? 0));
     }
@@ -50,9 +48,9 @@ class IntakeLocationBirthNativeNormalizationTest extends TestCase
         $this->seed(MinimalLocationSeeder::class);
         $city = City::query()->where('name', 'Pune City')->first();
         $this->assertNotNull($city);
-        CityAlias::query()->create([
-            'city_id' => $city->id,
-            'alias_name' => 'Pune',
+        LocationAlias::query()->create([
+            'location_id' => $city->id,
+            'alias' => 'Pune',
             'normalized_alias' => 'pune',
             'is_active' => true,
         ]);
@@ -80,9 +78,9 @@ class IntakeLocationBirthNativeNormalizationTest extends TestCase
         $this->seed(MinimalLocationSeeder::class);
         $city = City::query()->with('taluka.district')->where('name', 'Pune City')->first();
         $this->assertNotNull($city);
-        CityAlias::query()->create([
-            'city_id' => $city->id,
-            'alias_name' => 'Pune',
+        LocationAlias::query()->create([
+            'location_id' => $city->id,
+            'alias' => 'Pune',
             'normalized_alias' => 'pune',
             'is_active' => true,
         ]);
@@ -98,6 +96,7 @@ class IntakeLocationBirthNativeNormalizationTest extends TestCase
         $this->assertNotNull($india);
         $this->assertSame((int) $india->id, (int) ($r['country_id'] ?? 0));
         $this->assertGreaterThanOrEqual(0.80, (float) ($r['confidence'] ?? 0));
+        $this->assertSame($city->id, (int) ($r['location_id'] ?? 0));
         $this->assertSame('Pune', $r['raw_input']);
     }
 
@@ -114,8 +113,6 @@ class IntakeLocationBirthNativeNormalizationTest extends TestCase
         $out = app(IntakeControlledFieldNormalizer::class)->normalizeSnapshot($snapshot);
 
         $this->assertNull($out['core']['birth_city_id'] ?? null);
-        $this->assertNull($out['core']['birth_district_id'] ?? null);
-        $this->assertNull($out['core']['birth_state_id'] ?? null);
         $this->assertSame('Unknown Village XYZ', (string) ($out['core']['birth_place_text'] ?? ''));
     }
 }

@@ -4,47 +4,71 @@ use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 
+/**
+ * Replace free-text location with hierarchy IDs pointing into {@code addresses} (same id space).
+ * Legacy columns ({@code country_id} … {@code city_id}) stay nullable without FKs for backward compatibility;
+ * canonical residence is {@code location_id} → addresses.
+ */
 return new class extends Migration
 {
-    /**
-     * Run the migrations.
-     * Phase-4 Day-8: Replace free-text location with hierarchical foreign keys
-     * 
-     * BREAKING CHANGE: Removes location (string) column
-     * Data migration strategy must be executed separately before running this migration
-     */
     public function up(): void
     {
         Schema::table('matrimony_profiles', function (Blueprint $table) {
-            // Add hierarchical location foreign keys
-            $table->foreignId('country_id')->nullable()->after('location')->constrained('countries')->onDelete('restrict');
-            $table->foreignId('state_id')->nullable()->after('country_id')->constrained('states')->onDelete('restrict');
-            $table->foreignId('district_id')->nullable()->after('state_id')->constrained('districts')->onDelete('restrict');
-            $table->foreignId('taluka_id')->nullable()->after('district_id')->constrained('talukas')->onDelete('restrict');
-            $table->foreignId('city_id')->nullable()->after('taluka_id')->constrained('cities')->onDelete('restrict');
-            
-            // Remove free-text location column
             $table->dropColumn('location');
+        });
+
+        Schema::table('matrimony_profiles', function (Blueprint $table) {
+            $table->unsignedBigInteger('country_id')->nullable()->after('education');
+            $table->unsignedBigInteger('state_id')->nullable()->after('country_id');
+            $table->unsignedBigInteger('district_id')->nullable()->after('state_id');
+            $table->unsignedBigInteger('taluka_id')->nullable()->after('district_id');
+            $table->unsignedBigInteger('city_id')->nullable()->after('taluka_id');
+            $table->unsignedBigInteger('location_id')->nullable()->after('city_id');
+        });
+
+        if (Schema::hasTable('addresses')) {
+            Schema::table('matrimony_profiles', function (Blueprint $table) {
+                $table->foreign('location_id')->references('id')->on('addresses')->nullOnDelete();
+            });
+        }
+
+        Schema::table('matrimony_profiles', function (Blueprint $table) {
+            $table->index('country_id');
+            $table->index('state_id');
+            $table->index('district_id');
+            $table->index('taluka_id');
+            $table->index('city_id');
+            $table->index('location_id');
         });
     }
 
-    /**
-     * Reverse the migrations.
-     */
     public function down(): void
     {
         Schema::table('matrimony_profiles', function (Blueprint $table) {
-            // Restore free-text location column
+            if (Schema::hasColumn('matrimony_profiles', 'location_id')) {
+                try {
+                    $table->dropForeign(['location_id']);
+                } catch (\Throwable) {
+                }
+            }
+        });
+
+        Schema::table('matrimony_profiles', function (Blueprint $table) {
+            $drops = array_filter([
+                Schema::hasColumn('matrimony_profiles', 'country_id') ? 'country_id' : null,
+                Schema::hasColumn('matrimony_profiles', 'state_id') ? 'state_id' : null,
+                Schema::hasColumn('matrimony_profiles', 'district_id') ? 'district_id' : null,
+                Schema::hasColumn('matrimony_profiles', 'taluka_id') ? 'taluka_id' : null,
+                Schema::hasColumn('matrimony_profiles', 'city_id') ? 'city_id' : null,
+                Schema::hasColumn('matrimony_profiles', 'location_id') ? 'location_id' : null,
+            ]);
+            if ($drops !== []) {
+                $table->dropColumn($drops);
+            }
+        });
+
+        Schema::table('matrimony_profiles', function (Blueprint $table) {
             $table->string('location')->nullable()->after('education');
-            
-            // Drop hierarchical location foreign keys
-            $table->dropForeign(['country_id']);
-            $table->dropForeign(['state_id']);
-            $table->dropForeign(['district_id']);
-            $table->dropForeign(['taluka_id']);
-            $table->dropForeign(['city_id']);
-            
-            $table->dropColumn(['country_id', 'state_id', 'district_id', 'taluka_id', 'city_id']);
         });
     }
 };

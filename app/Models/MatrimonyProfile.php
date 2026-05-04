@@ -4,7 +4,8 @@ namespace App\Models;
 
 use App\Casts\MojibakeSafeUtf8String;
 use App\Services\ConflictDetectionService;
-use App\Services\Location\LocationDisplayFormatter;
+use App\Services\Location\LocationFormatterService;
+use App\Services\Location\LocationService;
 use App\Services\ProfileFieldLockService;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -31,7 +32,6 @@ use Illuminate\Validation\ValidationException;
 
 /**
  * @property int|null $location_id Canonical residence ({@see Location} / {@code addresses}.id).
- * @property int|null $city_id      @deprecated Legacy column; not mass-assignable. Use location_id.
  */
 class MatrimonyProfile extends Model
 {
@@ -123,20 +123,9 @@ class MatrimonyProfile extends Model
         'caste_id',
         'sub_caste_id',
         'highest_education',
-        'highest_education_id',
-        'highest_education_text',
-        'education_degree_id',
-        'education_text',
-        'country_id',
-        'state_id',
-        'district_id',
-        'taluka_id',
         'location_id',
         'address_line',
         'birth_city_id',
-        'birth_taluka_id',
-        'birth_district_id',
-        'birth_state_id',
         'birth_place_text',
         'native_city_id',
         'native_taluka_id',
@@ -245,13 +234,9 @@ class MatrimonyProfile extends Model
         'income_private' => 'boolean',
         'family_income_private' => 'boolean',
         'card_onboarding_resume_step' => 'integer',
-        'highest_education_id' => 'integer',
-        'education_degree_id' => 'integer',
         // UTF-8 bytes misread as Latin-1 (mojibake) — repair on read/write for MR/EN narrative fields.
         'full_name' => MojibakeSafeUtf8String::class,
         'highest_education' => MojibakeSafeUtf8String::class,
-        'highest_education_text' => MojibakeSafeUtf8String::class,
-        'education_text' => MojibakeSafeUtf8String::class,
         'address_line' => MojibakeSafeUtf8String::class,
         'birth_place_text' => MojibakeSafeUtf8String::class,
         'photo_rejection_reason' => MojibakeSafeUtf8String::class,
@@ -365,6 +350,122 @@ class MatrimonyProfile extends Model
     }
 
     /**
+     * Residence leaf {@see Location} row is under this ancestor {@code addresses.id} (country/state/district/taluka/city).
+     */
+    public function scopeWhereResidenceUnderAncestor(Builder $query, int $ancestorAddressId): Builder
+    {
+        $geo = Location::geoTable();
+        $tbl = $this->getTable();
+
+        return $query->whereNotNull($tbl.'.location_id')
+            ->whereRaw(
+                "EXISTS (
+                    WITH RECURSIVE chain AS (
+                        SELECT id, parent_id FROM {$geo} WHERE id = {$tbl}.location_id
+                        UNION ALL
+                        SELECT a.id, a.parent_id FROM {$geo} a INNER JOIN chain c ON a.id = c.parent_id
+                    )
+                    SELECT 1 FROM chain WHERE chain.id = ?
+                )",
+                [$ancestorAddressId]
+            );
+    }
+
+    /**
+     * District / state / country as {@code addresses.id} values derived from {@see location_id} (partner matching, search).
+     *
+     * @return array{district_id: int|null, state_id: int|null, country_id: int|null}
+     */
+    public function residenceGeoAddressIds(): array
+    {
+        $empty = ['district_id' => null, 'state_id' => null, 'country_id' => null];
+        if (! $this->location_id || ! Schema::hasTable(Location::geoTable())) {
+            return $empty;
+        }
+        $leaf = Location::query()->find((int) $this->location_id);
+        if ($leaf === null) {
+            return $empty;
+        }
+        $svc = app(LocationService::class);
+        $h = $svc->getFullHierarchy($leaf);
+        $district = $h['district'] ?? null;
+        if ($district === null && $leaf->type === 'district') {
+            $district = $leaf;
+        }
+        $state = $h['state'] ?? null;
+        if ($state === null && $leaf->type === 'state') {
+            $state = $leaf;
+        }
+        $country = $svc->getAncestorByType($leaf, 'country');
+        if ($country === null && $leaf->type === 'country') {
+            $country = $leaf;
+        }
+
+        return [
+            'district_id' => $district !== null ? (int) $district->id : null,
+            'state_id' => $state !== null ? (int) $state->id : null,
+            'country_id' => $country !== null ? (int) $country->id : null,
+        ];
+    }
+
+    /**
+     * Values for {@see resources/views/components/profile/location-typeahead.blade.php} residence context:
+     * ancestor {@code addresses.id} hints derived from {@see location_id} only (not persisted as separate columns).
+     *
+     * @return array{location_id: string, country_id: string, state_id: string, district_id: string, taluka_id: string}
+     */
+    public function residenceLocationHierarchyHints(): array
+    {
+        $empty = ['location_id' => '', 'country_id' => '', 'state_id' => '', 'district_id' => '', 'taluka_id' => ''];
+        if (! $this->location_id || ! Schema::hasTable(Location::geoTable())) {
+            return $empty;
+        }
+        $leaf = Location::query()->find((int) $this->location_id);
+        if ($leaf === null) {
+            return $empty;
+        }
+        $svc = app(LocationService::class);
+        $h = $svc->getFullHierarchy($leaf);
+        $country = $svc->getAncestorByType($leaf, 'country');
+
+        return [
+            'location_id' => (string) $this->location_id,
+            'country_id' => $country ? (string) $country->id : '',
+            'state_id' => $h['state'] ? (string) $h['state']->id : '',
+            'district_id' => $h['district'] ? (string) $h['district']->id : '',
+            'taluka_id' => $h['taluka'] ? (string) $h['taluka']->id : '',
+        ];
+    }
+
+    /**
+     * Same as {@see residenceLocationHierarchyHints()} but for {@see birth_city_id} (birth place leaf).
+     *
+     * @return array{location_id: string, country_id: string, state_id: string, district_id: string, taluka_id: string}
+     */
+    public function birthCityHierarchyHints(): array
+    {
+        $empty = ['location_id' => '', 'country_id' => '', 'state_id' => '', 'district_id' => '', 'taluka_id' => ''];
+        if (! $this->birth_city_id || ! Schema::hasTable(Location::geoTable())) {
+            return $empty;
+        }
+        $leaf = Location::query()->find((int) $this->birth_city_id);
+        if ($leaf === null) {
+            return $empty;
+        }
+        $svc = app(LocationService::class);
+        $h = $svc->getFullHierarchy($leaf);
+        $country = $svc->getAncestorByType($leaf, 'country');
+
+        return [
+            'location_id' => (string) $this->birth_city_id,
+            'country_id' => $country ? (string) $country->id : '',
+            'state_id' => $h['state'] ? (string) $h['state']->id : '',
+            'district_id' => $h['district'] ? (string) $h['district']->id : '',
+            'taluka_id' => $h['taluka'] ? (string) $h['taluka']->id : '',
+        ];
+    }
+
+    /**
      * Profile photo gallery (sorted + primary first in UI ordering).
      */
     public function photos()
@@ -443,11 +544,29 @@ class MatrimonyProfile extends Model
     }
 
     /**
-     * Highest education via Shaadi-style degree master ({@see EducationDegree}).
+     * Partner preference: acceptable qualification degrees ({@see EducationDegree} / {@code education_degrees}).
      */
-    public function educationDegree(): \Illuminate\Database\Eloquent\Relations\BelongsTo
+    public function preferredEducationDegrees(): \Illuminate\Database\Eloquent\Relations\BelongsToMany
     {
-        return $this->belongsTo(EducationDegree::class, 'education_degree_id');
+        return $this->belongsToMany(
+            EducationDegree::class,
+            'profile_preferred_education_degrees',
+            'profile_id',
+            'education_degree_id'
+        )->withTimestamps();
+    }
+
+    /**
+     * Partner preference: acceptable occupations ({@see OccupationMaster}).
+     */
+    public function preferredOccupationMasters(): \Illuminate\Database\Eloquent\Relations\BelongsToMany
+    {
+        return $this->belongsToMany(
+            OccupationMaster::class,
+            'profile_preferred_occupation_master',
+            'profile_id',
+            'occupation_master_id'
+        )->withTimestamps();
     }
 
     /*
@@ -480,34 +599,9 @@ class MatrimonyProfile extends Model
 
     /*
     |--------------------------------------------------------------------------
-    | Location Hierarchy Relationships (Phase-4 Day-8)
+    | Location (Phase-4 Day-8) — SSOT: {@code location_id} only on this table.
     |--------------------------------------------------------------------------
     */
-
-    public function country()
-    {
-        return $this->belongsTo(Country::class);
-    }
-
-    public function state()
-    {
-        return $this->belongsTo(State::class);
-    }
-
-    public function district()
-    {
-        return $this->belongsTo(District::class);
-    }
-
-    public function taluka()
-    {
-        return $this->belongsTo(Taluka::class);
-    }
-
-    public function city()
-    {
-        return $this->belongsTo(City::class);
-    }
 
     /**
      * Canonical current residence in the unified {@see Location} table.
@@ -515,24 +609,6 @@ class MatrimonyProfile extends Model
     public function location()
     {
         return $this->belongsTo(Location::class, 'location_id');
-    }
-
-    /**
-     * Eager-load paths for {@see LocationDisplayFormatter} (parent metro + optional meta overrides).
-     *
-     * @return list<string>
-     */
-    public static function withRelationsForLocationDisplay(): array
-    {
-        $with = ['taluka.district.state.country'];
-        if (Schema::hasColumn('cities', 'parent_city_id')) {
-            $with[] = 'parentCity';
-        }
-        if (Schema::hasTable('city_display_meta')) {
-            $with[] = 'displayMeta';
-        }
-
-        return $with;
     }
 
     /**
@@ -552,12 +628,8 @@ class MatrimonyProfile extends Model
         if (! $lid || ! Schema::hasTable(Location::geoTable())) {
             return '';
         }
-        $loc = Location::query()->find((int) $lid);
-        if ($loc === null) {
-            return '';
-        }
 
-        return app(\App\Services\Location\LocationService::class)->getDisplayLabel($loc);
+        return app(LocationFormatterService::class)->formatLocation((int) $lid);
     }
 
     /**
@@ -568,12 +640,8 @@ class MatrimonyProfile extends Model
         if (! $this->location_id || ! Schema::hasTable(Location::geoTable())) {
             return '';
         }
-        $loc = Location::query()->find((int) $this->location_id);
-        if ($loc === null) {
-            return '';
-        }
 
-        return app(\App\Services\Location\LocationService::class)->getDisplayLabel($loc);
+        return app(LocationFormatterService::class)->formatLocation((int) $this->location_id);
     }
 
     /**
@@ -600,108 +668,140 @@ class MatrimonyProfile extends Model
 
     public function residenceDistrictStateLine(): string
     {
+        $geo = $this->residenceGeoAddressIds();
+
         return self::residenceDistrictAndStateLineFromIds(
-            $this->district_id ? (int) $this->district_id : null,
-            $this->state_id ? (int) $this->state_id : null,
+            $geo['district_id'],
+            $geo['state_id'],
         );
     }
 
     /**
-     * Birth place line using {@see LocationDisplayFormatter} when `birth_city_id` resolves to a row.
+     * Birth place line from {@code addresses} via {@see LocationFormatterService} (same SSOT as residence).
      */
     public function birthLocationDisplayLine(): string
     {
-        if ($this->birth_city_id) {
-            $city = City::query()->with(self::withRelationsForLocationDisplay())->find((int) $this->birth_city_id);
-            if ($city !== null) {
-                return app(LocationDisplayFormatter::class)->formatCityLine($city);
+        if ($this->birth_city_id && Schema::hasTable(Location::geoTable())) {
+            $line = app(LocationFormatterService::class)->formatLocation((int) $this->birth_city_id);
+            if ($line !== '') {
+                return $line;
             }
         }
 
-        return trim(implode(', ', array_values(array_filter([
-            $this->birthCity?->name,
-            $this->birthTaluka?->name,
-            $this->birthDistrict?->name,
-            $this->birthState?->name,
-        ], static fn ($x) => $x !== null && $x !== ''))));
+        return trim((string) ($this->birthCity?->localizedName() ?? ''));
     }
 
     /**
-     * Native place line using {@see LocationDisplayFormatter} when `native_city_id` resolves.
+     * Native place from canonical {@code addresses} ids.
      */
     public function nativeLocationDisplayLine(): string
     {
-        if ($this->native_city_id) {
-            $city = City::query()->with(self::withRelationsForLocationDisplay())->find((int) $this->native_city_id);
-            if ($city !== null) {
-                return app(LocationDisplayFormatter::class)->formatCityLine($city);
+        if ($this->native_city_id && Schema::hasTable(Location::geoTable())) {
+            $line = app(LocationFormatterService::class)->formatLocation((int) $this->native_city_id);
+            if ($line !== '') {
+                return $line;
             }
         }
 
         return trim(implode(', ', array_values(array_filter([
-            $this->nativeCity?->name,
-            $this->nativeTaluka?->name,
-            $this->nativeDistrict?->name,
-            $this->nativeState?->name,
+            $this->nativeCity?->localizedName(),
+            $this->nativeTaluka?->localizedName(),
+            $this->nativeDistrict?->localizedName(),
+            $this->nativeState?->localizedName(),
         ], static fn ($x) => $x !== null && $x !== ''))));
     }
 
     /**
-     * Work location: formatted city hierarchy when `work_city_id` exists, else city + state names.
+     * Work location from {@code addresses} (city row + optional state).
      */
     public function workLocationDisplayLine(): string
     {
-        if ($this->work_city_id) {
-            $city = City::query()->with(self::withRelationsForLocationDisplay())->find((int) $this->work_city_id);
-            if ($city !== null) {
-                return app(LocationDisplayFormatter::class)->formatCityLine($city);
+        if ($this->work_city_id && Schema::hasTable(Location::geoTable())) {
+            $line = app(LocationFormatterService::class)->formatLocation((int) $this->work_city_id);
+            if ($line !== '') {
+                return $line;
             }
         }
 
-        $workCityName = $this->work_city_id ? City::query()->whereKey($this->work_city_id)->value('name') : null;
-        $workStateName = $this->work_state_id ? State::query()->whereKey($this->work_state_id)->value('name') : null;
+        if ($this->work_state_id && Schema::hasTable(Location::geoTable())) {
+            $line = app(LocationFormatterService::class)->formatLocation((int) $this->work_state_id);
+            if ($line !== '') {
+                return $line;
+            }
+        }
 
-        return trim(implode(', ', array_values(array_filter([$workCityName, $workStateName], static fn ($x) => $x !== null && $x !== ''))));
+        return '';
     }
 
+    /** Birth place leaf row in {@code addresses} (hierarchy from {@see Location::parent}). */
     public function birthCity()
     {
-        return $this->belongsTo(City::class, 'birth_city_id');
-    }
-
-    public function birthTaluka()
-    {
-        return $this->belongsTo(Taluka::class, 'birth_taluka_id');
-    }
-
-    public function birthDistrict()
-    {
-        return $this->belongsTo(District::class, 'birth_district_id');
-    }
-
-    public function birthState()
-    {
-        return $this->belongsTo(State::class, 'birth_state_id');
+        return $this->belongsTo(Location::class, 'birth_city_id');
     }
 
     public function nativeCity()
     {
-        return $this->belongsTo(City::class, 'native_city_id');
+        return $this->belongsTo(Location::class, 'native_city_id');
     }
 
     public function nativeTaluka()
     {
-        return $this->belongsTo(Taluka::class, 'native_taluka_id');
+        return $this->belongsTo(Location::class, 'native_taluka_id');
     }
 
     public function nativeDistrict()
     {
-        return $this->belongsTo(District::class, 'native_district_id');
+        return $this->belongsTo(Location::class, 'native_district_id');
     }
 
     public function nativeState()
     {
-        return $this->belongsTo(State::class, 'native_state_id');
+        return $this->belongsTo(Location::class, 'native_state_id');
+    }
+
+    /**
+     * Legacy parallel hierarchy FKs on {@code matrimony_profiles} → typed rows in {@code addresses}.
+     * Nullable when residence is {@see location_id} only (canonical SSOT).
+     */
+    public function country(): \Illuminate\Database\Eloquent\Relations\BelongsTo
+    {
+        return $this->belongsTo(Country::class, 'country_id');
+    }
+
+    public function state(): \Illuminate\Database\Eloquent\Relations\BelongsTo
+    {
+        return $this->belongsTo(State::class, 'state_id');
+    }
+
+    public function district(): \Illuminate\Database\Eloquent\Relations\BelongsTo
+    {
+        return $this->belongsTo(District::class, 'district_id');
+    }
+
+    public function taluka(): \Illuminate\Database\Eloquent\Relations\BelongsTo
+    {
+        return $this->belongsTo(Taluka::class, 'taluka_id');
+    }
+
+    public function city(): \Illuminate\Database\Eloquent\Relations\BelongsTo
+    {
+        return $this->belongsTo(City::class, 'city_id');
+    }
+
+    /** Birth place hierarchy (optional columns; leaf is {@see birthCity}). */
+    public function birthTaluka(): \Illuminate\Database\Eloquent\Relations\BelongsTo
+    {
+        return $this->belongsTo(Taluka::class, 'birth_taluka_id');
+    }
+
+    public function birthDistrict(): \Illuminate\Database\Eloquent\Relations\BelongsTo
+    {
+        return $this->belongsTo(District::class, 'birth_district_id');
+    }
+
+    public function birthState(): \Illuminate\Database\Eloquent\Relations\BelongsTo
+    {
+        return $this->belongsTo(State::class, 'birth_state_id');
     }
 
     public function seriousIntent()

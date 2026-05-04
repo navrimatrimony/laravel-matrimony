@@ -2,35 +2,48 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Model;
+use App\Services\Location\LocationHierarchyValidator;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Str;
 
 /**
- * Phase-4 Day-8: Location Hierarchy - District Model
+ * District rows in {@code addresses} ({@code type = district}).
  *
- * Unique per state: {@see $fillable name}, {@see $fillable slug} (URL-safe ASCII).
- *
- * Slug policy: generated once on {@see creating} from the English name. Renaming {@see $fillable name}
- * does **not** regenerate slug (stable URLs / FK-by-closure expectations). Change {@see $fillable slug}
- * explicitly only when an admin intentionally remaps identifiers.
+ * @deprecated Prefer {@see Location}.
  */
-class District extends Model
+class District extends Location
 {
-    protected $fillable = ['state_id', 'name', 'name_mr', 'slug'];
+    /** @return list<string> */
+    public function getFillable(): array
+    {
+        return array_merge(parent::getFillable(), ['state_id']);
+    }
 
     protected static function booted(): void
     {
-        static::creating(function (District $district): void {
-            if (($district->slug === null || $district->slug === '') && $district->name !== null && $district->name !== '') {
-                $district->slug = static::uniqueSlugForState((int) $district->state_id, (string) $district->name);
+        static::saving(function (District $district): void {
+            $district->type = 'district';
+            if (isset($district->attributes['state_id'])) {
+                $district->parent_id = $district->attributes['state_id'];
+                unset($district->attributes['state_id']);
             }
+            if (($district->slug === null || $district->slug === '') && filled($district->name)) {
+                $pid = (int) ($district->parent_id ?? 0);
+                if ($pid > 0) {
+                    $district->slug = static::uniqueSlugForState($pid, (string) $district->name);
+                }
+            }
+            app(LocationHierarchyValidator::class)->validate($district);
         });
+
+        parent::booted();
+
+        static::addGlobalScope('geo_district', fn ($q) => $q->where('type', 'district'));
     }
 
     /**
-     * Stable URL segment per state (e.g. pune, mumbai-suburban). Handles collisions within the same state.
+     * Stable URL segment per state (parent_id = state row id).
      */
     public static function uniqueSlugForState(int $stateId, string $englishName, ?int $exceptDistrictId = null): string
     {
@@ -40,8 +53,9 @@ class District extends Model
         }
         $slug = $base;
         $n = 2;
-        while (static::query()
-            ->where('state_id', $stateId)
+        while (static::withoutGlobalScopes()
+            ->where('type', 'district')
+            ->where('parent_id', $stateId)
             ->where('slug', $slug)
             ->when($exceptDistrictId !== null, fn ($q) => $q->where('id', '!=', $exceptDistrictId))
             ->exists()) {
@@ -52,13 +66,23 @@ class District extends Model
         return $slug;
     }
 
+    public function getStateIdAttribute(): ?int
+    {
+        return isset($this->attributes['parent_id']) ? (int) $this->attributes['parent_id'] : null;
+    }
+
+    public function setStateIdAttribute(mixed $value): void
+    {
+        $this->attributes['parent_id'] = $value;
+    }
+
     public function state(): BelongsTo
     {
-        return $this->belongsTo(State::class);
+        return $this->belongsTo(State::class, 'parent_id');
     }
 
     public function talukas(): HasMany
     {
-        return $this->hasMany(Taluka::class);
+        return $this->hasMany(Taluka::class, 'parent_id');
     }
 }

@@ -5,15 +5,15 @@ namespace App\Services;
 use App\Models\Caste;
 use App\Models\City;
 use App\Models\District;
+use App\Models\EducationDegree;
+use App\Models\OccupationMaster;
 use App\Models\MasterDiet;
-use App\Models\MasterEducation;
 use App\Models\MasterMaritalStatus;
 use App\Models\MatrimonyProfile;
-use App\Models\Profession;
 use App\Models\Religion;
 use App\Models\State;
-use App\Models\WorkingWithType;
 use App\Support\HeightDisplay;
+use App\Support\ProfileDisplayCopy;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -110,10 +110,9 @@ class ProfileShowSnapshotService
             'preferred_religion_ids' => [],
             'preferred_caste_ids' => [],
             'preferred_district_ids' => [],
-            'preferred_master_education_ids' => [],
+            'preferred_education_degree_ids' => [],
+            'preferred_occupation_master_ids' => [],
             'preferred_diet_ids' => [],
-            'preferred_profession_ids' => [],
-            'preferred_working_with_type_ids' => [],
             'preferred_marital_status_ids' => [],
             'extended_attributes' => null,
             'extended_values' => [],
@@ -188,13 +187,7 @@ class ProfileShowSnapshotService
         }
 
         if ($ctx['location_visible'] ?? true) {
-            $loc = implode(', ', array_filter([
-                $profile->city?->name,
-                $profile->taluka?->name,
-                $profile->district?->name,
-                $profile->state?->name,
-                $profile->country?->name,
-            ]));
+            $loc = trim(ProfileDisplayCopy::profileResidenceDisplayLine($profile));
             if ($this->present($loc)) {
                 $rows[] = $this->row(__('Location'), $loc);
             }
@@ -714,10 +707,6 @@ class ProfileShowSnapshotService
             $rows[] = $this->row(__('wizard.preferred_height_range'), $text);
         }
 
-        if ($pc && $this->present($pc->preferred_education ?? null)) {
-            $rows[] = $this->row(__('Education'), (string) $pc->preferred_education);
-        }
-
         if ($pc && ($pc->preferred_city_id ?? null)) {
             $name = City::query()->where('id', $pc->preferred_city_id)->value('name');
             if ($this->present($name)) {
@@ -777,11 +766,11 @@ class ProfileShowSnapshotService
             $rows[] = $this->row(__('Preferred income'), ($pc->preferred_income_min ?? '—').' – '.($pc->preferred_income_max ?? '—'));
         }
 
-        $prefMe = $ctx['preferred_master_education_ids'] ?? [];
-        if ($prefMe !== []) {
-            $labs = MasterEducation::query()->whereIn('id', $prefMe)->orderBy('sort_order')->pluck('name')->filter()->values()->all();
+        $prefDeg = $ctx['preferred_education_degree_ids'] ?? [];
+        if ($prefDeg !== []) {
+            $labs = EducationDegree::query()->whereIn('id', $prefDeg)->orderBy('sort_order')->pluck('title')->filter()->values()->all();
             if ($labs !== []) {
-                $rows[] = $this->row(__('Preferred education level'), implode(', ', $labs));
+                $rows[] = $this->row(__('Preferred qualification'), implode(', ', $labs));
             }
         }
 
@@ -793,19 +782,11 @@ class ProfileShowSnapshotService
             }
         }
 
-        $prefProf = $ctx['preferred_profession_ids'] ?? [];
-        if ($prefProf !== []) {
-            $labs = Profession::query()->whereIn('id', $prefProf)->orderBy('sort_order')->pluck('name')->filter()->values()->all();
+        $prefOccM = $ctx['preferred_occupation_master_ids'] ?? [];
+        if ($prefOccM !== []) {
+            $labs = OccupationMaster::query()->whereIn('id', $prefOccM)->orderBy('sort_order')->pluck('name')->filter()->values()->all();
             if ($labs !== []) {
-                $rows[] = $this->row(__('Preferred profession'), implode(', ', $labs));
-            }
-        }
-
-        $prefWwt = $ctx['preferred_working_with_type_ids'] ?? [];
-        if ($prefWwt !== []) {
-            $labs = WorkingWithType::query()->whereIn('id', $prefWwt)->orderBy('sort_order')->pluck('name')->filter()->values()->all();
-            if ($labs !== []) {
-                $rows[] = $this->row(__('Preferred working with'), implode(', ', $labs));
+                $rows[] = $this->row(__('Preferred occupation'), implode(', ', $labs));
             }
         }
 

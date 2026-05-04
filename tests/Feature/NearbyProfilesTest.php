@@ -3,12 +3,10 @@
 use App\Models\City;
 use App\Models\Location;
 use App\Models\MatrimonyProfile;
-use App\Models\Pincode;
 use App\Models\Taluka;
 use App\Models\User;
 use Database\Seeders\MinimalLocationSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Facades\DB;
 
 uses(RefreshDatabase::class);
 
@@ -27,115 +25,35 @@ function setupNearbyProfilesFixture(): array
         'name' => 'Baner City',
     ]);
 
-    $mh = Location::query()->create([
-        'name' => 'Maharashtra',
-        'slug' => 'mh-nearby-'.uniqid(),
-        'type' => 'state',
-        'parent_id' => null,
-        'state_code' => 'MH',
-        'is_active' => true,
-    ]);
-    $puneDist = Location::query()->create([
-        'name' => 'Pune',
-        'slug' => 'pune-dist-nearby-'.uniqid(),
-        'type' => 'district',
-        'parent_id' => $mh->id,
-        'state_code' => 'MH',
-        'district_code' => 'PN',
-        'is_active' => true,
-    ]);
-    $puneLoc = Location::query()->create([
-        'id' => $puneCity->id,
-        'name' => 'Pune',
-        'slug' => 'pune-city-nearby-'.uniqid(),
-        'type' => 'city',
-        'parent_id' => $puneDist->id,
-        'state_code' => 'MH',
-        'district_code' => 'PN',
-        'is_active' => true,
-    ]);
-
-    $gj = Location::query()->create([
-        'name' => 'Gujarat',
-        'slug' => 'gj-nearby-'.uniqid(),
-        'type' => 'state',
-        'parent_id' => null,
-        'state_code' => 'GJ',
-        'is_active' => true,
-    ]);
-    $ahmDist = Location::query()->create([
-        'name' => 'Ahmedabad',
-        'slug' => 'ahm-dist-nearby-'.uniqid(),
-        'type' => 'district',
-        'parent_id' => $gj->id,
-        'state_code' => 'GJ',
-        'district_code' => 'AH',
-        'is_active' => true,
-    ]);
-    Location::query()->create([
-        'id' => $ahmedabadCity->id,
-        'name' => 'Ahmedabad',
-        'slug' => 'ahmedabad-city-nearby-'.uniqid(),
-        'type' => 'city',
-        'parent_id' => $ahmDist->id,
-        'state_code' => 'GJ',
-        'district_code' => 'AH',
-        'is_active' => true,
-    ]);
-
-    Location::query()->create([
-        'id' => $banerCity->id,
-        'name' => 'Baner',
-        'slug' => 'baner-nearby-'.uniqid(),
-        'type' => 'suburb',
-        'parent_id' => $puneLoc->id,
-        'state_code' => 'MH',
-        'district_code' => 'PN',
-        'is_active' => true,
-    ]);
-
-    DB::table(Location::geoTable())->insert([
-        'id' => 9001,
+    $source = Location::query()->create([
         'name' => 'Wakad Source',
         'slug' => 'wakad-source-test-'.uniqid(),
         'type' => 'suburb',
-        'parent_id' => $puneLoc->id,
-        'level' => 5,
+        'parent_id' => $puneCity->id,
         'state_code' => 'MH',
         'district_code' => 'PN',
         'is_active' => true,
-        'created_at' => now(),
-        'updated_at' => now(),
     ]);
-    $source = Location::query()->findOrFail(9001);
 
-    Pincode::query()->create([
+    Location::query()->whereKey($source->id)->update([
         'pincode' => '411057',
-        'place_id' => $source->id,
         'latitude' => 18.5912,
         'longitude' => 73.7400,
-        'is_primary' => true,
     ]);
-    Pincode::query()->create([
+    Location::query()->whereKey($banerCity->id)->update([
         'pincode' => '411045',
-        'place_id' => $banerCity->id,
         'latitude' => 18.5590,
         'longitude' => 73.7868,
-        'is_primary' => true,
     ]);
-    Pincode::query()->create([
+    Location::query()->whereKey($puneCity->id)->update([
         'pincode' => '411001',
-        'place_id' => $puneCity->id,
         'latitude' => 18.5204,
         'longitude' => 73.8567,
-        'is_primary' => true,
     ]);
-    Pincode::query()->create([
+    Location::query()->whereKey($ahmedabadCity->id)->update([
         'pincode' => '380001',
-        'place_id' => $ahmedabadCity->id,
         'latitude' => 23.0225,
         'longitude' => 72.5714,
-        'is_primary' => true,
     ]);
 
     $u1 = User::factory()->create();

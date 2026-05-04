@@ -7,19 +7,20 @@ use App\Models\City;
 use App\Models\District;
 use App\Models\State;
 use App\Models\Taluka;
+use App\Support\Validation\AddressHierarchyRules;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 class LocationHierarchyController extends Controller
 {
     /**
-     * When `country_ids` is present (array query), return only states for those countries.
-     * When omitted, return all states (backward compatible with existing typeahead/modals).
+     * States (addresses.type = state).
+     * Optional {@code parent_ids[]} lists country row ids (parents of states); when omitted, returns all states.
      */
     public function states(Request $request): JsonResponse
     {
-        if ($request->has('country_ids')) {
-            $ids = $request->input('country_ids', []);
+        if ($request->has('parent_ids')) {
+            $ids = $request->input('parent_ids', []);
             if (! is_array($ids)) {
                 $ids = [];
             }
@@ -30,9 +31,13 @@ class LocationHierarchyController extends Controller
                     'data' => [],
                 ]);
             }
-            $states = State::whereIn('country_id', $ids)->orderBy('name')->get(['id', 'name', 'country_id']);
+            $request->validate([
+                'parent_ids' => ['required', 'array', 'min:1'],
+                'parent_ids.*' => ['integer', AddressHierarchyRules::existsCountryId()],
+            ]);
+            $states = State::whereIn('parent_id', $ids)->orderBy('name')->get(['id', 'name', 'parent_id']);
         } else {
-            $states = State::orderBy('name')->get(['id', 'name', 'country_id']);
+            $states = State::orderBy('name')->get(['id', 'name', 'parent_id']);
         }
 
         return response()->json([
@@ -42,17 +47,17 @@ class LocationHierarchyController extends Controller
     }
 
     /**
-     * Single `state_id` (legacy) or `state_ids` for multi-state filtering.
+     * Districts under one or more state rows. Parent id(s) must be {@code addresses} rows with type=state.
      */
     public function districts(Request $request): JsonResponse
     {
-        if ($request->filled('state_ids')) {
+        if ($request->filled('parent_ids')) {
             $request->validate([
-                'state_ids' => ['required', 'array', 'min:1'],
-                'state_ids.*' => ['integer', 'exists:states,id'],
+                'parent_ids' => ['required', 'array', 'min:1'],
+                'parent_ids.*' => ['integer', AddressHierarchyRules::existsStateId()],
             ]);
-            $ids = array_values(array_unique(array_map('intval', $request->input('state_ids', []))));
-            $districts = District::whereIn('state_id', $ids)->orderBy('name')->get(['id', 'name', 'slug', 'state_id']);
+            $ids = array_values(array_unique(array_map('intval', $request->input('parent_ids', []))));
+            $districts = District::whereIn('parent_id', $ids)->orderBy('name')->get(['id', 'name', 'slug', 'parent_id']);
 
             return response()->json([
                 'success' => true,
@@ -61,12 +66,12 @@ class LocationHierarchyController extends Controller
         }
 
         $request->validate([
-            'state_id' => ['required', 'integer', 'exists:states,id'],
+            'parent_id' => ['required', 'integer', AddressHierarchyRules::existsStateId()],
         ]);
 
-        $districts = District::where('state_id', $request->integer('state_id'))
+        $districts = District::where('parent_id', $request->integer('parent_id'))
             ->orderBy('name')
-            ->get(['id', 'name', 'slug', 'state_id']);
+            ->get(['id', 'name', 'slug', 'parent_id']);
 
         return response()->json([
             'success' => true,
@@ -75,17 +80,17 @@ class LocationHierarchyController extends Controller
     }
 
     /**
-     * Single `district_id` (legacy) or `district_ids` for multi-district filtering.
+     * Talukas under one or more district rows.
      */
     public function talukas(Request $request): JsonResponse
     {
-        if ($request->filled('district_ids')) {
+        if ($request->filled('parent_ids')) {
             $request->validate([
-                'district_ids' => ['required', 'array', 'min:1'],
-                'district_ids.*' => ['integer', 'exists:districts,id'],
+                'parent_ids' => ['required', 'array', 'min:1'],
+                'parent_ids.*' => ['integer', AddressHierarchyRules::existsDistrictId()],
             ]);
-            $ids = array_values(array_unique(array_map('intval', $request->input('district_ids', []))));
-            $talukas = Taluka::whereIn('district_id', $ids)->orderBy('name')->get(['id', 'name', 'district_id']);
+            $ids = array_values(array_unique(array_map('intval', $request->input('parent_ids', []))));
+            $talukas = Taluka::whereIn('parent_id', $ids)->orderBy('name')->get(['id', 'name', 'parent_id']);
 
             return response()->json([
                 'success' => true,
@@ -94,12 +99,12 @@ class LocationHierarchyController extends Controller
         }
 
         $request->validate([
-            'district_id' => ['required', 'integer', 'exists:districts,id'],
+            'parent_id' => ['required', 'integer', AddressHierarchyRules::existsDistrictId()],
         ]);
 
-        $talukas = Taluka::where('district_id', $request->integer('district_id'))
+        $talukas = Taluka::where('parent_id', $request->integer('parent_id'))
             ->orderBy('name')
-            ->get(['id', 'name', 'district_id']);
+            ->get(['id', 'name', 'parent_id']);
 
         return response()->json([
             'success' => true,
@@ -108,17 +113,17 @@ class LocationHierarchyController extends Controller
     }
 
     /**
-     * Cities for a taluka (search filter dropdowns).
+     * Cities under one taluka row (parent must be type=taluka).
      */
     public function cities(Request $request): JsonResponse
     {
         $request->validate([
-            'taluka_id' => ['required', 'integer', 'exists:talukas,id'],
+            'parent_id' => ['required', 'integer', AddressHierarchyRules::existsTalukaId()],
         ]);
 
-        $cities = City::where('taluka_id', $request->integer('taluka_id'))
+        $cities = City::where('parent_id', $request->integer('parent_id'))
             ->orderBy('name')
-            ->get(['id', 'name', 'taluka_id']);
+            ->get(['id', 'name', 'parent_id']);
 
         return response()->json([
             'success' => true,
@@ -126,4 +131,3 @@ class LocationHierarchyController extends Controller
         ]);
     }
 }
-

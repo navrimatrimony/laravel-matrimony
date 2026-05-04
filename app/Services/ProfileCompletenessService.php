@@ -76,18 +76,6 @@ class ProfileCompletenessService
                 if (($profile->highest_education ?? '') !== '') {
                     return true;
                 }
-                if (! empty($profile->education_degree_id)) {
-                    return true;
-                }
-                if (($profile->education_text ?? '') !== '') {
-                    return true;
-                }
-                if (! empty($profile->highest_education_id)) {
-                    return true;
-                }
-                if (($profile->highest_education_text ?? '') !== '') {
-                    return true;
-                }
 
                 return false;
 
@@ -223,20 +211,7 @@ class ProfileCompletenessService
 
             case 'education':
             case 'highest_education':
-                $parts = ["COALESCE(TRIM({$table}.highest_education),'') != ''"];
-                if (Schema::hasColumn('matrimony_profiles', 'education_degree_id')) {
-                    $parts[] = "{$table}.education_degree_id IS NOT NULL";
-                    $parts[] = "COALESCE(TRIM({$table}.education_text),'') != ''";
-                }
-                if (Schema::hasColumn('matrimony_profiles', 'highest_education_id')) {
-                    $parts[] = "{$table}.highest_education_id IS NOT NULL";
-                }
-                if (Schema::hasColumn('matrimony_profiles', 'highest_education_text')) {
-                    $parts[] = "COALESCE(TRIM({$table}.highest_education_text),'') != ''";
-                }
-                $cond = implode(' OR ', $parts);
-
-                return "(CASE WHEN {$cond} THEN 1 ELSE 0 END)";
+                return "(CASE WHEN COALESCE(TRIM({$table}.highest_education),'') != '' THEN 1 ELSE 0 END)";
 
             case 'location':
                 if (Schema::hasColumn('matrimony_profiles', 'location_id')) {

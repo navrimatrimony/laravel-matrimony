@@ -271,12 +271,15 @@ class OnboardingController extends Controller
                 $rawManual
             );
 
+            $h = $resolved['legacy_highest_education'];
+            if (($h === null || $h === '') && ! empty($resolved['education_text'])) {
+                $h = mb_substr((string) $resolved['education_text'], 0, 255);
+            }
+            if (($h === null || $h === '') && ! empty($resolved['mirror_highest_education_text'])) {
+                $h = mb_substr((string) $resolved['mirror_highest_education_text'], 0, 255);
+            }
             $request->merge([
-                'education_degree_id' => $resolved['education_degree_id'],
-                'education_text' => $resolved['education_text'],
-                'highest_education_id' => null,
-                'highest_education_text' => $resolved['mirror_highest_education_text'],
-                'highest_education' => $resolved['legacy_highest_education'],
+                'highest_education' => $h,
                 'highest_education_other' => null,
             ]);
         }
@@ -310,6 +313,11 @@ class OnboardingController extends Controller
         ];
 
         // Use filled() so empty strings from partial posts (e.g. hidden inputs) do not override saved profile values.
+        // Also accept intake-style snapshot[core][…] / core[…] names (same as ProfileWizardController::residenceScalarFromRequest).
+        //
+        // Free-text residence (`location_input`) is mutually exclusive with canonical `location_id`. If the user posted
+        // a pending place line, never merge a saved profile city id back onto the request (empty hidden would restore
+        // the old id and break validation or imply both id + text).
         $request->merge([
             'full_name' => $request->filled('full_name') ? $request->input('full_name') : $profile->full_name,
             'gender_id' => $request->filled('gender_id') ? $request->input('gender_id') : $profile->gender_id,
@@ -320,12 +328,10 @@ class OnboardingController extends Controller
             'sub_caste_id' => $request->filled('sub_caste_id') ? $request->input('sub_caste_id') : $profile->sub_caste_id,
             'mother_tongue_id' => $request->filled('mother_tongue_id') ? $request->input('mother_tongue_id') : $profile->mother_tongue_id,
             'marital_status_id' => $maritalId,
-            'country_id' => $request->filled('country_id') ? $request->input('country_id') : $profile->country_id,
-            'state_id' => $request->filled('state_id') ? $request->input('state_id') : $profile->state_id,
-            'district_id' => $request->filled('district_id') ? $request->input('district_id') : $profile->district_id,
-            'taluka_id' => $request->filled('taluka_id') ? $request->input('taluka_id') : $profile->taluka_id,
-            'location_id' => $request->filled('location_id') ? $request->input('location_id') : $profile->location_id,
-            'address_line' => $request->filled('address_line') ? $request->input('address_line') : $profile->address_line,
+            'location_id' => $this->residenceFreeTextLocationInput($request) !== null
+                ? null
+                : $this->onboardingScalarOrProfile($request, 'location_id', $profile->location_id),
+            'address_line' => $this->onboardingAddressLineOrProfile($request, $profile->address_line),
         ]);
 
         if (! $request->has('marriages')) {
@@ -402,12 +408,10 @@ class OnboardingController extends Controller
             'smoking_status_id' => $coalesce($request->input('smoking_status_id'), $profile->smoking_status_id),
             'drinking_status_id' => $coalesce($request->input('drinking_status_id'), $profile->drinking_status_id),
             'weight_kg' => $coalesce($request->input('weight_kg'), $profile->weight_kg),
-            'country_id' => $coalesce($request->input('country_id'), $profile->country_id),
-            'state_id' => $coalesce($request->input('state_id'), $profile->state_id),
-            'district_id' => $coalesce($request->input('district_id'), $profile->district_id),
-            'taluka_id' => $coalesce($request->input('taluka_id'), $profile->taluka_id),
-            'location_id' => $coalesce($request->input('location_id'), $profile->location_id),
-            'address_line' => $request->filled('address_line') ? trim((string) $request->input('address_line')) : $profile->address_line,
+            'location_id' => $this->residenceFreeTextLocationInput($request) !== null
+                ? null
+                : $coalesce($this->onboardingScalarOrProfile($request, 'location_id', null), $profile->location_id),
+            'address_line' => $this->onboardingAddressLineOrProfile($request, $profile->address_line),
         ]);
     }
 
@@ -425,10 +429,6 @@ class OnboardingController extends Controller
         $request->merge([
             'highest_education' => $coalesce($request->input('highest_education'), $profile->highest_education),
             'highest_education_other' => $coalesce($request->input('highest_education_other'), $profile->highest_education_other),
-            'highest_education_id' => $coalesce($request->input('highest_education_id'), $profile->highest_education_id ?? null),
-            'highest_education_text' => $coalesce($request->input('highest_education_text'), $profile->highest_education_text ?? null),
-            'education_degree_id' => $coalesce($request->input('education_degree_id'), $profile->education_degree_id ?? null),
-            'education_text' => $coalesce($request->input('education_text'), $profile->education_text ?? null),
             'specialization' => $request->input('specialization', $profile->specialization),
             'working_with_type_id' => $request->input('working_with_type_id', $profile->working_with_type_id),
             'profession_id' => $request->input('profession_id', $profile->profession_id),
@@ -453,6 +453,62 @@ class OnboardingController extends Controller
                 'occupation_custom_id' => $coalesce($request->input('occupation_custom_id'), $profile->occupation_custom_id ?? null),
             ]);
         }
+    }
+
+    /**
+     * Match {@see \App\Http\Controllers\ProfileWizardController::residenceScalarFromRequest} for nested POST names.
+     *
+     * @return mixed|null
+     */
+    /**
+     * Non-empty pending residence line ({@code location_input}) from flat or intake-style keys.
+     * When set, canonical {@code location_id} must not be back-filled from the profile.
+     */
+    private function residenceFreeTextLocationInput(Request $request): ?string
+    {
+        foreach ([
+            $request->input('location_input'),
+            data_get($request->all(), 'core.location_input'),
+            data_get($request->all(), 'snapshot.core.location_input'),
+        ] as $v) {
+            if ($v !== null && trim((string) $v) !== '') {
+                return trim((string) $v);
+            }
+        }
+
+        return null;
+    }
+
+    private function onboardingScalarOrProfile(Request $request, string $key, mixed $fallback): mixed
+    {
+        foreach ([
+            $request->input($key),
+            data_get($request->all(), 'core.'.$key),
+            data_get($request->all(), 'snapshot.core.'.$key),
+        ] as $v) {
+            if ($v !== null && $v !== '') {
+                return $v;
+            }
+        }
+
+        return $fallback;
+    }
+
+    private function onboardingAddressLineOrProfile(Request $request, mixed $fallback): mixed
+    {
+        if ($request->filled('address_line')) {
+            return $request->input('address_line');
+        }
+        foreach ([
+            data_get($request->all(), 'core.address_line'),
+            data_get($request->all(), 'snapshot.core.address_line'),
+        ] as $v) {
+            if ($v !== null && trim((string) $v) !== '') {
+                return trim((string) $v);
+            }
+        }
+
+        return $fallback;
     }
 
     private function ensureProfile($user): ?MatrimonyProfile

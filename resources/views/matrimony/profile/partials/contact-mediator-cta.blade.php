@@ -1,4 +1,4 @@
-{{-- Mediator / matchmaking request CTA — used beside locked contact (needs_upgrade, show_no_one, etc.) --}}
+{{-- Sole UI for matchmaking request: Contact Information column only (not profile ACTIONS aside). --}}
 <div class="rounded-2xl border border-violet-200/90 bg-gradient-to-br from-violet-50/95 via-white to-indigo-50/70 px-3 py-3 shadow-[0_14px_34px_-24px_rgba(109,40,217,0.55)] ring-1 ring-violet-100/80 backdrop-blur-sm dark:border-violet-800/60 dark:from-violet-950/35 dark:via-gray-900 dark:to-indigo-950/20 dark:ring-violet-900/40 md:col-span-3 md:flex md:h-full md:flex-col md:px-3.5 md:py-3.5">
     <div class="flex items-start gap-2">
         <span class="mt-0.5 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-emerald-500/15 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300" aria-hidden="true">

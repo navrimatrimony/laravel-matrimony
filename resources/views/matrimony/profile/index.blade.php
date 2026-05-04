@@ -20,6 +20,8 @@
         'marital_status_id',
         'marital_status',
         'education',
+        'education_category_id',
+        'education_degree_id',
         'profession_id',
         'serious_intent_id',
         'has_photo',
@@ -111,7 +113,7 @@
                                     <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1" for="search-filter-country">{{ __('search.country') }}</label>
                                     <select id="search-filter-country" name="country_id" class="w-full min-w-0 border border-gray-300 dark:border-gray-600 dark:bg-gray-900 rounded px-3 py-2 text-sm">
                                         <option value="">{{ __('search.any') }}</option>
-                                        @foreach(($countries ?? collect()) as $co)
+                                        @foreach(($addressCountries ?? collect()) as $co)
                                             <option value="{{ $co->id }}" {{ (string) ($locationDisplayCountryId ?? '') === (string) $co->id ? 'selected' : '' }}>{{ $co->name }}</option>
                                         @endforeach
                                     </select>
@@ -120,7 +122,7 @@
                                     <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1" for="search-filter-state">{{ __('search.state') }}</label>
                                     <select id="search-filter-state" name="state_id" class="w-full min-w-0 border border-gray-300 dark:border-gray-600 dark:bg-gray-900 rounded px-3 py-2 text-sm">
                                         <option value="">{{ __('search.any') }}</option>
-                                        @foreach(($states ?? collect()) as $st)
+                                        @foreach(($addressStates ?? collect()) as $st)
                                             <option value="{{ $st->id }}" {{ (string) ($locationDisplayStateId ?? '') === (string) $st->id ? 'selected' : '' }}>{{ $st->name }}</option>
                                         @endforeach
                                     </select>
@@ -129,7 +131,7 @@
                                     <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1" for="search-filter-district">{{ __('search.district') }}</label>
                                     <select id="search-filter-district" name="district_id" class="w-full min-w-0 border border-gray-300 dark:border-gray-600 dark:bg-gray-900 rounded px-3 py-2 text-sm">
                                         <option value="">{{ __('search.any') }}</option>
-                                        @foreach(($districts ?? collect()) as $d)
+                                        @foreach(($addressDistricts ?? collect()) as $d)
                                             <option value="{{ $d->id }}" {{ (string) ($locationDisplayDistrictId ?? '') === (string) $d->id ? 'selected' : '' }}>{{ $d->name }}</option>
                                         @endforeach
                                     </select>
@@ -138,7 +140,7 @@
                                     <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1" for="search-filter-taluka">{{ __('search.taluka') }}</label>
                                     <select id="search-filter-taluka" name="taluka_id" class="w-full min-w-0 border border-gray-300 dark:border-gray-600 dark:bg-gray-900 rounded px-3 py-2 text-sm">
                                         <option value="">{{ __('search.any') }}</option>
-                                        @foreach(($talukas ?? collect()) as $tk)
+                                        @foreach(($addressTalukas ?? collect()) as $tk)
                                             <option value="{{ $tk->id }}" {{ (string) ($locationDisplayTalukaId ?? '') === (string) $tk->id ? 'selected' : '' }}>{{ $tk->name }}</option>
                                         @endforeach
                                     </select>
@@ -147,7 +149,7 @@
                                     <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1" for="search-filter-city">{{ __('search.city') }}</label>
                                     <select id="search-filter-city" name="city_id" class="w-full min-w-0 border border-gray-300 dark:border-gray-600 dark:bg-gray-900 rounded px-3 py-2 text-sm">
                                         <option value="">{{ __('search.any') }}</option>
-                                        @foreach(($cities ?? collect()) as $city)
+                                        @foreach(($addressCities ?? collect()) as $city)
                                             <option value="{{ $city->id }}" {{ (string) ($locationDisplayCityId ?? '') === (string) $city->id ? 'selected' : '' }}>{{ $city->name }}</option>
                                         @endforeach
                                     </select>
@@ -177,8 +179,34 @@
                         </div>
                         @if (! empty($canAdvancedProfileSearch))
                                     <div>
-                                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{{ __('search.education') }}</label>
+                                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1" for="search-education-category">{{ __('search.education_category') }}</label>
+                                        <select id="search-education-category" name="education_category_id" class="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-900 rounded px-3 py-2 text-sm">
+                                            <option value="">{{ __('search.any') }}</option>
+                                            @foreach(($educationCategoriesForSearch ?? collect()) as $ec)
+                                                <option value="{{ $ec->id }}" {{ (string) request('education_category_id') === (string) $ec->id ? 'selected' : '' }}>{{ $ec->name }}</option>
+                                            @endforeach
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1" for="search-education-degree">{{ __('search.education_degree') }}</label>
+                                        <select id="search-education-degree" name="education_degree_id" class="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-900 rounded px-3 py-2 text-sm">
+                                            <option value="">{{ __('search.any') }}</option>
+                                            @foreach(($educationCategoriesForSearch ?? collect()) as $ec)
+                                                @if($ec->degrees->isEmpty())
+                                                    @continue
+                                                @endif
+                                                <optgroup label="{{ $ec->name }}">
+                                                    @foreach($ec->degrees as $deg)
+                                                        <option value="{{ $deg->id }}" {{ (string) request('education_degree_id') === (string) $deg->id ? 'selected' : '' }}>{{ $deg->title }}</option>
+                                                    @endforeach
+                                                </optgroup>
+                                            @endforeach
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{{ __('search.education_text') }}</label>
                                         <input type="text" name="education" value="{{ request('education') }}" class="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-900 rounded px-3 py-2 text-sm" placeholder="{{ __('search.education_placeholder') }}">
+                                        <p class="mt-1 text-[11px] text-gray-500 dark:text-gray-400">{{ __('search.education_text_hint') }}</p>
                                     </div>
                                 @endif
                             </section>
@@ -321,23 +349,23 @@
                                     $chips[] = ['k' => 'Sub-caste', 'v' => $sc ? $sc->display_label : ('#' . request('sub_caste_id'))];
                                 }
                                 if (request()->filled('country_id')) {
-                                    $co = ($countries ?? collect())->firstWhere('id', (int) request('country_id'));
+                                    $co = ($addressCountries ?? collect())->firstWhere('id', (int) request('country_id'));
                                     $chips[] = ['k' => __('search.country'), 'v' => $co ? $co->name : ('#' . request('country_id'))];
                                 }
                                 if (request()->filled('state_id')) {
-                                    $st = ($states ?? collect())->firstWhere('id', (int) request('state_id'));
+                                    $st = ($addressStates ?? collect())->firstWhere('id', (int) request('state_id'));
                                     $chips[] = ['k' => __('search.state'), 'v' => $st ? $st->name : ('#' . request('state_id'))];
                                 }
                                 if (request()->filled('district_id')) {
-                                    $d = ($districts ?? collect())->firstWhere('id', (int) request('district_id'));
+                                    $d = ($addressDistricts ?? collect())->firstWhere('id', (int) request('district_id'));
                                     $chips[] = ['k' => __('search.district'), 'v' => $d ? $d->name : ('#' . request('district_id'))];
                                 }
                                 if (request()->filled('taluka_id')) {
-                                    $tk = ($talukas ?? collect())->firstWhere('id', (int) request('taluka_id'));
+                                    $tk = ($addressTalukas ?? collect())->firstWhere('id', (int) request('taluka_id'));
                                     $chips[] = ['k' => __('search.taluka'), 'v' => $tk ? $tk->name : ('#' . request('taluka_id'))];
                                 }
                                 if (request()->filled('city_id')) {
-                                    $ct = ($cities ?? collect())->firstWhere('id', (int) request('city_id'));
+                                    $ct = ($addressCities ?? collect())->firstWhere('id', (int) request('city_id'));
                                     $chips[] = ['k' => __('search.city'), 'v' => $ct ? $ct->name : ('#' . request('city_id'))];
                                 }
                                 if (request()->filled('age_from') || request()->filled('age_to')) {
@@ -350,8 +378,23 @@
                                     $m = ($maritalStatuses ?? collect())->firstWhere('id', (int) $maritalSelectValue);
                                     $chips[] = ['k' => 'Marital', 'v' => $m ? $m->label : ('#' . $maritalSelectValue)];
                                 }
+                                if (! empty($canAdvancedProfileSearch) && request()->filled('education_category_id')) {
+                                    $ecChip = collect($educationCategoriesForSearch ?? [])->firstWhere('id', (int) request('education_category_id'));
+                                    $chips[] = ['k' => __('search.education_category'), 'v' => $ecChip ? $ecChip->name : ('#' . request('education_category_id'))];
+                                }
+                                if (! empty($canAdvancedProfileSearch) && request()->filled('education_degree_id')) {
+                                    $degLabel = null;
+                                    foreach (($educationCategoriesForSearch ?? collect()) as $_ec) {
+                                        $d = $_ec->degrees->firstWhere('id', (int) request('education_degree_id'));
+                                        if ($d) {
+                                            $degLabel = $d->title;
+                                            break;
+                                        }
+                                    }
+                                    $chips[] = ['k' => __('search.education_degree'), 'v' => $degLabel ?? ('#' . request('education_degree_id'))];
+                                }
                                 if (! empty($canAdvancedProfileSearch) && request()->filled('education')) {
-                                    $chips[] = ['k' => 'Education', 'v' => (string) request('education')];
+                                    $chips[] = ['k' => __('search.education_text'), 'v' => (string) request('education')];
                                 }
                                 if (! empty($canAdvancedProfileSearch) && (request()->filled('income_min') || request()->filled('income_max'))) {
                                     $chips[] = ['k' => 'Income', 'v' => (request('income_min') ?: '—') . '–' . (request('income_max') ?: '—')];
@@ -421,17 +464,10 @@
                                 $ageText = \Carbon\Carbon::parse($matrimonyProfile->date_of_birth)->age.' '.__('search.years_short');
                             }
 
-                            $cityName = trim((string) ($matrimonyProfile->city?->name ?? ''));
-                            $talukaName = trim((string) ($matrimonyProfile->taluka?->name ?? ''));
-                            $districtName = trim((string) ($matrimonyProfile->district?->name ?? ''));
-                            $stateName = trim((string) ($matrimonyProfile->state?->name ?? ''));
-
-                            $locationParts = array_values(array_filter([
-                                $cityName !== '' ? $cityName : null,
-                                $districtName !== '' && $cityName === '' ? $districtName : null,
-                                $stateName !== '' ? $stateName : null,
-                            ]));
-                            $locationLine = $locationParts !== [] ? implode(' · ', $locationParts) : ($talukaName !== '' ? $talukaName : '—');
+                            $locationLine = \App\Support\ProfileDisplayCopy::profileResidenceDisplayLine($matrimonyProfile);
+                            if ($locationLine === '') {
+                                $locationLine = '—';
+                            }
 
                             $hasApprovedPhoto = $matrimonyProfile->profile_photo && $matrimonyProfile->photo_approved !== false;
                             $edu = trim((string) ($matrimonyProfile->highest_education ?? ''));
@@ -682,7 +718,7 @@
                                     setSelectOptions(stateEl, [], '', anyLabel);
                                     return Promise.resolve();
                                 }
-                                return fetchJson(baseUrl + '/api/internal/location/states?country_ids[]=' + encodeURIComponent(countryEl.value))
+                                return fetchJson(baseUrl + '/api/internal/location/states?parent_ids[]=' + encodeURIComponent(countryEl.value))
                                     .then(unwrapInternalLocationPayload)
                                     .then(function (rows) {
                                         setSelectOptions(stateEl, rows, preferredState != null ? preferredState : stateEl.value, anyLabel);
@@ -696,7 +732,7 @@
                                     setSelectOptions(cityEl, [], '', anyLabel);
                                     return Promise.resolve();
                                 }
-                                return fetchJson(baseUrl + '/api/internal/location/districts?state_id=' + encodeURIComponent(stateEl.value))
+                                return fetchJson(baseUrl + '/api/internal/location/districts?parent_id=' + encodeURIComponent(stateEl.value))
                                     .then(unwrapInternalLocationPayload)
                                     .then(function (rows) {
                                         setSelectOptions(districtEl, rows, preferredDistrict != null ? preferredDistrict : districtEl.value, anyLabel);
@@ -709,7 +745,7 @@
                                     setSelectOptions(cityEl, [], '', anyLabel);
                                     return Promise.resolve();
                                 }
-                                return fetchJson(baseUrl + '/api/internal/location/talukas?district_id=' + encodeURIComponent(districtEl.value))
+                                return fetchJson(baseUrl + '/api/internal/location/talukas?parent_id=' + encodeURIComponent(districtEl.value))
                                     .then(unwrapInternalLocationPayload)
                                     .then(function (rows) {
                                         setSelectOptions(talukaEl, rows, preferredTaluka != null ? preferredTaluka : talukaEl.value, anyLabel);
@@ -721,7 +757,7 @@
                                     setSelectOptions(cityEl, [], '', anyLabel);
                                     return Promise.resolve();
                                 }
-                                return fetchJson(baseUrl + '/api/internal/location/cities?taluka_id=' + encodeURIComponent(talukaEl.value))
+                                return fetchJson(baseUrl + '/api/internal/location/cities?parent_id=' + encodeURIComponent(talukaEl.value))
                                     .then(unwrapInternalLocationPayload)
                                     .then(function (rows) {
                                         setSelectOptions(cityEl, rows, preferredCity != null ? preferredCity : cityEl.value, anyLabel);

@@ -43,7 +43,7 @@ class IndianStatesMasterSeeder extends Seeder
             }
             State::updateOrCreate(
                 [
-                    'country_id' => $india->id,
+                    'parent_id' => $india->id,
                     'name' => $en,
                 ],
                 [

@@ -3,7 +3,7 @@
 namespace Tests\Feature\Admin;
 
 use App\Models\City;
-use App\Models\CityAlias;
+use App\Models\LocationAlias;
 use App\Models\LocationOpenPlaceSuggestion;
 use App\Models\Taluka;
 use App\Models\User;
@@ -44,8 +44,8 @@ class LocationOpenPlaceApprovalTest extends TestCase
         $this->assertSame((int) $taluka->id, (int) $city->taluka_id);
 
         $norm = app(LocationNormalizationService::class)->mergeKeyFromRaw('Newville Step42 X');
-        $this->assertDatabaseHas('city_aliases', [
-            'city_id' => $city->id,
+        $this->assertDatabaseHas('location_aliases', [
+            'location_id' => $city->id,
             'normalized_alias' => $norm,
             'is_active' => 1,
         ]);
@@ -68,8 +68,8 @@ class LocationOpenPlaceApprovalTest extends TestCase
         $this->assertSame('alias', $row->match_type);
 
         $norm = app(LocationNormalizationService::class)->mergeKeyFromRaw('Punee Typo Unique Z');
-        $this->assertDatabaseHas('city_aliases', [
-            'city_id' => $city->id,
+        $this->assertDatabaseHas('location_aliases', [
+            'location_id' => $city->id,
             'normalized_alias' => $norm,
         ]);
     }
@@ -112,9 +112,9 @@ class LocationOpenPlaceApprovalTest extends TestCase
         $pune = City::query()->where('name', 'Pune City')->firstOrFail();
         $ahm = City::query()->where('name', 'Ahmedabad City')->firstOrFail();
 
-        CityAlias::query()->create([
-            'city_id' => $ahm->id,
-            'alias_name' => 'ClashPlace Q',
+        LocationAlias::query()->create([
+            'location_id' => $ahm->id,
+            'alias' => 'ClashPlace Q',
             'normalized_alias' => $norm,
             'is_active' => true,
         ]);

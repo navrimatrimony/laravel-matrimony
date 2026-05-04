@@ -259,7 +259,10 @@ class OccupationService
             return false;
         }
 
-        if (! $request->hasAny(['occupation_master_id', 'occupation_custom_id'])) {
+        // Use filled semantics: hydrate merges null occupation ids onto the request so keys exist but mean “unset”.
+        // Laravel {@see Request::hasAny} checks key existence only — null merged keys would wrongly trigger this path
+        // and wipe legacy {@code working_with_type_id} / {@code profession_id} from posted wizard/onboarding data.
+        if (! $request->filled('occupation_master_id') && ! $request->filled('occupation_custom_id')) {
             return false;
         }
 
@@ -273,8 +276,6 @@ class OccupationService
             $request->merge([
                 'occupation_master_id' => null,
                 'occupation_custom_id' => null,
-                'working_with_type_id' => null,
-                'profession_id' => null,
             ]);
 
             return true;

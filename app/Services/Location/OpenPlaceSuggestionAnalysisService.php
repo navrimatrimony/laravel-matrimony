@@ -183,7 +183,7 @@ class OpenPlaceSuggestionAnalysisService
      */
     private function appendCityFuzzyCandidates(string $normalized, array &$candidates): void
     {
-        if (! Schema::hasTable('cities')) {
+        if (! Schema::hasTable('addresses')) {
             return;
         }
 

@@ -11,7 +11,15 @@ class LocationAlias extends Model
         'location_id',
         'alias',
         'normalized_alias',
+        'is_active',
     ];
+
+    protected function casts(): array
+    {
+        return [
+            'is_active' => 'boolean',
+        ];
+    }
 
     public function location(): BelongsTo
     {

@@ -3,15 +3,15 @@
 namespace App\Services\Location;
 
 use App\Models\City;
-use App\Models\CityDisplayMeta;
 use App\Models\Country;
 use App\Models\District;
+use App\Models\LocationDisplayMeta;
 use App\Models\State;
 use App\Models\Taluka;
 use Illuminate\Support\Facades\Schema;
 
 /**
- * Step 5 — Human-readable location lines + optional {@see CityDisplayMeta} overrides.
+ * Step 5 — Human-readable location lines + optional {@see LocationDisplayMeta} overrides.
  *
  * Population-based heuristics deliberately omitted (plan: core correctness first).
  */
@@ -38,9 +38,9 @@ final class LocationDisplayFormatter
         return $this->composeSegments($segments, $meta, $hideIndiaDefault);
     }
 
-    private function metaForCity(City $city): ?CityDisplayMeta
+    private function metaForCity(City $city): ?LocationDisplayMeta
     {
-        if (! Schema::hasTable('city_display_meta')) {
+        if (! Schema::hasTable('location_display_meta')) {
             return null;
         }
 
@@ -48,13 +48,13 @@ final class LocationDisplayFormatter
             return $city->displayMeta;
         }
 
-        return CityDisplayMeta::query()->where('city_id', $city->id)->first();
+        return LocationDisplayMeta::query()->where('location_id', $city->id)->first();
     }
 
     /**
      * @return array<int, array{type: string, label: string}>
      */
-    private function buildSegments(City $city, ?CityDisplayMeta $meta): array
+    private function buildSegments(City $city, ?LocationDisplayMeta $meta): array
     {
         $taluka = $city->taluka;
         $district = $taluka?->district;
@@ -173,7 +173,7 @@ final class LocationDisplayFormatter
     /**
      * @param  array<int, array{type: string, label: string}>  $segments
      */
-    private function composeSegments(array $segments, ?CityDisplayMeta $meta, bool $hideIndiaDefault): string
+    private function composeSegments(array $segments, ?LocationDisplayMeta $meta, bool $hideIndiaDefault): string
     {
         $filtered = [];
         foreach ($segments as $seg) {

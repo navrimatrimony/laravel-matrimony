@@ -19,7 +19,7 @@
 
 @php
     $contactAccess = $contactAccess ?? ['show_contact_request_rail' => true];
-    $profile->loadMissing(['city', 'district', 'state', 'maritalStatus', 'religion', 'caste', 'profession', 'incomeCurrency', 'familyIncomeCurrency']);
+    $profile->loadMissing(['city', 'taluka', 'district', 'state', 'country', 'location', 'maritalStatus', 'religion', 'caste', 'profession', 'incomeCurrency', 'familyIncomeCurrency']);
     $age = null;
     if ($dateOfBirthVisible && ($profile->date_of_birth ?? '') !== '') {
         try {
@@ -28,11 +28,7 @@
             $age = null;
         }
     }
-    $locationLine = \App\Support\ProfileDisplayCopy::compactLocationLine(
-        $profile->city?->name,
-        $profile->district?->name,
-        $profile->state?->name
-    );
+    $locationLine = \App\Support\ProfileDisplayCopy::profileResidenceDisplayLine($profile);
     $incomeService = app(\App\Services\IncomeEngineService::class);
     $profileArr = $profile->toArray();
     $personalIncomeDisplay = $incomeService->formatForDisplay($profileArr, 'income', $profile->incomeCurrency);

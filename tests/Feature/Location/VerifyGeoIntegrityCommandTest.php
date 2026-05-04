@@ -3,7 +3,7 @@
 namespace Tests\Feature\Location;
 
 use App\Models\City;
-use App\Models\CityAlias;
+use App\Models\LocationAlias;
 use Database\Seeders\MinimalLocationSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -17,9 +17,9 @@ class VerifyGeoIntegrityCommandTest extends TestCase
         $this->seed(MinimalLocationSeeder::class);
         $city = City::query()->where('name', 'Pune City')->firstOrFail();
 
-        CityAlias::query()->create([
-            'city_id' => $city->id,
-            'alias_name' => 'Pune',
+        LocationAlias::query()->create([
+            'location_id' => $city->id,
+            'alias' => 'Pune',
             'normalized_alias' => 'pune',
             'is_active' => true,
         ]);
@@ -65,4 +65,3 @@ class VerifyGeoIntegrityCommandTest extends TestCase
             .$prefix.'-'.uniqid('', true).'.json';
     }
 }
-

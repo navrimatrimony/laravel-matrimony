@@ -2,7 +2,7 @@
 
 namespace App\Services\Location;
 
-use App\Models\CityAlias;
+use App\Models\LocationAlias;
 use App\Models\LocationOpenPlaceSuggestion;
 use Illuminate\Support\Facades\Schema;
 
@@ -50,6 +50,7 @@ class OpenPlaceGeoJsonPromotionService
             $taluka = $city?->taluka;
             if ($city === null || $state === null || $district === null || $taluka === null) {
                 $invalid++;
+
                 continue;
             }
 
@@ -57,6 +58,7 @@ class OpenPlaceGeoJsonPromotionService
             $stateCode = $stateCodeMap[$this->key($stateName)] ?? null;
             if ($stateCode === null || $stateCode === '') {
                 $invalid++;
+
                 continue;
             }
 
@@ -65,6 +67,7 @@ class OpenPlaceGeoJsonPromotionService
             $talukaName = trim((string) ($taluka->name ?? ''));
             if ($cityName === '' || $districtName === '' || $talukaName === '') {
                 $invalid++;
+
                 continue;
             }
 
@@ -78,6 +81,7 @@ class OpenPlaceGeoJsonPromotionService
                 $entries[$idx]['aliases'] = $mergedAliases;
                 $skipped++;
                 $processedSuggestionIds[] = (int) $row->id;
+
                 continue;
             }
 
@@ -137,15 +141,15 @@ class OpenPlaceGeoJsonPromotionService
      */
     private function collectAliasesForCity(int $cityId): array
     {
-        $aliases = CityAlias::query()
-            ->where('city_id', $cityId)
+        $aliases = LocationAlias::query()
+            ->where('location_id', $cityId)
             ->where('is_active', true)
             ->orderBy('id')
-            ->get(['alias_name', 'normalized_alias']);
+            ->get(['alias', 'normalized_alias']);
 
         $out = [];
         foreach ($aliases as $alias) {
-            foreach ([(string) $alias->alias_name, (string) $alias->normalized_alias] as $value) {
+            foreach ([(string) $alias->alias, (string) $alias->normalized_alias] as $value) {
                 $value = trim($value);
                 if ($value === '') {
                     continue;
@@ -284,6 +288,7 @@ class OpenPlaceGeoJsonPromotionService
                 strtolower(trim((string) ($b['taluka'] ?? ''))),
                 strtolower(trim((string) ($b['name'] ?? ''))),
             ];
+
             return $ak <=> $bk;
         });
 
@@ -339,4 +344,3 @@ class OpenPlaceGeoJsonPromotionService
         file_put_contents($path, $content);
     }
 }
-

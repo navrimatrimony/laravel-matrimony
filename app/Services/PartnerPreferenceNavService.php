@@ -62,9 +62,8 @@ class PartnerPreferenceNavService
             $loc++;
         }
 
-        $edu = (int) count($vd['preferredMasterEducationIds'] ?? [])
-            + (int) count($vd['preferredWorkingWithTypeIds'] ?? [])
-            + (int) count($vd['preferredProfessionIds'] ?? []);
+        $edu = (int) count($vd['preferredEducationDegreeIds'] ?? [])
+            + (int) count($vd['preferredOccupationMasterIds'] ?? []);
         if ($criteria !== null
             && ($criteria->preferred_income_min ?? null) !== null
             && ($criteria->preferred_income_max ?? null) !== null) {

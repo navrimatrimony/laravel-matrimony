@@ -1,7 +1,7 @@
 @php
     use Illuminate\Support\Facades\Schema;
 
-    $hasEducationEngine = Schema::hasColumn('matrimony_profiles', 'education_degree_id');
+    $hasEducationEngine = Schema::hasColumn('matrimony_profiles', 'highest_education');
 @endphp
 <form method="POST" action="{{ route('matrimony.onboarding.store', ['step' => 4]) }}" class="space-y-6" id="onboarding-step4-form">
     @csrf

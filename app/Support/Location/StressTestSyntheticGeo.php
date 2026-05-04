@@ -46,7 +46,7 @@ final class StressTestSyntheticGeo
         }
 
         return Taluka::query()
-            ->whereIn('district_id', $districtIds)
+            ->whereIn('parent_id', $districtIds)
             ->where('name', 'like', 'Taluka-%')
             ->pluck('id');
     }
@@ -58,7 +58,7 @@ final class StressTestSyntheticGeo
             ->where(function ($q) use ($talukaIds) {
                 $q->where('name', 'like', 'Village-%');
                 if ($talukaIds->isNotEmpty()) {
-                    $q->orWhereIn('taluka_id', $talukaIds);
+                    $q->orWhereIn('parent_id', $talukaIds);
                 }
             })
             ->pluck('id');
@@ -83,16 +83,12 @@ final class StressTestSyntheticGeo
 
         return MatrimonyProfile::query()
             ->where(function ($q) use ($districtIds, $districtIdList, $talukaIds, $cityIds) {
-                $q->whereIn('district_id', $districtIds)
-                    ->orWhereIn('birth_district_id', $districtIds)
-                    ->orWhereIn('native_district_id', $districtIds);
+                $q->whereIn('native_district_id', $districtIds);
                 if ($talukaIds->isNotEmpty()) {
-                    $q->orWhereIn('taluka_id', $talukaIds)
-                        ->orWhereIn('birth_taluka_id', $talukaIds)
-                        ->orWhereIn('native_taluka_id', $talukaIds);
+                    $q->orWhereIn('native_taluka_id', $talukaIds);
                 }
                 if ($cityIds->isNotEmpty()) {
-                    $q->orWhereIn('city_id', $cityIds)
+                    $q->orWhereIn('location_id', $cityIds)
                         ->orWhereIn('birth_city_id', $cityIds)
                         ->orWhereIn('native_city_id', $cityIds);
                 }

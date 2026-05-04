@@ -166,13 +166,13 @@ class AutoShowcaseEngine
         $city = City::query()->with(['taluka.district.state'])->find($cityId);
         if ($city && $city->taluka && $city->taluka->district) {
             $overrides['city_id'] = (int) $city->id;
-            $overrides['taluka_id'] = (int) $city->taluka_id;
-            $overrides['district_id'] = (int) $city->taluka->district_id;
+            $overrides['taluka_id'] = (int) $city->parent_id;
+            $overrides['district_id'] = (int) $city->taluka->parent_id;
             $d = $city->taluka->district;
-            $overrides['state_id'] = (int) $d->state_id;
+            $overrides['state_id'] = (int) $d->parent_id;
             $d->loadMissing('state');
             if ($d->state) {
-                $overrides['country_id'] = (int) $d->state->country_id;
+                $overrides['country_id'] = (int) $d->state->parent_id;
             }
         } else {
             $overrides['city_id'] = $cityId;

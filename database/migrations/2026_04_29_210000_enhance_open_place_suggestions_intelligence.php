@@ -31,18 +31,18 @@ return new class extends Migration
             }
         });
 
-        if (Schema::hasTable('locations')) {
+        if (Schema::hasTable('addresses')) {
             Schema::table('location_open_place_suggestions', function (Blueprint $table) {
                 if (Schema::hasColumn('location_open_place_suggestions', 'suggested_parent_id')) {
                     $table->foreign('suggested_parent_id', 'lop_sugg_parent_loc_fk')
                         ->references('id')
-                        ->on('locations')
+                        ->on('addresses')
                         ->nullOnDelete();
                 }
                 if (Schema::hasColumn('location_open_place_suggestions', 'resolved_location_id')) {
                     $table->foreign('resolved_location_id', 'lop_sugg_resolved_loc_fk')
                         ->references('id')
-                        ->on('locations')
+                        ->on('addresses')
                         ->nullOnDelete();
                 }
             });

@@ -20,6 +20,7 @@ use App\Services\Showcase\AutoShowcaseSettings;
 use App\Services\Showcase\ShowcaseBulkCreateSettings;
 use App\Services\Showcase\ShowcaseEligibleCityPopulationService;
 use App\Services\Showcase\ShowcaseSettings;
+use App\Support\Validation\AddressHierarchyRules;
 use Illuminate\Http\Request;
 
 class AutoShowcaseSettingsController extends Controller
@@ -125,11 +126,11 @@ class AutoShowcaseSettingsController extends Controller
             'bulk_caste_ids' => 'nullable|array',
             'bulk_caste_ids.*' => 'integer|exists:castes,id',
             'bulk_country_ids' => 'nullable|array',
-            'bulk_country_ids.*' => 'integer|exists:countries,id',
+            'bulk_country_ids.*' => ['integer', AddressHierarchyRules::existsCountryId()],
             'bulk_state_ids' => 'nullable|array',
-            'bulk_state_ids.*' => 'integer|exists:states,id',
+            'bulk_state_ids.*' => ['integer', AddressHierarchyRules::existsStateId()],
             'bulk_district_ids' => 'nullable|array',
-            'bulk_district_ids.*' => 'integer|exists:districts,id',
+            'bulk_district_ids.*' => ['integer', AddressHierarchyRules::existsDistrictId()],
             'bulk_marital_status_ids' => 'nullable|array',
             'bulk_marital_status_ids.*' => 'integer|exists:master_marital_statuses,id',
             'bulk_diet_ids' => 'nullable|array',

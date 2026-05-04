@@ -22,9 +22,8 @@
     $selectedCountryIds = collect(old('preferred_country_ids', $preferredCountryIds ?? []))->map(fn($id) => (int) $id)->all();
     $selectedStateIds = collect(old('preferred_state_ids', $preferredStateIds ?? []))->map(fn($id) => (int) $id)->all();
     $selectedTalukaIds = collect(old('preferred_taluka_ids', $preferredTalukaIds ?? []))->map(fn($id) => (int) $id)->all();
-    $selectedMasterEducationIds = collect(old('preferred_master_education_ids', $preferredMasterEducationIds ?? []))->map(fn($id) => (int) $id)->all();
-    $selectedWorkingWithTypeIds = collect(old('preferred_working_with_type_ids', $preferredWorkingWithTypeIds ?? []))->map(fn($id) => (int) $id)->all();
-    $selectedProfessionIds = collect(old('preferred_profession_ids', $preferredProfessionIds ?? []))->map(fn($id) => (int) $id)->all();
+    $selectedPreferredEducationDegreeIds = collect(old('preferred_education_degree_ids', $preferredEducationDegreeIds ?? []))->map(fn($id) => (int) $id)->all();
+    $selectedPreferredOccupationMasterIds = collect(old('preferred_occupation_master_ids', $preferredOccupationMasterIds ?? []))->map(fn($id) => (int) $id)->all();
     $selectedDietIds = collect(old('preferred_diet_ids', $preferredDietIds ?? []))->map(fn($id) => (int) $id)->all();
     $selectedProfileManagedBy = old('preferred_profile_managed_by', $criteria?->preferred_profile_managed_by ?? null);
     $ageRangeDefault = (isset($profile) && $profile instanceof \App\Models\MatrimonyProfile)
@@ -260,7 +259,7 @@
                         return;
                     }
                     var meta = stateById[String(id)] || stateById[id];
-                    if (meta && cids.indexOf(meta.country_id) === -1) {
+                    if (meta && cids.indexOf(meta.parent_id) === -1) {
                         delete selectedStateMap[id];
                     }
                 });
@@ -275,7 +274,7 @@
                         return;
                     }
                     var meta = districtById[String(id)] || districtById[id];
-                    if (meta && sids.indexOf(meta.state_id) === -1) {
+                    if (meta && sids.indexOf(meta.parent_id) === -1) {
                         delete selectedDistrictMap[id];
                     }
                 });
@@ -290,7 +289,7 @@
                         return;
                     }
                     var meta = talukaById[String(id)] || talukaById[id];
-                    if (meta && dids.indexOf(meta.district_id) === -1) {
+                    if (meta && dids.indexOf(meta.parent_id) === -1) {
                         delete selectedTalukaMap[id];
                     }
                 });
@@ -308,7 +307,7 @@
                         return;
                     }
                     var meta = stateById[String(id)] || stateById[id];
-                    if (meta && countryIds.indexOf(meta.country_id) === -1) {
+                    if (meta && countryIds.indexOf(meta.parent_id) === -1) {
                         hasOrphan = true;
                     }
                 });
@@ -345,7 +344,7 @@
                         return;
                     }
                     var meta = districtById[String(id)] || districtById[id];
-                    if (meta && stateIds.indexOf(meta.state_id) === -1) {
+                    if (meta && stateIds.indexOf(meta.parent_id) === -1) {
                         hasOrphan = true;
                     }
                 });
@@ -382,7 +381,7 @@
                         return;
                     }
                     var meta = talukaById[String(id)] || talukaById[id];
-                    if (meta && districtIds.indexOf(meta.district_id) === -1) {
+                    if (meta && districtIds.indexOf(meta.parent_id) === -1) {
                         hasOrphan = true;
                     }
                 });
@@ -412,7 +411,7 @@
                 var items = [];
                 (rows || []).forEach(function (row) {
                     seen[row.id] = true;
-                    items.push({ id: row.id, label: row.name, country_id: row.country_id, orphan: false });
+                    items.push({ id: row.id, label: row.name, country_id: row.parent_id, orphan: false });
                 });
                 Object.keys(selectedStateMap).forEach(function (k) {
                     var id = parseInt(k, 10);
@@ -421,7 +420,7 @@
                     }
                     var meta = stateById[String(id)] || stateById[id];
                     if (meta) {
-                        items.push({ id: meta.id, label: meta.name, country_id: meta.country_id, orphan: true });
+                        items.push({ id: meta.id, label: meta.name, country_id: meta.parent_id, orphan: true });
                         seen[id] = true;
                     }
                 });
@@ -433,7 +432,7 @@
                 var items = [];
                 (rows || []).forEach(function (row) {
                     seen[row.id] = true;
-                    items.push({ id: row.id, label: row.name, state_id: row.state_id, orphan: false });
+                    items.push({ id: row.id, label: row.name, state_id: row.parent_id, orphan: false });
                 });
                 Object.keys(selectedDistrictMap).forEach(function (k) {
                     var id = parseInt(k, 10);
@@ -442,7 +441,7 @@
                     }
                     var meta = districtById[String(id)] || districtById[id];
                     if (meta) {
-                        items.push({ id: meta.id, label: meta.name, state_id: meta.state_id, orphan: true });
+                        items.push({ id: meta.id, label: meta.name, state_id: meta.parent_id, orphan: true });
                         seen[id] = true;
                     }
                 });
@@ -454,7 +453,7 @@
                 var items = [];
                 (rows || []).forEach(function (row) {
                     seen[row.id] = true;
-                    items.push({ id: row.id, label: row.name, district_id: row.district_id, orphan: false });
+                    items.push({ id: row.id, label: row.name, district_id: row.parent_id, orphan: false });
                 });
                 Object.keys(selectedTalukaMap).forEach(function (k) {
                     var id = parseInt(k, 10);
@@ -463,7 +462,7 @@
                     }
                     var meta = talukaById[String(id)] || talukaById[id];
                     if (meta) {
-                        items.push({ id: meta.id, label: meta.name, district_id: meta.district_id, orphan: true });
+                        items.push({ id: meta.id, label: meta.name, district_id: meta.parent_id, orphan: true });
                         seen[id] = true;
                     }
                 });
@@ -630,7 +629,7 @@
                 }
                 var params = new URLSearchParams();
                 countryIds.forEach(function (id) {
-                    params.append('country_ids[]', id);
+                    params.append('parent_ids[]', id);
                 });
                 return fetch(apiBase + '/states?' + params.toString(), { headers: { Accept: 'application/json' } })
                     .then(function (r) {
@@ -641,7 +640,7 @@
                             return;
                         }
                         data.data.forEach(function (row) {
-                            stateById[row.id] = { id: row.id, name: row.name, country_id: row.country_id };
+                            stateById[row.id] = { id: row.id, name: row.name, parent_id: row.parent_id };
                         });
                         paintStateChips(mergeStateRows(data.data));
                     })
@@ -657,7 +656,7 @@
                 }
                 var params = new URLSearchParams();
                 stateIds.forEach(function (id) {
-                    params.append('state_ids[]', id);
+                    params.append('parent_ids[]', id);
                 });
                 return fetch(apiBase + '/districts?' + params.toString(), { headers: { Accept: 'application/json' } })
                     .then(function (r) {
@@ -668,7 +667,7 @@
                             return;
                         }
                         data.data.forEach(function (row) {
-                            districtById[row.id] = { id: row.id, name: row.name, state_id: row.state_id };
+                            districtById[row.id] = { id: row.id, name: row.name, parent_id: row.parent_id };
                         });
                         paintDistrictChips(mergeDistrictRows(data.data));
                     })
@@ -684,7 +683,7 @@
                 }
                 var params = new URLSearchParams();
                 districtIds.forEach(function (id) {
-                    params.append('district_ids[]', id);
+                    params.append('parent_ids[]', id);
                 });
                 return fetch(apiBase + '/talukas?' + params.toString(), { headers: { Accept: 'application/json' } })
                     .then(function (r) {
@@ -695,7 +694,7 @@
                             return;
                         }
                         data.data.forEach(function (row) {
-                            talukaById[row.id] = { id: row.id, name: row.name, district_id: row.district_id };
+                            talukaById[row.id] = { id: row.id, name: row.name, parent_id: row.parent_id };
                         });
                         paintTalukaChips(mergeTalukaRows(data.data));
                     })

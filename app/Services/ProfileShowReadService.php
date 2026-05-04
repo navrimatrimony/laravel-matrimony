@@ -6,6 +6,7 @@ use App\Models\AdminSetting;
 use App\Models\MatrimonyProfile;
 use App\Models\ProfileKycSubmission;
 use App\Models\User;
+use App\Support\ProfileDisplayCopy;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
@@ -419,11 +420,7 @@ class ProfileShowReadService
     public static function profileHeadline(MatrimonyProfile $p): string
     {
         $p->loadMissing(['city', 'district', 'state', 'maritalStatus']);
-        $loc = trim(implode(', ', array_filter([
-            $p->city?->name,
-            $p->district?->name,
-            $p->state?->name,
-        ])));
+        $loc = trim(ProfileDisplayCopy::profileResidenceDisplayLine($p));
 
         $parts = array_filter([
             $p->highest_education ?: null,
@@ -454,7 +451,7 @@ class ProfileShowReadService
         if (($p->occupation_title ?? '') !== '') {
             $chunks[] = $p->occupation_title;
         }
-        $loc = trim(implode(', ', array_filter([$p->city?->name, $p->district?->name, $p->state?->name])));
+        $loc = trim(ProfileDisplayCopy::profileResidenceDisplayLine($p));
         if ($loc !== '') {
             $chunks[] = 'from '.$loc;
         }

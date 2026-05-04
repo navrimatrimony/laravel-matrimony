@@ -59,7 +59,7 @@ class LocationHierarchyValidator
         match ($type) {
             'district' => $this->expectParentTypes($parentType, ['state'], 'district'),
             'taluka' => $this->expectParentTypes($parentType, ['district'], 'taluka'),
-            'city' => $this->expectParentTypes($parentType, ['district'], 'city'),
+            'city' => $this->expectParentTypes($parentType, ['taluka', 'district'], 'city'),
             'suburb', 'village' => $this->expectParentTypes($parentType, ['city', 'taluka'], $type),
             default => null,
         };

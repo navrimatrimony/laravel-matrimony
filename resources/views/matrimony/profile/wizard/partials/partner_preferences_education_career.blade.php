@@ -6,8 +6,7 @@
 
     <div class="flex flex-wrap gap-2 pt-1" role="navigation" aria-label="{{ __('wizard.partner_education_career_heading') }}">
         <a href="#partner-pref-ec-qual" class="inline-flex items-center rounded-full border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-900/40 px-2.5 py-1 text-[11px] font-medium text-gray-700 dark:text-gray-200 hover:border-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300">{{ __('wizard.pref_qualification_label') }}</a>
-        <a href="#partner-pref-ec-ww" class="inline-flex items-center rounded-full border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-900/40 px-2.5 py-1 text-[11px] font-medium text-gray-700 dark:text-gray-200 hover:border-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300">{{ __('wizard.pref_working_with_label') }}</a>
-        <a href="#partner-pref-ec-prof" class="inline-flex items-center rounded-full border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-900/40 px-2.5 py-1 text-[11px] font-medium text-gray-700 dark:text-gray-200 hover:border-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300">{{ __('wizard.pref_profession_label') }}</a>
+        <a href="#partner-pref-ec-occupation" class="inline-flex items-center rounded-full border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-900/40 px-2.5 py-1 text-[11px] font-medium text-gray-700 dark:text-gray-200 hover:border-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300">{{ __('wizard.partner_pref_occupation_heading') }}</a>
         <a href="#partner-pref-ec-income" class="inline-flex items-center rounded-full border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-900/40 px-2.5 py-1 text-[11px] font-medium text-gray-700 dark:text-gray-200 hover:border-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300">{{ __('wizard.pref_annual_income_label') }}</a>
     </div>
 
@@ -19,54 +18,107 @@
         .partner-ec-pref-dual-range::-moz-range-track { height: 8px; background: transparent; }
     </style>
 
-    {{-- 1) Qualification --}}
-    <div class="rounded-lg border border-gray-200 dark:border-gray-600 bg-gray-50/80 dark:bg-gray-900/30 p-3 space-y-2">
+    {{-- 1) Qualification — SSOT: education_degrees (+ categories), same catalogue as onboarding education engine --}}
+    @php
+        $eduPrefLocaleMr = str_starts_with(strtolower((string) app()->getLocale()), 'mr');
+        $selectedPreferredEducationDegreeIds = $selectedPreferredEducationDegreeIds ?? [];
+    @endphp
+    <div id="partner-pref-ec-qual" class="rounded-lg border border-gray-200 dark:border-gray-600 bg-gray-50/80 dark:bg-gray-900/30 p-3 space-y-2 scroll-mt-4">
         <h4 class="text-sm font-semibold text-gray-900 dark:text-gray-100">{{ __('wizard.pref_qualification_label') }}</h4>
         <p class="text-xs text-gray-500 dark:text-gray-400">{{ __('wizard.pref_qualification_hint') }}</p>
         <input type="search" id="partner-ec-education-filter" class="w-full rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 px-2 py-1.5 text-sm" placeholder="{{ __('wizard.filter_locations') }}" autocomplete="off">
-        <div class="max-h-32 overflow-y-auto rounded border border-gray-200 dark:border-gray-600 p-2 bg-white dark:bg-gray-800/60">
-            <div id="partner-ec-education-chips" class="flex flex-wrap gap-2 content-start">
-                @foreach(($masterEducationOptions ?? collect()) as $me)
-                    <label class="partner-ec-edu-chip inline-flex items-center gap-1.5 rounded-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-2 py-0.5 text-xs cursor-pointer hover:border-indigo-400 dark:hover:border-indigo-500" data-chip-label="{{ $me->name }}">
-                        <input type="checkbox" name="preferred_master_education_ids[]" value="{{ $me->id }}" class="partner-ec-edu-cb rounded border-gray-300 dark:border-gray-600 text-indigo-600"
-                            @if(in_array($me->id, $selectedMasterEducationIds ?? [], true)) checked @endif>
-                        <span class="text-gray-800 dark:text-gray-100">{{ $me->name }}</span>
-                    </label>
+        <div class="max-h-72 overflow-y-auto rounded border border-gray-200 dark:border-gray-600 p-2 bg-white dark:bg-gray-800/60">
+            <div id="partner-ec-education-chips" class="space-y-3">
+                @foreach(($educationCategoriesPartnerPrefs ?? collect()) as $cat)
+                    @if($cat->degrees->isEmpty())
+                        @continue
+                    @endif
+                    @php
+                        $catLabel = $eduPrefLocaleMr && filled($cat->name_mr ?? null) ? $cat->name_mr : $cat->name;
+                        $catSelectAllTitle = __('wizard.partner_pref_education_category_select_all');
+                    @endphp
+                    <div class="partner-ec-edu-category space-y-1.5" data-chip-label="{{ $catLabel }}">
+                        @php
+                            $partnerEcCatAllId = 'partner-ec-cat-all-'.(int) $cat->id;
+                        @endphp
+                        <div class="flex items-center gap-2">
+                            <input
+                                id="{{ $partnerEcCatAllId }}"
+                                type="checkbox"
+                                class="partner-ec-edu-category-all size-4 shrink-0 rounded border-gray-300 dark:border-gray-600 text-indigo-600 focus:ring-indigo-500"
+                                title="{{ $catSelectAllTitle }}"
+                                aria-label="{{ $catSelectAllTitle }}: {{ $catLabel }}"
+                            >
+                            <label for="{{ $partnerEcCatAllId }}" class="cursor-pointer text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 select-none">{{ $catLabel }}</label>
+                        </div>
+                        <div class="flex flex-wrap gap-2 content-start partner-ec-edu-category-degrees">
+                            @foreach($cat->degrees as $deg)
+                                @php
+                                    $degLabel = $eduPrefLocaleMr && filled($deg->title_mr ?? null) ? $deg->title_mr : $deg->title;
+                                @endphp
+                                <label class="partner-ec-edu-chip inline-flex items-center gap-1.5 rounded-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-2 py-0.5 text-xs cursor-pointer hover:border-indigo-400 dark:hover:border-indigo-500" data-chip-label="{{ $degLabel }}">
+                                    <input type="checkbox" name="preferred_education_degree_ids[]" value="{{ $deg->id }}" class="partner-ec-edu-cb rounded border-gray-300 dark:border-gray-600 text-indigo-600"
+                                        @if(in_array((int) $deg->id, $selectedPreferredEducationDegreeIds, true)) checked @endif>
+                                    <span class="text-gray-800 dark:text-gray-100">{{ $degLabel }}</span>
+                                </label>
+                            @endforeach
+                        </div>
+                    </div>
                 @endforeach
             </div>
         </div>
     </div>
 
-    {{-- 2) Working with --}}
-    <div id="partner-pref-ec-ww" class="rounded-lg border border-gray-200 dark:border-gray-600 bg-gray-50/80 dark:bg-gray-900/30 p-3 space-y-2 scroll-mt-4">
-        <h4 class="text-sm font-semibold text-gray-900 dark:text-gray-100">{{ __('wizard.pref_working_with_label') }}</h4>
-        <p class="text-xs text-gray-500 dark:text-gray-400">{{ __('wizard.pref_working_with_hint') }}</p>
-        <input type="search" id="partner-ec-ww-filter" class="w-full rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 px-2 py-1.5 text-sm" placeholder="{{ __('wizard.filter_locations') }}" autocomplete="off">
-        <div class="max-h-28 overflow-y-auto rounded border border-gray-200 dark:border-gray-600 p-2 bg-white dark:bg-gray-800/60">
-            <div class="flex flex-wrap gap-2" id="partner-ec-ww-chips">
-                @foreach(($workingWithTypes ?? collect()) as $ww)
-                    <label class="partner-ec-ww-chip inline-flex items-center gap-1.5 rounded-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-2 py-0.5 text-xs cursor-pointer hover:border-indigo-400 dark:hover:border-indigo-500" data-chip-label="{{ $ww->name }}">
-                        <input type="checkbox" name="preferred_working_with_type_ids[]" value="{{ $ww->id }}" class="partner-ec-ww-cb rounded border-gray-300 dark:border-gray-600 text-indigo-600"
-                            @if(in_array($ww->id, $selectedWorkingWithTypeIds ?? [], true)) checked @endif>
-                        <span class="text-gray-800 dark:text-gray-100">{{ $ww->name }}</span>
-                    </label>
+    {{-- 2) Occupation — SSOT: occupation_master + occupation_categories (same engine as onboarding `<x-occupation-search-engine>` / wizard career) --}}
+    @php
+        $occPrefLocaleMr = str_starts_with(strtolower((string) app()->getLocale()), 'mr');
+        $selectedPreferredOccupationMasterIds = $selectedPreferredOccupationMasterIds ?? [];
+    @endphp
+    <div id="partner-pref-ec-occupation" class="rounded-lg border border-gray-200 dark:border-gray-600 bg-gray-50/80 dark:bg-gray-900/30 p-3 space-y-2 scroll-mt-4">
+        <h4 class="text-sm font-semibold text-gray-900 dark:text-gray-100">{{ __('wizard.partner_pref_occupation_heading') }}</h4>
+        <p class="text-xs text-gray-500 dark:text-gray-400">{{ __('wizard.partner_pref_occupation_intro') }}</p>
+        <input type="search" id="partner-ec-occupation-filter" class="w-full rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 px-2 py-1.5 text-sm" placeholder="{{ __('wizard.filter_locations') }}" autocomplete="off">
+        <div class="max-h-72 overflow-y-auto rounded border border-gray-200 dark:border-gray-600 p-2 bg-white dark:bg-gray-800/60">
+            <div id="partner-ec-occupation-chips" class="space-y-3">
+                @foreach(($occupationCategoriesPartnerPrefs ?? collect()) as $occCat)
+                    @if($occCat->occupations->isEmpty())
+                        @continue
+                    @endif
+                    @php
+                        $occCatLabel = $occPrefLocaleMr && filled($occCat->name_mr ?? null) ? $occCat->name_mr : $occCat->name;
+                        $occCatSelectAllTitle = __('wizard.partner_pref_occupation_category_select_all');
+                        $partnerEcOccCatAllId = 'partner-ec-occ-cat-all-'.(int) $occCat->id;
+                    @endphp
+                    <div class="partner-ec-occ-category space-y-1.5" data-chip-label="{{ $occCatLabel }}">
+                        <div class="flex items-center gap-2">
+                            <input
+                                id="{{ $partnerEcOccCatAllId }}"
+                                type="checkbox"
+                                class="partner-ec-occ-category-all size-4 shrink-0 rounded border-gray-300 dark:border-gray-600 text-teal-600 focus:ring-teal-500"
+                                title="{{ $occCatSelectAllTitle }}"
+                                aria-label="{{ $occCatSelectAllTitle }}: {{ $occCatLabel }}"
+                            >
+                            <label for="{{ $partnerEcOccCatAllId }}" class="cursor-pointer text-[11px] font-semibold uppercase tracking-wide text-teal-800 dark:text-teal-300 select-none">{{ $occCatLabel }}</label>
+                        </div>
+                        <div class="flex flex-wrap gap-2 content-start">
+                            @foreach($occCat->occupations as $occ)
+                                @php
+                                    $occLabel = $occPrefLocaleMr && filled($occ->name_mr ?? null) ? $occ->name_mr : $occ->name;
+                                @endphp
+                                <label class="partner-ec-occ-chip inline-flex items-center gap-1.5 rounded-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-2 py-0.5 text-xs cursor-pointer hover:border-teal-400 dark:hover:border-teal-500" data-chip-label="{{ $occLabel }}">
+                                    <input type="checkbox" name="preferred_occupation_master_ids[]" value="{{ $occ->id }}" class="partner-ec-occ-cb rounded border-gray-300 dark:border-gray-600 text-teal-600"
+                                        @if(in_array((int) $occ->id, $selectedPreferredOccupationMasterIds, true)) checked @endif>
+                                    <span class="text-gray-800 dark:text-gray-100">{{ $occLabel }}</span>
+                                </label>
+                            @endforeach
+                        </div>
+                    </div>
                 @endforeach
             </div>
         </div>
     </div>
 
-    {{-- 3) Profession (filtered by working-with) --}}
-    <div id="partner-pref-ec-prof" class="rounded-lg border border-gray-200 dark:border-gray-600 bg-gray-50/80 dark:bg-gray-900/30 p-3 space-y-2 scroll-mt-4">
-        <h4 class="text-sm font-semibold text-gray-900 dark:text-gray-100">{{ __('wizard.pref_profession_label') }}</h4>
-        <p class="text-xs text-gray-500 dark:text-gray-400">{{ __('wizard.pref_profession_hint') }}</p>
-        <p id="partner-ec-profession-placeholder" class="text-xs text-amber-700 dark:text-amber-400 min-h-[1rem] hidden"></p>
-        <input type="search" id="partner-ec-profession-filter" class="w-full rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 px-2 py-1.5 text-sm" placeholder="{{ __('wizard.filter_locations') }}" autocomplete="off">
-        <div class="max-h-36 overflow-y-auto rounded border border-gray-200 dark:border-gray-600 p-2 bg-white dark:bg-gray-800/60">
-            <div id="partner-ec-profession-chips" class="flex flex-wrap gap-2 content-start"></div>
-        </div>
-    </div>
-
-    {{-- 4) Annual income (existing min/max rupees) --}}
+    {{-- 3) Annual income (existing min/max rupees) --}}
     <div id="partner-pref-ec-income" class="rounded-lg border border-gray-200 dark:border-gray-600 bg-gray-50/80 dark:bg-gray-900/30 p-3 space-y-2 scroll-mt-4">
         <h4 class="text-sm font-semibold text-gray-900 dark:text-gray-100">{{ __('wizard.pref_annual_income_label') }}</h4>
         <p class="text-xs text-gray-500 dark:text-gray-400">{{ __('wizard.pref_annual_income_hint') }}</p>
@@ -171,97 +223,6 @@
 
     <script>
         (function () {
-            var byWw = @json($partnerProfessionsByWorkingWithType ?? []);
-            var professionById = @json($partnerProfessionById ?? []);
-            var orphanHint = @json(__('wizard.location_orphan_hint'));
-            var selectedProfessionMap = @json(array_fill_keys($selectedProfessionIds ?? [], true));
-            var wwDebounce;
-
-            function esc(s) {
-                return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
-            }
-
-            function getSelectedWwIds() {
-                var ids = [];
-                document.querySelectorAll('input.partner-ec-ww-cb:checked').forEach(function (cb) {
-                    ids.push(parseInt(cb.value, 10));
-                });
-                return ids;
-            }
-
-            function mergeProfessionItems() {
-                var wids = getSelectedWwIds();
-                var seen = {};
-                var items = [];
-                wids.forEach(function (wid) {
-                    var list = byWw[String(wid)] || byWw[wid] || [];
-                    list.forEach(function (item) {
-                        if (seen[item.id]) return;
-                        seen[item.id] = true;
-                        items.push({ id: item.id, label: item.name, working_with_type_id: item.working_with_type_id, orphan: false });
-                    });
-                });
-                Object.keys(selectedProfessionMap).forEach(function (k) {
-                    var id = parseInt(k, 10);
-                    if (!selectedProfessionMap[id] || seen[id]) return;
-                    var meta = professionById[String(id)] || professionById[id];
-                    if (meta) {
-                        items.push({ id: meta.id, label: meta.name, working_with_type_id: meta.working_with_type_id, orphan: true });
-                        seen[id] = true;
-                    }
-                });
-                items.sort(function (a, b) { return a.label.localeCompare(b.label); });
-                return items;
-            }
-
-            function pruneProfessionsAfterWwChange() {
-                var wids = getSelectedWwIds();
-                Object.keys(selectedProfessionMap).forEach(function (k) {
-                    var id = parseInt(k, 10);
-                    if (!selectedProfessionMap[id]) return;
-                    var meta = professionById[String(id)] || professionById[id];
-                    if (meta && wids.indexOf(meta.working_with_type_id) === -1) {
-                        delete selectedProfessionMap[id];
-                    }
-                });
-            }
-
-            function paintProfessionChips(items) {
-                var inner = document.getElementById('partner-ec-profession-chips');
-                var ph = document.getElementById('partner-ec-profession-placeholder');
-                if (!inner) return;
-                var wids = getSelectedWwIds();
-                if (ph) {
-                    if (wids.length === 0 && items.length === 0) {
-                        ph.textContent = @json(__('wizard.select_working_with_first'));
-                        ph.classList.remove('hidden');
-                    } else {
-                        ph.textContent = '';
-                        ph.classList.add('hidden');
-                    }
-                }
-                var html = [];
-                items.forEach(function (item) {
-                    var checked = selectedProfessionMap[item.id] ? ' checked' : '';
-                    var orphanClass = item.orphan ? ' border-amber-400 dark:border-amber-600 bg-amber-50/80 dark:bg-amber-900/20' : '';
-                    var title = item.orphan ? orphanHint : '';
-                    html.push(
-                        '<label class="partner-ec-prof-chip inline-flex items-center gap-1.5 rounded-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-2 py-0.5 text-xs cursor-pointer' + orphanClass + '" data-chip-label="' + esc(item.label) + '"' + (title ? ' title="' + esc(title) + '"' : '') + '>' +
-                        '<input type="checkbox" name="preferred_profession_ids[]" value="' + item.id + '" class="partner-ec-prof-cb rounded border-gray-300 dark:border-gray-600 text-indigo-600"' + checked + '>' +
-                        '<span class="text-gray-800 dark:text-gray-100">' + esc(item.label) + '</span></label>'
-                    );
-                });
-                inner.innerHTML = html.join('');
-                inner.querySelectorAll('input.partner-ec-prof-cb').forEach(function (cb) {
-                    cb.addEventListener('change', function () {
-                        var id = parseInt(cb.value, 10);
-                        if (cb.checked) selectedProfessionMap[id] = true;
-                        else delete selectedProfessionMap[id];
-                    });
-                });
-                applyEcFilter('partner-ec-prof-chip', 'partner-ec-profession-filter');
-            }
-
             function applyEcFilter(chipClass, filterId) {
                 var q = ((document.getElementById(filterId) || {}).value || '').trim().toLowerCase();
                 document.querySelectorAll('.' + chipClass).forEach(function (el) {
@@ -270,27 +231,127 @@
                 });
             }
 
-            function renderProfessions() {
-                pruneProfessionsAfterWwChange();
-                paintProfessionChips(mergeProfessionItems());
+            function applyPartnerEducationCategoryFilter() {
+                var q = ((document.getElementById('partner-ec-education-filter') || {}).value || '').trim().toLowerCase();
+                document.querySelectorAll('#partner-ec-education-chips .partner-ec-edu-category').forEach(function (catEl) {
+                    var catLab = (catEl.getAttribute('data-chip-label') || '').toLowerCase();
+                    var catMatches = q !== '' && catLab.indexOf(q) !== -1;
+                    var anyChipVisible = false;
+                    catEl.querySelectorAll('.partner-ec-edu-chip').forEach(function (chip) {
+                        var lab = (chip.getAttribute('data-chip-label') || '').toLowerCase();
+                        var show = q === '' || lab.indexOf(q) !== -1 || catMatches;
+                        chip.style.display = show ? '' : 'none';
+                        if (show) {
+                            anyChipVisible = true;
+                        }
+                    });
+                    catEl.style.display = (q === '' || catMatches || anyChipVisible) ? '' : 'none';
+                });
             }
 
-            function scheduleWwChange() {
-                clearTimeout(wwDebounce);
-                wwDebounce = setTimeout(renderProfessions, 150);
+            function syncPartnerEduCategoryHeader(catRoot) {
+                var allInput = catRoot.querySelector('.partner-ec-edu-category-all');
+                var degreeCbs = catRoot.querySelectorAll('input.partner-ec-edu-cb[type="checkbox"]');
+                if (!allInput || degreeCbs.length === 0) {
+                    return;
+                }
+                var checked = 0;
+                degreeCbs.forEach(function (c) {
+                    if (c.checked) {
+                        checked++;
+                    }
+                });
+                var n = degreeCbs.length;
+                allInput.checked = checked === n && n > 0;
+                allInput.indeterminate = checked > 0 && checked < n;
+            }
+
+            function initPartnerEduCategorySelectAll() {
+                document.querySelectorAll('#partner-ec-education-chips .partner-ec-edu-category').forEach(function (catEl) {
+                    syncPartnerEduCategoryHeader(catEl);
+                    var allInput = catEl.querySelector('.partner-ec-edu-category-all');
+                    if (!allInput) {
+                        return;
+                    }
+                    allInput.addEventListener('change', function () {
+                        var on = allInput.checked;
+                        catEl.querySelectorAll('input.partner-ec-edu-cb[type="checkbox"]').forEach(function (d) {
+                            d.checked = on;
+                        });
+                        allInput.indeterminate = false;
+                    });
+                    catEl.querySelectorAll('input.partner-ec-edu-cb[type="checkbox"]').forEach(function (d) {
+                        d.addEventListener('change', function () {
+                            syncPartnerEduCategoryHeader(catEl);
+                        });
+                    });
+                });
+            }
+
+            function applyPartnerOccupationCategoryFilter() {
+                var q = ((document.getElementById('partner-ec-occupation-filter') || {}).value || '').trim().toLowerCase();
+                document.querySelectorAll('#partner-ec-occupation-chips .partner-ec-occ-category').forEach(function (catEl) {
+                    var catLab = (catEl.getAttribute('data-chip-label') || '').toLowerCase();
+                    var catMatches = q !== '' && catLab.indexOf(q) !== -1;
+                    var anyChipVisible = false;
+                    catEl.querySelectorAll('.partner-ec-occ-chip').forEach(function (chip) {
+                        var lab = (chip.getAttribute('data-chip-label') || '').toLowerCase();
+                        var show = q === '' || lab.indexOf(q) !== -1 || catMatches;
+                        chip.style.display = show ? '' : 'none';
+                        if (show) {
+                            anyChipVisible = true;
+                        }
+                    });
+                    catEl.style.display = (q === '' || catMatches || anyChipVisible) ? '' : 'none';
+                });
+            }
+
+            function syncPartnerOccCategoryHeader(catRoot) {
+                var allInput = catRoot.querySelector('.partner-ec-occ-category-all');
+                var occCbs = catRoot.querySelectorAll('input.partner-ec-occ-cb[type="checkbox"]');
+                if (!allInput || occCbs.length === 0) {
+                    return;
+                }
+                var checked = 0;
+                occCbs.forEach(function (c) {
+                    if (c.checked) {
+                        checked++;
+                    }
+                });
+                var n = occCbs.length;
+                allInput.checked = checked === n && n > 0;
+                allInput.indeterminate = checked > 0 && checked < n;
+            }
+
+            function initPartnerOccCategorySelectAll() {
+                document.querySelectorAll('#partner-ec-occupation-chips .partner-ec-occ-category').forEach(function (catEl) {
+                    syncPartnerOccCategoryHeader(catEl);
+                    var allInput = catEl.querySelector('.partner-ec-occ-category-all');
+                    if (!allInput) {
+                        return;
+                    }
+                    allInput.addEventListener('change', function () {
+                        var on = allInput.checked;
+                        catEl.querySelectorAll('input.partner-ec-occ-cb[type="checkbox"]').forEach(function (d) {
+                            d.checked = on;
+                        });
+                        allInput.indeterminate = false;
+                    });
+                    catEl.querySelectorAll('input.partner-ec-occ-cb[type="checkbox"]').forEach(function (d) {
+                        d.addEventListener('change', function () {
+                            syncPartnerOccCategoryHeader(catEl);
+                        });
+                    });
+                });
             }
 
             document.addEventListener('DOMContentLoaded', function () {
-                document.querySelectorAll('input.partner-ec-ww-cb').forEach(function (cb) {
-                    cb.addEventListener('change', scheduleWwChange);
-                });
                 var ef = document.getElementById('partner-ec-education-filter');
-                var wf = document.getElementById('partner-ec-ww-filter');
-                var pf = document.getElementById('partner-ec-profession-filter');
-                if (ef) ef.addEventListener('input', function () { applyEcFilter('partner-ec-edu-chip', 'partner-ec-education-filter'); });
-                if (wf) wf.addEventListener('input', function () { applyEcFilter('partner-ec-ww-chip', 'partner-ec-ww-filter'); });
-                if (pf) pf.addEventListener('input', function () { applyEcFilter('partner-ec-prof-chip', 'partner-ec-profession-filter'); });
-                renderProfessions();
+                var of = document.getElementById('partner-ec-occupation-filter');
+                if (ef) ef.addEventListener('input', function () { applyPartnerEducationCategoryFilter(); });
+                if (of) of.addEventListener('input', function () { applyPartnerOccupationCategoryFilter(); });
+                initPartnerEduCategorySelectAll();
+                initPartnerOccCategorySelectAll();
             });
         })();
     </script>
