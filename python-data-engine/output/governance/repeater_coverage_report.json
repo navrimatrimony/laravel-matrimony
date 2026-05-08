@@ -1,0 +1,59 @@
+{
+  "repeater_mismatches": {
+    "repeater_mismatches": [
+      {
+        "repeater": "children",
+        "type": "reordered_rows_tolerated",
+        "severity": "low",
+        "details": {
+          "row_count": 2,
+          "row_signatures": [
+            "895c5adbfdaef31cb61ae2d4ea5736f5207118574687c071c4db11c20dec070a",
+            "fb5059e5c869e41c345f66b1c16dcf01babce88b4c0a4fcd5ac557dc8f3f2045"
+          ]
+        }
+      },
+      {
+        "repeater": "education_history",
+        "type": "row_count_mismatch",
+        "severity": "medium",
+        "details": {
+          "duplicate_rows": 1,
+          "row_count": 2,
+          "row_signatures": [
+            "74af4fc8273c2734a54c3638fb51fde1a0c5771f2ced0d44da10673200ab83bb",
+            "74af4fc8273c2734a54c3638fb51fde1a0c5771f2ced0d44da10673200ab83bb"
+          ]
+        }
+      },
+      {
+        "repeater": "career_history",
+        "type": "row_count_mismatch",
+        "severity": "medium",
+        "details": {
+          "duplicate_rows": 1,
+          "row_count": 2,
+          "row_signatures": [
+            "e423750cef4f6fb220a6551c9753462dd93fa4d7171906a0ce9f2cc5f985e165",
+            "e423750cef4f6fb220a6551c9753462dd93fa4d7171906a0ce9f2cc5f985e165"
+          ]
+        }
+      },
+      {
+        "repeater": "property_assets",
+        "type": "row_count_mismatch",
+        "severity": "medium",
+        "details": {
+          "duplicate_rows": 1,
+          "row_count": 3,
+          "row_signatures": [
+            "9293fe1d530f1b3f3c2aae47086e53b1aea4024d25db48ab9de7890f64873ab6",
+            "d7d982d1c176cb64ca803e14d686b6e60fb44176c4fe8dd9a82f94b461048a58",
+            "d7d982d1c176cb64ca803e14d686b6e60fb44176c4fe8dd9a82f94b461048a58"
+          ]
+        }
+      }
+    ]
+  },
+  "repeater_fields_count": 46
+}

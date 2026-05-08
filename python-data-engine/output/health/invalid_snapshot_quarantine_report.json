@@ -1,0 +1,23 @@
+{
+  "generated_at": "2026-05-06T15:24:36Z",
+  "dry_run": false,
+  "retention_days": 30,
+  "moved_count": 12,
+  "moved_invalid_snapshots": [
+    "E:\\LaravelProjects\\laravel-matrimony\\storage\\app\\data-audit\\snapshots\\matrimony_profile_206\\snapshot_2026_05_06_191147.json",
+    "E:\\LaravelProjects\\laravel-matrimony\\storage\\app\\data-audit\\snapshots\\matrimony_profile_207\\snapshot_2026_05_06_125446.json",
+    "E:\\LaravelProjects\\laravel-matrimony\\storage\\app\\data-audit\\snapshots\\matrimony_profile_207\\snapshot_2026_05_06_125514.json",
+    "E:\\LaravelProjects\\laravel-matrimony\\storage\\app\\data-audit\\snapshots\\matrimony_profile_207\\snapshot_2026_05_06_125532.json",
+    "E:\\LaravelProjects\\laravel-matrimony\\storage\\app\\data-audit\\snapshots\\matrimony_profile_207\\snapshot_2026_05_06_132017.json",
+    "E:\\LaravelProjects\\laravel-matrimony\\storage\\app\\data-audit\\snapshots\\matrimony_profile_207\\snapshot_2026_05_06_133607.json",
+    "E:\\LaravelProjects\\laravel-matrimony\\storage\\app\\data-audit\\snapshots\\matrimony_profile_207\\snapshot_2026_05_06_134248.json",
+    "E:\\LaravelProjects\\laravel-matrimony\\storage\\app\\data-audit\\snapshots\\matrimony_profile_207\\snapshot_2026_05_06_142952.json",
+    "E:\\LaravelProjects\\laravel-matrimony\\storage\\app\\data-audit\\snapshots\\matrimony_profile_207\\snapshot_2026_05_06_143307.json",
+    "E:\\LaravelProjects\\laravel-matrimony\\storage\\app\\data-audit\\snapshots\\matrimony_profile_207\\snapshot_2026_05_06_144025.json",
+    "E:\\LaravelProjects\\laravel-matrimony\\storage\\app\\data-audit\\snapshots\\matrimony_profile_207\\snapshot_2026_05_06_191146.json",
+    "E:\\LaravelProjects\\laravel-matrimony\\storage\\app\\data-audit\\snapshots\\matrimony_profile_207\\snapshot_2026_05_06_201913.json"
+  ],
+  "kept_valid_count": 1,
+  "pruned_quarantine_count": 0,
+  "pruned_quarantine_snapshots": []
+}

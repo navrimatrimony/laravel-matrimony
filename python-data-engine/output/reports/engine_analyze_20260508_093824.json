@@ -1,0 +1,96 @@
+{
+  "meta": {
+    "runner_error": "(2003, \"Can't connect to MySQL server on '127.0.0.1' ([WinError 10106] The requested service provider could not be loaded or initialized)\")",
+    "runner_traceback": "Traceback (most recent call last):\n  File \"E:\\LaravelProjects\\laravel-matrimony\\python-data-engine\\venv\\Lib\\site-packages\\pymysql\\connections.py\", line 661, in connect\n    sock = socket.create_connection(\n        (self.host, self.port), self.connect_timeout, **kwargs\n    )\n  File \"C:\\Python314\\Lib\\socket.py\", line 870, in create_connection\n    raise exceptions[0]\n  File \"C:\\Python314\\Lib\\socket.py\", line 850, in create_connection\n    sock = socket(af, socktype, proto)\n  File \"C:\\Python314\\Lib\\socket.py\", line 236, in __init__\n    _socket.socket.__init__(self, family, type, proto, fileno)\n    ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nOSError: [WinError 10106] The requested service provider could not be loaded or initialized\n\nDuring handling of the above exception, another exception occurred:\n\nTraceback (most recent call last):\n  File \"E:\\LaravelProjects\\laravel-matrimony\\python-data-engine/scripts/runner.py\", line 560, in main\n    conn = db.connect()\n  File \"E:\\LaravelProjects\\laravel-matrimony\\python-data-engine\\scripts\\db.py\", line 27, in connect\n    return pymysql.connect(**base)\n           ~~~~~~~~~~~~~~~^^^^^^^^\n  File \"E:\\LaravelProjects\\laravel-matrimony\\python-data-engine\\venv\\Lib\\site-packages\\pymysql\\connections.py\", line 365, in __init__\n    self.connect()\n    ~~~~~~~~~~~~^^\n  File \"E:\\LaravelProjects\\laravel-matrimony\\python-data-engine\\venv\\Lib\\site-packages\\pymysql\\connections.py\", line 723, in connect\n    raise exc\npymysql.err.OperationalError: (2003, \"Can't connect to MySQL server on '127.0.0.1' ([WinError 10106] The requested service provider could not be loaded or initialized)\")\n",
+    "mode": "analyze",
+    "database": "laravel_matrimony",
+    "batch_size": 1000,
+    "engine_version": "1.0.0",
+    "run_mode": "analyze",
+    "lineage_engine_version": "2.0",
+    "report_schema_version": "1",
+    "execution_time": "0.064770",
+    "timestamp": "2026-05-08T09:38:24.207554+00:00",
+    "generated_at": "2026-05-08T09:38:24.207554+00:00",
+    "hash": "703ad60a95492e86b39ec80c788ea140"
+  },
+  "quality_score": 0,
+  "priority_summary": {
+    "critical": 0,
+    "high": 0,
+    "medium": 0,
+    "low": 0
+  },
+  "suggestions": [],
+  "duplicates": [],
+  "validation_errors": [],
+  "mismatch": [],
+  "schema_issues": [],
+  "log_errors": [],
+  "fix_results": {
+    "pincode_fixed": 0,
+    "latlong_fixed": 0,
+    "normalized": 0,
+    "skipped": 0
+  },
+  "fixes_applied": [],
+  "profile_analysis": [],
+  "profile_intelligence": {},
+  "conversion_intelligence": {
+    "conversion_signals": {
+      "low_profile_score_users": 0,
+      "no_photo_users": 0,
+      "high_intent_users": 0
+    },
+    "recommended_actions": [],
+    "notification_candidates": []
+  },
+  "mr_localization": {
+    "summary": {
+      "mr_columns_found": 0,
+      "pending_rows_total": 0,
+      "updated_rows": 0
+    },
+    "columns": [],
+    "fix": {
+      "updated_rows": 0,
+      "updated_by_column": [],
+      "skipped": []
+    }
+  },
+  "data_integrity": {
+    "summary": {
+      "health_score": 0
+    },
+    "registry_vs_profile": {
+      "missing_columns": []
+    },
+    "semantic_groups_triggered": []
+  },
+  "data_lineage": {
+    "summary": {
+      "health_score": 0,
+      "manifest_errors": 0,
+      "wrong_sources": 0,
+      "multi_source_conflicts": 0,
+      "wizard_public_mismatches": 0,
+      "missing_render_risks": 0,
+      "fields_audited": 0
+    },
+    "manifest_errors": [],
+    "wrong_sources": [],
+    "multi_source_conflicts": [],
+    "wizard_public_mismatches": [],
+    "missing_render_risks": [],
+    "metrics": {
+      "scan_duration_ms": null,
+      "memory_peak_kb": null,
+      "blade_count_scanned": 0,
+      "manifest_field_count": 0
+    }
+  },
+  "anomalies": [],
+  "runner_module_errors": [],
+  "module_warnings": [],
+  "backup_path": null
+}

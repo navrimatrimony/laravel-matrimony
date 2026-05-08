@@ -1,0 +1,550 @@
+{
+  "generated_at": "2026-05-07T00:55:37.051816+00:00",
+  "issue_summaries": [
+    {
+      "issue": "Duplicate identities",
+      "severity": "low",
+      "impact": "0 records potentially affected",
+      "affected_count": 0,
+      "root_cause": "Multiple rows share identity keys (phone/email) across ingestion paths.",
+      "suggested_fix": "Review duplicate groups and apply dedupe recipe in dry-run first.",
+      "auto_fix_available": true,
+      "rollback_available": true
+    },
+    {
+      "issue": "Validation errors",
+      "severity": "low",
+      "impact": "3 records potentially affected",
+      "affected_count": 3,
+      "root_cause": "Missing/invalid required fields from source or normalization layers.",
+      "suggested_fix": "Run validation-safe auto-fix recipes; unresolved rows should be queued for admin review.",
+      "auto_fix_available": true,
+      "rollback_available": true
+    },
+    {
+      "issue": "Cross-layer mismatches",
+      "severity": "low",
+      "impact": "2 records potentially affected",
+      "affected_count": 2,
+      "root_cause": "Canonical DB values differ from API/rendered snapshots.",
+      "suggested_fix": "Run comparison workflow, inspect diffs, then approve targeted fix recipes.",
+      "auto_fix_available": true,
+      "rollback_available": true
+    },
+    {
+      "issue": "Schema integrity risks",
+      "severity": "medium",
+      "impact": "11 records potentially affected",
+      "affected_count": 11,
+      "root_cause": "High null-ratio / sparse columns / weak indexing coverage.",
+      "suggested_fix": "Apply index and hierarchy repair recipes with pre-fix simulation.",
+      "auto_fix_available": true,
+      "rollback_available": true
+    },
+    {
+      "issue": "High severity lineage/comparison",
+      "severity": "low",
+      "impact": "2 records potentially affected",
+      "affected_count": 2,
+      "root_cause": "Multiple high severity discrepancies in deterministic comparison output.",
+      "suggested_fix": "Pause broad fixes, review impacted entities, then run scoped auto-fix plan.",
+      "auto_fix_available": false,
+      "rollback_available": true
+    }
+  ],
+  "health_cards": {
+    "module_health_score": {
+      "duplicates": 100,
+      "validation": 97,
+      "mismatch": 98,
+      "schema": 78,
+      "comparison": 60,
+      "coverage": 56
+    },
+    "overall_platform_health": 79,
+    "reliability_scores": {
+      "data_correctness_score": 93,
+      "coverage_score": 56,
+      "extraction_reliability_score": 100,
+      "snapshot_reliability_score": 100
+    },
+    "risk_weighting": {
+      "duplicates": 0.3,
+      "validation": 0.2,
+      "mismatch": 0.25,
+      "schema": 0.15,
+      "comparison": 0.1,
+      "coverage": 0.2
+    },
+    "coverage_penalties": {
+      "unsupported_field_penalty": 16,
+      "unaudited_critical_section_penalty": 0,
+      "coverage_score": 56
+    },
+    "trend_history": {
+      "note": "Trend history is derived from persisted comparison history and repeated runs."
+    }
+  },
+  "risk_summaries": {
+    "overall_platform_health": 79,
+    "critical_issue_count": 0
+  },
+  "coverage": {
+    "coverage_score": 56.56,
+    "coverage_label": "69 / 122 fields audited",
+    "totals": {
+      "total_detected_fields": 122,
+      "audited_fields": 69,
+      "unaudited_fields": 53,
+      "partial_support": 16,
+      "unsupported_repeaters": 15,
+      "unsupported_relations": 0,
+      "canonical_governed_logical_field_count": 29,
+      "canonical_comparison_supported_count": 29
+    },
+    "section_coverage": [
+      {
+        "section": "about-preferences",
+        "audited": 1,
+        "detected": 14,
+        "coverage_percent": 7.14
+      },
+      {
+        "section": "alliance",
+        "audited": 0,
+        "detected": 1,
+        "coverage_percent": 0.0
+      },
+      {
+        "section": "basic-info",
+        "audited": 18,
+        "detected": 21,
+        "coverage_percent": 85.71
+      },
+      {
+        "section": "education-career",
+        "audited": 13,
+        "detected": 13,
+        "coverage_percent": 100.0
+      },
+      {
+        "section": "family-details",
+        "audited": 17,
+        "detected": 17,
+        "coverage_percent": 100.0
+      },
+      {
+        "section": "horoscope",
+        "audited": 3,
+        "detected": 3,
+        "coverage_percent": 100.0
+      },
+      {
+        "section": "property",
+        "audited": 5,
+        "detected": 5,
+        "coverage_percent": 100.0
+      },
+      {
+        "section": "relatives",
+        "audited": 11,
+        "detected": 11,
+        "coverage_percent": 100.0
+      },
+      {
+        "section": "unknown",
+        "audited": 1,
+        "detected": 37,
+        "coverage_percent": 2.7
+      }
+    ],
+    "unsupported_fields": [
+      {
+        "field_path": "preferred_marital_status_ids[]",
+        "section": "unknown",
+        "field_type": "repeater_array",
+        "storage_source": "db",
+        "relation_table": null,
+        "audited_status": false,
+        "comparison_support_status": "unsupported"
+      },
+      {
+        "field_path": "preferred_diet_ids[]",
+        "section": "unknown",
+        "field_type": "repeater_array",
+        "storage_source": "db",
+        "relation_table": null,
+        "audited_status": false,
+        "comparison_support_status": "unsupported"
+      },
+      {
+        "field_path": "preferred_education_degree_ids[]",
+        "section": "about-preferences",
+        "field_type": "repeater_array",
+        "storage_source": "db",
+        "relation_table": null,
+        "audited_status": false,
+        "comparison_support_status": "unsupported"
+      },
+      {
+        "field_path": "preferred_occupation_master_ids[]",
+        "section": "about-preferences",
+        "field_type": "repeater_array",
+        "storage_source": "db",
+        "relation_table": null,
+        "audited_status": false,
+        "comparison_support_status": "unsupported"
+      },
+      {
+        "field_path": "preferred_country_ids[]",
+        "section": "about-preferences",
+        "field_type": "repeater_array",
+        "storage_source": "db",
+        "relation_table": null,
+        "audited_status": false,
+        "comparison_support_status": "unsupported"
+      },
+      {
+        "field_path": "preferred_state_ids[]",
+        "section": "about-preferences",
+        "field_type": "repeater_array",
+        "storage_source": "db",
+        "relation_table": null,
+        "audited_status": false,
+        "comparison_support_status": "unsupported"
+      },
+      {
+        "field_path": "preferred_district_ids[]",
+        "section": "about-preferences",
+        "field_type": "repeater_array",
+        "storage_source": "db",
+        "relation_table": null,
+        "audited_status": false,
+        "comparison_support_status": "unsupported"
+      },
+      {
+        "field_path": "preferred_taluka_ids[]",
+        "section": "about-preferences",
+        "field_type": "repeater_array",
+        "storage_source": "db",
+        "relation_table": null,
+        "audited_status": false,
+        "comparison_support_status": "unsupported"
+      },
+      {
+        "field_path": "preferred_religion_ids[]",
+        "section": "about-preferences",
+        "field_type": "repeater_array",
+        "storage_source": "db",
+        "relation_table": null,
+        "audited_status": false,
+        "comparison_support_status": "unsupported"
+      },
+      {
+        "field_path": "preferred_caste_ids[]",
+        "section": "about-preferences",
+        "field_type": "repeater_array",
+        "storage_source": "db",
+        "relation_table": null,
+        "audited_status": false,
+        "comparison_support_status": "unsupported"
+      },
+      {
+        "field_path": "{{ $corePrefix }}[birth_place]",
+        "section": "unknown",
+        "field_type": "nested_array",
+        "storage_source": "db",
+        "relation_table": null,
+        "audited_status": false,
+        "comparison_support_status": "unsupported"
+      },
+      {
+        "field_path": "namePrefix ? 'snapshot[][]' : 'marital_status_id'",
+        "section": "unknown",
+        "field_type": "repeater_array",
+        "storage_source": "db",
+        "relation_table": null,
+        "audited_status": false,
+        "comparison_support_status": "unsupported"
+      },
+      {
+        "field_path": "{{ []sSnapshot ? 'snapshot[][]' : 'has_children' }}",
+        "section": "unknown",
+        "field_type": "repeater_array",
+        "storage_source": "db",
+        "relation_table": null,
+        "audited_status": false,
+        "comparison_support_status": "unsupported"
+      },
+      {
+        "field_path": "namePrefix ? 'snapshot[][][]' : 'marriages[][]'",
+        "section": "unknown",
+        "field_type": "repeater_array",
+        "storage_source": "db",
+        "relation_table": null,
+        "audited_status": false,
+        "comparison_support_status": "unsupported"
+      },
+      {
+        "field_path": "(namePrefix ? 'snapshot[][' : 'children[') + index + '][]'",
+        "section": "unknown",
+        "field_type": "repeater_array",
+        "storage_source": "db",
+        "relation_table": null,
+        "audited_status": false,
+        "comparison_support_status": "unsupported"
+      },
+      {
+        "field_path": "marriages[][]",
+        "section": "unknown",
+        "field_type": "repeater_array",
+        "storage_source": "db",
+        "relation_table": null,
+        "audited_status": false,
+        "comparison_support_status": "unsupported"
+      }
+    ],
+    "silent_data_loss_alerts": [
+      {
+        "type": "saved_in_db_missing_in_api",
+        "field": "religion"
+      },
+      {
+        "type": "saved_in_db_missing_in_api",
+        "field": "caste"
+      },
+      {
+        "type": "saved_in_db_missing_in_api",
+        "field": "education"
+      },
+      {
+        "type": "saved_in_db_missing_in_api",
+        "field": "city"
+      },
+      {
+        "type": "saved_in_db_missing_in_api",
+        "field": "mother_tongue"
+      },
+      {
+        "type": "saved_in_db_missing_in_api",
+        "field": "marital_status"
+      },
+      {
+        "type": "saved_in_db_missing_in_api",
+        "field": "family_type"
+      },
+      {
+        "type": "saved_in_db_missing_in_api",
+        "field": "complexion"
+      },
+      {
+        "type": "saved_in_db_missing_in_api",
+        "field": "blood_group"
+      },
+      {
+        "type": "saved_in_db_missing_in_api",
+        "field": "nakshatra"
+      },
+      {
+        "type": "saved_in_db_missing_in_api",
+        "field": "rashi"
+      },
+      {
+        "type": "saved_in_db_missing_in_api",
+        "field": "mangal_dosh"
+      },
+      {
+        "type": "saved_in_db_missing_in_api",
+        "field": "professions"
+      },
+      {
+        "type": "api_present_public_missing",
+        "field": "partner_preferences"
+      },
+      {
+        "type": "repeater_rows_silently_dropped",
+        "field": "contacts"
+      }
+    ],
+    "completeness_governance": {
+      "actual_profile_completeness": 81.82,
+      "relation_completeness": 85.71,
+      "family_completeness": 100,
+      "horoscope_completeness": 100.0,
+      "partner_preference_completeness": 72.22
+    },
+    "repeater_mismatches": [
+      {
+        "repeater": "career_history",
+        "type": "row_count_mismatch",
+        "severity": "medium",
+        "details": {
+          "duplicate_rows": 1,
+          "row_count": 2,
+          "row_signatures": [
+            "e423750cef4f6fb220a6551c9753462dd93fa4d7171906a0ce9f2cc5f985e165",
+            "e423750cef4f6fb220a6551c9753462dd93fa4d7171906a0ce9f2cc5f985e165"
+          ]
+        }
+      },
+      {
+        "repeater": "children",
+        "type": "reordered_rows_tolerated",
+        "severity": "low",
+        "details": {
+          "row_count": 2,
+          "row_signatures": [
+            "895c5adbfdaef31cb61ae2d4ea5736f5207118574687c071c4db11c20dec070a",
+            "fb5059e5c869e41c345f66b1c16dcf01babce88b4c0a4fcd5ac557dc8f3f2045"
+          ]
+        }
+      },
+      {
+        "repeater": "education_history",
+        "type": "row_count_mismatch",
+        "severity": "medium",
+        "details": {
+          "duplicate_rows": 1,
+          "row_count": 2,
+          "row_signatures": [
+            "74af4fc8273c2734a54c3638fb51fde1a0c5771f2ced0d44da10673200ab83bb",
+            "74af4fc8273c2734a54c3638fb51fde1a0c5771f2ced0d44da10673200ab83bb"
+          ]
+        }
+      },
+      {
+        "repeater": "property_assets",
+        "type": "row_count_mismatch",
+        "severity": "medium",
+        "details": {
+          "duplicate_rows": 1,
+          "row_count": 3,
+          "row_signatures": [
+            "9293fe1d530f1b3f3c2aae47086e53b1aea4024d25db48ab9de7890f64873ab6",
+            "d7d982d1c176cb64ca803e14d686b6e60fb44176c4fe8dd9a82f94b461048a58",
+            "d7d982d1c176cb64ca803e14d686b6e60fb44176c4fe8dd9a82f94b461048a58"
+          ]
+        }
+      }
+    ],
+    "auto_field_governance": {
+      "baseline_exists": true,
+      "new_fields_detected": 0,
+      "new_fields": []
+    },
+    "canonical_registry": {
+      "path": "E:\\LaravelProjects\\laravel-matrimony\\python-data-engine\\config\\governance\\canonical_field_registry.json",
+      "meta": {
+        "schema": "canonical_field_registry_v1",
+        "generated_at": "2026-05-07T00:55:37Z",
+        "governed_logical_field_count": 29,
+        "governed_scalar_count": 22,
+        "governed_repeater_count": 7,
+        "comparison_supported_count": 29
+      },
+      "note": "Dashboard totals above are inventory-derived; canonical_* keys reconcile with comparison_truth / registry SSOT."
+    }
+  },
+  "snapshot_integrity": {
+    "generated_at": "2026-05-07T00:55:37Z",
+    "valid_snapshots": 3,
+    "invalid_snapshots": 1,
+    "files": [
+      {
+        "path": "E:\\LaravelProjects\\laravel-matrimony\\storage\\app\\data-audit\\snapshots\\matrimony_profile_207\\snapshot_2026_05_07_062530.json",
+        "valid": true,
+        "issues": []
+      },
+      {
+        "path": "E:\\LaravelProjects\\laravel-matrimony\\storage\\app\\data-audit\\snapshots\\matrimony_profile_207\\snapshot_2026_05_06_212436.json",
+        "valid": true,
+        "issues": []
+      },
+      {
+        "path": "E:\\LaravelProjects\\laravel-matrimony\\storage\\app\\data-audit\\snapshots\\matrimony_profile_207\\snapshot_2026_05_06_212324.json",
+        "valid": false,
+        "issues": [
+          "comparison_eligible_false"
+        ]
+      },
+      {
+        "path": "E:\\LaravelProjects\\laravel-matrimony\\storage\\app\\data-audit\\snapshots\\matrimony_profile_207\\snapshot_2026_05_06_203629.json",
+        "valid": true,
+        "issues": []
+      }
+    ],
+    "orphan_snapshot_directories": [
+      "E:\\LaravelProjects\\laravel-matrimony\\storage\\app\\data-audit\\snapshots\\matrimony_profile_206"
+    ]
+  },
+  "pending_actions": [
+    {
+      "action_id": "ops-dashboard",
+      "state": "detected"
+    }
+  ],
+  "suggested_fixes": [
+    "Start with dry-run previews for all fixes.",
+    "Only execute approved workflows in sequence: detect -> preview -> backup -> execute -> validate.",
+    "Use rollback manifests for any failed validation."
+  ],
+  "ai_ready": {
+    "explanation_blocks": [
+      {
+        "issue": "Duplicate identities",
+        "severity": "low",
+        "impact": "0 records potentially affected",
+        "affected_count": 0,
+        "root_cause": "Multiple rows share identity keys (phone/email) across ingestion paths.",
+        "suggested_fix": "Review duplicate groups and apply dedupe recipe in dry-run first.",
+        "auto_fix_available": true,
+        "rollback_available": true
+      },
+      {
+        "issue": "Validation errors",
+        "severity": "low",
+        "impact": "3 records potentially affected",
+        "affected_count": 3,
+        "root_cause": "Missing/invalid required fields from source or normalization layers.",
+        "suggested_fix": "Run validation-safe auto-fix recipes; unresolved rows should be queued for admin review.",
+        "auto_fix_available": true,
+        "rollback_available": true
+      },
+      {
+        "issue": "Cross-layer mismatches",
+        "severity": "low",
+        "impact": "2 records potentially affected",
+        "affected_count": 2,
+        "root_cause": "Canonical DB values differ from API/rendered snapshots.",
+        "suggested_fix": "Run comparison workflow, inspect diffs, then approve targeted fix recipes.",
+        "auto_fix_available": true,
+        "rollback_available": true
+      },
+      {
+        "issue": "Schema integrity risks",
+        "severity": "medium",
+        "impact": "11 records potentially affected",
+        "affected_count": 11,
+        "root_cause": "High null-ratio / sparse columns / weak indexing coverage.",
+        "suggested_fix": "Apply index and hierarchy repair recipes with pre-fix simulation.",
+        "auto_fix_available": true,
+        "rollback_available": true
+      },
+      {
+        "issue": "High severity lineage/comparison",
+        "severity": "low",
+        "impact": "2 records potentially affected",
+        "affected_count": 2,
+        "root_cause": "Multiple high severity discrepancies in deterministic comparison output.",
+        "suggested_fix": "Pause broad fixes, review impacted entities, then run scoped auto-fix plan.",
+        "auto_fix_available": false,
+        "rollback_available": true
+      }
+    ],
+    "language_targets": [
+      "en",
+      "mr"
+    ],
+    "note": "Prepared for future AI explanation services; no AI generation in this layer."
+  }
+}

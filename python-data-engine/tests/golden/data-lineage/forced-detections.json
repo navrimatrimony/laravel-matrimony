@@ -1,0 +1,32 @@
+{
+  "case": "forced_detections",
+  "summary": {
+    "health_score": 0,
+    "manifest_errors": 0,
+    "wrong_sources": 1,
+    "multi_source_conflicts": 6,
+    "wizard_public_mismatches": 1,
+    "missing_render_risks": 2,
+    "fields_audited": 4
+  },
+  "wrong_sources": [
+    {
+      "field": "height_cm",
+      "expected": "profile.height_cm",
+      "actual": "user.height",
+      "severity": "high"
+    }
+  ],
+  "wizard_public_mismatches": [
+    {
+      "field": "education",
+      "wizard": "profile.education",
+      "public": "profile.qualification",
+      "severity": "high"
+    }
+  ],
+  "required_presence": {
+    "multi_source_conflicts_non_empty": true,
+    "missing_render_risks_non_empty": true
+  }
+}

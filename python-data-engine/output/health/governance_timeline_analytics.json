@@ -1,0 +1,80 @@
+{
+  "generated_at": "2026-05-06T15:24:37Z",
+  "drift_timeline": [
+    {
+      "field": "date_of_birth",
+      "first_seen": "2026-05-06T07:32:03Z",
+      "last_seen": "2026-05-06T14:49:14Z",
+      "occurrences": 15
+    },
+    {
+      "field": "caste",
+      "first_seen": "2026-05-06T07:32:03Z",
+      "last_seen": "2026-05-06T14:49:14Z",
+      "occurrences": 15
+    },
+    {
+      "field": "city",
+      "first_seen": "2026-05-06T07:32:03Z",
+      "last_seen": "2026-05-06T14:49:14Z",
+      "occurrences": 15
+    },
+    {
+      "field": "gender",
+      "first_seen": "2026-05-06T07:32:25Z",
+      "last_seen": "2026-05-06T14:49:14Z",
+      "occurrences": 12
+    },
+    {
+      "field": "full_name",
+      "first_seen": "2026-05-06T07:32:25Z",
+      "last_seen": "2026-05-06T14:49:14Z",
+      "occurrences": 9
+    },
+    {
+      "field": "height_cm",
+      "first_seen": "2026-05-06T07:32:25Z",
+      "last_seen": "2026-05-06T14:49:14Z",
+      "occurrences": 9
+    },
+    {
+      "field": "religion",
+      "first_seen": "2026-05-06T07:32:25Z",
+      "last_seen": "2026-05-06T14:49:14Z",
+      "occurrences": 9
+    },
+    {
+      "field": "education",
+      "first_seen": "2026-05-06T07:32:25Z",
+      "last_seen": "2026-05-06T14:49:14Z",
+      "occurrences": 9
+    },
+    {
+      "field": "mother_tongue",
+      "first_seen": "2026-05-06T07:32:25Z",
+      "last_seen": "2026-05-06T14:49:14Z",
+      "occurrences": 9
+    },
+    {
+      "field": "marital_status",
+      "first_seen": "2026-05-06T07:32:25Z",
+      "last_seen": "2026-05-06T14:49:14Z",
+      "occurrences": 9
+    }
+  ],
+  "worsening_modules": [
+    {
+      "module": "missing_render",
+      "failures": 105
+    },
+    {
+      "module": "cross_layer_inconsistency",
+      "failures": 3
+    },
+    {
+      "module": "api_drift",
+      "failures": 3
+    }
+  ],
+  "deployment_correlation_note": "Use generated_at timeline against deploy logs for exact correlation."
+}

@@ -1,0 +1,9 @@
+name: missing_coordinates
+table: profile_addresses
+primary_key: id
+confidence: 0.79
+risk: medium
+detection_sql: "SELECT id, district, latitude, longitude FROM profile_addresses WHERE (latitude IS NULL OR longitude IS NULL)"
+preview_sql: "SELECT id, profile_id, district, latitude, longitude FROM profile_addresses WHERE (latitude IS NULL OR longitude IS NULL) ORDER BY id DESC"
+fix_sql: "UPDATE profile_addresses SET latitude = latitude, longitude = longitude WHERE (latitude IS NULL OR longitude IS NULL)"
+validation_sql: "SELECT id FROM profile_addresses WHERE (latitude IS NULL OR longitude IS NULL)"

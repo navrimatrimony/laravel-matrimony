@@ -12,6 +12,7 @@ use App\Http\Controllers\Internal\LocationSearchController;
 use App\Http\Controllers\Internal\LocationSuggestionController as InternalLocationSuggestionController;
 use App\Http\Controllers\OccupationController;
 use App\Http\Controllers\Webhooks\MetaWhatsAppWebhookController;
+use App\Http\Controllers\WhatsAppController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -25,6 +26,8 @@ Route::get('/moderation-config', ModerationConfigController::class);
 */
 Route::get('/webhooks/whatsapp', [MetaWhatsAppWebhookController::class, 'verify']);
 Route::post('/webhooks/whatsapp', [MetaWhatsAppWebhookController::class, 'handle']);
+
+Route::post('/whatsapp/register-user', [WhatsAppController::class, 'registerUser']);
 
 Route::get('/location/search', [LocationController::class, 'search']);
 Route::get('/location/nearby', [LocationController::class, 'nearby']);

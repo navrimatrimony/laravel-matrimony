@@ -1,0 +1,858 @@
+{
+  "field_governance_map": [
+    {
+      "wizard_field": "marriage_type_preference_id",
+      "db_source": "db",
+      "api_source": "api.profile.<field_alias>",
+      "public_profile_source": "rendered.fields.public_profile",
+      "comparison_support_status": "full"
+    },
+    {
+      "wizard_field": "preferred_marital_status_ids[]",
+      "db_source": "db",
+      "api_source": "api.profile.<field_alias>",
+      "public_profile_source": "rendered.fields.public_profile",
+      "comparison_support_status": "unsupported"
+    },
+    {
+      "wizard_field": "partner_profile_with_children",
+      "db_source": "db",
+      "api_source": "api.profile.<field_alias>",
+      "public_profile_source": "rendered.fields.public_profile",
+      "comparison_support_status": "full"
+    },
+    {
+      "wizard_field": "preferred_age_min",
+      "db_source": "db",
+      "api_source": "api.profile.<field_alias>",
+      "public_profile_source": "rendered.fields.public_profile",
+      "comparison_support_status": "full"
+    },
+    {
+      "wizard_field": "preferred_age_max",
+      "db_source": "db",
+      "api_source": "api.profile.<field_alias>",
+      "public_profile_source": "rendered.fields.public_profile",
+      "comparison_support_status": "full"
+    },
+    {
+      "wizard_field": "preferred_height_min_cm",
+      "db_source": "db",
+      "api_source": "api.profile.<field_alias>",
+      "public_profile_source": "rendered.fields.public_profile",
+      "comparison_support_status": "full"
+    },
+    {
+      "wizard_field": "preferred_height_max_cm",
+      "db_source": "db",
+      "api_source": "api.profile.<field_alias>",
+      "public_profile_source": "rendered.fields.public_profile",
+      "comparison_support_status": "full"
+    },
+    {
+      "wizard_field": "preferred_income_min",
+      "db_source": "db",
+      "api_source": "api.profile.<field_alias>",
+      "public_profile_source": "rendered.fields.public_profile",
+      "comparison_support_status": "full"
+    },
+    {
+      "wizard_field": "preferred_income_max",
+      "db_source": "db",
+      "api_source": "api.profile.<field_alias>",
+      "public_profile_source": "rendered.fields.public_profile",
+      "comparison_support_status": "full"
+    },
+    {
+      "wizard_field": "preferred_profile_managed_by",
+      "db_source": "db",
+      "api_source": "api.profile.<field_alias>",
+      "public_profile_source": "rendered.fields.public_profile",
+      "comparison_support_status": "full"
+    },
+    {
+      "wizard_field": "preferred_diet_ids[]",
+      "db_source": "db",
+      "api_source": "api.profile.<field_alias>",
+      "public_profile_source": "rendered.fields.public_profile",
+      "comparison_support_status": "unsupported"
+    },
+    {
+      "wizard_field": "preferred_education_degree_ids[]",
+      "db_source": "db",
+      "api_source": "api.profile.<field_alias>",
+      "public_profile_source": "rendered.fields.public_profile",
+      "comparison_support_status": "unsupported"
+    },
+    {
+      "wizard_field": "preferred_occupation_master_ids[]",
+      "db_source": "db",
+      "api_source": "api.profile.<field_alias>",
+      "public_profile_source": "rendered.fields.public_profile",
+      "comparison_support_status": "unsupported"
+    },
+    {
+      "wizard_field": "preferred_income_min",
+      "db_source": "db",
+      "api_source": "api.profile.<field_alias>",
+      "public_profile_source": "rendered.fields.public_profile",
+      "comparison_support_status": "full"
+    },
+    {
+      "wizard_field": "preferred_income_max",
+      "db_source": "db",
+      "api_source": "api.profile.<field_alias>",
+      "public_profile_source": "rendered.fields.public_profile",
+      "comparison_support_status": "full"
+    },
+    {
+      "wizard_field": "profile_id",
+      "db_source": "db",
+      "api_source": "api.profile.<field_alias>",
+      "public_profile_source": "rendered.fields.public_profile",
+      "comparison_support_status": "full"
+    },
+    {
+      "wizard_field": "pref",
+      "db_source": "db",
+      "api_source": "api.profile.<field_alias>",
+      "public_profile_source": "rendered.fields.public_profile",
+      "comparison_support_status": "full"
+    },
+    {
+      "wizard_field": "save_only",
+      "db_source": "db",
+      "api_source": "api.profile.<field_alias>",
+      "public_profile_source": "rendered.fields.public_profile",
+      "comparison_support_status": "full"
+    },
+    {
+      "wizard_field": "preference_preset",
+      "db_source": "db",
+      "api_source": "api.profile.<field_alias>",
+      "public_profile_source": "rendered.fields.public_profile",
+      "comparison_support_status": "full"
+    },
+    {
+      "wizard_field": "willing_to_relocate",
+      "db_source": "db",
+      "api_source": "api.profile.<field_alias>",
+      "public_profile_source": "rendered.fields.public_profile",
+      "comparison_support_status": "full"
+    },
+    {
+      "wizard_field": "preferred_country_ids[]",
+      "db_source": "db",
+      "api_source": "api.profile.<field_alias>",
+      "public_profile_source": "rendered.fields.public_profile",
+      "comparison_support_status": "unsupported"
+    },
+    {
+      "wizard_field": "preferred_state_ids[]",
+      "db_source": "db",
+      "api_source": "api.profile.<field_alias>",
+      "public_profile_source": "rendered.fields.public_profile",
+      "comparison_support_status": "unsupported"
+    },
+    {
+      "wizard_field": "preferred_district_ids[]",
+      "db_source": "db",
+      "api_source": "api.profile.<field_alias>",
+      "public_profile_source": "rendered.fields.public_profile",
+      "comparison_support_status": "unsupported"
+    },
+    {
+      "wizard_field": "preferred_taluka_ids[]",
+      "db_source": "db",
+      "api_source": "api.profile.<field_alias>",
+      "public_profile_source": "rendered.fields.public_profile",
+      "comparison_support_status": "unsupported"
+    },
+    {
+      "wizard_field": "preferred_religion_ids[]",
+      "db_source": "db",
+      "api_source": "api.profile.<field_alias>",
+      "public_profile_source": "rendered.fields.public_profile",
+      "comparison_support_status": "unsupported"
+    },
+    {
+      "wizard_field": "preferred_intercaste",
+      "db_source": "db",
+      "api_source": "api.profile.<field_alias>",
+      "public_profile_source": "rendered.fields.public_profile",
+      "comparison_support_status": "full"
+    },
+    {
+      "wizard_field": "preferred_caste_ids[]",
+      "db_source": "db",
+      "api_source": "api.profile.<field_alias>",
+      "public_profile_source": "rendered.fields.public_profile",
+      "comparison_support_status": "unsupported"
+    },
+    {
+      "wizard_field": "other_relatives_text",
+      "db_source": "db",
+      "api_source": "api.profile.<field_alias>",
+      "public_profile_source": "rendered.fields.public_profile",
+      "comparison_support_status": "full"
+    },
+    {
+      "wizard_field": "{{ $nameFullName }}",
+      "db_source": "db",
+      "api_source": "api.profile.<field_alias>",
+      "public_profile_source": "rendered.fields.public_profile",
+      "comparison_support_status": "full"
+    },
+    {
+      "wizard_field": "{{ $nameGenderId }}",
+      "db_source": "db",
+      "api_source": "api.profile.<field_alias>",
+      "public_profile_source": "rendered.fields.public_profile",
+      "comparison_support_status": "full"
+    },
+    {
+      "wizard_field": "{{ $nameDob }}",
+      "db_source": "db",
+      "api_source": "api.profile.<field_alias>",
+      "public_profile_source": "rendered.fields.public_profile",
+      "comparison_support_status": "full"
+    },
+    {
+      "wizard_field": "{{ $nameBirthTimeHour }}",
+      "db_source": "db",
+      "api_source": "api.profile.<field_alias>",
+      "public_profile_source": "rendered.fields.public_profile",
+      "comparison_support_status": "full"
+    },
+    {
+      "wizard_field": "{{ $nameBirthTimeMinute }}",
+      "db_source": "db",
+      "api_source": "api.profile.<field_alias>",
+      "public_profile_source": "rendered.fields.public_profile",
+      "comparison_support_status": "full"
+    },
+    {
+      "wizard_field": "{{ $nameBirthTime }}",
+      "db_source": "db",
+      "api_source": "api.profile.<field_alias>",
+      "public_profile_source": "rendered.fields.public_profile",
+      "comparison_support_status": "full"
+    },
+    {
+      "wizard_field": "{{ $corePrefix }}[birth_place]",
+      "db_source": "db",
+      "api_source": "api.profile.<field_alias>",
+      "public_profile_source": "rendered.fields.public_profile",
+      "comparison_support_status": "unsupported"
+    },
+    {
+      "wizard_field": "{{ $nameMotherTongue }}",
+      "db_source": "db",
+      "api_source": "api.profile.<field_alias>",
+      "public_profile_source": "rendered.fields.public_profile",
+      "comparison_support_status": "full"
+    },
+    {
+      "wizard_field": "{{ $nameAddressLine }}",
+      "db_source": "db",
+      "api_source": "api.profile.<field_alias>",
+      "public_profile_source": "rendered.fields.public_profile",
+      "comparison_support_status": "full"
+    },
+    {
+      "wizard_field": "children[][]",
+      "db_source": "repeaters.children",
+      "api_source": "api.profile.<field_alias>",
+      "public_profile_source": "rendered.fields.public_profile",
+      "comparison_support_status": "full"
+    },
+    {
+      "wizard_field": "$nameNum",
+      "db_source": "db",
+      "api_source": "api.profile.<field_alias>",
+      "public_profile_source": "rendered.fields.public_profile",
+      "comparison_support_status": "full"
+    },
+    {
+      "wizard_field": "__NAME__",
+      "db_source": "db",
+      "api_source": "api.profile.<field_alias>",
+      "public_profile_source": "rendered.fields.public_profile",
+      "comparison_support_status": "full"
+    },
+    {
+      "wizard_field": "otp",
+      "db_source": "db",
+      "api_source": "api.profile.<field_alias>",
+      "public_profile_source": "rendered.fields.public_profile",
+      "comparison_support_status": "full"
+    },
+    {
+      "wizard_field": "contacts[][]",
+      "db_source": "repeaters.contacts",
+      "api_source": "api.profile.<field_alias>",
+      "public_profile_source": "rendered.fields.public_profile",
+      "comparison_support_status": "full"
+    },
+    {
+      "wizard_field": "address_line",
+      "db_source": "db",
+      "api_source": "api.profile.<field_alias>",
+      "public_profile_source": "rendered.fields.public_profile",
+      "comparison_support_status": "full"
+    },
+    {
+      "wizard_field": "{{ $coreName }}marital_status_id{{ $coreNameSuffix }}",
+      "db_source": "db",
+      "api_source": "api.profile.<field_alias>",
+      "public_profile_source": "rendered.fields.public_profile",
+      "comparison_support_status": "full"
+    },
+    {
+      "wizard_field": "namePrefix ? 'snapshot[][]' : 'marital_status_id'",
+      "db_source": "db",
+      "api_source": "api.profile.<field_alias>",
+      "public_profile_source": "rendered.fields.public_profile",
+      "comparison_support_status": "unsupported"
+    },
+    {
+      "wizard_field": "{{ $marriagesPrefix }}marriage_year{{ $marriagesSuffix }}",
+      "db_source": "db",
+      "api_source": "api.profile.<field_alias>",
+      "public_profile_source": "rendered.fields.public_profile",
+      "comparison_support_status": "full"
+    },
+    {
+      "wizard_field": "{{ $marriagesPrefix }}divorce_year{{ $marriagesSuffix }}",
+      "db_source": "db",
+      "api_source": "api.profile.<field_alias>",
+      "public_profile_source": "rendered.fields.public_profile",
+      "comparison_support_status": "full"
+    },
+    {
+      "wizard_field": "{{ $marriagesPrefix }}separation_year{{ $marriagesSuffix }}",
+      "db_source": "db",
+      "api_source": "api.profile.<field_alias>",
+      "public_profile_source": "rendered.fields.public_profile",
+      "comparison_support_status": "full"
+    },
+    {
+      "wizard_field": "{{ $marriagesPrefix }}spouse_death_year{{ $marriagesSuffix }}",
+      "db_source": "db",
+      "api_source": "api.profile.<field_alias>",
+      "public_profile_source": "rendered.fields.public_profile",
+      "comparison_support_status": "full"
+    },
+    {
+      "wizard_field": "{{ $marriagesPrefix }}divorce_status{{ $marriagesSuffix }}",
+      "db_source": "db",
+      "api_source": "api.profile.<field_alias>",
+      "public_profile_source": "rendered.fields.public_profile",
+      "comparison_support_status": "full"
+    },
+    {
+      "wizard_field": "{{ []sSnapshot ? 'snapshot[][]' : 'has_children' }}",
+      "db_source": "db",
+      "api_source": "api.profile.<field_alias>",
+      "public_profile_source": "rendered.fields.public_profile",
+      "comparison_support_status": "unsupported"
+    },
+    {
+      "wizard_field": "{{ $marriagesPrefix }}id{{ $marriagesSuffix }}",
+      "db_source": "db",
+      "api_source": "api.profile.<field_alias>",
+      "public_profile_source": "rendered.fields.public_profile",
+      "comparison_support_status": "full"
+    },
+    {
+      "wizard_field": "namePrefix ? 'snapshot[][][]' : 'marriages[][]'",
+      "db_source": "db",
+      "api_source": "api.profile.<field_alias>",
+      "public_profile_source": "rendered.fields.public_profile",
+      "comparison_support_status": "unsupported"
+    },
+    {
+      "wizard_field": "(namePrefix ? 'snapshot[][' : 'children[') + index + '][]'",
+      "db_source": "db",
+      "api_source": "api.profile.<field_alias>",
+      "public_profile_source": "rendered.fields.public_profile",
+      "comparison_support_status": "unsupported"
+    },
+    {
+      "wizard_field": "marriages[][]",
+      "db_source": "db",
+      "api_source": "api.profile.<field_alias>",
+      "public_profile_source": "rendered.fields.public_profile",
+      "comparison_support_status": "unsupported"
+    },
+    {
+      "wizard_field": "full_name",
+      "db_source": "db",
+      "api_source": "api.profile.<field_alias>",
+      "public_profile_source": "rendered.fields.public_profile",
+      "comparison_support_status": "full"
+    },
+    {
+      "wizard_field": "gender",
+      "db_source": "db",
+      "api_source": "api.profile.<field_alias>",
+      "public_profile_source": "rendered.fields.public_profile",
+      "comparison_support_status": "full"
+    },
+    {
+      "wizard_field": "date_of_birth",
+      "db_source": "db",
+      "api_source": "api.profile.<field_alias>",
+      "public_profile_source": "rendered.fields.public_profile",
+      "comparison_support_status": "full"
+    },
+    {
+      "wizard_field": "height_cm",
+      "db_source": "db",
+      "api_source": "api.profile.<field_alias>",
+      "public_profile_source": "rendered.fields.public_profile",
+      "comparison_support_status": "full"
+    },
+    {
+      "wizard_field": "religion",
+      "db_source": "db",
+      "api_source": "api.profile.<field_alias>",
+      "public_profile_source": "rendered.fields.public_profile",
+      "comparison_support_status": "full"
+    },
+    {
+      "wizard_field": "caste",
+      "db_source": "db",
+      "api_source": "api.profile.<field_alias>",
+      "public_profile_source": "rendered.fields.public_profile",
+      "comparison_support_status": "full"
+    },
+    {
+      "wizard_field": "education",
+      "db_source": "db",
+      "api_source": "api.profile.<field_alias>",
+      "public_profile_source": "rendered.fields.public_profile",
+      "comparison_support_status": "full"
+    },
+    {
+      "wizard_field": "occupation",
+      "db_source": "db",
+      "api_source": "api.profile.<field_alias>",
+      "public_profile_source": "rendered.fields.public_profile",
+      "comparison_support_status": "full"
+    },
+    {
+      "wizard_field": "annual_income",
+      "db_source": "db",
+      "api_source": "api.profile.<field_alias>",
+      "public_profile_source": "rendered.fields.public_profile",
+      "comparison_support_status": "full"
+    },
+    {
+      "wizard_field": "city",
+      "db_source": "db",
+      "api_source": "api.profile.<field_alias>",
+      "public_profile_source": "rendered.fields.public_profile",
+      "comparison_support_status": "full"
+    },
+    {
+      "wizard_field": "state",
+      "db_source": "db",
+      "api_source": "api.profile.<field_alias>",
+      "public_profile_source": "rendered.fields.public_profile",
+      "comparison_support_status": "full"
+    },
+    {
+      "wizard_field": "mother_tongue",
+      "db_source": "db",
+      "api_source": "api.profile.<field_alias>",
+      "public_profile_source": "rendered.fields.public_profile",
+      "comparison_support_status": "full"
+    },
+    {
+      "wizard_field": "marital_status",
+      "db_source": "db",
+      "api_source": "api.profile.<field_alias>",
+      "public_profile_source": "rendered.fields.public_profile",
+      "comparison_support_status": "full"
+    },
+    {
+      "wizard_field": "family_type",
+      "db_source": "db",
+      "api_source": "api.profile.<field_alias>",
+      "public_profile_source": "rendered.fields.public_profile",
+      "comparison_support_status": "full"
+    },
+    {
+      "wizard_field": "complexion",
+      "db_source": "db",
+      "api_source": "api.profile.<field_alias>",
+      "public_profile_source": "rendered.fields.public_profile",
+      "comparison_support_status": "full"
+    },
+    {
+      "wizard_field": "blood_group",
+      "db_source": "db",
+      "api_source": "api.profile.<field_alias>",
+      "public_profile_source": "rendered.fields.public_profile",
+      "comparison_support_status": "full"
+    },
+    {
+      "wizard_field": "nakshatra",
+      "db_source": "db",
+      "api_source": "api.profile.<field_alias>",
+      "public_profile_source": "rendered.fields.public_profile",
+      "comparison_support_status": "full"
+    },
+    {
+      "wizard_field": "rashi",
+      "db_source": "db",
+      "api_source": "api.profile.<field_alias>",
+      "public_profile_source": "rendered.fields.public_profile",
+      "comparison_support_status": "full"
+    },
+    {
+      "wizard_field": "mangal_dosh",
+      "db_source": "db",
+      "api_source": "api.profile.<field_alias>",
+      "public_profile_source": "rendered.fields.public_profile",
+      "comparison_support_status": "full"
+    },
+    {
+      "wizard_field": "income_range",
+      "db_source": "db",
+      "api_source": "api.profile.<field_alias>",
+      "public_profile_source": "rendered.fields.public_profile",
+      "comparison_support_status": "full"
+    },
+    {
+      "wizard_field": "professions",
+      "db_source": "db",
+      "api_source": "api.profile.<field_alias>",
+      "public_profile_source": "rendered.fields.public_profile",
+      "comparison_support_status": "full"
+    },
+    {
+      "wizard_field": "partner_preferences",
+      "db_source": "db.partner_preferences",
+      "api_source": "api.profile.<field_alias>",
+      "public_profile_source": "rendered.fields.public_profile",
+      "comparison_support_status": "full"
+    },
+    {
+      "wizard_field": "siblings[].id",
+      "db_source": "repeaters.siblings",
+      "api_source": "api.profile.<field_alias>",
+      "public_profile_source": "rendered.fields.public_profile",
+      "comparison_support_status": "full"
+    },
+    {
+      "wizard_field": "siblings[].relation_type",
+      "db_source": "repeaters.siblings",
+      "api_source": "api.profile.<field_alias>",
+      "public_profile_source": "rendered.fields.public_profile",
+      "comparison_support_status": "full"
+    },
+    {
+      "wizard_field": "siblings[].name",
+      "db_source": "repeaters.siblings",
+      "api_source": "api.profile.<field_alias>",
+      "public_profile_source": "rendered.fields.public_profile",
+      "comparison_support_status": "full"
+    },
+    {
+      "wizard_field": "siblings[].gender",
+      "db_source": "repeaters.siblings",
+      "api_source": "api.profile.<field_alias>",
+      "public_profile_source": "rendered.fields.public_profile",
+      "comparison_support_status": "full"
+    },
+    {
+      "wizard_field": "siblings[].marital_status",
+      "db_source": "repeaters.siblings",
+      "api_source": "api.profile.<field_alias>",
+      "public_profile_source": "rendered.fields.public_profile",
+      "comparison_support_status": "full"
+    },
+    {
+      "wizard_field": "siblings[].occupation",
+      "db_source": "repeaters.siblings",
+      "api_source": "api.profile.<field_alias>",
+      "public_profile_source": "rendered.fields.public_profile",
+      "comparison_support_status": "full"
+    },
+    {
+      "wizard_field": "siblings[].occupation_master_id",
+      "db_source": "repeaters.siblings",
+      "api_source": "api.profile.<field_alias>",
+      "public_profile_source": "rendered.fields.public_profile",
+      "comparison_support_status": "full"
+    },
+    {
+      "wizard_field": "siblings[].occupation_custom_id",
+      "db_source": "repeaters.siblings",
+      "api_source": "api.profile.<field_alias>",
+      "public_profile_source": "rendered.fields.public_profile",
+      "comparison_support_status": "full"
+    },
+    {
+      "wizard_field": "siblings[].city_id",
+      "db_source": "repeaters.siblings",
+      "api_source": "api.profile.<field_alias>",
+      "public_profile_source": "rendered.fields.public_profile",
+      "comparison_support_status": "full"
+    },
+    {
+      "wizard_field": "siblings[].contact_number",
+      "db_source": "repeaters.siblings",
+      "api_source": "api.profile.<field_alias>",
+      "public_profile_source": "rendered.fields.public_profile",
+      "comparison_support_status": "full"
+    },
+    {
+      "wizard_field": "siblings[].notes",
+      "db_source": "repeaters.siblings",
+      "api_source": "api.profile.<field_alias>",
+      "public_profile_source": "rendered.fields.public_profile",
+      "comparison_support_status": "full"
+    },
+    {
+      "wizard_field": "children[].id",
+      "db_source": "repeaters.children",
+      "api_source": "api.profile.<field_alias>",
+      "public_profile_source": "rendered.fields.public_profile",
+      "comparison_support_status": "full"
+    },
+    {
+      "wizard_field": "children[].child_name",
+      "db_source": "repeaters.children",
+      "api_source": "api.profile.<field_alias>",
+      "public_profile_source": "rendered.fields.public_profile",
+      "comparison_support_status": "full"
+    },
+    {
+      "wizard_field": "children[].gender",
+      "db_source": "repeaters.children",
+      "api_source": "api.profile.<field_alias>",
+      "public_profile_source": "rendered.fields.public_profile",
+      "comparison_support_status": "full"
+    },
+    {
+      "wizard_field": "children[].age",
+      "db_source": "repeaters.children",
+      "api_source": "api.profile.<field_alias>",
+      "public_profile_source": "rendered.fields.public_profile",
+      "comparison_support_status": "full"
+    },
+    {
+      "wizard_field": "children[].child_living_with_id",
+      "db_source": "repeaters.children",
+      "api_source": "api.profile.<field_alias>",
+      "public_profile_source": "rendered.fields.public_profile",
+      "comparison_support_status": "full"
+    },
+    {
+      "wizard_field": "education_history[].id",
+      "db_source": "repeaters.education_history",
+      "api_source": "api.profile.<field_alias>",
+      "public_profile_source": "rendered.fields.public_profile",
+      "comparison_support_status": "full"
+    },
+    {
+      "wizard_field": "education_history[].degree",
+      "db_source": "repeaters.education_history",
+      "api_source": "api.profile.<field_alias>",
+      "public_profile_source": "rendered.fields.public_profile",
+      "comparison_support_status": "full"
+    },
+    {
+      "wizard_field": "education_history[].specialization",
+      "db_source": "repeaters.education_history",
+      "api_source": "api.profile.<field_alias>",
+      "public_profile_source": "rendered.fields.public_profile",
+      "comparison_support_status": "full"
+    },
+    {
+      "wizard_field": "education_history[].university",
+      "db_source": "repeaters.education_history",
+      "api_source": "api.profile.<field_alias>",
+      "public_profile_source": "rendered.fields.public_profile",
+      "comparison_support_status": "full"
+    },
+    {
+      "wizard_field": "education_history[].year_completed",
+      "db_source": "repeaters.education_history",
+      "api_source": "api.profile.<field_alias>",
+      "public_profile_source": "rendered.fields.public_profile",
+      "comparison_support_status": "full"
+    },
+    {
+      "wizard_field": "career_history[].id",
+      "db_source": "repeaters.career_history",
+      "api_source": "api.profile.<field_alias>",
+      "public_profile_source": "rendered.fields.public_profile",
+      "comparison_support_status": "full"
+    },
+    {
+      "wizard_field": "career_history[].designation",
+      "db_source": "repeaters.career_history",
+      "api_source": "api.profile.<field_alias>",
+      "public_profile_source": "rendered.fields.public_profile",
+      "comparison_support_status": "full"
+    },
+    {
+      "wizard_field": "career_history[].company",
+      "db_source": "repeaters.career_history",
+      "api_source": "api.profile.<field_alias>",
+      "public_profile_source": "rendered.fields.public_profile",
+      "comparison_support_status": "full"
+    },
+    {
+      "wizard_field": "career_history[].location",
+      "db_source": "repeaters.career_history",
+      "api_source": "api.profile.<field_alias>",
+      "public_profile_source": "rendered.fields.public_profile",
+      "comparison_support_status": "full"
+    },
+    {
+      "wizard_field": "career_history[].city_id",
+      "db_source": "repeaters.career_history",
+      "api_source": "api.profile.<field_alias>",
+      "public_profile_source": "rendered.fields.public_profile",
+      "comparison_support_status": "full"
+    },
+    {
+      "wizard_field": "career_history[].start_year",
+      "db_source": "repeaters.career_history",
+      "api_source": "api.profile.<field_alias>",
+      "public_profile_source": "rendered.fields.public_profile",
+      "comparison_support_status": "full"
+    },
+    {
+      "wizard_field": "career_history[].end_year",
+      "db_source": "repeaters.career_history",
+      "api_source": "api.profile.<field_alias>",
+      "public_profile_source": "rendered.fields.public_profile",
+      "comparison_support_status": "full"
+    },
+    {
+      "wizard_field": "career_history[].is_current",
+      "db_source": "repeaters.career_history",
+      "api_source": "api.profile.<field_alias>",
+      "public_profile_source": "rendered.fields.public_profile",
+      "comparison_support_status": "full"
+    },
+    {
+      "wizard_field": "relatives[].id",
+      "db_source": "repeaters.relatives",
+      "api_source": "api.profile.<field_alias>",
+      "public_profile_source": "rendered.fields.public_profile",
+      "comparison_support_status": "full"
+    },
+    {
+      "wizard_field": "relatives[].relation_type",
+      "db_source": "repeaters.relatives",
+      "api_source": "api.profile.<field_alias>",
+      "public_profile_source": "rendered.fields.public_profile",
+      "comparison_support_status": "full"
+    },
+    {
+      "wizard_field": "relatives[].name",
+      "db_source": "repeaters.relatives",
+      "api_source": "api.profile.<field_alias>",
+      "public_profile_source": "rendered.fields.public_profile",
+      "comparison_support_status": "full"
+    },
+    {
+      "wizard_field": "relatives[].occupation",
+      "db_source": "repeaters.relatives",
+      "api_source": "api.profile.<field_alias>",
+      "public_profile_source": "rendered.fields.public_profile",
+      "comparison_support_status": "full"
+    },
+    {
+      "wizard_field": "relatives[].occupation_master_id",
+      "db_source": "repeaters.relatives",
+      "api_source": "api.profile.<field_alias>",
+      "public_profile_source": "rendered.fields.public_profile",
+      "comparison_support_status": "full"
+    },
+    {
+      "wizard_field": "relatives[].occupation_custom_id",
+      "db_source": "repeaters.relatives",
+      "api_source": "api.profile.<field_alias>",
+      "public_profile_source": "rendered.fields.public_profile",
+      "comparison_support_status": "full"
+    },
+    {
+      "wizard_field": "relatives[].city_id",
+      "db_source": "repeaters.relatives",
+      "api_source": "api.profile.<field_alias>",
+      "public_profile_source": "rendered.fields.public_profile",
+      "comparison_support_status": "full"
+    },
+    {
+      "wizard_field": "relatives[].state_id",
+      "db_source": "repeaters.relatives",
+      "api_source": "api.profile.<field_alias>",
+      "public_profile_source": "rendered.fields.public_profile",
+      "comparison_support_status": "full"
+    },
+    {
+      "wizard_field": "relatives[].contact_number",
+      "db_source": "repeaters.relatives",
+      "api_source": "api.profile.<field_alias>",
+      "public_profile_source": "rendered.fields.public_profile",
+      "comparison_support_status": "full"
+    },
+    {
+      "wizard_field": "relatives[].notes",
+      "db_source": "repeaters.relatives",
+      "api_source": "api.profile.<field_alias>",
+      "public_profile_source": "rendered.fields.public_profile",
+      "comparison_support_status": "full"
+    },
+    {
+      "wizard_field": "relatives[].is_primary_contact",
+      "db_source": "repeaters.relatives",
+      "api_source": "api.profile.<field_alias>",
+      "public_profile_source": "rendered.fields.public_profile",
+      "comparison_support_status": "full"
+    },
+    {
+      "wizard_field": "property_assets[].id",
+      "db_source": "repeaters.property_assets",
+      "api_source": "api.profile.<field_alias>",
+      "public_profile_source": "rendered.fields.public_profile",
+      "comparison_support_status": "full"
+    },
+    {
+      "wizard_field": "property_assets[].asset_type_id",
+      "db_source": "repeaters.property_assets",
+      "api_source": "api.profile.<field_alias>",
+      "public_profile_source": "rendered.fields.public_profile",
+      "comparison_support_status": "full"
+    },
+    {
+      "wizard_field": "property_assets[].ownership_type_id",
+      "db_source": "repeaters.property_assets",
+      "api_source": "api.profile.<field_alias>",
+      "public_profile_source": "rendered.fields.public_profile",
+      "comparison_support_status": "full"
+    },
+    {
+      "wizard_field": "property_assets[].location",
+      "db_source": "repeaters.property_assets",
+      "api_source": "api.profile.<field_alias>",
+      "public_profile_source": "rendered.fields.public_profile",
+      "comparison_support_status": "full"
+    },
+    {
+      "wizard_field": "property_assets[].notes",
+      "db_source": "repeaters.property_assets",
+      "api_source": "api.profile.<field_alias>",
+      "public_profile_source": "rendered.fields.public_profile",
+      "comparison_support_status": "full"
+    }
+  ]
+}

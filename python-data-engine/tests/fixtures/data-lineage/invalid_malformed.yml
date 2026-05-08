@@ -1,0 +1,4 @@
+fields:
+  bad
+    canonical_source:
+      table: matrimony_profiles

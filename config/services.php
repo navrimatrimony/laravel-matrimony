@@ -74,12 +74,21 @@ return [
         'url' => env('NUDENET_DETECT_URL', 'http://127.0.0.1:8001/detect'),
         'timeout' => (int) env('NUDENET_TIMEOUT', 15),
     ],
-	'payu' => [
-    'key' => env('PAYU_KEY'),
-    'salt' => env('PAYU_SALT'),
-    'base_url' => env('PAYU_BASE_URL'),
-    'success_url' => env('PAYU_SUCCESS_URL'),
-    'failure_url' => env('PAYU_FAILURE_URL'),
-    'webhook_url' => env('PAYU_WEBHOOK_URL'),
-],
+    /*
+    | WhatsApp Engine → Matrimony internal registration (header: X-API-KEY).
+    */
+    'whatsapp_engine' => [
+        'api_key' => env('WHATSAPP_ENGINE_API_KEY', 'secret123'),
+        /** Matrimony → WhatsApp Engine outbound notifications (POST JSON). */
+        'notify_url' => env('WHATSAPP_ENGINE_NOTIFY_URL', 'http://127.0.0.1:8002/api/send-notification'),
+    ],
+
+    'payu' => [
+        'key' => env('PAYU_KEY'),
+        'salt' => env('PAYU_SALT'),
+        'base_url' => env('PAYU_BASE_URL'),
+        'success_url' => env('PAYU_SUCCESS_URL'),
+        'failure_url' => env('PAYU_FAILURE_URL'),
+        'webhook_url' => env('PAYU_WEBHOOK_URL'),
+    ],
 ];

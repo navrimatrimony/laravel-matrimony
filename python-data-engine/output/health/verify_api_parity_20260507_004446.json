@@ -1,0 +1,112 @@
+{
+  "generated_at": "2026-05-07T00:44:46Z",
+  "snapshot_path": "E:\\LaravelProjects\\laravel-matrimony\\storage\\app\\data-audit\\snapshots\\matrimony_profile_207\\snapshot_2026_05_06_212436.json",
+  "missing_api_keys": [
+    {
+      "field": "annual_income",
+      "expected_any_of": [
+        "annual_income"
+      ]
+    },
+    {
+      "field": "blood_group",
+      "expected_any_of": [
+        "blood_group",
+        "blood_group_id"
+      ]
+    },
+    {
+      "field": "complexion",
+      "expected_any_of": [
+        "complexion",
+        "complexion_id"
+      ]
+    },
+    {
+      "field": "family_type",
+      "expected_any_of": [
+        "family_type",
+        "family_type_id"
+      ]
+    },
+    {
+      "field": "height_cm",
+      "expected_any_of": [
+        "height_cm",
+        "height"
+      ]
+    },
+    {
+      "field": "income_range",
+      "expected_any_of": [
+        "income_range",
+        "income_range_id"
+      ]
+    },
+    {
+      "field": "mangal_dosh",
+      "expected_any_of": [
+        "mangal_dosh",
+        "mangal_dosh_type_id",
+        "mangal_status_id"
+      ]
+    },
+    {
+      "field": "marital_status",
+      "expected_any_of": [
+        "marital_status",
+        "marital_status_id"
+      ]
+    },
+    {
+      "field": "mother_tongue",
+      "expected_any_of": [
+        "mother_tongue",
+        "mother_tongue_id"
+      ]
+    },
+    {
+      "field": "nakshatra",
+      "expected_any_of": [
+        "nakshatra",
+        "nakshatra_id"
+      ]
+    },
+    {
+      "field": "occupation",
+      "expected_any_of": [
+        "occupation",
+        "occupation_title"
+      ]
+    },
+    {
+      "field": "partner_preferences",
+      "expected_any_of": [
+        "partner_preferences"
+      ]
+    },
+    {
+      "field": "professions",
+      "expected_any_of": [
+        "professions",
+        "profession",
+        "profession_id"
+      ]
+    },
+    {
+      "field": "rashi",
+      "expected_any_of": [
+        "rashi",
+        "rashi_id"
+      ]
+    },
+    {
+      "field": "religion",
+      "expected_any_of": [
+        "religion",
+        "religion_id"
+      ]
+    }
+  ],
+  "status": "failed"
+}

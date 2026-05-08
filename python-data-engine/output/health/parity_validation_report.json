@@ -1,0 +1,260 @@
+{
+  "generated_at": "2026-05-06T15:25:46Z",
+  "snapshot_path": "E:\\LaravelProjects\\laravel-matrimony\\storage\\app\\data-audit\\snapshots\\matrimony_profile_207\\snapshot_2026_05_06_203629.json",
+  "summary": {
+    "scalar_total": 22,
+    "scalar_parity_failures": 3,
+    "repeater_groups": 7
+  },
+  "scalar_parity": [
+    {
+      "field": "full_name",
+      "parity": true,
+      "db": "Anita Gaikwad",
+      "api": "Anita Gaikwad",
+      "wizard": "Anita Gaikwad",
+      "public_profile": "Anita Gaikwad"
+    },
+    {
+      "field": "gender",
+      "parity": true,
+      "db": 2,
+      "api": "",
+      "wizard": "2",
+      "public_profile": "2"
+    },
+    {
+      "field": "date_of_birth",
+      "parity": false,
+      "db": "1982-02-09",
+      "api": "1982-02-09",
+      "wizard": "1982-02-09",
+      "public_profile": "9 Feb 1982"
+    },
+    {
+      "field": "height_cm",
+      "parity": true,
+      "db": 163,
+      "api": null,
+      "wizard": "163",
+      "public_profile": "163"
+    },
+    {
+      "field": "religion",
+      "parity": true,
+      "db": 4,
+      "api": null,
+      "wizard": "4",
+      "public_profile": "4"
+    },
+    {
+      "field": "caste",
+      "parity": false,
+      "db": 412,
+      "api": {
+        "id": 412,
+        "religion_id": 4,
+        "key": "maratha",
+        "label": "Maratha",
+        "is_active": 1,
+        "created_at": "2026-04-26T14:30:31.000000Z",
+        "updated_at": "2026-04-26T14:30:32.000000Z",
+        "label_en": "Maratha",
+        "label_mr": "\u00e0\u00a4\u00ae\u00e0\u00a4\u00b0\u00e0\u00a4\u00be\u00e0\u00a4\u00a0\u00e0\u00a4\u00be"
+      },
+      "wizard": "412",
+      "public_profile": "Maratha"
+    },
+    {
+      "field": "education",
+      "parity": true,
+      "db": "B.A., M.A.",
+      "api": null,
+      "wizard": null,
+      "public_profile": "B.A., M.A."
+    },
+    {
+      "field": "occupation",
+      "parity": true,
+      "db": null,
+      "api": null,
+      "wizard": null,
+      "public_profile": null
+    },
+    {
+      "field": "annual_income",
+      "parity": true,
+      "db": null,
+      "api": null,
+      "wizard": null,
+      "public_profile": null
+    },
+    {
+      "field": "city",
+      "parity": false,
+      "db": 37648,
+      "api": null,
+      "wizard": "37648",
+      "public_profile": "Kadegaon, Sangli 415304"
+    },
+    {
+      "field": "state",
+      "parity": true,
+      "db": null,
+      "api": null,
+      "wizard": null,
+      "public_profile": null
+    },
+    {
+      "field": "mother_tongue",
+      "parity": true,
+      "db": 1,
+      "api": null,
+      "wizard": "1",
+      "public_profile": "1"
+    },
+    {
+      "field": "marital_status",
+      "parity": true,
+      "db": 2,
+      "api": null,
+      "wizard": "2",
+      "public_profile": "2"
+    },
+    {
+      "field": "family_type",
+      "parity": true,
+      "db": 1,
+      "api": null,
+      "wizard": "1",
+      "public_profile": "1"
+    },
+    {
+      "field": "complexion",
+      "parity": true,
+      "db": 2,
+      "api": null,
+      "wizard": "2",
+      "public_profile": "2"
+    },
+    {
+      "field": "blood_group",
+      "parity": true,
+      "db": 1,
+      "api": null,
+      "wizard": "1",
+      "public_profile": "1"
+    },
+    {
+      "field": "nakshatra",
+      "parity": true,
+      "db": 17,
+      "api": null,
+      "wizard": "17",
+      "public_profile": "17"
+    },
+    {
+      "field": "rashi",
+      "parity": true,
+      "db": 8,
+      "api": null,
+      "wizard": "8",
+      "public_profile": "8"
+    },
+    {
+      "field": "mangal_dosh",
+      "parity": true,
+      "db": 2,
+      "api": null,
+      "wizard": "2",
+      "public_profile": "2"
+    },
+    {
+      "field": "income_range",
+      "parity": true,
+      "db": null,
+      "api": null,
+      "wizard": null,
+      "public_profile": null
+    },
+    {
+      "field": "professions",
+      "parity": true,
+      "db": 17,
+      "api": null,
+      "wizard": "17",
+      "public_profile": "17"
+    },
+    {
+      "field": "partner_preferences",
+      "parity": true,
+      "db": {
+        "id": 100,
+        "profile_id": 207,
+        "preferred_age_min": 44,
+        "preferred_age_max": 49,
+        "preferred_income_min": "300000.00",
+        "preferred_income_max": "2500000.00",
+        "preferred_education": null,
+        "preferred_city_id": null,
+        "willing_to_relocate": true,
+        "settled_city_preference_id": null,
+        "marriage_type_preference_id": 1,
+        "created_at": "2026-05-03T16:01:46.000000Z",
+        "updated_at": "2026-05-06T14:37:12.000000Z",
+        "preferred_height_min_cm": 163,
+        "preferred_height_max_cm": 173,
+        "preferred_marital_status_id": null,
+        "partner_profile_with_children": "yes_if_live_separate",
+        "preferred_profile_managed_by": null
+      },
+      "api": null,
+      "wizard": null,
+      "public_profile": null
+    }
+  ],
+  "repeater_parity": [
+    {
+      "repeater": "siblings",
+      "row_count": 2,
+      "has_row_identity": true,
+      "has_nested_arrays": false
+    },
+    {
+      "repeater": "children",
+      "row_count": 2,
+      "has_row_identity": true,
+      "has_nested_arrays": false
+    },
+    {
+      "repeater": "education_history",
+      "row_count": 2,
+      "has_row_identity": true,
+      "has_nested_arrays": false
+    },
+    {
+      "repeater": "career_history",
+      "row_count": 2,
+      "has_row_identity": true,
+      "has_nested_arrays": false
+    },
+    {
+      "repeater": "relatives",
+      "row_count": 2,
+      "has_row_identity": true,
+      "has_nested_arrays": false
+    },
+    {
+      "repeater": "property_assets",
+      "row_count": 3,
+      "has_row_identity": true,
+      "has_nested_arrays": false
+    },
+    {
+      "repeater": "contacts",
+      "row_count": 0,
+      "has_row_identity": true,
+      "has_nested_arrays": false
+    }
+  ]
+}

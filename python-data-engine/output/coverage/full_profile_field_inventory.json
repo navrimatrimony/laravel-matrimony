@@ -1,0 +1,1102 @@
+{
+  "inventory": [
+    {
+      "field_path": "marriage_type_preference_id",
+      "section": "unknown",
+      "field_type": "relation_select",
+      "storage_source": "db",
+      "relation_table": null,
+      "audited_status": false,
+      "comparison_support_status": "full"
+    },
+    {
+      "field_path": "preferred_marital_status_ids[]",
+      "section": "unknown",
+      "field_type": "repeater_array",
+      "storage_source": "db",
+      "relation_table": null,
+      "audited_status": false,
+      "comparison_support_status": "unsupported"
+    },
+    {
+      "field_path": "partner_profile_with_children",
+      "section": "unknown",
+      "field_type": "scalar",
+      "storage_source": "db",
+      "relation_table": null,
+      "audited_status": false,
+      "comparison_support_status": "full"
+    },
+    {
+      "field_path": "preferred_age_min",
+      "section": "unknown",
+      "field_type": "scalar",
+      "storage_source": "db",
+      "relation_table": null,
+      "audited_status": false,
+      "comparison_support_status": "full"
+    },
+    {
+      "field_path": "preferred_age_max",
+      "section": "unknown",
+      "field_type": "scalar",
+      "storage_source": "db",
+      "relation_table": null,
+      "audited_status": false,
+      "comparison_support_status": "full"
+    },
+    {
+      "field_path": "preferred_height_min_cm",
+      "section": "unknown",
+      "field_type": "scalar",
+      "storage_source": "db",
+      "relation_table": null,
+      "audited_status": false,
+      "comparison_support_status": "full"
+    },
+    {
+      "field_path": "preferred_height_max_cm",
+      "section": "unknown",
+      "field_type": "scalar",
+      "storage_source": "db",
+      "relation_table": null,
+      "audited_status": false,
+      "comparison_support_status": "full"
+    },
+    {
+      "field_path": "preferred_income_min",
+      "section": "unknown",
+      "field_type": "scalar",
+      "storage_source": "db",
+      "relation_table": null,
+      "audited_status": false,
+      "comparison_support_status": "full"
+    },
+    {
+      "field_path": "preferred_income_max",
+      "section": "unknown",
+      "field_type": "scalar",
+      "storage_source": "db",
+      "relation_table": null,
+      "audited_status": false,
+      "comparison_support_status": "full"
+    },
+    {
+      "field_path": "preferred_profile_managed_by",
+      "section": "unknown",
+      "field_type": "scalar",
+      "storage_source": "db",
+      "relation_table": null,
+      "audited_status": false,
+      "comparison_support_status": "full"
+    },
+    {
+      "field_path": "preferred_diet_ids[]",
+      "section": "unknown",
+      "field_type": "repeater_array",
+      "storage_source": "db",
+      "relation_table": null,
+      "audited_status": false,
+      "comparison_support_status": "unsupported"
+    },
+    {
+      "field_path": "preferred_education_degree_ids[]",
+      "section": "about-preferences",
+      "field_type": "repeater_array",
+      "storage_source": "db",
+      "relation_table": null,
+      "audited_status": false,
+      "comparison_support_status": "unsupported"
+    },
+    {
+      "field_path": "preferred_occupation_master_ids[]",
+      "section": "about-preferences",
+      "field_type": "repeater_array",
+      "storage_source": "db",
+      "relation_table": null,
+      "audited_status": false,
+      "comparison_support_status": "unsupported"
+    },
+    {
+      "field_path": "preferred_income_min",
+      "section": "about-preferences",
+      "field_type": "scalar",
+      "storage_source": "db",
+      "relation_table": null,
+      "audited_status": false,
+      "comparison_support_status": "full"
+    },
+    {
+      "field_path": "preferred_income_max",
+      "section": "about-preferences",
+      "field_type": "scalar",
+      "storage_source": "db",
+      "relation_table": null,
+      "audited_status": false,
+      "comparison_support_status": "full"
+    },
+    {
+      "field_path": "profile_id",
+      "section": "unknown",
+      "field_type": "relation_select",
+      "storage_source": "db",
+      "relation_table": null,
+      "audited_status": false,
+      "comparison_support_status": "full"
+    },
+    {
+      "field_path": "pref",
+      "section": "unknown",
+      "field_type": "scalar",
+      "storage_source": "db",
+      "relation_table": null,
+      "audited_status": false,
+      "comparison_support_status": "full"
+    },
+    {
+      "field_path": "save_only",
+      "section": "unknown",
+      "field_type": "scalar",
+      "storage_source": "db",
+      "relation_table": null,
+      "audited_status": false,
+      "comparison_support_status": "full"
+    },
+    {
+      "field_path": "preference_preset",
+      "section": "about-preferences",
+      "field_type": "scalar",
+      "storage_source": "db",
+      "relation_table": null,
+      "audited_status": false,
+      "comparison_support_status": "full"
+    },
+    {
+      "field_path": "willing_to_relocate",
+      "section": "about-preferences",
+      "field_type": "scalar",
+      "storage_source": "db",
+      "relation_table": null,
+      "audited_status": false,
+      "comparison_support_status": "full"
+    },
+    {
+      "field_path": "preferred_country_ids[]",
+      "section": "about-preferences",
+      "field_type": "repeater_array",
+      "storage_source": "db",
+      "relation_table": null,
+      "audited_status": false,
+      "comparison_support_status": "unsupported"
+    },
+    {
+      "field_path": "preferred_state_ids[]",
+      "section": "about-preferences",
+      "field_type": "repeater_array",
+      "storage_source": "db",
+      "relation_table": null,
+      "audited_status": false,
+      "comparison_support_status": "unsupported"
+    },
+    {
+      "field_path": "preferred_district_ids[]",
+      "section": "about-preferences",
+      "field_type": "repeater_array",
+      "storage_source": "db",
+      "relation_table": null,
+      "audited_status": false,
+      "comparison_support_status": "unsupported"
+    },
+    {
+      "field_path": "preferred_taluka_ids[]",
+      "section": "about-preferences",
+      "field_type": "repeater_array",
+      "storage_source": "db",
+      "relation_table": null,
+      "audited_status": false,
+      "comparison_support_status": "unsupported"
+    },
+    {
+      "field_path": "preferred_religion_ids[]",
+      "section": "about-preferences",
+      "field_type": "repeater_array",
+      "storage_source": "db",
+      "relation_table": null,
+      "audited_status": false,
+      "comparison_support_status": "unsupported"
+    },
+    {
+      "field_path": "preferred_intercaste",
+      "section": "about-preferences",
+      "field_type": "scalar",
+      "storage_source": "db",
+      "relation_table": null,
+      "audited_status": false,
+      "comparison_support_status": "full"
+    },
+    {
+      "field_path": "preferred_caste_ids[]",
+      "section": "about-preferences",
+      "field_type": "repeater_array",
+      "storage_source": "db",
+      "relation_table": null,
+      "audited_status": false,
+      "comparison_support_status": "unsupported"
+    },
+    {
+      "field_path": "other_relatives_text",
+      "section": "alliance",
+      "field_type": "scalar",
+      "storage_source": "db",
+      "relation_table": null,
+      "audited_status": false,
+      "comparison_support_status": "full"
+    },
+    {
+      "field_path": "{{ $nameFullName }}",
+      "section": "unknown",
+      "field_type": "scalar",
+      "storage_source": "db",
+      "relation_table": null,
+      "audited_status": false,
+      "comparison_support_status": "full"
+    },
+    {
+      "field_path": "{{ $nameGenderId }}",
+      "section": "unknown",
+      "field_type": "scalar",
+      "storage_source": "db",
+      "relation_table": null,
+      "audited_status": false,
+      "comparison_support_status": "full"
+    },
+    {
+      "field_path": "{{ $nameDob }}",
+      "section": "unknown",
+      "field_type": "scalar",
+      "storage_source": "db",
+      "relation_table": null,
+      "audited_status": false,
+      "comparison_support_status": "full"
+    },
+    {
+      "field_path": "{{ $nameBirthTimeHour }}",
+      "section": "unknown",
+      "field_type": "scalar",
+      "storage_source": "db",
+      "relation_table": null,
+      "audited_status": false,
+      "comparison_support_status": "full"
+    },
+    {
+      "field_path": "{{ $nameBirthTimeMinute }}",
+      "section": "unknown",
+      "field_type": "scalar",
+      "storage_source": "db",
+      "relation_table": null,
+      "audited_status": false,
+      "comparison_support_status": "full"
+    },
+    {
+      "field_path": "{{ $nameBirthTime }}",
+      "section": "unknown",
+      "field_type": "scalar",
+      "storage_source": "db",
+      "relation_table": null,
+      "audited_status": false,
+      "comparison_support_status": "full"
+    },
+    {
+      "field_path": "{{ $corePrefix }}[birth_place]",
+      "section": "unknown",
+      "field_type": "nested_array",
+      "storage_source": "db",
+      "relation_table": null,
+      "audited_status": false,
+      "comparison_support_status": "unsupported"
+    },
+    {
+      "field_path": "{{ $nameMotherTongue }}",
+      "section": "unknown",
+      "field_type": "scalar",
+      "storage_source": "db",
+      "relation_table": null,
+      "audited_status": false,
+      "comparison_support_status": "full"
+    },
+    {
+      "field_path": "{{ $nameAddressLine }}",
+      "section": "unknown",
+      "field_type": "scalar",
+      "storage_source": "db",
+      "relation_table": null,
+      "audited_status": false,
+      "comparison_support_status": "full"
+    },
+    {
+      "field_path": "children[][]",
+      "section": "unknown",
+      "field_type": "repeater_array",
+      "storage_source": "repeaters.children",
+      "relation_table": "profile_children",
+      "audited_status": true,
+      "comparison_support_status": "full"
+    },
+    {
+      "field_path": "$nameNum",
+      "section": "basic-info",
+      "field_type": "scalar",
+      "storage_source": "db",
+      "relation_table": null,
+      "audited_status": false,
+      "comparison_support_status": "full"
+    },
+    {
+      "field_path": "__NAME__",
+      "section": "basic-info",
+      "field_type": "scalar",
+      "storage_source": "db",
+      "relation_table": null,
+      "audited_status": false,
+      "comparison_support_status": "full"
+    },
+    {
+      "field_path": "otp",
+      "section": "basic-info",
+      "field_type": "scalar",
+      "storage_source": "db",
+      "relation_table": null,
+      "audited_status": false,
+      "comparison_support_status": "full"
+    },
+    {
+      "field_path": "contacts[][]",
+      "section": "basic-info",
+      "field_type": "repeater_array",
+      "storage_source": "repeaters.contacts",
+      "relation_table": "profile_contacts",
+      "audited_status": true,
+      "comparison_support_status": "full"
+    },
+    {
+      "field_path": "address_line",
+      "section": "unknown",
+      "field_type": "scalar",
+      "storage_source": "db",
+      "relation_table": null,
+      "audited_status": false,
+      "comparison_support_status": "full"
+    },
+    {
+      "field_path": "{{ $coreName }}marital_status_id{{ $coreNameSuffix }}",
+      "section": "unknown",
+      "field_type": "scalar",
+      "storage_source": "db",
+      "relation_table": null,
+      "audited_status": false,
+      "comparison_support_status": "full"
+    },
+    {
+      "field_path": "namePrefix ? 'snapshot[][]' : 'marital_status_id'",
+      "section": "unknown",
+      "field_type": "repeater_array",
+      "storage_source": "db",
+      "relation_table": null,
+      "audited_status": false,
+      "comparison_support_status": "unsupported"
+    },
+    {
+      "field_path": "{{ $marriagesPrefix }}marriage_year{{ $marriagesSuffix }}",
+      "section": "unknown",
+      "field_type": "scalar",
+      "storage_source": "db",
+      "relation_table": null,
+      "audited_status": false,
+      "comparison_support_status": "full"
+    },
+    {
+      "field_path": "{{ $marriagesPrefix }}divorce_year{{ $marriagesSuffix }}",
+      "section": "unknown",
+      "field_type": "scalar",
+      "storage_source": "db",
+      "relation_table": null,
+      "audited_status": false,
+      "comparison_support_status": "full"
+    },
+    {
+      "field_path": "{{ $marriagesPrefix }}separation_year{{ $marriagesSuffix }}",
+      "section": "unknown",
+      "field_type": "scalar",
+      "storage_source": "db",
+      "relation_table": null,
+      "audited_status": false,
+      "comparison_support_status": "full"
+    },
+    {
+      "field_path": "{{ $marriagesPrefix }}spouse_death_year{{ $marriagesSuffix }}",
+      "section": "unknown",
+      "field_type": "scalar",
+      "storage_source": "db",
+      "relation_table": null,
+      "audited_status": false,
+      "comparison_support_status": "full"
+    },
+    {
+      "field_path": "{{ $marriagesPrefix }}divorce_status{{ $marriagesSuffix }}",
+      "section": "unknown",
+      "field_type": "scalar",
+      "storage_source": "db",
+      "relation_table": null,
+      "audited_status": false,
+      "comparison_support_status": "full"
+    },
+    {
+      "field_path": "{{ []sSnapshot ? 'snapshot[][]' : 'has_children' }}",
+      "section": "unknown",
+      "field_type": "repeater_array",
+      "storage_source": "db",
+      "relation_table": null,
+      "audited_status": false,
+      "comparison_support_status": "unsupported"
+    },
+    {
+      "field_path": "{{ $marriagesPrefix }}id{{ $marriagesSuffix }}",
+      "section": "unknown",
+      "field_type": "scalar",
+      "storage_source": "db",
+      "relation_table": null,
+      "audited_status": false,
+      "comparison_support_status": "full"
+    },
+    {
+      "field_path": "namePrefix ? 'snapshot[][][]' : 'marriages[][]'",
+      "section": "unknown",
+      "field_type": "repeater_array",
+      "storage_source": "db",
+      "relation_table": null,
+      "audited_status": false,
+      "comparison_support_status": "unsupported"
+    },
+    {
+      "field_path": "(namePrefix ? 'snapshot[][' : 'children[') + index + '][]'",
+      "section": "unknown",
+      "field_type": "repeater_array",
+      "storage_source": "db",
+      "relation_table": null,
+      "audited_status": false,
+      "comparison_support_status": "unsupported"
+    },
+    {
+      "field_path": "marriages[][]",
+      "section": "unknown",
+      "field_type": "repeater_array",
+      "storage_source": "db",
+      "relation_table": null,
+      "audited_status": false,
+      "comparison_support_status": "unsupported"
+    },
+    {
+      "field_path": "full_name",
+      "section": "basic-info",
+      "field_type": "scalar",
+      "storage_source": "db",
+      "relation_table": null,
+      "audited_status": true,
+      "comparison_support_status": "full"
+    },
+    {
+      "field_path": "gender",
+      "section": "basic-info",
+      "field_type": "scalar",
+      "storage_source": "db",
+      "relation_table": null,
+      "audited_status": true,
+      "comparison_support_status": "full"
+    },
+    {
+      "field_path": "date_of_birth",
+      "section": "basic-info",
+      "field_type": "scalar",
+      "storage_source": "db",
+      "relation_table": null,
+      "audited_status": true,
+      "comparison_support_status": "full"
+    },
+    {
+      "field_path": "height_cm",
+      "section": "basic-info",
+      "field_type": "scalar",
+      "storage_source": "db",
+      "relation_table": null,
+      "audited_status": true,
+      "comparison_support_status": "full"
+    },
+    {
+      "field_path": "religion",
+      "section": "basic-info",
+      "field_type": "scalar",
+      "storage_source": "db",
+      "relation_table": null,
+      "audited_status": true,
+      "comparison_support_status": "full"
+    },
+    {
+      "field_path": "caste",
+      "section": "basic-info",
+      "field_type": "scalar",
+      "storage_source": "db",
+      "relation_table": null,
+      "audited_status": true,
+      "comparison_support_status": "full"
+    },
+    {
+      "field_path": "education",
+      "section": "basic-info",
+      "field_type": "scalar",
+      "storage_source": "db",
+      "relation_table": null,
+      "audited_status": true,
+      "comparison_support_status": "full"
+    },
+    {
+      "field_path": "occupation",
+      "section": "basic-info",
+      "field_type": "scalar",
+      "storage_source": "db",
+      "relation_table": null,
+      "audited_status": true,
+      "comparison_support_status": "full"
+    },
+    {
+      "field_path": "annual_income",
+      "section": "basic-info",
+      "field_type": "scalar",
+      "storage_source": "db",
+      "relation_table": null,
+      "audited_status": true,
+      "comparison_support_status": "full"
+    },
+    {
+      "field_path": "city",
+      "section": "basic-info",
+      "field_type": "scalar",
+      "storage_source": "db",
+      "relation_table": null,
+      "audited_status": true,
+      "comparison_support_status": "full"
+    },
+    {
+      "field_path": "state",
+      "section": "basic-info",
+      "field_type": "scalar",
+      "storage_source": "db",
+      "relation_table": null,
+      "audited_status": true,
+      "comparison_support_status": "full"
+    },
+    {
+      "field_path": "mother_tongue",
+      "section": "basic-info",
+      "field_type": "scalar",
+      "storage_source": "db",
+      "relation_table": null,
+      "audited_status": true,
+      "comparison_support_status": "full"
+    },
+    {
+      "field_path": "marital_status",
+      "section": "basic-info",
+      "field_type": "scalar",
+      "storage_source": "db",
+      "relation_table": null,
+      "audited_status": true,
+      "comparison_support_status": "full"
+    },
+    {
+      "field_path": "family_type",
+      "section": "family-details",
+      "field_type": "scalar",
+      "storage_source": "db",
+      "relation_table": null,
+      "audited_status": true,
+      "comparison_support_status": "full"
+    },
+    {
+      "field_path": "complexion",
+      "section": "basic-info",
+      "field_type": "scalar",
+      "storage_source": "db",
+      "relation_table": null,
+      "audited_status": true,
+      "comparison_support_status": "full"
+    },
+    {
+      "field_path": "blood_group",
+      "section": "basic-info",
+      "field_type": "scalar",
+      "storage_source": "db",
+      "relation_table": null,
+      "audited_status": true,
+      "comparison_support_status": "full"
+    },
+    {
+      "field_path": "nakshatra",
+      "section": "horoscope",
+      "field_type": "scalar",
+      "storage_source": "db",
+      "relation_table": null,
+      "audited_status": true,
+      "comparison_support_status": "full"
+    },
+    {
+      "field_path": "rashi",
+      "section": "horoscope",
+      "field_type": "scalar",
+      "storage_source": "db",
+      "relation_table": null,
+      "audited_status": true,
+      "comparison_support_status": "full"
+    },
+    {
+      "field_path": "mangal_dosh",
+      "section": "horoscope",
+      "field_type": "scalar",
+      "storage_source": "db",
+      "relation_table": null,
+      "audited_status": true,
+      "comparison_support_status": "full"
+    },
+    {
+      "field_path": "income_range",
+      "section": "basic-info",
+      "field_type": "scalar",
+      "storage_source": "db",
+      "relation_table": null,
+      "audited_status": true,
+      "comparison_support_status": "full"
+    },
+    {
+      "field_path": "professions",
+      "section": "basic-info",
+      "field_type": "scalar",
+      "storage_source": "db",
+      "relation_table": null,
+      "audited_status": true,
+      "comparison_support_status": "full"
+    },
+    {
+      "field_path": "partner_preferences",
+      "section": "about-preferences",
+      "field_type": "nested_array",
+      "storage_source": "db.partner_preferences",
+      "relation_table": "profile_preference_criteria",
+      "audited_status": true,
+      "comparison_support_status": "full"
+    },
+    {
+      "field_path": "siblings[].id",
+      "section": "family-details",
+      "field_type": "repeater_array",
+      "storage_source": "repeaters.siblings",
+      "relation_table": "profile_siblings",
+      "audited_status": true,
+      "comparison_support_status": "full"
+    },
+    {
+      "field_path": "siblings[].relation_type",
+      "section": "family-details",
+      "field_type": "repeater_array",
+      "storage_source": "repeaters.siblings",
+      "relation_table": "profile_siblings",
+      "audited_status": true,
+      "comparison_support_status": "full"
+    },
+    {
+      "field_path": "siblings[].name",
+      "section": "family-details",
+      "field_type": "repeater_array",
+      "storage_source": "repeaters.siblings",
+      "relation_table": "profile_siblings",
+      "audited_status": true,
+      "comparison_support_status": "full"
+    },
+    {
+      "field_path": "siblings[].gender",
+      "section": "family-details",
+      "field_type": "repeater_array",
+      "storage_source": "repeaters.siblings",
+      "relation_table": "profile_siblings",
+      "audited_status": true,
+      "comparison_support_status": "full"
+    },
+    {
+      "field_path": "siblings[].marital_status",
+      "section": "family-details",
+      "field_type": "repeater_array",
+      "storage_source": "repeaters.siblings",
+      "relation_table": "profile_siblings",
+      "audited_status": true,
+      "comparison_support_status": "full"
+    },
+    {
+      "field_path": "siblings[].occupation",
+      "section": "family-details",
+      "field_type": "repeater_array",
+      "storage_source": "repeaters.siblings",
+      "relation_table": "profile_siblings",
+      "audited_status": true,
+      "comparison_support_status": "full"
+    },
+    {
+      "field_path": "siblings[].occupation_master_id",
+      "section": "family-details",
+      "field_type": "repeater_array",
+      "storage_source": "repeaters.siblings",
+      "relation_table": "profile_siblings",
+      "audited_status": true,
+      "comparison_support_status": "full"
+    },
+    {
+      "field_path": "siblings[].occupation_custom_id",
+      "section": "family-details",
+      "field_type": "repeater_array",
+      "storage_source": "repeaters.siblings",
+      "relation_table": "profile_siblings",
+      "audited_status": true,
+      "comparison_support_status": "full"
+    },
+    {
+      "field_path": "siblings[].city_id",
+      "section": "family-details",
+      "field_type": "repeater_array",
+      "storage_source": "repeaters.siblings",
+      "relation_table": "profile_siblings",
+      "audited_status": true,
+      "comparison_support_status": "full"
+    },
+    {
+      "field_path": "siblings[].contact_number",
+      "section": "family-details",
+      "field_type": "repeater_array",
+      "storage_source": "repeaters.siblings",
+      "relation_table": "profile_siblings",
+      "audited_status": true,
+      "comparison_support_status": "full"
+    },
+    {
+      "field_path": "siblings[].notes",
+      "section": "family-details",
+      "field_type": "repeater_array",
+      "storage_source": "repeaters.siblings",
+      "relation_table": "profile_siblings",
+      "audited_status": true,
+      "comparison_support_status": "full"
+    },
+    {
+      "field_path": "children[].id",
+      "section": "family-details",
+      "field_type": "repeater_array",
+      "storage_source": "repeaters.children",
+      "relation_table": "profile_children",
+      "audited_status": true,
+      "comparison_support_status": "full"
+    },
+    {
+      "field_path": "children[].child_name",
+      "section": "family-details",
+      "field_type": "repeater_array",
+      "storage_source": "repeaters.children",
+      "relation_table": "profile_children",
+      "audited_status": true,
+      "comparison_support_status": "full"
+    },
+    {
+      "field_path": "children[].gender",
+      "section": "family-details",
+      "field_type": "repeater_array",
+      "storage_source": "repeaters.children",
+      "relation_table": "profile_children",
+      "audited_status": true,
+      "comparison_support_status": "full"
+    },
+    {
+      "field_path": "children[].age",
+      "section": "family-details",
+      "field_type": "repeater_array",
+      "storage_source": "repeaters.children",
+      "relation_table": "profile_children",
+      "audited_status": true,
+      "comparison_support_status": "full"
+    },
+    {
+      "field_path": "children[].child_living_with_id",
+      "section": "family-details",
+      "field_type": "repeater_array",
+      "storage_source": "repeaters.children",
+      "relation_table": "profile_children",
+      "audited_status": true,
+      "comparison_support_status": "full"
+    },
+    {
+      "field_path": "education_history[].id",
+      "section": "education-career",
+      "field_type": "repeater_array",
+      "storage_source": "repeaters.education_history",
+      "relation_table": "profile_education",
+      "audited_status": true,
+      "comparison_support_status": "full"
+    },
+    {
+      "field_path": "education_history[].degree",
+      "section": "education-career",
+      "field_type": "repeater_array",
+      "storage_source": "repeaters.education_history",
+      "relation_table": "profile_education",
+      "audited_status": true,
+      "comparison_support_status": "full"
+    },
+    {
+      "field_path": "education_history[].specialization",
+      "section": "education-career",
+      "field_type": "repeater_array",
+      "storage_source": "repeaters.education_history",
+      "relation_table": "profile_education",
+      "audited_status": true,
+      "comparison_support_status": "full"
+    },
+    {
+      "field_path": "education_history[].university",
+      "section": "education-career",
+      "field_type": "repeater_array",
+      "storage_source": "repeaters.education_history",
+      "relation_table": "profile_education",
+      "audited_status": true,
+      "comparison_support_status": "full"
+    },
+    {
+      "field_path": "education_history[].year_completed",
+      "section": "education-career",
+      "field_type": "repeater_array",
+      "storage_source": "repeaters.education_history",
+      "relation_table": "profile_education",
+      "audited_status": true,
+      "comparison_support_status": "full"
+    },
+    {
+      "field_path": "career_history[].id",
+      "section": "education-career",
+      "field_type": "repeater_array",
+      "storage_source": "repeaters.career_history",
+      "relation_table": "profile_career",
+      "audited_status": true,
+      "comparison_support_status": "full"
+    },
+    {
+      "field_path": "career_history[].designation",
+      "section": "education-career",
+      "field_type": "repeater_array",
+      "storage_source": "repeaters.career_history",
+      "relation_table": "profile_career",
+      "audited_status": true,
+      "comparison_support_status": "full"
+    },
+    {
+      "field_path": "career_history[].company",
+      "section": "education-career",
+      "field_type": "repeater_array",
+      "storage_source": "repeaters.career_history",
+      "relation_table": "profile_career",
+      "audited_status": true,
+      "comparison_support_status": "full"
+    },
+    {
+      "field_path": "career_history[].location",
+      "section": "education-career",
+      "field_type": "repeater_array",
+      "storage_source": "repeaters.career_history",
+      "relation_table": "profile_career",
+      "audited_status": true,
+      "comparison_support_status": "full"
+    },
+    {
+      "field_path": "career_history[].city_id",
+      "section": "education-career",
+      "field_type": "repeater_array",
+      "storage_source": "repeaters.career_history",
+      "relation_table": "profile_career",
+      "audited_status": true,
+      "comparison_support_status": "full"
+    },
+    {
+      "field_path": "career_history[].start_year",
+      "section": "education-career",
+      "field_type": "repeater_array",
+      "storage_source": "repeaters.career_history",
+      "relation_table": "profile_career",
+      "audited_status": true,
+      "comparison_support_status": "full"
+    },
+    {
+      "field_path": "career_history[].end_year",
+      "section": "education-career",
+      "field_type": "repeater_array",
+      "storage_source": "repeaters.career_history",
+      "relation_table": "profile_career",
+      "audited_status": true,
+      "comparison_support_status": "full"
+    },
+    {
+      "field_path": "career_history[].is_current",
+      "section": "education-career",
+      "field_type": "repeater_array",
+      "storage_source": "repeaters.career_history",
+      "relation_table": "profile_career",
+      "audited_status": true,
+      "comparison_support_status": "full"
+    },
+    {
+      "field_path": "relatives[].id",
+      "section": "relatives",
+      "field_type": "repeater_array",
+      "storage_source": "repeaters.relatives",
+      "relation_table": "profile_relatives",
+      "audited_status": true,
+      "comparison_support_status": "full"
+    },
+    {
+      "field_path": "relatives[].relation_type",
+      "section": "relatives",
+      "field_type": "repeater_array",
+      "storage_source": "repeaters.relatives",
+      "relation_table": "profile_relatives",
+      "audited_status": true,
+      "comparison_support_status": "full"
+    },
+    {
+      "field_path": "relatives[].name",
+      "section": "relatives",
+      "field_type": "repeater_array",
+      "storage_source": "repeaters.relatives",
+      "relation_table": "profile_relatives",
+      "audited_status": true,
+      "comparison_support_status": "full"
+    },
+    {
+      "field_path": "relatives[].occupation",
+      "section": "relatives",
+      "field_type": "repeater_array",
+      "storage_source": "repeaters.relatives",
+      "relation_table": "profile_relatives",
+      "audited_status": true,
+      "comparison_support_status": "full"
+    },
+    {
+      "field_path": "relatives[].occupation_master_id",
+      "section": "relatives",
+      "field_type": "repeater_array",
+      "storage_source": "repeaters.relatives",
+      "relation_table": "profile_relatives",
+      "audited_status": true,
+      "comparison_support_status": "full"
+    },
+    {
+      "field_path": "relatives[].occupation_custom_id",
+      "section": "relatives",
+      "field_type": "repeater_array",
+      "storage_source": "repeaters.relatives",
+      "relation_table": "profile_relatives",
+      "audited_status": true,
+      "comparison_support_status": "full"
+    },
+    {
+      "field_path": "relatives[].city_id",
+      "section": "relatives",
+      "field_type": "repeater_array",
+      "storage_source": "repeaters.relatives",
+      "relation_table": "profile_relatives",
+      "audited_status": true,
+      "comparison_support_status": "full"
+    },
+    {
+      "field_path": "relatives[].state_id",
+      "section": "relatives",
+      "field_type": "repeater_array",
+      "storage_source": "repeaters.relatives",
+      "relation_table": "profile_relatives",
+      "audited_status": true,
+      "comparison_support_status": "full"
+    },
+    {
+      "field_path": "relatives[].contact_number",
+      "section": "relatives",
+      "field_type": "repeater_array",
+      "storage_source": "repeaters.relatives",
+      "relation_table": "profile_relatives",
+      "audited_status": true,
+      "comparison_support_status": "full"
+    },
+    {
+      "field_path": "relatives[].notes",
+      "section": "relatives",
+      "field_type": "repeater_array",
+      "storage_source": "repeaters.relatives",
+      "relation_table": "profile_relatives",
+      "audited_status": true,
+      "comparison_support_status": "full"
+    },
+    {
+      "field_path": "relatives[].is_primary_contact",
+      "section": "relatives",
+      "field_type": "repeater_array",
+      "storage_source": "repeaters.relatives",
+      "relation_table": "profile_relatives",
+      "audited_status": true,
+      "comparison_support_status": "full"
+    },
+    {
+      "field_path": "property_assets[].id",
+      "section": "property",
+      "field_type": "repeater_array",
+      "storage_source": "repeaters.property_assets",
+      "relation_table": "profile_property_assets",
+      "audited_status": true,
+      "comparison_support_status": "full"
+    },
+    {
+      "field_path": "property_assets[].asset_type_id",
+      "section": "property",
+      "field_type": "repeater_array",
+      "storage_source": "repeaters.property_assets",
+      "relation_table": "profile_property_assets",
+      "audited_status": true,
+      "comparison_support_status": "full"
+    },
+    {
+      "field_path": "property_assets[].ownership_type_id",
+      "section": "property",
+      "field_type": "repeater_array",
+      "storage_source": "repeaters.property_assets",
+      "relation_table": "profile_property_assets",
+      "audited_status": true,
+      "comparison_support_status": "full"
+    },
+    {
+      "field_path": "property_assets[].location",
+      "section": "property",
+      "field_type": "repeater_array",
+      "storage_source": "repeaters.property_assets",
+      "relation_table": "profile_property_assets",
+      "audited_status": true,
+      "comparison_support_status": "full"
+    },
+    {
+      "field_path": "property_assets[].notes",
+      "section": "property",
+      "field_type": "repeater_array",
+      "storage_source": "repeaters.property_assets",
+      "relation_table": "profile_property_assets",
+      "audited_status": true,
+      "comparison_support_status": "full"
+    }
+  ]
+}

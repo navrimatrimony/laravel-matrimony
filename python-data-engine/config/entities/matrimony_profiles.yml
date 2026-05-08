@@ -1,0 +1,23 @@
+entity: matrimony_profile
+table: matrimony_profiles
+# Logical keys aligned with SnapshotGeneratorService::captureDb() and canonical_field_registry.json
+canonical_fields:
+  - full_name
+  - gender
+  - date_of_birth
+  - height_cm
+  - religion
+  - caste
+  - education
+  - occupation
+  - annual_income
+  - city
+  - state
+  - mother_tongue
+  - marital_status
+routes:
+  public_profile:
+    path: /profile/{id}
+  wizard:
+    path: /matrimony/profile/wizard/basic-info
+

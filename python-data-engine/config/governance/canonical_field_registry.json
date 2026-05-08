@@ -1,0 +1,591 @@
+{
+  "meta": {
+    "schema": "canonical_field_registry_v1",
+    "generated_at": "2026-05-07T11:27:11Z",
+    "governed_logical_field_count": 29,
+    "governed_scalar_count": 22,
+    "governed_repeater_count": 7,
+    "comparison_supported_count": 29
+  },
+  "entries": [
+    {
+      "field": "annual_income",
+      "category": "scalar",
+      "source_paths": {
+        "wizard": "matrimony/profile/wizard → annual_income",
+        "db": "matrimony_profiles.annual_income",
+        "api": "profile.annual_income",
+        "public_profile": "rendered.fields.*.annual_income"
+      },
+      "governed": true,
+      "comparison_supported": true,
+      "snapshot_supported": true,
+      "api_supported": true,
+      "repeater": false,
+      "normalization_supported": true,
+      "lineage_supported": true,
+      "status": "active"
+    },
+    {
+      "field": "blood_group",
+      "category": "scalar",
+      "source_paths": {
+        "wizard": "matrimony/profile/wizard → blood_group_id",
+        "db": "matrimony_profiles.blood_group_id",
+        "api": "profile.blood_group_id",
+        "public_profile": "rendered.fields.*.blood_group"
+      },
+      "governed": true,
+      "comparison_supported": true,
+      "snapshot_supported": true,
+      "api_supported": true,
+      "repeater": false,
+      "normalization_supported": true,
+      "lineage_supported": true,
+      "status": "active"
+    },
+    {
+      "field": "caste",
+      "category": "scalar",
+      "source_paths": {
+        "wizard": "matrimony/profile/wizard → caste_id",
+        "db": "matrimony_profiles.caste_id",
+        "api": "profile.caste_id",
+        "public_profile": "rendered.fields.*.caste"
+      },
+      "governed": true,
+      "comparison_supported": true,
+      "snapshot_supported": true,
+      "api_supported": true,
+      "repeater": false,
+      "normalization_supported": true,
+      "lineage_supported": true,
+      "status": "active"
+    },
+    {
+      "field": "city",
+      "category": "scalar",
+      "source_paths": {
+        "wizard": "matrimony/profile/wizard → location_id",
+        "db": "matrimony_profiles.location_id",
+        "api": "profile.location_id",
+        "public_profile": "rendered.fields.*.city"
+      },
+      "governed": true,
+      "comparison_supported": true,
+      "snapshot_supported": true,
+      "api_supported": true,
+      "repeater": false,
+      "normalization_supported": true,
+      "lineage_supported": true,
+      "status": "active"
+    },
+    {
+      "field": "complexion",
+      "category": "scalar",
+      "source_paths": {
+        "wizard": "matrimony/profile/wizard → complexion_id",
+        "db": "matrimony_profiles.complexion_id",
+        "api": "profile.complexion_id",
+        "public_profile": "rendered.fields.*.complexion"
+      },
+      "governed": true,
+      "comparison_supported": true,
+      "snapshot_supported": true,
+      "api_supported": true,
+      "repeater": false,
+      "normalization_supported": true,
+      "lineage_supported": true,
+      "status": "active"
+    },
+    {
+      "field": "date_of_birth",
+      "category": "scalar",
+      "source_paths": {
+        "wizard": "matrimony/profile/wizard → date_of_birth",
+        "db": "matrimony_profiles.date_of_birth",
+        "api": "profile.date_of_birth",
+        "public_profile": "rendered.fields.*.date_of_birth"
+      },
+      "governed": true,
+      "comparison_supported": true,
+      "snapshot_supported": true,
+      "api_supported": true,
+      "repeater": false,
+      "normalization_supported": true,
+      "lineage_supported": true,
+      "status": "active"
+    },
+    {
+      "field": "education",
+      "category": "scalar",
+      "source_paths": {
+        "wizard": "matrimony/profile/wizard → highest_education",
+        "db": "matrimony_profiles.highest_education",
+        "api": "profile.highest_education",
+        "public_profile": "rendered.fields.*.education"
+      },
+      "governed": true,
+      "comparison_supported": true,
+      "snapshot_supported": true,
+      "api_supported": true,
+      "repeater": false,
+      "normalization_supported": true,
+      "lineage_supported": true,
+      "status": "active"
+    },
+    {
+      "field": "family_type",
+      "category": "scalar",
+      "source_paths": {
+        "wizard": "matrimony/profile/wizard → family_type_id",
+        "db": "matrimony_profiles.family_type_id",
+        "api": "profile.family_type_id",
+        "public_profile": "rendered.fields.*.family_type"
+      },
+      "governed": true,
+      "comparison_supported": true,
+      "snapshot_supported": true,
+      "api_supported": true,
+      "repeater": false,
+      "normalization_supported": true,
+      "lineage_supported": true,
+      "status": "active"
+    },
+    {
+      "field": "full_name",
+      "category": "scalar",
+      "source_paths": {
+        "wizard": "matrimony/profile/wizard → full_name",
+        "db": "matrimony_profiles.full_name",
+        "api": "profile.full_name",
+        "public_profile": "rendered.fields.*.full_name"
+      },
+      "governed": true,
+      "comparison_supported": true,
+      "snapshot_supported": true,
+      "api_supported": true,
+      "repeater": false,
+      "normalization_supported": true,
+      "lineage_supported": true,
+      "status": "active"
+    },
+    {
+      "field": "gender",
+      "category": "scalar",
+      "source_paths": {
+        "wizard": "users.gender / profile gender_id",
+        "db": "matrimony_profiles.gender_id (+ users.gender)",
+        "api": "profile.gender",
+        "public_profile": "rendered.fields.*.gender"
+      },
+      "governed": true,
+      "comparison_supported": true,
+      "snapshot_supported": true,
+      "api_supported": true,
+      "repeater": false,
+      "normalization_supported": true,
+      "lineage_supported": true,
+      "status": "active"
+    },
+    {
+      "field": "height_cm",
+      "category": "scalar",
+      "source_paths": {
+        "wizard": "matrimony/profile/wizard → height_cm",
+        "db": "matrimony_profiles.height_cm",
+        "api": "profile.height_cm",
+        "public_profile": "rendered.fields.*.height_cm"
+      },
+      "governed": true,
+      "comparison_supported": true,
+      "snapshot_supported": true,
+      "api_supported": true,
+      "repeater": false,
+      "normalization_supported": true,
+      "lineage_supported": true,
+      "status": "active"
+    },
+    {
+      "field": "income_range",
+      "category": "scalar",
+      "source_paths": {
+        "wizard": "matrimony/profile/wizard → income_range_id",
+        "db": "matrimony_profiles.income_range_id",
+        "api": "profile.income_range_id",
+        "public_profile": "rendered.fields.*.income_range"
+      },
+      "governed": true,
+      "comparison_supported": true,
+      "snapshot_supported": true,
+      "api_supported": true,
+      "repeater": false,
+      "normalization_supported": true,
+      "lineage_supported": true,
+      "status": "active"
+    },
+    {
+      "field": "mangal_dosh",
+      "category": "scalar",
+      "source_paths": {
+        "wizard": "horoscope → mangal_dosh_type_id",
+        "db": "profile_horoscope.mangal_dosh_type_id",
+        "api": "profile.mangal_dosh_type_id",
+        "public_profile": "rendered.fields.*.mangal_dosh"
+      },
+      "governed": true,
+      "comparison_supported": true,
+      "snapshot_supported": true,
+      "api_supported": true,
+      "repeater": false,
+      "normalization_supported": true,
+      "lineage_supported": true,
+      "status": "active"
+    },
+    {
+      "field": "marital_status",
+      "category": "scalar",
+      "source_paths": {
+        "wizard": "matrimony/profile/wizard → marital_status_id",
+        "db": "matrimony_profiles.marital_status_id",
+        "api": "profile.marital_status_id",
+        "public_profile": "rendered.fields.*.marital_status"
+      },
+      "governed": true,
+      "comparison_supported": true,
+      "snapshot_supported": true,
+      "api_supported": true,
+      "repeater": false,
+      "normalization_supported": true,
+      "lineage_supported": true,
+      "status": "active"
+    },
+    {
+      "field": "mother_tongue",
+      "category": "scalar",
+      "source_paths": {
+        "wizard": "matrimony/profile/wizard → mother_tongue_id",
+        "db": "matrimony_profiles.mother_tongue_id",
+        "api": "profile.mother_tongue_id",
+        "public_profile": "rendered.fields.*.mother_tongue"
+      },
+      "governed": true,
+      "comparison_supported": true,
+      "snapshot_supported": true,
+      "api_supported": true,
+      "repeater": false,
+      "normalization_supported": true,
+      "lineage_supported": true,
+      "status": "active"
+    },
+    {
+      "field": "nakshatra",
+      "category": "scalar",
+      "source_paths": {
+        "wizard": "horoscope → nakshatra_id",
+        "db": "profile_horoscope.nakshatra_id",
+        "api": "profile.nakshatra_id",
+        "public_profile": "rendered.fields.*.nakshatra"
+      },
+      "governed": true,
+      "comparison_supported": true,
+      "snapshot_supported": true,
+      "api_supported": true,
+      "repeater": false,
+      "normalization_supported": true,
+      "lineage_supported": true,
+      "status": "active"
+    },
+    {
+      "field": "occupation",
+      "category": "scalar",
+      "source_paths": {
+        "wizard": "matrimony/profile/wizard → occupation_title",
+        "db": "matrimony_profiles.occupation_title",
+        "api": "profile.occupation_title",
+        "public_profile": "rendered.fields.*.occupation"
+      },
+      "governed": true,
+      "comparison_supported": true,
+      "snapshot_supported": true,
+      "api_supported": true,
+      "repeater": false,
+      "normalization_supported": true,
+      "lineage_supported": true,
+      "status": "active"
+    },
+    {
+      "field": "partner_preferences",
+      "category": "nested",
+      "source_paths": {
+        "wizard": "about-preferences → profile_preference_criteria",
+        "db": "profile_preference_criteria.*",
+        "api": "profile.partner_preferences",
+        "public_profile": "rendered.fields.*.partner_preferences"
+      },
+      "governed": true,
+      "comparison_supported": true,
+      "snapshot_supported": true,
+      "api_supported": true,
+      "repeater": false,
+      "normalization_supported": false,
+      "lineage_supported": true,
+      "status": "active"
+    },
+    {
+      "field": "professions",
+      "category": "scalar",
+      "source_paths": {
+        "wizard": "matrimony/profile/wizard → profession_id",
+        "db": "matrimony_profiles.profession_id",
+        "api": "profile.profession_id",
+        "public_profile": "rendered.fields.*.professions"
+      },
+      "governed": true,
+      "comparison_supported": true,
+      "snapshot_supported": true,
+      "api_supported": true,
+      "repeater": false,
+      "normalization_supported": true,
+      "lineage_supported": true,
+      "status": "active"
+    },
+    {
+      "field": "rashi",
+      "category": "scalar",
+      "source_paths": {
+        "wizard": "horoscope → rashi_id",
+        "db": "profile_horoscope.rashi_id",
+        "api": "profile.rashi_id",
+        "public_profile": "rendered.fields.*.rashi"
+      },
+      "governed": true,
+      "comparison_supported": true,
+      "snapshot_supported": true,
+      "api_supported": true,
+      "repeater": false,
+      "normalization_supported": true,
+      "lineage_supported": true,
+      "status": "active"
+    },
+    {
+      "field": "religion",
+      "category": "scalar",
+      "source_paths": {
+        "wizard": "matrimony/profile/wizard → religion_id",
+        "db": "matrimony_profiles.religion_id",
+        "api": "profile.religion_id",
+        "public_profile": "rendered.fields.*.religion"
+      },
+      "governed": true,
+      "comparison_supported": true,
+      "snapshot_supported": true,
+      "api_supported": true,
+      "repeater": false,
+      "normalization_supported": true,
+      "lineage_supported": true,
+      "status": "active"
+    },
+    {
+      "field": "state",
+      "category": "scalar",
+      "source_paths": {
+        "wizard": "residence hierarchy → state",
+        "db": "matrimony_profiles / addresses.state_id",
+        "api": "profile.state_id",
+        "public_profile": "rendered.fields.*.state"
+      },
+      "governed": true,
+      "comparison_supported": true,
+      "snapshot_supported": true,
+      "api_supported": true,
+      "repeater": false,
+      "normalization_supported": true,
+      "lineage_supported": true,
+      "status": "active"
+    },
+    {
+      "field": "career_history",
+      "category": "repeater",
+      "source_paths": {
+        "wizard": "repeaters.career_history[]",
+        "db": "profile_career",
+        "api": "profile.career_history (when exposed)",
+        "public_profile": "repeaters.career_history[].* in rendered flat"
+      },
+      "governed": true,
+      "comparison_supported": true,
+      "snapshot_supported": true,
+      "api_supported": false,
+      "repeater": true,
+      "normalization_supported": true,
+      "lineage_supported": true,
+      "status": "active",
+      "repeater_row_fields": [
+        "designation",
+        "company",
+        "location",
+        "city_id",
+        "start_year",
+        "end_year",
+        "is_current"
+      ]
+    },
+    {
+      "field": "children",
+      "category": "repeater",
+      "source_paths": {
+        "wizard": "repeaters.children[]",
+        "db": "profile_children",
+        "api": "profile.children (when exposed)",
+        "public_profile": "repeaters.children[].*"
+      },
+      "governed": true,
+      "comparison_supported": true,
+      "snapshot_supported": true,
+      "api_supported": false,
+      "repeater": true,
+      "normalization_supported": true,
+      "lineage_supported": true,
+      "status": "active",
+      "repeater_row_fields": [
+        "child_name",
+        "gender",
+        "age",
+        "child_living_with_id"
+      ]
+    },
+    {
+      "field": "contacts",
+      "category": "repeater",
+      "source_paths": {
+        "wizard": "repeaters.contacts[]",
+        "db": "profile_contacts",
+        "api": "profile.contacts (when exposed)",
+        "public_profile": "repeaters.contacts[].*"
+      },
+      "governed": true,
+      "comparison_supported": true,
+      "snapshot_supported": true,
+      "api_supported": false,
+      "repeater": true,
+      "normalization_supported": true,
+      "lineage_supported": true,
+      "status": "active",
+      "repeater_row_fields": [
+        "contact_relation_id",
+        "phone_number",
+        "is_primary",
+        "verified_status"
+      ]
+    },
+    {
+      "field": "education_history",
+      "category": "repeater",
+      "source_paths": {
+        "wizard": "repeaters.education_history[]",
+        "db": "profile_education",
+        "api": "profile.education_history (when exposed)",
+        "public_profile": "repeaters.education_history[].*"
+      },
+      "governed": true,
+      "comparison_supported": true,
+      "snapshot_supported": true,
+      "api_supported": false,
+      "repeater": true,
+      "normalization_supported": true,
+      "lineage_supported": true,
+      "status": "active",
+      "repeater_row_fields": [
+        "degree",
+        "specialization",
+        "university",
+        "year_completed"
+      ]
+    },
+    {
+      "field": "property_assets",
+      "category": "repeater",
+      "source_paths": {
+        "wizard": "repeaters.property_assets[]",
+        "db": "profile_property_assets",
+        "api": "profile.property_assets (when exposed)",
+        "public_profile": "repeaters.property_assets[].*"
+      },
+      "governed": true,
+      "comparison_supported": true,
+      "snapshot_supported": true,
+      "api_supported": false,
+      "repeater": true,
+      "normalization_supported": true,
+      "lineage_supported": true,
+      "status": "active",
+      "repeater_row_fields": [
+        "asset_type_id",
+        "ownership_type_id",
+        "location",
+        "notes"
+      ]
+    },
+    {
+      "field": "relatives",
+      "category": "repeater",
+      "source_paths": {
+        "wizard": "repeaters.relatives[]",
+        "db": "profile_relatives",
+        "api": "profile.relatives (when exposed)",
+        "public_profile": "repeaters.relatives[].*"
+      },
+      "governed": true,
+      "comparison_supported": true,
+      "snapshot_supported": true,
+      "api_supported": false,
+      "repeater": true,
+      "normalization_supported": true,
+      "lineage_supported": true,
+      "status": "active",
+      "repeater_row_fields": [
+        "relation_type",
+        "name",
+        "occupation",
+        "occupation_master_id",
+        "occupation_custom_id",
+        "city_id",
+        "state_id",
+        "contact_number",
+        "notes",
+        "is_primary_contact"
+      ]
+    },
+    {
+      "field": "siblings",
+      "category": "repeater",
+      "source_paths": {
+        "wizard": "repeaters.siblings[]",
+        "db": "profile_siblings",
+        "api": "profile.siblings (when exposed)",
+        "public_profile": "repeaters.siblings[].*"
+      },
+      "governed": true,
+      "comparison_supported": true,
+      "snapshot_supported": true,
+      "api_supported": false,
+      "repeater": true,
+      "normalization_supported": true,
+      "lineage_supported": true,
+      "status": "active",
+      "repeater_row_fields": [
+        "relation_type",
+        "name",
+        "gender",
+        "marital_status",
+        "occupation",
+        "occupation_master_id",
+        "occupation_custom_id",
+        "city_id",
+        "contact_number",
+        "notes"
+      ]
+    }
+  ]
+}

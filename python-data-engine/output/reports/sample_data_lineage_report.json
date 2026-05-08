@@ -1,0 +1,33 @@
+{
+  "data_lineage": {
+    "summary": {
+      "health_score": 94,
+      "manifest_errors": 0,
+      "wrong_sources": 0,
+      "multi_source_conflicts": 0,
+      "wizard_public_mismatches": 1,
+      "missing_render_risks": 0,
+      "fields_audited": 3
+    },
+    "manifest_errors": [],
+    "wrong_sources": [],
+    "multi_source_conflicts": [],
+    "wizard_public_mismatches": [
+      {
+        "field": "example_field",
+        "column": "city_id",
+        "detail": "Wizard blades reference profile column but public blades show no matching accessor",
+        "severity": "medium"
+      }
+    ],
+    "missing_render_risks": [],
+    "implementation": {
+      "phase": 2,
+      "manifest_path": "python-data-engine/config/data_lineage.yml",
+      "notes": [
+        "Bindings use regex over Blade text; dynamic indirect access may false-positive missing_render.",
+        "Extend data_lineage.yml as new wizard/public fields stabilize."
+      ]
+    }
+  }
+}

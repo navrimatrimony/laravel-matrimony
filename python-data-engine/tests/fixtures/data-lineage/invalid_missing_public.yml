@@ -1,0 +1,12 @@
+version: 1
+fields:
+  full_name:
+    canonical_source:
+      table: matrimony_profiles
+      column: full_name
+    wizard:
+      route: matrimony.profile.wizard.basic-info
+      blades:
+        - python-data-engine/tests/fixtures/data-lineage/blades/detection_sample.blade.php
+      bindings:
+        - profile.full_name

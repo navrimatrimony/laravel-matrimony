@@ -1,0 +1,68 @@
+<?php
+
+namespace App\Http\Controllers;
+
+use App\Models\User;
+use App\Services\WhatsAppService;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
+use Illuminate\Support\Str;
+
+class WhatsAppController extends Controller
+{
+    /**
+     * Inbound registration from WhatsApp Engine (JSON + X-API-KEY).
+     * Uses {@see User::$fillable} {@code mobile} for the WhatsApp phone value (request field {@code phone}).
+     */
+    public function registerUser(Request $request): JsonResponse
+    {
+        $expected = config('services.whatsapp_engine.api_key');
+        if (filled($expected) && $request->header('X-API-KEY') !== $expected) {
+            return response()->json(['message' => 'Unauthorized'], 401);
+        }
+
+        $request->validate([
+            'phone' => ['required', 'string', 'max:64'],
+            'name' => ['nullable', 'string', 'max:255'],
+            'gender' => ['nullable', 'string', 'max:32'],
+            'dob' => ['nullable', 'date'],
+            'marital_status' => ['nullable', 'string', 'max:64'],
+        ]);
+
+        $phone = $request->input('phone');
+
+        $user = User::where('mobile', $phone)->first();
+
+        if ($user) {
+            return response()->json([
+                'status' => 'exists',
+                'message' => 'User already exists',
+            ]);
+        }
+
+        $gender = $request->input('gender');
+        if (is_string($gender) && $gender !== '') {
+            $gender = Str::lower(trim($gender));
+        }
+
+        $user = User::create([
+            'name' => $request->input('name') ?? '',
+            'mobile' => $phone,
+            'gender' => $gender,
+            'dob' => $request->input('dob'),
+            'marital_status' => $request->input('marital_status'),
+            'password' => '123456',
+            'email' => null,
+        ]);
+
+        app(WhatsAppService::class)->send(
+            $user->mobile,
+            '🎉 Your profile is successfully created on Suchak Matrimony!'
+        );
+
+        return response()->json([
+            'status' => 'created',
+            'user_id' => $user->id,
+        ]);
+    }
+}

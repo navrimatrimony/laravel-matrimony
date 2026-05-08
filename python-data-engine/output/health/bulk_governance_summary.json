@@ -1,0 +1,22 @@
+{
+  "generated_at": "2026-05-06T15:25:04Z",
+  "profiles_scanned": 2,
+  "reliable_profiles": 1,
+  "unreliable_profiles": 1,
+  "rows": [
+    {
+      "profile_id": 207,
+      "health_score": 100,
+      "reliability_status": "ok",
+      "mismatch_count": 0,
+      "error": null
+    },
+    {
+      "profile_id": 206,
+      "health_score": 65,
+      "reliability_status": "comparison reliability insufficient",
+      "mismatch_count": 0,
+      "error": "eligible_snapshot_not_found"
+    }
+  ]
+}

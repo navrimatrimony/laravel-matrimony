@@ -1,0 +1,117 @@
+{
+  "snapshot_id": "snapshot_2026_05_06_125532",
+  "snapshot_path": "E:\\LaravelProjects\\laravel-matrimony\\storage\\app\\data-audit\\snapshots\\profile_207\\snapshot_2026_05_06_125532.json",
+  "health_score": 40,
+  "summary": {
+    "compared_fields": 11,
+    "mismatch_count": 3,
+    "high_severity_count": 3,
+    "medium_severity_count": 0,
+    "pass_count": 8
+  },
+  "comparisons": [
+    {
+      "field": "full_name",
+      "db": "Anita Gaikwad",
+      "api": "Anita Gaikwad",
+      "rendered": "Anita Gaikwad",
+      "comparison_type": "exact_match",
+      "severity": "low",
+      "status": "pass"
+    },
+    {
+      "field": "gender",
+      "db": "2",
+      "api": null,
+      "rendered": "2",
+      "comparison_type": "normalized_match",
+      "severity": "low",
+      "status": "pass"
+    },
+    {
+      "field": "date_of_birth",
+      "db": "1982-02-09",
+      "api": "1982-02-09",
+      "rendered": null,
+      "comparison_type": "missing_render",
+      "severity": "high",
+      "status": "fail"
+    },
+    {
+      "field": "height_cm",
+      "db": "163",
+      "api": null,
+      "rendered": "163",
+      "comparison_type": "normalized_match",
+      "severity": "low",
+      "status": "pass"
+    },
+    {
+      "field": "religion",
+      "db": "4",
+      "api": null,
+      "rendered": "4",
+      "comparison_type": "normalized_match",
+      "severity": "low",
+      "status": "pass"
+    },
+    {
+      "field": "caste",
+      "db": "412",
+      "api": "412",
+      "rendered": null,
+      "comparison_type": "missing_render",
+      "severity": "high",
+      "status": "fail"
+    },
+    {
+      "field": "education",
+      "db": "B.A., M.A.",
+      "api": "B.A., M.A.",
+      "rendered": "B.A., M.A.",
+      "comparison_type": "exact_match",
+      "severity": "low",
+      "status": "pass"
+    },
+    {
+      "field": "city",
+      "db": "37648",
+      "api": "37648",
+      "rendered": null,
+      "comparison_type": "missing_render",
+      "severity": "high",
+      "status": "fail"
+    },
+    {
+      "field": "state",
+      "db": null,
+      "api": "4",
+      "rendered": null,
+      "comparison_type": "normalized_match",
+      "severity": "low",
+      "status": "pass"
+    },
+    {
+      "field": "mother_tongue",
+      "db": "1",
+      "api": null,
+      "rendered": "1",
+      "comparison_type": "normalized_match",
+      "severity": "low",
+      "status": "pass"
+    },
+    {
+      "field": "marital_status",
+      "db": "2",
+      "api": null,
+      "rendered": "2",
+      "comparison_type": "normalized_match",
+      "severity": "low",
+      "status": "pass"
+    }
+  ],
+  "metrics": {
+    "compare_duration_ms": 2,
+    "snapshot_load_ms": 0
+  }
+}

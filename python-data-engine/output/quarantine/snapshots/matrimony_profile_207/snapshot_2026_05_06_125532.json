@@ -1,0 +1,184 @@
+{
+    "snapshot_version": "1",
+    "profile_id": 207,
+    "captured_at": "2026-05-06T12:55:32+05:30",
+    "sources": {
+        "db": true,
+        "api": true,
+        "rendered": true
+    },
+    "db": {
+        "full_name": "Anita Gaikwad",
+        "gender": 2,
+        "date_of_birth": "1982-02-09",
+        "height_cm": 163,
+        "religion": 4,
+        "caste": 412,
+        "education": "B.A., M.A.",
+        "occupation": null,
+        "annual_income": null,
+        "city": 37648,
+        "state": null,
+        "mother_tongue": 1,
+        "marital_status": 2
+    },
+    "api": {
+        "success": true,
+        "profile": {
+            "id": 207,
+            "user_id": 173,
+            "full_name": "Anita Gaikwad",
+            "gender": "",
+            "date_of_birth": "1982-02-09",
+            "caste": {
+                "id": 412,
+                "religion_id": 4,
+                "key": "maratha",
+                "label": "Maratha",
+                "is_active": 1,
+                "created_at": "2026-04-26T14:30:31.000000Z",
+                "updated_at": "2026-04-26T14:30:32.000000Z",
+                "label_en": "Maratha",
+                "label_mr": "à¤®à¤°à¤¾à¤ à¤¾"
+            },
+            "highest_education": "B.A., M.A.",
+            "location_id": 37648,
+            "country_id": 1,
+            "state_id": 4,
+            "district_id": 40,
+            "taluka_id": 371,
+            "profile_photo": "25100df2-6107-4b00-a516-c8a711dc763a.webp",
+            "created_at": "2026-05-03T15:57:27.000000Z",
+            "updated_at": "2026-05-03T16:11:24.000000Z"
+        }
+    },
+    "rendered": {
+        "pages": {
+            "public_profile": {
+                "route": "http://localhost/profile/207",
+                "html_sha1": "f7df947d976ed6ef79939445de1b4486c5571bec",
+                "html_excerpt": "<!DOCTYPE html>\n<html lang=\"en\">\n    <head>\n        <meta charset=\"utf-8\">\n        <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n        <meta name=\"csrf-token\" content=\"eGRCvHdGTW3lcNMzX7iBzS3ySfTW8lHnqLXpXaD8\">\n\t\t<meta name=\"robots\" content=\"noindex, nofollow\">\n\t\t<meta name=\"googlebot\" content=\"noindex, nofollow\">\n\n\n        <title>Laravel</title>\n\n        <!-- Fonts -->\n        <link rel=\"preconnect\" href=\"https://fonts.bunny.net\">\n        <link href=\"https://fonts.bunny.net/css?family=figtree:400,500,600&display=swap\" rel=\"stylesheet\" />\n\n        <!-- Scripts -->\n        <script type=\"module\" src=\"http://[::1]:5173/@vite/client\"></script><link rel=\"stylesheet\" href=\"http://[::1]:5173/resources/css/app.css\" /><script type=\"module\" src=\"http://[::1]:5173/resources/js/app.js\"></script><script type=\"module\" src=\"http://[::1]:5173/resources/js/profile/religion-caste-selector.js\"></script><script type=\"module\" src=\"http://[::1]:5173/resources/js/profile/location-typeahead.js\"></script><script type=\"module\" src=\"http://[::1]:5173/resources/js/profile/about-me-narrative.js\"></script><script type=\"module\" src=\"http://[::1]:5173/resources/js/matrimony/occupation-engine-entry.js\"></script>    </head>\n    <body class=\"font-sans antialiased\">\n        <script>\n(function () {\n    function stack() {\n        var s = document.getElementById('app-toast-stack');\n        if (!s) {\n            s = document.createElement('div');\n            s.id = 'app-toast-stack';\n            s.style.cssText = 'position:fixed;bottom:1rem;right:1rem;z-index:99999;display:flex;flex-direction:column;gap:0.5rem;max-width:min(22rem,calc(100vw - 2rem));pointer-events:none';\n            document.body.appendChild(s);\n        }\n        return s;\n    }\n    function pushToast(message, tone) {\n        var text = String(message || '').trim();\n        if (!text) {\n            return;\n        }\n        var el = document.createElement('div');\n        el.setAttribute('role', 'status');\n        "
+            },
+            "wizard": {
+                "section": "basic-info",
+                "html_sha1": "25c144d17e69d6f0e9611b1477dbcf0809d72b76",
+                "html_excerpt": "<!DOCTYPE html>\n<html lang=\"en\">\n    <head>\n        <meta charset=\"utf-8\">\n        <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n        <meta name=\"csrf-token\" content=\"qZJaVSz9EiK4HjSM45O9voyZKyUOVl0vheYBXmHZ\">\n\t\t<meta name=\"robots\" content=\"noindex, nofollow\">\n\t\t<meta name=\"googlebot\" content=\"noindex, nofollow\">\n\n\n        <title>Laravel</title>\n\n        <!-- Fonts -->\n        <link rel=\"preconnect\" href=\"https://fonts.bunny.net\">\n        <link href=\"https://fonts.bunny.net/css?family=figtree:400,500,600&display=swap\" rel=\"stylesheet\" />\n\n        <!-- Scripts -->\n        <script type=\"module\" src=\"http://[::1]:5173/@vite/client\"></script><link rel=\"stylesheet\" href=\"http://[::1]:5173/resources/css/app.css\" /><script type=\"module\" src=\"http://[::1]:5173/resources/js/app.js\"></script><script type=\"module\" src=\"http://[::1]:5173/resources/js/profile/religion-caste-selector.js\"></script><script type=\"module\" src=\"http://[::1]:5173/resources/js/profile/location-typeahead.js\"></script><script type=\"module\" src=\"http://[::1]:5173/resources/js/profile/about-me-narrative.js\"></script><script type=\"module\" src=\"http://[::1]:5173/resources/js/matrimony/occupation-engine-entry.js\"></script>    </head>\n    <body class=\"font-sans antialiased\">\n        <script>\n(function () {\n    function stack() {\n        var s = document.getElementById('app-toast-stack');\n        if (!s) {\n            s = document.createElement('div');\n            s.id = 'app-toast-stack';\n            s.style.cssText = 'position:fixed;bottom:1rem;right:1rem;z-index:99999;display:flex;flex-direction:column;gap:0.5rem;max-width:min(22rem,calc(100vw - 2rem));pointer-events:none';\n            document.body.appendChild(s);\n        }\n        return s;\n    }\n    function pushToast(message, tone) {\n        var text = String(message || '').trim();\n        if (!text) {\n            return;\n        }\n        var el = document.createElement('div');\n        el.setAttribute('role', 'status');\n        "
+            }
+        },
+        "fields": {
+            "public_profile": {
+                "full_name": {
+                    "raw_rendered": "Anita Gaikwad",
+                    "normalized": "Anita Gaikwad"
+                },
+                "gender": {
+                    "raw_rendered": "2",
+                    "normalized": "2"
+                },
+                "date_of_birth": {
+                    "raw_rendered": null,
+                    "normalized": null
+                },
+                "height_cm": {
+                    "raw_rendered": "163",
+                    "normalized": "163"
+                },
+                "religion": {
+                    "raw_rendered": "4",
+                    "normalized": "4"
+                },
+                "caste": {
+                    "raw_rendered": null,
+                    "normalized": null
+                },
+                "education": {
+                    "raw_rendered": "B.A., M.A.",
+                    "normalized": "B.A., M.A."
+                },
+                "occupation": {
+                    "raw_rendered": null,
+                    "normalized": null
+                },
+                "annual_income": {
+                    "raw_rendered": null,
+                    "normalized": null
+                },
+                "city": {
+                    "raw_rendered": null,
+                    "normalized": null
+                },
+                "state": {
+                    "raw_rendered": null,
+                    "normalized": null
+                },
+                "mother_tongue": {
+                    "raw_rendered": "1",
+                    "normalized": "1"
+                },
+                "marital_status": {
+                    "raw_rendered": "2",
+                    "normalized": "2"
+                }
+            },
+            "wizard": {
+                "full_name": {
+                    "raw_rendered": "Anita Gaikwad",
+                    "normalized": "Anita Gaikwad"
+                },
+                "gender": {
+                    "raw_rendered": "2",
+                    "normalized": "2"
+                },
+                "date_of_birth": {
+                    "raw_rendered": null,
+                    "normalized": null
+                },
+                "height_cm": {
+                    "raw_rendered": null,
+                    "normalized": null
+                },
+                "religion": {
+                    "raw_rendered": "4",
+                    "normalized": "4"
+                },
+                "caste": {
+                    "raw_rendered": null,
+                    "normalized": null
+                },
+                "education": {
+                    "raw_rendered": null,
+                    "normalized": null
+                },
+                "occupation": {
+                    "raw_rendered": null,
+                    "normalized": null
+                },
+                "annual_income": {
+                    "raw_rendered": null,
+                    "normalized": null
+                },
+                "city": {
+                    "raw_rendered": null,
+                    "normalized": null
+                },
+                "state": {
+                    "raw_rendered": null,
+                    "normalized": null
+                },
+                "mother_tongue": {
+                    "raw_rendered": "1",
+                    "normalized": "1"
+                },
+                "marital_status": {
+                    "raw_rendered": "2",
+                    "normalized": "2"
+                }
+            }
+        }
+    },
+    "metrics": {
+        "capture_duration_ms": 873,
+        "memory_peak_kb": 18432,
+        "rendered_pages_count": 2
+    }
+}

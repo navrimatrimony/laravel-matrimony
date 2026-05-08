@@ -28,6 +28,10 @@ class Kernel extends ConsoleKernel
      */
     protected function schedule(Schedule $schedule): void
     {
+        /*
+        | Python data engine daily analyze lives in routes/console.php ("data-engine-analyze").
+        | Laravel 11+ merges console routes into the scheduler; keep cron hooks there.
+        */
         // NightlyOcrLearningJob is scheduled in routes/console.php (Day-29)
         $schedule->command('intake:purge-old-files')->dailyAt('03:00');
         $schedule->command('subscriptions:expire')->daily();
@@ -38,7 +42,6 @@ class Kernel extends ConsoleKernel
         $schedule->command('showcase:send-outgoing-interests')->everyFifteenMinutes();
         $schedule->command('location:mark-open-place-auto-candidates')->hourly();
     }
-
 
     /**
      * Register the commands for the application.

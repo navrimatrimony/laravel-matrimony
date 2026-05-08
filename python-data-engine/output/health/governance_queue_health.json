@@ -1,0 +1,23 @@
+{
+    "generated_at": "2026-05-06T20:54:40+05:30",
+    "queues": [
+        "governance-snapshot",
+        "governance-comparison",
+        "governance-repair",
+        "governance-quarantine"
+    ],
+    "pending_jobs": {
+        "governance-snapshot": 0,
+        "governance-comparison": 0,
+        "governance-repair": 0,
+        "governance-quarantine": 0
+    },
+    "failed_jobs": {
+        "governance-snapshot": 0,
+        "governance-comparison": 0,
+        "governance-repair": 0,
+        "governance-quarantine": 0
+    },
+    "stuck_jobs_count": 0,
+    "recovered": false
+}

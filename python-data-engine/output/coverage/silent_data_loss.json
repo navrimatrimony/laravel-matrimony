@@ -1,0 +1,68 @@
+{
+  "alerts": [
+    {
+      "type": "saved_in_db_missing_in_api",
+      "field": "height_cm"
+    },
+    {
+      "type": "saved_in_db_missing_in_api",
+      "field": "religion"
+    },
+    {
+      "type": "saved_in_db_missing_in_api",
+      "field": "education"
+    },
+    {
+      "type": "saved_in_db_missing_in_api",
+      "field": "city"
+    },
+    {
+      "type": "saved_in_db_missing_in_api",
+      "field": "mother_tongue"
+    },
+    {
+      "type": "saved_in_db_missing_in_api",
+      "field": "marital_status"
+    },
+    {
+      "type": "saved_in_db_missing_in_api",
+      "field": "family_type"
+    },
+    {
+      "type": "saved_in_db_missing_in_api",
+      "field": "complexion"
+    },
+    {
+      "type": "saved_in_db_missing_in_api",
+      "field": "blood_group"
+    },
+    {
+      "type": "saved_in_db_missing_in_api",
+      "field": "nakshatra"
+    },
+    {
+      "type": "saved_in_db_missing_in_api",
+      "field": "rashi"
+    },
+    {
+      "type": "saved_in_db_missing_in_api",
+      "field": "mangal_dosh"
+    },
+    {
+      "type": "saved_in_db_missing_in_api",
+      "field": "professions"
+    },
+    {
+      "type": "saved_in_db_missing_in_api",
+      "field": "partner_preferences"
+    },
+    {
+      "type": "api_present_public_missing",
+      "field": "partner_preferences"
+    },
+    {
+      "type": "repeater_rows_silently_dropped",
+      "field": "contacts"
+    }
+  ]
+}

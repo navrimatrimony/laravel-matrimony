@@ -197,6 +197,7 @@ class AdminProfileEditGovernanceService
             $this->mutationService->applyManualSnapshot($profile, $snapshot, (int) $admin->id, 'admin');
 
             $profile->refresh();
+            $this->ensureControlledCoreIdsPersisted($profile, $updateData);
 
             if (in_array('caste_id', $editedFields) || in_array('caste', $editedFields)) {
                 $casteValue = $updateData['caste_id'] ?? $updateData['caste'] ?? null;
@@ -248,5 +249,50 @@ class AdminProfileEditGovernanceService
             mutated: true,
             edited_fields: $editedFields,
         );
+    }
+
+    /**
+     * Admin edit is expected to persist selected controlled IDs.
+     * If mutation pipeline leaves these IDs unchanged without conflicts,
+     * apply a direct, conflict-safe fallback write.
+     *
+     * @param  array<string, mixed>  $updateData
+     */
+    private function ensureControlledCoreIdsPersisted(MatrimonyProfile $profile, array $updateData): void
+    {
+        $controlledIdFields = ['religion_id', 'caste_id', 'sub_caste_id', 'marital_status_id'];
+        $fallback = [];
+
+        foreach ($controlledIdFields as $field) {
+            if (! array_key_exists($field, $updateData)) {
+                continue;
+            }
+
+            if (ConflictRecord::where('profile_id', $profile->id)->where('field_name', $field)->where('resolution_status', 'PENDING')->exists()) {
+                continue;
+            }
+
+            $requested = $updateData[$field];
+            $requested = $requested === '' ? null : $requested;
+            if (is_numeric($requested)) {
+                $requested = (int) $requested;
+            }
+
+            $current = $profile->getAttribute($field);
+            if (is_numeric($current)) {
+                $current = (int) $current;
+            }
+
+            if ($requested !== $current) {
+                $fallback[$field] = $requested;
+            }
+        }
+
+        if ($fallback === []) {
+            return;
+        }
+
+        $profile->forceFill($fallback)->save();
+        $profile->refresh();
     }
 }

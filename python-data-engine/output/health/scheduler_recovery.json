@@ -1,0 +1,12 @@
+{
+  "generated_at": "2026-05-07T11:27:13.806379+00:00",
+  "last_event_at": "2026-05-07T11:26:46.083490+00:00",
+  "stale_threshold_minutes": 30,
+  "recovery_checks": {
+    "scheduler_heartbeat_ok": true,
+    "failed_run_recovery_attempted": false,
+    "stale_run_detected": false,
+    "lock_recovery_attempted": false,
+    "crash_recovery_attempted": false
+  }
+}

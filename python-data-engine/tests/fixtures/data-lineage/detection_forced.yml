@@ -1,0 +1,69 @@
+version: 1
+fields:
+  height_cm:
+    canonical_source:
+      table: matrimony_profiles
+      column: height_cm
+    wizard:
+      route: matrimony.profile.wizard.basic-info
+      blades:
+        - python-data-engine/tests/fixtures/data-lineage/blades/wrong_source_only.blade.php
+      bindings:
+        - profile.height_cm
+    public_profile:
+      route: profile.show
+      blades:
+        - python-data-engine/tests/fixtures/data-lineage/blades/wrong_source_only.blade.php
+      bindings:
+        - profile.height_cm
+
+  city:
+    canonical_source:
+      table: matrimony_profiles
+      column: location_id
+    wizard:
+      route: matrimony.profile.wizard.location
+      blades:
+        - python-data-engine/tests/fixtures/data-lineage/blades/detection_sample.blade.php
+      bindings:
+        - profile.city
+    public_profile:
+      route: profile.show
+      blades:
+        - python-data-engine/tests/fixtures/data-lineage/blades/detection_sample.blade.php
+      bindings:
+        - profile.city
+
+  education:
+    canonical_source:
+      table: matrimony_profiles
+      column: education
+    wizard:
+      route: matrimony.profile.wizard.education
+      blades:
+        - python-data-engine/tests/fixtures/data-lineage/blades/detection_sample.blade.php
+      bindings:
+        - profile.education
+    public_profile:
+      route: profile.show
+      blades:
+        - python-data-engine/tests/fixtures/data-lineage/blades/detection_sample.blade.php
+      bindings:
+        - profile.qualification
+
+  mother_tongue:
+    canonical_source:
+      table: matrimony_profiles
+      column: mother_tongue
+    wizard:
+      route: matrimony.profile.wizard.basic-info
+      blades:
+        - python-data-engine/tests/fixtures/data-lineage/blades/detection_sample.blade.php
+      bindings:
+        - profile.language
+    public_profile:
+      route: profile.show
+      blades:
+        - python-data-engine/tests/fixtures/data-lineage/blades/detection_sample.blade.php
+      bindings:
+        - profile.language

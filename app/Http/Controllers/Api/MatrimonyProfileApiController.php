@@ -115,11 +115,7 @@ class MatrimonyProfileApiController extends Controller
             ], 404);
         }
 
-        // Hide rejected images - return null for profile_photo if explicitly rejected
-        $profileData = $profile->toArray();
-        if ($profile->photo_approved === false || ! $profile->profile_photo) {
-            $profileData['profile_photo'] = null;
-        }
+        $profileData = $this->buildGovernanceParityProfilePayload($profile);
 
         return response()->json([
             'success' => true,
@@ -171,11 +167,7 @@ class MatrimonyProfileApiController extends Controller
             }
         }
 
-        // Hide rejected images - return null for profile_photo if explicitly rejected
-        $profileData = $profile->toArray();
-        if ($profile->photo_approved === false || ! $profile->profile_photo) {
-            $profileData['profile_photo'] = null;
-        }
+        $profileData = $this->buildGovernanceParityProfilePayload($profile->fresh(['user', 'horoscope', 'preferenceCriteria']));
 
         return response()->json([
             'success' => true,
@@ -366,30 +358,64 @@ class MatrimonyProfileApiController extends Controller
         // Transform to include gender from user relationship (SSOT-approved field)
         // PIR-006: Null-safe when user relation is missing
         // Phase-4 Day-8: Use hierarchical location fields
-        $hints = $profile->residenceLocationHierarchyHints();
-        $geo = $profile->residenceGeoAddressIds();
-        $profileData = [
-            'id' => $profile->id,
-            'user_id' => $profile->user_id,
-            'full_name' => $profile->full_name,
-            'gender' => $profile->user ? ($profile->user->gender ?? null) : null,
-            'date_of_birth' => $profile->date_of_birth,
-            'caste' => $profile->caste,
-            'highest_education' => $profile->highest_education,
-            'location_id' => $profile->location_id,
-            'country_id' => $geo['country_id'],
-            'state_id' => $geo['state_id'],
-            'district_id' => $geo['district_id'],
-            'taluka_id' => $hints['taluka_id'] !== '' ? (int) $hints['taluka_id'] : null,
-            'profile_photo' => ($profile->profile_photo && $profile->photo_approved !== false) ? $profile->profile_photo : null,
-            'created_at' => $profile->created_at,
-            'updated_at' => $profile->updated_at,
-        ];
+        $profileData = $this->buildGovernanceParityProfilePayload($profile);
 
         return response()->json([
             'success' => true,
             'profile' => $profileData,
         ]);
+    }
+
+    /**
+     * Deterministic API payload aligned with snapshot / governance canonical registry (Phase-6E).
+     * Includes explicit *_id columns and legacy aliases where snapshots compare logical keys.
+     *
+     * @return array<string, mixed>
+     */
+    private function buildGovernanceParityProfilePayload(MatrimonyProfile $profile): array
+    {
+        $profile->loadMissing(['user', 'horoscope', 'preferenceCriteria']);
+
+        $hints = $profile->residenceLocationHierarchyHints();
+        $geo = $profile->residenceGeoAddressIds();
+        $horoscope = $profile->horoscope;
+
+        $criteria = $profile->preferenceCriteria;
+        $partnerPreferences = $criteria !== null ? $criteria->toArray() : null;
+
+        $base = $profile->toArray();
+        $parity = [
+            'gender' => $profile->user ? ($profile->user->gender ?? null) : null,
+            'gender_id' => $profile->gender_id,
+            'caste_id' => $profile->caste_id,
+            'country_id' => $geo['country_id'],
+            'state_id' => $geo['state_id'],
+            'district_id' => $geo['district_id'],
+            'taluka_id' => $hints['taluka_id'] !== '' ? (int) $hints['taluka_id'] : null,
+            'height_cm' => $profile->height_cm,
+            'religion_id' => $profile->religion_id,
+            'mother_tongue_id' => $profile->mother_tongue_id,
+            'marital_status_id' => $profile->marital_status_id,
+            'occupation_title' => $profile->occupation_title,
+            'annual_income' => $profile->annual_income,
+            'family_type_id' => $profile->family_type_id,
+            'complexion_id' => $profile->complexion_id,
+            'blood_group_id' => $profile->blood_group_id,
+            'profession_id' => $profile->profession_id,
+            'income_range_id' => $profile->income_range_id,
+            'nakshatra_id' => $horoscope ? $horoscope->nakshatra_id : null,
+            'rashi_id' => $horoscope ? $horoscope->rashi_id : null,
+            'mangal_dosh_type_id' => $horoscope ? ($horoscope->mangal_dosh_type_id ?? $horoscope->mangal_status_id) : null,
+            'partner_preferences' => $partnerPreferences,
+        ];
+
+        $profileData = array_merge($base, $parity);
+
+        if ($profile->photo_approved === false || ! $profile->profile_photo) {
+            $profileData['profile_photo'] = null;
+        }
+
+        return $profileData;
     }
 
 }

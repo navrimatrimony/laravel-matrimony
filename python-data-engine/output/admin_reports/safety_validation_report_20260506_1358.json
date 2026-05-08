@@ -1,0 +1,33 @@
+{
+  "schema_version": "1",
+  "report_type": "safety_validation",
+  "generated_at": "2026-05-06T13:58:00Z",
+  "checks": [
+    {
+      "name": "backward_compat_analyze",
+      "status": "pass",
+      "evidence": "python scripts/runner.py -> engine_analyze_20260506_135624.json"
+    },
+    {
+      "name": "backward_compat_fix",
+      "status": "pass",
+      "evidence": "MODE=fix ENGINE_FIX_ENABLED=false python scripts/runner.py -> engine_fix_20260506_135653.json"
+    },
+    {
+      "name": "dry_run_preview_safety",
+      "status": "pass",
+      "evidence": "auto-fix duplicate_profiles dry-run generated preview only, no execute summary"
+    },
+    {
+      "name": "rollback_execution",
+      "status": "pass",
+      "evidence": "auto-fix stale_indexes --execute produced rollback manifest + validation success"
+    },
+    {
+      "name": "scheduler_recovery_checks",
+      "status": "pass",
+      "evidence": "self-heal-check output/health/scheduler_recovery.json"
+    }
+  ]
+}
+

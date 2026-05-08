@@ -1,0 +1,41 @@
+{
+  "generated_at": "2026-05-06T15:25:47Z",
+  "total_orphan_rows": 0,
+  "relations": [
+    {
+      "table": "profile_siblings",
+      "type": "orphan_rows",
+      "count": 0
+    },
+    {
+      "table": "profile_relatives",
+      "type": "orphan_rows",
+      "count": 0
+    },
+    {
+      "table": "profile_children",
+      "type": "orphan_rows",
+      "count": 0
+    },
+    {
+      "table": "profile_property_assets",
+      "type": "orphan_rows",
+      "count": 0
+    },
+    {
+      "table": "profile_contacts",
+      "type": "orphan_rows",
+      "count": 0
+    },
+    {
+      "table": "profile_education",
+      "type": "orphan_rows",
+      "count": 0
+    },
+    {
+      "table": "profile_career",
+      "type": "orphan_rows",
+      "count": 0
+    }
+  ]
+}

@@ -1,0 +1,23 @@
+{
+  "snapshot_id": null,
+  "health_score": 65,
+  "summary": {
+    "compared_fields": 0,
+    "mismatch_count": 0,
+    "high_severity_count": 0,
+    "medium_severity_count": 0,
+    "pass_count": 0
+  },
+  "comparisons": [],
+  "reliability": {
+    "reliability_status": "comparison reliability insufficient",
+    "reliability_score": 0,
+    "snapshot_confidence": 0,
+    "extraction_completeness": 0
+  },
+  "metrics": {
+    "compare_duration_ms": 0,
+    "snapshot_load_ms": 0
+  },
+  "error": "eligible_snapshot_not_found"
+}

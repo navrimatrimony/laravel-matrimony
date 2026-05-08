@@ -1,0 +1,22 @@
+{
+  "case": "malformed_manifest",
+  "summary": {
+    "health_score": 80,
+    "manifest_errors": 1,
+    "wrong_sources": 0,
+    "multi_source_conflicts": 0,
+    "wizard_public_mismatches": 0,
+    "missing_render_risks": 0,
+    "fields_audited": 0
+  },
+  "manifest_errors": [
+    {
+      "severity": "high",
+      "detail_prefix": "manifest_yaml_error:"
+    }
+  ],
+  "metrics": {
+    "blade_count_scanned": 0,
+    "manifest_field_count": 0
+  }
+}

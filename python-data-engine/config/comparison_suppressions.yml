@@ -1,0 +1,24 @@
+suppressions:
+  - field: annual_income
+    comparison_type: missing_render
+    route_view: public_profile
+    reason: intentionally_hidden_on_public_profile
+    suppress: true
+
+  - field: height_cm
+    comparison_type: normalized_match
+    reason: normalized_height_is_expected
+    suppress: true
+
+  - field: city
+    comparison_type: missing_render
+    route_view: wizard
+    reason: wizard_basic_info_may_not_render_city_literal
+    suppress: true
+
+  - field: education
+    comparison_type: cross_layer_inconsistency
+    reason: temporary_mapping_override
+    suppress: false
+    severity_override: high
+

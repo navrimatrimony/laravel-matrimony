@@ -31,6 +31,7 @@
     "autoload": {
         "psr-4": {
             "App\\": "app/",
+            "NMN\\DataGovernance\\": "app/NMN/DataGovernance/",
             "Database\\Factories\\": "database/factories/",
             "Database\\Seeders\\": "database/seeders/"
         }
@@ -40,6 +41,15 @@
             "Tests\\": "tests/"
         }
     },
+    "repositories": [
+        {
+            "type": "path",
+            "url": "packages/nmn/data-governance",
+            "options": {
+                "symlink": true
+            }
+        }
+    ],
     "scripts": {
         "setup": [
             "composer install",

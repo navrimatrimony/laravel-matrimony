@@ -1,0 +1,28 @@
+{
+  "generated_at": "2026-05-06T15:25:49Z",
+  "checks": [
+    {
+      "check": "shell_injection_guard",
+      "passed": true
+    },
+    {
+      "check": "snapshot_dos_size_guard",
+      "passed": true
+    },
+    {
+      "check": "unsafe_rollback_direct_exec",
+      "passed": true
+    },
+    {
+      "check": "queue_exhaustion_monitoring",
+      "passed": true,
+      "note": "Laravel governance:queue-health command adds queue pressure visibility."
+    },
+    {
+      "check": "permission_bypass",
+      "passed": true,
+      "note": "Laravel admin actions still gate through existing service and roles."
+    }
+  ],
+  "all_passed": true
+}

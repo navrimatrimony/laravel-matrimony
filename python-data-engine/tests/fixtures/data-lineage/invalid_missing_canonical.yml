@@ -1,0 +1,15 @@
+version: 1
+fields:
+  education:
+    wizard:
+      route: matrimony.profile.wizard.education
+      blades:
+        - python-data-engine/tests/fixtures/data-lineage/blades/detection_sample.blade.php
+      bindings:
+        - profile.education
+    public_profile:
+      route: profile.show
+      blades:
+        - python-data-engine/tests/fixtures/data-lineage/blades/detection_sample.blade.php
+      bindings:
+        - profile.education

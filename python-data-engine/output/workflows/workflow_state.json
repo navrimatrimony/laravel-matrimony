@@ -1,0 +1,385 @@
+{
+  "schema_version": "1",
+  "actions": [
+    {
+      "action_id": "ops-dashboard",
+      "state": "detected",
+      "timestamp": "2026-05-06T13:55:22.812279+00:00",
+      "details": {
+        "report": "E:\\LaravelProjects\\laravel-matrimony\\python-data-engine\\output\\reports\\engine_analyze_20260506_134144.json",
+        "comparison": "E:\\LaravelProjects\\laravel-matrimony\\python-data-engine\\output\\comparisons\\snapshot_comparison_20260506_134149.json"
+      }
+    },
+    {
+      "action_id": "auto-fix:duplicate_profiles",
+      "state": "reviewed",
+      "timestamp": "2026-05-06T13:55:22.829516+00:00",
+      "details": {
+        "pipeline": {
+          "recipe": "duplicate_profiles",
+          "workflow": "detect->preview->backup->execute->validate->rollback",
+          "detected_count": 0,
+          "preview": {
+            "rows": [
+              {
+                "id": 173,
+                "name": "Anita Gaikwad",
+                "mobile": "1111111111",
+                "email": null
+              }
+            ],
+            "estimated_changes": 0,
+            "confidence": 0.86,
+            "risk": "high",
+            "rollback_available": true
+          },
+          "dry_run": true,
+          "backup_manifest": null,
+          "execute_summary": null,
+          "validation": null,
+          "rollback": null,
+          "status": "preview_ready"
+        }
+      }
+    },
+    {
+      "action_id": "auto-fix:stale_indexes",
+      "state": "rolled_back",
+      "timestamp": "2026-05-06T13:55:56.177702+00:00",
+      "details": {
+        "pipeline": {
+          "recipe": "stale_indexes",
+          "workflow": "detect->preview->backup->execute->validate->rollback",
+          "detected_count": 4,
+          "preview": {
+            "rows": [
+              {
+                "id": 173,
+                "name": "Anita Gaikwad",
+                "mobile": "1111111111",
+                "email": null,
+                "updated_at": "2026-05-03 21:42:25"
+              },
+              {
+                "id": 172,
+                "name": "Auditor Test",
+                "mobile": null,
+                "email": "auditor_test@example.com",
+                "updated_at": "2026-05-03 21:03:42"
+              }
+            ],
+            "estimated_changes": 4,
+            "confidence": 0.66,
+            "risk": "low",
+            "rollback_available": true
+          },
+          "dry_run": false,
+          "backup_manifest": "E:\\LaravelProjects\\laravel-matrimony\\python-data-engine\\output\\rollback\\rollback_manifest_stale_indexes_20260506_135556.json",
+          "execute_summary": {
+            "affected_rows": 0
+          },
+          "validation": {
+            "remaining_problem_rows": 4,
+            "passed": false
+          },
+          "rollback": {
+            "performed": true,
+            "execution": {
+              "restored_rows": 4,
+              "skipped_rows": 0,
+              "manifest": "E:\\LaravelProjects\\laravel-matrimony\\python-data-engine\\output\\rollback\\rollback_manifest_stale_indexes_20260506_135556.json"
+            },
+            "validation": {
+              "validated_rows": 4,
+              "mismatch_rows": 0
+            }
+          },
+          "status": "rolled_back"
+        }
+      }
+    },
+    {
+      "action_id": "auto-fix:missing_coordinates",
+      "state": "failed",
+      "timestamp": "2026-05-06T13:57:54.914685+00:00",
+      "details": {
+        "pipeline": {
+          "recipe": "missing_coordinates",
+          "status": "failed",
+          "error": "(1054, \"Unknown column 'pin_code' in 'field list'\")",
+          "dry_run": false
+        }
+      }
+    },
+    {
+      "action_id": "ops-dashboard",
+      "state": "detected",
+      "timestamp": "2026-05-06T14:09:09.298273+00:00",
+      "details": {
+        "report": "E:\\LaravelProjects\\laravel-matrimony\\python-data-engine\\output\\reports\\engine_fix_20260506_135653.json",
+        "comparison": "E:\\LaravelProjects\\laravel-matrimony\\python-data-engine\\output\\comparisons\\snapshot_comparison_20260506_134149.json"
+      }
+    },
+    {
+      "action_id": "auto-fix:duplicate_profiles",
+      "state": "failed",
+      "timestamp": "2026-05-06T14:09:20.656837+00:00",
+      "details": {
+        "pipeline": {
+          "recipe": "duplicate_profiles",
+          "status": "failed",
+          "error": "PyYAML is required for recipe loading.",
+          "dry_run": true
+        }
+      }
+    },
+    {
+      "action_id": "auto-fix:duplicate_profiles",
+      "state": "reviewed",
+      "timestamp": "2026-05-06T14:10:38.728136+00:00",
+      "details": {
+        "pipeline": {
+          "recipe": "duplicate_profiles",
+          "workflow": "detect->preview->backup->execute->validate->rollback",
+          "detected_count": 0,
+          "preview": {
+            "rows": [
+              {
+                "id": 173,
+                "name": "Anita Gaikwad",
+                "mobile": "1111111111",
+                "email": null
+              }
+            ],
+            "estimated_changes": 0,
+            "confidence": 0.86,
+            "risk": "high",
+            "rollback_available": true
+          },
+          "dry_run": true,
+          "backup_manifest": null,
+          "execute_summary": null,
+          "validation": null,
+          "rollback": null,
+          "status": "preview_ready"
+        }
+      }
+    },
+    {
+      "action_id": "auto-fix:duplicate_profiles",
+      "state": "rolled_back",
+      "timestamp": "2026-05-06T14:24:41.798725+00:00",
+      "details": {
+        "pipeline": {
+          "recipe": "duplicate_profiles",
+          "workflow": "detect->preview->backup->execute->validate->rollback",
+          "detected_count": 0,
+          "preview": {
+            "rows": [
+              {
+                "id": 173,
+                "name": "Anita Gaikwad",
+                "mobile": "1111111111",
+                "email": null
+              }
+            ],
+            "estimated_changes": 0,
+            "confidence": 0.86,
+            "risk": "high",
+            "rollback_available": true
+          },
+          "dry_run": false,
+          "backup_manifest": "E:\\LaravelProjects\\laravel-matrimony\\python-data-engine\\output\\rollback\\rollback_manifest_duplicate_profiles_20260506_142441.json",
+          "execute_summary": {
+            "error": "(1064, \"You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near '' at line 1\")"
+          },
+          "validation": null,
+          "rollback": {
+            "performed": true,
+            "execution": {
+              "restored_rows": 0,
+              "skipped_rows": 0,
+              "manifest": "E:\\LaravelProjects\\laravel-matrimony\\python-data-engine\\output\\rollback\\rollback_manifest_duplicate_profiles_20260506_142441.json"
+            },
+            "validation": {
+              "validated_rows": 0,
+              "mismatch_rows": 0
+            }
+          },
+          "status": "rolled_back"
+        }
+      }
+    },
+    {
+      "action_id": "ops-dashboard",
+      "state": "detected",
+      "timestamp": "2026-05-06T14:24:43.623169+00:00",
+      "details": {
+        "report": "E:\\LaravelProjects\\laravel-matrimony\\python-data-engine\\output\\reports\\engine_fix_20260506_135653.json",
+        "comparison": "E:\\LaravelProjects\\laravel-matrimony\\python-data-engine\\output\\comparisons\\snapshot_comparison_20260506_142442.json"
+      }
+    },
+    {
+      "action_id": "auto-fix:duplicate_profiles",
+      "state": "rolled_back",
+      "timestamp": "2026-05-06T14:25:15.167154+00:00",
+      "details": {
+        "pipeline": {
+          "recipe": "duplicate_profiles",
+          "workflow": "detect->preview->backup->execute->validate->rollback",
+          "detected_count": 0,
+          "preview": {
+            "rows": [
+              {
+                "id": 173,
+                "name": "Anita Gaikwad",
+                "mobile": "1111111111",
+                "email": null
+              }
+            ],
+            "estimated_changes": 0,
+            "confidence": 0.86,
+            "risk": "high",
+            "rollback_available": true
+          },
+          "dry_run": false,
+          "backup_manifest": "E:\\LaravelProjects\\laravel-matrimony\\python-data-engine\\output\\rollback\\rollback_manifest_duplicate_profiles_20260506_142515.json",
+          "execute_summary": {
+            "error": "(1064, \"You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near '' at line 1\")"
+          },
+          "validation": null,
+          "rollback": {
+            "performed": true,
+            "execution": {
+              "restored_rows": 0,
+              "skipped_rows": 0,
+              "manifest": "E:\\LaravelProjects\\laravel-matrimony\\python-data-engine\\output\\rollback\\rollback_manifest_duplicate_profiles_20260506_142515.json"
+            },
+            "validation": {
+              "validated_rows": 0,
+              "mismatch_rows": 0
+            }
+          },
+          "status": "rolled_back"
+        }
+      }
+    },
+    {
+      "action_id": "ops-dashboard",
+      "state": "detected",
+      "timestamp": "2026-05-06T14:25:17.015145+00:00",
+      "details": {
+        "report": "E:\\LaravelProjects\\laravel-matrimony\\python-data-engine\\output\\reports\\engine_fix_20260506_135653.json",
+        "comparison": "E:\\LaravelProjects\\laravel-matrimony\\python-data-engine\\output\\comparisons\\snapshot_comparison_20260506_142516.json"
+      }
+    },
+    {
+      "action_id": "ops-dashboard",
+      "state": "detected",
+      "timestamp": "2026-05-06T14:49:15.212675+00:00",
+      "details": {
+        "report": "E:\\LaravelProjects\\laravel-matrimony\\python-data-engine\\output\\reports\\engine_fix_20260506_135653.json",
+        "comparison": "E:\\LaravelProjects\\laravel-matrimony\\python-data-engine\\output\\comparisons\\snapshot_comparison_20260506_144914.json"
+      }
+    },
+    {
+      "action_id": "ops-dashboard",
+      "state": "detected",
+      "timestamp": "2026-05-06T14:49:40.891898+00:00",
+      "details": {
+        "report": "E:\\LaravelProjects\\laravel-matrimony\\python-data-engine\\output\\reports\\engine_fix_20260506_135653.json",
+        "comparison": "E:\\LaravelProjects\\laravel-matrimony\\python-data-engine\\output\\comparisons\\snapshot_comparison_20260506_144914.json"
+      }
+    },
+    {
+      "action_id": "ops-dashboard",
+      "state": "detected",
+      "timestamp": "2026-05-06T14:50:06.673351+00:00",
+      "details": {
+        "report": "E:\\LaravelProjects\\laravel-matrimony\\python-data-engine\\output\\reports\\engine_fix_20260506_135653.json",
+        "comparison": "E:\\LaravelProjects\\laravel-matrimony\\python-data-engine\\output\\comparisons\\snapshot_comparison_20260506_144914.json"
+      }
+    },
+    {
+      "action_id": "ops-dashboard",
+      "state": "detected",
+      "timestamp": "2026-05-06T14:54:35.747106+00:00",
+      "details": {
+        "report": "E:\\LaravelProjects\\laravel-matrimony\\python-data-engine\\output\\reports\\engine_fix_20260506_135653.json",
+        "comparison": "E:\\LaravelProjects\\laravel-matrimony\\python-data-engine\\output\\comparisons\\snapshot_comparison_20260506_144914.json"
+      }
+    },
+    {
+      "action_id": "ops-dashboard",
+      "state": "detected",
+      "timestamp": "2026-05-06T15:06:34.678398+00:00",
+      "details": {
+        "report": "E:\\LaravelProjects\\laravel-matrimony\\python-data-engine\\output\\reports\\engine_fix_20260506_135653.json",
+        "comparison": "E:\\LaravelProjects\\laravel-matrimony\\python-data-engine\\output\\comparisons\\snapshot_comparison_20260506_150633.json"
+      }
+    },
+    {
+      "action_id": "ops-dashboard",
+      "state": "detected",
+      "timestamp": "2026-05-06T15:07:05.536565+00:00",
+      "details": {
+        "report": "E:\\LaravelProjects\\laravel-matrimony\\python-data-engine\\output\\reports\\engine_fix_20260506_135653.json",
+        "comparison": "E:\\LaravelProjects\\laravel-matrimony\\python-data-engine\\output\\comparisons\\snapshot_comparison_20260506_150704.json"
+      }
+    },
+    {
+      "action_id": "ops-dashboard",
+      "state": "detected",
+      "timestamp": "2026-05-06T15:24:39.727692+00:00",
+      "details": {
+        "report": "E:\\LaravelProjects\\laravel-matrimony\\python-data-engine\\output\\reports\\engine_fix_20260506_135653.json",
+        "comparison": "E:\\LaravelProjects\\laravel-matrimony\\python-data-engine\\output\\comparisons\\snapshot_comparison_20260506_150704.json"
+      }
+    },
+    {
+      "action_id": "ops-dashboard",
+      "state": "detected",
+      "timestamp": "2026-05-06T15:53:28.555195+00:00",
+      "details": {
+        "report": "E:\\LaravelProjects\\laravel-matrimony\\python-data-engine\\output\\reports\\engine_fix_20260506_135653.json",
+        "comparison": "E:\\LaravelProjects\\laravel-matrimony\\python-data-engine\\output\\comparisons\\snapshot_comparison_20260506_155325.json"
+      }
+    },
+    {
+      "action_id": "ops-dashboard",
+      "state": "detected",
+      "timestamp": "2026-05-06T15:54:42.078020+00:00",
+      "details": {
+        "report": "E:\\LaravelProjects\\laravel-matrimony\\python-data-engine\\output\\reports\\engine_fix_20260506_135653.json",
+        "comparison": "E:\\LaravelProjects\\laravel-matrimony\\python-data-engine\\output\\comparisons\\snapshot_comparison_20260506_155438.json"
+      }
+    },
+    {
+      "action_id": "ops-dashboard",
+      "state": "detected",
+      "timestamp": "2026-05-07T00:55:37.051410+00:00",
+      "details": {
+        "report": "E:\\LaravelProjects\\laravel-matrimony\\python-data-engine\\output\\reports\\engine_fix_20260506_135653.json",
+        "comparison": "E:\\LaravelProjects\\laravel-matrimony\\python-data-engine\\output\\comparisons\\snapshot_comparison_20260507_005532.json"
+      }
+    },
+    {
+      "action_id": "ops-dashboard",
+      "state": "detected",
+      "timestamp": "2026-05-07T02:37:57.934608+00:00",
+      "details": {
+        "report": "E:\\LaravelProjects\\laravel-matrimony\\python-data-engine\\output\\reports\\engine_fix_20260506_135653.json",
+        "comparison": "E:\\LaravelProjects\\laravel-matrimony\\python-data-engine\\output\\comparisons\\snapshot_comparison_20260507_011721.json"
+      }
+    },
+    {
+      "action_id": "ops-dashboard",
+      "state": "detected",
+      "timestamp": "2026-05-07T11:27:11.985356+00:00",
+      "details": {
+        "report": "E:\\LaravelProjects\\laravel-matrimony\\python-data-engine\\output\\reports\\engine_fix_20260506_135653.json",
+        "comparison": "E:\\LaravelProjects\\laravel-matrimony\\python-data-engine\\output\\comparisons\\snapshot_comparison_20260507_112646.json"
+      }
+    }
+  ]
+}

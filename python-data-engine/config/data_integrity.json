@@ -1,0 +1,143 @@
+{
+  "notes": "Semantic groups: multiple physical columns can represent the same concept — risk of dual sources of truth. Extend this list as the schema evolves.",
+  "matrimony_profiles_system_columns": [
+    "id",
+    "user_id",
+    "created_at",
+    "updated_at",
+    "lifecycle_state",
+    "profile_completion_score",
+    "profile_photo",
+    "photo_approved",
+    "photo_rejected_at",
+    "photo_rejection_reason",
+    "admin_edited_fields",
+    "last_manual_edit_at",
+    "is_suspended",
+    "suspended_at",
+    "suspend_reason"
+  ],
+  "semantic_groups": [
+    {
+      "id": "height",
+      "label": "Height (duplicate physical columns)",
+      "tables": ["matrimony_profiles"],
+      "columns": ["height_cm", "height", "height_in"]
+    },
+    {
+      "id": "user_phone",
+      "label": "User phone (duplicate columns on users)",
+      "tables": ["users"],
+      "columns": ["mobile", "phone", "phone_number"]
+    }
+  ],
+  "core_field_storage": {
+    "blood_group": {
+      "storage_type": "column_alias",
+      "target_column": "blood_group_id",
+      "aliases": ["blood_group_id"]
+    },
+    "caste": {
+      "storage_type": "column_alias",
+      "target_column": "caste_id",
+      "aliases": ["caste_id"]
+    },
+    "city_id": {
+      "storage_type": "virtual",
+      "virtual": true,
+      "computed": true,
+      "json_path": "residenceLocationHierarchyHints.city_id",
+      "detail": "Derived from location_id hierarchy; not persisted as matrimony_profiles.city_id."
+    },
+    "complexion": {
+      "storage_type": "column_alias",
+      "target_column": "complexion_id",
+      "aliases": ["complexion_id"]
+    },
+    "country_id": {
+      "storage_type": "virtual",
+      "virtual": true,
+      "computed": true,
+      "json_path": "residenceLocationHierarchyHints.country_id",
+      "detail": "Derived from location_id hierarchy; not persisted as matrimony_profiles.country_id."
+    },
+    "district_id": {
+      "storage_type": "virtual",
+      "virtual": true,
+      "computed": true,
+      "json_path": "residenceLocationHierarchyHints.district_id",
+      "detail": "Derived from location_id hierarchy; not persisted as matrimony_profiles.district_id."
+    },
+    "education": {
+      "storage_type": "column_alias",
+      "target_column": "highest_education",
+      "aliases": ["highest_education"]
+    },
+    "family_type": {
+      "storage_type": "column_alias",
+      "target_column": "family_type_id",
+      "aliases": ["family_type_id"]
+    },
+    "gender": {
+      "storage_type": "column_alias",
+      "target_column": "gender_id",
+      "aliases": ["gender_id"]
+    },
+    "income_currency": {
+      "storage_type": "column_alias",
+      "target_column": "income_currency_id",
+      "aliases": ["income_currency_id"]
+    },
+    "location": {
+      "storage_type": "column_alias",
+      "target_column": "location_id",
+      "aliases": ["location_id"]
+    },
+    "marital_status": {
+      "storage_type": "column_alias",
+      "target_column": "marital_status_id",
+      "aliases": ["marital_status_id"]
+    },
+    "physical_build": {
+      "storage_type": "column_alias",
+      "target_column": "physical_build_id",
+      "aliases": ["physical_build_id"]
+    },
+    "religion": {
+      "storage_type": "column_alias",
+      "target_column": "religion_id",
+      "aliases": ["religion_id"]
+    },
+    "state_id": {
+      "storage_type": "virtual",
+      "virtual": true,
+      "computed": true,
+      "json_path": "residenceLocationHierarchyHints.state_id",
+      "detail": "Derived from location_id hierarchy; not persisted as matrimony_profiles.state_id."
+    },
+    "sub_caste": {
+      "storage_type": "column_alias",
+      "target_column": "sub_caste_id",
+      "aliases": ["sub_caste_id"]
+    },
+    "taluka_id": {
+      "storage_type": "virtual",
+      "virtual": true,
+      "computed": true,
+      "json_path": "residenceLocationHierarchyHints.taluka_id",
+      "detail": "Derived from location_id hierarchy; not persisted as matrimony_profiles.taluka_id."
+    }
+  },
+  "roadmap": [
+    {
+      "phase": 2,
+      "title": "Wizard / public profile view audit",
+      "detail": "Add a repo-root manifest (YAML) mapping field_key → primary blade source, or scan resources/views/matrimony/profile-wizard for $profile-> access; compare to public profile templates."
+    },
+    {
+      "phase": 3,
+      "title": "Sampled row-level checks",
+      "detail": "For N profiles, detect populated duplicate semantic columns or NULL in public display path (requires display layer contract)."
+    }
+  ]
+}

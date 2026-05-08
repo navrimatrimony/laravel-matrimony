@@ -1,0 +1,11 @@
+entity: customer
+table: customers
+canonical_fields:
+  - name
+  - email
+  - phone
+  - city
+routes:
+  public_profile:
+    path: /customers/{id}
+

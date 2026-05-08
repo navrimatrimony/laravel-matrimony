@@ -1,0 +1,1166 @@
+{
+  "generated_at": "2026-05-08T11:18:57Z",
+  "snapshot_id": "snapshot_2026_05_08_164846",
+  "snapshot_path": "E:\\LaravelProjects\\laravel-matrimony\\storage\\app\\data-audit\\snapshots\\matrimony_profile_207\\snapshot_2026_05_08_164846.json",
+  "health_score": 60,
+  "summary": {
+    "compared_fields": 19,
+    "canonical_governed_logical_field_count": 29,
+    "mismatch_count": 2,
+    "high_severity_count": 2,
+    "medium_severity_count": 0,
+    "pass_count": 17,
+    "suppressed_count": 0
+  },
+  "reliability": {
+    "reliability_status": "ok",
+    "reliability_score": 100,
+    "snapshot_confidence": 100,
+    "extraction_completeness": 100
+  },
+  "comparisons": [
+    {
+      "field": "blood_group",
+      "db": "1",
+      "api": "1",
+      "rendered": "1",
+      "comparison_type": "exact_match",
+      "severity": "low",
+      "status": "pass",
+      "suppressed": false,
+      "suppression_reason": null,
+      "effective_severity": "low",
+      "source_layer": "flattened"
+    },
+    {
+      "field": "caste",
+      "db": "412",
+      "api": "412",
+      "rendered": "412",
+      "comparison_type": "exact_match",
+      "severity": "low",
+      "status": "pass",
+      "suppressed": false,
+      "suppression_reason": null,
+      "effective_severity": "low",
+      "source_layer": "flattened"
+    },
+    {
+      "field": "city",
+      "db": "37648",
+      "api": "37648",
+      "rendered": "37648",
+      "comparison_type": "exact_match",
+      "severity": "low",
+      "status": "pass",
+      "suppressed": false,
+      "suppression_reason": null,
+      "effective_severity": "low",
+      "source_layer": "flattened"
+    },
+    {
+      "field": "complexion",
+      "db": "2",
+      "api": "2",
+      "rendered": "2",
+      "comparison_type": "exact_match",
+      "severity": "low",
+      "status": "pass",
+      "suppressed": false,
+      "suppression_reason": null,
+      "effective_severity": "low",
+      "source_layer": "flattened"
+    },
+    {
+      "field": "date_of_birth",
+      "db": "1982-02-09",
+      "api": "1982-02-09",
+      "rendered": "1982-02-09",
+      "comparison_type": "exact_match",
+      "severity": "low",
+      "status": "pass",
+      "suppressed": false,
+      "suppression_reason": null,
+      "effective_severity": "low",
+      "source_layer": "flattened"
+    },
+    {
+      "field": "education",
+      "db": "B.A., M.A.",
+      "api": "B.A., M.A.",
+      "rendered": null,
+      "comparison_type": "missing_render",
+      "severity": "high",
+      "status": "fail",
+      "suppressed": false,
+      "suppression_reason": null,
+      "effective_severity": "high",
+      "source_layer": "flattened"
+    },
+    {
+      "field": "family_type",
+      "db": "1",
+      "api": "1",
+      "rendered": "1",
+      "comparison_type": "exact_match",
+      "severity": "low",
+      "status": "pass",
+      "suppressed": false,
+      "suppression_reason": null,
+      "effective_severity": "low",
+      "source_layer": "flattened"
+    },
+    {
+      "field": "full_name",
+      "db": "Anita Gaikwad",
+      "api": "Anita Gaikwad",
+      "rendered": "Anita Gaikwad",
+      "comparison_type": "exact_match",
+      "severity": "low",
+      "status": "pass",
+      "suppressed": false,
+      "suppression_reason": null,
+      "effective_severity": "low",
+      "source_layer": "flattened"
+    },
+    {
+      "field": "gender",
+      "db": "2",
+      "api": null,
+      "rendered": "2",
+      "comparison_type": "normalized_match",
+      "severity": "low",
+      "status": "pass",
+      "suppressed": false,
+      "suppression_reason": null,
+      "effective_severity": "low",
+      "source_layer": "flattened"
+    },
+    {
+      "field": "height_cm",
+      "db": "163",
+      "api": "163",
+      "rendered": "163",
+      "comparison_type": "exact_match",
+      "severity": "low",
+      "status": "pass",
+      "suppressed": false,
+      "suppression_reason": null,
+      "effective_severity": "low",
+      "source_layer": "flattened"
+    },
+    {
+      "field": "mangal_dosh",
+      "db": "2",
+      "api": "2",
+      "rendered": "2",
+      "comparison_type": "exact_match",
+      "severity": "low",
+      "status": "pass",
+      "suppressed": false,
+      "suppression_reason": null,
+      "effective_severity": "low",
+      "source_layer": "flattened"
+    },
+    {
+      "field": "marital_status",
+      "db": "2",
+      "api": "2",
+      "rendered": "2",
+      "comparison_type": "exact_match",
+      "severity": "low",
+      "status": "pass",
+      "suppressed": false,
+      "suppression_reason": null,
+      "effective_severity": "low",
+      "source_layer": "flattened"
+    },
+    {
+      "field": "mother_tongue",
+      "db": "1",
+      "api": "1",
+      "rendered": "1",
+      "comparison_type": "exact_match",
+      "severity": "low",
+      "status": "pass",
+      "suppressed": false,
+      "suppression_reason": null,
+      "effective_severity": "low",
+      "source_layer": "flattened"
+    },
+    {
+      "field": "nakshatra",
+      "db": "17",
+      "api": "17",
+      "rendered": "17",
+      "comparison_type": "exact_match",
+      "severity": "low",
+      "status": "pass",
+      "suppressed": false,
+      "suppression_reason": null,
+      "effective_severity": "low",
+      "source_layer": "flattened"
+    },
+    {
+      "field": "partner_preferences",
+      "db": "{\"created_at\": \"2026-05-03T16:01:46.000000Z\", \"id\": 100, \"marriage_type_preference_id\": 1, \"partner_profile_with_children\": \"yes_if_live_separate\", \"preferred_age_max\": 49, \"preferred_age_min\": 44, \"preferred_city_id\": null, \"preferred_education\": null, \"preferred_height_max_cm\": 173, \"preferred_height_min_cm\": 163, \"preferred_income_max\": \"2500000.00\", \"preferred_income_min\": \"300000.00\", \"preferred_marital_status_id\": null, \"preferred_profile_managed_by\": null, \"profile_id\": 207, \"settled_city_preference_id\": null, \"updated_at\": \"2026-05-06T14:37:12.000000Z\", \"willing_to_relocate\": true}",
+      "api": "100",
+      "rendered": null,
+      "comparison_type": "missing_render",
+      "severity": "high",
+      "status": "fail",
+      "suppressed": false,
+      "suppression_reason": null,
+      "effective_severity": "high",
+      "source_layer": "flattened"
+    },
+    {
+      "field": "professions",
+      "db": "17",
+      "api": "17",
+      "rendered": "17",
+      "comparison_type": "exact_match",
+      "severity": "low",
+      "status": "pass",
+      "suppressed": false,
+      "suppression_reason": null,
+      "effective_severity": "low",
+      "source_layer": "flattened"
+    },
+    {
+      "field": "rashi",
+      "db": "8",
+      "api": "8",
+      "rendered": "8",
+      "comparison_type": "exact_match",
+      "severity": "low",
+      "status": "pass",
+      "suppressed": false,
+      "suppression_reason": null,
+      "effective_severity": "low",
+      "source_layer": "flattened"
+    },
+    {
+      "field": "religion",
+      "db": "4",
+      "api": "4",
+      "rendered": "4",
+      "comparison_type": "exact_match",
+      "severity": "low",
+      "status": "pass",
+      "suppressed": false,
+      "suppression_reason": null,
+      "effective_severity": "low",
+      "source_layer": "flattened"
+    },
+    {
+      "field": "state",
+      "db": null,
+      "api": "4",
+      "rendered": null,
+      "comparison_type": "normalized_match",
+      "severity": "low",
+      "status": "pass",
+      "suppressed": false,
+      "suppression_reason": null,
+      "effective_severity": "low",
+      "source_layer": "flattened"
+    }
+  ],
+  "comparison_truth": {
+    "supported_fields": [
+      "annual_income",
+      "blood_group",
+      "career_history",
+      "caste",
+      "children",
+      "city",
+      "complexion",
+      "contacts",
+      "date_of_birth",
+      "education",
+      "education_history",
+      "family_type",
+      "full_name",
+      "gender",
+      "height_cm",
+      "income_range",
+      "mangal_dosh",
+      "marital_status",
+      "mother_tongue",
+      "nakshatra",
+      "occupation",
+      "partner_preferences",
+      "professions",
+      "property_assets",
+      "rashi",
+      "relatives",
+      "religion",
+      "siblings",
+      "state"
+    ],
+    "unsupported_fields": [],
+    "ignored_fields": [
+      "annual_income",
+      "income_range",
+      "occupation"
+    ],
+    "compared_fields": [
+      "blood_group",
+      "caste",
+      "city",
+      "complexion",
+      "date_of_birth",
+      "education",
+      "family_type",
+      "full_name",
+      "gender",
+      "height_cm",
+      "mangal_dosh",
+      "marital_status",
+      "mother_tongue",
+      "nakshatra",
+      "partner_preferences",
+      "professions",
+      "rashi",
+      "religion",
+      "state"
+    ],
+    "repeater_fields": [
+      "career_history",
+      "children",
+      "contacts",
+      "education_history",
+      "property_assets",
+      "relatives",
+      "siblings"
+    ],
+    "api_missing_fields": [
+      "gender"
+    ],
+    "snapshot_missing_fields": [
+      "education",
+      "partner_preferences"
+    ],
+    "canonical_registry_meta": {
+      "schema": "canonical_field_registry_v1",
+      "generated_at": "2026-05-07T11:27:11Z",
+      "governed_logical_field_count": 29,
+      "governed_scalar_count": 22,
+      "governed_repeater_count": 7,
+      "comparison_supported_count": 29
+    }
+  },
+  "repeater_field_diffs": [
+    {
+      "repeater": "siblings",
+      "row": 1,
+      "field": "*",
+      "wizard": {
+        "city_id": null,
+        "contact_number": null,
+        "gender": null,
+        "id": "67",
+        "marital_status": "married",
+        "name": null,
+        "notes": null,
+        "occupation": "Poultry Farmer",
+        "occupation_custom_id": null,
+        "occupation_master_id": null,
+        "relation_type": "brother"
+      },
+      "api": null,
+      "public_profile": null,
+      "normalized": {
+        "wizard": null,
+        "api": null,
+        "public_profile": null
+      },
+      "comparison_type": "missing_row",
+      "severity": "high",
+      "status": "missing_row"
+    },
+    {
+      "repeater": "siblings",
+      "row": 2,
+      "field": "id",
+      "wizard": "69",
+      "api": null,
+      "public_profile": null,
+      "normalized": {
+        "wizard": "69",
+        "api": null,
+        "public_profile": null
+      },
+      "comparison_type": "semantic_mismatch",
+      "severity": "medium",
+      "status": "mismatch"
+    },
+    {
+      "repeater": "children",
+      "row": 2,
+      "field": "id",
+      "wizard": "29",
+      "api": null,
+      "public_profile": null,
+      "normalized": {
+        "wizard": "29",
+        "api": null,
+        "public_profile": null
+      },
+      "comparison_type": "semantic_mismatch",
+      "severity": "medium",
+      "status": "mismatch"
+    },
+    {
+      "repeater": "education_history",
+      "row": 1,
+      "field": "*",
+      "wizard": {
+        "degree": "bba",
+        "id": "24",
+        "specialization": "marketing",
+        "university": "shivaji",
+        "year_completed": null
+      },
+      "api": null,
+      "public_profile": null,
+      "normalized": {
+        "wizard": null,
+        "api": null,
+        "public_profile": null
+      },
+      "comparison_type": "missing_row",
+      "severity": "high",
+      "status": "missing_row"
+    },
+    {
+      "repeater": "education_history",
+      "row": 2,
+      "field": "*",
+      "wizard": {
+        "degree": "bba",
+        "id": "25",
+        "specialization": "marketing",
+        "university": "shivaji",
+        "year_completed": null
+      },
+      "api": null,
+      "public_profile": null,
+      "normalized": {
+        "wizard": null,
+        "api": null,
+        "public_profile": null
+      },
+      "comparison_type": "missing_row",
+      "severity": "high",
+      "status": "missing_row"
+    },
+    {
+      "repeater": "career_history",
+      "row": 1,
+      "field": "*",
+      "wizard": {
+        "city_id": null,
+        "company": null,
+        "designation": "admin",
+        "end_year": null,
+        "id": "22",
+        "is_current": null,
+        "location": null,
+        "start_year": "2022"
+      },
+      "api": null,
+      "public_profile": null,
+      "normalized": {
+        "wizard": null,
+        "api": null,
+        "public_profile": null
+      },
+      "comparison_type": "missing_row",
+      "severity": "high",
+      "status": "missing_row"
+    },
+    {
+      "repeater": "career_history",
+      "row": 2,
+      "field": "*",
+      "wizard": {
+        "city_id": null,
+        "company": null,
+        "designation": "admin",
+        "end_year": null,
+        "id": "23",
+        "is_current": null,
+        "location": null,
+        "start_year": "2022"
+      },
+      "api": null,
+      "public_profile": null,
+      "normalized": {
+        "wizard": null,
+        "api": null,
+        "public_profile": null
+      },
+      "comparison_type": "missing_row",
+      "severity": "high",
+      "status": "missing_row"
+    },
+    {
+      "repeater": "relatives",
+      "row": 1,
+      "field": "*",
+      "wizard": {
+        "city_id": null,
+        "contact_number": null,
+        "id": null,
+        "is_primary_contact": null,
+        "name": null,
+        "notes": null,
+        "occupation": "Advertising Agency Owner",
+        "occupation_custom_id": null,
+        "occupation_master_id": "201",
+        "relation_type": null,
+        "state_id": null
+      },
+      "api": null,
+      "public_profile": null,
+      "normalized": {
+        "wizard": null,
+        "api": null,
+        "public_profile": null
+      },
+      "comparison_type": "missing_row",
+      "severity": "high",
+      "status": "missing_row"
+    },
+    {
+      "repeater": "relatives",
+      "row": 2,
+      "field": "*",
+      "wizard": {
+        "city_id": null,
+        "contact_number": null,
+        "id": null,
+        "is_primary_contact": "1",
+        "name": null,
+        "notes": "pune",
+        "occupation": "School Teacher",
+        "occupation_custom_id": null,
+        "occupation_master_id": null,
+        "relation_type": null,
+        "state_id": null
+      },
+      "api": null,
+      "public_profile": null,
+      "normalized": {
+        "wizard": null,
+        "api": null,
+        "public_profile": null
+      },
+      "comparison_type": "missing_row",
+      "severity": "high",
+      "status": "missing_row"
+    },
+    {
+      "repeater": "property_assets",
+      "row": 1,
+      "field": "id",
+      "wizard": "36",
+      "api": null,
+      "public_profile": null,
+      "normalized": {
+        "wizard": "36",
+        "api": null,
+        "public_profile": null
+      },
+      "comparison_type": "semantic_mismatch",
+      "severity": "medium",
+      "status": "mismatch"
+    },
+    {
+      "repeater": "property_assets",
+      "row": 2,
+      "field": "id",
+      "wizard": "37",
+      "api": null,
+      "public_profile": null,
+      "normalized": {
+        "wizard": "37",
+        "api": null,
+        "public_profile": null
+      },
+      "comparison_type": "semantic_mismatch",
+      "severity": "medium",
+      "status": "mismatch"
+    },
+    {
+      "repeater": "property_assets",
+      "row": 3,
+      "field": "id",
+      "wizard": "38",
+      "api": null,
+      "public_profile": null,
+      "normalized": {
+        "wizard": "38",
+        "api": null,
+        "public_profile": null
+      },
+      "comparison_type": "semantic_mismatch",
+      "severity": "medium",
+      "status": "mismatch"
+    }
+  ],
+  "trends": [
+    {
+      "field": "caste",
+      "failure_count": 18,
+      "first_seen": "2026-05-06T07:32:03Z",
+      "last_seen": "2026-05-06T07:32:03Z",
+      "trend": "persistent"
+    },
+    {
+      "field": "city",
+      "failure_count": 18,
+      "first_seen": "2026-05-06T07:32:03Z",
+      "last_seen": "2026-05-06T07:32:03Z",
+      "trend": "persistent"
+    },
+    {
+      "field": "date_of_birth",
+      "failure_count": 18,
+      "first_seen": "2026-05-06T07:32:03Z",
+      "last_seen": "2026-05-06T07:32:03Z",
+      "trend": "persistent"
+    },
+    {
+      "field": "education",
+      "failure_count": 13,
+      "first_seen": "2026-05-06T07:32:25Z",
+      "last_seen": "2026-05-06T07:32:25Z",
+      "trend": "persistent"
+    },
+    {
+      "field": "gender",
+      "failure_count": 12,
+      "first_seen": "2026-05-06T07:32:25Z",
+      "last_seen": "2026-05-06T07:32:25Z",
+      "trend": "persistent"
+    },
+    {
+      "field": "full_name",
+      "failure_count": 9,
+      "first_seen": "2026-05-06T07:32:25Z",
+      "last_seen": "2026-05-06T07:32:25Z",
+      "trend": "persistent"
+    },
+    {
+      "field": "height_cm",
+      "failure_count": 9,
+      "first_seen": "2026-05-06T07:32:25Z",
+      "last_seen": "2026-05-06T07:32:25Z",
+      "trend": "persistent"
+    },
+    {
+      "field": "religion",
+      "failure_count": 9,
+      "first_seen": "2026-05-06T07:32:25Z",
+      "last_seen": "2026-05-06T07:32:25Z",
+      "trend": "persistent"
+    },
+    {
+      "field": "mother_tongue",
+      "failure_count": 9,
+      "first_seen": "2026-05-06T07:32:25Z",
+      "last_seen": "2026-05-06T07:32:25Z",
+      "trend": "persistent"
+    },
+    {
+      "field": "marital_status",
+      "failure_count": 9,
+      "first_seen": "2026-05-06T07:32:25Z",
+      "last_seen": "2026-05-06T07:32:25Z",
+      "trend": "persistent"
+    },
+    {
+      "field": "partner_preferences",
+      "failure_count": 6,
+      "first_seen": "2026-05-07T00:55:31Z",
+      "last_seen": "2026-05-07T00:55:31Z",
+      "trend": "persistent"
+    },
+    {
+      "field": "occupation",
+      "failure_count": 6,
+      "first_seen": "2026-05-07T12:22:25Z",
+      "last_seen": "2026-05-07T12:22:25Z",
+      "trend": "persistent"
+    }
+  ],
+  "repeater_mismatches": [
+    {
+      "repeater": "career_history",
+      "type": "row_count_mismatch",
+      "severity": "medium",
+      "details": {
+        "duplicate_rows": 1,
+        "row_count": 2,
+        "row_signatures": [
+          "e423750cef4f6fb220a6551c9753462dd93fa4d7171906a0ce9f2cc5f985e165",
+          "e423750cef4f6fb220a6551c9753462dd93fa4d7171906a0ce9f2cc5f985e165"
+        ]
+      }
+    },
+    {
+      "repeater": "children",
+      "type": "reordered_rows_tolerated",
+      "severity": "low",
+      "details": {
+        "row_count": 2,
+        "row_signatures": [
+          "895c5adbfdaef31cb61ae2d4ea5736f5207118574687c071c4db11c20dec070a",
+          "fb5059e5c869e41c345f66b1c16dcf01babce88b4c0a4fcd5ac557dc8f3f2045"
+        ]
+      }
+    },
+    {
+      "repeater": "education_history",
+      "type": "row_count_mismatch",
+      "severity": "medium",
+      "details": {
+        "duplicate_rows": 1,
+        "row_count": 2,
+        "row_signatures": [
+          "74af4fc8273c2734a54c3638fb51fde1a0c5771f2ced0d44da10673200ab83bb",
+          "74af4fc8273c2734a54c3638fb51fde1a0c5771f2ced0d44da10673200ab83bb"
+        ]
+      }
+    },
+    {
+      "repeater": "property_assets",
+      "type": "row_count_mismatch",
+      "severity": "medium",
+      "details": {
+        "duplicate_rows": 1,
+        "row_count": 3,
+        "row_signatures": [
+          "9293fe1d530f1b3f3c2aae47086e53b1aea4024d25db48ab9de7890f64873ab6",
+          "d7d982d1c176cb64ca803e14d686b6e60fb44176c4fe8dd9a82f94b461048a58",
+          "d7d982d1c176cb64ca803e14d686b6e60fb44176c4fe8dd9a82f94b461048a58"
+        ]
+      }
+    }
+  ],
+  "history_index": {
+    "latest_scores": [
+      {
+        "file": "snapshot_comparison_20260508_094100.json",
+        "health_score": 60,
+        "generated_at": "2026-05-08T09:41:00Z"
+      },
+      {
+        "file": "snapshot_comparison_20260507_122735.json",
+        "health_score": 80,
+        "generated_at": "2026-05-07T12:27:35Z"
+      },
+      {
+        "file": "snapshot_comparison_20260507_122733.json",
+        "health_score": 80,
+        "generated_at": "2026-05-07T12:27:33Z"
+      },
+      {
+        "file": "snapshot_comparison_20260507_122436.json",
+        "health_score": 80,
+        "generated_at": "2026-05-07T12:24:36Z"
+      },
+      {
+        "file": "snapshot_comparison_20260507_122337.json",
+        "health_score": 80,
+        "generated_at": "2026-05-07T12:23:37Z"
+      },
+      {
+        "file": "snapshot_comparison_20260507_122305.json",
+        "health_score": 80,
+        "generated_at": "2026-05-07T12:23:05Z"
+      },
+      {
+        "file": "snapshot_comparison_20260507_122225.json",
+        "health_score": 80,
+        "generated_at": "2026-05-07T12:22:25Z"
+      },
+      {
+        "file": "snapshot_comparison_20260507_120443.json",
+        "health_score": 65,
+        "generated_at": null
+      },
+      {
+        "file": "snapshot_comparison_20260507_112727.json",
+        "health_score": 50,
+        "generated_at": "2026-05-07T11:27:27Z"
+      },
+      {
+        "file": "snapshot_comparison_20260507_112646.json",
+        "health_score": 50,
+        "generated_at": "2026-05-07T11:26:46Z"
+      },
+      {
+        "file": "snapshot_comparison_20260507_103532.json",
+        "health_score": 50,
+        "generated_at": "2026-05-07T10:35:32Z"
+      },
+      {
+        "file": "snapshot_comparison_20260507_011721.json",
+        "health_score": 65,
+        "generated_at": null
+      },
+      {
+        "file": "snapshot_comparison_20260507_005532.json",
+        "health_score": 60,
+        "generated_at": "2026-05-07T00:55:32Z"
+      },
+      {
+        "file": "snapshot_comparison_20260507_005531.json",
+        "health_score": 60,
+        "generated_at": "2026-05-07T00:55:31Z"
+      },
+      {
+        "file": "snapshot_comparison_20260506_155438.json",
+        "health_score": 80,
+        "generated_at": "2026-05-06T15:54:38Z"
+      },
+      {
+        "file": "snapshot_comparison_20260506_155325.json",
+        "health_score": 100,
+        "generated_at": "2026-05-06T15:53:25Z"
+      },
+      {
+        "file": "snapshot_comparison_20260506_150704.json",
+        "health_score": 100,
+        "generated_at": "2026-05-06T15:07:04Z"
+      },
+      {
+        "file": "snapshot_comparison_20260506_150633.json",
+        "health_score": 100,
+        "generated_at": "2026-05-06T15:06:33Z"
+      },
+      {
+        "file": "snapshot_comparison_20260506_144914.json",
+        "health_score": 0,
+        "generated_at": "2026-05-06T14:49:14Z"
+      },
+      {
+        "file": "snapshot_comparison_20260506_142516.json",
+        "health_score": 90,
+        "generated_at": "2026-05-06T14:25:16Z"
+      }
+    ],
+    "recent_failures": [
+      {
+        "file": "snapshot_comparison_20260508_094100.json",
+        "field": "education",
+        "comparison_type": "missing_render",
+        "severity": "high"
+      },
+      {
+        "file": "snapshot_comparison_20260508_094100.json",
+        "field": "partner_preferences",
+        "comparison_type": "missing_render",
+        "severity": "high"
+      },
+      {
+        "file": "snapshot_comparison_20260507_122735.json",
+        "field": "occupation",
+        "comparison_type": "missing_render",
+        "severity": "high"
+      },
+      {
+        "file": "snapshot_comparison_20260507_122733.json",
+        "field": "occupation",
+        "comparison_type": "missing_render",
+        "severity": "high"
+      },
+      {
+        "file": "snapshot_comparison_20260507_122436.json",
+        "field": "occupation",
+        "comparison_type": "missing_render",
+        "severity": "high"
+      },
+      {
+        "file": "snapshot_comparison_20260507_122337.json",
+        "field": "occupation",
+        "comparison_type": "missing_render",
+        "severity": "high"
+      },
+      {
+        "file": "snapshot_comparison_20260507_122305.json",
+        "field": "occupation",
+        "comparison_type": "missing_render",
+        "severity": "high"
+      },
+      {
+        "file": "snapshot_comparison_20260507_122225.json",
+        "field": "occupation",
+        "comparison_type": "missing_render",
+        "severity": "high"
+      },
+      {
+        "file": "snapshot_comparison_20260507_112727.json",
+        "field": "caste",
+        "comparison_type": "cross_layer_inconsistency",
+        "severity": "medium"
+      },
+      {
+        "file": "snapshot_comparison_20260507_112727.json",
+        "field": "city",
+        "comparison_type": "cross_layer_inconsistency",
+        "severity": "medium"
+      },
+      {
+        "file": "snapshot_comparison_20260507_112727.json",
+        "field": "date_of_birth",
+        "comparison_type": "cross_layer_inconsistency",
+        "severity": "medium"
+      },
+      {
+        "file": "snapshot_comparison_20260507_112727.json",
+        "field": "partner_preferences",
+        "comparison_type": "missing_render",
+        "severity": "high"
+      },
+      {
+        "file": "snapshot_comparison_20260507_112646.json",
+        "field": "caste",
+        "comparison_type": "cross_layer_inconsistency",
+        "severity": "medium"
+      },
+      {
+        "file": "snapshot_comparison_20260507_112646.json",
+        "field": "city",
+        "comparison_type": "cross_layer_inconsistency",
+        "severity": "medium"
+      },
+      {
+        "file": "snapshot_comparison_20260507_112646.json",
+        "field": "date_of_birth",
+        "comparison_type": "cross_layer_inconsistency",
+        "severity": "medium"
+      },
+      {
+        "file": "snapshot_comparison_20260507_112646.json",
+        "field": "partner_preferences",
+        "comparison_type": "missing_render",
+        "severity": "high"
+      },
+      {
+        "file": "snapshot_comparison_20260507_103532.json",
+        "field": "caste",
+        "comparison_type": "cross_layer_inconsistency",
+        "severity": "medium"
+      },
+      {
+        "file": "snapshot_comparison_20260507_103532.json",
+        "field": "city",
+        "comparison_type": "cross_layer_inconsistency",
+        "severity": "medium"
+      },
+      {
+        "file": "snapshot_comparison_20260507_103532.json",
+        "field": "date_of_birth",
+        "comparison_type": "cross_layer_inconsistency",
+        "severity": "medium"
+      },
+      {
+        "file": "snapshot_comparison_20260507_103532.json",
+        "field": "partner_preferences",
+        "comparison_type": "missing_render",
+        "severity": "high"
+      },
+      {
+        "file": "snapshot_comparison_20260507_005532.json",
+        "field": "education",
+        "comparison_type": "missing_render",
+        "severity": "high"
+      },
+      {
+        "file": "snapshot_comparison_20260507_005532.json",
+        "field": "partner_preferences",
+        "comparison_type": "missing_render",
+        "severity": "high"
+      },
+      {
+        "file": "snapshot_comparison_20260507_005531.json",
+        "field": "education",
+        "comparison_type": "missing_render",
+        "severity": "high"
+      },
+      {
+        "file": "snapshot_comparison_20260507_005531.json",
+        "field": "partner_preferences",
+        "comparison_type": "missing_render",
+        "severity": "high"
+      },
+      {
+        "file": "snapshot_comparison_20260506_155438.json",
+        "field": "education",
+        "comparison_type": "missing_render",
+        "severity": "high"
+      },
+      {
+        "file": "snapshot_comparison_20260506_144914.json",
+        "field": "full_name",
+        "comparison_type": "missing_render",
+        "severity": "high"
+      },
+      {
+        "file": "snapshot_comparison_20260506_144914.json",
+        "field": "gender",
+        "comparison_type": "missing_render",
+        "severity": "high"
+      },
+      {
+        "file": "snapshot_comparison_20260506_144914.json",
+        "field": "date_of_birth",
+        "comparison_type": "missing_render",
+        "severity": "high"
+      },
+      {
+        "file": "snapshot_comparison_20260506_144914.json",
+        "field": "height_cm",
+        "comparison_type": "missing_render",
+        "severity": "high"
+      },
+      {
+        "file": "snapshot_comparison_20260506_144914.json",
+        "field": "religion",
+        "comparison_type": "missing_render",
+        "severity": "high"
+      },
+      {
+        "file": "snapshot_comparison_20260506_144914.json",
+        "field": "caste",
+        "comparison_type": "missing_render",
+        "severity": "high"
+      },
+      {
+        "file": "snapshot_comparison_20260506_144914.json",
+        "field": "education",
+        "comparison_type": "missing_render",
+        "severity": "high"
+      },
+      {
+        "file": "snapshot_comparison_20260506_144914.json",
+        "field": "city",
+        "comparison_type": "missing_render",
+        "severity": "high"
+      },
+      {
+        "file": "snapshot_comparison_20260506_144914.json",
+        "field": "mother_tongue",
+        "comparison_type": "missing_render",
+        "severity": "high"
+      },
+      {
+        "file": "snapshot_comparison_20260506_144914.json",
+        "field": "marital_status",
+        "comparison_type": "missing_render",
+        "severity": "high"
+      },
+      {
+        "file": "snapshot_comparison_20260506_142516.json",
+        "field": "gender",
+        "comparison_type": "api_drift",
+        "severity": "medium"
+      }
+    ],
+    "persistent_failures": [
+      {
+        "field": "caste",
+        "failure_count": 18,
+        "first_seen": "2026-05-06T07:32:03Z",
+        "last_seen": "2026-05-06T07:32:03Z",
+        "trend": "persistent"
+      },
+      {
+        "field": "city",
+        "failure_count": 18,
+        "first_seen": "2026-05-06T07:32:03Z",
+        "last_seen": "2026-05-06T07:32:03Z",
+        "trend": "persistent"
+      },
+      {
+        "field": "date_of_birth",
+        "failure_count": 18,
+        "first_seen": "2026-05-06T07:32:03Z",
+        "last_seen": "2026-05-06T07:32:03Z",
+        "trend": "persistent"
+      },
+      {
+        "field": "education",
+        "failure_count": 13,
+        "first_seen": "2026-05-06T07:32:25Z",
+        "last_seen": "2026-05-06T07:32:25Z",
+        "trend": "persistent"
+      },
+      {
+        "field": "gender",
+        "failure_count": 12,
+        "first_seen": "2026-05-06T07:32:25Z",
+        "last_seen": "2026-05-06T07:32:25Z",
+        "trend": "persistent"
+      },
+      {
+        "field": "full_name",
+        "failure_count": 9,
+        "first_seen": "2026-05-06T07:32:25Z",
+        "last_seen": "2026-05-06T07:32:25Z",
+        "trend": "persistent"
+      },
+      {
+        "field": "height_cm",
+        "failure_count": 9,
+        "first_seen": "2026-05-06T07:32:25Z",
+        "last_seen": "2026-05-06T07:32:25Z",
+        "trend": "persistent"
+      },
+      {
+        "field": "religion",
+        "failure_count": 9,
+        "first_seen": "2026-05-06T07:32:25Z",
+        "last_seen": "2026-05-06T07:32:25Z",
+        "trend": "persistent"
+      },
+      {
+        "field": "mother_tongue",
+        "failure_count": 9,
+        "first_seen": "2026-05-06T07:32:25Z",
+        "last_seen": "2026-05-06T07:32:25Z",
+        "trend": "persistent"
+      },
+      {
+        "field": "marital_status",
+        "failure_count": 9,
+        "first_seen": "2026-05-06T07:32:25Z",
+        "last_seen": "2026-05-06T07:32:25Z",
+        "trend": "persistent"
+      },
+      {
+        "field": "partner_preferences",
+        "failure_count": 6,
+        "first_seen": "2026-05-07T00:55:31Z",
+        "last_seen": "2026-05-07T00:55:31Z",
+        "trend": "persistent"
+      },
+      {
+        "field": "occupation",
+        "failure_count": 6,
+        "first_seen": "2026-05-07T12:22:25Z",
+        "last_seen": "2026-05-07T12:22:25Z",
+        "trend": "persistent"
+      }
+    ]
+  },
+  "metrics": {
+    "compare_duration_ms": 45,
+    "snapshot_load_ms": 0
+  }
+}

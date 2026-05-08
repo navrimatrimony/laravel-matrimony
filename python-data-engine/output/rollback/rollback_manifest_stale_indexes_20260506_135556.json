@@ -1,0 +1,37 @@
+{
+  "schema_version": "1",
+  "recipe": "stale_indexes",
+  "table": "users",
+  "primary_key": "id",
+  "created_at": "2026-05-06T13:55:56.164525+00:00",
+  "rows": [
+    {
+      "id": 170,
+      "name": "Super Admin Test",
+      "mobile": null,
+      "email": "super_admin_test@example.com",
+      "updated_at": "2026-05-06 19:25:05"
+    },
+    {
+      "id": 171,
+      "name": "Data Admin Test",
+      "mobile": null,
+      "email": "data_admin_test@example.com",
+      "updated_at": "2026-05-03 21:03:41"
+    },
+    {
+      "id": 172,
+      "name": "Auditor Test",
+      "mobile": null,
+      "email": "auditor_test@example.com",
+      "updated_at": "2026-05-03 21:03:42"
+    },
+    {
+      "id": 173,
+      "name": "Anita Gaikwad",
+      "mobile": "1111111111",
+      "email": null,
+      "updated_at": "2026-05-03 21:42:25"
+    }
+  ]
+}

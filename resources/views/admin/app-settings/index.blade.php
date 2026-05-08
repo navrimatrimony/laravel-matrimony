@@ -34,6 +34,11 @@
             Only super_admin can change billing/invoice settings.
         </div>
     @endif
+    @if (! ($canManageDataEngineFixMode ?? false))
+        <div class="mb-4 rounded-lg bg-amber-50 text-amber-900 dark:bg-amber-950/40 dark:text-amber-100 px-4 py-3 text-sm border border-amber-200 dark:border-amber-800">
+            Only super_admin can change Data Engine fix-mode safety lock.
+        </div>
+    @endif
 
     <form method="POST" action="{{ route('admin.app-settings.update') }}" class="space-y-6">
         @csrf
@@ -101,6 +106,42 @@
                     <code class="text-xs bg-gray-200 dark:bg-gray-600 px-1 rounded">member_presence_online_threshold_minutes</code>.
                 </p>
             </div>
+
+            <fieldset @disabled(!($canManageDataEngineFixMode ?? false)) class="p-4 bg-gray-50 dark:bg-gray-700/30 rounded-lg border border-gray-200 dark:border-gray-600 space-y-4 disabled:opacity-60">
+                <h2 class="text-sm font-semibold text-gray-900 dark:text-gray-100">Data Engine fix mode (mutation safety)</h2>
+
+                <label class="admin-toggle">
+                    <input type="checkbox" name="data_engine_allow_fix_mode" value="1" {{ ($dataEngineFixModeEnabled ?? false) ? 'checked' : '' }}>
+                    <span class="toggle-track"><span class="toggle-thumb"></span></span>
+                    <span class="toggle-label {{ ($dataEngineFixModeEnabled ?? false) ? 'on' : 'off' }}">Allow fix mode writes</span>
+                </label>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-xs mb-1">Auto-disable after</label>
+                        <select name="data_engine_fix_mode_duration" class="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm text-gray-900 dark:text-gray-100">
+                            @php($selectedFixDuration = old('data_engine_fix_mode_duration', $dataEngineFixModeDuration ?? 'forever'))
+                            <option value="2_hours" {{ $selectedFixDuration === '2_hours' ? 'selected' : '' }}>2 hours</option>
+                            <option value="1_day" {{ $selectedFixDuration === '1_day' ? 'selected' : '' }}>1 day</option>
+                            <option value="forever" {{ $selectedFixDuration === 'forever' ? 'selected' : '' }}>Forever (manual off)</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs mb-1">Current expiry</label>
+                        <div class="text-sm text-gray-700 dark:text-gray-200 mt-2">
+                            @if (! empty($dataEngineFixModeExpiresAt))
+                                {{ $dataEngineFixModeExpiresAt }}
+                            @else
+                                Never (until manually turned off)
+                            @endif
+                        </div>
+                    </div>
+                </div>
+
+                <p class="text-xs text-gray-500 dark:text-gray-400">
+                    When enabled with a timed duration, fix mode auto-turns off after expiry. Analyze mode remains available.
+                </p>
+            </fieldset>
         </div>
 
         <div x-show="tab === 'dashboard'" x-cloak class="space-y-6">

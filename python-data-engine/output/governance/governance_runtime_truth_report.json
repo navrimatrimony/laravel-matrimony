@@ -1,0 +1,22 @@
+{
+  "generated_at": "2026-05-07T00:55:33Z",
+  "runtime_truth": {
+    "inventory_generated": true,
+    "snapshot_integrity_generated": true,
+    "coverage_generated": true
+  },
+  "inventory_summary": {
+    "total_wizard_fields": 75,
+    "total_governed_fields": 226,
+    "unsupported_field_count": 75,
+    "comparison_supported_count": 0
+  },
+  "coverage_summary": {
+    "total_detected_fields": 122,
+    "audited_fields": 69,
+    "unaudited_fields": 53,
+    "partial_support": 16,
+    "unsupported_repeaters": 15,
+    "unsupported_relations": 0
+  }
+}

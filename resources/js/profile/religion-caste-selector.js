@@ -39,6 +39,21 @@
         });
     }
 
+    function findExactOption(options, q) {
+        if (!q) return null;
+        const lower = q.toLowerCase();
+        for (let i = 0; i < options.length; i++) {
+            const o = options[i];
+            if ((o.label && o.label.toLowerCase() === lower)
+                || (o.label_en && o.label_en.toLowerCase() === lower)
+                || (o.label_mr && o.label_mr.toLowerCase() === lower)) {
+                return o;
+            }
+        }
+
+        return null;
+    }
+
     function initComponent(root) {
         const religionInput = root.querySelector('.religion-input');
         const religionHidden = root.querySelector('.religion-hidden');
@@ -114,11 +129,31 @@
             }
             religionInput.addEventListener('input', function () {
                 const q = this.value.trim();
+                if (!q) {
+                    religionHidden.value = '';
+                }
                 renderReligionOptions(filterOptions(religionOptions, q));
             });
             religionInput.addEventListener('focus', function () {
                 const q = this.value.trim();
                 renderReligionOptions(filterOptions(religionOptions, q));
+            });
+            religionInput.addEventListener('blur', function () {
+                const q = this.value.trim();
+                if (!q) {
+                    religionHidden.value = '';
+                    onReligionChange();
+                    return;
+                }
+                const hit = findExactOption(religionOptions, q);
+                if (hit) {
+                    religionHidden.value = String(hit.id);
+                    religionInput.value = hit.label;
+                    onReligionChange();
+                    return;
+                }
+                religionHidden.value = '';
+                onReligionChange();
             });
             document.addEventListener('click', function (e) {
                 if (religionWrap && !religionWrap.contains(e.target) && religionDropdown && !religionDropdown.contains(e.target)) {
@@ -153,11 +188,39 @@
             }
             casteInput.addEventListener('input', function () {
                 const q = this.value.trim();
+                if (!q) {
+                    casteHidden.value = '';
+                }
                 renderCasteOptions(filterOptions(castesCache, q));
             });
             casteInput.addEventListener('focus', function () {
                 const q = this.value.trim();
                 renderCasteOptions(filterOptions(castesCache, q));
+            });
+            casteInput.addEventListener('blur', function () {
+                const q = this.value.trim();
+                if (!q) {
+                    casteHidden.value = '';
+                    if (subHidden) subHidden.value = '';
+                    if (subInput) {
+                        subInput.value = '';
+                        subInput.disabled = true;
+                    }
+                    return;
+                }
+                const hit = findExactOption(castesCache, q);
+                if (hit) {
+                    casteHidden.value = String(hit.id);
+                    casteInput.value = hit.label;
+                    if (subInput) subInput.disabled = false;
+                    return;
+                }
+                casteHidden.value = '';
+                if (subHidden) subHidden.value = '';
+                if (subInput) {
+                    subInput.value = '';
+                    subInput.disabled = true;
+                }
             });
             document.addEventListener('click', function (e) {
                 if (casteWrap && !casteWrap.contains(e.target) && casteDropdown && !casteDropdown.contains(e.target)) {

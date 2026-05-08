@@ -11,6 +11,7 @@ use App\Services\Parsing\ProviderResolver;
 use App\Services\ProfileCompletenessService;
 use App\Services\SettingService;
 use App\Services\Showcase\ShowcaseInterestPolicyService;
+use Carbon\CarbonImmutable;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 
@@ -650,12 +651,17 @@ class AdminSettingsController extends Controller
             'invoiceFailureThreshold' => (string) AdminSetting::getValue('invoice_failure_threshold', '2'),
             'dashboardNotificationCardsLimit' => (int) AdminSetting::getValue('dashboard_notification_cards_limit', '2'),
             'dashboardActivityAutoHideSeconds' => (int) AdminSetting::getValue('dashboard_activity_autohide_seconds', '7'),
+            'canManageDataEngineFixMode' => $viewer?->hasAdminRole(['super_admin']) ?? false,
+            'dataEngineFixModeEnabled' => AdminSetting::getBool('data_engine_allow_fix_mode', false),
+            'dataEngineFixModeDuration' => (string) AdminSetting::getValue('data_engine_fix_mode_duration', 'forever'),
+            'dataEngineFixModeExpiresAt' => (string) AdminSetting::getValue('data_engine_fix_mode_expires_at', ''),
         ]);
     }
 
     public function updateAppSettings(Request $request, SettingService $settings): \Illuminate\Http\RedirectResponse
     {
         $canManageBillingSettings = $request->user()->hasAdminRole(['super_admin']);
+        $canManageDataEngineFixMode = $request->user()->hasAdminRole(['super_admin']);
 
         $request->validate([
             'admin_bypass_mode' => 'nullable|in:0,1',
@@ -678,6 +684,8 @@ class AdminSettingsController extends Controller
             'invoice_failure_threshold' => 'required|numeric|min:0|max:100',
             'dashboard_notification_cards_limit' => 'required|integer|min:1|max:3',
             'dashboard_activity_autohide_seconds' => 'required|integer|min:3|max:30',
+            'data_engine_allow_fix_mode' => 'nullable|in:0,1',
+            'data_engine_fix_mode_duration' => ['nullable', 'string', Rule::in(['2_hours', '1_day', 'forever'])],
         ]);
 
         $on = $request->boolean('admin_bypass_mode');
@@ -713,12 +721,32 @@ class AdminSettingsController extends Controller
             AdminSetting::setValue('billing_invoice_terms', trim((string) $request->input('billing_invoice_terms', '')));
         }
 
+        if ($canManageDataEngineFixMode) {
+            $fixModeEnabled = $request->boolean('data_engine_allow_fix_mode');
+            $duration = (string) $request->input('data_engine_fix_mode_duration', 'forever');
+            if (! in_array($duration, ['2_hours', '1_day', 'forever'], true)) {
+                $duration = 'forever';
+            }
+
+            AdminSetting::setValue('data_engine_allow_fix_mode', $fixModeEnabled ? '1' : '0');
+            AdminSetting::setValue('data_engine_fix_mode_duration', $duration);
+
+            if (! $fixModeEnabled || $duration === 'forever') {
+                AdminSetting::setValue('data_engine_fix_mode_expires_at', '');
+            } else {
+                $expiry = $duration === '2_hours'
+                    ? CarbonImmutable::now()->addHours(2)
+                    : CarbonImmutable::now()->addDay();
+                AdminSetting::setValue('data_engine_fix_mode_expires_at', $expiry->toIso8601String());
+            }
+        }
+
         AuditLogService::log(
             $request->user(),
             'update_app_settings',
             'AdminSetting',
             null,
-            'admin_bypass_mode='.($on ? '1' : '0').'; interest_min_core_completeness_pct='.$pct.'; member_presence_online_threshold_minutes='.$presenceMin.'; plans_enforce_gender_specific_visibility='.($plansGenderSpecific ? '1' : '0').'; mobile_clean_mode='.($mobileCleanMode ? '1' : '0').'; dashboard_notification_cards_limit='.(string) $request->input('dashboard_notification_cards_limit', '2').'; dashboard_activity_autohide_seconds='.(string) $request->input('dashboard_activity_autohide_seconds', '7').'; billing settings updated',
+            'admin_bypass_mode='.($on ? '1' : '0').'; interest_min_core_completeness_pct='.$pct.'; member_presence_online_threshold_minutes='.$presenceMin.'; plans_enforce_gender_specific_visibility='.($plansGenderSpecific ? '1' : '0').'; mobile_clean_mode='.($mobileCleanMode ? '1' : '0').'; dashboard_notification_cards_limit='.(string) $request->input('dashboard_notification_cards_limit', '2').'; dashboard_activity_autohide_seconds='.(string) $request->input('dashboard_activity_autohide_seconds', '7').'; data_engine_allow_fix_mode='.($canManageDataEngineFixMode ? ($request->boolean('data_engine_allow_fix_mode') ? '1' : '0') : 'unchanged').'; billing settings updated',
             false
         );
 

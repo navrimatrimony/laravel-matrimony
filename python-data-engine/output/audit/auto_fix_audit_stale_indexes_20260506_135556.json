@@ -1,0 +1,49 @@
+{
+  "recipe": "stale_indexes",
+  "workflow": "detect->preview->backup->execute->validate->rollback",
+  "detected_count": 4,
+  "preview": {
+    "rows": [
+      {
+        "id": 173,
+        "name": "Anita Gaikwad",
+        "mobile": "1111111111",
+        "email": null,
+        "updated_at": "2026-05-03 21:42:25"
+      },
+      {
+        "id": 172,
+        "name": "Auditor Test",
+        "mobile": null,
+        "email": "auditor_test@example.com",
+        "updated_at": "2026-05-03 21:03:42"
+      }
+    ],
+    "estimated_changes": 4,
+    "confidence": 0.66,
+    "risk": "low",
+    "rollback_available": true
+  },
+  "dry_run": false,
+  "backup_manifest": "E:\\LaravelProjects\\laravel-matrimony\\python-data-engine\\output\\rollback\\rollback_manifest_stale_indexes_20260506_135556.json",
+  "execute_summary": {
+    "affected_rows": 0
+  },
+  "validation": {
+    "remaining_problem_rows": 4,
+    "passed": false
+  },
+  "rollback": {
+    "performed": true,
+    "execution": {
+      "restored_rows": 4,
+      "skipped_rows": 0,
+      "manifest": "E:\\LaravelProjects\\laravel-matrimony\\python-data-engine\\output\\rollback\\rollback_manifest_stale_indexes_20260506_135556.json"
+    },
+    "validation": {
+      "validated_rows": 4,
+      "mismatch_rows": 0
+    }
+  },
+  "status": "rolled_back"
+}

@@ -1,0 +1,27 @@
+{
+  "generated_at": "2026-05-06T15:54:42Z",
+  "valid_snapshots": 2,
+  "invalid_snapshots": 1,
+  "files": [
+    {
+      "path": "E:\\LaravelProjects\\laravel-matrimony\\storage\\app\\data-audit\\snapshots\\matrimony_profile_207\\snapshot_2026_05_06_212436.json",
+      "valid": true,
+      "issues": []
+    },
+    {
+      "path": "E:\\LaravelProjects\\laravel-matrimony\\storage\\app\\data-audit\\snapshots\\matrimony_profile_207\\snapshot_2026_05_06_212324.json",
+      "valid": false,
+      "issues": [
+        "comparison_eligible_false"
+      ]
+    },
+    {
+      "path": "E:\\LaravelProjects\\laravel-matrimony\\storage\\app\\data-audit\\snapshots\\matrimony_profile_207\\snapshot_2026_05_06_203629.json",
+      "valid": true,
+      "issues": []
+    }
+  ],
+  "orphan_snapshot_directories": [
+    "E:\\LaravelProjects\\laravel-matrimony\\storage\\app\\data-audit\\snapshots\\matrimony_profile_206"
+  ]
+}

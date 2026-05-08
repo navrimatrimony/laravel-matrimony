@@ -1,0 +1,422 @@
+{
+    "snapshot_version": "2",
+    "profile_id": 207,
+    "entity_type": "matrimony_profile",
+    "entity_id": 207,
+    "captured_at": "2026-05-06T20:19:13+05:30",
+    "sources": {
+        "db": true,
+        "api": true,
+        "rendered": true
+    },
+    "db": {
+        "full_name": "Anita Gaikwad",
+        "gender": 2,
+        "date_of_birth": "1982-02-09",
+        "height_cm": 163,
+        "religion": 4,
+        "caste": 412,
+        "education": "B.A., M.A.",
+        "occupation": null,
+        "annual_income": null,
+        "city": 37648,
+        "state": null,
+        "mother_tongue": 1,
+        "marital_status": 2,
+        "family_type": 1,
+        "complexion": 2,
+        "blood_group": 1,
+        "nakshatra": 17,
+        "rashi": 8,
+        "mangal_dosh": 2,
+        "income_range": null,
+        "professions": 17,
+        "partner_preferences": {
+            "id": 100,
+            "profile_id": 207,
+            "preferred_age_min": 44,
+            "preferred_age_max": 49,
+            "preferred_income_min": "300000.00",
+            "preferred_income_max": "2500000.00",
+            "preferred_education": null,
+            "preferred_city_id": null,
+            "willing_to_relocate": true,
+            "settled_city_preference_id": null,
+            "marriage_type_preference_id": 1,
+            "created_at": "2026-05-03T16:01:46.000000Z",
+            "updated_at": "2026-05-06T14:37:12.000000Z",
+            "preferred_height_min_cm": 163,
+            "preferred_height_max_cm": 173,
+            "preferred_marital_status_id": null,
+            "partner_profile_with_children": "yes_if_live_separate",
+            "preferred_profile_managed_by": null
+        }
+    },
+    "repeaters": {
+        "siblings": [
+            {
+                "id": 67,
+                "relation_type": "brother",
+                "name": "Rahul",
+                "gender": "",
+                "marital_status": "married",
+                "occupation": "Poultry Farmer",
+                "occupation_master_id": 109,
+                "occupation_custom_id": null,
+                "city_id": null,
+                "contact_number": "1111111111",
+                "notes": ""
+            },
+            {
+                "id": 69,
+                "relation_type": "",
+                "name": "",
+                "gender": "",
+                "marital_status": "unmarried",
+                "occupation": "",
+                "occupation_master_id": null,
+                "occupation_custom_id": null,
+                "city_id": null,
+                "contact_number": "",
+                "notes": ""
+            }
+        ],
+        "children": [
+            {
+                "id": 28,
+                "child_name": "",
+                "gender": "female",
+                "age": 14,
+                "child_living_with_id": 2
+            },
+            {
+                "id": 29,
+                "child_name": "",
+                "gender": "male",
+                "age": 10,
+                "child_living_with_id": 2
+            }
+        ],
+        "education_history": [
+            {
+                "id": 24,
+                "degree": "bba",
+                "specialization": "marketing",
+                "university": "shivaji",
+                "year_completed": 1999
+            },
+            {
+                "id": 25,
+                "degree": "bba",
+                "specialization": "marketing",
+                "university": "shivaji",
+                "year_completed": 1999
+            }
+        ],
+        "career_history": [
+            {
+                "id": 22,
+                "designation": "admin",
+                "company": "mayur hospital",
+                "location": "vita",
+                "city_id": null,
+                "start_year": 2022,
+                "end_year": 2023,
+                "is_current": false
+            },
+            {
+                "id": 23,
+                "designation": "admin",
+                "company": "mayur hospital",
+                "location": "vita",
+                "city_id": null,
+                "start_year": 2022,
+                "end_year": 2023,
+                "is_current": false
+            }
+        ],
+        "relatives": [
+            {
+                "id": 156,
+                "relation_type": "paternal_aunt",
+                "name": "Prabhavati Patil",
+                "occupation": "Advertising Agency Owner",
+                "occupation_master_id": 201,
+                "occupation_custom_id": null,
+                "city_id": null,
+                "state_id": null,
+                "contact_number": "1111111122",
+                "notes": "Panchayat samiti Adhyaksha",
+                "is_primary_contact": false
+            },
+            {
+                "id": 157,
+                "relation_type": "maternal_uncle",
+                "name": "Raghuram",
+                "occupation": "School Teacher",
+                "occupation_master_id": 96,
+                "occupation_custom_id": null,
+                "city_id": null,
+                "state_id": null,
+                "contact_number": "1111111122",
+                "notes": "no addistional information",
+                "is_primary_contact": false
+            }
+        ],
+        "property_assets": [
+            {
+                "id": 36,
+                "asset_type_id": 1,
+                "ownership_type_id": 1,
+                "location": "pune",
+                "notes": ""
+            },
+            {
+                "id": 37,
+                "asset_type_id": 2,
+                "ownership_type_id": 3,
+                "location": "pune",
+                "notes": ""
+            },
+            {
+                "id": 38,
+                "asset_type_id": 2,
+                "ownership_type_id": 3,
+                "location": "pune",
+                "notes": ""
+            }
+        ],
+        "contacts": []
+    },
+    "api": {
+        "success": true,
+        "profile": {
+            "id": 207,
+            "user_id": 173,
+            "full_name": "Anita Gaikwad",
+            "gender": "",
+            "date_of_birth": "1982-02-09",
+            "caste": {
+                "id": 412,
+                "religion_id": 4,
+                "key": "maratha",
+                "label": "Maratha",
+                "is_active": 1,
+                "created_at": "2026-04-26T14:30:31.000000Z",
+                "updated_at": "2026-04-26T14:30:32.000000Z",
+                "label_en": "Maratha",
+                "label_mr": "à¤®à¤°à¤¾à¤ à¤¾"
+            },
+            "highest_education": "B.A., M.A.",
+            "location_id": 37648,
+            "country_id": 1,
+            "state_id": 4,
+            "district_id": 40,
+            "taluka_id": 371,
+            "profile_photo": "25100df2-6107-4b00-a516-c8a711dc763a.webp",
+            "created_at": "2026-05-03T15:57:27.000000Z",
+            "updated_at": "2026-05-06T14:32:17.000000Z"
+        }
+    },
+    "rendered": {
+        "pages": {
+            "public_profile": {
+                "route": "http://localhost/profile/207",
+                "html_sha1": "40da2b00b38ce893d32065354e56704b3a2ce56e",
+                "html_excerpt": "<!DOCTYPE html>\n<html lang=\"en\">\n    <head>\n        <meta charset=\"utf-8\">\n        <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n        <meta name=\"csrf-token\" content=\"MONAgJH7LGrm5tGLiyoXmj6hkk3fbuz3fxdSPR86\">\n\t\t<meta name=\"robots\" content=\"noindex, nofollow\">\n\t\t<meta name=\"googlebot\" content=\"noindex, nofollow\">\n\n\n        <title>Laravel</title>\n\n        <!-- Fonts -->\n        <link rel=\"preconnect\" href=\"https://fonts.bunny.net\">\n        <link href=\"https://fonts.bunny.net/css?family=figtree:400,500,600&display=swap\" rel=\"stylesheet\" />\n\n        <!-- Scripts -->\n        <script type=\"module\" src=\"http://[::1]:5173/@vite/client\"></script><link rel=\"stylesheet\" href=\"http://[::1]:5173/resources/css/app.css\" /><script type=\"module\" src=\"http://[::1]:5173/resources/js/app.js\"></script><script type=\"module\" src=\"http://[::1]:5173/resources/js/profile/religion-caste-selector.js\"></script><script type=\"module\" src=\"http://[::1]:5173/resources/js/profile/location-typeahead.js\"></script><script type=\"module\" src=\"http://[::1]:5173/resources/js/profile/about-me-narrative.js\"></script><script type=\"module\" src=\"http://[::1]:5173/resources/js/matrimony/occupation-engine-entry.js\"></script>    </head>\n    <body class=\"font-sans antialiased\">\n        <script>\n(function () {\n    function stack() {\n        var s = document.getElementById('app-toast-stack');\n        if (!s) {\n            s = document.createElement('div');\n            s.id = 'app-toast-stack';\n            s.style.cssText = 'position:fixed;bottom:1rem;right:1rem;z-index:99999;display:flex;flex-direction:column;gap:0.5rem;max-width:min(22rem,calc(100vw - 2rem));pointer-events:none';\n            document.body.appendChild(s);\n        }\n        return s;\n    }\n    function pushToast(message, tone) {\n        var text = String(message || '').trim();\n        if (!text) {\n            return;\n        }\n        var el = document.createElement('div');\n        el.setAttribute('role', 'status');\n        "
+            },
+            "wizard": {
+                "section": "full",
+                "html_sha1": "4519637732d0fabcab8620cc8da451737b9f9eb4",
+                "html_excerpt": "<!DOCTYPE html>\n<html lang=\"en\">\n    <head>\n        <meta charset=\"utf-8\">\n        <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n        <meta name=\"csrf-token\" content=\"Ya7Gpwe6d3L3G1TwyFm3YrAuw85VIeXJES1ILt9I\">\n\t\t<meta name=\"robots\" content=\"noindex, nofollow\">\n\t\t<meta name=\"googlebot\" content=\"noindex, nofollow\">\n\n\n        <title>Laravel</title>\n\n        <!-- Fonts -->\n        <link rel=\"preconnect\" href=\"https://fonts.bunny.net\">\n        <link href=\"https://fonts.bunny.net/css?family=figtree:400,500,600&display=swap\" rel=\"stylesheet\" />\n\n        <!-- Scripts -->\n        <script type=\"module\" src=\"http://[::1]:5173/@vite/client\"></script><link rel=\"stylesheet\" href=\"http://[::1]:5173/resources/css/app.css\" /><script type=\"module\" src=\"http://[::1]:5173/resources/js/app.js\"></script><script type=\"module\" src=\"http://[::1]:5173/resources/js/profile/religion-caste-selector.js\"></script><script type=\"module\" src=\"http://[::1]:5173/resources/js/profile/location-typeahead.js\"></script><script type=\"module\" src=\"http://[::1]:5173/resources/js/profile/about-me-narrative.js\"></script><script type=\"module\" src=\"http://[::1]:5173/resources/js/matrimony/occupation-engine-entry.js\"></script>    </head>\n    <body class=\"font-sans antialiased\">\n        <script>\n(function () {\n    function stack() {\n        var s = document.getElementById('app-toast-stack');\n        if (!s) {\n            s = document.createElement('div');\n            s.id = 'app-toast-stack';\n            s.style.cssText = 'position:fixed;bottom:1rem;right:1rem;z-index:99999;display:flex;flex-direction:column;gap:0.5rem;max-width:min(22rem,calc(100vw - 2rem));pointer-events:none';\n            document.body.appendChild(s);\n        }\n        return s;\n    }\n    function pushToast(message, tone) {\n        var text = String(message || '').trim();\n        if (!text) {\n            return;\n        }\n        var el = document.createElement('div');\n        el.setAttribute('role', 'status');\n        "
+            }
+        },
+        "fields": {
+            "public_profile": {
+                "full_name": {
+                    "raw_rendered": "Anita Gaikwad",
+                    "normalized": "Anita Gaikwad"
+                },
+                "gender": {
+                    "raw_rendered": "2",
+                    "normalized": "2"
+                },
+                "date_of_birth": {
+                    "raw_rendered": "9 Feb 1982",
+                    "normalized": "9 Feb 1982"
+                },
+                "height_cm": {
+                    "raw_rendered": "163",
+                    "normalized": "163"
+                },
+                "religion": {
+                    "raw_rendered": "4",
+                    "normalized": "4"
+                },
+                "caste": {
+                    "raw_rendered": "Maratha",
+                    "normalized": "Maratha"
+                },
+                "education": {
+                    "raw_rendered": "B.A., M.A.",
+                    "normalized": "B.A., M.A."
+                },
+                "occupation": {
+                    "raw_rendered": null,
+                    "normalized": null
+                },
+                "annual_income": {
+                    "raw_rendered": null,
+                    "normalized": null
+                },
+                "city": {
+                    "raw_rendered": "Kadegaon, Sangli 415304",
+                    "normalized": "Kadegaon, Sangli 415304"
+                },
+                "state": {
+                    "raw_rendered": null,
+                    "normalized": null
+                },
+                "mother_tongue": {
+                    "raw_rendered": "1",
+                    "normalized": "1"
+                },
+                "marital_status": {
+                    "raw_rendered": "2",
+                    "normalized": "2"
+                },
+                "family_type": {
+                    "raw_rendered": "1",
+                    "normalized": "1"
+                },
+                "complexion": {
+                    "raw_rendered": "2",
+                    "normalized": "2"
+                },
+                "blood_group": {
+                    "raw_rendered": "1",
+                    "normalized": "1"
+                },
+                "nakshatra": {
+                    "raw_rendered": "17",
+                    "normalized": "17"
+                },
+                "rashi": {
+                    "raw_rendered": "8",
+                    "normalized": "8"
+                },
+                "mangal_dosh": {
+                    "raw_rendered": "2",
+                    "normalized": "2"
+                },
+                "income_range": {
+                    "raw_rendered": null,
+                    "normalized": null
+                },
+                "professions": {
+                    "raw_rendered": "17",
+                    "normalized": "17"
+                },
+                "partner_preferences": {
+                    "raw_rendered": null,
+                    "normalized": null
+                }
+            },
+            "wizard": {
+                "full_name": {
+                    "raw_rendered": "Anita Gaikwad",
+                    "normalized": "Anita Gaikwad"
+                },
+                "gender": {
+                    "raw_rendered": "2",
+                    "normalized": "2"
+                },
+                "date_of_birth": {
+                    "raw_rendered": "1982-02-09",
+                    "normalized": "1982-02-09"
+                },
+                "height_cm": {
+                    "raw_rendered": "163",
+                    "normalized": "163"
+                },
+                "religion": {
+                    "raw_rendered": "4",
+                    "normalized": "4"
+                },
+                "caste": {
+                    "raw_rendered": "412",
+                    "normalized": "412"
+                },
+                "education": {
+                    "raw_rendered": null,
+                    "normalized": null
+                },
+                "occupation": {
+                    "raw_rendered": null,
+                    "normalized": null
+                },
+                "annual_income": {
+                    "raw_rendered": null,
+                    "normalized": null
+                },
+                "city": {
+                    "raw_rendered": "37648",
+                    "normalized": "37648"
+                },
+                "state": {
+                    "raw_rendered": null,
+                    "normalized": null
+                },
+                "mother_tongue": {
+                    "raw_rendered": "1",
+                    "normalized": "1"
+                },
+                "marital_status": {
+                    "raw_rendered": "2",
+                    "normalized": "2"
+                },
+                "family_type": {
+                    "raw_rendered": "1",
+                    "normalized": "1"
+                },
+                "complexion": {
+                    "raw_rendered": "2",
+                    "normalized": "2"
+                },
+                "blood_group": {
+                    "raw_rendered": "1",
+                    "normalized": "1"
+                },
+                "nakshatra": {
+                    "raw_rendered": "17",
+                    "normalized": "17"
+                },
+                "rashi": {
+                    "raw_rendered": "8",
+                    "normalized": "8"
+                },
+                "mangal_dosh": {
+                    "raw_rendered": "2",
+                    "normalized": "2"
+                },
+                "income_range": {
+                    "raw_rendered": null,
+                    "normalized": null
+                },
+                "professions": {
+                    "raw_rendered": "17",
+                    "normalized": "17"
+                },
+                "partner_preferences": {
+                    "raw_rendered": null,
+                    "normalized": null
+                }
+            }
+        }
+    },
+    "metrics": {
+        "capture_duration_ms": 1625,
+        "memory_peak_kb": 30720,
+        "rendered_pages_count": 2
+    }
+}

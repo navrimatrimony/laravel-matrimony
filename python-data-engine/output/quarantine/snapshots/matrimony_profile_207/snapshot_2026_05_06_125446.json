@@ -1,0 +1,38 @@
+{
+    "snapshot_version": "1",
+    "profile_id": 207,
+    "captured_at": "2026-05-06T12:54:46+05:30",
+    "sources": {
+        "db": true,
+        "api": true,
+        "rendered": false
+    },
+    "db": {
+        "full_name": "Anita Gaikwad",
+        "gender": 2,
+        "date_of_birth": "1982-02-09",
+        "height_cm": 163,
+        "religion": 4,
+        "caste": 412,
+        "education": "B.A., M.A.",
+        "occupation": null,
+        "annual_income": null,
+        "city": 37648,
+        "state": null,
+        "mother_tongue": 1,
+        "marital_status": 2
+    },
+    "api": {
+        "success": false,
+        "message": "Profile not found"
+    },
+    "rendered": {
+        "pages": [],
+        "fields": []
+    },
+    "metrics": {
+        "capture_duration_ms": 17,
+        "memory_peak_kb": 2048,
+        "rendered_pages_count": 0
+    }
+}

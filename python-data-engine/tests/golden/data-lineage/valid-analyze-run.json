@@ -1,0 +1,42 @@
+{
+  "case": "valid_analyze_run",
+  "report_path": "python-data-engine/output/reports/engine_analyze_20260506_070000.json",
+  "data_lineage": {
+    "summary": {
+      "health_score": 60,
+      "manifest_errors": 0,
+      "wrong_sources": 0,
+      "multi_source_conflicts": 0,
+      "wizard_public_mismatches": 1,
+      "missing_render_risks": 2,
+      "fields_audited": 13
+    },
+    "manifest_errors": [],
+    "wrong_sources": [],
+    "multi_source_conflicts": [],
+    "wizard_public_mismatches": [
+      {
+        "field": "state",
+        "wizard": "profile.residence_state_id",
+        "public": "profile.location_id",
+        "severity": "high"
+      }
+    ],
+    "missing_render_risks": [
+      {
+        "field": "city",
+        "severity": "medium"
+      },
+      {
+        "field": "state",
+        "severity": "medium"
+      }
+    ],
+    "metrics": {
+      "scan_duration_ms": 201,
+      "memory_peak_kb": 1843,
+      "blade_count_scanned": 36,
+      "manifest_field_count": 13
+    }
+  }
+}

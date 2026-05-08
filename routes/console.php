@@ -1,9 +1,9 @@
 <?php
 
+use App\Services\MonitoringService;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Schedule;
-use App\Services\MonitoringService;
 
 Artisan::command('inspire', function () {
     $this->comment(Inspiring::quote());
@@ -26,3 +26,46 @@ Schedule::command('payments:reconcile')->dailyAt('01:00');
 Schedule::call(function (): void {
     app(MonitoringService::class)->evaluateAlerts();
 })->everyMinute()->name('payments:evaluate-alerts');
+
+/*
+| Phase 4+ productionization governance schedules (deterministic, lock-safe).
+*/
+Schedule::command('data-audit:analyze')
+    ->dailyAt('02:30')
+    ->name('data-audit-analyze')
+    ->withoutOverlapping(45)
+    ->onOneServer();
+Schedule::command('data-audit:snapshot --entity=matrimony_profile --limit=10')
+    ->dailyAt('02:45')
+    ->name('data-audit-snapshot')
+    ->withoutOverlapping(45)
+    ->onOneServer();
+Schedule::command('data-audit:compare --latest')
+    ->dailyAt('03:00')
+    ->name('data-audit-compare')
+    ->withoutOverlapping(45)
+    ->onOneServer();
+Schedule::command('data-audit:cleanup --dry-run')
+    ->dailyAt('03:10')
+    ->name('data-audit-cleanup-dryrun')
+    ->withoutOverlapping(30)
+    ->onOneServer();
+Schedule::command('data-audit:notify')
+    ->dailyAt('03:15')
+    ->name('data-audit-notify')
+    ->withoutOverlapping(15)
+    ->onOneServer();
+
+/*
+| Autonomous governance operations (phase: autonomous ops hardening).
+*/
+Schedule::command('governance:autonomous-ops --queue')
+    ->dailyAt('03:30')
+    ->name('governance-autonomous-ops')
+    ->withoutOverlapping(60)
+    ->onOneServer();
+Schedule::command('governance:queue-health')
+    ->everyThirtyMinutes()
+    ->name('governance-queue-health')
+    ->withoutOverlapping(25)
+    ->onOneServer();

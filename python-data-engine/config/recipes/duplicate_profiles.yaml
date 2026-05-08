@@ -1,0 +1,9 @@
+name: duplicate_profiles
+table: users
+primary_key: id
+confidence: 0.86
+risk: high
+detection_sql: "SELECT u1.id, u1.mobile, u1.email FROM users u1 INNER JOIN (SELECT mobile FROM users WHERE mobile IS NOT NULL AND TRIM(mobile) <> '' GROUP BY mobile HAVING COUNT(*) > 1) d ON d.mobile = u1.mobile"
+preview_sql: "SELECT id, name, mobile, email FROM users WHERE mobile IS NOT NULL AND TRIM(mobile) <> '' ORDER BY id DESC"
+fix_sql: "UPDATE users SET updated_at = updated_at WHERE mobile IS NOT NULL AND TRIM(mobile) <> ''"
+validation_sql: "SELECT mobile FROM users WHERE mobile IS NOT NULL AND TRIM(mobile) <> '' GROUP BY mobile HAVING COUNT(*) > 1"

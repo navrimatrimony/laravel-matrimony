@@ -1,0 +1,33 @@
+{
+  "schema_version": "1",
+  "report_type": "reusability_validation",
+  "generated_at": "2026-05-06T13:58:00Z",
+  "criteria": [
+    {
+      "name": "core_module_genericity",
+      "status": "pass",
+      "details": "auto_fix, rollback, scoring, explanations, workflows, recovery modules avoid matrimony-only hardcoding"
+    },
+    {
+      "name": "recipe_driven_execution",
+      "status": "pass",
+      "details": "fix orchestration driven by config/recipes/*.yaml"
+    },
+    {
+      "name": "environment_portability",
+      "status": "pass",
+      "details": "paths and output directories are config/env-driven in scripts/config.py"
+    },
+    {
+      "name": "admin_api_ready_outputs",
+      "status": "pass",
+      "details": "output/admin_reports and output/dashboard provide standardized JSON payloads"
+    },
+    {
+      "name": "rollback_contract",
+      "status": "pass",
+      "details": "row-level rollback manifests and execution utilities are table/primary-key generic"
+    }
+  ]
+}
+

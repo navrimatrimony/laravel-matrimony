@@ -26,6 +26,8 @@ use App\Http\Controllers\Admin\AutoShowcaseSettingsController;
 use App\Http\Controllers\Admin\CommerceAnalyticsController;
 use App\Http\Controllers\Admin\CommerceMemberOverrideController;
 use App\Http\Controllers\Admin\CouponController;
+use App\Http\Controllers\Admin\DataEngineController;
+use App\Http\Controllers\Admin\DataEngineGovernanceController;
 use App\Http\Controllers\Admin\DuplicatePhoneController;
 use App\Http\Controllers\Admin\GovernanceDashboardController;
 use App\Http\Controllers\Admin\HelpCentreTicketController;
@@ -37,6 +39,7 @@ use App\Http\Controllers\Admin\MatchBoostController;
 use App\Http\Controllers\Admin\MatchingEngineController;
 use App\Http\Controllers\Admin\ModerationLearningController;
 use App\Http\Controllers\Admin\MonitoringController;
+use App\Http\Controllers\Admin\MrLocalizationFillController;
 use App\Http\Controllers\Admin\OcrPatternController;
 use App\Http\Controllers\Admin\OpenPlaceSuggestionWebController;
 use App\Http\Controllers\Admin\PhotoModerationEngineController;
@@ -300,6 +303,16 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
 
     Route::get('/governance-dashboard', [GovernanceDashboardController::class, 'index'])
         ->name('governance-dashboard');
+    Route::get('/data-engine/profiles/{profileId}', [DataEngineGovernanceController::class, 'profile'])
+        ->name('data-engine.profiles.show');
+    Route::get('/governance/profiles/{profileId}', [DataEngineGovernanceController::class, 'profile'])
+        ->name('governance.profiles.show');
+    Route::get('/governance/profiles/{profileId}/status', [DataEngineGovernanceController::class, 'profileStatus'])
+        ->name('governance.profiles.status');
+    Route::post('/governance/profiles/{profileId}/actions', [DataEngineGovernanceController::class, 'profileAction'])
+        ->name('governance.profiles.actions');
+    Route::get('/governance/profiles/{profileId}/diagnostics', [DataEngineGovernanceController::class, 'profileDiagnostics'])
+        ->name('governance.profiles.diagnostics');
 
     /*
     | Master Data (Religions, Castes, Sub-castes) — layout expects admin.master.*.index
@@ -522,6 +535,37 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
     Route::get('/homepage-images', [HomepageImageController::class, 'index'])->name('homepage-images.index');
     Route::post('/homepage-images', [HomepageImageController::class, 'store'])->name('homepage-images.store');
     Route::post('/homepage-images/clear', [HomepageImageController::class, 'clear'])->name('homepage-images.clear');
+
+    /*
+    | Python data engine (CLI) — reports under python-data-engine/output/reports; HTTP API reserved on port 8003
+    */
+    Route::prefix('data-engine')->name('data-engine.')->group(function () {
+        Route::get('/', [DataEngineController::class, 'index'])->name('index');
+        Route::get('/status', [DataEngineController::class, 'status'])->name('status');
+        Route::get('/marathi-columns', [DataEngineController::class, 'marathiColumns'])->name('marathi-columns');
+        Route::get('/mr-fill', [MrLocalizationFillController::class, 'index'])->name('mr-fill.index');
+        Route::post('/mr-fill/{row}', [MrLocalizationFillController::class, 'update'])->whereNumber('row')->name('mr-fill.update');
+        Route::get('/data-integrity', [DataEngineController::class, 'dataIntegrity'])->name('data-integrity');
+        Route::get('/data-lineage', [DataEngineController::class, 'dataLineage'])->name('data-lineage');
+        Route::get('/comparisons', [DataEngineController::class, 'comparisons'])->name('comparisons');
+        Route::post('/analyze', [DataEngineController::class, 'runAnalyze'])->name('analyze');
+        Route::post('/fix', [DataEngineController::class, 'runFix'])->name('fix');
+        Route::post('/run-analyze', [DataEngineController::class, 'runAnalyze'])->name('run-analyze');
+        Route::post('/run-fix', [DataEngineController::class, 'runFix'])->name('run-fix');
+        Route::post('/toggle-engine', [DataEngineController::class, 'toggleEngine'])->name('toggle-engine');
+        Route::get('/issues', [DataEngineGovernanceController::class, 'issues'])->name('issues');
+        Route::get('/workflows', [DataEngineGovernanceController::class, 'workflows'])->name('workflows');
+        Route::get('/audit', [DataEngineGovernanceController::class, 'audit'])->name('audit');
+        Route::get('/system-health', [DataEngineGovernanceController::class, 'systemHealth'])->name('system-health');
+        Route::get('/rollback', [DataEngineGovernanceController::class, 'rollback'])->name('rollback');
+        Route::post('/governance-action', [DataEngineGovernanceController::class, 'executeAction'])->name('governance-action');
+        Route::post('/governance-action/{actionId}/approve', [DataEngineGovernanceController::class, 'approveAction'])->name('governance-action.approve');
+        Route::post('/refresh-dashboard', [DataEngineGovernanceController::class, 'refreshDashboard'])->name('refresh-dashboard');
+        Route::get('/live-status', [DataEngineGovernanceController::class, 'liveStatus'])->name('live-status');
+        Route::get('/profiles/{profileId}', [DataEngineGovernanceController::class, 'profile'])->name('profiles.show');
+        Route::get('/{run}/download', [DataEngineController::class, 'download'])->whereNumber('run')->name('download');
+        Route::get('/{run}', [DataEngineController::class, 'show'])->whereNumber('run')->name('show');
+    });
 
     /*
     | Pending intake suggestions queue (profile-centric; no intake attachment required)

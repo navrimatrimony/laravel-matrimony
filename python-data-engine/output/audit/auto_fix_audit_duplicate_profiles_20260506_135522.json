@@ -1,0 +1,25 @@
+{
+  "recipe": "duplicate_profiles",
+  "workflow": "detect->preview->backup->execute->validate->rollback",
+  "detected_count": 0,
+  "preview": {
+    "rows": [
+      {
+        "id": 173,
+        "name": "Anita Gaikwad",
+        "mobile": "1111111111",
+        "email": null
+      }
+    ],
+    "estimated_changes": 0,
+    "confidence": 0.86,
+    "risk": "high",
+    "rollback_available": true
+  },
+  "dry_run": true,
+  "backup_manifest": null,
+  "execute_summary": null,
+  "validation": null,
+  "rollback": null,
+  "status": "preview_ready"
+}

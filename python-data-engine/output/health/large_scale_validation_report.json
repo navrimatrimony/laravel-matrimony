@@ -1,0 +1,9 @@
+{
+  "generated_at": "2026-05-06T15:25:04Z",
+  "profiles_targeted": 1000,
+  "profiles_scanned": 2,
+  "runtime_ms": 55,
+  "memory_note": "Use system profiler for exact RSS in production worker host.",
+  "queue_throughput_note": "Track governance queues via governance:queue-health metrics.",
+  "snapshot_growth_bytes": 0
+}

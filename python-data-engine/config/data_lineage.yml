@@ -1,0 +1,258 @@
+# Data lineage manifest (PHASE 2) — source of truth for wizard vs public profile bindings.
+# Paths are relative to the Laravel repository root (parent of python-data-engine/).
+# Blade scan is verification-only (regex); manifest drives expectations.
+
+version: 1
+
+fields:
+  full_name:
+    canonical_source:
+      table: matrimony_profiles
+      column: full_name
+    wizard:
+      route: matrimony.profile.wizard.section
+      route_note: "GET /matrimony/profile/wizard/basic-info"
+      blades:
+        - resources/views/matrimony/profile/wizard/sections/basic_info.blade.php
+      bindings:
+        - profile.full_name
+    public_profile:
+      route: matrimony.profile.show
+      route_note: "GET /profile/{matrimony_profile_id}"
+      blades:
+        - resources/views/matrimony/profile/show.blade.php
+      bindings:
+        - profile.full_name
+
+  gender:
+    canonical_source:
+      table: matrimony_profiles
+      column: gender_id
+    wizard:
+      route: matrimony.profile.wizard.section
+      route_note: "section=basic-info"
+      blades:
+        - resources/views/matrimony/profile/wizard/sections/basic_info.blade.php
+      bindings:
+        - profile.gender_id
+    public_profile:
+      route: matrimony.profile.show
+      blades:
+        - resources/views/matrimony/profile/show.blade.php
+      bindings:
+        - profile.gender_id
+
+  date_of_birth:
+    canonical_source:
+      table: matrimony_profiles
+      column: date_of_birth
+    wizard:
+      route: matrimony.profile.wizard.section
+      route_note: "section=basic-info"
+      blades:
+        - resources/views/matrimony/profile/wizard/sections/basic_info.blade.php
+      bindings:
+        - profile.date_of_birth
+    public_profile:
+      route: matrimony.profile.show
+      blades:
+        - resources/views/matrimony/profile/show.blade.php
+      bindings:
+        - profile.date_of_birth
+
+  height_cm:
+    canonical_source:
+      table: matrimony_profiles
+      column: height_cm
+    wizard:
+      route: matrimony.profile.wizard.section
+      route_note: "section=physical — uses x-physical-engine component"
+      blades:
+        - resources/views/matrimony/profile/wizard/sections/physical.blade.php
+        - resources/views/components/physical-engine.blade.php
+      bindings:
+        - profile.height_cm
+    public_profile:
+      route: matrimony.profile.show
+      blades:
+        - resources/views/matrimony/profile/show.blade.php
+      bindings:
+        - profile.height_cm
+
+  religion:
+    canonical_source:
+      table: matrimony_profiles
+      column: religion_id
+    wizard:
+      route: matrimony.profile.wizard.section
+      route_note: "section=basic-info (religion-caste component)"
+      blades:
+        - resources/views/matrimony/profile/wizard/sections/basic_info.blade.php
+        - resources/views/components/profile/religion-caste-selector.blade.php
+      bindings:
+        - profile.religion_id
+    public_profile:
+      route: matrimony.profile.show
+      blades:
+        - resources/views/matrimony/profile/show.blade.php
+      bindings:
+        - profile.religion_id
+
+  caste:
+    canonical_source:
+      table: matrimony_profiles
+      column: caste_id
+    wizard:
+      route: matrimony.profile.wizard.section
+      route_note: "section=basic-info (religion-caste component)"
+      blades:
+        - resources/views/matrimony/profile/wizard/sections/basic_info.blade.php
+        - resources/views/components/profile/religion-caste-selector.blade.php
+      bindings:
+        - profile.caste_id
+    public_profile:
+      route: matrimony.profile.show
+      blades:
+        - resources/views/matrimony/profile/show.blade.php
+      bindings:
+        - profile.caste_id
+
+  education:
+    canonical_source:
+      table: matrimony_profiles
+      column: highest_education
+    wizard:
+      route: matrimony.profile.wizard.section
+      route_note: "section=education-career"
+      blades:
+        - resources/views/matrimony/profile/wizard/sections/education_career.blade.php
+        - resources/views/components/education-occupation-income-engine.blade.php
+      bindings:
+        - profile.highest_education
+    public_profile:
+      route: matrimony.profile.show
+      blades:
+        - resources/views/matrimony/profile/show.blade.php
+      bindings:
+        - profile.highest_education
+
+  occupation:
+    canonical_source:
+      table: matrimony_profiles
+      column: occupation_title
+    wizard:
+      route: matrimony.profile.wizard.section
+      route_note: "section=education-career"
+      blades:
+        - resources/views/matrimony/profile/wizard/sections/education_career.blade.php
+        - resources/views/components/education-occupation-income-engine.blade.php
+      bindings:
+        - profile.occupation_title
+        - profile.occupation_master_id
+    public_profile:
+      route: matrimony.profile.show
+      blades:
+        - resources/views/matrimony/profile/show.blade.php
+      bindings:
+        - profile.occupation_title
+
+  annual_income:
+    canonical_source:
+      table: matrimony_profiles
+      column: annual_income
+    wizard:
+      route: matrimony.profile.wizard.section
+      route_note: "section=education-career (income engine)"
+      blades:
+        - resources/views/matrimony/profile/wizard/sections/education_career.blade.php
+        - resources/views/components/education-occupation-income-engine.blade.php
+        - resources/views/components/income-engine.blade.php
+      bindings:
+        - profile.annual_income
+        - profile.income_amount
+        - profile.income_min_amount
+        - profile.income_max_amount
+    public_profile:
+      route: matrimony.profile.show
+      blades:
+        - resources/views/matrimony/profile/show.blade.php
+      bindings:
+        - profile.annual_income
+        - profile.income_amount
+        - profile.income_min_amount
+        - profile.income_max_amount
+
+  city:
+    canonical_source:
+      table: matrimony_profiles
+      column: location_id
+    wizard:
+      route: matrimony.profile.wizard.section
+      route_note: "section=location (location-typeahead)"
+      blades:
+        - resources/views/matrimony/profile/wizard/sections/location.blade.php
+        - resources/views/components/profile/location-typeahead.blade.php
+      bindings:
+        - profile.location_id
+    public_profile:
+      route: matrimony.profile.show
+      blades:
+        - resources/views/matrimony/profile/show.blade.php
+      bindings:
+        - profile.location_id
+
+  state:
+    canonical_source:
+      table: matrimony_profiles
+      column: location_id
+    wizard:
+      route: matrimony.profile.wizard.section
+      route_note: "section=location (state hint + derived display)"
+      blades:
+        - resources/views/matrimony/profile/wizard/sections/location.blade.php
+        - resources/views/components/profile/location-typeahead.blade.php
+      bindings:
+        - profile.residence_state_id
+    public_profile:
+      route: matrimony.profile.show
+      blades:
+        - resources/views/matrimony/profile/show.blade.php
+      bindings:
+        - profile.location_id
+
+  mother_tongue:
+    canonical_source:
+      table: matrimony_profiles
+      column: mother_tongue_id
+    wizard:
+      route: matrimony.profile.wizard.section
+      route_note: "section=basic-info"
+      blades:
+        - resources/views/matrimony/profile/wizard/sections/basic_info.blade.php
+      bindings:
+        - profile.mother_tongue_id
+    public_profile:
+      route: matrimony.profile.show
+      blades:
+        - resources/views/matrimony/profile/show.blade.php
+      bindings:
+        - profile.mother_tongue_id
+
+  marital_status:
+    canonical_source:
+      table: matrimony_profiles
+      column: marital_status_id
+    wizard:
+      route: matrimony.profile.wizard.section
+      route_note: "marital engine is rendered from basic-info section"
+      blades:
+        - resources/views/matrimony/profile/wizard/sections/basic_info.blade.php
+        - resources/views/matrimony/profile/wizard/sections/marital_engine.blade.php
+      bindings:
+        - profile.marital_status_id
+    public_profile:
+      route: matrimony.profile.show
+      blades:
+        - resources/views/matrimony/profile/show.blade.php
+      bindings:
+        - profile.marital_status_id

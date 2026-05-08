@@ -1,0 +1,9 @@
+name: orphan_addresses
+table: profile_addresses
+primary_key: id
+confidence: 0.82
+risk: high
+detection_sql: "SELECT pa.id, pa.profile_id FROM profile_addresses pa LEFT JOIN matrimony_profiles mp ON mp.id = pa.profile_id WHERE mp.id IS NULL"
+preview_sql: "SELECT pa.id, pa.profile_id, pa.district, pa.pin_code FROM profile_addresses pa LEFT JOIN matrimony_profiles mp ON mp.id = pa.profile_id WHERE mp.id IS NULL ORDER BY pa.id DESC"
+fix_sql: "UPDATE profile_addresses pa LEFT JOIN matrimony_profiles mp ON mp.id = pa.profile_id SET pa.updated_at = pa.updated_at WHERE mp.id IS NULL"
+validation_sql: "SELECT pa.id FROM profile_addresses pa LEFT JOIN matrimony_profiles mp ON mp.id = pa.profile_id WHERE mp.id IS NULL"

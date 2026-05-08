@@ -1,0 +1,66 @@
+full_name:
+  selectors:
+    - "Full Name"
+    - "Name"
+    - "नाव"
+  input_names:
+    - "full_name"
+    - "snapshot[core][full_name]"
+
+gender:
+  selectors:
+    - "Gender"
+    - "लिंग"
+  input_names:
+    - "gender_id"
+    - "snapshot[core][gender_id]"
+  value_patterns:
+    - "(?:Gender|लिंग)\\s*[:\\-]?\\s*(Male|Female|पुरुष|स्त्री)"
+
+date_of_birth:
+  selectors:
+    - "Date of Birth"
+    - "Date of birth"
+    - "जन्मतारीख"
+  input_names:
+    - "date_of_birth"
+    - "snapshot[core][date_of_birth]"
+  value_patterns:
+    - "(\\d{4}-\\d{2}-\\d{2})"
+    - "(\\d{2}\\/\\d{2}\\/\\d{4})"
+
+religion:
+  selectors:
+    - "Religion"
+    - "धर्म"
+  input_names:
+    - "religion_id"
+    - "snapshot[core][religion_id]"
+    - "religion"
+    - "snapshot[core][religion]"
+
+caste:
+  selectors:
+    - "Caste"
+    - "जात"
+  input_names:
+    - "caste_id"
+    - "snapshot[core][caste_id]"
+    - "caste"
+    - "snapshot[core][caste]"
+  value_patterns:
+    - "value\\s*=\\s*\"([^\"]+)\"\\s+disabled"
+
+city:
+  selectors:
+    - "Current city / village / district / state"
+    - "Location"
+    - "स्थान"
+  input_names:
+    - "location_id"
+    - "snapshot[core][location_id]"
+    - "location_input"
+    - "snapshot[core][location_input]"
+  value_patterns:
+    - "Lives in\\s+([^<\\n]+)"
+

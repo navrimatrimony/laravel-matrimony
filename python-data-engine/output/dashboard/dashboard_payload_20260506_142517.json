@@ -1,0 +1,149 @@
+{
+  "generated_at": "2026-05-06T14:25:17.015774+00:00",
+  "issue_summaries": [
+    {
+      "issue": "Duplicate identities",
+      "severity": "low",
+      "impact": "0 records potentially affected",
+      "affected_count": 0,
+      "root_cause": "Multiple rows share identity keys (phone/email) across ingestion paths.",
+      "suggested_fix": "Review duplicate groups and apply dedupe recipe in dry-run first.",
+      "auto_fix_available": true,
+      "rollback_available": true
+    },
+    {
+      "issue": "Validation errors",
+      "severity": "low",
+      "impact": "3 records potentially affected",
+      "affected_count": 3,
+      "root_cause": "Missing/invalid required fields from source or normalization layers.",
+      "suggested_fix": "Run validation-safe auto-fix recipes; unresolved rows should be queued for admin review.",
+      "auto_fix_available": true,
+      "rollback_available": true
+    },
+    {
+      "issue": "Cross-layer mismatches",
+      "severity": "low",
+      "impact": "1 records potentially affected",
+      "affected_count": 1,
+      "root_cause": "Canonical DB values differ from API/rendered snapshots.",
+      "suggested_fix": "Run comparison workflow, inspect diffs, then approve targeted fix recipes.",
+      "auto_fix_available": true,
+      "rollback_available": true
+    },
+    {
+      "issue": "Schema integrity risks",
+      "severity": "medium",
+      "impact": "11 records potentially affected",
+      "affected_count": 11,
+      "root_cause": "High null-ratio / sparse columns / weak indexing coverage.",
+      "suggested_fix": "Apply index and hierarchy repair recipes with pre-fix simulation.",
+      "auto_fix_available": true,
+      "rollback_available": true
+    },
+    {
+      "issue": "High severity lineage/comparison",
+      "severity": "low",
+      "impact": "0 records potentially affected",
+      "affected_count": 0,
+      "root_cause": "Multiple high severity discrepancies in deterministic comparison output.",
+      "suggested_fix": "Pause broad fixes, review impacted entities, then run scoped auto-fix plan.",
+      "auto_fix_available": false,
+      "rollback_available": true
+    }
+  ],
+  "health_cards": {
+    "module_health_score": {
+      "duplicates": 100,
+      "validation": 97,
+      "mismatch": 98,
+      "schema": 78,
+      "comparison": 90
+    },
+    "overall_platform_health": 95,
+    "risk_weighting": {
+      "duplicates": 0.3,
+      "validation": 0.2,
+      "mismatch": 0.25,
+      "schema": 0.15,
+      "comparison": 0.1
+    },
+    "trend_history": {
+      "note": "Trend history is derived from persisted comparison history and repeated runs."
+    }
+  },
+  "risk_summaries": {
+    "overall_platform_health": 95,
+    "critical_issue_count": 0
+  },
+  "pending_actions": [
+    {
+      "action_id": "ops-dashboard",
+      "state": "detected"
+    }
+  ],
+  "suggested_fixes": [
+    "Start with dry-run previews for all fixes.",
+    "Only execute approved workflows in sequence: detect -> preview -> backup -> execute -> validate.",
+    "Use rollback manifests for any failed validation."
+  ],
+  "ai_ready": {
+    "explanation_blocks": [
+      {
+        "issue": "Duplicate identities",
+        "severity": "low",
+        "impact": "0 records potentially affected",
+        "affected_count": 0,
+        "root_cause": "Multiple rows share identity keys (phone/email) across ingestion paths.",
+        "suggested_fix": "Review duplicate groups and apply dedupe recipe in dry-run first.",
+        "auto_fix_available": true,
+        "rollback_available": true
+      },
+      {
+        "issue": "Validation errors",
+        "severity": "low",
+        "impact": "3 records potentially affected",
+        "affected_count": 3,
+        "root_cause": "Missing/invalid required fields from source or normalization layers.",
+        "suggested_fix": "Run validation-safe auto-fix recipes; unresolved rows should be queued for admin review.",
+        "auto_fix_available": true,
+        "rollback_available": true
+      },
+      {
+        "issue": "Cross-layer mismatches",
+        "severity": "low",
+        "impact": "1 records potentially affected",
+        "affected_count": 1,
+        "root_cause": "Canonical DB values differ from API/rendered snapshots.",
+        "suggested_fix": "Run comparison workflow, inspect diffs, then approve targeted fix recipes.",
+        "auto_fix_available": true,
+        "rollback_available": true
+      },
+      {
+        "issue": "Schema integrity risks",
+        "severity": "medium",
+        "impact": "11 records potentially affected",
+        "affected_count": 11,
+        "root_cause": "High null-ratio / sparse columns / weak indexing coverage.",
+        "suggested_fix": "Apply index and hierarchy repair recipes with pre-fix simulation.",
+        "auto_fix_available": true,
+        "rollback_available": true
+      },
+      {
+        "issue": "High severity lineage/comparison",
+        "severity": "low",
+        "impact": "0 records potentially affected",
+        "affected_count": 0,
+        "root_cause": "Multiple high severity discrepancies in deterministic comparison output.",
+        "suggested_fix": "Pause broad fixes, review impacted entities, then run scoped auto-fix plan.",
+        "auto_fix_available": false,
+        "rollback_available": true
+      }
+    ],
+    "language_targets": [
+      "en",
+      "mr"
+    ],
+    "note": "Prepared for future AI explanation services; no AI generation in this layer."
+  }
+}

@@ -1,0 +1,11 @@
+entity: order
+table: orders
+canonical_fields:
+  - order_number
+  - status
+  - total_amount
+  - customer_id
+routes:
+  detail:
+    path: /orders/{id}
+

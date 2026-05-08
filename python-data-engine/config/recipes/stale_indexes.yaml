@@ -1,0 +1,9 @@
+name: stale_indexes
+table: users
+primary_key: id
+confidence: 0.66
+risk: low
+detection_sql: "SELECT id, name, mobile, email, updated_at FROM users WHERE id IS NOT NULL"
+preview_sql: "SELECT id, name, mobile, email, updated_at FROM users ORDER BY id DESC"
+fix_sql: "UPDATE users SET updated_at = updated_at WHERE id IS NOT NULL"
+validation_sql: "SELECT id FROM users WHERE id IS NOT NULL"

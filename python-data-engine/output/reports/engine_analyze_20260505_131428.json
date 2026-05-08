@@ -1,0 +1,616 @@
+{
+  "meta": {
+    "mode": "analyze",
+    "database": "laravel_matrimony",
+    "generated_at": "2026-05-05T13:14:28.310982+00:00",
+    "batch_size": 1000,
+    "engine_version": "1.0.0",
+    "run_mode": "analyze",
+    "timestamp": "2026-05-05T13:14:28.310982+00:00",
+    "pincode_csv_rows": 165627,
+    "execution_time": "34.873968",
+    "hash": "3ffa2d2f03dfe753a043874f7b8f79f2"
+  },
+  "quality_score": 85,
+  "priority_summary": {
+    "critical": 3,
+    "high": 0,
+    "medium": 0,
+    "low": 12
+  },
+  "suggestions": [
+    {
+      "type": "sparse_columns",
+      "count": 12,
+      "suggestion": "Review columns with very high NULL rates; improve intake or defaults."
+    },
+    {
+      "type": "schema_error",
+      "count": 12,
+      "suggestion": "Column missing in DB. Check migrations."
+    },
+    {
+      "type": "query_error",
+      "count": 152,
+      "suggestion": "Check SQL queries or null constraints."
+    }
+  ],
+  "profile_analysis": [
+    {
+      "user_id": 170,
+      "profile_id": 206,
+      "completeness_score": 10,
+      "missing_fields": [
+        "name",
+        "date_of_birth",
+        "religion",
+        "caste",
+        "city",
+        "pincode",
+        "education",
+        "occupation",
+        "profile_photo"
+      ],
+      "improvement_suggestions": [
+        "Upload profile photo to increase visibility",
+        "Add education to improve match quality",
+        "Add pincode for better location matching",
+        "Complete display name on your profile",
+        "Add date of birth for age-based matching",
+        "Add religion preference context",
+        "Add community / caste where applicable",
+        "Set your location for geo matching",
+        "Add occupation for better compatibility signals"
+      ],
+      "match_ready": false
+    },
+    {
+      "user_id": 173,
+      "profile_id": 207,
+      "completeness_score": 90,
+      "missing_fields": [
+        "pincode"
+      ],
+      "improvement_suggestions": [
+        "Add pincode for better location matching"
+      ],
+      "match_ready": true
+    }
+  ],
+  "profile_intelligence": {
+    "average_completeness_score": 50.0,
+    "sample_size": 2,
+    "top_incomplete": [
+      {
+        "user_id": 170,
+        "profile_id": 206,
+        "completeness_score": 10,
+        "missing_fields": [
+          "name",
+          "date_of_birth",
+          "religion",
+          "caste",
+          "city",
+          "pincode",
+          "education",
+          "occupation",
+          "profile_photo"
+        ]
+      },
+      {
+        "user_id": 173,
+        "profile_id": 207,
+        "completeness_score": 90,
+        "missing_fields": [
+          "pincode"
+        ]
+      }
+    ],
+    "suggestion_counts": {
+      "Upload profile photo to increase visibility": 1,
+      "Add education to improve match quality": 1,
+      "Add pincode for better location matching": 2,
+      "Complete display name on your profile": 1,
+      "Add date of birth for age-based matching": 1,
+      "Add religion preference context": 1,
+      "Add community / caste where applicable": 1,
+      "Set your location for geo matching": 1,
+      "Add occupation for better compatibility signals": 1
+    },
+    "missing_field_counts": {
+      "name": 1,
+      "date_of_birth": 1,
+      "religion": 1,
+      "caste": 1,
+      "city": 1,
+      "pincode": 2,
+      "education": 1,
+      "occupation": 1,
+      "profile_photo": 1
+    },
+    "notification_candidates": [
+      {
+        "user_id": 170,
+        "profile_id": 206,
+        "completeness_score": 10,
+        "missing_fields": [
+          "name",
+          "date_of_birth",
+          "religion",
+          "caste",
+          "city",
+          "pincode",
+          "education",
+          "occupation",
+          "profile_photo"
+        ],
+        "improvement_suggestions": [
+          "Upload profile photo to increase visibility",
+          "Add education to improve match quality",
+          "Add pincode for better location matching",
+          "Complete display name on your profile",
+          "Add date of birth for age-based matching"
+        ],
+        "channels_hint": [
+          "whatsapp_nudge_profile_photo",
+          "whatsapp_nudge_education",
+          "whatsapp_nudge_pincode",
+          "whatsapp_nudge_core_fields"
+        ]
+      }
+    ]
+  },
+  "conversion_intelligence": {
+    "conversion_signals": {
+      "low_profile_score_users": 1,
+      "no_photo_users": 1,
+      "high_intent_users": 1
+    },
+    "recommended_actions": [
+      {
+        "type": "profile_improvement",
+        "action": "Send notification to upload photo"
+      },
+      {
+        "type": "profile_improvement",
+        "action": "Prompt users with low completeness to finish core profile fields"
+      },
+      {
+        "type": "upgrade_prompt",
+        "action": "Show premium plan banner"
+      }
+    ],
+    "notification_candidates": [
+      {
+        "user_id": 170,
+        "type": "upload_photo"
+      }
+    ]
+  },
+  "duplicates": [],
+  "validation_errors": [
+    {
+      "rule": "invalid_phone",
+      "user_id": 170,
+      "message": "Phone is empty"
+    },
+    {
+      "rule": "invalid_phone",
+      "user_id": 171,
+      "message": "Phone is empty"
+    },
+    {
+      "rule": "invalid_phone",
+      "user_id": 172,
+      "message": "Phone is empty"
+    }
+  ],
+  "mismatch": [
+    {
+      "module": "mismatch_detector",
+      "warning": "Column 'city' missing on 'users'; skipped generic mismatch.",
+      "hint": "Define ENGINE_MISMATCH_SQL for your project (e.g. profiles vs profile_addresses)."
+    }
+  ],
+  "schema_issues": [
+    {
+      "table": "users",
+      "column": "dob",
+      "null_count": 4,
+      "row_count": 4,
+      "null_ratio": 1.0
+    },
+    {
+      "table": "users",
+      "column": "marital_status",
+      "null_count": 4,
+      "row_count": 4,
+      "null_ratio": 1.0
+    },
+    {
+      "table": "users",
+      "column": "plan",
+      "null_count": 4,
+      "row_count": 4,
+      "null_ratio": 1.0
+    },
+    {
+      "table": "users",
+      "column": "plan_expires_at",
+      "null_count": 4,
+      "row_count": 4,
+      "null_ratio": 1.0
+    },
+    {
+      "table": "users",
+      "column": "plan_started_at",
+      "null_count": 4,
+      "row_count": 4,
+      "null_ratio": 1.0
+    },
+    {
+      "table": "users",
+      "column": "mobile_backup",
+      "null_count": 4,
+      "row_count": 4,
+      "null_ratio": 1.0
+    },
+    {
+      "table": "users",
+      "column": "mobile_duplicate_of_user_id",
+      "null_count": 4,
+      "row_count": 4,
+      "null_ratio": 1.0
+    },
+    {
+      "table": "users",
+      "column": "email_verified_at",
+      "null_count": 4,
+      "row_count": 4,
+      "null_ratio": 1.0
+    },
+    {
+      "table": "users",
+      "column": "mobile_verified_at",
+      "null_count": 4,
+      "row_count": 4,
+      "null_ratio": 1.0
+    },
+    {
+      "table": "users",
+      "column": "remember_token",
+      "null_count": 4,
+      "row_count": 4,
+      "null_ratio": 1.0
+    },
+    {
+      "table": "users",
+      "column": "last_inactive_reminder_sent_at",
+      "null_count": 4,
+      "row_count": 4,
+      "null_ratio": 1.0
+    },
+    {
+      "table": "users",
+      "column": "last_new_matches_digest_sent_at",
+      "null_count": 4,
+      "row_count": 4,
+      "null_ratio": 1.0
+    }
+  ],
+  "log_errors": [
+    {
+      "kind": "pattern_count",
+      "pattern": "sqlstate",
+      "count": 152
+    },
+    {
+      "kind": "pattern_count",
+      "pattern": "error_token",
+      "count": 117
+    },
+    {
+      "kind": "pattern_count",
+      "pattern": "laravel_error_marker",
+      "count": 83
+    },
+    {
+      "kind": "sample_line",
+      "text": "[2026-05-01 19:15:50] local.ERROR: SQLSTATE[42S02]: Base table or view not found: 1146 Table 'laravel_matrimony.city_display_meta' doesn't exist (Connection: mysql, Host: 127.0.0.1, Port: 3306, Database: laravel_matrimony, SQL: select * from `city_display_meta` where `city_display_meta`.`city_id` in (4444, 8925, 10043, 14067, 15610, 16287, 28197, 28346, 28610, 28939, 29172, 30281, 30551, 34324, 34743, 35075, 40118, 41294, 41295, 45716)) {\"exception\":\"[object] (Illuminate\\\\Database\\\\QueryExceptio"
+    },
+    {
+      "kind": "sample_line",
+      "text": "[2026-05-01 19:15:50] local.ERROR: SQLSTATE[42S02]: Base table or view not found: 1146 Table 'laravel_matrimony.city_display_meta' doesn't exist (Connection: mysql, Host: 127.0.0.1, Port: 3306, Database: laravel_matrimony, SQL: select * from `city_display_meta` where `city_display_meta`.`city_id` in (8925, 28197, 28346, 28939, 30551, 34743, 40118, 45716)) {\"exception\":\"[object] (Illuminate\\\\Database\\\\QueryException(code: 42S02): SQLSTATE[42S02]: Base table or view not found: 1146 Table 'laravel_"
+    },
+    {
+      "kind": "sample_line",
+      "text": "[2026-05-01 19:16:58] local.ERROR: SQLSTATE[42S02]: Base table or view not found: 1146 Table 'laravel_matrimony.city_display_meta' doesn't exist (Connection: mysql, Host: 127.0.0.1, Port: 3306, Database: laravel_matrimony, SQL: select * from `city_display_meta` where `city_display_meta`.`city_id` in (5666, 8147, 8148, 8277, 8284, 8287, 8558, 10872, 18167, 22531, 23234, 23959, 28331, 28687, 29757, 35706, 37171, 38016, 39012, 41369)) {\"exception\":\"[object] (Illuminate\\\\Database\\\\QueryException(cod"
+    },
+    {
+      "kind": "sample_line",
+      "text": "[2026-05-01 19:17:02] local.ERROR: SQLSTATE[42S02]: Base table or view not found: 1146 Table 'laravel_matrimony.city_display_meta' doesn't exist (Connection: mysql, Host: 127.0.0.1, Port: 3306, Database: laravel_matrimony, SQL: select * from `city_display_meta` where `city_display_meta`.`city_id` in (1, 18, 4311, 20483, 25969, 28074, 28884)) {\"exception\":\"[object] (Illuminate\\\\Database\\\\QueryException(code: 42S02): SQLSTATE[42S02]: Base table or view not found: 1146 Table 'laravel_matrimony.city"
+    },
+    {
+      "kind": "sample_line",
+      "text": "[2026-05-01 19:24:34] local.ERROR: The \"intl\" PHP extension is required to use the [format] method. {\"exception\":\"[object] (RuntimeException(code: 0): The \\\"intl\\\" PHP extension is required to use the [format] method. at E:/LaravelProjects/laravel-matrimony/vendor/laravel/framework/src/Illuminate/Support/Number.php:443)"
+    },
+    {
+      "kind": "sample_line",
+      "text": "[2026-05-01 19:24:44] local.ERROR: Unexpected end of input {\"exception\":\"[object] (InvalidArgumentException(code: 0): Unexpected end of input at E:/LaravelProjects/laravel-matrimony/vendor/psy/psysh/src/Shell.php:1102)"
+    },
+    {
+      "kind": "sample_line",
+      "text": "[2026-05-01 19:30:44] local.ERROR: SQLSTATE[42S21]: Column already exists: 1060 Duplicate column name 'name_mr' (Connection: mysql, Host: 127.0.0.1, Port: 3306, Database: laravel_matrimony, SQL: alter table `locations` add `name_mr` varchar(255) null after `name`) {\"exception\":\"[object] (Illuminate\\\\Database\\\\QueryException(code: 42S21): SQLSTATE[42S21]: Column already exists: 1060 Duplicate column name 'name_mr' (Connection: mysql, Host: 127.0.0.1, Port: 3306, Database: laravel_matrimony, SQL: "
+    },
+    {
+      "kind": "sample_line",
+      "text": "[2026-05-01 19:51:20] local.ERROR: SQLSTATE[42S02]: Base table or view not found: 1146 Table 'laravel_matrimony.city_display_meta' doesn't exist (Connection: mysql, Host: 127.0.0.1, Port: 3306, Database: laravel_matrimony, SQL: select * from `city_display_meta` where `city_display_meta`.`city_id` in (3700, 4930, 9678, 14307, 15082, 21257, 24608, 26862, 28223, 28692, 32377, 33407, 35247, 36711, 37140, 37266, 37506, 37969, 38766, 38914)) {\"exception\":\"[object] (Illuminate\\\\Database\\\\QueryException"
+    },
+    {
+      "kind": "sample_line",
+      "text": "[2026-05-01 19:54:16] local.ERROR: PHP Parse error: Syntax error, unexpected '=' on line 1 {\"exception\":\"[object] (Psy\\\\Exception\\\\ParseErrorException(code: 0): PHP Parse error: Syntax error, unexpected '=' on line 1 at E:/LaravelProjects/laravel-matrimony/vendor/psy/psysh/src/Exception/ParseErrorException.php:44)"
+    },
+    {
+      "kind": "sample_line",
+      "text": "[2026-05-01 19:59:39] local.ERROR: SQLSTATE[42S02]: Base table or view not found: 1146 Table 'laravel_matrimony.city_display_meta' doesn't exist (Connection: mysql, Host: 127.0.0.1, Port: 3306, Database: laravel_matrimony, SQL: select * from `city_display_meta` where `city_display_meta`.`city_id` in (3700, 4930, 9678, 14307, 15082, 21257, 24608, 26862, 28223, 28692, 32377, 33407, 35247, 36711, 37140, 37266, 37506, 37969, 38766, 38914)) {\"exception\":\"[object] (Illuminate\\\\Database\\\\QueryException"
+    },
+    {
+      "kind": "sample_line",
+      "text": "[2026-05-01 19:59:45] local.ERROR: SQLSTATE[42S02]: Base table or view not found: 1146 Table 'laravel_matrimony.city_display_meta' doesn't exist (Connection: mysql, Host: 127.0.0.1, Port: 3306, Database: laravel_matrimony, SQL: select * from `city_display_meta` where `city_display_meta`.`city_id` in (14, 8828, 9631, 9804, 9805, 14032, 18058, 31361, 31821, 32524, 33648, 34916, 35829, 37281, 37694, 38808, 38888, 39091, 42163, 43713)) {\"exception\":\"[object] (Illuminate\\\\Database\\\\QueryException(cod"
+    },
+    {
+      "kind": "sample_line",
+      "text": "[2026-05-01 19:59:46] local.ERROR: SQLSTATE[42S02]: Base table or view not found: 1146 Table 'laravel_matrimony.city_display_meta' doesn't exist (Connection: mysql, Host: 127.0.0.1, Port: 3306, Database: laravel_matrimony, SQL: select * from `city_display_meta` where `city_display_meta`.`city_id` in (5192, 5194, 9349, 10138, 10190, 10705, 10878, 23113, 24642, 26221, 30754, 33597, 33867, 33874, 34609, 37598, 41052, 45280, 45907, 46320)) {\"exception\":\"[object] (Illuminate\\\\Database\\\\QueryException"
+    },
+    {
+      "kind": "sample_line",
+      "text": "[2026-05-01 19:59:49] local.ERROR: SQLSTATE[42S02]: Base table or view not found: 1146 Table 'laravel_matrimony.city_display_meta' doesn't exist (Connection: mysql, Host: 127.0.0.1, Port: 3306, Database: laravel_matrimony, SQL: select * from `city_display_meta` where `city_display_meta`.`city_id` in (7315, 11804, 31200, 35800, 35804, 35805, 35806, 37561)) {\"exception\":\"[object] (Illuminate\\\\Database\\\\QueryException(code: 42S02): SQLSTATE[42S02]: Base table or view not found: 1146 Table 'laravel_"
+    },
+    {
+      "kind": "sample_line",
+      "text": "[2026-05-01 19:59:49] local.ERROR: SQLSTATE[42S02]: Base table or view not found: 1146 Table 'laravel_matrimony.city_display_meta' doesn't exist (Connection: mysql, Host: 127.0.0.1, Port: 3306, Database: laravel_matrimony, SQL: select * from `city_display_meta` where `city_display_meta`.`city_id` in (37561)) {\"exception\":\"[object] (Illuminate\\\\Database\\\\QueryException(code: 42S02): SQLSTATE[42S02]: Base table or view not found: 1146 Table 'laravel_matrimony.city_display_meta' doesn't exist (Conn"
+    },
+    {
+      "kind": "sample_line",
+      "text": "[2026-05-01 19:59:54] local.ERROR: SQLSTATE[42S02]: Base table or view not found: 1146 Table 'laravel_matrimony.city_display_meta' doesn't exist (Connection: mysql, Host: 127.0.0.1, Port: 3306, Database: laravel_matrimony, SQL: select * from `city_display_meta` where `city_display_meta`.`city_id` in (1, 18, 4311, 20483, 25969, 28074, 28884)) {\"exception\":\"[object] (Illuminate\\\\Database\\\\QueryException(code: 42S02): SQLSTATE[42S02]: Base table or view not found: 1146 Table 'laravel_matrimony.city"
+    },
+    {
+      "kind": "sample_line",
+      "text": "[2026-05-01 19:59:55] local.ERROR: SQLSTATE[42S02]: Base table or view not found: 1146 Table 'laravel_matrimony.city_display_meta' doesn't exist (Connection: mysql, Host: 127.0.0.1, Port: 3306, Database: laravel_matrimony, SQL: select * from `city_display_meta` where `city_display_meta`.`city_id` in (1, 18, 4311, 20483, 25969, 28074, 28884)) {\"exception\":\"[object] (Illuminate\\\\Database\\\\QueryException(code: 42S02): SQLSTATE[42S02]: Base table or view not found: 1146 Table 'laravel_matrimony.city"
+    },
+    {
+      "kind": "sample_line",
+      "text": "[2026-05-01 19:59:57] local.ERROR: SQLSTATE[42S02]: Base table or view not found: 1146 Table 'laravel_matrimony.city_display_meta' doesn't exist (Connection: mysql, Host: 127.0.0.1, Port: 3306, Database: laravel_matrimony, SQL: select * from `city_display_meta` where `city_display_meta`.`city_id` in (1, 18, 4311, 20483, 25969, 28074, 28884)) {\"exception\":\"[object] (Illuminate\\\\Database\\\\QueryException(code: 42S02): SQLSTATE[42S02]: Base table or view not found: 1146 Table 'laravel_matrimony.city"
+    },
+    {
+      "kind": "sample_line",
+      "text": "[2026-05-01 20:00:05] local.ERROR: SQLSTATE[42S02]: Base table or view not found: 1146 Table 'laravel_matrimony.city_display_meta' doesn't exist (Connection: mysql, Host: 127.0.0.1, Port: 3306, Database: laravel_matrimony, SQL: select * from `city_display_meta` where `city_display_meta`.`city_id` in (3700, 4930, 9678, 14307, 15082, 21257, 24608, 26862, 28223, 28692, 32377, 33407, 35247, 36711, 37140, 37266, 37506, 37969, 38766, 38914)) {\"exception\":\"[object] (Illuminate\\\\Database\\\\QueryException"
+    },
+    {
+      "kind": "sample_line",
+      "text": "[2026-05-01 20:00:06] local.ERROR: SQLSTATE[42S02]: Base table or view not found: 1146 Table 'laravel_matrimony.city_display_meta' doesn't exist (Connection: mysql, Host: 127.0.0.1, Port: 3306, Database: laravel_matrimony, SQL: select * from `city_display_meta` where `city_display_meta`.`city_id` in (1, 18, 4311, 20483, 25969, 28074, 28884)) {\"exception\":\"[object] (Illuminate\\\\Database\\\\QueryException(code: 42S02): SQLSTATE[42S02]: Base table or view not found: 1146 Table 'laravel_matrimony.city"
+    },
+    {
+      "kind": "sample_line",
+      "text": "[2026-05-01 20:02:48] local.ERROR: SQLSTATE[42S02]: Base table or view not found: 1146 Table 'laravel_matrimony.city_display_meta' doesn't exist (Connection: mysql, Host: 127.0.0.1, Port: 3306, Database: laravel_matrimony, SQL: select * from `city_display_meta` where `city_display_meta`.`city_id` in (3700, 4930, 9678, 14307, 15082, 21257, 24608, 26862, 28223, 28692, 32377, 33407, 35247, 36711, 37140, 37266, 37506, 37969, 38766, 38914)) {\"exception\":\"[object] (Illuminate\\\\Database\\\\QueryException"
+    },
+    {
+      "kind": "sample_line",
+      "text": "[2026-05-01 20:02:49] local.ERROR: SQLSTATE[42S02]: Base table or view not found: 1146 Table 'laravel_matrimony.city_display_meta' doesn't exist (Connection: mysql, Host: 127.0.0.1, Port: 3306, Database: laravel_matrimony, SQL: select * from `city_display_meta` where `city_display_meta`.`city_id` in (1, 18, 4311, 20483, 25969, 28074, 28884)) {\"exception\":\"[object] (Illuminate\\\\Database\\\\QueryException(code: 42S02): SQLSTATE[42S02]: Base table or view not found: 1146 Table 'laravel_matrimony.city"
+    },
+    {
+      "kind": "sample_line",
+      "text": "[2026-05-01 20:03:11] local.ERROR: SQLSTATE[42S02]: Base table or view not found: 1146 Table 'laravel_matrimony.city_display_meta' doesn't exist (Connection: mysql, Host: 127.0.0.1, Port: 3306, Database: laravel_matrimony, SQL: select * from `city_display_meta` where `city_display_meta`.`city_id` in (5666, 8147, 8148, 8277, 8284, 8287, 8558, 10872, 18167, 22531, 23234, 23959, 28331, 28687, 29757, 35706, 37171, 38016, 39012, 41369)) {\"exception\":\"[object] (Illuminate\\\\Database\\\\QueryException(cod"
+    },
+    {
+      "kind": "sample_line",
+      "text": "[2026-05-01 20:03:14] local.ERROR: SQLSTATE[42S02]: Base table or view not found: 1146 Table 'laravel_matrimony.city_display_meta' doesn't exist (Connection: mysql, Host: 127.0.0.1, Port: 3306, Database: laravel_matrimony, SQL: select * from `city_display_meta` where `city_display_meta`.`city_id` in (8287, 8289, 8290, 12989, 12993, 14094, 14099, 14108, 20950, 25119, 38643, 45943)) {\"exception\":\"[object] (Illuminate\\\\Database\\\\QueryException(code: 42S02): SQLSTATE[42S02]: Base table or view not f"
+    },
+    {
+      "kind": "sample_line",
+      "text": "[2026-05-01 20:10:52] local.ERROR: SQLSTATE[42S02]: Base table or view not found: 1146 Table 'laravel_matrimony.location_open_place_suggestions' doesn't exist (Connection: mysql, Host: 127.0.0.1, Port: 3306, Database: laravel_matrimony, SQL: select * from `location_open_place_suggestions` where `normalized_input` = 415309 limit 1 for update) {\"userId\":1,\"exception\":\"[object] (Illuminate\\\\Database\\\\QueryException(code: 42S02): SQLSTATE[42S02]: Base table or view not found: 1146 Table 'laravel_mat"
+    },
+    {
+      "kind": "sample_line",
+      "text": "[2026-05-01 20:11:18] local.ERROR: SQLSTATE[42S02]: Base table or view not found: 1146 Table 'laravel_matrimony.location_open_place_suggestions' doesn't exist (Connection: mysql, Host: 127.0.0.1, Port: 3306, Database: laravel_matrimony, SQL: select * from `location_open_place_suggestions` where `normalized_input` = 415309 limit 1 for update) {\"userId\":1,\"exception\":\"[object] (Illuminate\\\\Database\\\\QueryException(code: 42S02): SQLSTATE[42S02]: Base table or view not found: 1146 Table 'laravel_mat"
+    },
+    {
+      "kind": "sample_line",
+      "text": "[2026-05-01 20:12:51] local.ERROR: SQLSTATE[42S02]: Base table or view not found: 1146 Table 'laravel_matrimony.location_open_place_suggestions' doesn't exist (Connection: mysql, Host: 127.0.0.1, Port: 3306, Database: laravel_matrimony, SQL: select * from `location_open_place_suggestions` where `normalized_input` = 415309 limit 1 for update) {\"userId\":1,\"exception\":\"[object] (Illuminate\\\\Database\\\\QueryException(code: 42S02): SQLSTATE[42S02]: Base table or view not found: 1146 Table 'laravel_mat"
+    },
+    {
+      "kind": "sample_line",
+      "text": "[2026-05-01 20:13:10] local.ERROR: SQLSTATE[42S02]: Base table or view not found: 1146 Table 'laravel_matrimony.location_open_place_suggestions' doesn't exist (Connection: mysql, Host: 127.0.0.1, Port: 3306, Database: laravel_matrimony, SQL: select * from `location_open_place_suggestions` where `normalized_input` = 415309 limit 1 for update) {\"userId\":1,\"exception\":\"[object] (Illuminate\\\\Database\\\\QueryException(code: 42S02): SQLSTATE[42S02]: Base table or view not found: 1146 Table 'laravel_mat"
+    },
+    {
+      "kind": "sample_line",
+      "text": "[2026-05-01 20:14:45] local.ERROR: SQLSTATE[42S02]: Base table or view not found: 1146 Table 'laravel_matrimony.location_open_place_suggestions' doesn't exist (Connection: mysql, Host: 127.0.0.1, Port: 3306, Database: laravel_matrimony, SQL: select * from `location_open_place_suggestions` where `normalized_input` = 415309 limit 1 for update) {\"userId\":1,\"exception\":\"[object] (Illuminate\\\\Database\\\\QueryException(code: 42S02): SQLSTATE[42S02]: Base table or view not found: 1146 Table 'laravel_mat"
+    },
+    {
+      "kind": "sample_line",
+      "text": "[2026-05-01 20:17:37] local.ERROR: SQLSTATE[42S21]: Column already exists: 1060 Duplicate column name 'name_mr' (Connection: mysql, Host: 127.0.0.1, Port: 3306, Database: laravel_matrimony, SQL: alter table `locations` add `name_mr` varchar(255) null after `name`) {\"exception\":\"[object] (Illuminate\\\\Database\\\\QueryException(code: 42S21): SQLSTATE[42S21]: Column already exists: 1060 Duplicate column name 'name_mr' (Connection: mysql, Host: 127.0.0.1, Port: 3306, Database: laravel_matrimony, SQL: "
+    },
+    {
+      "kind": "sample_line",
+      "text": "[2026-05-01 20:22:12] local.ERROR: SQLSTATE[42S02]: Base table or view not found: 1146 Table 'laravel_matrimony.city_display_meta' doesn't exist (Connection: mysql, Host: 127.0.0.1, Port: 3306, Database: laravel_matrimony, SQL: select * from `city_display_meta` where `city_display_meta`.`city_id` in (3)) {\"userId\":1,\"exception\":\"[object] (Illuminate\\\\Database\\\\QueryException(code: 42S02): SQLSTATE[42S02]: Base table or view not found: 1146 Table 'laravel_matrimony.city_display_meta' doesn't exis"
+    },
+    {
+      "kind": "sample_line",
+      "text": "[2026-05-01 20:27:38] local.ERROR: SQLSTATE[42S22]: Column not found: 1054 Unknown column 'parent_city_id' in 'field list' (Connection: mysql, Host: 127.0.0.1, Port: 3306, Database: laravel_matrimony, SQL: select `id`, `name`, `taluka_id`, `parent_city_id` from `cities` where `id` in (3)) {\"userId\":1,\"exception\":\"[object] (Illuminate\\\\Database\\\\QueryException(code: 42S22): SQLSTATE[42S22]: Column not found: 1054 Unknown column 'parent_city_id' in 'field list' (Connection: mysql, Host: 127.0.0.1,"
+    },
+    {
+      "kind": "sample_line",
+      "text": "[2026-05-01 20:27:56] local.ERROR: SQLSTATE[42S22]: Column not found: 1054 Unknown column 'parent_city_id' in 'field list' (Connection: mysql, Host: 127.0.0.1, Port: 3306, Database: laravel_matrimony, SQL: select `id`, `name`, `taluka_id`, `parent_city_id` from `cities` where `id` in (3)) {\"userId\":1,\"exception\":\"[object] (Illuminate\\\\Database\\\\QueryException(code: 42S22): SQLSTATE[42S22]: Column not found: 1054 Unknown column 'parent_city_id' in 'field list' (Connection: mysql, Host: 127.0.0.1,"
+    },
+    {
+      "kind": "sample_line",
+      "text": "[2026-05-02 19:23:12] local.ERROR: Unexpected end of input {\"exception\":\"[object] (InvalidArgumentException(code: 0): Unexpected end of input at E:/LaravelProjects/laravel-matrimony/vendor/psy/psysh/src/Shell.php:1102)"
+    },
+    {
+      "kind": "sample_line",
+      "text": "[2026-05-02 20:27:22] testing.ERROR: Quota SSOT violation: missing plan_quota_policies row for `chat_send_limit` (effective_plan.user_id=1). {\"userId\":1,\"exception\":\"[object] (App\\\\Exceptions\\\\QuotaPolicySourceViolation(code: 0): Quota SSOT violation: missing plan_quota_policies row for `chat_send_limit` (effective_plan.user_id=1). at E:/LaravelProjects/laravel-matrimony/app/Exceptions/QuotaPolicySourceViolation.php:15)"
+    },
+    {
+      "kind": "sample_line",
+      "text": "[2026-05-02 20:27:29] testing.ERROR: Quota SSOT violation: missing plan_quota_policies row for `chat_send_limit` (effective_plan.user_id=1). {\"userId\":1,\"exception\":\"[object] (App\\\\Exceptions\\\\QuotaPolicySourceViolation(code: 0): Quota SSOT violation: missing plan_quota_policies row for `chat_send_limit` (effective_plan.user_id=1). at E:/LaravelProjects/laravel-matrimony/app/Exceptions/QuotaPolicySourceViolation.php:15)"
+    },
+    {
+      "kind": "sample_line",
+      "text": "[2026-05-02 20:52:11] testing.ERROR: Quota SSOT violation: missing plan_quota_policies row for `chat_send_limit` (effective_plan.user_id=1). {\"userId\":1,\"exception\":\"[object] (App\\\\Exceptions\\\\QuotaPolicySourceViolation(code: 0): Quota SSOT violation: missing plan_quota_policies row for `chat_send_limit` (effective_plan.user_id=1). at E:/LaravelProjects/laravel-matrimony/app/Exceptions/QuotaPolicySourceViolation.php:15)"
+    },
+    {
+      "kind": "sample_line",
+      "text": "[2026-05-02 20:52:12] testing.ERROR: Quota SSOT violation: missing plan_quota_policies row for `chat_send_limit` (effective_plan.user_id=1). {\"userId\":1,\"exception\":\"[object] (App\\\\Exceptions\\\\QuotaPolicySourceViolation(code: 0): Quota SSOT violation: missing plan_quota_policies row for `chat_send_limit` (effective_plan.user_id=1). at E:/LaravelProjects/laravel-matrimony/app/Exceptions/QuotaPolicySourceViolation.php:15)"
+    },
+    {
+      "kind": "sample_line",
+      "text": "[2026-05-02 21:25:30] testing.ERROR: Quota SSOT violation: missing plan_quota_policies row for `chat_send_limit` (effective_plan.user_id=1). {\"userId\":1,\"exception\":\"[object] (App\\\\Exceptions\\\\QuotaPolicySourceViolation(code: 0): Quota SSOT violation: missing plan_quota_policies row for `chat_send_limit` (effective_plan.user_id=1). at E:/LaravelProjects/laravel-matrimony/app/Exceptions/QuotaPolicySourceViolation.php:15)"
+    },
+    {
+      "kind": "sample_line",
+      "text": "[2026-05-02 21:25:33] testing.ERROR: Quota SSOT violation: missing plan_quota_policies row for `chat_send_limit` (effective_plan.user_id=1). {\"userId\":1,\"exception\":\"[object] (App\\\\Exceptions\\\\QuotaPolicySourceViolation(code: 0): Quota SSOT violation: missing plan_quota_policies row for `chat_send_limit` (effective_plan.user_id=1). at E:/LaravelProjects/laravel-matrimony/app/Exceptions/QuotaPolicySourceViolation.php:15)"
+    },
+    {
+      "kind": "sample_line",
+      "text": "[2026-05-02 21:30:20] testing.ERROR: Quota SSOT violation: missing plan_quota_policies row for `chat_send_limit` (effective_plan.user_id=1). {\"userId\":1,\"exception\":\"[object] (App\\\\Exceptions\\\\QuotaPolicySourceViolation(code: 0): Quota SSOT violation: missing plan_quota_policies row for `chat_send_limit` (effective_plan.user_id=1). at E:/LaravelProjects/laravel-matrimony/app/Exceptions/QuotaPolicySourceViolation.php:15)"
+    },
+    {
+      "kind": "sample_line",
+      "text": "[2026-05-02 21:30:24] testing.ERROR: Quota SSOT violation: missing plan_quota_policies row for `chat_send_limit` (effective_plan.user_id=1). {\"userId\":1,\"exception\":\"[object] (App\\\\Exceptions\\\\QuotaPolicySourceViolation(code: 0): Quota SSOT violation: missing plan_quota_policies row for `chat_send_limit` (effective_plan.user_id=1). at E:/LaravelProjects/laravel-matrimony/app/Exceptions/QuotaPolicySourceViolation.php:15)"
+    },
+    {
+      "kind": "sample_line",
+      "text": "[2026-05-02 21:31:01] testing.ERROR: Quota SSOT violation: missing plan_quota_policies row for `chat_send_limit` (effective_plan.user_id=1). {\"userId\":1,\"exception\":\"[object] (App\\\\Exceptions\\\\QuotaPolicySourceViolation(code: 0): Quota SSOT violation: missing plan_quota_policies row for `chat_send_limit` (effective_plan.user_id=1). at E:/LaravelProjects/laravel-matrimony/app/Exceptions/QuotaPolicySourceViolation.php:15)"
+    },
+    {
+      "kind": "sample_line",
+      "text": "[2026-05-02 21:31:03] testing.ERROR: Quota SSOT violation: missing plan_quota_policies row for `chat_send_limit` (effective_plan.user_id=1). {\"userId\":1,\"exception\":\"[object] (App\\\\Exceptions\\\\QuotaPolicySourceViolation(code: 0): Quota SSOT violation: missing plan_quota_policies row for `chat_send_limit` (effective_plan.user_id=1). at E:/LaravelProjects/laravel-matrimony/app/Exceptions/QuotaPolicySourceViolation.php:15)"
+    },
+    {
+      "kind": "sample_line",
+      "text": "[2026-05-03 08:55:54] local.ERROR: AI SERVICE DOWN {\"profile_id\":204,\"reason\":\"AI moderation service is down\"} "
+    },
+    {
+      "kind": "sample_line",
+      "text": "[2026-05-03 12:01:36] local.ERROR: SQLSTATE[42S02]: Base table or view not found: 1146 Table 'laravel_matrimony.talukas' doesn't exist (Connection: mysql, Host: 127.0.0.1, Port: 3306, Database: laravel_matrimony, SQL: select * from `talukas`) {\"userId\":166,\"exception\":\"[object] (Illuminate\\\\Database\\\\QueryException(code: 42S02): SQLSTATE[42S02]: Base table or view not found: 1146 Table 'laravel_matrimony.talukas' doesn't exist (Connection: mysql, Host: 127.0.0.1, Port: 3306, Database: laravel_ma"
+    },
+    {
+      "kind": "sample_line",
+      "text": "[2026-05-03 12:01:47] local.ERROR: SQLSTATE[42S02]: Base table or view not found: 1146 Table 'laravel_matrimony.talukas' doesn't exist (Connection: mysql, Host: 127.0.0.1, Port: 3306, Database: laravel_matrimony, SQL: select * from `talukas`) {\"userId\":166,\"exception\":\"[object] (Illuminate\\\\Database\\\\QueryException(code: 42S02): SQLSTATE[42S02]: Base table or view not found: 1146 Table 'laravel_matrimony.talukas' doesn't exist (Connection: mysql, Host: 127.0.0.1, Port: 3306, Database: laravel_ma"
+    },
+    {
+      "kind": "sample_line",
+      "text": "[2026-05-03 12:01:59] local.ERROR: SQLSTATE[42S02]: Base table or view not found: 1146 Table 'laravel_matrimony.talukas' doesn't exist (Connection: mysql, Host: 127.0.0.1, Port: 3306, Database: laravel_matrimony, SQL: select * from `talukas`) {\"userId\":166,\"exception\":\"[object] (Illuminate\\\\Database\\\\QueryException(code: 42S02): SQLSTATE[42S02]: Base table or view not found: 1146 Table 'laravel_matrimony.talukas' doesn't exist (Connection: mysql, Host: 127.0.0.1, Port: 3306, Database: laravel_ma"
+    },
+    {
+      "kind": "sample_line",
+      "text": "[2026-05-03 12:02:00] local.ERROR: SQLSTATE[42S02]: Base table or view not found: 1146 Table 'laravel_matrimony.talukas' doesn't exist (Connection: mysql, Host: 127.0.0.1, Port: 3306, Database: laravel_matrimony, SQL: select * from `talukas`) {\"userId\":166,\"exception\":\"[object] (Illuminate\\\\Database\\\\QueryException(code: 42S02): SQLSTATE[42S02]: Base table or view not found: 1146 Table 'laravel_matrimony.talukas' doesn't exist (Connection: mysql, Host: 127.0.0.1, Port: 3306, Database: laravel_ma"
+    },
+    {
+      "kind": "sample_line",
+      "text": "[2026-05-03 12:02:01] local.ERROR: SQLSTATE[42S02]: Base table or view not found: 1146 Table 'laravel_matrimony.talukas' doesn't exist (Connection: mysql, Host: 127.0.0.1, Port: 3306, Database: laravel_matrimony, SQL: select * from `talukas`) {\"userId\":166,\"exception\":\"[object] (Illuminate\\\\Database\\\\QueryException(code: 42S02): SQLSTATE[42S02]: Base table or view not found: 1146 Table 'laravel_matrimony.talukas' doesn't exist (Connection: mysql, Host: 127.0.0.1, Port: 3306, Database: laravel_ma"
+    },
+    {
+      "kind": "sample_line",
+      "text": "[2026-05-03 12:02:02] local.ERROR: SQLSTATE[42S02]: Base table or view not found: 1146 Table 'laravel_matrimony.talukas' doesn't exist (Connection: mysql, Host: 127.0.0.1, Port: 3306, Database: laravel_matrimony, SQL: select * from `talukas`) {\"userId\":166,\"exception\":\"[object] (Illuminate\\\\Database\\\\QueryException(code: 42S02): SQLSTATE[42S02]: Base table or view not found: 1146 Table 'laravel_matrimony.talukas' doesn't exist (Connection: mysql, Host: 127.0.0.1, Port: 3306, Database: laravel_ma"
+    }
+  ],
+  "fix_results": {
+    "pincode_fixed": 0,
+    "latlong_fixed": 0,
+    "normalized": 0,
+    "skipped": 0,
+    "note": "analyze mode \u2014 no fixes applied"
+  },
+  "fixes_applied": [],
+  "anomalies": [],
+  "runner_module_errors": [],
+  "backup_path": null,
+  "address_fix": {
+    "total_checked": 38820,
+    "updated": 0,
+    "skipped": [
+      {
+        "id": 130,
+        "reason": "'lat'"
+      },
+      {
+        "id": 372,
+        "reason": "'lat'"
+      },
+      {
+        "id": 585,
+        "reason": "'lat'"
+      },
+      {
+        "id": 586,
+        "reason": "'lat'"
+      },
+      {
+        "id": 587,
+        "reason": "'lat'"
+      },
+      {
+        "id": 589,
+        "reason": "'lat'"
+      },
+      {
+        "id": 590,
+        "reason": "'lat'"
+      },
+      {
+        "id": 591,
+        "reason": "'lat'"
+      },
+      {
+        "id": 592,
+        "reason": "'lat'"
+      },
+      {
+        "id": 593,
+        "reason": "'lat'"
+      },
+      {
+        "id": 594,
+        "reason": "'lat'"
+      },
+      {
+        "id": 595,
+        "reason": "'lat'"
+      },
+      {
+        "id": 596,
+        "reason": "'lat'"
+      },
+      {
+        "id": 597,
+        "reason": "'lat'"
+      },
+      {
+        "id": 598,
+        "reason": "'lat'"
+      },
+      {
+        "id": 599,
+        "reason": "'lat'"
+      },
+      {
+        "id": 600,
+        "reason": "'lat'"
+      },
+      {
+        "id": 601,
+        "reason": "'lat'"
+      },
+      {
+        "id": 602,
+        "reason": "'lat'"
+      },
+      {
+        "id": 603,
+        "reason": "'lat'"
+      }
+    ],
+    "sample_updates": []
+  }
+}

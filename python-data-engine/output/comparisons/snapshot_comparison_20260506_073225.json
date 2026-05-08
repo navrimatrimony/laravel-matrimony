@@ -1,0 +1,108 @@
+{
+  "snapshot_id": "snapshot_2026_05_06_125446",
+  "snapshot_path": "E:\\LaravelProjects\\laravel-matrimony\\storage\\app\\data-audit\\snapshots\\profile_207\\snapshot_2026_05_06_125446.json",
+  "health_score": 0,
+  "summary": {
+    "compared_fields": 10,
+    "mismatch_count": 10,
+    "high_severity_count": 10,
+    "medium_severity_count": 0,
+    "pass_count": 0
+  },
+  "comparisons": [
+    {
+      "field": "full_name",
+      "db": "Anita Gaikwad",
+      "api": null,
+      "rendered": null,
+      "comparison_type": "missing_render",
+      "severity": "high",
+      "status": "fail"
+    },
+    {
+      "field": "gender",
+      "db": "2",
+      "api": null,
+      "rendered": null,
+      "comparison_type": "missing_render",
+      "severity": "high",
+      "status": "fail"
+    },
+    {
+      "field": "date_of_birth",
+      "db": "1982-02-09",
+      "api": null,
+      "rendered": null,
+      "comparison_type": "missing_render",
+      "severity": "high",
+      "status": "fail"
+    },
+    {
+      "field": "height_cm",
+      "db": "163",
+      "api": null,
+      "rendered": null,
+      "comparison_type": "missing_render",
+      "severity": "high",
+      "status": "fail"
+    },
+    {
+      "field": "religion",
+      "db": "4",
+      "api": null,
+      "rendered": null,
+      "comparison_type": "missing_render",
+      "severity": "high",
+      "status": "fail"
+    },
+    {
+      "field": "caste",
+      "db": "412",
+      "api": null,
+      "rendered": null,
+      "comparison_type": "missing_render",
+      "severity": "high",
+      "status": "fail"
+    },
+    {
+      "field": "education",
+      "db": "B.A., M.A.",
+      "api": null,
+      "rendered": null,
+      "comparison_type": "missing_render",
+      "severity": "high",
+      "status": "fail"
+    },
+    {
+      "field": "city",
+      "db": "37648",
+      "api": null,
+      "rendered": null,
+      "comparison_type": "missing_render",
+      "severity": "high",
+      "status": "fail"
+    },
+    {
+      "field": "mother_tongue",
+      "db": "1",
+      "api": null,
+      "rendered": null,
+      "comparison_type": "missing_render",
+      "severity": "high",
+      "status": "fail"
+    },
+    {
+      "field": "marital_status",
+      "db": "2",
+      "api": null,
+      "rendered": null,
+      "comparison_type": "missing_render",
+      "severity": "high",
+      "status": "fail"
+    }
+  ],
+  "metrics": {
+    "compare_duration_ms": 1,
+    "snapshot_load_ms": 0
+  }
+}

@@ -127,6 +127,13 @@ return [
             'path' => storage_path('logs/laravel.log'),
         ],
 
+        'data_engine' => [
+            'driver' => 'single',
+            'path' => storage_path('logs/data-engine.log'),
+            'level' => 'info',
+            'replace_placeholders' => true,
+        ],
+
     ],
 
 ];

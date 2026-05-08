@@ -466,6 +466,62 @@ class MatrimonyProfile extends Model
     }
 
     /**
+     * Same as {@see birthCityHierarchyHints()} for {@see native_city_id}.
+     *
+     * @return array{location_id: string, country_id: string, state_id: string, district_id: string, taluka_id: string}
+     */
+    public function nativePlaceHierarchyHints(): array
+    {
+        $empty = ['location_id' => '', 'country_id' => '', 'state_id' => '', 'district_id' => '', 'taluka_id' => ''];
+        if (! $this->native_city_id || ! Schema::hasTable(Location::geoTable())) {
+            return $empty;
+        }
+        $leaf = Location::query()->find((int) $this->native_city_id);
+        if ($leaf === null) {
+            return $empty;
+        }
+        $svc = app(LocationService::class);
+        $h = $svc->getFullHierarchy($leaf);
+        $country = $svc->getAncestorByType($leaf, 'country');
+
+        return [
+            'location_id' => (string) $this->native_city_id,
+            'country_id' => $country ? (string) $country->id : '',
+            'state_id' => $h['state'] ? (string) $h['state']->id : '',
+            'district_id' => $h['district'] ? (string) $h['district']->id : '',
+            'taluka_id' => $h['taluka'] ? (string) $h['taluka']->id : '',
+        ];
+    }
+
+    /**
+     * Same as {@see residenceLocationHierarchyHints()} for {@see work_city_id}.
+     *
+     * @return array{location_id: string, country_id: string, state_id: string, district_id: string, taluka_id: string}
+     */
+    public function workCityHierarchyHints(): array
+    {
+        $empty = ['location_id' => '', 'country_id' => '', 'state_id' => '', 'district_id' => '', 'taluka_id' => ''];
+        if (! $this->work_city_id || ! Schema::hasTable(Location::geoTable())) {
+            return $empty;
+        }
+        $leaf = Location::query()->find((int) $this->work_city_id);
+        if ($leaf === null) {
+            return $empty;
+        }
+        $svc = app(LocationService::class);
+        $h = $svc->getFullHierarchy($leaf);
+        $country = $svc->getAncestorByType($leaf, 'country');
+
+        return [
+            'location_id' => (string) $this->work_city_id,
+            'country_id' => $country ? (string) $country->id : '',
+            'state_id' => $h['state'] ? (string) $h['state']->id : '',
+            'district_id' => $h['district'] ? (string) $h['district']->id : '',
+            'taluka_id' => $h['taluka'] ? (string) $h['taluka']->id : '',
+        ];
+    }
+
+    /**
      * Profile photo gallery (sorted + primary first in UI ordering).
      */
     public function photos()

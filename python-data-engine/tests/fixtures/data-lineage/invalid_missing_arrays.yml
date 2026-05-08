@@ -1,0 +1,14 @@
+version: 1
+fields:
+  city:
+    canonical_source:
+      table: matrimony_profiles
+      column: location_id
+    wizard:
+      route: matrimony.profile.wizard.location
+      blades: python-data-engine/tests/fixtures/data-lineage/blades/detection_sample.blade.php
+      bindings: profile.city
+    public_profile:
+      route: profile.show
+      blades: python-data-engine/tests/fixtures/data-lineage/blades/detection_sample.blade.php
+      bindings: profile.city

@@ -1,0 +1,66 @@
+{
+    "snapshot_version": "1",
+    "profile_id": 207,
+    "entity_type": "matrimony_profile",
+    "entity_id": 207,
+    "captured_at": "2026-05-06T13:36:07+05:30",
+    "sources": {
+        "db": true,
+        "api": true,
+        "rendered": false
+    },
+    "db": {
+        "full_name": "Anita Gaikwad",
+        "gender": 2,
+        "date_of_birth": "1982-02-09",
+        "height_cm": 163,
+        "religion": 4,
+        "caste": 412,
+        "education": "B.A., M.A.",
+        "occupation": null,
+        "annual_income": null,
+        "city": 37648,
+        "state": null,
+        "mother_tongue": 1,
+        "marital_status": 2
+    },
+    "api": {
+        "success": true,
+        "profile": {
+            "id": 207,
+            "user_id": 173,
+            "full_name": "Anita Gaikwad",
+            "gender": "",
+            "date_of_birth": "1982-02-09",
+            "caste": {
+                "id": 412,
+                "religion_id": 4,
+                "key": "maratha",
+                "label": "Maratha",
+                "is_active": 1,
+                "created_at": "2026-04-26T14:30:31.000000Z",
+                "updated_at": "2026-04-26T14:30:32.000000Z",
+                "label_en": "Maratha",
+                "label_mr": "à¤®à¤°à¤¾à¤ à¤¾"
+            },
+            "highest_education": "B.A., M.A.",
+            "location_id": 37648,
+            "country_id": 1,
+            "state_id": 4,
+            "district_id": 40,
+            "taluka_id": 371,
+            "profile_photo": "25100df2-6107-4b00-a516-c8a711dc763a.webp",
+            "created_at": "2026-05-03T15:57:27.000000Z",
+            "updated_at": "2026-05-03T16:11:24.000000Z"
+        }
+    },
+    "rendered": {
+        "pages": [],
+        "fields": []
+    },
+    "metrics": {
+        "capture_duration_ms": 52,
+        "memory_peak_kb": 4096,
+        "rendered_pages_count": 0
+    }
+}
