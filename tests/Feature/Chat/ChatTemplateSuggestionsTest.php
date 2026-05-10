@@ -4,9 +4,12 @@ namespace Tests\Feature\Chat;
 
 use App\Models\Conversation;
 use App\Models\MatrimonyProfile;
+use App\Models\OccupationCategory;
+use App\Models\OccupationMaster;
 use App\Models\User;
 use App\Services\Chat\ChatTemplateSuggestionService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Schema;
 use Tests\TestCase;
 
 class ChatTemplateSuggestionsTest extends TestCase
@@ -76,16 +79,34 @@ class ChatTemplateSuggestionsTest extends TestCase
 
     public function test_service_includes_occupation_in_career_when_present(): void
     {
+        $tbl = (new MatrimonyProfile)->getTable();
         $other = MatrimonyProfile::factory()->create([
-            'occupation_title' => 'Software Engineer',
             'highest_education' => '',
         ]);
+        $label = 'Software Engineer';
+
+        if (Schema::hasColumn($tbl, 'occupation_title')) {
+            $other->forceFill(['occupation_title' => $label])->save();
+        }
+        if (Schema::hasColumn($tbl, 'occupation_master_id')) {
+            $cat = OccupationCategory::query()->create([
+                'name' => 'E2E test category',
+                'sort_order' => 0,
+            ]);
+            $om = OccupationMaster::query()->create([
+                'name' => $label,
+                'normalized_name' => mb_strtolower($label),
+                'category_id' => $cat->id,
+                'sort_order' => 0,
+            ]);
+            $other->forceFill(['occupation_master_id' => $om->id])->save();
+        }
 
         $svc = app(ChatTemplateSuggestionService::class);
         $groups = $svc->getSuggestionGroupsForConversation($other->fresh());
 
         $career = implode(' ', $groups['career']['items'] ?? []);
-        $this->assertStringContainsString('Software Engineer', $career);
+        $this->assertStringContainsString($label, $career);
     }
 
     public function test_service_fallback_when_no_extra_profile_fields(): void

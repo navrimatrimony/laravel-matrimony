@@ -143,7 +143,6 @@ final class MatrimonyProfileDatabasePurger
             ['profile_visibility_settings', 'profile_id'],
             ['profile_preferences', 'profile_id'],
             ['profile_education', 'profile_id'],
-            ['profile_career', 'profile_id'],
             ['profile_children', 'profile_id'],
             ['profile_addresses', 'profile_id'],
             ['profile_property_summary', 'profile_id'],

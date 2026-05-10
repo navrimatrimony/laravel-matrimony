@@ -58,17 +58,16 @@ class Location extends Model
         'district_code',
         'is_active',
         'pincode',
-        'latitude',
-        'longitude',
+        'lat',
+        'lng',
         'lgd_code',
-        'population',
     ];
 
     protected $casts = [
         'is_active' => 'boolean',
         'level' => 'integer',
-        'latitude' => 'float',
-        'longitude' => 'float',
+        'lat' => 'float',
+        'lng' => 'float',
     ];
 
     /**

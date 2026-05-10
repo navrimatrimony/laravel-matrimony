@@ -7,21 +7,27 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
 /**
- * Seeds master_education, master_occupation_types, master_employment_statuses
- * for the Education–Career–Income engine (PHASE-5 SSOT).
+ * Seeds master_employment_statuses for the Education–Career–Income engine.
+ *
+ * Catalog degrees live in {@code master_education} (formerly {@code education_degrees}), seeded via
+ * admin / importers — not this class. {@see canonicalMasterEducationRows()} is only referenced by migration
+ * {@code 2026_05_10_160000_deactivate_stale_master_education_and_reseed_canonical} on pre-unification databases.
  */
 class MasterEducationOccupationSeeder extends Seeder
 {
     public function run(): void
     {
-        $this->seedMasterEducation();
-        $this->seedMasterOccupationTypes();
         $this->seedMasterEmploymentStatuses();
     }
 
-    private function seedMasterEducation(): void
+    /**
+     * Canonical PHASE-5 education master rows (code is the stable key for upsert).
+     *
+     * @return list<array{name:string,name_mr:string,code:string,group:string,sort_order:int}>
+     */
+    public static function canonicalMasterEducationRows(): array
     {
-        $rows = [
+        return [
             ['name' => '10th / SSC', 'name_mr' => 'दहावी / एस.एस.सी.', 'code' => 'ssc', 'group' => 'school', 'sort_order' => 10],
             ['name' => '12th / HSC', 'name_mr' => 'बारावी / एच.एस.सी.', 'code' => 'hsc', 'group' => 'school', 'sort_order' => 20],
             ['name' => 'ITI', 'name_mr' => 'आय.टी.आय.', 'code' => 'iti', 'group' => 'school', 'sort_order' => 30],
@@ -52,43 +58,14 @@ class MasterEducationOccupationSeeder extends Seeder
             ['name' => 'CA / CS / CMA', 'name_mr' => 'सी.ए. / सी.एस. / सी.एम.ए.', 'code' => 'ca_cs_cma', 'group' => 'professional', 'sort_order' => 280],
             ['name' => 'Other', 'name_mr' => 'इतर', 'code' => 'other', 'group' => 'other', 'sort_order' => 999],
         ];
-        $hasMr = Schema::hasColumn('master_education', 'name_mr');
-        foreach ($rows as $row) {
-            if (! $hasMr) {
-                unset($row['name_mr']);
-            }
-            DB::table('master_education')->updateOrInsert(
-                ['code' => $row['code']],
-                array_merge($row, ['is_active' => true, 'created_at' => now(), 'updated_at' => now()])
-            );
-        }
     }
 
-    private function seedMasterOccupationTypes(): void
+    /**
+     * @return list<string>
+     */
+    public static function canonicalMasterEducationCodes(): array
     {
-        $rows = [
-            ['name' => 'Private Job', 'name_mr' => 'खाजगी नोकरी', 'code' => 'private_job', 'sort_order' => 10],
-            ['name' => 'Government Job', 'name_mr' => 'शासकीय नोकरी', 'code' => 'government_job', 'sort_order' => 20],
-            ['name' => 'Semi-Government', 'name_mr' => 'अर्धशासकीय', 'code' => 'semi_government', 'sort_order' => 30],
-            ['name' => 'Business', 'name_mr' => 'व्यवसाय', 'code' => 'business', 'sort_order' => 40],
-            ['name' => 'Self Employed', 'name_mr' => 'स्वयंरोजगार', 'code' => 'self_employed', 'sort_order' => 50],
-            ['name' => 'Professional Practice', 'name_mr' => 'व्यावसायिक सराव', 'code' => 'professional_practice', 'sort_order' => 60],
-            ['name' => 'Agriculture', 'name_mr' => 'शेती', 'code' => 'agriculture', 'sort_order' => 70],
-            ['name' => 'Freelancer', 'name_mr' => 'फ्रीलान्सर', 'code' => 'freelancer', 'sort_order' => 80],
-            ['name' => 'Student', 'name_mr' => 'विद्यार्थी', 'code' => 'student', 'sort_order' => 90],
-            ['name' => 'Not Working', 'name_mr' => 'नोकरी नाही', 'code' => 'not_working', 'sort_order' => 100],
-            ['name' => 'Other', 'name_mr' => 'इतर', 'code' => 'other', 'sort_order' => 999],
-        ];
-        $hasMr = Schema::hasColumn('master_occupation_types', 'name_mr');
-        foreach ($rows as $row) {
-            if (! $hasMr) {
-                unset($row['name_mr']);
-            }
-            DB::table('master_occupation_types')->updateOrInsert(
-                ['code' => $row['code']],
-                array_merge($row, ['is_active' => true, 'created_at' => now(), 'updated_at' => now()])
-            );
-        }
+        return array_values(array_map(static fn (array $r) => (string) $r['code'], self::canonicalMasterEducationRows()));
     }
 
     private function seedMasterEmploymentStatuses(): void

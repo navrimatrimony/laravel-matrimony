@@ -15,7 +15,7 @@ class EducationCleanupLegacyMasterCommand extends Command
 {
     protected $signature = 'education:cleanup-legacy-master {--force : Required to execute}';
 
-    protected $description = 'Remove educations master table after migrating to education_degrees';
+    protected $description = 'Legacy helper: old duplicate education master cleanup (catalog is master_education + categories)';
 
     public function handle(): int
     {

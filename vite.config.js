@@ -3,6 +3,11 @@ import laravel from 'laravel-vite-plugin';
 
 export default defineConfig({
     server: {
+        // Match `php artisan serve` on 127.0.0.1 — [::1] in `public/hot` often breaks when the
+        // Vite process is stopped (stale hot file) or the browser cannot reach IPv6 loopback.
+        host: '127.0.0.1',
+        port: 5173,
+        strictPort: true,
         watch: {
             ignored: [
                 '**/storage/framework/views/**',

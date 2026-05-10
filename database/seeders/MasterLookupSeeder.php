@@ -319,7 +319,8 @@ class MasterLookupSeeder extends Seeder
         $this->seedKeyLabel('master_address_types', [
             ['key' => 'current', 'label' => 'Current', 'label_mr' => 'सध्याचे'],
             ['key' => 'permanent', 'label' => 'Permanent', 'label_mr' => 'कायमचे'],
-            ['key' => 'office', 'label' => 'Office', 'label_mr' => 'कार्यालय'],
+            ['key' => 'native', 'label' => 'Native', 'label_mr' => 'मूळ'],
+            ['key' => 'work', 'label' => 'Work', 'label_mr' => 'काम'],
             ['key' => 'other', 'label' => 'Other', 'label_mr' => 'इतर'],
         ]);
     }

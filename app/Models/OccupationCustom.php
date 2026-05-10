@@ -7,7 +7,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class OccupationCustom extends Model
 {
-    protected $table = 'occupation_custom';
+    protected $table = 'master_occupation_custom';
 
     protected $fillable = [
         'raw_name',

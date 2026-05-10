@@ -15,7 +15,7 @@ use Illuminate\Support\Facades\Schema;
 class ManualSnapshotBuilderService
 {
     /**
-     * Build full SSOT snapshot (core + contacts + children + education_history + career_history
+     * Build full SSOT snapshot (core + contacts + children
      * + addresses + property_summary + property_assets + horoscope + preferences + extended_narrative).
      */
     public function buildFullManualSnapshot(Request $request, MatrimonyProfile $profile): array
@@ -40,8 +40,6 @@ class ManualSnapshotBuilderService
             'physical_condition' => $request->input('physical_condition') ?: null,
             'highest_education' => $request->input('highest_education'),
             'highest_education_other' => $request->filled('highest_education_other') ? trim((string) $request->input('highest_education_other')) : null,
-            'specialization' => $request->input('specialization'),
-            'college_id' => $request->filled('college_id') ? (int) $request->input('college_id') : null,
             'working_with_type_id' => $workingWithTypeId = $request->filled('working_with_type_id') ? (int) $request->input('working_with_type_id') : null,
             'profession_id' => $this->resolveProfessionIdForWorkingWith($request->input('profession_id'), $workingWithTypeId),
             'occupation_type' => $request->input('occupation_type') ?: null,
@@ -67,12 +65,16 @@ class ManualSnapshotBuilderService
         }
         $core['father_contact_1'] = trim((string) ($request->input('father_contact_1') ?? '')) ?: null;
         $core['father_contact_2'] = trim((string) ($request->input('father_contact_2') ?? '')) ?: null;
-        $core['father_contact_3'] = trim((string) ($request->input('father_contact_3') ?? '')) ?: null;
+        if (Schema::hasColumn('matrimony_profiles', 'father_contact_3')) {
+            $core['father_contact_3'] = trim((string) ($request->input('father_contact_3') ?? '')) ?: null;
+        }
         $core['mother_name'] = $request->input('mother_name');
         $core['mother_occupation'] = $request->input('mother_occupation');
         $core['mother_contact_1'] = trim((string) ($request->input('mother_contact_1') ?? '')) ?: null;
         $core['mother_contact_2'] = trim((string) ($request->input('mother_contact_2') ?? '')) ?: null;
-        $core['mother_contact_3'] = trim((string) ($request->input('mother_contact_3') ?? '')) ?: null;
+        if (Schema::hasColumn('matrimony_profiles', 'mother_contact_3')) {
+            $core['mother_contact_3'] = trim((string) ($request->input('mother_contact_3') ?? '')) ?: null;
+        }
         $core['family_type_id'] = $request->input('family_type_id') ? (int) $request->input('family_type_id') : null;
         $core['country_id'] = ($v = $this->rawCoreInput($request, 'country_id')) !== null && $v !== '' ? $v : null;
         $core['state_id'] = ($v = $this->rawCoreInput($request, 'state_id')) !== null && $v !== '' ? $v : null;
@@ -83,10 +85,8 @@ class ManualSnapshotBuilderService
         $core['address_line'] = $addrRaw !== null && trim((string) $addrRaw) !== '' ? trim((string) $addrRaw) : null;
         $core['work_city_id'] = $request->input('work_city_id') ?: null;
         $core['work_state_id'] = $request->input('work_state_id') ?: null;
-        if (Schema::hasColumn('matrimony_profiles', 'work_location_text')) {
-            $wlt = trim((string) $request->input('work_location_text', ''));
-            $core['work_location_text'] = $wlt !== '' ? mb_substr($wlt, 0, 255) : null;
-        }
+        $wlt = trim((string) $request->input('work_location_text', ''));
+        $core['work_location_text'] = $wlt !== '' ? mb_substr($wlt, 0, 255) : null;
         $core['serious_intent_id'] = $request->input('serious_intent_id') ?: null;
         $core['has_siblings'] = $request->has('has_siblings') ? ($request->input('has_siblings') === '1' || $request->input('has_siblings') === 1) : null;
         $core = array_map(fn ($v) => $v === '' ? null : $v, $core);
@@ -138,38 +138,18 @@ class ManualSnapshotBuilderService
         }
 
         $education_history = [];
-        foreach ($request->input('education_history', []) as $row) {
-            $education_history[] = [
-                'id' => ! empty($row['id']) ? (int) $row['id'] : null,
-                'degree' => trim((string) ($row['degree'] ?? '')),
-                'specialization' => trim((string) ($row['specialization'] ?? '')),
-                'university' => trim((string) ($row['university'] ?? '')),
-                'year_completed' => ! empty($row['year_completed']) ? (int) $row['year_completed'] : 0,
-            ];
-        }
-
-        $career_history = [];
-        foreach ($request->input('career_history', []) as $row) {
-            if (! is_array($row)) {
-                continue;
-            }
-            $normalized = CareerHistoryRowNormalizer::fromRequestRowOrNull($row);
-            if ($normalized !== null) {
-                $career_history[] = $normalized;
-            }
-        }
 
         $addresses = [];
         foreach ($request->input('addresses', []) as $row) {
             $addresses[] = [
                 'id' => ! empty($row['id']) ? (int) $row['id'] : null,
+                'address_scope' => trim((string) ($row['address_scope'] ?? 'self')) ?: 'self',
                 'address_type_id' => ! empty($row['address_type_id']) ? (int) $row['address_type_id'] : null,
                 'village_id' => $row['village_id'] ?? null,
                 'taluka' => trim((string) ($row['taluka'] ?? '')),
                 'district' => trim((string) ($row['district'] ?? '')),
                 'state' => trim((string) ($row['state'] ?? '')),
                 'country' => trim((string) ($row['country'] ?? '')),
-                'pin_code' => trim((string) ($row['pin_code'] ?? '')),
             ];
         }
 
@@ -357,7 +337,7 @@ class ManualSnapshotBuilderService
             'relatives' => $relatives,
             'alliance_networks' => $alliance_networks,
             'education_history' => $education_history,
-            'career_history' => $career_history,
+            'career_history' => [],
             'addresses' => $addresses,
             'property_summary' => $property_summary,
             'property_assets' => $property_assets,

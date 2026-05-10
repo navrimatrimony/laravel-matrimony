@@ -7,6 +7,7 @@ use App\Models\District;
 use App\Models\MatrimonyProfile;
 use App\Models\Taluka;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Schema;
 
 /**
  * Identifies location rows created by {@see \Database\Seeders\LocationStressTestSeeder}
@@ -83,35 +84,63 @@ final class StressTestSyntheticGeo
 
         return MatrimonyProfile::query()
             ->where(function ($q) use ($districtIds, $districtIdList, $talukaIds, $cityIds) {
-                $q->whereIn('native_district_id', $districtIds);
-                if ($talukaIds->isNotEmpty()) {
-                    $q->orWhereIn('native_taluka_id', $talukaIds);
+                $leafCol = Schema::hasColumn('profile_addresses', 'location_id') ? 'profile_addresses.location_id' : 'profile_addresses.city_id';
+                $started = false;
+                $pushIn = static function ($q, bool &$started, string $col, $ids): void {
+                    if ($started) {
+                        $q->orWhereIn($col, $ids);
+
+                        return;
+                    }
+                    $q->{$method}($col, $ids);
+                    $started = true;
+                };
+                if (Schema::hasColumn('matrimony_profiles', 'native_district_id')) {
+                    $pushIn($q, $started, 'native_district_id', $districtIds);
+                }
+                if ($talukaIds->isNotEmpty() && Schema::hasColumn('matrimony_profiles', 'native_taluka_id')) {
+                    $pushIn($q, $started, 'native_taluka_id', $talukaIds);
                 }
                 if ($cityIds->isNotEmpty()) {
-                    $q->orWhereIn('location_id', $cityIds)
-                        ->orWhereIn('birth_city_id', $cityIds)
-                        ->orWhereIn('native_city_id', $cityIds);
-                }
-                $q->orWhereExists(function ($sub) use ($districtIdList, $talukaIds, $cityIds) {
-                    $sub->selectRaw('1')
-                        ->from('profile_addresses')
-                        ->whereColumn('profile_addresses.profile_id', 'matrimony_profiles.id')
-                        ->where(function ($a) use ($districtIdList, $talukaIds, $cityIds) {
-                            $a->whereIn('profile_addresses.district_id', $districtIdList);
-                            if ($talukaIds->isNotEmpty()) {
-                                $a->orWhereIn('profile_addresses.taluka_id', $talukaIds);
-                            }
-                            if ($cityIds->isNotEmpty()) {
-                                $a->orWhereIn('profile_addresses.city_id', $cityIds);
-                            }
+                    if (Schema::hasColumn('matrimony_profiles', 'location_id')) {
+                        $pushIn($q, $started, 'location_id', $cityIds);
+                    }
+                    $pushIn($q, $started, 'birth_city_id', $cityIds);
+                    if (Schema::hasColumn('matrimony_profiles', 'native_city_id')) {
+                        $pushIn($q, $started, 'native_city_id', $cityIds);
+                    }
+                    if ($started) {
+                        $q->orWhereExists(function ($sub) use ($cityIds, $leafCol): void {
+                            $sub->selectRaw('1')
+                                ->from('profile_addresses')
+                                ->whereColumn('profile_addresses.profile_id', 'matrimony_profiles.id')
+                                ->whereIn($leafCol, $cityIds);
                         });
-                });
-                $q->orWhereExists(function ($sub) use ($districtIdList) {
-                    $sub->selectRaw('1')
-                        ->from('profile_preferred_districts')
-                        ->whereColumn('profile_preferred_districts.profile_id', 'matrimony_profiles.id')
-                        ->whereIn('profile_preferred_districts.district_id', $districtIdList);
-                });
+                    } else {
+                        $q->whereExists(function ($sub) use ($cityIds, $leafCol): void {
+                            $sub->selectRaw('1')
+                                ->from('profile_addresses')
+                                ->whereColumn('profile_addresses.profile_id', 'matrimony_profiles.id')
+                                ->whereIn($leafCol, $cityIds);
+                        });
+                        $started = true;
+                    }
+                }
+                if ($started) {
+                    $q->orWhereExists(function ($sub) use ($districtIdList): void {
+                        $sub->selectRaw('1')
+                            ->from('profile_preferred_districts')
+                            ->whereColumn('profile_preferred_districts.profile_id', 'matrimony_profiles.id')
+                            ->whereIn('profile_preferred_districts.district_id', $districtIdList);
+                    });
+                } else {
+                    $q->whereExists(function ($sub) use ($districtIdList): void {
+                        $sub->selectRaw('1')
+                            ->from('profile_preferred_districts')
+                            ->whereColumn('profile_preferred_districts.profile_id', 'matrimony_profiles.id')
+                            ->whereIn('profile_preferred_districts.district_id', $districtIdList);
+                    });
+                }
             })
             ->get();
     }

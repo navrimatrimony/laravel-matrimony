@@ -46,7 +46,7 @@ class SubCasteAdminController extends Controller
     {
         $casteId = (int) $request->input('caste_id');
         $request->validate([
-            'caste_id' => ['required', 'exists:castes,id'],
+            'caste_id' => ['required', 'exists:master_castes,id'],
             'label' => ['required', 'string', 'min:2', 'max:255'],
         ]);
         $label = $slugger->normalizeLabel($request->input('label'));
@@ -70,7 +70,7 @@ class SubCasteAdminController extends Controller
      */
     public function merge(Request $request, SubCaste $subCaste): RedirectResponse
     {
-        $request->validate(['merge_into_id' => ['required', 'exists:sub_castes,id']]);
+        $request->validate(['merge_into_id' => ['required', 'exists:master_sub_castes,id']]);
         $mergeIntoId = (int) $request->input('merge_into_id');
         if ($mergeIntoId === $subCaste->id) {
             return RuleResultResponder::redirectBack(ErrorFactory::subCasteCannotMergeIntoSelf());

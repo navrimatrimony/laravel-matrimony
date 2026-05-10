@@ -1,8 +1,8 @@
 <?php
 
 /**
- * Marathi labels for legacy {@see professions} → {@see occupation_master} rows
- * (workplace category names match {@see working_with_types} / seeded occupation_categories).
+ * Marathi labels for legacy {@see professions} → {@see OccupationMaster} ({@code master_occupations}) rows
+ * (workplace category names match {@see working_with_types} / {@code master_occupation_categories}).
  *
  * Each row: [category_en, occupation_en, occupation_mr] — unique on (category_en, occupation_en).
  */

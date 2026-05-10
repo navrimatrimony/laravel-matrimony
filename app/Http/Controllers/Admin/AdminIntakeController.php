@@ -385,7 +385,7 @@ class AdminIntakeController extends Controller
         'complexion_id', 'physical_build_id', 'blood_group_id',
         'spectacles_lens', 'physical_condition', 'family_type_id', 'income_currency_id',
         'father_name', 'father_occupation', 'mother_name', 'mother_occupation',
-        'specialization', 'occupation_title', 'company_name', 'work_location_text',
+        'occupation_title', 'company_name', 'work_location_text',
         'other_relatives_text', 'birth_place_text',
     ];
 

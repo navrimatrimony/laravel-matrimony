@@ -17,8 +17,8 @@
 
     $degreesPayload = $categories->flatMap(function ($cat) use ($localeMr) {
         return $cat->degrees->map(function ($d) use ($cat, $localeMr) {
-            $title = ($localeMr && filled($d->title_mr)) ? $d->title_mr : $d->title;
-            $fullForm = ($localeMr && filled($d->full_form_mr)) ? $d->full_form_mr : ($d->full_form ?? '');
+            $title = ($localeMr && filled($d->code_mr)) ? $d->code_mr : $d->code;
+            $fullForm = (string) ($d->full_form ?? '');
             $category = ($localeMr && filled($cat->name_mr)) ? $cat->name_mr : $cat->name;
 
             return [
@@ -26,12 +26,12 @@
                 'title' => $title,
                 'full_form' => $fullForm,
                 'category' => $category,
-                'title_en' => $d->title,
+                'title_en' => $d->code,
                 'code_en' => $d->code,
                 'full_form_en' => $d->full_form ?? '',
-                'title_mr' => $d->title_mr ?? '',
+                'title_mr' => $d->code_mr ?? '',
                 'code_mr' => $d->code_mr ?? '',
-                'full_form_mr' => $d->full_form_mr ?? '',
+                'full_form_mr' => '',
             ];
         });
     })->values();

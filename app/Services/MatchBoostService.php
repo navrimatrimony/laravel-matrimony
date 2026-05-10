@@ -7,6 +7,7 @@ use App\Models\MatrimonyProfile;
 use App\Models\Plan;
 use App\Models\User;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Schema;
 
 /**
  * Applies admin-configured boosts on top of rule-based match score (activity, premium tier, similarity, optional AI).
@@ -98,11 +99,24 @@ class MatchBoostService
 
     private function profilesSimilarityHit(MatrimonyProfile $a, MatrimonyProfile $b): bool
     {
-        $a->loadMissing(['profession']);
-        $b->loadMissing(['profession']);
+        $tbl = $a->getTable();
+        $hasProfFk = Schema::hasColumn($tbl, 'profession_id');
+        $a->loadMissing(['occupationMaster', 'occupationCustom', 'occupationMaster.category.workingWithType']);
+        $b->loadMissing(['occupationMaster', 'occupationCustom', 'occupationMaster.category.workingWithType']);
 
-        $pA = (int) ($a->profession_id ?? 0);
-        $pB = (int) ($b->profession_id ?? 0);
+        $midA = (int) ($a->occupation_master_id ?? 0);
+        $midB = (int) ($b->occupation_master_id ?? 0);
+        if ($midA > 0 && $midA === $midB) {
+            return true;
+        }
+        $cidA = (int) ($a->occupation_custom_id ?? 0);
+        $cidB = (int) ($b->occupation_custom_id ?? 0);
+        if ($cidA > 0 && $cidA === $cidB) {
+            return true;
+        }
+
+        $pA = $hasProfFk ? (int) ($a->getAttribute('profession_id') ?: 0) : (int) ($a->resolvedProfession()?->id ?? 0);
+        $pB = $hasProfFk ? (int) ($b->getAttribute('profession_id') ?: 0) : (int) ($b->resolvedProfession()?->id ?? 0);
         if ($pA > 0 && $pA === $pB) {
             return true;
         }

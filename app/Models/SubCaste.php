@@ -7,6 +7,8 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class SubCaste extends Model
 {
+    protected $table = 'master_sub_castes';
+
     protected $fillable = [
         'caste_id',
         'key',

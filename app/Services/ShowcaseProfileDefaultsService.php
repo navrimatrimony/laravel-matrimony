@@ -6,12 +6,13 @@ use App\Models\Caste;
 use App\Models\City;
 use App\Models\Country;
 use App\Models\District;
+use App\Models\EducationDegree;
 use App\Models\FieldRegistry;
+use App\Models\Location;
 use App\Models\MasterBloodGroup;
 use App\Models\MasterComplexion;
 use App\Models\MasterDiet;
 use App\Models\MasterDrinkingStatus;
-use App\Models\MasterEducation;
 use App\Models\MasterFamilyType;
 use App\Models\MasterGender;
 use App\Models\MasterIncomeCurrency;
@@ -26,8 +27,11 @@ use App\Models\State;
 use App\Models\SubCaste;
 use App\Models\Taluka;
 use App\Models\WorkingWithType;
+use App\Services\Showcase\ShowcaseAddressEligibility;
 use App\Services\Showcase\ShowcaseBulkCreateSettings;
+use App\Support\Location\NonShowcaseResidenceDistrictIds;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 /*
 |--------------------------------------------------------------------------
@@ -320,12 +324,12 @@ class ShowcaseProfileDefaultsService
         }
 
         if ($policy !== null && $policy['master_education_ids'] !== []) {
-            $eduRow = MasterEducation::query()
-                ->where('is_active', true)
+            $eduRow = EducationDegree::query()
+                ->whereHas('category', fn ($q) => $q->where('is_active', true))
                 ->whereIn('id', $policy['master_education_ids'])
                 ->inRandomOrder()
                 ->first();
-            $eduLabel = $eduRow ? trim((string) $eduRow->name) : 'Graduate';
+            $eduLabel = $eduRow ? trim((string) $eduRow->code) : 'Graduate';
             if ($eduLabel === '') {
                 $eduLabel = 'Graduate';
             }
@@ -373,6 +377,24 @@ class ShowcaseProfileDefaultsService
         $motherTongueId = self::pickMotherTongueIdForReligion($religion);
 
         [$workingWithTypeId, $professionId] = self::pickWorkingWithAndProfessionIds();
+        if ($policy !== null && ! $isNonWorking && ($policy['profession_ids'] ?? []) !== []) {
+            $pPick = Profession::query()
+                ->where('is_active', true)
+                ->whereIn('id', $policy['profession_ids'])
+                ->inRandomOrder()
+                ->first();
+            if ($pPick !== null) {
+                $professionId = (int) $pPick->id;
+                $ww = $pPick->working_with_type_id;
+                if ($ww !== null && (int) $ww > 0) {
+                    $workingWithTypeId = (int) $ww;
+                }
+                $pName = trim((string) $pPick->name);
+                if ($pName !== '') {
+                    $occupationTitle = $pName;
+                }
+            }
+        }
         if ($isNonWorking) {
             $occupationTitle = null;
             $workingWithTypeId = null;
@@ -394,7 +416,12 @@ class ShowcaseProfileDefaultsService
         }
         $physicalCondition = ['none', 'prefer_not_to_say'][array_rand(['none', 'prefer_not_to_say'])];
 
-        $attrs = array_merge($loc ?? [], [
+        $mpTable = (new MatrimonyProfile)->getTable();
+        $occupationMasterId = (! $isNonWorking && $professionId && (int) $professionId > 0)
+            ? app(OccupationService::class)->occupationMasterIdForProfessionId((int) $professionId)
+            : null;
+
+        $base = array_merge($loc ?? [], [
             'full_name' => $fullName,
             'gender_id' => $genderId,
             'date_of_birth' => $dob,
@@ -422,10 +449,6 @@ class ShowcaseProfileDefaultsService
             'is_suspended' => false,
             'photo_approved' => true,
             'is_showcase' => true,
-            'specialization' => ['Commerce', 'Computer Science', 'Arts', 'Science', 'Management'][array_rand(['Commerce', 'Computer Science', 'Arts', 'Science', 'Management'])],
-            'occupation_title' => $occupationTitle,
-            'working_with_type_id' => $workingWithTypeId,
-            'profession_id' => $professionId,
             'company_name' => $isNonWorking ? null : $companies[array_rand($companies)],
             'annual_income' => $isNonWorking ? null : $annualIncome,
             'family_income' => $familyIncome,
@@ -434,6 +457,25 @@ class ShowcaseProfileDefaultsService
             'mother_name' => $motherNames[array_rand($motherNames)].' '.explode(' ', $fullName)[0],
             'mother_occupation' => ['Homemaker', 'Teacher', 'Retired', 'Private Job'][array_rand(['Homemaker', 'Teacher', 'Retired', 'Private Job'])],
         ]);
+
+        $careerCols = [];
+        if (Schema::hasColumn($mpTable, 'occupation_title')) {
+            $careerCols['occupation_title'] = $occupationTitle;
+        }
+        if (Schema::hasColumn($mpTable, 'working_with_type_id')) {
+            $careerCols['working_with_type_id'] = $workingWithTypeId;
+        }
+        if (Schema::hasColumn($mpTable, 'profession_id')) {
+            $careerCols['profession_id'] = $professionId;
+        }
+        if (Schema::hasColumn($mpTable, 'occupation_master_id')) {
+            $careerCols['occupation_master_id'] = $occupationMasterId;
+        }
+        if (Schema::hasColumn($mpTable, 'occupation_custom_id')) {
+            $careerCols['occupation_custom_id'] = null;
+        }
+
+        $attrs = array_merge($base, $careerCols);
 
         if ($policy !== null) {
             self::applyBulkPolicyRandomFill($attrs, $policy);
@@ -808,28 +850,33 @@ class ShowcaseProfileDefaultsService
      */
     private static function eligibleNonShowcaseDistrictIds(): array
     {
-        return MatrimonyProfile::query()
-            ->whereNonShowcase()
-            ->whereNotNull('district_id')
-            ->pluck('district_id')
-            ->map(fn ($v) => (int) $v)
-            ->filter()
-            ->unique()
-            ->values()
-            ->all();
+        return NonShowcaseResidenceDistrictIds::all();
     }
 
     /**
      * @param  list<int>  $eligibleDistrictIds
      * @return array{country_id:int|null,state_id:int|null,district_id:int|null,taluka_id:int|null,city_id:int|null,work_state_id:int|null,work_city_id:int|null}|null
      */
-    private static function pickShowcaseHierarchyFromDistrictPool(array $eligibleDistrictIds): ?array
+    /**
+     * @param  list<int>  $eligibleDistrictIds
+     * @param  array<string, mixed>|null  $bulkPolicy  normalized bulk policy when bulk create supplies overrides
+     */
+    private static function pickShowcaseHierarchyFromDistrictPool(array $eligibleDistrictIds, ?array $bulkPolicy): ?array
     {
+        $types = ShowcaseAddressEligibility::typesForContext($bulkPolicy);
+        $cityTags = ShowcaseAddressEligibility::citySqlTagsFromAdminTags(
+            ShowcaseAddressEligibility::tagsForContext($bulkPolicy)
+        );
+
+        if (! ShowcaseAddressEligibility::allowsDistrictPool($types) || ! ShowcaseAddressEligibility::allowsCityPicks($types)) {
+            return null;
+        }
+
         if ($eligibleDistrictIds === []) {
             return null;
         }
 
-        for ($attempt = 0; $attempt < 12; $attempt++) {
+        for ($attempt = 0; $attempt < 24; $attempt++) {
             $districtId = $eligibleDistrictIds[array_rand($eligibleDistrictIds)];
             $district = District::query()->find($districtId);
             if (! $district) {
@@ -844,13 +891,14 @@ class ShowcaseProfileDefaultsService
 
             $districtName = strtolower(trim((string) ($district->name ?? '')));
 
-            $addr = \App\Models\Location::geoTable();
+            $addr = Location::geoTable();
             $candidate = DB::table($addr.' as city')
                 ->join($addr.' as taluka', 'city.parent_id', '=', 'taluka.id')
                 ->where('city.type', 'city')
                 ->where('taluka.type', 'taluka')
                 ->where('taluka.parent_id', $districtId)
                 ->whereNotNull('city.name')
+                ->whereIn('city.tag', $cityTags)
                 ->select('city.id as city_id', 'city.name as city_name', 'city.parent_id as taluka_id')
                 ->get();
 
@@ -868,7 +916,7 @@ class ShowcaseProfileDefaultsService
             }
 
             if ($picked === null) {
-                continue;
+                $picked = $candidate->random();
             }
 
             $talukaId = isset($picked->taluka_id) ? (int) $picked->taluka_id : null;
@@ -898,7 +946,7 @@ class ShowcaseProfileDefaultsService
             $eligibleDistrictIds = self::eligibleNonShowcaseDistrictIds();
         }
 
-        return self::pickShowcaseHierarchyFromDistrictPool($eligibleDistrictIds);
+        return self::pickShowcaseHierarchyFromDistrictPool($eligibleDistrictIds, null);
     }
 
     /**
@@ -918,7 +966,8 @@ class ShowcaseProfileDefaultsService
         }
         if ($policy['state_ids'] !== []) {
             $inStates = District::query()
-                ->whereIn('state_id', $policy['state_ids'])
+                // District extends Location(addresses): legacy state_id maps to parent_id.
+                ->whereIn('parent_id', $policy['state_ids'])
                 ->pluck('id')
                 ->map(fn ($v) => (int) $v)
                 ->all();
@@ -927,14 +976,15 @@ class ShowcaseProfileDefaultsService
         }
         if ($policy['country_ids'] !== []) {
             $stateIds = State::query()
-                ->whereIn('country_id', $policy['country_ids'])
+                // State extends Location(addresses): legacy country_id maps to parent_id.
+                ->whereIn('parent_id', $policy['country_ids'])
                 ->pluck('id')
                 ->all();
             if ($stateIds === []) {
                 return null;
             }
             $inCountries = District::query()
-                ->whereIn('state_id', $stateIds)
+                ->whereIn('parent_id', $stateIds)
                 ->pluck('id')
                 ->map(fn ($v) => (int) $v)
                 ->all();
@@ -942,7 +992,7 @@ class ShowcaseProfileDefaultsService
             $ids = array_values(array_filter($ids, fn (int $id) => isset($inSet[$id])));
         }
 
-        return self::pickShowcaseHierarchyFromDistrictPool($ids);
+        return self::pickShowcaseHierarchyFromDistrictPool($ids, $policy);
     }
 
     private static function pickSmokingStatusIdForReligion(?Religion $religion): ?int
@@ -1041,11 +1091,11 @@ class ShowcaseProfileDefaultsService
         if (! $district) {
             return ['country_id' => $country->id, 'state_id' => $state->id, 'district_id' => null, 'taluka_id' => null, 'city_id' => null];
         }
-        $taluka = Taluka::where('district_id', $district->id)->inRandomOrder()->first();
+        $taluka = Taluka::where('parent_id', $district->id)->inRandomOrder()->first();
         if (! $taluka) {
             return ['country_id' => $country->id, 'state_id' => $state->id, 'district_id' => $district->id, 'taluka_id' => null, 'city_id' => null];
         }
-        $city = City::where('taluka_id', $taluka->id)->inRandomOrder()->first();
+        $city = City::where('parent_id', $taluka->id)->inRandomOrder()->first();
 
         return [
             'country_id' => $country->id,

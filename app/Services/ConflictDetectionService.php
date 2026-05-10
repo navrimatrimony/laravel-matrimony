@@ -4,8 +4,12 @@ namespace App\Services;
 
 use App\Models\ConflictRecord;
 use App\Models\FieldRegistry;
+use App\Models\Location;
 use App\Models\MatrimonyProfile;
 use App\Services\Core\ConflictPolicy;
+use App\Services\LocationService;
+use App\Services\Profile\ProfileCanonicalResidenceService;
+use App\Services\Profile\ProfileTypedSelfAddressService;
 
 /**
  * Phase-3 Day-13 / Phase-5: Conflict detection with Escalation Matrix.
@@ -38,8 +42,11 @@ class ConflictDetectionService
         'family_income',
         'occupation_title',
         'company_name',
+        'occupation_master_id',
+        'occupation_custom_id',
         'work_city_id',
         'work_state_id',
+        'work_location_text',
     ];
 
     /**
@@ -205,12 +212,82 @@ class ConflictDetectionService
                 ->where('is_primary', true)
                 ->value('phone_number');
         }
-        if ($fieldKey === 'location') {
+        if ($fieldKey === 'location' || $fieldKey === 'location_id') {
             if (\Illuminate\Support\Facades\Schema::hasColumn($profile->getTable(), 'location_id')) {
                 return $profile->getAttribute('location_id');
             }
 
-            return null;
+            return $profile->exists
+                ? ProfileCanonicalResidenceService::locationLeafId((int) $profile->id)
+                : null;
+        }
+        if ($fieldKey === 'address_line') {
+            if (\Illuminate\Support\Facades\Schema::hasColumn($profile->getTable(), 'address_line')) {
+                return $profile->getAttribute('address_line');
+            }
+
+            return $profile->exists
+                ? ProfileCanonicalResidenceService::addressLineRaw((int) $profile->id)
+                : null;
+        }
+        if ($fieldKey === 'work_city_id') {
+            if (\Illuminate\Support\Facades\Schema::hasColumn($profile->getTable(), 'work_city_id')) {
+                return $profile->getAttribute('work_city_id');
+            }
+
+            return $profile->exists
+                ? ProfileTypedSelfAddressService::locationLeafIdForSelfType((int) $profile->id, 'work')
+                : null;
+        }
+        if ($fieldKey === 'work_state_id') {
+            if (\Illuminate\Support\Facades\Schema::hasColumn($profile->getTable(), 'work_state_id')) {
+                return $profile->getAttribute('work_state_id');
+            }
+            $leaf = $profile->exists
+                ? ProfileTypedSelfAddressService::locationLeafIdForSelfType((int) $profile->id, 'work')
+                : null;
+            if ($leaf === null || ! \Illuminate\Support\Facades\Schema::hasTable(Location::geoTable())) {
+                return null;
+            }
+            $row = Location::query()->find($leaf);
+            if ($row === null) {
+                return null;
+            }
+            $state = app(LocationService::class)->getAncestorByType($row, 'state');
+
+            return $state?->id;
+        }
+        if ($fieldKey === 'work_location_text') {
+            if (\Illuminate\Support\Facades\Schema::hasColumn($profile->getTable(), 'work_location_text')) {
+                return $profile->getAttribute('work_location_text');
+            }
+
+            return $profile->exists
+                ? ProfileTypedSelfAddressService::addressLineForSelfType((int) $profile->id, 'work')
+                : null;
+        }
+        if ($fieldKey === 'occupation_title') {
+            if (\Illuminate\Support\Facades\Schema::hasColumn($profile->getTable(), 'occupation_title')) {
+                return $profile->getAttribute('occupation_title');
+            }
+            $profile->loadMissing(['occupationMaster', 'occupationCustom']);
+            $t = trim((string) ($profile->occupationMaster?->name ?? $profile->occupationCustom?->raw_name ?? ''));
+
+            return $t !== '' ? $t : null;
+        }
+        if ($fieldKey === 'profession_id') {
+            if (\Illuminate\Support\Facades\Schema::hasColumn($profile->getTable(), 'profession_id')) {
+                return $profile->getAttribute('profession_id');
+            }
+
+            return $profile->resolvedProfession()?->id;
+        }
+        if ($fieldKey === 'working_with_type_id') {
+            if (\Illuminate\Support\Facades\Schema::hasColumn($profile->getTable(), 'working_with_type_id')) {
+                return $profile->getAttribute('working_with_type_id');
+            }
+
+            return $profile->resolvedWorkingWithType()?->id;
         }
 
         return $profile->getAttribute($fieldKey);

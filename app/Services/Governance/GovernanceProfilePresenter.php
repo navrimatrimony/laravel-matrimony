@@ -72,7 +72,6 @@ class GovernanceProfilePresenter
         'birth_place_text' => ['en' => 'Birth place', 'mr' => 'जन्मस्थान'],
         'work_location_text' => ['en' => 'Work location', 'mr' => 'कामाचे ठिकाण'],
         'company_name' => ['en' => 'Company name', 'mr' => 'कंपनीचे नाव'],
-        'specialization' => ['en' => 'Education specialization', 'mr' => 'शिक्षण तज्ञता'],
         'has_children' => ['en' => 'Has children', 'mr' => 'मुले आहेत का'],
         'has_siblings' => ['en' => 'Has siblings', 'mr' => 'भाऊ-बहिणी आहेत का'],
         // About me narrative (lives in `profile_extended_attributes`).
@@ -123,8 +122,6 @@ class GovernanceProfilePresenter
 
     /** @var array<string, array{en: string, mr: string}> */
     private const REPEATER_LABELS = [
-        'education_history' => ['en' => 'Education history', 'mr' => 'शिक्षण इतिहास'],
-        'career_history' => ['en' => 'Career history', 'mr' => 'करिअर इतिहास'],
         'siblings' => ['en' => 'Siblings', 'mr' => 'भावंडे'],
         'children' => ['en' => 'Children', 'mr' => 'मुले'],
         'relatives' => ['en' => 'Relatives', 'mr' => 'नातेवाईक'],
@@ -139,8 +136,8 @@ class GovernanceProfilePresenter
      * @param  list<array<string,mixed>>  $repeaterFieldDiffs
      * @param  array<string,mixed>  $repeaterGovernance
      * @param  array{core?: array<string,mixed>, repeaters?: array<string,list<array<string,mixed>>>}  $liveProfile
-     *         Live DB ground-truth (matrimony_profiles row + repeater rows) so that
-     *         lineage + section panels can stay accurate even when snapshot is stale.
+     *                                                                                                               Live DB ground-truth (matrimony_profiles row + repeater rows) so that
+     *                                                                                                               lineage + section panels can stay accurate even when snapshot is stale.
      * @return array<string,mixed>
      */
     public function buildViewModel(
@@ -1444,7 +1441,7 @@ class GovernanceProfilePresenter
             // two different keys for them):
             //   - occupation_title       free-text note (legacy)
             //   - profession_id          FK → professions.name (current UI)
-            //   - occupation_master_id   FK → master_occupation_types.label
+            //   - occupation_master_id   FK → master_occupations.name
             // Admins read the public profile line "Occupation: Admin
             // Professional" and expect to find one lineage card called
             // "Occupation" — they should not have to know that profession_id
@@ -1582,12 +1579,12 @@ class GovernanceProfilePresenter
             'work_city_id' => fn (int $id): ?string => $this->resolveCityLabel($id),
 
             // Religion / caste / sub-caste.
-            'religion' => ['table' => 'religions', 'columns' => ['label_en', 'label', 'name']],
-            'religion_id' => ['table' => 'religions', 'columns' => ['label_en', 'label', 'name']],
-            'caste' => ['table' => 'castes', 'columns' => ['label_en', 'label', 'name']],
-            'caste_id' => ['table' => 'castes', 'columns' => ['label_en', 'label', 'name']],
-            'sub_caste' => ['table' => 'sub_castes', 'columns' => ['label_en', 'label', 'name']],
-            'sub_caste_id' => ['table' => 'sub_castes', 'columns' => ['label_en', 'label', 'name']],
+            'religion' => ['table' => 'master_religions', 'columns' => ['label_en', 'label', 'name']],
+            'religion_id' => ['table' => 'master_religions', 'columns' => ['label_en', 'label', 'name']],
+            'caste' => ['table' => 'master_castes', 'columns' => ['label_en', 'label', 'name']],
+            'caste_id' => ['table' => 'master_castes', 'columns' => ['label_en', 'label', 'name']],
+            'sub_caste' => ['table' => 'master_sub_castes', 'columns' => ['label_en', 'label', 'name']],
+            'sub_caste_id' => ['table' => 'master_sub_castes', 'columns' => ['label_en', 'label', 'name']],
 
             // master_*.label tables.
             'gender' => ['table' => 'master_genders', 'columns' => ['label']],
@@ -1617,16 +1614,16 @@ class GovernanceProfilePresenter
             // Occupation is unified across 3 source columns. When the value
             // is a numeric ID it is most often a `professions.id` (used by
             // the wizard "Working as" select); fall back to legacy
-            // `master_occupation_types.label` for older intakes. We try both
-            // tables in order and return the first match, so the lineage
+            // `master_occupations.name` / `name_mr` for the unified occupation engine.
+            // We try legacy `professions` first, then `master_occupations`, so the lineage
             // card shows e.g. "17 (= Admin Professional)" regardless of
             // which FK column the value actually came from.
             'occupation' => fn (int $id): ?string => $this->resolveOccupationLabel($id),
             'profession_id' => fn (int $id): ?string => $this->resolveOccupationLabel($id),
-            'occupation_master_id' => ['table' => 'master_occupation_types', 'columns' => ['label']],
+            'occupation_master_id' => ['table' => 'master_occupations', 'columns' => ['name', 'name_mr']],
             // Father / mother occupation share the same lookup tables as the
             // member's own occupation — wizard select uses `professions.name`
-            // first, with `master_occupation_types.label` as fallback for
+            // first, with `master_occupations` as fallback for
             // older intakes. Resolving the FK gives admins the friendly
             // "Poultry Farmer" / "Homemaker" label alongside the raw id.
             'father_occupation' => fn (int $id): ?string => $this->resolveOccupationLabel($id),
@@ -1645,6 +1642,7 @@ class GovernanceProfilePresenter
         try {
             $formatter = app(LocationFormatterService::class);
             $label = $formatter->formatLocation($id);
+
             return $label !== '' ? $label : null;
         } catch (Throwable) {
             return null;
@@ -1655,7 +1653,7 @@ class GovernanceProfilePresenter
      * Resolve an occupation/profession FK to a human label by walking the
      * known tables in priority order. This is needed because the lineage
      * "Occupation" card collapses both `profession_id` (FK to `professions`)
-     * and `occupation_master_id` (FK to `master_occupation_types`) into one
+     * and `occupation_master_id` (FK to `master_occupations`) into one
      * canonical entry. The first table that has a row for the given id wins.
      */
     private function resolveOccupationLabel(int $id): ?string
@@ -1665,7 +1663,7 @@ class GovernanceProfilePresenter
         }
         $candidates = [
             ['table' => 'professions', 'columns' => ['name', 'label_en', 'label']],
-            ['table' => 'master_occupation_types', 'columns' => ['label', 'label_en', 'name']],
+            ['table' => 'master_occupations', 'columns' => ['name', 'name_mr']],
         ];
         foreach ($candidates as $cand) {
             $table = $cand['table'];
@@ -1687,6 +1685,7 @@ class GovernanceProfilePresenter
                 }
             }
         }
+
         return null;
     }
 
@@ -1824,6 +1823,7 @@ class GovernanceProfilePresenter
         if ($s === '' || strlen($s) > 40) {
             return false;
         }
+
         // Common patterns: ISO, "9 Feb 1982", "Feb 9, 1982", "09/02/1982", "9-Feb-1982".
         return (bool) preg_match(
             '/^(\d{4}-\d{1,2}-\d{1,2}(T\d{2}:\d{2}.*)?|\d{1,2}\s+[A-Za-z]{3,9}\s+\d{4}|[A-Za-z]{3,9}\s+\d{1,2},?\s+\d{4}|\d{1,2}[\/\-\.][\d\w]{1,9}[\/\-\.]\d{2,4})$/',
@@ -1842,6 +1842,7 @@ class GovernanceProfilePresenter
         if ($ca === '' || $cb === '') {
             return false;
         }
+
         return $ca === $cb;
     }
 }

@@ -70,6 +70,7 @@ final class ParsedJsonSsotNormalizer
 
         $parsed['contacts'] = self::normalizeContactRows($parsed['contacts'] ?? []);
         $parsed['children'] = self::normalizeChildRows($parsed['children'] ?? []);
+        // Parsed intake JSON may still carry legacy education_history rows (OCR/AI); they are not written to profile_education.
         $parsed['education_history'] = self::normalizeEducationRows($parsed['education_history'] ?? []);
         $parsed['career_history'] = self::normalizeCareerRows($parsed['career_history'] ?? []);
         $parsed['addresses'] = self::normalizeAddressRows($parsed['addresses'] ?? []);

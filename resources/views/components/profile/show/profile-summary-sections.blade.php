@@ -1,6 +1,6 @@
 @php
     $publicMatrimonyLayout = $publicMatrimonyLayout ?? false;
-    $profile->loadMissing(['city', 'district', 'state', 'taluka', 'country', 'maritalStatus', 'religion', 'caste', 'subCaste', 'familyType', 'complexion', 'physicalBuild', 'bloodGroup', 'seriousIntent', 'diet', 'smokingStatus', 'drinkingStatus', 'birthCity', 'birthTaluka', 'birthDistrict', 'birthState', 'nativeCity', 'nativeTaluka', 'nativeDistrict', 'nativeState', 'profession']);
+    $profile->loadMissing(['city', 'district', 'state', 'taluka', 'country', 'maritalStatus', 'religion', 'caste', 'subCaste', 'familyType', 'complexion', 'physicalBuild', 'bloodGroup', 'seriousIntent', 'diet', 'smokingStatus', 'drinkingStatus', 'birthCity', 'birthTaluka', 'birthDistrict', 'birthState', 'occupationMaster', 'occupationCustom', 'occupationMaster.category.workingWithType']);
     $locationLine = $profile->residenceLocationDisplayLine();
     $age = null;
     if ($dateOfBirthVisible && ($profile->date_of_birth ?? '') !== '') {
@@ -45,13 +45,11 @@
     $familyIncomeDisplay = $incomeService->formatForDisplay($profileArr, 'family_income', $profile->familyIncomeCurrency ?? $profile->incomeCurrency);
     $hasPersonalIncome = ($profile->income_value_type ?? null) !== null || ($profile->income_amount ?? null) !== null || ($profile->income_min_amount ?? null) !== null || ($profile->annual_income ?? null) !== null;
     $hasFamilyIncome = ($profile->family_income_value_type ?? null) !== null || ($profile->family_income_amount ?? null) !== null || ($profile->family_income_min_amount ?? null) !== null || ($profile->family_income ?? null) !== null;
-    $hasEduCareer = ($educationVisible && ($profile->highest_education ?? '') !== '') || ($profile->specialization ?? '') !== '' || ($profile->occupation_title ?? '') !== '' || ($profile->company_name ?? '') !== '' || $hasPersonalIncome || ($profile->annual_income ?? null) !== null || $profile->incomeCurrency;
+    $hasEduCareer = ($educationVisible && ($profile->highest_education ?? '') !== '') || ($profile->occupation_title ?? '') !== '' || ($profile->company_name ?? '') !== '' || $hasPersonalIncome || ($profile->annual_income ?? null) !== null || $profile->incomeCurrency;
     $eduCareerSubtitleParts = [];
     if ($educationVisible && ($profile->highest_education ?? '') !== '') {
         $eduFrag = \App\Support\ProfileDisplayCopy::formatEducationPhrase($profile->highest_education);
-        if (($profile->specialization ?? '') !== '') {
-            $eduCareerSubtitleParts[] = ($eduFrag ? $eduFrag.' in ' : '').\Illuminate\Support\Str::title(mb_strtolower($profile->specialization));
-        } elseif ($eduFrag !== null) {
+        if ($eduFrag !== null) {
             $eduCareerSubtitleParts[] = $eduFrag;
         }
     }
@@ -71,7 +69,7 @@
     $birthPlaceLine = $profile->birthLocationDisplayLine();
     $nativePlaceLine = $profile->nativeLocationDisplayLine();
     $hasBirthPlace = $birthPlaceLine !== '' || $profile->birth_city_id;
-    $hasNativePlace = $nativePlaceLine !== '' || $profile->native_city_id || $profile->native_taluka_id || $profile->native_district_id || $profile->native_state_id;
+    $hasNativePlace = $nativePlaceLine !== '';
     $hasPhysical = ($heightVisible && ($profile->height_cm ?? '') !== '') || ($profile->weight_kg ?? null) !== null || $profile->complexion || $profile->physicalBuild || $profile->bloodGroup;
     $hasBasicSection = ($dateOfBirthVisible && ($profile->date_of_birth ?? '') !== '') || (($profile->birth_time ?? '') !== '') || ($maritalStatusVisible && $profile->maritalStatus) || $profile->religion || $profile->caste || $profile->subCaste || $profile->seriousIntent;
     $basicSubtitle = null;
@@ -112,7 +110,7 @@
     };
     $hasLifestyle = $profile->diet || $profile->smokingStatus || $profile->drinkingStatus;
     $showFamilySection = $hasFamily || $hasFamilyIncome || ($profile->siblings?->isNotEmpty()) || ($profile->children?->isNotEmpty());
-    $showEducationSection = $hasEduCareer || ($profile->educationHistory && $profile->educationHistory->isNotEmpty()) || ($profile->career?->isNotEmpty());
+    $showEducationSection = $hasEduCareer || ($profile->career?->isNotEmpty());
     $basicScanRow1 = implode(' · ', array_values(array_filter([
         $age !== null ? __('profile.show_age_years', ['age' => $age]) : null,
         ($maritalStatusVisible && $profile->maritalStatus) ? ($profile->maritalStatus->label ?? '') : null,
@@ -470,30 +468,6 @@
                 @endif
             </div>
         @endif
-        @if ($profile->educationHistory && $profile->educationHistory->isNotEmpty())
-            <div class="{{ $hasEduCareer ? 'mt-6 border-t border-stone-200/80 pt-5 dark:border-gray-700' : '' }}">
-                <p class="mb-3 text-[11px] font-semibold text-stone-500 dark:text-stone-400">{{ __('Education History') }}</p>
-                <ul class="space-y-2 text-sm leading-relaxed text-stone-800 dark:text-stone-100">
-                    @foreach ($profile->educationHistory as $edu)
-                        <li>
-                            {{ $edu->degree ?: '—' }}{{ $edu->specialization ? ' – ' . $edu->specialization : '' }}{{ $edu->university ? ' (' . $edu->university . ')' : '' }}{{ $edu->year_completed ? ', ' . $edu->year_completed : '' }}
-                        </li>
-                    @endforeach
-                </ul>
-            </div>
-        @endif
-        @if ($profile->career?->isNotEmpty())
-            <div class="{{ $hasEduCareer || ($profile->educationHistory && $profile->educationHistory->isNotEmpty()) ? 'mt-6 border-t border-stone-200/80 pt-5 dark:border-gray-700' : '' }}">
-                <p class="mb-3 text-[11px] font-semibold text-stone-500 dark:text-stone-400">{{ __('Career History') }}</p>
-                <ul class="space-y-2 text-sm leading-relaxed text-stone-800 dark:text-stone-100">
-                    @foreach ($profile->career as $job)
-                        <li>
-                            {{ $job->designation ?: '—' }}{{ $job->company ? ' at ' . $job->company : '' }}{{ $job->start_year || $job->end_year ? ' (' . ($job->start_year ?? '') . '–' . ($job->end_year ?? '') . ')' : '' }}
-                        </li>
-                    @endforeach
-                </ul>
-            </div>
-        @endif
     </x-profile.show.profile-section-card>
 @endif
 
@@ -628,7 +602,7 @@
                                 $addr->district?->name,
                                 $addr->state?->name,
                                 $addr->country?->name,
-                            ])) ?: '—' }}{{ trim($addr->postal_code ?? '') ? ' – ' . $addr->postal_code : '' }}
+                            ])) ?: '—' }}{{ trim($addr->location?->pincode ?? '') ? ' – ' . $addr->location->pincode : '' }}
                         </li>
                     @endforeach
                 </ul>
@@ -807,7 +781,7 @@
             @if($prefDistricts)<p><span class="text-gray-500">{{ __('Districts:') }}</span> {{ implode(', ', $prefDistricts) }}</p>@endif
         @endif
         @if(!empty($preferredEducationDegreeIds ?? []))
-            @php $prefDegTitles = \App\Models\EducationDegree::whereIn('id', $preferredEducationDegreeIds)->orderBy('sort_order')->pluck('title')->filter()->values()->all(); @endphp
+            @php $prefDegTitles = \App\Models\EducationDegree::whereIn('id', $preferredEducationDegreeIds)->orderBy('sort_order')->pluck('code')->filter()->values()->all(); @endphp
             @if($prefDegTitles)<p><span class="text-gray-500">{{ __('Preferred qualification') }}:</span> {{ implode(', ', $prefDegTitles) }}</p>@endif
         @endif
         @if(!empty($preferredOccupationMasterIds ?? []))

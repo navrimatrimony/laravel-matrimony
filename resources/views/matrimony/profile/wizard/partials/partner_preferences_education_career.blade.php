@@ -54,7 +54,7 @@
                         <div class="flex flex-wrap gap-2 content-start partner-ec-edu-category-degrees">
                             @foreach($cat->degrees as $deg)
                                 @php
-                                    $degLabel = $eduPrefLocaleMr && filled($deg->title_mr ?? null) ? $deg->title_mr : $deg->title;
+                                    $degLabel = $eduPrefLocaleMr && filled($deg->code_mr ?? null) ? $deg->code_mr : $deg->code;
                                 @endphp
                                 <label class="partner-ec-edu-chip inline-flex items-center gap-1.5 rounded-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-2 py-0.5 text-xs cursor-pointer hover:border-indigo-400 dark:hover:border-indigo-500" data-chip-label="{{ $degLabel }}">
                                     <input type="checkbox" name="preferred_education_degree_ids[]" value="{{ $deg->id }}" class="partner-ec-edu-cb rounded border-gray-300 dark:border-gray-600 text-indigo-600"
@@ -69,7 +69,7 @@
         </div>
     </div>
 
-    {{-- 2) Occupation — SSOT: occupation_master + occupation_categories (same engine as onboarding `<x-occupation-search-engine>` / wizard career) --}}
+    {{-- 2) Occupation — SSOT: master_occupations + master_occupation_categories (same engine as onboarding `<x-occupation-search-engine>` / wizard career) --}}
     @php
         $occPrefLocaleMr = str_starts_with(strtolower((string) app()->getLocale()), 'mr');
         $selectedPreferredOccupationMasterIds = $selectedPreferredOccupationMasterIds ?? [];

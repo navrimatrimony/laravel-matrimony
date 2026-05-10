@@ -5,7 +5,6 @@ namespace App\Http\Controllers;
 use App\Models\Location;
 use App\Models\MatrimonyProfile;
 use App\Models\OccupationCategory;
-use App\Services\CareerHistoryRowNormalizer;
 use App\Services\EducationService;
 use App\Services\FieldCatalogService;
 use App\Services\OccupationService;
@@ -467,6 +466,8 @@ class ProfileWizardController extends Controller
                 if (($data['childLivingWithOptions'] ?? collect())->isEmpty()) {
                     $data['childLivingWithOptions'] = \App\Models\MasterChildLivingWith::where('is_active', true)->get();
                 }
+                $data['addressTypes'] = \App\Models\MasterAddressType::where('is_active', true)->orderBy('id')->get(['id', 'key', 'label']);
+                $data['wizardSelfAddresses'] = $this->wizardSelfAddressRowsForView($profile);
                 break;
             case 'physical':
                 $data['complexions'] = \App\Models\MasterComplexion::where('is_active', true)->orderBy('id')->get();
@@ -503,41 +504,26 @@ class ProfileWizardController extends Controller
                 }
                 break;
             case 'education-career':
-                $profileEducation = DB::table('profile_education')->where('profile_id', $profile->id)->orderBy('id')->get();
-                // Dedupe education rows (same degree/specialization/university/year) so full form does not show duplicate blocks.
-                $seen = [];
-                $data['profileEducation'] = $profileEducation->filter(function ($r) use (&$seen) {
-                    $key = implode('|', [trim((string) ($r->degree ?? '')), trim((string) ($r->specialization ?? '')), trim((string) ($r->university ?? '')), (string) ($r->year_completed ?? '')]);
-                    if (isset($seen[$key])) {
-                        return false;
-                    }
-                    $seen[$key] = true;
-
-                    return true;
-                })->values();
-                $profileCareer = DB::table('profile_career')->where('profile_id', $profile->id)->orderBy('id')->get();
-                // When first career row has no location but profile has work_location_text (e.g. from intake), show it in wizard.
-                if ($profileCareer->isNotEmpty() && \Illuminate\Support\Facades\Schema::hasColumn('matrimony_profiles', 'work_location_text')) {
-                    $first = $profileCareer->first();
-                    if (empty($first->location) && ! empty(trim((string) ($profile->work_location_text ?? '')))) {
-                        $first->location = $profile->work_location_text;
-                    }
-                }
-                $data['profileCareer'] = $profileCareer;
+                $data['profileEducation'] = collect();
+                $data['profileCareer'] = collect();
                 $data['currencies'] = \App\Models\MasterIncomeCurrency::where('is_active', true)->get();
                 break;
             case 'family-details':
                 $data['currencies'] = \App\Models\MasterIncomeCurrency::where('is_active', true)->get();
                 $data['familyTypes'] = \App\Models\MasterFamilyType::where('is_active', true)->get();
                 $data['physicalBuilds'] = \App\Models\MasterPhysicalBuild::where('is_active', true)->get();
+                $data['addressTypes'] = \App\Models\MasterAddressType::where('is_active', true)->orderBy('id')->get(['id', 'key', 'label']);
+                $data['wizardParentsAddresses'] = $this->wizardParentsAddressRowsForView($profile);
                 break;
             case 'personal-family':
                 $data['profileChildren'] = DB::table('profile_children')->where('profile_id', $profile->id)->orderBy('id')->get();
-                $data['profileEducation'] = DB::table('profile_education')->where('profile_id', $profile->id)->orderBy('id')->get();
-                $data['profileCareer'] = DB::table('profile_career')->where('profile_id', $profile->id)->orderBy('id')->get();
+                $data['profileEducation'] = collect();
+                $data['profileCareer'] = collect();
                 $data['currencies'] = \App\Models\MasterIncomeCurrency::where('is_active', true)->get();
                 $data['familyTypes'] = \App\Models\MasterFamilyType::where('is_active', true)->get();
                 $data['physicalBuilds'] = \App\Models\MasterPhysicalBuild::where('is_active', true)->get();
+                $data['addressTypes'] = \App\Models\MasterAddressType::where('is_active', true)->orderBy('id')->get(['id', 'key', 'label']);
+                $data['wizardParentsAddresses'] = $this->wizardParentsAddressRowsForView($profile);
                 break;
             case 'siblings':
                 $siblings = \App\Models\ProfileSibling::where('profile_id', $profile->id)
@@ -585,7 +571,7 @@ class ProfileWizardController extends Controller
 
                     return (object) $arr;
                 };
-                $parentsFamilyTypes = ['native_place', 'paternal_grandfather', 'paternal_grandmother', 'paternal_uncle', 'wife_paternal_uncle', 'paternal_aunt', 'husband_paternal_aunt', 'Cousin'];
+                $parentsFamilyTypes = ['paternal_grandfather', 'paternal_grandmother', 'paternal_uncle', 'wife_paternal_uncle', 'paternal_aunt', 'husband_paternal_aunt', 'Cousin'];
                 $maternalFamilyTypes = ['maternal_address_ajol', 'maternal_grandfather', 'maternal_grandmother', 'maternal_uncle', 'wife_maternal_uncle', 'maternal_aunt', 'husband_maternal_aunt', 'maternal_cousin'];
                 $parents = $relRows
                     ->filter(fn ($r) => in_array($r->relation_type ?? '', $parentsFamilyTypes, true))
@@ -605,7 +591,6 @@ class ProfileWizardController extends Controller
                     ->values();
                 $data['profileRelativesMaternalFamily'] = $relRows->filter(fn ($r) => in_array($r->relation_type ?? '', $maternalFamilyTypes, true))->map($mapRow)->values();
                 $data['relationTypesParentsFamily'] = [
-                    ['value' => 'native_place', 'label' => 'Native Place'],
                     ['value' => 'paternal_grandfather', 'label' => 'Paternal Grandfather'],
                     ['value' => 'paternal_grandmother', 'label' => 'Paternal Grandmother'],
                     ['value' => 'paternal_uncle', 'label' => 'Paternal Uncle (chulte)'],
@@ -654,13 +639,15 @@ class ProfileWizardController extends Controller
                 break;
             case 'location':
                 // Geo hierarchy rows live only in `addresses` (via Eloquent Country/State/…); do not load duplicate “master lists”.
-                $profile->loadMissing(['city', 'nativeCity', 'addresses.village']);
+                $profile->loadMissing(['city', 'addresses.village']);
                 $data['profileAddresses'] = $profile->addresses;
-                $data['workCityName'] = $profile->work_city_id
-                    ? (Location::query()->find($profile->work_city_id)?->localizedName() ?? '')
+                $wk = $profile->workCityLeafStorageId();
+                $data['workCityName'] = $wk
+                    ? (Location::query()->find($wk)?->localizedName() ?? '')
                     : '';
-                $data['nativePlaceDisplay'] = $profile->native_city_id
-                    ? (Location::query()->find($profile->native_city_id)?->localizedName() ?? '')
+                $nk = $profile->nativePlaceLeafStorageId();
+                $data['nativePlaceDisplay'] = $nk
+                    ? (Location::query()->find($nk)?->localizedName() ?? '')
                     : '';
                 $data['residencePlaceDisplay'] = old('wizard_residence_display', $profile->residenceLocationDisplayLine());
                 $data['workPlaceDisplay'] = old('wizard_work_place_display', $data['workCityName'] ?? '');
@@ -893,10 +880,10 @@ class ProfileWizardController extends Controller
                     ->orderBy('sort_order')
                     ->orderBy('name')
                     ->with(['degrees' => function ($q) {
-                        $q->orderBy('sort_order')->orderBy('title');
+                        $q->orderBy('sort_order')->orderBy('code');
                     }])
                     ->get();
-                $data['occupationCategoriesPartnerPrefs'] = Schema::hasTable('occupation_categories') && Schema::hasTable('occupation_master')
+                $data['occupationCategoriesPartnerPrefs'] = Schema::hasTable('master_occupation_categories') && Schema::hasTable('master_occupations')
                     ? OccupationCategory::query()
                         ->orderBy('sort_order')
                         ->orderBy('name')
@@ -1042,14 +1029,14 @@ class ProfileWizardController extends Controller
             'gender_id' => ['required', Rule::exists('master_genders', 'id')->where(fn ($q) => $q->where('is_active', true))],
             'date_of_birth' => ['nullable', 'date'],
             'birth_time' => ['nullable', 'string', 'max:20'],
-            'religion_id' => ['nullable', Rule::exists('religions', 'id')->where(fn ($q) => $q->where('is_active', true))],
-            'caste_id' => ['nullable', Rule::exists('castes', 'id')->where(fn ($q) => $q->where('is_active', true))],
-            'sub_caste_id' => ['nullable', Rule::exists('sub_castes', 'id')->where(fn ($q) => $q->where('is_active', true))],
+            'religion_id' => ['nullable', Rule::exists('master_religions', 'id')->where(fn ($q) => $q->where('is_active', true))],
+            'caste_id' => ['nullable', Rule::exists('master_castes', 'id')->where(fn ($q) => $q->where('is_active', true))],
+            'sub_caste_id' => ['nullable', Rule::exists('master_sub_castes', 'id')->where(fn ($q) => $q->where('is_active', true))],
             'mother_tongue_id' => ['nullable', Rule::exists('master_mother_tongues', 'id')->where(fn ($q) => $q->where('is_active', true))],
         ]);
 
         if (! $request->attributes->get(self::SKIP_BASIC_INFO_RESIDENCE_VALIDATION)) {
-            $this->validateResidenceCoreForSnapshot($request);
+            $this->validateSelfAddressesForBasicInfo($request);
         }
 
         $birthTimeValue = $request->filled('birth_time') ? trim($request->input('birth_time')) : null;
@@ -1069,9 +1056,16 @@ class ProfileWizardController extends Controller
         ];
         $core = array_map(fn ($v) => $v === '' ? null : $v, $core);
 
-        // Current residence (district/taluka/city + address line) — same fields as location snapshot; rendered on Basic info.
-        $core = array_merge($core, $this->residenceCoreFromRequest($request));
-        $core = $this->applyLocationSelectionResolution($core);
+        $selfRows = $this->buildSelfAddressSnapshotRowsFromBasicInfoRequest($request, $profile);
+        $parentsPreserved = $this->profileAddressesSnapshotRowsForScope($profile, 'parents');
+        $addresses = array_merge($selfRows, $parentsPreserved);
+
+        $canonical = $this->canonicalSelfResidenceCoreFromSnapshotRows($selfRows);
+        $core = array_merge($core, $canonical);
+        $rawSelf = $request->input('self_addresses');
+        if (! is_array($rawSelf) || $rawSelf === []) {
+            $core = $this->applyLocationSelectionResolution($core);
+        }
 
         // Merge full marital engine snapshot (marital_status_id, has_children, marriages, children)
         $marriagesSnapshot = $this->buildMarriagesSnapshot($request);
@@ -1100,6 +1094,7 @@ class ProfileWizardController extends Controller
             'birth_place' => $birth_place,
             'marriages' => $marriagesSnapshot['marriages'] ?? [],
             'children' => $marriagesSnapshot['children'] ?? [],
+            'addresses' => $addresses,
         ];
     }
 
@@ -1197,7 +1192,6 @@ class ProfileWizardController extends Controller
             'contacts' => [],
             'children' => [],
             'education_history' => [],
-            'career_history' => [],
             'addresses' => [],
             'property_summary' => [],
             'property_assets' => [],
@@ -1224,11 +1218,11 @@ class ProfileWizardController extends Controller
         $occRules = [];
         if ($hasOccEngine) {
             $occRules = [
-                'occupation_master_id' => ['nullable', 'integer', Rule::exists('occupation_master', 'id')],
+                'occupation_master_id' => ['nullable', 'integer', Rule::exists('master_occupations', 'id')],
                 'occupation_custom_id' => [
                     'nullable',
                     'integer',
-                    Rule::exists('occupation_custom', 'id')->where(fn ($q) => $q->where('user_id', auth()->id())),
+                    Rule::exists('master_occupation_custom', 'id')->where(fn ($q) => $q->where('user_id', auth()->id())),
                 ],
             ];
         }
@@ -1237,10 +1231,11 @@ class ProfileWizardController extends Controller
             'income_currency_id' => ['nullable', Rule::exists('master_income_currencies', 'id')->where(fn ($q) => $q->where('is_active', true))],
             'working_with_type_id' => ['nullable', Rule::exists('working_with_types', 'id')->where(fn ($q) => $q->where('is_active', true))],
             'profession_id' => ['nullable', Rule::exists('professions', 'id')->where(fn ($q) => $q->where('is_active', true))],
-            'income_range_id' => 'nullable|exists:income_ranges,id',
-            'college_id' => 'nullable|exists:colleges,id',
+            'income_range_id' => 'nullable|exists:master_income_ranges,id',
             'company_name' => 'nullable|string|max:255',
             'income_private' => 'nullable|boolean',
+            'work_city_id' => ['nullable', AddressHierarchyRules::existsLocationLeafId()],
+            'work_state_id' => ['nullable', AddressHierarchyRules::existsStateId()],
         ], $occRules, $incomeEngineRules));
         if (! $hasOccEngine || (! $request->filled('occupation_master_id') && ! $request->filled('occupation_custom_id'))) {
             if ($request->filled('profession_id') && $request->filled('working_with_type_id')) {
@@ -1275,8 +1270,6 @@ class ProfileWizardController extends Controller
         $core = [
             'highest_education' => $request->input('highest_education') ?: null,
             'highest_education_other' => $request->input('highest_education_other') ? trim((string) $request->input('highest_education_other')) ?: null : null,
-            'specialization' => $request->input('specialization') ?: null,
-            'college_id' => $request->filled('college_id') ? (int) $request->input('college_id') : null,
             'working_with_type_id' => $workingWithTypeId,
             'profession_id' => $professionId,
             'company_name' => $request->input('company_name') ?: null,
@@ -1287,10 +1280,8 @@ class ProfileWizardController extends Controller
             'work_city_id' => $workCityId,
             'work_state_id' => $workStateId,
         ];
-        if (Schema::hasColumn('matrimony_profiles', 'work_location_text')) {
-            $wlt = trim((string) $request->input('work_location_text', ''));
-            $core['work_location_text'] = $wlt !== '' ? mb_substr($wlt, 0, 255) : null;
-        }
+        $wlt = trim((string) $request->input('work_location_text', ''));
+        $core['work_location_text'] = $wlt !== '' ? mb_substr($wlt, 0, 255) : null;
         if ($hasOccEngine) {
             $core['occupation_master_id'] = $request->filled('occupation_master_id') ? (int) $request->input('occupation_master_id') : null;
             $core['occupation_custom_id'] = $request->filled('occupation_custom_id') ? (int) $request->input('occupation_custom_id') : null;
@@ -1298,31 +1289,9 @@ class ProfileWizardController extends Controller
         $core = array_merge($core, $incomeCore);
         $core = array_map(fn ($v) => $v === '' ? null : $v, $core);
 
-        $education_history = [];
-        foreach ($request->input('education_history', []) as $row) {
-            $education_history[] = [
-                'id' => ! empty($row['id']) ? (int) $row['id'] : null,
-                'degree' => trim((string) ($row['degree'] ?? '')),
-                'specialization' => trim((string) ($row['specialization'] ?? '')),
-                'university' => trim((string) ($row['university'] ?? '')),
-                'year_completed' => ! empty($row['year_completed']) ? (int) $row['year_completed'] : 0,
-            ];
-        }
-        $career_history = [];
-        foreach ($request->input('career_history', []) as $row) {
-            if (! is_array($row)) {
-                continue;
-            }
-            $normalized = CareerHistoryRowNormalizer::fromRequestRowOrNull($row);
-            if ($normalized !== null) {
-                $career_history[] = $normalized;
-            }
-        }
-
         return [
             'core' => $core,
-            'education_history' => $education_history,
-            'career_history' => $career_history,
+            'education_history' => [],
         ];
     }
 
@@ -1338,7 +1307,7 @@ class ProfileWizardController extends Controller
         ], $familyIncomeEngineRules));
         $incomeEngineService = app(\App\Services\IncomeEngineService::class);
         $familyIncomeCore = $this->buildIncomeEngineCore($request, 'family_income', $incomeEngineService);
-        $parentsAddressLine = $request->filled('parents_address_line') ? trim((string) $request->input('parents_address_line')) : null;
+        $this->validateParentsAddressesForFamilyDetails($request);
 
         if (Schema::hasColumn('matrimony_profiles', 'father_occupation_master_id')) {
             app(OccupationService::class)->mergeParentOccupationTextIntoRequest($request);
@@ -1350,13 +1319,11 @@ class ProfileWizardController extends Controller
             'father_extra_info' => $request->filled('father_extra_info') ? trim((string) $request->input('father_extra_info')) : null,
             'father_contact_1' => trim((string) ($request->input('father_contact_1') ?? '')) ?: null,
             'father_contact_2' => trim((string) ($request->input('father_contact_2') ?? '')) ?: null,
-            'father_contact_3' => trim((string) ($request->input('father_contact_3') ?? '')) ?: null,
             'mother_name' => $request->input('mother_name') ?: null,
             'mother_occupation' => $request->input('mother_occupation') ?: null,
             'mother_extra_info' => $request->filled('mother_extra_info') ? trim((string) $request->input('mother_extra_info')) : null,
             'mother_contact_1' => trim((string) ($request->input('mother_contact_1') ?? '')) ?: null,
             'mother_contact_2' => trim((string) ($request->input('mother_contact_2') ?? '')) ?: null,
-            'mother_contact_3' => trim((string) ($request->input('mother_contact_3') ?? '')) ?: null,
             'family_type_id' => $request->input('family_type_id') ? (int) $request->input('family_type_id') : null,
             'family_status' => $request->input('family_status') ?: null,
             'family_values' => $request->input('family_values') ?: null,
@@ -1370,20 +1337,22 @@ class ProfileWizardController extends Controller
             $core['mother_occupation_master_id'] = $request->filled('mother_occupation_master_id') ? (int) $request->input('mother_occupation_master_id') : null;
             $core['mother_occupation_custom_id'] = $request->filled('mother_occupation_custom_id') ? (int) $request->input('mother_occupation_custom_id') : null;
         }
-        // Parents home address uses the same core address fields; allow editing from Family details too.
-        if ($request->has('city_id') || $request->has('state_id') || $request->has('parents_address_line')) {
-            $core['country_id'] = $request->input('country_id') ?: null;
-            $core['state_id'] = $request->input('state_id') ?: null;
-            $core['district_id'] = $request->input('district_id') ?: null;
-            $core['taluka_id'] = $request->input('taluka_id') ?: null;
-            $core['city_id'] = $request->input('city_id') ?: null;
-            $core['address_line'] = $parentsAddressLine !== null ? $parentsAddressLine : ($profile->address_line ?? null);
-        }
         $core = array_merge($core, $familyIncomeCore);
+        if (\Illuminate\Support\Facades\Schema::hasColumn('matrimony_profiles', 'father_contact_3')) {
+            $core['father_contact_3'] = trim((string) ($request->input('father_contact_3') ?? '')) ?: null;
+        }
+        if (\Illuminate\Support\Facades\Schema::hasColumn('matrimony_profiles', 'mother_contact_3')) {
+            $core['mother_contact_3'] = trim((string) ($request->input('mother_contact_3') ?? '')) ?: null;
+        }
         $core = array_map(fn ($v) => $v === '' ? null : $v, $core);
+
+        $parentsRows = $this->mapRequestAddressRowsToSnapshotRows($request, 'parents_addresses', 'parents', 'permanent');
+        $selfPreserved = $this->profileAddressesSnapshotRowsForScope($profile, 'self');
+        $addresses = array_merge($selfPreserved, $parentsRows);
 
         return [
             'core' => $core,
+            'addresses' => $addresses,
         ];
     }
 
@@ -1409,11 +1378,11 @@ class ProfileWizardController extends Controller
         $occRulesPf = [];
         if ($hasOccEngine) {
             $occRulesPf = [
-                'occupation_master_id' => ['nullable', 'integer', Rule::exists('occupation_master', 'id')],
+                'occupation_master_id' => ['nullable', 'integer', Rule::exists('master_occupations', 'id')],
                 'occupation_custom_id' => [
                     'nullable',
                     'integer',
-                    Rule::exists('occupation_custom', 'id')->where(fn ($q) => $q->where('user_id', auth()->id())),
+                    Rule::exists('master_occupation_custom', 'id')->where(fn ($q) => $q->where('user_id', auth()->id())),
                 ],
             ];
         }
@@ -1423,10 +1392,11 @@ class ProfileWizardController extends Controller
             'income_currency_id' => 'nullable|exists:master_income_currencies,id',
             'working_with_type_id' => 'nullable|exists:working_with_types,id',
             'profession_id' => 'nullable|exists:professions,id',
-            'income_range_id' => 'nullable|exists:income_ranges,id',
-            'college_id' => 'nullable|exists:colleges,id',
+            'income_range_id' => 'nullable|exists:master_income_ranges,id',
             'company_name' => 'nullable|string|max:255',
             'income_private' => 'nullable|boolean',
+            'work_city_id' => ['nullable', AddressHierarchyRules::existsLocationLeafId()],
+            'work_state_id' => ['nullable', AddressHierarchyRules::existsStateId()],
         ], $occRulesPf, $incomeEngineRules, $familyIncomeEngineRules));
         if (! $hasOccEngine || (! $request->filled('occupation_master_id') && ! $request->filled('occupation_custom_id'))) {
             if ($request->filled('profession_id') && $request->filled('working_with_type_id')) {
@@ -1464,8 +1434,6 @@ class ProfileWizardController extends Controller
         $core = [
             'highest_education' => $request->input('highest_education') ?: null,
             'highest_education_other' => $request->input('highest_education_other') ? trim((string) $request->input('highest_education_other')) ?: null : null,
-            'specialization' => $request->input('specialization') ?: null,
-            'college_id' => $request->filled('college_id') ? (int) $request->input('college_id') : null,
             'working_with_type_id' => $workingWithTypeId,
             'profession_id' => $professionId,
             'company_name' => $request->input('company_name') ?: null,
@@ -1490,12 +1458,10 @@ class ProfileWizardController extends Controller
         }
         $core['father_contact_1'] = trim((string) ($request->input('father_contact_1') ?? '')) ?: null;
         $core['father_contact_2'] = trim((string) ($request->input('father_contact_2') ?? '')) ?: null;
-        $core['father_contact_3'] = trim((string) ($request->input('father_contact_3') ?? '')) ?: null;
         $core['mother_name'] = $request->input('mother_name') ?: null;
         $core['mother_occupation'] = $request->input('mother_occupation') ?: null;
         $core['mother_contact_1'] = trim((string) ($request->input('mother_contact_1') ?? '')) ?: null;
         $core['mother_contact_2'] = trim((string) ($request->input('mother_contact_2') ?? '')) ?: null;
-        $core['mother_contact_3'] = trim((string) ($request->input('mother_contact_3') ?? '')) ?: null;
         $core['family_type_id'] = $request->input('family_type_id') ? (int) $request->input('family_type_id') : null;
         $core['family_status'] = $request->input('family_status') ?: null;
         $core['family_values'] = $request->input('family_values') ?: null;
@@ -1504,6 +1470,18 @@ class ProfileWizardController extends Controller
         if ($request->filled('highest_education')) {
             $core['highest_education'] = $request->input('highest_education');
         }
+        $workCityIdPf = $request->filled('work_city_id') ? (int) $request->input('work_city_id') : null;
+        $workStateIdPf = $request->filled('work_state_id') ? (int) $request->input('work_state_id') : null;
+        $core['work_city_id'] = $workCityIdPf;
+        $core['work_state_id'] = $workStateIdPf;
+        if (Schema::hasColumn('matrimony_profiles', 'father_contact_3')) {
+            $core['father_contact_3'] = trim((string) ($request->input('father_contact_3') ?? '')) ?: null;
+        }
+        if (Schema::hasColumn('matrimony_profiles', 'mother_contact_3')) {
+            $core['mother_contact_3'] = trim((string) ($request->input('mother_contact_3') ?? '')) ?: null;
+        }
+        $wltPf = trim((string) $request->input('work_location_text', ''));
+        $core['work_location_text'] = $wltPf !== '' ? mb_substr($wltPf, 0, 255) : null;
         $core = array_map(fn ($v) => $v === '' ? null : $v, $core);
 
         $children = [];
@@ -1517,37 +1495,15 @@ class ProfileWizardController extends Controller
             ];
         }
 
-        $education_history = [];
-        foreach ($request->input('education_history', []) as $row) {
-            $education_history[] = [
-                'id' => ! empty($row['id']) ? (int) $row['id'] : null,
-                'degree' => trim((string) ($row['degree'] ?? '')),
-                'specialization' => trim((string) ($row['specialization'] ?? '')),
-                'university' => trim((string) ($row['university'] ?? '')),
-                'year_completed' => ! empty($row['year_completed']) ? (int) $row['year_completed'] : 0,
-            ];
-        }
-
-        $career_history = [];
-        foreach ($request->input('career_history', []) as $row) {
-            if (! is_array($row)) {
-                continue;
-            }
-            $normalized = CareerHistoryRowNormalizer::fromRequestRowOrNull($row);
-            if ($normalized !== null) {
-                $career_history[] = $normalized;
-            }
-        }
-
         $snapshot = ['core' => $core];
         if ($request->has('children')) {
             $snapshot['children'] = $children;
         }
-        if ($request->has('education_history')) {
-            $snapshot['education_history'] = $education_history;
-        }
-        if ($request->has('career_history')) {
-            $snapshot['career_history'] = $career_history;
+        if ($request->has('parents_addresses')) {
+            $this->validateParentsAddressesForFamilyDetails($request);
+            $parentsRows = $this->mapRequestAddressRowsToSnapshotRows($request, 'parents_addresses', 'parents', 'permanent');
+            $selfPreserved = $this->profileAddressesSnapshotRowsForScope($profile, 'self');
+            $snapshot['addresses'] = array_merge($selfPreserved, $parentsRows);
         }
 
         return $snapshot;
@@ -1648,7 +1604,7 @@ class ProfileWizardController extends Controller
                 continue;
             }
             $name = trim((string) ($row['name'] ?? ''));
-            if (in_array($relationType, ['maternal_address_ajol', 'native_place'], true)) {
+            if ($relationType === 'maternal_address_ajol') {
                 $name = '';
             }
             $rMid = ! empty($row['occupation_master_id']) ? (int) $row['occupation_master_id'] : null;
@@ -1751,7 +1707,7 @@ class ProfileWizardController extends Controller
 
         // Relatives tab: maternal from form; keep existing paternal from DB
         $maternal = $this->collectRelativesFromRequestSource($request->input('relatives_maternal_family', []));
-        $parentsFamilyTypes = ['native_place', 'paternal_grandfather', 'paternal_grandmother', 'paternal_uncle', 'wife_paternal_uncle', 'paternal_aunt', 'husband_paternal_aunt', 'Cousin'];
+        $parentsFamilyTypes = ['paternal_grandfather', 'paternal_grandmother', 'paternal_uncle', 'wife_paternal_uncle', 'paternal_aunt', 'husband_paternal_aunt', 'Cousin'];
         $paternalFromDb = $this->loadRelativesFromDb($profile->id, $parentsFamilyTypes);
         $relatives = array_merge($paternalFromDb, $maternal);
 
@@ -1766,7 +1722,7 @@ class ProfileWizardController extends Controller
     {
         $this->validateResidenceCoreForSnapshot($request);
         $request->validate([
-            'work_city_id' => ['nullable', AddressHierarchyRules::existsCityId()],
+            'work_city_id' => ['nullable', AddressHierarchyRules::existsLocationLeafId()],
             'work_state_id' => ['nullable', AddressHierarchyRules::existsStateId()],
         ]);
 
@@ -1786,7 +1742,6 @@ class ProfileWizardController extends Controller
                 'district' => trim((string) ($row['district'] ?? '')),
                 'state' => trim((string) ($row['state'] ?? '')),
                 'country' => trim((string) ($row['country'] ?? '')),
-                'pin_code' => trim((string) ($row['pin_code'] ?? '')),
             ];
         }
 
@@ -2118,11 +2073,28 @@ class ProfileWizardController extends Controller
             $hasChildren = $request->input('has_children');
             $hasChildrenYes = $hasChildren === '1' || $hasChildren === 1 || $hasChildren === true;
             if ($hasChildrenYes) {
+                $childrenIn = $request->input('children', []);
+                if (is_array($childrenIn)) {
+                    foreach ($childrenIn as $i => $row) {
+                        if (! is_array($row)) {
+                            continue;
+                        }
+                        $lw = $row['child_living_with_id'] ?? null;
+                        if ($lw === '' || $lw === null) {
+                            $childrenIn[$i]['child_living_with_id'] = null;
+                        }
+                    }
+                    $request->merge(['children' => $childrenIn]);
+                }
                 $request->validate([
                     'children' => ['nullable', 'array'],
                     'children.*.gender' => ['nullable', 'in:male,female,other,prefer_not_say'],
                     'children.*.age' => ['nullable', 'integer', 'min:1', 'max:120'],
-                    'children.*.child_living_with_id' => ['nullable'],
+                    'children.*.child_living_with_id' => [
+                        'nullable',
+                        'integer',
+                        Rule::exists('master_child_living_with', 'id')->where(fn ($q) => $q->where('is_active', true)),
+                    ],
                 ]);
             }
         }
@@ -2225,6 +2197,359 @@ class ProfileWizardController extends Controller
             'core' => [],
             'children' => $rows,
         ];
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    private function wizardSelfAddressRowsForView(MatrimonyProfile $profile): array
+    {
+        if (! Schema::hasTable('profile_addresses') || ! Schema::hasColumn('profile_addresses', 'address_scope')) {
+            $lid = $profile->location_id ? (string) $profile->location_id : '';
+            $disp = MatrimonyProfile::residenceLocationDisplayLineFor($profile);
+
+            return [[
+                'id' => null,
+                'address_type_key' => 'current',
+                'address_line' => (string) ($profile->address_line ?? ''),
+                'location_id' => $lid,
+                'display' => $disp,
+                'rid' => 'legacy-self',
+            ]];
+        }
+
+        $out = [];
+        $rows = DB::table('profile_addresses as pa')
+            ->join('master_address_types as mat', 'mat.id', '=', 'pa.address_type_id')
+            ->where('pa.profile_id', $profile->id)
+            ->where('pa.address_scope', 'self')
+            ->orderBy('pa.id')
+            ->select('pa.id', 'pa.address_line', 'pa.location_id', 'mat.key as address_type_key')
+            ->get();
+        foreach ($rows as $r) {
+            $leaf = (int) ($r->location_id ?? $r->city_id ?? 0);
+            $lid = $leaf > 0 ? (string) $leaf : '';
+            $disp = $leaf > 0
+                ? MatrimonyProfile::residenceLocationDisplayLineFor((object) ['location_id' => $leaf])
+                : '';
+            $out[] = [
+                'id' => (int) $r->id,
+                'address_type_key' => (string) ($r->address_type_key ?? 'current'),
+                'address_line' => (string) ($r->address_line ?? ''),
+                'location_id' => $lid,
+                'display' => $disp,
+                'rid' => 'db-'.$r->id,
+            ];
+        }
+        if ($out === [] && (($profile->location_id ?? null) || trim((string) ($profile->address_line ?? '')) !== '')) {
+            $lid = $profile->location_id ? (string) $profile->location_id : '';
+
+            return [[
+                'id' => null,
+                'address_type_key' => 'current',
+                'address_line' => (string) ($profile->address_line ?? ''),
+                'location_id' => $lid,
+                'display' => MatrimonyProfile::residenceLocationDisplayLineFor($profile),
+                'rid' => 'legacy-self',
+            ]];
+        }
+        if ($out === []) {
+            return [[
+                'id' => null,
+                'address_type_key' => 'current',
+                'address_line' => '',
+                'location_id' => '',
+                'display' => '',
+                'rid' => 'new-0',
+            ]];
+        }
+
+        return $out;
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    private function wizardParentsAddressRowsForView(MatrimonyProfile $profile): array
+    {
+        if (! Schema::hasTable('profile_addresses') || ! Schema::hasColumn('profile_addresses', 'address_scope')) {
+            return [[
+                'id' => null,
+                'address_type_key' => 'permanent',
+                'address_line' => '',
+                'location_id' => '',
+                'display' => '',
+                'rid' => 'p-new-0',
+            ]];
+        }
+
+        $out = [];
+        $rows = DB::table('profile_addresses as pa')
+            ->join('master_address_types as mat', 'mat.id', '=', 'pa.address_type_id')
+            ->where('pa.profile_id', $profile->id)
+            ->where('pa.address_scope', 'parents')
+            ->orderBy('pa.id')
+            ->select('pa.id', 'pa.address_line', 'pa.location_id', 'mat.key as address_type_key')
+            ->get();
+        foreach ($rows as $r) {
+            $leaf = (int) ($r->location_id ?? $r->city_id ?? 0);
+            $lid = $leaf > 0 ? (string) $leaf : '';
+            $disp = $leaf > 0
+                ? MatrimonyProfile::residenceLocationDisplayLineFor((object) ['location_id' => $leaf])
+                : '';
+            $out[] = [
+                'id' => (int) $r->id,
+                'address_type_key' => (string) ($r->address_type_key ?? 'permanent'),
+                'address_line' => (string) ($r->address_line ?? ''),
+                'location_id' => $lid,
+                'display' => $disp,
+                'rid' => 'pdb-'.$r->id,
+            ];
+        }
+        if ($out === []) {
+            return [[
+                'id' => null,
+                'address_type_key' => 'permanent',
+                'address_line' => '',
+                'location_id' => '',
+                'display' => '',
+                'rid' => 'p-new-0',
+            ]];
+        }
+
+        return $out;
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    private function profileAddressesSnapshotRowsForScope(MatrimonyProfile $profile, string $scope): array
+    {
+        if (! Schema::hasTable('profile_addresses') || ! Schema::hasColumn('profile_addresses', 'address_scope')) {
+            return [];
+        }
+        $rows = DB::table('profile_addresses as pa')
+            ->join('master_address_types as mat', 'mat.id', '=', 'pa.address_type_id')
+            ->where('pa.profile_id', $profile->id)
+            ->where('pa.address_scope', $scope)
+            ->orderBy('pa.id')
+            ->select('pa.id', 'pa.location_id', 'pa.address_line', 'mat.key as address_type_key')
+            ->get();
+        $out = [];
+        foreach ($rows as $r) {
+            $row = [
+                'id' => (int) $r->id,
+                'address_scope' => $scope,
+                'address_type' => (string) ($r->address_type_key ?? 'current'),
+                'address_line' => isset($r->address_line) && trim((string) $r->address_line) !== '' ? trim((string) $r->address_line) : null,
+            ];
+            $leaf = (int) ($r->location_id ?? $r->city_id ?? 0);
+            if ($leaf > 0) {
+                $row['location_id'] = $leaf;
+            }
+            $out[] = $row;
+        }
+
+        return $out;
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    private function mapRequestAddressRowsToSnapshotRows(Request $request, string $inputKey, string $scope, string $defaultTypeKey): array
+    {
+        $raw = $request->input($inputKey);
+        if (! is_array($raw)) {
+            return [];
+        }
+        $out = [];
+        foreach ($raw as $row) {
+            if (! is_array($row)) {
+                continue;
+            }
+            $id = ! empty($row['id']) ? (int) $row['id'] : null;
+            $typeKey = trim((string) ($row['address_type_key'] ?? ''));
+            if ($typeKey === '') {
+                $typeKey = $defaultTypeKey;
+            }
+            $addressLine = isset($row['address_line']) ? trim((string) $row['address_line']) : '';
+            $addressLine = $addressLine !== '' ? mb_substr($addressLine, 0, 255) : null;
+            $lid = isset($row['location_id']) && $row['location_id'] !== '' && $row['location_id'] !== null ? (int) $row['location_id'] : null;
+            $lit = isset($row['location_input']) ? trim((string) $row['location_input']) : '';
+            $lit = $lit !== '' ? mb_substr($lit, 0, 255) : null;
+            $mini = ['location_id' => $lid, 'location_input' => $lit];
+            $mini = $this->applyLocationSelectionResolution($mini);
+            $out[] = [
+                'id' => $id,
+                'address_scope' => $scope,
+                'address_type' => $typeKey,
+                'address_line' => $addressLine,
+                'location_id' => $mini['location_id'] ?? null,
+                'location_input' => $mini['location_input'] ?? null,
+            ];
+        }
+
+        return $out;
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    private function buildSelfAddressSnapshotRowsFromBasicInfoRequest(Request $request, MatrimonyProfile $profile): array
+    {
+        $raw = $request->input('self_addresses');
+        if (! is_array($raw) || $raw === []) {
+            $rc = $this->residenceCoreFromRequest($request);
+            $rc = $this->applyLocationSelectionResolution($rc);
+            $existingId = $this->existingProfileAddressIdForType($profile, 'self', 'current');
+
+            return [[
+                'id' => $existingId,
+                'address_scope' => 'self',
+                'address_type' => 'current',
+                'address_line' => isset($rc['address_line']) && trim((string) $rc['address_line']) !== '' ? trim((string) $rc['address_line']) : null,
+                'location_id' => $rc['location_id'] ?? null,
+                'location_input' => $rc['location_input'] ?? null,
+            ]];
+        }
+
+        return $this->mapRequestAddressRowsToSnapshotRows($request, 'self_addresses', 'self', 'current');
+    }
+
+    private function existingProfileAddressIdForType(MatrimonyProfile $profile, string $scope, string $typeKey): ?int
+    {
+        if (! Schema::hasTable('profile_addresses') || ! Schema::hasColumn('profile_addresses', 'address_scope')) {
+            return null;
+        }
+        $tid = DB::table('master_address_types')->where('key', $typeKey)->value('id');
+        if (! $tid) {
+            return null;
+        }
+
+        return DB::table('profile_addresses')
+            ->where('profile_id', $profile->id)
+            ->where('address_scope', $scope)
+            ->where('address_type_id', (int) $tid)
+            ->value('id');
+    }
+
+    /**
+     * @param  array<int, array<string, mixed>>  $rows
+     * @return array{location_id: int|null, location_input: string|null, address_line: string|null}
+     */
+    private function canonicalSelfResidenceCoreFromSnapshotRows(array $rows): array
+    {
+        $pick = null;
+        foreach ($rows as $r) {
+            if (($r['address_type'] ?? '') === 'current') {
+                $pick = $r;
+                break;
+            }
+        }
+        if ($pick === null && $rows !== []) {
+            $pick = $rows[0];
+        }
+        if ($pick === null) {
+            return ['location_id' => null, 'location_input' => null, 'address_line' => null];
+        }
+        $line = $pick['address_line'] ?? null;
+        $line = is_string($line) && trim($line) !== '' ? trim($line) : null;
+
+        $lid = $pick['location_id'] ?? null;
+        $lid = ($lid !== null && $lid !== '') ? (int) $lid : null;
+
+        return [
+            'location_id' => $lid,
+            'location_input' => isset($pick['location_input']) && trim((string) $pick['location_input']) !== '' ? trim((string) $pick['location_input']) : null,
+            'address_line' => $line,
+        ];
+    }
+
+    private function validateSelfAddressesForBasicInfo(Request $request): void
+    {
+        $raw = $request->input('self_addresses');
+        $geo = Location::geoTable();
+        $typeKeys = ['current', 'permanent', 'native', 'work', 'other'];
+        if (! is_array($raw) || $raw === []) {
+            $this->validateResidenceCoreForSnapshot($request);
+
+            return;
+        }
+        $hasAnyFilled = false;
+        foreach ($raw as $idx => $row) {
+            if (! is_array($row)) {
+                continue;
+            }
+            $line = trim((string) ($row['address_line'] ?? ''));
+            $lid = $row['location_id'] ?? null;
+            $lit = trim((string) ($row['location_input'] ?? ''));
+            if ($line === '' && ($lid === null || $lid === '') && $lit === '') {
+                continue;
+            }
+            $hasAnyFilled = true;
+            $validator = Validator::make($row, [
+                'address_type_key' => ['required', 'string', Rule::in($typeKeys)],
+                'location_id' => ['required_without:location_input', 'nullable', 'integer', Rule::exists($geo, 'id')],
+                'location_input' => ['required_without:location_id', 'nullable', 'string', 'min:2', 'max:255'],
+                'address_line' => ['nullable', 'string', 'max:255'],
+            ]);
+            if ($validator->fails()) {
+                throw \Illuminate\Validation\ValidationException::withMessages(
+                    collect($validator->errors()->toArray())
+                        ->mapWithKeys(fn ($msgs, $k) => ['self_addresses.'.$idx.'.'.$k => $msgs])
+                        ->all()
+                );
+            }
+            if (! empty($lid) && $lit !== '') {
+                throw \Illuminate\Validation\ValidationException::withMessages([
+                    'self_addresses.'.$idx.'.location_id' => ['Do not send location_id and location_input together.'],
+                ]);
+            }
+        }
+        if (! $hasAnyFilled) {
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'location_id' => ['Please add at least one address with a place or location text.'],
+            ]);
+        }
+    }
+
+    private function validateParentsAddressesForFamilyDetails(Request $request): void
+    {
+        $raw = $request->input('parents_addresses');
+        if (! is_array($raw)) {
+            return;
+        }
+        $geo = Location::geoTable();
+        $typeKeys = ['current', 'permanent', 'native', 'work', 'other'];
+        foreach ($raw as $idx => $row) {
+            if (! is_array($row)) {
+                continue;
+            }
+            $line = trim((string) ($row['address_line'] ?? ''));
+            $lid = $row['location_id'] ?? null;
+            $lit = trim((string) ($row['location_input'] ?? ''));
+            if ($line === '' && ($lid === null || $lid === '') && $lit === '') {
+                continue;
+            }
+            $validator = Validator::make($row, [
+                'address_type_key' => ['required', 'string', Rule::in($typeKeys)],
+                'location_id' => ['required_without:location_input', 'nullable', 'integer', Rule::exists($geo, 'id')],
+                'location_input' => ['required_without:location_id', 'nullable', 'string', 'min:2', 'max:255'],
+                'address_line' => ['nullable', 'string', 'max:255'],
+            ]);
+            if ($validator->fails()) {
+                throw \Illuminate\Validation\ValidationException::withMessages(
+                    collect($validator->errors()->toArray())
+                        ->mapWithKeys(fn ($msgs, $k) => ['parents_addresses.'.$idx.'.'.$k => $msgs])
+                        ->all()
+                );
+            }
+            if (! empty($lid) && $lit !== '') {
+                throw \Illuminate\Validation\ValidationException::withMessages([
+                    'parents_addresses.'.$idx.'.location_id' => ['Do not send location_id and location_input together.'],
+                ]);
+            }
+        }
     }
 
     /**

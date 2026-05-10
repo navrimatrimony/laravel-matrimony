@@ -83,6 +83,45 @@
                 <p class="text-xs text-gray-500 dark:text-gray-400 mt-2">Recommended ON for cleaner small-screen experience.</p>
             </div>
 
+            <div class="p-4 bg-gray-50 dark:bg-gray-700/30 rounded-lg border border-gray-200 dark:border-gray-600" x-data="{ profileLockBlurStrengthUi: {{ (int) old('profile_view_lock_blur_strength', $profileViewLockBlurStrength ?? 78) }} }">
+                <h2 class="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-3">Profile lock experience</h2>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-xs mb-1">Start blur from section</label>
+                        @php($selectedProfileLockStart = old('profile_view_lock_start_section', $profileViewLockStartSection ?? 'family'))
+                        <select name="profile_view_lock_start_section" class="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm text-gray-900 dark:text-gray-100">
+                            <option value="basic_info" {{ $selectedProfileLockStart === 'basic_info' ? 'selected' : '' }}>Basic information</option>
+                            <option value="physical" {{ $selectedProfileLockStart === 'physical' ? 'selected' : '' }}>Physical</option>
+                            <option value="education_career" {{ $selectedProfileLockStart === 'education_career' ? 'selected' : '' }}>Education &amp; career</option>
+                            <option value="family" {{ $selectedProfileLockStart === 'family' ? 'selected' : '' }}>Family details</option>
+                            <option value="siblings_detail" {{ $selectedProfileLockStart === 'siblings_detail' ? 'selected' : '' }}>Siblings details</option>
+                            <option value="extended_family" {{ $selectedProfileLockStart === 'extended_family' ? 'selected' : '' }}>Extended family</option>
+                            <option value="alliance" {{ $selectedProfileLockStart === 'alliance' ? 'selected' : '' }}>Alliance network</option>
+                            <option value="property" {{ $selectedProfileLockStart === 'property' ? 'selected' : '' }}>Property</option>
+                            <option value="horoscope" {{ $selectedProfileLockStart === 'horoscope' ? 'selected' : '' }}>Horoscope</option>
+                            <option value="partner_preferences" {{ $selectedProfileLockStart === 'partner_preferences' ? 'selected' : '' }}>Partner preferences</option>
+                            <option value="additional" {{ $selectedProfileLockStart === 'additional' ? 'selected' : '' }}>Additional details</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs mb-1">Blur strength (%)</label>
+                        <input
+                            type="range"
+                            name="profile_view_lock_blur_strength"
+                            min="35"
+                            max="100"
+                            step="1"
+                            x-model.number="profileLockBlurStrengthUi"
+                            class="mt-2 w-full"
+                        >
+                        <span class="mt-1 inline-block text-xs font-semibold text-gray-700 dark:text-gray-300" x-text="profileLockBlurStrengthUi + '%'"></span>
+                    </div>
+                </div>
+                <p class="text-xs text-gray-500 dark:text-gray-400 mt-2">
+                    Profile page वर lock card एकदाच दाखवला जाईल. निवडलेल्या section पासून gradient blur सुरू होईल.
+                </p>
+            </div>
+
             <div class="p-4 bg-gray-50 dark:bg-gray-700/30 rounded-lg border border-gray-200 dark:border-gray-600">
                 <label class="block text-sm font-semibold text-gray-900 dark:text-gray-100 mb-2">Interest — minimum core completeness (%)</label>
                 <input type="number" name="interest_min_core_completeness_pct" min="0" max="100" required

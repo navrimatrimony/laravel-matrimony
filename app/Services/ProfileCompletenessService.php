@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\AdminSetting;
 use App\Models\MatrimonyProfile;
+use App\Services\Profile\ProfileCanonicalResidenceService;
 use Illuminate\Support\Facades\Schema;
 
 /**
@@ -80,8 +81,11 @@ class ProfileCompletenessService
                 return false;
 
             case 'location':
-                return Schema::hasColumn('matrimony_profiles', 'location_id')
-                    && $profile->location_id !== null;
+                if (Schema::hasColumn('matrimony_profiles', 'location_id')) {
+                    return $profile->location_id !== null;
+                }
+
+                return ProfileCanonicalResidenceService::locationLeafId((int) $profile->id) !== null;
 
             case 'profile_photo':
                 return $profile->profile_photo !== null && $profile->profile_photo !== ''
@@ -217,8 +221,14 @@ class ProfileCompletenessService
                 if (Schema::hasColumn('matrimony_profiles', 'location_id')) {
                     return "(CASE WHEN {$table}.location_id IS NOT NULL THEN 1 ELSE 0 END)";
                 }
+                $tid = ProfileCanonicalResidenceService::currentAddressTypeId();
+                if ($tid === null) {
+                    return '(0)';
+                }
 
-                return '(0)';
+                $leaf = Schema::hasColumn('profile_addresses', 'location_id') ? 'pa.location_id' : 'pa.city_id';
+
+                return '(CASE WHEN EXISTS (SELECT 1 FROM profile_addresses pa WHERE pa.profile_id = '.$table.'.id AND pa.address_scope = \'self\' AND pa.address_type_id = '.(int) $tid.' AND '.$leaf.' IS NOT NULL) THEN 1 ELSE 0 END)';
 
             case 'profile_photo':
                 return "(CASE WHEN COALESCE(TRIM({$table}.profile_photo),'') != '' AND ({$table}.photo_approved = 1 OR {$table}.photo_approved IS TRUE) THEN 1 ELSE 0 END)";

@@ -11,6 +11,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 uses(RefreshDatabase::class);
 
 beforeEach(function () {
+    $this->seed(\Database\Seeders\MasterLookupSeeder::class);
     $this->seed(MinimalLocationSeeder::class);
 });
 
@@ -23,6 +24,7 @@ function setupNearbyProfilesFixture(): array
     $banerCity = City::query()->create([
         'taluka_id' => $haveli->id,
         'name' => 'Baner City',
+        'category' => 'metro',
     ]);
 
     $source = Location::query()->create([
@@ -37,23 +39,23 @@ function setupNearbyProfilesFixture(): array
 
     Location::query()->whereKey($source->id)->update([
         'pincode' => '411057',
-        'latitude' => 18.5912,
-        'longitude' => 73.7400,
+        'lat' => 18.5912,
+        'lng' => 73.7400,
     ]);
     Location::query()->whereKey($banerCity->id)->update([
         'pincode' => '411045',
-        'latitude' => 18.5590,
-        'longitude' => 73.7868,
+        'lat' => 18.5590,
+        'lng' => 73.7868,
     ]);
     Location::query()->whereKey($puneCity->id)->update([
         'pincode' => '411001',
-        'latitude' => 18.5204,
-        'longitude' => 73.8567,
+        'lat' => 18.5204,
+        'lng' => 73.8567,
     ]);
     Location::query()->whereKey($ahmedabadCity->id)->update([
         'pincode' => '380001',
-        'latitude' => 23.0225,
-        'longitude' => 72.5714,
+        'lat' => 23.0225,
+        'lng' => 72.5714,
     ]);
 
     $u1 = User::factory()->create();

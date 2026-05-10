@@ -6,8 +6,12 @@ use App\Casts\MojibakeSafeUtf8String;
 use App\Services\ConflictDetectionService;
 use App\Services\Location\LocationFormatterService;
 use App\Services\Location\LocationService;
+use App\Services\Profile\ProfileCanonicalResidenceService;
+use App\Services\Profile\ProfileTypedSelfAddressService;
 use App\Services\ProfileFieldLockService;
+use App\Support\Utf8MojibakeRepair;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
@@ -127,10 +131,6 @@ class MatrimonyProfile extends Model
         'address_line',
         'birth_city_id',
         'birth_place_text',
-        'native_city_id',
-        'native_taluka_id',
-        'native_district_id',
-        'native_state_id',
         'height_cm',
         'weight_kg',
         'weight_range',
@@ -163,17 +163,12 @@ class MatrimonyProfile extends Model
         'serious_intent_id',
 
         // Day 31 Part 2: Education/Career + Family (DB columns exist; was missing from fillable)
-        'specialization',
-        'occupation_title',
         'company_name',
         'work_location_text',
         'annual_income',
-        'working_with_type_id',
         'occupation_master_id',
         'occupation_custom_id',
-        'profession_id',
         'income_range_id',
-        'college_id',
         'income_private',
         'income_period',
         'income_value_type',
@@ -197,7 +192,6 @@ class MatrimonyProfile extends Model
         'father_extra_info',
         'father_contact_1',
         'father_contact_2',
-        'father_contact_3',
         'mother_name',
         'mother_occupation',
         'mother_occupation_master_id',
@@ -205,10 +199,7 @@ class MatrimonyProfile extends Model
         'mother_extra_info',
         'mother_contact_1',
         'mother_contact_2',
-        'mother_contact_3',
         // brothers_count, sisters_count: deprecated; use Siblings engine (profile_siblings).
-        'work_city_id',
-        'work_state_id',
 
         // Other Relatives engine (इतर नातेवाईक — आडनाव/गाव)
         'other_relatives_text',
@@ -237,16 +228,12 @@ class MatrimonyProfile extends Model
         // UTF-8 bytes misread as Latin-1 (mojibake) — repair on read/write for MR/EN narrative fields.
         'full_name' => MojibakeSafeUtf8String::class,
         'highest_education' => MojibakeSafeUtf8String::class,
-        'address_line' => MojibakeSafeUtf8String::class,
         'birth_place_text' => MojibakeSafeUtf8String::class,
         'photo_rejection_reason' => MojibakeSafeUtf8String::class,
         'photo_moderation_snapshot' => 'array',
         'visibility_override_reason' => MojibakeSafeUtf8String::class,
         'edit_reason' => MojibakeSafeUtf8String::class,
-        'specialization' => MojibakeSafeUtf8String::class,
-        'occupation_title' => MojibakeSafeUtf8String::class,
         'company_name' => MojibakeSafeUtf8String::class,
-        'work_location_text' => MojibakeSafeUtf8String::class,
         'annual_income' => MojibakeSafeUtf8String::class,
         'family_income' => MojibakeSafeUtf8String::class,
         'father_name' => MojibakeSafeUtf8String::class,
@@ -254,17 +241,96 @@ class MatrimonyProfile extends Model
         'father_extra_info' => MojibakeSafeUtf8String::class,
         'father_contact_1' => MojibakeSafeUtf8String::class,
         'father_contact_2' => MojibakeSafeUtf8String::class,
-        'father_contact_3' => MojibakeSafeUtf8String::class,
         'mother_name' => MojibakeSafeUtf8String::class,
         'mother_occupation' => MojibakeSafeUtf8String::class,
         'mother_extra_info' => MojibakeSafeUtf8String::class,
         'mother_contact_1' => MojibakeSafeUtf8String::class,
         'mother_contact_2' => MojibakeSafeUtf8String::class,
-        'mother_contact_3' => MojibakeSafeUtf8String::class,
         'other_relatives_text' => MojibakeSafeUtf8String::class,
         'physical_condition' => MojibakeSafeUtf8String::class,
         'weight_range' => MojibakeSafeUtf8String::class,
     ];
+
+    /**
+     * When {@code matrimony_profiles.location_id} / {@code address_line} columns are absent, mass-assignment
+     * on create is flushed into {@code profile_addresses} on first {@see saved} (profile id required).
+     *
+     * @var array<string, mixed>
+     */
+    protected array $pendingCanonicalSelfResidence = [];
+
+    protected function locationId(): Attribute
+    {
+        return Attribute::make(
+            get: function (mixed $value): ?int {
+                if (Schema::hasColumn($this->getTable(), 'location_id')) {
+                    if ($value === null || $value === '') {
+                        return null;
+                    }
+
+                    return (int) $value;
+                }
+                if (! $this->exists) {
+                    return null;
+                }
+
+                return ProfileCanonicalResidenceService::locationLeafId((int) $this->id);
+            },
+            set: function ($value): void {
+                $intVal = $value === null || $value === '' ? null : (int) $value;
+                if (Schema::hasColumn($this->getTable(), 'location_id')) {
+                    $this->attributes['location_id'] = $intVal;
+
+                    return;
+                }
+                if (! $this->exists) {
+                    $this->pendingCanonicalSelfResidence['city'] = $intVal;
+
+                    return;
+                }
+                ProfileCanonicalResidenceService::upsertSelfCurrent((int) $this->id, $intVal, null, true, false);
+            },
+        );
+    }
+
+    protected function addressLine(): Attribute
+    {
+        return Attribute::make(
+            get: function (?string $value): ?string {
+                $raw = null;
+                if (Schema::hasColumn($this->getTable(), 'address_line')) {
+                    $raw = $this->attributes['address_line'] ?? null;
+                } elseif ($this->exists) {
+                    $raw = ProfileCanonicalResidenceService::addressLineRaw((int) $this->id);
+                }
+                if ($raw === null) {
+                    return null;
+                }
+                $repaired = Utf8MojibakeRepair::repair((string) $raw);
+
+                return is_string($repaired) ? $repaired : (string) $raw;
+            },
+            set: function ($value): void {
+                $normalized = null;
+                if ($value !== null && trim((string) $value) !== '') {
+                    $s = is_string($value) ? $value : (string) $value;
+                    $repaired = Utf8MojibakeRepair::repair($s);
+                    $normalized = is_string($repaired) ? $repaired : $s;
+                }
+                if (Schema::hasColumn($this->getTable(), 'address_line')) {
+                    $this->attributes['address_line'] = $normalized;
+
+                    return;
+                }
+                if (! $this->exists) {
+                    $this->pendingCanonicalSelfResidence['line'] = $normalized;
+
+                    return;
+                }
+                ProfileCanonicalResidenceService::upsertSelfCurrent((int) $this->id, null, $normalized, false, true);
+            },
+        );
+    }
 
     /**
      * Primary contact number from profile_contacts (relation-based). No direct column.
@@ -357,18 +423,47 @@ class MatrimonyProfile extends Model
         $geo = Location::geoTable();
         $tbl = $this->getTable();
 
-        return $query->whereNotNull($tbl.'.location_id')
-            ->whereRaw(
-                "EXISTS (
-                    WITH RECURSIVE chain AS (
-                        SELECT id, parent_id FROM {$geo} WHERE id = {$tbl}.location_id
-                        UNION ALL
-                        SELECT a.id, a.parent_id FROM {$geo} a INNER JOIN chain c ON a.id = c.parent_id
-                    )
-                    SELECT 1 FROM chain WHERE chain.id = ?
-                )",
-                [$ancestorAddressId]
-            );
+        if (Schema::hasColumn($tbl, 'location_id')) {
+            return $query->whereNotNull($tbl.'.location_id')
+                ->whereRaw(
+                    "EXISTS (
+                        WITH RECURSIVE chain AS (
+                            SELECT id, parent_id FROM {$geo} WHERE id = {$tbl}.location_id
+                            UNION ALL
+                            SELECT a.id, a.parent_id FROM {$geo} a INNER JOIN chain c ON a.id = c.parent_id
+                        )
+                        SELECT 1 FROM chain WHERE chain.id = ?
+                    )",
+                    [$ancestorAddressId]
+                );
+        }
+
+        $typeId = ProfileCanonicalResidenceService::currentAddressTypeId();
+        if ($typeId === null) {
+            return $query->whereRaw('1 = 0');
+        }
+
+        $leafCol = Schema::hasColumn('profile_addresses', 'location_id') ? 'pa.location_id' : 'pa.city_id';
+
+        return $query->whereExists(function ($q) use ($tbl, $geo, $ancestorAddressId, $typeId, $leafCol): void {
+            $q->selectRaw('1')
+                ->from('profile_addresses as pa')
+                ->whereColumn('pa.profile_id', $tbl.'.id')
+                ->where('pa.address_scope', 'self')
+                ->where('pa.address_type_id', $typeId)
+                ->whereNotNull($leafCol)
+                ->whereRaw(
+                    "EXISTS (
+                        WITH RECURSIVE chain AS (
+                            SELECT id, parent_id FROM {$geo} WHERE id = {$leafCol}
+                            UNION ALL
+                            SELECT a.id, a.parent_id FROM {$geo} a INNER JOIN chain c ON a.id = c.parent_id
+                        )
+                        SELECT 1 FROM chain WHERE chain.id = ?
+                    )",
+                    [$ancestorAddressId]
+                );
+        });
     }
 
     /**
@@ -466,17 +561,83 @@ class MatrimonyProfile extends Model
     }
 
     /**
-     * Same as {@see birthCityHierarchyHints()} for {@see native_city_id}.
+     * Native place leaf: legacy column when present, else self + {@code native} in {@code profile_addresses}.
+     */
+    public function nativePlaceLeafStorageId(): ?int
+    {
+        if (Schema::hasColumn($this->getTable(), 'native_city_id')) {
+            $v = $this->attributes['native_city_id'] ?? null;
+
+            return $v !== null && $v !== '' && (int) $v > 0 ? (int) $v : null;
+        }
+        if (! $this->exists) {
+            return null;
+        }
+
+        return ProfileTypedSelfAddressService::locationLeafIdForSelfType((int) $this->id, 'native');
+    }
+
+    /**
+     * Work city leaf: legacy column when present, else self + {@code work} in {@code profile_addresses}.
+     */
+    public function workCityLeafStorageId(): ?int
+    {
+        if (Schema::hasColumn($this->getTable(), 'work_city_id')) {
+            $v = $this->attributes['work_city_id'] ?? null;
+
+            return $v !== null && $v !== '' && (int) $v > 0 ? (int) $v : null;
+        }
+        if (! $this->exists) {
+            return null;
+        }
+
+        return ProfileTypedSelfAddressService::locationLeafIdForSelfType((int) $this->id, 'work');
+    }
+
+    /**
+     * Read-time compatibility when {@code work_city_id} / {@code work_state_id} columns are absent.
+     */
+    public function getWorkCityIdAttribute(mixed $value): ?int
+    {
+        return $this->workCityLeafStorageId();
+    }
+
+    public function getWorkStateIdAttribute(mixed $value): ?int
+    {
+        if (Schema::hasColumn($this->getTable(), 'work_state_id')) {
+            return ($value !== null && $value !== '') ? (int) $value : null;
+        }
+        $leaf = $this->workCityLeafStorageId();
+        if ($leaf === null || ! Schema::hasTable(Location::geoTable())) {
+            return null;
+        }
+        $row = Location::query()->find($leaf);
+        if ($row === null) {
+            return null;
+        }
+        $state = app(LocationService::class)->getAncestorByType($row, 'state');
+
+        return $state?->id ? (int) $state->id : null;
+    }
+
+    public function getNativeCityIdAttribute(mixed $value): ?int
+    {
+        return $this->nativePlaceLeafStorageId();
+    }
+
+    /**
+     * Same as {@see birthCityHierarchyHints()} for native place leaf.
      *
      * @return array{location_id: string, country_id: string, state_id: string, district_id: string, taluka_id: string}
      */
     public function nativePlaceHierarchyHints(): array
     {
         $empty = ['location_id' => '', 'country_id' => '', 'state_id' => '', 'district_id' => '', 'taluka_id' => ''];
-        if (! $this->native_city_id || ! Schema::hasTable(Location::geoTable())) {
+        $leafId = $this->nativePlaceLeafStorageId();
+        if (! $leafId || ! Schema::hasTable(Location::geoTable())) {
             return $empty;
         }
-        $leaf = Location::query()->find((int) $this->native_city_id);
+        $leaf = Location::query()->find($leafId);
         if ($leaf === null) {
             return $empty;
         }
@@ -485,7 +646,7 @@ class MatrimonyProfile extends Model
         $country = $svc->getAncestorByType($leaf, 'country');
 
         return [
-            'location_id' => (string) $this->native_city_id,
+            'location_id' => (string) $leafId,
             'country_id' => $country ? (string) $country->id : '',
             'state_id' => $h['state'] ? (string) $h['state']->id : '',
             'district_id' => $h['district'] ? (string) $h['district']->id : '',
@@ -494,17 +655,18 @@ class MatrimonyProfile extends Model
     }
 
     /**
-     * Same as {@see residenceLocationHierarchyHints()} for {@see work_city_id}.
+     * Same as {@see residenceLocationHierarchyHints()} for work city leaf.
      *
      * @return array{location_id: string, country_id: string, state_id: string, district_id: string, taluka_id: string}
      */
     public function workCityHierarchyHints(): array
     {
         $empty = ['location_id' => '', 'country_id' => '', 'state_id' => '', 'district_id' => '', 'taluka_id' => ''];
-        if (! $this->work_city_id || ! Schema::hasTable(Location::geoTable())) {
+        $leafId = $this->workCityLeafStorageId();
+        if (! $leafId || ! Schema::hasTable(Location::geoTable())) {
             return $empty;
         }
-        $leaf = Location::query()->find((int) $this->work_city_id);
+        $leaf = Location::query()->find($leafId);
         if ($leaf === null) {
             return $empty;
         }
@@ -513,7 +675,7 @@ class MatrimonyProfile extends Model
         $country = $svc->getAncestorByType($leaf, 'country');
 
         return [
-            'location_id' => (string) $this->work_city_id,
+            'location_id' => (string) $leafId,
             'country_id' => $country ? (string) $country->id : '',
             'state_id' => $h['state'] ? (string) $h['state']->id : '',
             'district_id' => $h['district'] ? (string) $h['district']->id : '',
@@ -600,7 +762,7 @@ class MatrimonyProfile extends Model
     }
 
     /**
-     * Partner preference: acceptable qualification degrees ({@see EducationDegree} / {@code education_degrees}).
+     * Partner preference: acceptable qualification degrees ({@see EducationDegree} / {@code master_education}).
      */
     public function preferredEducationDegrees(): \Illuminate\Database\Eloquent\Relations\BelongsToMany
     {
@@ -655,12 +817,12 @@ class MatrimonyProfile extends Model
 
     /*
     |--------------------------------------------------------------------------
-    | Location (Phase-4 Day-8) — SSOT: {@code location_id} only on this table.
+    | Location — SSOT: self + type "current" in {@code profile_addresses.location_id} (leaf {@code addresses.id}).
     |--------------------------------------------------------------------------
     */
 
     /**
-     * Canonical current residence in the unified {@see Location} table.
+     * Canonical current residence leaf in the unified {@see Location} table.
      */
     public function location()
     {
@@ -748,71 +910,79 @@ class MatrimonyProfile extends Model
     }
 
     /**
-     * Native place from canonical {@code addresses} ids.
+     * Native place from canonical leaf in {@code addresses} (column or typed self-address).
      */
     public function nativeLocationDisplayLine(): string
     {
-        if ($this->native_city_id && Schema::hasTable(Location::geoTable())) {
-            $line = app(LocationFormatterService::class)->formatLocation((int) $this->native_city_id);
-            if ($line !== '') {
-                return $line;
-            }
+        $leaf = $this->nativePlaceLeafStorageId();
+        if ($leaf && Schema::hasTable(Location::geoTable())) {
+            return app(LocationFormatterService::class)->formatLocation((int) $leaf);
         }
 
-        return trim(implode(', ', array_values(array_filter([
-            $this->nativeCity?->localizedName(),
-            $this->nativeTaluka?->localizedName(),
-            $this->nativeDistrict?->localizedName(),
-            $this->nativeState?->localizedName(),
-        ], static fn ($x) => $x !== null && $x !== ''))));
+        return '';
     }
 
     /**
-     * Work location from {@code addresses} (city row + optional state).
+     * Work location from canonical work-city leaf ({@code addresses}).
      */
     public function workLocationDisplayLine(): string
     {
-        if ($this->work_city_id && Schema::hasTable(Location::geoTable())) {
-            $line = app(LocationFormatterService::class)->formatLocation((int) $this->work_city_id);
+        $leaf = $this->workCityLeafStorageId();
+        if ($leaf && Schema::hasTable(Location::geoTable())) {
+            $line = app(LocationFormatterService::class)->formatLocation((int) $leaf);
             if ($line !== '') {
                 return $line;
             }
         }
-
-        if ($this->work_state_id && Schema::hasTable(Location::geoTable())) {
-            $line = app(LocationFormatterService::class)->formatLocation((int) $this->work_state_id);
-            if ($line !== '') {
-                return $line;
+        if ($this->exists && Schema::hasTable('profile_addresses')) {
+            $fallback = ProfileTypedSelfAddressService::addressLineForSelfType((int) $this->id, 'work');
+            if ($fallback !== null && $fallback !== '') {
+                return $fallback;
             }
         }
 
         return '';
     }
 
+    public function getWorkLocationTextAttribute(mixed $value): ?string
+    {
+        if (Schema::hasColumn($this->getTable(), 'work_location_text')) {
+            $stored = array_key_exists('work_location_text', $this->attributes)
+                ? $this->attributes['work_location_text']
+                : null;
+
+            return (new MojibakeSafeUtf8String)->get($this, 'work_location_text', $stored, $this->attributes);
+        }
+        if (! $this->exists || ! Schema::hasTable('profile_addresses')) {
+            return null;
+        }
+
+        return ProfileTypedSelfAddressService::addressLineForSelfType((int) $this->id, 'work');
+    }
+
+    public function setWorkLocationTextAttribute(mixed $value): void
+    {
+        if ($value !== null && $value !== '' && ! is_string($value)) {
+            $value = (string) $value;
+        }
+        $prepared = ($value !== null && is_string($value) && trim($value) !== '')
+            ? mb_substr(trim($value), 0, 255)
+            : null;
+        if (Schema::hasColumn($this->getTable(), 'work_location_text')) {
+            $arr = (new MojibakeSafeUtf8String)->set($this, 'work_location_text', $prepared, $this->attributes);
+            $this->attributes['work_location_text'] = $arr['work_location_text'];
+
+            return;
+        }
+        if ($this->exists) {
+            ProfileTypedSelfAddressService::upsertSelfTypedAddressLine((int) $this->id, 'work', $prepared);
+        }
+    }
+
     /** Birth place leaf row in {@code addresses} (hierarchy from {@see Location::parent}). */
     public function birthCity()
     {
         return $this->belongsTo(Location::class, 'birth_city_id');
-    }
-
-    public function nativeCity()
-    {
-        return $this->belongsTo(Location::class, 'native_city_id');
-    }
-
-    public function nativeTaluka()
-    {
-        return $this->belongsTo(Location::class, 'native_taluka_id');
-    }
-
-    public function nativeDistrict()
-    {
-        return $this->belongsTo(Location::class, 'native_district_id');
-    }
-
-    public function nativeState()
-    {
-        return $this->belongsTo(Location::class, 'native_state_id');
     }
 
     /**
@@ -941,14 +1111,63 @@ class MatrimonyProfile extends Model
         return $this->belongsTo(MasterIncomeCurrency::class, 'family_income_currency_id');
     }
 
-    public function workingWithType()
+    /** Best-effort legacy {@see Profession} row — name match on canonical {@see OccupationMaster} only. */
+    public function resolvedProfession(): ?Profession
     {
-        return $this->belongsTo(WorkingWithType::class, 'working_with_type_id');
+        if (Schema::hasColumn($this->getTable(), 'profession_id') && isset($this->attributes['profession_id']) && $this->attributes['profession_id']) {
+            return Profession::query()->find((int) $this->attributes['profession_id']);
+        }
+        $this->loadMissing(['occupationMaster']);
+        $nm = trim((string) ($this->occupationMaster?->name ?? ''));
+        if ($nm === '') {
+            return null;
+        }
+
+        return Profession::query()
+            ->where('is_active', true)
+            ->whereRaw('LOWER(TRIM(name)) = ?', [mb_strtolower($nm)])
+            ->first();
     }
 
-    public function profession()
+    /** Workplace category via occupation master → {@code master_occupation_categories.legacy_working_with_type_id}. */
+    public function resolvedWorkingWithType(): ?WorkingWithType
     {
-        return $this->belongsTo(Profession::class, 'profession_id');
+        if (Schema::hasColumn($this->getTable(), 'working_with_type_id')
+            && isset($this->attributes['working_with_type_id'])
+            && $this->attributes['working_with_type_id']) {
+            return WorkingWithType::query()->find((int) $this->attributes['working_with_type_id']);
+        }
+
+        $this->loadMissing(['occupationMaster.category.workingWithType']);
+
+        return $this->occupationMaster?->category?->workingWithType;
+    }
+
+    /** Human-readable career title (canonical engine or legacy column when present). */
+    public function getOccupationTitleAttribute(mixed $value): ?string
+    {
+        if (Schema::hasColumn($this->getTable(), 'occupation_title')) {
+            $stored = array_key_exists('occupation_title', $this->attributes)
+                ? $this->attributes['occupation_title']
+                : null;
+
+            return (new MojibakeSafeUtf8String)->get($this, 'occupation_title', $stored, $this->attributes);
+        }
+
+        $this->loadMissing(['occupationMaster', 'occupationCustom']);
+
+        $t = trim((string) ($this->occupationMaster?->name ?? $this->occupationCustom?->raw_name ?? ''));
+
+        return $t !== '' ? $t : null;
+    }
+
+    public function setOccupationTitleAttribute(mixed $value): void
+    {
+        if (! Schema::hasColumn($this->getTable(), 'occupation_title')) {
+            return;
+        }
+        $arr = (new MojibakeSafeUtf8String)->set($this, 'occupation_title', $value, $this->attributes);
+        $this->attributes['occupation_title'] = $arr['occupation_title'];
     }
 
     public function occupationMaster(): \Illuminate\Database\Eloquent\Relations\BelongsTo
@@ -986,11 +1205,6 @@ class MatrimonyProfile extends Model
         return $this->belongsTo(IncomeRange::class, 'income_range_id');
     }
 
-    public function college()
-    {
-        return $this->belongsTo(College::class, 'college_id');
-    }
-
     public function extendedValues()
     {
         return $this->hasMany(\App\Models\ProfileExtendedField::class, 'profile_id');
@@ -999,16 +1213,6 @@ class MatrimonyProfile extends Model
     public function children()
     {
         return $this->hasMany(\App\Models\ProfileChild::class, 'profile_id');
-    }
-
-    public function educationHistory()
-    {
-        return $this->hasMany(\App\Models\ProfileEducation::class, 'profile_id');
-    }
-
-    public function career()
-    {
-        return $this->hasMany(\App\Models\ProfileCareer::class, 'profile_id');
     }
 
     public function addresses()
@@ -1039,6 +1243,42 @@ class MatrimonyProfile extends Model
     public $timestamps = true;
 
     /**
+     * When residence columns are dropped, {@see locationId} / {@see addressLine} are virtual — do not emit SQL for them.
+     *
+     * @return array<string, mixed>
+     */
+    public function getDirty(): array
+    {
+        $dirty = parent::getDirty();
+        if (! Schema::hasColumn($this->getTable(), 'location_id')) {
+            unset($dirty['location_id']);
+        }
+        if (! Schema::hasColumn($this->getTable(), 'address_line')) {
+            unset($dirty['address_line']);
+        }
+
+        return $dirty;
+    }
+
+    /**
+     * Exclude virtual residence keys from INSERT/UPDATE SQL when the backing columns were removed.
+     *
+     * @return array<string, mixed>
+     */
+    public function getAttributes(): array
+    {
+        $attrs = parent::getAttributes();
+        if (! Schema::hasColumn($this->getTable(), 'location_id')) {
+            unset($attrs['location_id']);
+        }
+        if (! Schema::hasColumn($this->getTable(), 'address_line')) {
+            unset($attrs['address_line']);
+        }
+
+        return $attrs;
+    }
+
+    /**
      * Model-level governance seal: prevent update/save from bypassing locks and conflict detection.
      */
     protected static function booted(): void
@@ -1051,6 +1291,31 @@ class MatrimonyProfile extends Model
             if ($model->exists) {
                 self::enforceGovernanceOnUpdate($model);
             }
+        });
+
+        static::saved(function (MatrimonyProfile $profile): void {
+            if (Schema::hasColumn($profile->getTable(), 'location_id')) {
+                return;
+            }
+            if ($profile->pendingCanonicalSelfResidence === []) {
+                return;
+            }
+            $city = array_key_exists('city', $profile->pendingCanonicalSelfResidence)
+                ? $profile->pendingCanonicalSelfResidence['city']
+                : null;
+            $line = array_key_exists('line', $profile->pendingCanonicalSelfResidence)
+                ? $profile->pendingCanonicalSelfResidence['line']
+                : null;
+            $touchCity = array_key_exists('city', $profile->pendingCanonicalSelfResidence);
+            $touchLine = array_key_exists('line', $profile->pendingCanonicalSelfResidence);
+            $profile->pendingCanonicalSelfResidence = [];
+            ProfileCanonicalResidenceService::upsertSelfCurrent(
+                (int) $profile->id,
+                $city,
+                $line,
+                $touchCity,
+                $touchLine,
+            );
         });
     }
 

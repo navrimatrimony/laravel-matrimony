@@ -635,6 +635,8 @@ class AdminSettingsController extends Controller
             'presenceOnlineThresholdMin' => $presenceOnlineThresholdMin,
             'plansEnforceGenderSpecificVisibility' => AdminSetting::getBool('plans_enforce_gender_specific_visibility', true),
             'mobileCleanMode' => AdminSetting::getBool('mobile_clean_mode', true),
+            'profileViewLockStartSection' => (string) AdminSetting::getValue('profile_view_lock_start_section', 'family'),
+            'profileViewLockBlurStrength' => max(35, min(100, (int) AdminSetting::getValue('profile_view_lock_blur_strength', '78'))),
             'canManageBillingSettings' => $viewer?->hasAdminRole(['super_admin']) ?? false,
             'billingLegalName' => (string) AdminSetting::getValue('billing_legal_name', ''),
             'billingAddress' => (string) AdminSetting::getValue('billing_address', ''),
@@ -669,6 +671,8 @@ class AdminSettingsController extends Controller
             'member_presence_online_threshold_minutes' => 'required|integer|min:1|max:1440',
             'plans_enforce_gender_specific_visibility' => 'nullable|in:0,1',
             'mobile_clean_mode' => 'nullable|in:0,1',
+            'profile_view_lock_start_section' => ['required', 'string', Rule::in(['basic_info', 'physical', 'education_career', 'family', 'siblings_detail', 'extended_family', 'alliance', 'property', 'horoscope', 'partner_preferences', 'additional'])],
+            'profile_view_lock_blur_strength' => 'required|integer|min:35|max:100',
             'billing_legal_name' => [Rule::requiredIf($canManageBillingSettings), 'nullable', 'string', 'max:160'],
             'billing_address' => [Rule::requiredIf($canManageBillingSettings), 'nullable', 'string', 'max:1000'],
             'billing_email' => [Rule::requiredIf($canManageBillingSettings), 'nullable', 'email:rfc', 'max:190'],
@@ -703,6 +707,10 @@ class AdminSettingsController extends Controller
         AdminSetting::setValue('plans_enforce_gender_specific_visibility', $plansGenderSpecific ? '1' : '0');
         $mobileCleanMode = $request->boolean('mobile_clean_mode');
         AdminSetting::setValue('mobile_clean_mode', $mobileCleanMode ? '1' : '0');
+        $profileViewLockStartSection = (string) $request->input('profile_view_lock_start_section', 'family');
+        $profileViewLockBlurStrength = max(35, min(100, (int) $request->input('profile_view_lock_blur_strength', 78)));
+        AdminSetting::setValue('profile_view_lock_start_section', $profileViewLockStartSection);
+        AdminSetting::setValue('profile_view_lock_blur_strength', (string) $profileViewLockBlurStrength);
         AdminSetting::setValue('success_rate_threshold', (string) $request->input('success_rate_threshold', '85'));
         AdminSetting::setValue('webhook_failure_threshold', (string) $request->input('webhook_failure_threshold', '5'));
         AdminSetting::setValue('queue_lag_threshold', (string) $request->input('queue_lag_threshold', '120'));
@@ -746,7 +754,7 @@ class AdminSettingsController extends Controller
             'update_app_settings',
             'AdminSetting',
             null,
-            'admin_bypass_mode='.($on ? '1' : '0').'; interest_min_core_completeness_pct='.$pct.'; member_presence_online_threshold_minutes='.$presenceMin.'; plans_enforce_gender_specific_visibility='.($plansGenderSpecific ? '1' : '0').'; mobile_clean_mode='.($mobileCleanMode ? '1' : '0').'; dashboard_notification_cards_limit='.(string) $request->input('dashboard_notification_cards_limit', '2').'; dashboard_activity_autohide_seconds='.(string) $request->input('dashboard_activity_autohide_seconds', '7').'; data_engine_allow_fix_mode='.($canManageDataEngineFixMode ? ($request->boolean('data_engine_allow_fix_mode') ? '1' : '0') : 'unchanged').'; billing settings updated',
+            'admin_bypass_mode='.($on ? '1' : '0').'; interest_min_core_completeness_pct='.$pct.'; member_presence_online_threshold_minutes='.$presenceMin.'; plans_enforce_gender_specific_visibility='.($plansGenderSpecific ? '1' : '0').'; mobile_clean_mode='.($mobileCleanMode ? '1' : '0').'; profile_view_lock_start_section='.$profileViewLockStartSection.'; profile_view_lock_blur_strength='.$profileViewLockBlurStrength.'; dashboard_notification_cards_limit='.(string) $request->input('dashboard_notification_cards_limit', '2').'; dashboard_activity_autohide_seconds='.(string) $request->input('dashboard_activity_autohide_seconds', '7').'; data_engine_allow_fix_mode='.($canManageDataEngineFixMode ? ($request->boolean('data_engine_allow_fix_mode') ? '1' : '0') : 'unchanged').'; billing settings updated',
             false
         );
 

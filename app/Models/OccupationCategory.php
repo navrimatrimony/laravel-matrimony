@@ -8,7 +8,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class OccupationCategory extends Model
 {
-    protected $table = 'occupation_categories';
+    protected $table = 'master_occupation_categories';
 
     protected $fillable = [
         'name',

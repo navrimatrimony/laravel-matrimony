@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\MatrimonyProfile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
@@ -17,7 +18,6 @@ class DuplicateDetectionService
      *
      * @param  array<string, mixed>  $snapshot  Snapshot (e.g. approval_snapshot_json: core, contacts, ...)
      * @param  int|null  $uploadedByUserId  Current user (for SAME_USER check); null to skip level 1
-     * @return DuplicateResult
      */
     public function detectFromSnapshot(array $snapshot, ?int $uploadedByUserId = null): DuplicateResult
     {
@@ -91,17 +91,18 @@ class DuplicateDetectionService
 
     private function getPrimaryContactFromSnapshot(array $core, array $contacts): ?string
     {
-        if (!empty($core['primary_contact_number'])) {
+        if (! empty($core['primary_contact_number'])) {
             return $core['primary_contact_number'];
         }
-        if (!empty($core['verified_otp_mobile'])) {
+        if (! empty($core['verified_otp_mobile'])) {
             return $core['verified_otp_mobile'];
         }
         foreach ($contacts as $c) {
-            if (is_array($c) && !empty($c['is_primary']) && !empty($c['phone_number'])) {
+            if (is_array($c) && ! empty($c['is_primary']) && ! empty($c['phone_number'])) {
                 return $c['phone_number'];
             }
         }
+
         return null;
     }
 
@@ -111,6 +112,7 @@ class DuplicateDetectionService
             return null;
         }
         $s = is_string($value) ? trim($value) : (string) $value;
+
         return $s === '' ? null : $s;
     }
 
@@ -120,6 +122,7 @@ class DuplicateDetectionService
             ->where('phone_number', $phone)
             ->where('is_primary', true)
             ->value('profile_id');
+
         return $profileId !== null ? (int) $profileId : null;
     }
 
@@ -134,6 +137,7 @@ class DuplicateDetectionService
             ->where('full_name', $fullName)
             ->where('date_of_birth', $dateOfBirth)
             ->value('id');
+
         return $match !== null ? (int) $match : null;
     }
 
@@ -149,15 +153,37 @@ class DuplicateDetectionService
 
     private function findProfileIdByComposite(string $fullName, string $dateOfBirth, ?string $fatherName, int $districtId, string $caste): ?int
     {
-        $query = DB::table('matrimony_profiles')
+        $query = MatrimonyProfile::query()
             ->where('full_name', $fullName)
-            ->where('date_of_birth', $dateOfBirth)
-            ->where('district_id', $districtId)
-            ->where('caste', $caste);
+            ->where('date_of_birth', $dateOfBirth);
+
+        if (Schema::hasColumn('matrimony_profiles', 'district_id')) {
+            $query->where('district_id', $districtId);
+        } elseif ($districtId > 0) {
+            $query->whereResidenceUnderAncestor($districtId);
+        } else {
+            return null;
+        }
+
+        if (Schema::hasColumn('matrimony_profiles', 'caste')) {
+            $query->where('caste', $caste);
+        } elseif (Schema::hasColumn('matrimony_profiles', 'caste_id') && Schema::hasTable('master_castes')) {
+            $casteId = DB::table('master_castes')
+                ->whereRaw('LOWER(TRIM(name)) = ?', [strtolower(trim($caste))])
+                ->value('id');
+            if ($casteId === null) {
+                return null;
+            }
+            $query->where('caste_id', (int) $casteId);
+        } else {
+            return null;
+        }
+
         if ($fatherName !== null && Schema::hasColumn('matrimony_profiles', 'father_name')) {
             $query->where('father_name', $fatherName);
         }
         $id = $query->value('id');
+
         return $id !== null ? (int) $id : null;
     }
 
@@ -166,6 +192,7 @@ class DuplicateDetectionService
         $id = DB::table('matrimony_profiles')
             ->where('serious_intent_id', $seriousIntentId)
             ->value('id');
+
         return $id !== null ? (int) $id : null;
     }
 }

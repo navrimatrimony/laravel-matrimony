@@ -8,6 +8,8 @@
                 :currencies="$currencies ?? []"
                 :errors="$errors ?? []"
                 :read-only="false"
+                :addressTypes="$addressTypes ?? []"
+                :wizardParentsAddresses="$wizardParentsAddresses ?? []"
             />
         </div>
         <div class="md:col-span-2">

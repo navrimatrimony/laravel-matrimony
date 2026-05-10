@@ -56,8 +56,8 @@ class ProfileShowSnapshotService
             'complexion',
             'physicalBuild',
             'bloodGroup',
-            'profession',
-            'workingWithType',
+            'occupationMaster.category.workingWithType',
+            'occupationCustom',
             'incomeCurrency',
             'familyIncomeCurrency',
             'familyType',
@@ -66,17 +66,11 @@ class ProfileShowSnapshotService
             'birthTaluka',
             'birthDistrict',
             'birthState',
-            'nativeCity',
-            'nativeTaluka',
-            'nativeDistrict',
-            'nativeState',
             'city',
             'taluka',
             'district',
             'state',
             'country',
-            'educationHistory',
-            'career',
             'addresses',
             'addresses.village',
             'children.childLivingWith',
@@ -203,12 +197,7 @@ class ProfileShowSnapshotService
             $rows[] = $this->row(__('Birth Place'), $birthPlace);
         }
 
-        $nativePlace = implode(', ', array_filter([
-            $profile->nativeCity?->name,
-            $profile->nativeTaluka?->name,
-            $profile->nativeDistrict?->name,
-            $profile->nativeState?->name,
-        ]));
+        $nativePlace = trim($profile->nativeLocationDisplayLine());
         if ($this->present($nativePlace)) {
             $rows[] = $this->row(__('Native Place'), $nativePlace);
         }
@@ -225,8 +214,8 @@ class ProfileShowSnapshotService
                     $addr->state?->name,
                     $addr->country?->name,
                 ]));
-                if (trim((string) ($addr->postal_code ?? '')) !== '') {
-                    $line .= ($line !== '' ? ' — ' : '').$addr->postal_code;
+                if (trim((string) ($addr->location?->pincode ?? '')) !== '') {
+                    $line .= ($line !== '' ? ' — ' : '').trim((string) $addr->location->pincode);
                 }
                 if ($this->present($line)) {
                     $label = $profile->addresses->count() > 1
@@ -285,7 +274,6 @@ class ProfileShowSnapshotService
     private function sectionEducationCareer(MatrimonyProfile $profile, array $ctx): ?array
     {
         $rows = [];
-        $timelines = [];
         $eduVisible = (bool) ($ctx['education_visible'] ?? true);
 
         if ($eduVisible) {
@@ -297,15 +285,15 @@ class ProfileShowSnapshotService
                 $rows[] = $this->row(__('Education'), $eduLine);
             }
         }
-        if ($this->present($profile->specialization)) {
-            $rows[] = $this->row(__('Specialization'), (string) $profile->specialization);
-        }
 
-        if ($profile->workingWithType && $this->present($profile->workingWithType->name ?? null)) {
-            $rows[] = $this->row(__('components.education.working_with'), (string) $profile->workingWithType->name);
+        $profile->loadMissing(['occupationMaster.category.workingWithType']);
+        $ww = $profile->resolvedWorkingWithType();
+        if ($ww && $this->present($ww->name ?? null)) {
+            $rows[] = $this->row(__('components.education.working_with'), (string) $ww->name);
         }
-        if ($profile->profession && $this->present($profile->profession->name ?? null)) {
-            $rows[] = $this->row(__('components.education.working_as'), (string) $profile->profession->name);
+        $profResolved = $profile->resolvedProfession();
+        if ($profResolved && $this->present($profResolved->name ?? null)) {
+            $rows[] = $this->row(__('components.education.working_as'), (string) $profResolved->name);
         }
         if ($this->present($profile->occupation_title)) {
             $rows[] = $this->row(__('Occupation'), (string) $profile->occupation_title);
@@ -338,49 +326,24 @@ class ProfileShowSnapshotService
             $rows[] = $this->row(__('Income Currency'), trim($sym));
         }
 
-        $workCity = $profile->work_city_id ? City::query()->where('id', $profile->work_city_id)->value('name') : null;
-        $workState = $profile->work_state_id ? State::query()->where('id', $profile->work_state_id)->value('name') : null;
-        $workLoc = implode(', ', array_filter([$workCity, $workState]));
+        $workLoc = trim((string) $profile->workLocationDisplayLine());
+        if ($workLoc === '' && $this->present($profile->work_location_text)) {
+            $workLoc = trim((string) $profile->work_location_text);
+        }
+        if ($workLoc === '' && $profile->work_city_id) {
+            $workCity = City::query()->where('id', $profile->work_city_id)->value('name');
+            $workState = $profile->work_state_id ? State::query()->where('id', $profile->work_state_id)->value('name') : null;
+            $workLoc = implode(', ', array_filter([$workCity, $workState]));
+        }
         if ($this->present($workLoc)) {
             $rows[] = $this->row(__('Work Location'), $workLoc);
         }
 
-        if ($profile->educationHistory && $profile->educationHistory->isNotEmpty()) {
-            $items = [];
-            foreach ($profile->educationHistory as $edu) {
-                $line = ($edu->degree ?: '—')
-                    .($edu->specialization ? ' – '.$edu->specialization : '')
-                    .($edu->university ? ' ('.$edu->university.')' : '')
-                    .($edu->year_completed ? ', '.$edu->year_completed : '');
-                $items[] = $line;
-            }
-            if ($items !== []) {
-                $timelines[] = ['title' => __('Education History'), 'items' => $items];
-            }
-        }
-
-        if ($profile->career && $profile->career->isNotEmpty()) {
-            $items = [];
-            foreach ($profile->career as $job) {
-                $items[] = ($job->designation ?: '—')
-                    .($job->company ? ' at '.$job->company : '')
-                    .(($job->start_year || $job->end_year) ? ' ('.($job->start_year ?? '').'–'.($job->end_year ?? '').')' : '');
-            }
-            if ($items !== []) {
-                $timelines[] = ['title' => __('Career History'), 'items' => $items];
-            }
-        }
-
-        if ($rows === [] && $timelines === []) {
+        if ($rows === []) {
             return null;
         }
 
-        $section = $this->wrap('education_career', __('profile.snapshot_section_education_career'), __('profile.snapshot_kicker_ordered'), 'sky', 'academic-cap', $rows);
-        if ($timelines !== []) {
-            $section['timelines'] = $timelines;
-        }
-
-        return $section;
+        return $this->wrap('education_career', __('profile.snapshot_section_education_career'), __('profile.snapshot_kicker_ordered'), 'sky', 'academic-cap', $rows);
     }
 
     private function sectionFamily(MatrimonyProfile $profile, array $ctx): ?array
@@ -768,7 +731,7 @@ class ProfileShowSnapshotService
 
         $prefDeg = $ctx['preferred_education_degree_ids'] ?? [];
         if ($prefDeg !== []) {
-            $labs = EducationDegree::query()->whereIn('id', $prefDeg)->orderBy('sort_order')->pluck('title')->filter()->values()->all();
+            $labs = EducationDegree::query()->whereIn('id', $prefDeg)->orderBy('sort_order')->pluck('code')->filter()->values()->all();
             if ($labs !== []) {
                 $rows[] = $this->row(__('Preferred qualification'), implode(', ', $labs));
             }

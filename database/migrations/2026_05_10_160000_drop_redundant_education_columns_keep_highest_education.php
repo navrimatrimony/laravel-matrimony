@@ -45,7 +45,7 @@ return new class extends Migration
                         if (Schema::hasColumn($tbl, 'education_degree_id') && ! empty($row->education_degree_id) && Schema::hasTable('education_degrees')) {
                             $deg = DB::table('education_degrees')->where('id', $row->education_degree_id)->first();
                             if ($deg) {
-                                $line = trim((string) ($deg->title ?: $deg->code ?? ''));
+                                $line = trim((string) ($deg->code ?? $deg->title ?? ''));
                             }
                         }
                         $extra = Schema::hasColumn($tbl, 'education_text') ? trim((string) ($row->education_text ?? '')) : '';

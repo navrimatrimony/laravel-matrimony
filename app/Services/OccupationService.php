@@ -18,7 +18,7 @@ class OccupationService
     private const MIN_SEARCH_LEN = 2;
 
     /**
-     * Search occupation_master rows (LIKE + simple ranking). Max 10 results.
+     * Search {@code master_occupations} rows (LIKE + simple ranking). Max 10 results.
      *
      * @return array{occupations: \Illuminate\Support\Collection<int, OccupationMaster>, suggestion: ?string}
      */
@@ -32,12 +32,12 @@ class OccupationService
             return null;
         }
 
-        if (Schema::hasTable('occupation_master_aliases')) {
+        if (Schema::hasTable('master_occupation_aliases')) {
             foreach (MasterDataAliasNormalizer::normalizedLookupCandidates($raw) as $norm) {
                 if ($norm === '') {
                     continue;
                 }
-                $mid = DB::table('occupation_master_aliases')
+                $mid = DB::table('master_occupation_aliases')
                     ->where('is_active', true)
                     ->where('normalized_alias', $norm)
                     ->value('occupation_master_id');
@@ -73,7 +73,7 @@ class OccupationService
             ->where(function ($w) use ($safeLowerLike, $qNorm) {
                 $w->whereRaw('LOWER(name) LIKE ?', [$safeLowerLike])
                     ->orWhereRaw('LOWER(COALESCE(normalized_name, "")) LIKE ?', [$safeLowerLike]);
-                if (Schema::hasColumn('occupation_master', 'name_mr')) {
+                if (Schema::hasColumn('master_occupations', 'name_mr')) {
                     $w->orWhereRaw('LOWER(COALESCE(name_mr, "")) LIKE ?', [$safeLowerLike]);
                 }
                 if ($qNorm !== '') {
@@ -145,7 +145,7 @@ class OccupationService
         $occupation->loadMissing('category');
 
         $catCols = ['id', 'name'];
-        if (Schema::hasColumn('occupation_categories', 'name_mr')) {
+        if (Schema::hasColumn('master_occupation_categories', 'name_mr')) {
             $catCols[] = 'name_mr';
         }
 
@@ -160,13 +160,13 @@ class OccupationService
             'category' => $cat ? [
                 'id' => $cat->id,
                 'name' => $cat->name,
-                'name_mr' => Schema::hasColumn('occupation_categories', 'name_mr') ? ($cat->name_mr ?? null) : null,
+                'name_mr' => Schema::hasColumn('master_occupation_categories', 'name_mr') ? ($cat->name_mr ?? null) : null,
                 'icon' => $this->categoryDisplayIcon($cat->name),
             ] : null,
             'categories' => $categories->map(fn ($c) => [
                 'id' => $c->id,
                 'name' => $c->name,
-                'name_mr' => Schema::hasColumn('occupation_categories', 'name_mr') ? ($c->name_mr ?? null) : null,
+                'name_mr' => Schema::hasColumn('master_occupation_categories', 'name_mr') ? ($c->name_mr ?? null) : null,
                 'icon' => $this->categoryDisplayIcon($c->name),
             ])->values()->all(),
         ];
@@ -287,32 +287,36 @@ class OccupationService
                 return false;
             }
 
-            $legacy = $occ->category?->legacy_working_with_type_id;
-            $workingWithTypeId = $legacy ? (int) $legacy : null;
-
-            $professionQuery = Profession::query()
-                ->whereRaw('LOWER(TRIM(name)) = ?', [mb_strtolower(trim($occ->name))])
-                ->where('is_active', true);
-
-            if ($workingWithTypeId) {
-                $professionQuery->where('working_with_type_id', $workingWithTypeId);
-            }
-
-            $professionId = $professionQuery->value('id');
-
-            if (! $professionId) {
-                $professionId = Profession::query()
-                    ->whereRaw('LOWER(TRIM(name)) = ?', [mb_strtolower(trim($occ->name))])
-                    ->where('is_active', true)
-                    ->value('id');
-            }
-
-            $request->merge([
+            $merge = [
                 'occupation_master_id' => $occ->id,
                 'occupation_custom_id' => null,
-                'working_with_type_id' => $workingWithTypeId,
-                'profession_id' => $professionId ? (int) $professionId : null,
-            ]);
+            ];
+            if (Schema::hasColumn('matrimony_profiles', 'working_with_type_id')
+                && Schema::hasColumn('matrimony_profiles', 'profession_id')) {
+                $legacy = $occ->category?->legacy_working_with_type_id;
+                $workingWithTypeId = $legacy ? (int) $legacy : null;
+
+                $professionQuery = Profession::query()
+                    ->whereRaw('LOWER(TRIM(name)) = ?', [mb_strtolower(trim($occ->name))])
+                    ->where('is_active', true);
+
+                if ($workingWithTypeId) {
+                    $professionQuery->where('working_with_type_id', $workingWithTypeId);
+                }
+
+                $professionId = $professionQuery->value('id');
+
+                if (! $professionId) {
+                    $professionId = Profession::query()
+                        ->whereRaw('LOWER(TRIM(name)) = ?', [mb_strtolower(trim($occ->name))])
+                        ->where('is_active', true)
+                        ->value('id');
+                }
+
+                $merge['working_with_type_id'] = $workingWithTypeId;
+                $merge['profession_id'] = $professionId ? (int) $professionId : null;
+            }
+            $request->merge($merge);
 
             return true;
         }
@@ -325,12 +329,17 @@ class OccupationService
 
             $custom = OccupationCustom::query()->where('user_id', $uid)->find($cid);
             if ($custom) {
-                $request->merge([
+                $merge = [
                     'occupation_master_id' => null,
                     'occupation_custom_id' => $custom->id,
-                    'working_with_type_id' => null,
-                    'profession_id' => null,
-                ]);
+                ];
+                if (Schema::hasColumn('matrimony_profiles', 'working_with_type_id')) {
+                    $merge['working_with_type_id'] = null;
+                }
+                if (Schema::hasColumn('matrimony_profiles', 'profession_id')) {
+                    $merge['profession_id'] = null;
+                }
+                $request->merge($merge);
 
                 return true;
             }
@@ -379,5 +388,133 @@ class OccupationService
     private function normalizeStoredName(string $s): string
     {
         return mb_strtolower(preg_replace('/\s+/u', ' ', trim($s)));
+    }
+
+    /** Resolve canonical master row from {@code professions.id} via exact trimmed name equality. */
+    public function occupationMasterIdForProfessionId(?int $professionId): ?int
+    {
+        if ($professionId === null || $professionId <= 0 || ! Schema::hasTable('professions') || ! Schema::hasTable('master_occupations')) {
+            return null;
+        }
+        $name = DB::table('professions')->where('id', $professionId)->value('name');
+        if ($name === null || trim((string) $name) === '') {
+            return null;
+        }
+
+        $id = OccupationMaster::query()
+            ->whereRaw('LOWER(TRIM(name)) = ?', [mb_strtolower(trim((string) $name))])
+            ->value('id');
+
+        return $id !== null ? (int) $id : null;
+    }
+
+    /** Resolve master id from arbitrary label via alias engine then exact master name match. */
+    public function occupationMasterIdForFreeText(?string $label): ?int
+    {
+        $t = trim((string) ($label ?? ''));
+        if ($t === '') {
+            return null;
+        }
+        $hit = $this->findOccupationMasterForIntake($t);
+        if ($hit !== null) {
+            return (int) $hit->id;
+        }
+        $id = OccupationMaster::query()
+            ->whereRaw('LOWER(TRIM(name)) = ?', [mb_strtolower($t)])
+            ->value('id');
+
+        return $id !== null ? (int) $id : null;
+    }
+
+    /**
+     * Map legacy snapshot keys ({@code profession_id}, {@code working_with_type_id}, {@code occupation_title})
+     * into {@code occupation_master_id} / {@code occupation_custom_id}, then unset dropped columns so apply does not rely on FK columns.
+     *
+     * @param  array<string, mixed>  $core
+     */
+    public function mergeLegacyCareerCoreForApply(array &$core, ?int $profileUserId = null): void
+    {
+        $tbl = 'matrimony_profiles';
+        $hasProfFk = Schema::hasColumn($tbl, 'profession_id');
+        $hasWwFk = Schema::hasColumn($tbl, 'working_with_type_id');
+        $hasTitleCol = Schema::hasColumn($tbl, 'occupation_title');
+        $hasMid = Schema::hasColumn($tbl, 'occupation_master_id');
+        $hasCid = Schema::hasColumn($tbl, 'occupation_custom_id');
+        if (! $hasMid || ! $hasCid) {
+            return;
+        }
+
+        $mid = ! empty($core['occupation_master_id']) ? (int) $core['occupation_master_id'] : null;
+        $cid = ! empty($core['occupation_custom_id']) ? (int) $core['occupation_custom_id'] : null;
+        if ($mid !== null && $mid > 0) {
+            $core['occupation_custom_id'] = null;
+        }
+
+        if (($mid === null || $mid <= 0) && ($cid !== null && $cid > 0)) {
+            if (! $hasProfFk && array_key_exists('profession_id', $core)) {
+                unset($core['profession_id']);
+            }
+            if (! $hasWwFk && array_key_exists('working_with_type_id', $core)) {
+                unset($core['working_with_type_id']);
+            }
+            if (! $hasTitleCol && array_key_exists('occupation_title', $core)) {
+                unset($core['occupation_title']);
+            }
+
+            return;
+        }
+
+        if (($mid === null || $mid <= 0) && ($cid === null || $cid <= 0)) {
+            $profId = ! empty($core['profession_id']) ? (int) $core['profession_id'] : null;
+            if ($profId) {
+                $resolved = $this->occupationMasterIdForProfessionId($profId);
+                $pName = Schema::hasTable('professions')
+                    ? trim((string) DB::table('professions')->where('id', $profId)->value('name'))
+                    : '';
+                if (($resolved === null || $resolved <= 0) && $pName !== '') {
+                    $resolved = $this->occupationMasterIdForFreeText($pName);
+                }
+                if ($resolved !== null && $resolved > 0) {
+                    $mid = $resolved;
+                    $core['occupation_master_id'] = $mid;
+                    $core['occupation_custom_id'] = null;
+                } elseif ($profileUserId !== null && $profileUserId > 0 && $pName !== '' && mb_strlen($pName) >= self::MIN_SEARCH_LEN) {
+                    try {
+                        $row = $this->createCustom($pName, $profileUserId);
+                        $core['occupation_master_id'] = null;
+                        $core['occupation_custom_id'] = (int) $row['id'];
+                    } catch (\Throwable) {
+                    }
+                }
+            }
+        }
+
+        if (empty($core['occupation_master_id']) || (int) $core['occupation_master_id'] <= 0) {
+            $titleSrc = isset($core['occupation_title']) ? trim((string) $core['occupation_title']) : '';
+            if ($titleSrc !== '') {
+                $resolved = $this->occupationMasterIdForFreeText($titleSrc);
+                if ($resolved !== null && $resolved > 0) {
+                    $core['occupation_master_id'] = $resolved;
+                    $core['occupation_custom_id'] = null;
+                } elseif ($profileUserId !== null && $profileUserId > 0 && mb_strlen($titleSrc) >= self::MIN_SEARCH_LEN) {
+                    try {
+                        $row = $this->createCustom($titleSrc, $profileUserId);
+                        $core['occupation_master_id'] = null;
+                        $core['occupation_custom_id'] = (int) $row['id'];
+                    } catch (\Throwable) {
+                    }
+                }
+            }
+        }
+
+        if (! $hasProfFk && array_key_exists('profession_id', $core)) {
+            unset($core['profession_id']);
+        }
+        if (! $hasWwFk && array_key_exists('working_with_type_id', $core)) {
+            unset($core['working_with_type_id']);
+        }
+        if (! $hasTitleCol && array_key_exists('occupation_title', $core)) {
+            unset($core['occupation_title']);
+        }
     }
 }

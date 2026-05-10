@@ -4,6 +4,7 @@ namespace App\Services\Intake;
 
 use App\Models\MatrimonyProfile;
 use App\Services\ExtendedFieldService;
+use App\Services\Profile\ProfileCanonicalResidenceService;
 use App\Services\Parsing\IntakeControlledFieldNormalizer;
 use App\Support\ArrayDiffHelper;
 use Illuminate\Support\Facades\DB;
@@ -19,7 +20,7 @@ class IntakeSuggestionDiffBuilder
     private const CORE_KEYS_EXCLUDED = [
         'primary_contact_number', 'primary_contact_number_2', 'primary_contact_number_3',
         'primary_contact_whatsapp', 'primary_contact_whatsapp_2', 'primary_contact_whatsapp_3',
-        'father_contact_2', 'father_contact_3', 'mother_contact_2', 'mother_contact_3',
+        'father_contact_2', 'mother_contact_2',
     ];
 
     public function __construct(
@@ -166,12 +167,23 @@ class IntakeSuggestionDiffBuilder
                 ->where('is_primary', true)
                 ->value('phone_number');
         }
-        if ($fieldKey === 'location') {
+        if ($fieldKey === 'location' || $fieldKey === 'location_id') {
             if (Schema::hasColumn('matrimony_profiles', 'location_id')) {
                 return $profile->getAttribute('location_id');
             }
 
-            return null;
+            return $profile->exists
+                ? ProfileCanonicalResidenceService::locationLeafId((int) $profile->id)
+                : null;
+        }
+        if ($fieldKey === 'address_line') {
+            if (Schema::hasColumn('matrimony_profiles', 'address_line')) {
+                return $profile->getAttribute('address_line');
+            }
+
+            return $profile->exists
+                ? ProfileCanonicalResidenceService::addressLineRaw((int) $profile->id)
+                : null;
         }
 
         return $profile->getAttribute($fieldKey);

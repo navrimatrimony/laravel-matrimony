@@ -4,8 +4,11 @@ namespace App\Services\Showcase;
 
 use App\Models\AdminSetting;
 use App\Models\Interest;
+use App\Models\Location;
 use App\Models\MatrimonyProfile;
+use App\Services\LocationService;
 use Carbon\Carbon;
+use Illuminate\Support\Facades\Schema;
 
 /**
  * Central rules for showcase ↔ real (and showcase ↔ showcase) interest flows.
@@ -26,6 +29,30 @@ use Carbon\Carbon;
 class ShowcaseInterestPolicyService
 {
     public const KEY_PREFIX = 'showcase_interest_';
+
+    /**
+     * District id for “native place” match weight: legacy column when present, else derived from native leaf ({@see MatrimonyProfile::nativePlaceLeafStorageId()}).
+     */
+    private static function nativeDistrictIdForDistrictWeight(MatrimonyProfile $profile): ?int
+    {
+        if (Schema::hasColumn($profile->getTable(), 'native_district_id')) {
+            $v = $profile->getAttribute('native_district_id');
+            if ($v !== null && $v !== '' && (int) $v > 0) {
+                return (int) $v;
+            }
+        }
+        $leaf = $profile->nativePlaceLeafStorageId();
+        if ($leaf === null || ! Schema::hasTable(Location::geoTable())) {
+            return null;
+        }
+        $row = Location::query()->find($leaf);
+        if ($row === null) {
+            return null;
+        }
+        $district = app(LocationService::class)->getAncestorByType($row, 'district');
+
+        return $district?->id ? (int) $district->id : null;
+    }
 
     /**
      * @return array{score: float, max: float, ratio: float}
@@ -51,7 +78,9 @@ class ShowcaseInterestPolicyService
         if ($a->caste_id !== null && (int) $a->caste_id === (int) $b->caste_id) {
             $score += (float) $wCas;
         }
-        if ($a->native_district_id !== null && (int) $a->native_district_id === (int) $b->native_district_id) {
+        $aNativeDist = self::nativeDistrictIdForDistrictWeight($a);
+        $bNativeDist = self::nativeDistrictIdForDistrictWeight($b);
+        if ($aNativeDist !== null && $aNativeDist > 0 && $aNativeDist === $bNativeDist) {
             $score += (float) $wDist;
         }
 

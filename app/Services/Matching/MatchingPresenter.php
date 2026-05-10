@@ -43,12 +43,13 @@ class MatchingPresenter
             return $this->emptyUiPayload();
         }
 
-        $viewerProfile->loadMissing([
-            'gender', 'maritalStatus', 'religion', 'motherTongue', 'city', 'state', 'profession', 'diet', 'familyType', 'caste', 'subCaste',
-        ]);
-        $viewedProfile->loadMissing([
-            'gender', 'maritalStatus', 'religion', 'motherTongue', 'city', 'state', 'profession', 'diet', 'familyType', 'caste', 'subCaste',
-        ]);
+        $occRel = ['occupationMaster.category.workingWithType', 'occupationCustom'];
+        $viewerProfile->loadMissing(array_merge([
+            'gender', 'maritalStatus', 'religion', 'motherTongue', 'city', 'state', 'diet', 'familyType', 'caste', 'subCaste',
+        ], $occRel));
+        $viewedProfile->loadMissing(array_merge([
+            'gender', 'maritalStatus', 'religion', 'motherTongue', 'city', 'state', 'diet', 'familyType', 'caste', 'subCaste',
+        ], $occRel));
 
         $engine = $this->ruleEngine->getMatchResultForProfiles($viewerProfile, $viewedProfile);
 
@@ -296,8 +297,16 @@ class MatchingPresenter
             $addRow('Career & location', 'Education', $theirEducation, $yourEducation, $status);
         }
 
-        $theirOccupation = trim((string) (($viewed->occupation_title ?? '') !== '' ? $viewed->occupation_title : ($viewed->profession?->name ?? '')));
-        $yourOccupation = trim((string) (($viewer->occupation_title ?? '') !== '' ? $viewer->occupation_title : ($viewer->profession?->name ?? '')));
+        $theirOcc = trim((string) ($viewed->occupation_title ?? ''));
+        if ($theirOcc === '') {
+            $theirOcc = trim((string) ($viewed->resolvedProfession()?->name ?? ''));
+        }
+        $yourOcc = trim((string) ($viewer->occupation_title ?? ''));
+        if ($yourOcc === '') {
+            $yourOcc = trim((string) ($viewer->resolvedProfession()?->name ?? ''));
+        }
+        $theirOccupation = $theirOcc;
+        $yourOccupation = $yourOcc;
         if ($theirOccupation !== '' || $yourOccupation !== '') {
             $status = ($theirOccupation !== '' && $yourOccupation !== '') ? (strcasecmp($theirOccupation, $yourOccupation) === 0 ? 'match' : 'open') : 'open';
             $addRow('Career & location', 'Occupation', $theirOccupation, $yourOccupation, $status);

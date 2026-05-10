@@ -20,7 +20,7 @@ class CasteLookupController extends Controller
     {
         $religionId = $request->input('religion_id') ?? $request->route('religionId');
         $request->merge(['religion_id' => $religionId]);
-        $request->validate(['religion_id' => ['required', 'exists:religions,id']]);
+        $request->validate(['religion_id' => ['required', 'exists:master_religions,id']]);
 
         $castes = Caste::where('religion_id', $religionId)
             ->where('is_active', true)
@@ -47,7 +47,7 @@ class CasteLookupController extends Controller
         try {
             $casteId = $request->input('caste_id') ?? $request->route('casteId');
             $request->merge(['caste_id' => $casteId]);
-            $request->validate(['caste_id' => ['required', 'exists:castes,id']]);
+            $request->validate(['caste_id' => ['required', 'exists:master_castes,id']]);
 
             $q = trim((string) $request->input('q', ''));
             if (strlen($q) < 2) {
@@ -91,7 +91,7 @@ class CasteLookupController extends Controller
     public function createSubCaste(Request $request, ReligionCasteSubcasteSlugger $slugger): JsonResponse
     {
         $request->validate([
-            'caste_id' => ['required', 'exists:castes,id'],
+            'caste_id' => ['required', 'exists:master_castes,id'],
             'label' => ['required', 'string', 'min:2', 'max:255'],
         ]);
 

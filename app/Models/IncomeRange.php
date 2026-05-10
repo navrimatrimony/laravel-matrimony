@@ -10,7 +10,7 @@ use Illuminate\Database\Eloquent\Model;
  */
 class IncomeRange extends Model
 {
-    protected $table = 'income_ranges';
+    protected $table = 'master_income_ranges';
 
     protected $fillable = ['name', 'name_mr', 'slug', 'sort_order', 'is_active'];
 

@@ -10,7 +10,7 @@ use Illuminate\Database\Eloquent\Model;
  */
 class College extends Model
 {
-    protected $table = 'colleges';
+    protected $table = 'master_colleges';
 
     protected $fillable = ['name', 'name_mr', 'slug', 'city', 'state', 'sort_order', 'is_active'];
 

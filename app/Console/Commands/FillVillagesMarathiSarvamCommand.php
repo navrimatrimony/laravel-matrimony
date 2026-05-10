@@ -11,7 +11,7 @@ use Illuminate\Support\Facades\Schema;
 class FillVillagesMarathiSarvamCommand extends Command
 {
     protected $signature = 'villages:fill-marathi-sarvam
-                            {--only-addresses : Only villages referenced by profile_addresses.village_id (default)}
+                            {--only-addresses : Only villages referenced by profile_addresses.location_id (addresses.type=village) (default)}
                             {--all : Fill every village row matching filters (not only address-linked)}
                             {--force : Overwrite existing non-empty name_mr}
                             {--dry-run : Show planned updates without saving}
@@ -41,10 +41,13 @@ class FillVillagesMarathiSarvamCommand extends Command
             ->with(['taluka:id,name,name_mr,district_id', 'taluka.district:id,name,name_mr']);
 
         if ($onlyAddresses && Schema::hasTable('profile_addresses')) {
-            $q->whereIn($geo.'.id', function ($sub): void {
-                $sub->select('village_id')
-                    ->from('profile_addresses')
-                    ->whereNotNull('village_id')
+            $q->whereIn($geo.'.id', function ($sub) use ($geo): void {
+                $leafCol = Schema::hasColumn('profile_addresses', 'location_id') ? 'location_id' : 'city_id';
+                $sub->select('pa.'.$leafCol)
+                    ->from('profile_addresses as pa')
+                    ->join($geo.' as a', 'a.id', '=', 'pa.'.$leafCol)
+                    ->where('a.type', 'village')
+                    ->whereNotNull('pa.'.$leafCol)
                     ->distinct();
             });
         }

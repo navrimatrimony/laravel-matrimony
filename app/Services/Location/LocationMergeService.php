@@ -69,9 +69,11 @@ class LocationMergeService
             }
         }
 
-        if (Schema::hasTable('profile_career') && Schema::hasColumn('profile_career', 'city_id')) {
-            DB::table('profile_career')->where('city_id', $sourceId)->update(['city_id' => $targetId]);
+        if (Schema::hasTable('profile_addresses')) {
+            $locCol = Schema::hasColumn('profile_addresses', 'location_id') ? 'location_id' : 'city_id';
+            DB::table('profile_addresses')->where($locCol, $sourceId)->update([$locCol => $targetId]);
         }
+
     }
 
     private function rewritePinCodes(int $sourceId, int $targetId): void
@@ -82,7 +84,7 @@ class LocationMergeService
             return;
         }
 
-        foreach (['pincode', 'latitude', 'longitude'] as $col) {
+        foreach (['pincode', 'lat', 'lng'] as $col) {
             if (($target->{$col} ?? null) === null && ($source->{$col} ?? null) !== null) {
                 $target->{$col} = $source->{$col};
             }

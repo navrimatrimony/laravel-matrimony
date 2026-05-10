@@ -4,6 +4,7 @@ namespace App\Services\Location;
 
 use App\Models\Location;
 use App\Models\MatrimonyProfile;
+use App\Services\Profile\ProfileCanonicalResidenceService;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
 
@@ -390,7 +391,7 @@ class LocationService
             return [];
         }
 
-        if ($source->latitude === null || $source->longitude === null) {
+        if ($source->lat === null || $source->lng === null) {
             Log::info('Nearby search skipped due to missing coordinates', [
                 'location_id' => $locationId,
                 'reason' => 'source_coordinates_missing',
@@ -399,13 +400,13 @@ class LocationService
             return [];
         }
 
-        $sourceLat = (float) $source->latitude;
-        $sourceLng = (float) $source->longitude;
+        $sourceLat = (float) $source->lat;
+        $sourceLng = (float) $source->lng;
 
         $candidates = Location::query()
-            ->select(['id', 'latitude', 'longitude'])
-            ->whereNotNull('latitude')
-            ->whereNotNull('longitude')
+            ->select(['id', 'lat', 'lng'])
+            ->whereNotNull('lat')
+            ->whereNotNull('lng')
             ->where('id', '!=', $locationId)
             ->get();
 
@@ -414,8 +415,8 @@ class LocationService
             $distance = $this->haversineDistanceKm(
                 $sourceLat,
                 $sourceLng,
-                (float) $candidate->latitude,
-                (float) $candidate->longitude
+                (float) $candidate->lat,
+                (float) $candidate->lng
             );
 
             if ($distance > $radiusKm) {
@@ -486,10 +487,28 @@ class LocationService
         }
 
         $locationIds = array_keys($locationById);
-        $profiles = MatrimonyProfile::query()
-            ->select(['id', 'full_name', 'location_id'])
-            ->whereIn('location_id', $locationIds)
-            ->get();
+        if (Schema::hasColumn((new MatrimonyProfile)->getTable(), 'location_id')) {
+            $profiles = MatrimonyProfile::query()
+                ->select(['id', 'full_name', 'location_id'])
+                ->whereIn('location_id', $locationIds)
+                ->get();
+        } else {
+            $typeId = ProfileCanonicalResidenceService::currentAddressTypeId();
+            if ($typeId === null) {
+                return [];
+            }
+            $leaf = Schema::hasColumn('profile_addresses', 'location_id') ? 'pa.location_id' : 'pa.city_id';
+            $profiles = MatrimonyProfile::query()
+                ->select('matrimony_profiles.id', 'matrimony_profiles.full_name')
+                ->selectRaw("{$leaf} as location_id")
+                ->join('profile_addresses as pa', function ($join) use ($typeId): void {
+                    $join->on('pa.profile_id', '=', 'matrimony_profiles.id')
+                        ->where('pa.address_scope', '=', 'self')
+                        ->where('pa.address_type_id', '=', $typeId);
+                })
+                ->whereIn($leaf, $locationIds)
+                ->get();
+        }
 
         return $profiles
             ->map(function (MatrimonyProfile $profile) use ($locationById): ?array {

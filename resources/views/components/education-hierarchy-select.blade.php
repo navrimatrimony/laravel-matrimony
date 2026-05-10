@@ -41,8 +41,8 @@
                     @foreach($categories as $cat)
                         @foreach($cat->degrees as $deg)
                             @php
-                                $degTitle = ($localeMr && filled($deg->title_mr)) ? $deg->title_mr : $deg->title;
-                                $degFull = ($localeMr && filled($deg->full_form_mr)) ? $deg->full_form_mr : ($deg->full_form ?? '');
+                                $degTitle = ($localeMr && filled($deg->code_mr)) ? $deg->code_mr : $deg->code;
+                                $degFull = (string) ($deg->full_form ?? '');
                             @endphp
                             <option value="{{ $deg->code }}" data-category="{{ $cat->name }}" data-fullform="{{ e($degFull) }}" {{ (string)$selectedDegree === (string)$deg->code ? 'selected' : '' }}>{{ $degTitle }}</option>
                         @endforeach
@@ -92,7 +92,7 @@
                     @php $ogLabel = ($localeMr && filled($cat->name_mr)) ? $cat->name_mr : $cat->name; @endphp
                     <optgroup label="{{ $ogLabel }}">
                         @foreach($cat->degrees as $deg)
-                            @php $degTitleG = ($localeMr && filled($deg->title_mr)) ? $deg->title_mr : $deg->title; @endphp
+                            @php $degTitleG = ($localeMr && filled($deg->code_mr)) ? $deg->code_mr : $deg->code; @endphp
                             <option value="{{ $deg->code }}" {{ (string)$selectedDegree === (string)$deg->code ? 'selected' : '' }}>{{ $degTitleG }}</option>
                         @endforeach
                     </optgroup>

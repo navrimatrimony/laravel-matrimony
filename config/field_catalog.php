@@ -79,7 +79,6 @@ return [
         // Contact info is captured inside Basic info (no separate "Contacts" wizard step).
         'primary_contact_number' => 'basic-info',
         'highest_education' => 'education-career',
-        'specialization' => 'education-career',
         'occupation_title' => 'education-career',
         'company_name' => 'education-career',
         'annual_income' => 'education-career',
@@ -94,7 +93,6 @@ return [
         'sisters_count' => 'family-details',
         // Residence hierarchy lives on Basic info (centralized typeahead); not a separate wizard tab.
         'city_id' => 'basic-info',
-        'work_city_id' => 'education-career',
         'country_id' => 'basic-info',
         'state_id' => 'basic-info',
         'district_id' => 'basic-info',

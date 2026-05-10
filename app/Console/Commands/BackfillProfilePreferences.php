@@ -27,7 +27,7 @@ class BackfillProfilePreferences extends Command
 
                     $casteKey = Str::slug(strtolower(trim($pref->preferred_caste)));
 
-                    $caste = DB::table('castes')
+                    $caste = DB::table('master_castes')
                         ->where('key', $casteKey)
                         ->first();
 

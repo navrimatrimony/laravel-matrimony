@@ -38,12 +38,12 @@ class ShowcaseInterestPolicyTest extends TestCase
         $showcase = MatrimonyProfile::factory()->create([
             'gender_id' => $maleGid,
             'is_showcase' => true,
-            'lifecycle_state' => 'active',
+            'lifecycle_state' => 'draft',
         ]);
         $real = MatrimonyProfile::factory()->create([
             'gender_id' => $femaleGid,
             'is_showcase' => false,
-            'lifecycle_state' => 'active',
+            'lifecycle_state' => 'draft',
         ]);
 
         $svc = app(ShowcaseInterestPolicyService::class);
@@ -63,12 +63,12 @@ class ShowcaseInterestPolicyTest extends TestCase
         $showcase = MatrimonyProfile::factory()->create([
             'gender_id' => $maleGid,
             'is_showcase' => true,
-            'lifecycle_state' => 'active',
+            'lifecycle_state' => 'draft',
         ]);
         $real = MatrimonyProfile::factory()->create([
             'gender_id' => $femaleGid,
             'is_showcase' => false,
-            'lifecycle_state' => 'active',
+            'lifecycle_state' => 'draft',
         ]);
 
         $svc = app(ShowcaseInterestPolicyService::class);
@@ -85,12 +85,12 @@ class ShowcaseInterestPolicyTest extends TestCase
         $showcase = MatrimonyProfile::factory()->create([
             'gender_id' => $maleGid,
             'is_showcase' => true,
-            'lifecycle_state' => 'active',
+            'lifecycle_state' => 'draft',
         ]);
         $real = MatrimonyProfile::factory()->create([
             'gender_id' => $femaleGid,
             'is_showcase' => false,
-            'lifecycle_state' => 'active',
+            'lifecycle_state' => 'draft',
         ]);
 
         $svc = app(ShowcaseInterestPolicyService::class);
@@ -166,12 +166,12 @@ class ShowcaseInterestPolicyTest extends TestCase
         $real = MatrimonyProfile::factory()->create([
             'gender_id' => $maleGid,
             'is_showcase' => false,
-            'lifecycle_state' => 'active',
+            'lifecycle_state' => 'draft',
         ]);
         $showcase = MatrimonyProfile::factory()->create([
             'gender_id' => $femaleGid,
             'is_showcase' => true,
-            'lifecycle_state' => 'active',
+            'lifecycle_state' => 'draft',
         ]);
 
         $svc = app(ShowcaseInterestPolicyService::class);

@@ -43,7 +43,7 @@ class ProfileCompletionService
             $pct += 20;
         }
 
-        // Personal/Family (20%): family/education/career summary or children/education_history/career_history
+        // Personal/Family (20%): family/education/career summary or children
         if (self::sectionPersonalFamilyFilled($profile)) {
             $pct += 20;
         }
@@ -84,10 +84,13 @@ class ProfileCompletionService
             return true;
         }
         $children = DB::table('profile_children')->where('profile_id', $profile->id)->count();
-        $edu = DB::table('profile_education')->where('profile_id', $profile->id)->count();
-        $career = DB::table('profile_career')->where('profile_id', $profile->id)->count();
+        $hasCareerCore = trim((string) ($profile->company_name ?? '')) !== ''
+            || ($profile->profession_id ?? null)
+            || ($profile->occupation_master_id ?? null)
+            || ($profile->work_city_id ?? null)
+            || trim((string) ($profile->work_location_text ?? '')) !== '';
 
-        return $children > 0 || $edu > 0 || $career > 0;
+        return $children > 0 || $hasCareerCore;
     }
 
     private static function sectionLocationFilled(MatrimonyProfile $profile): bool
@@ -95,12 +98,15 @@ class ProfileCompletionService
         if (($profile->location_id ?? null)) {
             return true;
         }
-        $hasVillage = DB::table('profile_addresses')
-            ->where('profile_id', $profile->id)
-            ->whereNotNull('village_id')
-            ->exists();
+        $leafCol = Schema::hasColumn('profile_addresses', 'location_id') ? 'location_id' : 'city_id';
+        $geo = (new \App\Models\Location)->getTable();
 
-        return $hasVillage;
+        return DB::table('profile_addresses as pa')
+            ->join($geo.' as a', 'a.id', '=', 'pa.'.$leafCol)
+            ->where('pa.profile_id', $profile->id)
+            ->where('a.type', 'village')
+            ->whereNotNull('pa.'.$leafCol)
+            ->exists();
     }
 
     private static function sectionAboutPreferencesFilled(MatrimonyProfile $profile): bool
@@ -191,10 +197,13 @@ class ProfileCompletionService
                 return ($profile->marital_status_id ?? null) !== null ? 'completed' : 'incomplete';
             case 'education-career':
                 $hasEdu = ($profile->highest_education ?? '') !== '' || ($profile->occupation_title ?? '') !== '' || ($profile->annual_income ?? null) !== null;
-                $eduCount = DB::table('profile_education')->where('profile_id', $profile->id)->count();
-                $careerCount = DB::table('profile_career')->where('profile_id', $profile->id)->count();
+                $hasCareer = trim((string) ($profile->company_name ?? '')) !== ''
+                    || ($profile->profession_id ?? null)
+                    || ($profile->occupation_master_id ?? null)
+                    || ($profile->work_city_id ?? null)
+                    || trim((string) ($profile->work_location_text ?? '')) !== '';
 
-                return $hasEdu || $eduCount > 0 || $careerCount > 0 ? 'completed' : 'incomplete';
+                return $hasEdu || $hasCareer ? 'completed' : 'incomplete';
             case 'family-details':
                 $hasFamily = ($profile->father_name ?? '') !== '' || ($profile->mother_name ?? '') !== '' || ($profile->family_type_id ?? null) !== null;
 

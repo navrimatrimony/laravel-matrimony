@@ -7,6 +7,8 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Caste extends Model
 {
+    protected $table = 'master_castes';
+
     protected $fillable = ['religion_id', 'key', 'label', 'label_en', 'label_mr', 'is_active'];
 
     public function religion()

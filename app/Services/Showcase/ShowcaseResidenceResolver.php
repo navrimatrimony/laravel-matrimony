@@ -9,28 +9,29 @@ use App\Models\Taluka;
 use Illuminate\Http\Request;
 
 /**
- * Picks a residence city_id for auto-showcase using admin-ordered fallbacks (search city → district hub → min population).
+ * Picks a residence city_id for auto-showcase using admin-ordered fallbacks
+ * (search city → district seat name match → tagged eligible cities by admin tag order).
  */
 class ShowcaseResidenceResolver
 {
     public function resolveCityId(Request $request): ?int
     {
         $order = AutoShowcaseSettings::residenceFallbackOrder();
-        $minPop = AutoShowcaseSettings::minPopulationThreshold();
+        $cityTags = ShowcaseAddressEligibility::citySqlTagsFromAdminTags(ShowcaseAddressEligibility::globalTags());
 
         foreach ($order as $mode) {
             if ($mode === 'search_city') {
-                $id = $this->fromSearchCity($request);
+                $id = $this->fromSearchCity($request, $cityTags);
                 if ($id !== null) {
                     return $id;
                 }
             } elseif ($mode === 'district_seat') {
-                $id = $this->fromDistrictSeat($request);
+                $id = $this->fromDistrictSeat($request, $cityTags);
                 if ($id !== null) {
                     return $id;
                 }
-            } elseif ($mode === 'min_population') {
-                $id = $this->fromMinPopulation($request, $minPop);
+            } elseif ($mode === 'tagged_city') {
+                $id = $this->fromTaggedCity($request, $cityTags);
                 if ($id !== null) {
                     return $id;
                 }
@@ -40,26 +41,35 @@ class ShowcaseResidenceResolver
         return null;
     }
 
-    private function fromSearchCity(Request $request): ?int
+    /**
+     * @param  list<string>  $cityTags  metro|capital only
+     */
+    private function fromSearchCity(Request $request, array $cityTags): ?int
     {
         if (! $request->filled('city_id')) {
             return null;
         }
 
         $cityId = (int) $request->input('city_id');
-        $exists = City::query()->whereKey($cityId)->exists();
-        if (! $exists) {
+        $geo = Location::geoTable();
+        $ok = City::query()
+            ->from($geo.' as city')
+            ->where('city.id', $cityId)
+            ->where('city.type', 'city')
+            ->whereIn('city.tag', $cityTags)
+            ->exists();
+        if (! $ok) {
             return null;
         }
 
         if ($request->filled('district_id')) {
             $districtId = (int) $request->district_id;
-            $geo = Location::geoTable();
             $inDistrict = City::query()
-                ->join($geo.' as taluka', function ($join) use ($geo): void {
-                    $join->on('taluka.id', '=', $geo.'.parent_id')->where('taluka.type', '=', 'taluka');
+                ->from($geo.' as city')
+                ->join($geo.' as taluka', function ($join): void {
+                    $join->on('taluka.id', '=', 'city.parent_id')->where('taluka.type', '=', 'taluka');
                 })
-                ->where($geo.'.id', $cityId)
+                ->where('city.id', $cityId)
                 ->where('taluka.parent_id', $districtId)
                 ->exists();
             if (! $inDistrict) {
@@ -76,7 +86,7 @@ class ShowcaseResidenceResolver
             return (int) $request->district_id;
         }
         if ($request->filled('taluka_id')) {
-            return (int) (Taluka::query()->whereKey((int) $request->taluka_id)->value('district_id') ?? 0) ?: null;
+            return (int) (Taluka::query()->whereKey((int) $request->taluka_id)->value('parent_id') ?? 0) ?: null;
         }
         if ($request->filled('city_id')) {
             $city = City::query()->with('taluka')->find((int) $request->city_id);
@@ -87,7 +97,10 @@ class ShowcaseResidenceResolver
         return null;
     }
 
-    private function fromDistrictSeat(Request $request): ?int
+    /**
+     * @param  list<string>  $cityTags
+     */
+    private function fromDistrictSeat(Request $request, array $cityTags): ?int
     {
         $districtId = $this->resolveDistrictId($request);
         if ($districtId === null) {
@@ -103,58 +116,51 @@ class ShowcaseResidenceResolver
         if ($name !== '') {
             $geo = Location::geoTable();
             $match = City::query()
-                ->join($geo.' as taluka', function ($join) use ($geo): void {
-                    $join->on('taluka.id', '=', $geo.'.parent_id')->where('taluka.type', '=', 'taluka');
+                ->from($geo.' as city')
+                ->join($geo.' as taluka', function ($join): void {
+                    $join->on('taluka.id', '=', 'city.parent_id')->where('taluka.type', '=', 'taluka');
                 })
                 ->where('taluka.parent_id', $districtId)
-                ->whereRaw('LOWER(TRIM('.$geo.'.name)) = ?', [mb_strtolower($name)])
-                ->orderByDesc($geo.'.population')
-                ->value($geo.'.id');
+                ->where('city.type', 'city')
+                ->whereIn('city.tag', $cityTags)
+                ->whereRaw('LOWER(TRIM(city.name)) = ?', [mb_strtolower($name)])
+                ->orderByDesc('city.id')
+                ->value('city.id');
             if ($match) {
                 return (int) $match;
             }
         }
 
-        $geo = Location::geoTable();
-        $bestPop = City::query()
-            ->join($geo.' as taluka', function ($join) use ($geo): void {
-                $join->on('taluka.id', '=', $geo.'.parent_id')->where('taluka.type', '=', 'taluka');
-            })
-            ->where('taluka.parent_id', $districtId)
-            ->orderByRaw('COALESCE('.$geo.'.population, 0) DESC')
-            ->orderByDesc($geo.'.id')
-            ->value($geo.'.id');
-
-        return $bestPop ? (int) $bestPop : null;
+        return $this->fromTaggedCity($request, $cityTags);
     }
 
-    private function fromMinPopulation(Request $request, int $minPopulation): ?int
+    /**
+     * Prefer capital, then metro, then highest id among eligible cities in the district.
+     *
+     * @param  list<string>  $cityTags
+     */
+    private function fromTaggedCity(Request $request, array $cityTags): ?int
     {
         $districtId = $this->resolveDistrictId($request);
         if ($districtId === null) {
             return null;
         }
 
-        if ($minPopulation <= 0) {
-            return $this->fromDistrictSeat($request);
-        }
-
         $geo = Location::geoTable();
+        $tagOrder = "CASE city.tag WHEN 'capital' THEN 2 WHEN 'metro' THEN 1 ELSE 0 END";
+
         $id = City::query()
-            ->join($geo.' as taluka', function ($join) use ($geo): void {
-                $join->on('taluka.id', '=', $geo.'.parent_id')->where('taluka.type', '=', 'taluka');
+            ->from($geo.' as city')
+            ->join($geo.' as taluka', function ($join): void {
+                $join->on('taluka.id', '=', 'city.parent_id')->where('taluka.type', '=', 'taluka');
             })
             ->where('taluka.parent_id', $districtId)
-            ->whereNotNull($geo.'.population')
-            ->where($geo.'.population', '>=', $minPopulation)
-            ->orderByDesc($geo.'.population')
-            ->orderByDesc($geo.'.id')
-            ->value($geo.'.id');
+            ->where('city.type', 'city')
+            ->whereIn('city.tag', $cityTags)
+            ->orderByRaw($tagOrder.' DESC')
+            ->orderByDesc('city.id')
+            ->value('city.id');
 
-        if ($id) {
-            return (int) $id;
-        }
-
-        return $this->fromDistrictSeat($request);
+        return $id ? (int) $id : null;
     }
 }

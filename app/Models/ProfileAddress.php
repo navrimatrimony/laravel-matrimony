@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class ProfileAddress extends Model
 {
@@ -10,48 +11,22 @@ class ProfileAddress extends Model
 
     protected $fillable = [
         'profile_id',
+        'address_scope',
         'address_type_id',
-        'village_id',
-        'country_id',
-        'state_id',
-        'district_id',
-        'taluka_id',
-        'city_id',
-        'postal_code',
+        'address_line',
+        'location_id',
     ];
 
-    public function profile()
+    public function profile(): BelongsTo
     {
         return $this->belongsTo(MatrimonyProfile::class, 'profile_id');
     }
 
-    public function country()
+    /**
+     * Leaf row in unified {@code addresses} (city, suburb, village, …).
+     */
+    public function location(): BelongsTo
     {
-        return $this->belongsTo(Country::class, 'country_id');
-    }
-
-    public function state()
-    {
-        return $this->belongsTo(State::class, 'state_id');
-    }
-
-    public function district()
-    {
-        return $this->belongsTo(District::class, 'district_id');
-    }
-
-    public function taluka()
-    {
-        return $this->belongsTo(Taluka::class, 'taluka_id');
-    }
-
-    public function city()
-    {
-        return $this->belongsTo(City::class, 'city_id');
-    }
-
-    public function village()
-    {
-        return $this->belongsTo(Village::class, 'village_id');
+        return $this->belongsTo(Location::class, 'location_id');
     }
 }

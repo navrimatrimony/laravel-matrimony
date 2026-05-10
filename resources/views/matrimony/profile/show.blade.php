@@ -1,6 +1,89 @@
 @extends('layouts.app')
 
 @section('content')
+<style>
+/* Premium progressive lock: top readable -> middle blurred -> bottom heavily blurred/faded */
+.profile-progressive-lock {
+    position: relative;
+    overflow: hidden;
+    isolation: isolate;
+}
+
+.profile-progressive-lock__content {
+    position: relative;
+    z-index: 1;
+}
+
+.profile-progressive-lock::before,
+.profile-progressive-lock::after,
+.profile-progressive-lock__veil::before {
+    content: '';
+    position: absolute;
+    inset-inline: 0;
+    pointer-events: none;
+}
+
+/* soft ramp (starts lower so top remains readable) */
+.profile-progressive-lock::before {
+    top: 18%;
+    bottom: 0;
+    z-index: 2;
+    backdrop-filter: blur(var(--lock-blur-soft, 4px));
+    -webkit-backdrop-filter: blur(var(--lock-blur-soft, 4px));
+    background: linear-gradient(
+        to bottom,
+        rgba(255, 255, 255, 0) 0%,
+        rgba(255, 255, 255, var(--lock-op-soft, 0.24)) 58%,
+        rgba(255, 255, 255, 0.12) 100%
+    );
+    -webkit-mask-image: linear-gradient(to bottom, transparent 0%, black 40%, black 100%);
+    mask-image: linear-gradient(to bottom, transparent 0%, black 40%, black 100%);
+}
+
+/* medium ramp */
+.profile-progressive-lock::after {
+    top: 40%;
+    bottom: 0;
+    z-index: 3;
+    backdrop-filter: blur(var(--lock-blur-mid, 9px));
+    -webkit-backdrop-filter: blur(var(--lock-blur-mid, 9px));
+    background: linear-gradient(
+        to bottom,
+        rgba(255, 255, 255, 0) 0%,
+        rgba(255, 255, 255, var(--lock-op-mid, 0.45)) 62%,
+        rgba(255, 255, 255, 0.2) 100%
+    );
+    -webkit-mask-image: linear-gradient(to bottom, transparent 0%, black 34%, black 100%);
+    mask-image: linear-gradient(to bottom, transparent 0%, black 34%, black 100%);
+}
+
+/* heavy ramp + fade near bottom */
+.profile-progressive-lock__veil::before {
+    top: 62%;
+    bottom: 0;
+    z-index: 4;
+    backdrop-filter: blur(var(--lock-blur-heavy, 16px));
+    -webkit-backdrop-filter: blur(var(--lock-blur-heavy, 16px));
+    background: linear-gradient(
+        to bottom,
+        rgba(255, 255, 255, 0) 0%,
+        rgba(255, 255, 255, var(--lock-op-heavy, 0.72)) 60%,
+        rgba(255, 255, 255, 0.98) 100%
+    );
+    -webkit-mask-image: linear-gradient(to bottom, transparent 0%, black 28%, black 100%);
+    mask-image: linear-gradient(to bottom, transparent 0%, black 28%, black 100%);
+}
+
+.profile-progressive-lock__cta {
+    position: absolute;
+    inset-inline: 0;
+    bottom: 1rem;
+    z-index: 10;
+    filter: none !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+}
+</style>
 @php
     $userId = auth()->id();
     $viewerUser = auth()->user();
@@ -15,6 +98,7 @@
         && ! ($isOwnProfile ?? false)
         && $userId
         && ! ($gateStates['daily_profile_view_limit']['allowed'] ?? false);
+    $legacyProfileLockMode = false;
     $cvs = $gateStates['contact_view_limit'] ?? null;
     $contactUsed = (int) ($cvs['used'] ?? ($contactUsageSnapshot['used'] ?? 0));
     $isUnlimited = (bool) ($cvs['unlimited'] ?? ($contactUsageSnapshot['is_unlimited'] ?? false));
@@ -384,7 +468,8 @@
     $familyIncomeDisplay = $incomeService->formatForDisplay($profileArr, 'family_income', $profile->familyIncomeCurrency ?? $profile->incomeCurrency);
     $hasPersonalIncome = ($profile->income_value_type ?? null) !== null || ($profile->income_amount ?? null) !== null || ($profile->income_min_amount ?? null) !== null || ($profile->annual_income ?? null) !== null;
     $hasFamilyIncome = ($profile->family_income_value_type ?? null) !== null || ($profile->family_income_amount ?? null) !== null || ($profile->family_income_min_amount ?? null) !== null || ($profile->family_income ?? null) !== null;
-    $hasEduCareer = ($educationVisible && ($profile->highest_education ?? '') !== '') || ($profile->highest_education_other ?? '') !== '' || ($profile->specialization ?? '') !== '' || ($profile->occupation_title ?? '') !== '' || ($profile->company_name ?? '') !== '' || $hasPersonalIncome || $hasFamilyIncome || ($profile->annual_income ?? null) !== null || ($profile->family_income ?? null) !== null || $profile->incomeCurrency || ($profile->profession && ($profile->profession->name ?? '') !== '') || ($profile->workingWithType && ($profile->workingWithType->name ?? '') !== '');
+    $__eduWWt = $profile->resolvedWorkingWithType();
+    $hasEduCareer = ($educationVisible && ($profile->highest_education ?? '') !== '') || ($profile->highest_education_other ?? '') !== '' || ($profile->occupation_title ?? '') !== '' || ($profile->company_name ?? '') !== '' || $hasPersonalIncome || $hasFamilyIncome || ($profile->annual_income ?? null) !== null || ($profile->family_income ?? null) !== null || $profile->incomeCurrency || ($profile->occupation_master_id ?? null) || ($profile->occupation_custom_id ?? null) || ($__eduWWt && ($__eduWWt->name ?? '') !== '');
 @endphp
         @php
             $__nav = $profileNavigation ?? ['prev' => null, 'next' => null];
@@ -420,7 +505,7 @@
 
         <div class="lg:flex lg:flex-row lg:items-stretch">
         <div class="min-w-0 flex-1 flex flex-col px-5 lg:px-5 lg:pb-2 lg:pl-6 lg:pr-5 xl:px-6 xl:pl-8">
-        @if ($profileViewGateLocked)
+        @if ($profileViewGateLocked && $legacyProfileLockMode)
             <div class="relative min-h-[160px]">
                 <div class="blur-[6px] pointer-events-none select-none">
         @endif
@@ -465,7 +550,7 @@
         {{-- Scan-first summary + actions integrated in one panel (no detached CTA card) --}}
         <div class="border-b border-stone-200/85 pb-4 dark:border-gray-700 lg:border-0 lg:pb-0">
 @php
-    $profile->loadMissing(['profession', 'workingWithType']);
+    $profile->loadMissing(['occupationMaster.category.workingWithType', 'occupationCustom']);
     $overviewAge = null;
     if ($dateOfBirthVisible && ($profile->date_of_birth ?? '') !== '') {
         try {
@@ -480,10 +565,12 @@
         $overviewEduLine = \App\Support\ProfileDisplayCopy::formatEducationPhrase($profile->highest_education);
     }
     $overviewOccLine = null;
-    if (($profile->occupation_title ?? '') !== '') {
-        $overviewOccLine = \App\Support\ProfileDisplayCopy::formatOccupationPhrase($profile->occupation_title);
-    } elseif ($profile->profession && ($profile->profession->name ?? '') !== '') {
-        $overviewOccLine = \App\Support\ProfileDisplayCopy::formatOccupationPhrase($profile->profession->name);
+    $__ovOcc = trim((string) ($profile->occupation_title ?? ''));
+    if ($__ovOcc === '') {
+        $__ovOcc = trim((string) ($profile->resolvedProfession()?->name ?? ''));
+    }
+    if ($__ovOcc !== '') {
+        $overviewOccLine = \App\Support\ProfileDisplayCopy::formatOccupationPhrase($__ovOcc);
     }
     $scanRow1Parts = [];
     if ($overviewAge !== null && $dateOfBirthVisible) {
@@ -589,7 +676,7 @@
             </div>
         </div>
         </div>
-        @if ($profileViewGateLocked)
+        @if ($profileViewGateLocked && $legacyProfileLockMode)
                 </div>
                 <div class="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 bg-white/75 p-4 dark:bg-gray-900/70">
                     <x-feature-lock
@@ -788,7 +875,7 @@
 
         @if (! ($isOwnProfile ?? false))
             <div class="border-b border-stone-200/85 bg-gradient-to-r from-rose-50/80 via-white to-white px-5 py-6 dark:border-gray-700/80 dark:from-rose-950/20 dark:via-gray-900 dark:to-gray-900 lg:px-8">
-                @if ($profileViewGateLocked)
+                @if ($profileViewGateLocked && $legacyProfileLockMode)
                     <div class="relative min-h-[100px]">
                         <div class="blur-[6px] pointer-events-none select-none">
                 @endif
@@ -812,7 +899,7 @@
                         @endif
                     </div>
                 </div>
-                @if ($profileViewGateLocked)
+                @if ($profileViewGateLocked && $legacyProfileLockMode)
                         </div>
                         <div class="absolute inset-0 z-10 flex flex-col items-center justify-center gap-2 bg-white/70 p-3 dark:bg-gray-900/65">
                             <x-feature-lock
@@ -896,10 +983,14 @@
             $locationLineForAbout = isset($locationLine) ? $locationLine : \App\Support\ProfileDisplayCopy::profileResidenceDisplayLine($profile);
             $detailAboutFallback = '';
             if ($detailNarrative === '') {
+                $__aboutOcc = trim((string) ($profile->occupation_title ?? ''));
+                if ($__aboutOcc === '') {
+                    $__aboutOcc = trim((string) ($profile->resolvedProfession()?->name ?? ''));
+                }
                 $detailAboutFallback = implode('  |  ', array_filter([
                     ($profile->maritalStatus?->label ?? '') !== '' ? __('Marital status').': '.$profile->maritalStatus->label : null,
                     ($profile->highest_education ?? '') !== '' ? __('Education').': '.$profile->highest_education : null,
-                    ($profile->occupation_title ?? '') !== '' ? __('Occupation').': '.$profile->occupation_title : (($profile->profession?->name ?? '') !== '' ? __('Occupation').': '.$profile->profession->name : null),
+                    $__aboutOcc !== '' ? __('Occupation').': '.$__aboutOcc : null,
                     $locationLineForAbout !== '' ? __('Location').': '.$locationLineForAbout : null,
                 ]));
             }
@@ -909,7 +1000,7 @@
         {{-- About me spotlight: directly under “Like this profile” / interest strip (or first fold for own profile) --}}
         @if ($hasAboutBody)
             <div class="px-5 pb-2 pt-2 lg:px-8 lg:pb-3 lg:pt-4">
-                @if (! ($isOwnProfile ?? false) && $profileViewGateLocked)
+                @if (! ($isOwnProfile ?? false) && $profileViewGateLocked && $legacyProfileLockMode)
                     <div class="relative min-h-[140px]">
                         <div class="blur-[6px] pointer-events-none select-none">
                 @endif
@@ -939,7 +1030,7 @@
                         </div>
                     </div>
                 </article>
-                @if (! ($isOwnProfile ?? false) && $profileViewGateLocked)
+                @if (! ($isOwnProfile ?? false) && $profileViewGateLocked && $legacyProfileLockMode)
                         </div>
                         <div class="absolute inset-0 z-10 flex flex-col items-center justify-center gap-2 bg-white/75 p-4 dark:bg-gray-900/70">
                             <x-feature-lock
@@ -962,25 +1053,62 @@
             'lg:pt-5' => $aboutFoldTight,
             'lg:pt-8' => ! $aboutFoldTight,
         ])>
-            @if (! ($isOwnProfile ?? false) && $profileViewGateLocked)
-                <div class="relative min-h-[160px]">
-                    <div class="blur-[6px] pointer-events-none select-none">
-            @endif
-            @include('matrimony.profile.partials.snapshot-stack', ['profileShowSnapshot' => $profileShowSnapshot ?? []])
-            @if (! ($isOwnProfile ?? false) && $profileViewGateLocked)
+            @php
+                $snapshotAll = $profileShowSnapshot ?? [];
+                $lockStartSection = $profileViewLockStartSection ?? 'family';
+                $lockStartIndex = null;
+                foreach ($snapshotAll as $i => $section) {
+                    if (($section['id'] ?? '') === $lockStartSection) {
+                        $lockStartIndex = $i;
+                        break;
+                    }
+                }
+                if ($lockStartIndex === null) {
+                    foreach ($snapshotAll as $i => $section) {
+                        if (($section['id'] ?? '') === 'family') {
+                            $lockStartIndex = $i;
+                            break;
+                        }
+                    }
+                }
+                if ($lockStartIndex === null) {
+                    $lockStartIndex = count($snapshotAll);
+                }
+                $snapshotVisible = array_slice($snapshotAll, 0, (int) $lockStartIndex);
+                $snapshotLocked = array_slice($snapshotAll, (int) $lockStartIndex);
+                $lockBlurStrength = max(35, min(100, (int) ($profileViewLockBlurStrength ?? 78)));
+                $lockBlurPxL1 = max(3, (int) round(2 + (($lockBlurStrength - 35) * 0.08)));
+                $lockBlurPxL2 = max(8, (int) round(7 + (($lockBlurStrength - 35) * 0.16)));
+                $lockBlurPxL3 = max(14, (int) round(13 + (($lockBlurStrength - 35) * 0.26)));
+                $lockOpacityL1 = min(0.45, max(0.14, 0.12 + (($lockBlurStrength - 35) / 240)));
+                $lockOpacityL2 = min(0.70, max(0.24, 0.22 + (($lockBlurStrength - 35) / 170)));
+                $lockOpacityL3 = min(0.92, max(0.36, 0.34 + (($lockBlurStrength - 35) / 120)));
+            @endphp
+            @include('matrimony.profile.partials.snapshot-stack', ['profileShowSnapshot' => $snapshotVisible])
+            @if (! ($isOwnProfile ?? false) && $profileViewGateLocked && $snapshotLocked !== [])
+                <section
+                    id="profile-lock-start"
+                    class="profile-progressive-lock rounded-2xl border border-stone-200/80 bg-white/80 shadow-sm dark:border-gray-700/70 dark:bg-gray-900/50"
+                    aria-label="{{ __('profile.feature_gate_profile_views_title') }}"
+                    style="--lock-blur-soft: {{ $lockBlurPxL1 }}px; --lock-blur-mid: {{ $lockBlurPxL2 }}px; --lock-blur-heavy: {{ $lockBlurPxL3 }}px; --lock-op-soft: {{ $lockOpacityL1 }}; --lock-op-mid: {{ $lockOpacityL2 }}; --lock-op-heavy: {{ $lockOpacityL3 }};"
+                >
+                    <div class="profile-progressive-lock__content max-h-[26rem] overflow-hidden" aria-hidden="true">
+                        @include('matrimony.profile.partials.snapshot-stack', ['profileShowSnapshot' => $snapshotLocked])
                     </div>
-                    <div class="absolute inset-0 z-10 flex flex-col items-center justify-center gap-2 bg-white/75 p-4 dark:bg-gray-900/70">
+                    <div class="profile-progressive-lock__veil" aria-hidden="true"></div>
+                    <div id="profile-lock-single-cta" class="profile-progressive-lock__cta px-4 sm:px-6">
                         <x-feature-lock
+                            data-analytics-lock-cta="profile_lock_cta"
                             :title="__('profile.feature_gate_profile_views_title')"
                             :message="__('profile.feature_gate_profile_views_message')"
                             :ctaTextDynamic="__('profile.feature_gate_cta_full_profile')"
                         />
                     </div>
-                </div>
+                </section>
             @endif
 
 
-@if (auth()->check())
+@if (auth()->check() && (! $profileViewGateLocked || ($isOwnProfile ?? false)))
     <div id="contact-usage-strip" class="mb-4 rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-gray-600 dark:bg-gray-800/50">
         @if ($isUnlimited)
             <p class="text-sm text-gray-800 dark:text-gray-200">
@@ -1005,8 +1133,15 @@
     </div>
 @endif
 
+@if (! (! ($isOwnProfile ?? false) && $profileViewGateLocked))
 <div id="profile-contact-panel" class="relative overflow-hidden rounded-2xl border border-stone-200/75 bg-gradient-to-br from-white via-stone-50/80 to-emerald-50/20 shadow-[0_14px_44px_-20px_rgba(5,150,105,0.1)] ring-1 ring-stone-100/70 dark:border-stone-700/80 dark:from-gray-900 dark:via-stone-900/90 dark:to-emerald-950/15">
-    <section class="relative px-5 py-6 sm:px-7 sm:py-7" aria-labelledby="profile-contact-heading">
+@if (! ($isOwnProfile ?? false) && $profileViewGateLocked)
+    <div
+        class="profile-progressive-lock max-h-56"
+        style="--lock-blur-soft: {{ $lockBlurPxL1 }}px; --lock-blur-mid: {{ $lockBlurPxL2 }}px; --lock-blur-heavy: {{ $lockBlurPxL3 }}px; --lock-op-soft: {{ $lockOpacityL1 }}; --lock-op-mid: {{ $lockOpacityL2 }}; --lock-op-heavy: {{ $lockOpacityL3 }};"
+    >
+@endif
+    <section class="relative px-5 py-6 sm:px-7 sm:py-7 @if(! ($isOwnProfile ?? false) && $profileViewGateLocked) profile-progressive-lock__content overflow-hidden @endif" aria-labelledby="profile-contact-heading">
         <header class="mb-4 flex flex-wrap items-center gap-3">
             <span class="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-700 text-white shadow-md shadow-emerald-600/20 dark:from-emerald-600 dark:to-teal-900" aria-hidden="true">
                 <svg class="h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 6.75c0 8.284 6.716 15 15 15h2.25a2.25 2.25 0 002.25-2.25v-1.372c0-.516-.351-.966-.852-1.091l-4.423-1.106c-.44-.11-.902.055-1.173.417l-.97 1.293c-.282.376-.769.542-1.21.38a12.035 12.035 0 01-7.143-7.143c-.162-.441.004-.928.38-1.21l1.293-.97c.363-.271.527-.734.417-1.173L6.963 3.102a1.125 1.125 0 00-1.091-.852H4.5A2.25 2.25 0 002.25 4.5v2.25z"/></svg>
@@ -1196,7 +1331,16 @@
             @endif
         </div>
     </section>
+@if (! ($isOwnProfile ?? false) && $profileViewGateLocked)
+    <div class="profile-progressive-lock__veil" aria-hidden="true"></div>
+    </div>
+@endif
 </div>
+@else
+<div class="rounded-2xl border border-indigo-200/90 bg-indigo-50/80 px-4 py-4 text-sm text-indigo-900 shadow-sm dark:border-indigo-800/70 dark:bg-indigo-950/35 dark:text-indigo-100">
+    {{ __('More profile details are available for paid users only.') }}
+</div>
+@endif
 
 {{-- Visual Divider --}}
 @if (!$isOwnProfile)
@@ -1462,6 +1606,36 @@
             btn.disabled = false;
         }
     });
+})();
+</script>
+@endif
+
+@if (! ($isOwnProfile ?? false) && ($profileViewGateLocked ?? false))
+<script>
+(function () {
+    var root = document.getElementById('profile-lock-single-cta');
+    if (!root) return;
+    if (window.__profileLockTracked !== true) {
+        window.__profileLockTracked = true;
+        window.dispatchEvent(new CustomEvent('analytics:event', {
+            detail: {
+                name: 'profile_lock_impression',
+                source: 'profile_show',
+                lock_start_section: @json($profileViewLockStartSection ?? 'family')
+            }
+        }));
+    }
+    var cta = root.querySelector('a');
+    if (!cta) return;
+    cta.addEventListener('click', function () {
+        window.dispatchEvent(new CustomEvent('analytics:event', {
+            detail: {
+                name: 'profile_lock_cta_click',
+                source: 'profile_show',
+                lock_start_section: @json($profileViewLockStartSection ?? 'family')
+            }
+        }));
+    }, { once: true });
 })();
 </script>
 @endif

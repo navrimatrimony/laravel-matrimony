@@ -37,11 +37,11 @@ class PincodeSeeder extends Seeder
             if ($isPrimary || $location->pincode === null || $location->pincode === '') {
                 $location->pincode = $pincode;
             }
-            if ($latitude !== null && ($location->latitude === null || $isPrimary)) {
-                $location->latitude = $latitude;
+            if ($latitude !== null && ($location->lat === null || $isPrimary)) {
+                $location->lat = $latitude;
             }
-            if ($longitude !== null && ($location->longitude === null || $isPrimary)) {
-                $location->longitude = $longitude;
+            if ($longitude !== null && ($location->lng === null || $isPrimary)) {
+                $location->lng = $longitude;
             }
             $location->save();
         }

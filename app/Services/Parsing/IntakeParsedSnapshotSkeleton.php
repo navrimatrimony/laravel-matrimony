@@ -5,6 +5,10 @@ namespace App\Services\Parsing;
 /**
  * Canonical full parsed-intake skeleton.
  * Keeps parse output shape stable even for partial biodata extraction.
+ *
+ * The {@code education_history} array is legacy parse shape only; matrimony profile education is
+ * stored on {@code core.highest_education} / {@code highest_education_other} and {@see \App\Services\MutationService}
+ * strips {@code education_history} before applying a snapshot to a profile.
  */
 class IntakeParsedSnapshotSkeleton
 {
@@ -172,19 +176,15 @@ class IntakeParsedSnapshotSkeleton
             'father_extra_info' => null,
             'father_contact_1' => null,
             'father_contact_2' => null,
-            'father_contact_3' => null,
             'mother_name' => null,
             'mother_occupation' => null,
             'mother_contact_1' => null,
             'mother_contact_2' => null,
-            'mother_contact_3' => null,
             'brother_count' => null,
             'sister_count' => null,
             'other_relatives_text' => null,
             'highest_education' => null,
             'highest_education_other' => null,
-            'specialization' => null,
-            'college_id' => null,
             'working_with_type_id' => null,
             'profession_id' => null,
             'occupation_type' => null,

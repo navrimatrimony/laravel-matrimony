@@ -42,11 +42,11 @@ class IntakeDbAliasLayerTest extends TestCase
 
     public function test_find_degree_match_honors_education_degree_aliases(): void
     {
-        if (! Schema::hasTable('education_degree_aliases') || ! Schema::hasTable('education_degrees')) {
-            $this->markTestSkipped('education_degree_aliases not migrated');
+        if (! Schema::hasTable('master_education_aliases') || ! Schema::hasTable('master_education')) {
+            $this->markTestSkipped('master_education_aliases not migrated');
         }
 
-        $catId = DB::table('education_categories')->insertGetId([
+        $catId = DB::table('master_education_categories')->insertGetId([
             'name' => 'Test Cat',
             'slug' => 'test-cat-'.uniqid(),
             'sort_order' => 0,
@@ -55,18 +55,17 @@ class IntakeDbAliasLayerTest extends TestCase
             'updated_at' => now(),
         ]);
 
-        $degId = DB::table('education_degrees')->insertGetId([
+        $degId = DB::table('master_education')->insertGetId([
             'category_id' => $catId,
             'code' => 'XYZ'.substr(uniqid(), 0, 6),
-            'title' => 'Rare Degree Title',
-            'full_form' => null,
+            'full_form' => 'Rare Degree Title',
             'sort_order' => 0,
             'created_at' => now(),
             'updated_at' => now(),
         ]);
 
         $aliasRaw = 'biodata says weird degree '.uniqid();
-        DB::table('education_degree_aliases')->insert([
+        DB::table('master_education_aliases')->insert([
             'education_degree_id' => $degId,
             'alias' => $aliasRaw,
             'normalized_alias' => MasterDataAliasNormalizer::normalizeForStoredAlias($aliasRaw),
@@ -82,18 +81,18 @@ class IntakeDbAliasLayerTest extends TestCase
 
     public function test_find_occupation_master_for_intake_uses_alias_table(): void
     {
-        if (! Schema::hasTable('occupation_master_aliases') || ! Schema::hasTable('occupation_master')) {
-            $this->markTestSkipped('occupation_master_aliases not migrated');
+        if (! Schema::hasTable('master_occupation_aliases') || ! Schema::hasTable('master_occupations')) {
+            $this->markTestSkipped('master_occupation_aliases not migrated');
         }
 
-        $catId = DB::table('occupation_categories')->insertGetId([
+        $catId = DB::table('master_occupation_categories')->insertGetId([
             'name' => 'Test Occ Cat',
             'sort_order' => 0,
             'created_at' => now(),
             'updated_at' => now(),
         ]);
 
-        $occId = DB::table('occupation_master')->insertGetId([
+        $occId = DB::table('master_occupations')->insertGetId([
             'name' => 'Canonical Occ Name',
             'normalized_name' => 'canonicaloccname',
             'category_id' => $catId,
@@ -103,7 +102,7 @@ class IntakeDbAliasLayerTest extends TestCase
         ]);
 
         $aliasRaw = 'OCR occ title '.uniqid();
-        DB::table('occupation_master_aliases')->insert([
+        DB::table('master_occupation_aliases')->insert([
             'occupation_master_id' => $occId,
             'alias' => $aliasRaw,
             'normalized_alias' => MasterDataAliasNormalizer::normalizeForStoredAlias($aliasRaw),
@@ -119,18 +118,18 @@ class IntakeDbAliasLayerTest extends TestCase
 
     public function test_normalize_career_rows_sets_occupation_master_id_from_alias(): void
     {
-        if (! Schema::hasTable('occupation_master_aliases') || ! Schema::hasTable('occupation_master')) {
-            $this->markTestSkipped('occupation_master_aliases not migrated');
+        if (! Schema::hasTable('master_occupation_aliases') || ! Schema::hasTable('master_occupations')) {
+            $this->markTestSkipped('master_occupation_aliases not migrated');
         }
 
-        $catId = DB::table('occupation_categories')->insertGetId([
+        $catId = DB::table('master_occupation_categories')->insertGetId([
             'name' => 'Test Occ Cat B',
             'sort_order' => 0,
             'created_at' => now(),
             'updated_at' => now(),
         ]);
 
-        $occId = DB::table('occupation_master')->insertGetId([
+        $occId = DB::table('master_occupations')->insertGetId([
             'name' => 'Canonical B',
             'normalized_name' => 'canonicalb',
             'category_id' => $catId,
@@ -140,7 +139,7 @@ class IntakeDbAliasLayerTest extends TestCase
         ]);
 
         $aliasRaw = 'job ocr label '.uniqid();
-        DB::table('occupation_master_aliases')->insert([
+        DB::table('master_occupation_aliases')->insert([
             'occupation_master_id' => $occId,
             'alias' => $aliasRaw,
             'normalized_alias' => MasterDataAliasNormalizer::normalizeForStoredAlias($aliasRaw),

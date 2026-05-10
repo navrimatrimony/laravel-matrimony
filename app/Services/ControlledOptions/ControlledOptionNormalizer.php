@@ -550,9 +550,9 @@ class ControlledOptionNormalizer
     {
         return match ($logicalField) {
             'gender' => 'master_genders',
-            'religion' => 'religions',
-            'caste' => 'castes',
-            'sub_caste' => 'sub_castes',
+            'religion' => 'master_religions',
+            'caste' => 'master_castes',
+            'sub_caste' => 'master_sub_castes',
             'marital_status' => 'master_marital_statuses',
             'complexion' => 'master_complexions',
             'blood_group' => 'master_blood_groups',

@@ -33,6 +33,32 @@ test('divorced without has_children in post is allowed', function () {
     $response->assertSessionHasNoErrors();
 });
 
+test('divorced has_children yes child row with empty living_with is allowed', function () {
+    $user = User::factory()->create();
+    $profile = MatrimonyProfile::factory()->create(['user_id' => $user->id]);
+    $divorcedId = MasterMaritalStatus::where('key', 'divorced')->value('id');
+    $genderId = MasterGender::where('key', 'male')->where('is_active', true)->value('id');
+    if (! $divorcedId || ! $genderId) {
+        $this->markTestSkipped('Master lookups not seeded.');
+    }
+
+    $response = $this->actingAs($user)->post(route('matrimony.profile.wizard.store', ['section' => 'basic-info']), [
+        'full_name' => $profile->full_name,
+        'gender_id' => $genderId,
+        'marital_status_id' => $divorcedId,
+        'location_input' => 'Pune',
+        'has_children' => '1',
+        'marriages' => [
+            ['id' => null, 'marriage_year' => '', 'divorce_year' => '', 'divorce_status' => ''],
+        ],
+        'children' => [
+            ['id' => null, 'gender' => 'male', 'age' => 7, 'child_living_with_id' => '', 'sort_order' => 0],
+        ],
+    ]);
+
+    $response->assertSessionHasNoErrors();
+});
+
 test('divorced has_children yes with zero children rows is allowed', function () {
     $user = User::factory()->create();
     $profile = MatrimonyProfile::factory()->create(['user_id' => $user->id]);

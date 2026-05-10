@@ -346,7 +346,6 @@ class IntakeController extends Controller
             'core' => 'core',
             'contacts' => 'contacts',
             'children' => 'children',
-            'education' => 'education_history',
             'career' => 'career_history',
             'addresses' => 'addresses',
             'property_summary' => 'property_summary',
@@ -1118,30 +1117,42 @@ class IntakeController extends Controller
         $profileEducation = collect($snapshot['education_history'] ?? [])->map(
             fn ($r) => (object) (is_array($r) ? $r : (array) $r)
         );
+        if ($profileEducation->isEmpty()) {
+            $h = trim((string) ($coreData['highest_education'] ?? ''));
+            $ho = trim((string) ($coreData['highest_education_other'] ?? ''));
+            $line = $h;
+            if ($ho !== '') {
+                $line = $line !== '' ? $line.' — '.$ho : $ho;
+            }
+            if ($line !== '' && $line !== '—') {
+                $profileEducation = collect([(object) ['degree' => $line, 'institution' => null, 'specialization' => null, 'year' => null]]);
+            }
+        }
         $profileCareer = collect($snapshot['career_history'] ?? [])->map(
             fn ($r) => (object) (is_array($r) ? $r : (array) $r)
         );
-        // Preview-only: derive highest_education / specialization / company_name / work location core fields from history rows when missing.
+        // Preview-only: derive highest_education / company_name / work location core fields from history rows when missing.
         if (empty($coreData['highest_education']) && $profileEducation->isNotEmpty()) {
             $firstEdu = (array) $profileEducation->first();
             $degreeCode = null;
             $degreeText = trim((string) ($firstEdu['degree'] ?? ''));
             $instText = trim((string) ($firstEdu['institution'] ?? ''));
 
-            // Try to resolve to a concrete EducationDegree row:
-            // 1) title exactly matches "BE - Computer Engineering" style composite,
-            // 2) else by code/title = raw degreeText.
+            // Try to resolve to a concrete EducationDegree row (short label = {@code code}, long = {@code full_form}).
             if ($degreeText !== '') {
                 $candidateTitle = $instText !== '' ? ($degreeText.' - '.$instText) : $degreeText;
                 $deg = \App\Models\EducationDegree::query()
-                    ->where('title', $candidateTitle)
-                    ->orWhere(function ($q) use ($degreeText) {
-                        $q->where('code', $degreeText)
-                            ->orWhere('title', $degreeText);
+                    ->where(function ($w) use ($degreeText, $candidateTitle) {
+                        $w->where('code', $degreeText);
+                        if ($candidateTitle !== '' && $candidateTitle !== $degreeText) {
+                            $w->orWhere('code', $candidateTitle);
+                        }
+                        $w->orWhere('full_form', $candidateTitle)
+                            ->orWhere('full_form', $degreeText);
                     })
                     ->first();
 
-                // Fallback: normalize codes/titles (remove dots/spaces etc.) and match common patterns.
+                // Fallback: normalize codes (remove dots/spaces etc.) and match common patterns.
                 if (! $deg) {
                     $normalize = static function (string $v): string {
                         $v = strtoupper($v);
@@ -1153,9 +1164,8 @@ class IntakeController extends Controller
                         $allDegrees = \App\Models\EducationDegree::all();
                         $matches = $allDegrees->filter(function ($row) use ($needle, $normalize) {
                             $codeNorm = $normalize((string) ($row->code ?? ''));
-                            $titleNorm = $normalize((string) ($row->title ?? ''));
 
-                            return $codeNorm === $needle || $titleNorm === $needle;
+                            return $codeNorm === $needle;
                         });
                         if ($matches->count() === 1) {
                             $deg = $matches->first();
@@ -1165,9 +1175,7 @@ class IntakeController extends Controller
                                 ->whereHas('category', fn ($q) => $q->where('name', 'Engineering'))
                                 ->where(function ($q) {
                                     $q->where('code', 'like', '%B.E%')
-                                        ->orWhere('title', 'like', '%B.E%')
-                                        ->orWhere('code', 'like', '%B.Tech%')
-                                        ->orWhere('title', 'like', '%B.Tech%');
+                                        ->orWhere('code', 'like', '%B.Tech%');
                                 })
                                 ->orderBy('sort_order')
                                 ->first();
@@ -1182,22 +1190,10 @@ class IntakeController extends Controller
 
             // highest_education: prefer canonical code, else fall back to plain degree text.
             $coreData['highest_education'] = $degreeCode ?? $degreeText;
-
-            // Specialization: if empty, use institution (e.g. "Computer Engineering") or explicit specialization field.
-            if (empty($coreData['specialization'])) {
-                if (! empty($firstEdu['specialization'] ?? null)) {
-                    $coreData['specialization'] = trim((string) $firstEdu['specialization']);
-                } elseif ($instText !== '') {
-                    $coreData['specialization'] = $instText;
-                }
-            }
         }
         // Mirror derived education fields back onto profile object so shared engines (education-occupation-income-engine) can read them.
         if (! empty($coreData['highest_education'] ?? null)) {
             $intakeProfile->highest_education = $coreData['highest_education'];
-        }
-        if (! empty($coreData['specialization'] ?? null)) {
-            $intakeProfile->specialization = $coreData['specialization'];
         }
 
         if ($profileCareer->isNotEmpty()) {
@@ -1294,7 +1290,6 @@ class IntakeController extends Controller
         $assetTypes = \App\Models\MasterAssetType::where('is_active', true)->get();
         $ownershipTypes = \App\Models\MasterOwnershipType::where('is_active', true)->get();
         $relationTypesParentsFamily = [
-            ['value' => 'native_place', 'label' => 'Native Place'],
             ['value' => 'paternal_grandfather', 'label' => 'Paternal Grandfather'],
             ['value' => 'paternal_grandmother', 'label' => 'Paternal Grandmother'],
             ['value' => 'paternal_uncle', 'label' => 'Paternal Uncle (chulte)'],
@@ -1864,17 +1859,6 @@ class IntakeController extends Controller
             }
         }
 
-        // When core has work_location_text but career_history[0].location is empty, copy so apply saves work location to profile_career.
-        if (is_array($out['core']) && isset($out['career_history']) && is_array($out['career_history'])) {
-            $workLoc = trim((string) ($out['core']['work_location_text'] ?? ''));
-            if ($workLoc !== '' && isset($out['career_history'][0]) && is_array($out['career_history'][0])) {
-                $first = &$out['career_history'][0];
-                if (trim((string) ($first['location'] ?? '')) === '' && trim((string) ($first['work_location'] ?? '')) === '') {
-                    $first['location'] = $workLoc;
-                }
-            }
-        }
-
         // Centralized deterministic controlled-field normalization for full snapshot.
         return app(IntakePipelineService::class)->normalizeSnapshotForStorage($out, $suggestedByUserId);
     }
@@ -1992,7 +1976,6 @@ class IntakeController extends Controller
             'काकू' => 'paternal_aunt',
             'Cousin' => 'Cousin',
             'इतर' => 'Other',
-            'native_place' => 'native_place',
         ];
         $marathiToMaternal = [
             'मामा' => 'maternal_uncle',
@@ -2553,7 +2536,7 @@ class IntakeController extends Controller
                 continue;
             }
             $name = trim((string) ($row['name'] ?? ''));
-            if (in_array($relationType, ['maternal_address_ajol', 'native_place'], true)) {
+            if ($relationType === 'maternal_address_ajol') {
                 $name = '';
             }
             $addressLine = trim((string) ($row['address_line'] ?? $row['address'] ?? $row['Address'] ?? ''));

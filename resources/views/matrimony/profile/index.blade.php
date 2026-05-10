@@ -197,7 +197,7 @@
                                                 @endif
                                                 <optgroup label="{{ $ec->name }}">
                                                     @foreach($ec->degrees as $deg)
-                                                        <option value="{{ $deg->id }}" {{ (string) request('education_degree_id') === (string) $deg->id ? 'selected' : '' }}>{{ $deg->title }}</option>
+                                                        <option value="{{ $deg->id }}" {{ (string) request('education_degree_id') === (string) $deg->id ? 'selected' : '' }}>{{ $deg->code }}</option>
                                                     @endforeach
                                                 </optgroup>
                                             @endforeach
@@ -387,7 +387,7 @@
                                     foreach (($educationCategoriesForSearch ?? collect()) as $_ec) {
                                         $d = $_ec->degrees->firstWhere('id', (int) request('education_degree_id'));
                                         if ($d) {
-                                            $degLabel = $d->title;
+                                            $degLabel = $d->code;
                                             break;
                                         }
                                     }
@@ -472,7 +472,10 @@
                             $hasApprovedPhoto = $matrimonyProfile->profile_photo && $matrimonyProfile->photo_approved !== false;
                             $edu = trim((string) ($matrimonyProfile->highest_education ?? ''));
                             $heightCm = $matrimonyProfile->height_cm;
-                            $profName = trim((string) ($matrimonyProfile->profession?->name ?? ''));
+                            $profName = trim((string) ($matrimonyProfile->occupation_title ?? ''));
+                            if ($profName === '') {
+                                $profName = trim((string) ($matrimonyProfile->resolvedProfession()?->name ?? ''));
+                            }
                             $msLabel = trim((string) ($matrimonyProfile->maritalStatus?->label ?? ''));
                             $casteLabel = $matrimonyProfile->caste?->display_label ?? '';
                             $religionLabel = trim((string) ($matrimonyProfile->religion?->display_label ?? ''));

@@ -96,7 +96,7 @@ class CouponController extends Controller
      */
     private function validatedCoupon(Request $request, ?int $ignoreCouponId = null): array
     {
-        $codeRule = Rule::unique('coupons', 'code');
+        $codeRule = Rule::unique('master_coupons', 'code');
         if ($ignoreCouponId !== null) {
             $codeRule = $codeRule->ignore($ignoreCouponId);
         }

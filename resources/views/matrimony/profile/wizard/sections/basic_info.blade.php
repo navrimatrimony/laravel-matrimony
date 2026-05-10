@@ -177,7 +177,7 @@
         />
     </div>
 
-    {{-- 4b. Mother tongue + Current location (text + searchable) — single row with 3 fields --}}
+    {{-- 4b. Mother tongue — full width; self addresses (repeater) below --}}
     @php
         $nameMotherTongue = $corePrefix ? $corePrefix . '[mother_tongue_id]' : 'mother_tongue_id';
         $valMotherTongue = old($oldPrefix.'mother_tongue_id', $profile->mother_tongue_id ?? '');
@@ -191,53 +191,122 @@
             }
             return $dbLabel;
         };
-        // Current location: detailed free-text + searchable city/town via typeahead.
-        $nameAddressLine = $corePrefix ? $corePrefix . '[address_line]' : 'address_line';
-        $addressLineVal = old($oldPrefix.'address_line', $profile->address_line ?? ($coreData['address_line'] ?? ''));
-        $residenceDisplay = old($oldPrefix.'wizard_residence_display', $residencePlaceDisplay ?? \App\Models\MatrimonyProfile::residenceLocationDisplayLineFor($profile));
-        $resHints = ['location_id' => '', 'country_id' => '', 'state_id' => '', 'district_id' => '', 'taluka_id' => ''];
-        if ($profile instanceof \App\Models\MatrimonyProfile) {
-            $resHints = $profile->residenceLocationHierarchyHints();
+        $addrTypes = $addressTypes ?? collect();
+        $selfRowsList = old('self_addresses', $wizardSelfAddresses ?? []);
+        if (! is_array($selfRowsList)) {
+            $selfRowsList = $wizardSelfAddresses ?? [];
         }
-        $resHints['location_id'] = (string) old($oldPrefix.'location_id', $resHints['location_id']);
+        $selfRowsList = array_values($selfRowsList);
     @endphp
-    <div class="grid grid-cols-1 md:grid-cols-3 gap-3 items-start">
-        <div class="min-w-0">
-            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">{{ __('wizard.mother_tongue') }}</label>
-            <select name="{{ $nameMotherTongue }}" class="w-full rounded-lg border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-3 py-2.5 h-[42px] focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
-                <option value="">{{ __('common.select_placeholder') }}</option>
-                @foreach($motherTongues ?? [] as $mt)
-                    <option value="{{ $mt->id }}" {{ (string)$valMotherTongue === (string)$mt->id ? 'selected' : '' }}>{{ $optionLabel($mt, 'mother_tongue') }}</option>
-                @endforeach
-            </select>
-            @error($oldPrefix.'mother_tongue_id')<p class="mt-1 text-sm text-red-600 dark:text-red-400">{{ $message }}</p>@enderror
+    <div class="max-w-md">
+        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">{{ __('wizard.mother_tongue') }}</label>
+        <select name="{{ $nameMotherTongue }}" class="w-full rounded-lg border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-3 py-2.5 h-[42px] focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+            <option value="">{{ __('common.select_placeholder') }}</option>
+            @foreach($motherTongues ?? [] as $mt)
+                <option value="{{ $mt->id }}" {{ (string)$valMotherTongue === (string)$mt->id ? 'selected' : '' }}>{{ $optionLabel($mt, 'mother_tongue') }}</option>
+            @endforeach
+        </select>
+        @error($oldPrefix.'mother_tongue_id')<p class="mt-1 text-sm text-red-600 dark:text-red-400">{{ $message }}</p>@enderror
+    </div>
+
+    <div class="space-y-3 border-t border-gray-100 dark:border-gray-700 pt-4 mt-2" id="self-addresses-repeater" data-next-index="{{ count($selfRowsList) }}">
+        <div class="flex items-center justify-between gap-2">
+            <span class="text-sm font-medium text-gray-800 dark:text-gray-200">{{ __('wizard.addresses_self') }}</span>
+            <button type="button" class="inline-flex items-center justify-center w-9 h-9 rounded-lg border border-indigo-300 dark:border-indigo-600 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-200 font-bold text-lg leading-none hover:bg-indigo-100 dark:hover:bg-indigo-900/50 js-add-self-address-row" title="{{ __('wizard.add_address_row') }}">+</button>
         </div>
-        <div class="min-w-0">
-            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Current address line</label>
-            <input type="text"
-                   name="{{ $nameAddressLine }}"
-                   value="{{ $addressLineVal }}"
-                   class="w-full rounded-lg border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-3 py-2.5 h-[42px] focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-                   placeholder="{{ __('components.parents.parents_address_line') }}">
-        </div>
-        <div class="min-w-0">
-            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Current city / village / district / state</label>
-            <x-profile.location-typeahead
-                context="residence"
-                :namePrefix="$corePrefix"
-                :value="$residenceDisplay"
-                :placeholder="__('components.parents.parents_location_placeholder')"
-                label=""
-                :noBorder="true"
-                :compactRow="true"
-                :dataLocationId="$resHints['location_id']"
-                :dataCountryId="$resHints['country_id']"
-                :dataStateId="$resHints['state_id']"
-                :dataDistrictId="$resHints['district_id']"
-                :dataTalukaId="$resHints['taluka_id']"
-            />
+        <div id="self-address-rows">
+            @foreach($selfRowsList as $index => $srow)
+                @php
+                    $srow = is_array($srow) ? $srow : [];
+                    $sid = $srow['id'] ?? null;
+                    $stype = old('self_addresses.'.$index.'.address_type_key', $srow['address_type_key'] ?? 'current');
+                    $sline = old('self_addresses.'.$index.'.address_line', $srow['address_line'] ?? '');
+                    $slid = (string) old('self_addresses.'.$index.'.location_id', $srow['location_id'] ?? '');
+                    $sdisp = old('self_addresses.'.$index.'.wizard_residence_display', $srow['display'] ?? '');
+                    $pfx = 'self_addresses['.$index.']';
+                    $hints = ['location_id' => '', 'country_id' => '', 'state_id' => '', 'district_id' => '', 'taluka_id' => ''];
+                    if ($slid !== '' && $profile instanceof \App\Models\MatrimonyProfile) {
+                        $hints = $profile->residenceLocationHierarchyHints();
+                        $hints['location_id'] = $slid;
+                    }
+                @endphp
+                <div class="self-address-row rounded-lg border border-gray-200 dark:border-gray-600 p-3 space-y-2 bg-gray-50/60 dark:bg-gray-900/40 mb-3" data-row-index="{{ $index }}">
+                    <div class="flex flex-wrap items-end gap-2">
+                        <div class="min-w-[10rem] flex-1">
+                            <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">{{ __('wizard.address_type') }}</label>
+                            <select name="{{ $pfx }}[address_type_key]" class="w-full rounded-lg border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-2 py-2 text-sm h-[42px]">
+                                @foreach($addrTypes as $at)
+                                    <option value="{{ $at->key }}" {{ (string) $stype === (string) $at->key ? 'selected' : '' }}>{{ $at->label }}</option>
+                                @endforeach
+                            </select>
+                        </div>
+                        <div class="flex-1 min-w-[8rem]">
+                            <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">{{ __('components.parents.parents_address_line') }}</label>
+                            <input type="text" name="{{ $pfx }}[address_line]" value="{{ $sline }}" class="w-full rounded-lg border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-2 py-2 text-sm h-[42px]" placeholder="{{ __('components.parents.parents_address_line') }}">
+                        </div>
+                        <input type="hidden" name="{{ $pfx }}[id]" value="{{ $sid }}">
+                        <button type="button" class="js-remove-self-address-row shrink-0 inline-flex items-center justify-center w-9 h-9 rounded-lg border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 mb-0.5 @if(count($selfRowsList) < 2) opacity-40 pointer-events-none @endif" title="{{ __('wizard.remove_row') }}">−</button>
+                    </div>
+                    <div class="min-w-0">
+                        <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">{{ __('components.parents.parents_village_city') }}</label>
+                        <x-profile.location-typeahead
+                            context="residence"
+                            :namePrefix="$pfx"
+                            :value="$sdisp"
+                            :placeholder="__('components.parents.parents_location_placeholder')"
+                            label=""
+                            :noBorder="true"
+                            :compactRow="true"
+                            :dataLocationId="$hints['location_id']"
+                            :dataCountryId="$hints['country_id']"
+                            :dataStateId="$hints['state_id']"
+                            :dataDistrictId="$hints['district_id']"
+                            :dataTalukaId="$hints['taluka_id']"
+                        />
+                    </div>
+                </div>
+            @endforeach
         </div>
     </div>
+
+    <template id="tpl-self-address-row">
+        @php $tplIdx = '__IDX__'; $pfx = 'self_addresses['.$tplIdx.']'; @endphp
+        <div class="self-address-row rounded-lg border border-gray-200 dark:border-gray-600 p-3 space-y-2 bg-gray-50/60 dark:bg-gray-900/40 mb-3" data-row-index="{{ $tplIdx }}">
+            <div class="flex flex-wrap items-end gap-2">
+                <div class="min-w-[10rem] flex-1">
+                    <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">{{ __('wizard.address_type') }}</label>
+                    <select name="{{ $pfx }}[address_type_key]" class="w-full rounded-lg border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-2 py-2 text-sm h-[42px]">
+                        @foreach($addrTypes as $at)
+                            <option value="{{ $at->key }}">{{ $at->label }}</option>
+                        @endforeach
+                    </select>
+                </div>
+                <div class="flex-1 min-w-[8rem]">
+                    <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">{{ __('components.parents.parents_address_line') }}</label>
+                    <input type="text" name="{{ $pfx }}[address_line]" value="" class="w-full rounded-lg border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-2 py-2 text-sm h-[42px]" placeholder="{{ __('components.parents.parents_address_line') }}">
+                </div>
+                <input type="hidden" name="{{ $pfx }}[id]" value="">
+                <button type="button" class="js-remove-self-address-row shrink-0 inline-flex items-center justify-center w-9 h-9 rounded-lg border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 mb-0.5" title="{{ __('wizard.remove_row') }}">−</button>
+            </div>
+            <div class="min-w-0">
+                <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">{{ __('components.parents.parents_village_city') }}</label>
+                <x-profile.location-typeahead
+                    context="residence"
+                    :namePrefix="$pfx"
+                    value=""
+                    :placeholder="__('components.parents.parents_location_placeholder')"
+                    label=""
+                    :noBorder="true"
+                    :compactRow="true"
+                    dataLocationId=""
+                    dataCountryId=""
+                    dataStateId=""
+                    dataDistrictId=""
+                    dataTalukaId=""
+                />
+            </div>
+        </div>
+    </template>
 
     {{-- 5. Marital status — full engine (status + status details + children) --}}
     @include('matrimony.profile.wizard.sections.marital_engine', [
@@ -281,5 +350,50 @@ document.addEventListener('alpine:init', function() {
 });
 </script>
 <script>
-document.addEventListener('DOMContentLoaded', function() { if (window.LocationTypeahead) window.LocationTypeahead.init(); });
+document.addEventListener('DOMContentLoaded', function() {
+    if (window.LocationTypeahead) window.LocationTypeahead.init();
+    var rep = document.getElementById('self-addresses-repeater');
+    var tpl = document.getElementById('tpl-self-address-row');
+    var rowsEl = document.getElementById('self-address-rows');
+    function syncSelfRemoveButtons() {
+        if (!rowsEl) return;
+        var rows = rowsEl.querySelectorAll('.self-address-row');
+        var dis = rows.length < 2;
+        rows.forEach(function (r) {
+            var b = r.querySelector('.js-remove-self-address-row');
+            if (!b) return;
+            b.classList.toggle('opacity-40', dis);
+            b.classList.toggle('pointer-events-none', dis);
+        });
+    }
+    function rebindSelfRowRemove(btn) {
+        btn.addEventListener('click', function () {
+            var row = btn.closest('.self-address-row');
+            if (!row || !rowsEl) return;
+            if (rowsEl.querySelectorAll('.self-address-row').length < 2) return;
+            row.remove();
+            syncSelfRemoveButtons();
+        });
+    }
+    if (rep && tpl && rowsEl) {
+        rowsEl.querySelectorAll('.js-remove-self-address-row').forEach(rebindSelfRowRemove);
+        rep.querySelectorAll('.js-add-self-address-row').forEach(function (addBtn) {
+            addBtn.addEventListener('click', function () {
+                var next = parseInt(rep.getAttribute('data-next-index') || '0', 10);
+                var html = tpl.innerHTML.replace(/__IDX__/g, String(next));
+                var wrap = document.createElement('div');
+                wrap.innerHTML = html.trim();
+                var node = wrap.firstElementChild;
+                if (node) {
+                    rowsEl.appendChild(node);
+                    rep.setAttribute('data-next-index', String(next + 1));
+                    node.querySelectorAll('.js-remove-self-address-row').forEach(rebindSelfRowRemove);
+                    if (window.LocationTypeahead) window.LocationTypeahead.init();
+                    syncSelfRemoveButtons();
+                }
+            });
+        });
+    }
+    syncSelfRemoveButtons();
+});
 </script>

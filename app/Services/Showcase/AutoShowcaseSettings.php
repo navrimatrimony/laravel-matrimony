@@ -53,7 +53,8 @@ class AutoShowcaseSettings
     }
 
     /**
-     * Ordered residence fallback modes: search_city | district_seat | min_population
+     * Ordered residence fallback modes: search_city | district_seat | tagged_city
+     * (Legacy {@code min_population} is mapped to {@code tagged_city} on read.)
      *
      * @return list<string>
      */
@@ -61,27 +62,25 @@ class AutoShowcaseSettings
     {
         $raw = (string) AdminSetting::getValue(
             'auto_showcase_residence_fallback',
-            '["search_city","district_seat","min_population"]'
+            '["search_city","district_seat","tagged_city"]'
         );
         $decoded = json_decode($raw, true);
         if (! is_array($decoded) || $decoded === []) {
-            return ['search_city', 'district_seat', 'min_population'];
+            return ['search_city', 'district_seat', 'tagged_city'];
         }
-        $allowed = ['search_city', 'district_seat', 'min_population'];
+        $allowed = ['search_city', 'district_seat', 'tagged_city', 'min_population'];
         $out = [];
         foreach ($decoded as $v) {
             $k = strtolower(trim((string) $v));
-            if (in_array($k, $allowed, true)) {
+            if ($k === 'min_population') {
+                $k = 'tagged_city';
+            }
+            if (in_array($k, ['search_city', 'district_seat', 'tagged_city'], true)) {
                 $out[] = $k;
             }
         }
 
-        return $out !== [] ? array_values(array_unique($out)) : ['search_city', 'district_seat', 'min_population'];
-    }
-
-    public static function minPopulationThreshold(): int
-    {
-        return max(0, (int) AdminSetting::getValue('auto_showcase_min_population', '100000'));
+        return $out !== [] ? array_values(array_unique($out)) : ['search_city', 'district_seat', 'tagged_city'];
     }
 
     public static function perSearchMaxCreate(): int

@@ -805,8 +805,7 @@ document.querySelectorAll('.use-candidate-btn').forEach(function(btn) {
             { key: 'mother_tongue', name: 'snapshot[core][mother_tongue_id]', fallbackSelector: null, label: 'Mother tongue' },
             { key: 'highest_education', name: 'snapshot[core][highest_education]', fallbackSelector: null, label: 'Highest education' },
             { key: 'working_with_type', name: 'snapshot[core][working_with_type_id]', fallbackSelector: null, label: 'Working with' },
-            { key: 'profession', name: 'snapshot[core][profession_id]', fallbackSelector: null, label: 'Profession' },
-            { key: 'college', name: 'snapshot[core][college_id]', fallbackSelector: null, label: 'College' }
+            { key: 'profession', name: 'snapshot[core][profession_id]', fallbackSelector: null, label: 'Profession' }
         ];
 
         fields.forEach(function(cfg) {

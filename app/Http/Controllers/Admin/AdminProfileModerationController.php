@@ -708,10 +708,10 @@ class AdminProfileModerationController extends Controller
                 $validationRules['education_slots'] = 'nullable|string|max:8192';
             }
             $validationRules['location'] = 'nullable|string|max:255';
-            $validationRules['religion_id'] = ['nullable', 'exists:religions,id'];
+            $validationRules['religion_id'] = ['nullable', 'exists:master_religions,id'];
             $validationRules['caste_id'] = [
                 'nullable',
-                Rule::exists('castes', 'id')->where(function ($query) use ($request) {
+                Rule::exists('master_castes', 'id')->where(function ($query) use ($request) {
                     if ($request->filled('religion_id')) {
                         $query->where('religion_id', $request->input('religion_id'));
                     }
@@ -719,7 +719,7 @@ class AdminProfileModerationController extends Controller
             ];
             $validationRules['sub_caste_id'] = [
                 'nullable',
-                Rule::exists('sub_castes', 'id')->where(function ($query) use ($request) {
+                Rule::exists('master_sub_castes', 'id')->where(function ($query) use ($request) {
                     if ($request->filled('caste_id')) {
                         $query->where('caste_id', $request->input('caste_id'));
                     }

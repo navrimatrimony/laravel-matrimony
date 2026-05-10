@@ -74,16 +74,10 @@ class EducationSeeder extends Seeder
                 if ($codeEn === '') {
                     $codeEn = $titleEn;
                 }
-                if ($titleEn === '') {
-                    $titleEn = $codeEn;
-                }
                 $grouped[$catEn]['degrees'][] = [
                     'code' => $codeEn,
-                    'title' => $titleEn,
                     'full_form' => $fullEn !== '' ? $fullEn : null,
                     'code_mr' => trim((string) $codeMr) !== '' ? trim((string) $codeMr) : null,
-                    'title_mr' => trim((string) $titleMr) !== '' ? trim((string) $titleMr) : null,
-                    'full_form_mr' => trim((string) $fullMr) !== '' ? trim((string) $fullMr) : null,
                 ];
             }
 
@@ -114,11 +108,8 @@ class EducationSeeder extends Seeder
                     EducationDegree::query()->create([
                         'category_id' => $category->id,
                         'code' => $degree['code'],
-                        'title' => $degree['title'],
                         'full_form' => $degree['full_form'],
                         'code_mr' => $degree['code_mr'],
-                        'title_mr' => $degree['title_mr'],
-                        'full_form_mr' => $degree['full_form_mr'],
                         'sort_order' => $degreeOrder,
                     ]);
                     $degreeOrder++;
@@ -191,12 +182,9 @@ class EducationSeeder extends Seeder
                         }
                         EducationDegree::query()->create([
                             'category_id' => $category->id,
-                            'code' => $code,
-                            'title' => $title,
+                            'code' => $code !== '' ? $code : $title,
                             'full_form' => $fullform !== '' && $fullform !== null ? $fullform : null,
                             'code_mr' => null,
-                            'title_mr' => null,
-                            'full_form_mr' => null,
                             'sort_order' => $degreeOrder,
                         ]);
                         $degreeOrder++;

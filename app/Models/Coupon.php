@@ -7,6 +7,8 @@ use Illuminate\Support\Carbon;
 
 class Coupon extends Model
 {
+    protected $table = 'master_coupons';
+
     public const TYPE_PERCENT = 'percent';
 
     /** Same as {@see self::TYPE_FLAT} in pricing logic (amount off). */

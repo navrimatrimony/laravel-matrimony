@@ -29,7 +29,7 @@ class LocationAliasAdminController extends Controller
 
         if ($location->type === 'city') {
             $city = City::find($location->id);
-            if ($city && City::where('taluka_id', $city->taluka_id)->whereRaw('LOWER(TRIM(name)) = ?', [$normalized])->exists()) {
+            if ($city && City::where('parent_id', (int) $city->parent_id)->whereRaw('LOWER(TRIM(name)) = ?', [$normalized])->exists()) {
                 return response()->json([
                     'success' => false,
                     'message' => 'A city with this name already exists in the same taluka.',

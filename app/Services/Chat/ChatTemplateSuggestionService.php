@@ -76,7 +76,11 @@ class ChatTemplateSuggestionService
     {
         $items = [];
 
+        $other->loadMissing(['occupationMaster', 'occupationCustom']);
         $occ = trim((string) ($other->occupation_title ?? ''));
+        if ($occ === '') {
+            $occ = trim((string) ($other->resolvedProfession()?->name ?? ''));
+        }
         if ($occ !== '') {
             $items[] = 'तुमच्या कामाच्या स्वरूपाबद्दल थोडंसं सांगाल का? (प्रोफाइल: '.$occ.')';
         }

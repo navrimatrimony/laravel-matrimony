@@ -20,6 +20,26 @@ class IntakeControlledFieldNormalizer
 {
     private ?int $openPlaceSuggestionUserId = null;
 
+    /**
+     * Parent contact slots on CORE follow {@code matrimony_profiles} columns (slot 3 optional when column dropped).
+     *
+     * @return list<string>
+     */
+    private function parentContactSlotCoreKeys(): array
+    {
+        $keys = ['father_contact_1', 'father_contact_2', 'mother_contact_1', 'mother_contact_2'];
+        if (Schema::hasTable('matrimony_profiles')) {
+            if (Schema::hasColumn('matrimony_profiles', 'father_contact_3')) {
+                $keys[] = 'father_contact_3';
+            }
+            if (Schema::hasColumn('matrimony_profiles', 'mother_contact_3')) {
+                $keys[] = 'mother_contact_3';
+            }
+        }
+
+        return $keys;
+    }
+
     public function __construct(
         private ControlledOptionNormalizer $controlled,
         private IntakeParsedSnapshotSkeleton $skeleton,
@@ -203,7 +223,7 @@ class IntakeControlledFieldNormalizer
                 }
             }
         }
-        foreach (['father_contact_1', 'father_contact_2', 'father_contact_3', 'mother_contact_1', 'mother_contact_2', 'mother_contact_3'] as $ck) {
+        foreach ($this->parentContactSlotCoreKeys() as $ck) {
             if (! isset($out[$ck]) || $out[$ck] === null || $out[$ck] === '') {
                 continue;
             }
@@ -746,7 +766,7 @@ class IntakeControlledFieldNormalizer
         if (! empty($core['other_relatives_text']) && is_string($core['other_relatives_text'])) {
             $core['other_relatives_text'] = BiodataParserService::pruneOtherRelativesNarrative($core['other_relatives_text']);
         }
-        foreach (['father_contact_1', 'father_contact_2', 'father_contact_3', 'mother_contact_1', 'mother_contact_2', 'mother_contact_3'] as $ck) {
+        foreach ($this->parentContactSlotCoreKeys() as $ck) {
             if (! isset($core[$ck]) || $core[$ck] === null || $core[$ck] === '') {
                 continue;
             }
@@ -1058,7 +1078,7 @@ class IntakeControlledFieldNormalizer
         };
         $core = $snapshot['core'] ?? [];
         if (is_array($core)) {
-            foreach (['father_contact_1', 'father_contact_2', 'father_contact_3', 'mother_contact_1', 'mother_contact_2', 'mother_contact_3'] as $ck) {
+            foreach ($this->parentContactSlotCoreKeys() as $ck) {
                 $add($core[$ck] ?? null);
             }
         }

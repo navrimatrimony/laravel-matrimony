@@ -213,7 +213,7 @@
                             </div>
                         </div>
                         <div class="min-w-0 w-full md:w-[12rem] md:shrink-0">
-                            <label class="block text-xs text-gray-600 dark:text-gray-400 mb-0.5 truncate">{{ __('wizard.living_with') }}</label>
+                            <label class="block text-xs text-gray-600 dark:text-gray-400 mb-0.5 truncate">{{ __('wizard.living_with_optional') }}</label>
                             <select :name="(namePrefix ? 'snapshot[children][' : 'children[') + index + '][child_living_with_id]'" class="w-full max-w-full min-w-0 rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-2 py-2 text-sm h-[42px]" x-model="child.child_living_with_id">
                                 <option value="">{{ __('wizard.select') }}</option>
                                 @foreach($childLivingWithOptions as $opt)

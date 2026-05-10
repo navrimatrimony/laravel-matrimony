@@ -10,6 +10,8 @@ use App\Services\FieldValueHistoryService;
 use App\Services\MutationService;
 use App\Services\ProfileCompletionEngine;
 use App\Services\RuleEngineService;
+use App\Services\Profile\ProfileCanonicalResidenceService;
+use App\Services\Profile\ProfileTypedSelfAddressService;
 use App\Services\ShowcaseProfileDefaultsService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -77,9 +79,27 @@ class ShowcaseProfileFactory
         $attrs['user_id'] = $user->id;
         $attrs['is_showcase'] = true;
         $attrs['is_suspended'] = false;
-        $attrs['lifecycle_state'] = in_array($lifecycleState, ['draft', 'active'], true) ? $lifecycleState : 'draft';
+        $desiredLifecycle = in_array($lifecycleState, ['draft', 'active'], true) ? $lifecycleState : 'draft';
+        $cityIdForResidence = isset($attrs['city_id']) ? (int) $attrs['city_id'] : 0;
+        if ($cityIdForResidence > 0 && ! Schema::hasColumn('matrimony_profiles', 'location_id')) {
+            // Without a profile.location_id column, the model flushes this into profile_addresses on first save (draft allows null in observer until saved() runs).
+            $attrs['location_id'] = $cityIdForResidence;
+        }
+        $attrs['lifecycle_state'] = 'draft';
 
         $profile = MatrimonyProfile::create($attrs);
+        if ($cityIdForResidence > 0 && Schema::hasTable('profile_addresses')) {
+            ProfileCanonicalResidenceService::upsertSelfCurrent($profile->id, $cityIdForResidence, null, true, false);
+            $workLeaf = isset($attrs['work_city_id']) ? (int) $attrs['work_city_id'] : 0;
+            if ($workLeaf <= 0) {
+                $workLeaf = $cityIdForResidence;
+            }
+            ProfileTypedSelfAddressService::upsertSelfTypedLeaf($profile->id, 'work', $workLeaf > 0 ? $workLeaf : null);
+        }
+        if ($desiredLifecycle !== 'draft' && ($profile->lifecycle_state ?? '') !== $desiredLifecycle) {
+            $profile->lifecycle_state = $desiredLifecycle;
+            $profile->save();
+        }
         $this->addPrimaryContact($profile);
         $this->autofillExtendedAndHistory($profile);
         $this->applyWizardLikeNarrativeAndPreferences($profile, $actorUserId, $searcherMatrimonyProfileId, $bulkPolicy);
@@ -177,12 +197,19 @@ class ShowcaseProfileFactory
 
     private function recordHistoryForShowcaseProfile(MatrimonyProfile $profile): void
     {
+        $tbl = $profile->getTable();
         $coreKeys = [
             'full_name', 'gender_id', 'date_of_birth', 'marital_status_id', 'highest_education',
             'religion_id', 'caste_id', 'sub_caste_id', 'height_cm', 'profile_photo', 'photo_approved',
-            'is_showcase', 'is_suspended', 'specialization', 'occupation_title', 'company_name',
+            'is_showcase', 'is_suspended', 'company_name',
             'annual_income', 'family_income', 'father_name', 'mother_name',
         ];
+        if (Schema::hasColumn($tbl, 'occupation_title')) {
+            $coreKeys[] = 'occupation_title';
+        }
+        if (Schema::hasColumn($tbl, 'occupation_master_id')) {
+            $coreKeys[] = 'occupation_master_id';
+        }
         foreach ($coreKeys as $fieldKey) {
             if (! isset($profile->$fieldKey)) {
                 continue;

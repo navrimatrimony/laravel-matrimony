@@ -195,24 +195,15 @@ class SnapshotGeneratorService
             'child_living_with_id' => $r->child_living_with_id,
         ])->values()->all();
 
-        $educationRows = $profile->educationHistory()->orderBy('id')->get()->map(fn ($r) => [
-            'id' => (int) $r->id,
-            'degree' => (string) ($r->degree ?? ''),
-            'specialization' => (string) ($r->specialization ?? ''),
-            'university' => (string) ($r->university ?? ''),
-            'year_completed' => $r->year_completed,
-        ])->values()->all();
-
-        $careerRows = $profile->career()->orderBy('id')->get()->map(fn ($r) => [
-            'id' => (int) $r->id,
-            'designation' => (string) ($r->designation ?? ''),
-            'company' => (string) ($r->company ?? ''),
-            'location' => (string) ($r->location ?? ''),
-            'city_id' => $r->city_id,
-            'start_year' => $r->start_year,
-            'end_year' => $r->end_year,
-            'is_current' => (bool) $r->is_current,
-        ])->values()->all();
+        $educationRows = Schema::hasTable('profile_education')
+            ? DB::table('profile_education')->where('profile_id', $profile->id)->orderBy('id')->get()->map(fn ($r) => [
+                'id' => (int) ($r->id ?? 0),
+                'degree' => (string) ($r->degree ?? ''),
+                'specialization' => (string) ($r->specialization ?? ''),
+                'university' => (string) ($r->university ?? ''),
+                'year_completed' => $r->year_completed,
+            ])->values()->all()
+            : [];
 
         $relativeRows = $profile->relatives()->orderBy('id')->get()->map(fn ($r) => [
             'id' => (int) $r->id,
@@ -263,7 +254,7 @@ class SnapshotGeneratorService
             'siblings' => $siblingRows,
             'children' => $childrenRows,
             'education_history' => $educationRows,
-            'career_history' => $careerRows,
+            'career_history' => [],
             'relatives' => $relativeRows,
             'property_assets' => $assets,
             'contacts' => $contacts,

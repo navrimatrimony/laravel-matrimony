@@ -7,6 +7,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class ReligionAlias extends Model
 {
+    protected $table = 'master_religion_aliases';
+
     protected $fillable = [
         'religion_id',
         'alias',

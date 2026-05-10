@@ -20,7 +20,7 @@ final class AboutMeQuickTemplateService
     public function resolvedAboutTemplatesForProfile(MatrimonyProfile $profile): array
     {
         $profile->loadMissing([
-            'district', 'state', 'religion', 'caste', 'profession', 'maritalStatus', 'children',
+            'district', 'state', 'religion', 'caste', 'occupationMaster', 'occupationCustom', 'maritalStatus', 'children',
         ]);
 
         $labels = $this->labels();
@@ -155,8 +155,8 @@ final class AboutMeQuickTemplateService
     private function factWorkRole(MatrimonyProfile $profile, int $seed): ?string
     {
         $title = trim((string) ($profile->occupation_title ?? ''));
-        $prof = trim((string) ($profile->profession?->name ?? ''));
-        $line = $title !== '' ? $title : $prof;
+        $fallback = trim((string) ($profile->resolvedProfession()?->name ?? ''));
+        $line = $title !== '' ? $title : $fallback;
         if ($line === '') {
             return null;
         }

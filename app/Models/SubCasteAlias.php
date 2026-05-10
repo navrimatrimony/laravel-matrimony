@@ -7,6 +7,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class SubCasteAlias extends Model
 {
+    protected $table = 'master_sub_caste_aliases';
+
     protected $fillable = [
         'sub_caste_id',
         'alias',

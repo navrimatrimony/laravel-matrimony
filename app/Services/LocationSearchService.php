@@ -350,12 +350,15 @@ class LocationSearchService
      */
     private function searchByPincode(string $pincode): array
     {
+        $needle = trim($pincode);
+        if ($needle === '') {
+            return [];
+        }
         $cityIds = City::query()
-            ->join('profile_addresses', 'cities.id', '=', 'profile_addresses.city_id')
-            ->where('profile_addresses.postal_code', $pincode)
-            ->distinct()
+            ->whereNotNull('pincode')
+            ->where('pincode', $needle)
             ->limit(self::MAX_RESULTS)
-            ->pluck('cities.id');
+            ->pluck('id');
 
         if ($cityIds->isEmpty()) {
             return [];

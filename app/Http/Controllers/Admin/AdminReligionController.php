@@ -27,7 +27,7 @@ class AdminReligionController extends Controller
     public function store(Request $request, ReligionCasteSubcasteSlugger $slugger): RedirectResponse
     {
         $data = $request->validate([
-            'label_en' => ['required', 'string', 'max:255', Rule::unique('religions', 'label_en')],
+            'label_en' => ['required', 'string', 'max:255', Rule::unique('master_religions', 'label_en')],
             'label_mr' => ['nullable', 'string', 'max:255'],
         ]);
         $labelEn = $slugger->normalizeLabel($data['label_en']);
@@ -53,7 +53,7 @@ class AdminReligionController extends Controller
     public function update(Request $request, Religion $religion, ReligionCasteSubcasteSlugger $slugger): RedirectResponse
     {
         $data = $request->validate([
-            'label_en' => ['required', 'string', 'max:255', Rule::unique('religions', 'label_en')->ignore($religion->id)],
+            'label_en' => ['required', 'string', 'max:255', Rule::unique('master_religions', 'label_en')->ignore($religion->id)],
             'label_mr' => ['nullable', 'string', 'max:255'],
         ]);
         $labelEn = $slugger->normalizeLabel($data['label_en']);

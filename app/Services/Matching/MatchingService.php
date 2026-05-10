@@ -2,11 +2,12 @@
 
 namespace App\Services\Matching;
 
+use App\Models\EducationDegree;
 use App\Models\Interest;
-use App\Models\MasterEducation;
 use App\Models\MatrimonyProfile;
 use App\Models\ProfileMatch;
 use App\Models\ProfileView;
+use App\Services\EducationService;
 use App\Services\MatchBoostService;
 use App\Services\ProfilePreferenceMatchService;
 use Illuminate\Database\Eloquent\Builder;
@@ -110,7 +111,8 @@ class MatchingService
 
         $profile->loadMissing([
             'gender', 'preferenceCriteria',
-            'religion', 'caste', 'subCaste', 'profession',
+            'religion', 'caste', 'subCaste',
+            'occupationMaster.category.workingWithType', 'occupationCustom',
             'country', 'state', 'district', 'city',
             'user',
         ]);
@@ -572,7 +574,8 @@ class MatchingService
     private function eagerLoadMatchingRelations(EloquentCollection|Collection $candidates): void
     {
         $candidates->loadMissing([
-            'gender', 'maritalStatus', 'religion', 'caste', 'subCaste', 'diet', 'profession',
+            'gender', 'maritalStatus', 'religion', 'caste', 'subCaste', 'diet',
+            'occupationMaster.category.workingWithType', 'occupationCustom',
             'country', 'state', 'district', 'taluka', 'city',
             'preferenceCriteria',
             'user',
@@ -826,8 +829,8 @@ class MatchingService
      */
     private function scoreEducationPart(MatrimonyProfile $a, MatrimonyProfile $b): array
     {
-        $idA = $this->resolveMasterEducationId($a);
-        $idB = $this->resolveMasterEducationId($b);
+        $idA = $this->resolveEducationDegreeId($a);
+        $idB = $this->resolveEducationDegreeId($b);
         if ($idA === null || $idB === null) {
             return ['points' => (int) round(self::WEIGHT_EDUCATION * 0.35), 'reasons' => [__('matching.reason_education_unknown')]];
         }
@@ -835,8 +838,8 @@ class MatchingService
             return ['points' => self::WEIGHT_EDUCATION, 'reasons' => [__('matching.reason_education_match')]];
         }
 
-        $sortA = (int) (MasterEducation::query()->whereKey($idA)->value('sort_order') ?? 0);
-        $sortB = (int) (MasterEducation::query()->whereKey($idB)->value('sort_order') ?? 0);
+        $sortA = (int) (EducationDegree::query()->whereKey($idA)->value('sort_order') ?? 0);
+        $sortB = (int) (EducationDegree::query()->whereKey($idB)->value('sort_order') ?? 0);
         $diff = abs($sortA - $sortB);
         if ($diff <= 1) {
             return ['points' => (int) round(self::WEIGHT_EDUCATION * 0.8), 'reasons' => [__('matching.reason_education_close')]];
@@ -848,27 +851,19 @@ class MatchingService
         return ['points' => (int) round(self::WEIGHT_EDUCATION * 0.25), 'reasons' => []];
     }
 
-    private function resolveMasterEducationId(MatrimonyProfile $profile): ?int
+    private function resolveEducationDegreeId(MatrimonyProfile $profile): ?int
     {
+        $fk = (int) ($profile->education_degree_id ?? 0);
+        if ($fk > 0) {
+            return $fk;
+        }
         $raw = trim((string) ($profile->highest_education ?? ''));
         if ($raw === '') {
             return null;
         }
-        $lower = mb_strtolower($raw);
-        $bestId = null;
-        $bestOrder = -1;
-        foreach (MasterEducation::query()->where('is_active', true)->orderBy('sort_order')->get(['id', 'name', 'sort_order']) as $me) {
-            $name = mb_strtolower((string) $me->name);
-            if ($name !== '' && (str_contains($lower, $name) || str_contains($name, $lower))) {
-                $so = (int) $me->sort_order;
-                if ($so >= $bestOrder) {
-                    $bestOrder = $so;
-                    $bestId = (int) $me->id;
-                }
-            }
-        }
+        $deg = app(EducationService::class)->findDegreeMatch($raw);
 
-        return $bestId;
+        return $deg?->id;
     }
 
     /**
@@ -876,21 +871,46 @@ class MatchingService
      */
     private function scoreOccupationPart(MatrimonyProfile $a, MatrimonyProfile $b): array
     {
-        $pA = (int) ($a->profession_id ?? 0);
-        $pB = (int) ($b->profession_id ?? 0);
+        $tbl = $a->getTable();
+        $hasProfFk = Schema::hasColumn($tbl, 'profession_id');
+
+        $midA = (int) ($a->occupation_master_id ?? 0);
+        $midB = (int) ($b->occupation_master_id ?? 0);
+        if ($midA > 0 && $midA === $midB) {
+            return ['points' => self::WEIGHT_OCCUPATION, 'reasons' => [__('matching.reason_same_occupation')]];
+        }
+
+        $cidA = (int) ($a->occupation_custom_id ?? 0);
+        $cidB = (int) ($b->occupation_custom_id ?? 0);
+        if ($cidA > 0 && $cidA === $cidB) {
+            return ['points' => self::WEIGHT_OCCUPATION, 'reasons' => [__('matching.reason_same_occupation')]];
+        }
+
+        $pA = $hasProfFk ? (int) ($a->getAttribute('profession_id') ?: 0) : 0;
+        $pB = $hasProfFk ? (int) ($b->getAttribute('profession_id') ?: 0) : 0;
         if ($pA > 0 && $pA === $pB) {
             return ['points' => self::WEIGHT_OCCUPATION, 'reasons' => [__('matching.reason_same_occupation')]];
         }
 
-        $a->loadMissing('profession');
-        $b->loadMissing('profession');
-        $wA = (int) ($a->profession?->working_with_type_id ?? 0);
-        $wB = (int) ($b->profession?->working_with_type_id ?? 0);
+        $a->loadMissing(['occupationMaster', 'occupationCustom']);
+        $b->loadMissing(['occupationMaster', 'occupationCustom']);
+        $resA = (int) ($a->resolvedProfession()?->id ?? 0);
+        $resB = (int) ($b->resolvedProfession()?->id ?? 0);
+        if ($resA > 0 && $resA === $resB) {
+            return ['points' => self::WEIGHT_OCCUPATION, 'reasons' => [__('matching.reason_same_occupation')]];
+        }
+
+        $a->loadMissing(['occupationMaster.category.workingWithType']);
+        $b->loadMissing(['occupationMaster.category.workingWithType']);
+        $wA = (int) ($a->resolvedWorkingWithType()?->id ?? 0);
+        $wB = (int) ($b->resolvedWorkingWithType()?->id ?? 0);
         if ($wA > 0 && $wA === $wB) {
             return ['points' => (int) round(self::WEIGHT_OCCUPATION * 0.65), 'reasons' => [__('matching.reason_similar_work_sector')]];
         }
 
-        if ($pA > 0 && $pB > 0) {
+        $signalsA = $midA || $cidA || $pA || $resA;
+        $signalsB = $midB || $cidB || $pB || $resB;
+        if ($signalsA && $signalsB) {
             return ['points' => (int) round(self::WEIGHT_OCCUPATION * 0.25), 'reasons' => []];
         }
 

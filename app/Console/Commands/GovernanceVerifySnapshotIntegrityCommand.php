@@ -35,7 +35,7 @@ class GovernanceVerifySnapshotIntegrityCommand extends Command
         $renderedFields = is_array($snap['rendered']['fields'] ?? null) ? $snap['rendered']['fields'] : [];
         $repeaters = is_array($snap['repeaters'] ?? null) ? $snap['repeaters'] : [];
         $missingExpected = [];
-        foreach (['full_name', 'date_of_birth', 'repeaters.education_history.0.degree'] as $expected) {
+        foreach (['full_name', 'date_of_birth'] as $expected) {
             if (! array_key_exists($expected, $renderedFields)) {
                 $missingExpected[] = $expected;
             }

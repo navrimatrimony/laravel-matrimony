@@ -239,8 +239,7 @@ class DataEngineGovernanceController extends Controller
      *   [
      *     'core' => ['col1' => val, ...],   // matrimony_profiles row (single)
      *     'repeaters' => [
-     *       'education_history' => [['col' => val], ...],
-     *       'career_history'    => [...],
+     *       (Repeater keys map to tables; {@code education_history} removed — use core highest_education.)
      *       'siblings'          => [...],
      *       'children'          => [...],
      *       'relatives'         => [...],
@@ -330,13 +329,14 @@ class DataEngineGovernanceController extends Controller
         $profileModel = MatrimonyProfile::query()->find($profileId);
         if ($profileModel !== null) {
             $this->mergeDerivedGeoHierarchyIntoCore($core, $profileModel);
+            if (! Schema::hasColumn('matrimony_profiles', 'work_location_text')) {
+                $core['work_location_text'] = $profileModel->work_location_text;
+            }
         }
 
         // Map presenter repeater keys → physical tables. Adding a new repeater
         // key here automatically lights up its panel + lineage rows.
         $repeaterTables = [
-            'education_history' => 'profile_education',
-            'career_history' => 'profile_career',
             'siblings' => 'profile_siblings',
             'children' => 'profile_children',
             'relatives' => 'profile_relatives',
@@ -435,8 +435,6 @@ class DataEngineGovernanceController extends Controller
 
         $relatedTables = [
             'profile_partner_preferences',
-            'profile_education',
-            'profile_career',
             'profile_siblings',
             'profile_children',
             'profile_relatives',

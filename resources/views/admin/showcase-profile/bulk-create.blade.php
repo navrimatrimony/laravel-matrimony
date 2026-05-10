@@ -21,6 +21,7 @@
             {{ session('success') }}
         </div>
     @endif
+
     <form method="POST" action="{{ route('admin.showcase-profile.bulk-store') }}" class="space-y-4">
         @csrf
         <div>

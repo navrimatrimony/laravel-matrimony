@@ -389,15 +389,19 @@ class ProfileShowReadService
             $q->whereNotIn('matrimony_profiles.id', $alsoExclude);
         }
 
-        if ($target->district_id) {
-            $q->where('district_id', $target->district_id);
-        } elseif ($target->state_id) {
-            $q->where('state_id', $target->state_id);
+        $geo = $target->residenceGeoAddressIds();
+        $districtId = $geo['district_id'] ?? null;
+        $stateId = $geo['state_id'] ?? null;
+
+        if ($districtId) {
+            $q->whereResidenceUnderAncestor((int) $districtId);
+        } elseif ($stateId) {
+            $q->whereResidenceUnderAncestor((int) $stateId);
         } else {
             return collect();
         }
 
-        $candidates = $q->with(['gender', 'district', 'state', 'maritalStatus', 'religion'])
+        $candidates = $q->with(['gender', 'maritalStatus', 'religion', 'location'])
             ->orderByDesc('matrimony_profiles.id')
             ->limit(40)
             ->get();

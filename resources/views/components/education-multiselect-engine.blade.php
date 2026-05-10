@@ -28,7 +28,7 @@
             $match = $educationService->findDegreeMatch($part);
             if ($match !== null) {
                 $d = $match;
-                $label = ($localeMr && filled($d->title_mr)) ? (string) $d->title_mr : (string) ($d->title ?? $d->code ?? '');
+                $label = ($localeMr && filled($d->code_mr)) ? (string) $d->code_mr : (string) ($d->code ?? '');
                 $initialEducationChips[] = [
                     'id' => (int) $d->id,
                     'name' => $label !== '' ? $label : (string) ($d->code ?? ''),

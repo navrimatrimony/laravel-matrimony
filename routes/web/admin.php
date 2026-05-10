@@ -382,8 +382,6 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
 
     Route::get('/auto-showcase-settings', [AutoShowcaseSettingsController::class, 'edit'])->name('auto-showcase-settings.edit');
     Route::post('/auto-showcase-settings', [AutoShowcaseSettingsController::class, 'update'])->name('auto-showcase-settings.update');
-    Route::post('/auto-showcase-settings/fill-city-population', [AutoShowcaseSettingsController::class, 'fillCityPopulation'])->name('auto-showcase-settings.fill-city-population');
-    Route::post('/auto-showcase-settings/reset-ai-population-locks', [AutoShowcaseSettingsController::class, 'resetAiPopulationDistrictLocks'])->name('auto-showcase-settings.reset-ai-population-locks');
 
     Route::get('/showcase-profile/bulk-create', [ShowcaseProfileController::class, 'bulkCreate'])->name('showcase-profile.bulk-create');
     Route::post('/showcase-profiles/bulk', [ShowcaseProfileController::class, 'bulkStore'])->name('showcase-profile.bulk-store');

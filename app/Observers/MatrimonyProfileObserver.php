@@ -6,6 +6,7 @@ use App\Models\Location;
 use App\Models\MatrimonyPhotoBatchAllocation;
 use App\Models\MatrimonyProfile;
 use App\Services\Location\LocationUsageStatsService;
+use App\Services\Profile\ProfileCanonicalResidenceService;
 use App\Services\ProfileCompletionEngine;
 use App\Services\ProfileVisibilitySettingsDefaultsService;
 use Illuminate\Support\Facades\Cache;
@@ -15,17 +16,20 @@ use Illuminate\Validation\ValidationException;
 class MatrimonyProfileObserver
 {
     /**
-     * Residence SSOT: {@see MatrimonyProfile::$location_id} required once profile leaves draft.
+     * Residence SSOT: canonical leaf required once profile leaves draft ({@code profile_addresses} when profile columns dropped).
      */
     public function saving(MatrimonyProfile $profile): void
     {
-        if (! Schema::hasColumn('matrimony_profiles', 'location_id')) {
-            return;
-        }
         if ($this->allowsNullResidenceLocation($profile)) {
             return;
         }
-        $lid = $profile->location_id;
+        if (Schema::hasColumn('matrimony_profiles', 'location_id')) {
+            $lid = $profile->location_id;
+        } else {
+            $lid = $profile->exists
+                ? ProfileCanonicalResidenceService::locationLeafId((int) $profile->id)
+                : null;
+        }
         if ($lid === null || $lid === '' || (int) $lid < 1) {
             throw ValidationException::withMessages([
                 'location_id' => ['Residence location is required.'],

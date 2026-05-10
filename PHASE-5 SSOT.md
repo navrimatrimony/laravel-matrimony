@@ -1229,7 +1229,6 @@ Filter: parentsFamilyTypes — rows with these relation_type go to Paternal sect
 
 | value                    | label                          |
 |--------------------------|--------------------------------|
-| native_place             | Native Place                   |
 | paternal_grandfather     | Paternal Grandfather           |
 | paternal_grandmother     | Paternal Grandmother          |
 | paternal_uncle           | Paternal Uncle (chulte)        |
@@ -1264,7 +1263,7 @@ Field mapping (per relative row)
 ----------------------------------------
 Same fields for all relation_type values except address-only types.
 
-Standard rows (all types except native_place and maternal_address_ajol):
+Standard rows (all types except maternal_address_ajol):
 - relation_type  → dropdown selection (above)
 - name           → relative's name
 - contact_number → mobile
@@ -1273,12 +1272,13 @@ Standard rows (all types except native_place and maternal_address_ajol):
 - notes          → additional info / notes
 - is_primary_contact → checkbox (Maternal section only)
 
-Address-only rows (only these two types show Relation + Address only; name/occupation/contact/notes hidden):
-- native_place        (Paternal): only relation_type + address (वडिलांचे मूळ गाव)
+Address-only rows (Relation + Address only; name/occupation/contact/notes hidden):
 - maternal_address_ajol (Maternal): only relation_type + address (माहेरचा पत्ता — अजोल)
 
-Component: resources/views/components/repeaters/relation-details.blade.php (showMarried=false, addressOnlyRelationValue set per section).
-Wizard: relatives.blade.php (Paternal, addressOnlyRelationValue=native_place); alliance.blade.php (Maternal, addressOnlyRelationValue=maternal_address_ajol).
+Native village/town: Location wizard + `addresses` / `master_address_types` key `native` (not a `profile_relatives` relation).
+
+Component: resources/views/components/repeaters/relation-details.blade.php (showMarried=false, optional addressOnlyRelationValue for maternal Ajol only).
+Wizard: relatives.blade.php (Paternal, full row); alliance.blade.php (Maternal, addressOnlyRelationValue=maternal_address_ajol).
 
 ============================================================
 7️⃣ profile_property_summary (ONE-TO-ONE)

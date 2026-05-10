@@ -10,10 +10,12 @@ use App\Models\EducationDegree;
 use App\Models\MatrimonyProfile;
 use App\Models\Religion;
 use App\Models\User;
+use App\Services\OccupationService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Queue;
+use Illuminate\Support\Facades\Schema;
 use Tests\TestCase;
 
 /**
@@ -136,7 +138,7 @@ class FullOnboardingRegistrationE2ETest extends TestCase
 
         $profile->refresh();
 
-        $this->assertDatabaseHas('matrimony_profiles', [
+        $expectedProfileRow = [
             'id' => $profile->id,
             'user_id' => $user->id,
             'full_name' => self::E2E_FULL_NAME,
@@ -145,17 +147,53 @@ class FullOnboardingRegistrationE2ETest extends TestCase
             'religion_id' => $religion->id,
             'caste_id' => $caste->id,
             'height_cm' => 172,
+            'company_name' => 'E2E Company Pvt Ltd',
+        ];
+        foreach ([
             'country_id' => $country->id,
             'state_id' => $state->id,
             'district_id' => $district->id,
             'taluka_id' => $taluka->id,
-            'location_id' => $puneCity->id,
-            'company_name' => 'E2E Company Pvt Ltd',
-        ]);
+        ] as $col => $val) {
+            if (Schema::hasColumn('matrimony_profiles', $col)) {
+                $expectedProfileRow[$col] = $val;
+            }
+        }
+        if (Schema::hasColumn('matrimony_profiles', 'location_id')) {
+            $expectedProfileRow['location_id'] = $puneCity->id;
+        }
+        $this->assertDatabaseHas('matrimony_profiles', $expectedProfileRow);
+
+        if (! Schema::hasColumn('matrimony_profiles', 'location_id') && Schema::hasTable('profile_addresses')) {
+            $typeId = (int) DB::table('master_address_types')->where('key', 'current')->value('id');
+            $this->assertDatabaseHas('profile_addresses', [
+                'profile_id' => $profile->id,
+                'address_scope' => 'self',
+                'address_type_id' => $typeId,
+                'location_id' => $puneCity->id,
+            ]);
+        }
 
         $this->assertNotNull($profile->highest_education, 'Education step must persist highest_education column.');
-        $this->assertSame((int) $wwId, (int) $profile->working_with_type_id);
-        $this->assertSame((int) $profId, (int) $profile->profession_id);
+        if (Schema::hasColumn('matrimony_profiles', 'working_with_type_id')) {
+            $this->assertSame((int) $wwId, (int) $profile->working_with_type_id);
+        }
+        if (Schema::hasColumn('matrimony_profiles', 'profession_id')) {
+            $this->assertSame((int) $profId, (int) $profile->profession_id);
+        }
+        if (Schema::hasColumn('matrimony_profiles', 'occupation_master_id')) {
+            $expectedMid = app(OccupationService::class)->occupationMasterIdForProfessionId((int) $profId);
+            if ($expectedMid !== null) {
+                $this->assertSame((int) $expectedMid, (int) $profile->occupation_master_id);
+            } elseif (! Schema::hasColumn('matrimony_profiles', 'profession_id')) {
+                $hasOccEngine = (int) ($profile->occupation_master_id ?? 0) > 0
+                    || (int) ($profile->occupation_custom_id ?? 0) > 0;
+                $this->assertTrue(
+                    $hasOccEngine,
+                    'Without legacy profession_id, onboarding step 4 must persist occupation_master_id or occupation_custom_id.',
+                );
+            }
+        }
 
         $this->assertSame(
             '1992-06-15',

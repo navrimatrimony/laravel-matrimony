@@ -33,8 +33,6 @@ class IntakeApprovalService
         'marriages',
         'relatives',
         'alliance_networks',
-        'education_history',
-        'career_history',
         'addresses',
         'property_summary',
         'property_assets',
@@ -617,12 +615,7 @@ class IntakeApprovalService
                 'birth_city_id' => $profile->birth_city_id,
                 'text' => $profile->birth_place_text,
             ]),
-            'native_place' => $this->scalarDisplay([
-                'native_city_id' => $profile->native_city_id,
-                'native_taluka_id' => $profile->native_taluka_id,
-                'native_district_id' => $profile->native_district_id,
-                'native_state_id' => $profile->native_state_id,
-            ]),
+            'native_place' => $this->scalarDisplay(trim($profile->nativeLocationDisplayLine())),
             'other_relatives_text' => $this->scalarDisplay($profile->other_relatives_text ?? ''),
             default => '—',
         };

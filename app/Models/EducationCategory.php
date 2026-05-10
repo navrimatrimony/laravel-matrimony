@@ -6,11 +6,11 @@ use Illuminate\Database\Eloquent\Model;
 
 /**
  * Shaadi.com-style education hierarchy: Level 1 (Category).
- * e.g. Engineering, Arts / Design, Management.
+ * Table {@code master_education_categories} (formerly {@code education_categories}).
  */
 class EducationCategory extends Model
 {
-    protected $table = 'education_categories';
+    protected $table = 'master_education_categories';
 
     protected $fillable = ['name', 'name_mr', 'slug', 'sort_order', 'is_active'];
 

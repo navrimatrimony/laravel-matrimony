@@ -33,7 +33,7 @@ class ReligionCasteSubcasteImportService
                 continue;
             }
             $rKey = $this->slugger->makeKey($relLabel);
-            $rid = DB::table('religions')->insertGetId([
+            $rid = DB::table('master_religions')->insertGetId([
                 'key' => $rKey,
                 'label' => $relLabel,
                 'label_en' => $relLabel,
@@ -56,7 +56,7 @@ class ReligionCasteSubcasteImportService
             if (isset($casteLookup[$lookup])) {
                 continue;
             }
-            $cid = DB::table('castes')->insertGetId([
+            $cid = DB::table('master_castes')->insertGetId([
                 'religion_id' => $rid,
                 'key' => $cKey,
                 'label' => $casteLabel,
@@ -82,7 +82,7 @@ class ReligionCasteSubcasteImportService
                 continue;
             }
             $sKey = $this->slugger->makeKey($subLabel);
-            DB::table('sub_castes')->insert([
+            DB::table('master_sub_castes')->insert([
                 'caste_id' => $cid,
                 'key' => $sKey,
                 'label' => $subLabel,
@@ -98,9 +98,9 @@ class ReligionCasteSubcasteImportService
         }
 
         return [
-            'religions' => (int) DB::table('religions')->count(),
-            'castes' => (int) DB::table('castes')->count(),
-            'sub_castes' => (int) DB::table('sub_castes')->count(),
+            'religions' => (int) DB::table('master_religions')->count(),
+            'castes' => (int) DB::table('master_castes')->count(),
+            'sub_castes' => (int) DB::table('master_sub_castes')->count(),
             'skipped_duplicate_rows' => $parsed['skipped_duplicate_rows'],
         ];
     }
@@ -182,9 +182,9 @@ class ReligionCasteSubcasteImportService
 
     public function deleteMasterRows(): void
     {
-        DB::table('sub_castes')->delete();
-        DB::table('castes')->delete();
-        DB::table('religions')->delete();
+        DB::table('master_sub_castes')->delete();
+        DB::table('master_castes')->delete();
+        DB::table('master_religions')->delete();
     }
 
     /**
@@ -195,11 +195,11 @@ class ReligionCasteSubcasteImportService
     {
         $driver = DB::getDriverName();
         if ($driver === 'mysql' || $driver === 'mariadb') {
-            DB::statement('ALTER TABLE religions AUTO_INCREMENT = 1');
-            DB::statement('ALTER TABLE castes AUTO_INCREMENT = 1');
-            DB::statement('ALTER TABLE sub_castes AUTO_INCREMENT = 1');
+            DB::statement('ALTER TABLE master_religions AUTO_INCREMENT = 1');
+            DB::statement('ALTER TABLE master_castes AUTO_INCREMENT = 1');
+            DB::statement('ALTER TABLE master_sub_castes AUTO_INCREMENT = 1');
         } elseif ($driver === 'sqlite') {
-            DB::statement("DELETE FROM sqlite_sequence WHERE name IN ('religions', 'castes', 'sub_castes')");
+            DB::statement("DELETE FROM sqlite_sequence WHERE name IN ('master_religions', 'master_castes', 'master_sub_castes')");
         }
     }
 }

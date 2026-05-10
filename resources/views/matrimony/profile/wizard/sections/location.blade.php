@@ -4,8 +4,12 @@
     $workDisplay = $workPlaceDisplay ?? old('wizard_work_place_display', $workCityName ?? '');
     $nativeDisplay = $nativePlaceTypeaheadDisplay ?? old('wizard_native_place_display', $nativePlaceDisplay ?? '');
     $resHints = ['location_id' => '', 'country_id' => '', 'state_id' => '', 'district_id' => '', 'taluka_id' => ''];
+    $workHints = ['location_id' => '', 'country_id' => '', 'state_id' => '', 'district_id' => '', 'taluka_id' => ''];
+    $nativeHints = ['location_id' => '', 'country_id' => '', 'state_id' => '', 'district_id' => '', 'taluka_id' => ''];
     if ($profile instanceof \App\Models\MatrimonyProfile) {
         $resHints = $profile->residenceLocationHierarchyHints();
+        $workHints = $profile->workCityHierarchyHints();
+        $nativeHints = $profile->nativePlaceHierarchyHints();
     }
 @endphp
 <div class="space-y-8">
@@ -50,8 +54,8 @@
                 :placeholder="__('wizard.type_city_area')"
                 label=""
                 :noBorder="true"
-                :data-work-city-id="old('work_city_id', $profile->work_city_id)"
-                :data-work-state-id="old('work_state_id', $profile->work_state_id)"
+                :data-work-city-id="old('work_city_id', $workHints['location_id'])"
+                :data-work-state-id="old('work_state_id', $workHints['state_id'])"
             />
         </div>
         @error('work_city_id')<p class="mt-1 text-sm text-red-600 dark:text-red-400">{{ $message }}</p>@enderror
@@ -68,10 +72,10 @@
                 :placeholder="__('wizard.type_city_area')"
                 label=""
                 :noBorder="true"
-                :data-native-city-id="old('native_city_id', $profile->native_city_id)"
-                :data-native-taluka-id="old('native_taluka_id', $profile->native_taluka_id)"
-                :data-native-district-id="old('native_district_id', $profile->native_district_id)"
-                :data-native-state-id="old('native_state_id', $profile->native_state_id)"
+                :data-native-city-id="old('native_city_id', $nativeHints['location_id'])"
+                :data-native-taluka-id="old('native_taluka_id', $nativeHints['taluka_id'])"
+                :data-native-district-id="old('native_district_id', $nativeHints['district_id'])"
+                :data-native-state-id="old('native_state_id', $nativeHints['state_id'])"
             />
         </div>
     </div>

@@ -5,10 +5,10 @@ namespace App\Services;
 use App\Models\Caste;
 use App\Models\District;
 use App\Models\EducationDegree;
-use App\Models\OccupationMaster;
 use App\Models\Location;
 use App\Models\MasterMaritalStatus;
 use App\Models\MatrimonyProfile;
+use App\Models\OccupationMaster;
 use App\Models\Religion;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -40,7 +40,7 @@ class ProfilePreferenceMatchService
     public static function build(MatrimonyProfile $viewerProfile, MatrimonyProfile $targetProfile, ?array $targetPreferencesOverride = null): array
     {
         $viewerProfile->loadMissing([
-            'gender', 'maritalStatus', 'religion', 'caste', 'subCaste', 'diet', 'profession',
+            'gender', 'maritalStatus', 'religion', 'caste', 'subCaste', 'diet', 'occupationMaster', 'occupationCustom',
             'location',
         ]);
 
@@ -468,7 +468,7 @@ class ProfilePreferenceMatchService
             $viewerDegreeId = self::resolveViewerPrimaryDegreeId($viewer);
             $viewerDegree = $viewerDegreeId ? EducationDegree::query()->find($viewerDegreeId) : null;
             $yours = $viewerDegree
-                ? (string) ($viewerDegree->title ?? '')
+                ? $viewerDegree->shortDisplayLabel()
                 : trim((string) ($viewer->highest_education ?? ''));
             if ($yours === '') {
                 $yours = __('preference_match.value_unknown');
@@ -480,7 +480,7 @@ class ProfilePreferenceMatchService
             return self::row('education', __('preference_match.field_education'), $their, $yours, self::STRICT_OPEN, self::STATUS_FLEXIBLE, __('preference_match.reason_pref_open'));
         }
 
-        $their = self::labelsForIds('education_degrees', $degreeIds, 'title');
+        $their = self::labelsForIds('master_education', $degreeIds, 'code');
         if ($their === '') {
             $their = __('preference_match.open_to_all');
         }
@@ -488,7 +488,7 @@ class ProfilePreferenceMatchService
         $viewerDegreeId = self::resolveViewerPrimaryDegreeId($viewer);
         $viewerDegree = $viewerDegreeId ? EducationDegree::query()->find($viewerDegreeId) : null;
         $yours = $viewerDegree
-            ? (string) ($viewerDegree->title ?? '')
+            ? $viewerDegree->shortDisplayLabel()
             : trim((string) ($viewer->highest_education ?? ''));
         if ($yours === '') {
             $yours = __('preference_match.value_unknown');
@@ -532,16 +532,16 @@ class ProfilePreferenceMatchService
     private static function rowOccupationMasterPreferences(MatrimonyProfile $viewer, array $occupationMasterIds): array
     {
         $occupationMasterIds = array_values(array_unique(array_filter($occupationMasterIds, fn ($id) => (int) $id > 0)));
-        $their = self::labelsForIds('occupation_master', $occupationMasterIds, 'name');
+        $their = self::labelsForIds('master_occupations', $occupationMasterIds, 'name');
         if ($their === '') {
             $their = __('preference_match.open_to_all');
         }
 
-        $viewer->loadMissing(['occupationMaster', 'profession']);
+        $viewer->loadMissing(['occupationMaster', 'occupationCustom']);
         $viewerOccId = isset($viewer->occupation_master_id) ? (int) $viewer->occupation_master_id : null;
         $yours = $viewerOccId
             ? (string) (OccupationMaster::query()->whereKey($viewerOccId)->value('name') ?? $viewer->occupationMaster?->name ?? '')
-            : (string) ($viewer->profession?->name ?? '');
+            : trim((string) ($viewer->occupation_title ?: ($viewer->resolvedProfession()?->name ?? '')));
         if ($yours === '') {
             $yours = __('preference_match.value_unknown');
         }

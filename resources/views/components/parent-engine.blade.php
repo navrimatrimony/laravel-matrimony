@@ -4,6 +4,8 @@
     'errors' => [],
     'readOnly' => false,
     'namePrefix' => '',
+    'addressTypes' => [],
+    'wizardParentsAddresses' => [],
 ])
 @php
     use Illuminate\Support\Facades\Schema;
@@ -20,24 +22,36 @@
 
         return is_string($r) ? $r : $v;
     };
+    $maxParentContactSlots = Schema::hasColumn('matrimony_profiles', 'father_contact_3') ? 3 : 2;
     $fatherContacts = [
         $u8(old($oldK('father_contact_1'), $profile->father_contact_1 ?? '')),
         $u8(old($oldK('father_contact_2'), $profile->father_contact_2 ?? '')),
-        $u8(old($oldK('father_contact_3'), $profile->father_contact_3 ?? '')),
     ];
+    if ($maxParentContactSlots > 2) {
+        $fatherContacts[] = $u8(old($oldK('father_contact_3'), $profile->father_contact_3 ?? ''));
+    }
     $fatherCount = max(1, count(array_filter($fatherContacts, fn($v) => trim((string)$v) !== '')));
+    if ($fatherCount > $maxParentContactSlots) {
+        $fatherCount = $maxParentContactSlots;
+    }
     $motherContacts = [
         $u8(old($oldK('mother_contact_1'), $profile->mother_contact_1 ?? '')),
         $u8(old($oldK('mother_contact_2'), $profile->mother_contact_2 ?? '')),
-        $u8(old($oldK('mother_contact_3'), $profile->mother_contact_3 ?? '')),
     ];
-    $motherCount = max(1, count(array_filter($motherContacts, fn($v) => trim((string)$v) !== '')));
-
-    $parentsResHints = ['location_id' => '', 'country_id' => '', 'state_id' => '', 'district_id' => '', 'taluka_id' => ''];
-    if ($profile instanceof \App\Models\MatrimonyProfile) {
-        $parentsResHints = $profile->residenceLocationHierarchyHints();
+    if ($maxParentContactSlots > 2) {
+        $motherContacts[] = $u8(old($oldK('mother_contact_3'), $profile->mother_contact_3 ?? ''));
     }
-    $parentsCityDisplay = $u8(old($oldK('wizard_parents_city_display'), \App\Models\MatrimonyProfile::residenceLocationDisplayLineFor($profile)));
+    $motherCount = max(1, count(array_filter($motherContacts, fn($v) => trim((string)$v) !== '')));
+    if ($motherCount > $maxParentContactSlots) {
+        $motherCount = $maxParentContactSlots;
+    }
+
+    $addrTypes = collect($addressTypes ?? []);
+    $parentsRowsList = old('parents_addresses', $wizardParentsAddresses ?? []);
+    if (! is_array($parentsRowsList)) {
+        $parentsRowsList = $wizardParentsAddresses ?? [];
+    }
+    $parentsRowsList = array_values($parentsRowsList);
 
 @endphp
 
@@ -66,14 +80,14 @@
             <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Father Extra Information</label>
             <input type="text" name="{{ $n('father_extra_info') }}" value="{{ $u8(old($oldK('father_extra_info'), $profile->father_extra_info ?? '')) }}" maxlength="255" placeholder="e.g. Retired from MSEB, Kolhapur" class="w-full rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-3 py-2">
         </div>
-        <div class="flex-1 min-w-0" data-contact-context="father" data-max-slots="3">
+        <div class="flex-1 min-w-0" data-contact-context="father" data-max-slots="{{ $maxParentContactSlots }}">
             <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Father Contact number</label>
             <div class="flex flex-wrap items-end gap-2" id="father-contact-slots-inner">
                 @for($i = 0; $i < $fatherCount; $i++)
                     @php
                         $nameNum = $n('father_contact_' . ($i + 1));
                         $nameWa = $n('father_contact_whatsapp_' . ($i + 1));
-                        $showAdd = $i < 2;
+                        $showAdd = $i < ($maxParentContactSlots - 1);
                     @endphp
                     <div class="parent-contact-slot {{ $i === 0 ? 'w-full basis-full' : 'shrink-0' }}" data-slot-index="{{ $i }}">
                         <x-profile.contact-field
@@ -118,14 +132,14 @@
             <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Mother Extra Information</label>
             <input type="text" name="{{ $n('mother_extra_info') }}" value="{{ $u8(old($oldK('mother_extra_info'), $profile->mother_extra_info ?? '')) }}" maxlength="255" placeholder="e.g. Housewife, stays with son in Pune" class="w-full rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-3 py-2">
         </div>
-        <div class="flex-1 min-w-0" data-contact-context="mother" data-max-slots="3">
+        <div class="flex-1 min-w-0" data-contact-context="mother" data-max-slots="{{ $maxParentContactSlots }}">
             <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Mother Contact number</label>
             <div class="flex flex-wrap items-end gap-2" id="mother-contact-slots-inner">
                 @for($i = 0; $i < $motherCount; $i++)
                     @php
                         $nameNum = $n('mother_contact_' . ($i + 1));
                         $nameWa = $n('mother_contact_whatsapp_' . ($i + 1));
-                        $showAdd = $i < 2;
+                        $showAdd = $i < ($maxParentContactSlots - 1);
                     @endphp
                     <div class="parent-contact-slot {{ $i === 0 ? 'w-full basis-full' : 'shrink-0' }}" data-slot-index="{{ $i }}">
                         <x-profile.contact-field
@@ -147,28 +161,154 @@
         </div>
     </div>
 
-    {{-- Line 5: Address extended address engine --}}
-    <div class="mt-3">
-        <x-profile.location-typeahead
-            context="residence"
-            mode="full"
-            :namePrefix="$namePrefix"
-            :detailedLabel="__('components.parents.parents_home_address')"
-            :detailedPlaceholder="__('components.parents.parents_address_line')"
-            detailedValue="{{ $u8(old($oldK('parents_address_line'), $profile->address_line ?? '')) }}"
-            :detailedName="$namePrefix !== '' ? $namePrefix . '[parents_address_line]' : 'parents_address_line'"
-            :value="$parentsCityDisplay"
-            placeholder="{{ __('components.parents.parents_location_placeholder') }}"
-            label="{{ __('components.parents.parents_village_city') }}"
-            :dataLocationId="old($oldK('location_id'), $parentsResHints['location_id'])"
-            :dataCountryId="old($oldK('country_id'), $parentsResHints['country_id'])"
-            :dataStateId="old($oldK('state_id'), $parentsResHints['state_id'])"
-            :dataDistrictId="old($oldK('district_id'), $parentsResHints['district_id'])"
-            :dataTalukaId="old($oldK('taluka_id'), $parentsResHints['taluka_id'])"
-        />
+    {{-- Parents home addresses (below contacts) — scoped to parents, default type Permanent --}}
+    <div class="mt-4 space-y-3 border-t border-gray-200 dark:border-gray-600 pt-4" id="parents-addresses-repeater" data-next-index="{{ count($parentsRowsList) }}">
+        <div class="flex items-center justify-between gap-2">
+            <span class="text-sm font-medium text-gray-800 dark:text-gray-200">{{ __('wizard.addresses_parents') }}</span>
+            <button type="button" class="inline-flex items-center justify-center w-9 h-9 rounded-lg border border-indigo-300 dark:border-indigo-600 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-200 font-bold text-lg leading-none hover:bg-indigo-100 dark:hover:bg-indigo-900/50 js-add-parents-address-row" title="{{ __('wizard.add_address_row') }}">+</button>
+        </div>
+        <div id="parents-address-rows">
+            @foreach($parentsRowsList as $index => $prow)
+                @php
+                    $prow = is_array($prow) ? $prow : [];
+                    $pid = $prow['id'] ?? null;
+                    $ptype = old('parents_addresses.'.$index.'.address_type_key', $prow['address_type_key'] ?? 'permanent');
+                    $pline = $u8(old('parents_addresses.'.$index.'.address_line', $prow['address_line'] ?? ''));
+                    $plid = (string) old('parents_addresses.'.$index.'.location_id', $prow['location_id'] ?? '');
+                    $pdisp = $u8(old('parents_addresses.'.$index.'.wizard_residence_display', $prow['display'] ?? ''));
+                    $ppfx = 'parents_addresses['.$index.']';
+                    $phints = ['location_id' => '', 'country_id' => '', 'state_id' => '', 'district_id' => '', 'taluka_id' => ''];
+                    if ($plid !== '') {
+                        $phints['location_id'] = $plid;
+                    }
+                @endphp
+                <div class="parents-address-row rounded-lg border border-gray-200 dark:border-gray-600 p-3 space-y-2 bg-gray-50/60 dark:bg-gray-900/40 mb-3" data-row-index="{{ $index }}">
+                    <div class="flex flex-wrap items-end gap-2">
+                        <div class="min-w-[10rem] flex-1">
+                            <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">{{ __('wizard.address_type') }}</label>
+                            <select name="{{ $ppfx }}[address_type_key]" class="w-full rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-2 py-2 text-sm h-[42px]">
+                                @foreach($addrTypes as $at)
+                                    <option value="{{ $at->key }}" {{ (string) $ptype === (string) $at->key ? 'selected' : '' }}>{{ $at->label }}</option>
+                                @endforeach
+                            </select>
+                        </div>
+                        <div class="flex-1 min-w-[8rem]">
+                            <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">{{ __('components.parents.parents_address_line') }}</label>
+                            <input type="text" name="{{ $ppfx }}[address_line]" value="{{ $pline }}" class="w-full rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-2 py-2 text-sm h-[42px]" placeholder="{{ __('components.parents.parents_address_line') }}">
+                        </div>
+                        <input type="hidden" name="{{ $ppfx }}[id]" value="{{ $pid }}">
+                        <button type="button" class="js-remove-parents-address-row shrink-0 inline-flex items-center justify-center w-9 h-9 rounded-lg border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 mb-0.5 @if(count($parentsRowsList) < 2) opacity-40 pointer-events-none @endif" title="{{ __('wizard.remove_row') }}">−</button>
+                    </div>
+                    <div class="min-w-0">
+                        <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">{{ __('components.parents.parents_village_city') }}</label>
+                        <x-profile.location-typeahead
+                            context="residence"
+                            :namePrefix="$ppfx"
+                            :value="$pdisp"
+                            :placeholder="__('components.parents.parents_location_placeholder')"
+                            label=""
+                            :noBorder="true"
+                            :compactRow="true"
+                            :dataLocationId="$phints['location_id']"
+                            :dataCountryId="$phints['country_id']"
+                            :dataStateId="$phints['state_id']"
+                            :dataDistrictId="$phints['district_id']"
+                            :dataTalukaId="$phints['taluka_id']"
+                        />
+                    </div>
+                </div>
+            @endforeach
+        </div>
     </div>
 
+    <template id="tpl-parents-address-row">
+        @php $pTplIdx = '__PIDX__'; $ppfx = 'parents_addresses['.$pTplIdx.']'; @endphp
+        <div class="parents-address-row rounded-lg border border-gray-200 dark:border-gray-600 p-3 space-y-2 bg-gray-50/60 dark:bg-gray-900/40 mb-3" data-row-index="{{ $pTplIdx }}">
+            <div class="flex flex-wrap items-end gap-2">
+                <div class="min-w-[10rem] flex-1">
+                    <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">{{ __('wizard.address_type') }}</label>
+                    <select name="{{ $ppfx }}[address_type_key]" class="w-full rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-2 py-2 text-sm h-[42px]">
+                        @foreach($addrTypes as $at)
+                            <option value="{{ $at->key }}" {{ $at->key === 'permanent' ? 'selected' : '' }}>{{ $at->label }}</option>
+                        @endforeach
+                    </select>
+                </div>
+                <div class="flex-1 min-w-[8rem]">
+                    <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">{{ __('components.parents.parents_address_line') }}</label>
+                    <input type="text" name="{{ $ppfx }}[address_line]" value="" class="w-full rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-2 py-2 text-sm h-[42px]" placeholder="{{ __('components.parents.parents_address_line') }}">
+                </div>
+                <input type="hidden" name="{{ $ppfx }}[id]" value="">
+                <button type="button" class="js-remove-parents-address-row shrink-0 inline-flex items-center justify-center w-9 h-9 rounded-lg border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 mb-0.5" title="{{ __('wizard.remove_row') }}">−</button>
+            </div>
+            <div class="min-w-0">
+                <label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">{{ __('components.parents.parents_village_city') }}</label>
+                <x-profile.location-typeahead
+                    context="residence"
+                    :namePrefix="$ppfx"
+                    value=""
+                    :placeholder="__('components.parents.parents_location_placeholder')"
+                    label=""
+                    :noBorder="true"
+                    :compactRow="true"
+                    dataLocationId=""
+                    dataCountryId=""
+                    dataStateId=""
+                    dataDistrictId=""
+                    dataTalukaId=""
+                />
+            </div>
+        </div>
+    </template>
+
 </div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    var rep = document.getElementById('parents-addresses-repeater');
+    var tpl = document.getElementById('tpl-parents-address-row');
+    var rowsEl = document.getElementById('parents-address-rows');
+    function syncParentsRemoveButtons() {
+        if (!rowsEl) return;
+        var rows = rowsEl.querySelectorAll('.parents-address-row');
+        var dis = rows.length < 2;
+        rows.forEach(function (r) {
+            var b = r.querySelector('.js-remove-parents-address-row');
+            if (!b) return;
+            b.classList.toggle('opacity-40', dis);
+            b.classList.toggle('pointer-events-none', dis);
+        });
+    }
+    function rebindParentsRemove(btn) {
+        btn.addEventListener('click', function () {
+            var row = btn.closest('.parents-address-row');
+            if (!row || !rowsEl) return;
+            if (rowsEl.querySelectorAll('.parents-address-row').length < 2) return;
+            row.remove();
+            syncParentsRemoveButtons();
+        });
+    }
+    if (rep && tpl && rowsEl) {
+        rowsEl.querySelectorAll('.js-remove-parents-address-row').forEach(rebindParentsRemove);
+        rep.querySelectorAll('.js-add-parents-address-row').forEach(function (addBtn) {
+            addBtn.addEventListener('click', function () {
+                var next = parseInt(rep.getAttribute('data-next-index') || '0', 10);
+                var html = tpl.innerHTML.replace(/__PIDX__/g, String(next));
+                var wrap = document.createElement('div');
+                wrap.innerHTML = html.trim();
+                var node = wrap.firstElementChild;
+                if (node) {
+                    rowsEl.appendChild(node);
+                    rep.setAttribute('data-next-index', String(next + 1));
+                    node.querySelectorAll('.js-remove-parents-address-row').forEach(rebindParentsRemove);
+                    if (window.LocationTypeahead) window.LocationTypeahead.init();
+                    syncParentsRemoveButtons();
+                }
+            });
+        });
+    }
+    syncParentsRemoveButtons();
+});
+</script>
 
 <template id="parent-father-slot-tpl">
     <div class="parent-contact-slot shrink-0" data-slot-index="">
@@ -221,7 +361,8 @@
 
 <script>
 (function() {
-    var maxSlots = 3;
+    var wrap = document.querySelector('[data-contact-context="father"]');
+    var maxSlots = wrap ? parseInt(wrap.getAttribute('data-max-slots') || '2', 10) : 2;
     var parentEngine = document.querySelector('.parent-engine[data-name-prefix]');
     var namePrefix = parentEngine ? (parentEngine.getAttribute('data-name-prefix') || '') : '';
     document.querySelectorAll('[data-contact-context="father"], [data-contact-context="mother"]').forEach(function(ctx) {
@@ -247,7 +388,7 @@
             div.innerHTML = html.trim();
             var newSlot = div.firstChild;
             inner.appendChild(newSlot);
-            if (nextIdx === 2) newSlot.querySelector('.contact-engine-add-btn')?.remove();
+            if (nextIdx >= maxSlots - 1) newSlot.querySelector('.contact-engine-add-btn')?.remove();
         });
     });
 })();

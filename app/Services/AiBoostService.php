@@ -3,10 +3,12 @@
 namespace App\Services;
 
 use App\Models\MatrimonyProfile;
+use App\Services\Profile\ProfileTypedSelfAddressService;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Schema;
 
 /**
  * Optional Sarvam (or compatible) chat completion for a 0–20 compatibility signal.
@@ -105,7 +107,7 @@ class AiBoostService
      */
     private function profilePayload(MatrimonyProfile $p): array
     {
-        $p->loadMissing(['profession', 'city', 'state', 'country']);
+        $p->loadMissing(['occupationMaster', 'occupationCustom', 'city', 'state', 'country']);
 
         $age = null;
         if ($p->date_of_birth) {
@@ -123,12 +125,13 @@ class AiBoostService
                 $p->state?->name,
                 $p->country?->name,
             ]))),
-            'profession' => $p->profession?->name ?? $p->occupation_title,
+            'profession' => trim((string) ($p->occupation_title ?: ($p->resolvedProfession()?->name ?? ''))) ?: null,
             'education' => $p->highest_education,
             'interests' => trim(implode(' | ', array_filter([
                 $p->occupation_title,
-                $p->specialization,
-                $p->work_location_text,
+                Schema::hasColumn($p->getTable(), 'work_location_text')
+                    ? $p->work_location_text
+                    : ProfileTypedSelfAddressService::addressLineForSelfType((int) $p->id, 'work'),
             ]))) ?: 'Not specified',
         ];
     }

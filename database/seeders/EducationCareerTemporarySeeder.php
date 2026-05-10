@@ -177,12 +177,13 @@ class EducationCareerTemporarySeeder extends Seeder
             ['name' => 'INR 30 to 50 Lakh yearly', 'name_mr' => 'वार्षिक ३० ते ५० लाख रु.', 'slug' => 'inr_30_50_lakh', 'sort_order' => 90],
             ['name' => 'INR 50 Lakh and above', 'name_mr' => '५० लाखांपेक्षा जास्त', 'slug' => 'inr_50_lakh_above', 'sort_order' => 100],
         ];
-        $hasMr = Schema::hasColumn('income_ranges', 'name_mr');
+        $incomeTable = Schema::hasTable('master_income_ranges') ? 'master_income_ranges' : 'income_ranges';
+        $hasMr = Schema::hasColumn($incomeTable, 'name_mr');
         foreach ($rows as $row) {
             if (! $hasMr) {
                 unset($row['name_mr']);
             }
-            DB::table('income_ranges')->updateOrInsert(
+            DB::table($incomeTable)->updateOrInsert(
                 ['slug' => $row['slug']],
                 array_merge($row, ['is_active' => true, 'created_at' => now(), 'updated_at' => now()])
             );
@@ -205,13 +206,14 @@ class EducationCareerTemporarySeeder extends Seeder
             ['name' => 'MIT World Peace University', 'name_mr' => 'एमआयटी विश्व शांती विद्यापीठ', 'city' => 'Pune', 'state' => 'Maharashtra', 'sort_order' => 110],
             ['name' => 'College Not Listed', 'name_mr' => 'महाविद्यालय सूचीत नाही', 'city' => null, 'state' => null, 'sort_order' => 999],
         ];
-        $hasMr = Schema::hasColumn('colleges', 'name_mr');
+        $collegeTable = Schema::hasTable('master_colleges') ? 'master_colleges' : 'colleges';
+        $hasMr = Schema::hasColumn($collegeTable, 'name_mr');
         foreach ($rows as $row) {
             if (! $hasMr) {
                 unset($row['name_mr']);
             }
             $slug = Str::slug($row['name']);
-            DB::table('colleges')->updateOrInsert(
+            DB::table($collegeTable)->updateOrInsert(
                 ['slug' => $slug],
                 array_merge($row, [
                     'slug' => $slug,

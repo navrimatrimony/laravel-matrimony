@@ -9,6 +9,10 @@
     $allowSelected = $errors->any()
         ? (is_array(old('auto_showcase_religion_allowlist')) ? array_map('intval', old('auto_showcase_religion_allowlist')) : [])
         : $religionAllowlistSelectedIds;
+    $globalTypeSel = old('showcase_eligible_address_types', $globalEligibleAddressTypes ?? []);
+    $globalTypeSel = is_array($globalTypeSel) ? $globalTypeSel : [];
+    $globalTagSel = old('showcase_eligible_address_tags', $globalEligibleAddressTags ?? []);
+    $globalTagSel = is_array($globalTagSel) ? $globalTagSel : [];
 @endphp
 
 @section('showcase_content')
@@ -44,9 +48,9 @@
             <div class="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950 shadow-sm" role="alert">
                 <p class="font-semibold">काही फील्ड तपासा</p>
                 <p class="mt-1 text-xs leading-relaxed text-amber-900/90">
-                    <strong>Common</strong> — partner preferences, residence JSON, min population.
-                    <strong>Admin bulk</strong> — lifecycle.
-                    <strong>Search auto-create</strong> — engine, strict JSON, limits, religion.
+                    <strong>Common</strong> — partner preferences.
+                    <strong>Admin bulk</strong> — lifecycle, bulk location type/tag.
+                    <strong>Search auto-create</strong> — engine, residence fallback, eligible addresses, strict JSON, limits, religion.
                 </p>
             </div>
         @endif
@@ -130,7 +134,7 @@
                 <div class="rounded-xl border border-emerald-100 bg-gradient-to-br from-emerald-50/90 to-white px-4 py-3">
                     <p class="text-sm font-medium text-emerald-950">या विभागातील सेटिंग्ज दोन्ही मार्गांसाठी लागू होतात</p>
                     <p class="mt-1 text-xs leading-relaxed text-emerald-900/80">
-                        Partner preferences, residence / city steps, आणि खाली city population टूल्स — <strong>Admin bulk</strong> किंवा <strong>search नंतर auto-create</strong> ने profile तयार झाल्यावर समान factory वापरतात.
+                        Partner preferences — residence / eligible <code class="rounded bg-gray-100 px-1 font-mono text-xs">addresses</code> नियम <strong>Search</strong> टॅबमध्ये; bulk-only नियम <strong>Bulk</strong> टॅबमध्ये.
                     </p>
                 </div>
 
@@ -156,20 +160,6 @@
                         </label>
                     </div>
                 </fieldset>
-
-                <div class="space-y-4 rounded-xl border border-gray-200 bg-white p-5">
-                    <h3 class="text-sm font-bold text-gray-900">Residence &amp; cities (दोन्ही मार्ग)</h3>
-                    <p class="text-xs leading-relaxed text-gray-600">Showcase profile ला city/district भरण्यासाठी fallback क्रम आणि लहान शहरांसाठी लोकसंख्या थ्रेशहोल्ड.</p>
-                    <div>
-                        <label class="{{ $lbl }}">Residence fallback order (JSON)</label>
-                        <p class="mt-0.5 text-xs text-gray-500">उदा. <code class="rounded bg-gray-100 px-1 font-mono text-gray-800">search_city</code>, <code class="rounded bg-gray-100 px-1 font-mono text-gray-800">district_seat</code>, <code class="rounded bg-gray-100 px-1 font-mono text-gray-800">min_population</code></p>
-                        <textarea name="auto_showcase_residence_fallback" rows="2" class="{{ $ctl }} mt-1 font-mono text-xs">{{ old('auto_showcase_residence_fallback', $residenceFallbackJson) }}</textarea>
-                    </div>
-                    <div>
-                        <label class="{{ $lbl }}">Min population (min_population step)</label>
-                        <input type="number" name="auto_showcase_min_population" value="{{ old('auto_showcase_min_population', $minPopulation) }}" min="0" autocomplete="off" class="{{ $ctl }} max-w-xs">
-                    </div>
-                </div>
             </div>
 
             {{-- ─── Tab 2: Admin bulk ─── --}}
@@ -229,6 +219,8 @@
                     $bulkDietSel = is_array($bulkDietSel) ? array_map('intval', $bulkDietSel) : [];
                     $bulkEduSel = old('bulk_master_education_ids', $bp['master_education_ids']);
                     $bulkEduSel = is_array($bulkEduSel) ? array_map('intval', $bulkEduSel) : [];
+                    $bulkProfSel = old('bulk_profession_ids', $bp['profession_ids'] ?? []);
+                    $bulkProfSel = is_array($bulkProfSel) ? array_map('intval', $bulkProfSel) : [];
                     $bulkNeverSel = old('bulk_never_fill_keys', $bp['never_fill_keys']);
                     $bulkNeverSel = is_array($bulkNeverSel) ? $bulkNeverSel : [];
                     $bulkRandomSel = old('bulk_random_fill_keys', $bp['random_fill_keys']);
@@ -239,7 +231,40 @@
                     $bulkPbFixed = is_array($bulkPbFixed) ? array_map('intval', $bulkPbFixed) : [];
                     $aboutTpl = old('bulk_about_me_templates', implode("\n", $bp['about_me_templates'] ?? []));
                     $expectTpl = old('bulk_expectations_templates', implode("\n", $bp['expectations_templates'] ?? []));
+                    $bulkAddrTypes = old('bulk_eligible_address_types', $bp['eligible_address_types'] ?? []);
+                    $bulkAddrTypes = is_array($bulkAddrTypes) ? $bulkAddrTypes : [];
+                    $bulkAddrTags = old('bulk_eligible_address_tags', $bp['eligible_address_tags'] ?? []);
+                    $bulkAddrTags = is_array($bulkAddrTags) ? $bulkAddrTags : [];
                 @endphp
+
+                <fieldset class="space-y-3 rounded-xl border border-violet-200 bg-white p-5">
+                    <legend class="text-sm font-bold text-gray-900">Bulk create — eligible <code class="font-mono text-xs">addresses</code> (type / tag)</legend>
+                    <p class="text-xs leading-relaxed text-gray-600">Admin bulk UI मधून तयार होणारे profiles येथील नियम वापरतात (search engine च्या global नियमांपेक्षा वेगळे ठेवायचे असल्यास).</p>
+                    <div class="grid gap-6 sm:grid-cols-2">
+                        <div>
+                            <span class="{{ $lbl }}">Type (multi) — DB schema</span>
+                            <div class="mt-2 max-h-64 space-y-2 overflow-y-auto rounded-lg border border-gray-200 bg-gray-50 p-3">
+                                @foreach ($addressTypeOptions as $t)
+                                    <label class="flex cursor-pointer items-center gap-2 text-sm text-gray-800">
+                                        <input type="checkbox" name="bulk_eligible_address_types[]" value="{{ $t }}" class="size-4 rounded border-gray-400 text-indigo-600 focus:ring-indigo-500" @checked(in_array($t, $bulkAddrTypes, true))>
+                                        <span>{{ $t }}</span>
+                                    </label>
+                                @endforeach
+                            </div>
+                        </div>
+                        <div>
+                            <span class="{{ $lbl }}">Tag (multi) — DB schema</span>
+                            <div class="mt-2 max-h-64 space-y-2 overflow-y-auto rounded-lg border border-gray-200 bg-gray-50 p-3">
+                                @foreach ($addressTagOptions as $tg)
+                                    <label class="flex cursor-pointer items-center gap-2 text-sm text-gray-800">
+                                        <input type="checkbox" name="bulk_eligible_address_tags[]" value="{{ $tg }}" class="size-4 rounded border-gray-400 text-indigo-600 focus:ring-indigo-500" @checked(in_array($tg, $bulkAddrTags, true))>
+                                        <span>{{ $tg }}</span>
+                                    </label>
+                                @endforeach
+                            </div>
+                        </div>
+                    </div>
+                </fieldset>
 
                 <div class="space-y-8 rounded-2xl border border-violet-200/60 bg-gradient-to-b from-white to-violet-50/30 p-6 shadow-sm">
                     <div>
@@ -348,14 +373,30 @@
                         </div>
                         <div class="rounded-xl border border-gray-200 bg-white p-4">
                             <span class="{{ $lbl }}">Education (master) pool</span>
+                            <p class="mt-0.5 text-xs text-gray-500">Single catalogue: degree rows from master_education (active categories only).</p>
                             <div class="mt-2 max-h-44 overflow-y-auto space-y-1 rounded-lg border border-gray-100 p-2">
                                 @foreach ($bulkEducations as $edu)
                                     <label class="flex cursor-pointer items-center gap-2 text-sm">
                                         <input type="checkbox" name="bulk_master_education_ids[]" value="{{ $edu->id }}" class="size-4 rounded border-gray-400 text-violet-600" @checked(in_array((int) $edu->id, $bulkEduSel, true))>
-                                        <span>{{ $edu->name }}</span>
+                                        <span>{{ $edu->code }}{{ filled($edu->full_form ?? null) ? ' — '.$edu->full_form : '' }}</span>
                                     </label>
                                 @endforeach
                             </div>
+                        </div>
+                    </div>
+
+                    <div class="rounded-xl border border-gray-200 bg-white p-4">
+                        <span class="{{ $lbl }}">Profession (working as) pool</span>
+                        <p class="mt-0.5 text-xs text-gray-500">एकही निवड नाही = random profession. निवडले = या यादीतून (काम करणाऱ्या profile साठी); “Not working” साठी लागू होत नाही.</p>
+                        <div class="mt-2 max-h-52 space-y-1 overflow-y-auto rounded-lg border border-gray-100 p-2">
+                            @forelse ($bulkProfessions as $prof)
+                                <label class="flex cursor-pointer items-center gap-2 text-sm">
+                                    <input type="checkbox" name="bulk_profession_ids[]" value="{{ $prof->id }}" class="size-4 rounded border-gray-400 text-violet-600" @checked(in_array((int) $prof->id, $bulkProfSel, true))>
+                                    <span>{{ $prof->name }}</span>
+                                </label>
+                            @empty
+                                <p class="text-xs text-gray-500">No active professions in DB — run career seeders if this list should be filled.</p>
+                            @endforelse
                         </div>
                     </div>
 
@@ -497,6 +538,49 @@
                     </p>
                 </div>
 
+                <div class="space-y-4 rounded-xl border border-gray-200 bg-white p-5">
+                    <h3 class="text-sm font-bold text-gray-900">Residence fallback (JSON)</h3>
+                    <p class="text-xs leading-relaxed text-gray-600">Engine नवीन showcase profile ला city निवडतो. जुनी <code class="rounded bg-gray-100 px-1 font-mono text-xs">min_population</code> पायरी <code class="rounded bg-gray-100 px-1 font-mono text-xs">tagged_city</code> मध्ये map होते.</p>
+                    <div>
+                        <label class="{{ $lbl }}">Residence fallback order</label>
+                        <p class="mt-0.5 text-xs text-gray-500"><code class="rounded bg-gray-100 px-1 font-mono text-gray-800">search_city</code>, <code class="rounded bg-gray-100 px-1 font-mono text-gray-800">district_seat</code>, <code class="rounded bg-gray-100 px-1 font-mono text-gray-800">tagged_city</code></p>
+                        <textarea name="auto_showcase_residence_fallback" rows="2" class="{{ $ctl }} mt-1 font-mono text-xs">{{ old('auto_showcase_residence_fallback', $residenceFallbackJson) }}</textarea>
+                    </div>
+                </div>
+
+                <fieldset class="space-y-3 rounded-xl border border-gray-200 bg-white p-5">
+                    <legend class="text-sm font-bold text-gray-900">Eligible <code class="rounded bg-gray-100 px-1 font-mono text-xs text-gray-800">addresses</code> (type / tag) — engine</legend>
+                    <p class="text-xs leading-relaxed text-gray-600">
+                        खाली सर्व पर्याय <strong class="text-gray-900">database schema</strong> (MySQL ENUM / table values) वरून येतात. Default: <strong>district</strong> + <strong>city</strong>; tags <strong>metro</strong> + <strong>capital</strong>.
+                        <strong class="text-gray-900">City + tag <code class="rounded bg-gray-100 px-1 font-mono text-xs">none</code> कधीही showcase साठी वापरले जात नाही.</strong>
+                    </p>
+                    <div class="grid gap-6 sm:grid-cols-2">
+                        <div>
+                            <span class="{{ $lbl }}">Address <code class="font-mono text-[11px]">type</code> (multi)</span>
+                            <div class="mt-2 max-h-64 space-y-2 overflow-y-auto rounded-lg border border-gray-200 bg-gray-50 p-3">
+                                @foreach ($addressTypeOptions as $t)
+                                    <label class="flex cursor-pointer items-center gap-2 text-sm text-gray-800">
+                                        <input type="checkbox" name="showcase_eligible_address_types[]" value="{{ $t }}" class="size-4 rounded border-gray-400 text-indigo-600 focus:ring-indigo-500" @checked(in_array($t, $globalTypeSel, true))>
+                                        <span>{{ $t }}</span>
+                                    </label>
+                                @endforeach
+                            </div>
+                        </div>
+                        <div>
+                            <span class="{{ $lbl }}">Address <code class="font-mono text-[11px]">tag</code> (multi)</span>
+                            <p class="mt-0.5 text-[11px] leading-relaxed text-gray-500">City rows: निवडलेले tags. <code class="font-mono">none</code> निवडले तरी city+none SQL मध्ये बाहेर.</p>
+                            <div class="mt-2 max-h-64 space-y-2 overflow-y-auto rounded-lg border border-gray-200 bg-gray-50 p-3">
+                                @foreach ($addressTagOptions as $tg)
+                                    <label class="flex cursor-pointer items-center gap-2 text-sm text-gray-800">
+                                        <input type="checkbox" name="showcase_eligible_address_tags[]" value="{{ $tg }}" class="size-4 rounded border-gray-400 text-indigo-600 focus:ring-indigo-500" @checked(in_array($tg, $globalTagSel, true))>
+                                        <span>{{ $tg }}</span>
+                                    </label>
+                                @endforeach
+                            </div>
+                        </div>
+                    </div>
+                </fieldset>
+
                 <label class="flex cursor-pointer items-center gap-3 rounded-xl border border-gray-200 bg-white p-4 shadow-sm hover:border-indigo-200">
                     <input type="checkbox" name="auto_showcase_engine_enabled" value="1" class="size-5 rounded border-gray-400 text-indigo-600 focus:ring-indigo-500" @checked($engineEnabled)>
                     <span>
@@ -617,47 +701,5 @@
             })();
         </script>
 
-        {{-- City population: same “Common” context, own POST routes --}}
-        <div x-show="tab === 'common'" x-cloak class="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm sm:p-8 space-y-4 text-gray-900">
-            <h2 class="text-lg font-bold tracking-tight text-gray-900">Eligible city population</h2>
-            <p class="text-xs text-gray-600 leading-relaxed">
-                Showcase residence resolution साठी city <code class="rounded bg-gray-100 px-1 font-mono text-gray-800">population</code> भरणे. फक्त अशा cities जिथे non-showcase profiles आहेत आणि population अजून null.
-                <strong>AI cost:</strong> एका district मध्ये AI ने यशस्वी fill केल्यानंतर तो district पुन्हा AI साठी lock होतो.
-                @if ($openAiConfigured)
-                    <span class="font-medium text-emerald-700">OpenAI key configured.</span>
-                @else
-                    <span class="font-medium text-amber-800">OpenAI key नाही — AI fill चालणार नाही.</span>
-                @endif
-            </p>
-            <ul class="text-sm text-gray-800 list-disc list-inside space-y-1">
-                <li>Eligible cities (any fill): <strong>{{ number_format($eligibleCityPopulationCount) }}</strong></li>
-                <li>Eligible for <strong>AI</strong>: <strong>{{ number_format($eligibleCityPopulationForAiCount) }}</strong></li>
-                <li>Districts AI-locked: <strong>{{ number_format($aiPopulationLockedDistrictCount) }}</strong></li>
-            </ul>
-            <div class="flex flex-wrap items-end gap-4">
-                <form method="POST" action="{{ route('admin.auto-showcase-settings.fill-city-population') }}" class="flex flex-wrap items-end gap-2">
-                    @csrf
-                    <input type="hidden" name="fill_mode" value="heuristic">
-                    <div>
-                        <label class="{{ $lbl }}">Max cities</label>
-                        <input type="number" name="population_fill_limit" value="100" min="1" max="500" autocomplete="off" class="mt-1 w-28 rounded-md border border-gray-300 bg-white px-2 py-2 text-sm text-gray-900 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500">
-                    </div>
-                    <button type="submit" class="rounded-lg bg-slate-700 px-3 py-2 text-sm font-medium text-white hover:bg-slate-600">Fill (heuristic)</button>
-                </form>
-                <form method="POST" action="{{ route('admin.auto-showcase-settings.fill-city-population') }}" class="flex flex-wrap items-end gap-2">
-                    @csrf
-                    <input type="hidden" name="fill_mode" value="ai">
-                    <div>
-                        <label class="{{ $lbl }}">Max cities</label>
-                        <input type="number" name="population_fill_limit" value="30" min="1" max="500" autocomplete="off" class="mt-1 w-28 rounded-md border border-gray-300 bg-white px-2 py-2 text-sm text-gray-900 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500">
-                    </div>
-                    <button type="submit" class="rounded-lg bg-violet-700 px-3 py-2 text-sm font-medium text-white hover:bg-violet-600">Fill (AI)</button>
-                </form>
-                <form method="POST" action="{{ route('admin.auto-showcase-settings.reset-ai-population-locks') }}" class="flex items-end" onsubmit="return confirm('Clear AI district locks? AI will be allowed again in those districts (new API cost).');">
-                    @csrf
-                    <button type="submit" class="rounded-lg border border-gray-400 bg-gray-100 px-3 py-2 text-sm font-medium text-gray-900 hover:bg-gray-200">Reset AI district locks</button>
-                </form>
-            </div>
-        </div>
     </div>
 @endsection

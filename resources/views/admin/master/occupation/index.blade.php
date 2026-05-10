@@ -3,8 +3,8 @@
 @section('content')
 @php
     use Illuminate\Support\Facades\Schema;
-    $hasOccCatMr = Schema::hasColumn('occupation_categories', 'name_mr');
-    $hasOccMr = Schema::hasColumn('occupation_master', 'name_mr');
+    $hasOccCatMr = Schema::hasColumn('master_occupation_categories', 'name_mr');
+    $hasOccMr = Schema::hasColumn('master_occupations', 'name_mr');
 @endphp
 <div class="space-y-6">
     <div>

@@ -35,4 +35,13 @@ final class AddressHierarchyRules
     {
         return Rule::exists('addresses', 'id')->where('type', 'city');
     }
+
+    /**
+     * Canonical place leaf id from geo SSOT. Used where UI stores any leaf type
+     * (city/town/village) under legacy-named fields like {@code work_city_id}.
+     */
+    public static function existsLocationLeafId(): \Illuminate\Validation\Rules\Exists
+    {
+        return Rule::exists('addresses', 'id');
+    }
 }

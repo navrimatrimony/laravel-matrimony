@@ -51,14 +51,9 @@ class FillVillagesMarathiSarvamCommandTest extends TestCase
 
         ProfileAddress::query()->create([
             'profile_id' => $profile->id,
+            'address_scope' => 'self',
             'address_type_id' => $addressTypeId,
-            'village_id' => $village->id,
-            'country_id' => null,
-            'state_id' => null,
-            'district_id' => null,
-            'taluka_id' => null,
-            'city_id' => null,
-            'postal_code' => null,
+            'location_id' => $village->id,
         ]);
 
         $vid = (int) $village->id;

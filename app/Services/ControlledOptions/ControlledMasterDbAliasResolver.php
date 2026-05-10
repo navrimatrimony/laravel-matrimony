@@ -41,7 +41,7 @@ final class ControlledMasterDbAliasResolver
      */
     private function resolveReligionId(array $candidates): ?int
     {
-        if (! Schema::hasTable('religion_aliases')) {
+        if (! Schema::hasTable('master_religion_aliases')) {
             return null;
         }
 
@@ -58,7 +58,7 @@ final class ControlledMasterDbAliasResolver
      */
     private function resolveCasteId(array $candidates, ?int $religionId): ?int
     {
-        if (! Schema::hasTable('caste_aliases') || ! Schema::hasTable('castes')) {
+        if (! Schema::hasTable('master_caste_aliases') || ! Schema::hasTable('master_castes')) {
             return null;
         }
 
@@ -76,7 +76,7 @@ final class ControlledMasterDbAliasResolver
      */
     private function resolveSubCasteId(array $candidates, ?int $casteId): ?int
     {
-        if (! Schema::hasTable('sub_caste_aliases')) {
+        if (! Schema::hasTable('master_sub_caste_aliases')) {
             return null;
         }
 

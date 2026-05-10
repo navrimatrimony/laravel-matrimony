@@ -21,24 +21,26 @@ class AdminCasteController extends Controller
         }
         $items = $query->get();
         $religions = Religion::where('is_active', true)->orderBy('label')->get();
+
         return view('admin.master.castes.index', compact('items', 'religions'));
     }
 
     public function create(Request $request): View
     {
         $religions = Religion::where('is_active', true)->orderBy('label')->get();
+
         return view('admin.master.castes.create', compact('religions'));
     }
 
     public function store(Request $request, ReligionCasteSubcasteSlugger $slugger): RedirectResponse
     {
         $request->validate([
-            'religion_id' => ['required', 'exists:religions,id'],
+            'religion_id' => ['required', 'exists:master_religions,id'],
             'label' => [
                 'required',
                 'string',
                 'max:255',
-                Rule::unique('castes', 'label')->where('religion_id', $request->input('religion_id')),
+                Rule::unique('master_castes', 'label')->where('religion_id', $request->input('religion_id')),
             ],
         ]);
         $religionId = (int) $request->input('religion_id');
@@ -55,12 +57,14 @@ class AdminCasteController extends Controller
             'label_mr' => null,
             'is_active' => true,
         ]);
+
         return redirect()->route('admin.master.castes.index')->with('success', 'Caste added.');
     }
 
     public function edit(Caste $caste): View
     {
         $religions = Religion::where('is_active', true)->orderBy('label')->get();
+
         return view('admin.master.castes.edit', compact('caste', 'religions'));
     }
 
@@ -68,12 +72,12 @@ class AdminCasteController extends Controller
     {
         $religionId = (int) $request->input('religion_id', $caste->religion_id);
         $request->validate([
-            'religion_id' => ['required', 'exists:religions,id'],
+            'religion_id' => ['required', 'exists:master_religions,id'],
             'label' => [
                 'required',
                 'string',
                 'max:255',
-                Rule::unique('castes', 'label')->where('religion_id', $religionId)->ignore($caste->id),
+                Rule::unique('master_castes', 'label')->where('religion_id', $religionId)->ignore($caste->id),
             ],
         ]);
         $label = $slugger->normalizeLabel($request->input('label'));
@@ -87,18 +91,21 @@ class AdminCasteController extends Controller
             'label_en' => $label,
             'key' => $key,
         ]);
+
         return redirect()->route('admin.master.castes.index')->with('success', 'Caste updated.');
     }
 
     public function disable(Request $request, Caste $caste): RedirectResponse
     {
         $caste->update(['is_active' => false]);
+
         return redirect()->route('admin.master.castes.index')->with('success', 'Caste disabled.');
     }
 
     public function enable(Request $request, Caste $caste): RedirectResponse
     {
         $caste->update(['is_active' => true]);
+
         return redirect()->route('admin.master.castes.index')->with('success', 'Caste enabled.');
     }
 }

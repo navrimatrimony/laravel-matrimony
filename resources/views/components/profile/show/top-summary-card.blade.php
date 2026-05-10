@@ -19,7 +19,7 @@
 
 @php
     $contactAccess = $contactAccess ?? ['show_contact_request_rail' => true];
-    $profile->loadMissing(['city', 'taluka', 'district', 'state', 'country', 'location', 'maritalStatus', 'religion', 'caste', 'profession', 'incomeCurrency', 'familyIncomeCurrency']);
+    $profile->loadMissing(['city', 'taluka', 'district', 'state', 'country', 'location', 'maritalStatus', 'religion', 'caste', 'occupationMaster', 'occupationCustom', 'occupationMaster.category.workingWithType', 'incomeCurrency', 'familyIncomeCurrency']);
     $age = null;
     if ($dateOfBirthVisible && ($profile->date_of_birth ?? '') !== '') {
         try {
@@ -37,9 +37,13 @@
     $eduDisplay = ($educationVisible && ($profile->highest_education ?? '') !== '')
         ? (\App\Support\ProfileDisplayCopy::formatEducationPhrase($profile->highest_education) ?? $profile->highest_education)
         : null;
-    $occDisplay = ($profile->occupation_title ?? '') !== ''
-        ? \App\Support\ProfileDisplayCopy::formatOccupationPhrase($profile->occupation_title)
-        : ($profile->profession?->name ? \App\Support\ProfileDisplayCopy::formatOccupationPhrase($profile->profession->name) : null);
+    $__occHead = trim((string) ($profile->occupation_title ?? ''));
+    if ($__occHead === '') {
+        $__occHead = trim((string) ($profile->resolvedProfession()?->name ?? ''));
+    }
+    $occDisplay = $__occHead !== ''
+        ? \App\Support\ProfileDisplayCopy::formatOccupationPhrase($__occHead)
+        : null;
     $trustCount = is_array($verificationItems) ? count(array_filter($verificationItems)) : 0;
     $nameDisplay = \App\Support\ProfileDisplayCopy::formatPersonName($profile->full_name);
 @endphp

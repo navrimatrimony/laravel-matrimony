@@ -5,10 +5,14 @@ namespace App\Services;
 use App\Models\BiodataIntake;
 use App\Models\ConflictRecord;
 use App\Models\FieldRegistry;
+use App\Models\Location;
 use App\Models\MatrimonyProfile;
 use App\Models\ProfileExtendedField;
 use App\Models\User;
 use App\Services\Core\ConflictPolicy;
+use App\Services\LocationService;
+use App\Services\Profile\ProfileCanonicalResidenceService;
+use App\Services\Profile\ProfileTypedSelfAddressService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
@@ -33,8 +37,6 @@ class MutationService
         'siblings' => 'profile_siblings',
         'relatives' => 'profile_relatives',
         'alliance_networks' => 'profile_alliance_networks',
-        'education_history' => 'profile_education',
-        'career_history' => 'profile_career',
         'addresses' => 'profile_addresses',
         'property_summary' => 'profile_property_summary',
         'property_assets' => 'profile_property_assets',
@@ -49,8 +51,6 @@ class MutationService
         'marriages',
         'relatives',
         'alliance_networks',
-        'education_history',
-        'career_history',
         'addresses',
         'property_summary',
         'property_assets',
@@ -72,8 +72,9 @@ class MutationService
         'complexion_id', 'physical_build_id', 'blood_group_id', 'diet_id', 'smoking_status_id', 'drinking_status_id', 'family_type_id', 'income_currency_id',
         'address_line', 'annual_income', 'family_income', 'income_private', 'family_income_private',
         'birth_place_text', 'work_location_text',
-        'father_name', 'father_occupation', 'father_occupation_master_id', 'father_occupation_custom_id', 'father_extra_info', 'father_contact_1', 'father_contact_2', 'father_contact_3',
-        'mother_name', 'mother_occupation', 'mother_occupation_master_id', 'mother_occupation_custom_id', 'mother_extra_info', 'mother_contact_1', 'mother_contact_2', 'mother_contact_3',
+        'occupation_master_id', 'occupation_custom_id',
+        'father_name', 'father_occupation', 'father_occupation_master_id', 'father_occupation_custom_id', 'father_extra_info', 'father_contact_1', 'father_contact_2',
+        'mother_name', 'mother_occupation', 'mother_occupation_master_id', 'mother_occupation_custom_id', 'mother_extra_info', 'mother_contact_1', 'mother_contact_2',
         'other_relatives_text',
         // photo_approved / photo_rejected_at / photo_rejection_reason: NOT snapshot-driven (see ProcessProfilePhoto + ProfilePhotoPendingStateService)
         'is_suspended',
@@ -96,6 +97,13 @@ class MutationService
     private ?int $mutationBatchId = null;
 
     /**
+     * When true, {@see syncEntityDiff} hard-deletes {@code profile_addresses} rows missing from the proposed list.
+     * Set only when the snapshot {@code addresses} array is a merged full list and every row includes {@code address_scope}
+     * (wizard basic-info / family-details saves).
+     */
+    private bool $profileAddressesFullReplace = false;
+
+    /**
      * Phase-5B: Apply manual edit snapshot. Single mutation authority.
      * Reuses conflict detection, field lock (skipped for admin), core apply, entity sync, profile_change_history.
      *
@@ -105,11 +113,10 @@ class MutationService
      */
     public function applyManualSnapshot(MatrimonyProfile $profile, array $snapshot, int $actorUserId, string $mode = 'manual'): array
     {
-        \Log::info('DEBUG APPLY SNAPSHOT KEYS', array_keys($snapshot));
-        \Log::info('DEBUG APPLY SNAPSHOT', [
-            'keys' => array_keys($snapshot),
-            'marriages_value' => $snapshot['marriages'] ?? 'NOT_PRESENT',
-        ]);
+        $snapshot = $this->stripDeprecatedSnapshotKeysForApply($snapshot);
+        if (isset($snapshot['core']) && is_array($snapshot['core'])) {
+            app(\App\Services\OccupationService::class)->mergeLegacyCareerCoreForApply($snapshot['core'], (int) ($profile->user_id ?? 0) ?: null);
+        }
 
         $state = $profile->lifecycle_state ?? '';
         $isAdmin = $mode === 'admin';
@@ -132,6 +139,7 @@ class MutationService
 
         try {
             DB::transaction(function () use ($profile, $snapshot, $isAdmin, $mode, &$hadConflicts): void {
+                $this->setProfileAddressesFullReplaceFromSnapshot($snapshot);
                 $proposedCore = $snapshot['core'] ?? [];
                 if ($mode === 'manual') {
                     $proposedCore = $this->stripPhotoModerationFromManualCore($proposedCore);
@@ -313,6 +321,25 @@ class MutationService
                         );
                     }
                 }
+                $tblWork = $profile->getTable();
+                if (! Schema::hasColumn($tblWork, 'work_city_id')
+                    && array_key_exists('work_city_id', $proposedCore)
+                    && ! in_array('work_city_id', $conflictFieldNames, true)
+                    && ($isAdmin || ! ProfileFieldLockService::isLocked($profile, 'work_city_id'))) {
+                    $newVal = $this->normalizeValue($proposedCore['work_city_id']);
+                    $oldVal = $this->getCurrentCoreValue($profile, 'work_city_id');
+                    if ((string) ($oldVal ?? '') !== (string) ($newVal ?? '')) {
+                        $this->setProfileAttribute($profile, 'work_city_id', $newVal);
+                        $this->writeProfileChangeHistory(
+                            $profile->id,
+                            'matrimony_profile',
+                            $profile->id,
+                            'work_city_id',
+                            $oldVal,
+                            $newVal
+                        );
+                    }
+                }
                 $profile->save();
 
                 // ——— Birth place / Native place (snapshot keys → profile columns only; do not touch existing location logic) ———
@@ -349,6 +376,12 @@ class MutationService
                         $profile->native_state_id = isset($np['state_id']) ? (int) $np['state_id'] : null;
                     }
                     $placeUpdated = true;
+                    if (! Schema::hasColumn($tableName, 'native_city_id')) {
+                        $leaf = isset($np['city_id']) && $np['city_id'] !== null && $np['city_id'] !== '' ? (int) $np['city_id'] : null;
+                        if ($leaf !== null && $leaf > 0) {
+                            ProfileTypedSelfAddressService::upsertSelfTypedLeaf((int) $profile->id, 'native', $leaf);
+                        }
+                    }
                 }
                 if ($placeUpdated) {
                     $profile->save();
@@ -365,7 +398,6 @@ class MutationService
 
                 // ——— Entity sync (only keys present in snapshot) ———
                 foreach (self::ENTITY_SYNC_ORDER as $snapshotKey) {
-                    \Log::info('DEBUG MULTI ROW SECTION', ['section' => $snapshotKey]);
                     if (! array_key_exists($snapshotKey, $snapshot) || ! is_array($snapshot[$snapshotKey])) {
                         continue;
                     }
@@ -436,6 +468,7 @@ class MutationService
             $this->historySourceContext = null;
             $this->historyChangedByContext = null;
             $this->mutationBatchId = null;
+            $this->profileAddressesFullReplace = false;
         }
 
         // Manual mode must NEVER report conflict to caller — user edits are never blocked by governance.
@@ -710,6 +743,7 @@ class MutationService
 
                 // ——— Canonical controlled core (text → *_id): MUST run before conflict + field-lock so evaluation matches apply ———
                 $proposedCore = $this->normalizeIntakeCoreForApply($proposedCore);
+                app(\App\Services\OccupationService::class)->mergeLegacyCareerCoreForApply($proposedCore, (int) ($profile->user_id ?? 0) ?: null);
 
                 // ——— Step 3: Field-level conflict detection (ConflictDetectionService owns escalation) ———
                 $conflictResult = ConflictDetectionService::detectResult($profile, $proposedCore, $proposedExtended);
@@ -765,7 +799,7 @@ class MutationService
                     'primary_contact_number', 'primary_contact_number_2', 'primary_contact_number_3',
                     'primary_contact_whatsapp', 'primary_contact_whatsapp_2', 'primary_contact_whatsapp_3',
                     // Parent extra slots: stored as profile_contacts (same relation) during intake, not duplicate core columns.
-                    'father_contact_2', 'father_contact_3', 'mother_contact_2', 'mother_contact_3',
+                    'father_contact_2', 'mother_contact_2',
                 ];
                 foreach ($coreFieldKeys as $fieldKey) {
                     if (! array_key_exists($fieldKey, $proposedCore)) {
@@ -850,6 +884,12 @@ class MutationService
                         $profile->native_state_id = isset($np['state_id']) ? (int) $np['state_id'] : null;
                     }
                     $placeUpdated = true;
+                    if (! Schema::hasColumn($tableName, 'native_city_id')) {
+                        $leaf = isset($np['city_id']) && $np['city_id'] !== null && $np['city_id'] !== '' ? (int) $np['city_id'] : null;
+                        if ($leaf !== null && $leaf > 0) {
+                            ProfileTypedSelfAddressService::upsertSelfTypedLeaf((int) $profile->id, 'native', $leaf);
+                        }
+                    }
                 }
                 if ($placeUpdated) {
                     $profile->save();
@@ -868,6 +908,7 @@ class MutationService
                 }
 
                 // ——— Step 7: Normalized entity sync (snapshot keys → tables) ———
+                $this->setProfileAddressesFullReplaceFromSnapshot($snapshot);
                 foreach (self::ENTITY_SYNC_ORDER as $snapshotKey) {
                     $table = self::SNAPSHOT_KEY_TO_TABLE[$snapshotKey] ?? null;
                     if ($table === null || ! Schema::hasTable($table)) {
@@ -977,6 +1018,7 @@ class MutationService
             throw $e;
         } finally {
             $this->mutationBatchId = null;
+            $this->profileAddressesFullReplace = false;
         }
 
         if ($alreadyAppliedInTransaction ?? false) {
@@ -1259,7 +1301,7 @@ class MutationService
                 $set[$d] = true;
             }
         }
-        foreach (['father_contact_1', 'father_contact_2', 'father_contact_3', 'mother_contact_1', 'mother_contact_2', 'mother_contact_3'] as $k) {
+        foreach (['father_contact_1', 'father_contact_2', 'mother_contact_1', 'mother_contact_2'] as $k) {
             $d = $this->normalizePhoneDigitsForDedupe($profile->getAttribute($k));
             if ($d !== '') {
                 $set[$d] = true;
@@ -1351,8 +1393,8 @@ class MutationService
         }
         $extras = [
             ['keys' => ['primary_contact_number_2', 'primary_contact_number_3'], 'relation' => 'self', 'name' => 'Self'],
-            ['keys' => ['father_contact_1', 'father_contact_2', 'father_contact_3'], 'relation' => 'father', 'name' => 'Father'],
-            ['keys' => ['mother_contact_1', 'mother_contact_2', 'mother_contact_3'], 'relation' => 'mother', 'name' => 'Mother'],
+            ['keys' => ['father_contact_1', 'father_contact_2'], 'relation' => 'father', 'name' => 'Father'],
+            ['keys' => ['mother_contact_1', 'mother_contact_2'], 'relation' => 'mother', 'name' => 'Mother'],
         ];
         foreach ($extras as $group) {
             foreach ($group['keys'] as $key) {
@@ -1442,6 +1484,22 @@ class MutationService
     }
 
     /**
+     * Remove snapshot keys / core fields that are no longer persisted (product simplification).
+     *
+     * @param  array<string, mixed>  $snapshot
+     * @return array<string, mixed>
+     */
+    private function stripDeprecatedSnapshotKeysForApply(array $snapshot): array
+    {
+        unset($snapshot['education_history'], $snapshot['career_history']);
+        if (isset($snapshot['core']) && is_array($snapshot['core'])) {
+            unset($snapshot['core']['specialization'], $snapshot['core']['college_id']);
+        }
+
+        return $snapshot;
+    }
+
+    /**
      * Sync a single entity from snapshot key (e.g. manual profile edit). No other snapshot keys affected.
      */
     public function syncEntityFromSnapshot(MatrimonyProfile $profile, string $snapshotKey, array $proposed): void
@@ -1458,39 +1516,38 @@ class MutationService
      */
     private function mapSnapshotRowToTable(string $entityType, array $row): array
     {
-        \Log::info('DEBUG MAP CALL', [
-            'table' => $entityType,
-            'row' => $row,
-        ]);
-        if ($entityType === 'profile_education') {
-            $mapped = $row;
-            if (array_key_exists('institution', $mapped)) {
-                $mapped['university'] = $mapped['institution'];
-                unset($mapped['institution']);
-            }
-            if (array_key_exists('year', $mapped)) {
-                $mapped['year_completed'] = $mapped['year'] !== null && $mapped['year'] !== '' ? (int) $mapped['year'] : 0;
-                unset($mapped['year']);
-            }
-            if (! array_key_exists('year_completed', $mapped)) {
-                $mapped['year_completed'] = 0;
-            }
-            // DB: degree NOT NULL
-            $degree = trim((string) ($mapped['degree'] ?? ''));
-            $mapped['degree'] = $degree !== '' ? $degree : '—';
-
-            return $mapped;
-        }
         if ($entityType === 'profile_addresses') {
             $mapped = $row;
             if (array_key_exists('type', $mapped)) {
                 $mapped['address_type'] = $mapped['type'];
                 unset($mapped['type']);
             }
+            if (array_key_exists('address_type_key', $mapped) && ! array_key_exists('address_type', $mapped)) {
+                $mapped['address_type'] = $mapped['address_type_key'];
+                unset($mapped['address_type_key']);
+            }
             if (array_key_exists('raw', $mapped)) {
                 unset($mapped['raw']);
             }
-            $mapped['village_id'] = $mapped['village_id'] ?? null;
+            $scope = trim((string) ($mapped['address_scope'] ?? 'self'));
+            if (! in_array($scope, ['self', 'parents'], true)) {
+                $scope = 'self';
+            }
+            $mapped['address_scope'] = $scope;
+            if (array_key_exists('location_id', $mapped)) {
+                $loc = $mapped['location_id'];
+                $mapped['location_id'] = ($loc !== null && $loc !== '') ? (int) $loc : null;
+            } elseif (array_key_exists('city_id', $mapped)) {
+                $c = $mapped['city_id'];
+                $mapped['location_id'] = ($c !== null && $c !== '') ? (int) $c : null;
+            }
+            foreach (['city_id', 'country_id', 'state_id', 'district_id', 'taluka_id', 'village_id', 'location_input', 'location_pending', 'wizard_residence_display', 'wizard_parents_city_display'] as $stripKey) {
+                unset($mapped[$stripKey]);
+            }
+            if (array_key_exists('address_line', $mapped)) {
+                $al = trim((string) ($mapped['address_line'] ?? ''));
+                $mapped['address_line'] = $al !== '' ? mb_substr($al, 0, 255) : null;
+            }
             $mapped = $this->resolveAddressTypeToId($mapped);
 
             return $mapped;
@@ -1598,46 +1655,7 @@ class MutationService
 
             return $mapped;
         }
-        if ($entityType === 'profile_career') {
-            $mapped = $row;
-            // DB NOT NULL columns: designation, company, start_year — never send null.
-            $mapped['designation'] = trim((string) ($mapped['designation'] ?? ''));
-            if ($mapped['designation'] === '') {
-                $mapped['designation'] = '—';
-            }
-            $mapped['company'] = trim((string) ($mapped['company'] ?? $mapped['employer_name'] ?? $mapped['company_name'] ?? ''));
-            if ($mapped['company'] === '') {
-                $mapped['company'] = '—';
-            }
-            unset($mapped['employer_name'], $mapped['company_name']);
-            $mapped['start_year'] = isset($mapped['start_year']) && (string) $mapped['start_year'] !== '' && is_numeric($mapped['start_year'])
-                ? (int) $mapped['start_year']
-                : 0;
-            $mapped['end_year'] = isset($mapped['end_year']) && (string) $mapped['end_year'] !== '' && is_numeric($mapped['end_year'])
-                ? (int) $mapped['end_year']
-                : null;
-            $cityId = ! empty($mapped['city_id']) && is_numeric($mapped['city_id']) ? (int) $mapped['city_id'] : null;
-            if ($cityId !== null && $cityId <= 0) {
-                $cityId = null;
-            }
-            if (Schema::hasColumn('profile_career', 'city_id')) {
-                $mapped['city_id'] = $cityId;
-            } else {
-                unset($mapped['city_id']);
-            }
-            unset($mapped['taluka_id'], $mapped['district_id'], $mapped['state_id']);
-            $loc = trim((string) ($mapped['location'] ?? $mapped['work_location'] ?? ''));
-            if ($loc === '' && $cityId !== null) {
-                $loc = CareerHistoryRowNormalizer::lineForCityId($cityId) ?? '';
-            }
-            $mapped['location'] = $loc !== '' ? $loc : null;
-            $mapped['is_current'] = ! empty($mapped['is_current']);
-
-            return $mapped;
-        }
         if ($entityType === 'profile_marriages') {
-            \Log::info('DEBUG MAP ROW', $row);
-
             return [
                 'marital_status_id' => $row['marital_status_id'] ?? null,
                 'marriage_year' => $row['marriage_year'] ?? null,
@@ -2147,6 +2165,25 @@ class MutationService
         }
     }
 
+    /**
+     * Wizard saves merge both {@code self} and {@code parents} address rows; every row carries {@code address_scope}.
+     * In that case {@see syncEntityDiff} may hard-delete removed {@code profile_addresses} ids.
+     */
+    private function setProfileAddressesFullReplaceFromSnapshot(array $snapshot): void
+    {
+        $this->profileAddressesFullReplace = false;
+        $addr = $snapshot['addresses'] ?? null;
+        if (! is_array($addr) || $addr === []) {
+            return;
+        }
+        foreach ($addr as $row) {
+            if (! is_array($row) || ! array_key_exists('address_scope', $row)) {
+                return;
+            }
+        }
+        $this->profileAddressesFullReplace = true;
+    }
+
     private function syncEntityDiff(MatrimonyProfile $profile, string $entityType, array $proposed): void
     {
         if (! Schema::hasTable($entityType)) {
@@ -2168,6 +2205,14 @@ class MutationService
                         continue;
                     }
                 }
+                if ($entityType === 'profile_addresses') {
+                    $typeId = isset($row['address_type_id']) ? (int) $row['address_type_id'] : 0;
+                    $leaf = isset($row['location_id']) ? (int) $row['location_id'] : (isset($row['city_id']) ? (int) $row['city_id'] : 0);
+                    $line = trim((string) ($row['address_line'] ?? ''));
+                    if ($typeId <= 0 && $leaf <= 0 && $line === '') {
+                        continue;
+                    }
+                }
                 $insertData = array_merge(['profile_id' => $profile->id], $row);
                 unset($insertData['id']);
                 $insertData['created_at'] = now();
@@ -2175,10 +2220,6 @@ class MutationService
                 // Only insert columns that exist on the table (intake/wizard may send extra keys e.g. address_line on profile_siblings).
                 $allowedColumns = array_fill_keys(Schema::getColumnListing($entityType), true);
                 $insertData = array_intersect_key($insertData, $allowedColumns);
-                \Log::info('DEBUG DB OPERATION', [
-                    'table' => $entityType,
-                    'payload' => $insertData,
-                ]);
                 DB::table($entityType)->insert($insertData);
                 $this->writeProfileChangeHistory(
                     $profile->id,
@@ -2241,7 +2282,9 @@ class MutationService
         }
 
         // For profile_relatives and profile_contacts: actually hard-delete rows that user removed from the wizard.
-        if (in_array($entityType, ['profile_relatives', 'profile_contacts'], true)) {
+        // profile_addresses: same when the snapshot is a merged wizard list (every row has address_scope).
+        if (in_array($entityType, ['profile_relatives', 'profile_contacts'], true)
+            || ($entityType === 'profile_addresses' && $this->profileAddressesFullReplace && Schema::hasColumn($entityType, 'address_scope'))) {
             $deleteIds = [];
             foreach ($existing as $id => $existingRow) {
                 if (! isset($proposedIds[$id])) {
@@ -2346,12 +2389,50 @@ class MutationService
                 ->where('is_primary', true)
                 ->value('phone_number');
         }
-        if ($fieldKey === 'location') {
+        if ($fieldKey === 'location' || $fieldKey === 'location_id') {
             if (Schema::hasColumn($profile->getTable(), 'location_id')) {
                 return $profile->getAttribute('location_id');
             }
 
-            return null;
+            return $profile->exists
+                ? ProfileCanonicalResidenceService::locationLeafId((int) $profile->id)
+                : null;
+        }
+        if ($fieldKey === 'address_line') {
+            if (Schema::hasColumn($profile->getTable(), 'address_line')) {
+                return $profile->getAttribute('address_line');
+            }
+
+            return $profile->exists
+                ? ProfileCanonicalResidenceService::addressLineRaw((int) $profile->id)
+                : null;
+        }
+        if ($fieldKey === 'work_city_id') {
+            if (Schema::hasColumn($profile->getTable(), 'work_city_id')) {
+                return $profile->getAttribute('work_city_id');
+            }
+
+            return $profile->exists
+                ? ProfileTypedSelfAddressService::locationLeafIdForSelfType((int) $profile->id, 'work')
+                : null;
+        }
+        if ($fieldKey === 'work_state_id') {
+            if (Schema::hasColumn($profile->getTable(), 'work_state_id')) {
+                return $profile->getAttribute('work_state_id');
+            }
+            $leaf = $profile->exists
+                ? ProfileTypedSelfAddressService::locationLeafIdForSelfType((int) $profile->id, 'work')
+                : null;
+            if ($leaf === null || ! Schema::hasTable(Location::geoTable())) {
+                return null;
+            }
+            $row = Location::query()->find($leaf);
+            if ($row === null) {
+                return null;
+            }
+            $state = app(LocationService::class)->getAncestorByType($row, 'state');
+
+            return $state?->id;
         }
 
         return $profile->getAttribute($fieldKey);
@@ -2386,6 +2467,51 @@ class MutationService
     private function setProfileAttribute(MatrimonyProfile $profile, string $fieldKey, $value): void
     {
         if ($fieldKey === 'location') {
+            if (! Schema::hasColumn($profile->getTable(), 'location_id')) {
+                $city = $value !== null && $value !== '' ? (int) $value : null;
+                ProfileCanonicalResidenceService::upsertSelfCurrent((int) $profile->id, $city, null, true, false);
+            }
+
+            return;
+        }
+        if ($fieldKey === 'location_id') {
+            if (! Schema::hasColumn($profile->getTable(), 'location_id')) {
+                $city = $value !== null && $value !== '' ? (int) $value : null;
+                ProfileCanonicalResidenceService::upsertSelfCurrent((int) $profile->id, $city, null, true, false);
+
+                return;
+            }
+            $profile->setAttribute($fieldKey, $value);
+
+            return;
+        }
+        if ($fieldKey === 'address_line') {
+            if (! Schema::hasColumn($profile->getTable(), 'address_line')) {
+                ProfileCanonicalResidenceService::upsertSelfCurrent((int) $profile->id, null, $value, false, true);
+
+                return;
+            }
+            $profile->setAttribute($fieldKey, $value);
+
+            return;
+        }
+        if ($fieldKey === 'work_city_id') {
+            $city = $value !== null && $value !== '' ? (int) $value : null;
+            if (! Schema::hasColumn($profile->getTable(), 'work_city_id')) {
+                ProfileTypedSelfAddressService::upsertSelfTypedLeaf((int) $profile->id, 'work', $city);
+
+                return;
+            }
+            $profile->setAttribute($fieldKey, $value);
+
+            return;
+        }
+        if ($fieldKey === 'work_state_id') {
+            if (! Schema::hasColumn($profile->getTable(), 'work_state_id')) {
+                return;
+            }
+            $profile->setAttribute($fieldKey, $value);
+
             return;
         }
         $profile->setAttribute($fieldKey, $value);
@@ -2762,7 +2888,7 @@ class MutationService
     private const INTAKE_CORE_KEYS_EXCLUDED_FROM_FIELD_SUGGESTION_PARTITION = [
         'primary_contact_number', 'primary_contact_number_2', 'primary_contact_number_3',
         'primary_contact_whatsapp', 'primary_contact_whatsapp_2', 'primary_contact_whatsapp_3',
-        'father_contact_2', 'father_contact_3', 'mother_contact_2', 'mother_contact_3',
+        'father_contact_2', 'mother_contact_2',
     ];
 
     /**
@@ -3009,10 +3135,18 @@ class MutationService
     private function profileHasExistingNativePlace(MatrimonyProfile $profile): bool
     {
         foreach (['native_city_id', 'native_taluka_id', 'native_district_id', 'native_state_id'] as $col) {
+            if (! Schema::hasColumn($profile->getTable(), $col)) {
+                continue;
+            }
             $v = $profile->getAttribute($col);
             if ($v !== null && $v !== '' && (int) $v !== 0) {
                 return true;
             }
+        }
+        if ($profile->exists) {
+            $leaf = ProfileTypedSelfAddressService::locationLeafIdForSelfType((int) $profile->id, 'native');
+
+            return $leaf !== null && $leaf > 0;
         }
 
         return false;

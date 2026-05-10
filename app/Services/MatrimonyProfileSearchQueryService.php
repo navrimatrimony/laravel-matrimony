@@ -6,8 +6,10 @@ use App\Models\EducationDegree;
 use App\Models\HiddenProfile;
 use App\Models\MasterMaritalStatus;
 use App\Models\MatrimonyProfile;
+use App\Services\Profile\ProfileCanonicalResidenceService;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Schema;
 
 /**
  * Member search listing filters — shared so list counts, strict-match counts, and auto-showcase stay aligned.
@@ -102,7 +104,25 @@ class MatrimonyProfileSearchQueryService
                 $query->whereResidenceUnderAncestor((int) $request->taluka_id);
             }
             if ($request->filled('location_id') && $geoActive('city_id')) {
-                $query->where('location_id', (int) $request->location_id);
+                $cityId = (int) $request->location_id;
+                if (Schema::hasColumn('matrimony_profiles', 'location_id')) {
+                    $query->where('location_id', $cityId);
+                } else {
+                    $tid = ProfileCanonicalResidenceService::currentAddressTypeId();
+                    if ($tid !== null) {
+                        $query->whereExists(function ($q) use ($cityId, $tid): void {
+                            $q->selectRaw('1')
+                                ->from('profile_addresses')
+                                ->whereColumn('profile_addresses.profile_id', 'matrimony_profiles.id')
+                                ->where('profile_addresses.address_scope', 'self')
+                                ->where('profile_addresses.address_type_id', $tid)
+                                ->where(
+                                    Schema::hasColumn('profile_addresses', 'location_id') ? 'profile_addresses.location_id' : 'profile_addresses.city_id',
+                                    $cityId
+                                );
+                        });
+                    }
+                }
             }
         }
 
@@ -141,10 +161,9 @@ class MatrimonyProfileSearchQueryService
                 $deg = EducationDegree::query()->find((int) $request->input('education_degree_id'));
                 if ($deg) {
                     $labels = array_unique(array_filter(array_map('trim', [
-                        (string) ($deg->title ?? ''),
                         (string) ($deg->code ?? ''),
-                        (string) ($deg->title_mr ?? ''),
                         (string) ($deg->code_mr ?? ''),
+                        (string) ($deg->full_form ?? ''),
                     ]), static fn ($s) => $s !== ''));
                     $query->where(function ($q) use ($labels): void {
                         foreach ($labels as $lab) {
@@ -154,12 +173,13 @@ class MatrimonyProfileSearchQueryService
                 }
             } elseif ($request->filled('education_category_id')) {
                 $catId = (int) $request->input('education_category_id');
-                $degrees = EducationDegree::query()->where('category_id', $catId)->get(['title', 'code', 'title_mr', 'code_mr']);
+                $degrees = EducationDegree::query()->where('category_id', $catId)->get(['code', 'code_mr', 'full_form']);
                 $query->where(function ($q) use ($degrees): void {
                     foreach ($degrees as $deg) {
                         foreach (array_unique(array_filter(array_map('trim', [
-                            (string) ($deg->title ?? ''),
                             (string) ($deg->code ?? ''),
+                            (string) ($deg->code_mr ?? ''),
+                            (string) ($deg->full_form ?? ''),
                         ]))) as $lab) {
                             if ($lab !== '') {
                                 $q->orWhere('highest_education', 'like', '%'.addcslashes($lab, '%_\\').'%');
@@ -173,7 +193,15 @@ class MatrimonyProfileSearchQueryService
         }
 
         if ((! $strict || $inStrict('profession_id')) && $isSearchable('profession_id') && $request->filled('profession_id')) {
-            $query->where('profession_id', $request->input('profession_id'));
+            $profId = (int) $request->input('profession_id');
+            if (Schema::hasColumn((new MatrimonyProfile)->getTable(), 'profession_id')) {
+                $query->where('profession_id', $profId);
+            } elseif (Schema::hasColumn((new MatrimonyProfile)->getTable(), 'occupation_master_id')) {
+                $mid = app(OccupationService::class)->occupationMasterIdForProfessionId($profId);
+                if ($mid !== null && $mid > 0) {
+                    $query->where('occupation_master_id', $mid);
+                }
+            }
         }
 
         if ($advancedProfileSearch && ! $strict && ($request->filled('income_min') || $request->filled('income_max'))) {

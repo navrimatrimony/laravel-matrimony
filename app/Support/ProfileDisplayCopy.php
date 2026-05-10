@@ -40,7 +40,7 @@ class ProfileDisplayCopy
      */
     public static function headline(MatrimonyProfile $p): string
     {
-        $p->loadMissing(['district', 'state', 'maritalStatus', 'profession']);
+        $p->loadMissing(['district', 'state', 'maritalStatus', 'occupationMaster', 'occupationCustom']);
         $loc = self::profileResidenceDisplayLine($p);
         if ($loc === '') {
             $loc = self::compactLocationLine(
@@ -49,7 +49,7 @@ class ProfileDisplayCopy
                 $p->state?->name
             );
         }
-        $occ = $p->occupation_title ?: ($p->profession?->name ?? '');
+        $occ = trim((string) ($p->occupation_title ?: ($p->resolvedProfession()?->name ?? '')));
         $parts = array_filter([
             self::formatEducationPhrase($p->highest_education ?: null),
             $occ !== '' ? self::formatOccupationPhrase($occ) : null,

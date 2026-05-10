@@ -13,6 +13,7 @@ use App\Services\ProfileLifecycleService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\ValidationException;
 
 /**
@@ -88,7 +89,10 @@ class OnboardingController extends Controller
             case 4:
                 $data['currencies'] = \App\Models\MasterIncomeCurrency::where('is_active', true)->get();
                 $data['educationExamples'] = __('onboarding.education_examples');
-                $data['profile'] = $profile->loadMissing(['occupationMaster', 'occupationCustom', 'profession']);
+                $data['profile'] = $profile->loadMissing([
+                    'occupationMaster.category.workingWithType',
+                    'occupationCustom',
+                ]);
                 break;
         }
 
@@ -426,18 +430,25 @@ class OnboardingController extends Controller
             return $posted;
         };
 
+        $tbl = $profile->getTable();
+        $profile->loadMissing(['occupationMaster.category.workingWithType', 'occupationCustom']);
+        $legacyWwFallback = Schema::hasColumn($tbl, 'working_with_type_id')
+            ? $profile->getAttribute('working_with_type_id')
+            : $profile->resolvedWorkingWithType()?->id;
+        $legacyProfFallback = Schema::hasColumn($tbl, 'profession_id')
+            ? $profile->getAttribute('profession_id')
+            : $profile->resolvedProfession()?->id;
+
         $request->merge([
             'highest_education' => $coalesce($request->input('highest_education'), $profile->highest_education),
             'highest_education_other' => $coalesce($request->input('highest_education_other'), $profile->highest_education_other),
-            'specialization' => $request->input('specialization', $profile->specialization),
-            'working_with_type_id' => $request->input('working_with_type_id', $profile->working_with_type_id),
-            'profession_id' => $request->input('profession_id', $profile->profession_id),
+            'working_with_type_id' => $request->input('working_with_type_id', $legacyWwFallback),
+            'profession_id' => $request->input('profession_id', $legacyProfFallback),
             'company_name' => $request->input('company_name', $profile->company_name),
             'annual_income' => $request->input('annual_income', $profile->annual_income),
             'income_range_id' => $request->input('income_range_id', $profile->income_range_id),
             'income_currency_id' => $request->input('income_currency_id', $profile->income_currency_id ?? $defaultInr),
             'income_private' => $request->has('income_private') ? $request->boolean('income_private') : (bool) $profile->income_private,
-            'college_id' => $request->input('college_id', $profile->college_id),
             'work_city_id' => $request->input('work_city_id', $profile->work_city_id),
             'work_state_id' => $request->input('work_state_id', $profile->work_state_id),
             'income_period' => $request->input('income_period', $profile->income_period),

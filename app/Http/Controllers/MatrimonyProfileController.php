@@ -192,7 +192,7 @@ class MatrimonyProfileController extends Controller
      * Only includes keys present in request (or in overrides). No DB write.
      *
      * @param  array<string, mixed>  $overrides  e.g. ['profile_photo' => $path, 'photo_approved' => true]
-     * @return array{core: array, contacts: array, children: array, education_history: array, career_history: array, addresses: array, property_summary: array, property_assets: array, horoscope: array, preferences: array, extended_narrative: array}
+     * @return array{core: array, contacts: array, children: array, education_history: array, addresses: array, property_summary: array, property_assets: array, horoscope: array, preferences: array, extended_narrative: array}
      */
     private function buildManualSnapshot(Request $request, MatrimonyProfile $profile, array $overrides = []): array
     {
@@ -260,51 +260,12 @@ class MatrimonyProfileController extends Controller
             }
         }
 
-        $education_history = [];
-        if ($request->has('education_history') && is_array($request->input('education_history'))) {
-            foreach (array_values($request->input('education_history')) as $row) {
-                $education_history[] = [
-                    'id' => ! empty($row['id']) ? (int) $row['id'] : null,
-                    'degree' => trim((string) ($row['degree'] ?? '')),
-                    'specialization' => trim((string) ($row['field_of_study'] ?? '')),
-                    'university' => trim((string) ($row['institution'] ?? '')),
-                    'year_completed' => ! empty($row['year_completed']) ? (int) $row['year_completed'] : 0,
-                ];
-            }
-            $latest = collect($education_history)->filter(fn ($r) => ($r['year_completed'] ?? 0) > 0 && ($r['degree'] ?? '') !== '')->sortByDesc('year_completed')->first();
-            if ($latest !== null) {
-                $core['highest_education'] = $latest['degree'];
-            }
-        }
-
-        $career_history = [];
-        if ($request->has('career_history') && is_array($request->input('career_history'))) {
-            foreach (array_values($request->input('career_history')) as $row) {
-                $career_history[] = [
-                    'id' => ! empty($row['id']) ? (int) $row['id'] : null,
-                    'designation' => trim((string) ($row['job_title'] ?? $row['designation'] ?? '')),
-                    'company' => trim((string) ($row['company_name'] ?? $row['company'] ?? '')),
-                    'location' => trim((string) ($row['location'] ?? '')) ?: null,
-                    'city_id' => ! empty($row['city_id']) && is_numeric($row['city_id']) ? (int) $row['city_id'] : null,
-                    'start_year' => ! empty($row['start_year']) ? (int) $row['start_year'] : null,
-                    'end_year' => ! empty($row['end_year']) ? (int) $row['end_year'] : null,
-                    'is_current' => isset($row['is_current']) && (string) $row['is_current'] === '1',
-                ];
-            }
-        }
-
         $snapshot = ['core' => $core];
         if ($contacts !== []) {
             $snapshot['contacts'] = $contacts;
         }
         if ($request->has('children') && is_array($request->input('children'))) {
             $snapshot['children'] = $children;
-        }
-        if ($request->has('education_history') && is_array($request->input('education_history'))) {
-            $snapshot['education_history'] = $education_history;
-        }
-        if ($request->has('career_history') && is_array($request->input('career_history'))) {
-            $snapshot['career_history'] = $career_history;
         }
         // Phase-5B PART-2: Extended fields passed into snapshot; applied inside MutationService transaction.
         if ($request->has('extended_fields') && is_array($request->input('extended_fields'))) {
@@ -1059,8 +1020,6 @@ class MatrimonyProfileController extends Controller
             'incomeCurrency',
             'horoscope',
             'children.childLivingWith',
-            'educationHistory',
-            'career',
             'addresses.village',
             'relatives.city',
             'relatives.state',
@@ -1072,10 +1031,6 @@ class MatrimonyProfileController extends Controller
             'birthState',
             'birthDistrict',
             'birthTaluka',
-            'nativeCity',
-            'nativeState',
-            'nativeDistrict',
-            'nativeTaluka',
             'siblings.city',
             'religion',
             'caste',
@@ -1086,8 +1041,8 @@ class MatrimonyProfileController extends Controller
             'state',
             'country',
             'location',
-            'profession',
-            'workingWithType',
+            'occupationMaster.category.workingWithType',
+            'occupationCustom',
             'motherTongue',
             'marriages',
             'seriousIntent',
@@ -1195,17 +1150,14 @@ class MatrimonyProfileController extends Controller
             $featureUsage = app(FeatureUsageService::class);
             $userId = (int) $user->id;
             $dailyViewKey = FeatureUsageService::FEATURE_DAILY_PROFILE_VIEW_LIMIT;
+            $canConsumeProfileView = $featureUsage->canUse($userId, $dailyViewKey);
 
-            if (! $featureUsage->canUse($userId, $dailyViewKey)) {
-                return redirect()
-                    ->route('matrimony.profiles.index')
-                    ->with('error', __('subscriptions.profile_view_daily_limit'));
-            }
-
-            if (ViewTrackingService::recordView($user->matrimonyProfile, $profile)) {
+            // When quota is exhausted, still allow profile page render in locked/blur mode.
+            // Only fresh allowed views consume quota and trigger view-back.
+            if ($canConsumeProfileView && ViewTrackingService::recordView($user->matrimonyProfile, $profile)) {
                 $featureUsage->consume($userId, $dailyViewKey);
+                ViewTrackingService::maybeTriggerViewBack($user->matrimonyProfile, $profile);
             }
-            ViewTrackingService::maybeTriggerViewBack($user->matrimonyProfile, $profile);
         }
 
         // Detailed section coverage for own-profile show (SSOT: ProfileCompletionEngine)
@@ -1407,6 +1359,11 @@ class MatrimonyProfileController extends Controller
             'extended_values' => $extendedValues,
             'extended_meta' => $extendedMeta,
         ]);
+        $profileViewLockStartSection = (string) \App\Models\AdminSetting::getValue('profile_view_lock_start_section', 'family');
+        if (! in_array($profileViewLockStartSection, ['basic_info', 'physical', 'education_career', 'family', 'siblings_detail', 'extended_family', 'alliance', 'property', 'horoscope', 'partner_preferences', 'additional'], true)) {
+            $profileViewLockStartSection = 'family';
+        }
+        $profileViewLockBlurStrength = max(35, min(100, (int) \App\Models\AdminSetting::getValue('profile_view_lock_blur_strength', '78')));
 
         $profileOwnerPresence = ! $isOwnProfile
             ? app(MemberPresencePresentationService::class)->buildProfileHeroPresence($profile->user)
@@ -1478,6 +1435,8 @@ class MatrimonyProfileController extends Controller
                 'whatsappWaMeHref' => $whatsappWaMeHref,
                 'profileOwnerPresence' => $profileOwnerPresence,
                 'hasIncomingMessageFromViewedProfile' => $hasIncomingMessageFromViewedProfile,
+                'profileViewLockStartSection' => $profileViewLockStartSection,
+                'profileViewLockBlurStrength' => $profileViewLockBlurStrength,
             ]
         );
     }
@@ -1585,7 +1544,8 @@ class MatrimonyProfileController extends Controller
             'religion',
             'caste',
             'subCaste',
-            'profession',
+            'occupationMaster.category.workingWithType',
+            'occupationCustom',
             'seriousIntent',
             'user:id,email_verified_at,last_seen_at',
             'photos' => function ($q) {
@@ -1651,7 +1611,7 @@ class MatrimonyProfileController extends Controller
             ->orderBy('sort_order')
             ->orderBy('name')
             ->with(['degrees' => function ($q) {
-                $q->orderBy('sort_order')->orderBy('title');
+                $q->orderBy('sort_order')->orderBy('code');
             }])
             ->get();
         $maritalStatuses = MasterMaritalStatus::query()

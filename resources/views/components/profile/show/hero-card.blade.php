@@ -18,7 +18,7 @@
 ])
 
 @php
-    $profile->loadMissing(['gender', 'city', 'taluka', 'district', 'state', 'country', 'location', 'maritalStatus', 'religion', 'caste', 'profession']);
+    $profile->loadMissing(['gender', 'city', 'taluka', 'district', 'state', 'country', 'location', 'maritalStatus', 'religion', 'caste', 'occupationMaster', 'occupationCustom', 'occupationMaster.category.workingWithType']);
     $age = null;
     if (! empty($profile->date_of_birth)) {
         try {
@@ -60,14 +60,13 @@
             $summaryParts[] = \Illuminate\Support\Str::limit($eduS, 40);
         }
     }
-    if (($profile->occupation_title ?? '') !== '') {
+    $__occPhrase = trim((string) ($profile->occupation_title ?? ''));
+    if ($__occPhrase === '') {
+        $__occPhrase = trim((string) ($profile->resolvedProfession()?->name ?? ''));
+    }
+    if ($__occPhrase !== '') {
         $summaryParts[] = \Illuminate\Support\Str::limit(
-            \App\Support\ProfileDisplayCopy::formatOccupationPhrase(trim($profile->occupation_title)),
-            32
-        );
-    } elseif ($profile->profession && ($profile->profession->name ?? '') !== '') {
-        $summaryParts[] = \Illuminate\Support\Str::limit(
-            \App\Support\ProfileDisplayCopy::formatOccupationPhrase($profile->profession->name),
+            \App\Support\ProfileDisplayCopy::formatOccupationPhrase($__occPhrase),
             32
         );
     }

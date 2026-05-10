@@ -276,6 +276,13 @@ class ControlledOptionEngine
             ];
         }
 
+        if ($fieldKey === 'entity.address_type') {
+            return [
+                'work' => ['office', 'कार्यालय', 'Office'],
+                'native' => ['native_place'],
+            ];
+        }
+
         return null;
     }
 

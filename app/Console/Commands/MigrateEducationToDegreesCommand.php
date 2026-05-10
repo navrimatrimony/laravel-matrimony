@@ -16,7 +16,7 @@ class MigrateEducationToDegreesCommand extends Command
 {
     protected $signature = 'education:migrate-to-degrees {--cleanup : Drop duplicate educations table after backfill} {--force : Re-resolve every profile using current alias + matching logic}';
 
-    protected $description = 'Migrate profile education data from legacy columns into education_degrees';
+    protected $description = 'Migrate profile education data from legacy columns into master_education (degrees)';
 
     public function handle(EducationService $educationService): int
     {
@@ -57,7 +57,7 @@ class MigrateEducationToDegreesCommand extends Command
                     $fill = [
                         'education_degree_id' => $match->id,
                         'education_text' => null,
-                        'highest_education' => $match->title ?: $match->code,
+                        'highest_education' => $match->code,
                     ];
                     if (Schema::hasColumn('matrimony_profiles', 'highest_education_text')) {
                         $fill['highest_education_text'] = null;

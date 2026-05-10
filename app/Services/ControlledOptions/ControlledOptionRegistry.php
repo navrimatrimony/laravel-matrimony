@@ -108,7 +108,7 @@ class ControlledOptionRegistry
         ],
         'core.religion' => [
             'source_type' => 'master_table',
-            'table' => 'religions',
+            'table' => 'master_religions',
             'key_column' => 'key',
             'id_column' => 'id',
             'label_column' => 'label',
@@ -117,7 +117,7 @@ class ControlledOptionRegistry
         ],
         'core.caste' => [
             'source_type' => 'master_table',
-            'table' => 'castes',
+            'table' => 'master_castes',
             'key_column' => 'key',
             'id_column' => 'id',
             'label_column' => 'label',
@@ -126,7 +126,7 @@ class ControlledOptionRegistry
         ],
         'core.sub_caste' => [
             'source_type' => 'master_table',
-            'table' => 'sub_castes',
+            'table' => 'master_sub_castes',
             'key_column' => 'key',
             'id_column' => 'id',
             'label_column' => 'label',
@@ -201,7 +201,7 @@ class ControlledOptionRegistry
         // -------------------------
         'preference.religion' => [
             'source_type' => 'master_table',
-            'table' => 'religions',
+            'table' => 'master_religions',
             'key_column' => 'key',
             'id_column' => 'id',
             'label_column' => 'label',
@@ -210,7 +210,7 @@ class ControlledOptionRegistry
         ],
         'preference.caste' => [
             'source_type' => 'master_table',
-            'table' => 'castes',
+            'table' => 'master_castes',
             'key_column' => 'key',
             'id_column' => 'id',
             'label_column' => 'label',
@@ -282,4 +282,3 @@ class ControlledOptionRegistry
         return $this->config[$fieldKey];
     }
 }
-

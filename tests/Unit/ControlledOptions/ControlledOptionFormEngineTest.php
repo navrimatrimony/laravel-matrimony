@@ -17,7 +17,7 @@ class ControlledOptionFormEngineTest extends TestCase
 
     private function makeEngine(): ControlledOptionFormEngine
     {
-        $registry = new ControlledOptionRegistry();
+        $registry = new ControlledOptionRegistry;
         $engine = new ControlledOptionEngine($registry);
         $labels = new ControlledOptionLabelResolver($registry);
 
@@ -201,12 +201,14 @@ class ControlledOptionFormEngineTest extends TestCase
 
     public function test_multi_select_filters_to_valid_ids_only()
     {
-        DB::table('religions')->truncate();
-        DB::table('religions')->insert([
+        \Illuminate\Support\Facades\Schema::disableForeignKeyConstraints();
+        DB::table('master_religions')->truncate();
+        DB::table('master_religions')->insert([
             ['id' => 1, 'key' => 'hindu', 'label' => 'Hindu', 'is_active' => true],
             ['id' => 2, 'key' => 'jain', 'label' => 'Jain', 'is_active' => false],
             ['id' => 3, 'key' => 'buddhist', 'label' => 'Buddhist', 'is_active' => true],
         ]);
+        \Illuminate\Support\Facades\Schema::enableForeignKeyConstraints();
 
         $formEngine = $this->makeEngine();
         $meta = $formEngine->build('preference.religion', [1, 2, 999]);
@@ -222,4 +224,3 @@ class ControlledOptionFormEngineTest extends TestCase
         $this->assertSame([1], $selectedIds);
     }
 }
-

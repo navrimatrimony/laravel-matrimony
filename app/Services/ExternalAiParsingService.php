@@ -226,14 +226,14 @@ class ExternalAiParsingService
             .'(5) गण देव/मनुष्य/राक्षस → gan=deva/manushya/rakshasa. '
             ."(6) दाजी = sister's husband: put in siblings[].spouse for the matching sister. "
             .'(7) If unsure, use JSON null (not the string "null") and confidence 0.0. Never invent phone numbers or income. '
-            .'(8) Education: degree = course/qualification; specialization = branch/stream if explicitly separate; institution = college/school name only—do not put the full शिक्षण line into one field if distinct parts exist. '
+            .'(8) Education: put recognised qualifications in core.highest_education (canonical code or short text; comma-separated if multiple). Use core.highest_education_other only when needed for extra free-text. Do not populate education_history (omit it or []). '
             .'(9) Horoscope: rashi/nakshatra/devak/kuldaivat/gotra must be only the actual value tokens, not labels like "रास" or "नक्षत्र" alone. '
             .'(10) Strip decorative symbols from caste/jāt strings (e.g. stray % from tables) but keep the caste text itself. '
             .'(11) Do not output guessed *_id values; extract raw textual labels only and keep them conservative when ambiguous. '
             .'(12) Preserve honorifics like श्री./सौ./डॉ. in person names when present. '
             .'(13) For repeated same-relation relatives, output multiple array entries (do not merge). '
             ."(14) Return ONLY JSON, no backticks.\n\n"
-            ."Top-level keys you MAY use (only include those you found): core, contacts, children, marriages, siblings, relatives, education_history, career_history, addresses, property_summary, property_assets, horoscope, preferences, extended_narrative, confidence_map.\n\n"
+            ."Top-level keys you MAY use (only include those you found): core, contacts, children, marriages, siblings, relatives, career_history, addresses, property_summary, property_assets, horoscope, preferences, extended_narrative, confidence_map.\n\n"
             ."Biodata text:\n\n".$rawText;
     }
 

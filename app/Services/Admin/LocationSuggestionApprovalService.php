@@ -19,7 +19,8 @@ class LocationSuggestionApprovalService
 
             $normalized = strtolower(trim($suggestion->suggested_name));
 
-            $cityExists = City::where('taluka_id', $suggestion->taluka_id)
+            // City rows live in `addresses`; taluka link is parent_id (not a physical taluka_id column).
+            $cityExists = City::where('parent_id', (int) $suggestion->taluka_id)
                 ->whereRaw('LOWER(TRIM(name)) = ?', [$normalized])
                 ->exists();
             if ($cityExists) {

@@ -23,7 +23,7 @@ class EducationDegreeSearchController extends Controller
         return response()->json([
             'results' => $result['degrees']->map(function ($d) use ($mr) {
                 $cat = $d->category;
-                $name = ($mr && filled($d->title_mr)) ? $d->title_mr : $d->title;
+                $name = ($mr && filled($d->code_mr)) ? $d->code_mr : $d->code;
                 $category = $mr && $cat && filled($cat->name_mr) ? $cat->name_mr : optional($cat)->name;
 
                 return [

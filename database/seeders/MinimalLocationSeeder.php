@@ -61,8 +61,14 @@ class MinimalLocationSeeder extends Seeder
         );
         LocationMarathiLabels::applyIfEmpty($daskroi, $daskroi->name);
 
-        City::firstOrCreate(['parent_id' => $haveli->id, 'name' => 'Pune City']);
-        City::firstOrCreate(['parent_id' => $daskroi->id, 'name' => 'Ahmedabad City']);
+        City::firstOrCreate(
+            ['parent_id' => $haveli->id, 'name' => 'Pune City'],
+            ['category' => 'metro']
+        );
+        City::firstOrCreate(
+            ['parent_id' => $daskroi->id, 'name' => 'Ahmedabad City'],
+            ['category' => 'metro']
+        );
 
         LocationMarathiLabels::syncIndianStateNameMr();
     }

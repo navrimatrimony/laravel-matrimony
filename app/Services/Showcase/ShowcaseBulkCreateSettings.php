@@ -4,7 +4,8 @@ namespace App\Services\Showcase;
 
 use App\Models\AdminSetting;
 use App\Models\District;
-use Illuminate\Support\Facades\DB;
+use App\Models\EducationDegree;
+use App\Models\Profession;
 
 /**
  * Admin-only policy for {@see ShowcaseProfileDefaultsService::fullAttributesForShowcaseProfile} when bulk-creating showcase profiles.
@@ -32,7 +33,6 @@ class ShowcaseBulkCreateSettings
         'diet_id' => 'Diet',
         'smoking_status_id' => 'Smoking',
         'drinking_status_id' => 'Drinking',
-        'specialization' => 'Specialization',
         'occupation_title' => 'Occupation title',
         'company_name' => 'Company name',
         'annual_income' => 'Annual income',
@@ -87,7 +87,27 @@ class ShowcaseBulkCreateSettings
         $d['district_ids'] = self::intList($data['district_ids'] ?? []);
         $d['marital_status_ids'] = self::intList($data['marital_status_ids'] ?? []);
         $d['diet_ids'] = self::intList($data['diet_ids'] ?? []);
-        $d['master_education_ids'] = self::intList($data['master_education_ids'] ?? []);
+        $eduIds = self::intList($data['master_education_ids'] ?? []);
+        if ($eduIds !== []) {
+            $eduIds = EducationDegree::query()
+                ->whereHas('category', fn ($q) => $q->where('is_active', true))
+                ->whereIn('id', $eduIds)
+                ->pluck('id')
+                ->map(static fn ($v) => (int) $v)
+                ->all();
+        }
+        $d['master_education_ids'] = array_values($eduIds);
+
+        $profIds = self::intList($data['profession_ids'] ?? []);
+        if ($profIds !== []) {
+            $profIds = Profession::query()
+                ->where('is_active', true)
+                ->whereIn('id', $profIds)
+                ->pluck('id')
+                ->map(static fn ($v) => (int) $v)
+                ->all();
+        }
+        $d['profession_ids'] = array_values($profIds);
 
         $amin = self::boundInt($data['age_min'] ?? $d['age_min'], 18, 80, $d['age_min']);
         $amax = self::boundInt($data['age_max'] ?? $d['age_max'], 18, 80, $d['age_max']);
@@ -121,6 +141,13 @@ class ShowcaseBulkCreateSettings
         $d['fixed_smoking_status_id'] = self::nullablePositiveInt($data['fixed_smoking_status_id'] ?? null);
         $d['fixed_drinking_status_id'] = self::nullablePositiveInt($data['fixed_drinking_status_id'] ?? null);
 
+        $d['eligible_address_types'] = ShowcaseAddressEligibility::normalizeTypesList(
+            $data['eligible_address_types'] ?? ($d['eligible_address_types'] ?? null)
+        ) ?? ShowcaseAddressEligibility::defaultTypes();
+        $d['eligible_address_tags'] = ShowcaseAddressEligibility::normalizeTagsList(
+            $data['eligible_address_tags'] ?? ($d['eligible_address_tags'] ?? null)
+        ) ?? ShowcaseAddressEligibility::defaultTags();
+
         return $d;
     }
 
@@ -131,6 +158,8 @@ class ShowcaseBulkCreateSettings
     {
         return [
             'v' => 1,
+            'eligible_address_types' => ShowcaseAddressEligibility::defaultTypes(),
+            'eligible_address_tags' => ShowcaseAddressEligibility::defaultTags(),
             'religion_ids' => [],
             'caste_ids' => [],
             'country_ids' => [],
@@ -139,6 +168,7 @@ class ShowcaseBulkCreateSettings
             'marital_status_ids' => [],
             'diet_ids' => [],
             'master_education_ids' => [],
+            'profession_ids' => [],
             'age_min' => 23,
             'age_max' => 35,
             'height_cm_min' => 155,
@@ -254,18 +284,7 @@ class ShowcaseBulkCreateSettings
      */
     public static function eligibleNonShowcaseDistrictModels(int $limit = 1200): \Illuminate\Database\Eloquent\Collection
     {
-        $ids = DB::table('matrimony_profiles')
-            ->where(function ($q) {
-                $q->where('is_showcase', false)->orWhereNull('is_showcase');
-            })
-            ->whereNull('deleted_at')
-            ->whereNotNull('district_id')
-            ->distinct()
-            ->pluck('district_id')
-            ->map(fn ($v) => (int) $v)
-            ->filter()
-            ->values()
-            ->all();
+        $ids = \App\Support\Location\NonShowcaseResidenceDistrictIds::all();
         if ($ids === []) {
             return new \Illuminate\Database\Eloquent\Collection;
         }
@@ -277,5 +296,4 @@ class ShowcaseBulkCreateSettings
             ->limit($limit)
             ->get();
     }
-
 }

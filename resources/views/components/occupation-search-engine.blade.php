@@ -22,7 +22,7 @@
 
     $profile = $profile ?? new \stdClass();
     if ($profile instanceof \App\Models\MatrimonyProfile) {
-        $profile->loadMissing(['occupationMaster', 'occupationCustom', 'profession']);
+        $profile->loadMissing(['occupationMaster', 'occupationCustom', 'occupationMaster.category.workingWithType']);
         if ($occupationKeyStem === 'father_occupation') {
             $profile->loadMissing(['fatherOccupationMaster', 'fatherOccupationCustom']);
         } elseif ($occupationKeyStem === 'mother_occupation') {
