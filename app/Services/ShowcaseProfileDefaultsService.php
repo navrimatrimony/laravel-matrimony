@@ -27,9 +27,11 @@ use App\Models\State;
 use App\Models\SubCaste;
 use App\Models\Taluka;
 use App\Models\WorkingWithType;
+use App\Services\Location\LocationService;
 use App\Services\Showcase\ShowcaseAddressEligibility;
 use App\Services\Showcase\ShowcaseBulkCreateSettings;
 use App\Support\Location\NonShowcaseResidenceDistrictIds;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
@@ -225,11 +227,18 @@ class ShowcaseProfileDefaultsService
             : random_int(155, 182);
         $weightKg = random_int(50, 85);
 
-        $loc = $policy !== null
-            ? self::locationHierarchyForShowcaseFromRealUsersPolicy($policy)
-            : self::locationHierarchyForShowcaseFromRealUsers();
-        if ($loc === null && $policy !== null) {
+        $loc = null;
+        if ($policy !== null) {
+            // Admin bulk: strict — residence may come only from rows whose `tag` is in the bulk tag multiselect.
+            $loc = self::pickShowcaseHierarchyFromAddressTags($policy);
+        } else {
             $loc = self::locationHierarchyForShowcaseFromRealUsers();
+            if ($loc === null) {
+                $loc = self::pickShowcaseHierarchyAnywhereInGeo();
+            }
+            if ($loc === null) {
+                $loc = self::locationHierarchyForShowcase();
+            }
         }
 
         $profilePhoto = self::randomShowcasePhoto($gender);
@@ -861,6 +870,184 @@ class ShowcaseProfileDefaultsService
      * @param  list<int>  $eligibleDistrictIds
      * @param  array<string, mixed>|null  $bulkPolicy  normalized bulk policy when bulk create supplies overrides
      */
+    /**
+     * Cities under a district (geo SSOT) for showcase picks.
+     *
+     * @param  list<string>  $strictTags  e.g. metro, capital — from admin eligibility
+     * @return Collection<int, object{city_id: int, city_name: string, taluka_id: int}>
+     */
+    private static function showcaseCityCandidatesUnderDistrict(int $districtId, array $strictTags, string $tagMode): Collection
+    {
+        $addr = Location::geoTable();
+        if (! Schema::hasTable($addr)) {
+            return collect();
+        }
+
+        $q = DB::table($addr.' as city')
+            ->join($addr.' as taluka', 'city.parent_id', '=', 'taluka.id')
+            ->where('city.type', 'city')
+            ->where('taluka.type', 'taluka')
+            ->where('taluka.parent_id', $districtId)
+            ->whereNotNull('city.name')
+            ->select('city.id as city_id', 'city.name as city_name', 'city.parent_id as taluka_id');
+
+        if ($tagMode === 'strict' && $strictTags !== []) {
+            $q->whereIn('city.tag', $strictTags);
+        } elseif ($tagMode === 'not_none') {
+            $q->where(function ($w) {
+                $w->whereNull('city.tag')->orWhere('city.tag', '<>', 'none');
+            });
+        }
+
+        return $q->get();
+    }
+
+    /**
+     * @return array{country_id:int|null,state_id:int|null,district_id:int|null,taluka_id:int|null,city_id:int|null,work_state_id:int|null,work_city_id:int|null}|null
+     */
+    private static function hierarchyFromJoinedCityRow(?object $row): ?array
+    {
+        if ($row === null) {
+            return null;
+        }
+
+        $cityId = (int) ($row->city_id ?? 0);
+        $talukaId = (int) ($row->taluka_id ?? 0);
+        $districtId = (int) ($row->district_id ?? 0);
+        $stateId = (int) ($row->state_id ?? 0);
+        $countryId = (int) ($row->country_id ?? 0);
+
+        if ($cityId <= 0 || $talukaId <= 0 || $districtId <= 0 || $stateId <= 0 || $countryId <= 0) {
+            return null;
+        }
+
+        return [
+            'country_id' => $countryId,
+            'state_id' => $stateId,
+            'district_id' => $districtId,
+            'taluka_id' => $talukaId,
+            'city_id' => $cityId,
+            'work_state_id' => $stateId,
+            'work_city_id' => $cityId,
+        ];
+    }
+
+    /**
+     * Admin bulk: strict {@code addresses.tag} multiselect only. Resolves IDs by walking {@code parent_id} with
+     * {@see LocationService} — same ancestor rules as {@see LocationFormatterService} (rural / town / city / suburban lines),
+     * not a fixed SQL join (suburban may skip taluka, district may sit at level 2, etc.).
+     *
+     * @param  array<string, mixed>  $bulkPolicy  normalized {@see ShowcaseBulkCreateSettings::normalize}
+     * @return array{country_id:int|null,state_id:int|null,district_id:int|null,taluka_id:int|null,city_id:int|null,work_state_id:int|null,work_city_id:int|null}|null
+     */
+    private static function pickShowcaseHierarchyFromAddressTags(array $bulkPolicy): ?array
+    {
+        $addr = Location::geoTable();
+        if (! Schema::hasTable($addr)) {
+            return null;
+        }
+
+        $strictTags = ShowcaseAddressEligibility::tagsForContext($bulkPolicy);
+        if ($strictTags === []) {
+            return null;
+        }
+
+        $svc = app(LocationService::class);
+
+        $q = Location::query()
+            ->whereIn('tag', $strictTags)
+            ->whereNotNull('name')
+            ->where('name', '!=', '');
+
+        if (Schema::hasColumn($addr, 'is_active')) {
+            $q->where(function ($w) {
+                $w->whereNull('is_active')->orWhere('is_active', true);
+            });
+        }
+
+        foreach ($q->inRandomOrder()->limit(80)->get() as $leaf) {
+            $built = self::hierarchyKeysForBulkTaggedResidence($leaf, $svc);
+            if ($built !== null) {
+                return $built;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * @return array{country_id:int,state_id:int,district_id:int,taluka_id:int|null,city_id:int,work_state_id:int,work_city_id:int}|null
+     */
+    private static function hierarchyKeysForBulkTaggedResidence(Location $leaf, LocationService $svc): ?array
+    {
+        $country = $svc->getAncestorByType($leaf, 'country');
+        $state = $svc->getAncestorByType($leaf, 'state');
+        $district = $svc->getAncestorByType($leaf, 'district');
+        $taluka = $svc->getAncestorByType($leaf, 'taluka');
+
+        if ($district === null && (string) $leaf->type === 'district') {
+            $district = $leaf;
+        }
+        if ($taluka === null && (string) $leaf->type === 'taluka') {
+            $taluka = $leaf;
+        }
+
+        if ($country === null || $state === null || $district === null) {
+            return null;
+        }
+
+        $leafId = (int) $leaf->id;
+        if ($leafId <= 0) {
+            return null;
+        }
+
+        return [
+            'country_id' => (int) $country->id,
+            'state_id' => (int) $state->id,
+            'district_id' => (int) $district->id,
+            'taluka_id' => $taluka !== null ? (int) $taluka->id : null,
+            'city_id' => $leafId,
+            'work_state_id' => (int) $state->id,
+            'work_city_id' => $leafId,
+        ];
+    }
+
+    /**
+     * Random valid residence + work leaf from {@code addresses} when member-derived district pool fails.
+     *
+     * @return array{country_id:int|null,state_id:int|null,district_id:int|null,taluka_id:int|null,city_id:int|null,work_state_id:int|null,work_city_id:int|null}|null
+     */
+    private static function pickShowcaseHierarchyAnywhereInGeo(): ?array
+    {
+        $addr = Location::geoTable();
+        if (! Schema::hasTable($addr)) {
+            return null;
+        }
+
+        $row = DB::table($addr.' as city')
+            ->join($addr.' as taluka', 'city.parent_id', '=', 'taluka.id')
+            ->join($addr.' as dist', 'taluka.parent_id', '=', 'dist.id')
+            ->join($addr.' as st', 'dist.parent_id', '=', 'st.id')
+            ->join($addr.' as co', 'st.parent_id', '=', 'co.id')
+            ->where('city.type', 'city')
+            ->where('taluka.type', 'taluka')
+            ->where('dist.type', 'district')
+            ->where('st.type', 'state')
+            ->where('co.type', 'country')
+            ->whereNotNull('city.name')
+            ->select(
+                'city.id as city_id',
+                'city.parent_id as taluka_id',
+                'dist.id as district_id',
+                'st.id as state_id',
+                'co.id as country_id'
+            )
+            ->inRandomOrder()
+            ->first();
+
+        return self::hierarchyFromJoinedCityRow($row);
+    }
+
     private static function pickShowcaseHierarchyFromDistrictPool(array $eligibleDistrictIds, ?array $bulkPolicy): ?array
     {
         $types = ShowcaseAddressEligibility::typesForContext($bulkPolicy);
@@ -891,16 +1078,13 @@ class ShowcaseProfileDefaultsService
 
             $districtName = strtolower(trim((string) ($district->name ?? '')));
 
-            $addr = Location::geoTable();
-            $candidate = DB::table($addr.' as city')
-                ->join($addr.' as taluka', 'city.parent_id', '=', 'taluka.id')
-                ->where('city.type', 'city')
-                ->where('taluka.type', 'taluka')
-                ->where('taluka.parent_id', $districtId)
-                ->whereNotNull('city.name')
-                ->whereIn('city.tag', $cityTags)
-                ->select('city.id as city_id', 'city.name as city_name', 'city.parent_id as taluka_id')
-                ->get();
+            $candidate = self::showcaseCityCandidatesUnderDistrict((int) $districtId, $cityTags, 'strict');
+            if ($candidate->isEmpty()) {
+                $candidate = self::showcaseCityCandidatesUnderDistrict((int) $districtId, $cityTags, 'not_none');
+            }
+            if ($candidate->isEmpty()) {
+                $candidate = self::showcaseCityCandidatesUnderDistrict((int) $districtId, $cityTags, 'any');
+            }
 
             if ($candidate->isEmpty()) {
                 continue;
@@ -946,7 +1130,12 @@ class ShowcaseProfileDefaultsService
             $eligibleDistrictIds = self::eligibleNonShowcaseDistrictIds();
         }
 
-        return self::pickShowcaseHierarchyFromDistrictPool($eligibleDistrictIds, null);
+        $picked = self::pickShowcaseHierarchyFromDistrictPool($eligibleDistrictIds, null);
+        if ($picked !== null) {
+            return $picked;
+        }
+
+        return null;
     }
 
     /**
@@ -1081,28 +1270,44 @@ class ShowcaseProfileDefaultsService
     {
         $country = Country::query()->inRandomOrder()->first();
         if (! $country) {
-            return ['country_id' => null, 'state_id' => null, 'district_id' => null, 'taluka_id' => null, 'city_id' => null];
+            return [
+                'country_id' => null, 'state_id' => null, 'district_id' => null, 'taluka_id' => null, 'city_id' => null,
+                'work_state_id' => null, 'work_city_id' => null,
+            ];
         }
         $state = State::where('parent_id', $country->id)->inRandomOrder()->first();
         if (! $state) {
-            return ['country_id' => $country->id, 'state_id' => null, 'district_id' => null, 'taluka_id' => null, 'city_id' => null];
+            return [
+                'country_id' => $country->id, 'state_id' => null, 'district_id' => null, 'taluka_id' => null, 'city_id' => null,
+                'work_state_id' => null, 'work_city_id' => null,
+            ];
         }
         $district = District::where('parent_id', $state->id)->inRandomOrder()->first();
         if (! $district) {
-            return ['country_id' => $country->id, 'state_id' => $state->id, 'district_id' => null, 'taluka_id' => null, 'city_id' => null];
+            return [
+                'country_id' => $country->id, 'state_id' => $state->id, 'district_id' => null, 'taluka_id' => null, 'city_id' => null,
+                'work_state_id' => null, 'work_city_id' => null,
+            ];
         }
         $taluka = Taluka::where('parent_id', $district->id)->inRandomOrder()->first();
         if (! $taluka) {
-            return ['country_id' => $country->id, 'state_id' => $state->id, 'district_id' => $district->id, 'taluka_id' => null, 'city_id' => null];
+            return [
+                'country_id' => $country->id, 'state_id' => $state->id, 'district_id' => $district->id, 'taluka_id' => null, 'city_id' => null,
+                'work_state_id' => null, 'work_city_id' => null,
+            ];
         }
         $city = City::where('parent_id', $taluka->id)->inRandomOrder()->first();
+        $cityId = $city?->id ? (int) $city->id : null;
+        $stateId = (int) $state->id;
 
         return [
             'country_id' => $country->id,
-            'state_id' => $state->id,
+            'state_id' => $stateId,
             'district_id' => $district->id,
             'taluka_id' => $taluka->id,
-            'city_id' => $city?->id,
+            'city_id' => $cityId,
+            'work_state_id' => $cityId ? $stateId : null,
+            'work_city_id' => $cityId,
         ];
     }
 

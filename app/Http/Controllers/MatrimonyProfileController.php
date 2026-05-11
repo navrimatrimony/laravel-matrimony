@@ -1020,7 +1020,7 @@ class MatrimonyProfileController extends Controller
             'incomeCurrency',
             'horoscope',
             'children.childLivingWith',
-            'addresses.village',
+            'addresses.location',
             'relatives.city',
             'relatives.state',
             'allianceNetworks.city',
@@ -1152,10 +1152,12 @@ class MatrimonyProfileController extends Controller
             $dailyViewKey = FeatureUsageService::FEATURE_DAILY_PROFILE_VIEW_LIMIT;
             $canConsumeProfileView = $featureUsage->canUse($userId, $dailyViewKey);
 
-            // When quota is exhausted, still allow profile page render in locked/blur mode.
-            // Only fresh allowed views consume quota and trigger view-back.
-            if ($canConsumeProfileView && ViewTrackingService::recordView($user->matrimonyProfile, $profile)) {
-                $featureUsage->consume($userId, $dailyViewKey);
+            // Keep behavior A: always record view + maybe view-back for showcase analytics/reciprocity.
+            // Quota only controls whether this open consumes the "daily profile opens" premium bucket.
+            if (ViewTrackingService::recordView($user->matrimonyProfile, $profile)) {
+                if ($canConsumeProfileView) {
+                    $featureUsage->consume($userId, $dailyViewKey);
+                }
                 ViewTrackingService::maybeTriggerViewBack($user->matrimonyProfile, $profile);
             }
         }

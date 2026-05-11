@@ -231,37 +231,26 @@
                     $bulkPbFixed = is_array($bulkPbFixed) ? array_map('intval', $bulkPbFixed) : [];
                     $aboutTpl = old('bulk_about_me_templates', implode("\n", $bp['about_me_templates'] ?? []));
                     $expectTpl = old('bulk_expectations_templates', implode("\n", $bp['expectations_templates'] ?? []));
-                    $bulkAddrTypes = old('bulk_eligible_address_types', $bp['eligible_address_types'] ?? []);
-                    $bulkAddrTypes = is_array($bulkAddrTypes) ? $bulkAddrTypes : [];
                     $bulkAddrTags = old('bulk_eligible_address_tags', $bp['eligible_address_tags'] ?? []);
                     $bulkAddrTags = is_array($bulkAddrTags) ? $bulkAddrTags : [];
                 @endphp
 
                 <fieldset class="space-y-3 rounded-xl border border-violet-200 bg-white p-5">
-                    <legend class="text-sm font-bold text-gray-900">Bulk create — eligible <code class="font-mono text-xs">addresses</code> (type / tag)</legend>
-                    <p class="text-xs leading-relaxed text-gray-600">Admin bulk UI मधून तयार होणारे profiles येथील नियम वापरतात (search engine च्या global नियमांपेक्षा वेगळे ठेवायचे असल्यास).</p>
-                    <div class="grid gap-6 sm:grid-cols-2">
-                        <div>
-                            <span class="{{ $lbl }}">Type (multi) — DB schema</span>
-                            <div class="mt-2 max-h-64 space-y-2 overflow-y-auto rounded-lg border border-gray-200 bg-gray-50 p-3">
-                                @foreach ($addressTypeOptions as $t)
-                                    <label class="flex cursor-pointer items-center gap-2 text-sm text-gray-800">
-                                        <input type="checkbox" name="bulk_eligible_address_types[]" value="{{ $t }}" class="size-4 rounded border-gray-400 text-indigo-600 focus:ring-indigo-500" @checked(in_array($t, $bulkAddrTypes, true))>
-                                        <span>{{ $t }}</span>
-                                    </label>
-                                @endforeach
-                            </div>
-                        </div>
-                        <div>
-                            <span class="{{ $lbl }}">Tag (multi) — DB schema</span>
-                            <div class="mt-2 max-h-64 space-y-2 overflow-y-auto rounded-lg border border-gray-200 bg-gray-50 p-3">
-                                @foreach ($addressTagOptions as $tg)
-                                    <label class="flex cursor-pointer items-center gap-2 text-sm text-gray-800">
-                                        <input type="checkbox" name="bulk_eligible_address_tags[]" value="{{ $tg }}" class="size-4 rounded border-gray-400 text-indigo-600 focus:ring-indigo-500" @checked(in_array($tg, $bulkAddrTags, true))>
-                                        <span>{{ $tg }}</span>
-                                    </label>
-                                @endforeach
-                            </div>
+                    <legend class="text-sm font-bold text-gray-900">Bulk create — eligible <code class="font-mono text-xs">addresses.tag</code></legend>
+                    <p class="text-xs leading-relaxed text-gray-600">
+                        <strong class="text-gray-900">Strict:</strong> residence फक्त निवडलेल्या <code class="rounded bg-gray-100 px-1 font-mono text-[11px]">tag</code> वरून; <code class="rounded bg-gray-100 px-1 font-mono text-[11px]">parent_id</code> chain member profile सारखीच (LocationFormatterService — suburban → Wakad, Pune इ.) resolve होते. जुळणारे row नसल्यास create होणार नाही.
+                        Search tab वरील engine नियम वेगळे.
+                    </p>
+                    <div>
+                        <span class="{{ $lbl }}">Tag (multi) — DB schema</span>
+                        <p class="mt-0.5 text-[11px] leading-relaxed text-gray-500"><code class="font-mono">none</code> निवडले तरी city+none SQL मध्ये बाहेर.</p>
+                        <div class="mt-2 max-h-64 space-y-2 overflow-y-auto rounded-lg border border-gray-200 bg-gray-50 p-3">
+                            @foreach ($addressTagOptions as $tg)
+                                <label class="flex cursor-pointer items-center gap-2 text-sm text-gray-800">
+                                    <input type="checkbox" name="bulk_eligible_address_tags[]" value="{{ $tg }}" class="size-4 rounded border-gray-400 text-indigo-600 focus:ring-indigo-500" @checked(in_array($tg, $bulkAddrTags, true))>
+                                    <span>{{ $tg }}</span>
+                                </label>
+                            @endforeach
                         </div>
                     </div>
                 </fieldset>
@@ -324,7 +313,7 @@
                     <div class="grid gap-6 lg:grid-cols-3">
                         <div class="rounded-xl border border-gray-200 bg-white p-4">
                             <span class="{{ $lbl }}">Country filter</span>
-                            <select name="bulk_country_ids[]" multiple size="6" class="{{ $ctl }} mt-1 min-h-[7rem] text-xs">
+                            <select id="bulk-country-filter" name="bulk_country_ids[]" multiple size="6" class="{{ $ctl }} mt-1 min-h-[7rem] text-xs">
                                 @foreach ($bulkCountries as $c)
                                     <option value="{{ $c->id }}" @selected(in_array((int) $c->id, $bulkCountrySel, true))>{{ $c->name }}</option>
                                 @endforeach
@@ -332,17 +321,22 @@
                         </div>
                         <div class="rounded-xl border border-gray-200 bg-white p-4">
                             <span class="{{ $lbl }}">State filter</span>
-                            <select name="bulk_state_ids[]" multiple size="6" class="{{ $ctl }} mt-1 min-h-[7rem] text-xs">
+                            <select id="bulk-state-filter" name="bulk_state_ids[]" multiple size="6" class="{{ $ctl }} mt-1 min-h-[7rem] text-xs">
                                 @foreach ($bulkStates as $s)
-                                    <option value="{{ $s->id }}" @selected(in_array((int) $s->id, $bulkStateSel, true))>{{ $s->name }}</option>
+                                    <option value="{{ $s->id }}" data-country-id="{{ (int) ($s->country_id ?? 0) }}" @selected(in_array((int) $s->id, $bulkStateSel, true))>{{ $s->name }}</option>
                                 @endforeach
                             </select>
                         </div>
                         <div class="rounded-xl border border-gray-200 bg-white p-4">
                             <span class="{{ $lbl }}">District filter (real-user districts)</span>
-                            <select name="bulk_district_ids[]" multiple size="6" class="{{ $ctl }} mt-1 min-h-[7rem] text-xs">
+                            <select id="bulk-district-filter" name="bulk_district_ids[]" multiple size="6" class="{{ $ctl }} mt-1 min-h-[7rem] text-xs">
                                 @foreach ($bulkDistricts as $d)
-                                    <option value="{{ $d->id }}" @selected(in_array((int) $d->id, $bulkDistrictSel, true))>{{ $d->name }} @if($d->state) — {{ $d->state->name }} @endif</option>
+                                    <option
+                                        value="{{ $d->id }}"
+                                        data-state-id="{{ (int) ($d->state_id ?? 0) }}"
+                                        data-country-id="{{ (int) ($d->state?->country_id ?? 0) }}"
+                                        @selected(in_array((int) $d->id, $bulkDistrictSel, true))
+                                    >{{ $d->name }} @if($d->state) — {{ $d->state->name }} @endif</option>
                                 @endforeach
                             </select>
                         </div>
@@ -507,6 +501,17 @@
                             document.querySelectorAll('[data-bulk-religion]:checked').forEach(function (el) { ids.push(String(el.value)); });
                             return ids;
                         }
+                        function selectedValues(selectEl) {
+                            if (!selectEl) return [];
+                            return Array.prototype.map.call(selectEl.selectedOptions || [], function (o) { return String(o.value); });
+                        }
+                        function setOptionVisible(optionEl, visible) {
+                            optionEl.hidden = !visible;
+                            optionEl.disabled = !visible;
+                            if (!visible && optionEl.selected) {
+                                optionEl.selected = false;
+                            }
+                        }
                         function syncCasteRows() {
                             var ids = selectedReligionIds();
                             document.querySelectorAll('.bulk-caste-row').forEach(function (row) {
@@ -514,10 +519,38 @@
                                 row.style.display = (ids.length === 0 || ids.indexOf(rid) !== -1) ? '' : 'none';
                             });
                         }
+                        function syncLocationFilters() {
+                            var countrySelect = document.getElementById('bulk-country-filter');
+                            var stateSelect = document.getElementById('bulk-state-filter');
+                            var districtSelect = document.getElementById('bulk-district-filter');
+                            if (!countrySelect || !stateSelect || !districtSelect) return;
+
+                            var selectedCountryIds = selectedValues(countrySelect);
+
+                            Array.prototype.forEach.call(stateSelect.options || [], function (opt) {
+                                var countryId = String(opt.getAttribute('data-country-id') || '');
+                                var visible = selectedCountryIds.length === 0 || selectedCountryIds.indexOf(countryId) !== -1;
+                                setOptionVisible(opt, visible);
+                            });
+
+                            var selectedStateIds = selectedValues(stateSelect);
+                            Array.prototype.forEach.call(districtSelect.options || [], function (opt) {
+                                var stateId = String(opt.getAttribute('data-state-id') || '');
+                                var countryId = String(opt.getAttribute('data-country-id') || '');
+                                var countryPass = selectedCountryIds.length === 0 || selectedCountryIds.indexOf(countryId) !== -1;
+                                var statePass = selectedStateIds.length === 0 || selectedStateIds.indexOf(stateId) !== -1;
+                                setOptionVisible(opt, countryPass && statePass);
+                            });
+                        }
                         document.querySelectorAll('[data-bulk-religion]').forEach(function (el) {
                             el.addEventListener('change', syncCasteRows);
                         });
+                        var countrySelect = document.getElementById('bulk-country-filter');
+                        var stateSelect = document.getElementById('bulk-state-filter');
+                        if (countrySelect) countrySelect.addEventListener('change', syncLocationFilters);
+                        if (stateSelect) stateSelect.addEventListener('change', syncLocationFilters);
                         syncCasteRows();
+                        syncLocationFilters();
                     })();
                 </script>
             </div>

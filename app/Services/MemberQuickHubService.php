@@ -9,6 +9,7 @@ use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 
 class MemberQuickHubService
@@ -340,22 +341,27 @@ class MemberQuickHubService
             return [];
         }
 
+        $select = [
+            'id',
+            'date_of_birth',
+            'height_cm',
+            'highest_education',
+            'city_id',
+            'taluka_id',
+            'district_id',
+            'state_id',
+            'religion_id',
+            'caste_id',
+        ];
+        // Some deployments dropped the physical column; accessor can still derive it.
+        if (Schema::hasColumn((new MatrimonyProfile)->getTable(), 'occupation_title')) {
+            $select[] = 'occupation_title';
+        }
+
         $profiles = MatrimonyProfile::query()
             ->with(['religion', 'caste'])
             ->whereIn('id', $ids)
-            ->get([
-                'id',
-                'date_of_birth',
-                'height_cm',
-                'occupation_title',
-                'highest_education',
-                'city_id',
-                'taluka_id',
-                'district_id',
-                'state_id',
-                'religion_id',
-                'caste_id',
-            ]);
+            ->get($select);
 
         $out = [];
         foreach ($profiles as $profile) {

@@ -440,6 +440,9 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
     Route::get('/app-settings', [AdminSettingsController::class, 'appSettings'])->name('app-settings.index');
     Route::post('/app-settings', [AdminSettingsController::class, 'updateAppSettings'])->name('app-settings.update');
 
+    Route::get('/who-viewed-teaser-settings', [AdminSettingsController::class, 'whoViewedTeaserSettings'])->name('who-viewed-teaser-settings.index');
+    Route::post('/who-viewed-teaser-settings', [AdminSettingsController::class, 'updateWhoViewedTeaserSettings'])->name('who-viewed-teaser-settings.update');
+
     Route::get('/view-back-settings', [AdminSettingsController::class, 'viewBackSettings'])->name('view-back-settings.index');
     Route::post('/view-back-settings', [AdminSettingsController::class, 'updateViewBackSettings'])->name('view-back-settings.update');
     Route::post('/view-back-settings/random-views', [AdminSettingsController::class, 'updateShowcaseRandomViewSettings'])->name('view-back-settings.random-views-update');

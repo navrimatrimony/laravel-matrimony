@@ -595,14 +595,15 @@
                 <ul class="space-y-2 text-sm leading-relaxed text-stone-800 dark:text-stone-100">
                     @foreach ($profile->addresses as $addr)
                         <li>
-                            {{ implode(', ', array_filter([
-                                trim($addr->village?->name ?? ''),
-                                $addr->city?->name,
-                                $addr->taluka?->name,
-                                $addr->district?->name,
-                                $addr->state?->name,
-                                $addr->country?->name,
-                            ])) ?: '—' }}{{ trim($addr->location?->pincode ?? '') ? ' – ' . $addr->location->pincode : '' }}
+                            @php
+                                $__addrLine = $addr->location_id
+                                    ? trim(app(\App\Services\Location\LocationFormatterService::class)->formatLocation((int) $addr->location_id))
+                                    : '';
+                                if ($__addrLine === '' && trim((string) ($addr->address_line ?? '')) !== '') {
+                                    $__addrLine = trim((string) $addr->address_line);
+                                }
+                            @endphp
+                            {{ $__addrLine !== '' ? $__addrLine : '—' }}
                         </li>
                     @endforeach
                 </ul>

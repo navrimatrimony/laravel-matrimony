@@ -19,9 +19,20 @@ return [
     'partial_plan_upgrade_hint' => 'Upgrade for a longer who-viewed window and full lists.',
     'view_profile' => 'View profile',
     'viewed_at' => 'Viewed :time',
+    'teaser_unlock_cta' => 'Unlock to see full profile',
 
     'bubble_title' => 'Your profile got attention',
     'bubble_intro' => 'You now have',
     'bubble_after_count' => 'distinct viewer(s) — open to see who.',
     'bubble_dismiss' => 'Dismiss',
+
+    'teaser_headline_anonymous' => 'Someone',
+    'teaser_headline_anonymous_from' => 'Someone from :place',
+    'teaser_name_fallback' => 'Member',
+    'teaser_age_exact' => 'Age :age',
+    'teaser_age_decade' => 'Age :from–:to',
+    'teaser_viewed_recent' => 'Viewed recently',
+    'teaser_viewed_this_week' => 'Viewed this week',
+    'teaser_viewed_this_month' => 'Viewed this month',
+    'teaser_viewed_earlier' => 'Viewed earlier',
 ];

@@ -12,6 +12,7 @@ use App\Models\MasterMaritalStatus;
 use App\Models\MatrimonyProfile;
 use App\Models\Religion;
 use App\Models\State;
+use App\Services\Location\LocationFormatterService;
 use App\Support\HeightDisplay;
 use App\Support\ProfileDisplayCopy;
 use Carbon\Carbon;
@@ -72,7 +73,7 @@ class ProfileShowSnapshotService
             'state',
             'country',
             'addresses',
-            'addresses.village',
+            'addresses.location',
             'children.childLivingWith',
             'marriages',
             'siblings.city',
@@ -206,16 +207,12 @@ class ProfileShowSnapshotService
             $ai = 0;
             foreach ($profile->addresses as $addr) {
                 $ai++;
-                $line = implode(', ', array_filter([
-                    trim((string) ($addr->village?->name ?? '')),
-                    $addr->city?->name,
-                    $addr->taluka?->name,
-                    $addr->district?->name,
-                    $addr->state?->name,
-                    $addr->country?->name,
-                ]));
-                if (trim((string) ($addr->location?->pincode ?? '')) !== '') {
-                    $line .= ($line !== '' ? ' — ' : '').trim((string) $addr->location->pincode);
+                $line = '';
+                if ($addr->location_id) {
+                    $line = trim(app(LocationFormatterService::class)->formatLocation((int) $addr->location_id));
+                }
+                if ($line === '' && trim((string) ($addr->address_line ?? '')) !== '') {
+                    $line = trim((string) $addr->address_line);
                 }
                 if ($this->present($line)) {
                     $label = $profile->addresses->count() > 1

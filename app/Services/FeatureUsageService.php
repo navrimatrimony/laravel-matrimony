@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\PlanQuotaPolicy;
 use App\Models\Message;
 use App\Models\Plan;
 use App\Models\Subscription;
@@ -38,8 +39,8 @@ class FeatureUsageService
     public const FEATURE_DAILY_PROFILE_VIEW_LIMIT = 'daily_profile_view_limit';
 
     /**
-     * Who-viewed: {@see PlanFeatureKeys::WHO_VIEWED_ME_PREVIEW_LIMIT} (free preview cap) + paid catalog plans see all viewers.
-     * (1 / 7 / 999 = unlimited). This string is the public gate key; it does not add a second plan_features row.
+     * Who-viewed gate. Effective behavior is derived from {@see PlanFeatureKeys::WHO_VIEWED_ME_PREVIEW_LIMIT}
+     * (+ optional referral carry bonus) and policy refresh window.
      */
     public const FEATURE_WHO_VIEWED_ME_ACCESS = 'who_viewed_me_access';
 
@@ -642,10 +643,10 @@ class FeatureUsageService
             ];
         }
 
-        $full = $this->whoViewedMeHasFullViewerList($user);
         $preview = $this->getWhoViewedMePreviewLimit($uid);
+        $full = $preview < 0;
         $allowed = $full || $preview > 0;
-        $unlimited = $full || $preview < 0;
+        $unlimited = $full;
 
         return [
             'allowed' => $allowed,
@@ -1141,7 +1142,7 @@ class FeatureUsageService
     }
 
     /**
-     * True when the member may see the full who-viewed list (paid catalog plan or unlimited preview quota).
+     * True when the member may see the full who-viewed list (unlimited preview quota).
      */
     public function whoViewedMeHasFullViewerList(User $user): bool
     {
@@ -1152,10 +1153,6 @@ class FeatureUsageService
         if (! app(EntitlementService::class)->hasAccess($uid, self::FEATURE_WHO_VIEWED_ME_ACCESS)) {
             return false;
         }
-        if ($this->whoViewedMeUserOnPaidCatalogPlan($user)) {
-            return true;
-        }
-
         $lim = app(SubscriptionService::class)->getFeatureLimit($user, PlanFeatureKeys::WHO_VIEWED_ME_PREVIEW_LIMIT);
 
         return $lim < 0;
@@ -1185,16 +1182,70 @@ class FeatureUsageService
         if ($user && $this->isAdminBypass($user)) {
             return -1;
         }
-        if ($user && $this->whoViewedMeUserOnPaidCatalogPlan($user)) {
-            return -1;
-        }
-
         $raw = app(EntitlementService::class)->getValue($userId, PlanFeatureKeys::WHO_VIEWED_ME_PREVIEW_LIMIT, '0');
         if (! is_numeric($raw)) {
             return 0;
         }
+        $base = (int) $raw;
+        if ($base < 0) {
+            return -1;
+        }
 
-        return max(0, (int) $raw) + $this->referralCarryBonusForFeature($user, PlanFeatureKeys::WHO_VIEWED_ME_PREVIEW_LIMIT);
+        return max(0, $base) + $this->referralCarryBonusForFeature($user, PlanFeatureKeys::WHO_VIEWED_ME_PREVIEW_LIMIT);
+    }
+
+    /**
+     * Resolve listing window for who-viewed preview using quota policy refresh type.
+     *
+     * @return array{since: CarbonInterface|null, window_days: int|null, uses_month_copy: bool}
+     */
+    public function whoViewedMePreviewWindow(User $user): array
+    {
+        if ($this->whoViewedMeHasFullViewerList($user)) {
+            return [
+                'since' => null,
+                'window_days' => null,
+                'uses_month_copy' => false,
+            ];
+        }
+
+        $refresh = $this->whoViewedMePreviewRefreshType($user);
+        $now = now();
+        $since = match ($refresh) {
+            PlanQuotaPolicy::REFRESH_DAILY => $now->copy()->startOfDay(),
+            PlanQuotaPolicy::REFRESH_WEEKLY => $now->copy()->startOfWeek(),
+            PlanQuotaPolicy::REFRESH_QUARTERLY => $now->copy()->startOfQuarter(),
+            PlanQuotaPolicy::REFRESH_MONTHLY_30D_IST => $now->copy()->startOfMonth(),
+            PlanQuotaPolicy::REFRESH_LIFETIME, PlanQuotaPolicy::REFRESH_UNLIMITED => null,
+            default => $now->copy()->startOfMonth(),
+        };
+
+        $windowDays = $since ? max(1, (int) $since->diffInDays($now) + 1) : null;
+        $usesMonthCopy = $refresh === PlanQuotaPolicy::REFRESH_MONTHLY_30D_IST;
+
+        return [
+            'since' => $since,
+            'window_days' => $windowDays,
+            'uses_month_copy' => $usesMonthCopy,
+        ];
+    }
+
+    private function whoViewedMePreviewRefreshType(User $user): string
+    {
+        $sub = app(SubscriptionService::class)->getActiveSubscription($user);
+        if (! $sub) {
+            return PlanQuotaPolicy::REFRESH_MONTHLY_30D_IST;
+        }
+        $sub->loadMissing('plan.quotaPolicies');
+        $row = $sub->plan?->quotaPolicies?->firstWhere('feature_key', PlanFeatureKeys::WHO_VIEWED_ME_PREVIEW_LIMIT);
+        if (! $row) {
+            return PlanQuotaPolicy::REFRESH_MONTHLY_30D_IST;
+        }
+        $refresh = PlanQuotaPolicy::normalizeRefreshType((string) ($row->refresh_type ?? PlanQuotaPolicy::REFRESH_MONTHLY_30D_IST));
+
+        return in_array($refresh, PlanQuotaPolicy::refreshTypes(), true)
+            ? $refresh
+            : PlanQuotaPolicy::REFRESH_MONTHLY_30D_IST;
     }
 
     private function referralCarryBonusForFeature(?User $user, string $featureKey): int

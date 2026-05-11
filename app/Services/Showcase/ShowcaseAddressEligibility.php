@@ -55,7 +55,7 @@ final class ShowcaseAddressEligibility
     }
 
     /**
-     * Bulk policy may override {@code eligible_address_types} / {@code eligible_address_tags}.
+     * Bulk policy overrides {@code eligible_address_tags}; bulk types are unused (always empty in stored policy).
      *
      * @param  array<string, mixed>|null  $bulkPolicy  normalized {@see ShowcaseBulkCreateSettings::policy}
      * @return list<string>
@@ -70,6 +70,9 @@ final class ShowcaseAddressEligibility
                     return $t;
                 }
             }
+
+            // Admin bulk policy is tag-only: internal pool logic always allows district + city picks.
+            return self::defaultTypes();
         }
 
         return self::globalTypes();

@@ -141,9 +141,8 @@ class ShowcaseBulkCreateSettings
         $d['fixed_smoking_status_id'] = self::nullablePositiveInt($data['fixed_smoking_status_id'] ?? null);
         $d['fixed_drinking_status_id'] = self::nullablePositiveInt($data['fixed_drinking_status_id'] ?? null);
 
-        $d['eligible_address_types'] = ShowcaseAddressEligibility::normalizeTypesList(
-            $data['eligible_address_types'] ?? ($d['eligible_address_types'] ?? null)
-        ) ?? ShowcaseAddressEligibility::defaultTypes();
+        // Bulk admin UI configures tags only; `eligible_address_types` is not used (kept empty for JSON shape).
+        $d['eligible_address_types'] = [];
         $d['eligible_address_tags'] = ShowcaseAddressEligibility::normalizeTagsList(
             $data['eligible_address_tags'] ?? ($d['eligible_address_tags'] ?? null)
         ) ?? ShowcaseAddressEligibility::defaultTags();
@@ -158,7 +157,7 @@ class ShowcaseBulkCreateSettings
     {
         return [
             'v' => 1,
-            'eligible_address_types' => ShowcaseAddressEligibility::defaultTypes(),
+            'eligible_address_types' => [],
             'eligible_address_tags' => ShowcaseAddressEligibility::defaultTags(),
             'religion_ids' => [],
             'caste_ids' => [],

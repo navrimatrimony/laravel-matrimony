@@ -11,6 +11,7 @@ use App\Services\Parsing\ProviderResolver;
 use App\Services\ProfileCompletenessService;
 use App\Services\SettingService;
 use App\Services\Showcase\ShowcaseInterestPolicyService;
+use App\Services\WhoViewed\WhoViewedTeaserPolicy;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -907,5 +908,53 @@ class AdminSettingsController extends Controller
 
         return redirect()->route('admin.showcase-interest-settings.index')
             ->with('success', 'Showcase interest rules saved.');
+    }
+
+    /**
+     * Privacy + fields shown on locked "who viewed me" teaser cards (JSON in {@see AdminSetting}, no new columns).
+     */
+    public function whoViewedTeaserSettings()
+    {
+        return view('admin.who-viewed-teaser-settings.edit', [
+            'policy' => WhoViewedTeaserPolicy::normalized(),
+        ]);
+    }
+
+    public function updateWhoViewedTeaserSettings(Request $request): \Illuminate\Http\RedirectResponse
+    {
+        $request->validate([
+            'location_granularity' => ['required', Rule::in(WhoViewedTeaserPolicy::LOCATION_GRANULARITIES)],
+            'show_age_mode' => ['required', Rule::in(WhoViewedTeaserPolicy::AGE_MODES)],
+            'name_display' => ['required', Rule::in(WhoViewedTeaserPolicy::NAME_DISPLAYS)],
+            'locked_teaser_rows' => ['required', 'integer', 'min:1', 'max:60'],
+            'teaser_avatar_style' => ['required', Rule::in(WhoViewedTeaserPolicy::TEASER_AVATAR_STYLES)],
+            'teaser_viewed_time' => ['required', Rule::in(WhoViewedTeaserPolicy::TEASER_VIEWED_TIME_MODES)],
+        ]);
+
+        $normalized = WhoViewedTeaserPolicy::normalizeForSave([
+            'location_granularity' => $request->input('location_granularity'),
+            'show_age_mode' => $request->input('show_age_mode'),
+            'show_occupation' => $request->boolean('show_occupation'),
+            'show_education' => $request->boolean('show_education'),
+            'show_marital_status' => $request->boolean('show_marital_status'),
+            'name_display' => $request->input('name_display'),
+            'locked_teaser_rows' => (int) $request->input('locked_teaser_rows'),
+            'teaser_avatar_style' => $request->input('teaser_avatar_style'),
+            'teaser_viewed_time' => $request->input('teaser_viewed_time'),
+        ]);
+
+        AdminSetting::setValue(WhoViewedTeaserPolicy::SETTING_KEY, json_encode($normalized, JSON_UNESCAPED_UNICODE));
+
+        AuditLogService::log(
+            $request->user(),
+            'update_who_viewed_teaser_settings',
+            'AdminSetting',
+            null,
+            'who_viewed_teaser_policy_json updated',
+            false
+        );
+
+        return redirect()->route('admin.who-viewed-teaser-settings.index')
+            ->with('success', 'Who-viewed teaser privacy settings saved.');
     }
 }

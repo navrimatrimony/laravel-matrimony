@@ -145,8 +145,6 @@ class AutoShowcaseSettingsController extends Controller
             'showcase_eligible_address_types.*' => ['string', 'max:32', $typeIn],
             'showcase_eligible_address_tags' => 'nullable|array',
             'showcase_eligible_address_tags.*' => ['string', 'max:32', $tagIn],
-            'bulk_eligible_address_types' => 'nullable|array',
-            'bulk_eligible_address_types.*' => ['string', 'max:32', $typeIn],
             'bulk_eligible_address_tags' => 'nullable|array',
             'bulk_eligible_address_tags.*' => ['string', 'max:32', $tagIn],
             'bulk_religion_ids' => 'nullable|array',
@@ -278,7 +276,7 @@ class AutoShowcaseSettingsController extends Controller
             'fixed_physical_build_ids' => $request->input('bulk_fixed_physical_build_ids', []),
             'fixed_smoking_status_id' => $request->input('bulk_fixed_smoking_status_id'),
             'fixed_drinking_status_id' => $request->input('bulk_fixed_drinking_status_id'),
-            'eligible_address_types' => $request->input('bulk_eligible_address_types', []),
+            'eligible_address_types' => [],
             'eligible_address_tags' => $request->input('bulk_eligible_address_tags', []),
         ];
     }

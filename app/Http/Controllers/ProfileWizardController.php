@@ -639,7 +639,7 @@ class ProfileWizardController extends Controller
                 break;
             case 'location':
                 // Geo hierarchy rows live only in `addresses` (via Eloquent Country/State/…); do not load duplicate “master lists”.
-                $profile->loadMissing(['city', 'addresses.village']);
+                $profile->loadMissing(['city', 'addresses.location']);
                 $data['profileAddresses'] = $profile->addresses;
                 $wk = $profile->workCityLeafStorageId();
                 $data['workCityName'] = $wk

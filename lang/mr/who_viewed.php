@@ -19,9 +19,20 @@ return [
     'partial_plan_upgrade_hint' => 'अधिक कालावधीसाठी आणि पूर्ण यादीसाठी प्लॅन अपग्रेड करा.',
     'view_profile' => 'प्रोफाइल पहा',
     'viewed_at' => 'पाहिले: :time',
+    'teaser_unlock_cta' => 'पूर्ण प्रोफाइल पाहण्यासाठी अनलॉक करा',
 
     'bubble_title' => 'तुमच्या प्रोफाइलला लक्ष',
     'bubble_intro' => 'आत्ता यादीत',
     'bubble_after_count' => 'वेगळे पाहणारे आहेत — कोण पाहिले ते उघडण्यासाठी टॅप करा.',
     'bubble_dismiss' => 'बंद करा',
+
+    'teaser_headline_anonymous' => 'कोणीतरी',
+    'teaser_headline_anonymous_from' => ':place भागातील कोणीतरी',
+    'teaser_name_fallback' => 'सदस्य',
+    'teaser_age_exact' => 'वय :age',
+    'teaser_age_decade' => 'वय :from–:to',
+    'teaser_viewed_recent' => 'अलीकडेच पाहिले',
+    'teaser_viewed_this_week' => 'या आठवड्यात पाहिले',
+    'teaser_viewed_this_month' => 'या महिन्यात पाहिले',
+    'teaser_viewed_earlier' => 'आधी कधीतरी पाहिले',
 ];
