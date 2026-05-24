@@ -51,9 +51,14 @@
                         </div>
                     @endif
 
-                    @if (($n->data['type'] ?? '') === 'chat_message' && ! empty($n->data['conversation_id']))
+                    @if (($n->data['type'] ?? '') === 'chat_message_locked')
+                        <a href="{{ route('plans.index') }}" class="block font-medium {{ $n->read_at ? 'text-gray-700' : 'text-gray-900' }}">
+                            {{ $n->data['message'] ?? __('notifications.chat_locked_message_anonymous') }}
+                        </a>
+                    @elseif (($n->data['type'] ?? '') === 'chat_message' && ! empty($n->data['conversation_id']) && (($n->data['revealed'] ?? true) !== false))
                         <a
                             href="{{ route('chat.show', ['conversation' => $n->data['conversation_id']]) }}"
+                            data-open-chat-conversation="{{ (int) $n->data['conversation_id'] }}"
                             data-notification-id="{{ $n->id }}"
                             data-chat-conversation="{{ $n->data['conversation_id'] }}"
                             class="block font-medium {{ $n->read_at ? 'text-gray-700' : 'text-gray-900' }}"
@@ -68,6 +73,15 @@
                         <a href="{{ route('mediation-inbox.index') }}" class="block font-medium {{ $n->read_at ? 'text-gray-700' : 'text-gray-900' }}">
                             {{ $n->data['message'] ?? 'Mediation' }}
                         </a>
+                    @elseif (in_array(($n->data['type'] ?? ''), ['interest_sent', 'profile_viewed'], true) && ! empty($data['teaser']) && (($data['revealed'] ?? true) === false))
+                        <div class="space-y-2">
+                            @include('who-viewed.partials.viewer-row-teaser', [
+                                'teaser' => $data['teaser'],
+                                'plansUrl' => $data['teaser_plans_url'] ?? route('plans.index'),
+                                'cardLayout' => 'horizontal',
+                                'hideTeaserCtaColumn' => true,
+                            ])
+                        </div>
                     @else
                         <a
                             href="{{ $actorHref ?: route('notifications.show', $n->id) }}"
@@ -79,15 +93,21 @@
                     <p class="text-sm text-gray-500 mt-1">{{ $n->created_at->diffForHumans() }}</p>
                 </div>
                 <div class="flex items-center gap-2 shrink-0">
-                    @if (($n->data['type'] ?? '') === 'chat_message' && ! empty($n->data['conversation_id']))
+                    @if (($n->data['type'] ?? '') === 'chat_message_locked')
+                        <a href="{{ route('plans.index') }}" class="text-indigo-600 text-sm hover:underline">{{ __('interests.upgrade_for_more_reveals') }}</a>
+                    @elseif (($n->data['type'] ?? '') === 'chat_message' && ! empty($n->data['conversation_id']) && (($n->data['revealed'] ?? true) !== false))
                         <a
                             href="{{ route('chat.show', ['conversation' => $n->data['conversation_id']]) }}"
+                            data-open-chat-conversation="{{ (int) $n->data['conversation_id'] }}"
                             data-notification-id="{{ $n->id }}"
                             data-chat-conversation="{{ $n->data['conversation_id'] }}"
                             class="text-indigo-600 text-sm hover:underline"
                         >Open chat</a>
                     @elseif (in_array(($n->data['type'] ?? ''), ['mediation_request_received', 'mediation_request_response'], true))
                         <a href="{{ route('mediation-inbox.index') }}" class="text-indigo-600 text-sm hover:underline">Open</a>
+                    @elseif (in_array(($n->data['type'] ?? ''), ['interest_sent', 'profile_viewed'], true) && ! empty($n->data['teaser']) && (($n->data['revealed'] ?? true) === false))
+                        <a href="{{ $n->data['teaser_plans_url'] ?? route('plans.index') }}" class="text-indigo-600 text-sm hover:underline">{{ __('interests.upgrade_for_more_reveals') }}</a>
+                        <a href="{{ $n->data['teaser_context_url'] ?? route('notifications.index') }}" class="text-indigo-600 text-sm hover:underline">{{ $n->data['teaser_context_label'] ?? __('notifications.teaser_open_who_viewed') }}</a>
                     @else
                         <a href="{{ $actorHref ?: route('notifications.show', $n->id) }}" class="text-indigo-600 text-sm hover:underline">
                             {{ $actorHref ? 'Open profile' : 'Open' }}
@@ -133,7 +153,15 @@
         e.preventDefault();
         const id = a.getAttribute('data-notification-id');
         const href = a.getAttribute('href');
+        const conversationId = a.getAttribute('data-chat-conversation');
         markRead(id).finally(() => {
+            if (typeof window.openChatConversationPopup === 'function'
+                && typeof window.shouldOpenChatPopupForViewport === 'function'
+                && window.shouldOpenChatPopupForViewport()
+            ) {
+                window.openChatConversationPopup(conversationId, href);
+                return;
+            }
             window.location.href = href;
         });
     });

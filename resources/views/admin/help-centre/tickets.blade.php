@@ -23,7 +23,7 @@
             <p class="mt-1 text-2xl font-bold text-emerald-900">{{ (int) ($stats['resolved'] ?? 0) }}</p>
         </div>
         <div class="rounded-xl border border-sky-200 bg-sky-50 p-3">
-            <p class="text-xs font-semibold uppercase tracking-wide text-sky-700">Auto-resolved</p>
+            <p class="text-xs font-semibold uppercase tracking-wide text-sky-700">Answered by bot</p>
             <p class="mt-1 text-2xl font-bold text-sky-900">{{ (int) ($stats['auto_resolved'] ?? 0) }}</p>
         </div>
         <div class="rounded-xl border border-violet-200 bg-violet-50 p-3">
@@ -55,7 +55,7 @@
                 <div>
                     <label for="status" class="block text-xs font-semibold uppercase tracking-wide text-gray-500">Status</label>
                     <select id="status" name="status" class="mt-1 rounded-lg border border-gray-300 px-3 py-2 text-sm">
-                        @foreach (['open' => 'Open', 'resolved' => 'Resolved', 'auto_resolved' => 'Auto-resolved', 'all' => 'All'] as $key => $label)
+                        @foreach (['open' => 'Open', 'resolved' => 'Resolved', 'auto_resolved' => 'Answered by bot', 'all' => 'All'] as $key => $label)
                             <option value="{{ $key }}" @selected($statusFilter === $key)>{{ $label }}</option>
                         @endforeach
                     </select>
@@ -90,7 +90,7 @@
                             <td class="px-4 py-3 text-gray-700">{{ str_replace('_', ' ', (string) $ticket->intent) }}</td>
                             <td class="px-4 py-3">
                                 <span class="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold {{ $ticket->status === 'open' ? 'bg-amber-100 text-amber-900' : ($ticket->status === 'resolved' ? 'bg-emerald-100 text-emerald-900' : 'bg-sky-100 text-sky-900') }}">
-                                    {{ $ticket->status }}
+                                    {{ $ticket->status === 'auto_resolved' ? 'answered_by_bot' : $ticket->status }}
                                 </span>
                             </td>
                             <td class="px-4 py-3 text-gray-700">
@@ -114,7 +114,7 @@
                             <td class="px-4 py-3">
                                 <div class="flex items-center gap-2">
                                     <a href="{{ route('admin.help-centre.tickets.show', $ticket) }}" class="rounded-md border border-indigo-200 px-3 py-1.5 text-xs font-semibold text-indigo-700 hover:bg-indigo-50">Open</a>
-                                    @if ($ticket->status !== 'resolved')
+                                    @if ($ticket->status === 'open')
                                         <form method="POST" action="{{ route('admin.help-centre.tickets.resolve', $ticket) }}">
                                             @csrf
                                             <button type="submit" class="rounded-md bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700">Resolve</button>

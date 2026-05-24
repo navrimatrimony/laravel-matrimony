@@ -23,7 +23,7 @@ use Illuminate\Validation\Rule;
 
 /**
  * Phase-5B: Section-based profile wizard. MutationService-only save path.
- * Full SSOT coverage: basic-info, personal-family, location, property, horoscope, about-preferences, contacts, photo.
+ * Current section order is defined by config/field_catalog.php.
  */
 class ProfileWizardController extends Controller
 {
@@ -33,23 +33,6 @@ class ProfileWizardController extends Controller
      * @see OnboardingController::snapshotStep2()
      */
     public const SKIP_BASIC_INFO_RESIDENCE_VALIDATION = 'skip_basic_info_residence_validation';
-
-    /** @deprecated Use FieldCatalogService::getSectionKeys() for canonical list. Kept for allowed list fallback. */
-    private const SECTIONS = [
-        'basic-info',
-        'physical',
-        'marriages',
-        'education-career',
-        'family-details',
-        'siblings',
-        'relatives',
-        'alliance',
-        'property',
-        'horoscope',
-        'about-me',
-        'about-preferences',
-        'photo',
-    ];
 
     public function __construct(
         private readonly ProfileCompletionEngine $profileCompletionEngine,
@@ -94,24 +77,6 @@ class ProfileWizardController extends Controller
      */
     public function show(Request $request, string $section)
     {
-        // Legacy: personal-family was split into education-career + family-details; redirect old links
-        if ($section === 'personal-family') {
-            return redirect()->route('matrimony.profile.wizard.section', ['section' => 'education-career'], 301);
-        }
-        // Legacy: location tab removed — location is captured within each relevant section.
-        if ($section === 'location') {
-            return redirect()->route('matrimony.profile.wizard.section', ['section' => 'basic-info'], 301);
-        }
-        // Legacy: contacts tab removed — contact is captured within Basic info.
-        if ($section === 'contacts') {
-            return redirect()->route('matrimony.profile.wizard.section', ['section' => 'basic-info'], 301);
-        }
-        // Legacy: marriages tab removed — marital engine lives under Basic info.
-        if ($section === 'marriages') {
-            return redirect()->route('matrimony.profile.wizard.section', ['section' => 'basic-info'], 301)
-                ->with('info', __('wizard.marriages_location_removed'));
-        }
-
         $allowed = $this->getAllowedSectionKeys();
         if (! in_array($section, $allowed, true)) {
             $minimal = $this->isMinimalWizard();
@@ -226,55 +191,11 @@ class ProfileWizardController extends Controller
     }
 
     /**
-     * Legacy: Return marriage-fields partial HTML for given status (old dropdown partials).
-     * GET ?status=divorced|widowed|separated|married. The MaritalEngine does not use this; it is the single UI for marital+children everywhere (wizard marriages + full).
-     */
-    public function marriageFields(Request $request)
-    {
-        $profile = $this->ensureProfile(auth()->user(), $request);
-        if (! $profile) {
-            return response('', 403);
-        }
-
-        $allowed = ['divorced', 'widowed', 'separated', 'married'];
-        $status = $request->query('status');
-        if (! in_array($status, $allowed, true)) {
-            return response('', 400);
-        }
-
-        $marriage = \App\Models\ProfileMarriage::where('profile_id', $profile->id)->orderBy('id')->first();
-        $view = 'matrimony.profile.wizard.sections.marriage_partials.marriages_'.$status;
-
-        return response()->view($view, ['marriage' => $marriage], 200, [
-            'Content-Type' => 'text/html; charset=UTF-8',
-        ]);
-    }
-
-    /**
      * Save section via MutationService and redirect to next.
      */
     public function store(Request $request, string $section)
     {
         \Log::info('DEBUG SECTION PARAM', ['section' => $section]);
-
-        // Legacy: redirect POST for personal-family to education-career (section no longer in nav)
-        if ($section === 'personal-family') {
-            return redirect()->route('matrimony.profile.wizard.section', ['section' => 'education-career'])
-                ->with('info', 'This section is now split into Education & Career and Family details.');
-        }
-        // Legacy: marriages section removed — do not accept POST here.
-        if ($section === 'marriages') {
-            return redirect()->route('matrimony.profile.wizard.section', ['section' => 'basic-info'])
-                ->with('info', __('wizard.marriages_location_removed'));
-        }
-        // Legacy: location section removed — do not accept POST here.
-        if ($section === 'location') {
-            return redirect()->route('matrimony.profile.wizard.section', ['section' => 'basic-info']);
-        }
-        // Legacy: contacts section removed — do not accept POST here.
-        if ($section === 'contacts') {
-            return redirect()->route('matrimony.profile.wizard.section', ['section' => 'basic-info']);
-        }
 
         $allowed = $this->getAllowedSectionKeys();
         if (! in_array($section, $allowed, true)) {
@@ -477,48 +398,12 @@ class ProfileWizardController extends Controller
                 $data['smokingStatuses'] = \App\Models\MasterSmokingStatus::where('is_active', true)->orderBy('sort_order')->get();
                 $data['drinkingStatuses'] = \App\Models\MasterDrinkingStatus::where('is_active', true)->orderBy('sort_order')->get();
                 break;
-            case 'marriages':
-                $data['profileMarriages'] = \App\Models\ProfileMarriage::where('profile_id', $profile->id)->orderBy('id')->get();
-                $maritalKeys = ['never_married', 'divorced', 'annulled', 'separated', 'widowed'];
-                $data['maritalStatuses'] = \App\Models\MasterMaritalStatus::where('is_active', true)
-                    ->whereIn('key', $maritalKeys)
-                    ->get()
-                    ->sortBy(fn ($s) => array_search($s->key, $maritalKeys, true) !== false ? array_search($s->key, $maritalKeys, true) : 999)
-                    ->values();
-                if ($data['maritalStatuses']->isEmpty()) {
-                    $data['maritalStatuses'] = \App\Models\MasterMaritalStatus::where('is_active', true)->get();
-                }
-                $data['profileChildren'] = \Illuminate\Support\Facades\DB::table('profile_children')
-                    ->where('profile_id', $profile->id)
-                    ->orderBy('sort_order')
-                    ->orderBy('id')
-                    ->get();
-                $livingKeys = ['with_parent', 'with_other_parent', 'joint', 'other'];
-                $data['childLivingWithOptions'] = \App\Models\MasterChildLivingWith::where('is_active', true)
-                    ->whereIn('key', $livingKeys)
-                    ->get()
-                    ->sortBy(fn ($o) => array_search($o->key, $livingKeys, true) !== false ? array_search($o->key, $livingKeys, true) : 999)
-                    ->values();
-                if ($data['childLivingWithOptions']->isEmpty()) {
-                    $data['childLivingWithOptions'] = \App\Models\MasterChildLivingWith::where('is_active', true)->get();
-                }
-                break;
             case 'education-career':
                 $data['profileEducation'] = collect();
                 $data['profileCareer'] = collect();
                 $data['currencies'] = \App\Models\MasterIncomeCurrency::where('is_active', true)->get();
                 break;
             case 'family-details':
-                $data['currencies'] = \App\Models\MasterIncomeCurrency::where('is_active', true)->get();
-                $data['familyTypes'] = \App\Models\MasterFamilyType::where('is_active', true)->get();
-                $data['physicalBuilds'] = \App\Models\MasterPhysicalBuild::where('is_active', true)->get();
-                $data['addressTypes'] = \App\Models\MasterAddressType::where('is_active', true)->orderBy('id')->get(['id', 'key', 'label']);
-                $data['wizardParentsAddresses'] = $this->wizardParentsAddressRowsForView($profile);
-                break;
-            case 'personal-family':
-                $data['profileChildren'] = DB::table('profile_children')->where('profile_id', $profile->id)->orderBy('id')->get();
-                $data['profileEducation'] = collect();
-                $data['profileCareer'] = collect();
                 $data['currencies'] = \App\Models\MasterIncomeCurrency::where('is_active', true)->get();
                 $data['familyTypes'] = \App\Models\MasterFamilyType::where('is_active', true)->get();
                 $data['physicalBuilds'] = \App\Models\MasterPhysicalBuild::where('is_active', true)->get();
@@ -636,25 +521,6 @@ class ProfileWizardController extends Controller
                     ['value' => 'husband_maternal_aunt', 'label' => 'Husband of Maternal Aunt'],
                     ['value' => 'maternal_cousin', 'label' => 'Cousin'],
                 ];
-                break;
-            case 'location':
-                // Geo hierarchy rows live only in `addresses` (via Eloquent Country/State/…); do not load duplicate “master lists”.
-                $profile->loadMissing(['city', 'addresses.location']);
-                $data['profileAddresses'] = $profile->addresses;
-                $wk = $profile->workCityLeafStorageId();
-                $data['workCityName'] = $wk
-                    ? (Location::query()->find($wk)?->localizedName() ?? '')
-                    : '';
-                $nk = $profile->nativePlaceLeafStorageId();
-                $data['nativePlaceDisplay'] = $nk
-                    ? (Location::query()->find($nk)?->localizedName() ?? '')
-                    : '';
-                $data['residencePlaceDisplay'] = old('wizard_residence_display', $profile->residenceLocationDisplayLine());
-                $data['workPlaceDisplay'] = old('wizard_work_place_display', $data['workCityName'] ?? '');
-                $data['nativePlaceTypeaheadDisplay'] = old('wizard_native_place_display', $data['nativePlaceDisplay'] ?? '');
-                $data['talukasByDistrict'] = \App\Models\Taluka::all()->groupBy('district_id')->map(fn ($col) => $col->map(fn ($t) => ['id' => $t->id, 'name' => $t->name])->values()->toArray())->toArray();
-                $data['districtsByState'] = \App\Models\District::all()->groupBy('state_id')->map(fn ($col) => $col->map(fn ($d) => ['id' => $d->id, 'name' => $d->name])->values()->toArray())->toArray();
-                $data['stateIdToCountryId'] = \App\Models\State::all()->pluck('country_id', 'id')->toArray();
                 break;
             case 'property':
                 $data['profile_property_summary'] = DB::table('profile_property_summary')->where('profile_id', $profile->id)->first();
@@ -923,13 +789,11 @@ class ProfileWizardController extends Controller
                 $data = array_merge(
                     $this->getSectionViewData('basic-info', $profile),
                     $this->getSectionViewData('physical', $profile),
-                    $this->getSectionViewData('marriages', $profile),
                     $this->getSectionViewData('education-career', $profile),
                     $this->getSectionViewData('family-details', $profile),
                     $this->getSectionViewData('siblings', $profile),
                     $this->getSectionViewData('relatives', $profile),
                     $this->getSectionViewData('alliance', $profile),
-                    $this->getSectionViewData('location', $profile),
                     $this->getSectionViewData('property', $profile),
                     $this->getSectionViewData('horoscope', $profile),
                     $this->getSectionViewData('contacts', $profile),
@@ -984,30 +848,22 @@ class ProfileWizardController extends Controller
                 return $this->buildBasicInfoSnapshot($request, $profile);
             case 'physical':
                 return $this->buildPhysicalSnapshot($request, $profile);
-            case 'marriages':
-                return $this->buildMarriagesSnapshot($request);
             case 'children':
                 return $this->buildChildrenSnapshot($request);
             case 'education-career':
                 return $this->buildEducationCareerSnapshot($request, $profile);
             case 'family-details':
                 return $this->buildFamilyDetailsSnapshot($request, $profile);
-            case 'personal-family':
-                return $this->buildPersonalFamilySnapshot($request, $profile);
             case 'siblings':
                 return $this->buildSiblingsSnapshot($request, $profile);
             case 'relatives':
                 return $this->buildRelativesSnapshot($request, $profile);
             case 'alliance':
                 return $this->buildAllianceSnapshot($request, $profile);
-            case 'location':
-                return $this->buildLocationSnapshot($request, $profile);
             case 'property':
                 return $this->buildPropertySnapshot($request, $profile);
             case 'horoscope':
                 return $this->buildHoroscopeSnapshot($request, $profile);
-            case 'contacts':
-                return $this->buildContactsSnapshot($request, $profile);
             case 'about-me':
                 return $this->buildAboutMeSnapshot($request, $profile);
             case 'about-preferences':

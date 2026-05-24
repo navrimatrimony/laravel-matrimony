@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\HelpCentreTicket;
 use App\Services\HelpCentre\HelpCentreService;
+use App\Support\ErrorFactory;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
@@ -34,6 +35,19 @@ class HelpCentreController extends Controller
                 __('help_centre.quick_chat_issue'),
             ],
             'recentTickets' => $recentTickets,
+            'helpCentreGenericMsg' => ErrorFactory::generic()->message,
+            'helpCentreNetworkMsg' => ErrorFactory::helpCentreNetwork()->message,
+        ]);
+    }
+
+    public function show(HelpCentreTicket $ticket): View
+    {
+        abort_unless((int) $ticket->user_id === (int) auth()->id(), 404);
+
+        $ticket->load('workflow');
+
+        return view('help-centre.show', [
+            'ticket' => $ticket,
         ]);
     }
 

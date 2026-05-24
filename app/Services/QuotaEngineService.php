@@ -281,7 +281,7 @@ class QuotaEngineService
         $uid = (int) $user->id;
 
         return match (strtolower(trim($feature))) {
-            'chat', 'chat_send', 'chat_send_limit' => $featureUsage->canUse($uid, FeatureUsageService::FEATURE_CHAT_SEND_LIMIT)
+            'chat', 'chat_send', 'chat_send_limit' => $featureUsage->getFeatureState($user, PlanFeatureKeys::CHAT_SEND_LIMIT)['allowed']
                 || (
                     isset($context['conversation_id'], $context['sender_profile_id'])
                     && $featureUsage->canSendChatInExistingConversation(

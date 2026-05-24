@@ -49,4 +49,7 @@ return [
     'inactive_reminder_message' => 'नमस्कार :name, तुम्ही काही काळ लॉग इन केले नाही. अपडेट्स, संदेश आणि जुळण्या पाहण्यासाठी लॉग इन करा.',
     'inactive_reminder_whatsapp_line' => ':app — तुमचे खाते सक्रिय आहे. भेट द्या: :url',
     'new_matches_digest_message' => 'तुमच्यासाठी :count शिफारस केलेल्या जुळण्या (सर्वोत्तम गुण :score/100). पाहण्यासाठी Matches उघडा.',
+    'chat_locked_message_anonymous' => 'तुम्हाला एक नवीन संदेश आला आहे. वाचण्यासाठी अपग्रेड करा — पैसे देण्यापूर्वी किंमत स्पष्ट दाखवली जाते.',
+    'teaser_open_received_interests' => 'मिळालेल्या इच्छा उघडा',
+    'teaser_open_who_viewed' => 'मला कोणी पाहिले उघडा',
 ];

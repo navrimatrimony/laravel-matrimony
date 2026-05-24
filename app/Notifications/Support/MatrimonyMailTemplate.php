@@ -62,7 +62,9 @@ final class MatrimonyMailTemplate
             'chat_message' => filled($payload['message_preview'] ?? null)
                 ? trim((string) $payload['message_preview'])
                 : null,
+            'chat_message_locked' => null,
             'plan_expiring_soon' => null,
+            'interest_sent', 'profile_viewed' => self::teaserDetailLine($payload),
             'image_rejected', 'image_approved', 'profile_suspended', 'profile_soft_deleted', 'profile_unsuspended' => self::reasonDetail($payload),
             'mediation_request_response' => filled($payload['feedback'] ?? null)
                 ? (string) $payload['feedback']
@@ -70,6 +72,27 @@ final class MatrimonyMailTemplate
             'referral_reward' => null,
             default => null,
         };
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
+     */
+    private static function teaserDetailLine(array $payload): ?string
+    {
+        $teaser = $payload['teaser'] ?? null;
+        if (! is_array($teaser)) {
+            return null;
+        }
+
+        $parts = array_values(array_filter(array_map(
+            static fn (mixed $v): string => trim((string) $v),
+            array_merge(
+                [trim((string) ($teaser['headline'] ?? ''))],
+                is_array($teaser['lines'] ?? null) ? $teaser['lines'] : [],
+            ),
+        )));
+
+        return $parts !== [] ? implode(' · ', $parts) : null;
     }
 
     /**
@@ -92,6 +115,10 @@ final class MatrimonyMailTemplate
     private static function secondaryAction(string $type, array $payload): array
     {
         if (! in_array($type, ['chat_message', 'chat_message_locked'], true)) {
+            return [];
+        }
+
+        if ($type === 'chat_message_locked') {
             return [];
         }
 

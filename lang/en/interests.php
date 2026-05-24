@@ -44,6 +44,17 @@ return [
     'from_locked_body' => 'This interest is outside your current reveal slots for this period. Upgrade your plan to see their name, photo, and profile.',
     'unlock_with_membership' => 'Upgrade to reveal',
     'locked_badge' => 'Locked',
+
+    'teaser_interest_at' => 'Interest :time',
+    'teaser_interest_recent' => 'Interest received recently',
+    'teaser_interest_this_week' => 'Interest received this week',
+    'teaser_interest_this_month' => 'Interest received this month',
+    'teaser_interest_earlier' => 'Interest received earlier',
+
+    'accept_reject_requires_reveal' => 'This interest is not revealed on your plan yet. Upgrade or wait for your next reveal window to accept.',
+    'locked_accept_hint' => 'Upgrade your plan to accept.',
+    'locked_actions_cta' => 'View plans',
+
     'notification_blurred_sender' => 'Someone sent you an interest. Open Received interests to manage your plan reveals.',
     'profile_open_locked_use_inbox' => 'This profile is not revealed under your current plan. Open Received interests — or upgrade to see full details.',
     'period_weekly' => 'week',

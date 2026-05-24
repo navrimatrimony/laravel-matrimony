@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Conversation;
 use App\Models\MatrimonyProfile;
 use App\Models\Message;
+use App\Services\Chat\ChatTeaserPolicy;
 use App\Services\Chat\ChatConversationService;
 use App\Services\Chat\ChatMessageModerationService;
 use App\Services\Chat\ChatMessageService;
@@ -68,6 +69,8 @@ class ChatController extends Controller
             'me' => $me,
             'tab' => $tab,
             'conversations' => $conversations,
+            'readLockedForIncoming' => ! $this->featureUsage->canUse((int) $user->id, FeatureUsageService::FEATURE_CHAT_CAN_READ),
+            'chatTeaserPolicy' => ChatTeaserPolicy::normalized(),
             'counts' => [
                 'all' => $all->count(),
                 'unread' => $unread->count(),
@@ -168,6 +171,7 @@ class ChatController extends Controller
                     'senderPhotoUrl' => $m->senderProfile?->profile_photo_url,
                     'viewerProfileId' => (int) $me->id,
                     'readLockedForIncoming' => $readLockedForIncoming,
+                    'chatTeaserPolicy' => ChatTeaserPolicy::normalized(),
                 ])->render();
             }
 
@@ -189,6 +193,7 @@ class ChatController extends Controller
         }
 
         $canSend = $this->policy->canSendMessage($me, $other, $conversation);
+        $chatTeaserPolicy = ChatTeaserPolicy::normalized();
 
         $cfg = CommunicationPolicyService::getConfig();
         $imagePolicy = [
@@ -231,6 +236,7 @@ class ChatController extends Controller
             'showcaseTag' => $showcaseTag,
             'chatTemplateSuggestions' => $chatTemplateSuggestions,
             'readLockedForIncoming' => $readLockedForIncoming,
+            'chatTeaserPolicy' => $chatTeaserPolicy,
         ]);
     }
 

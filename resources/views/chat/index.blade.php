@@ -12,6 +12,8 @@
 
     @php
         $active = $tab ?? 'all';
+        $chatPolicy = $chatTeaserPolicy ?? [];
+        $readLocked = (bool) ($readLockedForIncoming ?? false);
         $counts = $counts ?? ['all' => 0, 'unread' => 0, 'requests' => 0];
         $tabs = [
             'all' => ['label' => 'All', 'count' => (int) ($counts['all'] ?? 0)],
@@ -48,15 +50,18 @@
                         $last = $c->lastMessage;
                         $preview = '';
                         if ($last) {
-                            $preview = (string) ($last->body_text ?? '');
+                            $isIncomingLocked = $readLocked && (int) ($last->sender_profile_id ?? 0) !== (int) ($me->id ?? 0);
+                            $preview = $isIncomingLocked
+                                ? \App\Services\Chat\ChatTeaserPolicy::lockedPreviewText($chatPolicy)
+                                : (string) ($last->body_text ?? '');
                             if (($last->message_type ?? \App\Models\Message::TYPE_TEXT) === \App\Models\Message::TYPE_IMAGE) {
                                 $cap = trim((string) ($last->body_text ?? ''));
-                                $preview = $cap !== '' ? ('📷 ' . $cap) : '📷 Image';
+                                $preview = $isIncomingLocked ? $preview : ($cap !== '' ? ('📷 ' . $cap) : '📷 Image');
                             }
                         }
                     @endphp
 
-                    <a href="{{ route('chat.show', ['conversation' => $c->id, 'tab' => $active]) }}" class="block px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-800/60 {{ $unreadCount > 0 ? 'bg-emerald-50/70 dark:bg-emerald-950/20' : '' }}">
+                    <a href="{{ route('chat.show', ['conversation' => $c->id, 'tab' => $active]) }}" data-open-chat-conversation="{{ (int) $c->id }}" class="block px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-800/60 {{ $unreadCount > 0 ? 'bg-emerald-50/70 dark:bg-emerald-950/20' : '' }}">
                         <div class="flex min-w-0 items-center gap-3">
                             <img src="{{ $photo }}" alt="{{ $title }}" class="h-11 w-11 shrink-0 rounded-full object-cover ring-1 ring-black/10" />
                             <div class="min-w-0 flex-1">
@@ -99,4 +104,3 @@
     </div>
 </div>
 @endsection
-

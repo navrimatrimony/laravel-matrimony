@@ -60,7 +60,6 @@ return [
     'widowed' => 'Widowed',
     // Controller messages
     'profile_complete' => 'Your profile is complete.',
-    'marriages_location_removed' => 'The Marriages section was removed; use Basic information for marital details.',
     'location_residence_heading' => 'Current residence',
     'location_residence_help' => 'Country through city and your address line are saved on your profile (same data as under Basic information).',
     'current_address_line' => 'Current address line',

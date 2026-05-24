@@ -6,7 +6,9 @@ use App\Models\Interest;
 use App\Models\MatrimonyProfile;
 use App\Notifications\Concerns\SendsMatrimonyMailChannel;
 use App\Notifications\Support\MatrimonyMailTemplate;
+use App\Services\Interest\ReceivedInterestTeaserPolicy;
 use App\Services\InterestSendLimitService;
+use App\Services\WhoViewed\WhoViewedTeaserPresenter;
 use Illuminate\Bus\Queueable;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
@@ -61,11 +63,33 @@ class InterestSentNotification extends Notification
             ];
         }
 
+        $receiverProfile = $notifiable->matrimonyProfile;
+        $teaser = null;
+        if ($receiverProfile !== null) {
+            $policy = ReceivedInterestTeaserPolicy::forLockedPresentation(ReceivedInterestTeaserPolicy::normalized());
+            $at = $interest?->created_at ?? now();
+            $teaser = app(WhoViewedTeaserPresenter::class)->presentFromMatrimonyProfile(
+                $this->senderProfile,
+                $at,
+                $policy,
+                [
+                    'owner_profile' => $receiverProfile,
+                    'teaser_time_line' => 'interest_received',
+                ],
+            );
+        }
+
         return [
             'type' => 'interest_sent',
             'message' => __('interests.notification_blurred_sender'),
             'sender_profile_id' => null,
             'revealed' => false,
+            'teaser' => $teaser,
+            'teaser_plans_url' => route('plans.index'),
+            'teaser_context_url' => route('interests.received'),
+            'teaser_context_label' => __('notifications.teaser_open_received_interests'),
+            'mail_action_url' => route('interests.received'),
+            'mail_action_text' => __('notifications.teaser_open_received_interests'),
         ];
     }
 }

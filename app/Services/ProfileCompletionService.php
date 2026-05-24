@@ -8,22 +8,23 @@ use Illuminate\Support\Facades\Schema;
 
 /**
  * Phase-5B: Section-based completion percentage for profile wizard.
- * Full SSOT section order: basic-info, personal-family, location, property, horoscope, about-preferences, contacts, photo.
- * Completion % uses original 5 sections (20% each); new sections have 0 weight for backward compatibility.
+ * Full SSOT section order follows config/field_catalog.php.
+ * Completion % uses five product areas (20% each); detailed section status follows current wizard sections.
  */
 class ProfileCompletionService
 {
     public const SECTIONS = [
         'basic-info' => 20,
-        'personal-family' => 20,
+        'physical' => 0,
+        'education-career' => 20,
+        'family-details' => 0,
         'siblings' => 0,
         'relatives' => 0,
         'alliance' => 0,
-        'location' => 0,
         'property' => 0,
         'horoscope' => 0,
+        'about-me' => 0,
         'about-preferences' => 20,
-        'contacts' => 0,
         'photo' => 20,
     ];
 
@@ -193,8 +194,6 @@ class ProfileCompletionService
                     || ($profile->blood_group_id ?? null) !== null || ($profile->physical_build_id ?? null) !== null;
 
                 return $has ? 'completed' : 'incomplete';
-            case 'marriages':
-                return ($profile->marital_status_id ?? null) !== null ? 'completed' : 'incomplete';
             case 'education-career':
                 $hasEdu = ($profile->highest_education ?? '') !== '' || ($profile->occupation_title ?? '') !== '' || ($profile->annual_income ?? null) !== null;
                 $hasCareer = trim((string) ($profile->company_name ?? '')) !== ''
@@ -208,8 +207,6 @@ class ProfileCompletionService
                 $hasFamily = ($profile->father_name ?? '') !== '' || ($profile->mother_name ?? '') !== '' || ($profile->family_type_id ?? null) !== null;
 
                 return $hasFamily ? 'completed' : 'incomplete';
-            case 'personal-family':
-                return self::sectionPersonalFamilyFilled($profile) ? 'completed' : 'incomplete';
             case 'siblings':
                 if (($profile->has_siblings ?? null) === false) {
                     return 'completed';
@@ -225,8 +222,6 @@ class ProfileCompletionService
                 $count = DB::table('profile_alliance_networks')->where('profile_id', $profile->id)->count();
 
                 return $count > 0 ? 'completed' : 'incomplete';
-            case 'location':
-                return self::sectionLocationFilled($profile) ? 'completed' : 'incomplete';
             case 'property':
                 $summary = DB::table('profile_property_summary')->where('profile_id', $profile->id)->exists();
                 $assets = DB::table('profile_property_assets')->where('profile_id', $profile->id)->count();
@@ -237,14 +232,16 @@ class ProfileCompletionService
                 $hasRashi = $h && ($h->rashi_id ?? null) !== null;
 
                 return $hasRashi ? 'completed' : 'incomplete';
+            case 'about-me':
+                $ext = DB::table('profile_extended_attributes')->where('profile_id', $profile->id)->first();
+                $hasAbout = $ext && (
+                    trim((string) ($ext->narrative_about_me ?? '')) !== ''
+                    || trim((string) ($ext->narrative_expectations ?? '')) !== ''
+                );
+
+                return $hasAbout ? 'completed' : 'incomplete';
             case 'about-preferences':
                 return self::sectionAboutPreferencesFilled($profile) ? 'completed' : 'incomplete';
-            case 'contacts':
-                $selfRelId = DB::table('master_contact_relations')->where('key', 'self')->value('id');
-                $has = DB::table('profile_contacts')->where('profile_id', $profile->id)
-                    ->where('contact_relation_id', $selfRelId)->exists();
-
-                return $has ? 'completed' : 'warning';
             case 'photo':
                 return self::sectionPhotoFilled($profile) ? 'completed' : 'incomplete';
             default:

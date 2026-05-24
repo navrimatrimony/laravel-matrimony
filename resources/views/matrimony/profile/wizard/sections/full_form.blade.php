@@ -14,7 +14,8 @@
 @endphp
 @include('matrimony.profile.wizard.sections.basic_info', ['namePrefix' => $corePrefix])
 @include('matrimony.profile.wizard.sections.physical', ['namePrefix' => $corePrefix])
-@include('matrimony.profile.wizard.sections.personal_family', ['namePrefix' => $corePrefix])
+@include('matrimony.profile.wizard.sections.education_career', ['namePrefix' => $corePrefix])
+@include('matrimony.profile.wizard.sections.family_details', ['namePrefix' => $corePrefix])
 
 @include('matrimony.profile.wizard.sections.siblings', ['namePrefix' => $siblingsPrefix])
 @include('matrimony.profile.wizard.sections.relatives', ['namePrefix' => $relativesPaternalPrefix])

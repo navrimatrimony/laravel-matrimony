@@ -150,12 +150,14 @@ Route::middleware(['auth', \App\Http\Middleware\EnforceCardOnboarding::class])->
 
     Route::get('/matrimony/profile/wizard', [ProfileWizardController::class, 'index'])
         ->name('matrimony.profile.wizard');
+    $wizardSectionPattern = implode('|', array_merge(config('field_catalog.section_order', []), ['full']));
+
     Route::get('/matrimony/profile/wizard/{section}', [ProfileWizardController::class, 'show'])
         ->name('matrimony.profile.wizard.section')
-        ->where('section', 'basic-info|physical|marriages|location|personal-family|education-career|family-details|siblings|relatives|alliance|property|horoscope|about-me|about-preferences|contacts|photo|full');
+        ->where('section', $wizardSectionPattern);
     Route::post('/matrimony/profile/wizard/{section}', [ProfileWizardController::class, 'store'])
         ->name('matrimony.profile.wizard.store')
-        ->where('section', 'basic-info|physical|marriages|location|personal-family|education-career|family-details|siblings|relatives|alliance|property|horoscope|about-me|about-preferences|contacts|photo|full');
+        ->where('section', $wizardSectionPattern);
 
     Route::post('/matrimony/profile/contacts/{contact}/send-otp', [ProfileContactVerificationController::class, 'sendOtp'])
         ->middleware(['throttle:6,1'])
@@ -174,9 +176,6 @@ Route::middleware(['auth', \App\Http\Middleware\EnforceCardOnboarding::class])->
     Route::post('/matrimony/internal/location/resolve-current', [CurrentLocationController::class, 'resolve'])
         ->middleware(['throttle:location-gps'])
         ->name('matrimony.internal.location.resolve-current');
-
-    Route::get('/matrimony/profile/wizard/marriage-fields', [ProfileWizardController::class, 'marriageFields'])
-        ->name('matrimony.profile.wizard.marriage-fields');
 
     Route::get('/matrimony/profile/edit', [MatrimonyProfileController::class, 'edit'])
         ->name('matrimony.profile.edit');
@@ -314,6 +313,9 @@ Route::middleware(['auth', \App\Http\Middleware\EnforceCardOnboarding::class])->
     | Help centre (safe support assistant)
     */
     Route::get('/help-centre', [HelpCentreController::class, 'index'])->name('help-centre.index');
+    Route::get('/help-centre/requests/{ticket}', [HelpCentreController::class, 'show'])
+        ->whereNumber('ticket')
+        ->name('help-centre.requests.show');
     Route::post('/help-centre/ask', [HelpCentreController::class, 'ask'])
         ->middleware('throttle:30,1')
         ->name('help-centre.ask');

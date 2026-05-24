@@ -331,7 +331,7 @@
                         <h3 class="text-lg font-bold text-gray-900 dark:text-gray-100">नवे संदेश</h3>
                         <p class="text-sm text-gray-600 dark:text-gray-400">Unread: <span class="font-semibold text-emerald-700 dark:text-emerald-300">{{ $chatUnreadCount ?? 0 }}</span></p>
                     </div>
-                    <a href="{{ route('chat.index') }}" class="shrink-0 text-sm font-semibold text-emerald-700 dark:text-emerald-300 hover:underline">सर्व chats पहा →</a>
+                    <a href="{{ route('chat.index') }}" data-open-chat-launcher data-open-chat-tab="chats" class="shrink-0 text-sm font-semibold text-emerald-700 dark:text-emerald-300 hover:underline">सर्व chats पहा →</a>
                 </div>
 
                 @if (($chatUnreadCount ?? 0) > 0 && !empty($recentUnreadChats) && $recentUnreadChats->isNotEmpty())
@@ -347,7 +347,7 @@
                                     : 'Profile #';
                                 $preview = trim((string) ($row['preview'] ?? ''));
                             @endphp
-                            <a href="{{ route('chat.show', ['conversation' => $row['conversation']->id]) }}" class="block rounded-lg border border-gray-200 dark:border-gray-700 px-4 py-3 hover:bg-emerald-50/60 dark:hover:bg-emerald-950/20">
+                            <a href="{{ route('chat.show', ['conversation' => $row['conversation']->id]) }}" data-open-chat-conversation="{{ (int) $row['conversation']->id }}" class="block rounded-lg border border-gray-200 dark:border-gray-700 px-4 py-3 hover:bg-emerald-50/60 dark:hover:bg-emerald-950/20">
                                 <div class="flex items-center gap-3">
                                     <img src="{{ $photo }}" alt="" class="h-10 w-10 rounded-full object-cover ring-1 ring-black/10" />
                                     <div class="min-w-0 flex-1">

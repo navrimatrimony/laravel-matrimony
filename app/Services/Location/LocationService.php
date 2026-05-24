@@ -49,13 +49,14 @@ class LocationService
         $lineage = array_reverse($this->getAncestors($location)); // root -> ... -> parent
 
         foreach ($lineage as $node) {
-            if ($node->type === 'state') {
+            $t = strtolower((string) ($node->type ?? ''));
+            if ($t === 'state') {
                 $state = $node;
-            } elseif ($node->type === 'district') {
+            } elseif ($t === 'district') {
                 $district = $node;
-            } elseif ($node->type === 'taluka') {
+            } elseif ($t === 'taluka') {
                 $taluka = $node;
-            } elseif ($node->type === 'city') {
+            } elseif ($t === 'city') {
                 $city = $node;
             }
         }
@@ -70,15 +71,65 @@ class LocationService
     }
 
     /**
+     * Fill missing hierarchy slots by walking {@code parent_id} (handles legacy rows where
+     * {@see getFullHierarchy} did not classify an ancestor, and fixes "Name + pincode only" labels).
+     *
+     * @param  array<string, Location|null>  $h
+     * @return array<string, Location|null>
+     */
+    public function fillHierarchyGaps(Location $leaf, array $h): array
+    {
+        $pid = $leaf->parent_id !== null ? (int) $leaf->parent_id : 0;
+        if ($pid > 0) {
+            $immediate = Location::query()->whereKey($pid)->first();
+            if ($immediate !== null) {
+                $this->ensureAncestorsLoaded($immediate);
+                $pt = strtolower((string) ($immediate->type ?? ''));
+                if (($h['taluka'] ?? null) === null && $pt === 'taluka') {
+                    $h['taluka'] = $immediate;
+                }
+                if (($h['district'] ?? null) === null && $pt === 'district') {
+                    $h['district'] = $immediate;
+                }
+            }
+        }
+
+        if (($h['taluka'] ?? null) === null) {
+            $t = $this->getAncestorByType($leaf, 'taluka');
+            if ($t !== null) {
+                $h['taluka'] = $t;
+            }
+        }
+        if (($h['district'] ?? null) === null) {
+            $d = $this->getAncestorByType($leaf, 'district');
+            if ($d !== null) {
+                $h['district'] = $d;
+            }
+        }
+        if (($h['state'] ?? null) === null) {
+            $s = $this->getAncestorByType($leaf, 'state');
+            if ($s !== null) {
+                $h['state'] = $s;
+            }
+        }
+
+        return $h;
+    }
+
+    /**
      * Walk {@see Location::parent} chain (including self) for the first row with {@code type}.
      */
     public function getAncestorByType(Location $location, string $type): ?Location
     {
-        if ($location->type === $type) {
+        $want = strtolower(trim($type));
+        if ($want === '') {
+            return null;
+        }
+        if (strtolower((string) ($location->type ?? '')) === $want) {
             return $location;
         }
         foreach ($this->getAncestors($location) as $a) {
-            if ($a->type === $type) {
+            if (strtolower((string) ($a->type ?? '')) === $want) {
                 return $a;
             }
         }

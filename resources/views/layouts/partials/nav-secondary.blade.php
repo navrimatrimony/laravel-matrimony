@@ -73,6 +73,8 @@
                         >{{ (int) ($memberActivityCounts['interests_pending'] ?? 0) > 99 ? '99+' : (int) ($memberActivityCounts['interests_pending'] ?? 0) }}</span>
                     </a>
                     <a href="{{ route('chat.index') }}"
+                       data-open-chat-launcher
+                       data-open-chat-tab="chats"
                        class="inline-flex items-center gap-2 border-b-2 px-3 py-3 text-sm font-medium transition {{ request()->routeIs('chat.*') ? 'border-red-600 text-red-600 dark:border-red-500 dark:text-red-400' : 'border-transparent text-gray-600 hover:text-red-700 dark:text-gray-400 dark:hover:text-red-400' }}">
                         {{ __('Chat') }}
                         <span

@@ -1,11 +1,15 @@
 @auth
 @php
+    $showHelpCentreFloatingTab = (bool) ($showHelpCentreFloatingTab ?? true);
+    $showCommunicationFloatingTab = (bool) ($showCommunicationFloatingTab ?? true);
     $helpCentreGenericMsg = \App\Support\ErrorFactory::generic()->message;
     $helpCentreNetworkMsg = \App\Support\ErrorFactory::helpCentreNetwork()->message;
 @endphp
+@if ($showHelpCentreFloatingTab || $showCommunicationFloatingTab)
 {{-- Side tabs: stacked next to each other (gap-2); panels toggle; z above chat dock so tabs stay clickable. --}}
 <div id="help-centre-widget-root" data-mobile-clean-mode="{{ ($mobileCleanMode ?? true) ? '1' : '0' }}" class="pointer-events-none fixed right-0 top-1/2 z-[56] {{ ($mobileCleanMode ?? true) ? 'hidden lg:flex' : 'flex' }} -translate-y-1/2 transform flex-col gap-2 items-end">
     <div class="pointer-events-auto relative flex flex-col gap-2 items-end">
+        @if ($showHelpCentreFloatingTab)
         <button
             type="button"
             id="helpTab"
@@ -17,8 +21,9 @@
             <span class="block max-h-[9rem] overflow-hidden text-center [writing-mode:vertical-rl] [text-orientation:mixed]">{{ __('help_centre.title') }}</span>
             <span id="helpBadge" class="absolute right-0.5 top-0.5 hidden min-w-[1.1rem] rounded-full bg-red-600 px-1 py-0.5 text-center text-[10px] font-bold leading-none text-white"></span>
         </button>
+        @endif
 
-        @unless (request()->routeIs('chat.*'))
+        @if ($showCommunicationFloatingTab && ! request()->routeIs('chat.*'))
             <button
                 type="button"
                 id="chatTab"
@@ -28,8 +33,9 @@
                 <span class="block max-h-[9rem] overflow-hidden text-center [writing-mode:vertical-rl] [text-orientation:mixed]">{{ __('chat_ui.dock_panel_title') }}</span>
                 <span id="chatBadge" class="absolute right-0.5 top-0.5 hidden min-w-[1.1rem] rounded-full bg-red-600 px-1 py-0.5 text-center text-[10px] font-bold leading-none text-white"></span>
             </button>
-        @endunless
+        @endif
 
+        @if ($showHelpCentreFloatingTab)
         <section
             id="helpPanel"
             class="pointer-events-auto absolute right-full top-0 mr-2 hidden w-[min(22rem,calc(100vw-3rem))] overflow-hidden rounded-2xl rounded-r-none border border-indigo-100/90 bg-white shadow-2xl transition duration-300 ease-out will-change-transform dark:border-indigo-900/70 dark:bg-gray-900 sm:w-[24rem]"
@@ -68,9 +74,11 @@
                 </form>
             </div>
         </section>
+        @endif
     </div>
 </div>
 
+@if ($showHelpCentreFloatingTab)
 <script>
 (function () {
     const root = document.getElementById('help-centre-widget-root');
@@ -187,4 +195,6 @@
     });
 })();
 </script>
+@endif
+@endif
 @endauth

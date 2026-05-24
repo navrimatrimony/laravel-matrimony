@@ -1,6 +1,13 @@
 @auth
-@if (is_array($chatDockData ?? null))
+@if (auth()->user()?->matrimonyProfile)
 @php
+    $chatDockData = is_array($chatDockData ?? null) ? $chatDockData : [];
+    $memberChatDesktopOpenMode = in_array(($memberChatDesktopOpenMode ?? 'popup'), ['popup', 'full_page'], true)
+        ? (string) ($memberChatDesktopOpenMode ?? 'popup')
+        : 'popup';
+    $memberChatMobileOpenMode = in_array(($memberChatMobileOpenMode ?? 'full_page'), ['full_page', 'bottom_sheet'], true)
+        ? (string) ($memberChatMobileOpenMode ?? 'full_page')
+        : 'full_page';
     $chatDockInitialData = [
         'unread_count' => (int) ($chatDockData['unread_count'] ?? 0),
         'unread' => array_values($chatDockData['unread'] ?? []),
@@ -25,6 +32,8 @@
     data-hint-alerts="{{ __('chat_ui.dock_hint_alerts') }}"
     data-hint-chats="{{ __('chat_ui.dock_hint_chats') }}"
     data-hint-active="{{ __('chat_ui.dock_hint_active') }}"
+    data-desktop-open-mode="{{ $memberChatDesktopOpenMode }}"
+    data-mobile-open-mode="{{ $memberChatMobileOpenMode }}"
 >
     <header class="border-b border-gray-200 bg-gradient-to-r from-red-500 to-rose-600 px-3 py-2.5 text-white dark:border-gray-800">
         <div class="flex items-center justify-between gap-2">
@@ -122,6 +131,22 @@
     let currentTab = 'alerts';
     let dockData = { unread_count: 0, unread: [], chats: [], active: [], can_read_incoming: false };
     let dockLastHadUnreadAlerts = false;
+    const desktopOpenMode = root.dataset.desktopOpenMode || 'popup';
+    const mobileOpenMode = root.dataset.mobileOpenMode || 'full_page';
+
+    function isDesktopViewport() {
+        return window.matchMedia('(min-width: 1024px)').matches;
+    }
+
+    function shouldOpenChatPopupForViewport() {
+        return isDesktopViewport()
+            ? desktopOpenMode === 'popup'
+            : mobileOpenMode === 'bottom_sheet';
+    }
+
+    function isMobileBottomSheetMode() {
+        return !isDesktopViewport() && mobileOpenMode === 'bottom_sheet';
+    }
 
     if (initialDataEl) {
         try {
@@ -152,6 +177,11 @@
 
     function setDockExpanded(expanded) {
         if (!root) return;
+        const panel = document.getElementById('chatPanel');
+        if (panel && expanded) {
+            panel.classList.remove('hidden');
+            panel.style.removeProperty('display');
+        }
         root.classList.toggle('translate-x-full', !expanded);
         root.setAttribute('aria-hidden', expanded ? 'false' : 'true');
         refreshExpandHandleVisibility();
@@ -216,12 +246,7 @@
             ? `<img src="${escapeHtml(row.avatar_url)}" alt="${escapeHtml(row.name || 'Member')}" class="h-10 w-10 rounded-full object-cover ring-1 ring-black/10">`
             : `<span class="inline-flex h-10 w-10 items-center justify-center rounded-full bg-red-100 text-xs font-bold text-red-700">${escapeHtml((row.name || 'M').trim().charAt(0).toUpperCase())}</span>`;
 
-        const openChatControl = hasConversation
-            ? `<a href="${chatUrl}" class="rounded-md border border-red-200 px-2 py-0.5 text-[10px] font-semibold text-red-700 hover:bg-red-50 dark:border-red-800 dark:text-red-300">${labelOpenChat}</a>`
-            : `<form method="POST" action="${startChatUrl}" class="m-0 inline">
-                    <input type="hidden" name="_token" value="${escapeHtml(csrf)}" />
-                    <button type="submit" class="rounded-md border border-red-200 px-2 py-0.5 text-[10px] font-semibold text-red-700 hover:bg-red-50 dark:border-red-800 dark:text-red-300">${labelOpenChat}</button>
-               </form>`;
+        const openChatControl = `<button type="button" data-chat-dock-open-row="${rowKey}" class="rounded-md border border-red-200 px-2 py-0.5 text-[10px] font-semibold text-red-700 hover:bg-red-50 dark:border-red-800 dark:text-red-300">${labelOpenChat}</button>`;
 
         const rightBadge = unread > 0
             ? `<span class="inline-flex min-w-[1.2rem] items-center justify-center rounded-full bg-green-500 px-1.5 py-0.5 text-[10px] font-bold leading-none text-white">${unread}</span>`
@@ -253,9 +278,9 @@
     }
 
     function attachRowHandlers(container, rowsData) {
-        container.querySelectorAll('.chat-dock-row-main').forEach((el) => {
+        container.querySelectorAll('.chat-dock-row-main, [data-chat-dock-open-row]').forEach((el) => {
             el.addEventListener('click', () => {
-                const rowKey = el.getAttribute('data-row-key');
+                const rowKey = el.getAttribute('data-row-key') || el.getAttribute('data-chat-dock-open-row');
                 const conversation = rowsData.find((r) => String(r.conversation_key) === String(rowKey));
                 if (!conversation) return;
                 openPopoutFromConversation(conversation);
@@ -431,10 +456,25 @@
         let idx = 0;
         for (const card of openPopouts.values()) {
             if (!card || card.dataset.customPos === '1' || card.dataset.minimized === '1') continue;
+            if (isMobileBottomSheetMode()) {
+                card.style.left = '0';
+                card.style.right = '0';
+                card.style.bottom = '0';
+                card.style.top = 'auto';
+                card.style.width = '100vw';
+                card.style.height = 'min(82vh, 42rem)';
+                card.style.maxHeight = '82vh';
+                card.style.borderRadius = '1.25rem 1.25rem 0 0';
+                continue;
+            }
             card.style.bottom = '1rem';
             card.style.right = popoutRightOffsetRem(idx) + 'rem';
             card.style.left = 'auto';
             card.style.top = 'auto';
+            card.style.width = '';
+            card.style.height = '';
+            card.style.maxHeight = '';
+            card.style.borderRadius = '';
             idx++;
         }
     }
@@ -741,9 +781,59 @@
         } catch (_e) {}
     }
 
+    let dockSnapshotRefreshPromise = null;
+    async function refreshChatDockSnapshotNow() {
+        if (dockSnapshotRefreshPromise) return dockSnapshotRefreshPromise;
+        dockSnapshotRefreshPromise = pollChatDockSnapshot().finally(() => {
+            dockSnapshotRefreshPromise = null;
+        });
+        return dockSnapshotRefreshPromise;
+    }
+
+    async function openCommunicationDock(tab = 'chats') {
+        if (typeof window.openPanel === 'function') {
+            window.openPanel('chat');
+        } else {
+            setDockExpanded(true);
+        }
+        setDockExpanded(true);
+        setTabFromUserClick(tab);
+        await refreshChatDockSnapshotNow();
+        setTabFromUserClick(tab);
+    }
+
+    async function openChatConversationPopup(conversationId, fallbackUrl = '') {
+        if (!shouldOpenChatPopupForViewport()) {
+            if (fallbackUrl) {
+                window.location.href = fallbackUrl;
+            }
+            return false;
+        }
+        await openCommunicationDock('chats');
+        const wanted = String(conversationId || '');
+        const rows = []
+            .concat(Array.isArray(dockData.unread) ? dockData.unread : [])
+            .concat(Array.isArray(dockData.chats) ? dockData.chats : [])
+            .concat(Array.isArray(dockData.active) ? dockData.active : []);
+        const row = rows.find((r) => String(r.conversation_id || '') === wanted);
+        if (row) {
+            openPopoutFromConversation(row);
+            return true;
+        }
+        if (fallbackUrl) {
+            window.location.href = fallbackUrl;
+        }
+        return false;
+    }
+
+    window.openCommunicationDock = openCommunicationDock;
+    window.openChatConversationPopup = openChatConversationPopup;
+    window.shouldOpenChatPopupForViewport = shouldOpenChatPopupForViewport;
+
     tabButtons.forEach((btn) => {
-        btn.addEventListener('click', () => {
+        btn.addEventListener('click', async () => {
             setTabFromUserClick(btn.getAttribute('data-tab') || 'alerts');
+            await refreshChatDockSnapshotNow();
         });
     });
 
@@ -756,7 +846,10 @@
     }
     syncDockShellFromAlerts();
     refreshExpandHandleVisibility();
-    window.addEventListener('resize', refreshExpandHandleVisibility);
+    window.addEventListener('resize', () => {
+        refreshExpandHandleVisibility();
+        stackPopouts();
+    });
 
     document.addEventListener('floating-panel-opened', (e) => {
         const p = e.detail && e.detail.panel;
@@ -776,6 +869,23 @@
         });
     }
     document.addEventListener('click', function onGlobalChatTabClick(e) {
+        const launcher = e.target.closest('[data-open-chat-launcher]');
+        if (launcher && shouldOpenChatPopupForViewport() && isDesktopViewport()) {
+            e.preventDefault();
+            openCommunicationDock(launcher.getAttribute('data-open-chat-tab') || 'chats');
+            return;
+        }
+
+        const conversationLauncher = e.target.closest('[data-open-chat-conversation]');
+        if (conversationLauncher && shouldOpenChatPopupForViewport()) {
+            e.preventDefault();
+            openChatConversationPopup(
+                conversationLauncher.getAttribute('data-open-chat-conversation'),
+                conversationLauncher.getAttribute('href') || ''
+            );
+            return;
+        }
+
         const tab = e.target.closest('#chatTab');
         if (!tab) return;
         const dockOpen = !root.classList.contains('translate-x-full');
@@ -791,6 +901,7 @@
         } else {
             setDockExpanded(true);
         }
+        refreshChatDockSnapshotNow();
     });
 
     document.addEventListener('member-widget-counts-updated', () => {

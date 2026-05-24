@@ -86,10 +86,6 @@ class EnforceCardOnboarding
             }
         }
 
-        if ($name === 'matrimony.profile.wizard.marriage-fields') {
-            return true;
-        }
-
         if ($name === 'matrimony.internal.location.resolve-current') {
             return true;
         }

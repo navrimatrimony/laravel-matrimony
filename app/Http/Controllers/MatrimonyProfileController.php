@@ -9,6 +9,7 @@ use App\Models\District;
 use App\Models\EducationCategory;
 use App\Models\FieldRegistry;
 use App\Models\Interest;
+use App\Models\Location;
 use App\Models\MasterMaritalStatus;
 use App\Models\MatrimonyProfile;
 use App\Models\Message;
@@ -33,6 +34,7 @@ use App\Services\Image\PhotoUploadBatchUserMessage;
 use App\Services\Image\ProfileGalleryPhotoModerationStatus;
 use App\Services\Image\ProfilePhotoUrlService;
 use App\Services\InterestSendLimitService;
+use App\Services\Location\LocationService;
 use App\Services\Matching\MatchingPresenter;
 use App\Services\MatrimonyProfileSearchQueryService;
 use App\Services\MemberPresencePresentationService;
@@ -1481,18 +1483,32 @@ class MatrimonyProfileController extends Controller
 
         $myId = auth()->user()?->matrimonyProfile?->id;
         $viewerUserId = auth()->id();
+        $nearbyDistanceByLocation = MatrimonyProfileSearchQueryService::nearbyDistanceMapFromRequest($request);
+        $nearbySearchActive = $request->filled('nearby_location_id');
 
-        ProfileSearchRankingService::applySpotlightFirst($query);
-
-        $defaultSort = ($viewerOwnProfileId && ProfileRotationService::isEnabled()) ? 'discover' : 'latest';
+        $defaultSort = ($nearbySearchActive && $nearbyDistanceByLocation !== [])
+            ? 'nearby'
+            : (($viewerOwnProfileId && ProfileRotationService::isEnabled()) ? 'discover' : 'latest');
         $sort = (string) $request->input('sort', $defaultSort);
-        $allowedSorts = ['latest', 'age_asc', 'age_desc', 'height_asc', 'height_desc', 'discover'];
+        $allowedSorts = ['latest', 'age_asc', 'age_desc', 'height_asc', 'height_desc', 'discover', 'nearby'];
         if (! in_array($sort, $allowedSorts, true)) {
+            $sort = 'latest';
+        }
+
+        if ($sort === 'nearby' && $nearbyDistanceByLocation === []) {
             $sort = 'latest';
         }
 
         if ($sort === 'discover' && (! $myId || ! ProfileRotationService::isEnabled())) {
             $sort = 'latest';
+        }
+
+        if ($nearbyDistanceByLocation !== []) {
+            MatrimonyProfileSearchQueryService::applyNearbyDistanceSelect($query, $nearbyDistanceByLocation);
+        }
+
+        if ($sort !== 'nearby') {
+            ProfileSearchRankingService::applySpotlightFirst($query);
         }
 
         if ($sort === 'discover' && $myId && ProfileRotationService::isEnabled()) {
@@ -1507,6 +1523,10 @@ class MatrimonyProfileController extends Controller
             );
         } else {
             switch ($sort) {
+                case 'nearby':
+                    MatrimonyProfileSearchQueryService::applyNearbyOrdering($query);
+                    $query->latest('matrimony_profiles.created_at');
+                    break;
                 case 'age_asc':
                     // Younger first: more recent date_of_birth first; nulls last
                     $query->orderByRaw('CASE WHEN date_of_birth IS NULL THEN 1 ELSE 0 END ASC')
@@ -1628,6 +1648,15 @@ class MatrimonyProfileController extends Controller
                 : MasterMaritalStatus::where('key', $request->input('marital_status'))->value('id');
         }
 
+        $nearbySelectedLocationLabel = trim((string) $request->input('nearby_location_label', ''));
+        if ($request->filled('nearby_location_id')) {
+            $nearbySelectedLocation = Location::query()->find((int) $request->input('nearby_location_id'));
+            if ($nearbySelectedLocation) {
+                $nearbySelectedLocationLabel = app(LocationService::class)->getDisplayLabel($nearbySelectedLocation);
+            }
+        }
+        $nearbyRadiusKm = MatrimonyProfileSearchQueryService::nearbyRadiusFromRequest($request);
+
         return view('matrimony.profile.index', array_merge(compact(
             'profiles',
             'religions',
@@ -1638,6 +1667,8 @@ class MatrimonyProfileController extends Controller
             'maritalStatuses',
             'resolvedMaritalStatusId',
             'sort',
+            'nearbySelectedLocationLabel',
+            'nearbyRadiusKm',
             'educationCategoriesForSearch'
         ), $locationLookups, [
             'canAdvancedProfileSearch' => (bool) $request->attributes->get('advanced_profile_search', false),

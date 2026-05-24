@@ -31,6 +31,12 @@ class MemberQuickHubService
         $profile = $user->matrimonyProfile;
         $profileId = (int) $profile->id;
         $userId = (int) $user->id;
+        $canReadIncoming = false;
+        try {
+            $canReadIncoming = $this->featureUsage->canUse($userId, FeatureUsageService::FEATURE_CHAT_CAN_READ);
+        } catch (\Throwable) {
+            $canReadIncoming = false;
+        }
 
         $allConversations = $this->filterConversationsForDock($this->chatList->getAllConversations($profileId), $profile);
         $unreadConversations = $this->filterConversationsForDock($this->chatList->getUnreadConversations($profileId), $profile);
@@ -39,8 +45,8 @@ class MemberQuickHubService
         $onlineProfileIds = $this->loadOnlineProfileIdsForUser($user);
         $detailMap = $this->loadProfileDetailMap(array_values(array_unique(array_merge($conversationProfileIds, $onlineProfileIds))));
 
-        $chats = $this->mapConversationsForDock($allConversations->take(20), $detailMap);
-        $unreadChats = $this->mapConversationsForDock($unreadConversations->take(20), $detailMap);
+        $chats = $this->mapConversationsForDock($allConversations->take(20), $detailMap, $profileId, $canReadIncoming);
+        $unreadChats = $this->mapConversationsForDock($unreadConversations->take(20), $detailMap, $profileId, $canReadIncoming);
         $chatByProfileId = [];
         foreach ($chats as $row) {
             $pid = (int) ($row['profile_id'] ?? 0);
@@ -56,7 +62,7 @@ class MemberQuickHubService
             'unread' => $unreadChats,
             'active' => $activeUsers,
             'all_url' => route('chat.index'),
-            'can_read_incoming' => $this->featureUsage->canUse($userId, FeatureUsageService::FEATURE_CHAT_CAN_READ),
+            'can_read_incoming' => $canReadIncoming,
         ];
     }
 
@@ -73,13 +79,16 @@ class MemberQuickHubService
      * @param  array<int, array<string, string>>  $detailMap
      * @return array<int, array<string, mixed>>
      */
-    private function mapConversationsForDock(iterable $conversations, array $detailMap): array
+    private function mapConversationsForDock(iterable $conversations, array $detailMap, int $viewerProfileId, bool $canReadIncoming): array
     {
-        return collect($conversations)->map(function ($conversation) use ($detailMap) {
+        return collect($conversations)->map(function ($conversation) use ($detailMap, $viewerProfileId, $canReadIncoming) {
             $last = $conversation->lastMessage;
             $preview = 'No messages yet';
             if ($last) {
-                if (($last->message_type ?? 'text') === 'image') {
+                $incomingLocked = (int) ($last->sender_profile_id ?? 0) !== $viewerProfileId && ! $canReadIncoming;
+                if ($incomingLocked) {
+                    $preview = (string) __('chat_ui.read_locked_preview');
+                } elseif (($last->message_type ?? 'text') === 'image') {
                     $preview = 'Image';
                 } else {
                     $preview = Str::limit(trim((string) ($last->body_text ?? '')), 45);
@@ -346,13 +355,14 @@ class MemberQuickHubService
             'date_of_birth',
             'height_cm',
             'highest_education',
-            'city_id',
-            'taluka_id',
-            'district_id',
-            'state_id',
             'religion_id',
             'caste_id',
         ];
+        foreach (['city_id', 'taluka_id', 'district_id', 'state_id'] as $column) {
+            if (Schema::hasColumn((new MatrimonyProfile)->getTable(), $column)) {
+                $select[] = $column;
+            }
+        }
         // Some deployments dropped the physical column; accessor can still derive it.
         if (Schema::hasColumn((new MatrimonyProfile)->getTable(), 'occupation_title')) {
             $select[] = 'occupation_title';

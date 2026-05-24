@@ -4,7 +4,13 @@
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
 
-        <title>नवरी मिळे नवऱ्याला – Navri Mile Navryala | Marathi Matrimony</title>
+        @php
+            $siteIdentity = app(\App\Services\SiteIdentityService::class);
+            $siteName = $siteIdentity->get('site_name', 'नवरी मिळे नवऱ्याला');
+            $siteTagline = $siteIdentity->get('site_tagline', 'Navri Mile Navryala | Marathi Matrimony');
+        @endphp
+        <title>{{ $siteName }}{{ $siteTagline ? ' – '.$siteTagline : '' }}</title>
+        @include('layouts.partials.site-identity-head')
 
         <link rel="preconnect" href="https://fonts.bunny.net">
         <link href="https://fonts.bunny.net/css?family=instrument-sans:400,500,600" rel="stylesheet" />
@@ -33,6 +39,9 @@
             $addressDistricts = $addressDistricts ?? collect();
             $defaultCountry = $defaultCountry ?? null;
             $homepageImages = $homepageImages ?? [];
+            $siteIdentitySettings = $siteIdentity->all();
+            $logoLightUrl = $siteIdentity->assetUrl('logo_light');
+            $logoDarkUrl = $siteIdentity->assetUrl('logo_dark');
             $heroPath = ! empty($homepageImages['hero'] ?? null)
                 ? $homepageImages['hero']
                 : 'images/matrimonial-hero.jpg';
@@ -43,8 +52,15 @@
         <header class="w-full bg-white dark:bg-[#1a1a1a] border-b border-[#ddd] dark:border-[#333] sticky top-0 z-10">
             <div class="max-w-6xl mx-auto px-4 sm:px-6 py-3 flex items-center justify-between gap-4 flex-wrap">
                 <a href="{{ url('/') }}" class="flex items-center gap-2">
-                    <span class="font-devanagari text-xl font-bold text-[var(--brand-red)]">नवरी मिळे नवऱ्याला</span>
-                    <span class="text-sm text-[var(--brand-red-dark)] font-medium hidden sm:inline">Navri Mile Navryala</span>
+                    @if ($logoLightUrl || $logoDarkUrl)
+                        <img src="{{ $logoLightUrl ?: $logoDarkUrl }}" alt="{{ $siteName }}" class="h-10 w-auto max-w-[12rem] object-contain dark:hidden">
+                        <img src="{{ $logoDarkUrl ?: $logoLightUrl }}" alt="{{ $siteName }}" class="hidden h-10 w-auto max-w-[12rem] object-contain dark:block">
+                    @else
+                        <span class="font-devanagari text-xl font-bold text-[var(--brand-red)]">{{ $siteName }}</span>
+                    @endif
+                    @if ($siteTagline)
+                        <span class="text-sm text-[var(--brand-red-dark)] font-medium hidden sm:inline">{{ $siteTagline }}</span>
+                    @endif
                 </a>
                 @if (Route::has('login'))
                     <nav class="flex items-center gap-2 sm:gap-3 flex-wrap justify-end">
@@ -85,8 +101,8 @@
         <section class="w-full py-8 lg:py-12 px-4 sm:px-6 bg-[#f5f5f5] dark:bg-[#111]">
             <div class="max-w-5xl mx-auto">
                 <div class="text-center mb-8">
-                    <h1 class="text-2xl sm:text-3xl lg:text-4xl font-bold text-[var(--brand-red)] mb-2 font-devanagari">गंभीर विवाहसंबंधासाठी — Marathi matrimony</h1>
-                    <p class="text-[#555] dark:text-[#aaa] text-base sm:text-lg max-w-2xl mx-auto">For individuals and families seeking compatible matches with preference-based search and structured profile information.</p>
+                    <h1 class="text-2xl sm:text-3xl lg:text-4xl font-bold text-[var(--brand-red)] mb-2 font-devanagari">{{ $siteName }}</h1>
+                    <p class="text-[#555] dark:text-[#aaa] text-base sm:text-lg max-w-2xl mx-auto">{{ $siteTagline ?: 'For individuals and families seeking compatible matches with preference-based search and structured profile information.' }}</p>
                 </div>
 
                 <div class="flex flex-col-reverse lg:flex-row shadow-lg rounded-lg overflow-hidden bg-white dark:bg-[#1a1a1a] border border-[#e0e0e0] dark:border-[#333]">
@@ -243,9 +259,31 @@
         <footer class="w-full mt-auto py-10 px-4 sm:px-6 bg-[#1a1a1a] text-[#bbb] text-sm">
             <div class="max-w-5xl mx-auto flex flex-col sm:flex-row justify-between gap-8">
                 <div>
-                    <p class="font-devanagari text-white font-semibold mb-2">नवरी मिळे नवऱ्याला</p>
+                    <p class="font-devanagari text-white font-semibold mb-2">{{ $siteIdentitySettings['company_name'] ?: $siteName }}</p>
                     <p class="text-xs text-[#888] max-w-md">This platform is intended solely for matrimonial matchmaking. We do not guarantee any particular outcome; members are responsible for their own verification and decisions.</p>
+                    @if (! empty($siteIdentitySettings['address']))
+                        <p class="mt-3 text-xs text-[#888] max-w-md whitespace-pre-line">{{ $siteIdentitySettings['address'] }}</p>
+                    @endif
                 </div>
+                @if (! empty($siteIdentitySettings['support_email']) || ! empty($siteIdentitySettings['sales_email']) || ! empty($siteIdentitySettings['info_email']) || ! empty($siteIdentitySettings['primary_phone']) || ! empty($siteIdentitySettings['secondary_phone']))
+                    <div class="flex flex-col gap-2">
+                        <span class="text-[#888] text-xs uppercase tracking-wide">Contact</span>
+                        @foreach ([
+                            'support_email' => 'Support',
+                            'sales_email' => 'Sales',
+                            'info_email' => 'Info',
+                        ] as $field => $label)
+                            @if (! empty($siteIdentitySettings[$field]))
+                                <a href="mailto:{{ $siteIdentitySettings[$field] }}" class="text-white hover:underline">{{ $label }}: {{ $siteIdentitySettings[$field] }}</a>
+                            @endif
+                        @endforeach
+                        @foreach (['primary_phone', 'secondary_phone'] as $field)
+                            @if (! empty($siteIdentitySettings[$field]))
+                                <a href="tel:{{ preg_replace('/\s+/', '', $siteIdentitySettings[$field]) }}" class="text-white hover:underline">{{ $siteIdentitySettings[$field] }}</a>
+                            @endif
+                        @endforeach
+                    </div>
+                @endif
                 <div class="flex flex-col gap-2">
                     <span class="text-[#888] text-xs uppercase tracking-wide">Navigate</span>
                     <a href="{{ route('matrimony.profiles.index') }}" class="text-white hover:underline">Partner search</a>
@@ -260,8 +298,24 @@
                     @endauth
                 </div>
             </div>
+            @php
+                $socialLinks = array_filter([
+                    'Facebook' => $siteIdentitySettings['facebook_url'] ?? null,
+                    'Instagram' => $siteIdentitySettings['instagram_url'] ?? null,
+                    'YouTube' => $siteIdentitySettings['youtube_url'] ?? null,
+                    'LinkedIn' => $siteIdentitySettings['linkedin_url'] ?? null,
+                    'X' => $siteIdentitySettings['x_url'] ?? null,
+                ]);
+            @endphp
+            @if (! empty($socialLinks))
+                <div class="max-w-5xl mx-auto mt-6 flex flex-wrap gap-4 text-xs">
+                    @foreach ($socialLinks as $label => $url)
+                        <a href="{{ $url }}" target="_blank" rel="noopener noreferrer" class="text-white hover:underline">{{ $label }}</a>
+                    @endforeach
+                </div>
+            @endif
             <div class="max-w-5xl mx-auto mt-8 pt-6 border-t border-[#333] text-xs text-[#777]">
-                &copy; {{ date('Y') }} Navri Mile Navryala. All rights reserved.
+                {{ $siteIdentity->copyrightText() }}
             </div>
         </footer>
 

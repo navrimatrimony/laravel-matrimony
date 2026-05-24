@@ -8,6 +8,7 @@ use App\Models\Plan;
 use App\Models\PlanTerm;
 use App\Models\ProfileView;
 use App\Models\User;
+use App\Notifications\ProfileViewedNotification;
 use App\Services\Profile\ProfileCanonicalResidenceService;
 use App\Services\SubscriptionService;
 use Database\Seeders\MasterLookupSeeder;
@@ -107,6 +108,9 @@ class WhoViewedEntitlementTest extends TestCase
         $this->assertArrayHasKey('viewed_summary', $cards[0]);
         $this->assertArrayHasKey('photo_url', $cards[0]);
         $this->assertArrayHasKey('avatar_style', $cards[0]);
+        $this->assertArrayHasKey('blur_photo_class', $cards[0]);
+        $this->assertArrayHasKey('accent_line', $cards[0]);
+        $this->assertArrayHasKey('match_line', $cards[0]);
         $this->assertIsArray($cards[0]['lines']);
         $this->assertArrayNotHasKey('viewed_at', $cards[0]);
         $this->assertArrayNotHasKey('viewer_profile_id', $cards[0]);
@@ -195,6 +199,15 @@ class WhoViewedEntitlementTest extends TestCase
             ->assertJsonPath('overflow_count', 1)
             ->assertJsonPath('preview_limit', 5);
 
+        $res->assertJsonStructure([
+            'pagination' => [
+                'current_page',
+                'per_page',
+                'total',
+                'last_page',
+            ],
+        ]);
+
         $recent = $res->json('recent');
         $this->assertIsArray($recent);
         $this->assertCount(5, $recent);
@@ -207,6 +220,71 @@ class WhoViewedEntitlementTest extends TestCase
         $this->assertSame('teaser', $rows[5]['mode']);
         $this->assertArrayHasKey('teaser', $rows[5]);
         $this->assertArrayHasKey('headline', $rows[5]['teaser']);
+    }
+
+    /**
+     * Partial who-viewed: full slots go to the first N distinct viewers by earliest first view in the window,
+     * not the N most recently active viewers (so new viewers stay blurred until the plan window resets).
+     */
+    public function test_partial_who_viewed_full_slots_are_fifo_by_first_view_not_latest(): void
+    {
+        $this->seed(SubscriptionPlansSeeder::class);
+        $this->seed(PlanStandardFeatureKeysSeeder::class);
+
+        $owner = User::factory()->create();
+        $ownerProfile = $this->createActiveProfileWithResidence($owner);
+
+        $free = Plan::query()->where('slug', 'free_male')->firstOrFail();
+        app(SubscriptionService::class)->subscribe($owner, $free, null, null);
+
+        $viewerProfiles = [];
+        for ($i = 0; $i < 6; $i++) {
+            $u = User::factory()->create();
+            $viewerProfiles[] = $this->createActiveProfileWithResidence($u);
+        }
+
+        foreach ($viewerProfiles as $i => $vp) {
+            $pv = ProfileView::query()->create([
+                'viewer_profile_id' => $vp->id,
+                'viewed_profile_id' => $ownerProfile->id,
+            ]);
+            // Stay inside the calendar-month preview window (avoid clipping at month start).
+            $at = now()->subHours(72 - ($i * 8));
+            DB::table('profile_views')->where('id', $pv->id)->update([
+                'created_at' => $at,
+                'updated_at' => $at,
+            ]);
+        }
+
+        $oldestFirst = $viewerProfiles[0];
+        $newestFirst = $viewerProfiles[5];
+
+        $res = $this->actingAs($owner)
+            ->getJson(route('who-viewed.index'))
+            ->assertOk()
+            ->assertJsonPath('preview_limit', 5)
+            ->assertJsonPath('overflow_count', 1);
+
+        $rows = $res->json('rows');
+        $this->assertCount(6, $rows);
+        $this->assertSame('full', $rows[0]['mode']);
+        $this->assertSame((int) $oldestFirst->id, (int) ($rows[0]['viewer_profile_id'] ?? 0));
+        $this->assertSame('teaser', $rows[5]['mode']);
+        $this->assertArrayHasKey('teaser', $rows[5]);
+
+        $recent = $res->json('recent');
+        $this->assertCount(5, $recent);
+        $recentIds = array_map('intval', array_column($recent, 'viewer_profile_id'));
+        $this->assertContains((int) $oldestFirst->id, $recentIds);
+        $this->assertNotContains((int) $newestFirst->id, $recentIds);
+
+        $fullIds = [];
+        foreach (array_slice($rows, 0, 5) as $r) {
+            $this->assertSame('full', $r['mode']);
+            $fullIds[] = (int) ($r['viewer_profile_id'] ?? 0);
+        }
+        $this->assertContains((int) $oldestFirst->id, $fullIds);
+        $this->assertNotContains((int) $newestFirst->id, $fullIds);
     }
 
     public function test_gold_paid_includes_very_old_views_with_null_window_days(): void
@@ -289,5 +367,94 @@ class WhoViewedEntitlementTest extends TestCase
             ->get(route('matrimony.profile.show', $ownerProfile->id))
             ->assertOk()
             ->assertSee(__('nav.who_viewed_me'), false);
+    }
+
+    public function test_profile_viewed_notification_redacts_when_who_viewed_fully_locked(): void
+    {
+        $this->seed(SubscriptionPlansSeeder::class);
+        $this->seed(PlanStandardFeatureKeysSeeder::class);
+
+        $owner = User::factory()->create();
+        $viewerUser = User::factory()->create();
+        $this->createActiveProfileWithResidence($owner);
+        $viewerProfile = $this->createActiveProfileWithResidence($viewerUser);
+
+        $n = new ProfileViewedNotification($viewerProfile);
+        $payload = $n->toArray($owner);
+
+        $this->assertFalse($payload['revealed']);
+        $this->assertArrayNotHasKey('viewer_profile_id', $payload);
+        $this->assertSame(__('who_viewed.notification_profile_viewed_anonymous'), $payload['message']);
+        $this->assertNotEmpty($payload['viewer_dedupe_token'] ?? '');
+        $this->assertIsArray($payload['teaser'] ?? null);
+        $this->assertArrayHasKey('headline', $payload['teaser']);
+        $this->assertArrayHasKey('lines', $payload['teaser']);
+        $this->assertArrayHasKey('viewed_summary', $payload['teaser']);
+        $this->assertArrayHasKey('photo_url', $payload['teaser']);
+        $this->assertArrayHasKey('avatar_style', $payload['teaser']);
+        $this->assertArrayHasKey('blur_photo_class', $payload['teaser']);
+    }
+
+    public function test_profile_viewed_notification_reveals_first_fifo_viewer_on_free_plan(): void
+    {
+        $this->seed(SubscriptionPlansSeeder::class);
+        $this->seed(PlanStandardFeatureKeysSeeder::class);
+
+        $owner = User::factory()->create();
+        $viewerUser = User::factory()->create();
+        $ownerProfile = $this->createActiveProfileWithResidence($owner);
+        $viewerProfile = $this->createActiveProfileWithResidence($viewerUser);
+
+        $free = Plan::query()->where('slug', 'free_male')->firstOrFail();
+        app(SubscriptionService::class)->subscribe($owner, $free, null, null);
+
+        ProfileView::query()->create([
+            'viewer_profile_id' => $viewerProfile->id,
+            'viewed_profile_id' => $ownerProfile->id,
+        ]);
+
+        $n = new ProfileViewedNotification($viewerProfile);
+        $payload = $n->toArray($owner);
+
+        $this->assertTrue($payload['revealed']);
+        $this->assertSame($viewerProfile->id, $payload['viewer_profile_id']);
+        $this->assertStringContainsString('viewed your profile', (string) $payload['message']);
+    }
+
+    public function test_profile_viewed_notification_redacts_sixth_distinct_viewer_on_free_plan_fifo(): void
+    {
+        $this->seed(SubscriptionPlansSeeder::class);
+        $this->seed(PlanStandardFeatureKeysSeeder::class);
+
+        $owner = User::factory()->create();
+        $ownerProfile = $this->createActiveProfileWithResidence($owner);
+
+        $free = Plan::query()->where('slug', 'free_male')->firstOrFail();
+        app(SubscriptionService::class)->subscribe($owner, $free, null, null);
+
+        $viewerProfiles = [];
+        for ($i = 0; $i < 6; $i++) {
+            $u = User::factory()->create();
+            $viewerProfiles[] = $this->createActiveProfileWithResidence($u);
+        }
+
+        foreach ($viewerProfiles as $i => $vp) {
+            $pv = ProfileView::query()->create([
+                'viewer_profile_id' => $vp->id,
+                'viewed_profile_id' => $ownerProfile->id,
+            ]);
+            $at = now()->subHours(72 - ($i * 8));
+            DB::table('profile_views')->where('id', $pv->id)->update([
+                'created_at' => $at,
+                'updated_at' => $at,
+            ]);
+        }
+
+        $sixthViewer = $viewerProfiles[5];
+        $n = new ProfileViewedNotification($sixthViewer);
+        $payload = $n->toArray($owner);
+
+        $this->assertFalse($payload['revealed']);
+        $this->assertArrayNotHasKey('viewer_profile_id', $payload);
     }
 }

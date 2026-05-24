@@ -101,8 +101,14 @@
 
         @if ($isReceived)
             @include('interests._panel-received')
+            @if ($receivedInterests instanceof \Illuminate\Contracts\Pagination\Paginator && $receivedInterests->hasPages())
+                <div class="mt-8">{{ $receivedInterests->withQueryString()->links() }}</div>
+            @endif
         @else
             @include('interests._panel-sent')
+            @if ($sentInterests instanceof \Illuminate\Contracts\Pagination\Paginator && $sentInterests->hasPages())
+                <div class="mt-8">{{ $sentInterests->withQueryString()->links() }}</div>
+            @endif
         @endif
     </div>
 </div>

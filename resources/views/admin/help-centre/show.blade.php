@@ -9,7 +9,7 @@
             <p class="mt-1 text-sm text-gray-600">User: {{ $ticket->user?->name ?: 'Unknown' }} (ID #{{ (int) $ticket->user_id }})</p>
         </div>
         <span class="inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold {{ $ticket->status === 'resolved' ? 'bg-emerald-100 text-emerald-900' : ($ticket->status === 'open' ? 'bg-amber-100 text-amber-900' : 'bg-sky-100 text-sky-900') }}">
-            {{ $ticket->status }}
+            {{ $ticket->status === 'auto_resolved' ? 'answered_by_bot' : $ticket->status }}
         </span>
     </div>
 
@@ -53,7 +53,7 @@
                 <p><strong>Resolved at:</strong> {{ $wf?->resolved_at?->toDayDateTimeString() ?: '—' }}</p>
             </div>
 
-            @if ($ticket->status !== 'resolved')
+            @if ($ticket->status === 'open')
                 <form method="POST" action="{{ route('admin.help-centre.tickets.resolve', $ticket) }}" class="mt-4">
                     @csrf
                     <button type="submit" class="w-full rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700">Mark resolved</button>

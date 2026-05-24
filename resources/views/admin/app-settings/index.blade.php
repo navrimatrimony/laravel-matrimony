@@ -39,14 +39,21 @@
             Only super_admin can change Data Engine fix-mode safety lock.
         </div>
     @endif
+    @if (! ($canManageSiteIdentitySettings ?? false))
+        <div class="mb-4 rounded-lg bg-amber-50 text-amber-900 dark:bg-amber-950/40 dark:text-amber-100 px-4 py-3 text-sm border border-amber-200 dark:border-amber-800">
+            Only super_admin can change branding, company, contact, and social settings.
+        </div>
+    @endif
 
-    <form method="POST" action="{{ route('admin.app-settings.update') }}" class="space-y-6">
+    <form method="POST" action="{{ route('admin.app-settings.update') }}" enctype="multipart/form-data" novalidate class="space-y-6">
         @csrf
 
         <div class="border-b border-gray-200 dark:border-gray-700">
             <nav class="-mb-px flex flex-wrap gap-4" aria-label="App settings sections">
                 <button type="button" @click="tab='general'" :class="tab==='general' ? 'border-indigo-600 text-indigo-600 dark:border-indigo-400 dark:text-indigo-300' : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200'" class="border-b-2 px-1 py-3 text-sm font-semibold transition">General</button>
                 <button type="button" @click="tab='dashboard'" :class="tab==='dashboard' ? 'border-indigo-600 text-indigo-600 dark:border-indigo-400 dark:text-indigo-300' : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200'" class="border-b-2 px-1 py-3 text-sm font-semibold transition">Dashboard UX</button>
+                <button type="button" @click="tab='branding'" :class="tab==='branding' ? 'border-indigo-600 text-indigo-600 dark:border-indigo-400 dark:text-indigo-300' : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200'" class="border-b-2 px-1 py-3 text-sm font-semibold transition">Branding</button>
+                <button type="button" @click="tab='company'" :class="tab==='company' ? 'border-indigo-600 text-indigo-600 dark:border-indigo-400 dark:text-indigo-300' : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200'" class="border-b-2 px-1 py-3 text-sm font-semibold transition">Company & Contact</button>
                 <button type="button" @click="tab='monitoring'" :class="tab==='monitoring' ? 'border-indigo-600 text-indigo-600 dark:border-indigo-400 dark:text-indigo-300' : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200'" class="border-b-2 px-1 py-3 text-sm font-semibold transition">Payment Monitoring</button>
                 <button type="button" @click="tab='billing'" :class="tab==='billing' ? 'border-indigo-600 text-indigo-600 dark:border-indigo-400 dark:text-indigo-300' : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200'" class="border-b-2 px-1 py-3 text-sm font-semibold transition">Billing & Invoice</button>
             </nav>
@@ -83,24 +90,64 @@
                 <p class="text-xs text-gray-500 dark:text-gray-400 mt-2">Recommended ON for cleaner small-screen experience.</p>
             </div>
 
+            <div class="p-4 bg-gray-50 dark:bg-gray-700/30 rounded-lg border border-gray-200 dark:border-gray-600">
+                <h2 class="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-4">Member side tabs</h2>
+                <div class="space-y-4">
+                    <label class="admin-toggle">
+                        <input type="checkbox" name="member_help_centre_floating_tab_enabled" value="1" {{ ($memberHelpCentreFloatingTabEnabled ?? false) ? 'checked' : '' }}>
+                        <span class="toggle-track"><span class="toggle-thumb"></span></span>
+                        <span class="toggle-label {{ ($memberHelpCentreFloatingTabEnabled ?? false) ? 'on' : 'off' }}">Show Help centre floating tab</span>
+                    </label>
+
+                    <label class="admin-toggle">
+                        <input type="checkbox" name="member_communication_floating_tab_enabled" value="1" {{ ($memberCommunicationFloatingTabEnabled ?? false) ? 'checked' : '' }}>
+                        <span class="toggle-track"><span class="toggle-thumb"></span></span>
+                        <span class="toggle-label {{ ($memberCommunicationFloatingTabEnabled ?? false) ? 'on' : 'off' }}">Show Communication floating tab</span>
+                    </label>
+                </div>
+                <p class="text-sm text-gray-600 dark:text-gray-300 mt-3 font-medium">Default OFF. हे फक्त user screen वरील side tabs दाखवायचे की नाही ते control करते.</p>
+                <p class="text-xs text-gray-500 dark:text-gray-400 mt-2">OFF असले तरी Communication menu मधून वापरता येते. Help centre tab OFF असेल तर user dropdown मध्ये Help centre link दिसेल.</p>
+            </div>
+
+            <div class="p-4 bg-gray-50 dark:bg-gray-700/30 rounded-lg border border-gray-200 dark:border-gray-600">
+                <h2 class="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-4">Chat open behaviour</h2>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-xs mb-1">Desktop chat click</label>
+                        <select name="member_chat_desktop_open_mode" class="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm text-gray-900 dark:text-gray-100">
+                            <option value="popup" @selected(old('member_chat_desktop_open_mode', $memberChatDesktopOpenMode ?? 'popup') === 'popup')>Open in popup</option>
+                            <option value="full_page" @selected(old('member_chat_desktop_open_mode', $memberChatDesktopOpenMode ?? 'popup') === 'full_page')>Open full page</option>
+                        </select>
+                        <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Recommended: popup. Direct chat URL still works as a full-page fallback.</p>
+                    </div>
+                    <div>
+                        <label class="block text-xs mb-1">Mobile chat click</label>
+                        <select name="member_chat_mobile_open_mode" class="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm text-gray-900 dark:text-gray-100">
+                            <option value="full_page" @selected(old('member_chat_mobile_open_mode', $memberChatMobileOpenMode ?? 'full_page') === 'full_page')>Open full page</option>
+                            <option value="bottom_sheet" @selected(old('member_chat_mobile_open_mode', $memberChatMobileOpenMode ?? 'full_page') === 'bottom_sheet')>Open bottom sheet</option>
+                        </select>
+                        <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Full page is calmer for long chats. Bottom sheet keeps the current screen behind the chat.</p>
+                    </div>
+                </div>
+            </div>
+
             <div class="p-4 bg-gray-50 dark:bg-gray-700/30 rounded-lg border border-gray-200 dark:border-gray-600" x-data="{ profileLockBlurStrengthUi: {{ (int) old('profile_view_lock_blur_strength', $profileViewLockBlurStrength ?? 78) }} }">
                 <h2 class="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-3">Profile lock experience</h2>
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
                     <div>
                         <label class="block text-xs mb-1">Start blur from section</label>
-                        @php($selectedProfileLockStart = old('profile_view_lock_start_section', $profileViewLockStartSection ?? 'family'))
                         <select name="profile_view_lock_start_section" class="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm text-gray-900 dark:text-gray-100">
-                            <option value="basic_info" {{ $selectedProfileLockStart === 'basic_info' ? 'selected' : '' }}>Basic information</option>
-                            <option value="physical" {{ $selectedProfileLockStart === 'physical' ? 'selected' : '' }}>Physical</option>
-                            <option value="education_career" {{ $selectedProfileLockStart === 'education_career' ? 'selected' : '' }}>Education &amp; career</option>
-                            <option value="family" {{ $selectedProfileLockStart === 'family' ? 'selected' : '' }}>Family details</option>
-                            <option value="siblings_detail" {{ $selectedProfileLockStart === 'siblings_detail' ? 'selected' : '' }}>Siblings details</option>
-                            <option value="extended_family" {{ $selectedProfileLockStart === 'extended_family' ? 'selected' : '' }}>Extended family</option>
-                            <option value="alliance" {{ $selectedProfileLockStart === 'alliance' ? 'selected' : '' }}>Alliance network</option>
-                            <option value="property" {{ $selectedProfileLockStart === 'property' ? 'selected' : '' }}>Property</option>
-                            <option value="horoscope" {{ $selectedProfileLockStart === 'horoscope' ? 'selected' : '' }}>Horoscope</option>
-                            <option value="partner_preferences" {{ $selectedProfileLockStart === 'partner_preferences' ? 'selected' : '' }}>Partner preferences</option>
-                            <option value="additional" {{ $selectedProfileLockStart === 'additional' ? 'selected' : '' }}>Additional details</option>
+                            <option value="basic_info" @selected(old('profile_view_lock_start_section', $profileViewLockStartSection ?? 'family') === 'basic_info')>Basic information</option>
+                            <option value="physical" @selected(old('profile_view_lock_start_section', $profileViewLockStartSection ?? 'family') === 'physical')>Physical</option>
+                            <option value="education_career" @selected(old('profile_view_lock_start_section', $profileViewLockStartSection ?? 'family') === 'education_career')>Education &amp; career</option>
+                            <option value="family" @selected(old('profile_view_lock_start_section', $profileViewLockStartSection ?? 'family') === 'family')>Family details</option>
+                            <option value="siblings_detail" @selected(old('profile_view_lock_start_section', $profileViewLockStartSection ?? 'family') === 'siblings_detail')>Siblings details</option>
+                            <option value="extended_family" @selected(old('profile_view_lock_start_section', $profileViewLockStartSection ?? 'family') === 'extended_family')>Extended family</option>
+                            <option value="alliance" @selected(old('profile_view_lock_start_section', $profileViewLockStartSection ?? 'family') === 'alliance')>Alliance network</option>
+                            <option value="property" @selected(old('profile_view_lock_start_section', $profileViewLockStartSection ?? 'family') === 'property')>Property</option>
+                            <option value="horoscope" @selected(old('profile_view_lock_start_section', $profileViewLockStartSection ?? 'family') === 'horoscope')>Horoscope</option>
+                            <option value="partner_preferences" @selected(old('profile_view_lock_start_section', $profileViewLockStartSection ?? 'family') === 'partner_preferences')>Partner preferences</option>
+                            <option value="additional" @selected(old('profile_view_lock_start_section', $profileViewLockStartSection ?? 'family') === 'additional')>Additional details</option>
                         </select>
                     </div>
                     <div>
@@ -159,10 +206,9 @@
                     <div>
                         <label class="block text-xs mb-1">Auto-disable after</label>
                         <select name="data_engine_fix_mode_duration" class="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm text-gray-900 dark:text-gray-100">
-                            @php($selectedFixDuration = old('data_engine_fix_mode_duration', $dataEngineFixModeDuration ?? 'forever'))
-                            <option value="2_hours" {{ $selectedFixDuration === '2_hours' ? 'selected' : '' }}>2 hours</option>
-                            <option value="1_day" {{ $selectedFixDuration === '1_day' ? 'selected' : '' }}>1 day</option>
-                            <option value="forever" {{ $selectedFixDuration === 'forever' ? 'selected' : '' }}>Forever (manual off)</option>
+                            <option value="2_hours" @selected(old('data_engine_fix_mode_duration', $dataEngineFixModeDuration ?? 'forever') === '2_hours')>2 hours</option>
+                            <option value="1_day" @selected(old('data_engine_fix_mode_duration', $dataEngineFixModeDuration ?? 'forever') === '1_day')>1 day</option>
+                            <option value="forever" @selected(old('data_engine_fix_mode_duration', $dataEngineFixModeDuration ?? 'forever') === 'forever')>Forever (manual off)</option>
                         </select>
                     </div>
                     <div>
@@ -199,6 +245,116 @@
                     </div>
                 </div>
             </div>
+        </div>
+
+        <div x-show="tab === 'branding'" x-cloak class="space-y-6">
+            <fieldset @disabled(!($canManageSiteIdentitySettings ?? false)) class="p-4 bg-gray-50 dark:bg-gray-700/30 rounded-lg border border-gray-200 dark:border-gray-600 space-y-5 disabled:opacity-60">
+                <div>
+                    <h2 class="text-sm font-semibold text-gray-900 dark:text-gray-100">Basic branding settings</h2>
+                    <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Stored once in admin settings and reused by public pages, layouts, mail/SEO surfaces, and theme-aware logos.</p>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-xs mb-1">Site name</label>
+                        <input type="text" name="site_name" value="{{ old('site_name', $siteIdentity['site_name'] ?? '') }}" class="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm text-gray-900 dark:text-gray-100">
+                    </div>
+                    <div>
+                        <label class="block text-xs mb-1">Tagline / Subtitle</label>
+                        <input type="text" name="site_tagline" value="{{ old('site_tagline', $siteIdentity['site_tagline'] ?? '') }}" class="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm text-gray-900 dark:text-gray-100">
+                    </div>
+                    <div class="md:col-span-2">
+                        <label class="block text-xs mb-1">Footer copyright text</label>
+                        <input type="text" name="footer_copyright_text" value="{{ old('footer_copyright_text', $siteIdentity['footer_copyright_text'] ?? '') }}" class="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm text-gray-900 dark:text-gray-100">
+                        <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Use <code>{year}</code> where the current year should appear.</p>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    @foreach ([
+                        'logo_light' => 'Logo (Light version)',
+                        'logo_dark' => 'Logo (Dark version)',
+                        'favicon' => 'Favicon',
+                        'admin_panel_logo' => 'Admin Panel Logo',
+                        'default_seo_image' => 'Default SEO Image (Open Graph image)',
+                    ] as $field => $label)
+                        <div class="rounded-lg border border-gray-200 bg-white p-3 dark:border-gray-600 dark:bg-gray-800">
+                            <label class="block text-xs font-semibold text-gray-700 dark:text-gray-200 mb-2">{{ $label }}</label>
+                            @if (! empty($siteIdentityImageUrls[$field] ?? null))
+                                <img src="{{ $siteIdentityImageUrls[$field] }}" alt="" class="mb-3 h-14 max-w-full rounded border border-gray-200 bg-white object-contain p-1 dark:border-gray-600">
+                            @endif
+                            <input type="file" name="{{ $field }}" accept="{{ $field === 'favicon' ? '.ico,image/*' : 'image/*' }}" class="block w-full text-xs text-gray-700 dark:text-gray-200">
+                        </div>
+                    @endforeach
+                    <div class="rounded-lg border border-gray-200 bg-white p-3 dark:border-gray-600 dark:bg-gray-800">
+                        <label class="block text-xs font-semibold text-gray-700 dark:text-gray-200 mb-2">Success stories image</label>
+                        @if (! empty($successStoriesImageUrl ?? null))
+                            <img src="{{ $successStoriesImageUrl }}" alt="" class="mb-3 h-14 max-w-full rounded border border-gray-200 bg-white object-contain p-1 dark:border-gray-600">
+                        @endif
+                        <input type="file" name="success_stories_image" accept="image/*" class="block w-full text-xs text-gray-700 dark:text-gray-200">
+                        <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Uses the existing homepage success stories section, so no duplicate storage is created.</p>
+                    </div>
+                </div>
+            </fieldset>
+        </div>
+
+        <div x-show="tab === 'company'" x-cloak class="space-y-6">
+            <fieldset @disabled(!($canManageSiteIdentitySettings ?? false)) class="p-4 bg-gray-50 dark:bg-gray-700/30 rounded-lg border border-gray-200 dark:border-gray-600 space-y-5 disabled:opacity-60">
+                <div>
+                    <h2 class="text-sm font-semibold text-gray-900 dark:text-gray-100">Contact & company info</h2>
+                    <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">This is the central source for company details, footer contact blocks, social links, and map embed links.</p>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-xs mb-1">Company name</label>
+                        <input type="text" name="company_name" value="{{ old('company_name', $siteIdentity['company_name'] ?? '') }}" class="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm text-gray-900 dark:text-gray-100">
+                    </div>
+                    <div>
+                        <label class="block text-xs mb-1">Support email</label>
+                        <input type="email" name="support_email" value="{{ old('support_email', $siteIdentity['support_email'] ?? '') }}" class="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm text-gray-900 dark:text-gray-100">
+                    </div>
+                    <div>
+                        <label class="block text-xs mb-1">Sales email</label>
+                        <input type="email" name="sales_email" value="{{ old('sales_email', $siteIdentity['sales_email'] ?? '') }}" class="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm text-gray-900 dark:text-gray-100">
+                    </div>
+                    <div>
+                        <label class="block text-xs mb-1">Info email</label>
+                        <input type="email" name="info_email" value="{{ old('info_email', $siteIdentity['info_email'] ?? '') }}" class="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm text-gray-900 dark:text-gray-100">
+                    </div>
+                    <div>
+                        <label class="block text-xs mb-1">Primary phone</label>
+                        <input type="text" name="primary_phone" value="{{ old('primary_phone', $siteIdentity['primary_phone'] ?? '') }}" class="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm text-gray-900 dark:text-gray-100">
+                    </div>
+                    <div>
+                        <label class="block text-xs mb-1">Secondary phone</label>
+                        <input type="text" name="secondary_phone" value="{{ old('secondary_phone', $siteIdentity['secondary_phone'] ?? '') }}" class="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm text-gray-900 dark:text-gray-100">
+                    </div>
+                    <div class="md:col-span-2">
+                        <label class="block text-xs mb-1">Address</label>
+                        <textarea name="address" rows="3" class="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm text-gray-900 dark:text-gray-100">{{ old('address', $siteIdentity['address'] ?? '') }}</textarea>
+                    </div>
+                    <div class="md:col-span-2">
+                        <label class="block text-xs mb-1">Google Maps embed link</label>
+                        <input type="url" name="google_maps_embed_link" value="{{ old('google_maps_embed_link', $siteIdentity['google_maps_embed_link'] ?? '') }}" class="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm text-gray-900 dark:text-gray-100">
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    @foreach ([
+                        'facebook_url' => 'Facebook',
+                        'instagram_url' => 'Instagram',
+                        'youtube_url' => 'YouTube',
+                        'linkedin_url' => 'LinkedIn',
+                        'x_url' => 'X / Twitter',
+                    ] as $field => $label)
+                        <div>
+                            <label class="block text-xs mb-1">{{ $label }}</label>
+                            <input type="url" name="{{ $field }}" value="{{ old($field, $siteIdentity[$field] ?? '') }}" class="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm text-gray-900 dark:text-gray-100">
+                        </div>
+                    @endforeach
+                </div>
+            </fieldset>
         </div>
 
         <div x-show="tab === 'monitoring'" x-cloak class="space-y-6">

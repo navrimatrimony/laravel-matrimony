@@ -8,7 +8,11 @@
 		<meta name="googlebot" content="noindex, nofollow">
 
 
-        <title>{{ config('app.name', 'Laravel') }}</title>
+        @php
+            $siteIdentityLayout = app(\App\Services\SiteIdentityService::class);
+        @endphp
+        <title>{{ $siteIdentityLayout->get('site_name', config('app.name', 'Laravel')) }}</title>
+        @include('layouts.partials.site-identity-head')
 
         <!-- Fonts -->
         <link rel="preconnect" href="https://fonts.bunny.net">
@@ -27,6 +31,15 @@
                 || $cardOnboardingStep !== null;
             $showMobileStickyNav = auth()->check() && ! $hideMemberMainNav;
             $mobileCleanMode = \App\Models\AdminSetting::getBool('mobile_clean_mode', true);
+            $showMemberCommunicationFloatingTab = \App\Models\AdminSetting::getBool('member_communication_floating_tab_enabled', false);
+            $showMemberHelpCentreFloatingTab = \App\Models\AdminSetting::getBool('member_help_centre_floating_tab_enabled', false);
+            $memberChatDesktopOpenMode = (string) \App\Models\AdminSetting::getValue('member_chat_desktop_open_mode', 'popup');
+            $memberChatMobileOpenMode = (string) \App\Models\AdminSetting::getValue('member_chat_mobile_open_mode', 'full_page');
+            $showMemberCommunicationFloatingOnThisPage = $showMemberCommunicationFloatingTab && ! request()->routeIs('chat.*');
+            $includeMemberChatPopupEngine = ! request()->routeIs('chat.show')
+                && ($showMemberCommunicationFloatingOnThisPage
+                    || $memberChatDesktopOpenMode === 'popup'
+                    || $memberChatMobileOpenMode === 'bottom_sheet');
         @endphp
         <div class="min-h-screen bg-gray-100 dark:bg-gray-900">
             @if ($hideMemberMainNav)
@@ -35,7 +48,7 @@
                 @include('layouts.navigation')
             @endif
 
-            @unless ($hideMemberMainNav)
+            @unless ($hideMemberMainNav || request()->routeIs('help-centre.*'))
                 @include('partials.plan-usage-summary', ['variant' => 'compact'])
             @endunless
 
@@ -123,10 +136,19 @@
             'suppressWhoViewedBubble' => request()->routeIs('who-viewed.index'),
             'mobileCleanMode' => $mobileCleanMode,
         ])
-        @if (! request()->routeIs('chat.*'))
-            @include('partials.chat-dock-widget')
+        @if ($includeMemberChatPopupEngine)
+            @include('partials.chat-dock-widget', [
+                'memberChatDesktopOpenMode' => $memberChatDesktopOpenMode,
+                'memberChatMobileOpenMode' => $memberChatMobileOpenMode,
+            ])
         @endif
-        @include('help-centre.partials.floating-widget', ['mobileCleanMode' => $mobileCleanMode])
+        @if ($showMemberHelpCentreFloatingTab || $showMemberCommunicationFloatingOnThisPage)
+            @include('help-centre.partials.floating-widget', [
+                'mobileCleanMode' => $mobileCleanMode,
+                'showHelpCentreFloatingTab' => $showMemberHelpCentreFloatingTab,
+                'showCommunicationFloatingTab' => $showMemberCommunicationFloatingOnThisPage,
+            ])
+        @endif
     @endif
 @endauth
 @include('partials.mobile-sticky-quick-nav', ['hideMemberMainNav' => $hideMemberMainNav])

@@ -59,7 +59,6 @@ return [
     'widowed' => 'विधुर/विधवा',
     // Controller messages
     'profile_complete' => 'तुमची प्रोफाइल पूर्ण झाली आहे.',
-    'marriages_location_removed' => 'विवाह विभाग काढला आहे; वैवाहिक तपशीलासाठी मूलभूत माहिती वापरा.',
     'location_residence_heading' => 'सध्याचे निवासस्थान',
     'location_residence_help' => 'देश ते शहर आणि पत्ता ओळ तुमच्या प्रोफाइलवर जतन होतात (मूलभूत माहितीखालील डेटासारखेच).',
     'current_address_line' => 'सध्याचा पत्ता (ओळ)',

@@ -13,6 +13,8 @@
         'district_id',
         'taluka_id',
         'city_id',
+        'nearby_location_id',
+        'nearby_radius_km',
         'age_from',
         'age_to',
         'height_from',
@@ -30,7 +32,7 @@
     $hasActiveFilters = collect($filterKeys)->contains(fn ($k) => request()->filled($k));
     $perPageActive = (int) request('per_page', 15) !== 15;
     $resolvedSort = $sort ?? request('sort', 'latest');
-    if (! in_array($resolvedSort, ['latest', 'age_asc', 'age_desc', 'height_asc', 'height_desc', 'discover'], true)) {
+    if (! in_array($resolvedSort, ['latest', 'age_asc', 'age_desc', 'height_asc', 'height_desc', 'discover', 'nearby'], true)) {
         $resolvedSort = 'latest';
     }
     $hasResultsChrome = $hasActiveFilters || $perPageActive || ($resolvedSort !== 'latest');
@@ -153,6 +155,30 @@
                                             <option value="{{ $city->id }}" {{ (string) ($locationDisplayCityId ?? '') === (string) $city->id ? 'selected' : '' }}>{{ $city->name }}</option>
                                         @endforeach
                                     </select>
+                                </div>
+                                <div class="rounded-lg border border-blue-100 bg-blue-50/60 p-3 dark:border-blue-900/50 dark:bg-blue-950/20">
+                                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1" for="search-nearby-location">{{ __('search.nearby_place_label') }}</label>
+                                    <div class="relative">
+                                        <input type="hidden" id="search-nearby-location-id" name="nearby_location_id" value="{{ request('nearby_location_id') }}">
+                                        <input
+                                            id="search-nearby-location"
+                                            name="nearby_location_label"
+                                            type="text"
+                                            value="{{ request('nearby_location_label', $nearbySelectedLocationLabel ?? '') }}"
+                                            autocomplete="off"
+                                            class="w-full min-w-0 border border-gray-300 dark:border-gray-600 dark:bg-gray-900 rounded px-3 py-2 text-sm"
+                                            placeholder="{{ __('search.nearby_place_placeholder') }}"
+                                            data-search-url="{{ url('/api/location/search') }}"
+                                        >
+                                        <div id="search-nearby-location-results" class="absolute z-30 mt-1 hidden max-h-56 w-full overflow-y-auto rounded-md border border-gray-200 bg-white py-1 text-sm shadow-lg dark:border-gray-700 dark:bg-gray-900"></div>
+                                    </div>
+                                    <label class="mt-3 block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1" for="search-nearby-radius">{{ __('search.nearby_radius_label') }}</label>
+                                    <select id="search-nearby-radius" name="nearby_radius_km" class="w-full min-w-0 border border-gray-300 dark:border-gray-600 dark:bg-gray-900 rounded px-3 py-2 text-sm">
+                                        @foreach([5, 10, 25, 50, 100, 200] as $radiusOption)
+                                            <option value="{{ $radiusOption }}" {{ (int) ($nearbyRadiusKm ?? request('nearby_radius_km', 25)) === $radiusOption ? 'selected' : '' }}>{{ $radiusOption }} km</option>
+                                        @endforeach
+                                    </select>
+                                    <p class="mt-2 text-[11px] text-blue-900/80 dark:text-blue-100/80">{{ __('search.nearby_help') }}</p>
                                 </div>
                             </section>
 
@@ -309,6 +335,7 @@
                                             <option value="age_desc" {{ $resolvedSort === 'age_desc' ? 'selected' : '' }}>{{ __('search.sort_age_desc') }}</option>
                                             <option value="height_asc" {{ $resolvedSort === 'height_asc' ? 'selected' : '' }}>{{ __('search.sort_height_asc') }}</option>
                                             <option value="height_desc" {{ $resolvedSort === 'height_desc' ? 'selected' : '' }}>{{ __('search.sort_height_desc') }}</option>
+                                            <option value="nearby" {{ $resolvedSort === 'nearby' ? 'selected' : '' }}>{{ __('search.sort_nearby') }}</option>
                                             @auth
                                             <option value="discover" {{ $resolvedSort === 'discover' ? 'selected' : '' }}>{{ __('search.sort_discover') }}</option>
                                             @endauth
@@ -368,6 +395,16 @@
                                     $ct = ($addressCities ?? collect())->firstWhere('id', (int) request('city_id'));
                                     $chips[] = ['k' => __('search.city'), 'v' => $ct ? $ct->name : ('#' . request('city_id'))];
                                 }
+                                if (request()->filled('nearby_location_id')) {
+                                    $nearbyLabel = trim((string) ($nearbySelectedLocationLabel ?? request('nearby_location_label', '')));
+                                    $chips[] = [
+                                        'k' => __('search.nearby_search'),
+                                        'v' => __('search.summary_nearby', [
+                                            'radius' => (int) ($nearbyRadiusKm ?? request('nearby_radius_km', 25)),
+                                            'label' => $nearbyLabel !== '' ? $nearbyLabel : ('#' . request('nearby_location_id')),
+                                        ]),
+                                    ];
+                                }
                                 if (request()->filled('age_from') || request()->filled('age_to')) {
                                     $chips[] = ['k' => 'Age', 'v' => (request('age_from') ?: '—') . '–' . (request('age_to') ?: '—')];
                                 }
@@ -420,6 +457,7 @@
                                         'height_asc' => __('search.sort_height_asc'),
                                         'height_desc' => __('search.sort_height_desc'),
                                         'discover' => __('search.sort_discover'),
+                                        'nearby' => __('search.sort_nearby'),
                                     ];
                                     $chips[] = ['k' => 'Sort', 'v' => $sortChipLabels[$resolvedSort] ?? $resolvedSort];
                                 }
@@ -482,6 +520,7 @@
                             $subCasteLabel = trim((string) ($matrimonyProfile->subCaste?->display_label ?? ''));
                             $emailVerified = (bool) optional($matrimonyProfile->user)->email_verified_at;
                             $seriousLabel = trim((string) ($matrimonyProfile->seriousIntent?->name ?? ''));
+                            $nearbyDistanceKm = $matrimonyProfile->getAttribute('nearby_distance_km');
                         @endphp
 
                         <div class="mb-4 flex flex-col overflow-visible rounded-xl border border-gray-200 bg-white text-gray-900 shadow-sm dark:border-gray-700 dark:bg-gray-900/40 dark:text-gray-100 sm:flex-row sm:items-stretch">
@@ -575,6 +614,11 @@
                                         <span class="text-gray-500 dark:text-gray-500">{{ __('search.card_location') }}</span>
                                         {{ $locationLine }}
                                     </p>
+                                    @if (request()->filled('nearby_location_id') && $nearbyDistanceKm !== null)
+                                        <span class="inline-flex w-fit items-center rounded-full border border-blue-200 bg-blue-50 px-2.5 py-1 text-[11px] font-semibold text-blue-800 dark:border-blue-800 dark:bg-blue-950/40 dark:text-blue-100">
+                                            {{ (float) $nearbyDistanceKm <= 0.05 ? __('search.nearby_same_place') : __('search.nearby_distance_km', ['distance' => number_format((float) $nearbyDistanceKm, 1)]) }}
+                                        </span>
+                                    @endif
                                     @if ($religionLabel !== '' || $casteLabel !== '' || $subCasteLabel !== '')
                                         <p class="text-sm text-gray-700 dark:text-gray-300">
                                             @php
@@ -701,6 +745,90 @@
                                 return res.json();
                             });
                         }
+
+                        (function initNearbyLocationSearch() {
+                            var input = document.getElementById('search-nearby-location');
+                            var hidden = document.getElementById('search-nearby-location-id');
+                            var results = document.getElementById('search-nearby-location-results');
+                            var sortSelect = document.getElementById('search-sort');
+                            if (!input || !hidden || !results) {
+                                return;
+                            }
+
+                            var endpoint = input.getAttribute('data-search-url') || (baseUrl + '/api/location/search');
+                            var timer = null;
+
+                            function closeResults() {
+                                results.classList.add('hidden');
+                                results.innerHTML = '';
+                            }
+
+                            function labelFor(row) {
+                                return String((row && (row.display_label || row.label || row.name)) || '');
+                            }
+
+                            function renderRows(rows) {
+                                results.innerHTML = '';
+                                if (!Array.isArray(rows) || rows.length === 0) {
+                                    closeResults();
+                                    return;
+                                }
+
+                                rows.slice(0, 8).forEach(function (row) {
+                                    if (!row || row.location_id == null) {
+                                        return;
+                                    }
+                                    var button = document.createElement('button');
+                                    button.type = 'button';
+                                    button.className = 'block w-full px-3 py-2 text-left text-sm text-gray-800 hover:bg-blue-50 dark:text-gray-100 dark:hover:bg-gray-800';
+                                    button.textContent = labelFor(row);
+                                    button.addEventListener('click', function () {
+                                        hidden.value = String(row.location_id);
+                                        input.value = labelFor(row);
+                                        if (sortSelect && Array.prototype.some.call(sortSelect.options, function (option) { return option.value === 'nearby'; })) {
+                                            sortSelect.value = 'nearby';
+                                        }
+                                        closeResults();
+                                    });
+                                    results.appendChild(button);
+                                });
+
+                                if (results.children.length > 0) {
+                                    results.classList.remove('hidden');
+                                } else {
+                                    closeResults();
+                                }
+                            }
+
+                            input.addEventListener('input', function () {
+                                hidden.value = '';
+                                var query = input.value.trim();
+                                window.clearTimeout(timer);
+                                if (query.length < 2) {
+                                    closeResults();
+                                    return;
+                                }
+                                timer = window.setTimeout(function () {
+                                    fetchJson(endpoint + '?q=' + encodeURIComponent(query))
+                                        .then(renderRows)
+                                        .catch(closeResults);
+                                }, 220);
+                            });
+
+                            document.addEventListener('click', function (event) {
+                                if (!results.contains(event.target) && event.target !== input) {
+                                    closeResults();
+                                }
+                            });
+
+                            input.form?.addEventListener('submit', function (event) {
+                                if (input.value.trim() !== '' && hidden.value.trim() === '') {
+                                    event.preventDefault();
+                                    input.focus();
+                                    alert(@json(__('search.nearby_select_place_alert')));
+                                }
+                            });
+                        })();
 
                         function unwrapInternalLocationPayload(json) {
                             if (json && json.success && Array.isArray(json.data)) {

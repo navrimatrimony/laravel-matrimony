@@ -55,6 +55,7 @@ final class LocationFormatterService
         }
 
         $h = $this->enrichHierarchy($location, $this->locationService->getFullHierarchy($location));
+        $h = $this->locationService->fillHierarchyGaps($location, $h);
 
         return match ($tag) {
             'rural', 'village' => $this->formatRural($location, $h),
@@ -111,11 +112,7 @@ final class LocationFormatterService
      */
     private function formatRural(Location $leaf, array $h): string
     {
-        $body = $this->joinDistinct([
-            $leaf->localizedName(),
-            $h['taluka']?->localizedName() ?? '',
-            $h['district']?->localizedName() ?? '',
-        ]);
+        $body = $this->joinGeoChain([$leaf, $h['taluka'] ?? null, $h['district'] ?? null]);
 
         return $this->appendPin($body, $this->resolvePincode($leaf, $h));
     }
@@ -130,11 +127,7 @@ final class LocationFormatterService
         $cityName = $cityLoc?->localizedName() ?? '';
 
         if ($cityName === '') {
-            $body = $this->joinDistinct([
-                $sub,
-                $h['taluka']?->localizedName() ?? '',
-                $h['district']?->localizedName() ?? '',
-            ]);
+            $body = $this->joinSuburbThenGeoChain($sub, $h['taluka'] ?? null, $h['district'] ?? null);
         } else {
             $body = $this->joinDistinct([$sub, $cityName]);
         }
@@ -147,10 +140,7 @@ final class LocationFormatterService
      */
     private function formatTalukaLine(Location $leaf, array $h): string
     {
-        $body = $this->joinDistinct([
-            $leaf->localizedName(),
-            $h['district']?->localizedName() ?? '',
-        ]);
+        $body = $this->joinGeoChain([$leaf, $h['district'] ?? null]);
 
         return $this->appendPin($body, $this->resolvePincode($leaf, $h));
     }
@@ -192,10 +182,7 @@ final class LocationFormatterService
      */
     private function formatTown(Location $leaf, array $h): string
     {
-        $body = $this->joinDistinct([
-            $leaf->localizedName(),
-            $h['district']?->localizedName() ?? '',
-        ]);
+        $body = $this->joinGeoChain([$leaf, $h['district'] ?? null]);
 
         return $this->appendPin($body, $this->resolvePincode($leaf, $h));
     }
@@ -272,6 +259,56 @@ final class LocationFormatterService
         }
 
         return $body.' '.$pin;
+    }
+
+    /**
+     * Ordered labels for {@see Location} rows; dedupe by row id only so same spelling
+     * (e.g. village and taluka both "Tasgaon") still shows both — SSOT hierarchy is not dropped.
+     *
+     * @param  array<int, Location|null>  $chain
+     */
+    private function joinGeoChain(array $chain): string
+    {
+        $labels = [];
+        $seenIds = [];
+        foreach ($chain as $node) {
+            if (! $node instanceof Location) {
+                continue;
+            }
+            $id = (int) $node->id;
+            if ($id > 0) {
+                if (isset($seenIds[$id])) {
+                    continue;
+                }
+                $seenIds[$id] = true;
+            }
+            $label = trim($node->localizedName());
+            if ($label === '') {
+                continue;
+            }
+            $labels[] = $label;
+        }
+
+        return implode(', ', $labels);
+    }
+
+    /**
+     * Suburb name (plain string) then taluka/district {@see Location} labels — do not drop taluka/district
+     * when their text equals the suburb name (unlike {@see joinDistinct} on strings).
+     */
+    private function joinSuburbThenGeoChain(string $suburbName, ?Location $taluka, ?Location $district): string
+    {
+        $parts = [];
+        $sub = trim($suburbName);
+        if ($sub !== '') {
+            $parts[] = $sub;
+        }
+        $tail = $this->joinGeoChain([$taluka, $district]);
+        if ($tail !== '') {
+            $parts[] = $tail;
+        }
+
+        return implode(', ', $parts);
     }
 
     /**

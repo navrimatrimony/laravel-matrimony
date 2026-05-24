@@ -5,21 +5,25 @@ namespace App\Http\Controllers;
 use App\Models\Block;
 use App\Models\Interest;
 use App\Models\MatrimonyProfile;
+use App\Models\User;
 use App\Models\UserMatchBehavior;
 use App\Notifications\InterestAcceptedNotification;
 use App\Notifications\InterestRejectedNotification;
 use App\Notifications\InterestSentNotification;
 use App\Services\AdminActivityNotificationGate;
+use App\Services\Interest\ReceivedInterestTeaserPolicy;
 use App\Services\InterestPriorityService;
 use App\Services\InterestSendLimitService;
 use App\Services\ProfileLifecycleService;
 use App\Services\RuleEngineService;
 use App\Services\Showcase\ShowcaseInterestPolicyService;
+use App\Services\WhoViewed\WhoViewedTeaserPresenter;
 use App\Support\ErrorFactory;
 use App\Support\RuleResultResponder;
 use App\Support\SafeNotifier;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\View\View;
@@ -46,6 +50,7 @@ class InterestController extends Controller
         private readonly InterestPriorityService $interestPriority,
         private readonly ShowcaseInterestPolicyService $showcaseInterestPolicy,
         private readonly RuleEngineService $ruleEngine,
+        private readonly WhoViewedTeaserPresenter $whoViewedTeaserPresenter,
     ) {}
 
     /*
@@ -195,7 +200,7 @@ class InterestController extends Controller
         $tab = strtolower((string) $request->query('tab', 'received')) === 'sent' ? 'sent' : 'received';
         $statusFilter = $this->normalizeInterestStatusFilter($request->query('status'));
 
-        return $this->renderInterestsPage($tab, $statusFilter);
+        return $this->renderInterestsPage($request, $tab, $statusFilter);
     }
 
     /*
@@ -203,23 +208,25 @@ class InterestController extends Controller
     | Sent / Received (legacy URLs; same hub as {@see index})
     |--------------------------------------------------------------------------
     */
-    public function sent(): View|RedirectResponse
+    public function sent(Request $request): View|RedirectResponse
     {
         return $this->renderInterestsPage(
+            $request,
             'sent',
-            $this->normalizeInterestStatusFilter(request()->query('status'))
+            $this->normalizeInterestStatusFilter($request->query('status'))
         );
     }
 
-    public function received(): View|RedirectResponse
+    public function received(Request $request): View|RedirectResponse
     {
         return $this->renderInterestsPage(
+            $request,
             'received',
-            $this->normalizeInterestStatusFilter(request()->query('status'))
+            $this->normalizeInterestStatusFilter($request->query('status'))
         );
     }
 
-    private function renderInterestsPage(string $activeTab, string $statusFilter): View|RedirectResponse
+    private function renderInterestsPage(Request $request, string $activeTab, string $statusFilter): View|RedirectResponse
     {
         $authUser = auth()->user();
 
@@ -236,7 +243,14 @@ class InterestController extends Controller
             ->latest()
             ->get();
 
-        $receivedInterestsFull = Interest::with('senderProfile.gender')
+        $receivedInterestsFull = Interest::with([
+            'senderProfile.user',
+            'senderProfile.occupationMaster',
+            'senderProfile.occupationCustom',
+            'senderProfile.maritalStatus',
+            'senderProfile.location',
+            'senderProfile.gender',
+        ])
             ->where('receiver_profile_id', $myProfileId)
             ->receivedInboxOrder()
             ->get();
@@ -246,11 +260,81 @@ class InterestController extends Controller
         $interestViewPeriod = $this->interestSendLimit->interestViewResetPeriodLabel($authUser);
         $interestViewWindowStart = $this->interestSendLimit->interestViewWindowStart($authUser);
 
-        $receivedCounts = $this->interestStatusCounts($receivedInterestsFull);
+        $receivedTeaserRaw = ReceivedInterestTeaserPolicy::normalized();
+        $receivedInterestCardLayout = (string) ($receivedTeaserRaw['card_layout'] ?? 'horizontal');
+        $applyRichReceivedLockedTeaser = ! empty($receivedTeaserRaw['rich_teaser_enabled']);
+        $interestTeaserPolicy = ReceivedInterestTeaserPolicy::forLockedPresentation($receivedTeaserRaw);
+        $interestTeaserPlansUrl = route('plans.index');
+        $lockedInterestTeasers = [];
+        if ($applyRichReceivedLockedTeaser) {
+            $receiverProfile = $authUser->matrimonyProfile;
+            foreach ($receivedInterestsFull as $interestRow) {
+                if (($unlockById[$interestRow->id] ?? true) === true) {
+                    continue;
+                }
+                $senderProfile = $interestRow->senderProfile;
+                if ($senderProfile === null) {
+                    continue;
+                }
+                $lockedInterestTeasers[$interestRow->id] = $this->whoViewedTeaserPresenter->presentFromMatrimonyProfile(
+                    $senderProfile,
+                    $interestRow->created_at,
+                    $interestTeaserPolicy,
+                    [
+                        'owner_profile' => $receiverProfile,
+                        'viewer_view_count' => 1,
+                        'teaser_time_line' => 'interest_received',
+                    ]
+                );
+            }
+        }
+
+        $rowOrder = (string) ($receivedTeaserRaw['received_inbox_row_order'] ?? 'priority_then_recent');
+        if (! in_array($rowOrder, ReceivedInterestTeaserPolicy::RECEIVED_INBOX_ROW_ORDERS, true)) {
+            $rowOrder = 'priority_then_recent';
+        }
+
+        $inboxPerPage = (int) ($receivedTeaserRaw['received_inbox_per_page'] ?? 15);
+        $inboxPerPage = max(5, min(50, $inboxPerPage));
+
+        $receivedOrdered = $this->orderReceivedInboxForDisplay($receivedInterestsFull, $unlockById, $rowOrder);
+        $receivedCounts = $this->interestStatusCounts($receivedOrdered);
         $sentCounts = $this->interestStatusCounts($sentInterestsFull);
 
-        $receivedInterests = $this->filterInterestsByStatus($receivedInterestsFull, $statusFilter);
-        $sentInterests = $this->filterInterestsByStatus($sentInterestsFull, $statusFilter);
+        $pathParams = [];
+        if ($activeTab === 'sent') {
+            $pathParams['tab'] = 'sent';
+        }
+        if ($statusFilter !== 'all') {
+            $pathParams['status'] = $statusFilter;
+        }
+        $hubPath = route('interests.index', $pathParams);
+
+        $receivedFiltered = $this->filterInterestsByStatus($receivedOrdered, $statusFilter);
+        $sentFiltered = $this->filterInterestsByStatus($sentInterestsFull, $statusFilter);
+
+        $rpage = max(1, (int) $request->query('rpage', 1));
+        $spage = max(1, (int) $request->query('spage', 1));
+
+        $receivedTotal = $receivedFiltered->count();
+        $receivedSlice = $receivedFiltered->forPage($rpage, $inboxPerPage)->values();
+        $receivedInterests = new LengthAwarePaginator(
+            $receivedSlice->all(),
+            $receivedTotal,
+            $inboxPerPage,
+            $rpage,
+            ['path' => $hubPath, 'pageName' => 'rpage']
+        );
+
+        $sentTotal = $sentFiltered->count();
+        $sentSlice = $sentFiltered->forPage($spage, $inboxPerPage)->values();
+        $sentInterests = new LengthAwarePaginator(
+            $sentSlice->all(),
+            $sentTotal,
+            $inboxPerPage,
+            $spage,
+            ['path' => $hubPath, 'pageName' => 'spage']
+        );
 
         return view('interests.index', compact(
             'activeTab',
@@ -263,7 +347,31 @@ class InterestController extends Controller
             'interestViewLimit',
             'interestViewPeriod',
             'interestViewWindowStart',
+            'applyRichReceivedLockedTeaser',
+            'receivedInterestCardLayout',
+            'lockedInterestTeasers',
+            'interestTeaserPlansUrl',
         ));
+    }
+
+    /**
+     * Incoming interest is “revealed” for this billing window (name/photo/link); accept stays blocked until then. Reject may proceed without reveal.
+     */
+    private function interestIsRevealedToReceiver(User $user, Interest $interest): bool
+    {
+        $receiver = $user->matrimonyProfile;
+        if (! $receiver) {
+            return false;
+        }
+
+        $slice = Interest::query()
+            ->where('receiver_profile_id', $receiver->id)
+            ->whereKey($interest->id)
+            ->get();
+
+        $map = $this->interestSendLimit->incomingInterestUnlockMap($user, $slice);
+
+        return ($map[$interest->id] ?? false) === true;
     }
 
     private function normalizeInterestStatusFilter(mixed $raw): string
@@ -300,6 +408,29 @@ class InterestController extends Controller
         return $interests->where('status', $status)->values();
     }
 
+    /**
+     * @param  \Illuminate\Support\Collection<int, Interest>  $received
+     * @param  array<int, bool>  $unlockById
+     * @return \Illuminate\Support\Collection<int, Interest>
+     */
+    private function orderReceivedInboxForDisplay(Collection $received, array $unlockById, string $order): Collection
+    {
+        return match ($order) {
+            'newest_first' => $received->sortByDesc('created_at')->values(),
+            'unlocked_first_recent' => $received->sort(function (Interest $a, Interest $b) use ($unlockById) {
+                $ua = ($unlockById[$a->id] ?? true) === true;
+                $ub = ($unlockById[$b->id] ?? true) === true;
+                if ($ua !== $ub) {
+                    return $ua ? -1 : 1;
+                }
+                $cmp = $b->created_at <=> $a->created_at;
+
+                return $cmp !== 0 ? $cmp : $a->id <=> $b->id;
+            })->values(),
+            default => $received->values(),
+        };
+    }
+
     /*
 |--------------------------------------------------------------------------
 | Accept Interest
@@ -326,6 +457,10 @@ class InterestController extends Controller
         // 🔒 Guard: फक्त pending interest accept करता येईल
         if ($interest->status !== 'pending') {
             return back()->with('error', __('interest.interest_already_processed'));
+        }
+
+        if (! $this->interestIsRevealedToReceiver($user, $interest)) {
+            return back()->with('error', __('interests.accept_reject_requires_reveal'));
         }
 
         if ($msg = $this->showcaseInterestPolicy->validateAcceptInterest($user->matrimonyProfile, $interest)) {

@@ -1,0 +1,141 @@
+<?php
+
+namespace App\Services;
+
+use App\Models\AdminSetting;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Str;
+
+class SiteIdentityService
+{
+    public const CACHE_KEY = 'site_identity_settings';
+
+    public const TEXT_KEYS = [
+        'site_name',
+        'site_tagline',
+        'footer_copyright_text',
+        'company_name',
+        'support_email',
+        'sales_email',
+        'info_email',
+        'primary_phone',
+        'secondary_phone',
+        'address',
+        'google_maps_embed_link',
+        'facebook_url',
+        'instagram_url',
+        'youtube_url',
+        'linkedin_url',
+        'x_url',
+    ];
+
+    public const IMAGE_KEYS = [
+        'logo_light',
+        'logo_dark',
+        'favicon',
+        'admin_panel_logo',
+        'default_seo_image',
+    ];
+
+    public const DEFAULTS = [
+        'site_name' => 'नवरी मिळे नवऱ्याला',
+        'site_tagline' => 'Navri Mile Navryala | Marathi Matrimony',
+        'logo_light' => 'images/my-logo-light-mode.png',
+        'logo_dark' => 'images/my-logo.png',
+        'favicon' => 'favicon.ico',
+        'admin_panel_logo' => null,
+        'default_seo_image' => null,
+        'footer_copyright_text' => '© {year} Navri Mile Navryala. All rights reserved.',
+        'company_name' => 'Navri Mile Navryala',
+        'support_email' => '',
+        'sales_email' => '',
+        'info_email' => '',
+        'primary_phone' => '',
+        'secondary_phone' => '',
+        'address' => '',
+        'google_maps_embed_link' => '',
+        'facebook_url' => '',
+        'instagram_url' => '',
+        'youtube_url' => '',
+        'linkedin_url' => '',
+        'x_url' => '',
+    ];
+
+    /**
+     * @return array<string, string|null>
+     */
+    public function all(): array
+    {
+        return Cache::remember(self::CACHE_KEY, 300, function (): array {
+            $rows = AdminSetting::query()
+                ->whereIn('key', array_map(fn (string $key): string => $this->settingKey($key), array_keys(self::DEFAULTS)))
+                ->pluck('value', 'key');
+
+            $settings = [];
+            foreach (self::DEFAULTS as $key => $default) {
+                $settings[$key] = $rows->get($this->settingKey($key), $default);
+            }
+
+            return $settings;
+        });
+    }
+
+    public function get(string $key, ?string $default = null): ?string
+    {
+        $settings = $this->all();
+
+        return $settings[$key] ?? $default;
+    }
+
+    public function assetUrl(string $key): ?string
+    {
+        $path = $this->get($key);
+
+        return filled($path) ? asset($path) : null;
+    }
+
+    public function copyrightText(): string
+    {
+        $text = (string) $this->get('footer_copyright_text', self::DEFAULTS['footer_copyright_text']);
+
+        return str_replace('{year}', date('Y'), $text);
+    }
+
+    public function setText(string $key, ?string $value): void
+    {
+        if (! in_array($key, self::TEXT_KEYS, true)) {
+            return;
+        }
+
+        AdminSetting::setValue($this->settingKey($key), trim((string) $value));
+        Cache::forget(self::CACHE_KEY);
+    }
+
+    public function setImage(string $key, UploadedFile $file): string
+    {
+        if (! in_array($key, self::IMAGE_KEYS, true)) {
+            throw new \InvalidArgumentException("Unsupported site identity image key: {$key}");
+        }
+
+        $directory = public_path('images/branding');
+        if (! is_dir($directory)) {
+            mkdir($directory, 0775, true);
+        }
+
+        $extension = strtolower($file->getClientOriginalExtension() ?: 'png');
+        $filename = Str::slug(str_replace('_', '-', $key)).'-'.time().'.'.$extension;
+        $path = 'images/branding/'.$filename;
+
+        $file->move($directory, $filename);
+        AdminSetting::setValue($this->settingKey($key), $path);
+        Cache::forget(self::CACHE_KEY);
+
+        return $path;
+    }
+
+    private function settingKey(string $key): string
+    {
+        return 'site_identity_'.$key;
+    }
+}

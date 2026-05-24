@@ -2,7 +2,6 @@
 
 namespace App\Services;
 
-use App\Models\MatrimonyProfile;
 use App\Models\Subscription;
 use App\Models\User;
 use App\Notifications\ChatMessageLockedNotification;
@@ -67,13 +66,12 @@ class NotificationService
     /**
      * When the receiver cannot read chat per plan, still surface that a message is waiting (upgrade path is visible).
      */
-    public function notifyChatReceivedWhileReadLocked(User $receiverUser, MatrimonyProfile $senderProfile, int $conversationId): void
+    public function notifyChatReceivedWhileReadLocked(User $receiverUser, User $senderUser): void
     {
-        $senderProfile->loadMissing('user');
-        if (! AdminActivityNotificationGate::allowsPeerActivityNotification($senderProfile->user)) {
+        if (! AdminActivityNotificationGate::allowsPeerActivityNotification($senderUser)) {
             return;
         }
-        SafeNotifier::notify($receiverUser, new ChatMessageLockedNotification($senderProfile, $conversationId));
+        SafeNotifier::notify($receiverUser, new ChatMessageLockedNotification);
     }
 
     /**

@@ -148,14 +148,15 @@ final class ChatListService
             $other = null;
             $otherId = (int) ($c->getAttribute('other_id') ?? 0);
             if ($otherId > 0) {
-                $other = new MatrimonyProfile([
+                $other = new MatrimonyProfile();
+                $other->setRawAttributes([
                     'id' => $otherId,
                     'full_name' => $c->getAttribute('other_full_name'),
                     'profile_photo' => $c->getAttribute('other_profile_photo'),
                     'photo_approved' => $c->getAttribute('other_photo_approved'),
                     'gender_id' => $c->getAttribute('other_gender_id'),
                     'user_id' => $c->getAttribute('other_user_id'),
-                ]);
+                ], true);
                 $other->exists = true;
             }
 
@@ -165,4 +166,3 @@ final class ChatListService
         return $rows;
     }
 }
-

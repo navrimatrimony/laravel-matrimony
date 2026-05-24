@@ -22,6 +22,7 @@
             ->whereNull('read_at')
             ->count();
     }
+    $connectMainCount = (int) ($chatUnreadCount + (int) ($memberActivityCounts['interests_pending'] ?? 0));
     $isOwnProfileShow = request()->routeIs('matrimony.profile.show')
         && $mpNav
         && (int) request()->route('matrimony_profile_id') === (int) $mpNav->id;
@@ -97,6 +98,10 @@
 
     <a href="{{ route('interests.index') }}" class="{{ $navMainLink($navMainSection === 'connect') }}">
         <span class="whitespace-nowrap">{{ __('nav.connect') }}</span>
+        <span
+            id="connect-main-badge"
+            class="ml-2 inline-flex min-w-[1.2rem] items-center justify-center rounded-full bg-yellow-300 px-1.5 py-0.5 text-[10px] font-black leading-none text-red-700 {{ $connectMainCount > 0 ? '' : 'hidden' }}"
+        >{{ $connectMainCount > 99 ? '99+' : $connectMainCount }}</span>
         @if ($navMainSection === 'connect')
             <span class="{{ $navMainCaret }}" aria-hidden="true"></span>
         @endif
@@ -184,6 +189,12 @@
                         <x-dropdown-link :href="route('blocks.index')" class="hover:bg-gray-100 transition rounded-md">
                             {{ __('nav.blocked') }}
                         </x-dropdown-link>
+
+                        @if (! ($showMemberHelpCentreFloatingTab ?? false))
+                            <x-dropdown-link :href="route('help-centre.index')" class="hover:bg-gray-100 transition rounded-md">
+                                {{ __('nav.help_centre') }}
+                            </x-dropdown-link>
+                        @endif
 
                         @if (auth()->user()->isAnyAdmin())
                             <div class="border-t border-gray-200 dark:border-gray-600 my-1"></div>
@@ -284,8 +295,12 @@
 
 {{-- Connect --}}
 <details class="px-2">
-    <summary class="cursor-pointer px-3 py-2 text-white font-medium">
-        Connect
+    <summary class="flex cursor-pointer items-center gap-2 px-3 py-2 text-white font-medium">
+        <span>Connect</span>
+        <span
+            id="connect-main-badge-mobile"
+            class="inline-flex min-w-[1.2rem] items-center justify-center rounded-full bg-white px-1.5 py-0.5 text-[10px] font-bold leading-none text-red-800 {{ $connectMainCount > 0 ? '' : 'hidden' }}"
+        >{{ $connectMainCount > 99 ? '99+' : $connectMainCount }}</span>
     </summary>
     <div class="ml-3 space-y-1">
         <x-responsive-nav-link :href="route('interests.index')">
@@ -466,11 +481,45 @@
 <script>
 (function() {
     const POLL_INTERVAL = 30000; // 30 seconds
+    const chatUrl = @json(route('chat.index'));
+    const chatToastEnabled = @json(! request()->routeIs('chat.*'));
+    let lastChatUnreadCount = null;
+    let chatToastEl = null;
 
     function applyBadge(el, count) {
         if (!el) return;
         el.textContent = count > 99 ? '99+' : String(count);
         el.classList.toggle('hidden', !(count > 0));
+    }
+
+    function showChatToast(count) {
+        if (!chatToastEnabled || count <= 0) return;
+        if (document.getElementById('chat-dock-root') && window.matchMedia('(min-width: 1024px)').matches) return;
+        if (chatToastEl) chatToastEl.remove();
+        chatToastEl = document.createElement('button');
+        chatToastEl.type = 'button';
+        chatToastEl.className = 'fixed bottom-20 right-4 z-[70] flex max-w-[18rem] items-center gap-3 rounded-xl border border-red-100 bg-white px-4 py-3 text-left text-sm shadow-2xl ring-1 ring-black/5 transition hover:bg-red-50 dark:border-red-900 dark:bg-gray-900 dark:text-gray-100 dark:hover:bg-red-950/30 md:bottom-6';
+        chatToastEl.innerHTML = `
+            <span class="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-red-600 text-xs font-bold text-white">${count > 99 ? '99+' : String(count)}</span>
+            <span class="min-w-0">
+                <span class="block font-bold text-gray-900 dark:text-gray-100">{{ __('chat_ui.new_message_toast_title') }}</span>
+                <span class="block text-xs text-gray-600 dark:text-gray-300">{{ __('chat_ui.new_message_toast_action') }}</span>
+            </span>
+        `;
+        chatToastEl.addEventListener('click', function () {
+            if (typeof window.openCommunicationDock === 'function' && window.matchMedia('(min-width: 1024px)').matches) {
+                window.openCommunicationDock('alerts');
+            } else {
+                window.location.href = chatUrl;
+            }
+        });
+        document.body.appendChild(chatToastEl);
+        setTimeout(function () {
+            if (chatToastEl) {
+                chatToastEl.remove();
+                chatToastEl = null;
+            }
+        }, 6000);
     }
 
     function updateNotificationCount(badge, badgeMobile) {
@@ -509,10 +558,13 @@
             const chatCount = Number(data.chat_unread || 0);
             const interestsCount = Number(data.interests_pending || 0);
             const whoViewedCount = Number(data.who_viewed_count || 0);
+            const connectCount = chatCount + interestsCount;
             applyBadge(elements.chatBadge, chatCount);
             applyBadge(elements.chatBadgeMobile, chatCount);
             applyBadge(elements.chatDockBadge, chatCount);
             applyBadge(elements.stickyChatBadge, chatCount);
+            applyBadge(elements.connectMainBadge, connectCount);
+            applyBadge(elements.connectMainBadgeMobile, connectCount);
             applyBadge(elements.interestsBadge, interestsCount);
             applyBadge(elements.interestsBadgeMobile, interestsCount);
             applyBadge(elements.stickyInterestsBadge, interestsCount);
@@ -529,6 +581,10 @@
                     who_viewed_count: whoViewedCount
                 }
             }));
+            if (lastChatUnreadCount !== null && chatCount > lastChatUnreadCount) {
+                showChatToast(chatCount);
+            }
+            lastChatUnreadCount = chatCount;
         })
         .catch(() => {});
     }
@@ -539,6 +595,8 @@
         const chatBadge = document.getElementById('chat-badge');
         const chatBadgeMobile = document.getElementById('chat-badge-mobile');
         const chatDockBadge = document.getElementById('chat-dock-badge');
+        const connectMainBadge = document.getElementById('connect-main-badge');
+        const connectMainBadgeMobile = document.getElementById('connect-main-badge-mobile');
         const interestsBadge = document.getElementById('interests-received-badge');
         const interestsBadgeMobile = document.getElementById('interests-received-badge-mobile');
         const whoViewedBadge = document.getElementById('who-viewed-badge');
@@ -553,6 +611,8 @@
             chatBadge,
             chatBadgeMobile,
             chatDockBadge,
+            connectMainBadge,
+            connectMainBadgeMobile,
             stickyChatBadge,
             interestsBadge,
             interestsBadgeMobile,
@@ -566,6 +626,7 @@
         if (
             !badge && !badgeMobile
             && !chatBadge && !chatBadgeMobile && !chatDockBadge
+            && !connectMainBadge && !connectMainBadgeMobile
             && !interestsBadge && !interestsBadgeMobile && !stickyInterestsBadge
             && !whoViewedBadge && !whoViewedBadgeMobile
             && !activityMainBadge && !stickyChatBadge && !stickyActivityBadge

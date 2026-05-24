@@ -7,14 +7,27 @@
     </style>
 @endonce
 <div class="mx-auto max-w-6xl px-4 py-6">
+    @php
+        $otherDisplayName = $other->full_name ?: ('Profile #' . $other->id);
+        $gateCodesForUpgrade = ['reply_gate_limit', 'reply_gate_cooldown', 'daily_limit', 'weekly_limit', 'monthly_limit'];
+        $policyCode = (string) ($canSendDecision->code ?? '');
+        $showChatUpgradeCta = !($canSendDecision->allowed ?? false) && in_array($policyCode, $gateCodesForUpgrade, true);
+        $upgradeUrl = trim((string) config('communication.chat_upgrade_cta_url', ''));
+        if ($upgradeUrl === '') {
+            $upgradeUrl = route('dashboard');
+        }
+        $otherProfileUrl = route('matrimony.profile.show', ['matrimony_profile_id' => $other->id]);
+    @endphp
     <div class="flex items-center justify-between gap-4">
         <div class="min-w-0 flex items-center gap-3">
-            <img src="{{ $other->profile_photo_url }}" alt="{{ $other->full_name ?: ('Profile #' . $other->id) }}" class="h-10 w-10 rounded-full object-cover ring-1 ring-black/10" />
+            <a href="{{ $otherProfileUrl }}" class="shrink-0 rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-gray-900" aria-label="{{ __('chat_ui.view_profile_of', ['name' => $otherDisplayName]) }}">
+                <img src="{{ $other->profile_photo_url }}" alt="{{ $otherDisplayName }}" class="h-10 w-10 rounded-full object-cover ring-1 ring-black/10 transition hover:ring-indigo-400" />
+            </a>
             <div class="min-w-0">
             <a href="{{ route('chat.index', ['filter' => request()->query('filter', 'all')]) }}" class="text-sm font-medium text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200">← Back</a>
-            <h1 class="mt-1 truncate text-xl font-bold text-gray-900 dark:text-gray-100">
-                {{ $other->full_name ?: ('Profile #' . $other->id) }}
-            </h1>
+            <a href="{{ $otherProfileUrl }}" class="mt-1 block truncate text-xl font-bold text-gray-900 transition hover:text-indigo-700 hover:underline dark:text-gray-100 dark:hover:text-indigo-300">
+                {{ $otherDisplayName }}
+            </a>
             @if (!empty($showcaseTag))
                 <div class="mt-1 flex items-center gap-2">
                     <span class="inline-flex items-center rounded-full bg-indigo-50 px-2 py-0.5 text-[11px] font-bold text-indigo-700 ring-1 ring-indigo-200 dark:bg-indigo-950/30 dark:text-indigo-200 dark:ring-indigo-800/60">
@@ -26,7 +39,9 @@
             @endif
             </div>
         </div>
-        <a href="{{ route('matrimony.profile.show', ['matrimony_profile_id' => $other->id]) }}" class="text-sm font-semibold text-indigo-600 hover:text-indigo-700">View profile</a>
+        <a href="{{ $otherProfileUrl }}" class="inline-flex shrink-0 items-center justify-center rounded-xl border border-indigo-200 bg-white px-3 py-2 text-sm font-semibold text-indigo-700 shadow-sm transition hover:bg-indigo-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 dark:border-indigo-800 dark:bg-gray-900 dark:text-indigo-200 dark:hover:bg-indigo-950/30">
+            {{ __('chat_ui.view_profile') }}
+        </a>
     </div>
 
         @if (session('error'))
@@ -51,7 +66,7 @@
         <div class="mt-4 overflow-hidden rounded-2xl border border-indigo-200/90 bg-gradient-to-r from-indigo-600 via-violet-600 to-indigo-700 p-[1px] shadow-lg shadow-indigo-500/15 dark:border-indigo-500/40 dark:from-indigo-500 dark:via-violet-600 dark:to-indigo-800">
             <div class="rounded-2xl bg-white px-4 py-4 dark:bg-gray-900 sm:flex sm:items-center sm:justify-between sm:gap-6">
                 <div class="min-w-0">
-                    <p class="text-sm font-extrabold text-gray-900 dark:text-white">{{ __('chat_ui.read_lock_banner_title') }}</p>
+                    <p class="text-sm font-extrabold text-gray-900 dark:text-white">{{ __('chat_ui.read_lock_banner_title', ['name' => $otherDisplayName]) }}</p>
                     <p class="mt-1 text-sm text-gray-600 dark:text-gray-300">{{ __('chat_ui.read_lock_banner_body') }}</p>
                 </div>
                 <div class="mt-3 shrink-0 sm:mt-0">
@@ -62,16 +77,6 @@
             </div>
         </div>
     @endif
-
-    @php
-        $gateCodesForUpgrade = ['reply_gate_limit', 'reply_gate_cooldown', 'daily_limit', 'weekly_limit', 'monthly_limit'];
-        $policyCode = (string) ($canSendDecision->code ?? '');
-        $showChatUpgradeCta = !($canSendDecision->allowed ?? false) && in_array($policyCode, $gateCodesForUpgrade, true);
-        $upgradeUrl = trim((string) config('communication.chat_upgrade_cta_url', ''));
-        if ($upgradeUrl === '') {
-            $upgradeUrl = route('dashboard');
-        }
-    @endphp
 
     @if (!($canSendDecision->allowed ?? false))
         <div class="mt-4 overflow-hidden rounded-2xl border border-amber-200/90 bg-gradient-to-br from-amber-50 via-white to-amber-50/80 shadow-sm dark:border-amber-900/50 dark:from-amber-950/40 dark:via-gray-900 dark:to-amber-950/30">
@@ -132,6 +137,7 @@
                                 'senderPhotoUrl' => $m->senderProfile?->profile_photo_url,
                                 'viewerProfileId' => (int) ($viewerProfileId ?? $me->id),
                                 'readLockedForIncoming' => (bool) ($readLockedForIncoming ?? false),
+                                'chatTeaserPolicy' => $chatTeaserPolicy ?? [],
                             ])
                         @endforeach
                     @endif
@@ -173,7 +179,7 @@
                         </div>
                     </div>
 
-                    @if ($canSendDecision->allowed ?? false)
+                    @if (($canSendDecision->allowed ?? false) && empty($readLockedForIncoming))
                         <div id="chat-template-starters" class="mb-3" data-test="chat-template-starters">
                             <p class="mb-2 text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">प्रोफाइलवर आधारित सुचवलेले संदेश</p>
                             <div class="flex flex-wrap gap-1.5" role="tablist" aria-label="संदेश प्रकार">
@@ -188,6 +194,12 @@
                             <div id="chat-template-pills" class="mt-2 flex flex-wrap gap-1.5" aria-live="polite"></div>
                         </div>
                         <script type="application/json" id="chat-template-groups-json">{!! json_encode($chatTemplateSuggestions ?? [], JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT) !!}</script>
+                    @endif
+
+                    @if (($canSendDecision->allowed ?? false) && ! empty($readLockedForIncoming))
+                        <p class="mb-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-900 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-100">
+                            {{ __('chat_ui.read_lock_can_still_reply') }}
+                        </p>
                     @endif
 
                     {{-- Main composer (single row, WhatsApp-style) --}}
@@ -217,7 +229,7 @@
                         </form>
                     </div>
 
-                    @if ($showChatUpgradeCta && !($canSendDecision->allowed ?? false))
+                    @if (($showChatUpgradeCta ?? false) && !($canSendDecision->allowed ?? false))
                         <div class="absolute inset-0 z-10 flex flex-col items-center justify-center gap-2 rounded-b-2xl bg-white/85 px-3 py-4 text-center shadow-[inset_0_1px_0_0_rgba(0,0,0,0.04)] backdrop-blur-[2px] dark:bg-gray-950/90" role="region" aria-label="संदेश मर्यादा">
                             <a href="{{ $upgradeUrl }}" class="inline-flex items-center justify-center rounded-xl bg-indigo-600 px-5 py-2.5 text-sm font-bold text-white shadow-md ring-1 ring-indigo-500/25 transition hover:bg-indigo-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 dark:ring-offset-gray-950">
                                 View access details
@@ -565,4 +577,3 @@
 </script>
 @endif
 @endsection
-

@@ -82,38 +82,16 @@
         <div class="space-y-4">
             @foreach ($whoViewedRows as $row)
                 @if (($row['display'] ?? '') === 'full')
-                    @php
-                        $view = $row['view'];
-                        $viewerProfile = $view->viewerProfile;
-                        $viewerUser = $viewerProfile?->user;
-                    @endphp
-                    <div class="flex items-center gap-4 border border-gray-200 dark:border-gray-700 rounded-lg p-3 bg-white dark:bg-gray-800">
-                        <div class="w-16 h-16 rounded-full overflow-hidden border flex-shrink-0">
-                            @if ($viewerProfile && $viewerProfile->profile_photo && $viewerProfile->photo_approved !== false)
-                                <img src="{{ app(\App\Services\Image\ProfilePhotoUrlService::class)->publicUrl($viewerProfile->profile_photo) }}" class="w-full h-full object-cover" alt="">
-                            @else
-                                <img src="{{ asset('images/placeholders/default-profile.svg') }}" class="w-full h-full object-cover" alt="">
-                            @endif
-                        </div>
-                        <div class="flex-1 min-w-0">
-                            <p class="font-semibold text-gray-900 dark:text-gray-100">
-                                {{ $viewerProfile->full_name ?? $viewerUser?->name ?? 'Member' }}
-                            </p>
-                            @if ($viewerProfile)
-                                <a href="{{ route('matrimony.profile.show', $viewerProfile->id) }}" class="text-sm text-indigo-600 dark:text-indigo-400 hover:underline">
-                                    {{ __('who_viewed.view_profile') }}
-                                </a>
-                            @endif
-                            <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                                {{ __('who_viewed.viewed_at', ['time' => $view->created_at->diffForHumans()]) }}
-                            </p>
-                        </div>
-                    </div>
+                    @include('who-viewed.partials.viewer-row-full', ['view' => $row['view']])
                 @elseif (($row['display'] ?? '') === 'teaser' && ! empty($row['teaser']))
                     @include('who-viewed.partials.viewer-row-teaser', ['teaser' => $row['teaser'], 'plansUrl' => $plansUrl ?? route('plans.index')])
                 @endif
             @endforeach
         </div>
+
+        @if ($whoViewedRows instanceof \Illuminate\Contracts\Pagination\Paginator && $whoViewedRows->hasPages())
+            <div class="mt-6">{{ $whoViewedRows->withQueryString()->links() }}</div>
+        @endif
 
         @if ($hasTeaserRows && ! ($hasFullWhoViewedAccess ?? true))
             <p class="mt-4 text-sm text-gray-600 dark:text-gray-400">

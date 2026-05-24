@@ -440,8 +440,13 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
     Route::get('/app-settings', [AdminSettingsController::class, 'appSettings'])->name('app-settings.index');
     Route::post('/app-settings', [AdminSettingsController::class, 'updateAppSettings'])->name('app-settings.update');
 
-    Route::get('/who-viewed-teaser-settings', [AdminSettingsController::class, 'whoViewedTeaserSettings'])->name('who-viewed-teaser-settings.index');
-    Route::post('/who-viewed-teaser-settings', [AdminSettingsController::class, 'updateWhoViewedTeaserSettings'])->name('who-viewed-teaser-settings.update');
+    Route::get('/teaser-settings', [AdminSettingsController::class, 'teaserSettings'])->name('teaser-settings.index');
+    Route::post('/teaser-settings/who-viewed', [AdminSettingsController::class, 'updateTeaserSettingsWhoViewed'])->name('teaser-settings.who-viewed.update');
+    Route::post('/teaser-settings/received-interests', [AdminSettingsController::class, 'updateTeaserSettingsReceivedInterests'])->name('teaser-settings.received-interests.update');
+    Route::post('/teaser-settings/chat', [AdminSettingsController::class, 'updateTeaserSettingsChat'])->name('teaser-settings.chat.update');
+    Route::get('/who-viewed-teaser-settings', static function () {
+        return redirect()->route('admin.teaser-settings.index', ['tab' => 'who-viewed']);
+    })->name('who-viewed-teaser-settings.index');
 
     Route::get('/view-back-settings', [AdminSettingsController::class, 'viewBackSettings'])->name('view-back-settings.index');
     Route::post('/view-back-settings', [AdminSettingsController::class, 'updateViewBackSettings'])->name('view-back-settings.update');

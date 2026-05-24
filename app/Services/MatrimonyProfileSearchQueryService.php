@@ -4,8 +4,10 @@ namespace App\Services;
 
 use App\Models\EducationDegree;
 use App\Models\HiddenProfile;
+use App\Models\Location;
 use App\Models\MasterMaritalStatus;
 use App\Models\MatrimonyProfile;
+use App\Services\Location\LocationService;
 use App\Services\Profile\ProfileCanonicalResidenceService;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
@@ -103,25 +105,16 @@ class MatrimonyProfileSearchQueryService
             if ($request->filled('taluka_id') && $geoActive('taluka_id')) {
                 $query->whereResidenceUnderAncestor((int) $request->taluka_id);
             }
-            if ($request->filled('location_id') && $geoActive('city_id')) {
-                $cityId = (int) $request->location_id;
-                if (Schema::hasColumn('matrimony_profiles', 'location_id')) {
-                    $query->where('location_id', $cityId);
+            $cityId = $request->input('location_id') ?: $request->input('city_id');
+            if ($cityId && $geoActive('city_id')) {
+                self::whereResidenceLeafIn($query, [(int) $cityId]);
+            }
+            if ($request->filled('nearby_location_id') && $geoActive('nearby_location_id')) {
+                $distanceByLocation = self::nearbyDistanceMapFromRequest($request);
+                if ($distanceByLocation === []) {
+                    $query->whereRaw('1 = 0');
                 } else {
-                    $tid = ProfileCanonicalResidenceService::currentAddressTypeId();
-                    if ($tid !== null) {
-                        $query->whereExists(function ($q) use ($cityId, $tid): void {
-                            $q->selectRaw('1')
-                                ->from('profile_addresses')
-                                ->whereColumn('profile_addresses.profile_id', 'matrimony_profiles.id')
-                                ->where('profile_addresses.address_scope', 'self')
-                                ->where('profile_addresses.address_type_id', $tid)
-                                ->where(
-                                    Schema::hasColumn('profile_addresses', 'location_id') ? 'profile_addresses.location_id' : 'profile_addresses.city_id',
-                                    $cityId
-                                );
-                        });
-                    }
+                    self::whereResidenceLeafIn($query, array_keys($distanceByLocation));
                 }
             }
         }
@@ -290,6 +283,82 @@ class MatrimonyProfileSearchQueryService
         return array_values(array_unique($out));
     }
 
+    public static function nearbyLocationIdFromRequest(Request $request): ?int
+    {
+        $id = (int) $request->input('nearby_location_id', 0);
+
+        return $id > 0 ? $id : null;
+    }
+
+    public static function nearbyRadiusFromRequest(Request $request): int
+    {
+        $radius = (int) $request->input('nearby_radius_km', 25);
+
+        return max(1, min(200, $radius));
+    }
+
+    /**
+     * @return array<int, float>
+     */
+    public static function nearbyDistanceMapFromRequest(Request $request): array
+    {
+        $locationId = self::nearbyLocationIdFromRequest($request);
+        if ($locationId === null) {
+            return [];
+        }
+
+        $source = Location::query()->find($locationId);
+        if (! $source || $source->lat === null || $source->lng === null) {
+            return [];
+        }
+
+        $distances = [(int) $source->id => 0.0];
+        foreach (app(LocationService::class)->getNearbyLocations((int) $source->id, self::nearbyRadiusFromRequest($request)) as $row) {
+            $id = (int) ($row['id'] ?? 0);
+            if ($id > 0) {
+                $distances[$id] = round((float) ($row['distance_km'] ?? 0), 2);
+            }
+        }
+
+        asort($distances, SORT_NUMERIC);
+
+        return $distances;
+    }
+
+    /**
+     * @param  array<int, float>  $distanceByLocation
+     */
+    public static function applyNearbyDistanceSelect(Builder $query, array $distanceByLocation): void
+    {
+        $distanceByLocation = self::normalizeDistanceMap($distanceByLocation);
+        if ($distanceByLocation === []) {
+            return;
+        }
+
+        [$leafExpression, $leafBindings] = self::residenceLeafSqlExpression();
+        if ($leafExpression === null) {
+            return;
+        }
+
+        $caseSql = 'CASE '.$leafExpression;
+        $bindings = $leafBindings;
+        foreach ($distanceByLocation as $locationId => $distanceKm) {
+            $caseSql .= ' WHEN ? THEN ?';
+            $bindings[] = (int) $locationId;
+            $bindings[] = (float) $distanceKm;
+        }
+        $caseSql .= ' ELSE NULL END as nearby_distance_km';
+
+        $query->addSelect('matrimony_profiles.*');
+        $query->selectRaw($caseSql, $bindings);
+    }
+
+    public static function applyNearbyOrdering(Builder $query): void
+    {
+        $query->orderByRaw('nearby_distance_km IS NULL ASC')
+            ->orderBy('nearby_distance_km', 'asc');
+    }
+
     /**
      * @param  Builder<MatrimonyProfile>  $query
      */
@@ -306,6 +375,83 @@ class MatrimonyProfileSearchQueryService
         }
 
         self::applyRequestSearchFiltersWithChecker($query, $request, $isSearchable, $normalized);
+    }
+
+    /**
+     * @param  array<int, int>  $locationIds
+     */
+    private static function whereResidenceLeafIn(Builder $query, array $locationIds): void
+    {
+        $locationIds = array_values(array_unique(array_filter(array_map('intval', $locationIds), static fn (int $id): bool => $id > 0)));
+        if ($locationIds === []) {
+            $query->whereRaw('1 = 0');
+
+            return;
+        }
+
+        if (Schema::hasColumn('matrimony_profiles', 'location_id')) {
+            $query->whereIn('location_id', $locationIds);
+
+            return;
+        }
+
+        $tid = ProfileCanonicalResidenceService::currentAddressTypeId();
+        if ($tid === null || ! Schema::hasTable('profile_addresses')) {
+            $query->whereRaw('1 = 0');
+
+            return;
+        }
+
+        $leafColumn = Schema::hasColumn('profile_addresses', 'location_id') ? 'profile_addresses.location_id' : 'profile_addresses.city_id';
+        $query->whereExists(function ($q) use ($locationIds, $tid, $leafColumn): void {
+            $q->selectRaw('1')
+                ->from('profile_addresses')
+                ->whereColumn('profile_addresses.profile_id', 'matrimony_profiles.id')
+                ->where('profile_addresses.address_scope', 'self')
+                ->where('profile_addresses.address_type_id', $tid)
+                ->whereIn($leafColumn, $locationIds);
+        });
+    }
+
+    /**
+     * @param  array<int, float>  $distanceByLocation
+     * @return array<int, float>
+     */
+    private static function normalizeDistanceMap(array $distanceByLocation): array
+    {
+        $out = [];
+        foreach ($distanceByLocation as $locationId => $distanceKm) {
+            $id = (int) $locationId;
+            if ($id > 0) {
+                $out[$id] = round((float) $distanceKm, 2);
+            }
+        }
+
+        asort($out, SORT_NUMERIC);
+
+        return $out;
+    }
+
+    /**
+     * @return array{0: string|null, 1: list<mixed>}
+     */
+    private static function residenceLeafSqlExpression(): array
+    {
+        if (Schema::hasColumn('matrimony_profiles', 'location_id')) {
+            return ['matrimony_profiles.location_id', []];
+        }
+
+        $tid = ProfileCanonicalResidenceService::currentAddressTypeId();
+        if ($tid === null || ! Schema::hasTable('profile_addresses')) {
+            return [null, []];
+        }
+
+        $leafColumn = Schema::hasColumn('profile_addresses', 'location_id') ? 'pa.location_id' : 'pa.city_id';
+
+        return [
+            '(select '.$leafColumn.' from profile_addresses pa where pa.profile_id = matrimony_profiles.id and pa.address_scope = ? and pa.address_type_id = ? and '.$leafColumn.' is not null limit 1)',
+            ['self', (int) $tid],
+        ];
     }
 
     /**

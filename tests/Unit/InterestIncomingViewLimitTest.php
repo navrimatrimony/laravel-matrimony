@@ -2,18 +2,56 @@
 
 namespace Tests\Unit;
 
+use App\Models\City;
 use App\Models\Interest;
 use App\Models\MatrimonyProfile;
 use App\Models\User;
 use App\Services\InterestSendLimitService;
+use App\Services\Profile\ProfileCanonicalResidenceService;
+use Database\Seeders\MasterLookupSeeder;
+use Database\Seeders\MinimalLocationSeeder;
 use Database\Seeders\PlanStandardFeatureKeysSeeder;
 use Database\Seeders\SubscriptionPlansSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Tests\TestCase;
 
 class InterestIncomingViewLimitTest extends TestCase
 {
     use RefreshDatabase;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        $this->seed(MinimalLocationSeeder::class);
+        $this->seed(MasterLookupSeeder::class);
+        ProfileCanonicalResidenceService::forgetCachedMasters();
+    }
+
+    /**
+     * @param  array<string, mixed>  $factoryAttributes
+     */
+    private function createActiveProfileWithResidence(User $user, array $factoryAttributes = []): MatrimonyProfile
+    {
+        $p = MatrimonyProfile::factory()->for($user)->create(array_merge([
+            'lifecycle_state' => 'draft',
+        ], $factoryAttributes));
+        $tbl = $p->getTable();
+        $leafId = (int) City::query()->where('name', 'Pune City')->firstOrFail()->id;
+        if (Schema::hasColumn($tbl, 'location_id')) {
+            DB::table($tbl)->where('id', $p->id)->update(['location_id' => $leafId]);
+            $p->refresh();
+        } else {
+            ProfileCanonicalResidenceService::upsertSelfCurrent((int) $p->id, $leafId, null, true, false);
+        }
+        $p->update([
+            'lifecycle_state' => 'active',
+            'is_suspended' => false,
+        ]);
+
+        return $p->fresh();
+    }
 
     public function test_first_n_pending_in_window_unlock_rest_locked(): void
     {
@@ -21,12 +59,12 @@ class InterestIncomingViewLimitTest extends TestCase
         $this->seed(PlanStandardFeatureKeysSeeder::class);
 
         $receiver = User::factory()->create(['is_admin' => false]);
-        $receiverProfile = MatrimonyProfile::factory()->for($receiver)->create(['lifecycle_state' => 'active']);
+        $receiverProfile = $this->createActiveProfileWithResidence($receiver);
 
         $senders = [];
         for ($i = 0; $i < 4; $i++) {
             $u = User::factory()->create();
-            $senders[] = MatrimonyProfile::factory()->for($u)->create(['lifecycle_state' => 'active']);
+            $senders[] = $this->createActiveProfileWithResidence($u);
         }
 
         foreach ($senders as $sp) {
@@ -58,8 +96,8 @@ class InterestIncomingViewLimitTest extends TestCase
         $this->seed(PlanStandardFeatureKeysSeeder::class);
 
         $receiver = User::factory()->create(['is_admin' => false]);
-        $receiverProfile = MatrimonyProfile::factory()->for($receiver)->create(['lifecycle_state' => 'active']);
-        $sender = MatrimonyProfile::factory()->for(User::factory()->create())->create(['lifecycle_state' => 'active']);
+        $receiverProfile = $this->createActiveProfileWithResidence($receiver);
+        $sender = $this->createActiveProfileWithResidence(User::factory()->create());
 
         $interest = Interest::query()->create([
             'sender_profile_id' => $sender->id,

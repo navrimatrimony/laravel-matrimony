@@ -30,7 +30,9 @@ class HelpCentreService
             $reply = __('help_centre.sensitive_refusal');
         } elseif ($this->matchesAny($normalized, ['payment', 'refund', 'transaction', 'failed', 'declined', 'पेमेंट', 'payment failed', 'plan not active', 'कट झाले'])) {
             $intent = 'payment_help';
-            $reply = __('help_centre.intent_payment');
+            $escalated = true;
+            $ticketId = $this->createTicketId();
+            $reply = __('help_centre.intent_payment_escalated', ['ticket' => $ticketId]);
         } elseif ($this->matchesAny($normalized, ['contact reveal', 'unlock contact', 'number not visible', 'contact not visible', 'संपर्क दिसत नाही', 'unlock number', 'show contact'])) {
             $intent = 'contact_unlock';
             $reply = __('help_centre.intent_contact_unlock');

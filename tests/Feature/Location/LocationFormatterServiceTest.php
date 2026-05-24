@@ -55,6 +55,37 @@ test('rural tag includes taluka district and optional pincode', function () {
         ->and($line)->toContain('411042');
 });
 
+test('rural label keeps taluka when village and taluka share the same name', function () {
+    $district = Location::query()->where('type', 'district')->where('name', 'Pune')->firstOrFail();
+
+    $taluka = Location::query()->create([
+        'name' => 'Tasgaon',
+        'slug' => 'fmt-dup-taluka-'.uniqid(),
+        'type' => 'taluka',
+        'parent_id' => $district->id,
+        'state_code' => 'MH',
+        'district_code' => 'PN',
+        'is_active' => true,
+        'category' => 'taluka',
+    ]);
+
+    $village = Location::query()->create([
+        'name' => 'Tasgaon',
+        'slug' => 'fmt-dup-village-'.uniqid(),
+        'type' => 'village',
+        'parent_id' => $taluka->id,
+        'state_code' => 'MH',
+        'district_code' => 'PN',
+        'is_active' => true,
+        'category' => 'rural',
+        'pincode' => '415004',
+    ]);
+
+    $line = app(LocationFormatterService::class)->formatLocation((int) $village->id);
+
+    expect($line)->toBe('Tasgaon, Tasgaon, Pune 415004');
+});
+
 test('suburban tag uses suburb and city with pincode when present', function () {
     $taluka = Location::query()->where('type', 'taluka')->where('name', 'Haveli')->firstOrFail();
     $city = Location::query()->create([

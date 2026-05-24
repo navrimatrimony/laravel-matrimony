@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\City;
 use App\Models\Interest;
 use App\Models\MasterGender;
 use App\Models\MatrimonyProfile;
@@ -9,9 +10,14 @@ use App\Models\Plan;
 use App\Models\Subscription;
 use App\Models\User;
 use App\Services\InterestPriorityService;
+use App\Services\Profile\ProfileCanonicalResidenceService;
+use Database\Seeders\MasterLookupSeeder;
+use Database\Seeders\MinimalLocationSeeder;
 use Database\Seeders\PlanStandardFeatureKeysSeeder;
 use Database\Seeders\SubscriptionPlansSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
 
@@ -22,8 +28,35 @@ class InterestPriorityReceivedOrderTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+        $this->seed(MinimalLocationSeeder::class);
+        $this->seed(MasterLookupSeeder::class);
+        ProfileCanonicalResidenceService::forgetCachedMasters();
         $this->seed(SubscriptionPlansSeeder::class);
         $this->seed(PlanStandardFeatureKeysSeeder::class);
+    }
+
+    /**
+     * @param  array<string, mixed>  $factoryAttributes
+     */
+    private function createActiveProfileWithResidence(User $user, array $factoryAttributes = []): MatrimonyProfile
+    {
+        $p = MatrimonyProfile::factory()->for($user)->create(array_merge([
+            'lifecycle_state' => 'draft',
+        ], $factoryAttributes));
+        $tbl = $p->getTable();
+        $leafId = (int) City::query()->where('name', 'Pune City')->firstOrFail()->id;
+        if (Schema::hasColumn($tbl, 'location_id')) {
+            DB::table($tbl)->where('id', $p->id)->update(['location_id' => $leafId]);
+            $p->refresh();
+        } else {
+            ProfileCanonicalResidenceService::upsertSelfCurrent((int) $p->id, $leafId, null, true, false);
+        }
+        $p->update([
+            'lifecycle_state' => 'active',
+            'is_suspended' => false,
+        ]);
+
+        return $p->fresh();
     }
 
     private function seedGenders(): array
@@ -46,28 +79,22 @@ class InterestPriorityReceivedOrderTest extends TestCase
         [$maleGid, $femaleGid] = $this->seedGenders();
 
         $receiver = User::factory()->create();
-        $receiverProfile = MatrimonyProfile::factory()->for($receiver)->create([
+        $receiverProfile = $this->createActiveProfileWithResidence($receiver, [
             'gender_id' => $femaleGid,
-            'lifecycle_state' => 'active',
-            'is_suspended' => false,
             'full_name' => 'Receiver Person',
             'visibility_override' => true,
         ]);
 
         $freeSender = User::factory()->create();
-        $freeProfile = MatrimonyProfile::factory()->for($freeSender)->create([
+        $freeProfile = $this->createActiveProfileWithResidence($freeSender, [
             'gender_id' => $maleGid,
-            'lifecycle_state' => 'active',
-            'is_suspended' => false,
             'full_name' => 'Free Sender Inbox',
             'visibility_override' => true,
         ]);
 
         $paidSender = User::factory()->create();
-        $paidProfile = MatrimonyProfile::factory()->for($paidSender)->create([
+        $paidProfile = $this->createActiveProfileWithResidence($paidSender, [
             'gender_id' => $maleGid,
-            'lifecycle_state' => 'active',
-            'is_suspended' => false,
             'full_name' => 'Paid Sender Inbox',
             'visibility_override' => true,
         ]);
@@ -107,27 +134,21 @@ class InterestPriorityReceivedOrderTest extends TestCase
         [$maleGid, $femaleGid] = $this->seedGenders();
 
         $receiver = User::factory()->create();
-        $receiverProfile = MatrimonyProfile::factory()->for($receiver)->create([
+        $receiverProfile = $this->createActiveProfileWithResidence($receiver, [
             'gender_id' => $femaleGid,
-            'lifecycle_state' => 'active',
-            'is_suspended' => false,
             'full_name' => 'Receiver Two',
             'visibility_override' => true,
         ]);
 
         $a = User::factory()->create();
-        $aProfile = MatrimonyProfile::factory()->for($a)->create([
+        $aProfile = $this->createActiveProfileWithResidence($a, [
             'gender_id' => $maleGid,
-            'lifecycle_state' => 'active',
-            'is_suspended' => false,
             'full_name' => 'Sender Older',
             'visibility_override' => true,
         ]);
         $b = User::factory()->create();
-        $bProfile = MatrimonyProfile::factory()->for($b)->create([
+        $bProfile = $this->createActiveProfileWithResidence($b, [
             'gender_id' => $maleGid,
-            'lifecycle_state' => 'active',
-            'is_suspended' => false,
             'full_name' => 'Sender Newer',
             'visibility_override' => true,
         ]);

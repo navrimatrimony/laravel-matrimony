@@ -6,15 +6,20 @@ use App\Http\Controllers\Controller;
 use App\Models\AdminSetting;
 use App\Models\ProfileFieldConfig;
 use App\Services\AuditLogService;
+use App\Services\Chat\ChatTeaserPolicy;
+use App\Services\Admin\HomepageImageService;
+use App\Services\Interest\ReceivedInterestTeaserPolicy;
 use App\Services\MemberPresencePresentationService;
 use App\Services\Parsing\ProviderResolver;
 use App\Services\ProfileCompletenessService;
 use App\Services\SettingService;
 use App\Services\Showcase\ShowcaseInterestPolicyService;
+use App\Services\SiteIdentityService;
 use App\Services\WhoViewed\WhoViewedTeaserPolicy;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
+use Illuminate\View\View;
 
 /*
 |--------------------------------------------------------------------------
@@ -612,7 +617,7 @@ class AdminSettingsController extends Controller
     /**
      * App-wide toggles (admin bypass mode, …) via {@see SettingService} / {@see AdminSetting}.
      */
-    public function appSettings(SettingService $settings): \Illuminate\View\View
+    public function appSettings(SettingService $settings, SiteIdentityService $siteIdentity, HomepageImageService $homepageImageService): \Illuminate\View\View
     {
         $viewer = auth()->user();
         $raw = $settings->get('admin_bypass_mode');
@@ -636,6 +641,10 @@ class AdminSettingsController extends Controller
             'presenceOnlineThresholdMin' => $presenceOnlineThresholdMin,
             'plansEnforceGenderSpecificVisibility' => AdminSetting::getBool('plans_enforce_gender_specific_visibility', true),
             'mobileCleanMode' => AdminSetting::getBool('mobile_clean_mode', true),
+            'memberCommunicationFloatingTabEnabled' => AdminSetting::getBool('member_communication_floating_tab_enabled', false),
+            'memberHelpCentreFloatingTabEnabled' => AdminSetting::getBool('member_help_centre_floating_tab_enabled', false),
+            'memberChatDesktopOpenMode' => (string) AdminSetting::getValue('member_chat_desktop_open_mode', 'popup'),
+            'memberChatMobileOpenMode' => (string) AdminSetting::getValue('member_chat_mobile_open_mode', 'full_page'),
             'profileViewLockStartSection' => (string) AdminSetting::getValue('profile_view_lock_start_section', 'family'),
             'profileViewLockBlurStrength' => max(35, min(100, (int) AdminSetting::getValue('profile_view_lock_blur_strength', '78'))),
             'canManageBillingSettings' => $viewer?->hasAdminRole(['super_admin']) ?? false,
@@ -658,39 +667,72 @@ class AdminSettingsController extends Controller
             'dataEngineFixModeEnabled' => AdminSetting::getBool('data_engine_allow_fix_mode', false),
             'dataEngineFixModeDuration' => (string) AdminSetting::getValue('data_engine_fix_mode_duration', 'forever'),
             'dataEngineFixModeExpiresAt' => (string) AdminSetting::getValue('data_engine_fix_mode_expires_at', ''),
+            'canManageSiteIdentitySettings' => $viewer?->hasAdminRole(['super_admin']) ?? false,
+            'siteIdentity' => $siteIdentity->all(),
+            'siteIdentityImageUrls' => collect(SiteIdentityService::IMAGE_KEYS)
+                ->mapWithKeys(fn (string $key): array => [$key => $siteIdentity->assetUrl($key)])
+                ->all(),
+            'successStoriesImageUrl' => $homepageImageService->url('success_stories'),
         ]);
     }
 
-    public function updateAppSettings(Request $request, SettingService $settings): \Illuminate\Http\RedirectResponse
+    public function updateAppSettings(Request $request, SettingService $settings, SiteIdentityService $siteIdentity, HomepageImageService $homepageImageService): \Illuminate\Http\RedirectResponse
     {
         $canManageBillingSettings = $request->user()->hasAdminRole(['super_admin']);
         $canManageDataEngineFixMode = $request->user()->hasAdminRole(['super_admin']);
+        $canManageSiteIdentitySettings = $request->user()->hasAdminRole(['super_admin']);
 
         $request->validate([
             'admin_bypass_mode' => 'nullable|in:0,1',
-            'interest_min_core_completeness_pct' => 'required|integer|min:0|max:100',
-            'member_presence_online_threshold_minutes' => 'required|integer|min:1|max:1440',
+            'interest_min_core_completeness_pct' => 'nullable|integer|min:0|max:100',
+            'member_presence_online_threshold_minutes' => 'nullable|integer|min:1|max:1440',
             'plans_enforce_gender_specific_visibility' => 'nullable|in:0,1',
             'mobile_clean_mode' => 'nullable|in:0,1',
-            'profile_view_lock_start_section' => ['required', 'string', Rule::in(['basic_info', 'physical', 'education_career', 'family', 'siblings_detail', 'extended_family', 'alliance', 'property', 'horoscope', 'partner_preferences', 'additional'])],
-            'profile_view_lock_blur_strength' => 'required|integer|min:35|max:100',
-            'billing_legal_name' => [Rule::requiredIf($canManageBillingSettings), 'nullable', 'string', 'max:160'],
-            'billing_address' => [Rule::requiredIf($canManageBillingSettings), 'nullable', 'string', 'max:1000'],
-            'billing_email' => [Rule::requiredIf($canManageBillingSettings), 'nullable', 'email:rfc', 'max:190'],
-            'billing_phone' => [Rule::requiredIf($canManageBillingSettings), 'nullable', 'string', 'max:32'],
+            'member_communication_floating_tab_enabled' => 'nullable|in:0,1',
+            'member_help_centre_floating_tab_enabled' => 'nullable|in:0,1',
+            'member_chat_desktop_open_mode' => ['nullable', Rule::in(['popup', 'full_page'])],
+            'member_chat_mobile_open_mode' => ['nullable', Rule::in(['full_page', 'bottom_sheet'])],
+            'profile_view_lock_start_section' => ['nullable', 'string', Rule::in(['basic_info', 'physical', 'education_career', 'family', 'siblings_detail', 'extended_family', 'alliance', 'property', 'horoscope', 'partner_preferences', 'additional'])],
+            'profile_view_lock_blur_strength' => 'nullable|integer|min:35|max:100',
+            'billing_legal_name' => ['nullable', 'string', 'max:160'],
+            'billing_address' => ['nullable', 'string', 'max:1000'],
+            'billing_email' => ['nullable', 'email:rfc', 'max:190'],
+            'billing_phone' => ['nullable', 'string', 'max:32'],
             'billing_gstin' => 'nullable|string|max:32',
             'billing_pan' => 'nullable|string|max:32',
             'billing_state_code' => 'nullable|string|max:8',
             'billing_invoice_prefix' => 'nullable|string|max:24',
             'billing_invoice_terms' => 'nullable|string|max:3000',
-            'success_rate_threshold' => 'required|numeric|min:1|max:100',
-            'webhook_failure_threshold' => 'required|integer|min:1|max:10000',
-            'queue_lag_threshold' => 'required|integer|min:1|max:10000',
-            'invoice_failure_threshold' => 'required|numeric|min:0|max:100',
-            'dashboard_notification_cards_limit' => 'required|integer|min:1|max:3',
-            'dashboard_activity_autohide_seconds' => 'required|integer|min:3|max:30',
+            'success_rate_threshold' => 'nullable|numeric|min:1|max:100',
+            'webhook_failure_threshold' => 'nullable|integer|min:1|max:10000',
+            'queue_lag_threshold' => 'nullable|integer|min:1|max:10000',
+            'invoice_failure_threshold' => 'nullable|numeric|min:0|max:100',
+            'dashboard_notification_cards_limit' => 'nullable|integer|min:1|max:3',
+            'dashboard_activity_autohide_seconds' => 'nullable|integer|min:3|max:30',
             'data_engine_allow_fix_mode' => 'nullable|in:0,1',
             'data_engine_fix_mode_duration' => ['nullable', 'string', Rule::in(['2_hours', '1_day', 'forever'])],
+            'site_name' => ['nullable', 'string', 'max:160'],
+            'site_tagline' => ['nullable', 'string', 'max:220'],
+            'footer_copyright_text' => ['nullable', 'string', 'max:300'],
+            'company_name' => ['nullable', 'string', 'max:160'],
+            'support_email' => ['nullable', 'email:rfc', 'max:190'],
+            'sales_email' => ['nullable', 'email:rfc', 'max:190'],
+            'info_email' => ['nullable', 'email:rfc', 'max:190'],
+            'primary_phone' => ['nullable', 'string', 'max:40'],
+            'secondary_phone' => ['nullable', 'string', 'max:40'],
+            'address' => ['nullable', 'string', 'max:1000'],
+            'google_maps_embed_link' => ['nullable', 'string', 'max:2000'],
+            'facebook_url' => ['nullable', 'url', 'max:500'],
+            'instagram_url' => ['nullable', 'url', 'max:500'],
+            'youtube_url' => ['nullable', 'url', 'max:500'],
+            'linkedin_url' => ['nullable', 'url', 'max:500'],
+            'x_url' => ['nullable', 'url', 'max:500'],
+            'logo_light' => ['nullable', 'image', 'max:5120'],
+            'logo_dark' => ['nullable', 'image', 'max:5120'],
+            'favicon' => ['nullable', 'file', 'mimes:ico,png,jpg,jpeg,svg,webp', 'max:1024'],
+            'admin_panel_logo' => ['nullable', 'image', 'max:5120'],
+            'default_seo_image' => ['nullable', 'image', 'max:5120'],
+            'success_stories_image' => ['nullable', 'image', 'max:5120'],
         ]);
 
         $on = $request->boolean('admin_bypass_mode');
@@ -708,6 +750,14 @@ class AdminSettingsController extends Controller
         AdminSetting::setValue('plans_enforce_gender_specific_visibility', $plansGenderSpecific ? '1' : '0');
         $mobileCleanMode = $request->boolean('mobile_clean_mode');
         AdminSetting::setValue('mobile_clean_mode', $mobileCleanMode ? '1' : '0');
+        $memberCommunicationFloatingTab = $request->boolean('member_communication_floating_tab_enabled');
+        $memberHelpCentreFloatingTab = $request->boolean('member_help_centre_floating_tab_enabled');
+        AdminSetting::setValue('member_communication_floating_tab_enabled', $memberCommunicationFloatingTab ? '1' : '0');
+        AdminSetting::setValue('member_help_centre_floating_tab_enabled', $memberHelpCentreFloatingTab ? '1' : '0');
+        $memberChatDesktopOpenMode = (string) $request->input('member_chat_desktop_open_mode', 'popup');
+        $memberChatMobileOpenMode = (string) $request->input('member_chat_mobile_open_mode', 'full_page');
+        AdminSetting::setValue('member_chat_desktop_open_mode', $memberChatDesktopOpenMode);
+        AdminSetting::setValue('member_chat_mobile_open_mode', $memberChatMobileOpenMode);
         $profileViewLockStartSection = (string) $request->input('profile_view_lock_start_section', 'family');
         $profileViewLockBlurStrength = max(35, min(100, (int) $request->input('profile_view_lock_blur_strength', 78)));
         AdminSetting::setValue('profile_view_lock_start_section', $profileViewLockStartSection);
@@ -750,12 +800,38 @@ class AdminSettingsController extends Controller
             }
         }
 
+        if ($canManageSiteIdentitySettings) {
+            foreach (SiteIdentityService::TEXT_KEYS as $key) {
+                if ($request->has($key)) {
+                    $siteIdentity->setText($key, $request->input($key));
+                }
+            }
+
+            foreach (SiteIdentityService::IMAGE_KEYS as $key) {
+                if ($request->hasFile($key)) {
+                    $siteIdentity->setImage($key, $request->file($key));
+                }
+            }
+
+            if ($request->hasFile('success_stories_image')) {
+                $file = $request->file('success_stories_image');
+                $directory = public_path('images/homepage');
+                if (! is_dir($directory)) {
+                    mkdir($directory, 0775, true);
+                }
+
+                $filename = 'success_stories_'.time().'.'.strtolower($file->getClientOriginalExtension() ?: 'png');
+                $file->move($directory, $filename);
+                $homepageImageService->set('success_stories', 'images/homepage/'.$filename);
+            }
+        }
+
         AuditLogService::log(
             $request->user(),
             'update_app_settings',
             'AdminSetting',
             null,
-            'admin_bypass_mode='.($on ? '1' : '0').'; interest_min_core_completeness_pct='.$pct.'; member_presence_online_threshold_minutes='.$presenceMin.'; plans_enforce_gender_specific_visibility='.($plansGenderSpecific ? '1' : '0').'; mobile_clean_mode='.($mobileCleanMode ? '1' : '0').'; profile_view_lock_start_section='.$profileViewLockStartSection.'; profile_view_lock_blur_strength='.$profileViewLockBlurStrength.'; dashboard_notification_cards_limit='.(string) $request->input('dashboard_notification_cards_limit', '2').'; dashboard_activity_autohide_seconds='.(string) $request->input('dashboard_activity_autohide_seconds', '7').'; data_engine_allow_fix_mode='.($canManageDataEngineFixMode ? ($request->boolean('data_engine_allow_fix_mode') ? '1' : '0') : 'unchanged').'; billing settings updated',
+            'admin_bypass_mode='.($on ? '1' : '0').'; interest_min_core_completeness_pct='.$pct.'; member_presence_online_threshold_minutes='.$presenceMin.'; plans_enforce_gender_specific_visibility='.($plansGenderSpecific ? '1' : '0').'; mobile_clean_mode='.($mobileCleanMode ? '1' : '0').'; member_communication_floating_tab_enabled='.($memberCommunicationFloatingTab ? '1' : '0').'; member_help_centre_floating_tab_enabled='.($memberHelpCentreFloatingTab ? '1' : '0').'; member_chat_desktop_open_mode='.$memberChatDesktopOpenMode.'; member_chat_mobile_open_mode='.$memberChatMobileOpenMode.'; profile_view_lock_start_section='.$profileViewLockStartSection.'; profile_view_lock_blur_strength='.$profileViewLockBlurStrength.'; dashboard_notification_cards_limit='.(string) $request->input('dashboard_notification_cards_limit', '2').'; dashboard_activity_autohide_seconds='.(string) $request->input('dashboard_activity_autohide_seconds', '7').'; data_engine_allow_fix_mode='.($canManageDataEngineFixMode ? ($request->boolean('data_engine_allow_fix_mode') ? '1' : '0') : 'unchanged').'; billing settings updated; site identity settings='.($canManageSiteIdentitySettings ? 'updated' : 'unchanged'),
             false
         );
 
@@ -911,24 +987,37 @@ class AdminSettingsController extends Controller
     }
 
     /**
-     * Privacy + fields shown on locked "who viewed me" teaser cards (JSON in {@see AdminSetting}, no new columns).
+     * Tabbed admin UI: teaser settings with separate JSON keys per surface.
      */
-    public function whoViewedTeaserSettings()
+    public function teaserSettings(Request $request): View
     {
-        return view('admin.who-viewed-teaser-settings.edit', [
-            'policy' => WhoViewedTeaserPolicy::normalized(),
+        $tab = (string) $request->query('tab', 'who-viewed');
+        if (! in_array($tab, ['who-viewed', 'received-interests', 'chat'], true)) {
+            $tab = 'who-viewed';
+        }
+
+        return view('admin.teaser-settings.edit', [
+            'activeTab' => $tab,
+            'whoViewedPolicy' => WhoViewedTeaserPolicy::normalized(),
+            'receivedInterestPolicy' => ReceivedInterestTeaserPolicy::normalized(),
+            'chatPolicy' => ChatTeaserPolicy::normalized(),
         ]);
     }
 
-    public function updateWhoViewedTeaserSettings(Request $request): \Illuminate\Http\RedirectResponse
+    public function updateTeaserSettingsWhoViewed(Request $request): \Illuminate\Http\RedirectResponse
     {
         $request->validate([
             'location_granularity' => ['required', Rule::in(WhoViewedTeaserPolicy::LOCATION_GRANULARITIES)],
             'show_age_mode' => ['required', Rule::in(WhoViewedTeaserPolicy::AGE_MODES)],
             'name_display' => ['required', Rule::in(WhoViewedTeaserPolicy::NAME_DISPLAYS)],
             'locked_teaser_rows' => ['required', 'integer', 'min:1', 'max:60'],
+            'partial_plan_list_order' => ['required', Rule::in(WhoViewedTeaserPolicy::PARTIAL_PLAN_LIST_ORDERS)],
+            'who_viewed_per_page' => ['required', 'integer', 'min:5', 'max:50'],
             'teaser_avatar_style' => ['required', Rule::in(WhoViewedTeaserPolicy::TEASER_AVATAR_STYLES)],
+            'teaser_blur_strength' => ['required', Rule::in(WhoViewedTeaserPolicy::TEASER_BLUR_STRENGTHS)],
             'teaser_viewed_time' => ['required', Rule::in(WhoViewedTeaserPolicy::TEASER_VIEWED_TIME_MODES)],
+            'masked_name_dots' => ['required', 'integer', 'min:3', 'max:10'],
+            'match_teaser_min_score' => ['required', 'integer', 'min:50', 'max:95'],
         ]);
 
         $normalized = WhoViewedTeaserPolicy::normalizeForSave([
@@ -940,21 +1029,118 @@ class AdminSettingsController extends Controller
             'name_display' => $request->input('name_display'),
             'locked_teaser_rows' => (int) $request->input('locked_teaser_rows'),
             'teaser_avatar_style' => $request->input('teaser_avatar_style'),
+            'teaser_blur_strength' => $request->input('teaser_blur_strength'),
             'teaser_viewed_time' => $request->input('teaser_viewed_time'),
+            'masked_name_dots' => (int) $request->input('masked_name_dots'),
+            'show_repeat_view_teaser' => $request->boolean('show_repeat_view_teaser'),
+            'show_match_teaser' => $request->boolean('show_match_teaser'),
+            'match_teaser_min_score' => (int) $request->input('match_teaser_min_score'),
+            'apply_who_viewed_locked' => $request->boolean('apply_who_viewed_locked', true),
+            'partial_plan_list_order' => $request->input('partial_plan_list_order'),
+            'who_viewed_per_page' => (int) $request->input('who_viewed_per_page'),
         ]);
 
         AdminSetting::setValue(WhoViewedTeaserPolicy::SETTING_KEY, json_encode($normalized, JSON_UNESCAPED_UNICODE));
 
         AuditLogService::log(
             $request->user(),
-            'update_who_viewed_teaser_settings',
+            'update_teaser_settings_who_viewed',
             'AdminSetting',
             null,
             'who_viewed_teaser_policy_json updated',
             false
         );
 
-        return redirect()->route('admin.who-viewed-teaser-settings.index')
-            ->with('success', 'Who-viewed teaser privacy settings saved.');
+        return redirect()->route('admin.teaser-settings.index', ['tab' => 'who-viewed'])
+            ->with('success', __('admin.teaser_settings_who_viewed_saved'));
+    }
+
+    public function updateTeaserSettingsReceivedInterests(Request $request): \Illuminate\Http\RedirectResponse
+    {
+        $request->validate([
+            'location_granularity' => ['required', Rule::in(WhoViewedTeaserPolicy::LOCATION_GRANULARITIES)],
+            'show_age_mode' => ['required', Rule::in(WhoViewedTeaserPolicy::AGE_MODES)],
+            'name_display' => ['required', Rule::in(WhoViewedTeaserPolicy::NAME_DISPLAYS)],
+            'teaser_avatar_style' => ['required', Rule::in(WhoViewedTeaserPolicy::TEASER_AVATAR_STYLES)],
+            'teaser_blur_strength' => ['required', Rule::in(WhoViewedTeaserPolicy::TEASER_BLUR_STRENGTHS)],
+            'teaser_viewed_time' => ['required', Rule::in(WhoViewedTeaserPolicy::TEASER_VIEWED_TIME_MODES)],
+            'masked_name_dots' => ['required', 'integer', 'min:3', 'max:10'],
+            'match_teaser_min_score' => ['required', 'integer', 'min:50', 'max:95'],
+            'card_layout' => ['required', Rule::in(ReceivedInterestTeaserPolicy::CARD_LAYOUTS)],
+            'received_inbox_row_order' => ['required', Rule::in(ReceivedInterestTeaserPolicy::RECEIVED_INBOX_ROW_ORDERS)],
+            'received_inbox_per_page' => ['required', 'integer', 'min:5', 'max:50'],
+        ]);
+
+        $normalized = ReceivedInterestTeaserPolicy::normalizeForSave([
+            'rich_teaser_enabled' => $request->boolean('rich_teaser_enabled', true),
+            'card_layout' => $request->input('card_layout'),
+            'location_granularity' => $request->input('location_granularity'),
+            'show_age_mode' => $request->input('show_age_mode'),
+            'show_occupation' => $request->boolean('show_occupation'),
+            'show_education' => $request->boolean('show_education'),
+            'show_marital_status' => $request->boolean('show_marital_status'),
+            'name_display' => $request->input('name_display'),
+            'teaser_avatar_style' => $request->input('teaser_avatar_style'),
+            'teaser_blur_strength' => $request->input('teaser_blur_strength'),
+            'teaser_viewed_time' => $request->input('teaser_viewed_time'),
+            'masked_name_dots' => (int) $request->input('masked_name_dots'),
+            'show_match_teaser' => $request->boolean('show_match_teaser'),
+            'match_teaser_min_score' => (int) $request->input('match_teaser_min_score'),
+            'received_inbox_row_order' => $request->input('received_inbox_row_order'),
+            'received_inbox_per_page' => (int) $request->input('received_inbox_per_page'),
+        ]);
+
+        AdminSetting::setValue(ReceivedInterestTeaserPolicy::SETTING_KEY, json_encode($normalized, JSON_UNESCAPED_UNICODE));
+
+        AuditLogService::log(
+            $request->user(),
+            'update_teaser_settings_received_interests',
+            'AdminSetting',
+            null,
+            'received_interest_teaser_policy_json updated',
+            false
+        );
+
+        return redirect()->route('admin.teaser-settings.index', ['tab' => 'received-interests'])
+            ->with('success', __('admin.teaser_settings_received_interests_saved'));
+    }
+
+    public function updateTeaserSettingsChat(Request $request): \Illuminate\Http\RedirectResponse
+    {
+        $request->validate([
+            'locked_message_style' => ['required', Rule::in(ChatTeaserPolicy::MESSAGE_STYLES)],
+            'preview_line_mode' => ['required', Rule::in(ChatTeaserPolicy::PREVIEW_LINE_MODES)],
+            'locked_chat_cta' => ['required', Rule::in(ChatTeaserPolicy::CTA_MODES)],
+            'locked_message_time' => ['required', Rule::in(WhoViewedTeaserPolicy::TEASER_VIEWED_TIME_MODES)],
+            'teaser_blur_strength' => ['required', Rule::in(WhoViewedTeaserPolicy::TEASER_BLUR_STRENGTHS)],
+            'max_locked_threads' => ['required', 'integer', 'min:1', 'max:50'],
+        ]);
+
+        $normalized = ChatTeaserPolicy::normalizeForSave([
+            'locked_message_teaser_enabled' => $request->boolean('locked_message_teaser_enabled', true),
+            'locked_message_style' => $request->input('locked_message_style'),
+            'show_sender_hint' => true,
+            'mask_sender_name' => false,
+            'preview_line_mode' => $request->input('preview_line_mode'),
+            'locked_message_time' => $request->input('locked_message_time'),
+            'show_unread_count' => $request->boolean('show_unread_count', true),
+            'teaser_blur_strength' => $request->input('teaser_blur_strength'),
+            'locked_chat_cta' => $request->input('locked_chat_cta'),
+            'max_locked_threads' => (int) $request->input('max_locked_threads'),
+        ]);
+
+        AdminSetting::setValue(ChatTeaserPolicy::SETTING_KEY, json_encode($normalized, JSON_UNESCAPED_UNICODE));
+
+        AuditLogService::log(
+            $request->user(),
+            'update_teaser_settings_chat',
+            'AdminSetting',
+            null,
+            'chat_teaser_policy_json updated',
+            false
+        );
+
+        return redirect()->route('admin.teaser-settings.index', ['tab' => 'chat'])
+            ->with('success', __('admin.teaser_settings_chat_saved'));
     }
 }

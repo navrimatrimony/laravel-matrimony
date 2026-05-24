@@ -40,7 +40,7 @@ class NewChatMessageNotification extends Notification
         $preview = $preview !== '' ? Str::limit($preview, 80) : '';
 
         $display = $this->messageType === 'image'
-            ? ($preview !== '' ? ('📷 ' . $preview) : '📷 Image')
+            ? ($preview !== '' ? ('📷 '.$preview) : '📷 Image')
             : $preview;
 
         return [
@@ -51,7 +51,7 @@ class NewChatMessageNotification extends Notification
             'conversation_id' => $this->conversationId,
             'message_preview' => $display,
             'message_id' => $this->messageId,
+            'revealed' => true,
         ];
     }
 }
-

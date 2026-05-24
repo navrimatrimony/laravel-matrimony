@@ -192,21 +192,22 @@ class ChatMessageService
                         return;
                     }
 
-                    SafeNotifier::notify($receiverUser, new NewChatMessageNotification(
-                        senderProfile: $sender,
-                        conversationId: (int) $conversation->id,
-                        messageType: (string) ($message->message_type ?? 'text'),
-                        messagePreview: $message->body_text,
-                        messageId: (int) $message->id,
-                    ));
+                    $canRead = app(FeatureUsageService::class)->canUse((int) $receiverUser->id, FeatureUsageService::FEATURE_CHAT_CAN_READ);
 
-                    if (! app(FeatureUsageService::class)->canUse((int) $receiverUser->id, FeatureUsageService::FEATURE_CHAT_CAN_READ)) {
+                    if ($canRead) {
+                        SafeNotifier::notify($receiverUser, new NewChatMessageNotification(
+                            senderProfile: $sender,
+                            conversationId: (int) $conversation->id,
+                            messageType: (string) ($message->message_type ?? 'text'),
+                            messagePreview: $message->body_text,
+                            messageId: (int) $message->id,
+                        ));
+                    } else {
                         try {
-                            app(NotificationService::class)->notifyChatReceivedWhileReadLocked(
-                                $receiverUser,
-                                $sender,
-                                (int) $conversation->id
-                            );
+                            $senderUser = $sender->user;
+                            if ($senderUser) {
+                                app(NotificationService::class)->notifyChatReceivedWhileReadLocked($receiverUser, $senderUser);
+                            }
                         } catch (\Throwable) {
                             // Must not break messaging.
                         }

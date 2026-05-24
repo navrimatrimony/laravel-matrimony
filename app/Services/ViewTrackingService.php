@@ -8,6 +8,7 @@ use App\Models\MatrimonyProfile;
 use App\Models\ProfileView;
 use App\Models\User;
 use App\Notifications\ProfileViewedNotification;
+use App\Services\WhoViewed\WhoViewedNotificationIdentityGate;
 use App\Support\SafeNotifier;
 use Illuminate\Support\Facades\DB;
 
@@ -222,12 +223,18 @@ class ViewTrackingService
             ->where('created_at', '>=', $since)
             ->get(['data']);
 
+        $token = WhoViewedNotificationIdentityGate::viewerDedupeToken($owner, $viewerProfileId);
+
         foreach ($recent as $notification) {
             $data = is_array($notification->data) ? $notification->data : [];
             if (($data['type'] ?? null) !== 'profile_viewed') {
                 continue;
             }
             if ((int) ($data['viewer_profile_id'] ?? 0) === $viewerProfileId) {
+                return false;
+            }
+            $prev = (string) ($data['viewer_dedupe_token'] ?? '');
+            if ($prev !== '' && hash_equals($prev, $token)) {
                 return false;
             }
         }
