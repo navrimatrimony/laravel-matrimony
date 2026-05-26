@@ -5,8 +5,16 @@ use App\Http\Controllers\SubscriptionController;
 use App\Models\Caste;
 use App\Models\Country;
 use App\Models\District;
+use App\Models\HomepageSuccessStory;
+use App\Models\MasterGender;
+use App\Models\MasterMaritalStatus;
+use App\Models\MatrimonyProfile;
+use App\Models\Plan;
+use App\Models\Religion;
+use App\Services\Admin\HomepageContentService;
 use App\Services\Admin\HomepageImageService;
 use Illuminate\Support\Facades\Route;
+use Illuminate\Support\Facades\Schema;
 
 /*
 |--------------------------------------------------------------------------
@@ -36,12 +44,27 @@ Route::post('/payments/payu/webhook', [PayuController::class, 'webhook'])->name(
 */
 Route::get('/', function () {
     $homepageImages = app(HomepageImageService::class)->allPaths();
+    $homepageSettings = app(HomepageContentService::class)->settings();
     $castes = Caste::query()
         ->where(function ($q) {
             $q->where('is_active', true)->orWhereNull('is_active');
         })
         ->orderBy('label_en')
         ->orderBy('label')
+        ->get();
+
+    $religions = Religion::query()
+        ->where(function ($q) {
+            $q->where('is_active', true)->orWhereNull('is_active');
+        })
+        ->orderBy('label_en')
+        ->orderBy('label')
+        ->get();
+
+    $genders = MasterGender::query()
+        ->where('is_active', true)
+        ->whereIn('key', ['male', 'female'])
+        ->orderByRaw("CASE WHEN `key` = 'female' THEN 1 WHEN `key` = 'male' THEN 2 ELSE 3 END")
         ->get();
 
     $defaultCountry = Country::query()
@@ -59,11 +82,53 @@ Route::get('/', function () {
         ? District::query()->where('parent_id', (int) $welcomeStateId)->orderBy('name')->get()
         : collect();
 
+    $maritalStatuses = MasterMaritalStatus::query()
+        ->where('is_active', true)
+        ->orderBy('label')
+        ->get();
+
+    $successStories = Schema::hasTable('homepage_success_stories')
+        ? HomepageSuccessStory::query()
+            ->where('is_published', true)
+            ->orderByDesc('is_featured')
+            ->orderBy('sort_order')
+            ->latest('id')
+            ->limit((int) ($homepageSettings['story_limit'] ?? 6))
+            ->get()
+        : collect();
+
+    $homepageStats = [
+        'profiles' => Schema::hasTable('matrimony_profiles')
+            ? MatrimonyProfile::query()->where('is_suspended', false)->count()
+            : 0,
+        'success_stories' => $successStories->count(),
+        'plans' => Schema::hasTable('plans')
+            ? Plan::query()->where('is_active', true)->where('is_visible', true)->count()
+            : 0,
+    ];
+
+    $homepagePlans = Schema::hasTable('plans')
+        ? Plan::query()
+            ->where('is_active', true)
+            ->where('is_visible', true)
+            ->orderByDesc('highlight')
+            ->orderBy('sort_order')
+            ->limit(3)
+            ->get()
+        : collect();
+
     return view('public.welcome', compact(
         'homepageImages',
+        'homepageSettings',
+        'genders',
+        'religions',
         'castes',
         'addressStates',
         'addressDistricts',
+        'maritalStatuses',
+        'successStories',
+        'homepageStats',
+        'homepagePlans',
         'defaultCountry',
     ));
 });

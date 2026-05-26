@@ -71,6 +71,10 @@ class MatrimonyProfileSearchQueryService
             $query->where('religion_id', $request->input('religion_id'));
         }
 
+        if ((! $strict || $inStrict('gender_id')) && $isSearchable('gender_id') && $request->filled('gender_id')) {
+            $query->where('gender_id', $request->input('gender_id'));
+        }
+
         $advancedProfileSearch = (bool) $request->attributes->get('advanced_profile_search', false);
 
         if ($advancedProfileSearch && (! $strict || $inStrict('caste_id')) && $isSearchable('caste') && $request->filled('caste_id')) {

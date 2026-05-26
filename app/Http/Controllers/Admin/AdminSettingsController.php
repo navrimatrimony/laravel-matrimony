@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 
 namespace App\Http\Controllers\Admin;
 
@@ -7,7 +7,6 @@ use App\Models\AdminSetting;
 use App\Models\ProfileFieldConfig;
 use App\Services\AuditLogService;
 use App\Services\Chat\ChatTeaserPolicy;
-use App\Services\Admin\HomepageImageService;
 use App\Services\Interest\ReceivedInterestTeaserPolicy;
 use App\Services\MemberPresencePresentationService;
 use App\Services\Parsing\ProviderResolver;
@@ -31,7 +30,7 @@ class AdminSettingsController extends Controller
     private const REASON_RULES = ['required', 'string', 'min:10'];
 
     /**
-     * View-back settings (Day-9). Enable/disable, probability 0–100, delay min/max.
+     * View-back settings (Day-9). Enable/disable, probability 0â€“100, delay min/max.
      */
     public function viewBackSettings()
     {
@@ -110,7 +109,7 @@ class AdminSettingsController extends Controller
     }
 
     /**
-     * Showcase → real random views (scheduled). Weighted matching + per-real caps.
+     * Showcase â†’ real random views (scheduled). Weighted matching + per-real caps.
      */
     public function updateShowcaseRandomViewSettings(Request $request): \Illuminate\Http\RedirectResponse
     {
@@ -592,7 +591,7 @@ class AdminSettingsController extends Controller
                 $fieldChanges = [];
                 foreach ($updates as $key => $value) {
                     if ($value !== $original[$key]) {
-                        $fieldChanges[] = "{$key}: ".($original[$key] ? 'true' : 'false').' → '.($value ? 'true' : 'false');
+                        $fieldChanges[] = "{$key}: ".($original[$key] ? 'true' : 'false').' â†’ '.($value ? 'true' : 'false');
                     }
                 }
                 $changes[] = $field->field_key.' ('.implode(', ', $fieldChanges).')';
@@ -615,9 +614,9 @@ class AdminSettingsController extends Controller
     }
 
     /**
-     * App-wide toggles (admin bypass mode, …) via {@see SettingService} / {@see AdminSetting}.
+     * App-wide toggles (admin bypass mode, â€¦) via {@see SettingService} / {@see AdminSetting}.
      */
-    public function appSettings(SettingService $settings, SiteIdentityService $siteIdentity, HomepageImageService $homepageImageService): \Illuminate\View\View
+    public function appSettings(SettingService $settings, SiteIdentityService $siteIdentity): \Illuminate\View\View
     {
         $viewer = auth()->user();
         $raw = $settings->get('admin_bypass_mode');
@@ -672,11 +671,10 @@ class AdminSettingsController extends Controller
             'siteIdentityImageUrls' => collect(SiteIdentityService::IMAGE_KEYS)
                 ->mapWithKeys(fn (string $key): array => [$key => $siteIdentity->assetUrl($key)])
                 ->all(),
-            'successStoriesImageUrl' => $homepageImageService->url('success_stories'),
         ]);
     }
 
-    public function updateAppSettings(Request $request, SettingService $settings, SiteIdentityService $siteIdentity, HomepageImageService $homepageImageService): \Illuminate\Http\RedirectResponse
+    public function updateAppSettings(Request $request, SettingService $settings, SiteIdentityService $siteIdentity): \Illuminate\Http\RedirectResponse
     {
         $canManageBillingSettings = $request->user()->hasAdminRole(['super_admin']);
         $canManageDataEngineFixMode = $request->user()->hasAdminRole(['super_admin']);
@@ -732,7 +730,6 @@ class AdminSettingsController extends Controller
             'favicon' => ['nullable', 'file', 'mimes:ico,png,jpg,jpeg,svg,webp', 'max:1024'],
             'admin_panel_logo' => ['nullable', 'image', 'max:5120'],
             'default_seo_image' => ['nullable', 'image', 'max:5120'],
-            'success_stories_image' => ['nullable', 'image', 'max:5120'],
         ]);
 
         $on = $request->boolean('admin_bypass_mode');
@@ -813,17 +810,6 @@ class AdminSettingsController extends Controller
                 }
             }
 
-            if ($request->hasFile('success_stories_image')) {
-                $file = $request->file('success_stories_image');
-                $directory = public_path('images/homepage');
-                if (! is_dir($directory)) {
-                    mkdir($directory, 0775, true);
-                }
-
-                $filename = 'success_stories_'.time().'.'.strtolower($file->getClientOriginalExtension() ?: 'png');
-                $file->move($directory, $filename);
-                $homepageImageService->set('success_stories', 'images/homepage/'.$filename);
-            }
         }
 
         AuditLogService::log(
@@ -886,7 +872,7 @@ class AdminSettingsController extends Controller
     }
 
     /**
-     * Showcase interest admin: mostly showcase → real sends; plus incoming auto-respond (real → showcase).
+     * Showcase interest admin: mostly showcase â†’ real sends; plus incoming auto-respond (real â†’ showcase).
      * Other {@see ShowcaseInterestPolicyService} keys may remain in DB untouched.
      */
     public function showcaseInterestSettings(): \Illuminate\View\View

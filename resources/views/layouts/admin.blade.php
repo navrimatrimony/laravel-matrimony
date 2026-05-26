@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="{{ str_replace('_', '-', app()->getLocale()) }}">
 <head>
     <meta charset="utf-8">
@@ -8,7 +8,7 @@
     @php
         $siteIdentityLayout = app(\App\Services\SiteIdentityService::class);
     @endphp
-    <title>Admin — {{ $siteIdentityLayout->get('site_name', config('app.name', 'Laravel')) }}</title>
+    <title>Admin â€” {{ $siteIdentityLayout->get('site_name', config('app.name', 'Laravel')) }}</title>
     @include('layouts.partials.site-identity-head')
     <link rel="preconnect" href="https://fonts.bunny.net">
     <link href="https://fonts.bunny.net/css?family=figtree:400,500,600&display=swap" rel="stylesheet" />
@@ -62,13 +62,13 @@
                     $governanceOpen = request()->routeIs('admin.governance-dashboard');
                     $masterDataOpen = request()->routeIs('admin.master.*');
                     $showcaseOpen = request()->routeIs('admin.showcase-dashboard.*') || request()->routeIs('admin.showcase-search-settings.*') || request()->routeIs('admin.showcase-interest-settings.*') || request()->routeIs('admin.view-back-settings.*') || request()->routeIs('admin.showcase-chat-settings.*') || request()->routeIs('admin.showcase-conversations.*') || request()->routeIs('admin.showcase-chat.debug') || request()->routeIs('admin.showcase-profile.*') || request()->routeIs('admin.auto-showcase-settings.*');
-                    $settingsOpen = request()->routeIs('admin.app-settings.*') || request()->routeIs('admin.teaser-settings.*') || request()->routeIs('admin.who-viewed-teaser-settings.*') || request()->routeIs('admin.photo-approval-settings.*') || request()->routeIs('admin.moderation-engine-settings.*') || request()->routeIs('admin.intake-settings.*') || request()->routeIs('admin.mobile-verification-settings.*') || request()->routeIs('admin.notifications.*') || request()->routeIs('admin.profile-field-config.*') || request()->routeIs('admin.field-registry.*') || request()->routeIs('admin.verification-tags.*') || request()->routeIs('admin.serious-intents.*') || request()->routeIs('admin.admin-capabilities.*') || request()->routeIs('admin.communication-policy.*') || request()->routeIs('admin.homepage-images.*') || request()->routeIs('admin.translations.*') || request()->routeIs('admin.plans.*') || request()->routeIs('admin.commerce.*') || request()->routeIs('admin.revenue.*') || request()->routeIs('admin.match-boost.*') || request()->routeIs('admin.help-centre.tickets.*');
+                    $settingsOpen = request()->routeIs('admin.app-settings.*') || request()->routeIs('admin.teaser-settings.*') || request()->routeIs('admin.who-viewed-teaser-settings.*') || request()->routeIs('admin.photo-approval-settings.*') || request()->routeIs('admin.moderation-engine-settings.*') || request()->routeIs('admin.intake-settings.*') || request()->routeIs('admin.mobile-verification-settings.*') || request()->routeIs('admin.notifications.*') || request()->routeIs('admin.profile-field-config.*') || request()->routeIs('admin.field-registry.*') || request()->routeIs('admin.verification-tags.*') || request()->routeIs('admin.serious-intents.*') || request()->routeIs('admin.admin-capabilities.*') || request()->routeIs('admin.communication-policy.*') || request()->routeIs('admin.homepage-settings.*') || request()->routeIs('admin.homepage-images.*') || request()->routeIs('admin.translations.*') || request()->routeIs('admin.plans.*') || request()->routeIs('admin.commerce.*') || request()->routeIs('admin.revenue.*') || request()->routeIs('admin.match-boost.*') || request()->routeIs('admin.help-centre.tickets.*');
                     $matchingEngineOpen = request()->routeIs('admin.matching-engine.*');
                     $monetizationOpen = request()->routeIs('admin.coupons.*') || request()->routeIs('admin.wallets.*') || request()->routeIs('admin.boosts.*') || request()->routeIs('admin.referrals.*');
                     $dataEngineOpen = request()->routeIs('admin.data-engine.*') || request()->routeIs('admin.governance.profiles.*');
                 @endphp
 
-                {{-- 1) Dashboard — default expanded --}}
+                {{-- 1) Dashboard â€” default expanded --}}
                 <div class="nav-group" x-data="{ open: true }">
                     <button type="button" @click="open = !open" class="nav-group-btn w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium text-left text-gray-300">
                         <svg class="w-5 h-5 shrink-0 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6A2.25 2.25 0 016 3.75h2.25A2.25 2.25 0 0110.5 6v2.25a2.25 2.25 0 01-2.25 2.25H6a2.25 2.25 0 01-2.25-2.25V6zM3.75 15.75A2.25 2.25 0 016 13.5h2.25a2.25 2.25 0 012.25 2.25V18a2.25 2.25 0 01-2.25 2.25H6A2.25 2.25 0 013.75 18v-2.25zM13.5 6a2.25 2.25 0 012.25-2.25H18A2.25 2.25 0 0120.25 6v2.25A2.25 2.25 0 0118 10.5h-2.25a2.25 2.25 0 01-2.25-2.25V6zM13.5 15.75a2.25 2.25 0 012.25-2.25H18a2.25 2.25 0 012.25 2.25V18A2.25 2.25 0 0118 20.25h-2.25A2.25 2.25 0 0113.5 18v-2.25z" /></svg>
@@ -105,7 +105,7 @@
 
                 @include('admin.layouts.sidebar')
 
-                {{-- 2) Profiles — default expanded --}}
+                {{-- 2) Profiles â€” default expanded --}}
                 <div class="nav-group" x-data="{ open: true }">
                     <button type="button" @click="open = !open" class="nav-group-btn w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium text-left text-gray-300">
                         <svg class="w-5 h-5 shrink-0 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M18 18.72a9.094 9.094 0 003.741-.479 3 3 0 00-4.682-2.72m.94 3.198l.001.031c0 .225-.012.447-.037.666A11.944 11.944 0 0112 21c-2.17 0-4.207-.576-5.963-1.584A6.062 6.062 0 016 18.719m12 0a5.971 5.971 0 00-.941-3.197m0 0A5.995 5.995 0 0012 12.75a5.995 5.995 0 00-5.058 2.772m0 0a3 3 0 00-4.681 2.72 8.986 8.986 0 003.74.477m.94-3.197a5.971 5.971 0 00-.94 3.197M15 6.75a3 3 0 11-6 0 3 3 0 016 0zm6 3a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0zm-13.5 0a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0z" /></svg>
@@ -119,7 +119,7 @@
                     </ul>
                 </div>
 
-                {{-- Showcase engine — horizontal tabs + all showcase tools (see layouts.admin-showcase) --}}
+                {{-- Showcase engine â€” horizontal tabs + all showcase tools (see layouts.admin-showcase) --}}
                 <div>
                     <a href="{{ route('admin.showcase.index') }}" class="nav-link flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-semibold {{ $showcaseOpen ? 'active' : 'text-gray-300 hover:bg-gray-700' }}">
                         <svg class="w-5 h-5 shrink-0 text-violet-300" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 00-2.456 2.456z" /></svg>
@@ -127,7 +127,7 @@
                     </a>
                 </div>
 
-                {{-- 3) Interactions — collapsed by default --}}
+                {{-- 3) Interactions â€” collapsed by default --}}
                 <div class="nav-group" x-data="{ open: false }">
                     <button type="button" @click="open = !open" class="nav-group-btn w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium text-left text-gray-300">
                         <svg class="w-5 h-5 shrink-0 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M13.19 8.688a4.5 4.5 0 011.242 7.244l-4.5 4.5a4.5 4.5 0 01-6.364-6.364l1.757-1.757m13.35-.622l1.757-1.757a4.5 4.5 0 00-6.364-6.364l-4.5 4.5a4.5 4.5 0 001.242 7.244" /></svg>
@@ -142,7 +142,7 @@
                     </ul>
                 </div>
 
-                {{-- 4) Moderation — expanded when active --}}
+                {{-- 4) Moderation â€” expanded when active --}}
                 <div class="nav-group" x-data="{ open: {{ $moderationOpen ? 'true' : 'false' }} }">
                     <button type="button" @click="open = !open" class="nav-group-btn w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium text-left text-gray-300">
                         <svg class="w-5 h-5 shrink-0 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285zm0 0A11.959 11.959 0 013.598 6" /></svg>
@@ -211,7 +211,7 @@
                     </ul>
                 </div>
 
-                {{-- 5) Settings — expanded when active --}}
+                {{-- 5) Settings â€” expanded when active --}}
                 <div class="nav-group" x-data="{ open: {{ $settingsOpen ? 'true' : 'false' }} }">
                     <button type="button" @click="open = !open" class="nav-group-btn w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium text-left text-gray-300">
                         <svg class="w-5 h-5 shrink-0 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.324.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 011.37.49l1.296 2.247a1.125 1.125 0 01-.26 1.431l-1.003.827c-.293.24-.438.613-.431.992a6.759 6.759 0 010 .255c-.007.378.138.75.43.99l1.005.828c.424.35.534.954.26 1.43l-1.298 2.247a1.125 1.125 0 01-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.57 6.57 0 01-.22.128c-.331.183-.581.495-.644.869l-.213 1.28c-.09.543-.56.941-1.11.941h-2.594c-.55 0-1.02-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 01-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 01-1.369-.49l-1.297-2.247a1.125 1.125 0 01.26-1.431l1.004-.827c.292-.24.437-.613.43-.992a6.932 6.932 0 010-.255c.007-.378-.138-.75-.43-.99l-1.004-.828a1.125 1.125 0 01-.26-1.43l1.297-2.247a1.125 1.125 0 011.37-.491l1.216.456c.356.133.751.072 1.076-.124.072-.044.146-.087.22-.128.332-.183.582-.495.644-.869l.214-1.281z" /><path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
@@ -244,14 +244,14 @@
                         <li><a href="{{ route('admin.profile-field-config.index') }}" class="nav-link flex items-center gap-3 px-3 py-2 rounded-lg text-sm {{ request()->routeIs('admin.profile-field-config.*') ? 'active' : '' }}"><svg class="w-4 h-4 shrink-0 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12h3.75M9 15h3.75M9 18h3.75m3 .75H18a2.25 2.25 0 002.25-2.25V6.108c0-1.135-.845-2.098-1.976-2.192a48.424 48.424 0 00-1.123-.08m-5.801 0c-.065.21-.1.433-.1.664 0 .414.336.75.75.75h4.5a.75.75 0 00.75-.75 2.25 2.25 0 00-.1-.664m-5.8 0A2.251 2.251 0 0113.5 2.25H15c1.012 0 1.867.668 2.15 1.586m-5.8 0c-.376.023-.75.05-1.124.08C9.095 4.01 8.25 4.973 8.25 6.108V8.25m0 0H4.875c-.621 0-1.125.504-1.125 1.125v11.25c0 .621.504 1.125 1.125 1.125h11.25c.621 0 1.125-.504 1.125-1.125V9.375c0-.621-.504-1.125-1.125-1.125H8.25zM6.75 12h.008v.008H6.75V12zm0 3h.008v.008H6.75V15zm0 3h.008v.008H6.75V18z" /></svg>Profile Field Configuration</a></li>
                         <li><a href="{{ route('admin.field-registry.index') }}" class="nav-link flex items-center gap-3 px-3 py-2 rounded-lg text-sm {{ request()->routeIs('admin.field-registry.index') ? 'active' : '' }}"><svg class="w-4 h-4 shrink-0 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M3.75 12h16.5m-16.5 3.75h16.5M3.75 19.5h16.5M5.625 4.5h12.75a1.875 1.875 0 010 3.75H5.625a1.875 1.875 0 010-3.75z" /></svg>Field Registry (CORE)</a></li>
                         <li><a href="{{ route('admin.field-registry.extended.index') }}" class="nav-link flex items-center gap-3 px-3 py-2 rounded-lg text-sm {{ request()->routeIs('admin.field-registry.extended.*') ? 'active' : '' }}"><svg class="w-4 h-4 shrink-0 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15m0 0l7.5 7.5m-7.5-7.5l7.5-7.5" /></svg>EXTENDED Fields</a></li>
-                        <li><a href="{{ route('admin.homepage-images.index') }}" class="nav-link flex items-center gap-3 px-3 py-2 rounded-lg text-sm {{ request()->routeIs('admin.homepage-images.*') ? 'active' : '' }}"><svg class="w-4 h-4 shrink-0 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909m-18 3.75h16.5a1.5 1.5 0 001.5-1.5V6a1.5 1.5 0 00-1.5-1.5H3.75A1.5 1.5 0 002.25 6v12a1.5 1.5 0 001.5 1.5zm10.5-11.25h.008v.008h-.008V8.25zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z" /></svg>Homepage images</a></li>
+                        <li><a href="{{ route('admin.homepage-settings.index') }}" class="nav-link flex items-center gap-3 px-3 py-2 rounded-lg text-sm {{ request()->routeIs('admin.homepage-settings.*') || request()->routeIs('admin.homepage-images.*') ? 'active' : '' }}"><svg class="w-4 h-4 shrink-0 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M3 7.5A2.25 2.25 0 015.25 5.25h13.5A2.25 2.25 0 0121 7.5v9A2.25 2.25 0 0118.75 18.75H5.25A2.25 2.25 0 013 16.5v-9z" /><path stroke-linecap="round" stroke-linejoin="round" d="M7.5 9.75h9M7.5 12h5.25M7.5 14.25h7.5" /></svg>Homepage settings</a></li>
                         <li><a href="{{ route('admin.notifications.index') }}" class="nav-link flex items-center gap-3 px-3 py-2 rounded-lg text-sm {{ request()->routeIs('admin.notifications.*') ? 'active' : '' }}"><svg class="w-4 h-4 shrink-0 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M14.857 17.082a23.848 23.848 0 005.454-1.31A8.967 8.967 0 0118 9.75v-.7V9A6 6 0 006 9v.75a8.967 8.967 0 01-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 01-5.714 0m5.714 0a3 3 0 11-5.714 0" /></svg>Notification settings</a></li>
                         <li><a href="{{ route('admin.help-centre.tickets.index') }}" class="nav-link flex items-center gap-3 px-3 py-2 rounded-lg text-sm {{ request()->routeIs('admin.help-centre.tickets.*') ? 'active' : '' }}"><svg class="w-4 h-4 shrink-0 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 12c0 5.385 4.365 9.75 9.75 9.75 1.832 0 3.545-.505 5.01-1.384l4.74 1.184-1.184-4.74A9.713 9.713 0 0021.75 12c0-5.385-4.365-9.75-9.75-9.75S2.25 6.615 2.25 12z" /></svg>Help centre tickets</a></li>
                         <li><a href="{{ route('admin.translations.index') }}" class="nav-link flex items-center gap-3 px-3 py-2 rounded-lg text-sm {{ request()->routeIs('admin.translations.*') ? 'active' : '' }}"><svg class="w-4 h-4 shrink-0 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M10.5 21l5.25-11.25L21 21m-9-3h7.5M3 5.621a48.474 48.474 0 016-.371m0 0c1.12 0 2.233.038 3.334.114M9 5.25V3m3.334 2.364C11.176 10.658 7.69 15.08 3 17.502m9.334-12.138c.896.061 1.785.147 2.666.257m-4.589 8.495a18.023 18.023 0 01-3.827-5.802" /></svg>Translations (EN / MR)</a></li>
                     </ul>
                 </div>
 
-                {{-- 6) System — collapsed by default --}}
+                {{-- 6) System â€” collapsed by default --}}
                 <div class="nav-group" x-data="{ open: false }">
                     <button type="button" @click="open = !open" class="nav-group-btn w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium text-left text-gray-300">
                         <svg class="w-5 h-5 shrink-0 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" /></svg>
@@ -265,7 +265,7 @@
                 </div>
             </nav>
             <div class="p-4 border-t border-gray-700 flex-shrink-0">
-                <a href="{{ url('/') }}" class="block text-sm text-gray-400 hover:text-white">← Back to site</a>
+                <a href="{{ url('/') }}" class="block text-sm text-gray-400 hover:text-white">â† Back to site</a>
                 <form method="POST" action="{{ route('logout') }}" class="mt-2">
                     @csrf
                     <button type="submit" class="text-sm text-gray-400 hover:text-white">Log out</button>

@@ -32,6 +32,7 @@ use App\Http\Controllers\Admin\DuplicatePhoneController;
 use App\Http\Controllers\Admin\GovernanceDashboardController;
 use App\Http\Controllers\Admin\HelpCentreTicketController;
 use App\Http\Controllers\Admin\HomepageImageController;
+use App\Http\Controllers\Admin\HomepageSettingsController;
 use App\Http\Controllers\Admin\IntakeReviewController;
 use App\Http\Controllers\Admin\LocationManageWebController;
 use App\Http\Controllers\Admin\LocationSuggestionWebController;
@@ -537,6 +538,15 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
 
     Route::get('/notifications', [AdminUserNotificationsController::class, 'userNotificationsIndex'])->name('notifications.index');
     Route::get('/notifications/user', [AdminUserNotificationsController::class, 'userNotificationsShow'])->name('notifications.user.show');
+
+    Route::get('/homepage-settings', [HomepageSettingsController::class, 'index'])->name('homepage-settings.index');
+    Route::post('/homepage-settings', [HomepageSettingsController::class, 'update'])->name('homepage-settings.update');
+    Route::post('/homepage-settings/stories-display', [HomepageSettingsController::class, 'updateStoriesDisplay'])->name('homepage-settings.stories-display.update');
+    Route::post('/homepage-settings/images', [HomepageSettingsController::class, 'storeImage'])->name('homepage-settings.images.store');
+    Route::post('/homepage-settings/images/clear', [HomepageSettingsController::class, 'clearImage'])->name('homepage-settings.images.clear');
+    Route::post('/homepage-settings/stories', [HomepageSettingsController::class, 'storeStory'])->name('homepage-settings.stories.store');
+    Route::put('/homepage-settings/stories/{story}', [HomepageSettingsController::class, 'updateStory'])->name('homepage-settings.stories.update');
+    Route::delete('/homepage-settings/stories/{story}', [HomepageSettingsController::class, 'destroyStory'])->name('homepage-settings.stories.destroy');
 
     Route::get('/homepage-images', [HomepageImageController::class, 'index'])->name('homepage-images.index');
     Route::post('/homepage-images', [HomepageImageController::class, 'store'])->name('homepage-images.store');

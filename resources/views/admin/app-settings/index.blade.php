@@ -1,4 +1,4 @@
-@extends('layouts.admin')
+﻿@extends('layouts.admin')
 
 @section('content')
 <style>
@@ -76,8 +76,8 @@
                     <span class="toggle-track"><span class="toggle-thumb"></span></span>
                     <span class="toggle-label {{ $plansEnforceGenderSpecificVisibility ? 'on' : 'off' }}">Plans: gender-specific visibility</span>
                 </label>
-                <p class="text-sm text-gray-600 dark:text-gray-300 mt-3 font-medium">ON: male userला male plans आणि female userला female plansच दिसतील</p>
-                <p class="text-xs text-gray-500 dark:text-gray-400 mt-2">Default ON. OFF केल्यावर gender matching drift असताना blank catalog टाळण्यासाठी all paid plans fallback दिसू शकतो.</p>
+                <p class="text-sm text-gray-600 dark:text-gray-300 mt-3 font-medium">ON: male userà¤²à¤¾ male plans à¤†à¤£à¤¿ female userà¤²à¤¾ female plansà¤š à¤¦à¤¿à¤¸à¤¤à¥€à¤²</p>
+                <p class="text-xs text-gray-500 dark:text-gray-400 mt-2">Default ON. OFF à¤•à¥‡à¤²à¥à¤¯à¤¾à¤µà¤° gender matching drift à¤…à¤¸à¤¤à¤¾à¤¨à¤¾ blank catalog à¤Ÿà¤¾à¤³à¤£à¥à¤¯à¤¾à¤¸à¤¾à¤ à¥€ all paid plans fallback à¤¦à¤¿à¤¸à¥‚ à¤¶à¤•à¤¤à¥‹.</p>
             </div>
 
             <div class="p-4 bg-gray-50 dark:bg-gray-700/30 rounded-lg border border-gray-200 dark:border-gray-600">
@@ -86,7 +86,7 @@
                     <span class="toggle-track"><span class="toggle-thumb"></span></span>
                     <span class="toggle-label {{ ($mobileCleanMode ?? true) ? 'on' : 'off' }}">Mobile clean mode</span>
                 </label>
-                <p class="text-sm text-gray-600 dark:text-gray-300 mt-3 font-medium">ON: mobile वर floating help/chat/viewer overlays hide ठेवून content-first UI दाखवा</p>
+                <p class="text-sm text-gray-600 dark:text-gray-300 mt-3 font-medium">ON: mobile à¤µà¤° floating help/chat/viewer overlays hide à¤ à¥‡à¤µà¥‚à¤¨ content-first UI à¤¦à¤¾à¤–à¤µà¤¾</p>
                 <p class="text-xs text-gray-500 dark:text-gray-400 mt-2">Recommended ON for cleaner small-screen experience.</p>
             </div>
 
@@ -105,8 +105,8 @@
                         <span class="toggle-label {{ ($memberCommunicationFloatingTabEnabled ?? false) ? 'on' : 'off' }}">Show Communication floating tab</span>
                     </label>
                 </div>
-                <p class="text-sm text-gray-600 dark:text-gray-300 mt-3 font-medium">Default OFF. हे फक्त user screen वरील side tabs दाखवायचे की नाही ते control करते.</p>
-                <p class="text-xs text-gray-500 dark:text-gray-400 mt-2">OFF असले तरी Communication menu मधून वापरता येते. Help centre tab OFF असेल तर user dropdown मध्ये Help centre link दिसेल.</p>
+                <p class="text-sm text-gray-600 dark:text-gray-300 mt-3 font-medium">Default OFF. à¤¹à¥‡ à¤«à¤•à¥à¤¤ user screen à¤µà¤°à¥€à¤² side tabs à¤¦à¤¾à¤–à¤µà¤¾à¤¯à¤šà¥‡ à¤•à¥€ à¤¨à¤¾à¤¹à¥€ à¤¤à¥‡ control à¤•à¤°à¤¤à¥‡.</p>
+                <p class="text-xs text-gray-500 dark:text-gray-400 mt-2">OFF à¤…à¤¸à¤²à¥‡ à¤¤à¤°à¥€ Communication menu à¤®à¤§à¥‚à¤¨ à¤µà¤¾à¤ªà¤°à¤¤à¤¾ à¤¯à¥‡à¤¤à¥‡. Help centre tab OFF à¤…à¤¸à¥‡à¤² à¤¤à¤° user dropdown à¤®à¤§à¥à¤¯à¥‡ Help centre link à¤¦à¤¿à¤¸à¥‡à¤².</p>
             </div>
 
             <div class="p-4 bg-gray-50 dark:bg-gray-700/30 rounded-lg border border-gray-200 dark:border-gray-600">
@@ -165,30 +165,30 @@
                     </div>
                 </div>
                 <p class="text-xs text-gray-500 dark:text-gray-400 mt-2">
-                    Profile page वर lock card एकदाच दाखवला जाईल. निवडलेल्या section पासून gradient blur सुरू होईल.
+                    Profile page à¤µà¤° lock card à¤à¤•à¤¦à¤¾à¤š à¤¦à¤¾à¤–à¤µà¤²à¤¾ à¤œà¤¾à¤ˆà¤². à¤¨à¤¿à¤µà¤¡à¤²à¥‡à¤²à¥à¤¯à¤¾ section à¤ªà¤¾à¤¸à¥‚à¤¨ gradient blur à¤¸à¥à¤°à¥‚ à¤¹à¥‹à¤ˆà¤².
                 </p>
             </div>
 
             <div class="p-4 bg-gray-50 dark:bg-gray-700/30 rounded-lg border border-gray-200 dark:border-gray-600">
-                <label class="block text-sm font-semibold text-gray-900 dark:text-gray-100 mb-2">Interest — minimum core completeness (%)</label>
+                <label class="block text-sm font-semibold text-gray-900 dark:text-gray-100 mb-2">Interest â€” minimum core completeness (%)</label>
                 <input type="number" name="interest_min_core_completeness_pct" min="0" max="100" required
                     value="{{ old('interest_min_core_completeness_pct', $interestMinCorePct) }}"
                     class="block w-full max-w-xs rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm text-gray-900 dark:text-gray-100">
                 <p class="text-xs text-gray-500 dark:text-gray-400 mt-2">
                     Mandatory-field completeness score required to <strong>send interest</strong>, <strong>receive interest</strong> (when non-zero), and <strong>accept interest</strong>.
-                    Use <strong>0</strong> to disable this check (default — no blocking).
+                    Use <strong>0</strong> to disable this check (default â€” no blocking).
                     Stored as <code class="text-xs bg-gray-200 dark:bg-gray-600 px-1 rounded">interest_min_core_completeness_pct</code>.
                 </p>
             </div>
 
             <div class="p-4 bg-gray-50 dark:bg-gray-700/30 rounded-lg border border-gray-200 dark:border-gray-600">
-                <label class="block text-sm font-semibold text-gray-900 dark:text-gray-100 mb-2">Member presence — treat as “online” for (minutes)</label>
+                <label class="block text-sm font-semibold text-gray-900 dark:text-gray-100 mb-2">Member presence â€” treat as â€œonlineâ€ for (minutes)</label>
                 <input type="number" name="member_presence_online_threshold_minutes" min="1" max="1440" required
                     value="{{ old('member_presence_online_threshold_minutes', $presenceOnlineThresholdMin) }}"
                     class="block w-full max-w-xs rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm text-gray-900 dark:text-gray-100">
                 <p class="text-xs text-gray-500 dark:text-gray-400 mt-2">
-                    If the member’s last activity was within this window, profile / listing shows <strong>online / active now</strong> (based on <code class="text-xs bg-gray-200 dark:bg-gray-600 px-1 rounded">users.last_seen_at</code>).
-                    Default <strong>5</strong> minutes. Same-day behaviour and “last active” labels follow after that window. Stored as
+                    If the memberâ€™s last activity was within this window, profile / listing shows <strong>online / active now</strong> (based on <code class="text-xs bg-gray-200 dark:bg-gray-600 px-1 rounded">users.last_seen_at</code>).
+                    Default <strong>5</strong> minutes. Same-day behaviour and â€œlast activeâ€ labels follow after that window. Stored as
                     <code class="text-xs bg-gray-200 dark:bg-gray-600 px-1 rounded">member_presence_online_threshold_minutes</code>.
                 </p>
             </div>
@@ -236,12 +236,12 @@
                     <div>
                         <label class="block text-xs mb-1">Top notification boxes count</label>
                         <input type="number" min="1" max="3" name="dashboard_notification_cards_limit" value="{{ old('dashboard_notification_cards_limit', $dashboardNotificationCardsLimit ?? 2) }}" class="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm text-gray-900 dark:text-gray-100">
-                        <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Dashboard top row मध्ये welcome च्या बाजूला किती notification cards दाखवायचे.</p>
+                        <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Dashboard top row à¤®à¤§à¥à¤¯à¥‡ welcome à¤šà¥à¤¯à¤¾ à¤¬à¤¾à¤œà¥‚à¤²à¤¾ à¤•à¤¿à¤¤à¥€ notification cards à¤¦à¤¾à¤–à¤µà¤¾à¤¯à¤šà¥‡.</p>
                     </div>
                     <div>
                         <label class="block text-xs mb-1">Activity strip auto-hide (seconds)</label>
                         <input type="number" min="3" max="30" name="dashboard_activity_autohide_seconds" value="{{ old('dashboard_activity_autohide_seconds', $dashboardActivityAutoHideSeconds ?? 7) }}" class="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm text-gray-900 dark:text-gray-100">
-                        <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">“What is happening” strip किती सेकंदांनी hide व्हायचा.</p>
+                        <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">â€œWhat is happeningâ€ strip à¤•à¤¿à¤¤à¥€ à¤¸à¥‡à¤•à¤‚à¤¦à¤¾à¤‚à¤¨à¥€ hide à¤µà¥à¤¹à¤¾à¤¯à¤šà¤¾.</p>
                     </div>
                 </div>
             </div>
@@ -286,13 +286,10 @@
                             <input type="file" name="{{ $field }}" accept="{{ $field === 'favicon' ? '.ico,image/*' : 'image/*' }}" class="block w-full text-xs text-gray-700 dark:text-gray-200">
                         </div>
                     @endforeach
-                    <div class="rounded-lg border border-gray-200 bg-white p-3 dark:border-gray-600 dark:bg-gray-800">
-                        <label class="block text-xs font-semibold text-gray-700 dark:text-gray-200 mb-2">Success stories image</label>
-                        @if (! empty($successStoriesImageUrl ?? null))
-                            <img src="{{ $successStoriesImageUrl }}" alt="" class="mb-3 h-14 max-w-full rounded border border-gray-200 bg-white object-contain p-1 dark:border-gray-600">
-                        @endif
-                        <input type="file" name="success_stories_image" accept="image/*" class="block w-full text-xs text-gray-700 dark:text-gray-200">
-                        <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Uses the existing homepage success stories section, so no duplicate storage is created.</p>
+                    <div class="rounded-lg border border-dashed border-indigo-200 bg-indigo-50/50 p-3 dark:border-indigo-800 dark:bg-indigo-950/20 md:col-span-2">
+                        <p class="text-xs font-semibold text-gray-800 dark:text-gray-100">Success stories</p>
+                        <p class="mt-1 text-xs text-gray-600 dark:text-gray-400">Couple photos, slider timing, and layout are managed in one place â€” not here.</p>
+                        <a href="{{ route('admin.homepage-settings.index', ['tab' => 'stories']) }}" class="mt-2 inline-flex text-xs font-semibold text-indigo-700 hover:underline dark:text-indigo-300">Open Homepage settings â†’ Success stories</a>
                     </div>
                 </div>
             </fieldset>

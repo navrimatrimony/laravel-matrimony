@@ -19,7 +19,6 @@ class HomepageSectionImage extends Model
         'retail_outlet' => 'Retail Outlet / Store',
         'app_section' => 'App Download (phone mockup)',
         'hero' => 'Hero (main form area image)',
-        'success_stories' => 'Success Stories',
     ];
 
     /**
@@ -31,6 +30,5 @@ class HomepageSectionImage extends Model
         'retail_outlet' => null,
         'app_section' => null,
         'hero' => 'images/matrimonial-hero.jpg',
-        'success_stories' => null,
     ];
 }
