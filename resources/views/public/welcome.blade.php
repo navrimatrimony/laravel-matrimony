@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="{{ str_replace('_', '-', app()->getLocale()) }}">
     <head>
         <meta charset="utf-8">
@@ -6,7 +6,7 @@
 
         @php
             $siteIdentity = app(\App\Services\SiteIdentityService::class);
-            $siteName = $siteIdentity->get('site_name', 'à¤¨à¤µà¤°à¥€ à¤®à¤¿à¤³à¥‡ à¤¨à¤µà¤±à¥à¤¯à¤¾à¤²à¤¾');
+            $siteName = $siteIdentity->get('site_name', 'नवरी मिळे नवऱ्याला');
             $siteTagline = $siteIdentity->get('site_tagline', 'Navri Mile Navryala | Marathi Matrimony');
         @endphp
         <title>{{ $siteName }}{{ $siteTagline ? ' - '.$siteTagline : '' }}</title>
@@ -766,19 +766,19 @@
                     ? ($homepageSettings[$key.'_mr'] ?? $fallbackMr)
                     : ($homepageSettings[$key.'_en'] ?? $fallbackEn)
             );
-            $heroBadge = $localized('hero_badge', 'à¤µà¤¿à¤¶à¥à¤µà¤¾à¤¸à¥‚ à¤®à¤°à¤¾à¤ à¥€ à¤µà¤¿à¤µà¤¾à¤¹à¤¸à¥à¤¥à¤³', 'Trusted Marathi Matrimony');
-            $heroTitle = $localized('hero_title', 'à¤¯à¥‹à¤—à¥à¤¯ à¤®à¤°à¤¾à¤ à¥€ à¤œà¥‹à¤¡à¥€à¤¦à¤¾à¤° à¤¶à¥‹à¤§à¤¾', 'Find your trusted Marathi match');
-            $heroSubtitle = $localized('hero_subtitle', 'à¤•à¥à¤Ÿà¥à¤‚à¤¬à¤¾à¤šà¥à¤¯à¤¾ à¤¸à¤¹à¤­à¤¾à¤—à¤¾à¤¨à¥‡, à¤¸à¥à¤°à¤•à¥à¤·à¤¿à¤¤ à¤¸à¤‚à¤ªà¤°à¥à¤• à¤†à¤£à¤¿ à¤µà¥à¤¯à¤µà¤¸à¥à¤¥à¤¿à¤¤ à¤ªà¥à¤°à¥‹à¤«à¤¾à¤‡à¤²à¤¸à¤¹ à¤—à¤‚à¤­à¥€à¤° à¤µà¤¿à¤µà¤¾à¤¹à¤¾à¤¸à¤¾à¤ à¥€ à¤¯à¥‹à¤—à¥à¤¯ à¤¸à¥à¤¥à¤³ à¤¶à¥‹à¤§à¤¾.', 'Search serious profiles with privacy, family-first trust, and a guided matchmaking flow.');
-            $primaryCta = $localized('primary_cta', 'à¤¨à¥‹à¤‚à¤¦à¤£à¥€ à¤•à¤°à¤¾', 'Register free');
-            $secondaryCta = $localized('secondary_cta', 'à¤¸à¥à¤¥à¤³ à¤¶à¥‹à¤§à¤¾', 'Search profiles');
-            $assistedTitle = $localized('assisted_title', 'à¤¸à¤¹à¤¾à¤¯à¥à¤¯à¤• à¤¸à¥‡à¤µà¤¾', 'Assisted Service');
-            $assistedBody = $localized('assisted_body', 'à¤•à¥à¤Ÿà¥à¤‚à¤¬à¤¾à¤‚à¤¨à¤¾ à¤ªà¥à¤°à¥‹à¤«à¤¾à¤‡à¤², à¤ªà¤¸à¤‚à¤¤à¥€ à¤†à¤£à¤¿ à¤¸à¤‚à¤µà¤¾à¤¦ à¤¯à¤¾à¤®à¤§à¥à¤¯à¥‡ à¤¸à¤‚à¤¯à¤®à¥€ à¤®à¤¦à¤¤.', 'Support for families that want a guided, matrimony-focused experience.');
-            $successTitle = $localized('success_title', 'à¤¯à¤¶à¥‹à¤—à¤¾à¤¥à¤¾', 'Success Stories');
-            $successIntro = $localized('success_intro', 'à¤µà¤¿à¤¶à¥à¤µà¤¾à¤¸à¤¾à¤¨à¥‡ à¤¸à¥à¤°à¥‚ à¤à¤¾à¤²à¥‡à¤²à¤¾ à¤¸à¤‚à¤µà¤¾à¤¦ à¤†à¤¯à¥à¤·à¥à¤¯à¤­à¤°à¤¾à¤šà¥à¤¯à¤¾ à¤¨à¤¾à¤¤à¥à¤¯à¤¾à¤¤ à¤¬à¤¦à¤²à¤²à¤¾.', 'Real stories can be featured here with consent and admin approval.');
-            $finalCtaTitle = $localized('final_cta_title', 'à¤¯à¥‹à¤—à¥à¤¯ à¤œà¥‹à¤¡à¥€à¤¦à¤¾à¤°à¤¾à¤šà¤¾ à¤¶à¥‹à¤§ à¤¸à¥à¤°à¥‚ à¤•à¤°à¤¾', 'Ready to explore matches?');
-            $finalCtaBody = $localized('final_cta_body', 'à¤ªà¥à¤°à¥‹à¤«à¤¾à¤‡à¤² à¤¤à¤¯à¤¾à¤° à¤•à¤°à¤¾ à¤•à¤¿à¤‚à¤µà¤¾ à¤‰à¤ªà¤²à¤¬à¥à¤§ à¤¸à¥à¤¥à¤³à¥‡ à¤¶à¥‹à¤§à¤¾.', 'Create your profile or open the search flow with the same filters used inside the platform.');
-            $appTitle = $localized('app_title', 'à¤®à¥‹à¤¬à¤¾à¤‡à¤² à¤…â€à¥…à¤ª', 'Download our mobile app');
-            $appBody = $localized('app_body', 'Android à¤†à¤£à¤¿ iOS à¤µà¤° à¤¶à¥‹à¤§, interests à¤†à¤£à¤¿ à¤¸à¤‚à¤µà¤¾à¤¦ à¤¸à¥‹à¤ªà¥‡ à¤ à¥‡à¤µà¤¾.', 'Search profiles, manage interests, and chat on Android and iOS.');
+            $heroBadge = $localized('hero_badge', 'विश्वासू मराठी विवाहस्थळ', 'Trusted Marathi Matrimony');
+            $heroTitle = $localized('hero_title', 'योग्य मराठी जोडीदार शोधा', 'Find your trusted Marathi match');
+            $heroSubtitle = $localized('hero_subtitle', 'कुटुंबाच्या सहभागाने, सुरक्षित संपर्क आणि व्यवस्थित प्रोफाइलसह गंभीर विवाहासाठी योग्य स्थळ शोधा.', 'Search serious profiles with privacy, family-first trust, and a guided matchmaking flow.');
+            $primaryCta = $localized('primary_cta', 'नोंदणी करा', 'Register free');
+            $secondaryCta = $localized('secondary_cta', 'स्थळ शोधा', 'Search profiles');
+            $assistedTitle = $localized('assisted_title', 'सहाय्यक सेवा', 'Assisted Service');
+            $assistedBody = $localized('assisted_body', 'कुटुंबांना प्रोफाइल, पसंती आणि संवाद यामध्ये संयमी मदत.', 'Support for families that want a guided, matrimony-focused experience.');
+            $successTitle = $localized('success_title', 'यशोगाथा', 'Success Stories');
+            $successIntro = $localized('success_intro', 'विश्वासाने सुरू झालेला संवाद आयुष्यभराच्या नात्यात बदलला.', 'Real stories can be featured here with consent and admin approval.');
+            $finalCtaTitle = $localized('final_cta_title', 'योग्य जोडीदाराचा शोध सुरू करा', 'Ready to explore matches?');
+            $finalCtaBody = $localized('final_cta_body', 'प्रोफाइल तयार करा किंवा उपलब्ध स्थळे शोधा.', 'Create your profile or open the search flow with the same filters used inside the platform.');
+            $appTitle = $localized('app_title', 'मोबाइल अ‍ॅप', 'Download our mobile app');
+            $appBody = $localized('app_body', 'Android आणि iOS वर शोध, interests आणि संवाद सोपे ठेवा.', 'Search profiles, manage interests, and chat on Android and iOS.');
             $appAndroidUrl = trim((string) ($homepageSettings['app_android_url'] ?? ''));
             $appIosUrl = trim((string) ($homepageSettings['app_ios_url'] ?? ''));
             $appShowAndroid = filter_var($homepageSettings['app_show_android'] ?? true, FILTER_VALIDATE_BOOLEAN) && $appAndroidUrl !== '';
@@ -789,7 +789,7 @@
                 __('homepage.trust_privacy'),
                 __('homepage.trust_family'),
             ];
-            $howStepNumbers = $isMarathiLocale ? ['à¥§', 'à¥¨', 'à¥©', 'à¥ª'] : ['1', '2', '3', '4'];
+            $howStepIcons = ['user-plus', 'clipboard-check', 'search', 'shield-check'];
             $ageControl = in_array(($homepageSettings['hero_search_age_control'] ?? 'inputs'), ['inputs', 'slider'], true)
                 ? $homepageSettings['hero_search_age_control']
                 : 'inputs';
@@ -1069,8 +1069,21 @@
                                     __('homepage.how_step_3'),
                                     __('homepage.how_step_4'),
                                 ] as $index => $stepLabel)
-                                    <div class="rounded-lg border border-zinc-200 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-                                        <span class="{{ $devanagariClass }} inline-flex h-10 w-10 items-center justify-center rounded-full bg-red-100 text-lg font-extrabold text-[var(--brand-red)] dark:bg-red-950/50">{{ $howStepNumbers[$index] ?? (string) ($index + 1) }}</span>
+                                    @php
+                                        $stepIcon = $howStepIcons[$index] ?? 'check';
+                                    @endphp
+                                    <div class="rounded-lg border border-zinc-200 bg-white p-6 shadow-sm transition hover:-translate-y-0.5 hover:border-red-200 hover:shadow-md dark:border-zinc-800 dark:bg-zinc-900 dark:hover:border-red-900">
+                                        <span class="inline-flex h-12 w-12 items-center justify-center rounded-full bg-red-50 text-[var(--brand-red)] ring-1 ring-red-100 dark:bg-red-950/40 dark:ring-red-900/60" aria-hidden="true">
+                                            @if ($stepIcon === 'user-plus')
+                                                <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M18 7.5v3m0 0v3m0-3h3m-3 0h-3M15 21a6 6 0 0 0-12 0M9 10.5a3.75 3.75 0 1 0 0-7.5 3.75 3.75 0 0 0 0 7.5Z" /></svg>
+                                            @elseif ($stepIcon === 'clipboard-check')
+                                                <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5.25h6M9 12.75l2.25 2.25L15.75 10.5M8.25 3.75h7.5A2.25 2.25 0 0 1 18 6v13.5A2.25 2.25 0 0 1 15.75 21h-7.5A2.25 2.25 0 0 1 6 18.75V6a2.25 2.25 0 0 1 2.25-2.25Z" /></svg>
+                                            @elseif ($stepIcon === 'search')
+                                                <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="m21 21-5.2-5.2m0 0A7.5 7.5 0 1 0 5.2 5.2a7.5 7.5 0 0 0 10.6 10.6Z" /></svg>
+                                            @else
+                                                <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75 11.25 15 15.75 9M12 3.75l7.5 3v5.25c0 4.47-3.06 8.43-7.5 9.5-4.44-1.07-7.5-5.03-7.5-9.5V6.75l7.5-3Z" /></svg>
+                                            @endif
+                                        </span>
                                         <h3 class="{{ $devanagariClass }} mt-4 text-lg font-bold text-zinc-950 dark:text-white">{{ $stepLabel }}</h3>
                                     </div>
                                 @endforeach
@@ -1191,7 +1204,7 @@
                                         @endif
                                         <h3 class="{{ $devanagariClass }} mt-3 text-lg font-extrabold text-zinc-950 dark:text-white">{{ $isMarathiLocale && $plan->name_mr ? $plan->name_mr : $plan->name }}</h3>
                                         <p class="mt-1 text-sm text-zinc-600 dark:text-zinc-400">{{ $plan->description }}</p>
-                                        <p class="mt-4 text-2xl font-extrabold text-[var(--brand-red)]">â‚¹{{ number_format((float) $plan->price, 0) }}</p>
+                                        <p class="mt-4 text-2xl font-extrabold text-[var(--brand-red)]">₹{{ number_format((float) $plan->price, 0) }}</p>
                                     </div>
                                 @endforeach
                             </div>
@@ -1215,7 +1228,7 @@
                                             <a href="{{ $appAndroidUrl }}" target="_blank" rel="noopener noreferrer" class="nmn-app-store-badge">
                                                 <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M3.6 1.8 13.2 12 3.6 22.2a1.4 1.4 0 0 1-.2-.8V2.6c0-.3.1-.6.2-.8Zm1.5.9 10.9 6.3-2.5 2.5L5.1 2.7Zm12.4 7.4-3.1-1.8-2.8 2.8 2.8 2.8 3.1-1.8a1.5 1.5 0 0 0 0-2.6l-.1-.4Zm-5.9 3.4 2.5 2.5-10.9 6.3 8.4-8.8Z"/></svg>
                                                 <span>
-                                                    <span>{{ $isMarathiLocale ? 'Android à¤¸à¤¾à¤ à¥€' : 'Android app on' }}</span>
+                                                    <span>{{ $isMarathiLocale ? 'Android साठी' : 'Android app on' }}</span>
                                                     <strong>{{ __('homepage.app_android_cta') }}</strong>
                                                 </span>
                                             </a>
@@ -1224,7 +1237,7 @@
                                             <a href="{{ $appIosUrl }}" target="_blank" rel="noopener noreferrer" class="nmn-app-store-badge">
                                                 <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M16.36 12.74c.03-2.97 2.43-4.4 2.54-4.47-1.38-2.02-3.53-2.3-4.29-2.33-1.83-.19-3.57 1.08-4.49 1.08-.93 0-2.35-1.05-3.86-1.02-1.99.03-3.82 1.16-4.84 2.94-2.07 3.58-.53 8.88 1.48 11.78 1 1.45 2.19 3.08 3.75 3.02 1.51-.06 2.08-.98 3.91-.98 1.83 0 2.35.98 3.95.95 1.63-.03 2.66-1.48 3.64-2.93 1.15-1.68 1.62-3.31 1.65-3.39-.04-.02-3.17-1.22-3.2-4.83l-.01-.04ZM13.3 4.22c.83-1.01 1.39-2.41 1.24-3.8-1.2.05-2.65.8-3.51 1.8-.77.89-1.44 2.32-1.26 3.69 1.33.1 2.69-.68 3.53-1.69Z"/></svg>
                                                 <span>
-                                                    <span>{{ $isMarathiLocale ? 'iOS à¤¸à¤¾à¤ à¥€' : 'Download on the' }}</span>
+                                                    <span>{{ $isMarathiLocale ? 'iOS साठी' : 'Download on the' }}</span>
                                                     <strong>{{ __('homepage.app_ios_cta') }}</strong>
                                                 </span>
                                             </a>
