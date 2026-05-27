@@ -191,7 +191,7 @@
         </div>
     </div>
 
-    {{-- Row 3: Varna, Vashya, Rashi Lord (editable dropdowns) + Mangal Dosh toggle + Mangal Status --}}
+    {{-- Row 3: Varna, Vashya, Rashi Lord (editable dropdowns) + Mangal Dosh --}}
     <div class="flex flex-wrap items-center gap-4 py-2">
         <div class="flex flex-wrap items-center gap-3">
             <div>
@@ -341,7 +341,33 @@
             var ganSelect = sel('gan_id');
             var nadiSelect = sel('nadi_id');
             var yoniSelect = sel('yoni_id');
+            var varnaSelect = sel('varna_id');
+            var vashyaSelect = sel('vashya_id');
+            var rashiLordSelect = sel('rashi_lord_id');
             if (!nakshatraSelect) return;
+
+            function triggerNativeChange(select) {
+                if (!select) return;
+                select.dispatchEvent(new Event('change', { bubbles: true }));
+            }
+
+            function setSelectValue(select, value, shouldTrigger) {
+                if (!select) return;
+                var next = value === null || value === undefined ? '' : String(value);
+                if (select.value !== next) {
+                    select.value = next;
+                    if (shouldTrigger) triggerNativeChange(select);
+                }
+            }
+
+            function applyRashiAshtakoota() {
+                if (!rashiSelect) return;
+                var rashiId = rashiSelect.value ? String(rashiSelect.value) : '';
+                var details = rashiId ? (rashiAshtakoota[rashiId] || null) : null;
+                setSelectValue(varnaSelect, details ? details.varna_id : null, true);
+                setSelectValue(vashyaSelect, details ? details.vashya_id : null, true);
+                setSelectValue(rashiLordSelect, details ? details.rashi_lord_id : null, true);
+            }
 
             function setSelectOptions(select, allowedIds, list, emptyLabel) {
                 if (!select || !list) return;
@@ -384,11 +410,11 @@
                     var allowedRashiIds = distinctRashiByNakshatra[String(nakshatraId)];
                     if (charanVal >= 1 && charanVal <= 4) {
                         var rule = rashiRules.filter(function(r) { return r.nakshatra_id === nakshatraId && r.charan === charanVal; })[0];
-                        if (rule && rashiSelect && !rashiSelect.value) rashiSelect.value = String(rule.rashi_id);
+                        if (rule && rashiSelect && !rashiSelect.value) setSelectValue(rashiSelect, rule.rashi_id, true);
                     }
                     if (rashiSelect) {
                         setSelectOptions(rashiSelect, allowedRashiIds && allowedRashiIds.length ? allowedRashiIds : null, masterLists.rashis);
-                        if (allowedRashiIds && allowedRashiIds.length && rashiSelect.value && allowedRashiIds.indexOf(parseInt(rashiSelect.value, 10)) === -1) rashiSelect.value = String(allowedRashiIds[0]);
+                        if (allowedRashiIds && allowedRashiIds.length && rashiSelect.value && allowedRashiIds.indexOf(parseInt(rashiSelect.value, 10)) === -1) setSelectValue(rashiSelect, allowedRashiIds[0], true);
                     }
                     if (charanSelect) {
                         setSelectOptions(charanSelect, [1,2,3,4], [{id:1,label:'1'},{id:2,label:'2'},{id:3,label:'3'},{id:4,label:'4'}]);
@@ -405,7 +431,7 @@
                     if (ganSelect) { ganSelect.value = ''; setSelectOptions(ganSelect, null, masterLists.gans); }
                     if (nadiSelect) { nadiSelect.value = ''; setSelectOptions(nadiSelect, null, masterLists.nadis); }
                     if (yoniSelect) { yoniSelect.value = ''; setSelectOptions(yoniSelect, null, masterLists.yonis); }
-                    if (rashiSelect) { rashiSelect.value = ''; setSelectOptions(rashiSelect, null, masterLists.rashis); }
+                    if (rashiSelect) setSelectOptions(rashiSelect, null, masterLists.rashis);
                     if (charanSelect) setSelectOptions(charanSelect, [1,2,3,4], [{id:1,label:'1'},{id:2,label:'2'},{id:3,label:'3'},{id:4,label:'4'}]);
                 }
 
@@ -416,6 +442,8 @@
                         nakshatraSelect.value = ''; if (charanSelect) charanSelect.value = ''; if (ganSelect) ganSelect.value = ''; if (nadiSelect) nadiSelect.value = ''; if (yoniSelect) yoniSelect.value = ''; applyDependency(); return;
                     }
                 } else if (!rashiId && nakshatraSelect) setSelectOptions(nakshatraSelect, null, masterLists.nakshatras);
+
+                applyRashiAshtakoota();
             }
 
             wrapper.querySelectorAll('.horoscope-hint-chip').forEach(function(btn) {

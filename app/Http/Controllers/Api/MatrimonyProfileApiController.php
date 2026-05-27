@@ -405,7 +405,7 @@ class MatrimonyProfileApiController extends Controller
             'income_range_id' => $profile->income_range_id,
             'nakshatra_id' => $horoscope ? $horoscope->nakshatra_id : null,
             'rashi_id' => $horoscope ? $horoscope->rashi_id : null,
-            'mangal_dosh_type_id' => $horoscope ? ($horoscope->mangal_dosh_type_id ?? $horoscope->mangal_status_id) : null,
+            'mangal_dosh_type_id' => $horoscope ? $horoscope->mangal_dosh_type_id : null,
             'partner_preferences' => $partnerPreferences,
         ];
 

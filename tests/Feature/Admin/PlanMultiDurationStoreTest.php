@@ -84,7 +84,6 @@ class PlanMultiDurationStoreTest extends TestCase
             'grace_period_days' => 3,
             'leftover_quota_carry_window_days' => '',
             'is_active' => '1',
-            'list_price_rupees' => '',
             'gst_inclusive' => '1',
             'quota_policies' => $this->quotaPoliciesPayload([
                 \App\Support\PlanFeatureKeys::CHAT_SEND_LIMIT => ['limit_value' => '10'],
@@ -108,7 +107,6 @@ class PlanMultiDurationStoreTest extends TestCase
             'grace_period_days' => 14,
             'leftover_quota_carry_window_days' => '7',
             'is_active' => '1',
-            'list_price_rupees' => '',
             'gst_inclusive' => '1',
             'quota_policies' => $this->quotaPoliciesPayload([
                 \App\Support\PlanFeatureKeys::CHAT_SEND_LIMIT => ['limit_value' => '999'],
@@ -161,7 +159,6 @@ class PlanMultiDurationStoreTest extends TestCase
             'grace_period_days' => 3,
             'leftover_quota_carry_window_days' => '',
             'is_active' => '1',
-            'list_price_rupees' => '',
             'gst_inclusive' => '1',
             'quota_policies' => $this->quotaPoliciesPayload(),
             'term_rows' => $this->termRowsList([

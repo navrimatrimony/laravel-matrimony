@@ -5,6 +5,7 @@ namespace App\Notifications;
 use App\Models\MatrimonyProfile;
 use App\Notifications\Concerns\SendsMatrimonyMailChannel;
 use App\Notifications\Support\MatrimonyMailTemplate;
+use App\Support\NotificationMarathiPayload;
 use Illuminate\Bus\Queueable;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
@@ -43,7 +44,7 @@ class NewChatMessageNotification extends Notification
             ? ($preview !== '' ? ('📷 '.$preview) : '📷 Image')
             : $preview;
 
-        return [
+        return NotificationMarathiPayload::withMessage([
             'type' => 'chat_message',
             'message' => "{$name} sent you a message.",
             'sender_name' => $name,
@@ -52,6 +53,6 @@ class NewChatMessageNotification extends Notification
             'message_preview' => $display,
             'message_id' => $this->messageId,
             'revealed' => true,
-        ];
+        ]);
     }
 }

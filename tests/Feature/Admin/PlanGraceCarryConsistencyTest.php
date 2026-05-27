@@ -87,7 +87,6 @@ class PlanGraceCarryConsistencyTest extends TestCase
                 'grace_period_days' => (string) $grace,
                 'leftover_quota_carry_window_days' => $carry === null ? '' : (string) $carry,
                 'is_active' => '1',
-                'list_price_rupees' => '',
                 'gst_inclusive' => '1',
                 'quota_policies' => $this->quotaPoliciesPayload(),
                 'term_rows' => $this->termRowsList([

@@ -5,6 +5,7 @@ namespace App\Notifications;
 use App\Models\MatrimonyProfile;
 use App\Notifications\Concerns\SendsMatrimonyMailChannel;
 use App\Notifications\Support\MatrimonyMailTemplate;
+use App\Support\NotificationMarathiPayload;
 use Illuminate\Bus\Queueable;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
@@ -37,10 +38,10 @@ class InterestAcceptedNotification extends Notification
     public function toArray(object $notifiable): array
     {
         $name = $this->accepterProfile->full_name ?? 'Someone';
-        return [
+        return NotificationMarathiPayload::withMessage([
             'type' => 'interest_accepted',
             'message' => "{$name} accepted your interest.",
             'accepter_profile_id' => $this->accepterProfile->id,
-        ];
+        ]);
     }
 }

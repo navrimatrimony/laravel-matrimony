@@ -32,7 +32,6 @@ class MasterLookupSeeder extends Seeder
         $this->seedAddressTypes();
         $this->seedAssetTypes();
         $this->seedOwnershipTypes();
-        $this->seedLegalCaseTypes();
     }
 
     /** @param  array<string, mixed>  $row */
@@ -343,17 +342,6 @@ class MasterLookupSeeder extends Seeder
             ['key' => 'sole', 'label' => 'Sole', 'label_mr' => 'एकटे मालकी'],
             ['key' => 'joint', 'label' => 'Joint', 'label_mr' => 'संयुक्त मालकी'],
             ['key' => 'family', 'label' => 'Family', 'label_mr' => 'कौटुंबिक'],
-            ['key' => 'other', 'label' => 'Other', 'label_mr' => 'इतर'],
-        ]);
-    }
-
-    private function seedLegalCaseTypes(): void
-    {
-        $this->seedKeyLabel('master_legal_case_types', [
-            ['key' => 'civil', 'label' => 'Civil', 'label_mr' => 'दिवाणी'],
-            ['key' => 'criminal', 'label' => 'Criminal', 'label_mr' => 'फौजदारी'],
-            ['key' => 'family', 'label' => 'Family', 'label_mr' => 'कौटुंबिक'],
-            ['key' => 'property', 'label' => 'Property', 'label_mr' => 'मालमत्ता'],
             ['key' => 'other', 'label' => 'Other', 'label_mr' => 'इतर'],
         ]);
     }

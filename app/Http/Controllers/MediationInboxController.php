@@ -57,7 +57,10 @@ class MediationInboxController extends Controller
     public function respond(Request $request, MediationRequest $mediation_request): RedirectResponse
     {
         $validated = $request->validate([
-            'response' => 'required|string|in:interested,not_interested,need_more_info',
+            'response' => 'required|string|in:interested,not_interested,need_more_info,decide_later,talks_in_progress',
+            'decline_reason' => 'nullable|string|in:age_mismatch,education_mismatch,location_mismatch,job_income_mismatch,caste_subcaste_mismatch,horoscope_mismatch,talks_in_progress,marriage_fixed,other',
+            'decline_reason_note' => 'nullable|string|max:500',
+            'next_action' => 'nullable|string|in:share_my_number,view_their_number,app_chat,office_contact',
             'feedback' => 'nullable|string|max:2000',
         ]);
 
@@ -66,7 +69,12 @@ class MediationInboxController extends Controller
                 $request->user(),
                 $mediation_request,
                 $validated['response'],
-                $validated['feedback'] ?? null
+                $validated['feedback'] ?? null,
+                [
+                    'decline_reason' => $validated['decline_reason'] ?? null,
+                    'decline_reason_note' => $validated['decline_reason_note'] ?? null,
+                    'next_action' => $validated['next_action'] ?? null,
+                ]
             );
         } catch (\InvalidArgumentException $e) {
             return redirect()

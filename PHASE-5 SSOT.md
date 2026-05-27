@@ -1417,7 +1417,6 @@ Columns:
 
 - id
 - profile_id
-- case_type (divorce/separation/other)
 - court_name
 - case_number
 - case_stage
@@ -9901,7 +9900,6 @@ ENTITY TABLE LOOKUPS
 - child_living_with_id
 - asset_type_id
 - ownership_type_id
-- legal_case_type_id
 - any future master-backed nested entity lookup
 
 NOT IN SCOPE:
@@ -10228,7 +10226,6 @@ D) Nested entities
 - invalid address_type_id
 - invalid contact_relation_id
 - invalid asset_type_id
-- invalid legal_case_type_id
 
 E) Localization
 - same field options visible correctly in EN

@@ -211,6 +211,7 @@ return [
     'feature_gate_upgrade_to_view_contact' => 'Upgrade to view contact',
     'feature_gate_profile_views_title' => 'Profile details hidden',
     'feature_gate_profile_views_message' => 'Upgrade your plan to view full profile details today.',
+    'lock_section_content_locked' => 'Information in this section is locked.',
     'feature_gate_who_viewed_title' => 'Who viewed you',
     'feature_gate_who_viewed_message' => 'Upgrade to see who viewed your profile.',
     'feature_gate_soft_limit_warning' => 'Only few actions left — upgrade now',

@@ -416,13 +416,19 @@
                 border: 1px solid #f0caca;
                 background: #fff7f7;
             }
+            .nmn-lang-switch-icon {
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+                padding: 0 6px 0 8px;
+                color: var(--brand-red);
+            }
             .nmn-lang-switch-btn {
                 display: inline-flex;
                 align-items: center;
-                gap: 6px;
+                gap: 5px;
                 border-radius: 999px;
-                min-height: 34px;
-                padding: 0 12px;
+                padding: 6px 10px;
                 font-size: 12px;
                 font-weight: 800;
                 line-height: 1;
@@ -438,15 +444,6 @@
                 background: var(--brand-red);
                 color: #fff;
                 box-shadow: 0 2px 8px rgba(127, 29, 29, .22);
-            }
-            @media (max-width: 520px) {
-                .nmn-lang-switch-btn {
-                    padding: 0 9px;
-                    font-size: 11px;
-                }
-                .nmn-lang-switch-btn svg {
-                    display: none;
-                }
             }
             .nmn-app-section {
                 border-radius: 12px;
@@ -789,7 +786,7 @@
                 __('homepage.trust_privacy'),
                 __('homepage.trust_family'),
             ];
-            $howStepIcons = ['user-plus', 'clipboard-check', 'search', 'shield-check'];
+            $howStepNumbers = $isMarathiLocale ? ['१', '२', '३', '४'] : ['1', '2', '3', '4'];
             $ageControl = in_array(($homepageSettings['hero_search_age_control'] ?? 'inputs'), ['inputs', 'slider'], true)
                 ? $homepageSettings['hero_search_age_control']
                 : 'inputs';
@@ -1069,21 +1066,8 @@
                                     __('homepage.how_step_3'),
                                     __('homepage.how_step_4'),
                                 ] as $index => $stepLabel)
-                                    @php
-                                        $stepIcon = $howStepIcons[$index] ?? 'check';
-                                    @endphp
-                                    <div class="rounded-lg border border-zinc-200 bg-white p-6 shadow-sm transition hover:-translate-y-0.5 hover:border-red-200 hover:shadow-md dark:border-zinc-800 dark:bg-zinc-900 dark:hover:border-red-900">
-                                        <span class="inline-flex h-12 w-12 items-center justify-center rounded-full bg-red-50 text-[var(--brand-red)] ring-1 ring-red-100 dark:bg-red-950/40 dark:ring-red-900/60" aria-hidden="true">
-                                            @if ($stepIcon === 'user-plus')
-                                                <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M18 7.5v3m0 0v3m0-3h3m-3 0h-3M15 21a6 6 0 0 0-12 0M9 10.5a3.75 3.75 0 1 0 0-7.5 3.75 3.75 0 0 0 0 7.5Z" /></svg>
-                                            @elseif ($stepIcon === 'clipboard-check')
-                                                <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5.25h6M9 12.75l2.25 2.25L15.75 10.5M8.25 3.75h7.5A2.25 2.25 0 0 1 18 6v13.5A2.25 2.25 0 0 1 15.75 21h-7.5A2.25 2.25 0 0 1 6 18.75V6a2.25 2.25 0 0 1 2.25-2.25Z" /></svg>
-                                            @elseif ($stepIcon === 'search')
-                                                <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="m21 21-5.2-5.2m0 0A7.5 7.5 0 1 0 5.2 5.2a7.5 7.5 0 0 0 10.6 10.6Z" /></svg>
-                                            @else
-                                                <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75 11.25 15 15.75 9M12 3.75l7.5 3v5.25c0 4.47-3.06 8.43-7.5 9.5-4.44-1.07-7.5-5.03-7.5-9.5V6.75l7.5-3Z" /></svg>
-                                            @endif
-                                        </span>
+                                    <div class="rounded-lg border border-zinc-200 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+                                        <span class="{{ $devanagariClass }} inline-flex h-10 w-10 items-center justify-center rounded-full bg-red-100 text-lg font-extrabold text-[var(--brand-red)] dark:bg-red-950/50">{{ $howStepNumbers[$index] ?? (string) ($index + 1) }}</span>
                                         <h3 class="{{ $devanagariClass }} mt-4 text-lg font-bold text-zinc-950 dark:text-white">{{ $stepLabel }}</h3>
                                     </div>
                                 @endforeach
@@ -1295,25 +1279,6 @@
                         <p class="mt-3 whitespace-pre-line text-xs leading-6 text-zinc-500">{{ $siteIdentitySettings['address'] }}</p>
                     @endif
                 </div>
-                @if (! empty($siteIdentitySettings['support_email']) || ! empty($siteIdentitySettings['sales_email']) || ! empty($siteIdentitySettings['info_email']) || ! empty($siteIdentitySettings['primary_phone']) || ! empty($siteIdentitySettings['secondary_phone']))
-                    <div class="flex flex-col gap-2">
-                        <span class="text-[#888] text-xs uppercase tracking-wide">Contact</span>
-                        @foreach ([
-                            'support_email' => 'Support',
-                            'sales_email' => 'Sales',
-                            'info_email' => 'Info',
-                        ] as $field => $label)
-                            @if (! empty($siteIdentitySettings[$field]))
-                                <a href="mailto:{{ $siteIdentitySettings[$field] }}" class="text-white hover:underline">{{ $label }}: {{ $siteIdentitySettings[$field] }}</a>
-                            @endif
-                        @endforeach
-                        @foreach (['primary_phone', 'secondary_phone'] as $field)
-                            @if (! empty($siteIdentitySettings[$field]))
-                                <a href="tel:{{ preg_replace('/\s+/', '', $siteIdentitySettings[$field]) }}" class="text-white hover:underline">{{ $siteIdentitySettings[$field] }}</a>
-                            @endif
-                        @endforeach
-                    </div>
-                @endif
                 <div class="flex flex-col gap-2">
                     <span class="text-xs font-bold uppercase text-zinc-500">{{ __('homepage.footer_contact') }}</span>
                     @foreach ([

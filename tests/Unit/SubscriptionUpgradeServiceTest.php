@@ -23,7 +23,7 @@ class SubscriptionUpgradeServiceTest extends TestCase
         $termId = (int) $gold->terms()->where('is_visible', true)->value('id');
 
         $this->expectException(HttpException::class);
-        app(SubscriptionUpgradeService::class)->upgradeNow($user, $gold, $termId, null, null);
+        app(SubscriptionUpgradeService::class)->upgradeNow($user, $gold, $termId, null);
     }
 
     public function test_upgrade_now_returns_merged_carry_preview_from_quota_engine(): void
@@ -39,7 +39,6 @@ class SubscriptionUpgradeServiceTest extends TestCase
             'user_id' => $user->id,
             'plan_id' => $silver->id,
             'plan_term_id' => $silverTerm->id,
-            'plan_price_id' => null,
             'coupon_id' => null,
             'starts_at' => now()->subDays(5),
             'ends_at' => now()->addDays(25),
@@ -56,7 +55,7 @@ class SubscriptionUpgradeServiceTest extends TestCase
             ],
         ]);
 
-        $out = app(SubscriptionUpgradeService::class)->upgradeNow($user, $gold, (int) $goldTerm->id, null, null);
+        $out = app(SubscriptionUpgradeService::class)->upgradeNow($user, $gold, (int) $goldTerm->id, null);
 
         $this->assertSame(SubscriptionUpgradeService::TYPE_IMMEDIATE_UPGRADE, $out['type']);
         $this->assertArrayHasKey('carry_quota_from_engine', $out);

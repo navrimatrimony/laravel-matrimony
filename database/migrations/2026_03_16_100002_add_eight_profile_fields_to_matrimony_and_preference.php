@@ -6,8 +6,7 @@ use Illuminate\Support\Facades\Schema;
 
 /**
  * Phase-5 additive: Add mother_tongue_id, diet_id, smoking_status_id, drinking_status_id to matrimony_profiles;
- * willing_to_relocate, settled_city_preference_id, marriage_type_preference_id to profile_preference_criteria;
- * mangal_status_id to profile_horoscope_data.
+ * willing_to_relocate, settled_city_preference_id, marriage_type_preference_id to profile_preference_criteria.
  */
 return new class extends Migration
 {
@@ -46,25 +45,10 @@ return new class extends Migration
             });
         }
 
-        $horoscope = 'profile_horoscope_data';
-        if (Schema::hasTable($horoscope)) {
-            Schema::table($horoscope, function (Blueprint $table) use ($horoscope) {
-                if (! Schema::hasColumn($horoscope, 'mangal_status_id')) {
-                    $table->foreignId('mangal_status_id')->nullable()->after('mangal_dosh_type_id')->constrained('master_mangal_statuses')->nullOnDelete();
-                }
-            });
-        }
     }
 
     public function down(): void
     {
-        $horoscope = 'profile_horoscope_data';
-        if (Schema::hasTable($horoscope) && Schema::hasColumn($horoscope, 'mangal_status_id')) {
-            Schema::table($horoscope, function (Blueprint $table) {
-                $table->dropForeign(['mangal_status_id']);
-            });
-        }
-
         $criteria = 'profile_preference_criteria';
         if (Schema::hasTable($criteria)) {
             Schema::table($criteria, function (Blueprint $table) use ($criteria) {

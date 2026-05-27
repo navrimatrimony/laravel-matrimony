@@ -43,11 +43,11 @@
                 <a href="{{ $notification->data['teaser_context_url'] ?? route('notifications.index') }}" class="text-indigo-600 hover:underline">{{ $notification->data['teaser_context_label'] ?? '' }}</a>
             </p>
         @else
-            <p class="text-gray-900 font-medium">{{ $notification->data['message'] ?? 'Notification' }}</p>
+            <p class="text-gray-900 font-medium">{{ $notification->data['message_mr'] ?? ($notification->data['message'] ?? 'Notification') }}</p>
         @endif
         <p class="text-sm text-gray-500 mt-2">{{ $notification->created_at->format('M j, Y g:i A') }}</p>
         <p class="mt-4">
-            <a href="{{ route('notifications.index') }}" class="text-indigo-600 hover:underline">← Back to notifications</a>
+            <a href="{{ route('notifications.index') }}" class="text-indigo-600 hover:underline">← सूचनांकडे परत</a>
         </p>
     </div>
 </div>

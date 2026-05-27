@@ -5,6 +5,7 @@ namespace App\Notifications;
 use App\Models\ContactRequest;
 use App\Notifications\Concerns\SendsMatrimonyMailChannel;
 use App\Notifications\Support\MatrimonyMailTemplate;
+use App\Support\NotificationMarathiPayload;
 use Illuminate\Bus\Queueable;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
@@ -37,12 +38,12 @@ class ContactRequestRejectedNotification extends Notification
         $endsAt = $this->contactRequest->cooldown_ends_at
             ? $this->contactRequest->cooldown_ends_at->format('M j, Y')
             : 'later';
-        return [
+        return NotificationMarathiPayload::withMessage([
             'type' => 'contact_request_rejected',
             'message' => 'Your contact request was declined. You can send a new request after the cooling period (ends ' . $endsAt . ').',
             'contact_request_id' => $this->contactRequest->id,
             'cooldown_ends_at' => $this->contactRequest->cooldown_ends_at?->toIso8601String(),
             'receiver_profile_id' => (int) ($receiver?->matrimonyProfile?->id ?? 0) ?: null,
-        ];
+        ]);
     }
 }

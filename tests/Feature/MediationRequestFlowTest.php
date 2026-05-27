@@ -3,6 +3,8 @@
 namespace Tests\Feature;
 
 use App\Models\ContactRequest;
+use App\Models\AdminSetting;
+use App\Models\City;
 use App\Models\Interest;
 use App\Models\MasterGender;
 use App\Models\MatrimonyProfile;
@@ -14,18 +16,58 @@ use App\Notifications\MediationRequestReceivedNotification;
 use App\Notifications\MediationRequestResponseNotification;
 use App\Services\ContactAccessService;
 use App\Services\MediationRequestService;
+use App\Services\Profile\ProfileCanonicalResidenceService;
 use App\Services\SubscriptionService;
+use Database\Seeders\MinimalLocationSeeder;
 use Database\Seeders\PlanStandardFeatureKeysSeeder;
 use Database\Seeders\SubscriptionPlansSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Notification;
+use Illuminate\Support\Facades\Schema;
 use LogicException;
 use Tests\TestCase;
 
 class MediationRequestFlowTest extends TestCase
 {
     use RefreshDatabase;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        $this->seed(MinimalLocationSeeder::class);
+        ProfileCanonicalResidenceService::forgetCachedMasters();
+    }
+
+    /**
+     * Observer requires canonical residence when a profile leaves draft.
+     *
+     * @param  array<string, mixed>  $attributes
+     */
+    private function createActiveProfileWithResidence(User $user, array $attributes = []): MatrimonyProfile
+    {
+        $profile = MatrimonyProfile::factory()->for($user)->create(array_merge([
+            'lifecycle_state' => 'draft',
+        ], $attributes, [
+            'lifecycle_state' => 'draft',
+        ]));
+
+        $leafId = (int) City::query()->where('name', 'Pune City')->firstOrFail()->id;
+        if (Schema::hasColumn($profile->getTable(), 'location_id')) {
+            DB::table($profile->getTable())->where('id', $profile->id)->update(['location_id' => $leafId]);
+            $profile->refresh();
+        } else {
+            ProfileCanonicalResidenceService::upsertSelfCurrent((int) $profile->id, $leafId, null, true, false);
+        }
+
+        $profile->update([
+            'lifecycle_state' => 'active',
+            'is_suspended' => false,
+        ]);
+
+        return $profile->fresh();
+    }
 
     private function seedGenders(): array
     {
@@ -62,15 +104,11 @@ class MediationRequestFlowTest extends TestCase
 
         $sender = User::factory()->create();
         $receiver = User::factory()->create();
-        MatrimonyProfile::factory()->for($sender)->create([
+        $this->createActiveProfileWithResidence($sender, [
             'gender_id' => $maleGid,
-            'lifecycle_state' => 'active',
-            'is_suspended' => false,
         ]);
-        $target = MatrimonyProfile::factory()->for($receiver)->create([
+        $target = $this->createActiveProfileWithResidence($receiver, [
             'gender_id' => $femaleGid,
-            'lifecycle_state' => 'active',
-            'is_suspended' => false,
         ]);
 
         $this->subscribeUser($sender, 'silver_male');
@@ -116,15 +154,11 @@ class MediationRequestFlowTest extends TestCase
 
         $sender = User::factory()->create();
         $receiver = User::factory()->create();
-        MatrimonyProfile::factory()->for($sender)->create([
+        $this->createActiveProfileWithResidence($sender, [
             'gender_id' => $maleGid,
-            'lifecycle_state' => 'active',
-            'is_suspended' => false,
         ]);
-        $target = MatrimonyProfile::factory()->for($receiver)->create([
+        $target = $this->createActiveProfileWithResidence($receiver, [
             'gender_id' => $femaleGid,
-            'lifecycle_state' => 'active',
-            'is_suspended' => false,
         ]);
 
         $this->subscribeUser($sender, 'silver_male');
@@ -151,15 +185,11 @@ class MediationRequestFlowTest extends TestCase
 
         $sender = User::factory()->create();
         $receiver = User::factory()->create();
-        MatrimonyProfile::factory()->for($sender)->create([
+        $this->createActiveProfileWithResidence($sender, [
             'gender_id' => $maleGid,
-            'lifecycle_state' => 'active',
-            'is_suspended' => false,
         ]);
-        $target = MatrimonyProfile::factory()->for($receiver)->create([
+        $target = $this->createActiveProfileWithResidence($receiver, [
             'gender_id' => $femaleGid,
-            'lifecycle_state' => 'active',
-            'is_suspended' => false,
         ]);
 
         $this->subscribeUser($sender, 'silver_male');
@@ -177,6 +207,75 @@ class MediationRequestFlowTest extends TestCase
         Notification::assertSentTo($sender, MediationRequestResponseNotification::class);
     }
 
+    public function test_profile_page_shows_inline_whatsapp_response_form_without_duplicate_request_card(): void
+    {
+        Notification::fake();
+
+        $this->seed(SubscriptionPlansSeeder::class);
+        $this->seed(PlanStandardFeatureKeysSeeder::class);
+        [$maleGid, $femaleGid] = $this->seedGenders();
+
+        $sender = User::factory()->create();
+        $receiver = User::factory()->create();
+        $senderProfile = $this->createActiveProfileWithResidence($sender, [
+            'gender_id' => $maleGid,
+            'full_name' => 'Inline Sender',
+        ]);
+        $target = $this->createActiveProfileWithResidence($receiver, [
+            'gender_id' => $femaleGid,
+            'full_name' => 'Inline Receiver',
+        ]);
+
+        $this->subscribeUser($sender, 'silver_male');
+        app(MediationRequestService::class)->createFromProfile($sender, $target);
+
+        $response = $this->actingAs($receiver)->get(route('matrimony.profile.show', $senderProfile->id));
+
+        $response->assertOk();
+        $response->assertSee(__('mediation.incoming_whatsapp_response_kicker'));
+        $response->assertSee(route('mediation-requests.respond', MediationRequest::query()->firstOrFail()), false);
+        $response->assertSee(__('mediation.submit_response'));
+        $response->assertDontSee(__('contact_access.mediator_submit'));
+    }
+
+    public function test_same_sender_cannot_request_same_profile_until_admin_cooldown_days_end(): void
+    {
+        Notification::fake();
+
+        $this->seed(SubscriptionPlansSeeder::class);
+        $this->seed(PlanStandardFeatureKeysSeeder::class);
+        [$maleGid, $femaleGid] = $this->seedGenders();
+
+        AdminSetting::setValue(MediationRequestService::SETTING_REQUEST_COOLDOWN_DAYS, '30');
+
+        $sender = User::factory()->create();
+        $receiver = User::factory()->create();
+        $this->createActiveProfileWithResidence($sender, [
+            'gender_id' => $maleGid,
+        ]);
+        $target = $this->createActiveProfileWithResidence($receiver, [
+            'gender_id' => $femaleGid,
+        ]);
+
+        $this->subscribeUser($sender, 'silver_male');
+
+        $svc = app(MediationRequestService::class);
+        $mr = $svc->createFromProfile($sender, $target);
+        $svc->respond($receiver, $mr, 'not_interested', 'Not suitable right now.');
+
+        try {
+            $svc->createFromProfile($sender, $target->fresh());
+            $this->fail('Expected cooldown to block duplicate WhatsApp Response request.');
+        } catch (\InvalidArgumentException $e) {
+            $this->assertStringContainsString('again after', $e->getMessage());
+        }
+
+        $mr->forceFill(['cooldown_ends_at' => now()->subDay(), 'created_at' => now()->subDays(31)])->save();
+
+        $second = $svc->createFromProfile($sender, $target->fresh());
+        $this->assertSame(MediationRequest::STATUS_PENDING, $second->status);
+    }
+
     public function test_paid_contact_reveal_requires_matchmaking_interested_by_default(): void
     {
         $this->seed(SubscriptionPlansSeeder::class);
@@ -185,15 +284,11 @@ class MediationRequestFlowTest extends TestCase
 
         $sender = User::factory()->create();
         $receiver = User::factory()->create();
-        $senderProfile = MatrimonyProfile::factory()->for($sender)->create([
+        $senderProfile = $this->createActiveProfileWithResidence($sender, [
             'gender_id' => $maleGid,
-            'lifecycle_state' => 'active',
-            'is_suspended' => false,
         ]);
-        $target = MatrimonyProfile::factory()->for($receiver)->create([
+        $target = $this->createActiveProfileWithResidence($receiver, [
             'gender_id' => $femaleGid,
-            'lifecycle_state' => 'active',
-            'is_suspended' => false,
         ]);
 
         DB::table('profile_contacts')->insert([
@@ -247,15 +342,11 @@ class MediationRequestFlowTest extends TestCase
 
         $sender = User::factory()->create();
         $receiver = User::factory()->create();
-        $senderProfile = MatrimonyProfile::factory()->for($sender)->create([
+        $senderProfile = $this->createActiveProfileWithResidence($sender, [
             'gender_id' => $maleGid,
-            'lifecycle_state' => 'active',
-            'is_suspended' => false,
         ]);
-        $target = MatrimonyProfile::factory()->for($receiver)->create([
+        $target = $this->createActiveProfileWithResidence($receiver, [
             'gender_id' => $femaleGid,
-            'lifecycle_state' => 'active',
-            'is_suspended' => false,
         ]);
 
         $mr = MediationRequest::query()->create([
@@ -277,10 +368,8 @@ class MediationRequestFlowTest extends TestCase
 
         $sender = User::factory()->create();
         $receiver = User::factory()->create();
-        MatrimonyProfile::factory()->for($receiver)->create([
+        $this->createActiveProfileWithResidence($receiver, [
             'gender_id' => $femaleGid,
-            'lifecycle_state' => 'active',
-            'is_suspended' => false,
         ]);
 
         $target = MatrimonyProfile::query()->where('user_id', $receiver->id)->firstOrFail();

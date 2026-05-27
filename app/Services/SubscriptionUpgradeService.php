@@ -65,7 +65,6 @@ class SubscriptionUpgradeService
         User $user,
         Plan $newPlan,
         ?int $planTermId = null,
-        ?int $planPriceId = null,
         ?string $couponCode = null,
     ): array {
         if (! $newPlan->is_active) {
@@ -93,7 +92,7 @@ class SubscriptionUpgradeService
 
         $timePreview = $this->timeRemainingPreview($current, $now);
 
-        $prepared = $this->revenueOrchestrator->prepareCheckout($user, $newPlan, $planTermId, $planPriceId, $couponCode);
+        $prepared = $this->revenueOrchestrator->prepareCheckout($user, $newPlan, $planTermId, $couponCode);
         $resolved = $prepared['resolved'];
         $finalAmount = round((float) ($resolved['final_amount'] ?? 0), 2);
 

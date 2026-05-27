@@ -15,9 +15,6 @@
                             @if (($checkoutContext['plan_term_id'] ?? '') !== '')
                                 <input type="hidden" name="plan_term_id" value="{{ $checkoutContext['plan_term_id'] }}">
                             @endif
-                            @if (($checkoutContext['plan_price_id'] ?? '') !== '')
-                                <input type="hidden" name="plan_price_id" value="{{ $checkoutContext['plan_price_id'] }}">
-                            @endif
                             <div>
                                 <label for="checkout-coupon" class="mb-1 block text-sm font-medium text-gray-700">{{ __('revenue_summary.checkout_coupon_label') }}</label>
                                 <input

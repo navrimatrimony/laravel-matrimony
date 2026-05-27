@@ -15,7 +15,7 @@ final class PlanFeatureLabel
      * Public catalog (/plans): scale pool limits by billing duration vs shortest option on the card.
      *
      * @param  float  $durationMultiplier  e.g. 90/30 = 3 for quarterly vs monthly baseline
-     * @param  string|null  $billingDurationType  {@see PlanPrice::duration_type} or {@see PlanTerm::billing_key}
+     * @param  string|null  $billingDurationType  {@see \App\Models\PlanTerm::billing_key}
      */
     public static function catalogFormatValue(string $key, string $value, float $durationMultiplier, ?string $billingDurationType = null): string
     {

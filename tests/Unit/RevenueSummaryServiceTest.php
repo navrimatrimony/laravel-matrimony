@@ -23,7 +23,7 @@ class RevenueSummaryServiceTest extends TestCase
         $termId = (int) $plan->terms()->where('is_visible', true)->value('id');
         $this->assertGreaterThan(0, $termId);
 
-        $resolved = app(SubscriptionService::class)->resolvePaidPlanCheckout($user, $plan, $termId, null, null);
+        $resolved = app(SubscriptionService::class)->resolvePaidPlanCheckout($user, $plan, $termId, null);
         $out = app(RevenueSummaryService::class)->forSubscriptionResolvedCheckout($user, $plan, $resolved);
 
         $this->assertSame(round((float) $resolved['base_amount'], 2), $out['base_plan_price']);
@@ -42,7 +42,6 @@ class RevenueSummaryServiceTest extends TestCase
             'user_id' => $user->id,
             'plan_id' => $plan->id,
             'plan_term_id' => null,
-            'plan_price_id' => null,
             'coupon_id' => null,
             'starts_at' => now()->subDay(),
             'ends_at' => now()->addMonth(),

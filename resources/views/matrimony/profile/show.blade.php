@@ -1083,9 +1083,14 @@
                 $lockOpacityL1 = min(0.45, max(0.14, 0.12 + (($lockBlurStrength - 35) / 240)));
                 $lockOpacityL2 = min(0.70, max(0.24, 0.22 + (($lockBlurStrength - 35) / 170)));
                 $lockOpacityL3 = min(0.92, max(0.36, 0.34 + (($lockBlurStrength - 35) / 120)));
+                $profileViewLockDisplayMode = $profileViewLockDisplayMode ?? 'merged_blur_card';
+                if (! in_array($profileViewLockDisplayMode, ['merged_blur_card', 'heading_lock_rows', 'per_section_blur'], true)) {
+                    $profileViewLockDisplayMode = 'merged_blur_card';
+                }
             @endphp
             @include('matrimony.profile.partials.snapshot-stack', ['profileShowSnapshot' => $snapshotVisible])
             @if (! ($isOwnProfile ?? false) && $profileViewGateLocked && $snapshotLocked !== [])
+                @if ($profileViewLockDisplayMode === 'merged_blur_card')
                 <section
                     id="profile-lock-start"
                     class="profile-progressive-lock rounded-2xl border border-stone-200/80 bg-white/80 shadow-sm dark:border-gray-700/70 dark:bg-gray-900/50"
@@ -1105,6 +1110,53 @@
                         />
                     </div>
                 </section>
+                @elseif ($profileViewLockDisplayMode === 'heading_lock_rows')
+                <div id="profile-lock-start" class="space-y-2" aria-label="{{ __('profile.feature_gate_profile_views_title') }}">
+                    @foreach ($snapshotLocked as $section)
+                        <div class="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-stone-200/80 bg-white/90 px-4 py-3 shadow-sm dark:border-gray-700/70 dark:bg-gray-900/50">
+                            <div class="min-w-0 flex-1">
+                                <p class="text-[10px] font-semibold uppercase tracking-wide text-stone-500 dark:text-stone-400">{{ $section['kicker'] ?? '' }}</p>
+                                <h3 class="text-base font-semibold text-stone-900 dark:text-stone-100">{{ $section['title'] ?? '' }}</h3>
+                                <p class="mt-0.5 text-sm text-stone-600 dark:text-stone-400">{{ __('profile.lock_section_content_locked') }}</p>
+                            </div>
+                            <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-stone-200 bg-stone-50 text-lg dark:border-gray-600 dark:bg-gray-800" aria-hidden="true">🔒</span>
+                        </div>
+                    @endforeach
+                    <div id="profile-lock-single-cta" class="mt-4 px-0 sm:px-1">
+                        <x-feature-lock
+                            data-analytics-lock-cta="profile_lock_cta"
+                            :title="__('profile.feature_gate_profile_views_title')"
+                            :message="__('profile.feature_gate_profile_views_message')"
+                            :ctaTextDynamic="__('profile.feature_gate_cta_full_profile')"
+                        />
+                    </div>
+                </div>
+                @else
+                <div id="profile-lock-start" class="space-y-5" aria-label="{{ __('profile.feature_gate_profile_views_title') }}">
+                    @foreach ($snapshotLocked as $section)
+                        @php
+                            $profileShowLockedSingle = [$section];
+                        @endphp
+                        <section
+                            class="profile-progressive-lock relative overflow-hidden rounded-2xl border border-stone-200/80 bg-white/80 shadow-sm dark:border-gray-700/70 dark:bg-gray-900/50 max-h-[22rem]"
+                            style="--lock-blur-soft: {{ $lockBlurPxL1 }}px; --lock-blur-mid: {{ $lockBlurPxL2 }}px; --lock-blur-heavy: {{ $lockBlurPxL3 }}px; --lock-op-soft: {{ $lockOpacityL1 }}; --lock-op-mid: {{ $lockOpacityL2 }}; --lock-op-heavy: {{ $lockOpacityL3 }};"
+                        >
+                            <div class="profile-progressive-lock__content max-h-[18rem] overflow-hidden" aria-hidden="true">
+                                @include('matrimony.profile.partials.snapshot-stack', ['profileShowSnapshot' => $profileShowLockedSingle])
+                            </div>
+                            <div class="profile-progressive-lock__veil" aria-hidden="true"></div>
+                        </section>
+                    @endforeach
+                    <div id="profile-lock-single-cta" class="px-0 pt-2 sm:px-1">
+                        <x-feature-lock
+                            data-analytics-lock-cta="profile_lock_cta"
+                            :title="__('profile.feature_gate_profile_views_title')"
+                            :message="__('profile.feature_gate_profile_views_message')"
+                            :ctaTextDynamic="__('profile.feature_gate_cta_full_profile')"
+                        />
+                    </div>
+                </div>
+                @endif
             @endif
 
 
@@ -1133,15 +1185,9 @@
     </div>
 @endif
 
-@if (! (! ($isOwnProfile ?? false) && $profileViewGateLocked))
+@if (($isOwnProfile ?? false) || auth()->check())
 <div id="profile-contact-panel" class="relative overflow-hidden rounded-2xl border border-stone-200/75 bg-gradient-to-br from-white via-stone-50/80 to-emerald-50/20 shadow-[0_14px_44px_-20px_rgba(5,150,105,0.1)] ring-1 ring-stone-100/70 dark:border-stone-700/80 dark:from-gray-900 dark:via-stone-900/90 dark:to-emerald-950/15">
-@if (! ($isOwnProfile ?? false) && $profileViewGateLocked)
-    <div
-        class="profile-progressive-lock max-h-56"
-        style="--lock-blur-soft: {{ $lockBlurPxL1 }}px; --lock-blur-mid: {{ $lockBlurPxL2 }}px; --lock-blur-heavy: {{ $lockBlurPxL3 }}px; --lock-op-soft: {{ $lockOpacityL1 }}; --lock-op-mid: {{ $lockOpacityL2 }}; --lock-op-heavy: {{ $lockOpacityL3 }};"
-    >
-@endif
-    <section class="relative px-5 py-6 sm:px-7 sm:py-7 @if(! ($isOwnProfile ?? false) && $profileViewGateLocked) profile-progressive-lock__content overflow-hidden @endif" aria-labelledby="profile-contact-heading">
+    <section class="relative px-5 py-6 sm:px-7 sm:py-7" aria-labelledby="profile-contact-heading">
         <header class="mb-4 flex flex-wrap items-center gap-3">
             <span class="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-700 text-white shadow-md shadow-emerald-600/20 dark:from-emerald-600 dark:to-teal-900" aria-hidden="true">
                 <svg class="h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 6.75c0 8.284 6.716 15 15 15h2.25a2.25 2.25 0 002.25-2.25v-1.372c0-.516-.351-.966-.852-1.091l-4.423-1.106c-.44-.11-.902.055-1.173.417l-.97 1.293c-.282.376-.769.542-1.21.38a12.035 12.035 0 01-7.143-7.143c-.162-.441.004-.928.38-1.21l1.293-.97c.363-.271.527-.734.417-1.173L6.963 3.102a1.125 1.125 0 00-1.091-.852H4.5A2.25 2.25 0 002.25 4.5v2.25z"/></svg>
@@ -1209,12 +1255,7 @@
                         </p>
                     </div>
                 @elseif (($contactAccess['needs_upgrade'] ?? false))
-                    @php
-                        $_contactMediatorVisible = ! ($isOwnProfile ?? false) && ($contactAccess['show_mediator_cta'] ?? false);
-                        $_contactPrimarySpan = $_contactMediatorVisible ? 'md:col-span-7' : 'md:col-span-10';
-                    @endphp
-                    <div class="grid gap-3 md:grid-cols-10 md:items-stretch">
-                        <div class="{{ $_contactPrimarySpan }} rounded-xl border border-stone-100/95 bg-stone-50/70 px-4 py-5 text-center dark:border-gray-700/70 dark:bg-gray-900/45 md:flex md:h-full md:flex-col md:justify-center">
+                    <div class="rounded-xl border border-stone-100/95 bg-stone-50/70 px-4 py-5 text-center dark:border-gray-700/70 dark:bg-gray-900/45 md:flex md:h-full md:flex-col md:justify-center">
                             <p class="text-xl font-bold tracking-wider text-stone-900 dark:text-stone-100">
                                 {{ $masked }} <span class="text-stone-400" aria-hidden="true">🔒</span>
                             </p>
@@ -1225,18 +1266,9 @@
                                 class="mt-3 inline-flex items-center justify-center rounded-lg bg-indigo-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 dark:focus:ring-offset-gray-900">
                                 {{ __('contact_access.upgrade_plan_button') }}
                             </a>
-                        </div>
-                        @if ($_contactMediatorVisible)
-                            @include('matrimony.profile.partials.contact-mediator-cta')
-                        @endif
                     </div>
                 @elseif (($contactAccess['show_no_one_copy'] ?? false))
-                    @php
-                        $_noOneMediatorVisible = ! ($isOwnProfile ?? false) && ($contactAccess['show_mediator_cta'] ?? false);
-                        $_noOnePrimarySpan = $_noOneMediatorVisible ? 'md:col-span-7' : 'md:col-span-10';
-                    @endphp
-                    <div class="grid gap-3 md:grid-cols-10 md:items-stretch">
-                        <div class="rounded-2xl border border-stone-200/90 bg-stone-50/85 px-4 py-5 text-center dark:border-gray-700 dark:bg-gray-900/45 {{ $_noOnePrimarySpan }} md:flex md:h-full md:flex-col md:justify-center">
+                    <div class="rounded-2xl border border-stone-200/90 bg-stone-50/85 px-4 py-5 text-center dark:border-gray-700 dark:bg-gray-900/45 md:flex md:h-full md:flex-col md:justify-center">
                             <p class="text-2xl font-bold tracking-wider text-stone-900 dark:text-stone-100">
                                 {{ $masked }} <span class="text-stone-400" aria-hidden="true">🔒</span>
                             </p>
@@ -1246,11 +1278,6 @@
                             <p class="mt-1 text-sm text-stone-600 dark:text-stone-400">
                                 {{ __('contact_access.owner_restricted_contact_help') }}
                             </p>
-                        </div>
-
-                        @if ($_noOneMediatorVisible)
-                            @include('matrimony.profile.partials.contact-mediator-cta')
-                        @endif
                     </div>
                 @elseif (($contactAccess['paid_reveal_blocked_pending_matchmaking'] ?? false))
                     <div class="text-center">
@@ -1328,17 +1355,17 @@
                     </div>
                 @endif
                 </div>{{-- #profile-contact-reveal-root --}}
+                @if (! ($isOwnProfile ?? false) && (($contactAccess['show_mediator_cta'] ?? false) || ($latestMediatorRequestIncoming ?? null)))
+                    <div class="mt-3">
+                        @include('matrimony.profile.partials.contact-mediator-cta', [
+                            'latestMediatorRequest' => $latestMediatorRequest ?? null,
+                            'latestMediatorRequestIncoming' => $latestMediatorRequestIncoming ?? null,
+                        ])
+                    </div>
+                @endif
             @endif
         </div>
     </section>
-@if (! ($isOwnProfile ?? false) && $profileViewGateLocked)
-    <div class="profile-progressive-lock__veil" aria-hidden="true"></div>
-    </div>
-@endif
-</div>
-@else
-<div class="rounded-2xl border border-indigo-200/90 bg-indigo-50/80 px-4 py-4 text-sm text-indigo-900 shadow-sm dark:border-indigo-800/70 dark:bg-indigo-950/35 dark:text-indigo-100">
-    {{ __('More profile details are available for paid users only.') }}
 </div>
 @endif
 

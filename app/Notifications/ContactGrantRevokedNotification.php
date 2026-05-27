@@ -5,6 +5,7 @@ namespace App\Notifications;
 use App\Models\ContactGrant;
 use App\Notifications\Concerns\SendsMatrimonyMailChannel;
 use App\Notifications\Support\MatrimonyMailTemplate;
+use App\Support\NotificationMarathiPayload;
 use Illuminate\Bus\Queueable;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
@@ -33,11 +34,11 @@ class ContactGrantRevokedNotification extends Notification
 
     public function toArray(object $notifiable): array
     {
-        return [
+        return NotificationMarathiPayload::withMessage([
             'type' => 'contact_grant_revoked',
             'message' => 'Your access to their contact has been revoked.',
             'contact_request_id' => $this->grant->contact_request_id,
             'contact_grant_id' => $this->grant->id,
-        ];
+        ]);
     }
 }

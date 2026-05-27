@@ -1207,12 +1207,12 @@ final class AdminDashboardMetricsService
 
         $q = DB::table('subscriptions')
             ->join('plans', 'plans.id', '=', 'subscriptions.plan_id')
-            ->leftJoin('plan_prices', 'plan_prices.id', '=', 'subscriptions.plan_price_id')
+            ->leftJoin('plan_terms', 'plan_terms.id', '=', 'subscriptions.plan_term_id')
             ->where('subscriptions.status', '!=', Subscription::STATUS_PENDING)
             ->whereBetween('subscriptions.created_at', [$from, $to]);
 
         return (float) $q->sum(DB::raw(
-            'COALESCE(plan_prices.price, plans.list_price_rupees, plans.price, 0)'
+            'COALESCE(plan_terms.price, plans.price, 0)'
         ));
     }
 
@@ -1227,7 +1227,7 @@ final class AdminDashboardMetricsService
 
         $rows = DB::table('subscriptions')
             ->join('plans', 'plans.id', '=', 'subscriptions.plan_id')
-            ->leftJoin('plan_prices', 'plan_prices.id', '=', 'subscriptions.plan_price_id')
+            ->leftJoin('plan_terms', 'plan_terms.id', '=', 'subscriptions.plan_term_id')
             ->where('subscriptions.status', '!=', Subscription::STATUS_PENDING)
             ->whereBetween('subscriptions.created_at', [$start, $end])
             ->groupBy('plans.id', 'plans.name', 'plans.slug', 'plans.tier')
@@ -1236,7 +1236,7 @@ final class AdminDashboardMetricsService
                 'plans.name',
                 'plans.slug',
                 'plans.tier',
-                DB::raw('SUM(COALESCE(plan_prices.price, plans.list_price_rupees, plans.price, 0)) as revenue'),
+                DB::raw('SUM(COALESCE(plan_terms.price, plans.price, 0)) as revenue'),
             ])
             ->orderByDesc('revenue')
             ->get();

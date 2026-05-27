@@ -5,7 +5,6 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\Plan;
 use App\Models\PlanFeature;
-use App\Models\PlanPrice;
 use App\Models\PlanQuotaPolicy;
 use App\Models\PlanTerm;
 use App\Models\Subscription;
@@ -200,7 +199,7 @@ class PlanController extends Controller
     public function edit(Plan $plan)
     {
         PlanQuotaPolicy::ensureAllKeysForPlan($plan);
-        $plan->load(['features', 'terms', 'planPrices', 'quotaPolicies']);
+        $plan->load(['features', 'terms', 'quotaPolicies']);
 
         return view('admin.plans.form', [
             'plan' => $plan,
@@ -239,7 +238,6 @@ class PlanController extends Controller
                 $this->persistPlanDefaultBillingKeyFromRequest($plan->fresh('terms'), $request);
             } else {
                 PlanTerm::query()->where('plan_id', $plan->id)->delete();
-                PlanPrice::query()->where('plan_id', $plan->id)->delete();
             }
 
             PlanQuotaPolicy::ensureAllKeysForPlan($plan);
@@ -488,7 +486,6 @@ class PlanController extends Controller
             'default_billing_key' => ['nullable', 'string', 'max:64'],
             'applies_to_gender' => ['required', 'string', Rule::in(['male', 'female', 'all'])],
             'marketing_badge' => ['nullable', 'string', 'max:80', Rule::in(array_merge([''], self::ADMIN_MARKETING_BADGE_KEYS))],
-            'list_price_rupees' => ['nullable', 'integer', 'min:0'],
             'gst_inclusive' => ['sometimes'],
             'chat_initiate_new_chats_only' => ['sometimes', 'boolean'],
         ]);
@@ -534,16 +531,6 @@ class PlanController extends Controller
         $durationQuantity = null;
         $durationUnit = null;
 
-        $listPrice = $validated['list_price_rupees'] ?? null;
-        if ($listPrice === '' || $listPrice === null) {
-            $listPriceRupees = null;
-        } else {
-            $listPriceRupees = max(0, (int) $listPrice);
-        }
-        if ($canonicalPaidPricing !== null) {
-            $listPriceRupees = $canonicalPaidPricing['list_price_rupees'];
-        }
-
         $defaultBilling = $isFreeSystemPlan ? null : ($validated['default_billing_key'] ?? null);
         if (is_string($defaultBilling) && $defaultBilling === '') {
             $defaultBilling = null;
@@ -558,7 +545,6 @@ class PlanController extends Controller
             'slug' => $slug,
             'price' => $canonicalPaidPricing['price'] ?? $validated['price'],
             'discount_percent' => $canonicalPaidPricing['discount_percent'] ?? ($validated['discount_percent'] ?? null),
-            'list_price_rupees' => $listPriceRupees,
             'gst_inclusive' => $request->boolean('gst_inclusive'),
             'duration_days' => $durationDays,
             'duration_quantity' => $durationQuantity !== null ? (int) $durationQuantity : null,
@@ -577,7 +563,7 @@ class PlanController extends Controller
     /**
      * Paid-plan monetary SSOT comes from selected duration billing row in term_rows.
      *
-     * @return array{price:float, discount_percent:int|null, list_price_rupees:int}|null
+     * @return array{price:float, discount_percent:int|null}|null
      */
     private function canonicalPaidPricingFromRequest(Request $request, ?Plan $planContext): ?array
     {
@@ -607,7 +593,6 @@ class PlanController extends Controller
         return [
             'price' => $price,
             'discount_percent' => $disc,
-            'list_price_rupees' => (int) round($price),
         ];
     }
 

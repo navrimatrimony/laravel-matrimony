@@ -51,14 +51,12 @@ class SubscriptionController extends Controller
             $validated = $request->validate([
                 'plan' => ['required', 'string', 'max:128'],
                 'plan_term_id' => ['nullable', 'integer'],
-                'plan_price_id' => ['nullable', 'integer'],
                 'coupon' => ['nullable', 'string', 'max:64'],
             ]);
         } else {
             $validated = $request->validate([
                 'plan' => ['required', 'string', 'max:128'],
                 'plan_term_id' => ['nullable', 'integer'],
-                'plan_price_id' => ['nullable', 'integer'],
                 'coupon_code' => ['nullable', 'string', 'max:64'],
             ]);
         }
@@ -96,15 +94,12 @@ class SubscriptionController extends Controller
 
         $rawTerm = $request->input('plan_term_id');
         $planTermId = ($rawTerm === null || $rawTerm === '') ? null : (int) $rawTerm;
-        $rawPrice = $request->input('plan_price_id');
-        $planPriceId = ($rawPrice === null || $rawPrice === '') ? null : (int) $rawPrice;
         $couponCode = self::normalizedCouponFromRequest($request, $validated);
 
         Log::info('Subscribe clicked', [
             'user_id' => $user->id,
             'plan_slug' => $plan->slug,
             'plan_term_id' => $planTermId,
-            'plan_price_id' => $planPriceId,
             'has_coupon' => $couponCode !== null,
         ]);
 
@@ -113,7 +108,6 @@ class SubscriptionController extends Controller
                 $user,
                 $plan,
                 $planTermId,
-                $planPriceId,
                 $couponCode,
             );
             $resolved = $prepared['resolved'];
@@ -123,7 +117,6 @@ class SubscriptionController extends Controller
                     ->route('plans.subscribe', self::subscribeReplayRouteQuery(
                         $validated,
                         $planTermId,
-                        $planPriceId,
                         $request,
                         includeCouponFromRequest: false,
                     ))
@@ -235,12 +228,10 @@ class SubscriptionController extends Controller
         $checkoutContext = [
             'plan' => (string) $plan->slug,
             'plan_term_id' => $planTermId !== null ? (string) $planTermId : '',
-            'plan_price_id' => $planPriceId !== null ? (string) $planPriceId : '',
         ];
         $removeCouponSubscribeParams = self::subscribeReplayRouteQuery(
             $validated,
             $planTermId,
-            $planPriceId,
             $request,
             includeCouponFromRequest: false,
         );
@@ -334,7 +325,7 @@ class SubscriptionController extends Controller
         $planTermId = $visibleTerms->isNotEmpty() ? (int) $visibleTerms->first()->id : null;
 
         try {
-            $prepared = $revenueOrchestrator->prepareCheckout($user, $plan, $planTermId, null, null);
+            $prepared = $revenueOrchestrator->prepareCheckout($user, $plan, $planTermId, null);
             $resolved = $prepared['resolved'];
         } catch (HttpException $e) {
             return redirect()
@@ -942,16 +933,12 @@ class SubscriptionController extends Controller
     private static function subscribeReplayRouteQuery(
         array $validated,
         ?int $planTermId,
-        ?int $planPriceId,
         Request $request,
         bool $includeCouponFromRequest,
     ): array {
         $q = ['plan' => (string) $validated['plan']];
         if ($planTermId !== null) {
             $q['plan_term_id'] = $planTermId;
-        }
-        if ($planPriceId !== null) {
-            $q['plan_price_id'] = $planPriceId;
         }
         if ($includeCouponFromRequest) {
             $c = $request->input('coupon');

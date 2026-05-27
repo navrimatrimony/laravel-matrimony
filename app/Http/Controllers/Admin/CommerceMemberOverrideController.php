@@ -46,7 +46,7 @@ class CommerceMemberOverrideController extends Controller
     {
         $subscriptions = Subscription::query()
             ->where('user_id', $user->id)
-            ->with(['plan', 'planPrice'])
+            ->with(['plan', 'planTerm'])
             ->orderByDesc('starts_at')
             ->limit(50)
             ->get();

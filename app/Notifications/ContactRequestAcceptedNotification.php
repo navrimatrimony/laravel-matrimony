@@ -5,6 +5,7 @@ namespace App\Notifications;
 use App\Models\ContactGrant;
 use App\Notifications\Concerns\SendsMatrimonyMailChannel;
 use App\Notifications\Support\MatrimonyMailTemplate;
+use App\Support\NotificationMarathiPayload;
 use Illuminate\Bus\Queueable;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
@@ -36,12 +37,12 @@ class ContactRequestAcceptedNotification extends Notification
         $receiver = $this->grant->contactRequest->receiver;
         $name = $receiver->matrimonyProfile->full_name ?? $receiver->name ?? 'They';
         $validUntil = $this->grant->valid_until->format('M j, Y');
-        return [
+        return NotificationMarathiPayload::withMessage([
             'type' => 'contact_request_accepted',
             'message' => "{$name} approved your contact request. Shared: Phone (primary). Valid until {$validUntil}.",
             'contact_request_id' => $this->grant->contact_request_id,
             'contact_grant_id' => $this->grant->id,
             'receiver_profile_id' => (int) ($receiver->matrimonyProfile?->id ?? 0) ?: null,
-        ];
+        ]);
     }
 }

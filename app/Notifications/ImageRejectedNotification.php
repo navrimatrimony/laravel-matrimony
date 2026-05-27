@@ -4,6 +4,7 @@ namespace App\Notifications;
 
 use App\Notifications\Concerns\SendsMatrimonyMailChannel;
 use App\Notifications\Support\MatrimonyMailTemplate;
+use App\Support\NotificationMarathiPayload;
 use Illuminate\Bus\Queueable;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
@@ -52,10 +53,10 @@ class ImageRejectedNotification extends Notification
      */
     public function toArray(object $notifiable): array
     {
-        return [
+        return NotificationMarathiPayload::withMessage([
             'type' => 'image_rejected',
             'message' => 'Your profile photo was removed by admin. Reason: ' . $this->reason,
             'reason' => $this->reason,
-        ];
+        ]);
     }
 }

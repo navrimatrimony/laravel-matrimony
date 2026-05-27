@@ -197,4 +197,5 @@ return [
     'monetization_send_message' => 'संदेश पाठवा',
     'match_score' => 'जुळणी गुण',
     'match_compatible' => 'सुसंगत',
+    'lock_section_content_locked' => 'या section मधील माहिती लॉक आहे.',
 ];

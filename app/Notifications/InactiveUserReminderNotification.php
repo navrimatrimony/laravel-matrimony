@@ -4,6 +4,7 @@ namespace App\Notifications;
 
 use App\Notifications\Concerns\SendsMatrimonyMailChannel;
 use App\Notifications\Support\MatrimonyMailTemplate;
+use App\Support\NotificationMarathiPayload;
 use Illuminate\Bus\Queueable;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
@@ -28,13 +29,13 @@ class InactiveUserReminderNotification extends Notification
 
     public function toArray(object $notifiable): array
     {
-        return [
+        return NotificationMarathiPayload::withMessage([
             'type' => 'inactive_reminder',
             'message' => __('notifications.inactive_reminder_message', [
                 'name' => $notifiable->name ?? __('notifications.fellow_member'),
             ]),
             'mail_action_url' => url(route('dashboard', [], false)),
             'mail_action_text' => __('mail.common.open_dashboard'),
-        ];
+        ]);
     }
 }

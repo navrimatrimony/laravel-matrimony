@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 
 namespace App\Http\Controllers\Admin;
 
@@ -30,7 +30,7 @@ class AdminSettingsController extends Controller
     private const REASON_RULES = ['required', 'string', 'min:10'];
 
     /**
-     * View-back settings (Day-9). Enable/disable, probability 0â€“100, delay min/max.
+     * View-back settings (Day-9). Enable/disable, probability 0–100, delay min/max.
      */
     public function viewBackSettings()
     {
@@ -109,7 +109,7 @@ class AdminSettingsController extends Controller
     }
 
     /**
-     * Showcase â†’ real random views (scheduled). Weighted matching + per-real caps.
+     * Showcase → real random views (scheduled). Weighted matching + per-real caps.
      */
     public function updateShowcaseRandomViewSettings(Request $request): \Illuminate\Http\RedirectResponse
     {
@@ -591,7 +591,7 @@ class AdminSettingsController extends Controller
                 $fieldChanges = [];
                 foreach ($updates as $key => $value) {
                     if ($value !== $original[$key]) {
-                        $fieldChanges[] = "{$key}: ".($original[$key] ? 'true' : 'false').' â†’ '.($value ? 'true' : 'false');
+                        $fieldChanges[] = "{$key}: ".($original[$key] ? 'true' : 'false').' → '.($value ? 'true' : 'false');
                     }
                 }
                 $changes[] = $field->field_key.' ('.implode(', ', $fieldChanges).')';
@@ -614,7 +614,7 @@ class AdminSettingsController extends Controller
     }
 
     /**
-     * App-wide toggles (admin bypass mode, â€¦) via {@see SettingService} / {@see AdminSetting}.
+     * App-wide toggles (admin bypass mode, …) via {@see SettingService} / {@see AdminSetting}.
      */
     public function appSettings(SettingService $settings, SiteIdentityService $siteIdentity): \Illuminate\View\View
     {
@@ -634,6 +634,11 @@ class AdminSettingsController extends Controller
             )
         ));
 
+        $rawLockDisplayMode = (string) AdminSetting::getValue('profile_view_lock_display_mode', 'merged_blur_card');
+        $profileViewLockDisplayModeAdmin = in_array($rawLockDisplayMode, ['merged_blur_card', 'heading_lock_rows', 'per_section_blur'], true)
+            ? $rawLockDisplayMode
+            : 'merged_blur_card';
+
         return view('admin.app-settings.index', [
             'adminBypassMode' => $adminBypassMode,
             'interestMinCorePct' => $interestMinCorePct,
@@ -646,6 +651,7 @@ class AdminSettingsController extends Controller
             'memberChatMobileOpenMode' => (string) AdminSetting::getValue('member_chat_mobile_open_mode', 'full_page'),
             'profileViewLockStartSection' => (string) AdminSetting::getValue('profile_view_lock_start_section', 'family'),
             'profileViewLockBlurStrength' => max(35, min(100, (int) AdminSetting::getValue('profile_view_lock_blur_strength', '78'))),
+            'profileViewLockDisplayMode' => $profileViewLockDisplayModeAdmin,
             'canManageBillingSettings' => $viewer?->hasAdminRole(['super_admin']) ?? false,
             'billingLegalName' => (string) AdminSetting::getValue('billing_legal_name', ''),
             'billingAddress' => (string) AdminSetting::getValue('billing_address', ''),
@@ -692,6 +698,7 @@ class AdminSettingsController extends Controller
             'member_chat_mobile_open_mode' => ['nullable', Rule::in(['full_page', 'bottom_sheet'])],
             'profile_view_lock_start_section' => ['nullable', 'string', Rule::in(['basic_info', 'physical', 'education_career', 'family', 'siblings_detail', 'extended_family', 'alliance', 'property', 'horoscope', 'partner_preferences', 'additional'])],
             'profile_view_lock_blur_strength' => 'nullable|integer|min:35|max:100',
+            'profile_view_lock_display_mode' => ['nullable', 'string', Rule::in(['merged_blur_card', 'heading_lock_rows', 'per_section_blur'])],
             'billing_legal_name' => ['nullable', 'string', 'max:160'],
             'billing_address' => ['nullable', 'string', 'max:1000'],
             'billing_email' => ['nullable', 'email:rfc', 'max:190'],
@@ -759,6 +766,11 @@ class AdminSettingsController extends Controller
         $profileViewLockBlurStrength = max(35, min(100, (int) $request->input('profile_view_lock_blur_strength', 78)));
         AdminSetting::setValue('profile_view_lock_start_section', $profileViewLockStartSection);
         AdminSetting::setValue('profile_view_lock_blur_strength', (string) $profileViewLockBlurStrength);
+        $profileViewLockDisplayMode = (string) $request->input('profile_view_lock_display_mode', 'merged_blur_card');
+        if (! in_array($profileViewLockDisplayMode, ['merged_blur_card', 'heading_lock_rows', 'per_section_blur'], true)) {
+            $profileViewLockDisplayMode = 'merged_blur_card';
+        }
+        AdminSetting::setValue('profile_view_lock_display_mode', $profileViewLockDisplayMode);
         AdminSetting::setValue('success_rate_threshold', (string) $request->input('success_rate_threshold', '85'));
         AdminSetting::setValue('webhook_failure_threshold', (string) $request->input('webhook_failure_threshold', '5'));
         AdminSetting::setValue('queue_lag_threshold', (string) $request->input('queue_lag_threshold', '120'));
@@ -817,7 +829,7 @@ class AdminSettingsController extends Controller
             'update_app_settings',
             'AdminSetting',
             null,
-            'admin_bypass_mode='.($on ? '1' : '0').'; interest_min_core_completeness_pct='.$pct.'; member_presence_online_threshold_minutes='.$presenceMin.'; plans_enforce_gender_specific_visibility='.($plansGenderSpecific ? '1' : '0').'; mobile_clean_mode='.($mobileCleanMode ? '1' : '0').'; member_communication_floating_tab_enabled='.($memberCommunicationFloatingTab ? '1' : '0').'; member_help_centre_floating_tab_enabled='.($memberHelpCentreFloatingTab ? '1' : '0').'; member_chat_desktop_open_mode='.$memberChatDesktopOpenMode.'; member_chat_mobile_open_mode='.$memberChatMobileOpenMode.'; profile_view_lock_start_section='.$profileViewLockStartSection.'; profile_view_lock_blur_strength='.$profileViewLockBlurStrength.'; dashboard_notification_cards_limit='.(string) $request->input('dashboard_notification_cards_limit', '2').'; dashboard_activity_autohide_seconds='.(string) $request->input('dashboard_activity_autohide_seconds', '7').'; data_engine_allow_fix_mode='.($canManageDataEngineFixMode ? ($request->boolean('data_engine_allow_fix_mode') ? '1' : '0') : 'unchanged').'; billing settings updated; site identity settings='.($canManageSiteIdentitySettings ? 'updated' : 'unchanged'),
+            'admin_bypass_mode='.($on ? '1' : '0').'; interest_min_core_completeness_pct='.$pct.'; member_presence_online_threshold_minutes='.$presenceMin.'; plans_enforce_gender_specific_visibility='.($plansGenderSpecific ? '1' : '0').'; mobile_clean_mode='.($mobileCleanMode ? '1' : '0').'; member_communication_floating_tab_enabled='.($memberCommunicationFloatingTab ? '1' : '0').'; member_help_centre_floating_tab_enabled='.($memberHelpCentreFloatingTab ? '1' : '0').'; member_chat_desktop_open_mode='.$memberChatDesktopOpenMode.'; member_chat_mobile_open_mode='.$memberChatMobileOpenMode.'; profile_view_lock_start_section='.$profileViewLockStartSection.'; profile_view_lock_blur_strength='.$profileViewLockBlurStrength.'; profile_view_lock_display_mode='.$profileViewLockDisplayMode.'; dashboard_notification_cards_limit='.(string) $request->input('dashboard_notification_cards_limit', '2').'; dashboard_activity_autohide_seconds='.(string) $request->input('dashboard_activity_autohide_seconds', '7').'; data_engine_allow_fix_mode='.($canManageDataEngineFixMode ? ($request->boolean('data_engine_allow_fix_mode') ? '1' : '0') : 'unchanged').'; billing settings updated; site identity settings='.($canManageSiteIdentitySettings ? 'updated' : 'unchanged'),
             false
         );
 
@@ -872,7 +884,7 @@ class AdminSettingsController extends Controller
     }
 
     /**
-     * Showcase interest admin: mostly showcase â†’ real sends; plus incoming auto-respond (real â†’ showcase).
+     * Showcase interest admin: mostly showcase → real sends; plus incoming auto-respond (real → showcase).
      * Other {@see ShowcaseInterestPolicyService} keys may remain in DB untouched.
      */
     public function showcaseInterestSettings(): \Illuminate\View\View

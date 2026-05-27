@@ -10,6 +10,7 @@ use App\Notifications\Support\MatrimonyMailTemplate;
 use App\Services\WhoViewed\WhoViewedNotificationIdentityGate;
 use App\Services\WhoViewed\WhoViewedTeaserPolicy;
 use App\Services\WhoViewed\WhoViewedTeaserPresenter;
+use App\Support\NotificationMarathiPayload;
 use Illuminate\Bus\Queueable;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
@@ -56,14 +57,14 @@ class ProfileViewedNotification extends Notification
             $name = $this->viewerProfile->full_name ?? 'Someone';
             $message = "{$name} viewed your profile.";
 
-            return [
+            return NotificationMarathiPayload::withMessage([
                 'type' => 'profile_viewed',
                 'message' => $message,
                 'viewer_profile_id' => $this->viewerProfile->id,
                 'is_view_back' => $this->isViewBack,
                 'revealed' => true,
                 'viewer_dedupe_token' => $token,
-            ];
+            ]);
         }
 
         $teaser = null;
@@ -86,7 +87,7 @@ class ProfileViewedNotification extends Notification
             );
         }
 
-        return [
+        return NotificationMarathiPayload::withMessage([
             'type' => 'profile_viewed',
             'message' => __('who_viewed.notification_profile_viewed_anonymous'),
             'is_view_back' => $this->isViewBack,
@@ -98,6 +99,6 @@ class ProfileViewedNotification extends Notification
             'teaser_context_label' => __('notifications.teaser_open_who_viewed'),
             'mail_action_url' => route('who-viewed.index'),
             'mail_action_text' => __('notifications.teaser_open_who_viewed'),
-        ];
+        ]);
     }
 }

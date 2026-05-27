@@ -118,7 +118,6 @@ class RevenueAnalyticsServiceTest extends TestCase
                 'user_id' => $user->id,
                 'plan_id' => $plan->id,
                 'plan_term_id' => null,
-                'plan_price_id' => null,
                 'coupon_id' => $coupon->id,
                 'starts_at' => $day->copy()->addHour(),
                 'ends_at' => $day->copy()->addMonth(),

@@ -27,7 +27,6 @@ class PlanTermSubscriptionReferenceGuardTest extends TestCase
             'user_id' => $user->id,
             'plan_id' => $plan->id,
             'plan_term_id' => $term->id,
-            'plan_price_id' => null,
             'coupon_id' => null,
             'starts_at' => now()->subDay(),
             'ends_at' => now()->addMonth(),

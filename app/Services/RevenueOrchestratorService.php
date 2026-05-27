@@ -39,14 +39,12 @@ class RevenueOrchestratorService
         User $user,
         Plan $plan,
         ?int $planTermId = null,
-        ?int $planPriceId = null,
         ?string $couponCode = null,
     ): array {
         $resolved = $this->subscriptions->resolvePaidPlanCheckout(
             $user,
             $plan,
             $planTermId,
-            $planPriceId,
             $couponCode !== null && trim($couponCode) !== '' ? trim($couponCode) : null,
         );
 

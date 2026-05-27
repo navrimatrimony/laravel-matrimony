@@ -70,9 +70,6 @@
         $durationDaysValue = $allowOldInput
             ? old('duration_days', $plan->duration_days)
             : $plan->duration_days;
-        $listPriceValue = $allowOldInput
-            ? old('list_price_rupees', $plan->list_price_rupees !== null ? (int) $plan->list_price_rupees : '')
-            : ($plan->list_price_rupees !== null ? (int) $plan->list_price_rupees : '');
         $gstInclusiveValue = $allowOldInput
             ? old('gst_inclusive', ($plan->gst_inclusive ?? true) ? '1' : '0')
             : (($plan->gst_inclusive ?? true) ? '1' : '0');
@@ -174,8 +171,6 @@
                                 @endforeach
                             </select>
                         </div>
-                        <input type="hidden" name="list_price_rupees" value="{{ $listPriceValue }}">
-
                         @include('admin.plans.partials.plan-grace-carry-selects', ['showPlanDiscount' => false, 'withTrailingSpacer' => false])
                     @endif
 

@@ -86,7 +86,6 @@ class PlanUpdateBillingRequestTest extends TestCase
             'grace_period_days' => '3',
             'leftover_quota_carry_window_days' => '',
             'is_active' => '1',
-            'list_price_rupees' => '',
             'gst_inclusive' => '1',
             'quota_policies' => $this->quotaPoliciesPayload(),
             'term_rows' => $this->termRowsList([
@@ -137,7 +136,6 @@ class PlanUpdateBillingRequestTest extends TestCase
             'grace_period_days' => '3',
             'leftover_quota_carry_window_days' => '',
             'is_active' => '1',
-            'list_price_rupees' => '',
             'gst_inclusive' => '1',
             'quota_policies' => $this->quotaPoliciesPayload(),
             'term_rows' => $this->termRowsList([
@@ -196,7 +194,6 @@ class PlanUpdateBillingRequestTest extends TestCase
             'grace_period_days' => '3',
             'leftover_quota_carry_window_days' => '',
             'is_active' => '1',
-            'list_price_rupees' => '',
             'gst_inclusive' => '1',
             'quota_policies' => $qp,
             'term_rows' => $this->termRowsList([

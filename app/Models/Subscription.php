@@ -24,7 +24,6 @@ class Subscription extends Model
         'user_id',
         'plan_id',
         'plan_term_id',
-        'plan_price_id',
         'coupon_id',
         'starts_at',
         'ends_at',
@@ -153,11 +152,6 @@ class Subscription extends Model
     public function planTerm(): BelongsTo
     {
         return $this->belongsTo(PlanTerm::class);
-    }
-
-    public function planPrice(): BelongsTo
-    {
-        return $this->belongsTo(PlanPrice::class);
     }
 
     /**

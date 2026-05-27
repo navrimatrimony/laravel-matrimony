@@ -548,7 +548,6 @@ class ProfileWizardController extends Controller
                 $data['nadis'] = \App\Models\MasterNadi::where('is_active', true)->get();
                 $data['yonis'] = \App\Models\MasterYoni::where('is_active', true)->get();
                 $data['mangalDoshTypes'] = \App\Models\MasterMangalDoshType::where('is_active', true)->get();
-                $data['mangalStatuses'] = \App\Models\MasterMangalStatus::where('is_active', true)->orderBy('sort_order')->get();
                 $data['varnas'] = DB::table('master_varnas')->where('is_active', true)->orderBy('label')->get();
                 $data['vashyas'] = DB::table('master_vashyas')->where('is_active', true)->orderBy('label')->get();
                 $data['rashiLords'] = DB::table('master_rashi_lords')->where('is_active', true)->orderBy('label')->get();
@@ -1767,7 +1766,6 @@ class ProfileWizardController extends Controller
                 'vashya_id' => ! empty($h['vashya_id']) ? (int) $h['vashya_id'] : null,
                 'rashi_lord_id' => ! empty($h['rashi_lord_id']) ? (int) $h['rashi_lord_id'] : null,
                 'mangal_dosh_type_id' => ! empty($h['mangal_dosh_type_id']) ? (int) $h['mangal_dosh_type_id'] : null,
-                'mangal_status_id' => ! empty($h['mangal_status_id']) ? (int) $h['mangal_status_id'] : null,
                 'devak' => trim((string) ($h['devak'] ?? '')),
                 'kul' => trim((string) ($h['kuldaivat'] ?? $h['kul'] ?? '')),
                 'gotra' => trim((string) ($h['gotra'] ?? '')),
@@ -1792,7 +1790,6 @@ class ProfileWizardController extends Controller
                 'vashya_id' => $payload['vashya_id'],
                 'rashi_lord_id' => $payload['rashi_lord_id'],
                 'mangal_dosh_type_id' => $payload['mangal_dosh_type_id'],
-                'mangal_status_id' => $payload['mangal_status_id'],
                 'devak' => $payload['devak'],
                 'kul' => $payload['kul'],
                 'gotra' => $payload['gotra'],
@@ -1817,7 +1814,6 @@ class ProfileWizardController extends Controller
             'nadi_id' => ['nullable', Rule::exists('master_nadis', 'id')->where(fn ($q) => $q->where('is_active', true))],
             'yoni_id' => ['nullable', Rule::exists('master_yonis', 'id')->where(fn ($q) => $q->where('is_active', true))],
             'mangal_dosh_type_id' => ['nullable', Rule::exists('master_mangal_dosh_types', 'id')->where(fn ($q) => $q->where('is_active', true))],
-            'mangal_status_id' => ['nullable', Rule::exists('master_mangal_statuses', 'id')->where(fn ($q) => $q->where('is_active', true))],
             'varna_id' => ['nullable', Rule::exists('master_varnas', 'id')->where(fn ($q) => $q->where('is_active', true))],
             'vashya_id' => ['nullable', Rule::exists('master_vashyas', 'id')->where(fn ($q) => $q->where('is_active', true))],
             'rashi_lord_id' => ['nullable', Rule::exists('master_rashi_lords', 'id')->where(fn ($q) => $q->where('is_active', true))],

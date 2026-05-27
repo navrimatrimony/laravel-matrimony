@@ -5,6 +5,7 @@ namespace App\Notifications;
 use App\Models\ContactRequest;
 use App\Notifications\Concerns\SendsMatrimonyMailChannel;
 use App\Notifications\Support\MatrimonyMailTemplate;
+use App\Support\NotificationMarathiPayload;
 use Illuminate\Bus\Queueable;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
@@ -37,7 +38,7 @@ class MediationRequestReceivedNotification extends Notification
             ? __('mediation.notify_receiver_assisted', ['name' => $name, 'hint' => $hint])
             : __('mediation.notify_receiver_body', ['name' => $name]);
 
-        return [
+        return NotificationMarathiPayload::withMessage([
             'type' => 'mediation_request_received',
             'message' => $message,
             'contact_request_id' => $this->mediationRequest->id,
@@ -47,6 +48,6 @@ class MediationRequestReceivedNotification extends Notification
             'receiver_profile_id' => $this->mediationRequest->receiver_profile_id,
             'subject_profile_id' => $this->mediationRequest->subject_profile_id,
             'compatibility_hint' => $hint,
-        ];
+        ]);
     }
 }

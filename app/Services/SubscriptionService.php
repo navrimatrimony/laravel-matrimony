@@ -9,7 +9,6 @@ use App\Models\Interest;
 use App\Models\Message;
 use App\Models\Payment;
 use App\Models\Plan;
-use App\Models\PlanPrice;
 use App\Models\PlanQuotaPolicy;
 use App\Models\PlanTerm;
 use App\Models\ProfileView;
@@ -47,12 +46,10 @@ class SubscriptionService
      *
      * @return array{
      *     plan_term_id: ?int,
-     *     plan_price_id: ?int,
      *     coupon_code: ?string,
      *     final_amount: float,
      *     duration_days: int,
      *     plan_term: ?PlanTerm,
-     *     plan_price: ?PlanPrice,
      *     coupon: ?Coupon,
      *     base_amount: float,
      *     subscription_meta_preview: array<string, mixed>
@@ -62,7 +59,6 @@ class SubscriptionService
         User $user,
         Plan $plan,
         ?int $planTermId = null,
-        ?int $planPriceId = null,
         ?string $couponCode = null,
     ): array {
         if (! $plan->is_active) {
@@ -76,7 +72,6 @@ class SubscriptionService
         }
 
         $planTerm = null;
-        $planPrice = null;
         $duration = (int) $plan->duration_days;
         $baseAmount = (float) $plan->final_price;
         $coupon = null;
@@ -132,12 +127,10 @@ class SubscriptionService
 
         return [
             'plan_term_id' => $planTerm?->id,
-            'plan_price_id' => $planPrice?->id,
             'coupon_code' => $rawCoupon !== '' ? $rawCoupon : null,
             'final_amount' => max(0.0, round((float) $applied['final_price'], 2)),
             'duration_days' => $duration,
             'plan_term' => $planTerm,
-            'plan_price' => $planPrice,
             'coupon' => $coupon,
             'base_amount' => $baseAmount,
             'subscription_meta_preview' => $subscriptionMetaPreview,
@@ -148,20 +141,18 @@ class SubscriptionService
         User $user,
         Plan $plan,
         ?int $planTermId = null,
-        ?int $planPriceId = null,
         ?string $couponCode = null,
     ): Subscription {
         $couponSvc = app(CouponService::class);
         $rawCoupon = trim((string) ($couponCode ?? ''));
 
-        return DB::transaction(function () use ($user, $plan, $planTermId, $planPriceId, $rawCoupon, $couponSvc) {
+        return DB::transaction(function () use ($user, $plan, $planTermId, $rawCoupon, $couponSvc) {
             $this->lockUserSubscriptionRows((int) $user->id);
             $now = now();
             $carryQuota = app(QuotaEngineService::class)->applyPlan($user, $plan, $now)['carry_quota'];
 
-            $resolved = $this->resolvePaidPlanCheckout($user, $plan, $planTermId, $planPriceId, $rawCoupon !== '' ? $rawCoupon : null);
+            $resolved = $this->resolvePaidPlanCheckout($user, $plan, $planTermId, $rawCoupon !== '' ? $rawCoupon : null);
             $planTerm = $resolved['plan_term'];
-            $planPrice = $resolved['plan_price'];
             $duration = (int) $resolved['duration_days'];
             $coupon = $resolved['coupon'];
 
@@ -226,7 +217,6 @@ class SubscriptionService
                 'user_id' => $user->id,
                 'plan_id' => $plan->id,
                 'plan_term_id' => $planTerm?->id,
-                'plan_price_id' => $planPrice?->id,
                 'coupon_id' => $coupon?->id,
                 'starts_at' => $now,
                 'ends_at' => $endsAt,
@@ -390,7 +380,6 @@ class SubscriptionService
                 'user_id' => $user->id,
                 'plan_id' => $plan->id,
                 'plan_term_id' => $term?->id,
-                'plan_price_id' => null,
                 'coupon_id' => $coupon?->id,
                 'starts_at' => $now,
                 'ends_at' => $endsAt,
@@ -440,7 +429,6 @@ class SubscriptionService
             'plan_id' => (int) $plan->id,
             'plan_slug' => (string) $plan->slug,
             'plan_term_id' => $resolved['plan_term_id'],
-            'plan_price_id' => $resolved['plan_price_id'],
             'plan_name' => (string) $plan->name,
             'billing_key' => $term?->billing_key,
             'duration_days' => (int) $resolved['duration_days'],
@@ -620,26 +608,26 @@ class SubscriptionService
      *     subscription_meta: array<string, mixed>
      * }
      */
-    public function applyCoupon(?Coupon $coupon, float $planPrice): array
+    public function applyCoupon(?Coupon $coupon, float $baseAmount): array
     {
         if (! $coupon || ! config('monetization.coupons.enabled', true)) {
-            $planPrice = max(0, round($planPrice, 2));
+            $baseAmount = max(0, round($baseAmount, 2));
 
             return [
                 'discount_amount' => 0.0,
-                'final_price' => $planPrice,
+                'final_price' => $baseAmount,
                 'extra_duration_days' => 0,
                 'subscription_meta' => [],
             ];
         }
 
-        $planPrice = max(0, round($planPrice, 2));
+        $baseAmount = max(0, round($baseAmount, 2));
         $couponSvc = app(CouponService::class);
 
         return match ($coupon->type) {
             Coupon::TYPE_DAYS => [
                 'discount_amount' => 0.0,
-                'final_price' => $planPrice,
+                'final_price' => $baseAmount,
                 'extra_duration_days' => max(0, (int) round((float) $coupon->value)),
                 'subscription_meta' => [
                     'coupon_applied' => [
@@ -651,7 +639,7 @@ class SubscriptionService
             ],
             Coupon::TYPE_FEATURE => [
                 'discount_amount' => 0.0,
-                'final_price' => $planPrice,
+                'final_price' => $baseAmount,
                 'extra_duration_days' => 0,
                 'subscription_meta' => [
                     'coupon_applied' => [
@@ -662,15 +650,15 @@ class SubscriptionService
                 ],
             ],
             default => [
-                'discount_amount' => round($planPrice - $couponSvc->amountAfterCoupon($coupon, $planPrice), 2),
-                'final_price' => $couponSvc->amountAfterCoupon($coupon, $planPrice),
+                'discount_amount' => round($baseAmount - $couponSvc->amountAfterCoupon($coupon, $baseAmount), 2),
+                'final_price' => $couponSvc->amountAfterCoupon($coupon, $baseAmount),
                 'extra_duration_days' => 0,
                 'subscription_meta' => [
                     'coupon_applied' => [
                         'type' => $coupon->type,
                         'code' => $coupon->code,
-                        'discount_amount' => round($planPrice - $couponSvc->amountAfterCoupon($coupon, $planPrice), 2),
-                        'final_price' => $couponSvc->amountAfterCoupon($coupon, $planPrice),
+                        'discount_amount' => round($baseAmount - $couponSvc->amountAfterCoupon($coupon, $baseAmount), 2),
+                        'final_price' => $couponSvc->amountAfterCoupon($coupon, $baseAmount),
                     ],
                 ],
             ],
@@ -794,7 +782,6 @@ class SubscriptionService
                 'user_id' => $user->id,
                 'plan_id' => $plan->id,
                 'plan_term_id' => $term->id,
-                'plan_price_id' => null,
                 'coupon_id' => null,
                 'starts_at' => $now,
                 'ends_at' => $endsAt,

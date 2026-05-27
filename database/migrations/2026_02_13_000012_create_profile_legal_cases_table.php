@@ -13,7 +13,6 @@ return new class extends Migration
             $table->foreignId('profile_id')
                 ->constrained('matrimony_profiles')
                 ->restrictOnDelete();
-            $table->string('case_type');
             $table->string('court_name')->nullable();
             $table->string('case_number')->nullable();
             $table->string('case_stage')->nullable();

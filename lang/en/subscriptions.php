@@ -176,7 +176,7 @@ return [
     'who_viewed_catalog_see_all_viewers' => 'See all viewers',
     'who_viewed_catalog_hidden' => 'Hidden',
     'who_viewed_catalog_see_n_profiles' => '{1} See 1 profile|[2,*] See :count profiles',
-    'pricing_feature_mediator' => 'Mediator / assisted requests',
+    'pricing_feature_mediator' => 'WhatsApp Response requests',
     'pricing_feature_interest_view_limit' => 'Incoming interest reveals',
     'quota_line_total' => ':count total',
     'quota_line_per_day' => ':count per day',

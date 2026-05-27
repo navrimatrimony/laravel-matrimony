@@ -928,8 +928,7 @@ class MutationService
             return $mapped;
         }
         if ($entityType === 'profile_legal_cases') {
-            $mapped = $this->resolveLegalCaseTypeToId($row);
-            return $mapped;
+            return $row;
         }
         if ($entityType === 'profile_horoscope_data') {
             $mapped = $this->resolveHoroscopeLookupsToId($row);
@@ -1052,19 +1051,6 @@ class MutationService
             $mapped['ownership_type_id'] = (int) $mapped['ownership_type_id'];
         }
         unset($mapped['ownership_type']);
-        return $mapped;
-    }
-
-    private function resolveLegalCaseTypeToId(array $row): array
-    {
-        $mapped = $row;
-        $val = $mapped['legal_case_type_id'] ?? $mapped['case_type'] ?? null;
-        if ($val !== null && !is_numeric($val)) {
-            $mapped['legal_case_type_id'] = $this->resolveMasterKey('master_legal_case_types', $val);
-        } elseif (isset($mapped['legal_case_type_id']) && is_numeric($mapped['legal_case_type_id'])) {
-            $mapped['legal_case_type_id'] = (int) $mapped['legal_case_type_id'];
-        }
-        unset($mapped['case_type']);
         return $mapped;
     }
 

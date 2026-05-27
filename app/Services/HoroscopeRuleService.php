@@ -351,10 +351,9 @@ class HoroscopeRuleService
     }
 
     /**
-     * Ashta-Koota display for frontend: per rashi_id, labels for Varna, Vashya, Rashi Lord (read-only in UI).
-     * Keyed by rashi id (string) => ['varna' => label, 'vashya' => label, 'rashi_lord' => label].
+     * Ashta-Koota display for frontend: per rashi_id, IDs and labels for Varna, Vashya, Rashi Lord.
      *
-     * @return array<string, array{varna: string, vashya: string, rashi_lord: string}>
+     * @return array<string, array{varna_id: int|null, vashya_id: int|null, rashi_lord_id: int|null, varna: string, vashya: string, rashi_lord: string}>
      */
     public function getRashiAshtakootaForFrontend(): array
     {
@@ -370,6 +369,9 @@ class HoroscopeRuleService
         $out = [];
         foreach ($rashis as $r) {
             $out[(string) $r->id] = [
+                'varna_id' => $r->varna_id ? (int) $r->varna_id : null,
+                'vashya_id' => $r->vashya_id ? (int) $r->vashya_id : null,
+                'rashi_lord_id' => $r->rashi_lord_id ? (int) $r->rashi_lord_id : null,
                 'varna' => $r->varna_id ? ($varnas[$r->varna_id] ?? '—') : '—',
                 'vashya' => $r->vashya_id ? ($vashyas[$r->vashya_id] ?? '—') : '—',
                 'rashi_lord' => $r->rashi_lord_id ? ($lords[$r->rashi_lord_id] ?? '—') : '—',

@@ -179,14 +179,12 @@ class PlansController extends Controller
         $data = $request->validate([
             'code' => ['required', 'string', 'max:64'],
             'plan_id' => ['nullable', 'integer'],
-            'plan_price_id' => ['nullable', 'integer'],
             'plan_term_id' => ['nullable', 'integer'],
         ]);
 
         return response()->json($coupons->validatePreview(
             $data['code'],
             isset($data['plan_id']) ? (int) $data['plan_id'] : null,
-            isset($data['plan_price_id']) ? (int) $data['plan_price_id'] : null,
             isset($data['plan_term_id']) ? (int) $data['plan_term_id'] : null,
         ));
     }

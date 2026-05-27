@@ -5,6 +5,7 @@ namespace App\Notifications;
 use App\Models\ContactRequest;
 use App\Notifications\Concerns\SendsMatrimonyMailChannel;
 use App\Notifications\Support\MatrimonyMailTemplate;
+use App\Support\NotificationMarathiPayload;
 use Illuminate\Bus\Queueable;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
@@ -33,10 +34,10 @@ class ContactRequestExpiredNotification extends Notification
 
     public function toArray(object $notifiable): array
     {
-        return [
+        return NotificationMarathiPayload::withMessage([
             'type' => 'contact_request_expired',
             'message' => 'Your contact request was not responded to and has expired. You can send a new request if you wish.',
             'contact_request_id' => $this->contactRequest->id,
-        ];
+        ]);
     }
 }

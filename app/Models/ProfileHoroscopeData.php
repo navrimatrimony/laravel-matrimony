@@ -16,7 +16,6 @@ class ProfileHoroscopeData extends Model
         'gan_id',
         'nadi_id',
         'mangal_dosh_type_id',
-        'mangal_status_id',
         'yoni_id',
         'varna_id',
         'vashya_id',
@@ -63,8 +62,4 @@ class ProfileHoroscopeData extends Model
         return $this->belongsTo(MasterYoni::class, 'yoni_id');
     }
 
-    public function mangalStatus()
-    {
-        return $this->belongsTo(MasterMangalStatus::class, 'mangal_status_id');
-    }
 }

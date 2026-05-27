@@ -66,12 +66,12 @@ return [
             'title' => 'Contact access',
         ],
         'mediation_request_received' => [
-            'subject' => 'Mediation / assisted introduction request',
-            'title' => 'Mediation request',
+            'subject' => 'WhatsApp Response request',
+            'title' => 'WhatsApp Response request',
         ],
         'mediation_request_response' => [
-            'subject' => 'Update on your mediation request',
-            'title' => 'Mediation update',
+            'subject' => 'WhatsApp Response update',
+            'title' => 'WhatsApp Response update',
         ],
         'plan_expiring_soon' => [
             'subject' => 'Your plan is expiring soon',

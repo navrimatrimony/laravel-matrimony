@@ -8,7 +8,7 @@ use Illuminate\Support\Facades\Schema;
 
 /**
  * Phase-5: Seed master_mother_tongues, master_diets, master_smoking_statuses,
- * master_drinking_statuses, master_mangal_statuses, master_marriage_type_preferences.
+ * master_drinking_statuses, master_marriage_type_preferences.
  */
 class MasterMotherTongueDietLifestyleSeeder extends Seeder
 {
@@ -18,7 +18,6 @@ class MasterMotherTongueDietLifestyleSeeder extends Seeder
         $this->seedDiets();
         $this->seedSmokingStatuses();
         $this->seedDrinkingStatuses();
-        $this->seedMangalStatuses();
         $this->seedMarriageTypePreferences();
     }
 
@@ -100,20 +99,6 @@ class MasterMotherTongueDietLifestyleSeeder extends Seeder
             $key = $row['key'];
             unset($row['key']);
             $this->applyKeyTable('master_drinking_statuses', $key, $row);
-        }
-    }
-
-    private function seedMangalStatuses(): void
-    {
-        $rows = [
-            ['key' => 'yes', 'label' => 'Yes (Mangalik)', 'label_mr' => 'होय (मंगळिक)', 'sort_order' => 10],
-            ['key' => 'no', 'label' => 'No (Non-Mangalik)', 'label_mr' => 'नाही (नॉन-मंगळिक)', 'sort_order' => 20],
-            ['key' => 'don_t_know', 'label' => 'Don\'t know', 'label_mr' => 'माहीत नाही', 'sort_order' => 30],
-        ];
-        foreach ($rows as $row) {
-            $key = $row['key'];
-            unset($row['key']);
-            $this->applyKeyTable('master_mangal_statuses', $key, $row);
         }
     }
 

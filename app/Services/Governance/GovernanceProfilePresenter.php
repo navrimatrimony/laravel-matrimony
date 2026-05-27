@@ -1499,7 +1499,6 @@ class GovernanceProfilePresenter
             'nakshatra_id' => 'nakshatra',
             'rashi_id' => 'rashi',
             'mangal_dosh_type_id' => 'mangal_dosh',
-            'mangal_status_id' => 'mangal_dosh',
         ];
     }
 

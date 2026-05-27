@@ -161,7 +161,7 @@ class SnapshotGeneratorService
             'blood_group' => $profile->blood_group_id,
             'nakshatra' => optional($profile->horoscope)->nakshatra_id,
             'rashi' => optional($profile->horoscope)->rashi_id,
-            'mangal_dosh' => optional($profile->horoscope)->mangal_dosh_type_id ?? optional($profile->horoscope)->mangal_status_id,
+            'mangal_dosh' => optional($profile->horoscope)->mangal_dosh_type_id,
             'income_range' => $profile->income_range_id,
             'professions' => $profile->profession_id,
             'partner_preferences' => optional($profile->preferenceCriteria)?->toArray(),
@@ -544,4 +544,3 @@ class SnapshotGeneratorService
         return '';
     }
 }
-

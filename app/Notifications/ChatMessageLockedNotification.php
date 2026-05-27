@@ -4,6 +4,7 @@ namespace App\Notifications;
 
 use App\Notifications\Concerns\SendsMatrimonyMailChannel;
 use App\Notifications\Support\MatrimonyMailTemplate;
+use App\Support\NotificationMarathiPayload;
 use Illuminate\Bus\Queueable;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
@@ -28,12 +29,12 @@ class ChatMessageLockedNotification extends Notification
      */
     public function toArray(object $notifiable): array
     {
-        return [
+        return NotificationMarathiPayload::withMessage([
             'type' => 'chat_message_locked',
             'message' => __('notifications.chat_locked_message_anonymous'),
             'revealed' => false,
             'mail_action_url' => route('plans.index'),
             'mail_action_text' => __('who_viewed.upgrade_cta'),
-        ];
+        ]);
     }
 }

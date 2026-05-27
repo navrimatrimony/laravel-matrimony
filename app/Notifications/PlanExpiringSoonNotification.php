@@ -4,6 +4,7 @@ namespace App\Notifications;
 
 use App\Notifications\Concerns\SendsMatrimonyMailChannel;
 use App\Notifications\Support\MatrimonyMailTemplate;
+use App\Support\NotificationMarathiPayload;
 use Illuminate\Bus\Queueable;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
@@ -32,7 +33,7 @@ class PlanExpiringSoonNotification extends Notification
 
     public function toArray(object $notifiable): array
     {
-        return [
+        return NotificationMarathiPayload::withMessage([
             'type' => 'plan_expiring_soon',
             'plan_name' => $this->planName,
             'days_left' => $this->daysLeft,
@@ -42,6 +43,6 @@ class PlanExpiringSoonNotification extends Notification
                 'plan' => $this->planName,
                 'days' => $this->daysLeft,
             ]),
-        ];
+        ]);
     }
 }

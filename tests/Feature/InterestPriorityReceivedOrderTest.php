@@ -181,6 +181,44 @@ class InterestPriorityReceivedOrderTest extends TestCase
     }
 
     #[Test]
+    public function locked_received_interest_sender_profile_still_opens_directly(): void
+    {
+        [$maleGid, $femaleGid] = $this->seedGenders();
+
+        $receiver = User::factory()->create();
+        $receiverProfile = $this->createActiveProfileWithResidence($receiver, [
+            'gender_id' => $femaleGid,
+            'full_name' => 'Receiver Direct Open',
+            'visibility_override' => true,
+        ]);
+
+        $senders = [];
+        for ($i = 1; $i <= 4; $i++) {
+            $senderUser = User::factory()->create();
+            $senders[$i] = $this->createActiveProfileWithResidence($senderUser, [
+                'gender_id' => $maleGid,
+                'full_name' => 'Direct Sender '.$i,
+                'visibility_override' => true,
+            ]);
+
+            Interest::query()->create([
+                'sender_profile_id' => $senders[$i]->id,
+                'receiver_profile_id' => $receiverProfile->id,
+                'status' => 'pending',
+                'priority_score' => Interest::PRIORITY_SCORE_FREE,
+                'created_at' => now()->subDays(5 - $i),
+                'updated_at' => now()->subDays(5 - $i),
+            ]);
+        }
+
+        $response = $this->actingAs($receiver)->get(route('matrimony.profile.show', $senders[1]->id));
+
+        $response->assertOk();
+        $response->assertSee('Direct Sender 1');
+        $response->assertDontSee(__('interests.profile_open_locked_use_inbox'));
+    }
+
+    #[Test]
     public function priority_service_marks_paid_plan_subscriber_as_ten(): void
     {
         $user = User::factory()->create();
@@ -190,7 +228,6 @@ class InterestPriorityReceivedOrderTest extends TestCase
             'user_id' => $user->id,
             'plan_id' => $basic->id,
             'plan_term_id' => null,
-            'plan_price_id' => null,
             'coupon_id' => null,
             'starts_at' => now()->subDay(),
             'ends_at' => now()->addMonth(),
@@ -208,7 +245,6 @@ class InterestPriorityReceivedOrderTest extends TestCase
             'user_id' => $freeOnly->id,
             'plan_id' => $freePlan->id,
             'plan_term_id' => null,
-            'plan_price_id' => null,
             'coupon_id' => null,
             'starts_at' => now()->subDay(),
             'ends_at' => null,

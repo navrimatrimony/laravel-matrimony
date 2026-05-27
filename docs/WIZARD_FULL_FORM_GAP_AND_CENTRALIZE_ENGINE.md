@@ -43,7 +43,7 @@
 - **Wizard steps:** कोणत्याही step मध्ये **legal** नाही (`ProfileWizardController` मध्ये section list मध्ये legal नाही).
 - **View:** `legal.blade.php` **नाही** wizard/sections मध्ये.
 - **Data:** MutationService / snapshot मध्ये `legal_cases` आहे; परंतु manual wizard/full मध्ये legal cases edit करण्याचा कोणताही UI नाही.
-- **Action:** जर legal cases edit करायचे असतील तर नवीन section **legal** (view + controller case + validation + snapshot) add करावा. Registry मध्ये `entity.legal_case_type` आधीच आहे.
+- **Action:** जर legal cases edit करायचे असतील तर नवीन section **legal** (view + controller case + validation + snapshot) add करावा.
 
 ---
 
@@ -58,7 +58,7 @@
   - education: `education.income_currency`, `education.working_with`, `education.profession`
   - preference: `preference.religion`, `preference.caste` (multi)
   - horoscope: `horoscope.nadi`, `horoscope.gan`, `horoscope.rashi`, `horoscope.nakshatra`, `horoscope.yoni`, `horoscope.mangal_dosh_type`
-  - entity: `entity.address_type`, `entity.contact_relation`, `entity.child_living_with`, `entity.asset_type`, `entity.ownership_type`, `entity.legal_case_type`
+  - entity: `entity.address_type`, `entity.contact_relation`, `entity.child_living_with`, `entity.asset_type`, `entity.ownership_type`
 
 **Wizard मध्ये आज:**
 - **कोणत्याही view मध्ये `<x-forms.controlled-select>` किंवा ControlledOptionFormEngine चा direct उपयोग नाही.**
@@ -83,7 +83,7 @@
 | contacts | contact_relation → `entity.contact_relation` | contactRelations collection | Relation dropdown → ControlledSelect. |
 | about_preferences | preferred religions/castes → `preference.religion`, `preference.caste` | allReligions, allCastes | Multi-select → ControlledSelect (multiple). |
 | property | asset_type, ownership_type → `entity.asset_type`, `entity.ownership_type` | Raw/collections | Dropdowns → ControlledSelect. |
-| Legal (नवीन section) | legal_case_type → `entity.legal_case_type` | — | नवीन section मध्येच ControlledSelect वापरावा. |
+| Legal (नवीन section) | — | — | नवीन section SSOT मधील उरलेल्या legal case fields पुरताच ठेवावा. |
 
 ---
 

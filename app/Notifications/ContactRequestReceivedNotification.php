@@ -5,6 +5,7 @@ namespace App\Notifications;
 use App\Models\ContactRequest;
 use App\Notifications\Concerns\SendsMatrimonyMailChannel;
 use App\Notifications\Support\MatrimonyMailTemplate;
+use App\Support\NotificationMarathiPayload;
 use Illuminate\Bus\Queueable;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
@@ -35,12 +36,12 @@ class ContactRequestReceivedNotification extends Notification
     {
         $sender = $this->contactRequest->sender;
         $name = $sender->matrimonyProfile->full_name ?? $sender->name ?? 'Someone';
-        return [
+        return NotificationMarathiPayload::withMessage([
             'type' => 'contact_request_received',
             'message' => "{$name} requested your contact.",
             'contact_request_id' => $this->contactRequest->id,
             'sender_id' => $this->contactRequest->sender_id,
             'sender_profile_id' => (int) ($sender->matrimonyProfile?->id ?? 0) ?: null,
-        ];
+        ]);
     }
 }

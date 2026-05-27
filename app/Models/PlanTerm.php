@@ -165,7 +165,6 @@ class PlanTerm extends Model
             ]);
         }
 
-        PlanPrice::ensureMirrorMatchesTerms($plan->fresh('terms'));
     }
 
     /**
@@ -200,7 +199,6 @@ class PlanTerm extends Model
             );
         }
 
-        PlanPrice::ensureMirrorMatchesTerms($plan->fresh('terms'));
     }
 
     /**
@@ -212,7 +210,6 @@ class PlanTerm extends Model
     {
         if (Plan::isFreeCatalogSlug((string) $plan->slug)) {
             static::query()->where('plan_id', $plan->id)->delete();
-            PlanPrice::query()->where('plan_id', $plan->id)->delete();
 
             return;
         }
@@ -258,7 +255,6 @@ class PlanTerm extends Model
             ]);
         }
 
-        PlanPrice::ensureMirrorMatchesTerms($plan->fresh('terms'));
     }
 
     public function plan(): BelongsTo

@@ -11,6 +11,19 @@
  */
 return [
 
+    /*
+    |--------------------------------------------------------------------------
+    | WhatsApp Response Provider Bridge
+    |--------------------------------------------------------------------------
+    |
+    | Keep disabled by default. Set WHATSAPP_RESPONSE_PROVIDER=meta and
+    | WHATSAPP_RESPONSE_LIVE_ENABLED=true only when approved templates and
+    | Meta credentials are configured outside admin settings.
+    |
+    */
+    'response_provider' => env('WHATSAPP_RESPONSE_PROVIDER', 'null'),
+    'response_live_enabled' => filter_var(env('WHATSAPP_RESPONSE_LIVE_ENABLED', false), FILTER_VALIDATE_BOOLEAN),
+
     'graph_version' => env('WHATSAPP_GRAPH_VERSION', 'v22.0'),
 
     /** Permanent token (System User) or short-lived token from Meta; keep in env / secrets manager. */

@@ -9,6 +9,7 @@ use App\Notifications\Support\MatrimonyMailTemplate;
 use App\Services\Interest\ReceivedInterestTeaserPolicy;
 use App\Services\InterestSendLimitService;
 use App\Services\WhoViewed\WhoViewedTeaserPresenter;
+use App\Support\NotificationMarathiPayload;
 use Illuminate\Bus\Queueable;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
@@ -55,12 +56,12 @@ class InterestSentNotification extends Notification
         if ($unlocked) {
             $name = $this->senderProfile->full_name ?? 'Someone';
 
-            return [
+            return NotificationMarathiPayload::withMessage([
                 'type' => 'interest_sent',
                 'message' => "{$name} sent you an interest.",
                 'sender_profile_id' => $this->senderProfile->id,
                 'revealed' => true,
-            ];
+            ]);
         }
 
         $receiverProfile = $notifiable->matrimonyProfile;
@@ -79,7 +80,7 @@ class InterestSentNotification extends Notification
             );
         }
 
-        return [
+        return NotificationMarathiPayload::withMessage([
             'type' => 'interest_sent',
             'message' => __('interests.notification_blurred_sender'),
             'sender_profile_id' => null,
@@ -90,6 +91,6 @@ class InterestSentNotification extends Notification
             'teaser_context_label' => __('notifications.teaser_open_received_interests'),
             'mail_action_url' => route('interests.received'),
             'mail_action_text' => __('notifications.teaser_open_received_interests'),
-        ];
+        ]);
     }
 }

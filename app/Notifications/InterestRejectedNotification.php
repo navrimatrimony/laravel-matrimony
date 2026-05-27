@@ -5,6 +5,7 @@ namespace App\Notifications;
 use App\Models\MatrimonyProfile;
 use App\Notifications\Concerns\SendsMatrimonyMailChannel;
 use App\Notifications\Support\MatrimonyMailTemplate;
+use App\Support\NotificationMarathiPayload;
 use Illuminate\Bus\Queueable;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
@@ -37,10 +38,10 @@ class InterestRejectedNotification extends Notification
     public function toArray(object $notifiable): array
     {
         $name = $this->rejecterProfile->full_name ?? 'Someone';
-        return [
+        return NotificationMarathiPayload::withMessage([
             'type' => 'interest_rejected',
             'message' => "{$name} declined your interest.",
             'rejecter_profile_id' => $this->rejecterProfile->id,
-        ];
+        ]);
     }
 }

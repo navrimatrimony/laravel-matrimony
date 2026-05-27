@@ -4,6 +4,7 @@ namespace App\Notifications;
 
 use App\Notifications\Concerns\SendsMatrimonyMailChannel;
 use App\Notifications\Support\MatrimonyMailTemplate;
+use App\Support\NotificationMarathiPayload;
 use Illuminate\Bus\Queueable;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
@@ -34,7 +35,7 @@ class NewMatchesAvailableNotification extends Notification
 
     public function toArray(object $notifiable): array
     {
-        return [
+        return NotificationMarathiPayload::withMessage([
             'type' => 'new_matches_digest',
             'match_count' => $this->matchCount,
             'top_score' => $this->topScore,
@@ -45,6 +46,6 @@ class NewMatchesAvailableNotification extends Notification
             ]),
             'mail_action_url' => route('matches.index', ['tab' => $this->tab], true),
             'mail_action_text' => __('mail.common.open_matches'),
-        ];
+        ]);
     }
 }

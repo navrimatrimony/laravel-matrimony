@@ -21,6 +21,7 @@
                 <div class="min-w-0">
                     @php
                         $data = is_array($n->data) ? $n->data : [];
+                        $message = $data['message_mr'] ?? ($data['message'] ?? 'Notification');
                         $revealed = ($data['revealed'] ?? true) !== false;
                         $actorProfileId = null;
                         foreach (['viewer_profile_id','sender_profile_id','accepter_profile_id','rejecter_profile_id','receiver_profile_id'] as $k) {
@@ -53,7 +54,7 @@
 
                     @if (($n->data['type'] ?? '') === 'chat_message_locked')
                         <a href="{{ route('plans.index') }}" class="block font-medium {{ $n->read_at ? 'text-gray-700' : 'text-gray-900' }}">
-                            {{ $n->data['message'] ?? __('notifications.chat_locked_message_anonymous') }}
+                            {{ $message }}
                         </a>
                     @elseif (($n->data['type'] ?? '') === 'chat_message' && ! empty($n->data['conversation_id']) && (($n->data['revealed'] ?? true) !== false))
                         <a
@@ -64,14 +65,14 @@
                             class="block font-medium {{ $n->read_at ? 'text-gray-700' : 'text-gray-900' }}"
                         >
                             <span class="font-semibold">{{ $n->data['sender_name'] ?? 'Someone' }}</span>
-                            <span class="text-gray-700">sent you a message</span>
+                            <span class="text-gray-700">यांनी तुम्हाला संदेश पाठवला</span>
                             @if (! empty($n->data['message_preview']))
                                 <span class="mt-1 block text-sm text-gray-600">{{ $n->data['message_preview'] }}</span>
                             @endif
                         </a>
                     @elseif (in_array(($n->data['type'] ?? ''), ['mediation_request_received', 'mediation_request_response'], true))
                         <a href="{{ route('mediation-inbox.index') }}" class="block font-medium {{ $n->read_at ? 'text-gray-700' : 'text-gray-900' }}">
-                            {{ $n->data['message'] ?? 'Mediation' }}
+                            {{ $message }}
                         </a>
                     @elseif (in_array(($n->data['type'] ?? ''), ['interest_sent', 'profile_viewed'], true) && ! empty($data['teaser']) && (($data['revealed'] ?? true) === false))
                         <div class="space-y-2">
@@ -87,7 +88,7 @@
                             href="{{ $actorHref ?: route('notifications.show', $n->id) }}"
                             class="block font-medium {{ $n->read_at ? 'text-gray-700' : 'text-gray-900' }}"
                         >
-                            {{ $n->data['message'] ?? 'Notification' }}
+                            {{ $message }}
                         </a>
                     @endif
                     <p class="text-sm text-gray-500 mt-1">{{ $n->created_at->diffForHumans() }}</p>
@@ -102,21 +103,21 @@
                             data-notification-id="{{ $n->id }}"
                             data-chat-conversation="{{ $n->data['conversation_id'] }}"
                             class="text-indigo-600 text-sm hover:underline"
-                        >Open chat</a>
+                        >चॅट उघडा</a>
                     @elseif (in_array(($n->data['type'] ?? ''), ['mediation_request_received', 'mediation_request_response'], true))
-                        <a href="{{ route('mediation-inbox.index') }}" class="text-indigo-600 text-sm hover:underline">Open</a>
+                        <a href="{{ route('mediation-inbox.index') }}" class="text-indigo-600 text-sm hover:underline">उघडा</a>
                     @elseif (in_array(($n->data['type'] ?? ''), ['interest_sent', 'profile_viewed'], true) && ! empty($n->data['teaser']) && (($n->data['revealed'] ?? true) === false))
                         <a href="{{ $n->data['teaser_plans_url'] ?? route('plans.index') }}" class="text-indigo-600 text-sm hover:underline">{{ __('interests.upgrade_for_more_reveals') }}</a>
                         <a href="{{ $n->data['teaser_context_url'] ?? route('notifications.index') }}" class="text-indigo-600 text-sm hover:underline">{{ $n->data['teaser_context_label'] ?? __('notifications.teaser_open_who_viewed') }}</a>
                     @else
                         <a href="{{ $actorHref ?: route('notifications.show', $n->id) }}" class="text-indigo-600 text-sm hover:underline">
-                            {{ $actorHref ? 'Open profile' : 'Open' }}
+                            {{ $actorHref ? 'प्रोफाइल उघडा' : 'उघडा' }}
                         </a>
                     @endif
                     @if (!$n->read_at)
                         <form method="POST" action="{{ route('notifications.mark-read', $n->id) }}" class="inline">
                             @csrf
-                            <button type="submit" class="text-gray-500 text-sm hover:underline">Mark read</button>
+                            <button type="submit" class="text-gray-500 text-sm hover:underline">वाचले म्हणून चिन्हांकित करा</button>
                         </form>
                     @endif
                 </div>

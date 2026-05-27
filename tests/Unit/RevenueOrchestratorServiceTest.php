@@ -21,8 +21,8 @@ class RevenueOrchestratorServiceTest extends TestCase
         $plan = Plan::query()->where('slug', 'silver_male')->firstOrFail();
         $termId = (int) $plan->terms()->where('is_visible', true)->value('id');
 
-        $direct = app(SubscriptionService::class)->resolvePaidPlanCheckout($user, $plan, $termId, null, null);
-        $prepared = app(RevenueOrchestratorService::class)->prepareCheckout($user, $plan, $termId, null, null);
+        $direct = app(SubscriptionService::class)->resolvePaidPlanCheckout($user, $plan, $termId, null);
+        $prepared = app(RevenueOrchestratorService::class)->prepareCheckout($user, $plan, $termId, null);
 
         $this->assertSame($direct['final_amount'], $prepared['resolved']['final_amount']);
         $this->assertSame($direct['base_amount'], $prepared['resolved']['base_amount']);

@@ -73,7 +73,7 @@ return [
     'who_viewed_catalog_see_all_viewers' => 'सर्व पाहणाऱ्यांची यादी',
     'who_viewed_catalog_hidden' => 'लपवले',
     'who_viewed_catalog_see_n_profiles' => '{1} १ प्रोफाइल पहा|[2,*] :count प्रोफाइल्स पहा',
-    'pricing_feature_mediator' => 'मध्यस्थ / सहाय्य विनंत्या',
+    'pricing_feature_mediator' => 'WhatsApp प्रतिसाद विनंत्या',
     'pricing_feature_interest_view_limit' => 'येणाऱ्या इच्छा उघड',
     'quota_line_total' => 'एकूण :count',
     'quota_line_per_day' => 'दर दिवशी :count',

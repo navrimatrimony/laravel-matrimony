@@ -39,7 +39,6 @@ class Plan extends Model
         'tier',
         'price',
         'discount_percent',
-        'list_price_rupees',
         'gst_inclusive',
         'duration_days',
         'duration_quantity',
@@ -58,7 +57,6 @@ class Plan extends Model
     protected $casts = [
         'price' => 'decimal:2',
         'discount_percent' => 'integer',
-        'list_price_rupees' => 'decimal:2',
         'gst_inclusive' => 'boolean',
         'duration_days' => 'integer',
         'duration_quantity' => 'integer',
@@ -74,22 +72,6 @@ class Plan extends Model
     public function features(): HasMany
     {
         return $this->hasMany(PlanFeature::class, 'plan_id');
-    }
-
-    /**
-     * Multi-duration rows (parallel to legacy {@see terms()} / admin billing UI).
-     */
-    public function prices(): HasMany
-    {
-        return $this->hasMany(PlanPrice::class)->orderBy('sort_order');
-    }
-
-    /**
-     * Structured feature engine (legacy table; non-quota keys only for runtime reads).
-     */
-    public function featureConfigs(): HasMany
-    {
-        return $this->hasMany(PlanFeatureConfig::class);
     }
 
     /**
@@ -176,18 +158,6 @@ class Plan extends Model
     public function visibleTerms(): HasMany
     {
         return $this->terms()->where('is_visible', true);
-    }
-
-    public function planPrices(): HasMany
-    {
-        return $this->prices();
-    }
-
-    public function visiblePlanPrices(): HasMany
-    {
-        return $this->hasMany(PlanPrice::class)
-            ->where('is_visible', true)
-            ->orderBy('sort_order');
     }
 
     /**

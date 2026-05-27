@@ -9,7 +9,7 @@
     </p>
     @forelse ($notifications as $n)
         <div class="border rounded-lg p-4 mb-3 {{ $n->read_at ? 'bg-gray-50 dark:bg-gray-700/30 border-gray-200 dark:border-gray-600' : 'bg-white dark:bg-gray-700/50 border-gray-200 dark:border-gray-600' }}">
-            <p class="font-medium text-gray-800 dark:text-gray-100">{{ $n->data['message'] ?? 'Notification' }}</p>
+            <p class="font-medium text-gray-800 dark:text-gray-100">{{ $n->data['message_mr'] ?? ($n->data['message'] ?? 'Notification') }}</p>
             <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">
                 {{ $n->created_at->format('M j, Y g:i A') }}
                 @if ($n->read_at)

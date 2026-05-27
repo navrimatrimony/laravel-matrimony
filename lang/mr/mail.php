@@ -66,12 +66,12 @@ return [
             'title' => 'संपर्क प्रवेश',
         ],
         'mediation_request_received' => [
-            'subject' => 'मध्यस्थता / ओळख विनंती',
-            'title' => 'मध्यस्थता विनंती',
+            'subject' => 'WhatsApp प्रतिसाद विनंती',
+            'title' => 'WhatsApp प्रतिसाद विनंती',
         ],
         'mediation_request_response' => [
-            'subject' => 'मध्यस्थता विनंतीत अपडेट',
-            'title' => 'मध्यस्थता अपडेट',
+            'subject' => 'WhatsApp प्रतिसाद अपडेट',
+            'title' => 'WhatsApp प्रतिसाद अपडेट',
         ],
         'plan_expiring_soon' => [
             'subject' => 'प्लॅन लवकर संपत आहे',

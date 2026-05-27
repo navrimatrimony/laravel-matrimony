@@ -2,10 +2,13 @@
 
 namespace App\Providers;
 
+use App\Contracts\WhatsApp\WhatsAppMessageProvider;
 use App\Models\MatrimonyProfile;
 use App\Models\SystemRule;
 use App\Observers\MatrimonyProfileObserver;
 use App\Observers\SystemRuleObserver;
+use App\Services\WhatsApp\MetaWhatsAppMessageProvider;
+use App\Services\WhatsApp\NullWhatsAppMessageProvider;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -25,6 +28,19 @@ class AppServiceProvider extends ServiceProvider
         $this->app->singleton(\App\Services\ProfileCompletionEngine::class);
         $this->app->singleton(\App\Services\MatchingEngine::class);
         $this->app->singleton(\App\Services\Matching\MatchingPresenter::class);
+        $this->app->bind(WhatsAppMessageProvider::class, function ($app) {
+            $provider = strtolower(trim((string) config('whatsapp.response_provider', 'null')));
+            $liveEnabled = (bool) config('whatsapp.response_live_enabled', false);
+            $coreConfigured = trim((string) config('whatsapp.access_token')) !== ''
+                && trim((string) config('whatsapp.phone_number_id')) !== ''
+                && trim((string) config('whatsapp.engagement_template_name')) !== '';
+
+            if (in_array($provider, ['meta', 'cloud_api', 'meta_cloud'], true) && $liveEnabled && $coreConfigured) {
+                return $app->make(MetaWhatsAppMessageProvider::class);
+            }
+
+            return $app->make(NullWhatsAppMessageProvider::class);
+        });
     }
 
     /**

@@ -199,7 +199,6 @@ class SubscriptionPlansSeeder extends Seeder
                     'slug' => $slug,
                     'applies_to_gender' => $applies,
                     'price' => $price,
-                    'list_price_rupees' => $isFree ? null : (int) round($price),
                     'discount_percent' => null,
                     'duration_days' => $isFree ? 0 : 30,
                     'grace_period_days' => 3,

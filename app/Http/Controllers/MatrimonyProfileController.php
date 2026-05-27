@@ -11,6 +11,7 @@ use App\Models\FieldRegistry;
 use App\Models\Interest;
 use App\Models\Location;
 use App\Models\MasterMaritalStatus;
+use App\Models\MediationRequest;
 use App\Models\MatrimonyProfile;
 use App\Models\Message;
 use App\Models\Profession;
@@ -33,7 +34,6 @@ use App\Services\Image\PhotoModerationScanPayload;
 use App\Services\Image\PhotoUploadBatchUserMessage;
 use App\Services\Image\ProfileGalleryPhotoModerationStatus;
 use App\Services\Image\ProfilePhotoUrlService;
-use App\Services\InterestSendLimitService;
 use App\Services\Location\LocationService;
 use App\Services\Matching\MatchingPresenter;
 use App\Services\MatrimonyProfileSearchQueryService;
@@ -73,7 +73,6 @@ class MatrimonyProfileController extends Controller
     public function __construct(
         protected ContactAccessService $contactAccessService,
         protected ProfilePhotoAccessService $profilePhotoAccessService,
-        protected InterestSendLimitService $interestSendLimitService,
         protected ProfileCompletionEngine $profileCompletionEngine,
     ) {}
 
@@ -1107,20 +1106,6 @@ class MatrimonyProfileController extends Controller
             abort(404, __('common.profile_not_found'));
         }
 
-        // Plan interest-view limit: block direct open when pending incoming interest is outside reveal slots
-        if (! $isOwnProfile) {
-            $incomingPending = Interest::query()
-                ->where('sender_profile_id', $profile->id)
-                ->where('receiver_profile_id', $user->matrimonyProfile->id)
-                ->where('status', 'pending')
-                ->first();
-            if ($incomingPending && ! $this->interestSendLimitService->isIncomingInterestUnlocked($user, $incomingPending)) {
-                return redirect()
-                    ->route('interests.index', ['tab' => 'received'])
-                    ->with('info', __('interests.profile_open_locked_use_inbox'));
-            }
-        }
-
         $interestAlreadySent = false;
 
         $interestAlreadySent = \App\Models\Interest::where(
@@ -1263,6 +1248,34 @@ class MatrimonyProfileController extends Controller
                 $contactGrantReveal,
             );
 
+        $latestMediatorRequest = null;
+        $latestMediatorRequestIncoming = null;
+        if (! $isOwnProfile && $user && $user->matrimonyProfile) {
+            $latestMediatorRequest = MediationRequest::query()
+                ->where('sender_id', (int) $user->id)
+                ->where('sender_profile_id', (int) $user->matrimonyProfile->id)
+                ->where('receiver_profile_id', (int) $profile->id)
+                ->latest('id')
+                ->first();
+            if ($latestMediatorRequest) {
+                app(\App\Services\MediationRequestService::class)->expireIfDue($latestMediatorRequest);
+                $latestMediatorRequest->refresh();
+            }
+
+            $incomingRow = MediationRequest::query()
+                ->where('receiver_id', (int) $user->id)
+                ->where('sender_profile_id', (int) $profile->id)
+                ->latest('id')
+                ->first();
+            if ($incomingRow) {
+                app(\App\Services\MediationRequestService::class)->expireIfDue($incomingRow);
+                $incomingRow->refresh();
+                if ($incomingRow->delivery_status !== MediationRequest::DELIVERY_CANCELLED) {
+                    $latestMediatorRequestIncoming = $incomingRow;
+                }
+            }
+        }
+
         if (! ($contactAccess['has_contact_unlock'] ?? false)) {
             $contactGrantReveal = null;
         }
@@ -1368,6 +1381,10 @@ class MatrimonyProfileController extends Controller
             $profileViewLockStartSection = 'family';
         }
         $profileViewLockBlurStrength = max(35, min(100, (int) \App\Models\AdminSetting::getValue('profile_view_lock_blur_strength', '78')));
+        $profileViewLockDisplayMode = (string) \App\Models\AdminSetting::getValue('profile_view_lock_display_mode', 'merged_blur_card');
+        if (! in_array($profileViewLockDisplayMode, ['merged_blur_card', 'heading_lock_rows', 'per_section_blur'], true)) {
+            $profileViewLockDisplayMode = 'merged_blur_card';
+        }
 
         $profileOwnerPresence = ! $isOwnProfile
             ? app(MemberPresencePresentationService::class)->buildProfileHeroPresence($profile->user)
@@ -1417,6 +1434,8 @@ class MatrimonyProfileController extends Controller
                 'canViewContact' => $canViewContact,
                 'primaryContactPhone' => $primaryContactPhone,
                 'contactAccess' => $contactAccess,
+                'latestMediatorRequest' => $latestMediatorRequest,
+                'latestMediatorRequestIncoming' => $latestMediatorRequestIncoming,
                 'canUseContact' => $canUseContact,
                 'contactUsageSnapshot' => $contactUsageSnapshot,
                 'gateStates' => $gateStates,
@@ -1441,6 +1460,7 @@ class MatrimonyProfileController extends Controller
                 'hasIncomingMessageFromViewedProfile' => $hasIncomingMessageFromViewedProfile,
                 'profileViewLockStartSection' => $profileViewLockStartSection,
                 'profileViewLockBlurStrength' => $profileViewLockBlurStrength,
+                'profileViewLockDisplayMode' => $profileViewLockDisplayMode,
             ]
         );
     }

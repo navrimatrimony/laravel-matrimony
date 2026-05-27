@@ -165,7 +165,6 @@ class PaymentService
             'plan_id' => (int) $plan->id,
             'plan_slug' => (string) $plan->slug,
             'plan_term_id' => $payment->plan_term_id ? (int) $payment->plan_term_id : null,
-            'plan_price_id' => null,
             'plan_name' => (string) ($meta['plan_name'] ?? $plan->name ?? 'Plan'),
             'billing_key' => (string) ($meta['billing_key'] ?? $payment->billing_key ?? $term?->billing_key ?? ''),
             'duration_days' => $durationDays,
@@ -183,4 +182,3 @@ class PaymentService
         ];
     }
 }
-

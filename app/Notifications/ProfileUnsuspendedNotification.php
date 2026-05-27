@@ -4,6 +4,7 @@ namespace App\Notifications;
 
 use App\Notifications\Concerns\SendsMatrimonyMailChannel;
 use App\Notifications\Support\MatrimonyMailTemplate;
+use App\Support\NotificationMarathiPayload;
 use Illuminate\Bus\Queueable;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
@@ -52,10 +53,10 @@ class ProfileUnsuspendedNotification extends Notification
      */
     public function toArray(object $notifiable): array
     {
-        return [
+        return NotificationMarathiPayload::withMessage([
             'type' => 'profile_unsuspended',
             'message' => 'Your matrimony profile has been unsuspended.',
             'reason' => $this->reason,
-        ];
+        ]);
     }
 }

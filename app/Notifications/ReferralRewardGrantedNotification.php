@@ -4,6 +4,7 @@ namespace App\Notifications;
 
 use App\Notifications\Concerns\SendsMatrimonyMailChannel;
 use App\Notifications\Support\MatrimonyMailTemplate;
+use App\Support\NotificationMarathiPayload;
 use Illuminate\Bus\Queueable;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
@@ -30,7 +31,7 @@ class ReferralRewardGrantedNotification extends Notification
 
     public function toArray(object $notifiable): array
     {
-        return [
+        return NotificationMarathiPayload::withMessage([
             'type' => 'referral_reward',
             'bonus_days' => $this->bonusDays,
             'purchased_plan_name' => $this->purchasedPlanName,
@@ -38,6 +39,6 @@ class ReferralRewardGrantedNotification extends Notification
                 'days' => $this->bonusDays,
                 'plan' => $this->purchasedPlanName,
             ]),
-        ];
+        ]);
     }
 }
