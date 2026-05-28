@@ -9,8 +9,6 @@
         ['id' => MatchingService::TAB_DAILY, 'icon' => '⚡', 'label' => __('matching.tab_daily')],
         ['id' => MatchingService::TAB_NEAR, 'icon' => '📍', 'label' => __('matching.tab_near')],
         ['id' => MatchingService::TAB_FRESH, 'icon' => '✨', 'label' => __('matching.tab_fresh')],
-        ['id' => MatchingService::TAB_VIEWED, 'icon' => '👀', 'label' => __('matching.tab_viewed')],
-        ['id' => MatchingService::TAB_INTERESTED, 'icon' => '💌', 'label' => __('matching.tab_interested')],
         ['id' => MatchingService::TAB_SECOND_CHANCE, 'icon' => '↻', 'label' => __('matching.tab_second')],
         ['id' => MatchingService::TAB_CURATED, 'icon' => '◇', 'label' => __('matching.tab_curated')],
     ];
@@ -85,19 +83,6 @@
 
             {{-- Main column --}}
             <div class="min-w-0 flex-1 space-y-5">
-                <div class="rounded-2xl border border-gray-200/80 bg-white/60 px-4 py-3 dark:border-gray-700 dark:bg-gray-900/40">
-                    <p class="text-sm text-gray-600 dark:text-gray-300 leading-relaxed">
-                        {{ __('matching.tab_hint_' . ($tab === MatchingService::TAB_SECOND_CHANCE ? 'second' : $tab)) }}
-                    </p>
-                    @if ($tab === MatchingService::TAB_INTERESTED)
-                        <p class="mt-2">
-                            <a href="{{ route('interests.index', ['tab' => 'received']) }}" class="text-sm font-semibold text-rose-600 hover:text-rose-700 dark:text-rose-400 dark:hover:text-rose-300">
-                                {{ __('nav.interests_received') }} →
-                            </a>
-                        </p>
-                    @endif
-                </div>
-
                 @if ($matches->isEmpty())
                     <div class="rounded-2xl border border-dashed border-gray-300 bg-white/70 px-6 py-14 text-center dark:border-gray-600 dark:bg-gray-800/60">
                         <p class="text-gray-600 dark:text-gray-300 text-sm sm:text-base font-medium">
@@ -116,6 +101,7 @@
                                 $boost = max(0, $score - $baseScore);
                                 $nm = trim((string) ($p->full_name ?? ''));
                                 $initial = $nm !== '' ? mb_strtoupper(mb_substr($nm, 0, 1, 'UTF-8'), 'UTF-8') : '?';
+                                $matchesLocLine = \App\Support\ProfileDisplayCopy::profileResidenceDisplayLine($p);
                             @endphp
                             <li class="group rounded-2xl border border-gray-200/90 bg-white/95 shadow-sm shadow-gray-200/40 overflow-hidden transition hover:shadow-lg hover:border-rose-200/70 dark:border-gray-700 dark:bg-gray-800/95 dark:shadow-none dark:hover:border-rose-900/50">
                                 <div class="p-4 sm:p-5 flex flex-col sm:flex-row gap-4 sm:gap-5">
@@ -151,7 +137,6 @@
                                                     @if ($p->gender)
                                                         <div><span class="text-gray-400 dark:text-gray-500">{{ __('Gender') }}:</span> {{ $p->gender->label ?? '' }}</div>
                                                     @endif
-                                                    @php($matchesLocLine = \App\Support\ProfileDisplayCopy::profileResidenceDisplayLine($p))
                                                     @if ($matchesLocLine !== '')
                                                         <div class="truncate max-w-[16rem] sm:max-w-none">
                                                             <span class="text-gray-400 dark:text-gray-500">{{ __('Location') }}:</span>

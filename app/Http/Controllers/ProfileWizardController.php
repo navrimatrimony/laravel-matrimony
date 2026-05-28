@@ -11,7 +11,6 @@ use App\Services\OccupationService;
 use App\Services\PartnerPreferenceNavService;
 use App\Services\PartnerPreferenceSnapshotBuilder;
 use App\Services\ProfileCompletionEngine;
-use App\Services\ProfileCompletionService;
 use App\Support\ErrorFactory;
 use App\Support\Validation\AddressHierarchyRules;
 use Illuminate\Http\Request;
@@ -120,7 +119,7 @@ class ProfileWizardController extends Controller
 
         $completion = $this->profileCompletionEngine->for($user);
         $completionPct = $completion['detailed'];
-        $sectionStatuses = ProfileCompletionService::getSectionStatuses($profile, $sections);
+        $sectionStatuses = $this->profileCompletionEngine->sectionStatuses($profile, $sections);
         $viewData = $this->getSectionViewData($section, $profile);
         $viewData['profile'] = $profile;
         $viewData['currentSection'] = $section;

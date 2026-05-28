@@ -15,6 +15,8 @@
 <div class="py-6 md:py-12 bg-gradient-to-b from-slate-50/90 via-white to-slate-50/80 dark:from-gray-950 dark:via-gray-900 dark:to-gray-950 min-h-[calc(100vh-5rem)]">
     {{-- Capped width on large screens so fields and CTAs do not stretch edge-to-edge --}}
     <div class="w-full max-w-xl md:max-w-2xl mx-auto px-4 sm:px-6 lg:px-8">
+        <x-referred-registration-welcome :welcome="$referredRegistrationWelcome ?? null" />
+
         {{-- success/info flash: layouts.app only (dismissible + auto-hide) to avoid duplicate banners --}}
         @if ($errors->any())
             <div class="mb-4 px-4 py-3 rounded-xl bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 text-red-800 dark:text-red-200 text-sm" role="alert" id="onboarding-errors-summary" data-lv-humanize-summary>

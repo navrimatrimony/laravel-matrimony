@@ -10,7 +10,11 @@ final class NotificationMarathiPayload
      */
     public static function withMessage(array $payload): array
     {
-        if (! isset($payload['message_mr'])) {
+        if (isset($payload['message_key']) && is_string($payload['message_key'])) {
+            return NotificationLocalization::enrichPayload($payload);
+        }
+
+        if (! isset($payload['message_mr']) || trim((string) ($payload['message_mr'] ?? '')) === '') {
             $message = self::message($payload);
             if ($message !== null && $message !== '') {
                 $payload['message_mr'] = $message;
@@ -35,7 +39,8 @@ final class NotificationMarathiPayload
             'interest_rejected' => self::nameAction($message, ' declined your interest.', 'यांनी तुमची इच्छा नाकारली.'),
             'chat_message' => self::nameAction($message, ' sent you a message.', 'यांनी तुम्हाला संदेश पाठवला.'),
             'chat_message_locked' => self::chatMessageLocked($message),
-            'contact_request_received' => self::nameAction($message, ' requested your contact.', 'यांनी तुमचा संपर्क मागितला.'),
+            'contact_request_received' => self::nameAction($message, ' requested your contact details.', 'यांनी तुमचा संपर्क मागितला.')
+                ?? self::nameAction($message, ' requested your contact.', 'यांनी तुमचा संपर्क मागितला.'),
             'contact_request_accepted' => self::contactRequestAccepted($message),
             'contact_request_rejected' => self::contactRequestRejected($message),
             'contact_request_expired' => 'तुमच्या संपर्क विनंतीला उत्तर मिळाले नाही आणि ती कालबाह्य झाली आहे. इच्छा असल्यास तुम्ही नवीन विनंती पाठवू शकता.',
@@ -49,6 +54,10 @@ final class NotificationMarathiPayload
             'new_matches_digest' => self::newMatches($payload),
             'plan_expiring_soon' => self::planExpiring($payload),
             'referral_reward' => self::referralReward($payload),
+            'referral_invite_registered' => self::referralInviteRegistered($payload),
+            'referral_invite_upgraded' => self::referralInviteUpgraded($payload),
+            'referral_reward_pending' => self::referralRewardPending($payload),
+            'referral_cap_skipped' => self::referralCapSkipped($payload),
             'mediation_request_received' => self::mediationReceived($message),
             'mediation_request_response' => self::mediationResponse($message),
             default => null,
@@ -150,13 +159,62 @@ final class NotificationMarathiPayload
 
     private static function referralReward(array $payload): ?string
     {
+        $benefits = trim((string) ($payload['benefits_summary'] ?? ''));
         $plan = trim((string) ($payload['purchased_plan_name'] ?? $payload['plan'] ?? ''));
         $days = (int) ($payload['bonus_days'] ?? $payload['days'] ?? 0);
-        if ($plan === '' || $days <= 0) {
-            return null;
+
+        if ($benefits !== '' && $plan !== '') {
+            return NotificationLocalization::translate('notifications.referral_reward_message', [
+                'plan' => $plan,
+                'benefits' => $benefits,
+            ], NotificationLocalization::LOCALE_MR);
         }
 
-        return 'तुमच्या मित्राने '.$plan.' प्लॅन upgrade केला. तुमच्या subscription मध्ये '.$days.' bonus दिवस जोडले.';
+        if ($plan !== '' && $days > 0) {
+            return NotificationLocalization::translate('notifications.referral_reward_message_days_only', [
+                'plan' => $plan,
+                'days' => $days,
+            ], NotificationLocalization::LOCALE_MR);
+        }
+
+        return null;
+    }
+
+    private static function referralInviteRegistered(array $payload): ?string
+    {
+        $name = trim((string) ($payload['invitee_name'] ?? ''));
+
+        return NotificationLocalization::translate('notifications.referral_invite_registered_message', [
+            'name' => $name !== '' ? $name : __('referrals.member_placeholder'),
+        ], NotificationLocalization::LOCALE_MR);
+    }
+
+    private static function referralInviteUpgraded(array $payload): ?string
+    {
+        $name = trim((string) ($payload['invitee_name'] ?? ''));
+        $plan = trim((string) ($payload['plan_name'] ?? ''));
+
+        return NotificationLocalization::translate('notifications.referral_invite_upgraded_message', [
+            'name' => $name !== '' ? $name : __('referrals.member_placeholder'),
+            'plan' => $plan !== '' ? $plan : __('referrals.member_placeholder'),
+        ], NotificationLocalization::LOCALE_MR);
+    }
+
+    private static function referralRewardPending(array $payload): ?string
+    {
+        return NotificationLocalization::translate('notifications.referral_reward_pending_message', [
+            'name' => trim((string) ($payload['invitee_name'] ?? '')) ?: __('referrals.member_placeholder'),
+            'plan' => trim((string) ($payload['plan_name'] ?? '')) ?: __('referrals.member_placeholder'),
+            'days' => (int) ($payload['bonus_days'] ?? 0),
+        ], NotificationLocalization::LOCALE_MR);
+    }
+
+    private static function referralCapSkipped(array $payload): ?string
+    {
+        return NotificationLocalization::translate('notifications.referral_cap_skipped_message', [
+            'name' => trim((string) ($payload['invitee_name'] ?? '')) ?: __('referrals.member_placeholder'),
+            'plan' => trim((string) ($payload['plan_name'] ?? '')) ?: __('referrals.member_placeholder'),
+        ], NotificationLocalization::LOCALE_MR);
     }
 
     private static function mediationReceived(string $message): string

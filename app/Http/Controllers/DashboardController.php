@@ -9,11 +9,15 @@ use App\Models\MatrimonyProfile;
 use App\Models\Message;
 use App\Models\ProfileView;
 use App\Models\Shortlist;
+use App\Services\Interest\ReceivedInterestTeaserPolicy;
+use App\Services\InterestSendLimitService;
 use App\Services\NudgeService;
 use App\Services\ProfileCompletionEngine;
+use App\Services\ReferralService;
 use App\Services\RecommendationService;
 use App\Services\SubscriptionService;
 use App\Services\UserWalletService;
+use App\Services\WhoViewed\WhoViewedTeaserPresenter;
 use Illuminate\Support\Facades\DB;
 
 /*
@@ -32,6 +36,9 @@ class DashboardController extends Controller
         private readonly ProfileCompletionEngine $profileCompletionEngine,
         private readonly RecommendationService $recommendationService,
         private readonly NudgeService $nudgeService,
+        private readonly InterestSendLimitService $interestSendLimit,
+        private readonly WhoViewedTeaserPresenter $whoViewedTeaserPresenter,
+        private readonly ReferralService $referralService,
     ) {}
 
     /**
@@ -40,6 +47,9 @@ class DashboardController extends Controller
     public function index()
     {
         $user = auth()->user();
+        $referralShareTools = $this->referralService->shareToolsForReferrer($user);
+        $referralShareUrl = $referralShareTools['share_url'] ?? null;
+        $referralSummary = $this->referralService->summaryForReferrer($user);
 
         // No profile case - view handles this with empty data
         if (! $user->matrimonyProfile) {
@@ -47,6 +57,10 @@ class DashboardController extends Controller
                 'hasProfile' => false,
                 'recommendations' => [],
                 'nudges' => [],
+                'referredRegistrationWelcome' => $this->referralService->registrationWelcomeBanner($user),
+                'referralShareTools' => $referralShareTools,
+                'referralShareUrl' => $referralShareUrl,
+                'referralSummary' => $referralSummary,
             ]);
         }
 
@@ -76,6 +90,28 @@ class DashboardController extends Controller
             ->receivedInboxOrder()
             ->limit(3)
             ->get();
+        $recentReceivedUnlockById = $this->interestSendLimit->incomingInterestUnlockMap($user, $recentReceivedInterests);
+        $receivedTeaserPolicy = ReceivedInterestTeaserPolicy::forLockedPresentation(ReceivedInterestTeaserPolicy::normalized());
+        $recentReceivedLockedTeasers = [];
+        foreach ($recentReceivedInterests as $interestRow) {
+            if (($recentReceivedUnlockById[$interestRow->id] ?? true) === true) {
+                continue;
+            }
+            $senderProfile = $interestRow->senderProfile;
+            if ($senderProfile === null) {
+                continue;
+            }
+            $recentReceivedLockedTeasers[$interestRow->id] = $this->whoViewedTeaserPresenter->presentFromMatrimonyProfile(
+                $senderProfile,
+                $interestRow->created_at,
+                $receivedTeaserPolicy,
+                [
+                    'owner_profile' => $profile,
+                    'viewer_view_count' => 1,
+                    'teaser_time_line' => 'interest_received',
+                ]
+            );
+        }
 
         // Recent Sent Interests (Last 3)
         $recentSentInterests = Interest::with('receiverProfile.gender')
@@ -151,9 +187,7 @@ class DashboardController extends Controller
             ->unique()
             ->count();
 
-        $referralShareUrl = $user->referral_code
-            ? url(route('register', ['ref' => $user->referral_code], false))
-            : null;
+        $referralPendingClaimCount = (int) ($referralSummary['pending_claim'] ?? 0);
 
         $recommendations = $this->recommendationService->getTopMatches($user, 10);
         $nudges = $this->nudgeService->getNudges($user, $recommendations);
@@ -168,6 +202,10 @@ class DashboardController extends Controller
             'planExpiresInDays' => $planExpiresInDays,
             'profileViewersRecentCount' => $profileViewersRecentCount,
             'referralShareUrl' => $referralShareUrl,
+            'referralShareTools' => $referralShareTools,
+            'referralSummary' => $referralSummary,
+            'referralPendingClaimCount' => $referralPendingClaimCount,
+            'referredRegistrationWelcome' => $this->referralService->registrationWelcomeBanner($user),
             'sentInterestsCount' => $sentInterestsCount,
             'receivedPendingCount' => $receivedPendingCount,
             'acceptedInterestsCount' => $acceptedInterestsCount,
@@ -177,6 +215,8 @@ class DashboardController extends Controller
             'mobileVerified' => $mobileVerified,
             'completion' => $completion,
             'recentReceivedInterests' => $recentReceivedInterests,
+            'recentReceivedUnlockById' => $recentReceivedUnlockById,
+            'recentReceivedLockedTeasers' => $recentReceivedLockedTeasers,
             'recentSentInterests' => $recentSentInterests,
             'chatUnreadCount' => (int) $chatUnreadCount,
             'recentUnreadChats' => $recentUnread,

@@ -23,13 +23,13 @@ class EngagementNotificationService
 
     public function sendInactiveReminders(): int
     {
-        $cfg = config('engagement.inactive_reminder', []);
-        if (! ($cfg['enabled'] ?? true)) {
+        $platform = app(NotificationPlatformSettingsService::class);
+        if (! $platform->inactiveReminderEnabled()) {
             return 0;
         }
 
-        $afterDays = max(1, (int) ($cfg['after_days'] ?? 3));
-        $cooldownDays = max(1, (int) ($cfg['cooldown_days'] ?? 7));
+        $afterDays = $platform->inactiveAfterDays();
+        $cooldownDays = $platform->inactiveCooldownDays();
         $threshold = now()->subDays($afterDays);
         $cooldownCut = now()->subDays($cooldownDays);
 
@@ -46,13 +46,17 @@ class EngagementNotificationService
                     ->orWhere('last_inactive_reminder_sent_at', '<', $cooldownCut);
             })
             ->orderBy('id')
-            ->chunkById(200, function ($users) use (&$sent, $cfg): void {
+            ->chunkById(200, function ($users) use (&$sent, $platform): void {
                 foreach ($users as $user) {
                     /** @var User $user */
+                    if (! app(UserNotificationPreferencesService::class)->inactiveReminderEnabled($user)) {
+                        continue;
+                    }
+
                     try {
                         SafeNotifier::notify($user, new InactiveUserReminderNotification);
                         $user->forceFill(['last_inactive_reminder_sent_at' => now()])->saveQuietly();
-                        if (($cfg['whatsapp']['enabled'] ?? false) && $this->whatsapp->canSendEngagementTemplate()) {
+                        if ($platform->inactiveWhatsappEnabled() && $this->whatsapp->canSendEngagementTemplate()) {
                             $mobile = preg_replace('/\D/', '', (string) ($user->mobile ?? ''));
                             if (strlen($mobile) >= 10) {
                                 $line = __('notifications.inactive_reminder_whatsapp_line', [
@@ -77,10 +81,11 @@ class EngagementNotificationService
 
     public function sendNewMatchDigests(): int
     {
-        $cfg = config('engagement.new_matches_digest', []);
-        if (! ($cfg['enabled'] ?? true)) {
+        if (! app(NotificationPlatformSettingsService::class)->newMatchesDigestEnabled()) {
             return 0;
         }
+
+        $cfg = config('engagement.new_matches_digest', []);
 
         $minScore = max(0, (int) ($cfg['min_score'] ?? 55));
         $tab = MatchingService::normalizeTab((string) ($cfg['tab'] ?? MatchingService::TAB_PERFECT));
@@ -108,6 +113,11 @@ class EngagementNotificationService
                     if (! $profile instanceof MatrimonyProfile) {
                         continue;
                     }
+
+                    if (! app(UserNotificationPreferencesService::class)->newMatchesDigestEnabled($user)) {
+                        continue;
+                    }
+
                     try {
                         $rows = $this->matching->findMatchesForTab($profile, $tab, $limit, false);
                         $count = 0;

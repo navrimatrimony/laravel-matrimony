@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Auth;
 use App\Http\Controllers\Controller;
 use App\Models\AdminSetting;
 use App\Services\Messaging\MetaWhatsAppCloudService;
+use App\Services\ReferralService;
 use App\Support\MobileNumber;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -55,6 +56,7 @@ class MobileOtpController extends Controller
             'otpDisplay' => $otpDisplay,
             'fromRegistration' => $fromRegistration,
             'intendedAfterVerify' => $intendedAfterVerify,
+            'referredRegistrationWelcome' => app(ReferralService::class)->registrationWelcomeBanner($user),
         ]);
     }
 
@@ -150,6 +152,7 @@ class MobileOtpController extends Controller
 
         Cache::forget($key);
         $user->update(['mobile_verified_at' => now()]);
+        app(\App\Services\ReferralService::class)->retryQualityPendingReferralReward($user);
 
         $fromRegistration = (bool) $request->session()->pull('from_registration', false);
         $intended = $request->session()->pull('intended_after_verify');

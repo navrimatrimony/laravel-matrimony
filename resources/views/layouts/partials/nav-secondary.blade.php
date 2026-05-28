@@ -36,6 +36,12 @@
                            class="inline-flex items-center border-b-2 px-3 py-3 text-sm font-medium transition {{ request()->routeIs('shortlist.*') ? 'border-red-600 text-red-600 dark:border-red-500 dark:text-red-400' : 'border-transparent text-gray-600 hover:text-red-700 dark:text-gray-400 dark:hover:text-red-400' }}">
                             {{ __('nav.shortlist') }}
                         </a>
+                        @if (config('referral.enabled', true))
+                            <a href="{{ route('referrals.index') }}"
+                               class="inline-flex items-center border-b-2 px-3 py-3 text-sm font-medium transition {{ request()->routeIs('referrals.*') ? 'border-red-600 text-red-600 dark:border-red-500 dark:text-red-400' : 'border-transparent text-gray-600 hover:text-red-700 dark:text-gray-400 dark:hover:text-red-400' }}">
+                                {{ __('nav.my_referrals') }}
+                            </a>
+                        @endif
                         <a href="{{ route('who-viewed.index') }}"
                            class="inline-flex items-center gap-2 border-b-2 px-3 py-3 text-sm font-medium transition {{ request()->routeIs('who-viewed.*') ? 'border-red-600 text-red-600 dark:border-red-500 dark:text-red-400' : 'border-transparent text-gray-600 hover:text-red-700 dark:text-gray-400 dark:hover:text-red-400' }}">
                             <span>{{ __('nav.who_viewed_me') }}</span>

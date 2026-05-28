@@ -4,7 +4,6 @@ namespace App\Services\Matching;
 
 use App\Models\MatrimonyProfile;
 use App\Models\User;
-use App\Services\MatchingEngine;
 use App\Services\RuleEngineService;
 use App\Support\ProfileDisplayCopy;
 use Carbon\Carbon;
@@ -14,6 +13,16 @@ use Carbon\Carbon;
  */
 class MatchingPresenter
 {
+    private const RULE_MATCHING_LOCATION = 'matching_location';
+
+    private const RULE_MATCHING_AGE = 'matching_age';
+
+    private const RULE_MATCHING_EDUCATION = 'matching_education';
+
+    private const RULE_MATCHING_CASTE = 'matching_caste';
+
+    private const RULE_MATCHING_PROFILE_COMPLETION = 'matching_profile_completion';
+
     public function __construct(
         private readonly RuleEngineService $ruleEngine,
     ) {}
@@ -155,11 +164,11 @@ class MatchingPresenter
     private function buildChipMatchesFromBreakdown(array $breakdown): array
     {
         $map = [
-            MatchingEngine::RULE_MATCHING_LOCATION => ['field' => 'location', 'label' => 'Location', 'icon' => '📍'],
-            MatchingEngine::RULE_MATCHING_AGE => ['field' => 'age', 'label' => 'Age', 'icon' => '🎂'],
-            MatchingEngine::RULE_MATCHING_EDUCATION => ['field' => 'highest_education', 'label' => 'Education', 'icon' => '🎓'],
-            MatchingEngine::RULE_MATCHING_CASTE => ['field' => 'caste_id', 'label' => 'Caste', 'icon' => '🗣️'],
-            MatchingEngine::RULE_MATCHING_PROFILE_COMPLETION => ['field' => 'profile_completion', 'label' => 'Profile completeness', 'icon' => '✅'],
+            self::RULE_MATCHING_LOCATION => ['field' => 'location', 'label' => 'Location', 'icon' => '📍'],
+            self::RULE_MATCHING_AGE => ['field' => 'age', 'label' => 'Age', 'icon' => '🎂'],
+            self::RULE_MATCHING_EDUCATION => ['field' => 'highest_education', 'label' => 'Education', 'icon' => '🎓'],
+            self::RULE_MATCHING_CASTE => ['field' => 'caste_id', 'label' => 'Caste', 'icon' => '🗣️'],
+            self::RULE_MATCHING_PROFILE_COMPLETION => ['field' => 'profile_completion', 'label' => 'Profile completeness', 'icon' => '✅'],
         ];
         $out = [];
         foreach ($map as $key => $meta) {
@@ -184,7 +193,7 @@ class MatchingPresenter
     private function buildCommonGroundFromBreakdown(MatrimonyProfile $viewed, array $breakdown): array
     {
         $cg = [];
-        if (($breakdown[MatchingEngine::RULE_MATCHING_LOCATION] ?? 0) > 0) {
+        if (($breakdown[self::RULE_MATCHING_LOCATION] ?? 0) > 0) {
             $viewedLocationLine = trim(ProfileDisplayCopy::profileResidenceDisplayLine($viewed));
             $cg[] = [
                 'field' => 'location',
@@ -193,7 +202,7 @@ class MatchingPresenter
                 'value' => $viewedLocationLine !== '' ? $viewedLocationLine : ($viewed->city_id ? (string) ($viewed->city?->name ?? '—') : (string) ($viewed->state?->name ?? '—')),
             ];
         }
-        if (($breakdown[MatchingEngine::RULE_MATCHING_EDUCATION] ?? 0) > 0) {
+        if (($breakdown[self::RULE_MATCHING_EDUCATION] ?? 0) > 0) {
             $cg[] = [
                 'field' => 'highest_education',
                 'label' => 'Education',
@@ -201,7 +210,7 @@ class MatchingPresenter
                 'value' => (string) ($viewed->highest_education ?? ''),
             ];
         }
-        if (($breakdown[MatchingEngine::RULE_MATCHING_CASTE] ?? 0) > 0) {
+        if (($breakdown[self::RULE_MATCHING_CASTE] ?? 0) > 0) {
             $cg[] = [
                 'field' => 'caste_id',
                 'label' => 'Caste',

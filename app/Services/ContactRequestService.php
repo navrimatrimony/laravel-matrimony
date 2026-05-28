@@ -9,6 +9,7 @@ use App\Models\User;
 use App\Notifications\ContactGrantRevokedNotification;
 use App\Notifications\ContactRequestAcceptedNotification;
 use App\Notifications\ContactRequestExpiredNotification;
+use App\Notifications\ContactRequestReceivedNotification;
 use App\Notifications\ContactRequestRejectedNotification;
 use App\Support\SafeNotifier;
 use Illuminate\Support\Facades\DB;
@@ -181,7 +182,7 @@ class ContactRequestService
         $expiresAt = now()->addDays($pendingExpiryDays);
 
         return DB::transaction(function () use ($sender, $receiver, $reason, $otherReasonText, $requested_scopes, $expiresAt) {
-            return ContactRequest::create([
+            $request = ContactRequest::create([
                 'type' => ContactRequest::TYPE_CONTACT,
                 'sender_id' => $sender->id,
                 'receiver_id' => $receiver->id,
@@ -191,6 +192,14 @@ class ContactRequestService
                 'status' => ContactRequest::STATUS_PENDING,
                 'expires_at' => $expiresAt,
             ]);
+
+            $request->load(['sender.matrimonyProfile']);
+
+            if (AdminActivityNotificationGate::allowsPeerActivityNotification($sender)) {
+                SafeNotifier::notify($receiver, new ContactRequestReceivedNotification($request));
+            }
+
+            return $request;
         });
     }
 

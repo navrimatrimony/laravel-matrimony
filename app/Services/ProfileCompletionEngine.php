@@ -129,4 +129,15 @@ class ProfileCompletionEngine
     {
         return (int) round(($mandatory + $detailed) / 2);
     }
+
+    /**
+     * Single read path for section status chips used in wizard/edit flows.
+     *
+     * @param  list<string>  $sectionKeys
+     * @return array<string, string>
+     */
+    public function sectionStatuses(MatrimonyProfile $profile, array $sectionKeys): array
+    {
+        return ProfileCompletionService::getSectionStatuses($profile, $sectionKeys);
+    }
 }

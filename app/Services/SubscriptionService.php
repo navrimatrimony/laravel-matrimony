@@ -118,10 +118,29 @@ class SubscriptionService
             );
         }
 
+        $originalBase = $baseAmount;
+        $referralDisc = 0.0;
+        $referralExtraDays = 0;
+        $referralBenefit = null;
+        if ($rawCoupon === '' && ! Plan::isFreeCatalogSlug((string) $plan->slug)) {
+            $referralBenefit = app(ReferralService::class)->computeReferredCheckoutDiscount($user, $plan, $baseAmount);
+            if ($referralBenefit !== null) {
+                $referralDisc = round((float) ($referralBenefit['discount_amount'] ?? 0), 2);
+                $referralExtraDays = max(0, (int) ($referralBenefit['extra_duration_days'] ?? 0));
+                $baseAmount = max(0.0, round($baseAmount - $referralDisc, 2));
+            }
+        }
+
         $applied = $this->applyCoupon($coupon, $baseAmount);
         $subscriptionMetaPreview = $applied['subscription_meta'] ?? [];
         if (! is_array($subscriptionMetaPreview)) {
             $subscriptionMetaPreview = [];
+        }
+        if ($referralBenefit !== null) {
+            $referralMeta = $referralBenefit['subscription_meta'] ?? [];
+            if (is_array($referralMeta) && $referralMeta !== []) {
+                $subscriptionMetaPreview = array_merge($subscriptionMetaPreview, $referralMeta);
+            }
         }
         $subscriptionMetaPreview = array_merge($subscriptionMetaPreview, PlanQuotaCheckoutSnapshot::forPlan($plan));
 
@@ -132,7 +151,9 @@ class SubscriptionService
             'duration_days' => $duration,
             'plan_term' => $planTerm,
             'coupon' => $coupon,
-            'base_amount' => $baseAmount,
+            'base_amount' => $originalBase,
+            'referral_checkout_discount' => $referralDisc,
+            'referral_extra_duration_days' => $referralExtraDays,
             'subscription_meta_preview' => $subscriptionMetaPreview,
         ];
     }
@@ -159,11 +180,13 @@ class SubscriptionService
             // 1) Cancel any current active subscription(s) — rows kept for history (same as model safeguard on create).
             Subscription::deactivateActiveSubscriptionsForUserId((int) $user->id);
 
-            $couponApplied = $coupon ? $this->applyCoupon($coupon, (float) $resolved['base_amount']) : null;
+            $amountForCoupon = max(0.0, round((float) $resolved['base_amount'] - (float) ($resolved['referral_checkout_discount'] ?? 0), 2));
+            $couponApplied = $coupon ? $this->applyCoupon($coupon, $amountForCoupon) : null;
+            $duration += (int) ($resolved['referral_extra_duration_days'] ?? 0);
             if ($couponApplied !== null) {
                 $duration += (int) ($couponApplied['extra_duration_days'] ?? 0);
             }
-            $finalCharged = round((float) ($couponApplied['final_price'] ?? $resolved['final_amount']), 2);
+            $finalCharged = round((float) $resolved['final_amount'], 2);
 
             $subscriptionMeta = [];
             if ($couponApplied !== null) {
@@ -409,20 +432,22 @@ class SubscriptionService
     {
         $term = $resolved['plan_term'];
         $coupon = $resolved['coupon'];
-        $couponApplied = $coupon ? $this->applyCoupon($coupon, (float) $resolved['base_amount']) : null;
-        $extraDays = (int) ($couponApplied['extra_duration_days'] ?? 0);
+        $amountForCoupon = max(0.0, round((float) $resolved['base_amount'] - (float) ($resolved['referral_checkout_discount'] ?? 0), 2));
+        $couponApplied = $coupon ? $this->applyCoupon($coupon, $amountForCoupon) : null;
+        $referralDisc = round((float) ($resolved['referral_checkout_discount'] ?? 0), 2);
+        $referralExtra = max(0, (int) ($resolved['referral_extra_duration_days'] ?? 0));
+        $couponExtra = (int) ($couponApplied['extra_duration_days'] ?? 0);
+        $extraDays = $couponExtra + $referralExtra;
         $durationTotal = (int) $resolved['duration_days'] + $extraDays;
         $preview = $resolved['subscription_meta_preview'] ?? [];
         if (! is_array($preview)) {
             $preview = [];
         }
 
-        $couponDiscount = $couponApplied !== null
+        $couponDiscount = ($couponApplied !== null
             ? round((float) ($couponApplied['discount_amount'] ?? 0), 2)
-            : 0.0;
-        $finalAfterCoupon = $couponApplied !== null
-            ? round((float) ($couponApplied['final_price'] ?? $resolved['final_amount']), 2)
-            : round((float) $resolved['final_amount'], 2);
+            : 0.0) + $referralDisc;
+        $finalAfterCoupon = round((float) $resolved['final_amount'], 2);
 
         return [
             'user_id' => (int) $user->id,
@@ -433,13 +458,15 @@ class SubscriptionService
             'billing_key' => $term?->billing_key,
             'duration_days' => (int) $resolved['duration_days'],
             'extra_duration_days' => $extraDays,
+            'referral_extra_duration_days' => $referralExtra,
             'duration_days_total' => $durationTotal,
             'discount_percent' => $term?->discount_percent,
             'base_amount' => round((float) $resolved['base_amount'], 2),
-            'final_amount' => round((float) $resolved['final_amount'], 2),
+            'final_amount' => $finalAfterCoupon,
             'currency' => 'INR',
             'coupon_code' => $resolved['coupon_code'],
             'coupon_discount' => $couponDiscount,
+            'referral_checkout_discount' => $referralDisc,
             'final_amount_after_coupon' => $finalAfterCoupon,
             'amount' => $amountString,
             'subscription_meta_preview' => $preview,
@@ -568,34 +595,35 @@ class SubscriptionService
     {
         $raw = $resolved['coupon_code'] ?? null;
         $code = is_string($raw) && trim($raw) !== '' ? trim($raw) : null;
-        $disc = $couponApplied !== null
+        $disc = ($couponApplied !== null
             ? round((float) ($couponApplied['discount_amount'] ?? 0), 2)
-            : 0.0;
-        $finalAfter = $couponApplied !== null
-            ? round((float) ($couponApplied['final_price'] ?? $resolved['final_amount']), 2)
-            : round((float) $resolved['final_amount'], 2);
+            : 0.0) + round((float) ($resolved['referral_checkout_discount'] ?? 0), 2);
+        $finalAfter = round((float) $resolved['final_amount'], 2);
 
         return [
             'coupon_code' => $code,
             'coupon_discount' => $disc,
+            'referral_checkout_discount' => round((float) ($resolved['referral_checkout_discount'] ?? 0), 2),
             'final_amount_after_coupon' => $finalAfter,
         ];
     }
 
     /**
      * @param  array<string, mixed>  $pending
-     * @return array{coupon_code: ?string, coupon_discount: float, final_amount_after_coupon: float}
+     * @return array{coupon_code: ?string, coupon_discount: float, referral_checkout_discount: float, final_amount_after_coupon: float}
      */
     private function checkoutCouponSnapshotFromPending(array $pending): array
     {
         $raw = $pending['coupon_code'] ?? null;
         $code = is_string($raw) && trim($raw) !== '' ? trim($raw) : null;
         $disc = round((float) ($pending['coupon_discount'] ?? 0), 2);
+        $referralDisc = round((float) ($pending['referral_checkout_discount'] ?? 0), 2);
         $finalAfter = round((float) ($pending['final_amount_after_coupon'] ?? $pending['final_amount'] ?? 0), 2);
 
         return [
             'coupon_code' => $code,
             'coupon_discount' => $disc,
+            'referral_checkout_discount' => $referralDisc,
             'final_amount_after_coupon' => $finalAfter,
         ];
     }

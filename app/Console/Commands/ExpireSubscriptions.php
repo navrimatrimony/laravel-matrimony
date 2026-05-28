@@ -2,6 +2,7 @@
 
 namespace App\Console\Commands;
 
+use App\Services\NotificationPlatformSettingsService;
 use App\Services\NotificationService;
 use App\Services\SubscriptionService;
 use Illuminate\Console\Command;
@@ -14,10 +15,7 @@ class ExpireSubscriptions extends Command
 
     public function handle(SubscriptionService $subscriptionService, NotificationService $notifications): int
     {
-        $windows = array_filter(
-            array_map('intval', config('monetization.plan_expiry_notify_days_before_list', [2])),
-            static fn (int $d): bool => $d > 0
-        );
+        $windows = app(NotificationPlatformSettingsService::class)->planExpiryNotifyDaysBeforeList();
 
         $totalSent = 0;
         foreach ($windows as $days) {

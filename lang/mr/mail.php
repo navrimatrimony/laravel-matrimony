@@ -81,6 +81,22 @@ return [
             'subject' => 'रेफरल बोनस लागू',
             'title' => 'रेफरल बोनस',
         ],
+        'referral_invite_registered' => [
+            'subject' => 'तुमच्या आमंत्रणाने कोणी सामील झाले',
+            'title' => 'नवीन रेफरल नोंदणी',
+        ],
+        'referral_invite_upgraded' => [
+            'subject' => 'आमंत्रिताने प्लान घेतला',
+            'title' => 'रेफरल अपग्रेड',
+        ],
+        'referral_reward_pending' => [
+            'subject' => 'रेफरल रिवॉर्ड प्रतीक्षेत',
+            'title' => 'रिवॉर्ड मिळवा',
+        ],
+        'referral_cap_skipped' => [
+            'subject' => 'रेफरल मर्यादा पूर्ण',
+            'title' => 'मासिक रेफरल मर्यादा',
+        ],
         'image_approved' => [
             'subject' => 'प्रोफाइल फोटो मंजूर',
             'title' => 'फोटो मंजूर',

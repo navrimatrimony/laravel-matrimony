@@ -1,8 +1,24 @@
 <?php
 
 return [
+    'page_title' => 'Notifications',
+    'mark_all_read' => 'Mark all as read',
+    'none' => 'No notifications.',
+    'view_profile' => 'View profile',
+    'someone' => 'Someone',
+    'sent_you_message' => 'sent you a message',
+    'open_chat' => 'Open chat',
+    'open' => 'Open',
+    'open_profile' => 'Open profile',
+    'mark_read' => 'Mark as read',
+    'back_to_notifications' => 'Back to notifications',
     'plan_expiring_soon_message' => 'Your :plan plan ends in :days day(s). Renew to keep full access — no hidden auto-charges.',
-    'referral_reward_message' => 'Your friend upgraded to :plan. We added :days bonus day(s) to your subscription. Thank you for spreading the word.',
+    'referral_reward_message' => 'Your friend upgraded to :plan. Added to your subscription: :benefits. Thank you for spreading the word.',
+    'referral_reward_message_days_only' => 'Your friend upgraded to :plan. We added :days bonus day(s) to your subscription. Thank you for spreading the word.',
+    'referral_invite_registered_message' => ':name joined using your invite link.',
+    'referral_invite_upgraded_message' => ':name upgraded to :plan.',
+    'referral_reward_pending_message' => ':name upgraded to :plan. Subscribe to an active paid plan to claim :days bonus day(s) waiting for you.',
+    'referral_cap_skipped_message' => ':name upgraded to :plan, but your monthly referral reward limit was already reached.',
     'chat_locked_message' => ':name messaged you. Upgrade to read messages — prices are always shown before you pay.',
     'chat_locked_message_anonymous' => 'You have a new message. Upgrade to read it — prices are always shown before you pay.',
     'fellow_member' => 'there',
@@ -11,4 +27,7 @@ return [
     'new_matches_digest_message' => 'You have :count recommended match(es) (best score :score/100). Open Matches to explore.',
     'teaser_open_received_interests' => 'Open received interests',
     'teaser_open_who_viewed' => 'Open who viewed me',
+    'contact_request_received_message' => ':name requested your contact details.',
+    'image_approved_message' => 'Your profile photo was approved. It is now visible on your profile.',
+    'open_contact_inbox' => 'Open contact requests',
 ];

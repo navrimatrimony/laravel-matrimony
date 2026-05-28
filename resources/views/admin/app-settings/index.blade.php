@@ -13,7 +13,19 @@
 .admin-toggle .toggle-label.off { color: #6b7280; }
 </style>
 
-<div class="bg-white dark:bg-gray-800 shadow rounded-lg p-6" x-data="{ tab: 'general' }">
+@php
+    $appSettingsTab = in_array(request('tab'), ['general', 'dashboard', 'notifications', 'branding', 'company', 'monitoring', 'billing'], true)
+        ? request('tab')
+        : 'general';
+@endphp
+@php
+    $appSettingsTabLinkClass = static function (string $tab) use ($appSettingsTab): string {
+        return $appSettingsTab === $tab
+            ? 'border-indigo-600 text-indigo-600 dark:border-indigo-400 dark:text-indigo-300'
+            : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200';
+    };
+@endphp
+<div class="bg-white dark:bg-gray-800 shadow rounded-lg p-6">
     <h1 class="text-2xl font-bold text-gray-800 dark:text-gray-100 mb-2">App settings</h1>
     <p class="text-gray-500 dark:text-gray-400 text-sm mb-6">Application-wide switches stored in the database. When no DB value exists, the value falls back to environment configuration.</p>
 
@@ -50,16 +62,20 @@
 
         <div class="border-b border-gray-200 dark:border-gray-700">
             <nav class="-mb-px flex flex-wrap gap-4" aria-label="App settings sections">
-                <button type="button" @click="tab='general'" :class="tab==='general' ? 'border-indigo-600 text-indigo-600 dark:border-indigo-400 dark:text-indigo-300' : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200'" class="border-b-2 px-1 py-3 text-sm font-semibold transition">General</button>
-                <button type="button" @click="tab='dashboard'" :class="tab==='dashboard' ? 'border-indigo-600 text-indigo-600 dark:border-indigo-400 dark:text-indigo-300' : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200'" class="border-b-2 px-1 py-3 text-sm font-semibold transition">Dashboard UX</button>
-                <button type="button" @click="tab='branding'" :class="tab==='branding' ? 'border-indigo-600 text-indigo-600 dark:border-indigo-400 dark:text-indigo-300' : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200'" class="border-b-2 px-1 py-3 text-sm font-semibold transition">Branding</button>
-                <button type="button" @click="tab='company'" :class="tab==='company' ? 'border-indigo-600 text-indigo-600 dark:border-indigo-400 dark:text-indigo-300' : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200'" class="border-b-2 px-1 py-3 text-sm font-semibold transition">Company & Contact</button>
-                <button type="button" @click="tab='monitoring'" :class="tab==='monitoring' ? 'border-indigo-600 text-indigo-600 dark:border-indigo-400 dark:text-indigo-300' : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200'" class="border-b-2 px-1 py-3 text-sm font-semibold transition">Payment Monitoring</button>
-                <button type="button" @click="tab='billing'" :class="tab==='billing' ? 'border-indigo-600 text-indigo-600 dark:border-indigo-400 dark:text-indigo-300' : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200'" class="border-b-2 px-1 py-3 text-sm font-semibold transition">Billing & Invoice</button>
+                <a href="{{ route('admin.app-settings.index', ['tab' => 'general']) }}" class="border-b-2 px-1 py-3 text-sm font-semibold transition {{ $appSettingsTabLinkClass('general') }}">General</a>
+                <a href="{{ route('admin.app-settings.index', ['tab' => 'dashboard']) }}" class="border-b-2 px-1 py-3 text-sm font-semibold transition {{ $appSettingsTabLinkClass('dashboard') }}">Dashboard UX</a>
+                <a href="{{ route('admin.app-settings.index', ['tab' => 'notifications']) }}" class="border-b-2 px-1 py-3 text-sm font-semibold transition {{ $appSettingsTabLinkClass('notifications') }}">{{ __('admin_notifications.app_settings_tab') }}</a>
+                <a href="{{ route('admin.app-settings.index', ['tab' => 'branding']) }}" class="border-b-2 px-1 py-3 text-sm font-semibold transition {{ $appSettingsTabLinkClass('branding') }}">Branding</a>
+                <a href="{{ route('admin.app-settings.index', ['tab' => 'company']) }}" class="border-b-2 px-1 py-3 text-sm font-semibold transition {{ $appSettingsTabLinkClass('company') }}">Company & Contact</a>
+                <a href="{{ route('admin.app-settings.index', ['tab' => 'monitoring']) }}" class="border-b-2 px-1 py-3 text-sm font-semibold transition {{ $appSettingsTabLinkClass('monitoring') }}">Payment Monitoring</a>
+                <a href="{{ route('admin.app-settings.index', ['tab' => 'billing']) }}" class="border-b-2 px-1 py-3 text-sm font-semibold transition {{ $appSettingsTabLinkClass('billing') }}">Billing & Invoice</a>
             </nav>
         </div>
 
-        <div x-show="tab === 'general'" x-cloak class="space-y-6">
+        <input type="hidden" name="return_tab" value="{{ $appSettingsTab }}">
+
+        @if ($appSettingsTab === 'general')
+        <div class="space-y-6">
             <div class="p-4 bg-gray-50 dark:bg-gray-700/30 rounded-lg border border-gray-200 dark:border-gray-600">
                 <label class="admin-toggle">
                     <input type="checkbox" name="admin_bypass_mode" value="1" {{ $adminBypassMode ? 'checked' : '' }}>
@@ -239,8 +255,89 @@
                 </p>
             </fieldset>
         </div>
+        @endif
 
-        <div x-show="tab === 'dashboard'" x-cloak class="space-y-6">
+        @if ($appSettingsTab === 'notifications')
+        @php
+            $np = $notificationPlatform ?? [];
+        @endphp
+        <div class="space-y-6">
+            <p class="text-sm text-gray-600 dark:text-gray-400">
+                <a href="{{ route('admin.notifications.index') }}" class="text-indigo-600 dark:text-indigo-400 hover:underline font-medium">
+                    {{ __('admin_notifications.nav_inbox_debug') }}
+                </a>
+                — {{ __('admin_notifications.debug_index_intro') }}
+            </p>
+            <div class="p-4 bg-gray-50 dark:bg-gray-700/30 rounded-lg border border-gray-200 dark:border-gray-600">
+                <h2 class="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-1">{{ __('admin_notifications.platform_heading') }}</h2>
+                <p class="text-xs text-gray-500 dark:text-gray-400 mb-4">{{ __('admin_notifications.platform_intro') }}</p>
+
+                <div class="space-y-4">
+                    <label class="admin-toggle">
+                        <input type="checkbox" name="notification_mail_enabled" value="1" @checked(old('notification_mail_enabled', $np['mail_enabled'] ?? true))>
+                        <span class="toggle-track"><span class="toggle-thumb"></span></span>
+                        <span class="toggle-label">{{ __('admin_notifications.mail_enabled') }}</span>
+                    </label>
+                    <p class="text-xs text-gray-500 dark:text-gray-400 -mt-2 ml-16">{{ __('admin_notifications.mail_enabled_help') }}</p>
+
+                    <label class="admin-toggle">
+                        <input type="checkbox" name="notification_inactive_reminder_enabled" value="1" @checked(old('notification_inactive_reminder_enabled', $np['inactive_reminder_enabled'] ?? true))>
+                        <span class="toggle-track"><span class="toggle-thumb"></span></span>
+                        <span class="toggle-label">{{ __('admin_notifications.inactive_enabled') }}</span>
+                    </label>
+
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 ml-0 sm:ml-16">
+                        <div>
+                            <label class="block text-xs mb-1">{{ __('admin_notifications.inactive_after_days') }}</label>
+                            <input type="number" min="1" max="90" name="notification_inactive_after_days" value="{{ old('notification_inactive_after_days', $np['inactive_after_days'] ?? 3) }}" class="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm text-gray-900 dark:text-gray-100">
+                        </div>
+                        <div>
+                            <label class="block text-xs mb-1">{{ __('admin_notifications.inactive_cooldown_days') }}</label>
+                            <input type="number" min="1" max="90" name="notification_inactive_cooldown_days" value="{{ old('notification_inactive_cooldown_days', $np['inactive_cooldown_days'] ?? 7) }}" class="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm text-gray-900 dark:text-gray-100">
+                        </div>
+                    </div>
+
+                    <label class="admin-toggle">
+                        <input type="checkbox" name="notification_inactive_whatsapp_enabled" value="1" @checked(old('notification_inactive_whatsapp_enabled', $np['inactive_whatsapp_enabled'] ?? false))>
+                        <span class="toggle-track"><span class="toggle-thumb"></span></span>
+                        <span class="toggle-label">{{ __('admin_notifications.inactive_whatsapp') }}</span>
+                    </label>
+                    <p class="text-xs text-gray-500 dark:text-gray-400 -mt-2 ml-16">{{ __('admin_notifications.inactive_whatsapp_help') }}</p>
+
+                    <label class="admin-toggle">
+                        <input type="checkbox" name="notification_new_matches_digest_enabled" value="1" @checked(old('notification_new_matches_digest_enabled', $np['new_matches_digest_enabled'] ?? true))>
+                        <span class="toggle-track"><span class="toggle-thumb"></span></span>
+                        <span class="toggle-label">{{ __('admin_notifications.new_matches_digest') }}</span>
+                    </label>
+
+                    <div>
+                        <label class="block text-xs mb-1">{{ __('admin_notifications.plan_expiry_days') }}</label>
+                        <input type="text" name="notification_plan_expiry_notify_days" value="{{ old('notification_plan_expiry_notify_days', $np['plan_expiry_notify_days'] ?? '7,2,1') }}" placeholder="7,2,1" class="block w-full max-w-xs rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm text-gray-900 dark:text-gray-100">
+                        <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">{{ __('admin_notifications.plan_expiry_days_help') }}</p>
+                    </div>
+
+                    <div>
+                        <label class="block text-xs mb-1">{{ __('admin_notifications.retention_days') }}</label>
+                        <input type="number" min="7" max="3650" name="notification_retention_days" value="{{ old('notification_retention_days', $np['retention_days'] ?? 90) }}" class="block w-full max-w-xs rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm text-gray-900 dark:text-gray-100">
+                        <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">{{ __('admin_notifications.retention_days_help') }}</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="rounded-lg border border-indigo-200 bg-indigo-50/80 px-4 py-3 text-xs text-indigo-900 dark:border-indigo-900/50 dark:bg-indigo-950/30 dark:text-indigo-100">
+                <p class="font-semibold">{{ __('admin_notifications.channel_matrix_title') }}</p>
+                <ul class="mt-2 list-disc list-inside space-y-1">
+                    <li>{{ __('admin_notifications.channel_in_app') }}</li>
+                    <li>{{ __('admin_notifications.channel_email') }}</li>
+                    <li>{{ __('admin_notifications.channel_whatsapp') }}</li>
+                </ul>
+                <p class="mt-3 text-indigo-800/90 dark:text-indigo-100/90">{{ __('admin_notifications.queue_worker_note') }}</p>
+            </div>
+        </div>
+        @endif
+
+        @if ($appSettingsTab === 'dashboard')
+        <div class="space-y-6">
             <div class="p-4 bg-gray-50 dark:bg-gray-700/30 rounded-lg border border-gray-200 dark:border-gray-600">
                 <h2 class="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-3">Dashboard notification summary</h2>
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -257,8 +354,10 @@
                 </div>
             </div>
         </div>
+        @endif
 
-        <div x-show="tab === 'branding'" x-cloak class="space-y-6">
+        @if ($appSettingsTab === 'branding')
+        <div class="space-y-6">
             <fieldset @disabled(!($canManageSiteIdentitySettings ?? false)) class="p-4 bg-gray-50 dark:bg-gray-700/30 rounded-lg border border-gray-200 dark:border-gray-600 space-y-5 disabled:opacity-60">
                 <div>
                     <h2 class="text-sm font-semibold text-gray-900 dark:text-gray-100">Basic branding settings</h2>
@@ -267,10 +366,16 @@
 
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
                     <div>
-                        <label class="block text-xs mb-1">Site name</label>
-                        <input type="text" name="site_name" value="{{ old('site_name', $siteIdentity['site_name'] ?? '') }}" class="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm text-gray-900 dark:text-gray-100">
+                        <label class="block text-xs mb-1">Site name (Marathi)</label>
+                        <input type="text" name="site_name_mr" value="{{ old('site_name_mr', $siteIdentity['site_name_mr'] ?? $siteIdentity['site_name'] ?? '') }}" class="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm text-gray-900 dark:text-gray-100" placeholder="नवरी मिळे नवऱ्याला">
+                        <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Used in Marathi UI and Marathi WhatsApp invite messages.</p>
                     </div>
                     <div>
+                        <label class="block text-xs mb-1">Site name (English)</label>
+                        <input type="text" name="site_name_en" value="{{ old('site_name_en', $siteIdentity['site_name_en'] ?? '') }}" class="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm text-gray-900 dark:text-gray-100" placeholder="Navri Mile Navryala">
+                        <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Used in English UI and English WhatsApp invite messages.</p>
+                    </div>
+                    <div class="md:col-span-2">
                         <label class="block text-xs mb-1">Tagline / Subtitle</label>
                         <input type="text" name="site_tagline" value="{{ old('site_tagline', $siteIdentity['site_tagline'] ?? '') }}" class="block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 shadow-sm text-gray-900 dark:text-gray-100">
                     </div>
@@ -305,8 +410,10 @@
                 </div>
             </fieldset>
         </div>
+        @endif
 
-        <div x-show="tab === 'company'" x-cloak class="space-y-6">
+        @if ($appSettingsTab === 'company')
+        <div class="space-y-6">
             <fieldset @disabled(!($canManageSiteIdentitySettings ?? false)) class="p-4 bg-gray-50 dark:bg-gray-700/30 rounded-lg border border-gray-200 dark:border-gray-600 space-y-5 disabled:opacity-60">
                 <div>
                     <h2 class="text-sm font-semibold text-gray-900 dark:text-gray-100">Contact & company info</h2>
@@ -364,8 +471,10 @@
                 </div>
             </fieldset>
         </div>
+        @endif
 
-        <div x-show="tab === 'monitoring'" x-cloak class="space-y-6">
+        @if ($appSettingsTab === 'monitoring')
+        <div class="space-y-6">
             <div class="p-4 bg-gray-50 dark:bg-gray-700/30 rounded-lg border border-gray-200 dark:border-gray-600">
                 <h2 class="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-3">Payment monitoring thresholds</h2>
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -388,8 +497,10 @@
                 </div>
             </div>
         </div>
+        @endif
 
-        <div x-show="tab === 'billing'" x-cloak class="space-y-6">
+        @if ($appSettingsTab === 'billing')
+        <div class="space-y-6">
             <fieldset @disabled(!($canManageBillingSettings ?? false)) class="p-4 bg-gray-50 dark:bg-gray-700/30 rounded-lg border border-gray-200 dark:border-gray-600 space-y-3 disabled:opacity-60">
                 <h2 class="text-sm font-semibold text-gray-900 dark:text-gray-100">Billing / Invoice settings</h2>
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -432,6 +543,7 @@
                 </div>
             </fieldset>
         </div>
+        @endif
 
         <div class="pt-2">
             <button type="submit" class="inline-flex items-center px-4 py-2 rounded-md bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-500">

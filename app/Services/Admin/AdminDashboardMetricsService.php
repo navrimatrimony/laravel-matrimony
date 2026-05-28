@@ -1000,7 +1000,7 @@ final class AdminDashboardMetricsService
     private function insightActionsRevenueDrop(): array
     {
         return [
-            ['label' => 'Send notification', 'url' => route('admin.notifications.index')],
+            ['label' => 'View user notifications (debug)', 'url' => route('admin.notifications.index')],
             ['label' => 'Create discount', 'url' => route('admin.coupons.index')],
         ];
     }

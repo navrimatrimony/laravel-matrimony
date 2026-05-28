@@ -7,6 +7,7 @@ use App\Models\PhotoLearningDataset;
 use App\Models\PhotoModerationLog;
 use App\Models\ProfilePhoto;
 use App\Models\User;
+use App\Notifications\ImageApprovedNotification;
 use App\Notifications\ImageRejectedNotification;
 use App\Services\Image\ProfileGalleryPhotoDeletionService;
 use App\Support\SafeNotifier;
@@ -142,13 +143,18 @@ class PhotoModerationAdminService
             }
         }
 
-        if ($action === 'reject') {
-            $profile = MatrimonyProfile::query()->find($photo->profile_id);
-            $owner = $profile?->user;
-            if ($owner !== null) {
-                $msg = ($reason !== null && trim($reason) !== '') ? $reason : 'Your photo was rejected by moderation.';
-                SafeNotifier::notify($owner, new ImageRejectedNotification($msg));
-            }
+        $profile = MatrimonyProfile::query()->find($photo->profile_id);
+        $owner = $profile?->user;
+
+        if ($action === 'approve' && $owner !== null) {
+            SafeNotifier::notify($owner, new ImageApprovedNotification(
+                ($reason !== null && trim($reason) !== '') ? trim($reason) : '',
+            ));
+        }
+
+        if ($action === 'reject' && $owner !== null) {
+            $msg = ($reason !== null && trim($reason) !== '') ? $reason : 'Your photo was rejected by moderation.';
+            SafeNotifier::notify($owner, new ImageRejectedNotification($msg));
         }
     }
 

@@ -12,7 +12,26 @@ final class MatrimonyMailTemplate
     /**
      * @param  array<string, mixed>  $payload  Output of {@see Notification::toArray()}.
      */
-    public static function fromToArray(array $payload): MailMessage
+    public static function fromToArray(array $payload, ?string $locale = null): MailMessage
+    {
+        $previous = app()->getLocale();
+        if ($locale !== null) {
+            app()->setLocale(NotificationLocalization::normalize($locale));
+            \App\Models\Translation::loadIntoTranslator(app()->getLocale());
+        }
+
+        try {
+            return self::buildMailMessage($payload);
+        } finally {
+            app()->setLocale($previous);
+            \App\Models\Translation::loadIntoTranslator($previous);
+        }
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
+     */
+    private static function buildMailMessage(array $payload): MailMessage
     {
         $type = (string) ($payload['type'] ?? 'default');
         $baseKey = 'mail.types.'.$type;

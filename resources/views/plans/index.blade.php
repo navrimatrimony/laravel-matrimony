@@ -119,6 +119,20 @@
             'message' => (string) session('error'),
         ];
     }
+    if (! empty($referredCheckoutOffer) && is_array($referredCheckoutOffer)) {
+        $pct = (int) ($referredCheckoutOffer['percent_off'] ?? 0);
+        $extra = (int) ($referredCheckoutOffer['extra_days'] ?? 0);
+        if ($pct > 0 || $extra > 0) {
+            $planSummaryItems[] = [
+                'severity' => 'info',
+                'message' => $pct > 0 && $extra > 0
+                    ? __('referrals.plans_invite_offer_percent_and_days', ['percent' => $pct, 'days' => $extra])
+                    : ($pct > 0
+                        ? __('referrals.plans_invite_offer_percent', ['percent' => $pct])
+                        : __('referrals.plans_invite_offer_days', ['days' => $extra])),
+            ];
+        }
+    }
     if (! empty($pricingCatalogInjectedActivePlan)) {
         $planSummaryItems[] = [
             'severity' => 'warning',

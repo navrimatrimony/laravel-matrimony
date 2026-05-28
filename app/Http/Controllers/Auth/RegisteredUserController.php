@@ -59,7 +59,20 @@ class RegisteredUserController extends Controller
             'gender' => '',
         ]);
 
-        app(ReferralService::class)->recordReferralIfEligible($user, $request->input('invite_code'));
+        $referralRecorded = app(ReferralService::class)->recordReferralIfEligible(
+            $user,
+            $request->input('invite_code'),
+            $request->ip(),
+            [
+                'utm_source' => $request->input('utm_source'),
+                'utm_medium' => $request->input('utm_medium'),
+                'utm_campaign' => $request->input('utm_campaign'),
+                'utm_content' => $request->input('utm_content'),
+            ],
+        );
+        if ($referralRecorded) {
+            app(ReferralService::class)->stashRegistrationWelcomeSession($user);
+        }
         $user->forceFill(['referral_code' => User::generateUniqueReferralCode()])->saveQuietly();
 
         event(new Registered($user));

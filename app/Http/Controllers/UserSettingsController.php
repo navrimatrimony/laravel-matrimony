@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\MatrimonyProfile;
 use App\Models\ProfileVisibilitySetting;
+use App\Services\UserNotificationPreferencesService;
 use Illuminate\Http\Request;
 use Illuminate\Http\RedirectResponse;
 
@@ -152,6 +153,54 @@ class UserSettingsController extends Controller
         return redirect()
             ->route('user.settings.communication')
             ->with('status', 'communication-updated');
+    }
+
+    public function notifications(Request $request)
+    {
+        $user = $request->user();
+        $prefs = app(UserNotificationPreferencesService::class)->forUser($user);
+        $platform = app(\App\Services\NotificationPlatformSettingsService::class);
+
+        return view('settings.notifications', [
+            'user' => $user,
+            'prefs' => $prefs,
+            'platformMailEnabled' => $platform->mailEnabled(),
+            'platformInactiveEnabled' => $platform->inactiveReminderEnabled(),
+            'platformDigestEnabled' => $platform->newMatchesDigestEnabled(),
+        ]);
+    }
+
+    public function updateNotifications(Request $request)
+    {
+        $user = $request->user();
+        $platform = app(\App\Services\NotificationPlatformSettingsService::class);
+        $prefsService = app(UserNotificationPreferencesService::class);
+
+        $request->validate([
+            'email_alerts' => 'nullable|boolean',
+            'engagement_inactive_reminder' => 'nullable|boolean',
+            'engagement_new_matches_digest' => 'nullable|boolean',
+        ]);
+
+        $updates = $prefsService->forUser($user);
+
+        if ($platform->mailEnabled() && trim((string) ($user->email ?? '')) !== '') {
+            $updates[UserNotificationPreferencesService::KEY_EMAIL_ALERTS] = $request->boolean('email_alerts');
+        }
+
+        if ($platform->inactiveReminderEnabled()) {
+            $updates[UserNotificationPreferencesService::KEY_ENGAGEMENT_INACTIVE] = $request->boolean('engagement_inactive_reminder');
+        }
+
+        if ($platform->newMatchesDigestEnabled()) {
+            $updates[UserNotificationPreferencesService::KEY_ENGAGEMENT_MATCHES_DIGEST] = $request->boolean('engagement_new_matches_digest');
+        }
+
+        $prefsService->saveForUser($user, $updates);
+
+        return redirect()
+            ->route('user.settings.notifications')
+            ->with('status', 'notifications-updated');
     }
 
     public function security(Request $request)

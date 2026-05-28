@@ -8,20 +8,20 @@
         : asset('images/placeholders/default-profile.svg');
     $profileUrl = $viewerProfile ? route('matrimony.profile.show', $viewerProfile->id) : '#';
 @endphp
-<div class="flex h-36 sm:h-40 w-full overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-800">
-    <div class="relative h-full w-28 shrink-0 bg-gray-100 dark:bg-gray-900 sm:w-32">
+<div class="flex w-full flex-col overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-800 sm:min-h-[10rem] sm:flex-row">
+    <div class="relative h-44 w-full shrink-0 bg-gray-100 dark:bg-gray-900 sm:h-full sm:w-32">
         <img src="{{ $photoSrc }}" alt="" class="absolute inset-0 h-full w-full object-cover" loading="lazy">
     </div>
-    <div class="flex min-h-0 min-w-0 flex-1 flex-col justify-center border-l border-gray-100 px-3 py-2 dark:border-gray-700">
-        <p class="line-clamp-2 font-semibold text-gray-900 dark:text-gray-100">
+    <div class="flex min-h-0 min-w-0 flex-1 flex-col justify-center border-t border-gray-100 px-3 py-3 dark:border-gray-700 sm:border-l sm:border-t-0 sm:py-2">
+        <p class="font-semibold text-gray-900 dark:text-gray-100">
             {{ $viewerProfile?->full_name ?? $viewerUser?->name ?? 'Member' }}
         </p>
-        <p class="mt-1 line-clamp-1 text-xs text-gray-500 dark:text-gray-400">
+        <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
             {{ __('who_viewed.viewed_at', ['time' => $view->created_at->diffForHumans()]) }}
         </p>
     </div>
-    <div class="flex h-full w-[8.5rem] shrink-0 flex-col justify-center gap-1.5 border-l border-gray-100 bg-gray-50/95 px-2.5 py-2 dark:border-gray-700 dark:bg-gray-900/50 sm:w-36">
-        <p class="line-clamp-2 text-[10px] font-medium leading-snug text-gray-600 dark:text-gray-400">
+    <div class="flex w-full shrink-0 flex-col justify-center gap-2 border-t border-gray-100 bg-gray-50/95 px-3 py-3 dark:border-gray-700 dark:bg-gray-900/50 sm:h-full sm:w-36 sm:border-l sm:border-t-0 sm:px-2.5 sm:py-2">
+        <p class="text-[10px] font-medium leading-snug text-gray-600 dark:text-gray-400">
             {{ __('who_viewed.full_card_cta_hint') }}
         </p>
         <a href="{{ $profileUrl }}" @class([

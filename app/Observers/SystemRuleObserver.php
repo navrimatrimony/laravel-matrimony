@@ -3,7 +3,6 @@
 namespace App\Observers;
 
 use App\Models\SystemRule;
-use App\Services\MatchingEngine;
 
 class SystemRuleObserver
 {
@@ -23,7 +22,6 @@ class SystemRuleObserver
         if ($key === '' || ! str_starts_with($key, 'matching')) {
             return;
         }
-
-        MatchingEngine::forgetRulesCache();
+        // Matching rules cache invalidation removed after single-engine consolidation.
     }
 }

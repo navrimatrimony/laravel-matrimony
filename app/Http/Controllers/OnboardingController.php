@@ -10,6 +10,7 @@ use App\Services\Admin\AdminSettingService;
 use App\Services\EducationService;
 use App\Services\MutationService;
 use App\Services\ProfileLifecycleService;
+use App\Services\ReferralService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -52,6 +53,7 @@ class OnboardingController extends Controller
             'totalSteps' => self::LAST_STEP,
             'onboardingDisplayCurrent' => $step - 1,
             'onboardingDisplayTotal' => self::ONBOARDING_DISPLAY_TOTAL,
+            'referredRegistrationWelcome' => app(ReferralService::class)->registrationWelcomeBanner($user),
         ];
 
         switch ($step) {

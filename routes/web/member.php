@@ -11,6 +11,7 @@ use App\Http\Controllers\IntakeController;
 use App\Http\Controllers\InterestController;
 use App\Http\Controllers\Internal\CurrentLocationController;
 use App\Http\Controllers\MatchController;
+use App\Http\Controllers\MemberReferralController;
 use App\Http\Controllers\MatrimonyProfileController;
 use App\Http\Controllers\MatrimonyVerificationEmailController;
 use App\Http\Controllers\MediationInboxController;
@@ -52,6 +53,8 @@ Route::middleware(['auth', \App\Http\Middleware\EnforceCardOnboarding::class])->
         ->name('matrimony.api.occupations.create');
 
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
+    Route::get('/referrals', [MemberReferralController::class, 'index'])->name('referrals.index');
+    Route::post('/referrals/welcome/dismiss', [MemberReferralController::class, 'dismissRegistrationWelcome'])->name('referrals.welcome.dismiss');
 
     Route::get('/test/payment/success/{planId}', [SubscriptionController::class, 'testPayuSuccessSimulate'])
         ->whereNumber('planId')
@@ -122,6 +125,11 @@ Route::middleware(['auth', \App\Http\Middleware\EnforceCardOnboarding::class])->
 
     Route::get('/settings/security', [UserSettingsController::class, 'security'])
         ->name('user.settings.security');
+
+    Route::get('/settings/notifications', [UserSettingsController::class, 'notifications'])
+        ->name('user.settings.notifications');
+    Route::post('/settings/notifications', [UserSettingsController::class, 'updateNotifications'])
+        ->name('user.settings.notifications.update');
 
     Route::get('/settings/my-plan', [UserPlanController::class, 'settingsHub'])->name('user.settings.my-plan');
     Route::get('/my-plan', [UserPlanController::class, 'show'])->name('user.my-plan');

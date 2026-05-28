@@ -41,6 +41,8 @@ class User extends Authenticatable implements MustVerifyEmail
     protected $fillable = [
         'name',
         'email',
+        'preferred_locale',
+        'notification_preferences',
         'plan',
         'plan_expires_at',
         'plan_status',
@@ -55,6 +57,9 @@ class User extends Authenticatable implements MustVerifyEmail
         'mobile_verified_at',
         'registering_for',
         'referral_code',
+        'referral_rewards_frozen_at',
+        'referral_code_disabled_at',
+        'referral_monthly_cap_override',
     ];
 
     /*
@@ -78,6 +83,10 @@ class User extends Authenticatable implements MustVerifyEmail
         'plan_started_at' => 'datetime',
         'dob' => 'date',
         'mobile_verified_at' => 'datetime',
+        'referral_rewards_frozen_at' => 'datetime',
+        'referral_code_disabled_at' => 'datetime',
+        'referral_monthly_cap_override' => 'integer',
+        'notification_preferences' => 'array',
         'last_seen_at' => 'datetime',
         'last_inactive_reminder_sent_at' => 'datetime',
         'last_new_matches_digest_sent_at' => 'datetime',
@@ -176,6 +185,16 @@ class User extends Authenticatable implements MustVerifyEmail
         }
 
         return strtoupper(substr(bin2hex(random_bytes(8)), 0, 12));
+    }
+
+    public function isReferralRewardsFrozen(): bool
+    {
+        return $this->referral_rewards_frozen_at !== null;
+    }
+
+    public function isReferralCodeDisabled(): bool
+    {
+        return $this->referral_code_disabled_at !== null;
     }
 
     /**

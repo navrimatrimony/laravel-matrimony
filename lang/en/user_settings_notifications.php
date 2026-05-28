@@ -1,0 +1,26 @@
+<?php
+
+return [
+    'title' => 'Notification preferences',
+    'intro' => 'Choose which optional emails and engagement reminders you receive. Important in-app alerts (messages, interests, plan expiry) always appear in your notification inbox.',
+    'back_to_settings' => 'Back to settings',
+    'card_title' => 'Notification preferences',
+    'card_intro' => 'Turn email alerts and match digests on or off.',
+    'inbox_card_intro' => 'View and mark in-app notifications as read.',
+    'in_app_heading' => 'In-app notifications',
+    'in_app_note' => 'Alerts for messages, contact requests, referrals, and plan updates always show in your inbox when something happens on your account.',
+    'open_inbox' => 'Open notification inbox',
+    'email_heading' => 'Email copies',
+    'email_alerts_label' => 'Send me email copies of notifications',
+    'email_alerts_help' => 'When enabled, you also receive an email for alerts that appear in your inbox (same language as your profile preference).',
+    'no_email' => 'Add and verify an email on Account & Security to receive email copies.',
+    'platform_mail_off' => 'Email notifications are temporarily disabled site-wide. In-app alerts still work.',
+    'engagement_heading' => 'Engagement reminders',
+    'engagement_help' => 'Optional nudges when you have been away or when new high-score matches are available.',
+    'inactive_label' => 'Inactive account reminders',
+    'inactive_help' => 'A gentle reminder if you have not visited for a while (in-app, and WhatsApp if configured).',
+    'digest_label' => 'New matches digest',
+    'digest_help' => 'Periodic summary when several strong new matches are waiting for you.',
+    'platform_inactive_off' => 'Inactive reminders are disabled site-wide.',
+    'platform_digest_off' => 'New matches digests are disabled site-wide.',
+];

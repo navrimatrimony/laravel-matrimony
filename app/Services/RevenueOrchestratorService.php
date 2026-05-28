@@ -70,7 +70,11 @@ class RevenueOrchestratorService
      */
     public function finalizePurchase(User $user, Plan $plan, Subscription $subscription): array
     {
+        if (! Plan::isFreeCatalogSlug((string) $plan->slug)) {
+            $this->referrals->markReferredCheckoutBonusConsumed($user);
+        }
         $this->referrals->applyPurchaseRewardIfEligible($user, $plan);
+        $this->referrals->claimPendingReferralRewards($user);
 
         $fresh = $subscription->fresh();
         $meta = $fresh && is_array($fresh->meta) ? $fresh->meta : [];

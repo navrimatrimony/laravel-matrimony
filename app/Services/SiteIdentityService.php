@@ -13,6 +13,8 @@ class SiteIdentityService
 
     public const TEXT_KEYS = [
         'site_name',
+        'site_name_mr',
+        'site_name_en',
         'site_tagline',
         'footer_copyright_text',
         'company_name',
@@ -40,6 +42,8 @@ class SiteIdentityService
 
     public const DEFAULTS = [
         'site_name' => 'नवरी मिळे नवऱ्याला',
+        'site_name_mr' => 'नवरी मिळे नवऱ्याला',
+        'site_name_en' => 'Navri Mile Navryala',
         'site_tagline' => 'Navri Mile Navryala | Marathi Matrimony',
         'logo_light' => 'images/my-logo-light-mode.png',
         'logo_dark' => 'images/my-logo.png',
@@ -77,8 +81,43 @@ class SiteIdentityService
                 $settings[$key] = $rows->get($this->settingKey($key), $default);
             }
 
-            return $settings;
+            return $this->normalizeLocalizedSiteNames($settings);
         });
+    }
+
+    /**
+     * Site display name for the active (or given) app locale — used in referral share copy, etc.
+     */
+    public function siteNameForLocale(?string $locale = null): string
+    {
+        $locale = strtolower((string) ($locale ?? app()->getLocale()));
+        $useEnglish = str_starts_with($locale, 'en');
+
+        if ($useEnglish) {
+            $en = trim((string) $this->get('site_name_en', ''));
+            if ($en !== '') {
+                return $en;
+            }
+
+            $company = trim((string) $this->get('company_name', ''));
+            if ($company !== '') {
+                return $company;
+            }
+
+            return self::DEFAULTS['site_name_en'];
+        }
+
+        $mr = trim((string) $this->get('site_name_mr', ''));
+        if ($mr !== '') {
+            return $mr;
+        }
+
+        $legacy = trim((string) $this->get('site_name', ''));
+        if ($legacy !== '') {
+            return $legacy;
+        }
+
+        return self::DEFAULTS['site_name_mr'];
     }
 
     public function get(string $key, ?string $default = null): ?string
@@ -108,8 +147,40 @@ class SiteIdentityService
             return;
         }
 
-        AdminSetting::setValue($this->settingKey($key), trim((string) $value));
+        $value = trim((string) $value);
+        AdminSetting::setValue($this->settingKey($key), $value);
+
+        if ($key === 'site_name_mr') {
+            AdminSetting::setValue($this->settingKey('site_name'), $value);
+        }
+
         Cache::forget(self::CACHE_KEY);
+    }
+
+    /**
+     * @param  array<string, string|null>  $settings
+     * @return array<string, string|null>
+     */
+    private function normalizeLocalizedSiteNames(array $settings): array
+    {
+        $legacy = trim((string) ($settings['site_name'] ?? ''));
+        $mr = trim((string) ($settings['site_name_mr'] ?? ''));
+        $en = trim((string) ($settings['site_name_en'] ?? ''));
+
+        if ($mr === '' && $legacy !== '') {
+            $settings['site_name_mr'] = $legacy;
+            $mr = $legacy;
+        }
+
+        if ($en === '') {
+            $settings['site_name_en'] = self::DEFAULTS['site_name_en'];
+        }
+
+        if ($legacy === '' && $mr !== '') {
+            $settings['site_name'] = $mr;
+        }
+
+        return $settings;
     }
 
     public function setImage(string $key, UploadedFile $file): string

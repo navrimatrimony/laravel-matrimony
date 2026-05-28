@@ -63,7 +63,7 @@
 
             <!-- Page Content -->
             <!-- Page Content -->
-				<main class="{{ $showMobileStickyNav ? 'pb-16 md:pb-0' : '' }}">
+				<main class="{{ $showMobileStickyNav ? 'pb-24 md:pb-0' : '' }}">
                 @include('partials.laravel-validation-payload')
                 {{-- Flash messages: single place, dismissible + auto-hide (see resources/js/app.js) --}}
 @php($memberNotice = session('member_notice'))

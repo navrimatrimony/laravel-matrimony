@@ -81,11 +81,19 @@
                 </p>
             </a>
 
-            <a href="{{ route('notifications.index') }}"
-               class="block bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6 hover:shadow-md transition md:col-span-2 lg:col-span-1">
-                <div class="text-lg font-semibold text-gray-900 dark:text-gray-100">{{ __('Manage Notifications') }}</div>
+            <a href="{{ route('user.settings.notifications') }}"
+               class="block bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6 hover:shadow-md transition">
+                <div class="text-lg font-semibold text-gray-900 dark:text-gray-100">{{ __('user_settings_notifications.card_title') }}</div>
                 <p class="mt-2 text-sm text-gray-600 dark:text-gray-400">
-                    {{ __('Open notifications and mark them as read.') }}
+                    {{ __('user_settings_notifications.card_intro') }}
+                </p>
+            </a>
+
+            <a href="{{ route('notifications.index') }}"
+               class="block bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6 hover:shadow-md transition">
+                <div class="text-lg font-semibold text-gray-900 dark:text-gray-100">{{ __('notifications.page_title') }}</div>
+                <p class="mt-2 text-sm text-gray-600 dark:text-gray-400">
+                    {{ __('user_settings_notifications.inbox_card_intro') }}
                 </p>
             </a>
         </div>

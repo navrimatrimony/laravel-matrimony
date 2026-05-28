@@ -2,9 +2,12 @@
 
 namespace Tests\Feature;
 
+use App\Models\Interest;
 use App\Models\MasterGender;
 use App\Models\MatrimonyProfile;
+use App\Models\ProfileView;
 use App\Models\User;
+use App\Services\Matching\MatchingService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -148,6 +151,111 @@ class MatchingTest extends TestCase
             ->getContent();
 
         $this->assertSame(1, substr_count($html, $dupName));
+    }
+
+    public function test_perfect_tab_puts_viewed_profiles_after_unviewed(): void
+    {
+        [$maleGid, $femaleGid] = $this->seedGenders();
+
+        $userA = User::factory()->create();
+        $userB = User::factory()->create();
+        $userC = User::factory()->create();
+
+        $seeker = MatrimonyProfile::factory()->create([
+            'user_id' => $userA->id,
+            'gender_id' => $maleGid,
+            'lifecycle_state' => 'active',
+            'is_suspended' => false,
+            'is_showcase' => false,
+            'date_of_birth' => now()->subYears(28),
+            'full_name' => 'Seeker Male',
+        ]);
+
+        $unviewed = MatrimonyProfile::factory()->create([
+            'user_id' => $userB->id,
+            'gender_id' => $femaleGid,
+            'lifecycle_state' => 'active',
+            'is_suspended' => false,
+            'is_showcase' => false,
+            'date_of_birth' => now()->subYears(26),
+            'full_name' => 'Unviewed Candidate',
+            'updated_at' => now()->subDay(),
+        ]);
+
+        $viewed = MatrimonyProfile::factory()->create([
+            'user_id' => $userC->id,
+            'gender_id' => $femaleGid,
+            'lifecycle_state' => 'active',
+            'is_suspended' => false,
+            'is_showcase' => false,
+            'date_of_birth' => now()->subYears(27),
+            'full_name' => 'Viewed Candidate',
+            'updated_at' => now(),
+        ]);
+
+        ProfileView::query()->create([
+            'viewer_profile_id' => $seeker->id,
+            'viewed_profile_id' => $viewed->id,
+        ]);
+
+        Interest::query()->create([
+            'sender_profile_id' => $seeker->id,
+            'receiver_profile_id' => $viewed->id,
+            'status' => 'pending',
+        ]);
+
+        $rows = app(MatchingService::class)->findMatchesForTab($seeker, MatchingService::TAB_PERFECT, 20);
+        $ids = $rows->map(fn (array $row) => (int) $row['profile']->id)->values()->all();
+
+        $this->assertContains($unviewed->id, $ids);
+        $this->assertContains($viewed->id, $ids);
+        $this->assertLessThan(array_search($viewed->id, $ids, true), array_search($unviewed->id, $ids, true));
+    }
+
+    public function test_perfect_tab_excludes_opened_without_interest_second_chance_pool(): void
+    {
+        [$maleGid, $femaleGid] = $this->seedGenders();
+
+        $userA = User::factory()->create();
+        $userB = User::factory()->create();
+
+        $seeker = MatrimonyProfile::factory()->create([
+            'user_id' => $userA->id,
+            'gender_id' => $maleGid,
+            'lifecycle_state' => 'active',
+            'is_suspended' => false,
+            'is_showcase' => false,
+            'date_of_birth' => now()->subYears(28),
+            'full_name' => 'Seeker Male',
+        ]);
+
+        $secondChance = MatrimonyProfile::factory()->create([
+            'user_id' => $userB->id,
+            'gender_id' => $femaleGid,
+            'lifecycle_state' => 'active',
+            'is_suspended' => false,
+            'is_showcase' => false,
+            'date_of_birth' => now()->subYears(26),
+            'full_name' => 'Second Chance Only',
+        ]);
+
+        ProfileView::query()->create([
+            'viewer_profile_id' => $seeker->id,
+            'viewed_profile_id' => $secondChance->id,
+        ]);
+
+        $perfectIds = app(MatchingService::class)
+            ->findMatchesForTab($seeker, MatchingService::TAB_PERFECT, 20)
+            ->map(fn (array $row) => (int) $row['profile']->id)
+            ->all();
+
+        $secondIds = app(MatchingService::class)
+            ->findMatchesForTab($seeker, MatchingService::TAB_SECOND_CHANCE, 20)
+            ->map(fn (array $row) => (int) $row['profile']->id)
+            ->all();
+
+        $this->assertNotContains($secondChance->id, $perfectIds);
+        $this->assertContains($secondChance->id, $secondIds);
     }
 
     public function test_show_matches_forbidden_for_other_user(): void

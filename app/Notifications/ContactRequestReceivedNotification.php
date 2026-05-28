@@ -29,19 +29,26 @@ class ContactRequestReceivedNotification extends Notification
 
     public function toMail(object $notifiable): MailMessage
     {
-        return MatrimonyMailTemplate::fromToArray($this->toArray($notifiable));
+        return $this->matrimonyMailFromPayload($this->toArray($notifiable), $notifiable);
     }
 
     public function toArray(object $notifiable): array
     {
         $sender = $this->contactRequest->sender;
-        $name = $sender->matrimonyProfile->full_name ?? $sender->name ?? 'Someone';
+        $name = trim((string) ($sender?->matrimonyProfile?->full_name ?? $sender?->name ?? ''));
+        if ($name === '') {
+            $name = __('notifications.someone');
+        }
+
         return NotificationMarathiPayload::withMessage([
             'type' => 'contact_request_received',
-            'message' => "{$name} requested your contact.",
+            'message' => __('notifications.contact_request_received_message', ['name' => $name]),
             'contact_request_id' => $this->contactRequest->id,
             'sender_id' => $this->contactRequest->sender_id,
-            'sender_profile_id' => (int) ($sender->matrimonyProfile?->id ?? 0) ?: null,
+            'sender_profile_id' => (int) ($sender?->matrimonyProfile?->id ?? 0) ?: null,
+            'sender_name' => $name,
+            'mail_action_url' => route('contact-inbox.index'),
+            'mail_action_text' => __('notifications.open_contact_inbox'),
         ]);
     }
 }

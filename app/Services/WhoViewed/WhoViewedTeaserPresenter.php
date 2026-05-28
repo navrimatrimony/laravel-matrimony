@@ -8,7 +8,7 @@ use App\Models\ProfileView;
 use App\Services\Image\ProfilePhotoUrlService;
 use App\Services\Interest\ReceivedInterestTeaserPolicy;
 use App\Services\Location\LocationService;
-use App\Services\MatchingEngine;
+use App\Services\RuleEngineService;
 use App\Services\Profile\ProfileCanonicalResidenceService;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Schema;
@@ -22,7 +22,7 @@ final class WhoViewedTeaserPresenter
     public function __construct(
         private LocationService $locationService,
         private ProfilePhotoUrlService $profilePhotoUrlService,
-        private MatchingEngine $matchingEngine,
+        private RuleEngineService $ruleEngine,
     ) {}
 
     /**
@@ -37,6 +37,7 @@ final class WhoViewedTeaserPresenter
      *   blur_photo_class: string,
      *   accent_line: ?string,
      *   match_line: ?string,
+     *   interest_hint: string,
      * }
      */
     public function present(ProfileView $view, array $policy, array $context = []): array
@@ -58,6 +59,7 @@ final class WhoViewedTeaserPresenter
                 'blur_photo_class' => $blurPhotoClass,
                 'accent_line' => null,
                 'match_line' => null,
+                'interest_hint' => __('who_viewed.teaser_interest_hint_person'),
             ];
         }
 
@@ -78,6 +80,7 @@ final class WhoViewedTeaserPresenter
      *   blur_photo_class: string,
      *   accent_line: ?string,
      *   match_line: ?string,
+     *   interest_hint: string,
      * }
      */
     public function presentFromMatrimonyProfile(MatrimonyProfile $viewer, ?Carbon $relevantAt, array $policy, array $context = []): array
@@ -173,6 +176,7 @@ final class WhoViewedTeaserPresenter
             'blur_photo_class' => $blurPhotoClass,
             'accent_line' => $this->repeatViewAccentLine($policy, $context),
             'match_line' => $matchLine,
+            'interest_hint' => $this->interestHintLine($viewer),
         ];
     }
 
@@ -211,7 +215,7 @@ final class WhoViewedTeaserPresenter
                 $walk->loadMissing('parent');
                 $wt = strtolower((string) ($walk->type ?? ''));
                 if (in_array($wt, ['city', 'taluka', 'district'], true)) {
-                    return $walk->localizedName();
+                    return $this->formatHeadlinePlaceByType($walk);
                 }
                 $walk = $walk->parent;
                 $guard++;
@@ -224,7 +228,7 @@ final class WhoViewedTeaserPresenter
         }
 
         if ($h['taluka'] !== null) {
-            return $h['taluka']->localizedName();
+            return $this->formatHeadlinePlaceByType($h['taluka']);
         }
 
         if ($type === 'city') {
@@ -248,6 +252,30 @@ final class WhoViewedTeaserPresenter
         }
 
         return null;
+    }
+
+    private function formatHeadlinePlaceByType(Location $location): string
+    {
+        $label = trim((string) $location->localizedName());
+        if ($label === '') {
+            return $label;
+        }
+
+        $type = strtolower((string) ($location->type ?? ''));
+        if ($type !== 'taluka') {
+            return $label;
+        }
+
+        $suffix = trim((string) __('who_viewed.teaser_taluka_suffix'));
+        if ($suffix === '') {
+            return $label;
+        }
+
+        if (preg_match('/\b'.preg_quote($suffix, '/').'\b/iu', $label) === 1) {
+            return $label;
+        }
+
+        return $label.' '.$suffix;
     }
 
     private function repeatViewAccentLine(array $policy, array $context): ?string
@@ -279,7 +307,7 @@ final class WhoViewedTeaserPresenter
             return null;
         }
         $min = (int) ($policy['match_teaser_min_score'] ?? 75);
-        $payload = $this->matchingEngine->scoreBetweenProfiles($owner, $viewer);
+        $payload = $this->ruleEngine->getMatchResultForProfiles($owner, $viewer);
         $score = (int) ($payload['score'] ?? 0);
         if ($score < $min) {
             return null;
@@ -302,6 +330,28 @@ final class WhoViewedTeaserPresenter
         }
 
         return $never ? __('who_viewed.courtesy_a_girl') : __('who_viewed.courtesy_a_woman');
+    }
+
+    private function interestHintLine(MatrimonyProfile $viewer): string
+    {
+        $viewer->loadMissing(['maritalStatus', 'gender']);
+        $mKey = strtolower(trim((string) ($viewer->maritalStatus?->key ?? '')));
+        $gKey = strtolower(trim((string) ($viewer->gender?->key ?? '')));
+        $never = ($mKey === 'never_married');
+
+        if ($gKey === 'female') {
+            return $never
+                ? __('who_viewed.teaser_interest_hint_girl')
+                : __('who_viewed.teaser_interest_hint_woman');
+        }
+
+        if ($gKey === 'male') {
+            return $never
+                ? __('who_viewed.teaser_interest_hint_boy')
+                : __('who_viewed.teaser_interest_hint_man');
+        }
+
+        return __('who_viewed.teaser_interest_hint_person');
     }
 
     private function blurTailwindClasses(string $strength): string

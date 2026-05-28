@@ -81,6 +81,9 @@ return [
     'monetization_plan_expires' => '{1} Your plan renews or ends in :days day.|[2,*] Your plan renews or ends in :days days.',
     'monetization_wallet_balance' => 'Wallet balance: ₹:amount (used only when you approve an extra paid action).',
     'monetization_referral_hint' => 'Invite friends — share your link:',
+    'referral_pending_claim_title' => 'Referral reward waiting for you',
+    'referral_pending_claim_body' => '{1} Your invitee upgraded, but you need an active paid plan to receive :count pending reward.|[2,*] Your invitees upgraded, but you need an active paid plan to receive :count pending rewards.',
+    'referral_pending_claim_cta' => 'View plans & claim reward',
 
     'smart_recommendations_title' => 'Suggested for you',
     'smart_recommendations_subtitle' => 'Ranked by match score including your activity (same rules as search).',

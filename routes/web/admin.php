@@ -62,6 +62,7 @@ use App\Http\Controllers\Internal\Admin\LocationSuggestionAdminController;
 use App\Http\Controllers\Internal\Admin\OpenPlaceSuggestionAdminController;
 use App\Http\Controllers\PaymentController;
 use App\Http\Controllers\PaymentDisputeController;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -490,6 +491,19 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
     Route::get('referrals', [ReferralController::class, 'index'])->name('referrals.index');
     Route::get('referrals/export', [ReferralController::class, 'exportReport'])->name('referrals.export');
     Route::post('referrals/audit/override', [ReferralController::class, 'manualOverride'])->name('referrals.audit.override');
+    Route::post('referrals/review/{referral}/approve', [ReferralController::class, 'approveReview'])->name('referrals.review.approve');
+    Route::post('referrals/review/{referral}/reject', [ReferralController::class, 'rejectReview'])->name('referrals.review.reject');
+    Route::post('referrals/supreme/{user}/freeze', [ReferralController::class, 'freezeReferrer'])->name('referrals.supreme.freeze');
+    Route::post('referrals/supreme/{user}/unfreeze', [ReferralController::class, 'unfreezeReferrer'])->name('referrals.supreme.unfreeze');
+    Route::post('referrals/supreme/{user}/disable-code', [ReferralController::class, 'disableReferralCode'])->name('referrals.supreme.disable-code');
+    Route::post('referrals/supreme/{user}/enable-code', [ReferralController::class, 'enableReferralCode'])->name('referrals.supreme.enable-code');
+    Route::post('referrals/supreme/{user}/regenerate-code', [ReferralController::class, 'regenerateReferralCode'])->name('referrals.supreme.regenerate-code');
+    Route::post('referrals/supreme/{user}/cap-override', [ReferralController::class, 'saveReferrerCapOverride'])->name('referrals.supreme.cap-override');
+    Route::post('referrals/{referral}/force-pending', [ReferralController::class, 'forcePendingClaim'])->name('referrals.force-pending');
+    Route::post('referrals/{referral}/cancel-pending', [ReferralController::class, 'cancelPendingClaim'])->name('referrals.cancel-pending');
+    Route::post('referrals/{referral}/reassign', [ReferralController::class, 'reassignReferral'])->name('referrals.reassign');
+    Route::post('referrals/{referral}/partial-reward', [ReferralController::class, 'partialReward'])->name('referrals.partial-reward');
+    Route::post('referrals/{referral}/revoke-reward', [ReferralController::class, 'revokeAppliedReward'])->name('referrals.revoke-reward');
     Route::post('referrals/engine', [ReferralController::class, 'saveEngine'])->name('referrals.engine.save');
     Route::post('referrals/rules', [ReferralController::class, 'saveRule'])->name('referrals.rules.save');
 
@@ -537,7 +551,11 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
     Route::post('/field-registry/{field}/unarchive', [AdminFieldRegistryController::class, 'unarchiveFieldRegistry'])->name('field-registry.unarchive');
 
     Route::get('/notifications', [AdminUserNotificationsController::class, 'userNotificationsIndex'])->name('notifications.index');
-    Route::get('/notifications/user', [AdminUserNotificationsController::class, 'userNotificationsShow'])->name('notifications.user.show');
+    Route::get('/notifications/user', function (Request $request) {
+        return redirect()->route('admin.notifications.index', array_filter([
+            'user_id' => $request->query('user_id'),
+        ]));
+    })->name('notifications.user.show');
 
     Route::get('/homepage-settings', [HomepageSettingsController::class, 'index'])->name('homepage-settings.index');
     Route::post('/homepage-settings', [HomepageSettingsController::class, 'update'])->name('homepage-settings.update');

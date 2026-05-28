@@ -9,6 +9,9 @@ class ReferralRewardRule extends Model
     protected $fillable = [
         'plan_slug',
         'is_active',
+        'referred_checkout_excluded',
+        'referred_checkout_percent_off',
+        'referred_checkout_extra_days',
         'bonus_days',
         'chat_send_limit_bonus',
         'contact_view_limit_bonus',
@@ -19,6 +22,9 @@ class ReferralRewardRule extends Model
 
     protected $casts = [
         'is_active' => 'boolean',
+        'referred_checkout_excluded' => 'boolean',
+        'referred_checkout_percent_off' => 'integer',
+        'referred_checkout_extra_days' => 'integer',
         'bonus_days' => 'integer',
         'chat_send_limit_bonus' => 'integer',
         'contact_view_limit_bonus' => 'integer',

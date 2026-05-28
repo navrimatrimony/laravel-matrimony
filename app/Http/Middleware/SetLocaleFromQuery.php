@@ -41,6 +41,11 @@ class SetLocaleFromQuery
 
         \App\Models\Translation::loadIntoTranslator($locale);
 
+        $user = $request->user();
+        if ($user !== null && in_array($locale, self::ALLOWED, true)) {
+            $user->forceFill(['preferred_locale' => $locale])->saveQuietly();
+        }
+
         return $next($request);
     }
 }

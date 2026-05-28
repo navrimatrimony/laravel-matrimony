@@ -57,6 +57,7 @@
         || request()->routeIs('blocks.index')
         || request()->routeIs('contact-inbox.*')
         || request()->routeIs('shortlist.*')
+        || request()->routeIs('referrals.*')
         || request()->routeIs('matrimony.verification.*')
         || request()->routeIs('matrimony.profile.verification.*')
         || $isOwnProfileShow) {
@@ -181,6 +182,12 @@
                         <x-dropdown-link :href="route('shortlist.index')" class="hover:bg-gray-100 transition rounded-md">
                             {{ __('nav.shortlist') }}
                         </x-dropdown-link>
+
+                        @if (config('referral.enabled', true))
+                            <x-dropdown-link :href="route('referrals.index')" class="hover:bg-gray-100 transition rounded-md">
+                                {{ __('nav.my_referrals') }}
+                            </x-dropdown-link>
+                        @endif
 
                         <x-dropdown-link :href="route('intake.index')" class="hover:bg-gray-100 transition rounded-md">
                             {{ __('nav.my_biodata_uploads') }}
@@ -419,6 +426,12 @@
                 <x-responsive-nav-link :href="route('shortlist.index')">
                     {{ __('nav.shortlist') }}
                 </x-responsive-nav-link>
+
+                @if (config('referral.enabled', true))
+                    <x-responsive-nav-link :href="route('referrals.index')">
+                        {{ __('nav.my_referrals') }}
+                    </x-responsive-nav-link>
+                @endif
 
                 <x-responsive-nav-link :href="route('intake.index')">
                     {{ __('nav.my_biodata_uploads') }}

@@ -36,4 +36,5 @@ return [
     'log_out' => 'Log Out',
     'admin_section' => 'Administration',
     'admin_panel' => 'Admin panel',
+    'my_referrals' => 'My referrals',
 ];

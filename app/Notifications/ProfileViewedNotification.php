@@ -40,7 +40,7 @@ class ProfileViewedNotification extends Notification
 
     public function toMail(object $notifiable): MailMessage
     {
-        return MatrimonyMailTemplate::fromToArray($this->toArray($notifiable));
+        return $this->matrimonyMailFromPayload($this->toArray($notifiable), $notifiable);
     }
 
     public function toArray(object $notifiable): array

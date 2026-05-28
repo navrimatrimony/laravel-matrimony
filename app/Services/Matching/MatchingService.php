@@ -24,6 +24,8 @@ class MatchingService
 {
     public function __construct(
         protected MatchBoostService $matchBoost,
+        protected MatchingConfigService $matchingConfig,
+        protected MatchingBehaviorScoringService $behaviorScoring,
     ) {}
 
     public const WEIGHT_AGE = 20;
@@ -64,8 +66,6 @@ class MatchingService
             self::TAB_DAILY,
             self::TAB_NEAR,
             self::TAB_FRESH,
-            self::TAB_VIEWED,
-            self::TAB_INTERESTED,
             self::TAB_SECOND_CHANCE,
             self::TAB_CURATED,
         ];
@@ -87,6 +87,9 @@ class MatchingService
     /** @var array<string, array<string, mixed>> */
     private array $componentsCache = [];
 
+    /** @var array<int, list<int>> */
+    private array $seekerViewedIdsCache = [];
+
     /**
      * @param  bool  $withExplain  When true, each row includes an `explain` array (admin preview / JSON API).
      * @return Collection<int, array{profile: MatrimonyProfile, score: int, base_score: int, reasons: list<string>, explain?: list<array{reason: string, impact: int}>}>
@@ -97,7 +100,9 @@ class MatchingService
     }
 
     /**
-     * Tab-specific lists reuse the same scoring and preference gates; only the candidate pool and ordering differ.
+     * Tab-specific pools and ordering: Perfect (new-to-you), Daily (date shuffle), Near (local pool),
+     * Fresh (recently updated), Second chance (viewed, no interest), Curated (boost lift). Viewed profiles
+     * sink to the bottom on every tab except Second chance.
      *
      * @param  bool  $withExplain  When true, each row includes `explain` from {@see MatchingExplainService}.
      * @return Collection<int, array{profile: MatrimonyProfile, score: int, base_score: int, reasons: list<string>, explain?: list<array{reason: string, impact: int}>}>
@@ -122,12 +127,16 @@ class MatchingService
             return collect();
         }
 
+        $poolLimit = max(1, (int) config('matching.candidate_pool_limit', 200));
+
         $candidates = match ($tab) {
             self::TAB_VIEWED => $this->candidatesWhoViewedMe($profile, $oppositeKey),
             self::TAB_INTERESTED => $this->candidatesInterestedInMe($profile, $oppositeKey),
             self::TAB_SECOND_CHANCE => $this->candidatesSecondChance($profile, $oppositeKey),
+            self::TAB_PERFECT => $this->candidatesPerfectForYou($profile, $oppositeKey, $poolLimit),
+            self::TAB_NEAR => $this->candidatesNearMe($profile, $oppositeKey, $poolLimit),
             default => $this->baseCandidateQuery($profile, $oppositeKey)
-                ->limit(max(1, (int) config('matching.candidate_pool_limit', 200)))
+                ->limit($poolLimit)
                 ->get(),
         };
 
@@ -164,6 +173,9 @@ class MatchingService
             $score = ($seekerUser && $candidateUser)
                 ? $this->matchBoost->applyBoost($seekerUser, $candidateUser, $baseScore)
                 : $baseScore;
+            if ($seekerUser && $candidateUser) {
+                $score = max(0, min(100, $score + $this->behaviorScoring->scoreAdjustment($seekerUser, $candidate)));
+            }
             $reasons = $this->explainScore($profile, $candidate);
 
             $row = [
@@ -176,6 +188,13 @@ class MatchingService
                 $row['explain'] = app(MatchingExplainService::class)->explainPair($profile, $candidate);
             }
             $out->push($row);
+        }
+
+        if ($tab === self::TAB_CURATED && $out->isNotEmpty()) {
+            $boosted = $out->filter(static fn (array $r): bool => (int) ($r['score'] ?? 0) > (int) ($r['base_score'] ?? 0));
+            if ($boosted->count() >= min(8, max(1, (int) ceil($limit / 2)))) {
+                $out = $boosted->values();
+            }
         }
 
         $sorted = $this->applyTabOrdering($out, $tab, $profile)->values();
@@ -342,10 +361,15 @@ class MatchingService
      *
      * @return Collection<int, MatrimonyProfile>
      */
-    private function candidatesSecondChance(MatrimonyProfile $profile, string $oppositeGenderKey): Collection
+    /**
+     * Viewed by seeker but interest not sent — belongs on Second chance, not Perfect.
+     *
+     * @return list<int>
+     */
+    private function secondChanceCandidateIds(MatrimonyProfile $profile): array
     {
         if (! Schema::hasTable('profile_views')) {
-            return collect();
+            return [];
         }
 
         $viewedIds = ProfileView::query()
@@ -359,21 +383,30 @@ class MatchingService
             ->all();
 
         if ($viewedIds === []) {
-            return collect();
+            return [];
         }
 
-        $messaged = [];
-        if (Schema::hasTable('interests')) {
-            $messaged = Interest::query()
-                ->where('sender_profile_id', $profile->id)
-                ->whereIn('receiver_profile_id', $viewedIds)
-                ->pluck('receiver_profile_id')
-                ->map(fn ($id) => (int) $id)
-                ->unique()
-                ->all();
+        if (! Schema::hasTable('interests')) {
+            return $viewedIds;
         }
 
-        $candidateIds = array_values(array_diff($viewedIds, $messaged));
+        $messaged = Interest::query()
+            ->where('sender_profile_id', $profile->id)
+            ->whereIn('receiver_profile_id', $viewedIds)
+            ->pluck('receiver_profile_id')
+            ->map(fn ($id) => (int) $id)
+            ->unique()
+            ->all();
+
+        return array_values(array_diff($viewedIds, $messaged));
+    }
+
+    /**
+     * @return Collection<int, MatrimonyProfile>
+     */
+    private function candidatesSecondChance(MatrimonyProfile $profile, string $oppositeGenderKey): Collection
+    {
+        $candidateIds = $this->secondChanceCandidateIds($profile);
         if ($candidateIds === []) {
             return collect();
         }
@@ -382,6 +415,97 @@ class MatchingService
         $this->applyBaseCandidateFilters($q, $profile, $oppositeGenderKey);
 
         return $q->get()->sortByDesc('updated_at')->values();
+    }
+
+    /**
+     * Best new matches: full pool minus profiles already opened without interest.
+     *
+     * @return Collection<int, MatrimonyProfile>
+     */
+    private function candidatesPerfectForYou(MatrimonyProfile $profile, string $oppositeGenderKey, int $poolLimit): Collection
+    {
+        $all = $this->baseCandidateQuery($profile, $oppositeGenderKey)
+            ->limit($poolLimit)
+            ->get();
+
+        $secondChance = array_flip($this->secondChanceCandidateIds($profile));
+        if ($secondChance === []) {
+            return $all;
+        }
+
+        return $all->filter(fn (MatrimonyProfile $c): bool => ! isset($secondChance[(int) $c->id]))->values();
+    }
+
+    /**
+     * Same-state / same-city candidates first; widen pool only when too few local matches.
+     *
+     * @return Collection<int, MatrimonyProfile>
+     */
+    private function candidatesNearMe(MatrimonyProfile $profile, string $oppositeGenderKey, int $poolLimit): Collection
+    {
+        $all = $this->baseCandidateQuery($profile, $oppositeGenderKey)
+            ->limit($poolLimit)
+            ->get();
+
+        $near = $all->filter(fn (MatrimonyProfile $c): bool => $this->locationProximityTier($profile, $c) >= 1)->values();
+        if ($near->count() >= min(12, max(1, (int) ceil($poolLimit / 4)))) {
+            return $near;
+        }
+
+        $nearIds = $near->pluck('id')->map(fn ($id) => (int) $id)->all();
+        $rest = $all->filter(fn (MatrimonyProfile $c): bool => ! in_array((int) $c->id, $nearIds, true))->values();
+
+        return $near->concat($rest)->values();
+    }
+
+    /**
+     * @return list<int>
+     */
+    private function seekerViewedCandidateIds(int $seekerProfileId): array
+    {
+        if (isset($this->seekerViewedIdsCache[$seekerProfileId])) {
+            return $this->seekerViewedIdsCache[$seekerProfileId];
+        }
+
+        if (! Schema::hasTable('profile_views')) {
+            return $this->seekerViewedIdsCache[$seekerProfileId] = [];
+        }
+
+        $ids = ProfileView::query()
+            ->where('viewer_profile_id', $seekerProfileId)
+            ->orderByDesc('id')
+            ->limit(800)
+            ->pluck('viewed_profile_id')
+            ->map(fn ($id) => (int) $id)
+            ->unique()
+            ->values()
+            ->all();
+
+        return $this->seekerViewedIdsCache[$seekerProfileId] = $ids;
+    }
+
+    /**
+     * @param  Collection<int, array{profile: MatrimonyProfile, score: int, base_score: int, reasons: list<string>}>  $rows
+     * @return Collection<int, array{profile: MatrimonyProfile, score: int, base_score: int, reasons: list<string>}>
+     */
+    private function moveViewedProfilesToBottom(Collection $rows, MatrimonyProfile $seeker): Collection
+    {
+        $viewedSet = array_flip($this->seekerViewedCandidateIds((int) $seeker->id));
+        if ($viewedSet === []) {
+            return $rows;
+        }
+
+        $unseen = collect();
+        $seen = collect();
+        foreach ($rows as $row) {
+            if (isset($viewedSet[(int) $row['profile']->id])) {
+                $seen->push($row);
+            } else {
+                $unseen->push($row);
+            }
+        }
+
+        return $unseen->concat($seen)->values();
     }
 
     /**
@@ -395,7 +519,7 @@ class MatchingService
         }
 
         if ($tab === self::TAB_NEAR) {
-            return $rows->sort(function (array $a, array $b) use ($profile) {
+            $rows = $rows->sort(function (array $a, array $b) use ($profile) {
                 /** @var MatrimonyProfile $pa */
                 $pa = $a['profile'];
                 /** @var MatrimonyProfile $pb */
@@ -408,10 +532,8 @@ class MatchingService
 
                 return ($b['score'] ?? 0) <=> ($a['score'] ?? 0);
             })->values();
-        }
-
-        if ($tab === self::TAB_FRESH) {
-            return $rows->sort(function (array $a, array $b) {
+        } elseif ($tab === self::TAB_FRESH) {
+            $rows = $rows->sort(function (array $a, array $b) {
                 $ua = $a['profile']->updated_at?->timestamp ?? 0;
                 $ub = $b['profile']->updated_at?->timestamp ?? 0;
                 if ($ua !== $ub) {
@@ -420,25 +542,20 @@ class MatchingService
 
                 return ($b['score'] ?? 0) <=> ($a['score'] ?? 0);
             })->values();
-        }
-
-        if ($tab === self::TAB_DAILY) {
+        } elseif ($tab === self::TAB_DAILY) {
             $dateKey = now()->toDateString();
-            $top = $rows->sortByDesc('score')->take(100)->values();
 
-            return $top->sort(function (array $a, array $b) use ($profile, $dateKey) {
-                $ha = crc32($profile->id.'|'.$dateKey.'|'.$a['profile']->id);
-                $hb = crc32($profile->id.'|'.$dateKey.'|'.$b['profile']->id);
+            $rows = $rows->sort(function (array $a, array $b) use ($profile, $dateKey) {
+                $ha = crc32($profile->id.'|'.$dateKey.'|daily|'.$a['profile']->id);
+                $hb = crc32($profile->id.'|'.$dateKey.'|daily|'.$b['profile']->id);
                 if ($ha !== $hb) {
                     return $ha <=> $hb;
                 }
 
                 return ($b['score'] ?? 0) <=> ($a['score'] ?? 0);
             })->values();
-        }
-
-        if ($tab === self::TAB_CURATED) {
-            return $rows->sort(function (array $a, array $b) {
+        } elseif ($tab === self::TAB_CURATED) {
+            $rows = $rows->sort(function (array $a, array $b) {
                 $liftA = (int) ($a['score'] ?? 0) - (int) ($a['base_score'] ?? 0);
                 $liftB = (int) ($b['score'] ?? 0) - (int) ($b['base_score'] ?? 0);
                 if ($liftA !== $liftB) {
@@ -447,9 +564,25 @@ class MatchingService
 
                 return ($b['score'] ?? 0) <=> ($a['score'] ?? 0);
             })->values();
+        } elseif ($tab === self::TAB_SECOND_CHANCE) {
+            $rows = $rows->sort(function (array $a, array $b) {
+                $ua = $a['profile']->updated_at?->timestamp ?? 0;
+                $ub = $b['profile']->updated_at?->timestamp ?? 0;
+                if ($ua !== $ub) {
+                    return $ub <=> $ua;
+                }
+
+                return ($b['score'] ?? 0) <=> ($a['score'] ?? 0);
+            })->values();
+        } else {
+            $rows = $rows->sortByDesc('score')->values();
         }
 
-        return $rows->sortByDesc('score')->values();
+        if ($tab !== self::TAB_SECOND_CHANCE) {
+            $rows = $this->moveViewedProfilesToBottom($rows, $profile);
+        }
+
+        return $rows;
     }
 
     private function locationProximityTier(MatrimonyProfile $seeker, MatrimonyProfile $candidate): int
@@ -525,10 +658,13 @@ class MatchingService
                     ->where('date_of_birth', '>=', now()->subYears($maxAge));
             }
 
-            if (config('matching.strict_marital_filter', false)) {
-                $maritalIds = [];
-                if (Schema::hasTable('profile_preferred_marital_statuses')) {
-                    $maritalIds = DB::table('profile_preferred_marital_statuses')
+        $this->matchingConfig->ensureDefaults();
+        $hard = $this->matchingConfig->getHardFilters();
+
+        if (($hard['marital_status']['mode'] ?? 'off') === 'strict') {
+            $maritalIds = [];
+            if (Schema::hasTable('profile_preferred_marital_statuses')) {
+                $maritalIds = DB::table('profile_preferred_marital_statuses')
                         ->where('profile_id', $profile->id)
                         ->pluck('marital_status_id')
                         ->map(fn ($id) => (int) $id)
@@ -543,7 +679,7 @@ class MatchingService
             }
         }
 
-        if (config('matching.strict_religion_filter', false)) {
+        if (($hard['religion']['mode'] ?? 'off') === 'strict') {
             $relIds = DB::table('profile_preferred_religions')
                 ->where('profile_id', $profile->id)
                 ->pluck('religion_id')
@@ -551,6 +687,19 @@ class MatchingService
                 ->all();
             if ($relIds !== []) {
                 $q->whereIn('religion_id', $relIds);
+            }
+        }
+        if (($hard['caste']['mode'] ?? 'off') === 'strict') {
+            $casteIds = [];
+            if (Schema::hasTable('profile_preferred_castes')) {
+                $casteIds = DB::table('profile_preferred_castes')
+                    ->where('profile_id', $profile->id)
+                    ->pluck('caste_id')
+                    ->map(fn ($id) => (int) $id)
+                    ->all();
+            }
+            if ($casteIds !== []) {
+                $q->whereIn('caste_id', $casteIds);
             }
         }
     }
@@ -745,6 +894,9 @@ class MatchingService
             $this->scoreOccupationPart($a, $b),
             $this->scoreCommunityPart($a, $b),
             $this->scorePreferencesPart($ab, $ba),
+            $this->scoreMaritalStatusPart($a, $b),
+            $this->scoreHeightPart($a, $b),
+            $this->scoreDietPart($a, $b),
         ];
 
         return $this->componentsCache[$cacheKey] = $parts;
@@ -763,19 +915,19 @@ class MatchingService
         $reasons = [];
 
         if ($sa === ProfilePreferenceMatchService::STATUS_MATCH && $sb === ProfilePreferenceMatchService::STATUS_MATCH) {
-            $points = self::WEIGHT_AGE;
+            $points = $this->weight('age', self::WEIGHT_AGE);
             $reasons[] = __('matching.reason_age_both_in_range');
         } elseif (
             ($sa === ProfilePreferenceMatchService::STATUS_MATCH && $sb === ProfilePreferenceMatchService::STATUS_FLEXIBLE)
             || ($sa === ProfilePreferenceMatchService::STATUS_FLEXIBLE && $sb === ProfilePreferenceMatchService::STATUS_MATCH)
         ) {
-            $points = (int) round(self::WEIGHT_AGE * 0.75);
+            $points = (int) round($this->weight('age', self::WEIGHT_AGE) * 0.75);
             $reasons[] = __('matching.reason_age_compatible');
         } elseif ($sa === ProfilePreferenceMatchService::STATUS_FLEXIBLE && $sb === ProfilePreferenceMatchService::STATUS_FLEXIBLE) {
-            $points = (int) round(self::WEIGHT_AGE * 0.6);
+            $points = (int) round($this->weight('age', self::WEIGHT_AGE) * 0.6);
             $reasons[] = __('matching.reason_age_flexible');
         } else {
-            $points = (int) round(self::WEIGHT_AGE * 0.45);
+            $points = (int) round($this->weight('age', self::WEIGHT_AGE) * 0.45);
             $reasons[] = __('matching.reason_age_partial');
         }
 
@@ -804,7 +956,7 @@ class MatchingService
         $lidA = (int) ($a->location_id ?? 0);
         $lidB = (int) ($b->location_id ?? 0);
         if ($lidA > 0 && $lidA === $lidB) {
-            return ['points' => self::WEIGHT_LOCATION, 'reasons' => [__('matching.reason_same_city')]];
+            return ['points' => $this->weight('location', self::WEIGHT_LOCATION), 'reasons' => [__('matching.reason_same_city')]];
         }
 
         $geoA = $a->residenceGeoAddressIds();
@@ -812,13 +964,13 @@ class MatchingService
         $sidA = (int) ($geoA['state_id'] ?? 0);
         $sidB = (int) ($geoB['state_id'] ?? 0);
         if ($sidA > 0 && $sidA === $sidB) {
-            return ['points' => (int) round(self::WEIGHT_LOCATION * 0.65), 'reasons' => [__('matching.reason_same_state')]];
+            return ['points' => (int) round($this->weight('location', self::WEIGHT_LOCATION) * 0.65), 'reasons' => [__('matching.reason_same_state')]];
         }
 
         $coidA = (int) ($geoA['country_id'] ?? 0);
         $coidB = (int) ($geoB['country_id'] ?? 0);
         if ($coidA > 0 && $coidA === $coidB) {
-            return ['points' => (int) round(self::WEIGHT_LOCATION * 0.35), 'reasons' => [__('matching.reason_same_country')]];
+            return ['points' => (int) round($this->weight('location', self::WEIGHT_LOCATION) * 0.35), 'reasons' => [__('matching.reason_same_country')]];
         }
 
         return ['points' => 0, 'reasons' => []];
@@ -832,23 +984,23 @@ class MatchingService
         $idA = $this->resolveEducationDegreeId($a);
         $idB = $this->resolveEducationDegreeId($b);
         if ($idA === null || $idB === null) {
-            return ['points' => (int) round(self::WEIGHT_EDUCATION * 0.35), 'reasons' => [__('matching.reason_education_unknown')]];
+            return ['points' => (int) round($this->weight('education', self::WEIGHT_EDUCATION) * 0.35), 'reasons' => [__('matching.reason_education_unknown')]];
         }
         if ($idA === $idB) {
-            return ['points' => self::WEIGHT_EDUCATION, 'reasons' => [__('matching.reason_education_match')]];
+            return ['points' => $this->weight('education', self::WEIGHT_EDUCATION), 'reasons' => [__('matching.reason_education_match')]];
         }
 
         $sortA = (int) (EducationDegree::query()->whereKey($idA)->value('sort_order') ?? 0);
         $sortB = (int) (EducationDegree::query()->whereKey($idB)->value('sort_order') ?? 0);
         $diff = abs($sortA - $sortB);
         if ($diff <= 1) {
-            return ['points' => (int) round(self::WEIGHT_EDUCATION * 0.8), 'reasons' => [__('matching.reason_education_close')]];
+            return ['points' => (int) round($this->weight('education', self::WEIGHT_EDUCATION) * 0.8), 'reasons' => [__('matching.reason_education_close')]];
         }
         if ($diff <= 3) {
-            return ['points' => (int) round(self::WEIGHT_EDUCATION * 0.55), 'reasons' => [__('matching.reason_education_similar')]];
+            return ['points' => (int) round($this->weight('education', self::WEIGHT_EDUCATION) * 0.55), 'reasons' => [__('matching.reason_education_similar')]];
         }
 
-        return ['points' => (int) round(self::WEIGHT_EDUCATION * 0.25), 'reasons' => []];
+        return ['points' => (int) round($this->weight('education', self::WEIGHT_EDUCATION) * 0.25), 'reasons' => []];
     }
 
     private function resolveEducationDegreeId(MatrimonyProfile $profile): ?int
@@ -877,19 +1029,19 @@ class MatchingService
         $midA = (int) ($a->occupation_master_id ?? 0);
         $midB = (int) ($b->occupation_master_id ?? 0);
         if ($midA > 0 && $midA === $midB) {
-            return ['points' => self::WEIGHT_OCCUPATION, 'reasons' => [__('matching.reason_same_occupation')]];
+            return ['points' => $this->weight('occupation', self::WEIGHT_OCCUPATION), 'reasons' => [__('matching.reason_same_occupation')]];
         }
 
         $cidA = (int) ($a->occupation_custom_id ?? 0);
         $cidB = (int) ($b->occupation_custom_id ?? 0);
         if ($cidA > 0 && $cidA === $cidB) {
-            return ['points' => self::WEIGHT_OCCUPATION, 'reasons' => [__('matching.reason_same_occupation')]];
+            return ['points' => $this->weight('occupation', self::WEIGHT_OCCUPATION), 'reasons' => [__('matching.reason_same_occupation')]];
         }
 
         $pA = $hasProfFk ? (int) ($a->getAttribute('profession_id') ?: 0) : 0;
         $pB = $hasProfFk ? (int) ($b->getAttribute('profession_id') ?: 0) : 0;
         if ($pA > 0 && $pA === $pB) {
-            return ['points' => self::WEIGHT_OCCUPATION, 'reasons' => [__('matching.reason_same_occupation')]];
+            return ['points' => $this->weight('occupation', self::WEIGHT_OCCUPATION), 'reasons' => [__('matching.reason_same_occupation')]];
         }
 
         $a->loadMissing(['occupationMaster', 'occupationCustom']);
@@ -897,7 +1049,7 @@ class MatchingService
         $resA = (int) ($a->resolvedProfession()?->id ?? 0);
         $resB = (int) ($b->resolvedProfession()?->id ?? 0);
         if ($resA > 0 && $resA === $resB) {
-            return ['points' => self::WEIGHT_OCCUPATION, 'reasons' => [__('matching.reason_same_occupation')]];
+            return ['points' => $this->weight('occupation', self::WEIGHT_OCCUPATION), 'reasons' => [__('matching.reason_same_occupation')]];
         }
 
         $a->loadMissing(['occupationMaster.category.workingWithType']);
@@ -905,13 +1057,13 @@ class MatchingService
         $wA = (int) ($a->resolvedWorkingWithType()?->id ?? 0);
         $wB = (int) ($b->resolvedWorkingWithType()?->id ?? 0);
         if ($wA > 0 && $wA === $wB) {
-            return ['points' => (int) round(self::WEIGHT_OCCUPATION * 0.65), 'reasons' => [__('matching.reason_similar_work_sector')]];
+            return ['points' => (int) round($this->weight('occupation', self::WEIGHT_OCCUPATION) * 0.65), 'reasons' => [__('matching.reason_similar_work_sector')]];
         }
 
         $signalsA = $midA || $cidA || $pA || $resA;
         $signalsB = $midB || $cidB || $pB || $resB;
         if ($signalsA && $signalsB) {
-            return ['points' => (int) round(self::WEIGHT_OCCUPATION * 0.25), 'reasons' => []];
+            return ['points' => (int) round($this->weight('occupation', self::WEIGHT_OCCUPATION) * 0.25), 'reasons' => []];
         }
 
         return ['points' => 0, 'reasons' => []];
@@ -925,22 +1077,22 @@ class MatchingService
         $subA = (int) ($a->sub_caste_id ?? 0);
         $subB = (int) ($b->sub_caste_id ?? 0);
         if ($subA > 0 && $subA === $subB) {
-            return ['points' => self::WEIGHT_COMMUNITY, 'reasons' => [__('matching.reason_same_subcaste')]];
+            return ['points' => $this->weight('community', self::WEIGHT_COMMUNITY), 'reasons' => [__('matching.reason_same_subcaste')]];
         }
 
         $casteA = (int) ($a->caste_id ?? 0);
         $casteB = (int) ($b->caste_id ?? 0);
         if ($casteA > 0 && $casteA === $casteB) {
-            return ['points' => (int) round(self::WEIGHT_COMMUNITY * 0.8), 'reasons' => [__('matching.reason_same_caste')]];
+            return ['points' => (int) round($this->weight('community', self::WEIGHT_COMMUNITY) * 0.8), 'reasons' => [__('matching.reason_same_caste')]];
         }
 
         $relA = (int) ($a->religion_id ?? 0);
         $relB = (int) ($b->religion_id ?? 0);
         if ($relA > 0 && $relA === $relB) {
-            return ['points' => (int) round(self::WEIGHT_COMMUNITY * 0.5), 'reasons' => [__('matching.reason_same_religion')]];
+            return ['points' => (int) round($this->weight('community', self::WEIGHT_COMMUNITY) * 0.5), 'reasons' => [__('matching.reason_same_religion')]];
         }
 
-        return ['points' => (int) round(self::WEIGHT_COMMUNITY * 0.15), 'reasons' => []];
+        return ['points' => (int) round($this->weight('community', self::WEIGHT_COMMUNITY) * 0.15), 'reasons' => []];
     }
 
     /**
@@ -954,10 +1106,10 @@ class MatchingService
         $f = (int) ($ab['counts']['flexible'] ?? 0) + (int) ($ba['counts']['flexible'] ?? 0);
         $den = $m + $f;
         if ($den <= 0) {
-            return ['points' => (int) round(self::WEIGHT_PREFERENCES * 0.5), 'reasons' => [__('matching.reason_prefs_open')]];
+            return ['points' => (int) round($this->weight('preferences', self::WEIGHT_PREFERENCES) * 0.5), 'reasons' => [__('matching.reason_prefs_open')]];
         }
 
-        $points = (int) round(self::WEIGHT_PREFERENCES * ($m / $den));
+        $points = (int) round($this->weight('preferences', self::WEIGHT_PREFERENCES) * ($m / $den));
         $reasons = [];
         if ($m >= 4) {
             $reasons[] = __('matching.reason_strong_pref_alignment');
@@ -965,7 +1117,78 @@ class MatchingService
             $reasons[] = __('matching.reason_good_pref_alignment');
         }
 
-        return ['points' => min(self::WEIGHT_PREFERENCES, $points), 'reasons' => $reasons];
+        return ['points' => min($this->weight('preferences', self::WEIGHT_PREFERENCES), $points), 'reasons' => $reasons];
+    }
+
+    /**
+     * @return array{points: int, reasons: list<string>}
+     */
+    private function scoreMaritalStatusPart(MatrimonyProfile $a, MatrimonyProfile $b): array
+    {
+        $w = $this->weight('marital_status', 9);
+        $ma = (int) ($a->marital_status_id ?? 0);
+        $mb = (int) ($b->marital_status_id ?? 0);
+        if ($ma > 0 && $ma === $mb) {
+            return ['points' => $w, 'reasons' => []];
+        }
+        if ($ma > 0 && $mb > 0) {
+            return ['points' => (int) round($w * 0.25), 'reasons' => []];
+        }
+
+        return ['points' => 0, 'reasons' => []];
+    }
+
+    /**
+     * @return array{points: int, reasons: list<string>}
+     */
+    private function scoreHeightPart(MatrimonyProfile $a, MatrimonyProfile $b): array
+    {
+        $w = $this->weight('height', 8);
+        $ha = (int) ($a->height_cm ?? 0);
+        $hb = (int) ($b->height_cm ?? 0);
+        if ($ha <= 0 || $hb <= 0) {
+            return ['points' => 0, 'reasons' => []];
+        }
+        $diff = abs($ha - $hb);
+        if ($diff <= 4) {
+            return ['points' => $w, 'reasons' => []];
+        }
+        if ($diff <= 9) {
+            return ['points' => (int) round($w * 0.6), 'reasons' => []];
+        }
+        if ($diff <= 14) {
+            return ['points' => (int) round($w * 0.3), 'reasons' => []];
+        }
+
+        return ['points' => 0, 'reasons' => []];
+    }
+
+    /**
+     * @return array{points: int, reasons: list<string>}
+     */
+    private function scoreDietPart(MatrimonyProfile $a, MatrimonyProfile $b): array
+    {
+        $w = $this->weight('diet', 6);
+        $da = (int) ($a->diet_id ?? 0);
+        $db = (int) ($b->diet_id ?? 0);
+        if ($da > 0 && $da === $db) {
+            return ['points' => $w, 'reasons' => []];
+        }
+        if ($da > 0 && $db > 0) {
+            return ['points' => (int) round($w * 0.2), 'reasons' => []];
+        }
+
+        return ['points' => 0, 'reasons' => []];
+    }
+
+    private function weight(string $fieldKey, int $fallback): int
+    {
+        $w = $this->matchingConfig->weightFor($fieldKey);
+        if ($w <= 0) {
+            return $fallback;
+        }
+
+        return $w;
     }
 
     /**
@@ -992,6 +1215,18 @@ class MatchingService
             $parts = $this->scoreParts($seeker, $candidate);
             $fieldParts = [];
             $sumBase = 0;
+            $fieldPoints = [
+                'age' => 0,
+                'location' => 0,
+                'education' => 0,
+                'occupation' => 0,
+                'community' => 0,
+                'preferences' => 0,
+                'marital_status' => 0,
+                'height' => 0,
+                'diet' => 0,
+            ];
+            $keys = array_keys($fieldPoints);
             foreach ($parts as $p) {
                 $pts = (int) ($p['points'] ?? 0);
                 $sumBase += $pts;
@@ -999,6 +1234,10 @@ class MatchingService
                     'points' => $pts,
                     'reasons' => $p['reasons'] ?? [],
                 ];
+                $k = array_shift($keys);
+                if ($k !== null) {
+                    $fieldPoints[$k] = $pts;
+                }
             }
             $baseScore = min(100, max(0, $sumBase));
 
@@ -1008,11 +1247,16 @@ class MatchingService
             $finalScore = ($seeker->user && $candidate->user)
                 ? $this->matchBoost->applyBoost($seeker->user, $candidate->user, $baseScore)
                 : $baseScore;
+            $behaviorDelta = ($seeker->user && $candidate->user)
+                ? $this->behaviorScoring->scoreAdjustment($seeker->user, $candidate)
+                : 0;
+            $finalScore = max(0, min(100, $finalScore + $behaviorDelta));
 
             return [
                 'field_parts' => $fieldParts,
+                'field_points' => $fieldPoints,
                 'preferred_penalties' => [],
-                'behavior_delta' => 0,
+                'behavior_delta' => $behaviorDelta,
                 'before_boost' => $baseScore,
                 'final_score' => $finalScore,
             ];

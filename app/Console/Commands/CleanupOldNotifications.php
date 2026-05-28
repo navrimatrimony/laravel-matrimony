@@ -2,6 +2,7 @@
 
 namespace App\Console\Commands;
 
+use App\Services\NotificationPlatformSettingsService;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
 
@@ -21,9 +22,10 @@ class CleanupOldNotifications extends Command
 
     public function handle(): int
     {
-        $since = now()->subDays(90);
+        $days = app(NotificationPlatformSettingsService::class)->retentionDays();
+        $since = now()->subDays($days);
         $deleted = DB::table('notifications')->where('created_at', '<', $since)->delete();
-        $this->info("Deleted {$deleted} notification(s) older than 90 days.");
+        $this->info("Deleted {$deleted} notification(s) older than {$days} days.");
         return self::SUCCESS;
     }
 }

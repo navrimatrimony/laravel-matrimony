@@ -35,4 +35,5 @@ return [
     'log_out' => 'लॉग आउट',
     'admin_section' => 'प्रशासन',
     'admin_panel' => 'अ‍ॅडमीन पॅनेल',
+    'my_referrals' => 'माझे रेफरल',
 ];

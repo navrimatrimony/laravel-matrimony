@@ -11,10 +11,28 @@
             <dt>{{ __('revenue_summary.row_plan') }}</dt>
             <dd class="font-semibold tabular-nums">{{ $revenueSummary['base_plan_price_display'] ?? '' }}</dd>
         </div>
-        <div class="flex justify-between gap-3">
-            <dt>{{ __('revenue_summary.row_coupon_discount') }}</dt>
-            <dd class="font-semibold tabular-nums">{{ $revenueSummary['discount_amount_display'] ?? '' }}</dd>
-        </div>
+        @php
+            $referralInviteDisc = round((float) ($revenueSummary['referral_checkout_discount'] ?? 0), 2);
+            $totalDisc = round((float) ($revenueSummary['discount_amount'] ?? 0), 2);
+            $couponOnlyDisc = max(0, round($totalDisc - $referralInviteDisc, 2));
+        @endphp
+        @if ($referralInviteDisc > 0.004)
+            <div class="flex justify-between gap-3 text-violet-800 dark:text-violet-300">
+                <dt>{{ __('revenue_summary.row_referral_invite_discount') }}</dt>
+                <dd class="font-semibold tabular-nums">{{ $revenueSummary['referral_checkout_discount_display'] ?? '' }}</dd>
+            </div>
+        @endif
+        @if ($couponOnlyDisc > 0.004)
+            <div class="flex justify-between gap-3">
+                <dt>{{ __('revenue_summary.row_coupon_discount') }}</dt>
+                <dd class="font-semibold tabular-nums">-₹{{ number_format($couponOnlyDisc, $couponOnlyDisc === floor($couponOnlyDisc) ? 0 : 2, '.', ',') }}</dd>
+            </div>
+        @elseif ($referralInviteDisc <= 0.004 && $totalDisc > 0.004)
+            <div class="flex justify-between gap-3">
+                <dt>{{ __('revenue_summary.row_coupon_discount') }}</dt>
+                <dd class="font-semibold tabular-nums">{{ $revenueSummary['discount_amount_display'] ?? '' }}</dd>
+            </div>
+        @endif
         @if (! empty($revenueSummary['coupon_code']))
             <div class="flex justify-between gap-3 text-xs text-slate-600 dark:text-slate-400">
                 <dt>{{ __('revenue_summary.coupon_code_label') }}</dt>

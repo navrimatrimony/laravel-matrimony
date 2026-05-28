@@ -822,9 +822,14 @@
                     <nav class="flex items-center gap-2">
                         <x-homepage-language-switcher />
                         @auth
+                            @php
+                                $isAnyAdminUser = auth()->user()?->isAnyAdmin() ?? false;
+                            @endphp
                             <a href="{{ route('dashboard') }}" class="rounded-md px-3 py-2 text-sm font-semibold text-[var(--brand-red)] hover:bg-red-50 dark:hover:bg-red-950/40">{{ __('homepage.dashboard') }}</a>
-                            @if (Route::has('matrimony.profile.wizard'))
-                                <a href="{{ route('matrimony.profile.wizard') }}" class="rounded-md bg-[var(--brand-red)] px-3 py-2 text-sm font-semibold text-white hover:bg-[var(--brand-red-dark)]">{{ __('homepage.profile_wizard') }}</a>
+                            @if ($isAnyAdminUser && Route::has('admin.dashboard'))
+                                <a href="{{ route('admin.dashboard') }}" class="rounded-md bg-[var(--brand-red)] px-3 py-2 text-sm font-semibold text-white hover:bg-[var(--brand-red-dark)]">
+                                    {{ __('nav.admin_panel') }}
+                                </a>
                             @endif
                         @else
                             <a href="{{ route('login') }}" class="rounded-md px-3 py-2 text-sm font-semibold text-zinc-700 hover:bg-zinc-100 dark:text-zinc-200 dark:hover:bg-zinc-800">{{ __('homepage.login') }}</a>

@@ -43,7 +43,7 @@ class ImageApprovedNotification extends Notification
 
     public function toMail(object $notifiable): MailMessage
     {
-        return MatrimonyMailTemplate::fromToArray($this->toArray($notifiable));
+        return $this->matrimonyMailFromPayload($this->toArray($notifiable), $notifiable);
     }
 
     /**
@@ -55,8 +55,10 @@ class ImageApprovedNotification extends Notification
     {
         return NotificationMarathiPayload::withMessage([
             'type' => 'image_approved',
-            'message' => 'Your profile image has been approved by admin.',
+            'message' => __('notifications.image_approved_message'),
             'reason' => $this->reason,
+            'mail_action_url' => route('matrimony.profile.upload-photo'),
+            'mail_action_text' => __('notifications.view_profile'),
         ]);
     }
 }

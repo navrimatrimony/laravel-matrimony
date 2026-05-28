@@ -9,6 +9,7 @@ use App\Models\Subscription;
 use App\Models\AdminSetting;
 use App\Services\ActivePlanResolver;
 use App\Services\CouponService;
+use App\Services\ReferralService;
 use App\Services\SubscriptionService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
@@ -156,9 +157,14 @@ class PlansController extends Controller
             return $m;
         });
 
+        $referredCheckoutOffer = $user !== null
+            ? app(ReferralService::class)->referredCheckoutOfferFor($user)
+            : null;
+
         return view('plans.index', [
             'plans' => $plans,
             'pricingPlans' => $pricingPlans,
+            'referredCheckoutOffer' => $referredCheckoutOffer,
             'effectivePlan' => $planForMemberTierContext,
             'currentPlan' => $planForMemberTierContext,
             'currentPlanDisplayName' => $currentPlanDisplayName,

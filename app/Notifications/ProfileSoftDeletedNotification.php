@@ -43,7 +43,7 @@ class ProfileSoftDeletedNotification extends Notification
 
     public function toMail(object $notifiable): MailMessage
     {
-        return MatrimonyMailTemplate::fromToArray($this->toArray($notifiable));
+        return $this->matrimonyMailFromPayload($this->toArray($notifiable), $notifiable);
     }
 
     /**

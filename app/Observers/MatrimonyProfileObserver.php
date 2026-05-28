@@ -7,8 +7,10 @@ use App\Models\MatrimonyPhotoBatchAllocation;
 use App\Models\MatrimonyProfile;
 use App\Services\Location\LocationUsageStatsService;
 use App\Services\Profile\ProfileCanonicalResidenceService;
+use App\Models\User;
 use App\Services\ProfileCompletionEngine;
 use App\Services\ProfileVisibilitySettingsDefaultsService;
+use App\Services\ReferralService;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\ValidationException;
@@ -59,6 +61,13 @@ class MatrimonyProfileObserver
             app(ProfileCompletionEngine::class)->forgetRequestCacheForUser((int) $profile->user_id);
         }
         Cache::forget('profile_completion_profile_'.$profile->id);
+
+        if ($profile->user_id && $profile->wasChanged(['lifecycle_state', 'photo_approved', 'is_suspended'])) {
+            $user = User::query()->find((int) $profile->user_id);
+            if ($user) {
+                app(ReferralService::class)->retryQualityPendingReferralReward($user);
+            }
+        }
 
         if (! Schema::hasTable('location_usage_stats')) {
             return;

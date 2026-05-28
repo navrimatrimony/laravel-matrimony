@@ -1,4 +1,6 @@
 <x-guest-layout>
+    <x-referred-registration-welcome :welcome="$referredRegistrationWelcome ?? null" class="mb-4" />
+
     @if (!empty($fromRegistration))
         <div class="mb-4 p-4 bg-sky-50 dark:bg-sky-900/20 border border-sky-200 dark:border-sky-700 rounded-lg text-sky-800 dark:text-sky-200 text-sm">
             <p class="font-semibold">{{ __('otp.step_1_of_2_verify_mobile') }}</p>

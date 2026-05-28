@@ -4,6 +4,17 @@
  * Notifications / contact request UI strings (Marathi).
  */
 return [
+    'page_title' => 'सूचना',
+    'mark_all_read' => 'सर्व वाचले म्हणून चिन्हांकित करा',
+    'none' => 'सूचना नाहीत.',
+    'view_profile' => 'प्रोफाइल पहा',
+    'someone' => 'कोणीतरी',
+    'sent_you_message' => 'तुम्हाला संदेश पाठवला',
+    'open_chat' => 'चॅट उघडा',
+    'open' => 'उघडा',
+    'open_profile' => 'प्रोफाइल उघडा',
+    'mark_read' => 'वाचले म्हणून चिन्हांकित करा',
+    'back_to_notifications' => 'सूचनांकडे परत',
     'contact_requests_access' => 'संपर्क विनंत्या व प्रवेश',
     'requests_pending' => 'विनंत्या (प्रलंबित)',
     'access_granted_active' => 'प्रवेश मंजूर (सक्रिय)',
@@ -52,4 +63,13 @@ return [
     'chat_locked_message_anonymous' => 'तुम्हाला एक नवीन संदेश आला आहे. वाचण्यासाठी अपग्रेड करा — पैसे देण्यापूर्वी किंमत स्पष्ट दाखवली जाते.',
     'teaser_open_received_interests' => 'मिळालेल्या इच्छा उघडा',
     'teaser_open_who_viewed' => 'मला कोणी पाहिले उघडा',
+    'referral_reward_message' => 'तुमच्या मित्राने :plan प्लान घेतला. तुमच्या सदस्यतेत जोडले: :benefits. शेअर केल्याबद्दल धन्यवाद.',
+    'referral_reward_message_days_only' => 'तुमच्या मित्राने :plan प्लान घेतला. तुमच्या सदस्यतेत :days बोनस दिवस जोडले. शेअर केल्याबद्दल धन्यवाद.',
+    'referral_invite_registered_message' => ':name ने तुमच्या आमंत्रण लिंकने नोंदणी केली.',
+    'referral_invite_upgraded_message' => ':name ने :plan प्लान घेतला.',
+    'referral_reward_pending_message' => ':name ने :plan घेतला. :days बोनस दिवस मिळवण्यासाठी active paid plan घ्या.',
+    'referral_cap_skipped_message' => ':name ने :plan घेतला, पण मासिक रेफरल मर्यादा आधीच पूर्ण होती.',
+    'contact_request_received_message' => ':name यांनी तुमचा संपर्क मागितला.',
+    'image_approved_message' => 'तुमची प्रोफाइल फोटो मंजूर झाली. आता ती प्रोफाइलवर दिसेल.',
+    'open_contact_inbox' => 'संपर्क विनंत्या उघडा',
 ];

@@ -4,6 +4,7 @@
     'planExpiresInDays' => null,
     'walletBalanceDisplay' => null,
     'shareReferralUrl' => null,
+    'referralWhatsappUrl' => null,
     'autoHideSeconds' => 7,
 ])
 
@@ -41,8 +42,11 @@
             <p class="mt-2 text-xs text-amber-800/90 dark:text-amber-200/90">{{ __('dashboard.monetization_wallet_balance', ['amount' => $walletBalanceDisplay]) }}</p>
         @endif
         @if ($shareReferralUrl)
-            <p class="mt-2 text-xs text-amber-800/90 dark:text-amber-200/90">{{ __('dashboard.monetization_referral_hint') }}
-                <a href="{{ $shareReferralUrl }}" class="font-mono underline break-all">{{ $shareReferralUrl }}</a>
+            <p class="mt-2 text-xs text-amber-800/90 dark:text-amber-200/90">
+                {{ __('dashboard.monetization_referral_hint') }}
+                @if ($referralWhatsappUrl)
+                    <a href="{{ $referralWhatsappUrl }}" target="_blank" rel="noopener noreferrer" class="ml-1 font-semibold text-[#128C7E] underline">{{ __('referrals.share_whatsapp_short') }}</a>
+                @endif
             </p>
         @endif
     </div>

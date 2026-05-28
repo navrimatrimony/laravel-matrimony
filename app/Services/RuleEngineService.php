@@ -6,11 +6,12 @@ use App\DTO\RuleResult;
 use App\Models\MatrimonyProfile;
 use App\Models\SystemRule;
 use App\Models\User;
+use App\Services\Matching\MatchingService;
 use App\Support\ErrorFactory;
 
 /**
  * Single entry for configurable rules, mandatory-core completion signals used in product gates,
- * and **compatibility scoring** (always use {@see getMatchResult()} / {@see getMatchResultForProfiles()} — not {@see MatchingEngine} directly).
+ * and **compatibility scoring** (always use {@see getMatchResult()} / {@see getMatchResultForProfiles()}).
  * Numeric completion reads from {@see ProfileCompletionEngine}; thresholds live in {@see SystemRule} / admin.
  */
 class RuleEngineService
@@ -21,7 +22,7 @@ class RuleEngineService
 
     public function __construct(
         private readonly ProfileCompletionEngine $profileCompletionEngine,
-        private readonly MatchingEngine $matchingEngine,
+        private readonly MatchingService $matchingService,
         private readonly AIBehaviorService $aiBehaviorService,
     ) {}
 
@@ -134,7 +135,7 @@ class RuleEngineService
     }
 
     /**
-     * Product gate before running {@see MatchingEngine} between two accounts (both must own profiles; not self).
+     * Product gate before running matching between two accounts (both must own profiles; not self).
      */
     public function checkMatchingAllowed(User $userA, User $userB): bool
     {
@@ -163,7 +164,7 @@ class RuleEngineService
     public function getMatchResult(User $userA, User $userB): array
     {
         if (! $this->checkMatchingAllowed($userA, $userB)) {
-            $empty = $this->matchingEngine->emptyScorePayload();
+            $empty = $this->emptyMatchPayload();
             $empty['ai_boost'] = 0;
             $empty['final_score'] = (int) $empty['score'];
             $empty['debug'] = [
@@ -174,7 +175,11 @@ class RuleEngineService
             return $empty;
         }
 
-        $base = $this->matchingEngine->for($userA, $userB);
+        /** @var MatrimonyProfile $source */
+        $source = $userA->matrimonyProfile;
+        /** @var MatrimonyProfile $target */
+        $target = $userB->matrimonyProfile;
+        $base = $this->matchResultFromProfiles($source, $target);
 
         $targetProfile = $userB->matrimonyProfile ?? null;
         $aiBoost = 0;
@@ -208,7 +213,7 @@ class RuleEngineService
     {
         $viewerUser = $viewerProfile->relationLoaded('user') ? $viewerProfile->user : $viewerProfile->user()->first();
         if (! $viewerUser instanceof User) {
-            return $this->matchingEngine->emptyScorePayload();
+            return $this->emptyMatchPayload();
         }
 
         $viewedUser = $viewedProfile->relationLoaded('user') ? $viewedProfile->user : $viewedProfile->user()->first();
@@ -216,7 +221,7 @@ class RuleEngineService
             return $this->getMatchResult($viewerUser, $viewedUser);
         }
 
-        return $this->matchingEngine->scoreBetweenProfiles($viewerProfile, $viewedProfile);
+        return $this->matchResultFromProfiles($viewerProfile, $viewedProfile);
     }
 
     /**
@@ -224,7 +229,7 @@ class RuleEngineService
      */
     public function emptyMatchResult(): array
     {
-        return $this->matchingEngine->emptyScorePayload();
+        return $this->emptyMatchPayload();
     }
 
     /**
@@ -237,13 +242,13 @@ class RuleEngineService
     {
         $viewer = $user->matrimonyProfile;
         if (! $viewer instanceof MatrimonyProfile) {
-            return collect($profiles)->map(fn () => $this->matchingEngine->emptyScorePayload())->values()->all();
+            return collect($profiles)->map(fn () => $this->emptyMatchPayload())->values()->all();
         }
 
         return collect($profiles)
             ->map(function ($profile) use ($viewer): array {
                 if (! $profile instanceof MatrimonyProfile) {
-                    return $this->matchingEngine->emptyScorePayload();
+                    return $this->emptyMatchPayload();
                 }
 
                 return $this->getMatchResultForProfiles($viewer, $profile);
@@ -268,5 +273,63 @@ class RuleEngineService
     private function systemRule(string $key): ?SystemRule
     {
         return SystemRule::query()->where('key', $key)->first();
+    }
+
+    /**
+     * @return array{score:int, grade:string, breakdown:array<string,int>, normalized_breakdown:array<string,int>, is_compatible:bool}
+     */
+    private function matchResultFromProfiles(MatrimonyProfile $source, MatrimonyProfile $target): array
+    {
+        $breakdownPayload = $this->matchingService->computeMatchBreakdown($source, $target);
+        $field = is_array($breakdownPayload['field_points'] ?? null) ? $breakdownPayload['field_points'] : [];
+        $score = (int) ($breakdownPayload['final_score'] ?? 0);
+        $breakdown = [
+            'matching_age' => (int) ($field['age'] ?? 0),
+            'matching_location' => (int) ($field['location'] ?? 0),
+            'matching_education' => (int) ($field['education'] ?? 0),
+            'matching_caste' => (int) ($field['community'] ?? 0),
+            'matching_profile_completion' => (int) ($field['preferences'] ?? 0),
+        ];
+        $sum = array_sum($breakdown);
+        $normalized = $sum > 0
+            ? collect($breakdown)->map(fn (int $v): int => (int) round(($v / $sum) * 100))->all()
+            : [];
+
+        return [
+            'score' => $score,
+            'grade' => $this->gradeFromScore($score),
+            'breakdown' => $breakdown,
+            'normalized_breakdown' => $normalized,
+            'is_compatible' => $score >= 60,
+        ];
+    }
+
+    /**
+     * @return array{score:int, grade:string, breakdown:array<string,int>, normalized_breakdown:array<string,int>, is_compatible:bool}
+     */
+    private function emptyMatchPayload(): array
+    {
+        return [
+            'score' => 0,
+            'grade' => 'Low',
+            'breakdown' => [],
+            'normalized_breakdown' => [],
+            'is_compatible' => false,
+        ];
+    }
+
+    private function gradeFromScore(int $score): string
+    {
+        if ($score >= 80) {
+            return 'Excellent';
+        }
+        if ($score >= 60) {
+            return 'Good';
+        }
+        if ($score >= 40) {
+            return 'Average';
+        }
+
+        return 'Low';
     }
 }

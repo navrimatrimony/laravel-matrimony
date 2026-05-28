@@ -13,6 +13,7 @@ use App\Models\UserReferral;
 use App\Services\AuditLogService;
 use App\Services\EntitlementService;
 use App\Services\FeatureUsageService;
+use App\Services\ReferralService;
 use App\Services\SubscriptionService;
 use Carbon\Carbon;
 use Illuminate\Http\RedirectResponse;
@@ -34,7 +35,7 @@ class ReferralController extends Controller
     public function index(Request $request)
     {
         $tab = (string) $request->query('tab', 'reward-plans');
-        if (! in_array($tab, ['engine', 'reward-plans', 'reports', 'audit'], true)) {
+        if (! in_array($tab, ['engine', 'reward-plans', 'reports', 'review', 'audit', 'supreme'], true)) {
             $tab = 'reward-plans';
         }
 
@@ -84,16 +85,71 @@ class ReferralController extends Controller
             'paid_only' => $this->getBoolSetting(self::ENGINE_KEYS['paid_only'], true),
             'min_plan_amount' => $this->getIntSetting(self::ENGINE_KEYS['min_plan_amount'], 0),
             'monthly_cap' => $this->getIntSetting(self::ENGINE_KEYS['monthly_cap'], 0),
+            'fraud_auto_hold' => $this->getBoolSetting('referral_fraud_auto_hold', (bool) config('referral.fraud.auto_hold_on_flags', true)),
+            'fraud_rapid_invites' => $this->fraudRapidInvitesFromSettings(),
+            'pending_claim_expiry_days' => $this->getIntSetting('referral_pending_claim_expiry_days', (int) config('referral.pending_claim_expiry_days', 90)),
+            'quality_require_profile_active' => $this->getBoolSetting('referral_quality_require_profile_active', (bool) config('referral.quality_gates.require_profile_active', false)),
+            'quality_require_mobile_verified' => $this->getBoolSetting('referral_quality_require_mobile_verified', (bool) config('referral.quality_gates.require_mobile_verified', false)),
+            'quality_require_photo_approved' => $this->getBoolSetting('referral_quality_require_photo_approved', (bool) config('referral.quality_gates.require_photo_approved', false)),
+            'quality_cooling_period_days' => $this->getIntSetting('referral_quality_cooling_period_days', (int) config('referral.quality_gates.cooling_period_days', 0)),
+            'referred_checkout_enabled' => $this->getBoolSetting('referral_referred_checkout_enabled', (bool) config('referral.referred_checkout.enabled', true)),
+            'referred_checkout_percent' => $this->getIntSetting('referral_referred_checkout_percent', (int) config('referral.referred_checkout.percent_off', 0)),
+            'referred_checkout_extra_days' => $this->getIntSetting('referral_referred_checkout_extra_days', (int) config('referral.referred_checkout.extra_days', 0)),
+            'renewal_micro_bonus_enabled' => $this->getBoolSetting('referral_renewal_micro_bonus_enabled', (bool) config('referral.growth.renewal_micro_bonus.enabled', false)),
+            'renewal_micro_bonus_days' => $this->getIntSetting('referral_renewal_micro_bonus_days', (int) config('referral.growth.renewal_micro_bonus.bonus_days', 1)),
         ];
 
-        $reportSummary = [
-            'total' => (clone $referralsQuery)->count(),
-            'rewarded' => (clone $referralsQuery)->where('reward_applied', true)->count(),
-            'pending' => (clone $referralsQuery)->where('reward_applied', false)->count(),
+        $reviewQueue = collect();
+        $reviewQueueCount = 0;
+        if ($tab === 'review') {
+            $reviewQueue = UserReferral::query()
+                ->where('review_status', UserReferral::REVIEW_PENDING)
+                ->with([
+                    'referrer:id,name,mobile,email,referral_code',
+                    'referredUser:id,name,mobile,email',
+                ])
+                ->orderBy('created_at')
+                ->paginate(30)
+                ->withQueryString();
+        }
+        $reviewQueueCount = app(ReferralService::class)->countPendingReviewReferrals();
+
+        $supremeReferrer = null;
+        $supremePanel = null;
+        if ($tab === 'supreme') {
+            $lookup = trim((string) $request->query('referrer_lookup', ''));
+            if ($lookup !== '') {
+                $query = User::query();
+                if (ctype_digit($lookup)) {
+                    $query->where('id', (int) $lookup);
+                } else {
+                    $query->where(function ($inner) use ($lookup) {
+                        $inner->where('referral_code', strtoupper($lookup))
+                            ->orWhere('mobile', $lookup)
+                            ->orWhere('email', $lookup);
+                    });
+                }
+                $supremeReferrer = $query->first();
+                if ($supremeReferrer) {
+                    $supremePanel = app(ReferralService::class)->adminReferrerSupremePanel($supremeReferrer);
+                }
+            }
+        }
+
+        $referralReports = null;
+        $reportFrom = $tab === 'reports' && $this->isValidDate($fromDate) ? $fromDate : null;
+        $reportTo = $tab === 'reports' && $this->isValidDate($toDate) ? $toDate : null;
+        if ($tab === 'reports') {
+            $referralReports = app(ReferralService::class)->adminReportsBundle($reportFrom, $reportTo);
+        }
+        $reportSummary = $referralReports['summary'] ?? [
+            'total' => 0,
+            'rewarded' => 0,
+            'upgraded' => 0,
+            'profile_ready' => 0,
+            'pending' => 0,
+            'conversion_rate' => 0.0,
         ];
-        $reportSummary['conversion_rate'] = $reportSummary['total'] > 0
-            ? round(($reportSummary['rewarded'] * 100) / $reportSummary['total'], 2)
-            : 0.0;
 
         $topReferrers = UserReferral::query()
             ->selectRaw('referrer_id, COUNT(*) as total_referrals, SUM(CASE WHEN reward_applied = 1 THEN 1 ELSE 0 END) as rewarded_referrals')
@@ -138,6 +194,7 @@ class ReferralController extends Controller
             'fromDate',
             'toDate',
             'reportSummary',
+            'referralReports',
             'topReferrers',
             'selectedPlanSlug',
             'selectedRewardRule',
@@ -145,7 +202,269 @@ class ReferralController extends Controller
             'auditReferrerId',
             'ledgers',
             'auditActionTypes',
+            'reviewQueue',
+            'reviewQueueCount',
+            'supremeReferrer',
+            'supremePanel',
         ));
+    }
+
+    public function freezeReferrer(Request $request, User $user): RedirectResponse
+    {
+        $validated = $request->validate([
+            'reason' => ['nullable', 'string', 'max:500'],
+        ]);
+
+        app(ReferralService::class)->adminFreezeReferrerRewards($user, $request->user(), $validated['reason'] ?? null);
+
+        return $this->supremeRedirect($user)->with('success', __('admin_monetization.referral_supreme_frozen'));
+    }
+
+    public function unfreezeReferrer(Request $request, User $user): RedirectResponse
+    {
+        $validated = $request->validate([
+            'reason' => ['nullable', 'string', 'max:500'],
+        ]);
+
+        app(ReferralService::class)->adminUnfreezeReferrerRewards($user, $request->user(), $validated['reason'] ?? null);
+
+        return $this->supremeRedirect($user)->with('success', __('admin_monetization.referral_supreme_unfrozen'));
+    }
+
+    public function disableReferralCode(Request $request, User $user): RedirectResponse
+    {
+        $validated = $request->validate([
+            'reason' => ['nullable', 'string', 'max:500'],
+        ]);
+
+        app(ReferralService::class)->adminDisableReferralCode($user, $request->user(), $validated['reason'] ?? null);
+
+        return $this->supremeRedirect($user)->with('success', __('admin_monetization.referral_supreme_code_disabled'));
+    }
+
+    public function enableReferralCode(Request $request, User $user): RedirectResponse
+    {
+        $validated = $request->validate([
+            'reason' => ['nullable', 'string', 'max:500'],
+        ]);
+
+        app(ReferralService::class)->adminEnableReferralCode($user, $request->user(), $validated['reason'] ?? null);
+
+        return $this->supremeRedirect($user)->with('success', __('admin_monetization.referral_supreme_code_enabled'));
+    }
+
+    public function regenerateReferralCode(Request $request, User $user): RedirectResponse
+    {
+        $validated = $request->validate([
+            'reason' => ['nullable', 'string', 'max:500'],
+        ]);
+
+        $code = app(ReferralService::class)->adminRegenerateReferralCode($user, $request->user(), $validated['reason'] ?? null);
+
+        return $this->supremeRedirect($user)
+            ->with('success', __('admin_monetization.referral_supreme_code_regenerated', ['code' => $code]));
+    }
+
+    public function saveReferrerCapOverride(Request $request, User $user): RedirectResponse
+    {
+        $validated = $request->validate([
+            'monthly_cap_override' => ['nullable', 'integer', 'min:0', 'max:10000'],
+            'use_global_cap' => ['sometimes', 'boolean'],
+            'reason' => ['nullable', 'string', 'max:500'],
+        ]);
+
+        $cap = $request->boolean('use_global_cap')
+            ? null
+            : max(0, (int) ($validated['monthly_cap_override'] ?? 0));
+
+        app(ReferralService::class)->adminSetReferrerMonthlyCapOverride(
+            $user,
+            $request->user(),
+            $cap,
+            $validated['reason'] ?? null,
+        );
+
+        return $this->supremeRedirect($user)->with('success', __('admin_monetization.referral_supreme_cap_saved'));
+    }
+
+    public function forcePendingClaim(Request $request, UserReferral $referral): RedirectResponse
+    {
+        $validated = $request->validate([
+            'reason' => ['nullable', 'string', 'max:500'],
+            'return_tab' => ['nullable', 'string', Rule::in(['reports', 'supreme', 'audit'])],
+        ]);
+
+        $applied = app(ReferralService::class)->adminForceApplyPendingClaim(
+            $referral,
+            $request->user(),
+            $validated['reason'] ?? null,
+        );
+
+        if (! $applied) {
+            return $this->referralActionRedirect($request)
+                ->with('error', __('admin_monetization.referral_force_pending_failed'));
+        }
+
+        return $this->referralActionRedirect($request)
+            ->with('success', __('admin_monetization.referral_force_pending_success'));
+    }
+
+    public function cancelPendingClaim(Request $request, UserReferral $referral): RedirectResponse
+    {
+        $validated = $request->validate([
+            'reason' => ['required', 'string', 'min:10', 'max:500'],
+        ]);
+
+        app(ReferralService::class)->adminCancelPendingClaim(
+            $referral,
+            $request->user(),
+            (string) $validated['reason'],
+        );
+
+        return $this->referralActionRedirect($request)
+            ->with('success', __('admin_monetization.referral_cancel_pending_success'));
+    }
+
+    public function reassignReferral(Request $request, UserReferral $referral): RedirectResponse
+    {
+        $validated = $request->validate([
+            'new_referrer_id' => ['required', 'integer', Rule::exists('users', 'id')],
+            'reason' => ['required', 'string', 'min:10', 'max:500'],
+        ]);
+
+        $newReferrer = User::query()->findOrFail((int) $validated['new_referrer_id']);
+        $ok = app(ReferralService::class)->adminReassignReferral(
+            $referral,
+            $newReferrer,
+            $request->user(),
+            (string) $validated['reason'],
+        );
+
+        if (! $ok) {
+            return $this->referralActionRedirect($request)
+                ->with('error', __('admin_monetization.referral_reassign_failed'));
+        }
+
+        return $this->referralActionRedirect($request)
+            ->with('success', __('admin_monetization.referral_reassign_success'));
+    }
+
+    public function partialReward(Request $request, UserReferral $referral): RedirectResponse
+    {
+        $validated = $request->validate([
+            'bonus_days' => ['nullable', 'integer', 'min:0', 'max:3650'],
+            'chat_send_limit_bonus' => ['nullable', 'integer', 'min:0', 'max:100000'],
+            'contact_view_limit_bonus' => ['nullable', 'integer', 'min:0', 'max:100000'],
+            'interest_send_limit_bonus' => ['nullable', 'integer', 'min:0', 'max:100000'],
+            'daily_profile_view_limit_bonus' => ['nullable', 'integer', 'min:0', 'max:100000'],
+            'who_viewed_me_preview_limit_bonus' => ['nullable', 'integer', 'min:0', 'max:100000'],
+            'mark_reward_applied' => ['sometimes', 'boolean'],
+            'reason' => ['required', 'string', 'min:10', 'max:500'],
+        ]);
+
+        $bonusDays = max(0, (int) ($validated['bonus_days'] ?? 0));
+        $featureBonus = $this->buildFeatureBonusFromRequest($request);
+
+        if ($bonusDays <= 0 && $featureBonus === []) {
+            return $this->referralActionRedirect($request)
+                ->with('error', __('admin_monetization.referral_partial_failed_empty'));
+        }
+
+        $ok = app(ReferralService::class)->adminApplyPartialReward(
+            $referral,
+            $request->user(),
+            $bonusDays,
+            $featureBonus,
+            $request->boolean('mark_reward_applied'),
+            (string) $validated['reason'],
+        );
+
+        if (! $ok) {
+            return $this->referralActionRedirect($request)
+                ->with('error', __('admin_monetization.referral_partial_failed'));
+        }
+
+        return $this->referralActionRedirect($request)
+            ->with('success', __('admin_monetization.referral_partial_success'));
+    }
+
+    public function revokeAppliedReward(Request $request, UserReferral $referral): RedirectResponse
+    {
+        $validated = $request->validate([
+            'reason' => ['required', 'string', 'min:10', 'max:500'],
+        ]);
+
+        $ok = app(ReferralService::class)->adminRevokeAppliedReward(
+            $referral,
+            $request->user(),
+            (string) $validated['reason'],
+        );
+
+        if (! $ok) {
+            return $this->referralActionRedirect($request)
+                ->with('error', __('admin_monetization.referral_revoke_failed'));
+        }
+
+        return $this->referralActionRedirect($request)
+            ->with('success', __('admin_monetization.referral_revoke_success'));
+    }
+
+    private function referralActionRedirect(Request $request): RedirectResponse
+    {
+        $tab = (string) $request->input('return_tab', 'reports');
+        if (! in_array($tab, ['reports', 'supreme', 'audit'], true)) {
+            $tab = 'reports';
+        }
+
+        $params = ['tab' => $tab];
+        $lookup = trim((string) $request->input('referrer_lookup', ''));
+        if ($tab === 'supreme' && $lookup !== '') {
+            $params['referrer_lookup'] = $lookup;
+        }
+
+        return redirect()->route('admin.referrals.index', $params);
+    }
+
+    private function supremeRedirect(User $user): RedirectResponse
+    {
+        return redirect()->route('admin.referrals.index', [
+            'tab' => 'supreme',
+            'referrer_lookup' => (string) $user->id,
+        ]);
+    }
+
+    public function approveReview(Request $request, UserReferral $referral): RedirectResponse
+    {
+        $validated = $request->validate([
+            'notes' => ['nullable', 'string', 'max:500'],
+        ]);
+
+        app(ReferralService::class)->adminApproveReferralReview(
+            $referral,
+            $request->user(),
+            $validated['notes'] ?? null,
+        );
+
+        return redirect()
+            ->route('admin.referrals.index', ['tab' => 'review'])
+            ->with('success', __('admin_monetization.referral_review_approve_success'));
+    }
+
+    public function rejectReview(Request $request, UserReferral $referral): RedirectResponse
+    {
+        $validated = $request->validate([
+            'reason' => ['required', 'string', 'min:10', 'max:500'],
+        ]);
+
+        app(ReferralService::class)->adminRejectReferralReview(
+            $referral,
+            $request->user(),
+            (string) $validated['reason'],
+        );
+
+        return redirect()
+            ->route('admin.referrals.index', ['tab' => 'review'])
+            ->with('success', __('admin_monetization.referral_review_reject_success'));
     }
 
     public function saveRule(Request $request): RedirectResponse
@@ -159,6 +478,9 @@ class ReferralController extends Controller
             'interest_send_limit_bonus' => ['nullable', 'integer', 'min:0'],
             'daily_profile_view_limit_bonus' => ['nullable', 'integer', 'min:0'],
             'who_viewed_me_preview_limit_bonus' => ['nullable', 'integer', 'min:0'],
+            'referred_checkout_excluded' => ['sometimes', 'boolean'],
+            'referred_checkout_percent_off' => ['nullable', 'integer', 'min:0', 'max:100'],
+            'referred_checkout_extra_days' => ['nullable', 'integer', 'min:0', 'max:365'],
         ]);
 
         $slug = strtolower(trim((string) $validated['plan_slug']));
@@ -167,6 +489,13 @@ class ReferralController extends Controller
             ['plan_slug' => $slug],
             [
                 'is_active' => $request->boolean('is_active'),
+                'referred_checkout_excluded' => $request->boolean('referred_checkout_excluded'),
+                'referred_checkout_percent_off' => $request->filled('referred_checkout_percent_off')
+                    ? (int) $validated['referred_checkout_percent_off']
+                    : null,
+                'referred_checkout_extra_days' => $request->filled('referred_checkout_extra_days')
+                    ? (int) $validated['referred_checkout_extra_days']
+                    : null,
                 'bonus_days' => (int) ($validated['bonus_days'] ?? 0),
                 'chat_send_limit_bonus' => (int) ($validated['chat_send_limit_bonus'] ?? 0),
                 'contact_view_limit_bonus' => (int) ($validated['contact_view_limit_bonus'] ?? 0),
@@ -186,14 +515,36 @@ class ReferralController extends Controller
         $validated = $request->validate([
             'min_plan_amount' => ['required', 'integer', 'min:0', 'max:1000000'],
             'monthly_cap' => ['required', 'integer', 'min:0', 'max:10000'],
+            'fraud_rapid_invites' => ['required', 'integer', 'min:0', 'max:500'],
+            'pending_claim_expiry_days' => ['required', 'integer', 'min:0', 'max:3650'],
+            'quality_cooling_period_days' => ['required', 'integer', 'min:0', 'max:365'],
             'enabled' => ['sometimes', 'boolean'],
             'paid_only' => ['sometimes', 'boolean'],
+            'fraud_auto_hold' => ['sometimes', 'boolean'],
+            'quality_require_profile_active' => ['sometimes', 'boolean'],
+            'quality_require_mobile_verified' => ['sometimes', 'boolean'],
+            'quality_require_photo_approved' => ['sometimes', 'boolean'],
+            'referred_checkout_enabled' => ['sometimes', 'boolean'],
+            'referred_checkout_percent' => ['required', 'integer', 'min:0', 'max:100'],
+            'referred_checkout_extra_days' => ['required', 'integer', 'min:0', 'max:365'],
         ]);
 
         AdminSetting::setValue(self::ENGINE_KEYS['enabled'], $request->boolean('enabled') ? '1' : '0');
         AdminSetting::setValue(self::ENGINE_KEYS['paid_only'], $request->boolean('paid_only') ? '1' : '0');
         AdminSetting::setValue(self::ENGINE_KEYS['min_plan_amount'], (string) ((int) $validated['min_plan_amount']));
         AdminSetting::setValue(self::ENGINE_KEYS['monthly_cap'], (string) ((int) $validated['monthly_cap']));
+        AdminSetting::setValue('referral_fraud_auto_hold', $request->boolean('fraud_auto_hold') ? '1' : '0');
+        AdminSetting::setValue('referral_fraud_rapid_invites_per_day', (string) ((int) $validated['fraud_rapid_invites']));
+        AdminSetting::setValue('referral_pending_claim_expiry_days', (string) ((int) $validated['pending_claim_expiry_days']));
+        AdminSetting::setValue('referral_quality_require_profile_active', $request->boolean('quality_require_profile_active') ? '1' : '0');
+        AdminSetting::setValue('referral_quality_require_mobile_verified', $request->boolean('quality_require_mobile_verified') ? '1' : '0');
+        AdminSetting::setValue('referral_quality_require_photo_approved', $request->boolean('quality_require_photo_approved') ? '1' : '0');
+        AdminSetting::setValue('referral_quality_cooling_period_days', (string) ((int) $validated['quality_cooling_period_days']));
+        AdminSetting::setValue('referral_referred_checkout_enabled', $request->boolean('referred_checkout_enabled') ? '1' : '0');
+        AdminSetting::setValue('referral_referred_checkout_percent', (string) ((int) $validated['referred_checkout_percent']));
+        AdminSetting::setValue('referral_referred_checkout_extra_days', (string) ((int) $validated['referred_checkout_extra_days']));
+        AdminSetting::setValue('referral_renewal_micro_bonus_enabled', $request->boolean('renewal_micro_bonus_enabled') ? '1' : '0');
+        AdminSetting::setValue('referral_renewal_micro_bonus_days', (string) ((int) $validated['renewal_micro_bonus_days']));
 
         return redirect()
             ->route('admin.referrals.index', ['tab' => 'engine'])
@@ -228,6 +579,10 @@ class ReferralController extends Controller
             $query->whereDate('created_at', '<=', (string) $validated['to_date']);
         }
 
+        $from = ! empty($validated['from_date']) ? (string) $validated['from_date'] : null;
+        $to = ! empty($validated['to_date']) ? (string) $validated['to_date'] : null;
+        $bundle = app(ReferralService::class)->adminReportsBundle($from, $to);
+
         $rows = $query->orderByDesc('id')->get();
         $filename = 'referral-report-'.now()->format('Ymd-His').'.csv';
 
@@ -236,11 +591,28 @@ class ReferralController extends Controller
             'Content-Disposition' => "attachment; filename={$filename}",
         ];
 
-        return response()->streamDownload(function () use ($rows): void {
+        return response()->streamDownload(function () use ($rows, $bundle): void {
             $output = fopen('php://output', 'w');
             if ($output === false) {
                 return;
             }
+
+            $summary = $bundle['summary'] ?? [];
+            $funnel = $bundle['funnel'] ?? [];
+            $economics = $bundle['economics'] ?? [];
+            fputcsv($output, ['metric', 'value']);
+            fputcsv($output, ['funnel_invited', (string) ($funnel['invited'] ?? 0)]);
+            fputcsv($output, ['funnel_profile_ready', (string) ($funnel['profile_ready'] ?? 0)]);
+            fputcsv($output, ['funnel_upgraded', (string) ($funnel['upgraded'] ?? 0)]);
+            fputcsv($output, ['funnel_rewarded', (string) ($funnel['rewarded'] ?? 0)]);
+            fputcsv($output, ['economics_referred_revenue', (string) ($economics['referred_first_paid_revenue'] ?? 0)]);
+            fputcsv($output, ['economics_invite_discount', (string) ($economics['invite_checkout_discount'] ?? 0)]);
+            fputcsv($output, ['economics_referrer_bonus_days', (string) ($economics['referrer_reward_bonus_days'] ?? 0)]);
+            fputcsv($output, ['economics_referrer_cost_estimate', (string) ($economics['referrer_reward_cost_estimate'] ?? 0)]);
+            fputcsv($output, ['economics_net_margin_estimate', (string) ($economics['net_margin_estimate'] ?? 0)]);
+            fputcsv($output, ['summary_total', (string) ($summary['total'] ?? 0)]);
+            fputcsv($output, ['summary_conversion_rate', (string) ($summary['conversion_rate'] ?? 0)]);
+            fputcsv($output, []);
 
             fputcsv($output, [
                 'id',
@@ -471,5 +843,14 @@ class ReferralController extends Controller
         }
 
         return $out;
+    }
+
+    private function fraudRapidInvitesFromSettings(): int
+    {
+        $raw = AdminSetting::getValue('referral_fraud_rapid_invites_per_day', '');
+
+        return $raw !== '' && $raw !== null
+            ? max(0, (int) $raw)
+            : max(0, (int) config('referral.fraud.rapid_invites_per_day', 5));
     }
 }

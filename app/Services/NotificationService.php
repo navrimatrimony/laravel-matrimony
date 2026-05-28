@@ -6,6 +6,7 @@ use App\Models\Subscription;
 use App\Models\User;
 use App\Notifications\ChatMessageLockedNotification;
 use App\Notifications\PlanExpiringSoonNotification;
+use App\Notifications\ReferralActivityNotification;
 use App\Notifications\ReferralRewardGrantedNotification;
 use App\Support\SafeNotifier;
 
@@ -55,12 +56,54 @@ class NotificationService
     /**
      * Notify referrers when their invitee purchases a paid plan (reward already applied in DB).
      */
-    public function notifyReferralReward(User $referrer, User $referredUser, int $bonusDays, string $purchasedPlanName): void
+    /**
+     * @param  array<string, int>  $featureBonus
+     */
+    public function notifyReferralReward(User $referrer, User $referredUser, int $bonusDays, string $purchasedPlanName, array $featureBonus = []): void
     {
         if (! AdminActivityNotificationGate::allowsPeerActivityNotification($referrer)) {
             return;
         }
-        SafeNotifier::notify($referrer, new ReferralRewardGrantedNotification($bonusDays, $purchasedPlanName));
+        SafeNotifier::notify($referrer, new ReferralRewardGrantedNotification($bonusDays, $purchasedPlanName, $featureBonus));
+    }
+
+    public function notifyReferralInviteRegistered(User $referrer, string $inviteeDisplayName): void
+    {
+        $this->notifyReferralActivity($referrer, ReferralActivityNotification::TYPE_INVITE_REGISTERED, $inviteeDisplayName);
+    }
+
+    public function notifyReferralInviteUpgraded(User $referrer, string $inviteeDisplayName, string $planName): void
+    {
+        $this->notifyReferralActivity($referrer, ReferralActivityNotification::TYPE_INVITE_UPGRADED, $inviteeDisplayName, $planName);
+    }
+
+    public function notifyReferralRewardPending(User $referrer, string $inviteeDisplayName, string $planName, int $bonusDays): void
+    {
+        $this->notifyReferralActivity($referrer, ReferralActivityNotification::TYPE_REWARD_PENDING, $inviteeDisplayName, $planName, $bonusDays);
+    }
+
+    public function notifyReferralCapSkipped(User $referrer, string $inviteeDisplayName, string $planName): void
+    {
+        $this->notifyReferralActivity($referrer, ReferralActivityNotification::TYPE_CAP_SKIPPED, $inviteeDisplayName, $planName);
+    }
+
+    private function notifyReferralActivity(
+        User $referrer,
+        string $activityType,
+        string $inviteeDisplayName,
+        string $planName = '',
+        int $bonusDays = 0,
+    ): void {
+        if (! AdminActivityNotificationGate::allowsPeerActivityNotification($referrer)) {
+            return;
+        }
+
+        SafeNotifier::notify($referrer, new ReferralActivityNotification(
+            $activityType,
+            $inviteeDisplayName,
+            $planName,
+            $bonusDays,
+        ));
     }
 
     /**

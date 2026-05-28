@@ -5,6 +5,8 @@
 <div class="py-12">
     <div class="max-w-7xl mx-auto sm:px-6 lg:px-8">
 
+        <x-referred-registration-welcome :welcome="$referredRegistrationWelcome ?? null" />
+
         {{-- No Profile Case --}}
             @if (!$hasProfile)
 
@@ -94,12 +96,46 @@
                 @endif
             </div>
 
+            @if (! empty($referralShareTools) && ($referralSummary['engine_enabled'] ?? false))
+                <div class="mb-6 rounded-2xl border border-rose-200/80 bg-white/95 p-4 sm:p-5 shadow-sm dark:border-rose-900/40 dark:bg-gray-800/95">
+                    <div class="flex flex-wrap items-start justify-between gap-3">
+                        <div class="min-w-0 flex-1">
+                            <h2 class="text-base font-semibold text-gray-900 dark:text-gray-100">{{ __('referrals.dashboard_card_title') }}</h2>
+                            <x-referral-share-tools :share-tools="$referralShareTools" id-prefix="dashboard-referral" :show-url="false" compact class="mt-2" />
+                        </div>
+                        <a href="{{ route('referrals.index') }}" class="shrink-0 text-sm font-semibold text-rose-600 hover:underline dark:text-rose-400">{{ __('referrals.dashboard_card_link') }} →</a>
+                    </div>
+                    <div class="mt-4 grid grid-cols-3 gap-2 sm:gap-3">
+                        <div class="rounded-lg bg-gray-50 px-2 py-2 text-center dark:bg-gray-900/60">
+                            <p class="text-lg font-bold tabular-nums text-gray-900 dark:text-gray-50">{{ (int) ($referralSummary['invited'] ?? 0) }}</p>
+                            <p class="text-[10px] font-semibold uppercase tracking-wide text-gray-500">{{ __('referrals.stat_invited') }}</p>
+                        </div>
+                        <div class="rounded-lg bg-violet-50 px-2 py-2 text-center dark:bg-violet-950/40">
+                            <p class="text-lg font-bold tabular-nums text-violet-800 dark:text-violet-200">{{ (int) ($referralSummary['converted'] ?? 0) }}</p>
+                            <p class="text-[10px] font-semibold uppercase tracking-wide text-violet-600/90 dark:text-violet-300/90">{{ __('referrals.stat_converted') }}</p>
+                        </div>
+                        <div class="rounded-lg bg-emerald-50 px-2 py-2 text-center dark:bg-emerald-950/40">
+                            <p class="text-lg font-bold tabular-nums text-emerald-800 dark:text-emerald-200">{{ (int) ($referralSummary['rewards_earned'] ?? 0) }}</p>
+                            <p class="text-[10px] font-semibold uppercase tracking-wide text-emerald-700/90 dark:text-emerald-300/90">{{ __('referrals.stat_rewards') }}</p>
+                        </div>
+                    </div>
+                    <x-referral-monthly-cap-progress :progress="$referralSummary['monthly_cap_progress'] ?? null" class="mt-3" />
+                    @if (($referralPendingClaimCount ?? 0) > 0)
+                        <p class="mt-3 text-sm text-violet-800 dark:text-violet-200">
+                            {{ trans_choice('dashboard.referral_pending_claim_body', (int) $referralPendingClaimCount, ['count' => (int) $referralPendingClaimCount]) }}
+                            <a href="{{ route('plans.index') }}" class="font-semibold underline">{{ __('referrals.view_plans_claim') }}</a>
+                        </p>
+                    @endif
+                </div>
+            @endif
+
             <x-monetization.urgency-strip
                 :profileViewersCount="$profileViewersRecentCount ?? 0"
                 :unreadMessages="$chatUnreadCount ?? 0"
                 :planExpiresInDays="$planExpiresInDays"
                 :walletBalanceDisplay="($walletSummary['wallet_enabled'] ?? false) && (($walletSummary['balance_paise'] ?? 0) > 0) ? $walletSummary['balance_rupees_display'] : null"
                 :shareReferralUrl="$referralShareUrl"
+                :referralWhatsappUrl="$referralShareTools['whatsapp_url'] ?? null"
                 :autoHideSeconds="(int) ($activityAutoHideSeconds ?? 7)"
             />
 
@@ -158,13 +194,13 @@
                         <div class="mb-4">
                             <div class="flex justify-between items-center mb-2">
                                 <span class="text-sm font-medium text-gray-700 dark:text-gray-300">{{ __('profile.profile_completeness') }}</span>
-                                <span class="text-sm font-bold text-red-600 dark:text-red-400">{{ $completion['mandatory_core'] }}%</span>
+                                <span class="text-sm font-bold text-red-600 dark:text-red-400">{{ $completion['detailed'] }}%</span>
                             </div>
                             <div class="w-full bg-gray-200 dark:bg-gray-600 rounded-full h-3">
                                 <div class="bg-red-600 dark:bg-red-500 h-3 rounded-full transition-all duration-300" 
-                                     style="width: {{ $completion['mandatory_core'] }}%"></div>
+                                     style="width: {{ $completion['detailed'] }}%"></div>
                             </div>
-                            @if (!($completion['is_mandatory_complete'] ?? false))
+                            @if (!($completion['is_detailed_complete'] ?? false))
                                 <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
                                     <a href="{{ route('matrimony.profile.wizard.section', ['section' => 'full']) }}" class="text-red-600 dark:text-red-400 hover:underline">{{ __('dashboard.complete_your_profile') }}</a> {{ __('dashboard.to_get_better_matches') }}
                                 </p>
@@ -191,45 +227,6 @@
             </div>
 
             @include('partials.plan-usage-summary', ['variant' => 'full'])
-
-            @if (!empty($recommendations ?? []))
-                <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 mb-6 border border-gray-200 dark:border-gray-700">
-                    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-4">
-                        <div>
-                            <h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100">{{ __('dashboard.smart_recommendations_title') }}</h3>
-                            <p class="text-sm text-gray-600 dark:text-gray-400">{{ __('dashboard.smart_recommendations_subtitle') }}</p>
-                        </div>
-                        <a href="{{ route('matrimony.profiles.index') }}" class="text-sm font-medium text-red-600 dark:text-red-400 hover:underline whitespace-nowrap">
-                            {{ __('dashboard.smart_recommendations_browse') }}
-                        </a>
-                    </div>
-                    <ul class="divide-y divide-gray-200 dark:divide-gray-700">
-                        @foreach ($recommendations as $rec)
-                            @continue(empty($rec['profile']))
-                            <li class="py-3 flex items-start justify-between gap-3">
-                                <a href="{{ route('matrimony.profile.show', $rec['profile']->id) }}" class="text-gray-900 dark:text-gray-100 font-medium hover:text-red-600 dark:hover:text-red-400 truncate min-w-0">
-                                    {{ $rec['profile']->full_name ?: __('dashboard.profile_placeholder') }}
-                                </a>
-                                <div class="shrink-0 text-right max-w-[58%]">
-                                    <span class="text-sm tabular-nums text-gray-600 dark:text-gray-400 block">
-                                        {{ __('dashboard.smart_recommendations_score', ['score' => (int) ($rec['final_score'] ?? 0)]) }}
-                                    </span>
-                                    @if (! empty($rec['explanation'] ?? ''))
-                                        <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">
-                                            {{ $rec['explanation'] }}
-                                        </p>
-                                    @endif
-                                </div>
-                            </li>
-                        @endforeach
-                    </ul>
-                </div>
-            @else
-                <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-4 mb-6 border border-gray-200 dark:border-gray-700 text-sm text-gray-600 dark:text-gray-400">
-                    {{ __('dashboard.smart_recommendations_empty') }}
-                    <a href="{{ route('matrimony.profiles.index') }}" class="text-red-600 dark:text-red-400 hover:underline ml-1">{{ __('dashboard.smart_recommendations_browse') }}</a>
-                </div>
-            @endif
 
             {{-- Statistics Cards with SVG Icons --}}
             <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 mb-6">
@@ -379,32 +376,71 @@
                     </div>
 
                     @forelse ($recentReceivedInterests as $interest)
+                        @php
+                            $receivedUnlocked = ($recentReceivedUnlockById[$interest->id] ?? true) === true;
+                            $receivedTeaser = $recentReceivedLockedTeasers[$interest->id] ?? null;
+                            $lockedBlurPhoto = is_array($receivedTeaser) ? ($receivedTeaser['photo_url'] ?? null) : null;
+                            if (!$lockedBlurPhoto && $interest->senderProfile && $interest->senderProfile->profile_photo && $interest->senderProfile->photo_approved !== false) {
+                                $lockedBlurPhoto = app(\App\Services\Image\ProfilePhotoUrlService::class)->publicUrl($interest->senderProfile->profile_photo);
+                            }
+                            if (!$lockedBlurPhoto) {
+                                $lockedBlurPhoto = asset('images/placeholders/default-profile.svg');
+                            }
+                        @endphp
                         <div class="border-b border-gray-200 dark:border-gray-600 pb-3 mb-3 last:border-0 last:mb-0 last:pb-0">
                             <div class="flex items-center gap-3">
-                                {{-- Sender Photo with Gender-based Fallback --}}
-                                <div class="flex-shrink-0">
-                                    @if ($interest->senderProfile && $interest->senderProfile->profile_photo && $interest->senderProfile->photo_approved !== false)
-                                        <img src="{{ app(\App\Services\Image\ProfilePhotoUrlService::class)->publicUrl($interest->senderProfile->profile_photo) }}"
-                                             alt="{{ __('common.profile') }}" 
-                                             class="w-14 h-14 rounded-full object-cover border-2 border-red-200">
-                                    @else
-                                        @php
-                                            $sG = ($interest->senderProfile && $interest->senderProfile->gender)
-                                                ? ($interest->senderProfile->gender->key ?? null)
-                                                : null;
-                                            $sP = $sG === 'male' ? asset('images/placeholders/male-profile.svg') : ($sG === 'female' ? asset('images/placeholders/female-profile.svg') : asset('images/placeholders/default-profile.svg'));
-                                        @endphp
-                                        <img src="{{ $sP }}" 
-                                             alt="{{ __('dashboard.profile_placeholder') }}" 
-                                             class="w-14 h-14 rounded-full object-cover border-2 border-red-200">
-                                    @endif
-                                </div>
+                                {{-- Sender Photo / Locked Placeholder --}}
+                                @if ($receivedUnlocked)
+                                    <div class="flex-shrink-0">
+                                        @if ($interest->senderProfile && $interest->senderProfile->profile_photo && $interest->senderProfile->photo_approved !== false)
+                                            <img src="{{ app(\App\Services\Image\ProfilePhotoUrlService::class)->publicUrl($interest->senderProfile->profile_photo) }}"
+                                                 alt="{{ __('common.profile') }}" 
+                                                 class="w-14 h-14 rounded-full object-cover border-2 border-red-200">
+                                        @else
+                                            @php
+                                                $sG = ($interest->senderProfile && $interest->senderProfile->gender)
+                                                    ? ($interest->senderProfile->gender->key ?? null)
+                                                    : null;
+                                                $sP = $sG === 'male' ? asset('images/placeholders/male-profile.svg') : ($sG === 'female' ? asset('images/placeholders/female-profile.svg') : asset('images/placeholders/default-profile.svg'));
+                                            @endphp
+                                            <img src="{{ $sP }}" 
+                                                 alt="{{ __('dashboard.profile_placeholder') }}" 
+                                                 class="w-14 h-14 rounded-full object-cover border-2 border-red-200">
+                                        @endif
+                                    </div>
+                                @else
+                                    <div class="flex-shrink-0 h-14 w-14 overflow-hidden rounded-full border-2 border-red-200 bg-gray-100 dark:bg-gray-700">
+                                        <img src="{{ $lockedBlurPhoto }}"
+                                             alt="{{ __('common.profile') }}"
+                                             class="h-full w-full object-cover {{ $receivedTeaser['blur_photo_class'] ?? 'blur-md opacity-90 scale-110' }}">
+                                    </div>
+                                @endif
 
-                                {{-- Sender Info - Better alignment --}}
+                                {{-- Sender Info --}}
                                 <div class="flex-1 min-w-0">
-                                    <p class="font-semibold text-gray-900 dark:text-gray-100 truncate">
-                                        {{ $interest->senderProfile->full_name ?? __('interests.profile_deleted') }}
-                                    </p>
+                                    @if ($receivedUnlocked)
+                                        <p class="font-semibold text-gray-900 dark:text-gray-100 truncate">
+                                            {{ $interest->senderProfile->full_name ?? __('interests.profile_deleted') }}
+                                        </p>
+                                    @else
+                                        <p class="font-semibold text-gray-900 dark:text-gray-100 truncate">
+                                            {{ is_array($receivedTeaser) ? ($receivedTeaser['headline'] ?? __('interests.from_locked_title')) : __('interests.from_locked_title') }}
+                                        </p>
+                                        @if (is_array($receivedTeaser) && !empty($receivedTeaser['lines']))
+                                            <p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400 truncate">
+                                                {{ $receivedTeaser['lines'][0] ?? '' }}
+                                            </p>
+                                            @if (!empty($receivedTeaser['lines'][1] ?? ''))
+                                                <p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400 truncate">
+                                                    {{ $receivedTeaser['lines'][1] }}
+                                                </p>
+                                            @endif
+                                        @else
+                                            <p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
+                                                {{ __('interests.from_locked_body') }}
+                                            </p>
+                                        @endif
+                                    @endif
                                     <div class="flex items-center gap-2 mt-1 flex-wrap">
                                         @if ($interest->status === 'pending')
                                             <span class="text-xs bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300 px-2 py-1 rounded">{{ __('interests.pending') }}</span>
@@ -417,12 +453,19 @@
                                     </div>
                                 </div>
 
-                                {{-- View Profile Link --}}
-                                @if ($interest->senderProfile)
+                                {{-- CTA --}}
+                                @if ($receivedUnlocked && $interest->senderProfile)
                                     <div class="flex-shrink-0">
                                         <a href="{{ route('matrimony.profile.show', $interest->senderProfile->id) }}"
                                            class="text-sm text-red-600 dark:text-red-400 hover:underline whitespace-nowrap">
                                             {{ __('common.view_arrow') }}
+                                        </a>
+                                    </div>
+                                @else
+                                    <div class="flex-shrink-0">
+                                        <a href="{{ route('plans.index') }}"
+                                           class="text-sm text-red-600 dark:text-red-400 hover:underline whitespace-nowrap">
+                                            {{ __('interests.upgrade_for_more_reveals') }}
                                         </a>
                                     </div>
                                 @endif

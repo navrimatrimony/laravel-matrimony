@@ -10,6 +10,9 @@
     <form id="register-form" method="POST" action="{{ route('register') }}">
         @csrf
         <input type="hidden" name="invite_code" value="{{ old('invite_code', request('ref')) }}" autocomplete="off" />
+        @foreach (['utm_source', 'utm_medium', 'utm_campaign', 'utm_content'] as $utmKey)
+            <input type="hidden" name="{{ $utmKey }}" value="{{ old($utmKey, request($utmKey)) }}" autocomplete="off" />
+        @endforeach
 
         <!-- Registrant name (account) -->
         <div>

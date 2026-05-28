@@ -81,6 +81,22 @@ return [
             'subject' => 'Referral reward applied',
             'title' => 'Referral reward',
         ],
+        'referral_invite_registered' => [
+            'subject' => 'Someone joined with your invite',
+            'title' => 'New referral signup',
+        ],
+        'referral_invite_upgraded' => [
+            'subject' => 'Your invitee upgraded',
+            'title' => 'Referral upgrade',
+        ],
+        'referral_reward_pending' => [
+            'subject' => 'Referral reward waiting',
+            'title' => 'Claim your referral reward',
+        ],
+        'referral_cap_skipped' => [
+            'subject' => 'Referral reward limit reached',
+            'title' => 'Monthly referral cap',
+        ],
         'image_approved' => [
             'subject' => 'Profile photo approved',
             'title' => 'Photo approved',

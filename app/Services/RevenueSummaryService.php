@@ -132,9 +132,26 @@ class RevenueSummaryService
             $preview = [];
         }
 
+        $referralDisc = round((float) ($pending['referral_checkout_discount'] ?? 0), 2);
         $extras = [];
         if ($includePreviewExtras) {
             $extras = $this->previewCouponExtrasLines($pending, $preview);
+            if ($referralDisc > 0.004) {
+                $percent = (int) (($preview['referred_checkout']['percent_off'] ?? null) ?: config('referral.referred_checkout.percent_off', 0));
+                $extras[] = [
+                    'kind' => 'referral_invite_discount',
+                    'display' => __('revenue_summary.referral_invite_discount_line', [
+                        'percent' => $percent > 0 ? $percent : '—',
+                    ]),
+                ];
+            }
+            $referralExtra = (int) ($pending['referral_extra_duration_days'] ?? 0);
+            if ($referralExtra > 0) {
+                $extras[] = [
+                    'kind' => 'referral_invite_extra_days',
+                    'display' => __('revenue_summary.referral_invite_extra_days_line', ['days' => $referralExtra]),
+                ];
+            }
         }
 
         return [
@@ -142,14 +159,18 @@ class RevenueSummaryService
             'base_plan_price_display' => $this->formatInrPlain($base),
             'discount_amount' => $disc,
             'discount_amount_display' => $this->formatInrSigned(-$disc, negativeIsDiscount: true),
+            'referral_checkout_discount' => $referralDisc,
+            'referral_checkout_discount_display' => $this->formatInrSigned(-$referralDisc, negativeIsDiscount: true),
             'final_price' => $final,
             'final_price_display' => $this->formatInrPlain($final),
             'coupon_code' => $couponCode,
             'wallet_used_rupees' => 0.0,
             'wallet_used_display' => $this->formatInrPlain(0.0),
             'subscription_checkout_uses_wallet' => false,
-            'referral_bonus' => null,
-            'referral_bonus_display' => null,
+            'referral_bonus' => $referralDisc > 0.004 ? ['percent_off' => (int) config('referral.referred_checkout.percent_off', 0)] : null,
+            'referral_bonus_display' => $referralDisc > 0.004
+                ? __('revenue_summary.referral_invite_discount_compact', ['amount' => $this->formatInrSigned(-$referralDisc, negativeIsDiscount: true)])
+                : null,
             /** Coupon / duration extras from locked checkout preview (not quota engine). */
             'coupon_checkout_extras' => $extras,
             'extra_duration_days' => (int) ($pending['extra_duration_days'] ?? 0),

@@ -26,7 +26,7 @@ class AppServiceProvider extends ServiceProvider
     public function register(): void
     {
         $this->app->singleton(\App\Services\ProfileCompletionEngine::class);
-        $this->app->singleton(\App\Services\MatchingEngine::class);
+        $this->app->singleton(\App\Services\UserEngagementStatsService::class);
         $this->app->singleton(\App\Services\Matching\MatchingPresenter::class);
         $this->app->bind(WhatsAppMessageProvider::class, function ($app) {
             $provider = strtolower(trim((string) config('whatsapp.response_provider', 'null')));

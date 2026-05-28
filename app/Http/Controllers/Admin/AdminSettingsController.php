@@ -13,6 +13,7 @@ use App\Services\Parsing\ProviderResolver;
 use App\Services\ProfileCompletenessService;
 use App\Services\SettingService;
 use App\Services\Showcase\ShowcaseInterestPolicyService;
+use App\Services\NotificationPlatformSettingsService;
 use App\Services\SiteIdentityService;
 use App\Services\WhoViewed\WhoViewedTeaserPolicy;
 use Carbon\CarbonImmutable;
@@ -677,6 +678,7 @@ class AdminSettingsController extends Controller
             'siteIdentityImageUrls' => collect(SiteIdentityService::IMAGE_KEYS)
                 ->mapWithKeys(fn (string $key): array => [$key => $siteIdentity->assetUrl($key)])
                 ->all(),
+            'notificationPlatform' => app(NotificationPlatformSettingsService::class)->formDefaults(),
         ]);
     }
 
@@ -714,9 +716,19 @@ class AdminSettingsController extends Controller
             'invoice_failure_threshold' => 'nullable|numeric|min:0|max:100',
             'dashboard_notification_cards_limit' => 'nullable|integer|min:1|max:3',
             'dashboard_activity_autohide_seconds' => 'nullable|integer|min:3|max:30',
+            'notification_mail_enabled' => 'nullable|in:0,1',
+            'notification_inactive_reminder_enabled' => 'nullable|in:0,1',
+            'notification_inactive_whatsapp_enabled' => 'nullable|in:0,1',
+            'notification_inactive_after_days' => 'nullable|integer|min:1|max:90',
+            'notification_inactive_cooldown_days' => 'nullable|integer|min:1|max:90',
+            'notification_new_matches_digest_enabled' => 'nullable|in:0,1',
+            'notification_plan_expiry_notify_days' => ['nullable', 'string', 'max:80', 'regex:/^[\d,\s]+$/'],
+            'notification_retention_days' => 'nullable|integer|min:7|max:3650',
             'data_engine_allow_fix_mode' => 'nullable|in:0,1',
             'data_engine_fix_mode_duration' => ['nullable', 'string', Rule::in(['2_hours', '1_day', 'forever'])],
             'site_name' => ['nullable', 'string', 'max:160'],
+            'site_name_mr' => ['nullable', 'string', 'max:160'],
+            'site_name_en' => ['nullable', 'string', 'max:160'],
             'site_tagline' => ['nullable', 'string', 'max:220'],
             'footer_copyright_text' => ['nullable', 'string', 'max:300'],
             'company_name' => ['nullable', 'string', 'max:160'],
@@ -777,6 +789,17 @@ class AdminSettingsController extends Controller
         AdminSetting::setValue('invoice_failure_threshold', (string) $request->input('invoice_failure_threshold', '2'));
         AdminSetting::setValue('dashboard_notification_cards_limit', (string) $request->input('dashboard_notification_cards_limit', '2'));
         AdminSetting::setValue('dashboard_activity_autohide_seconds', (string) $request->input('dashboard_activity_autohide_seconds', '7'));
+
+        app(NotificationPlatformSettingsService::class)->persistFromAdminForm([
+            'notification_mail_enabled' => $request->boolean('notification_mail_enabled'),
+            'notification_inactive_reminder_enabled' => $request->boolean('notification_inactive_reminder_enabled'),
+            'notification_inactive_whatsapp_enabled' => $request->boolean('notification_inactive_whatsapp_enabled'),
+            'notification_inactive_after_days' => (int) $request->input('notification_inactive_after_days', 3),
+            'notification_inactive_cooldown_days' => (int) $request->input('notification_inactive_cooldown_days', 7),
+            'notification_new_matches_digest_enabled' => $request->boolean('notification_new_matches_digest_enabled'),
+            'notification_plan_expiry_notify_days' => trim((string) $request->input('notification_plan_expiry_notify_days', '7,2,1')),
+            'notification_retention_days' => (int) $request->input('notification_retention_days', 90),
+        ]);
         if ($canManageBillingSettings) {
             AdminSetting::setValue('billing_legal_name', trim((string) $request->input('billing_legal_name', '')));
             AdminSetting::setValue('billing_address', trim((string) $request->input('billing_address', '')));
@@ -833,7 +856,12 @@ class AdminSettingsController extends Controller
             false
         );
 
-        return redirect()->route('admin.app-settings.index')
+        $returnTab = $request->input('return_tab');
+        $tabQuery = in_array($returnTab, ['general', 'dashboard', 'notifications', 'branding', 'company', 'monitoring', 'billing'], true)
+            ? ['tab' => $returnTab]
+            : [];
+
+        return redirect()->route('admin.app-settings.index', $tabQuery)
             ->with('success', 'App settings updated.');
     }
 

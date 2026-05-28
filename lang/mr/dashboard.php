@@ -81,6 +81,9 @@ return [
     'monetization_plan_expires' => '{1} तुमचा प्लॅन :days दिवसात संपतो/नूतनीकरण होते.|[2,*] तुमचा प्लॅन :days दिवसांत संपतो/नूतनीकरण होते.',
     'monetization_wallet_balance' => 'वॉलेट शिल्लक: ₹:amount (फक्त तुम्ही मान्य केलेल्या अतिरिक्त पेड कृतींसाठी वापरली जाते).',
     'monetization_referral_hint' => 'मित्रांना आमंत्रित करा — लिंक शेअर करा:',
+    'referral_pending_claim_title' => 'रेफरल रिवॉर्ड प्रतीक्षेत आहे',
+    'referral_pending_claim_body' => '{1} तुमच्या आमंत्रिताने प्लान घेतला — :count प्रलंबित रिवॉर्ड मिळवण्यासाठी सक्रिय paid plan आवश्यक.|[2,*] तुमच्या आमंत्रितांनी प्लान घेतले — :count प्रलंबित रिवॉर्ड मिळवण्यासाठी सक्रिय paid plan आवश्यक.',
+    'referral_pending_claim_cta' => 'प्लान पहा आणि रिवॉर्ड मिळवा',
 
     'smart_recommendations_title' => 'तुमच्यासाठी सूचना',
     'smart_recommendations_subtitle' => 'तुमच्या हालचालीसह जुळण्याच्या गुणांनुसार क्रम (शोधाशी समान नियम).',
