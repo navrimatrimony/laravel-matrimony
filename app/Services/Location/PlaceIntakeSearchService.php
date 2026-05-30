@@ -79,6 +79,405 @@ final class PlaceIntakeSearchService
     }
 
     /**
+     * One intake suggestion when biodata hierarchy (गाव+ता.+जि., town-taluka, suburban+city, metro) resolves uniquely.
+     * Uses {@code addresses.type} + {@code tag} with {@see LocationFormatterService} display lines.
+     *
+     * @return array<string, mixed>|null
+     */
+    public function confidentMatch(string $searchText): ?array
+    {
+        $searchText = trim($searchText);
+        if ($searchText === '') {
+            return null;
+        }
+
+        $hints = $this->compoundParser->parseComponents($searchText);
+        $simpleParts = $this->parseSimpleParts($searchText);
+        $pattern = $this->detectIntakePattern($hints, $simpleParts);
+
+        if ($pattern === 'rural' && $this->hasFullRuralHints($hints)) {
+            $resolved = $this->resolveUniqueRuralVillage($hints);
+            if ($resolved !== null) {
+                return $this->formatRows([$resolved])[0] ?? null;
+            }
+        }
+
+        if ($pattern === 'town_taluka') {
+            $resolved = $this->resolveUniqueTownTaluka($hints);
+            if ($resolved !== null) {
+                return $this->formatRows([$resolved])[0] ?? null;
+            }
+        }
+
+        $rows = $this->search($searchText, 10);
+        $candidates = $this->filterRowsForIntakePattern($rows, $pattern, $hints, $simpleParts);
+
+        return $this->pickSingleConfidentRow($candidates, $hints, $rows);
+    }
+
+    /**
+     * @param  array{village: string, taluka: string, district: string}  $hints
+     * @param  list<string>  $simpleParts
+     */
+    private function detectIntakePattern(array $hints, array $simpleParts): string
+    {
+        $village = trim((string) ($hints['village'] ?? ''));
+        $taluka = trim((string) ($hints['taluka'] ?? ''));
+        $district = trim((string) ($hints['district'] ?? ''));
+
+        if (count($simpleParts) === 1 && $taluka === '' && $district === '') {
+            return 'metro';
+        }
+
+        if (count($simpleParts) === 2 && $taluka === '' && $district === '') {
+            return 'suburban';
+        }
+
+        if ($district !== '' && $taluka !== '' && $village !== ''
+            && $this->normalizeKey($village) === $this->normalizeKey($taluka)) {
+            return 'town_taluka';
+        }
+
+        if ($district !== '' && $taluka !== '' && $village !== '') {
+            return 'rural';
+        }
+
+        return 'unknown';
+    }
+
+    /**
+     * @param  array{village: string, taluka: string, district: string}  $hints
+     */
+    private function hasFullRuralHints(array $hints): bool
+    {
+        return trim((string) ($hints['village'] ?? '')) !== ''
+            && trim((string) ($hints['taluka'] ?? '')) !== ''
+            && trim((string) ($hints['district'] ?? '')) !== '';
+    }
+
+    /**
+     * @param  array{village: string, taluka: string, district: string}  $hints
+     */
+    private function resolveUniqueRuralVillage(array $hints): ?Location
+    {
+        $matches = [];
+        foreach ($this->hierarchySearch->findCities($hints, 12) as $leaf) {
+            $loc = Location::query()->with(['parent.parent.parent'])->find((int) $leaf->id);
+            if ($loc === null || ! $this->locationFitsPattern($loc, 'rural')) {
+                continue;
+            }
+            if (! $this->locationMatchesAdminHints($loc, $hints)) {
+                continue;
+            }
+            if (! $this->villageNameMatchesHint($this->compactNamesForLocation($loc), (string) $hints['village'])) {
+                continue;
+            }
+            $matches[] = $loc;
+        }
+
+        return $this->pickUniqueLocation($matches, (string) $hints['village']);
+    }
+
+    /**
+     * @param  array{village: string, taluka: string, district: string}  $hints
+     */
+    private function resolveUniqueTownTaluka(array $hints): ?Location
+    {
+        $townName = trim((string) ($hints['taluka'] !== '' ? $hints['taluka'] : $hints['village']));
+        $district = trim((string) ($hints['district'] ?? ''));
+        if ($townName === '' || $district === '') {
+            return null;
+        }
+
+        $query = Location::query()
+            ->with(['parent.parent'])
+            ->where('type', 'taluka')
+            ->where(function (Builder $w): void {
+                $w->where('tag', 'town')
+                    ->orWhereRaw('LOWER(COALESCE(tag, "")) = ?', ['town']);
+            })
+            ->where(function (Builder $w) use ($townName): void {
+                $this->applyGeoNameMatch($w, $townName);
+            });
+
+        $districtIds = $this->resolveDistrictIds($district);
+        if ($districtIds !== []) {
+            $query->whereIn('parent_id', $districtIds);
+        } else {
+            $query->whereHas('parent', function (Builder $dq) use ($district): void {
+                $dq->where('type', 'district');
+                $this->applyGeoNameMatch($dq, $district);
+            });
+        }
+
+        $matches = [];
+        foreach ($query->orderBy('name')->limit(8)->get() as $loc) {
+            if ($this->locationMatchesAdminHints($loc, $hints)) {
+                $matches[] = $loc;
+            }
+        }
+
+        return $this->pickUniqueLocation($matches, $townName);
+    }
+
+    /**
+     * @param  list<Location>  $locations
+     */
+    private function pickUniqueLocation(array $locations, string $villageHint): ?Location
+    {
+        if ($locations === []) {
+            return null;
+        }
+        if (count($locations) === 1) {
+            return $locations[0];
+        }
+
+        $scored = [];
+        foreach ($locations as $loc) {
+            $scored[] = [
+                'loc' => $loc,
+                'score' => $this->villageTokenMatchScore($this->compactNamesForLocation($loc), $villageHint),
+            ];
+        }
+        usort($scored, static fn ($a, $b) => $b['score'] <=> $a['score']);
+        if (($scored[0]['score'] ?? 0) < 1) {
+            return null;
+        }
+        if (isset($scored[1]) && $scored[1]['score'] === $scored[0]['score']) {
+            return null;
+        }
+
+        return $scored[0]['loc'];
+    }
+
+    private function locationFitsPattern(Location $loc, string $pattern): bool
+    {
+        $type = (string) ($loc->type ?? '');
+        $tag = strtolower(trim((string) ($loc->category ?? '')));
+
+        return match ($pattern) {
+            'rural' => $type === 'village' && ($tag === '' || in_array($tag, ['rural', 'village'], true)),
+            'town_taluka' => $type === 'taluka' && in_array($tag, ['town', 'taluka'], true),
+            'suburban' => $type === 'suburb' && ($tag === '' || $tag === 'suburban'),
+            'metro' => in_array($type, ['city', 'district'], true)
+                && ($tag === '' || in_array($tag, ['metro', 'city', 'capital'], true)),
+            default => true,
+        };
+    }
+
+    /**
+     * @param  array{village: string, taluka: string, district: string}  $hints
+     */
+    private function locationMatchesAdminHints(Location $loc, array $hints): bool
+    {
+        $this->locationService->ensureAncestorsLoaded($loc);
+        $h = $this->locationService->fillHierarchyGaps($loc, $this->locationService->getFullHierarchy($loc));
+
+        $talukaHint = trim((string) ($hints['taluka'] ?? ''));
+        $districtHint = trim((string) ($hints['district'] ?? ''));
+
+        if ($talukaHint !== '' && ! $this->adminUnitMatchesLocation($h['taluka'] ?? null, $talukaHint)) {
+            return false;
+        }
+
+        if ($districtHint !== '' && ! $this->adminUnitMatchesLocation($h['district'] ?? null, $districtHint)) {
+            return false;
+        }
+
+        return true;
+    }
+
+    private function adminUnitMatchesLocation(?Location $admin, string $hint): bool
+    {
+        if ($admin === null || trim($hint) === '') {
+            return false;
+        }
+
+        foreach ([$admin->name_mr, $admin->name_en, $admin->name, $admin->localizedName()] as $name) {
+            $n = $this->normalizeKey((string) $name);
+            $h = $this->normalizeKey($hint);
+            if ($n !== '' && ($n === $h || str_contains($n, $h) || str_contains($h, $n))) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function compactNamesForLocation(Location $loc): array
+    {
+        return array_values(array_filter([
+            $this->compactLookupKey((string) ($loc->name_mr ?? '')),
+            $this->compactLookupKey((string) ($loc->name_en ?? '')),
+            $this->compactLookupKey((string) ($loc->name ?? '')),
+            $this->compactLookupKey($loc->localizedName()),
+        ]));
+    }
+
+    private function compactLookupKey(string $value): string
+    {
+        return $this->normalizeKey($value);
+    }
+
+    private function villageNameMatchesHint(array $nameCompacts, string $villageHint): bool
+    {
+        $expected = $this->villageTokenCount($villageHint) * 10;
+        if ($expected < 1) {
+            return false;
+        }
+
+        foreach ($nameCompacts as $compact) {
+            if ($compact === '') {
+                continue;
+            }
+            if ($this->villageTokenMatchScore([$compact], $villageHint) >= $expected) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function villageTokenCount(string $villageHint): int
+    {
+        return count($this->villageNameTokens($villageHint));
+    }
+
+    /**
+     * @param  list<string>  $nameCompacts
+     */
+    private function villageTokenMatchScore(array $nameCompacts, string $villageHint): int
+    {
+        $score = 0;
+        foreach ($this->villageNameTokens($villageHint) as $token) {
+            foreach ($nameCompacts as $compact) {
+                if ($compact !== '' && (str_contains($compact, $token) || $this->tokenAppearsInCompactName($compact, $token))) {
+                    $score += 10;
+                    break;
+                }
+            }
+        }
+
+        return $score;
+    }
+
+    private function tokenAppearsInCompactName(string $locNameCompact, string $token): bool
+    {
+        if ($token === '' || $locNameCompact === '') {
+            return false;
+        }
+        if (str_contains($locNameCompact, $token)) {
+            return true;
+        }
+
+        $len = mb_strlen($token);
+        for ($i = 0; $i <= mb_strlen($locNameCompact) - $len; $i++) {
+            $slice = mb_substr($locNameCompact, $i, $len);
+            similar_text($slice, $token, $pct);
+            if ($pct >= 86.0) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * @param  list<array<string, mixed>>  $rows
+     * @param  array{village: string, taluka: string, district: string}  $hints
+     * @param  list<string>  $simpleParts
+     * @return list<array<string, mixed>>
+     */
+    private function filterRowsForIntakePattern(array $rows, string $pattern, array $hints, array $simpleParts): array
+    {
+        if ($pattern === 'unknown') {
+            return [];
+        }
+
+        $out = [];
+        foreach ($rows as $row) {
+            $loc = Location::query()->find((int) ($row['city_id'] ?? 0));
+            if ($loc === null || ! $this->locationFitsPattern($loc, $pattern)) {
+                continue;
+            }
+            if ($pattern === 'rural' && ! $this->hasFullRuralHints($hints)) {
+                continue;
+            }
+            if ($pattern === 'rural' && ! $this->locationMatchesAdminHints($loc, $hints)) {
+                continue;
+            }
+            if ($pattern === 'town_taluka' && ! $this->locationMatchesAdminHints($loc, $hints)) {
+                continue;
+            }
+            if ($pattern === 'suburban' && count($simpleParts) >= 2) {
+                if (! $this->villageNameMatchesHint($this->compactNamesForLocation($loc), $simpleParts[0])) {
+                    continue;
+                }
+            }
+            $out[] = $row;
+        }
+
+        return $out;
+    }
+
+    /**
+     * @param  list<array<string, mixed>>  $candidates
+     * @param  array{village: string, taluka: string, district: string}  $hints
+     * @param  list<array<string, mixed>>  $searchOrder
+     * @return array<string, mixed>|null
+     */
+    private function pickSingleConfidentRow(array $candidates, array $hints, array $searchOrder): ?array
+    {
+        if ($candidates === []) {
+            return null;
+        }
+        if (count($candidates) === 1) {
+            return $candidates[0];
+        }
+
+        $rankById = [];
+        foreach ($searchOrder as $index => $row) {
+            $id = (int) ($row['city_id'] ?? 0);
+            if ($id > 0) {
+                $rankById[$id] = $index;
+            }
+        }
+
+        $villageHint = (string) ($hints['village'] ?? '');
+        $scored = [];
+        foreach ($candidates as $row) {
+            $loc = Location::query()->find((int) ($row['city_id'] ?? 0));
+            $compacts = $loc !== null ? $this->compactNamesForLocation($loc) : [$this->compactLookupKey((string) ($row['city_name'] ?? ''))];
+            $scored[] = [
+                'row' => $row,
+                'score' => $this->villageTokenMatchScore($compacts, $villageHint),
+                'rank' => $rankById[(int) ($row['city_id'] ?? 0)] ?? PHP_INT_MAX,
+            ];
+        }
+
+        usort($scored, static fn ($a, $b) => $b['score'] <=> $a['score'] ?: $a['rank'] <=> $b['rank']);
+
+        $top = $scored[0];
+        $runnerUp = $scored[1] ?? null;
+        if (($top['score'] ?? 0) < 1) {
+            return null;
+        }
+        if ($runnerUp !== null && ($runnerUp['score'] ?? 0) === ($top['score'] ?? 0)) {
+            return null;
+        }
+
+        $expected = $this->villageTokenCount($villageHint) * 10;
+        if ($expected >= 20 && ($top['score'] ?? 0) < $expected) {
+            return null;
+        }
+
+        return $top['row'];
+    }
+
+    /**
      * @param  array{village: string, taluka: string, district: string}  $hints
      */
     private function shouldSearchTownTaluka(array $hints): bool
@@ -128,6 +527,11 @@ final class PlaceIntakeSearchService
         }
 
         $query = Taluka::query()->with(['district.state']);
+
+        $query->where(function (Builder $w): void {
+            $w->where('tag', 'town')
+                ->orWhereRaw('LOWER(COALESCE(tag, "")) = ?', ['town']);
+        });
 
         $query->where(function (Builder $w) use ($townName): void {
             $this->applyGeoNameMatch($w, $townName);
@@ -184,7 +588,12 @@ final class PlaceIntakeSearchService
 
         return Location::query()
             ->with(['parent.parent'])
-            ->where('type', 'suburban')
+            ->where('type', 'suburb')
+            ->where(function (Builder $w): void {
+                $w->where('tag', 'suburban')
+                    ->orWhereNull('tag')
+                    ->orWhere('tag', '');
+            })
             ->whereIn('parent_id', $cityIds)
             ->where(function (Builder $w) use ($suburb): void {
                 $this->applyGeoNameMatch($w, $suburb);

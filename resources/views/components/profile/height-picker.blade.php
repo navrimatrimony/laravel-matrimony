@@ -59,7 +59,12 @@ document.addEventListener('alpine:init', function() {
             formatDisplay() {
                 var cm = parseInt(this.heightCm, 10);
                 if (!cm) return '—';
-                return cm + ' cm';
+                var totalIn = cm / 2.54;
+                var ft = Math.floor(totalIn / 12);
+                var inch = Math.round(totalIn - ft * 12);
+                if (inch === 12) { ft++; inch = 0; }
+                if (inch < 0) inch = 0;
+                return ft + "' " + inch + '" (' + cm + ' cm)';
             }
         };
     }

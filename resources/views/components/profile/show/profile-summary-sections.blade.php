@@ -1,4 +1,5 @@
 @php
+    use App\Support\HeightDisplay;
     $publicMatrimonyLayout = $publicMatrimonyLayout ?? false;
     $profile->loadMissing(['city', 'district', 'state', 'taluka', 'country', 'maritalStatus', 'religion', 'caste', 'subCaste', 'familyType', 'complexion', 'physicalBuild', 'bloodGroup', 'seriousIntent', 'diet', 'smokingStatus', 'drinkingStatus', 'birthCity', 'birthTaluka', 'birthDistrict', 'birthState', 'occupationMaster', 'occupationCustom', 'occupationMaster.category.workingWithType']);
     $locationLine = $profile->residenceLocationDisplayLine();
@@ -15,7 +16,7 @@
         $overviewHighlights[] = __('profile.show_age_years', ['age' => $age]);
     }
     if ($heightVisible && ($profile->height_cm ?? '') !== '') {
-        $overviewHighlights[] = $profile->height_cm.' cm';
+        $overviewHighlights[] = HeightDisplay::formatFeetInches((int) $profile->height_cm);
     }
     if ($profile->religion) {
         $overviewHighlights[] = $profile->religion->label ?? '';
@@ -132,7 +133,7 @@
     $basicScanRow5 = implode(' · ', array_values(array_filter([
         $hasPersonalIncome ? $personalIncomeDisplay : null,
         $hasFamilyIncome ? $familyIncomeDisplay : null,
-        ($heightVisible && ($profile->height_cm ?? '') !== '') ? $profile->height_cm.' cm' : null,
+        ($heightVisible && ($profile->height_cm ?? '') !== '') ? HeightDisplay::formatFeetInches((int) $profile->height_cm) : null,
         ($profile->birth_time ?? '') !== '' ? $profile->birth_time : null,
     ])));
 @endphp
@@ -404,7 +405,7 @@
             @if ($heightVisible && ($profile->height_cm ?? '') !== '')
                 <div class="space-y-1">
                     <p class="text-[11px] font-medium text-stone-500 dark:text-stone-400">{{ __('Height') }}</p>
-                    <p class="text-sm font-semibold text-stone-900 dark:text-stone-100">{{ $profile->height_cm }} cm</p>
+                    <p class="text-sm font-semibold text-stone-900 dark:text-stone-100">{{ HeightDisplay::formatCm((int) $profile->height_cm) }}</p>
                 </div>
             @endif
             @if (($profile->weight_kg ?? null) !== null && $profile->weight_kg !== '')

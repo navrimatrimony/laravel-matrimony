@@ -12,8 +12,8 @@ class IntakePreviewMasterFieldEquivalenceTest extends TestCase
 {
     public function test_religion_id_matches_marathi_label_via_label_mr(): void
     {
-        if (! Schema::hasTable('religions')) {
-            $this->markTestSkipped('religions table not available');
+        if (! Schema::hasTable('master_religions')) {
+            $this->markTestSkipped('master_religions table not available');
         }
 
         $key = 'equiv-hindu-'.uniqid('', true);
@@ -42,7 +42,7 @@ class IntakePreviewMasterFieldEquivalenceTest extends TestCase
 
     public function test_caste_id_matches_marathi_label_when_religion_context_set(): void
     {
-        if (! Schema::hasTable('religions') || ! Schema::hasTable('castes')) {
+        if (! Schema::hasTable('master_religions') || ! Schema::hasTable('master_castes')) {
             $this->markTestSkipped('religion/caste tables not available');
         }
 
@@ -77,6 +77,39 @@ class IntakePreviewMasterFieldEquivalenceTest extends TestCase
         } finally {
             $caste->delete();
             $religion->delete();
+        }
+    }
+
+    public function test_religion_id_matches_english_display_against_marathi_intake_text(): void
+    {
+        if (! Schema::hasTable('master_religions')) {
+            $this->markTestSkipped('master_religions table not available');
+        }
+
+        app()->setLocale('en');
+
+        $key = 'equiv-hindu-en-'.uniqid('', true);
+        $religion = Religion::create([
+            'key' => $key,
+            'label' => 'Hindu',
+            'label_en' => 'Hindu',
+            'label_mr' => 'हिंदू',
+            'is_active' => true,
+        ]);
+
+        try {
+            $eq = app(IntakePreviewMasterFieldEquivalence::class);
+            $this->assertTrue($eq->valuesEqual(
+                'religion_id',
+                $religion->id,
+                'हिंदू',
+                ['religion_id' => $religion->id, 'religion' => 'Hindu'],
+                ['religion' => 'हिंदू', 'religion_id' => $religion->id],
+                null
+            ));
+        } finally {
+            $religion->delete();
+            app()->setLocale(config('app.locale'));
         }
     }
 }

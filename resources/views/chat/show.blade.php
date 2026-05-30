@@ -62,11 +62,11 @@
         </div>
     @endif
 
-    @if (!empty($readLockedForIncoming) && isset($messages) && $messages->isNotEmpty())
+    @if (!empty($readLockedForIncoming) && !empty($hasIncomingFromOther))
         <div class="mt-4 overflow-hidden rounded-2xl border border-indigo-200/90 bg-gradient-to-r from-indigo-600 via-violet-600 to-indigo-700 p-[1px] shadow-lg shadow-indigo-500/15 dark:border-indigo-500/40 dark:from-indigo-500 dark:via-violet-600 dark:to-indigo-800">
             <div class="rounded-2xl bg-white px-4 py-4 dark:bg-gray-900 sm:flex sm:items-center sm:justify-between sm:gap-6">
                 <div class="min-w-0">
-                    <p class="text-sm font-extrabold text-gray-900 dark:text-white">{{ __('chat_ui.read_lock_banner_title', ['name' => $otherDisplayName]) }}</p>
+                    <p class="text-sm font-extrabold text-gray-900 dark:text-white">{{ __('chat_ui.read_lock_sender_title', ['name' => $otherDisplayName]) }}</p>
                     <p class="mt-1 text-sm text-gray-600 dark:text-gray-300">{{ __('chat_ui.read_lock_banner_body') }}</p>
                 </div>
                 <div class="mt-3 shrink-0 sm:mt-0">
@@ -454,6 +454,7 @@
             if (html.length > 0) {
                 const wasBottom = atBottom();
                 const ids = Array.isArray(data.message_ids) ? data.message_ids : [];
+                let appendedIncoming = false;
                 for (let i = 0; i < html.length; i++) {
                     const chunk = html[i];
                     const id = ids[i];
@@ -465,6 +466,9 @@
                     const node = wrap.firstElementChild;
                     if (node) {
                         scroller.appendChild(node);
+                        if (node.getAttribute('data-is-mine') === '0') {
+                            appendedIncoming = true;
+                        }
                     }
                 }
                 if (typeof data.last_id === 'number' && data.last_id > lastId) {
@@ -472,7 +476,7 @@
                 }
                 if (wasBottom) {
                     scrollToBottom();
-                } else {
+                } else if (appendedIncoming) {
                     toast('New message');
                 }
             } else if (!hadAny) {

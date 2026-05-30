@@ -74,4 +74,27 @@ class IntakePreviewExistingProfileOverlayTest extends TestCase
             fn ($r) => ($r['key'] ?? '') === 'date_of_birth'
         ));
     }
+
+    public function test_profile_birth_city_id_stays_visible_when_approval_snapshot_differs(): void
+    {
+        $profile = new MatrimonyProfile;
+        $profile->birth_city_id = 1001;
+
+        $coreData = ['birth_city_id' => 6316];
+        $suggestionMap = [];
+        $intakeParsed = ['core' => ['birth_place' => 'वरकुटे मलवडी']];
+        $snapshot = ['core' => ['birth_city_id' => 6316, 'birth_place_suggestion_applied' => true]];
+        $sections = ['core' => ['data' => &$coreData]];
+
+        app(IntakePreviewExistingProfileOverlay::class)->apply(
+            $profile,
+            $coreData,
+            $suggestionMap,
+            $intakeParsed,
+            $snapshot,
+            $sections
+        );
+
+        $this->assertSame(1001, (int) $coreData['birth_city_id']);
+    }
 }

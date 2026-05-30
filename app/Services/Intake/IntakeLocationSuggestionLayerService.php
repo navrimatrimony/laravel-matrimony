@@ -11,7 +11,10 @@ use App\Services\Location\LocationService;
 use App\Services\Location\PlaceIntakeSearchService;
 /**
  * Step 4.5 (UI-only): biodata place suggestions — never overwrites user-filled hierarchy values.
- * Shows one confident option when village + taluka + district match; full list only via Search more.
+ * Shows one confident option when village + taluka + district match. Never treat {@code core.birth_place} as user text.
+ *
+ * @see IntakeLocationFieldRegistry
+ * @see docs/INTAKE-LOCATION-SUGGESTIONS-SSOT.md
  */
 class IntakeLocationSuggestionLayerService
 {
@@ -40,45 +43,112 @@ class IntakeLocationSuggestionLayerService
      * @param  array<string, mixed>  $intakeParsed
      * @return array<int, array{field_key: string, label: string, raw_input: string, options: array<int, array<string, mixed>>}>
      */
-    public function unresolvedCandidatesFromSnapshot(array $snapshot, int $limit = 7, array $intakeParsed = []): array
-    {
+    public function unresolvedCandidatesFromSnapshot(
+        array $snapshot,
+        int $limit = 7,
+        array $intakeParsed = [],
+        ?\App\Models\MatrimonyProfile $profile = null,
+    ): array {
         $out = [];
 
         $core = is_array($snapshot['core'] ?? null) ? $snapshot['core'] : [];
         $intakeCore = is_array($intakeParsed['core'] ?? null) ? $intakeParsed['core'] : [];
 
-        $birthRaw = $this->extractBirthPlaceRaw($core, $snapshot, $intakeCore);
-        if ($birthRaw !== '' && $this->intakeDiffersFromUserLocation($birthRaw, $core['birth_city_id'] ?? null)) {
-            $out[] = $this->entry('birth_place', 'Birth place', $birthRaw);
+        $biodataBirth = $this->extractBiodataBirthPlace($snapshot, $intakeCore);
+        if ($biodataBirth !== '' && $this->shouldSuggestBirthPlace($biodataBirth, $core)) {
+            $out[] = $this->entry('birth_place', 'Birth place', $biodataBirth);
         }
 
-        $nativeRaw = trim((string) (($snapshot['native_place']['raw'] ?? $snapshot['native_place']['address_line'] ?? $core['native_place'] ?? '')));
-        if ($nativeRaw !== '' && $this->intakeDiffersFromUserLocation($nativeRaw, $core['native_city_id'] ?? null)) {
-            $out[] = $this->entry('native_place', 'Native place', $nativeRaw);
+        $biodataNative = $this->extractBiodataNativePlace($snapshot, $intakeCore);
+        if ($biodataNative !== '' && $this->shouldSuggestNativePlace($biodataNative, $core, $snapshot)) {
+            $out[] = $this->entry('native_place', 'Native place', $biodataNative);
         }
 
-        $workRaw = trim((string) ($core['work_location_text'] ?? ''));
-        if ($workRaw !== '' && $this->intakeDiffersFromUserLocation($workRaw, $core['work_city_id'] ?? null)) {
-            $out[] = $this->entry('work_location', 'Work location', $workRaw);
+        $biodataWork = $this->extractBiodataWorkPlace($intakeCore);
+        if ($biodataWork !== '' && $this->shouldSuggestWorkPlace($biodataWork, $core)) {
+            $out[] = $this->entry('work_location', 'Work location', $biodataWork);
         }
 
-        $addresses = is_array($snapshot['addresses'] ?? null) ? $snapshot['addresses'] : [];
-        foreach ($addresses as $i => $addr) {
+        $parentsAddresses = is_array($snapshot['parents_addresses'] ?? null) ? $snapshot['parents_addresses'] : [];
+        foreach ($parentsAddresses as $i => $addr) {
             if (! is_array($addr)) {
                 continue;
             }
-            if (! empty($addr['city_id'])) {
+            if (! empty($addr['city_id']) || ! empty($addr['location_id'])) {
                 continue;
             }
-            $raw = trim((string) ($addr['city'] ?? $addr['place'] ?? $addr['location'] ?? $addr['village'] ?? $addr['address_line'] ?? ''));
+            $raw = trim((string) ($addr['location_text'] ?? ''));
+            if ($raw === '') {
+                $raw = $this->addressRowRawText($addr);
+            }
             $searchInput = $this->extractPlaceSearchInput($raw);
             if ($searchInput === '') {
                 continue;
             }
-            $out[] = $this->entry("addresses.{$i}", 'Address #'.($i + 1), $searchInput);
+            $out[] = $this->entry("parents_addresses.{$i}", __('intake.location_suggestion_parents_address', ['n' => $i + 1]), $searchInput);
         }
 
-        return $out;
+        $selfRows = app(IntakePreviewSelfAddressRows::class)->rows($profile, $snapshot, $intakeParsed);
+        foreach ($selfRows as $i => $row) {
+            if (! is_array($row)) {
+                continue;
+            }
+            $biodataRaw = trim((string) ($row['biodata_intake_line'] ?? ''));
+            if ($biodataRaw === '' && ! empty($row['from_biodata'])) {
+                $biodataRaw = trim((string) ($row['address_line'] ?? ''));
+            }
+            if ($biodataRaw === '') {
+                continue;
+            }
+
+            $userCityId = (int) ($row['location_id'] ?? 0);
+            $userLine = trim((string) ($row['address_line'] ?? ''));
+            if ($userCityId > 0 && ! $this->intakeDiffersFromUserLocation($biodataRaw, $userCityId)) {
+                if ($userLine === ''
+                    || $this->normalizePlaceCompareKey($biodataRaw) === $this->normalizePlaceCompareKey($userLine)) {
+                    continue;
+                }
+            }
+
+            $searchInput = $this->extractPlaceSearchInput($biodataRaw);
+            if ($searchInput === '') {
+                continue;
+            }
+
+            $typeKey = (string) ($row['address_type_key'] ?? 'current');
+            $out[] = $this->entry(
+                "self_addresses.{$i}",
+                __('intake.location_suggestion_self_address', ['type' => $typeKey]),
+                $searchInput
+            );
+        }
+
+        foreach (['relatives_parents_family' => __('intake.location_suggestion_paternal_relative'), 'relatives_maternal_family' => __('intake.location_suggestion_maternal_relative')] as $sectionKey => $sectionLabel) {
+            $rows = is_array($snapshot[$sectionKey] ?? null) ? $snapshot[$sectionKey] : [];
+            $parsedRows = is_array($intakeParsed[$sectionKey] ?? null) ? $intakeParsed[$sectionKey] : [];
+            foreach ($rows as $i => $row) {
+                if (! is_array($row)) {
+                    continue;
+                }
+                $parsedRow = is_array($parsedRows[$i] ?? null) ? $parsedRows[$i] : [];
+                $biodataRaw = $this->relativeRowBiodataText($parsedRow);
+                if ($biodataRaw === '') {
+                    continue;
+                }
+                $userCityId = (int) ($row['city_id'] ?? $row['location_id'] ?? 0);
+                if ($userCityId > 0 && ! $this->intakeDiffersFromUserLocation($biodataRaw, $userCityId)) {
+                    continue;
+                }
+                $userText = trim((string) ($row['address_line'] ?? $row['notes'] ?? ''));
+                if ($userCityId < 1 && $userText !== ''
+                    && $this->normalizePlaceCompareKey($biodataRaw) === $this->normalizePlaceCompareKey($userText)) {
+                    continue;
+                }
+                $out[] = $this->entry("{$sectionKey}.{$i}", $sectionLabel.' #'.($i + 1), $biodataRaw);
+            }
+        }
+
+        return array_slice($out, 0, max(1, $limit));
     }
 
     /**
@@ -110,12 +180,12 @@ class IntakeLocationSuggestionLayerService
         $core = &$snapshot['core'];
 
         if ($fieldKey === 'birth_place') {
-            $birthRaw = $this->extractBirthPlaceRaw($core, $snapshot, is_array($intake->parsed_json) ? $intake->parsed_json['core'] ?? [] : []);
-            if (! empty($core['birth_city_id'])
-                && ! $this->intakeDiffersFromUserLocation($birthRaw, $core['birth_city_id'])) {
-                return ['ok' => false, 'message' => 'Birth place is already resolved.'];
+            $existingApplied = (int) ($core['birth_city_id'] ?? 0);
+            if ($existingApplied === (int) $loc->id && ! empty($core['birth_place_suggestion_applied'])) {
+                return $this->resolveSuccessPayload($loc, $talukaId, $districtId, $stateId);
             }
             $core['birth_city_id'] = (int) $loc->id;
+            $core['birth_place_suggestion_applied'] = true;
             if (! is_array($snapshot['birth_place'] ?? null)) {
                 $snapshot['birth_place'] = [];
             }
@@ -123,11 +193,10 @@ class IntakeLocationSuggestionLayerService
             $snapshot['birth_place']['taluka_id'] = $talukaId;
             $snapshot['birth_place']['district_id'] = $districtId;
             $snapshot['birth_place']['state_id'] = $stateId;
+            $this->recordLocationSuggestionApplied($core, $fieldKey, $loc, $talukaId, $districtId, $stateId);
         } elseif ($fieldKey === 'native_place') {
-            $nativeRaw = trim((string) (($snapshot['native_place']['raw'] ?? $snapshot['native_place']['address_line'] ?? $core['native_place'] ?? '')));
-            if (! empty($core['native_city_id'])
-                && ! $this->intakeDiffersFromUserLocation($nativeRaw, $core['native_city_id'])) {
-                return ['ok' => false, 'message' => 'Native place is already resolved.'];
+            if ((int) ($core['native_city_id'] ?? 0) === (int) $loc->id) {
+                return $this->resolveSuccessPayload($loc, $talukaId, $districtId, $stateId);
             }
             $core['native_city_id'] = (int) $loc->id;
             $core['native_taluka_id'] = $talukaId;
@@ -140,31 +209,86 @@ class IntakeLocationSuggestionLayerService
             $snapshot['native_place']['taluka_id'] = $talukaId;
             $snapshot['native_place']['district_id'] = $districtId;
             $snapshot['native_place']['state_id'] = $stateId;
+            $this->recordLocationSuggestionApplied($core, $fieldKey, $loc, $talukaId, $districtId, $stateId);
         } elseif ($fieldKey === 'work_location') {
-            $workRaw = trim((string) ($core['work_location_text'] ?? ''));
-            if (! empty($core['work_city_id'])
-                && ! $this->intakeDiffersFromUserLocation($workRaw, $core['work_city_id'])) {
-                return ['ok' => false, 'message' => 'Work location is already resolved.'];
+            if ((int) ($core['work_city_id'] ?? 0) === (int) $loc->id) {
+                return $this->resolveSuccessPayload($loc, $talukaId, $districtId, $stateId);
             }
             $core['work_city_id'] = (int) $loc->id;
             $core['work_state_id'] = $stateId;
             if (is_array($snapshot['career_history'] ?? null) && isset($snapshot['career_history'][0]) && is_array($snapshot['career_history'][0])) {
                 $snapshot['career_history'][0]['city_id'] = (int) $loc->id;
             }
+            $this->recordLocationSuggestionApplied($core, $fieldKey, $loc, $talukaId, $districtId, $stateId);
+        } elseif (str_starts_with($fieldKey, 'parents_addresses.')) {
+            $parts = explode('.', $fieldKey);
+            $idx = isset($parts[1]) ? (int) $parts[1] : -1;
+            if (! is_array($snapshot['parents_addresses'] ?? null) || ! isset($snapshot['parents_addresses'][$idx]) || ! is_array($snapshot['parents_addresses'][$idx])) {
+                return ['ok' => false, 'message' => 'Parents address row not found in snapshot.'];
+            }
+            $existingAddrId = (int) ($snapshot['parents_addresses'][$idx]['city_id'] ?? $snapshot['parents_addresses'][$idx]['location_id'] ?? 0);
+            if ($existingAddrId === (int) $loc->id) {
+                return $this->resolveSuccessPayload($loc, $talukaId, $districtId, $stateId);
+            }
+            $snapshot['parents_addresses'][$idx]['city_id'] = (int) $loc->id;
+            $snapshot['parents_addresses'][$idx]['location_id'] = (int) $loc->id;
+            $snapshot['parents_addresses'][$idx]['taluka_id'] = $talukaId;
+            $snapshot['parents_addresses'][$idx]['district_id'] = $districtId;
+            $snapshot['parents_addresses'][$idx]['state_id'] = $stateId;
+            $snapshot['parents_addresses'][$idx]['country_id'] = $countryId !== null ? (int) $countryId : null;
+            $snapshot['parents_addresses'][$idx]['display'] = $this->locationFormatter->formatForLocation($loc);
+            $this->recordLocationSuggestionApplied($core, $fieldKey, $loc, $talukaId, $districtId, $stateId);
         } elseif (str_starts_with($fieldKey, 'addresses.')) {
             $parts = explode('.', $fieldKey);
             $idx = isset($parts[1]) ? (int) $parts[1] : -1;
             if (! is_array($snapshot['addresses'] ?? null) || ! isset($snapshot['addresses'][$idx]) || ! is_array($snapshot['addresses'][$idx])) {
                 return ['ok' => false, 'message' => 'Address row not found in snapshot.'];
             }
-            if (! empty($snapshot['addresses'][$idx]['city_id'])) {
-                return ['ok' => false, 'message' => 'Address row is already resolved.'];
+            $existingAddrId = (int) ($snapshot['addresses'][$idx]['city_id'] ?? $snapshot['addresses'][$idx]['location_id'] ?? 0);
+            if ($existingAddrId === (int) $loc->id) {
+                return $this->resolveSuccessPayload($loc, $talukaId, $districtId, $stateId);
             }
             $snapshot['addresses'][$idx]['city_id'] = (int) $loc->id;
+            $snapshot['addresses'][$idx]['location_id'] = (int) $loc->id;
             $snapshot['addresses'][$idx]['taluka_id'] = $talukaId;
             $snapshot['addresses'][$idx]['district_id'] = $districtId;
             $snapshot['addresses'][$idx]['state_id'] = $stateId;
             $snapshot['addresses'][$idx]['country_id'] = $countryId !== null ? (int) $countryId : null;
+            $this->recordLocationSuggestionApplied($core, $fieldKey, $loc, $talukaId, $districtId, $stateId);
+        } elseif (preg_match('/^self_addresses\.(\d+)$/', $fieldKey, $selfMatch) === 1) {
+            $idx = (int) $selfMatch[1];
+            if (! is_array($snapshot['self_addresses'] ?? null)) {
+                $snapshot['self_addresses'] = [];
+            }
+            if (! isset($snapshot['self_addresses'][$idx]) || ! is_array($snapshot['self_addresses'][$idx])) {
+                $snapshot['self_addresses'][$idx] = [];
+            }
+            $existingAddrId = (int) ($snapshot['self_addresses'][$idx]['location_id'] ?? $snapshot['self_addresses'][$idx]['city_id'] ?? 0);
+            if ($existingAddrId === (int) $loc->id) {
+                return $this->resolveSuccessPayload($loc, $talukaId, $districtId, $stateId);
+            }
+            $snapshot['self_addresses'][$idx]['location_id'] = (int) $loc->id;
+            $snapshot['self_addresses'][$idx]['city_id'] = (int) $loc->id;
+            $snapshot['self_addresses'][$idx]['taluka_id'] = $talukaId;
+            $snapshot['self_addresses'][$idx]['district_id'] = $districtId;
+            $snapshot['self_addresses'][$idx]['state_id'] = $stateId;
+            $snapshot['self_addresses'][$idx]['country_id'] = $countryId !== null ? (int) $countryId : null;
+            $snapshot['self_addresses'][$idx]['display'] = $this->locationFormatter->formatForLocation($loc);
+            $this->recordLocationSuggestionApplied($core, $fieldKey, $loc, $talukaId, $districtId, $stateId);
+        } elseif (preg_match('/^relatives_(parents_family|maternal_family)\.(\d+)$/', $fieldKey, $relMatch) === 1) {
+            $sectionKey = 'relatives_'.$relMatch[1];
+            $idx = (int) $relMatch[2];
+            if (! is_array($snapshot[$sectionKey] ?? null) || ! isset($snapshot[$sectionKey][$idx]) || ! is_array($snapshot[$sectionKey][$idx])) {
+                return ['ok' => false, 'message' => 'Relative row not found in snapshot.'];
+            }
+            if ((int) ($snapshot[$sectionKey][$idx]['city_id'] ?? 0) === (int) $loc->id) {
+                return $this->resolveSuccessPayload($loc, $talukaId, $districtId, $stateId);
+            }
+            $snapshot[$sectionKey][$idx]['city_id'] = (int) $loc->id;
+            $snapshot[$sectionKey][$idx]['taluka_id'] = $talukaId;
+            $snapshot[$sectionKey][$idx]['district_id'] = $districtId;
+            $snapshot[$sectionKey][$idx]['state_id'] = $stateId;
+            $this->recordLocationSuggestionApplied($core, $fieldKey, $loc, $talukaId, $districtId, $stateId);
         } else {
             return ['ok' => false, 'message' => 'Unsupported location field.'];
         }
@@ -172,7 +296,22 @@ class IntakeLocationSuggestionLayerService
         $intake->approval_snapshot_json = $snapshot;
         $intake->save();
 
-        return ['ok' => true];
+        return $this->resolveSuccessPayload($loc, $talukaId, $districtId, $stateId);
+    }
+
+    /**
+     * @return array{ok: true, city_id: int, display_label: string, taluka_id: ?int, district_id: ?int, state_id: ?int}
+     */
+    private function resolveSuccessPayload(Location $loc, ?int $talukaId, ?int $districtId, ?int $stateId): array
+    {
+        return [
+            'ok' => true,
+            'city_id' => (int) $loc->id,
+            'display_label' => $this->locationFormatter->formatForLocation($loc),
+            'taluka_id' => $talukaId,
+            'district_id' => $districtId,
+            'state_id' => $stateId,
+        ];
     }
 
     /**
@@ -244,6 +383,46 @@ class IntakeLocationSuggestionLayerService
             'suggested_search' => $searchQueries[0] ?? ($searchSeed !== '' ? $searchSeed : $rawInput),
             'options' => $confident !== null ? [$confident] : [],
             'has_confident_match' => $confident !== null,
+            'dom_anchor' => IntakeLocationFieldRegistry::domAnchor($fieldKey),
+        ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $addr
+     */
+    private function addressRowRawText(array $addr): string
+    {
+        return trim((string) ($addr['raw'] ?? $addr['city'] ?? $addr['place'] ?? $addr['location'] ?? $addr['village'] ?? $addr['address_line'] ?? ''));
+    }
+
+    /**
+     * @param  array<string, mixed>  $parsedRow
+     */
+    private function relativeRowBiodataText(array $parsedRow): string
+    {
+        return trim((string) ($parsedRow['address_line'] ?? $parsedRow['notes'] ?? $parsedRow['location'] ?? ''));
+    }
+
+    /**
+     * @param  array<string, mixed>  $core
+     */
+    private function recordLocationSuggestionApplied(
+        array &$core,
+        string $fieldKey,
+        Location $loc,
+        ?int $talukaId,
+        ?int $districtId,
+        ?int $stateId,
+    ): void {
+        if (! is_array($core['_location_suggestion_applies'] ?? null)) {
+            $core['_location_suggestion_applies'] = [];
+        }
+        $core['_location_suggestion_applies'][$fieldKey] = [
+            'city_id' => (int) $loc->id,
+            'display_label' => $this->locationFormatter->formatForLocation($loc),
+            'taluka_id' => $talukaId,
+            'district_id' => $districtId,
+            'state_id' => $stateId,
         ];
     }
 
@@ -259,42 +438,7 @@ class IntakeLocationSuggestionLayerService
             return null;
         }
 
-        $hints = $this->compoundAddressParser->parseComponents($searchText);
-        $village = trim((string) ($hints['village'] ?? ''));
-        $taluka = trim((string) ($hints['taluka'] ?? ''));
-        $district = trim((string) ($hints['district'] ?? ''));
-        if ($village === '' || $taluka === '' || $district === '') {
-            return null;
-        }
-
-        $strictRows = [];
-        foreach ($this->hierarchySearch->findCities($hints, self::CONFIDENT_HIERARCHY_SEARCH_LIMIT) as $leaf) {
-            $loc = Location::query()->find((int) $leaf->id);
-            if ($loc === null || ! $this->locationMatchesHierarchyHints($loc, $hints)) {
-                continue;
-            }
-            $strictRows[] = $this->formatRowFromLocation($loc);
-        }
-
-        if (count($strictRows) === 1) {
-            return $strictRows[0];
-        }
-
-        $searchRows = $this->placeIntakeSearch->search($searchText, 7);
-        $strictFromSearch = array_values(array_filter(
-            $searchRows,
-            fn (array $row): bool => $this->rowMatchesFullHierarchy($row, $hints)
-        ));
-
-        if ($strictFromSearch === []) {
-            return null;
-        }
-
-        if (count($strictFromSearch) === 1) {
-            return $strictFromSearch[0];
-        }
-
-        return $this->pickBestHierarchyRow($strictFromSearch, $searchRows, $hints);
+        return $this->placeIntakeSearch->confidentMatch($searchText);
     }
 
     /**
@@ -683,6 +827,111 @@ class IntakeLocationSuggestionLayerService
         }
 
         return '';
+    }
+
+    /**
+     * Biodata birth text only — never {@code core.birth_place} (parser-filled form field).
+     *
+     * @param  array<string, mixed>  $snapshot
+     * @param  array<string, mixed>  $intakeCore
+     */
+    private function extractBiodataBirthPlace(array $snapshot, array $intakeCore): string
+    {
+        $candidates = [
+            $intakeCore['birth_place_text'] ?? null,
+            $intakeCore['birth_place'] ?? null,
+        ];
+        if (is_array($snapshot['birth_place'] ?? null)) {
+            $bp = $snapshot['birth_place'];
+            $candidates[] = $bp['raw'] ?? $bp['address_line'] ?? $bp['text'] ?? null;
+        }
+
+        return $this->firstPlaceText($candidates);
+    }
+
+    /**
+     * @param  array<string, mixed>  $snapshot
+     * @param  array<string, mixed>  $intakeCore
+     */
+    private function extractBiodataNativePlace(array $snapshot, array $intakeCore): string
+    {
+        $candidates = [
+            $intakeCore['native_place'] ?? null,
+            $intakeCore['native_place_text'] ?? null,
+        ];
+        if (is_array($snapshot['native_place'] ?? null)) {
+            $np = $snapshot['native_place'];
+            $candidates[] = $np['raw'] ?? $np['address_line'] ?? $np['text'] ?? null;
+        }
+
+        return $this->firstPlaceText($candidates);
+    }
+
+    /**
+     * @param  array<string, mixed>  $intakeCore
+     */
+    private function extractBiodataWorkPlace(array $intakeCore): string
+    {
+        return $this->firstPlaceText([
+            $intakeCore['work_location_text'] ?? null,
+            $intakeCore['work_location'] ?? null,
+        ]);
+    }
+
+    /**
+     * User picked place in location engine ({@code birth_city_id}) — not parser text in {@code birth_place}.
+     *
+     * @param  array<string, mixed>  $core
+     */
+    private function shouldSuggestBirthPlace(string $biodataRaw, array $core): bool
+    {
+        $cityId = $core['birth_city_id'] ?? null;
+        if (is_numeric($cityId) && (int) $cityId > 0) {
+            return $this->intakeDiffersFromUserLocation($biodataRaw, (int) $cityId);
+        }
+
+        $userText = trim((string) ($core['birth_place_text'] ?? ''));
+        if ($userText === '') {
+            return $biodataRaw !== '';
+        }
+
+        return $this->normalizePlaceCompareKey($biodataRaw) !== $this->normalizePlaceCompareKey($userText);
+    }
+
+    /**
+     * @param  array<string, mixed>  $core
+     * @param  array<string, mixed>  $snapshot
+     */
+    private function shouldSuggestNativePlace(string $biodataRaw, array $core, array $snapshot): bool
+    {
+        $cityId = $core['native_city_id'] ?? null;
+        if (is_numeric($cityId) && (int) $cityId > 0) {
+            return $this->intakeDiffersFromUserLocation($biodataRaw, (int) $cityId);
+        }
+
+        $userText = trim((string) ($core['native_place'] ?? $snapshot['native_place']['raw'] ?? ''));
+        if ($userText === '' || ! is_scalar($userText)) {
+            return $biodataRaw !== '';
+        }
+
+        return $this->normalizePlaceCompareKey($biodataRaw) !== $this->normalizePlaceCompareKey((string) $userText);
+    }
+
+    /**
+     * @param  array<string, mixed>  $core
+     */
+    private function shouldSuggestWorkPlace(string $biodataRaw, array $core): bool
+    {
+        $cityId = $core['work_city_id'] ?? null;
+        if (is_numeric($cityId) && (int) $cityId > 0) {
+            return $this->intakeDiffersFromUserLocation($biodataRaw, (int) $cityId);
+        }
+
+        $userText = trim((string) ($core['work_location_text'] ?? ''));
+
+        return $userText === ''
+            ? $biodataRaw !== ''
+            : $this->normalizePlaceCompareKey($biodataRaw) !== $this->normalizePlaceCompareKey($userText);
     }
 
     /**

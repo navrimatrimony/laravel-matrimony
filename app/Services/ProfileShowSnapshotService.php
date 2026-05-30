@@ -14,6 +14,7 @@ use App\Models\Religion;
 use App\Models\State;
 use App\Services\Location\LocationFormatterService;
 use App\Support\HeightDisplay;
+use App\Support\HeightDisplay;
 use App\Support\ProfileDisplayCopy;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -243,7 +244,7 @@ class ProfileShowSnapshotService
         $hv = (bool) ($ctx['height_visible'] ?? true);
 
         if ($hv && $this->present($profile->height_cm)) {
-            $rows[] = $this->row(__('Height'), $profile->height_cm.' cm');
+            $rows[] = $this->row(__('Height'), HeightDisplay::formatCm((int) $profile->height_cm));
         }
         if (($profile->weight_kg ?? null) !== null && (string) $profile->weight_kg !== '') {
             $rows[] = $this->row(__('Weight'), $profile->weight_kg.' kg');

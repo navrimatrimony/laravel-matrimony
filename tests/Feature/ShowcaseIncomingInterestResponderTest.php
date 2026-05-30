@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\AdminSetting;
 use App\Services\Showcase\ShowcaseIncomingInterestResponderService;
+use App\Services\Showcase\ShowcaseOutgoingInterestSenderService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -29,5 +30,25 @@ class ShowcaseIncomingInterestResponderTest extends TestCase
     public function test_outgoing_artisan_command_runs(): void
     {
         $this->artisan('showcase:send-outgoing-interests')->assertSuccessful();
+    }
+
+    public function test_outgoing_command_uses_admin_batch_when_option_omitted(): void
+    {
+        AdminSetting::setValue('showcase_interest_outgoing_auto_batch_per_run', '200');
+
+        $mock = $this->mock(ShowcaseOutgoingInterestSenderService::class);
+        $mock->shouldReceive('run')->once()->with(200)->andReturn(['created' => 0, 'skipped' => 0]);
+
+        $this->artisan('showcase:send-outgoing-interests')->assertSuccessful();
+    }
+
+    public function test_outgoing_command_cli_batch_overrides_admin(): void
+    {
+        AdminSetting::setValue('showcase_interest_outgoing_auto_batch_per_run', '200');
+
+        $mock = $this->mock(ShowcaseOutgoingInterestSenderService::class);
+        $mock->shouldReceive('run')->once()->with(10)->andReturn(['created' => 0, 'skipped' => 0]);
+
+        $this->artisan('showcase:send-outgoing-interests', ['--batch' => 10])->assertSuccessful();
     }
 }

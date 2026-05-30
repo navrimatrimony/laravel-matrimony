@@ -15,7 +15,7 @@ use Illuminate\Database\Eloquent\Builder;
 final class AddressHierarchySearch
 {
     /** @var list<string> */
-    private const LEAF_TYPES = ['village', 'suburban', 'city'];
+    private const LEAF_TYPES = ['village', 'suburb', 'city'];
 
     /**
      * @param  array{village: string, taluka: string, district: string}  $components
@@ -103,7 +103,7 @@ final class AddressHierarchySearch
             return null;
         }
 
-        if ($leaf->type === 'city' || $leaf->type === 'suburban') {
+        if ($leaf->type === 'city' || $leaf->type === 'suburb') {
             $city = City::query()
                 ->withoutGlobalScope('geo_city')
                 ->with(['taluka.district.state.country', 'parentCity', 'displayMeta'])

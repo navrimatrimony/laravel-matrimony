@@ -78,10 +78,10 @@ class IntakePreviewMasterFieldEquivalence
         }
 
         $profileId = $this->canonicalMasterId($coreKey, $profileValue, $profileContext, $profile);
-        $intakeId = $this->canonicalMasterId($coreKey, $intakeValue, $intakeContext, $profile);
+        $intakeId = $this->canonicalMasterId($coreKey, $intakeValue, $intakeContext, null);
 
-        if ($profileId !== null && $intakeId !== null && $profileId === $intakeId) {
-            return true;
+        if ($profileId !== null && $intakeId !== null) {
+            return $profileId === $intakeId;
         }
 
         $profileLabel = $this->displayLabelForValue($coreKey, $profileValue, $profileContext, $profileId);
@@ -105,8 +105,21 @@ class IntakePreviewMasterFieldEquivalence
         array $intakeContext,
         ?MatrimonyProfile $profile,
     ): bool {
+        $intakeProfile = $coreKey === 'sub_caste_id' ? null : $profile;
+
+        $profileId = $this->canonicalMasterId($coreKey, $profileValue, $profileContext, $profile);
+        $intakeId = $this->canonicalMasterId($coreKey, $intakeValue, $intakeContext, $intakeProfile);
+        if ($profileId !== null && $intakeId !== null) {
+            if ($profileId === $intakeId) {
+                return true;
+            }
+            if ($coreKey === 'sub_caste_id') {
+                return false;
+            }
+        }
+
         $profileTexts = $this->gatherComparableTexts($coreKey, $profileValue, $profileContext, $profile);
-        $intakeTexts = $this->gatherComparableTexts($coreKey, $intakeValue, $intakeContext, $profile);
+        $intakeTexts = $this->gatherComparableTexts($coreKey, $intakeValue, $intakeContext, $intakeProfile);
 
         if ($profileTexts === [] || $intakeTexts === []) {
             return false;
@@ -120,20 +133,18 @@ class IntakePreviewMasterFieldEquivalence
             }
         }
 
-        $profileId = $this->canonicalMasterId($coreKey, $profileValue, $profileContext, $profile);
-        $intakeId = $this->canonicalMasterId($coreKey, $intakeValue, $intakeContext, $profile);
-        if ($profileId !== null && $intakeId !== null && $profileId === $intakeId) {
-            return true;
-        }
-
         foreach ($profileTexts as $profileText) {
             $resolvedFromProfile = $this->canonicalMasterId($coreKey, $profileText, $profileContext, $profile);
             foreach ($intakeTexts as $intakeText) {
-                $resolvedFromIntake = $this->canonicalMasterId($coreKey, $intakeText, $intakeContext, $profile);
+                $resolvedFromIntake = $this->canonicalMasterId($coreKey, $intakeText, $intakeContext, $intakeProfile);
                 if ($resolvedFromProfile !== null && $resolvedFromIntake !== null && $resolvedFromProfile === $resolvedFromIntake) {
                     return true;
                 }
             }
+        }
+
+        if ($profileId !== null && $intakeId !== null) {
+            return false;
         }
 
         return false;
@@ -210,13 +221,44 @@ class IntakePreviewMasterFieldEquivalence
     }
 
     /**
+     * All display variants (MR, EN, legacy) for cross-locale equivalence — not locale-picked preferred only.
+     *
      * @return list<string>
      */
     private function labelsFromMasterId(string $coreKey, int $id): array
     {
-        $single = $this->labelFromMasterId($coreKey, $id);
+        $out = [];
+        $add = static function (?string $label) use (&$out): void {
+            $s = trim((string) ($label ?? ''));
+            if ($s !== '' && ! in_array($s, $out, true)) {
+                $out[] = $s;
+            }
+        };
 
-        return $single !== null && $single !== '' ? [$single] : [];
+        if ($coreKey === 'religion_id') {
+            $r = \App\Models\Religion::find($id);
+            if ($r) {
+                $add($r->label_mr);
+                $add($r->label_en);
+                $add($r->label);
+            }
+        } elseif ($coreKey === 'caste_id') {
+            $c = \App\Models\Caste::find($id);
+            if ($c) {
+                $add($c->label_mr);
+                $add($c->label_en);
+                $add($c->label);
+            }
+        } elseif ($coreKey === 'sub_caste_id') {
+            $s = \App\Models\SubCaste::find($id);
+            if ($s) {
+                $add($s->label_mr);
+                $add($s->label_en);
+                $add($s->label);
+            }
+        }
+
+        return $out;
     }
 
     /**

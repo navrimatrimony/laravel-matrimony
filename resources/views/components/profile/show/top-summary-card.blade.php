@@ -70,7 +70,7 @@
             $facts[] = ['label' => __('profile.show_top_fact_age'), 'value' => __('profile.show_age_years', ['age' => $age])];
         }
         if ($heightVisible && ($profile->height_cm ?? '') !== '') {
-            $facts[] = ['label' => __('profile.show_top_fact_height'), 'value' => $profile->height_cm.' cm'];
+            $facts[] = ['label' => __('profile.show_top_fact_height'), 'value' => \App\Support\HeightDisplay::formatCm((int) $profile->height_cm)];
         }
         if ($maritalStatusVisible && $profile->maritalStatus) {
             $facts[] = ['label' => __('profile.show_top_fact_marital'), 'value' => $profile->maritalStatus->label ?? '—'];

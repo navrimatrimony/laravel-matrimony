@@ -70,7 +70,9 @@ class IntakePreviewExistingProfileOverlay
         $profile->loadMissing(['religion', 'caste', 'subCaste']);
 
         $intakeProposedCore = is_array($intakeParsed['core'] ?? null) ? $intakeParsed['core'] : [];
-        $normalizedIntake = $this->controlledFieldNormalizer->normalizeCore($intakeProposedCore);
+        $normalizedIntake = $this->controlledFieldNormalizer->normalizeCore(
+            $this->enrichParsedCommunityCore($intakeProposedCore)
+        );
         $profileCore = $this->buildProfileCoreBaseline($profile);
         $normalizedProfile = $this->controlledFieldNormalizer->normalizeCore($profileCore);
 
@@ -167,6 +169,8 @@ class IntakePreviewExistingProfileOverlay
             )
         );
 
+        $this->restoreProfileLocationFieldsForPreviewDisplay($profile, $coreData, $snapshot, $sections);
+
         return [
             'protected_core_keys' => array_values(array_unique($protected)),
             'field_suggestions' => $fieldSuggestions,
@@ -174,20 +178,81 @@ class IntakePreviewExistingProfileOverlay
     }
 
     /**
+     * Preview SSOT: biodata/parser must not replace what the member already saved on profile.
+     * Biodata place Apply only updates {@code approval_snapshot_json}; the typeahead keeps profile text/ids until approve.
+     *
+     * @param  array<string, mixed>  $coreData
+     * @param  array<string, mixed>  $snapshot
+     * @param  array<string, mixed>  $sections
+     */
+    private function restoreProfileLocationFieldsForPreviewDisplay(
+        MatrimonyProfile $profile,
+        array &$coreData,
+        array &$snapshot,
+        array &$sections,
+    ): void {
+        $profileBirthCityId = (int) ($profile->birth_city_id ?? 0);
+        if ($profileBirthCityId > 0) {
+            $this->setCoreField($coreData, 'birth_city_id', $profileBirthCityId);
+        }
+        $profileBirthText = trim((string) ($profile->birth_place_text ?? ''));
+        if ($profileBirthText !== '') {
+            $this->setCoreField($coreData, 'birth_place_text', $profileBirthText);
+        }
+        if ($profileBirthCityId > 0 || $profileBirthText !== '') {
+            unset($coreData['birth_place']);
+        }
+
+        if (Schema::hasColumn($profile->getTable(), 'native_city_id')) {
+            $nativeCityId = (int) ($profile->native_city_id ?? 0);
+            if ($nativeCityId > 0) {
+                $this->setCoreField($coreData, 'native_city_id', $nativeCityId);
+            }
+        }
+
+        $workCityId = (int) ($profile->work_city_id ?? 0);
+        if ($workCityId > 0) {
+            $this->setCoreField($coreData, 'work_city_id', $workCityId);
+        }
+        $workText = trim((string) ($profile->work_location_text ?? ''));
+        if ($workText !== '') {
+            $this->setCoreField($coreData, 'work_location_text', $workText);
+        }
+
+        if (isset($sections['core']['data']) && is_array($sections['core']['data'])) {
+            $sections['core']['data'] = array_merge($sections['core']['data'], $coreData);
+        }
+        if (! isset($snapshot['core']) || ! is_array($snapshot['core'])) {
+            $snapshot['core'] = [];
+        }
+        $snapshot['core'] = array_merge($snapshot['core'], $coreData);
+    }
+
+    /**
      * @return list<string>
      */
     private function coreKeysForOverlay(): array
     {
+        $textOnlyKeys = array_keys(self::SUGGESTION_KEY_TO_CORE);
+
         try {
             $fromRegistry = app(MutationService::class)->coreFieldKeysAllowedForIntakeSuggestionApply();
             if ($fromRegistry !== []) {
-                return array_values(array_unique(array_merge($fromRegistry, self::WIZARD_CORE_KEYS)));
+                $merged = array_values(array_unique(array_merge($fromRegistry, self::WIZARD_CORE_KEYS)));
+
+                return array_values(array_filter(
+                    $merged,
+                    static fn (string $k): bool => ! in_array($k, $textOnlyKeys, true)
+                ));
             }
         } catch (\Throwable) {
             // tests / missing registry
         }
 
-        return self::WIZARD_CORE_KEYS;
+        return array_values(array_filter(
+            self::WIZARD_CORE_KEYS,
+            static fn (string $k): bool => ! in_array($k, $textOnlyKeys, true)
+        ));
     }
 
     /**
@@ -225,6 +290,27 @@ class IntakePreviewExistingProfileOverlay
         }
 
         return $coreKey;
+    }
+
+    /**
+     * Parser often leaves "96 कुळी" inside caste; mirror intake preview resolve so sub_caste_id compares correctly.
+     *
+     * @param  array<string, mixed>  $core
+     * @return array<string, mixed>
+     */
+    private function enrichParsedCommunityCore(array $core): array
+    {
+        $caste = trim((string) ($core['caste'] ?? ''));
+        $sub = trim((string) ($core['sub_caste'] ?? ''));
+        if ($sub === '' && $caste !== ''
+            && preg_match('/(९६|96)\s*[कक][ुू]ळी|96\s*kuli/iu', $caste, $m) === 1) {
+            $core['sub_caste'] = trim((string) $m[0]);
+            if (mb_stripos($caste, 'मराठा') !== false) {
+                $core['caste'] = 'मराठा';
+            }
+        }
+
+        return $core;
     }
 
     /**
@@ -609,9 +695,29 @@ class IntakePreviewExistingProfileOverlay
             ];
         }
         if ($coreKey === 'sub_caste_id') {
+            $label = trim((string) ($normalizedIntake['sub_caste'] ?? ''));
+            if (is_string($value) && trim($value) !== '' && ! is_numeric(trim($value))) {
+                $label = trim($value);
+                $value = null;
+            }
+            $id = is_numeric($value) && (int) $value > 0
+                ? (int) $value
+                : (is_numeric($normalizedIntake['sub_caste_id'] ?? null) ? (int) $normalizedIntake['sub_caste_id'] : 0);
+            if ($id < 1 && $label !== '') {
+                $probe = ['sub_caste' => $label];
+                if (is_numeric($normalizedIntake['caste_id'] ?? null) && (int) $normalizedIntake['caste_id'] > 0) {
+                    $probe['caste_id'] = (int) $normalizedIntake['caste_id'];
+                }
+                $resolved = $this->controlledFieldNormalizer->normalizeCore($probe);
+                $id = is_numeric($resolved['sub_caste_id'] ?? null) ? (int) $resolved['sub_caste_id'] : 0;
+            }
+            if ($id < 1 && $label === '') {
+                $label = trim((string) $this->displayValue($coreKey, $value, $normalizedIntake));
+            }
+
             return [
-                'sub_caste_id' => (int) $value,
-                'subcaste_label' => trim((string) ($normalizedIntake['sub_caste'] ?? $this->displayValue($coreKey, $value, $normalizedIntake))),
+                'sub_caste_id' => $id > 0 ? $id : null,
+                'subcaste_label' => $label !== '' ? $label : trim((string) $this->displayValue($coreKey, $value, $normalizedIntake)),
             ];
         }
         if ($value instanceof \DateTimeInterface) {

@@ -10,6 +10,7 @@ use App\Models\User;
 use App\Notifications\ProfileViewedNotification;
 use App\Services\WhoViewed\WhoViewedNotificationIdentityGate;
 use App\Support\SafeNotifier;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 
 /*
@@ -23,6 +24,9 @@ use Illuminate\Support\Facades\DB;
 */
 class ViewTrackingService
 {
+    /** Admin key: max showcase→real views per showcase per calendar day (0 = unlimited). */
+    public const SHOWCASE_TO_REAL_MAX_PER_SHOWCASE_PER_DAY_KEY = 'showcase_to_real_max_per_showcase_per_day';
+
     /** Prevent repeat "profile viewed" notifications from same viewer within this window. */
     private const PROFILE_VIEW_NOTIFY_DEDUP_MINUTES = 10;
 
@@ -95,6 +99,10 @@ class ViewTrackingService
             return;
         }
 
+        if (! self::canShowcaseCreateToRealViewToday($viewed)) {
+            return;
+        }
+
         // Get delay settings (minutes)
         $delayMin = (int) \App\Models\AdminSetting::getValue('view_back_delay_min', '0');
         $delayMax = (int) \App\Models\AdminSetting::getValue('view_back_delay_max', '0');
@@ -119,6 +127,10 @@ class ViewTrackingService
      */
     private static function createViewBackNow(MatrimonyProfile $showcaseProfile, MatrimonyProfile $realProfile): void
     {
+        if (! self::canShowcaseCreateToRealViewToday($showcaseProfile)) {
+            return;
+        }
+
         ProfileView::create([
             'viewer_profile_id' => $showcaseProfile->id,
             'viewed_profile_id' => $realProfile->id,
@@ -147,6 +159,10 @@ class ViewTrackingService
             return;
         }
 
+        if (! self::canShowcaseCreateToRealViewToday($showcaseProfile)) {
+            return;
+        }
+
         ProfileView::create([
             'viewer_profile_id' => $showcaseProfile->id,
             'viewed_profile_id' => $realProfile->id,
@@ -157,6 +173,46 @@ class ViewTrackingService
         self::touchViewerLastSeenForPresence($showcaseProfile);
 
         self::notifyProfileViewIfEligible($realProfile->user, $showcaseProfile, false);
+    }
+
+    /**
+     * Admin-tuned daily cap for all showcase→real views (view-back + random engine).
+     * Uses calendar day in the application timezone. 0 = unlimited.
+     */
+    public static function showcaseToRealMaxPerShowcasePerDay(): int
+    {
+        return max(0, (int) \App\Models\AdminSetting::getValue(
+            self::SHOWCASE_TO_REAL_MAX_PER_SHOWCASE_PER_DAY_KEY,
+            '20'
+        ));
+    }
+
+    public static function countShowcaseToRealViewsToday(int $showcaseProfileId): int
+    {
+        return self::countShowcaseToRealViewsSince($showcaseProfileId, now()->startOfDay());
+    }
+
+    public static function countShowcaseToRealViewsSince(int $showcaseProfileId, Carbon $since): int
+    {
+        return (int) ProfileView::query()
+            ->where('viewer_profile_id', $showcaseProfileId)
+            ->where('created_at', '>=', $since)
+            ->whereHas('viewedProfile', fn ($q) => $q->whereNonShowcase())
+            ->count();
+    }
+
+    public static function canShowcaseCreateToRealViewToday(MatrimonyProfile $showcase): bool
+    {
+        if (! $showcase->isShowcaseProfile()) {
+            return false;
+        }
+
+        $cap = self::showcaseToRealMaxPerShowcasePerDay();
+        if ($cap === 0) {
+            return true;
+        }
+
+        return self::countShowcaseToRealViewsToday((int) $showcase->id) < $cap;
     }
 
     /**

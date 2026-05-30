@@ -65,6 +65,10 @@ class ProcessDelayedViewBack implements ShouldQueue
             return;
         }
 
+        if (! ViewTrackingService::canShowcaseCreateToRealViewToday($showcaseProfile)) {
+            return;
+        }
+
         // Create view-back
         ProfileView::create([
             'viewer_profile_id' => $showcaseProfile->id,

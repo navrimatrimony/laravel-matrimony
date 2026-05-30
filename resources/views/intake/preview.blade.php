@@ -554,7 +554,6 @@
     const placeholderNotFound = @json($placeholderNotFound ?? '⟪NOT FOUND IN OCR⟫');
     const placeholderSelectRequired = @json($placeholderSelectRequired ?? '⟪SELECT REQUIRED⟫');
     const resolveLocationUrl = @json(route('intake.resolve-location', $intake));
-    const locationSearchApiUrl = @json(url('/api/internal/location/search'));
     const unresolvedLocationOptions = @json($unresolvedLocationOptions ?? []);
     const suggestionMapData = @json($suggestionMap ?? []);
     const previewFieldSuggestions = @json($previewFieldSuggestions ?? []);
@@ -665,126 +664,134 @@ document.querySelectorAll('.use-candidate-btn').forEach(function(btn) {
         btn.addEventListener('click', function() { btn.closest('.contact-row, .child-row, .education-row, .career-row, .address-row, .preference-row')?.remove(); });
     });
 
-    function bindResolveButtons(root) {
-    root.querySelectorAll('.intake-loc-resolve-btn').forEach(function(btn) {
-        if (btn.dataset.boundResolve === '1') return;
-        btn.dataset.boundResolve = '1';
-        btn.addEventListener('click', function() {
-            var field = btn.getAttribute('data-field');
-            var cityId = btn.getAttribute('data-city-id');
-            if (!field || !cityId) return;
-            root.querySelectorAll('.intake-loc-resolve-btn').forEach(function(other) {
-                other.classList.remove('ring-2', 'ring-emerald-500', 'bg-emerald-50');
-            });
-            btn.classList.add('ring-2', 'ring-emerald-500', 'bg-emerald-50');
-            btn.disabled = true;
-            fetch(resolveLocationUrl, {
-                method: 'PATCH',
-                credentials: 'same-origin',
-                headers: {
-                    'Accept': 'application/json',
-                    'Content-Type': 'application/json',
-                    'X-Requested-With': 'XMLHttpRequest',
-                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || ''
-                },
-                body: JSON.stringify({ field: field, city_id: parseInt(cityId, 10) })
-            }).then(function(r){ return r.json().then(function(j){ return { ok: r.ok, data: j }; }); })
-              .then(function(res) {
-                  if (res.ok && res.data && res.data.success) {
-                      window.location.reload();
-                  } else {
+    function bindLocationApplyButtons(root) {
+        root.querySelectorAll('.intake-loc-apply-btn').forEach(function(btn) {
+            if (btn.dataset.boundLocApply === '1') return;
+            btn.dataset.boundLocApply = '1';
+            btn.addEventListener('click', function() {
+                var field = btn.getAttribute('data-field');
+                var cityId = btn.getAttribute('data-city-id');
+                if (!field || !cityId) return;
+                btn.disabled = true;
+                fetch(resolveLocationUrl, {
+                    method: 'PATCH',
+                    credentials: 'same-origin',
+                    headers: {
+                        'Accept': 'application/json',
+                        'Content-Type': 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest',
+                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || ''
+                    },
+                    body: JSON.stringify({ field: field, city_id: parseInt(cityId, 10) })
+                }).then(function(r){ return r.json().then(function(j){ return { ok: r.ok, data: j }; }); })
+                  .then(function(res) {
+                      if (res.ok && res.data && res.data.success) {
+                          var note = btn.closest('[data-intake-location-suggestion="1"]');
+                          var payload = res.data;
+                          if (!payload.display_label && note) {
+                              var lbl = note.querySelector('.font-medium');
+                              if (lbl) payload.display_label = String(lbl.textContent || '').trim();
+                          }
+                          var locApi = window.LocationTypeahead;
+                          var wrapper = locApi && typeof locApi.wrapperForIntakeField === 'function'
+                              ? locApi.wrapperForIntakeField(form, field, btn)
+                              : null;
+                          if (wrapper && locApi && typeof locApi.applySelection === 'function') {
+                              locApi.applySelection(wrapper, payload);
+                          }
+                          if (note) note.remove();
+                      } else {
+                          btn.disabled = false;
+                          window.alert((res.data && res.data.message) ? res.data.message : 'Could not resolve this location.');
+                      }
+                  }).catch(function() {
                       btn.disabled = false;
-                      window.alert((res.data && res.data.message) ? res.data.message : 'Could not resolve this location.');
-                  }
-              }).catch(function() {
-                  btn.disabled = false;
-                  window.alert('Network error while resolving location.');
-              });
+                      window.alert('Network error while resolving location.');
+                  });
+            });
         });
-    });
     }
 
     function renderInlineLocationUi(targetWrap, loc) {
         if (!targetWrap || !loc) return;
-        targetWrap.classList.add('bg-amber-50', 'dark:bg-amber-950/20', 'border', 'border-amber-300', 'dark:border-amber-700', 'rounded-lg', 'p-2');
-        var box = document.createElement('div');
-        box.className = 'mt-2 rounded-md border border-amber-200 dark:border-amber-800 bg-white/80 dark:bg-gray-900/40 p-2';
+        if (targetWrap.querySelector('[data-intake-location-suggestion="1"]')) return;
         var opts = Array.isArray(loc.options) ? loc.options : [];
-        var hasConfident = loc.has_confident_match === true;
-        var raw = String(loc.raw_input || '').trim();
-        var suggestedSearch = String(loc.suggested_search || '').trim();
-        var searchDefault = suggestedSearch !== '' ? suggestedSearch : raw;
-        box.innerHTML = ''
-            + '<p class="text-xs font-semibold text-amber-900 dark:text-amber-100">Biodata place suggestion (does not change your entry until you apply)</p>'
-            + '<p class="text-xs text-gray-600 dark:text-gray-300 mt-1">Detected text: "' + raw.replace(/"/g, '&quot;') + '"</p>'
-            + '<div class="flex gap-2 mt-2">'
-            + '  <input type="text" class="intake-loc-search-input flex-1 px-2 py-1.5 text-xs rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800" value="' + searchDefault.replace(/"/g, '&quot;') + '" placeholder="Search more">'
-            + '  <button type="button" class="intake-loc-search-btn px-2.5 py-1.5 text-xs rounded border border-gray-300 dark:border-gray-600">Search more</button>'
-            + '</div>'
-            + '<div class="space-y-2 intake-loc-options-list mt-2"></div>'
-            + '<p class="text-xs text-gray-600 dark:text-gray-300 intake-loc-empty-note mt-2 hidden"></p>';
-        targetWrap.appendChild(box);
+        if (opts.length === 0) return;
 
-        var list = box.querySelector('.intake-loc-options-list');
-        var empty = box.querySelector('.intake-loc-empty-note');
-        function renderOptions(results) {
-            list.innerHTML = '';
-            if (!Array.isArray(results) || results.length === 0) {
-                empty.classList.remove('hidden');
-                empty.textContent = hasConfident
-                    ? 'ही जागा सापडली नाही. Search more वापरून शोधा.'
-                    : 'गाव, तालुका आणि जिल्हा जुळले नाहीत. Search more वापरून योग्य ठिकाण निवडा.';
-                return;
-            }
-            empty.classList.add('hidden');
-            if (hasConfident && results.length === 1) {
-                var hint = document.createElement('p');
-                hint.className = 'text-xs text-emerald-800 dark:text-emerald-200 mb-1';
-                hint.textContent = 'खालील ठिकाण biodata शी जुळते — Apply करण्यासाठी क्लिक करा.';
-                list.appendChild(hint);
-            }
-            results.forEach(function(opt) {
-                var b = document.createElement('button');
-                b.type = 'button';
-                b.className = 'intake-loc-resolve-btn w-full text-left px-3 py-2 rounded border border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-800 text-sm';
-                b.setAttribute('data-field', String(loc.field_key || ''));
-                b.setAttribute('data-city-id', String(opt.city_id || ''));
-                b.textContent = String(opt.display_label || opt.name || opt.city_name || '—');
-                list.appendChild(b);
-            });
-            bindResolveButtons(box);
+        opts.forEach(function(opt) {
+            var note = document.createElement('div');
+            note.className = 'mt-1.5 flex flex-wrap items-center gap-2 text-xs text-indigo-900 dark:text-indigo-100 rounded-md border border-indigo-200 dark:border-indigo-800 bg-indigo-50/80 dark:bg-indigo-950/40 px-2 py-1.5';
+            note.dataset.intakeLocationSuggestion = '1';
+
+            var label = document.createElement('span');
+            label.textContent = intakeParseSuggestionLabel;
+            note.appendChild(label);
+
+            var valSpan = document.createElement('span');
+            valSpan.className = 'font-medium text-indigo-950 dark:text-indigo-50';
+            valSpan.textContent = String(opt.display_label || opt.name || opt.city_name || '—');
+            note.appendChild(valSpan);
+
+            var applyBtn = document.createElement('button');
+            applyBtn.type = 'button';
+            applyBtn.className = 'intake-loc-apply-btn px-2 py-0.5 rounded bg-indigo-600 hover:bg-indigo-700 text-white text-[11px] font-semibold';
+            applyBtn.title = @json(__('intake.parse_suggestion_click_hint'));
+            applyBtn.textContent = intakeParseApplyLabel;
+            applyBtn.setAttribute('data-field', String(loc.field_key || ''));
+            applyBtn.setAttribute('data-city-id', String(opt.city_id || ''));
+            note.appendChild(applyBtn);
+
+            targetWrap.appendChild(note);
+        });
+        bindLocationApplyButtons(targetWrap);
+    }
+
+    function findLocationSuggestionAnchor(dom) {
+        if (!dom || !dom.type) return null;
+        if (dom.type === 'location_context') {
+            return form.querySelector('[data-location-context="' + dom.value + '"]');
         }
-        renderOptions(opts);
-        if (!hasConfident && opts.length === 0) {
-            empty.classList.remove('hidden');
+        if (dom.type === 'parents_address_row') {
+            var pRows = document.getElementById('parents-address-rows');
+            var pRow = pRows ? (pRows.querySelector('.parents-address-row[data-row-index="' + dom.index + '"]') || pRows.children[dom.index]) : null;
+            return pRow ? (pRow.querySelector('.location-typeahead-wrapper')?.closest('.min-w-0') || pRow) : null;
         }
+        if (dom.type === 'self_address_row') {
+            var sRows = document.getElementById('self-address-rows');
+            var sRow = sRows ? (sRows.querySelector('.self-address-row[data-row-index="' + dom.index + '"]') || sRows.children[dom.index]) : null;
+            return sRow ? (sRow.querySelector('.location-typeahead-wrapper')?.closest('.min-w-0') || sRow) : null;
+        }
+        if (dom.type === 'relatives_row') {
+            var prefix = dom.container === 'relatives_maternal_family'
+                ? 'snapshot[relatives_maternal_family]'
+                : 'snapshot[relatives_parents_family]';
+            var relInput = form.querySelector('input[name="' + prefix + '[' + dom.index + '][notes]"]')
+                || form.querySelector('input[name="' + prefix + '[' + dom.index + '][occupation]"]');
+            return relInput ? (relInput.closest('.relation-engine-row') || relInput.closest('.min-w-0') || relInput.parentElement) : null;
+        }
+        return null;
     }
 
     function resolveInlineTargets() {
         if (!Array.isArray(unresolvedLocationOptions)) return;
         unresolvedLocationOptions.forEach(function(loc) {
-            var field = String((loc && loc.field_key) || '');
-            if (!field) return;
-            if (field === 'birth_place') {
-                var wrap = form.querySelector('[data-location-context="birth"]');
-                renderInlineLocationUi(wrap, loc);
-                return;
+            var anchor = findLocationSuggestionAnchor(loc.dom_anchor || {});
+            if (!anchor) {
+                var field = String((loc && loc.field_key) || '');
+                if (field === 'birth_place') {
+                    anchor = form.querySelector('[data-location-context="birth"]');
+                } else if (field === 'native_place') {
+                    anchor = form.querySelector('[data-location-context="native"]');
+                } else if (field === 'work_location') {
+                    anchor = form.querySelector('[data-location-context="work"]');
+                }
             }
-            if (field === 'work_location') {
-                var workInput = form.querySelector('input[name="snapshot[core][work_location_text]"]');
-                var workWrap = workInput ? (workInput.closest('.min-w-0') || workInput.parentElement) : null;
-                renderInlineLocationUi(workWrap, loc);
-                return;
-            }
-            if (field.indexOf('addresses.') === 0) {
-                var idx = field.split('.')[1];
-                var addrInput = form.querySelector('input[name="snapshot[addresses][' + idx + '][raw]"]')
-                    || form.querySelector('input[name="snapshot[addresses][' + idx + '][address_line]"]')
-                    || form.querySelector('input[name="snapshot[addresses][' + idx + '][city]"]');
-                var addrWrap = addrInput ? (addrInput.closest('.address-row') || addrInput.closest('.min-w-0') || addrInput.parentElement) : null;
-                renderInlineLocationUi(addrWrap, loc);
-            }
+            renderInlineLocationUi(anchor, loc);
         });
+    }
+
+    function normSuggestionText(s) {
+        return String(s || '').normalize('NFKC').replace(/\s+/g, ' ').trim();
     }
 
     function pickVisibleElementByName(fieldName) {
@@ -896,11 +903,27 @@ document.querySelectorAll('.use-candidate-btn').forEach(function(btn) {
             if (!payload || typeof payload !== 'object') return;
             var hiddenKey = cfg.key === 'religion' ? 'religion_id' : (cfg.key === 'caste' ? 'caste_id' : 'sub_caste_id');
             var labelKey = cfg.key === 'religion' ? 'religion_label' : (cfg.key === 'caste' ? 'caste_label' : 'subcaste_label');
-            var hiddenEl = form.querySelector('[name="snapshot[core][' + hiddenKey + ']"]');
-            var visibleEl = form.querySelector('.' + (cfg.key === 'sub_caste' ? 'subcaste' : cfg.key) + '-input');
-            if (hiddenEl && payload[hiddenKey] !== undefined) hiddenEl.value = String(payload[hiddenKey]);
-            if (visibleEl && payload[labelKey] !== undefined) visibleEl.value = String(payload[labelKey]);
-            if (visibleEl) visibleEl.dispatchEvent(new Event('input', { bubbles: true }));
+            var componentRoot = form.querySelector('.religion-caste-component');
+            var hiddenEl = componentRoot
+                ? componentRoot.querySelector('.' + (cfg.key === 'sub_caste' ? 'subcaste-hidden' : (cfg.key + '-hidden')))
+                : form.querySelector('[name="snapshot[core][' + hiddenKey + ']"]');
+            var visibleEl = componentRoot
+                ? componentRoot.querySelector('.' + (cfg.key === 'sub_caste' ? 'subcaste' : cfg.key) + '-input')
+                : form.querySelector('.' + (cfg.key === 'sub_caste' ? 'subcaste' : cfg.key) + '-input');
+            var idNum = payload[hiddenKey] !== undefined && payload[hiddenKey] !== null
+                ? parseInt(String(payload[hiddenKey]), 10)
+                : 0;
+            if (hiddenEl && idNum > 0) {
+                hiddenEl.value = String(idNum);
+                hiddenEl.dispatchEvent(new Event('change', { bubbles: true }));
+            }
+            if (visibleEl) {
+                if (visibleEl.disabled) visibleEl.disabled = false;
+                if (payload[labelKey] !== undefined && payload[labelKey] !== null) {
+                    visibleEl.value = String(payload[labelKey]);
+                }
+                visibleEl.dispatchEvent(new Event('input', { bubbles: true }));
+            }
             return;
         }
         var el = pickVisibleElementByName(cfg.name);
@@ -921,8 +944,37 @@ document.querySelectorAll('.use-candidate-btn').forEach(function(btn) {
         };
     }
 
+    function biodataLabelFromSuggestionMap(key) {
+        var sug = (suggestionMapData && typeof suggestionMapData === 'object') ? suggestionMapData[key] : null;
+        if (!sug || !sug.profile_existing) return '';
+        return String(sug.intake_display_value || sug.corrected_value || sug.suggested_value || '').trim();
+    }
+
+    function mergeParseSuggestionRows() {
+        var rows = Array.isArray(previewFieldSuggestions) ? previewFieldSuggestions.slice() : [];
+        var seen = {};
+        rows.forEach(function(r) { if (r && r.key) seen[r.key] = true; });
+        ['religion', 'caste', 'sub_caste'].forEach(function(key) {
+            if (seen[key]) return;
+            var intakeDisplay = biodataLabelFromSuggestionMap(key);
+            if (!intakeDisplay) return;
+            var coreKey = key === 'religion' ? 'religion_id' : (key === 'caste' ? 'caste_id' : 'sub_caste_id');
+            var sug = suggestionMapData[key];
+            rows.push({
+                key: key,
+                core_key: coreKey,
+                form_name: 'snapshot[core][' + coreKey + ']',
+                profile_display: String(sug.current_value || sug.selected_value || '').trim(),
+                intake_display: intakeDisplay,
+                intake_apply: sug.intake_apply
+            });
+            seen[key] = true;
+        });
+        return rows;
+    }
+
     function renderIntakeParseSuggestions() {
-        var rows = Array.isArray(previewFieldSuggestions) ? previewFieldSuggestions : [];
+        var rows = mergeParseSuggestionRows();
         var seen = {};
         rows.forEach(function(row) {
             if (!row || !row.key || seen[row.key]) return;
@@ -933,15 +985,30 @@ document.querySelectorAll('.use-candidate-btn').forEach(function(btn) {
             var el = pickVisibleElementByName(cfg.name);
             if (!el && cfg.fallbackSelector) el = form.querySelector(cfg.fallbackSelector);
             if (!el) return;
-
-            function normSuggestionText(s) {
-                return String(s || '').normalize('NFKC').replace(/\s+/g, ' ').trim();
+            var compareEl = el;
+            if (cfg.fallbackSelector) {
+                var visEl = form.querySelector(cfg.fallbackSelector);
+                if (visEl) compareEl = visEl;
             }
-            var fieldText = normSuggestionText(el.value);
+
+            var fieldText = normSuggestionText(compareEl.value);
             var intakeNorm = normSuggestionText(intakeDisplay);
             var profileNorm = normSuggestionText(row.profile_display || '');
             if (intakeNorm !== '' && (fieldText === intakeNorm || (profileNorm !== '' && profileNorm === intakeNorm))) {
                 return;
+            }
+            if (cfg.key === 'religion' || cfg.key === 'caste' || cfg.key === 'sub_caste') {
+                var hidKey = cfg.key === 'religion' ? 'religion_id' : (cfg.key === 'caste' ? 'caste_id' : 'sub_caste_id');
+                var hiddenIdEl = form.querySelector('[name="snapshot[core][' + hidKey + ']"]');
+                var applyObj = row.intake_apply;
+                if (hiddenIdEl && applyObj && typeof applyObj === 'object' && applyObj[hidKey] !== undefined && applyObj[hidKey] !== null) {
+                    var hidId = parseInt(String(hiddenIdEl.value || ''), 10);
+                    var applyId = parseInt(String(applyObj[hidKey]), 10);
+                    if (hidId > 0 && applyId > 0 && hidId === applyId
+                        && (fieldText === intakeNorm || (profileNorm !== '' && fieldText === profileNorm))) {
+                        return;
+                    }
+                }
             }
             var wrap = el.closest('.min-w-0') || el.parentElement;
             if (!wrap || wrap.querySelector('[data-intake-parse-suggestion="1"]')) return;
@@ -965,7 +1032,26 @@ document.querySelectorAll('.use-candidate-btn').forEach(function(btn) {
             applyBtn.title = @json(__('intake.parse_suggestion_click_hint'));
             applyBtn.textContent = intakeParseApplyLabel;
             applyBtn.addEventListener('click', function() {
-                applyIntakeValueToField(cfg, row.intake_apply !== undefined ? row.intake_apply : intakeDisplay);
+                var applyVal = row.intake_apply !== undefined ? row.intake_apply : intakeDisplay;
+                if (cfg.key === 'religion' || cfg.key === 'caste' || cfg.key === 'sub_caste') {
+                    if (typeof applyVal !== 'object' || applyVal === null) {
+                        var hidKey = cfg.key === 'religion' ? 'religion_id' : (cfg.key === 'caste' ? 'caste_id' : 'sub_caste_id');
+                        var lblKey = cfg.key === 'religion' ? 'religion_label' : (cfg.key === 'caste' ? 'caste_label' : 'subcaste_label');
+                        var o = {};
+                        if (typeof applyVal === 'number' || (typeof applyVal === 'string' && /^\d+$/.test(String(applyVal)))) {
+                            o[hidKey] = parseInt(String(applyVal), 10);
+                        }
+                        o[lblKey] = intakeDisplay;
+                        applyVal = o;
+                    } else if (!applyVal.subcaste_label && !applyVal.caste_label && !applyVal.religion_label) {
+                        var lk = cfg.key === 'religion' ? 'religion_label' : (cfg.key === 'caste' ? 'caste_label' : 'subcaste_label');
+                        applyVal[lk] = intakeDisplay;
+                    }
+                }
+                applyIntakeValueToField(cfg, applyVal);
+                var noteEl = applyBtn.closest('[data-intake-parse-suggestion="1"]');
+                if (noteEl) noteEl.remove();
+                if (el) delete el.dataset.intakeParseSuggestion;
             });
             note.appendChild(applyBtn);
 
@@ -1004,8 +1090,24 @@ document.querySelectorAll('.use-candidate-btn').forEach(function(btn) {
                 }
             }
             var needsReview = !!(sug && (sug.needs_review || sug.required_missing));
+            var biodataLabel = biodataLabelFromSuggestionMap(cfg.key);
+            if (biodataLabel !== '') {
+                var vis = cfg.fallbackSelector ? form.querySelector(cfg.fallbackSelector) : el;
+                if (vis && normSuggestionText(vis.value) !== normSuggestionText(biodataLabel)) {
+                    return;
+                }
+            }
             if (sug && sug.profile_existing && hasValue) {
                 return;
+            }
+            if (cfg.key === 'religion' || cfg.key === 'caste' || cfg.key === 'sub_caste') {
+                var hidKey = cfg.key === 'religion' ? 'religion_id' : (cfg.key === 'caste' ? 'caste_id' : 'sub_caste_id');
+                var hiddenIdEl = form.querySelector('[name="snapshot[core][' + hidKey + ']"]');
+                if (hiddenIdEl && sug && sug.intake_apply && typeof sug.intake_apply === 'object' && sug.intake_apply[hidKey]) {
+                    if (parseInt(String(hiddenIdEl.value || ''), 10) === parseInt(String(sug.intake_apply[hidKey]), 10)) {
+                        return;
+                    }
+                }
             }
             if (!hasValue || needsReview) {
                 var msg = !hasValue
@@ -1016,67 +1118,8 @@ document.querySelectorAll('.use-candidate-btn').forEach(function(btn) {
         });
     }
 
-    function bindSearchButtons(root) {
-    root.querySelectorAll('.intake-loc-search-btn').forEach(function(searchBtn) {
-        if (searchBtn.dataset.boundSearch === '1') return;
-        searchBtn.dataset.boundSearch = '1';
-        searchBtn.addEventListener('click', function() {
-            var card = searchBtn.closest('.rounded-md');
-            if (!card) return;
-            var input = card.querySelector('.intake-loc-search-input');
-            var list = card.querySelector('.intake-loc-options-list');
-            var empty = card.querySelector('.intake-loc-empty-note');
-            var seedBtn = card.querySelector('.intake-loc-resolve-btn');
-            var field = seedBtn ? seedBtn.getAttribute('data-field') : '';
-            var q = input ? String(input.value || '').trim() : '';
-            if (!q || !field) return;
-            var originalSearchLabel = searchBtn.textContent;
-            searchBtn.disabled = true;
-            searchBtn.textContent = 'Searching...';
-            fetch(locationSearchApiUrl + '?q=' + encodeURIComponent(q), {
-                method: 'GET',
-                credentials: 'same-origin',
-                headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }
-            }).then(function(r){ return r.json(); })
-              .then(function(data) {
-                  var results = Array.isArray(data && data.data) ? data.data.slice(0, 10)
-                      : (Array.isArray(data && data.results) ? data.results.slice(0, 10) : []);
-                  if (!list) {
-                      list = document.createElement('div');
-                      list.className = 'space-y-2 intake-loc-options-list';
-                      card.appendChild(list);
-                  }
-                  list.innerHTML = '';
-                  if (results.length === 0) {
-                      if (!empty) {
-                          empty = document.createElement('p');
-                          empty.className = 'text-xs text-gray-600 dark:text-gray-300 intake-loc-empty-note';
-                          card.appendChild(empty);
-                      }
-                      empty.textContent = 'ही जागा सापडली नाही. नवीन म्हणून सबमिट करा';
-                      return;
-                  }
-                  if (empty) empty.textContent = '';
-                  results.forEach(function(opt) {
-                      var b = document.createElement('button');
-                      b.type = 'button';
-                      b.className = 'intake-loc-resolve-btn w-full text-left px-3 py-2 rounded border border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-800 text-sm';
-                      b.setAttribute('data-field', field);
-                      b.setAttribute('data-city-id', String(opt.city_id || ''));
-                      b.textContent = String(opt.display_label || opt.name || opt.city_name || '—');
-                      list.appendChild(b);
-                  });
-                  bindResolveButtons(card);
-              }).finally(function() {
-                  searchBtn.disabled = false;
-                  searchBtn.textContent = originalSearchLabel;
-              });
-        });
-    });
-    }
     resolveInlineTargets();
-    bindSearchButtons(document);
-    bindResolveButtons(document);
+    bindLocationApplyButtons(document);
     applyCoreFieldAdvisories();
     renderIntakeParseSuggestions();
 })();

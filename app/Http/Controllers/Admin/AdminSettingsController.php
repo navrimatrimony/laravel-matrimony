@@ -55,6 +55,7 @@ class AdminSettingsController extends Controller
             'randomViewRevisitRandomMaxDays' => $rvMax,
             'randomViewBatchPerRun' => max(0, (int) AdminSetting::getValue('showcase_random_view_batch_per_run', '15')),
             'randomViewCandidatePool' => max(30, (int) AdminSetting::getValue('showcase_random_view_candidate_pool', '120')),
+            'maxPerShowcasePerDay' => max(0, (int) AdminSetting::getValue('showcase_to_real_max_per_showcase_per_day', '20')),
             'randomViewMaxPerRealWeek' => max(0, (int) AdminSetting::getValue('showcase_random_view_max_per_real_per_week', '5')),
             'randomViewMaxPerRealMonth' => max(0, (int) AdminSetting::getValue('showcase_random_view_max_per_real_per_month', '10')),
             'randomViewAgeSpreadYears' => max(1, (int) AdminSetting::getValue('showcase_random_view_age_spread_years', '6')),
@@ -121,6 +122,7 @@ class AdminSettingsController extends Controller
             'showcase_random_view_revisit_random_max_days' => 'required|integer|min:1|max:365',
             'showcase_random_view_batch_per_run' => 'required|integer|min:0|max:500',
             'showcase_random_view_candidate_pool' => 'required|integer|min:30|max:500',
+            'showcase_to_real_max_per_showcase_per_day' => 'required|integer|min:0|max:9999',
             'showcase_random_view_max_per_real_per_week' => 'required|integer|min:0|max:999',
             'showcase_random_view_max_per_real_per_month' => 'required|integer|min:0|max:999',
             'showcase_random_view_age_spread_years' => 'required|integer|min:1|max:40',
@@ -147,6 +149,7 @@ class AdminSettingsController extends Controller
         AdminSetting::setValue('showcase_random_view_revisit_random_max_days', (string) $maxRand);
         AdminSetting::setValue('showcase_random_view_batch_per_run', (string) $request->input('showcase_random_view_batch_per_run'));
         AdminSetting::setValue('showcase_random_view_candidate_pool', (string) $request->input('showcase_random_view_candidate_pool'));
+        AdminSetting::setValue('showcase_to_real_max_per_showcase_per_day', (string) max(0, (int) $request->input('showcase_to_real_max_per_showcase_per_day', 20)));
         AdminSetting::setValue('showcase_random_view_max_per_real_per_week', (string) $request->input('showcase_random_view_max_per_real_per_week'));
         AdminSetting::setValue('showcase_random_view_max_per_real_per_month', (string) $request->input('showcase_random_view_max_per_real_per_month'));
         AdminSetting::setValue('showcase_random_view_age_spread_years', (string) $request->input('showcase_random_view_age_spread_years'));

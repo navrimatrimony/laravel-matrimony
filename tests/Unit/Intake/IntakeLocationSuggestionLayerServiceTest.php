@@ -2,6 +2,8 @@
 
 namespace Tests\Unit\Intake;
 
+use App\Models\Country;
+use App\Models\Location;
 use App\Services\Intake\IntakeLocationSuggestionLayerService;
 use Tests\TestCase;
 
@@ -43,8 +45,7 @@ class IntakeLocationSuggestionLayerServiceTest extends TestCase
 
         $snapshot = [
             'core' => [
-                'birth_city_id' => 999,
-                'birth_place' => 'कोल्हापूर',
+                'birth_place_text' => 'कोल्हापूर',
             ],
         ];
         $parsed = [
@@ -56,29 +57,36 @@ class IntakeLocationSuggestionLayerServiceTest extends TestCase
         $rows = $method->invoke($service, $snapshot, 7, $parsed);
 
         $birth = collect($rows)->firstWhere('field_key', 'birth_place');
-        $this->assertNotNull($birth);
-        $this->assertSame('कोल्हापूर', $birth['raw_input'] ?? '');
-        $this->assertFalse($birth['has_confident_match'] ?? true);
-        $this->assertSame([], $birth['options'] ?? null);
+        $this->assertNull($birth, 'No overlay when biodata matches user birth_place_text');
     }
 
-    public function test_birth_place_without_full_hierarchy_shows_no_initial_options(): void
+    public function test_shows_suggestion_when_user_city_id_differs_from_biodata(): void
     {
+        if (Country::query()->count() === 0) {
+            $this->markTestSkipped('No location data');
+        }
+
+        $kolhapurId = (int) (Location::query()
+            ->where('name_mr', 'like', '%कोल्हापूर%')
+            ->orWhereRaw('LOWER(name) LIKE ?', ['%kolhapur%'])
+            ->value('id') ?? 0);
+
+        if ($kolhapurId < 1) {
+            $this->markTestSkipped('Kolhapur location missing');
+        }
+
         $service = app(IntakeLocationSuggestionLayerService::class);
         $method = new \ReflectionMethod($service, 'unresolvedCandidatesFromSnapshot');
         $method->setAccessible(true);
 
-        $snapshot = ['core' => ['birth_city_id' => 11]];
-        $parsed = ['core' => ['birth_place' => 'पुणे']];
+        $snapshot = ['core' => ['birth_city_id' => $kolhapurId]];
+        $parsed = ['core' => ['birth_place' => 'वरकुटे-मलवडी, ता. माण, जि. सातारा']];
 
         $rows = $method->invoke($service, $snapshot, 7, $parsed);
         $birth = collect($rows)->firstWhere('field_key', 'birth_place');
 
-        if ($birth !== null) {
-            $this->assertFalse($birth['has_confident_match'] ?? true);
-            $this->assertSame([], $birth['options'] ?? null);
-        } else {
-            $this->assertTrue(true);
-        }
+        $this->assertNotNull($birth);
+        $this->assertTrue($birth['has_confident_match'] ?? false);
+        $this->assertCount(1, $birth['options'] ?? []);
     }
 }

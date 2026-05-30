@@ -39,6 +39,20 @@ class PlaceIntakeSearchServiceTest extends TestCase
         $this->assertSame(6316, (int) ($rows[0]['city_id'] ?? 0));
     }
 
+    public function test_confident_match_varkute_returns_single_rural_row(): void
+    {
+        if (Country::query()->count() === 0) {
+            $this->markTestSkipped('No location data');
+        }
+
+        app()->setLocale('mr');
+        $row = app(PlaceIntakeSearchService::class)->confidentMatch('वरकुटे-मलवडी, ता. माण, जि. सातारा');
+
+        $this->assertIsArray($row);
+        $this->assertSame(6316, (int) ($row['city_id'] ?? 0));
+        $this->assertStringContainsString('415509', (string) ($row['display_label'] ?? ''));
+    }
+
     public function test_tasgaon_sangli_simple_comma_form(): void
     {
         if (Country::query()->count() === 0) {

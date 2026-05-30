@@ -32,7 +32,7 @@
         $chips[] = __('profile.show_age_years', ['age' => $age]);
     }
     if (($profile->height_cm ?? 0) > 0 && ($heightVisible ?? true)) {
-        $chips[] = $profile->height_cm.' cm';
+        $chips[] = \App\Support\HeightDisplay::formatFeetInches((int) $profile->height_cm);
     }
     if ($profile->religion) {
         $chips[] = $profile->religion->label ?? '';

@@ -66,6 +66,7 @@ class IntakeControlledFieldNormalizer
             $this->normalizeBirthPlace($out);
             $this->normalizeNativePlace($out);
             $this->normalizeAddressRows($out);
+            $this->normalizeParentsAddressRows($out);
             $out['horoscope'] = $this->normalizeHoroscopeRows(is_array($out['horoscope'] ?? null) ? $out['horoscope'] : []);
             $out['contacts'] = $this->normalizeContacts(is_array($out['contacts'] ?? null) ? $out['contacts'] : []);
             $out['education_history'] = $this->normalizeEducationRows(is_array($out['education_history'] ?? null) ? $out['education_history'] : []);
@@ -121,6 +122,7 @@ class IntakeControlledFieldNormalizer
             $this->normalizeBirthPlace($snapshot);
             $this->normalizeNativePlace($snapshot);
             $this->normalizeAddressRows($snapshot);
+            $this->normalizeParentsAddressRows($snapshot);
             $snapshot['contacts'] = $this->normalizeContacts(is_array($snapshot['contacts'] ?? null) ? $snapshot['contacts'] : []);
             $snapshot['horoscope'] = $this->normalizeHoroscopeRows(is_array($snapshot['horoscope'] ?? null) ? $snapshot['horoscope'] : []);
             $snapshot['career_history'] = $this->normalizeCareerRows(is_array($snapshot['career_history'] ?? null) ? $snapshot['career_history'] : []);
@@ -375,10 +377,27 @@ class IntakeControlledFieldNormalizer
      */
     public function normalizeAddressRows(array &$snapshot): void
     {
-        $list = $snapshot['addresses'] ?? null;
+        $this->normalizeAddressListKey($snapshot, 'addresses');
+    }
+
+    /**
+     * @param  array<string, mixed>  $snapshot
+     */
+    public function normalizeParentsAddressRows(array &$snapshot): void
+    {
+        $this->normalizeAddressListKey($snapshot, 'parents_addresses', 'parents_addresses');
+    }
+
+    /**
+     * @param  array<string, mixed>  $snapshot
+     */
+    private function normalizeAddressListKey(array &$snapshot, string $listKey, ?string $suggestionPrefix = null): void
+    {
+        $list = $snapshot[$listKey] ?? null;
         if (! is_array($list) || $list === []) {
             return;
         }
+        $fieldPrefix = $suggestionPrefix ?? $listKey;
         foreach ($list as $i => $addr) {
             if (! is_array($addr)) {
                 continue;
@@ -393,21 +412,22 @@ class IntakeControlledFieldNormalizer
             $res = $this->locationNormalization->normalizeFromText($raw);
             if (($res['confidence'] ?? 0.0) >= 0.80 && ($res['matched'] ?? false) && ($res['city_id'] ?? null) !== null) {
                 $addr['city_id'] = (int) $res['city_id'];
+                $addr['location_id'] = (int) $res['city_id'];
                 $addr['district_id'] = $res['district_id'] ?? null;
                 $addr['state_id'] = $res['state_id'] ?? null;
                 $addr['country_id'] = $res['country_id'] ?? null;
                 if (isset($res['taluka_id']) && $res['taluka_id'] !== null) {
                     $addr['taluka_id'] = (int) $res['taluka_id'];
                 }
-                $snapshot['addresses'][$i] = $addr;
+                $snapshot[$listKey][$i] = $addr;
 
                 continue;
             }
             Log::debug('Unknown location input', [
-                'field_name' => 'addresses.'.$i,
+                'field_name' => $fieldPrefix.'.'.$i,
                 'raw_input' => $raw,
             ]);
-            $this->recordUnresolvedLocationSuggestion($raw, 'addresses.'.$i, $this->addressRowHierarchyHint($addr));
+            $this->recordUnresolvedLocationSuggestion($raw, $fieldPrefix.'.'.$i, $this->addressRowHierarchyHint($addr));
         }
     }
 
@@ -463,6 +483,11 @@ class IntakeControlledFieldNormalizer
      */
     private function extractAddressPlaceCandidate(array $addr): ?string
     {
+        $locText = isset($addr['location_text']) && is_string($addr['location_text']) ? trim($addr['location_text']) : '';
+        if ($locText !== '') {
+            return $locText;
+        }
+
         foreach (['city', 'place', 'location', 'town', 'village_name'] as $k) {
             $v = $addr[$k] ?? null;
             if (is_string($v)) {

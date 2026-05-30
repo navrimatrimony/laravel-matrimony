@@ -235,6 +235,106 @@
         }
     }
 
+    function clearIntakeBirthPlaceText(wrapper) {
+        if ((wrapper.dataset.locationContext || '') !== 'birth') return;
+        var bp = document.getElementById('intake_birth_place_text');
+        if (bp) bp.value = '';
+    }
+
+    /**
+     * Programmatic selection (typeahead pick, GPS, intake biodata Apply).
+     */
+    function applyCanonicalSelectionToWrapper(wrapper, item, displayLabel) {
+        if (!wrapper) return;
+        var context = wrapper.dataset.locationContext || 'residence';
+        var input = wrapper.querySelector('.location-typeahead-input');
+        var resultsEl = wrapper.querySelector('.location-typeahead-results');
+        if (!input) return;
+
+        clearPendingSummary(wrapper);
+        input.value = displayLabel;
+        if (resultsEl) {
+            resultsEl.classList.add('hidden');
+            resultsEl.style.display = 'none';
+        }
+
+        var locationId = item.location_id || item.city_id || item.id || '';
+        var cityId = item.city_id || item.id || locationId || '';
+        var talukaId = item.taluka_id || '';
+        var districtId = item.district_id || '';
+        var stateId = item.state_id || '';
+        var countryId = item.country_id || '';
+        var locationHidden = wrapper.querySelector('.location-hidden-location-id');
+        if (locationHidden) locationHidden.value = locationId;
+        var locationInputHidden = wrapper.querySelector('.location-hidden-location-input');
+        if (locationInputHidden) locationInputHidden.value = '';
+
+        if (context === 'residence') {
+            var country = wrapper.querySelector('.location-hidden-country');
+            var state = wrapper.querySelector('.location-hidden-state');
+            var district = wrapper.querySelector('.location-hidden-district');
+            var taluka = wrapper.querySelector('.location-hidden-taluka');
+            if (country) country.value = countryId;
+            if (state) state.value = stateId;
+            if (district) district.value = districtId;
+            if (taluka) taluka.value = talukaId;
+            wrapper.dataset.resCountryId = countryId || '';
+            wrapper.dataset.resStateId = stateId || '';
+            wrapper.dataset.resDistrictId = districtId || '';
+            wrapper.dataset.resTalukaId = talukaId || '';
+            wrapper.dataset.resLocationId = locationId || '';
+        } else if (context === 'work') {
+            var workCity = wrapper.querySelector('.location-hidden-work-city');
+            var workState = wrapper.querySelector('.location-hidden-work-state');
+            if (workCity) workCity.value = cityId;
+            if (workState) workState.value = stateId;
+        } else if (context === 'native') {
+            var nCity = wrapper.querySelector('.location-hidden-native-city');
+            var nTaluka = wrapper.querySelector('.location-hidden-native-taluka');
+            var nDistrict = wrapper.querySelector('.location-hidden-native-district');
+            var nState = wrapper.querySelector('.location-hidden-native-state');
+            if (nCity) nCity.value = cityId;
+            if (nTaluka) nTaluka.value = talukaId;
+            if (nDistrict) nDistrict.value = districtId;
+            if (nState) nState.value = stateId;
+        } else if (context === 'birth') {
+            var bCity = wrapper.querySelector('.location-hidden-birth-city');
+            var bTaluka = wrapper.querySelector('.location-hidden-birth-taluka');
+            var bDistrict = wrapper.querySelector('.location-hidden-birth-district');
+            var bState = wrapper.querySelector('.location-hidden-birth-state');
+            if (bCity) bCity.value = cityId;
+            if (bTaluka) bTaluka.value = talukaId;
+            if (bDistrict) bDistrict.value = districtId;
+            if (bState) bState.value = stateId;
+            clearIntakeBirthPlaceText(wrapper);
+        } else if (context === 'alliance') {
+            var t = wrapper.querySelector('.location-hidden-taluka');
+            var d = wrapper.querySelector('.location-hidden-district');
+            var s = wrapper.querySelector('.location-hidden-state');
+            if (t) t.value = talukaId;
+            if (d) d.value = districtId;
+            if (s) s.value = stateId;
+            var row = wrapper.closest('.property-asset-row');
+            if (row) {
+                var sync = row.querySelector('.location-display-sync');
+                if (sync) sync.value = displayLabel;
+            }
+        }
+        var displaySyncName = wrapper.getAttribute('data-display-sync-name');
+        if (displaySyncName) {
+            var form = wrapper.closest('form');
+            if (form) {
+                var found = null;
+                form.querySelectorAll('input[name]').forEach(function (inp) {
+                    if (inp.getAttribute('name') === displaySyncName) found = inp;
+                });
+                if (found) found.value = displayLabel;
+            }
+        }
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+        input.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+
     function openSuggestModal(wrapper, name) {
         var tpl = document.getElementById('location-suggest-modal-template');
         if (!tpl) return;
@@ -522,95 +622,8 @@
         if (!input || !resultsEl) return;
         wrapper.dataset.bound = '1';
 
-        function clearIntakeBirthPlaceText(wrapper) {
-            if (wrapper.dataset.locationContext !== 'birth') return;
-            var bp = document.getElementById('intake_birth_place_text');
-            if (bp) bp.value = '';
-        }
-
-        function applyCanonicalSelection(item, displayLabel) {
-            clearPendingSummary(wrapper);
-            input.value = displayLabel;
-            resultsEl.classList.add('hidden');
-            resultsEl.style.display = 'none';
-
-            var locationId = item.location_id || item.city_id || item.id || '';
-            var cityId = item.city_id || item.id || '';
-            var talukaId = item.taluka_id || '';
-            var districtId = item.district_id || '';
-            var stateId = item.state_id || '';
-            var countryId = item.country_id || '';
-            var locationHidden = wrapper.querySelector('.location-hidden-location-id');
-            if (locationHidden) locationHidden.value = locationId;
-            var locationInputHidden = wrapper.querySelector('.location-hidden-location-input');
-            if (locationInputHidden) locationInputHidden.value = '';
-
-            if (context === 'residence') {
-                var country = wrapper.querySelector('.location-hidden-country');
-                var state = wrapper.querySelector('.location-hidden-state');
-                var district = wrapper.querySelector('.location-hidden-district');
-                var taluka = wrapper.querySelector('.location-hidden-taluka');
-                if (country) country.value = countryId;
-                if (state) state.value = stateId;
-                if (district) district.value = districtId;
-                if (taluka) taluka.value = talukaId;
-                wrapper.dataset.resCountryId = countryId || '';
-                wrapper.dataset.resStateId = stateId || '';
-                wrapper.dataset.resDistrictId = districtId || '';
-                wrapper.dataset.resTalukaId = talukaId || '';
-                wrapper.dataset.resLocationId = locationId || '';
-            } else if (context === 'work') {
-                var workCity = wrapper.querySelector('.location-hidden-work-city');
-                var workState = wrapper.querySelector('.location-hidden-work-state');
-                if (workCity) workCity.value = cityId;
-                if (workState) workState.value = stateId;
-            } else if (context === 'native') {
-                var nCity = wrapper.querySelector('.location-hidden-native-city');
-                var nTaluka = wrapper.querySelector('.location-hidden-native-taluka');
-                var nDistrict = wrapper.querySelector('.location-hidden-native-district');
-                var nState = wrapper.querySelector('.location-hidden-native-state');
-                if (nCity) nCity.value = cityId;
-                if (nTaluka) nTaluka.value = talukaId;
-                if (nDistrict) nDistrict.value = districtId;
-                if (nState) nState.value = stateId;
-            } else if (context === 'birth') {
-                var bCity = wrapper.querySelector('.location-hidden-birth-city');
-                var bTaluka = wrapper.querySelector('.location-hidden-birth-taluka');
-                var bDistrict = wrapper.querySelector('.location-hidden-birth-district');
-                var bState = wrapper.querySelector('.location-hidden-birth-state');
-                if (bCity) bCity.value = cityId;
-                if (bTaluka) bTaluka.value = talukaId;
-                if (bDistrict) bDistrict.value = districtId;
-                if (bState) bState.value = stateId;
-                clearIntakeBirthPlaceText(wrapper);
-            } else if (context === 'alliance') {
-                var t = wrapper.querySelector('.location-hidden-taluka');
-                var d = wrapper.querySelector('.location-hidden-district');
-                var s = wrapper.querySelector('.location-hidden-state');
-                if (t) t.value = talukaId;
-                if (d) d.value = districtId;
-                if (s) s.value = stateId;
-                var row = wrapper.closest('.property-asset-row');
-                if (row) {
-                    var sync = row.querySelector('.location-display-sync');
-                    if (sync) sync.value = displayLabel;
-                }
-            }
-            var displaySyncName = wrapper.getAttribute('data-display-sync-name');
-            if (displaySyncName) {
-                var form = wrapper.closest('form');
-                if (form) {
-                    var found = null;
-                    form.querySelectorAll('input[name]').forEach(function(inp) {
-                        if (inp.getAttribute('name') === displaySyncName) found = inp;
-                    });
-                    if (found) found.value = displayLabel;
-                }
-            }
-        }
-
         function onSelect(item, displayLabel) {
-            applyCanonicalSelection(item, displayLabel);
+            applyCanonicalSelectionToWrapper(wrapper, item, displayLabel);
         }
 
         var gpsPanel = wrapper.querySelector('.location-gps-panel');
@@ -735,7 +748,7 @@
                                 var applyBtn = gpsPanel.querySelector('.location-gps-apply');
                                 if (applyBtn) {
                                     applyBtn.addEventListener('click', function () {
-                                        applyCanonicalSelection(primaryItem, data.display_label || labelFromItem(primaryItem));
+                                        applyCanonicalSelectionToWrapper(wrapper, primaryItem, data.display_label || labelFromItem(primaryItem));
                                         hideGpsPanel();
                                     });
                                 }
@@ -750,7 +763,7 @@
                                         var idx = parseInt(btn.getAttribute('data-alt-idx'), 10);
                                         var alt = alts[idx];
                                         if (!alt) return;
-                                        applyCanonicalSelection(alt, alt.display_label || labelFromItem(alt));
+                                        applyCanonicalSelectionToWrapper(wrapper, alt, alt.display_label || labelFromItem(alt));
                                         hideGpsPanel();
                                     });
                                 });
@@ -931,5 +944,56 @@
         init();
     }
 
-    window.LocationTypeahead = { init: init };
+    function locationWrapperForIntakeField(form, fieldKey, btn) {
+        if (!form) return null;
+        if (btn) {
+            var fromBtn = btn.closest('.location-typeahead-wrapper');
+            if (fromBtn) return fromBtn;
+            var row = btn.closest('.parents-address-row, .self-address-row, .relation-engine-row');
+            if (row) {
+                var inRow = row.querySelector('.location-typeahead-wrapper');
+                if (inRow) return inRow;
+            }
+        }
+        if (fieldKey === 'birth_place') {
+            return form.querySelector('[data-location-context="birth"]');
+        }
+        if (fieldKey === 'native_place') {
+            return form.querySelector('[data-location-context="native"]');
+        }
+        if (fieldKey === 'work_location') {
+            return form.querySelector('[data-location-context="work"]');
+        }
+        var addrMatch = String(fieldKey || '').match(/^addresses\.(\d+)$/);
+        if (addrMatch) {
+            var pRows = document.getElementById('parents-address-rows');
+            var pRow = pRows ? (pRows.querySelector('.parents-address-row[data-row-index="' + addrMatch[1] + '"]') || pRows.children[parseInt(addrMatch[1], 10)]) : null;
+            return pRow ? pRow.querySelector('.location-typeahead-wrapper') : null;
+        }
+        var selfMatch = String(fieldKey || '').match(/^self_addresses\.(\d+)$/);
+        if (selfMatch) {
+            var sRows = document.getElementById('self-address-rows');
+            var sRow = sRows ? (sRows.querySelector('.self-address-row[data-row-index="' + selfMatch[1] + '"]') || sRows.children[parseInt(selfMatch[1], 10)]) : null;
+            return sRow ? sRow.querySelector('.location-typeahead-wrapper') : null;
+        }
+        return null;
+    }
+
+    window.LocationTypeahead = {
+        init: init,
+        applySelection: function (wrapper, payload) {
+            if (!wrapper || !payload) return;
+            var label = String(payload.display_label || payload.label || '').trim();
+            var item = {
+                location_id: payload.city_id || payload.location_id || payload.id,
+                city_id: payload.city_id || payload.location_id || payload.id,
+                taluka_id: payload.taluka_id,
+                district_id: payload.district_id,
+                state_id: payload.state_id,
+                country_id: payload.country_id,
+            };
+            applyCanonicalSelectionToWrapper(wrapper, item, label);
+        },
+        wrapperForIntakeField: locationWrapperForIntakeField,
+    };
 })();

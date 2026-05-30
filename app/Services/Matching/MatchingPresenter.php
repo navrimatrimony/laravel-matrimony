@@ -5,6 +5,7 @@ namespace App\Services\Matching;
 use App\Models\MatrimonyProfile;
 use App\Models\User;
 use App\Services\RuleEngineService;
+use App\Support\HeightDisplay;
 use App\Support\ProfileDisplayCopy;
 use Carbon\Carbon;
 
@@ -278,8 +279,8 @@ class MatchingPresenter
         }
 
         if (($viewed->height_cm ?? null) || ($viewer->height_cm ?? null)) {
-            $their = ($viewed->height_cm ?? null) ? ((string) $viewed->height_cm.' cm') : '';
-            $yours = ($viewer->height_cm ?? null) ? ((string) $viewer->height_cm.' cm') : '';
+            $their = ($viewed->height_cm ?? null) ? HeightDisplay::formatCm((int) $viewed->height_cm) : '';
+            $yours = ($viewer->height_cm ?? null) ? HeightDisplay::formatCm((int) $viewer->height_cm) : '';
             $heightDiff = ($their !== '' && $yours !== '') ? abs((int) $viewed->height_cm - (int) $viewer->height_cm) : null;
             $status = ($heightDiff === null) ? 'open' : ($heightDiff <= 8 ? 'match' : ($heightDiff <= 12 ? 'close' : 'open'));
             $addRow('Basic fit', 'Height', $their, $yours, $status);

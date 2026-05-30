@@ -5,7 +5,9 @@ namespace Tests\Feature\Intake;
 use App\Http\Middleware\EnforceCardOnboarding;
 use App\Models\BiodataIntake;
 use App\Models\City;
+use App\Models\Taluka;
 use App\Models\User;
+use App\Models\Village;
 use Database\Seeders\MinimalLocationSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -88,6 +90,47 @@ class IntakeLocationResolveSuggestionTest extends TestCase
         $snapshot = $intake->approval_snapshot_json;
         $this->assertIsArray($snapshot);
         $this->assertSame($city->id, (int) ($snapshot['addresses'][0]['city_id'] ?? 0));
+    }
+
+    public function test_owner_can_resolve_village_leaf_id_for_birth_place(): void
+    {
+        $this->withoutMiddleware(EnforceCardOnboarding::class);
+        $this->seed(MinimalLocationSeeder::class);
+        $user = User::factory()->create();
+        $taluka = Taluka::query()->where('name', 'Haveli')->firstOrFail();
+        $village = Village::firstOrCreate(
+            ['parent_id' => $taluka->id, 'name' => 'Test Village Leaf'],
+            ['pincode' => '412801']
+        );
+
+        $intake = BiodataIntake::query()->create([
+            'uploaded_by' => $user->id,
+            'file_path' => 'intakes/test-village.txt',
+            'original_filename' => 'test-village.txt',
+            'file_type' => 'txt',
+            'raw_ocr_text' => 'Birth place Test Village Leaf',
+            'intake_status' => 'uploaded',
+            'parse_status' => 'parsed',
+            'parsed_json' => [
+                'core' => ['birth_place' => 'Test Village Leaf'],
+                'addresses' => [],
+            ],
+            'approved_by_user' => false,
+            'intake_locked' => false,
+        ]);
+
+        $this->actingAs($user)
+            ->patchJson(route('intake.resolve-location', $intake), [
+                'field' => 'birth_place',
+                'city_id' => $village->id,
+            ])
+            ->assertOk()
+            ->assertJsonPath('success', true);
+
+        $intake->refresh();
+        $snapshot = $intake->approval_snapshot_json;
+        $this->assertIsArray($snapshot);
+        $this->assertSame($village->id, (int) ($snapshot['core']['birth_city_id'] ?? 0));
     }
 
     public function test_resolve_rejects_when_field_already_resolved(): void

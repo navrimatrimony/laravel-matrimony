@@ -358,7 +358,7 @@ class AdminIntakeController extends Controller
 
         $validated = $request->validate([
             'field' => ['required', 'string', 'max:64'],
-            'city_id' => ['required', 'integer', AddressHierarchyRules::existsCityId()],
+            'city_id' => ['required', 'integer', AddressHierarchyRules::existsLocationLeafId()],
         ]);
 
         $resolver = app(IntakeLocationSuggestionLayerService::class);
@@ -370,10 +370,19 @@ class AdminIntakeController extends Controller
             ], 422);
         }
 
-        return response()->json([
-            'success' => true,
-            'message' => 'Location resolved.',
-        ]);
+        return response()->json(array_merge(
+            [
+                'success' => true,
+                'message' => 'Location resolved.',
+            ],
+            array_filter([
+                'city_id' => $result['city_id'] ?? null,
+                'display_label' => $result['display_label'] ?? null,
+                'taluka_id' => $result['taluka_id'] ?? null,
+                'district_id' => $result['district_id'] ?? null,
+                'state_id' => $result['state_id'] ?? null,
+            ], fn ($v) => $v !== null)
+        ));
     }
 
     /** @var list<string> */

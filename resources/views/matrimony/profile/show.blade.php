@@ -603,7 +603,7 @@
     $scanRow5Parts = array_filter([
         $hasPersonalIncome ? $personalIncomeDisplay : null,
         $hasFamilyIncome ? $familyIncomeDisplay : null,
-        ($heightVisible && ($profile->height_cm ?? '') !== '') ? $profile->height_cm.' cm' : null,
+        ($heightVisible && ($profile->height_cm ?? '') !== '') ? \App\Support\HeightDisplay::formatFeetInches((int) $profile->height_cm) : null,
         ($profile->birth_time ?? '') !== '' ? $profile->birth_time : null,
     ]);
     $scanRow5Text = implode(' · ', $scanRow5Parts);

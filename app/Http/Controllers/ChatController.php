@@ -188,6 +188,8 @@ class ChatController extends Controller
         $messages = $page->getCollection()->reverse()->values(); // oldest->newest for UI
         $messages->loadMissing(['senderProfile']);
 
+        $hasIncomingFromOther = $this->messages->conversationHasIncomingFromOther($conversation, (int) $other->id);
+
         if (! $readLockedForIncoming) {
             $this->messages->markConversationRead($me, $conversation);
         }
@@ -236,6 +238,7 @@ class ChatController extends Controller
             'showcaseTag' => $showcaseTag,
             'chatTemplateSuggestions' => $chatTemplateSuggestions,
             'readLockedForIncoming' => $readLockedForIncoming,
+            'hasIncomingFromOther' => $hasIncomingFromOther,
             'chatTeaserPolicy' => $chatTeaserPolicy,
         ]);
     }

@@ -49,6 +49,17 @@ class ChatMessageService
             ->paginate($perPage);
     }
 
+    /**
+     * True when the other participant has sent at least one message in this thread.
+     */
+    public function conversationHasIncomingFromOther(Conversation $conversation, int $otherProfileId): bool
+    {
+        return Message::query()
+            ->where('conversation_id', $conversation->id)
+            ->where('sender_profile_id', $otherProfileId)
+            ->exists();
+    }
+
     public function sendTextMessage(MatrimonyProfile $sender, MatrimonyProfile $receiver, Conversation $conversation, string $bodyText): Message
     {
         $bodyText = trim($bodyText);
@@ -180,15 +191,20 @@ class ChatMessageService
             $this->policy->clearReplyGateOnReply($sender, $receiver, $conversation);
             $this->policy->registerReplyGateLockIfNeeded($sender, $receiver, $conversation);
 
-            // Notify receiver (database channel) after successful commit.
+            // Notify receiver (database channel) after successful commit — never the sender.
             if ($receiver->id !== $sender->id && $receiver->user) {
                 $receiverUser = $receiver->user;
                 $receiverUser->loadMissing('notifications');
                 $sender->loadMissing('user');
-                $allowPeerNotify = AdminActivityNotificationGate::allowsPeerActivityNotification($sender->user);
+                $senderUser = $sender->user;
+                $allowPeerNotify = AdminActivityNotificationGate::allowsPeerActivityNotification($senderUser);
 
-                DB::afterCommit(function () use ($receiverUser, $sender, $conversation, $message, $allowPeerNotify) {
+                DB::afterCommit(function () use ($receiverUser, $sender, $senderUser, $conversation, $message, $allowPeerNotify) {
                     if (! $allowPeerNotify) {
+                        return;
+                    }
+
+                    if ($senderUser && (int) $receiverUser->id === (int) $senderUser->id) {
                         return;
                     }
 
@@ -204,7 +220,6 @@ class ChatMessageService
                         ));
                     } else {
                         try {
-                            $senderUser = $sender->user;
                             if ($senderUser) {
                                 app(NotificationService::class)->notifyChatReceivedWhileReadLocked($receiverUser, $senderUser);
                             }

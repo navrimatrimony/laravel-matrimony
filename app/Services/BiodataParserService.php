@@ -843,7 +843,7 @@ class BiodataParserService
             'primary_contact_number' => $primaryContact,
             'father_contact_1' => $fatherContactPhone,
             'father_contact_2' => $fatherContactPhone2,
-            'father_extra_info' => $fatherMuPoAddressLine,
+            'father_extra_info' => null,
             'company_name' => null,
             'work_location_text' => null,
             'occupation_title' => null,
@@ -1421,6 +1421,9 @@ class BiodataParserService
         $careerHistory = $this->sanitizeCareerLocationFromGotra($careerHistory);
         $careerHistory = $this->normalizeCareerHistoryCanonicalKeys($careerHistory);
 
+        $parentsBlob = (string) ($core['_parsed_parents_address_blob'] ?? '');
+        $parentsAddresses = $this->buildParentsAddressesFromBiodata($fatherMuPoAddressLine, $core, $parentsBlob);
+        unset($core['_parsed_parents_address_blob']);
         $coreOut = $core;
         $siblingsOut = $siblings;
         $explicitSiblingCountSignal = (bool) preg_match(
@@ -1450,6 +1453,7 @@ class BiodataParserService
             'education_history' => $educationHistory,
             'career_history' => $careerHistory,
             'addresses' => $this->buildAddressesArray($addressBlock, $residentialAddressLine ?? null, $nativePlaceRaw ?? null),
+            'parents_addresses' => $parentsAddresses,
             'birth_place' => (($coreOut['birth_place_text'] ?? $coreOut['birth_place'] ?? null) !== null && trim((string) ($coreOut['birth_place_text'] ?? $coreOut['birth_place'])) !== '')
                 ? [
                     'address_line' => (string) ($coreOut['birth_place_text'] ?? $coreOut['birth_place']),
@@ -1696,7 +1700,7 @@ class BiodataParserService
             if ($t === '') {
                 continue;
             }
-            if (preg_match('/वडिलांचे\s*नाव|वडिलाचे\s*नाव|वडीलांचे\s*नाव/u', $t)) {
+            if (preg_match('/वडिलांचे\s*नां?व|वडिलाचे\s*नां?व|वडीलांचे\s*नां?व/u', $t)) {
                 $afterFather = true;
 
                 continue;
@@ -1707,11 +1711,15 @@ class BiodataParserService
             if (preg_match('/^(?:आईचे|मातेचे|माता|मुलाचे|मुलीचे|भाऊ|बहीण|बहिण|आत्या|मामा|मावशी|संपर्क|इतर\s+नातेवाईक|इतर\s+पाहुणे|पाहुणे\s*[-–—])/u', $t)) {
                 break;
             }
-            if (preg_match('/^\s*मु\.?\s*पो\.?\s*[:：]\s*(.+)$/u', $t, $m)) {
+            if (preg_match('/^\s*मु\.?\s*पो\.?\s*[:\-–—]+\s*(.+)$/u', $t, $m)) {
                 $addr = trim(preg_replace('/\s+/u', ' ', $m[1]) ?? '');
                 if ($addr === '') {
                     return null;
                 }
+                $split = \App\Services\Intake\ParentsBiodataAddressSplitter::split('मु. पो. '.$addr);
+                $addr = $split['address_line'] !== ''
+                    ? ($split['location_text'] !== '' ? $split['address_line'].', '.$split['location_text'] : $split['address_line'])
+                    : $addr;
                 if (mb_strlen($addr) > 255) {
                     return mb_substr($addr, 0, 255);
                 }
@@ -2337,6 +2345,8 @@ class BiodataParserService
         if ($this->valueSmellsLikeHoroscopeOrGotraLeak($addr) && ! $hasAddrAnchor) {
             return null;
         }
+
+        $addr = preg_replace('/\s*[-–—■•|]+\s*(?:मोबाईल|मोबा|मो\.|Mobile|Phone|Contact)(?:\s*नंबर|\s*नं)?\s*$/ui', '', $addr) ?? $addr;
 
         return $this->stripMultilineAddressJoinArtifacts($addr);
     }
@@ -3911,12 +3921,24 @@ class BiodataParserService
             }
         }
 
+        if (isset($hints['address_parents'])) {
+            $cand = $this->cleanValue(trim((string) $hints['address_parents']));
+            if ($cand !== null && $cand !== '') {
+                $core['_parsed_parents_address_blob'] = $cand;
+            }
+        }
+
         if (isset($hints['address_current'])) {
-            $cand = trim($hints['address_current']);
-            $addr = $this->finalizeAddressBlockCandidate($this->cleanValue($cand));
-            if ($addr !== null && $addr !== '') {
-                $addressBlock = $addr;
-                $core['address_line'] = $addr;
+            $cand = $this->cleanValue(trim((string) $hints['address_current']));
+            if ($cand !== null && $cand !== ''
+                && \App\Services\Intake\ParentsBiodataAddressSplitter::looksLikeParentsHomeBlob($cand)) {
+                $core['_parsed_parents_address_blob'] = $cand;
+            } else {
+                $addr = $this->finalizeAddressBlockCandidate($cand);
+                if ($addr !== null && $addr !== '') {
+                    $addressBlock = $addr;
+                    $core['address_line'] = $addr;
+                }
             }
         }
 
@@ -4273,11 +4295,24 @@ class BiodataParserService
         $hints = $tableHints;
         unset($hints[\App\Services\Parsing\HtmlMarathiBiodataTableExtractor::STRUCTURED_MARKER]);
 
+        if (isset($hints['address_parents'])) {
+            $cand = $this->cleanValue(trim((string) $hints['address_parents']));
+            if ($cand !== null && $cand !== '') {
+                $core['_parsed_parents_address_blob'] = $cand;
+            }
+        }
+
         if (isset($hints['address_current'])) {
-            $addr = $this->finalizeAddressBlockCandidate($this->cleanValue(trim((string) $hints['address_current'])));
-            if ($addr !== null && $addr !== '') {
-                $addressBlock = $addr;
-                $core['address_line'] = $addr;
+            $cand = $this->cleanValue(trim((string) $hints['address_current']));
+            if ($cand !== null && $cand !== ''
+                && \App\Services\Intake\ParentsBiodataAddressSplitter::looksLikeParentsHomeBlob($cand)) {
+                $core['_parsed_parents_address_blob'] = $cand;
+            } else {
+                $addr = $this->finalizeAddressBlockCandidate($cand);
+                if ($addr !== null && $addr !== '') {
+                    $addressBlock = $addr;
+                    $core['address_line'] = $addr;
+                }
             }
         }
         if (isset($hints['address_native'])) {
@@ -5414,6 +5449,48 @@ class BiodataParserService
         }
 
         return $v;
+    }
+
+    /**
+     * Parents-home (वडिलांचा/घरचा) address — not self current; split flat line vs hierarchy vs phones.
+     *
+     * @param  array<string, mixed>  $core
+     * @return list<array<string, mixed>>
+     */
+    private function buildParentsAddressesFromBiodata(?string $fatherMuPoLine, array &$core, string $tableBlob = ''): array
+    {
+        $raw = trim((string) ($fatherMuPoLine ?? ''));
+        if ($raw === '' && trim($tableBlob) !== '') {
+            $raw = trim($tableBlob);
+        }
+        if ($raw === '') {
+            return [];
+        }
+
+        $split = \App\Services\Intake\ParentsBiodataAddressSplitter::split($raw);
+        foreach ($split['phones'] as $i => $phone) {
+            if ($i === 0 && empty($core['father_contact_1'])) {
+                $core['father_contact_1'] = $phone;
+            } elseif ($i === 1 && empty($core['father_contact_2'])) {
+                $core['father_contact_2'] = $phone;
+            } elseif ($i === 2 && empty($core['father_contact_3'] ?? null)
+                && \Illuminate\Support\Facades\Schema::hasColumn('matrimony_profiles', 'father_contact_3')) {
+                $core['father_contact_3'] = $phone;
+            }
+        }
+
+        if ($split['address_line'] === '' && $split['location_text'] === '') {
+            return [];
+        }
+
+        return [[
+            'address_line' => $split['address_line'],
+            'raw' => $split['address_line'],
+            'location_text' => $split['location_text'],
+            'type' => 'permanent',
+            'address_type_key' => 'permanent',
+            'address_scope' => 'parents',
+        ]];
     }
 
     /**

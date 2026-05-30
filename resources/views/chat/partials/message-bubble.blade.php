@@ -29,7 +29,7 @@
         : null;
 @endphp
 
-<div class="flex {{ $wrap }}" data-message-id="{{ (int) ($message->id ?? 0) }}">
+<div class="flex {{ $wrap }}" data-message-id="{{ (int) ($message->id ?? 0) }}" data-is-mine="{{ $isMine ? '1' : '0' }}">
     @if (! $isMine)
         <img src="{{ $avatarUrl }}" alt="Sender photo" class="mr-2 h-8 w-8 shrink-0 rounded-full object-cover ring-1 ring-black/10" />
     @endif

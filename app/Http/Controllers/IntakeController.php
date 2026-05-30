@@ -553,31 +553,17 @@ class IntakeController extends Controller
             $workingSnapshot = $data;
         }
 
-        // Existing profile: form shows DB values; parsed biodata differences appear as suggestions (not silent overwrite).
-        if ($linkedMatrimonyProfile instanceof \App\Models\MatrimonyProfile) {
-            $mergeResult = app(IntakePreviewExistingProfileOverlay::class)->apply(
-                $linkedMatrimonyProfile,
-                $sections['core']['data'],
-                $suggestionMap,
-                $data,
-                $workingSnapshot,
-                $sections
-            );
-            $previewProtectedCoreKeys = $mergeResult['protected_core_keys'] ?? [];
-            $previewFieldSuggestions = $this->dedupePreviewFieldSuggestions($mergeResult['field_suggestions'] ?? []);
-        }
-
         // Build profile-like object for Basic Info engine (wizard same UI in intake).
-        // Ensure 100% of parsed core fields appear in the form: set all known keys, then copy any remaining from parser.
         $coreData = $sections['core']['data'] ?? [];
         if (! is_array($coreData)) {
             $coreData = [];
         }
 
-        // Resolve religion/caste/sub_caste/complexion/mother_tongue text → IDs so form hidden inputs and submit have IDs (edit then shows correctly).
+        // Resolve text → master IDs before profile overlay (so MR/EN labels compare as same record).
         $coreData = $this->normalizeIntakeCoreForStorage($coreData);
         $sections['core']['data'] = $coreData;
 
+        // Existing profile: form shows DB values; parsed biodata differences appear as suggestions (not silent overwrite).
         if ($linkedMatrimonyProfile instanceof \App\Models\MatrimonyProfile) {
             $mergeResult = app(IntakePreviewExistingProfileOverlay::class)->apply(
                 $linkedMatrimonyProfile,
@@ -587,14 +573,13 @@ class IntakeController extends Controller
                 $workingSnapshot,
                 $sections
             );
-            $previewProtectedCoreKeys = array_values(array_unique(array_merge(
-                $previewProtectedCoreKeys,
-                $mergeResult['protected_core_keys'] ?? []
-            )));
-            $previewFieldSuggestions = $this->dedupePreviewFieldSuggestions(array_merge(
-                $previewFieldSuggestions,
-                $mergeResult['field_suggestions'] ?? []
-            ));
+            $previewProtectedCoreKeys = $mergeResult['protected_core_keys'] ?? [];
+            $previewFieldSuggestions = $this->dedupePreviewFieldSuggestions(
+                $this->mergeBiodataFieldSuggestionsFromMap(
+                    $mergeResult['field_suggestions'] ?? [],
+                    $suggestionMap
+                )
+            );
             $sections['core']['data'] = $coreData;
         }
 
@@ -1387,6 +1372,7 @@ class IntakeController extends Controller
         $smokingStatuses = \App\Models\MasterSmokingStatus::where('is_active', true)->orderBy('sort_order')->get();
         $drinkingStatuses = \App\Models\MasterDrinkingStatus::where('is_active', true)->orderBy('sort_order')->get();
         $motherTongues = \App\Models\MasterMotherTongue::where('is_active', true)->orderBy('sort_order')->orderBy('label')->get(['id', 'key', 'label']);
+        $addressTypes = \App\Models\MasterAddressType::where('is_active', true)->orderBy('id')->get(['id', 'key', 'label']);
         $religions = \App\Models\Religion::where('is_active', true)->orderBy('label')->get(['id', 'label']);
         $rashiAshtakootaJson = [];
         $talukasByDistrict = \App\Models\Taluka::all()->groupBy('district_id')->map(fn ($col) => $col->map(fn ($t) => ['id' => $t->id, 'name' => $t->name])->values()->toArray())->toArray();
@@ -1409,6 +1395,11 @@ class IntakeController extends Controller
             }
         }
         $birthPlaceDisplay = $profile->birthPlaceDisplay ?? '';
+        $profileForAddresses = $linkedMatrimonyProfile instanceof \App\Models\MatrimonyProfile ? $linkedMatrimonyProfile : null;
+        $wizardParentsAddresses = app(\App\Services\Intake\IntakePreviewParentsAddressRows::class)
+            ->rows($profileForAddresses, $snapshot, $data);
+        $wizardSelfAddresses = app(\App\Services\Intake\IntakePreviewSelfAddressRows::class)
+            ->rows($profileForAddresses, $snapshot, $data);
 
         $ocrPresetFeedback = null;
 
@@ -1443,7 +1434,7 @@ class IntakeController extends Controller
         }
         $snapshot['core'] = array_replace($snapshot['core'], is_array($coreData) ? $coreData : []);
         $unresolvedLocationOptions = app(IntakeLocationSuggestionLayerService::class)
-            ->unresolvedCandidatesFromSnapshot($snapshot, 7, $data);
+            ->unresolvedCandidatesFromSnapshot($snapshot, 7, $data, $profileForAddresses);
 
         if (IntakeDobTrace::enabled((int) $intake->id)) {
             $parsedCoreDob = is_array($data['core'] ?? null) ? ($data['core']['date_of_birth'] ?? null) : null;
@@ -1555,6 +1546,9 @@ class IntakeController extends Controller
             'stateIdToCountryId',
             'otherRelativesText',
             'birthPlaceDisplay',
+            'wizardParentsAddresses',
+            'wizardSelfAddresses',
+            'addressTypes',
             'unresolvedLocationOptions'
         ));
     }
@@ -1734,6 +1728,7 @@ class IntakeController extends Controller
                 $snapshot['preferences'] = [$prefRow];
             }
             $snapshot = $this->mergeSnapshotCoreEducationFromMultiselect($snapshot);
+            $snapshot = $this->mergeApprovalLocationSuggestionsIntoSubmitSnapshot($intake, $snapshot);
             $snapshot = $this->normalizeApprovalSnapshot(
                 array_merge($base, $snapshot),
                 auth()->check() ? (int) auth()->id() : null,
@@ -1812,6 +1807,120 @@ class IntakeController extends Controller
         return redirect()->route('intake.status', $intake->id)
             ->with('success', __('intake.approved_successfully'))
             ->with('mutation_result', $result);
+    }
+
+    /**
+     * Merge biodata location Apply actions from approval_snapshot into the submitted snapshot on approve.
+     *
+     * @param  array<string, mixed>  $snapshot
+     * @return array<string, mixed>
+     */
+    private function mergeApprovalLocationSuggestionsIntoSubmitSnapshot(BiodataIntake $intake, array $snapshot): array
+    {
+        $approval = $intake->approval_snapshot_json;
+        if (! is_array($approval)) {
+            return $snapshot;
+        }
+        $approvalCore = is_array($approval['core'] ?? null) ? $approval['core'] : [];
+        $applies = is_array($approvalCore['_location_suggestion_applies'] ?? null)
+            ? $approvalCore['_location_suggestion_applies']
+            : [];
+
+        if ($applies === [] && ! empty($approvalCore['birth_place_suggestion_applied'])) {
+            $applies['birth_place'] = [
+                'city_id' => (int) ($approvalCore['birth_city_id'] ?? 0),
+            ];
+        }
+
+        if ($applies === []) {
+            return $snapshot;
+        }
+
+        if (! isset($snapshot['core']) || ! is_array($snapshot['core'])) {
+            $snapshot['core'] = [];
+        }
+
+        foreach ($applies as $fieldKey => $payload) {
+            if (! is_array($payload)) {
+                continue;
+            }
+            $cityId = (int) ($payload['city_id'] ?? 0);
+            if ($cityId < 1) {
+                continue;
+            }
+            if ($fieldKey === 'birth_place') {
+                $snapshot['core']['birth_city_id'] = $cityId;
+                $snapshot['core']['birth_place_suggestion_applied'] = true;
+                if (is_array($approval['birth_place'] ?? null)) {
+                    $snapshot['birth_place'] = $approval['birth_place'];
+                }
+            } elseif ($fieldKey === 'native_place') {
+                $snapshot['core']['native_city_id'] = $cityId;
+                $snapshot['core']['native_taluka_id'] = $payload['taluka_id'] ?? null;
+                $snapshot['core']['native_district_id'] = $payload['district_id'] ?? null;
+                $snapshot['core']['native_state_id'] = $payload['state_id'] ?? null;
+                if (is_array($approval['native_place'] ?? null)) {
+                    $snapshot['native_place'] = $approval['native_place'];
+                }
+            } elseif ($fieldKey === 'work_location') {
+                $snapshot['core']['work_city_id'] = $cityId;
+                $snapshot['core']['work_state_id'] = $payload['state_id'] ?? null;
+            } elseif (str_starts_with((string) $fieldKey, 'addresses.')
+                || str_starts_with((string) $fieldKey, 'parents_addresses.')) {
+                $idx = (int) explode('.', (string) $fieldKey)[1];
+                if (! is_array($snapshot['addresses'] ?? null)) {
+                    $snapshot['addresses'] = [];
+                }
+                if (! isset($snapshot['addresses'][$idx]) || ! is_array($snapshot['addresses'][$idx])) {
+                    $snapshot['addresses'][$idx] = [];
+                }
+                $snapshot['addresses'][$idx]['city_id'] = $cityId;
+                $snapshot['addresses'][$idx]['location_id'] = $cityId;
+                $snapshot['addresses'][$idx]['taluka_id'] = $payload['taluka_id'] ?? null;
+                $snapshot['addresses'][$idx]['district_id'] = $payload['district_id'] ?? null;
+                $snapshot['addresses'][$idx]['state_id'] = $payload['state_id'] ?? null;
+                if (is_array($approval['parents_addresses'][$idx] ?? null)) {
+                    if (! is_array($snapshot['parents_addresses'] ?? null)) {
+                        $snapshot['parents_addresses'] = [];
+                    }
+                    $snapshot['parents_addresses'][$idx] = $approval['parents_addresses'][$idx];
+                }
+            } elseif (preg_match('/^self_addresses\.(\d+)$/', (string) $fieldKey, $selfM) === 1) {
+                $idx = (int) $selfM[1];
+                if (! is_array($snapshot['self_addresses'] ?? null)) {
+                    $snapshot['self_addresses'] = [];
+                }
+                if (! isset($snapshot['self_addresses'][$idx]) || ! is_array($snapshot['self_addresses'][$idx])) {
+                    $snapshot['self_addresses'][$idx] = [];
+                }
+                $snapshot['self_addresses'][$idx]['location_id'] = $cityId;
+                $snapshot['self_addresses'][$idx]['city_id'] = $cityId;
+                $snapshot['self_addresses'][$idx]['taluka_id'] = $payload['taluka_id'] ?? null;
+                $snapshot['self_addresses'][$idx]['district_id'] = $payload['district_id'] ?? null;
+                $snapshot['self_addresses'][$idx]['state_id'] = $payload['state_id'] ?? null;
+                if (is_array($approval['self_addresses'][$idx] ?? null)) {
+                    $snapshot['self_addresses'][$idx] = array_merge(
+                        $snapshot['self_addresses'][$idx],
+                        $approval['self_addresses'][$idx]
+                    );
+                }
+            } elseif (preg_match('/^relatives_(parents_family|maternal_family)\.(\d+)$/', (string) $fieldKey, $m) === 1) {
+                $section = 'relatives_'.$m[1];
+                $idx = (int) $m[2];
+                if (! is_array($snapshot[$section] ?? null)) {
+                    $snapshot[$section] = [];
+                }
+                if (! isset($snapshot[$section][$idx]) || ! is_array($snapshot[$section][$idx])) {
+                    $snapshot[$section][$idx] = [];
+                }
+                $snapshot[$section][$idx]['city_id'] = $cityId;
+                $snapshot[$section][$idx]['taluka_id'] = $payload['taluka_id'] ?? null;
+                $snapshot[$section][$idx]['district_id'] = $payload['district_id'] ?? null;
+                $snapshot[$section][$idx]['state_id'] = $payload['state_id'] ?? null;
+            }
+        }
+
+        return $snapshot;
     }
 
     /**
@@ -1961,6 +2070,59 @@ class IntakeController extends Controller
         }
 
         return $out;
+    }
+
+    /**
+     * Ensure biodata Apply rows exist when overlay marked profile_existing + intake text (JS reads previewFieldSuggestions).
+     *
+     * @param  list<array<string, mixed>>  $rows
+     * @param  array<string, mixed>  $suggestionMap
+     * @return list<array<string, mixed>>
+     */
+    private function mergeBiodataFieldSuggestionsFromMap(array $rows, array $suggestionMap): array
+    {
+        $byKey = [];
+        foreach ($rows as $row) {
+            if (! is_array($row)) {
+                continue;
+            }
+            $key = (string) ($row['key'] ?? '');
+            if ($key !== '') {
+                $byKey[$key] = $row;
+            }
+        }
+
+        $coreKeyBySuggestion = [
+            'religion' => 'religion_id',
+            'caste' => 'caste_id',
+            'sub_caste' => 'sub_caste_id',
+        ];
+
+        foreach ($coreKeyBySuggestion as $suggestionKey => $coreKey) {
+            if (isset($byKey[$suggestionKey])) {
+                continue;
+            }
+            $entry = is_array($suggestionMap[$suggestionKey] ?? null) ? $suggestionMap[$suggestionKey] : [];
+            if (empty($entry['profile_existing'])) {
+                continue;
+            }
+            $intakeDisplay = trim((string) ($entry['intake_display_value'] ?? $entry['corrected_value'] ?? $entry['suggested_value'] ?? ''));
+            if ($intakeDisplay === '') {
+                continue;
+            }
+            $profileDisplay = trim((string) ($entry['current_value'] ?? $entry['selected_value'] ?? ''));
+            $byKey[$suggestionKey] = [
+                'key' => $suggestionKey,
+                'core_key' => $coreKey,
+                'form_name' => 'snapshot[core]['.$coreKey.']',
+                'profile_display' => $profileDisplay,
+                'intake_display' => $intakeDisplay,
+                'intake_apply' => $entry['intake_apply'] ?? null,
+                'section' => 'core',
+            ];
+        }
+
+        return array_values($byKey);
     }
 
     /**
@@ -3120,7 +3282,7 @@ class IntakeController extends Controller
 
         $validated = $request->validate([
             'field' => ['required', 'string', 'max:64'],
-            'city_id' => ['required', 'integer', AddressHierarchyRules::existsCityId()],
+            'city_id' => ['required', 'integer', AddressHierarchyRules::existsLocationLeafId()],
         ]);
 
         $result = $resolver->resolveFieldToCity($intake, (string) $validated['field'], (int) $validated['city_id']);
@@ -3131,10 +3293,19 @@ class IntakeController extends Controller
             ], 422);
         }
 
-        return response()->json([
-            'success' => true,
-            'message' => 'Location resolved.',
-        ]);
+        return response()->json(array_merge(
+            [
+                'success' => true,
+                'message' => 'Location resolved.',
+            ],
+            array_filter([
+                'city_id' => $result['city_id'] ?? null,
+                'display_label' => $result['display_label'] ?? null,
+                'taluka_id' => $result['taluka_id'] ?? null,
+                'district_id' => $result['district_id'] ?? null,
+                'state_id' => $result['state_id'] ?? null,
+            ], fn ($v) => $v !== null)
+        ));
     }
 
     /**

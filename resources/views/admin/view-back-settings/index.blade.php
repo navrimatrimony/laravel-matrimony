@@ -18,7 +18,7 @@
 
 <div class="bg-white dark:bg-gray-800 shadow rounded-lg p-6">
     <h1 class="text-2xl font-bold text-gray-800 dark:text-gray-100 mb-2">View-Back Settings</h1>
-    <p class="text-gray-500 dark:text-gray-400 text-sm mb-6">Control showcase → real view-back. Max one per showcase–real pair per 24 hours. No recursion.</p>
+    <p class="text-gray-500 dark:text-gray-400 text-sm mb-6">Control showcase → real view-back. Max one per showcase–real pair per 24 hours. No recursion. Per-showcase daily cap (view-back + random views) is configured under <strong>Random profile views</strong> below.</p>
     @if ($errors->any())
         <ul class="text-red-600 text-sm mb-4 space-y-1">
             @foreach ($errors->all() as $e) <li>{{ $e }}</li> @endforeach
@@ -119,6 +119,11 @@
         </div>
 
         <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div>
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Cap per showcase — calendar day</label>
+                <input type="number" name="showcase_to_real_max_per_showcase_per_day" min="0" max="9999" value="{{ $maxPerShowcasePerDay }}" required class="w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-sm">
+                <p class="text-xs text-gray-500 mt-1">All showcase→real views (view-back + random). Default 20. 0 = unlimited.</p>
+            </div>
             <div>
                 <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Max views per run (all showcases)</label>
                 <input type="number" name="showcase_random_view_batch_per_run" min="0" max="500" value="{{ $randomViewBatchPerRun }}" required class="w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-sm">

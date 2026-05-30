@@ -252,27 +252,27 @@
                     @endphp
                     <div class="rounded-lg border border-amber-700/70 bg-gray-900/40 p-3">
                         <div class="text-xs text-gray-400 mb-1">{{ $loc['label'] ?? ($loc['field_key'] ?? 'Location') }}</div>
-                        <div class="text-sm font-semibold text-gray-100 mb-2">"{{ $loc['raw_input'] ?? '' }}"</div>
-                        <div class="flex gap-2 mb-2">
-                            <input
-                                type="text"
-                                class="admin-intake-loc-search-input flex-1 px-2 py-1.5 text-xs rounded border border-gray-600 bg-gray-900 text-gray-100"
-                                value="{{ $loc['raw_input'] ?? '' }}"
-                                placeholder="Search more"
-                            >
-                            <button type="button" class="admin-intake-loc-search-btn px-2.5 py-1.5 text-xs rounded border border-gray-600">Search more</button>
-                        </div>
+                        <p class="text-sm text-gray-100 mb-2">
+                            <span class="text-gray-400">{{ __('intake.parse_suggestion_from_biodata') }}</span>
+                            @if (! empty($loc['raw_input']))
+                                <span class="font-semibold">"{{ $loc['raw_input'] }}"</span>
+                            @endif
+                        </p>
                         @if ($opts !== [])
-                            <div class="grid grid-cols-1 md:grid-cols-2 gap-2 admin-intake-loc-options-list">
+                            <div class="space-y-2 admin-intake-loc-options-list">
                                 @foreach ($opts as $opt)
-                                    <button
-                                        type="button"
-                                        class="admin-intake-loc-resolve-btn text-left px-3 py-2 rounded border border-gray-600 hover:bg-gray-800 text-xs text-gray-100"
-                                        data-field="{{ $loc['field_key'] ?? '' }}"
-                                        data-city-id="{{ $opt['city_id'] ?? '' }}"
-                                    >
-                                        {{ ($opt['display_label'] ?? $opt['name'] ?? $opt['city_name'] ?? '—') }}
-                                    </button>
+                                    <div class="flex flex-wrap items-center gap-2 text-xs text-indigo-100 rounded-md border border-indigo-700/60 bg-indigo-950/40 px-2 py-1.5">
+                                        <span class="text-gray-400">{{ __('intake.parse_suggestion_from_biodata') }}</span>
+                                        <span class="font-semibold text-gray-100">{{ $opt['display_label'] ?? $opt['name'] ?? $opt['city_name'] ?? '—' }}</span>
+                                        <button
+                                            type="button"
+                                            class="admin-intake-loc-apply-btn px-2 py-0.5 rounded bg-indigo-600 hover:bg-indigo-700 text-white text-[11px] font-semibold"
+                                            data-field="{{ $loc['field_key'] ?? '' }}"
+                                            data-city-id="{{ $opt['city_id'] ?? '' }}"
+                                        >
+                                            {{ __('intake.parse_suggestion_apply') }}
+                                        </button>
+                                    </div>
                                 @endforeach
                             </div>
                         @else
@@ -684,17 +684,11 @@
 <script>
 (function () {
     var resolveUrl = @json(route('admin.biodata-intakes.resolve-location', $intake));
-    var locationSearchApiUrl = @json(url('/api/internal/location/search'));
-    function bindResolveButtons(root) {
-    root.querySelectorAll('.admin-intake-loc-resolve-btn').forEach(function (btn) {
+    document.querySelectorAll('.admin-intake-loc-apply-btn').forEach(function (btn) {
         btn.addEventListener('click', function () {
             var field = btn.getAttribute('data-field');
             var cityId = btn.getAttribute('data-city-id');
             if (!field || !cityId) return;
-            root.querySelectorAll('.admin-intake-loc-resolve-btn').forEach(function (other) {
-                other.classList.remove('ring-2', 'ring-emerald-500', 'bg-emerald-900/20');
-            });
-            btn.classList.add('ring-2', 'ring-emerald-500', 'bg-emerald-900/20');
             btn.disabled = true;
             fetch(resolveUrl, {
                 method: 'PATCH',
@@ -720,63 +714,6 @@
                 });
         });
     });
-    }
-
-    document.querySelectorAll('.admin-intake-loc-search-btn').forEach(function (searchBtn) {
-        searchBtn.addEventListener('click', function () {
-            var card = searchBtn.closest('.rounded-lg');
-            if (!card) return;
-            var input = card.querySelector('.admin-intake-loc-search-input');
-            var list = card.querySelector('.admin-intake-loc-options-list');
-            var empty = card.querySelector('.admin-intake-loc-empty-note');
-            var seedBtn = card.querySelector('.admin-intake-loc-resolve-btn');
-            var field = seedBtn ? seedBtn.getAttribute('data-field') : '';
-            var q = input ? String(input.value || '').trim() : '';
-            if (!q || !field) return;
-            var originalSearchLabel = searchBtn.textContent;
-            searchBtn.disabled = true;
-            searchBtn.textContent = 'Searching...';
-            fetch(locationSearchApiUrl + '?q=' + encodeURIComponent(q), {
-                method: 'GET',
-                credentials: 'same-origin',
-                headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }
-            }).then(function (r) { return r.json(); })
-                .then(function (data) {
-                    var results = Array.isArray(data && data.data) ? data.data.slice(0, 10)
-                        : (Array.isArray(data && data.results) ? data.results.slice(0, 10) : []);
-                    if (!list) {
-                        list = document.createElement('div');
-                        list.className = 'grid grid-cols-1 md:grid-cols-2 gap-2 admin-intake-loc-options-list';
-                        card.appendChild(list);
-                    }
-                    list.innerHTML = '';
-                    if (results.length === 0) {
-                        if (!empty) {
-                            empty = document.createElement('p');
-                            empty.className = 'text-xs text-gray-300 admin-intake-loc-empty-note';
-                            card.appendChild(empty);
-                        }
-                        empty.textContent = 'ही जागा सापडली नाही. नवीन म्हणून सबमिट करा';
-                        return;
-                    }
-                    if (empty) empty.textContent = '';
-                    results.forEach(function (opt) {
-                        var b = document.createElement('button');
-                        b.type = 'button';
-                        b.className = 'admin-intake-loc-resolve-btn text-left px-3 py-2 rounded border border-gray-600 hover:bg-gray-800 text-xs text-gray-100';
-                        b.setAttribute('data-field', field);
-                        b.setAttribute('data-city-id', String(opt.city_id || ''));
-                        b.textContent = String(opt.display_label || opt.name || opt.city_name || '—');
-                        list.appendChild(b);
-                    });
-                    bindResolveButtons(card);
-                }).finally(function () {
-                    searchBtn.disabled = false;
-                    searchBtn.textContent = originalSearchLabel;
-                });
-        });
-    });
-    bindResolveButtons(document);
 })();
 </script>
 @endsection

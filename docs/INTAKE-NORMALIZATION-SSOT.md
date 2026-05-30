@@ -2,6 +2,9 @@
 
 ## Purpose
 
+**Location hierarchy suggestions (biodata → Apply, profile display SSOT):** see
+[`INTAKE-LOCATION-SUGGESTIONS-SSOT.md`](INTAKE-LOCATION-SUGGESTIONS-SSOT.md).
+
 This document defines **non-negotiable rules** for how **controlled** user input
 (intake forms, biodata OCR, manual entry, or API) is turned into **canonical
 master IDs** (or safe null), in line with **PHASE-5 SSOT** (no silent overwrite,

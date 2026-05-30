@@ -27,6 +27,7 @@ class IntakeParsedSnapshotSkeleton
             'education_history' => [],
             'career_history' => [],
             'addresses' => [],
+            'parents_addresses' => [],
             'siblings' => [],
             'relatives' => [],
             'relatives_parents_family' => [],
@@ -65,7 +66,7 @@ class IntakeParsedSnapshotSkeleton
         }
         $out['core'] = array_replace($this->coreDefaults(), $out['core']);
 
-        foreach (['contacts', 'children', 'marriages', 'education_history', 'career_history', 'addresses', 'siblings', 'relatives', 'property_assets', 'horoscope', 'preferences', 'alliance_networks'] as $arrKey) {
+        foreach (['contacts', 'children', 'marriages', 'education_history', 'career_history', 'addresses', 'parents_addresses', 'siblings', 'relatives', 'property_assets', 'horoscope', 'preferences', 'alliance_networks'] as $arrKey) {
             if (! is_array($out[$arrKey] ?? null)) {
                 $out[$arrKey] = [];
             }

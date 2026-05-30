@@ -57,6 +57,10 @@ final class ShowcaseRandomViewService
                 continue;
             }
 
+            if (! ViewTrackingService::canShowcaseCreateToRealViewToday($showcase)) {
+                continue;
+            }
+
             $real = $this->pickTargetProfile($showcase);
             if ($real === null) {
                 continue;

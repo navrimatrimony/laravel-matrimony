@@ -64,15 +64,19 @@ class IntakePreviewProfileHydrator
         }
 
         $obj->birthPlaceDisplay = '';
-        $birthCityId = $obj->birth_city_id ?? null;
-        if (! empty($birthCityId)) {
-            $obj->birthPlaceDisplay = \App\Models\Location::query()->find((int) $birthCityId)?->localizedName() ?? '';
-        } elseif (! empty($profile->birth_place_text)) {
-            $obj->birthPlaceDisplay = trim((string) $profile->birth_place_text);
-        } elseif (! empty($mergedCore['birth_place_text'])) {
-            $obj->birthPlaceDisplay = trim((string) $mergedCore['birth_place_text']);
-        } elseif (! empty($mergedCore['birth_place']) && is_scalar($mergedCore['birth_place'])) {
-            $obj->birthPlaceDisplay = trim((string) $mergedCore['birth_place']);
+        $profileCityId = (int) ($profile->birth_city_id ?? 0);
+        if ($profileCityId > 0) {
+            $obj->birth_city_id = $profileCityId;
+            $obj->birthPlaceDisplay = \App\Models\Location::query()->find($profileCityId)?->localizedName() ?? '';
+        } else {
+            $birthCityId = (int) ($obj->birth_city_id ?? 0);
+            if ($birthCityId > 0) {
+                $obj->birthPlaceDisplay = \App\Models\Location::query()->find($birthCityId)?->localizedName() ?? '';
+            } elseif (! empty($profile->birth_place_text)) {
+                $obj->birthPlaceDisplay = trim((string) $profile->birth_place_text);
+            } elseif (! empty($mergedCore['birth_place_text'])) {
+                $obj->birthPlaceDisplay = trim((string) $mergedCore['birth_place_text']);
+            }
         }
 
         $obj->extended = ExtendedFieldService::getValuesForProfile($profile);
