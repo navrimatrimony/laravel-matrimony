@@ -501,7 +501,10 @@
                                                 $secCount = is_array($sec) && isset($sec['row_count']) ? (int) $sec['row_count'] : null;
                                             @endphp
                                             <li class="px-2 py-1 rounded border border-gray-600 text-gray-200 font-mono text-[11px]">
-                                                {{ $secName !== '' ? $secName : '—' }}@if ($secCount !== null)<span class="text-gray-500"> ({{ $secCount }} {{ $secCount === 1 ? 'row' : 'rows' }})</span>@endif
+                                                {{ $secName !== '' ? $secName : '—' }}
+                                                @if ($secCount !== null)
+                                                    <span class="text-gray-500"> ({{ $secCount }} {{ $secCount === 1 ? 'row' : 'rows' }})</span>
+                                                @endif
                                             </li>
                                         @endforeach
                                     </ul>
@@ -528,7 +531,13 @@
                     <a href="{{ route('admin.profiles.show', $govProfile->id) }}" class="inline-flex items-center px-3 py-1.5 rounded border border-indigo-500/50 text-indigo-100 text-xs font-semibold hover:bg-indigo-600/15">Open attached profile →</a>
                     <a href="{{ route('admin.suggestions.review', $intake) }}" class="inline-flex items-center px-3 py-1.5 rounded border border-violet-500/50 text-violet-100 text-xs font-semibold hover:bg-violet-600/15">Admin suggestion review →</a>
                 @endif
-                <a href="{{ route('admin.conflict-records.index') }}" class="inline-flex items-center px-3 py-1.5 rounded border border-amber-600/50 text-amber-100 text-xs font-semibold hover:bg-amber-600/10">Open pending conflicts@if ($govPendingConflicts > 0) ({{ $govPendingConflicts }})@endif →</a>
+                <a href="{{ route('admin.conflict-records.index') }}" class="inline-flex items-center px-3 py-1.5 rounded border border-amber-600/50 text-amber-100 text-xs font-semibold hover:bg-amber-600/10">
+                    Open pending conflicts
+                    @if ($govPendingConflicts > 0)
+                        ({{ $govPendingConflicts }})
+                    @endif
+                    →
+                </a>
                 <a href="{{ route('admin.governance-dashboard') }}" class="inline-flex items-center px-3 py-1.5 rounded border border-gray-600 text-gray-200 text-xs font-semibold hover:bg-gray-700/50">Open governance dashboard →</a>
             </div>
         </div>
@@ -733,7 +742,8 @@
                 headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }
             }).then(function (r) { return r.json(); })
                 .then(function (data) {
-                    var results = Array.isArray(data && data.results) ? data.results.slice(0, 10) : [];
+                    var results = Array.isArray(data && data.data) ? data.data.slice(0, 10)
+                        : (Array.isArray(data && data.results) ? data.results.slice(0, 10) : []);
                     if (!list) {
                         list = document.createElement('div');
                         list.className = 'grid grid-cols-1 md:grid-cols-2 gap-2 admin-intake-loc-options-list';

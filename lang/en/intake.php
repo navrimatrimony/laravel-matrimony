@@ -35,6 +35,15 @@ return [
     'only_view_status_own' => 'You can only view status of your own biodata uploads.',
     'approved_successfully' => 'Intake approved successfully.',
 
+    'parse_suggestion_from_biodata' => 'From biodata:',
+    'parse_suggestion_apply' => 'Apply',
+    'parse_suggestion_click_hint' => 'Replace the current value with this biodata suggestion',
+    'preview_horoscope_differs' => 'Biodata has different horoscope details',
+    'preview_horoscope_keep_profile' => 'Your saved horoscope',
+    'preview_education_differs' => 'Biodata lists different education',
+    'preview_career_differs' => 'Biodata lists different career',
+    'preview_repeater_keep_profile' => 'Your saved entries',
+
     'pending_suggestions_title' => 'Suggestions from biodata (not applied automatically)',
     'pending_suggestions_intro' => 'These values would have replaced information already on your profile. Use Apply only if you want to replace your current value with the biodata suggestion.',
     'apply_suggestion_button' => 'Apply',
@@ -134,6 +143,8 @@ return [
     'processing_step_2' => 'Extracting names, contacts, and addresses…',
     'processing_step_3' => 'Building your structured preview…',
     'processing_hint' => 'Usually under a minute. Large PDFs or photos may take longer.',
+    'processing_queue_worker_hint' => 'Parsing runs in the background queue. If this screen does not move forward, start a worker in another terminal: php artisan queue:work',
+    'processing_auto_parse_disabled' => 'Automatic parsing is turned off in admin settings. Ask an admin to run parse from the biodata intake page.',
 
     // Preview screen – structured sections
     'raw_text_heading' => 'Raw biodata text (full)',

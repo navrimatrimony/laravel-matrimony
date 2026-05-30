@@ -35,6 +35,15 @@ return [
     'only_view_status_own' => 'तुम्ही फक्त तुमचे स्वतःचे बायोडाटा अपलोडचे स्टेटस पाहू शकता.',
     'approved_successfully' => 'इंटेक यशस्वीरीत्या अप्रूव्ह झाला.',
 
+    'parse_suggestion_from_biodata' => 'बायोडेटामधून:',
+    'parse_suggestion_apply' => 'लागू करा',
+    'parse_suggestion_click_hint' => 'सध्याचे मूल्य बायोडेटातील सूचनेने बदला',
+    'preview_horoscope_differs' => 'बायोडेटामध्ये वेगळी कुंडली माहिती',
+    'preview_horoscope_keep_profile' => 'तुमची सध्याची कुंडली',
+    'preview_education_differs' => 'बायोडेटामध्ये वेगळे शिक्षण',
+    'preview_career_differs' => 'बायोडेटामध्ये वेगळी नोकरी/व्यवसाय',
+    'preview_repeater_keep_profile' => 'तुमची सध्याची नोंद',
+
     'pending_suggestions_title' => 'बायोडेटामधून सूचना (आपोआप लागू केल्या नाहीत)',
     'pending_suggestions_intro' => 'हे मूल्ये तुमच्या प्रोफाइलवरील विद्यमान माहितीवर लागू होतील असे होते. फक्त तुम्ही सध्याचे मूल्य बदलू इच्छित असल्याच “Apply” वापरा.',
     'apply_suggestion_button' => 'लागू करा',
@@ -134,6 +143,8 @@ return [
     'processing_step_2' => 'नावे, संपर्क आणि पत्ते काढत आहे…',
     'processing_step_3' => 'स्ट्रक्चर्ड प्रीव्ह्यू तयार करत आहे…',
     'processing_hint' => 'साधारणतः एका मिनिटाखाली. मोठे PDF किंवा फोटो जास्त वेळ घेऊ शकतात.',
+    'processing_queue_worker_hint' => 'Parsing background queue मध्ये चालते. ही screen पुढे जात नसेल तर दुसऱ्या terminal मध्ये चालवा: php artisan queue:work',
+    'processing_auto_parse_disabled' => 'Admin settings मध्ये automatic parsing बंद आहे. Admin कडून biodata intake page वरून parse करावे लागेल.',
 
     // Preview screen – structured sections
     'raw_text_heading' => 'संपूर्ण बायोडाटा मजकूर',

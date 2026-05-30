@@ -557,6 +557,9 @@
     const locationSearchApiUrl = @json(url('/api/internal/location/search'));
     const unresolvedLocationOptions = @json($unresolvedLocationOptions ?? []);
     const suggestionMapData = @json($suggestionMap ?? []);
+    const previewFieldSuggestions = @json($previewFieldSuggestions ?? []);
+    const intakeParseSuggestionLabel = @json(__('intake.parse_suggestion_from_biodata'));
+    const intakeParseApplyLabel = @json(__('intake.parse_suggestion_apply'));
 
     function isScrolledToBottom() {
         if (!anchor) return false;
@@ -707,12 +710,15 @@ document.querySelectorAll('.use-candidate-btn').forEach(function(btn) {
         var box = document.createElement('div');
         box.className = 'mt-2 rounded-md border border-amber-200 dark:border-amber-800 bg-white/80 dark:bg-gray-900/40 p-2';
         var opts = Array.isArray(loc.options) ? loc.options : [];
+        var hasConfident = loc.has_confident_match === true;
         var raw = String(loc.raw_input || '').trim();
+        var suggestedSearch = String(loc.suggested_search || '').trim();
+        var searchDefault = suggestedSearch !== '' ? suggestedSearch : raw;
         box.innerHTML = ''
-            + '<p class="text-xs font-semibold text-amber-900 dark:text-amber-100">Location needs confirmation</p>'
+            + '<p class="text-xs font-semibold text-amber-900 dark:text-amber-100">Biodata place suggestion (does not change your entry until you apply)</p>'
             + '<p class="text-xs text-gray-600 dark:text-gray-300 mt-1">Detected text: "' + raw.replace(/"/g, '&quot;') + '"</p>'
             + '<div class="flex gap-2 mt-2">'
-            + '  <input type="text" class="intake-loc-search-input flex-1 px-2 py-1.5 text-xs rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800" value="' + raw.replace(/"/g, '&quot;') + '" placeholder="Search more">'
+            + '  <input type="text" class="intake-loc-search-input flex-1 px-2 py-1.5 text-xs rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800" value="' + searchDefault.replace(/"/g, '&quot;') + '" placeholder="Search more">'
             + '  <button type="button" class="intake-loc-search-btn px-2.5 py-1.5 text-xs rounded border border-gray-300 dark:border-gray-600">Search more</button>'
             + '</div>'
             + '<div class="space-y-2 intake-loc-options-list mt-2"></div>'
@@ -725,10 +731,18 @@ document.querySelectorAll('.use-candidate-btn').forEach(function(btn) {
             list.innerHTML = '';
             if (!Array.isArray(results) || results.length === 0) {
                 empty.classList.remove('hidden');
-                empty.textContent = 'ही जागा सापडली नाही. नवीन म्हणून सबमिट करा';
+                empty.textContent = hasConfident
+                    ? 'ही जागा सापडली नाही. Search more वापरून शोधा.'
+                    : 'गाव, तालुका आणि जिल्हा जुळले नाहीत. Search more वापरून योग्य ठिकाण निवडा.';
                 return;
             }
             empty.classList.add('hidden');
+            if (hasConfident && results.length === 1) {
+                var hint = document.createElement('p');
+                hint.className = 'text-xs text-emerald-800 dark:text-emerald-200 mb-1';
+                hint.textContent = 'खालील ठिकाण biodata शी जुळते — Apply करण्यासाठी क्लिक करा.';
+                list.appendChild(hint);
+            }
             results.forEach(function(opt) {
                 var b = document.createElement('button');
                 b.type = 'button';
@@ -741,6 +755,9 @@ document.querySelectorAll('.use-candidate-btn').forEach(function(btn) {
             bindResolveButtons(box);
         }
         renderOptions(opts);
+        if (!hasConfident && opts.length === 0) {
+            empty.classList.remove('hidden');
+        }
     }
 
     function resolveInlineTargets() {
@@ -795,6 +812,168 @@ document.querySelectorAll('.use-candidate-btn').forEach(function(btn) {
         }
     }
 
+    function snapHeightCmToPicker(cm) {
+        if (cm < 137) return 136;
+        if (cm > 213) return 214;
+        var best = 163;
+        var minDiff = 9999;
+        for (var inches = 54; inches <= 84; inches++) {
+            var v = Math.round(inches * 2.54);
+            var d = Math.abs(v - cm);
+            if (d < minDiff) {
+                minDiff = d;
+                best = v;
+            }
+        }
+        return best;
+    }
+
+    function applyHeightCmToPicker(cmRaw) {
+        var cm = parseInt(String(cmRaw), 10);
+        if (!cm || cm < 1) return;
+        var snapped = snapHeightCmToPicker(cm);
+        var hidden = form.querySelector('[name="snapshot[core][height_cm]"]');
+        if (hidden) {
+            hidden.value = String(snapped);
+            hidden.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+        var picker = form.querySelector('.height-picker');
+        if (picker) {
+            var sel = picker.querySelector('select');
+            if (sel) {
+                sel.value = String(snapped);
+                sel.dispatchEvent(new Event('change', { bubbles: true }));
+            }
+            if (window.Alpine) {
+                try {
+                    var data = Alpine.$data(picker);
+                    if (data && typeof data.heightCm !== 'undefined') {
+                        data.heightCm = snapped;
+                    }
+                } catch (e) { /* ignore */ }
+            }
+        }
+    }
+
+    function applyIntakeValueToField(cfg, applyValue) {
+        if (!cfg || applyValue === undefined || applyValue === null) return;
+        var coreKey = cfg.core_key || cfg.key || '';
+        if (coreKey === 'height_cm') {
+            applyHeightCmToPicker(applyValue);
+            return;
+        }
+        if (coreKey === 'blood_group_id') {
+            var bgId = parseInt(String(applyValue), 10);
+            if (!bgId) return;
+            var bgSel = form.querySelector('select[name="snapshot[core][blood_group_id]"]');
+            if (bgSel) {
+                bgSel.value = String(bgId);
+                bgSel.dispatchEvent(new Event('change', { bubbles: true }));
+            }
+            return;
+        }
+        if (cfg.key === 'gender') {
+            var gid = parseInt(String(applyValue), 10);
+            if (!gid) return;
+            var hiddenGender = form.querySelector('[name="snapshot[core][gender_id]"]');
+            if (hiddenGender) {
+                hiddenGender.value = String(gid);
+                hiddenGender.dispatchEvent(new Event('change', { bubbles: true }));
+            }
+            form.querySelectorAll('[x-data] button[type="button"]').forEach(function(btn) {
+                var click = btn.getAttribute('@click') || btn.getAttribute('x-on:click') || '';
+                if (click.indexOf('genderId = ' + gid) !== -1 || click.indexOf('genderId=' + gid) !== -1) {
+                    btn.click();
+                }
+            });
+            return;
+        }
+        if (cfg.key === 'religion' || cfg.key === 'caste' || cfg.key === 'sub_caste') {
+            var payload = applyValue;
+            if (typeof payload === 'string') {
+                try { payload = JSON.parse(payload); } catch (e) { payload = null; }
+            }
+            if (!payload || typeof payload !== 'object') return;
+            var hiddenKey = cfg.key === 'religion' ? 'religion_id' : (cfg.key === 'caste' ? 'caste_id' : 'sub_caste_id');
+            var labelKey = cfg.key === 'religion' ? 'religion_label' : (cfg.key === 'caste' ? 'caste_label' : 'subcaste_label');
+            var hiddenEl = form.querySelector('[name="snapshot[core][' + hiddenKey + ']"]');
+            var visibleEl = form.querySelector('.' + (cfg.key === 'sub_caste' ? 'subcaste' : cfg.key) + '-input');
+            if (hiddenEl && payload[hiddenKey] !== undefined) hiddenEl.value = String(payload[hiddenKey]);
+            if (visibleEl && payload[labelKey] !== undefined) visibleEl.value = String(payload[labelKey]);
+            if (visibleEl) visibleEl.dispatchEvent(new Event('input', { bubbles: true }));
+            return;
+        }
+        var el = pickVisibleElementByName(cfg.name);
+        if (!el) return;
+        el.value = String(applyValue);
+        el.dispatchEvent(new Event('input', { bubbles: true }));
+        el.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+
+    function cfgFromSuggestionRow(row) {
+        var coreKey = row.core_key || row.key || '';
+        var sk = row.key || coreKey;
+        return {
+            key: sk,
+            core_key: coreKey,
+            name: row.form_name || ('snapshot[core][' + coreKey + ']'),
+            fallbackSelector: sk === 'religion' ? '.religion-input' : (sk === 'caste' ? '.caste-input' : (sk === 'sub_caste' ? '.subcaste-input' : null))
+        };
+    }
+
+    function renderIntakeParseSuggestions() {
+        var rows = Array.isArray(previewFieldSuggestions) ? previewFieldSuggestions : [];
+        var seen = {};
+        rows.forEach(function(row) {
+            if (!row || !row.key || seen[row.key]) return;
+            seen[row.key] = true;
+            var intakeDisplay = String(row.intake_display || '').trim();
+            if (!intakeDisplay) return;
+            var cfg = cfgFromSuggestionRow(row);
+            var el = pickVisibleElementByName(cfg.name);
+            if (!el && cfg.fallbackSelector) el = form.querySelector(cfg.fallbackSelector);
+            if (!el) return;
+
+            function normSuggestionText(s) {
+                return String(s || '').normalize('NFKC').replace(/\s+/g, ' ').trim();
+            }
+            var fieldText = normSuggestionText(el.value);
+            var intakeNorm = normSuggestionText(intakeDisplay);
+            var profileNorm = normSuggestionText(row.profile_display || '');
+            if (intakeNorm !== '' && (fieldText === intakeNorm || (profileNorm !== '' && profileNorm === intakeNorm))) {
+                return;
+            }
+            var wrap = el.closest('.min-w-0') || el.parentElement;
+            if (!wrap || wrap.querySelector('[data-intake-parse-suggestion="1"]')) return;
+
+            var note = document.createElement('div');
+            note.className = 'mt-1.5 flex flex-wrap items-center gap-2 text-xs text-indigo-900 dark:text-indigo-100 rounded-md border border-indigo-200 dark:border-indigo-800 bg-indigo-50/80 dark:bg-indigo-950/40 px-2 py-1.5';
+            note.dataset.intakeParseSuggestion = '1';
+
+            var label = document.createElement('span');
+            label.textContent = intakeParseSuggestionLabel;
+            note.appendChild(label);
+
+            var valSpan = document.createElement('span');
+            valSpan.className = 'font-medium text-indigo-950 dark:text-indigo-50';
+            valSpan.textContent = intakeDisplay;
+            note.appendChild(valSpan);
+
+            var applyBtn = document.createElement('button');
+            applyBtn.type = 'button';
+            applyBtn.className = 'intake-parse-apply-btn px-2 py-0.5 rounded bg-indigo-600 hover:bg-indigo-700 text-white text-[11px] font-semibold';
+            applyBtn.title = @json(__('intake.parse_suggestion_click_hint'));
+            applyBtn.textContent = intakeParseApplyLabel;
+            applyBtn.addEventListener('click', function() {
+                applyIntakeValueToField(cfg, row.intake_apply !== undefined ? row.intake_apply : intakeDisplay);
+            });
+            note.appendChild(applyBtn);
+
+            wrap.appendChild(note);
+            el.dataset.intakeParseSuggestion = '1';
+        });
+    }
+
     function applyCoreFieldAdvisories() {
         var map = suggestionMapData && typeof suggestionMapData === 'object' ? suggestionMapData : {};
         var fields = [
@@ -825,6 +1004,9 @@ document.querySelectorAll('.use-candidate-btn').forEach(function(btn) {
                 }
             }
             var needsReview = !!(sug && (sug.needs_review || sug.required_missing));
+            if (sug && sug.profile_existing && hasValue) {
+                return;
+            }
             if (!hasValue || needsReview) {
                 var msg = !hasValue
                     ? (cfg.label + ' unresolved. Please review and select.')
@@ -857,7 +1039,8 @@ document.querySelectorAll('.use-candidate-btn').forEach(function(btn) {
                 headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }
             }).then(function(r){ return r.json(); })
               .then(function(data) {
-                  var results = Array.isArray(data && data.results) ? data.results.slice(0, 10) : [];
+                  var results = Array.isArray(data && data.data) ? data.data.slice(0, 10)
+                      : (Array.isArray(data && data.results) ? data.results.slice(0, 10) : []);
                   if (!list) {
                       list = document.createElement('div');
                       list.className = 'space-y-2 intake-loc-options-list';
@@ -895,6 +1078,7 @@ document.querySelectorAll('.use-candidate-btn').forEach(function(btn) {
     bindSearchButtons(document);
     bindResolveButtons(document);
     applyCoreFieldAdvisories();
+    renderIntakeParseSuggestions();
 })();
 </script>
 @endsection

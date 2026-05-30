@@ -9,6 +9,9 @@ use App\Services\EducationService;
 use App\Services\Intake\IntakeExtractionReuseResolver;
 use App\Services\Intake\IntakeLocationSuggestionLayerService;
 use App\Services\Intake\IntakePipelineService;
+use App\Services\Intake\IntakePreviewExistingProfileOverlay;
+use App\Services\Intake\IntakePreviewLinkedProfileResolver;
+use App\Services\Intake\IntakePreviewProfileHydrator;
 use App\Services\Intake\IntakeReviewParseInputTextResolver;
 use App\Services\IntakeApprovalService;
 use App\Services\IntakeManualOcrPreparedService;
@@ -214,6 +217,11 @@ class IntakeController extends Controller
      */
     public function preview(BiodataIntake $intake)
     {
+        $preferredLocale = auth()->user()?->preferred_locale;
+        if (is_string($preferredLocale) && in_array($preferredLocale, ['en', 'mr'], true)) {
+            app()->setLocale($preferredLocale);
+        }
+
         $isOwner = (int) $intake->uploaded_by === (int) auth()->id();
         $isAdmin = auth()->user()?->isAnyAdmin() ?? false;
         if (! $isOwner && ! $isAdmin) {
@@ -327,16 +335,17 @@ class IntakeController extends Controller
             }
         }
 
+        // Resolve existing profile (linked id or same user) — preview must not overwrite filled profile fields.
+        $linkedMatrimonyProfile = app(IntakePreviewLinkedProfileResolver::class)->resolve($intake);
+        $previewProtectedCoreKeys = [];
+        $previewFieldSuggestions = [];
+
         // Day-19: When preview loaded and intake has linked profile with state 'parsed' → awaiting_user_approval
-        if ($intake->matrimony_profile_id) {
-            $profile = \App\Models\MatrimonyProfile::find($intake->matrimony_profile_id);
-            if ($profile && (($profile->lifecycle_state ?? '') === 'parsed')) {
-                try {
-                    \App\Services\ProfileLifecycleService::transitionTo($profile, 'awaiting_user_approval', auth()->user());
-                } catch (\Throwable $e) {
-                    // Log but do not block preview
-                    report($e);
-                }
+        if ($linkedMatrimonyProfile && (($linkedMatrimonyProfile->lifecycle_state ?? '') === 'parsed')) {
+            try {
+                \App\Services\ProfileLifecycleService::transitionTo($linkedMatrimonyProfile, 'awaiting_user_approval', auth()->user());
+            } catch (\Throwable $e) {
+                report($e);
             }
         }
 
@@ -539,6 +548,25 @@ class IntakeController extends Controller
             }
         }
 
+        $workingSnapshot = $intake->approval_snapshot_json ?? $data;
+        if (! is_array($workingSnapshot)) {
+            $workingSnapshot = $data;
+        }
+
+        // Existing profile: form shows DB values; parsed biodata differences appear as suggestions (not silent overwrite).
+        if ($linkedMatrimonyProfile instanceof \App\Models\MatrimonyProfile) {
+            $mergeResult = app(IntakePreviewExistingProfileOverlay::class)->apply(
+                $linkedMatrimonyProfile,
+                $sections['core']['data'],
+                $suggestionMap,
+                $data,
+                $workingSnapshot,
+                $sections
+            );
+            $previewProtectedCoreKeys = $mergeResult['protected_core_keys'] ?? [];
+            $previewFieldSuggestions = $this->dedupePreviewFieldSuggestions($mergeResult['field_suggestions'] ?? []);
+        }
+
         // Build profile-like object for Basic Info engine (wizard same UI in intake).
         // Ensure 100% of parsed core fields appear in the form: set all known keys, then copy any remaining from parser.
         $coreData = $sections['core']['data'] ?? [];
@@ -550,12 +578,32 @@ class IntakeController extends Controller
         $coreData = $this->normalizeIntakeCoreForStorage($coreData);
         $sections['core']['data'] = $coreData;
 
+        if ($linkedMatrimonyProfile instanceof \App\Models\MatrimonyProfile) {
+            $mergeResult = app(IntakePreviewExistingProfileOverlay::class)->apply(
+                $linkedMatrimonyProfile,
+                $coreData,
+                $suggestionMap,
+                $data,
+                $workingSnapshot,
+                $sections
+            );
+            $previewProtectedCoreKeys = array_values(array_unique(array_merge(
+                $previewProtectedCoreKeys,
+                $mergeResult['protected_core_keys'] ?? []
+            )));
+            $previewFieldSuggestions = $this->dedupePreviewFieldSuggestions(array_merge(
+                $previewFieldSuggestions,
+                $mergeResult['field_suggestions'] ?? []
+            ));
+            $sections['core']['data'] = $coreData;
+        }
+
         // --- Physical section safety-net (height + complexion only, additive, SSOT-safe) ---
         // Parse-input review text वरून minimum fallback — parsed_json सोबतचा मजकूर (stored upload OCR नाही).
         $rawOcrTextForPhysical = $reviewTextIsBiodata ? $rawOcrTextForPreview : '';
         if ($rawOcrTextForPhysical !== '') {
             // Height fallback: handle normal आणि थोडे garbled cases (फूट/कूट + इंच).
-            if (empty($coreData['height_cm'])) {
+            if (empty($coreData['height_cm']) && ! in_array('height_cm', $previewProtectedCoreKeys, true)) {
                 if (preg_match('/(\d{1,2})\s*[फक][ुू]ट\s*(\d{1,2})/u', $rawOcrTextForPhysical, $mHt)) {
                     $feet = (int) $mHt[1];
                     $inch = (int) $mHt[2];
@@ -622,7 +670,8 @@ class IntakeController extends Controller
         }
 
         // Preview-only: default mother_tongue_id = Marathi when biodata looks predominantly Marathi and mother_tongue_id is empty.
-        if (empty($coreData['mother_tongue_id'] ?? null) && empty($intakeProfile->mother_tongue_id ?? null)) {
+        $profileHasMotherTongue = $linkedMatrimonyProfile && ! empty($linkedMatrimonyProfile->mother_tongue_id);
+        if (! $profileHasMotherTongue && empty($coreData['mother_tongue_id'] ?? null) && empty($intakeProfile->mother_tongue_id ?? null)) {
             $rawText = $reviewTextIsBiodata ? $rawOcrTextForPreview : '';
             if ($rawText !== '') {
                 // If app locale is Marathi OR there's at least one Devanagari char, assume Marathi.
@@ -652,55 +701,72 @@ class IntakeController extends Controller
             }
         }
 
-        $intakeProfile = (object) [
-            'full_name' => is_scalar($coreData['full_name'] ?? null) ? trim((string) $coreData['full_name']) : '',
-            'date_of_birth' => is_scalar($coreData['date_of_birth'] ?? null) ? trim((string) $coreData['date_of_birth']) : null,
-            'gender_id' => $coreData['gender_id'] ?? null,
-            'birth_time' => is_scalar($coreData['birth_time'] ?? null) ? trim((string) $coreData['birth_time']) : '',
-            'birth_city_id' => $coreData['birth_city_id'] ?? null,
-            'religion_id' => $coreData['religion_id'] ?? '',
-            'caste_id' => $coreData['caste_id'] ?? '',
-            'sub_caste_id' => $coreData['sub_caste_id'] ?? '',
-            'religion_label' => '',
-            'caste_label' => '',
-            'subcaste_label' => '',
-        ];
-        // Centralized deterministic controlled-field normalization (no fuzzy/contains-based dropdown forcing).
-        $coreData = app(\App\Services\Parsing\IntakeControlledFieldNormalizer::class)->normalizeCore($coreData);
-        // Copy every other key from parsed core so form/engines see 100% of biodata (e.g. primary_contact_number, father_name, mother_name, height_cm, annual_income, birth_place string).
-        foreach ($coreData as $k => $v) {
-            if (! property_exists($intakeProfile, $k)) {
-                $intakeProfile->{$k} = $v;
-            }
-        }
-        // Updated coreData should also flow back into $sections so blade includes (e.g. physical-engine via :values="$coreData") see complexion_id, blood_group_id, etc.
-        $sections['core']['data'] = $coreData;
-        if (empty($intakeProfile->gender_id) && ! empty($coreData['gender_id'])) {
-            $intakeProfile->gender_id = $coreData['gender_id'];
-        }
-        $intakeProfile->birthPlaceDisplay = '';
-        if (! empty($intakeProfile->birth_city_id)) {
-            $intakeProfile->birthPlaceDisplay = \App\Models\Location::query()->find($intakeProfile->birth_city_id)?->localizedName() ?? '';
-        }
-        // Resolve birth_place string (from parser) to location IDs so Basic Info birth-place typeahead shows value.
-        if (empty($intakeProfile->birth_city_id) && ! empty($intakeProfile->birth_place) && is_scalar($intakeProfile->birth_place)) {
-            $birthPlaceStr = trim((string) $intakeProfile->birth_place);
-            if ($birthPlaceStr !== '' && $birthPlaceStr !== \App\Services\Ocr\OcrSuggestionEngine::PLACEHOLDER_NOT_FOUND) {
-                $cityQuery = \App\Models\City::where('name', 'like', $birthPlaceStr.'%');
-                if (\Illuminate\Support\Facades\Schema::hasColumn((new \App\Models\City)->getTable(), 'name_mr')) {
-                    $cityQuery->orWhere('name_mr', 'like', $birthPlaceStr.'%');
+        if ($linkedMatrimonyProfile instanceof \App\Models\MatrimonyProfile) {
+            $intakeProfile = app(IntakePreviewProfileHydrator::class)->hydrate($linkedMatrimonyProfile, $coreData);
+            foreach ($coreData as $k => $v) {
+                if (! property_exists($intakeProfile, $k)) {
+                    $intakeProfile->{$k} = $v;
                 }
-                $city = $cityQuery->first();
-                if ($city) {
-                    $intakeProfile->birth_city_id = $city->id;
-                    $intakeProfile->birthPlaceDisplay = $city->name ?? '';
-                } else {
-                    $intakeProfile->birthPlaceDisplay = $birthPlaceStr;
+            }
+            $sections['core']['data'] = $coreData;
+        } else {
+            $intakeProfile = (object) [
+                'full_name' => is_scalar($coreData['full_name'] ?? null) ? trim((string) $coreData['full_name']) : '',
+                'date_of_birth' => is_scalar($coreData['date_of_birth'] ?? null) ? trim((string) $coreData['date_of_birth']) : null,
+                'gender_id' => $coreData['gender_id'] ?? null,
+                'birth_time' => is_scalar($coreData['birth_time'] ?? null) ? trim((string) $coreData['birth_time']) : '',
+                'birth_city_id' => $coreData['birth_city_id'] ?? null,
+                'religion_id' => $coreData['religion_id'] ?? '',
+                'caste_id' => $coreData['caste_id'] ?? '',
+                'sub_caste_id' => $coreData['sub_caste_id'] ?? '',
+                'religion_label' => '',
+                'caste_label' => '',
+                'subcaste_label' => '',
+            ];
+            $coreData = app(\App\Services\Parsing\IntakeControlledFieldNormalizer::class)->normalizeCore($coreData);
+            foreach ($coreData as $k => $v) {
+                if (! property_exists($intakeProfile, $k)) {
+                    $intakeProfile->{$k} = $v;
+                }
+            }
+            $sections['core']['data'] = $coreData;
+            if (empty($intakeProfile->gender_id) && ! empty($coreData['gender_id'])) {
+                $intakeProfile->gender_id = $coreData['gender_id'];
+            }
+            $intakeProfile->birthPlaceDisplay = '';
+            if (! empty($intakeProfile->birth_city_id)) {
+                $intakeProfile->birthPlaceDisplay = \App\Models\Location::query()->find($intakeProfile->birth_city_id)?->localizedName() ?? '';
+            }
+            if (empty($intakeProfile->birth_city_id) && ! empty($intakeProfile->birth_place) && is_scalar($intakeProfile->birth_place)) {
+                $birthPlaceStr = trim((string) $intakeProfile->birth_place);
+                if ($birthPlaceStr !== '' && $birthPlaceStr !== \App\Services\Ocr\OcrSuggestionEngine::PLACEHOLDER_NOT_FOUND) {
+                    $cityQuery = \App\Models\City::where('name', 'like', $birthPlaceStr.'%');
+                    if (\Illuminate\Support\Facades\Schema::hasColumn((new \App\Models\City)->getTable(), 'name_mr')) {
+                        $cityQuery->orWhere('name_mr', 'like', $birthPlaceStr.'%');
+                    }
+                    $city = $cityQuery->first();
+                    if ($city) {
+                        $intakeProfile->birth_city_id = $city->id;
+                        $intakeProfile->birthPlaceDisplay = $city->name ?? '';
+                    } else {
+                        $intakeProfile->birthPlaceDisplay = $birthPlaceStr;
+                    }
                 }
             }
         }
         $genders = \App\Models\MasterGender::where('is_active', true)->whereIn('key', ['male', 'female'])
             ->orderByRaw("CASE WHEN `key` = 'male' THEN 1 ELSE 2 END")->get();
+
+        $skipIntakeReligionCasteResolve = $linkedMatrimonyProfile instanceof \App\Models\MatrimonyProfile
+            && (
+                ! empty($linkedMatrimonyProfile->religion_id)
+                || ! empty($linkedMatrimonyProfile->caste_id)
+                || in_array('religion_id', $previewProtectedCoreKeys, true)
+                || in_array('caste_id', $previewProtectedCoreKeys, true)
+                || in_array('sub_caste_id', $previewProtectedCoreKeys, true)
+            );
+
+        if (! $skipIntakeReligionCasteResolve) {
         $relLabel = is_scalar($coreData['religion'] ?? null) ? trim((string) $coreData['religion']) : '';
         $casteLabel = is_scalar($coreData['caste'] ?? null) ? trim((string) $coreData['caste']) : '';
         $subLabel = is_scalar($coreData['sub_caste'] ?? null) ? trim((string) $coreData['sub_caste']) : '';
@@ -783,7 +849,8 @@ class IntakeController extends Controller
         if ($intakeProfile->subcaste_label === '' && $subLabel !== '') {
             $intakeProfile->subcaste_label = $subLabel;
         }
-        // When we have IDs from normalizeIntakeCoreForStorage but labels were not set (e.g. Marathi text), set labels from DB so selector shows text.
+        }
+
         if (! empty($intakeProfile->religion_id) && empty($intakeProfile->religion_label)) {
             $r = \App\Models\Religion::find($intakeProfile->religion_id);
             if ($r) {
@@ -813,8 +880,11 @@ class IntakeController extends Controller
         if ($maritalStatuses->isEmpty()) {
             $maritalStatuses = \App\Models\MasterMaritalStatus::where('is_active', true)->get();
         }
-        $approvalCore = $intake->approval_snapshot_json['core'] ?? $coreData;
+        $approvalCore = $workingSnapshot['core'] ?? $coreData;
         $maritalStatusId = $approvalCore['marital_status_id'] ?? null;
+        if ($linkedMatrimonyProfile && ! empty($linkedMatrimonyProfile->marital_status_id)) {
+            $maritalStatusId = $linkedMatrimonyProfile->marital_status_id;
+        }
         if ($maritalStatusId === null || $maritalStatusId === '') {
             $maritalText = is_scalar($approvalCore['marital_status'] ?? null) ? trim((string) $approvalCore['marital_status']) : '';
             if ($maritalText !== '' && $maritalText !== \App\Services\Ocr\OcrSuggestionEngine::PLACEHOLDER_NOT_FOUND && $maritalText !== \App\Services\Ocr\OcrSuggestionEngine::PLACEHOLDER_SELECT_REQUIRED) {
@@ -857,7 +927,7 @@ class IntakeController extends Controller
                 }
             }
         }
-        if ($maritalStatusId === null || $maritalStatusId === '') {
+        if (($maritalStatusId === null || $maritalStatusId === '') && ! $linkedMatrimonyProfile) {
             $ms = $maritalStatuses->first(fn ($s) => ($s->key ?? '') === 'never_married');
             if ($ms) {
                 $maritalStatusId = $ms->id;
@@ -925,7 +995,7 @@ class IntakeController extends Controller
         $horoscopeDependencyWarnings = $horoscopeValidation['warnings'] ?? [];
 
         // Centralized full form: same sections as wizard full; prefixes so form names are snapshot[...].
-        $snapshot = $intake->approval_snapshot_json ?? $data;
+        $snapshot = $workingSnapshot;
         $corePrefix = 'snapshot[core]';
         $horoscopePrefix = 'snapshot[horoscope][0]';
         $siblingsPrefix = 'snapshot[siblings]';
@@ -1368,8 +1438,12 @@ class IntakeController extends Controller
             && ! $manualPreparedExists;
 
         $showIntakeReextractAction = app(ProviderResolver::class)->parseJobUsesAiVisionExtraction();
+        if (! is_array($snapshot['core'] ?? null)) {
+            $snapshot['core'] = [];
+        }
+        $snapshot['core'] = array_replace($snapshot['core'], is_array($coreData) ? $coreData : []);
         $unresolvedLocationOptions = app(IntakeLocationSuggestionLayerService::class)
-            ->unresolvedCandidates($intake, 7);
+            ->unresolvedCandidatesFromSnapshot($snapshot, 7, $data);
 
         if (IntakeDobTrace::enabled((int) $intake->id)) {
             $parsedCoreDob = is_array($data['core'] ?? null) ? ($data['core']['date_of_birth'] ?? null) : null;
@@ -1416,6 +1490,9 @@ class IntakeController extends Controller
             'data',
             'sectionSourceKeys',
             'suggestionMap',
+            'previewFieldSuggestions',
+            'previewProtectedCoreKeys',
+            'linkedMatrimonyProfile',
             'placeholderNotFound',
             'placeholderSelectRequired',
             'intakeProfile',
@@ -1861,6 +1938,29 @@ class IntakeController extends Controller
 
         // Centralized deterministic controlled-field normalization for full snapshot.
         return app(IntakePipelineService::class)->normalizeSnapshotForStorage($out, $suggestedByUserId);
+    }
+
+    /**
+     * @param  list<array<string, mixed>>  $rows
+     * @return list<array<string, mixed>>
+     */
+    private function dedupePreviewFieldSuggestions(array $rows): array
+    {
+        $seen = [];
+        $out = [];
+        foreach ($rows as $row) {
+            if (! is_array($row)) {
+                continue;
+            }
+            $key = (string) ($row['key'] ?? '');
+            if ($key === '' || isset($seen[$key])) {
+                continue;
+            }
+            $seen[$key] = true;
+            $out[] = $row;
+        }
+
+        return $out;
     }
 
     /**
@@ -2942,6 +3042,26 @@ class IntakeController extends Controller
     }
 
     /**
+     * JSON poll for intake processing page (parse_status transitions).
+     */
+    public function pollStatus(BiodataIntake $intake): \Illuminate\Http\JsonResponse
+    {
+        if ((int) $intake->uploaded_by !== (int) auth()->id()) {
+            abort(403, __('intake.only_view_status_own'));
+        }
+
+        $intake->refresh();
+
+        return response()->json([
+            'parse_status' => $intake->parse_status,
+            'approved_by_user' => (bool) $intake->approved_by_user,
+            'intake_status' => $intake->intake_status,
+            'last_error' => $intake->last_error,
+            'queue_async' => config('queue.default') !== 'sync',
+        ]);
+    }
+
+    /**
      * Show status.
      */
     public function status(BiodataIntake $intake)
@@ -2965,7 +3085,19 @@ class IntakeController extends Controller
             $parseInputTextPreview = null;
         }
 
-        return view('intake.status', compact('intake', 'ocrPresetFeedback', 'profile', 'pendingSuggestions', 'parseInputDebug', 'parseInputTextPreview'));
+        $queueAsync = config('queue.default') !== 'sync';
+        $autoParseEnabled = \App\Models\AdminSetting::getBool('intake_auto_parse_enabled', true);
+
+        return view('intake.status', compact(
+            'intake',
+            'ocrPresetFeedback',
+            'profile',
+            'pendingSuggestions',
+            'parseInputDebug',
+            'parseInputTextPreview',
+            'queueAsync',
+            'autoParseEnabled',
+        ));
     }
 
     /**

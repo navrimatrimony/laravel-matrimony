@@ -322,6 +322,16 @@
                     <p class="mt-4 text-xs text-gray-500 dark:text-gray-400">
                         {{ __('intake.processing_hint') }}
                     </p>
+                    @if (empty($autoParseEnabled))
+                        <p class="mt-3 text-sm text-amber-800 dark:text-amber-200 font-medium">
+                            {{ __('intake.processing_auto_parse_disabled') }}
+                        </p>
+                    @elseif (!empty($queueAsync))
+                        <p class="mt-3 text-sm text-amber-800 dark:text-amber-200">
+                            {{ __('intake.processing_queue_worker_hint') }}
+                        </p>
+                    @endif
+                    <p id="intake-processing-error" class="mt-3 hidden text-sm text-red-700 dark:text-red-300 font-mono whitespace-pre-wrap break-words"></p>
                     <a href="{{ route('intake.index') }}" class="mt-5 inline-block text-sm text-gray-600 dark:text-gray-400 hover:underline">
                         {{ __('intake.my_biodata_uploads') }}
                     </a>
@@ -339,6 +349,7 @@
                 var pollUrl = root.getAttribute('data-poll-url');
                 var previewUrl = root.getAttribute('data-preview-url');
                 var statusUrl = root.getAttribute('data-status-url');
+                var errorEl = document.getElementById('intake-processing-error');
                 var stepIndex = 0;
                 var stopped = false;
 
@@ -360,6 +371,13 @@
                             return r.json();
                         })
                         .then(function (data) {
+                            if (errorEl && data.last_error) {
+                                errorEl.textContent = data.last_error;
+                                errorEl.classList.remove('hidden');
+                            } else if (errorEl) {
+                                errorEl.textContent = '';
+                                errorEl.classList.add('hidden');
+                            }
                             if (data.parse_status === 'parsed') {
                                 stopped = true;
                                 window.location.href = data.approved_by_user ? statusUrl : previewUrl;

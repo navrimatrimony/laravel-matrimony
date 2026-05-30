@@ -32,7 +32,6 @@ use App\Http\Controllers\SubscriptionController;
 use App\Http\Controllers\UserPlanController;
 use App\Http\Controllers\UserSettingsController;
 use App\Http\Controllers\WhoViewedController;
-use App\Models\BiodataIntake;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -97,13 +96,8 @@ Route::middleware(['auth', \App\Http\Middleware\EnforceCardOnboarding::class])->
     Route::patch('/intake/resolve-location/{intake}', [IntakeController::class, 'resolveLocationSuggestion'])
         ->name('intake.resolve-location');
 
-    Route::get('/api/intake-status/{intake}', function (BiodataIntake $intake) {
-        return response()->json([
-            'parse_status' => $intake->parse_status,
-            'approved_by_user' => (bool) $intake->approved_by_user,
-            'intake_status' => $intake->intake_status,
-        ]);
-    });
+    Route::get('/api/intake-status/{intake}', [IntakeController::class, 'pollStatus'])
+        ->name('api.intake-status');
 
     /*
     |--------------------------------------------------------------------------

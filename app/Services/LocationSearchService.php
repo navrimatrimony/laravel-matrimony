@@ -7,6 +7,8 @@ use App\Models\District;
 use App\Models\LocationAlias;
 use App\Models\State;
 use App\Models\Village;
+use App\Services\Location\AddressHierarchySearch;
+use App\Services\Location\LocationCompoundAddressParser;
 use App\Services\Location\LocationDisplayFormatter;
 use Illuminate\Support\Facades\Schema;
 
@@ -19,7 +21,9 @@ class LocationSearchService
     private const MAX_RESULTS = 20;
 
     public function __construct(
-        private readonly LocationDisplayFormatter $locationDisplayFormatter
+        private readonly LocationDisplayFormatter $locationDisplayFormatter,
+        private readonly LocationCompoundAddressParser $compoundAddressParser,
+        private readonly AddressHierarchySearch $hierarchySearch,
     ) {}
 
     /**
@@ -29,7 +33,8 @@ class LocationSearchService
         string $query,
         array $preferredStateIds = [],
         array $preferredDistrictIds = [],
-        bool $applyAmbiguousRanking = false
+        bool $applyAmbiguousRanking = false,
+        bool $allowCompoundFallback = true,
     ): array {
         $q = strtolower(trim($query));
         $queryTrimmed = trim($query);
@@ -63,6 +68,25 @@ class LocationSearchService
         $maxResults = self::MAX_RESULTS;
         $seen = [];
         $rows = [];
+
+        $components = $this->compoundAddressParser->parseComponents($queryTrimmed);
+        if ($components['village'] !== '') {
+            foreach ($this->hierarchySearch->findCities($components, $maxResults) as $city) {
+                if (isset($seen[$city->id])) {
+                    continue;
+                }
+                $seen[$city->id] = true;
+                $rows[] = $this->formatRow($city);
+            }
+            if (count($rows) >= $maxResults) {
+                $rows = $this->applyRankingPipeline($rows, $q, $preferredStateIds, $preferredDistrictIds, $applyAmbiguousRanking);
+
+                return [
+                    'results' => array_slice($rows, 0, $maxResults),
+                    'context_detected' => $this->detectContext($query),
+                ];
+            }
+        }
 
         // Multi-token: "village taluka" or "village district" — match village/city name + taluka or district name
         $tokens = array_values(array_filter(preg_split('/\s+/', $q, -1, PREG_SPLIT_NO_EMPTY)));
@@ -182,19 +206,135 @@ class LocationSearchService
             ];
         }
 
-        $locale = app()->getLocale();
-
-        if ($locale === 'mr') {
-            $this->appendVillageLocaleMatches($rows, $seen, $q, $maxResults);
+        $this->appendCityLocalizedNameMatches($rows, $seen, $queryTrimmed, $q, $maxResults);
+        if (app()->getLocale() === 'mr' || preg_match('/\p{M}/u', $queryTrimmed) === 1) {
+            $this->appendVillageLocaleMatches($rows, $seen, $q, $maxResults, $queryTrimmed);
         }
 
         $context = $this->detectContext($query);
         $rows = $this->applyRankingPipeline($rows, $q, $preferredStateIds, $preferredDistrictIds, $applyAmbiguousRanking);
 
+        $results = array_slice(array_values($rows), 0, $maxResults);
+        if ($results === [] && $allowCompoundFallback && $this->compoundAddressParser->looksCompound($queryTrimmed)) {
+            $results = $this->searchCompoundFallback(
+                $queryTrimmed,
+                $preferredStateIds,
+                $preferredDistrictIds,
+                $applyAmbiguousRanking,
+                $maxResults
+            );
+            $context = $this->detectContext($queryTrimmed);
+        }
+
         return [
-            'results' => array_slice(array_values($rows), 0, $maxResults),
+            'results' => $results,
             'context_detected' => $context,
         ];
+    }
+
+    /**
+     * @param  array<int, array<string, mixed>>  $rows
+     * @param  array<int, bool>  $seen
+     */
+    private function appendCityLocalizedNameMatches(array &$rows, array &$seen, string $queryTrimmed, string $qLower, int $maxResults): void
+    {
+        if (mb_strlen($queryTrimmed) < 2 || count($rows) >= $maxResults) {
+            return;
+        }
+
+        $remaining = $maxResults - count($rows);
+        $likeAscii = '%'.$qLower.'%';
+        $likeOriginal = '%'.$queryTrimmed.'%';
+
+        $cities = City::query()
+            ->with($this->cityWithRelations())
+            ->whereNotIn('id', array_keys($seen))
+            ->where(function ($w) use ($likeAscii, $likeOriginal, $queryTrimmed): void {
+                $w->whereRaw('LOWER(name) LIKE ?', [$likeAscii])
+                    ->orWhereRaw('LOWER(COALESCE(name_en, "")) LIKE ?', [$likeAscii]);
+                if (preg_match('/\p{M}/u', $queryTrimmed) === 1) {
+                    $w->orWhere('name_mr', 'like', $likeOriginal);
+                }
+            })
+            ->orderBy('name')
+            ->limit(max(1, $remaining) * 3)
+            ->get();
+
+        foreach ($cities as $city) {
+            if (count($rows) >= $maxResults) {
+                break;
+            }
+            if (isset($seen[$city->id])) {
+                continue;
+            }
+            $seen[$city->id] = true;
+            $rows[] = $this->formatRow($city);
+        }
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    private function searchCompoundFallback(
+        string $raw,
+        array $preferredStateIds,
+        array $preferredDistrictIds,
+        bool $applyAmbiguousRanking,
+        int $maxResults,
+    ): array {
+        $hints = $this->compoundAddressParser->parseComponents($raw);
+        $seen = [];
+        $merged = [];
+
+        foreach ($this->compoundAddressParser->searchQueries($raw) as $subQuery) {
+            if (mb_strtolower(trim($subQuery)) === mb_strtolower(trim($raw))) {
+                continue;
+            }
+            $res = $this->search($subQuery, $preferredStateIds, $preferredDistrictIds, $applyAmbiguousRanking, false);
+            $rows = is_array($res['results'] ?? null) ? $res['results'] : [];
+            $rows = $this->filterRowsByAdminHints($rows, $hints);
+
+            foreach ($rows as $row) {
+                $cityId = (int) ($row['city_id'] ?? 0);
+                if ($cityId < 1 || isset($seen[$cityId])) {
+                    continue;
+                }
+                $seen[$cityId] = true;
+                $merged[] = $row;
+                if (count($merged) >= $maxResults) {
+                    return $merged;
+                }
+            }
+        }
+
+        return $merged;
+    }
+
+    /**
+     * @param  array<int, array<string, mixed>>  $rows
+     * @param  array{village: string, taluka: string, district: string}  $hints
+     * @return array<int, array<string, mixed>>
+     */
+    private function filterRowsByAdminHints(array $rows, array $hints): array
+    {
+        $taluka = mb_strtolower(trim((string) ($hints['taluka'] ?? '')));
+        $district = mb_strtolower(trim((string) ($hints['district'] ?? '')));
+        if ($taluka === '' && $district === '') {
+            return $rows;
+        }
+
+        $matches = array_values(array_filter($rows, function (array $row) use ($taluka, $district): bool {
+            $t = mb_strtolower(trim((string) ($row['taluka_name'] ?? '')));
+            $d = mb_strtolower(trim((string) ($row['district_name'] ?? '')));
+            $talukaOk = $taluka === '' || $t === $taluka
+                || str_contains($t, $taluka) || str_contains($taluka, $t);
+            $districtOk = $district === '' || $d === $district
+                || str_contains($d, $district) || str_contains($district, $d);
+
+            return $talukaOk && $districtOk;
+        }));
+
+        return $matches !== [] ? $matches : $rows;
     }
 
     /**
@@ -204,17 +344,26 @@ class LocationSearchService
      * @param  array<int, array>  $rows
      * @param  array<int, bool>  $seen  city_id => true
      */
-    private function appendVillageLocaleMatches(array &$rows, array &$seen, string $q, int $maxResults): void
+    private function appendVillageLocaleMatches(array &$rows, array &$seen, string $q, int $maxResults, string $queryTrimmed = ''): void
     {
         if (mb_strlen($q) < 2 || count($rows) >= $maxResults) {
             return;
         }
 
         $remaining = $maxResults - count($rows);
+        $mrNeedle = $queryTrimmed !== '' ? $queryTrimmed : $q;
+        $usePartialMr = preg_match('/\p{M}/u', $mrNeedle) === 1;
 
         $villages = Village::query()
             ->whereNotNull('name_mr')
-            ->whereRaw('name_mr LIKE ?', [$q.'%'])
+            ->where(function ($w) use ($q, $mrNeedle, $usePartialMr): void {
+                if ($usePartialMr) {
+                    $w->whereRaw('name_mr LIKE ?', ['%'.$mrNeedle.'%']);
+                } else {
+                    $w->whereRaw('name_mr LIKE ?', [$q.'%'])
+                        ->orWhereRaw('LOWER(COALESCE(name_en, "")) LIKE ?', ['%'.$q.'%']);
+                }
+            })
             ->limit($remaining * 3)
             ->get();
 
@@ -318,18 +467,50 @@ class LocationSearchService
      */
     private function searchByVillageAndPlace(string $namePart, string $placePart, int $limit): array
     {
-        $nameLike = '%'.strtolower($namePart).'%';
-        $placeLike = '%'.strtolower($placePart).'%';
+        $components = [
+            'village' => trim($namePart.' '.$placePart),
+            'taluka' => '',
+            'district' => '',
+        ];
+        if (str_contains($placePart, ' ')) {
+            $parts = preg_split('/\s+/u', trim($placePart)) ?: [];
+            $components['village'] = trim($namePart.' '.($parts[0] ?? ''));
+            $components['taluka'] = trim($parts[1] ?? '');
+            if (isset($parts[2])) {
+                $components['district'] = trim(implode(' ', array_slice($parts, 1)));
+            }
+        } else {
+            $components['taluka'] = trim($placePart);
+        }
+
+        $cities = $this->hierarchySearch->findCities($components, $limit);
+        if ($cities !== []) {
+            $rows = [];
+            foreach ($cities as $city) {
+                $rows[] = $this->formatRow($city);
+            }
+
+            return $rows;
+        }
+
+        $nameLike = '%'.mb_strtolower($namePart, 'UTF-8').'%';
+        $nameLikeMr = '%'.$namePart.'%';
+        $placeLike = '%'.mb_strtolower($placePart, 'UTF-8').'%';
+        $placeLikeMr = '%'.$placePart.'%';
         $cities = City::query()
             ->with($this->cityWithRelations())
-            ->whereRaw('LOWER(name) LIKE ?', [$nameLike])
-            ->whereHas('taluka', function ($qb) use ($placeLike) {
-                $qb->where(function ($t) use ($placeLike) {
-                    $t->whereRaw('LOWER(talukas.name) LIKE ?', [$placeLike])
-                        ->orWhereRaw('LOWER(COALESCE(talukas.name_mr, "")) LIKE ?', [$placeLike])
-                        ->orWhereHas('district', function ($d) use ($placeLike) {
-                            $d->whereRaw('LOWER(districts.name) LIKE ?', [$placeLike])
-                                ->orWhereRaw('LOWER(COALESCE(districts.name_mr, "")) LIKE ?', [$placeLike]);
+            ->where(function ($w) use ($nameLike, $nameLikeMr) {
+                $w->whereRaw('LOWER(COALESCE(name, "")) LIKE ?', [$nameLike])
+                    ->orWhereRaw('LOWER(COALESCE(name_en, "")) LIKE ?', [$nameLike])
+                    ->orWhereRaw('COALESCE(name_mr, "") LIKE ?', [$nameLikeMr]);
+            })
+            ->whereHas('taluka', function ($qb) use ($placeLike, $placeLikeMr) {
+                $qb->where(function ($t) use ($placeLike, $placeLikeMr) {
+                    $t->whereRaw('LOWER(COALESCE(name, "")) LIKE ?', [$placeLike])
+                        ->orWhereRaw('COALESCE(name_mr, "") LIKE ?', [$placeLikeMr])
+                        ->orWhereHas('district', function ($d) use ($placeLike, $placeLikeMr) {
+                            $d->whereRaw('LOWER(COALESCE(name, "")) LIKE ?', [$placeLike])
+                                ->orWhereRaw('COALESCE(name_mr, "") LIKE ?', [$placeLikeMr]);
                         });
                 });
             })
@@ -467,30 +648,34 @@ class LocationSearchService
         }
 
         $cityRankWith = ['taluka.district.state'];
-        if (Schema::hasTable('location_display_meta')) {
-            $cityRankWith[] = 'displayMeta';
+
+        $leafColumns = ['id', 'name', 'parent_id', 'type'];
+        if (Schema::hasColumn('addresses', 'parent_city_id')) {
+            $leafColumns[] = 'parent_city_id';
         }
 
-        $cities = City::query()
+        $leaves = Village::query()
             ->with($cityRankWith)
             ->whereIn('id', $cityIds)
-            ->get(['id', 'name', 'parent_id', 'parent_city_id']);
+            ->get($leafColumns);
 
         $signalByCityId = [];
         $talukaIds = [];
         $cityNameKeys = [];
-        foreach ($cities as $city) {
+        foreach ($leaves as $city) {
             $cityNameKey = $this->rankKey((string) $city->name);
             $talukaNameKey = $this->rankKey((string) ($city->taluka?->name ?? ''));
             $stateNameKey = $this->rankKey((string) ($city->taluka?->district?->state?->name ?? ''));
+            $hasParentCity = Schema::hasColumn('addresses', 'parent_city_id')
+                && ($city->getAttribute('parent_city_id') !== null);
             $signalByCityId[(int) $city->id] = [
                 'is_district_hq' => (bool) ($city->displayMeta?->is_district_hq ?? false),
                 'is_taluka_hq' => ($cityNameKey !== '' && $cityNameKey === $talukaNameKey),
-                'has_parent_city' => $city->parent_city_id !== null,
+                'has_parent_city' => $hasParentCity,
                 'state_name_key' => $stateNameKey,
                 'taluka_id' => (int) ($city->parent_id ?? 0),
                 'city_name_key' => $cityNameKey,
-                'is_village' => false,
+                'is_village' => ($city->type ?? '') === 'village',
             ];
             if ((int) ($city->parent_id ?? 0) > 0) {
                 $talukaIds[] = (int) $city->parent_id;
