@@ -145,9 +145,8 @@ class ShowcaseProfileDefaultsService
      * Returns mandatory field defaults. Age ≥21. No NULLs for required fields.
      * All except gender are randomly generated per call (no duplication across profiles).
      *
-     * profile_photo is randomly selected from unused images in engagement folder at creation time.
-     * Stored as full relative path from matrimony_photos (e.g., "engagement/female/f1.jpg").
-     * Each image is used only once across all showcase profiles. Falls back to null if no unused images available.
+     * profile_photo is assigned at create time via strict eng/{gender}/{religion}/{marital}/{age_bucket} matching.
+     * Admin policy ({@see \App\Services\Showcase\ShowcasePhotoPoolSettings}) controls skip vs create-without-photo when no match.
      *
      * full_name is auto-generated based on gender and caste at creation time only.
      *
@@ -162,7 +161,6 @@ class ShowcaseProfileDefaultsService
         $education = self::EDUCATION_OPTIONS[array_rand(self::EDUCATION_OPTIONS)];
         $location = self::LOCATION_OPTIONS[array_rand(self::LOCATION_OPTIONS)];
         $caste = self::randomCaste();
-        $profilePhoto = self::randomShowcasePhoto($gender);
         $fullName = self::generateFullName($gender, $caste, $index);
 
         return [
@@ -172,7 +170,7 @@ class ShowcaseProfileDefaultsService
             'highest_education' => $education,
             'location' => $location,
             'caste' => $caste,
-            'profile_photo' => $profilePhoto,
+            'profile_photo' => null,
             'photo_approved' => true,
             'full_name' => $fullName,
         ];
@@ -188,7 +186,6 @@ class ShowcaseProfileDefaultsService
         $gender = self::resolveGender($genderOverride);
         $dob = self::randomDobShowcase();
         $caste = self::randomCaste();
-        $profilePhoto = self::randomShowcasePhoto($gender);
         $fullName = self::generateFullName($gender, $caste, $index);
         $heightCm = random_int(150, 180);
         $hierarchy = self::locationHierarchyForShowcase();
@@ -201,7 +198,7 @@ class ShowcaseProfileDefaultsService
             'highest_education' => 'Graduate',
             'caste' => $caste,
             'height_cm' => $heightCm,
-            'profile_photo' => $profilePhoto,
+            'profile_photo' => null,
             'photo_approved' => true,
         ], $hierarchy);
     }
@@ -240,8 +237,6 @@ class ShowcaseProfileDefaultsService
                 $loc = self::locationHierarchyForShowcase();
             }
         }
-
-        $profilePhoto = self::randomShowcasePhoto($gender);
 
         $genderId = MasterGender::where('key', $gender)->where('is_active', true)->value('id');
 
@@ -444,7 +439,7 @@ class ShowcaseProfileDefaultsService
             'highest_education' => $highestEducation,
             'height_cm' => $heightCm,
             'weight_kg' => $weightKg,
-            'profile_photo' => $profilePhoto,
+            'profile_photo' => null,
             'complexion_id' => $complexionId,
             'physical_build_id' => $physicalBuildId,
             'blood_group_id' => $bloodGroupId,
@@ -1420,110 +1415,256 @@ class ShowcaseProfileDefaultsService
     }
 
     /**
-     * Randomly select an unused showcase profile photo from gender-specific engagement folder.
-     * Each image is used only once across all showcase profiles. Returns null if no unused images available.
+     * Select an unused showcase profile photo using strict eng/{gender}/{religion}/{marital}/{age_bucket} only.
      *
-     * @param  string  $gender  male|female
-     * @return string|null Full relative path from matrimony_photos (e.g., "engagement/female/f1.jpg"), or null if no unused images found
+     * @param  array<string, mixed>  $attrs
      */
-    private static function randomShowcasePhoto(string $gender): ?string
+    public static function showcasePhotoForAttributes(array $attrs): ?string
     {
-        if (! in_array($gender, self::GENDERS, true)) {
-            return null;
-        }
-
-        $folderPath = public_path('uploads/matrimony_photos/engagement/'.$gender);
-
-        if (! is_dir($folderPath) || ! is_readable($folderPath)) {
-            return null;
-        }
-
-        $availableFiles = [];
-        $handle = opendir($folderPath);
-
-        if ($handle === false) {
-            return null;
-        }
-
-        $imageExtensions = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg'];
-
-        while (($entry = readdir($handle)) !== false) {
-            if ($entry === '.' || $entry === '..') {
-                continue;
-            }
-
-            $filePath = $folderPath.DIRECTORY_SEPARATOR.$entry;
-
-            if (is_file($filePath)) {
-                $extension = strtolower(pathinfo($entry, PATHINFO_EXTENSION));
-                if (in_array($extension, $imageExtensions, true)) {
-                    $availableFiles[] = $entry;
-                }
-            }
-        }
-
-        closedir($handle);
-
-        if (empty($availableFiles)) {
-            return null;
-        }
-
-        $usedFilenames = self::getUsedShowcasePhotoFilenames($gender);
-        $unusedFiles = array_diff($availableFiles, $usedFilenames);
-
-        if (empty($unusedFiles)) {
-            return null;
-        }
-
-        $selectedFilename = $unusedFiles[array_rand($unusedFiles)];
-
-        return 'engagement/'.$gender.'/'.$selectedFilename;
+        return self::resolveShowcasePhotoForAttributes($attrs)['path'];
     }
 
     /**
-     * Get list of filenames (extracted from stored paths) already assigned to showcase profiles of given gender.
-     * Handles both old format (filename only) and new format (relative path).
+     * Strict photo resolution for showcase create (no any/any/any or gender-only fallbacks).
      *
-     * @param  string  $gender  male|female
-     * @return array Array of filenames only (for comparison with available files)
+     * @param  array<string, mixed>  $attrs
+     * @return array{path: ?string, reason: ?string, expected_folder: ?string, category_label: ?string}
      */
-    private static function getUsedShowcasePhotoFilenames(string $gender): array
+    public static function resolveShowcasePhotoForAttributes(array $attrs): array
     {
-        $genderId = MasterGender::where('key', $gender)->where('is_active', true)->value('id');
-        if ($genderId === null) {
+        $expectedFolder = self::expectedShowcasePhotoFolderForAttributes($attrs);
+        if ($expectedFolder === null) {
+            return [
+                'path' => null,
+                'reason' => \App\Services\Showcase\ShowcasePhotoPoolSettings::INVALID_CATEGORY,
+                'expected_folder' => null,
+                'category_label' => null,
+            ];
+        }
+
+        $usedPaths = self::getUsedShowcasePhotoPaths();
+        $unused = self::imageFilesInShowcaseDirectory($expectedFolder, $usedPaths);
+        if ($unused !== []) {
+            return [
+                'path' => $unused[array_rand($unused)],
+                'reason' => null,
+                'expected_folder' => $expectedFolder,
+                'category_label' => self::showcasePhotoCategoryLabelFromFolder($expectedFolder),
+            ];
+        }
+
+        $absoluteDir = public_path('uploads/matrimony_photos/'.$expectedFolder);
+        if (! is_dir($absoluteDir) || ! is_readable($absoluteDir)) {
+            return [
+                'path' => null,
+                'reason' => \App\Services\Showcase\ShowcasePhotoPoolSettings::MISSING_FOLDER,
+                'expected_folder' => $expectedFolder,
+                'category_label' => self::showcasePhotoCategoryLabelFromFolder($expectedFolder),
+            ];
+        }
+
+        if (\App\Services\Showcase\ShowcasePhotoPoolSettings::allowReuseWhenBucketExhausted()) {
+            $includingUsed = self::imageFilesInShowcaseDirectory($expectedFolder, []);
+            if ($includingUsed !== []) {
+                return [
+                    'path' => $includingUsed[array_rand($includingUsed)],
+                    'reason' => null,
+                    'expected_folder' => $expectedFolder,
+                    'category_label' => self::showcasePhotoCategoryLabelFromFolder($expectedFolder),
+                ];
+            }
+        }
+
+        return [
+            'path' => null,
+            'reason' => \App\Services\Showcase\ShowcasePhotoPoolSettings::POOL_EXHAUSTED,
+            'expected_folder' => $expectedFolder,
+            'category_label' => self::showcasePhotoCategoryLabelFromFolder($expectedFolder),
+        ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $attrs
+     */
+    public static function expectedShowcasePhotoFolderForAttributes(array $attrs): ?string
+    {
+        $gender = self::genderKeyFromAttributes($attrs);
+        if (! is_string($gender) || ! in_array($gender, self::GENDERS, true)) {
+            return null;
+        }
+
+        $religionId = isset($attrs['religion_id']) ? (int) $attrs['religion_id'] : 0;
+        $maritalStatusId = isset($attrs['marital_status_id']) ? (int) $attrs['marital_status_id'] : 0;
+        if ($religionId <= 0 || $maritalStatusId <= 0) {
+            return null;
+        }
+
+        $religion = self::folderKeyFromMasterValue(Religion::query()->whereKey($religionId)->value('key'));
+        $marital = self::folderKeyFromMasterValue(MasterMaritalStatus::query()->whereKey($maritalStatusId)->value('key'));
+        $ageBucket = self::ageBucketFromDateOfBirth($attrs['date_of_birth'] ?? null);
+        if ($religion === null || $marital === null || $ageBucket === null) {
+            return null;
+        }
+
+        return 'eng/'.$gender.'/'.$religion.'/'.$marital.'/'.$ageBucket;
+    }
+
+    private static function showcasePhotoCategoryLabelFromFolder(string $folder): string
+    {
+        $parts = explode('/', trim($folder, '/'));
+        if (count($parts) < 5 || ($parts[0] ?? '') !== 'eng') {
+            return $folder;
+        }
+
+        return implode(' / ', array_slice($parts, 1));
+    }
+
+    /**
+     * @param  array<string, true>  $usedPaths
+     * @return list<string>
+     */
+    private static function imageFilesInShowcaseDirectory(string $relativeDir, array $usedPaths): array
+    {
+        $absoluteDir = public_path('uploads/matrimony_photos/'.$relativeDir);
+        if (! is_dir($absoluteDir) || ! is_readable($absoluteDir)) {
             return [];
         }
 
+        $files = [];
+        $handle = opendir($absoluteDir);
+        if ($handle === false) {
+            return [];
+        }
+
+        $allowedExtensions = ['jpg', 'jpeg', 'png', 'webp'];
+        while (($entry = readdir($handle)) !== false) {
+            if ($entry === '.' || $entry === '..' || str_starts_with($entry, '.')) {
+                continue;
+            }
+
+            $filePath = $absoluteDir.DIRECTORY_SEPARATOR.$entry;
+            if (! is_file($filePath)) {
+                continue;
+            }
+
+            $extension = strtolower(pathinfo($entry, PATHINFO_EXTENSION));
+            if (! in_array($extension, $allowedExtensions, true)) {
+                continue;
+            }
+
+            $relativePath = $relativeDir.'/'.$entry;
+            if (! isset($usedPaths[$relativePath])) {
+                $files[] = $relativePath;
+            }
+        }
+        closedir($handle);
+
+        sort($files, SORT_NATURAL | SORT_FLAG_CASE);
+
+        return $files;
+    }
+
+    /**
+     * @return array<string, true>
+     */
+    private static function getUsedShowcasePhotoPaths(): array
+    {
         $usedPhotos = MatrimonyProfile::query()
             ->whereShowcase()
-            ->where('gender_id', $genderId)
             ->whereNotNull('profile_photo')
             ->pluck('profile_photo')
             ->toArray();
 
-        $filenames = [];
+        $paths = [];
         foreach ($usedPhotos as $photo) {
-            if (empty($photo) || ! is_string($photo)) {
-                continue;
-            }
-
-            // Extract filename from path (handles both "filename.jpg" and "engagement/gender/filename.jpg")
-            $filename = basename($photo);
-
-            // Only include if it's from engagement folder (new format) or just filename (old format)
-            // For old format, we need to check if it matches engagement folder structure
-            if (strpos($photo, 'engagement/'.$gender.'/') === 0) {
-                // New format: extract filename
-                $filenames[] = $filename;
-            } elseif (strpos($photo, '/') === false) {
-                // Old format: filename only, check if it exists in engagement folder
-                $engagementPath = public_path('uploads/matrimony_photos/engagement/'.$gender.'/'.$photo);
-                if (file_exists($engagementPath)) {
-                    $filenames[] = $filename;
-                }
+            $path = self::normaliseStoredShowcasePhotoPath($photo);
+            if ($path !== null) {
+                $paths[$path] = true;
             }
         }
 
-        return array_unique($filenames);
+        return $paths;
+    }
+
+    private static function normaliseStoredShowcasePhotoPath(mixed $photo): ?string
+    {
+        if (! is_string($photo)) {
+            return null;
+        }
+
+        $path = ltrim(str_replace('\\', '/', trim($photo)), '/');
+        $prefix = 'uploads/matrimony_photos/';
+        if (str_starts_with($path, $prefix)) {
+            $path = substr($path, strlen($prefix));
+        }
+
+        if (! str_starts_with($path, 'eng/')) {
+            return null;
+        }
+
+        return str_contains($path, '..') ? null : $path;
+    }
+
+    private static function genderKeyFromAttributes(array $attrs): ?string
+    {
+        $gender = isset($attrs['gender']) ? (string) $attrs['gender'] : '';
+        if (in_array($gender, self::GENDERS, true)) {
+            return $gender;
+        }
+
+        $genderId = isset($attrs['gender_id']) ? (int) $attrs['gender_id'] : 0;
+        if ($genderId <= 0) {
+            return null;
+        }
+
+        $key = MasterGender::query()->whereKey($genderId)->value('key');
+
+        return is_string($key) && in_array($key, self::GENDERS, true) ? $key : null;
+    }
+
+    private static function folderKeyFromMasterValue(mixed $value): ?string
+    {
+        if (! is_string($value)) {
+            return null;
+        }
+
+        $value = strtolower(trim($value));
+        $value = preg_replace('/[\s-]+/', '_', $value) ?? '';
+        $value = preg_replace('/[^a-z0-9_-]/', '', $value) ?? '';
+        $value = trim($value, '_-');
+
+        return $value !== '' ? $value : null;
+    }
+
+    private static function ageBucketFromDateOfBirth(mixed $dateOfBirth): ?string
+    {
+        if ($dateOfBirth === null || $dateOfBirth === '') {
+            return null;
+        }
+
+        try {
+            $dob = \Carbon\Carbon::parse($dateOfBirth);
+        } catch (\Throwable) {
+            return null;
+        }
+
+        $age = $dob->age;
+        if ($age < 18) {
+            return null;
+        }
+        if ($age <= 24) {
+            return '18-24';
+        }
+        if ($age <= 30) {
+            return '25-30';
+        }
+        if ($age <= 35) {
+            return '31-35';
+        }
+        if ($age <= 45) {
+            return '36-45';
+        }
+
+        return '46-plus';
     }
 }

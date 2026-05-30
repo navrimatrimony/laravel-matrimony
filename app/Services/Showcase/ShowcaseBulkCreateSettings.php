@@ -11,7 +11,7 @@ use App\Models\Profession;
  * Admin-only policy for {@see ShowcaseProfileDefaultsService::fullAttributesForShowcaseProfile} when bulk-creating showcase profiles.
  * Stored as JSON in {@see AdminSetting} key `showcase_bulk_create_policy`.
  *
- * Photo selection is governed elsewhere — not configured here.
+ * Photo selection policy: {@see ShowcasePhotoPoolSettings} (strict eng folder matching).
  */
 class ShowcaseBulkCreateSettings
 {

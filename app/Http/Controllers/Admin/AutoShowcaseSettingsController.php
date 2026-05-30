@@ -20,6 +20,7 @@ use App\Services\AuditLogService;
 use App\Services\Showcase\AutoShowcaseSettings;
 use App\Services\Showcase\ShowcaseAddressEligibility;
 use App\Services\Showcase\ShowcaseBulkCreateSettings;
+use App\Services\Showcase\ShowcasePhotoPoolSettings;
 use App\Services\Showcase\ShowcaseSettings;
 use App\Support\Location\AddressSchemaEnumOptions;
 use App\Support\Validation\AddressHierarchyRules;
@@ -116,6 +117,7 @@ class AutoShowcaseSettingsController extends Controller
             'bulkRandomFillOptions' => ShowcaseBulkCreateSettings::RANDOM_FILL_KEY_OPTIONS,
             'addressTypeOptions' => $addressTypeOptions,
             'addressTagOptions' => $addressTagOptions,
+            'photoPoolPolicy' => ShowcasePhotoPoolSettings::policy(),
         ]);
     }
 
@@ -182,6 +184,9 @@ class AutoShowcaseSettingsController extends Controller
             'bulk_fixed_drinking_status_id' => 'nullable|integer|exists:master_drinking_statuses,id',
             'bulk_about_me_templates' => 'nullable|string|max:50000',
             'bulk_expectations_templates' => 'nullable|string|max:50000',
+            'showcase_photo_missing_folder_action' => 'required|in:'.ShowcasePhotoPoolSettings::ACTION_CREATE_WITHOUT_PHOTO.','.ShowcasePhotoPoolSettings::ACTION_SKIP_PROFILE,
+            'showcase_photo_pool_exhausted_action' => 'required|in:'.ShowcasePhotoPoolSettings::ACTION_CREATE_WITHOUT_PHOTO.','.ShowcasePhotoPoolSettings::ACTION_SKIP_PROFILE,
+            'showcase_photo_allow_bucket_reuse' => 'nullable|in:0,1',
         ]);
 
         AdminSetting::setValue('auto_showcase_engine_enabled', $request->has('auto_showcase_engine_enabled') ? '1' : '0');
@@ -222,6 +227,16 @@ class AutoShowcaseSettingsController extends Controller
         AdminSetting::setValue(
             ShowcaseBulkCreateSettings::SETTING_KEY,
             json_encode($bulkPolicy, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)
+        );
+
+        $photoPoolPolicy = ShowcasePhotoPoolSettings::normalize([
+            'missing_exact_folder_action' => $request->input('showcase_photo_missing_folder_action'),
+            'pool_exhausted_action' => $request->input('showcase_photo_pool_exhausted_action'),
+            'allow_reuse_when_bucket_exhausted' => $request->input('showcase_photo_allow_bucket_reuse') === '1',
+        ]);
+        AdminSetting::setValue(
+            ShowcasePhotoPoolSettings::SETTING_KEY,
+            json_encode($photoPoolPolicy, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)
         );
 
         AuditLogService::log(

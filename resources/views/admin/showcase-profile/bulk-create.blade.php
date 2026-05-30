@@ -1,9 +1,15 @@
 @extends('layouts.admin-showcase')
 
 @section('showcase_content')
+@php
+    $bulkLc = $bulkShowcaseLifecycle ?? 'draft';
+    $summary = is_array($bulkResult ?? null) ? ($bulkResult['summary'] ?? null) : null;
+    $groupedWarnings = is_array($bulkResult ?? null) ? ($bulkResult['grouped_warnings'] ?? []) : [];
+    $noPhotoIds = array_flip($noPhotoProfileIds ?? []);
+    $policy = $photoPolicyLabels ?? [];
+@endphp
 <div class="bg-white dark:bg-gray-800 shadow rounded-lg p-6">
     <h1 class="text-2xl font-bold text-gray-800 dark:text-gray-100 mb-2">Bulk Create Showcase Profiles (1–50)</h1>
-    @php $bulkLc = $bulkShowcaseLifecycle ?? 'draft'; @endphp
     <p class="text-gray-500 dark:text-gray-400 text-sm mb-6">
         @if ($bulkLc === 'active')
             Create multiple showcase profiles. Current <a href="{{ route('admin.auto-showcase-settings.edit') }}#bulk" class="text-indigo-600 dark:text-indigo-400 underline">Admin bulk</a> lifecycle is <strong>active</strong> — new profiles are visible in member search when completeness and visibility rules pass (no publish step).
@@ -22,6 +28,76 @@
         </div>
     @endif
 
+    @php $pool = $poolHealth ?? ['bucket_count' => 0, 'total_photos' => 0, 'exhausted_buckets' => 0, 'low_unused_buckets' => 0]; @endphp
+    <div class="mb-6 rounded-xl border border-violet-200 bg-violet-50/50 px-4 py-4 dark:border-violet-900/50 dark:bg-violet-950/20">
+        <div class="flex flex-wrap items-start justify-between gap-3">
+            <div>
+                <p class="text-sm font-bold text-violet-950 dark:text-violet-100">{{ __('showcase_bulk.pool_health_title') }}</p>
+                @if ((int) ($pool['bucket_count'] ?? 0) === 0)
+                    <p class="mt-1 text-xs text-violet-900/90 dark:text-violet-200/90">{{ __('showcase_bulk.pool_health_empty') }}</p>
+                @else
+                    <dl class="mt-3 grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">
+                        <div><dt class="text-[10px] uppercase tracking-wide text-violet-800/70">{{ __('showcase_bulk.pool_health_buckets') }}</dt><dd class="font-bold text-gray-900 dark:text-gray-100">{{ $pool['bucket_count'] }}</dd></div>
+                        <div><dt class="text-[10px] uppercase tracking-wide text-violet-800/70">{{ __('showcase_bulk.pool_health_total') }}</dt><dd class="font-bold text-gray-900 dark:text-gray-100">{{ $pool['total_photos'] }}</dd></div>
+                        <div><dt class="text-[10px] uppercase tracking-wide text-amber-800/80">{{ __('showcase_bulk.pool_health_low') }}</dt><dd class="font-bold text-amber-800 dark:text-amber-200">{{ $pool['low_unused_buckets'] }}</dd></div>
+                        <div><dt class="text-[10px] uppercase tracking-wide text-amber-800/80">{{ __('showcase_bulk.pool_health_exhausted') }}</dt><dd class="font-bold text-amber-800 dark:text-amber-200">{{ $pool['exhausted_buckets'] }}</dd></div>
+                    </dl>
+                @endif
+            </div>
+            <a href="{{ route('admin.showcase-photo-pool.index') }}" class="shrink-0 rounded-lg bg-violet-600 px-3 py-2 text-xs font-semibold text-white hover:bg-violet-700">{{ __('showcase_bulk.pool_health_manage') }}</a>
+        </div>
+    </div>
+
+    @if (is_array($summary))
+        <div class="mb-6 rounded-xl border border-indigo-200 bg-indigo-50/60 p-5 dark:border-indigo-900/50 dark:bg-indigo-950/30">
+            <h2 class="text-base font-bold text-indigo-950 dark:text-indigo-100">{{ __('showcase_bulk.result_title') }}</h2>
+            <dl class="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6 text-center">
+                @foreach ([
+                    'requested' => __('showcase_bulk.stat_requested'),
+                    'created' => __('showcase_bulk.stat_created'),
+                    'with_photo' => __('showcase_bulk.stat_with_photo'),
+                    'without_photo' => __('showcase_bulk.stat_without_photo'),
+                    'skipped_no_photo' => __('showcase_bulk.stat_skipped_photo'),
+                    'skipped_no_location' => __('showcase_bulk.stat_skipped_location'),
+                ] as $key => $label)
+                    <div class="rounded-lg border border-indigo-100 bg-white px-2 py-3 dark:border-indigo-900/40 dark:bg-gray-900/60">
+                        <dt class="text-[10px] font-semibold uppercase tracking-wide text-indigo-800/80 dark:text-indigo-200/80">{{ $label }}</dt>
+                        <dd class="mt-1 text-xl font-bold text-gray-900 dark:text-gray-100">{{ (int) ($summary[$key] ?? 0) }}</dd>
+                    </div>
+                @endforeach
+            </dl>
+
+            @if (is_array($groupedWarnings) && $groupedWarnings !== [])
+                <div class="mt-5 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 dark:border-amber-800 dark:bg-amber-950/40">
+                    <p class="text-sm font-semibold text-amber-950 dark:text-amber-100">{{ __('showcase_bulk.photo_warnings_title') }}</p>
+                    <p class="mt-1 text-xs text-amber-900/90 dark:text-amber-200/90">{{ __('showcase_bulk.photo_warnings_help') }}</p>
+                    <ul class="mt-3 space-y-2 text-xs text-amber-950 dark:text-amber-100">
+                        @foreach ($groupedWarnings as $w)
+                            @if (is_array($w))
+                                <li class="rounded border border-amber-200/80 bg-white/70 px-3 py-2 dark:border-amber-900/50 dark:bg-gray-900/50">
+                                    <span class="font-semibold">
+                                        {{ ! empty($w['skipped']) ? __('showcase_bulk.warning_skipped') : __('showcase_bulk.warning_without_photo') }} —
+                                        {{ __('showcase_bulk.warning_count', ['count' => (int) ($w['count'] ?? 0)]) }}
+                                    </span>
+                                    <span class="text-amber-900/90 dark:text-amber-200/90"> · {{ $w['reason'] ?? '' }}</span>
+                                    @if (! empty($w['category']))
+                                        <span class="block mt-0.5">{{ $w['category'] }}</span>
+                                    @endif
+                                    @if (! empty($w['folder']))
+                                        <span class="mt-0.5 block font-mono text-[11px] text-amber-900/80 dark:text-amber-200/80">uploads/matrimony_photos/{{ $w['folder'] }}/</span>
+                                    @endif
+                                    @if (! empty($w['profile_ids']) && is_array($w['profile_ids']))
+                                        <span class="mt-1 block text-[11px]">{{ __('showcase_bulk.profile_ids') }}: {{ implode(', ', array_map(fn ($id) => '#'.$id, $w['profile_ids'])) }}</span>
+                                    @endif
+                                </li>
+                            @endif
+                        @endforeach
+                    </ul>
+                </div>
+            @endif
+        </div>
+    @endif
+
     <form method="POST" action="{{ route('admin.showcase-profile.bulk-store') }}" class="space-y-4">
         @csrf
         <div>
@@ -37,6 +113,22 @@
             </select>
             <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">Random = each profile gets random gender. Otherwise all use selected gender; other fields remain random per profile.</p>
         </div>
+
+        <div class="rounded border border-gray-200 bg-gray-50 px-4 py-3 text-xs leading-relaxed text-gray-700 dark:border-gray-700 dark:bg-gray-900/40 dark:text-gray-300">
+            <p class="font-semibold text-gray-900 dark:text-gray-100">Showcase image folders (strict)</p>
+            <p class="mt-1 font-mono">uploads/matrimony_photos/eng/{gender}/{religion}/{marital_status}/{age_bucket}/</p>
+            <p class="mt-1">No <code class="rounded bg-gray-200 px-1 dark:bg-gray-800">any</code> fallbacks. Upload photos in <a href="{{ route('admin.showcase-photo-pool.index') }}" class="text-indigo-600 dark:text-indigo-400 underline">Showcase photo pool</a>. Policy: <a href="{{ route('admin.auto-showcase-settings.edit') }}#bulk" class="text-indigo-600 dark:text-indigo-400 underline">Admin bulk settings</a>.</p>
+        </div>
+
+        <div class="rounded border border-violet-200 bg-violet-50/50 px-4 py-3 text-xs text-violet-950 dark:border-violet-900/50 dark:bg-violet-950/20 dark:text-violet-100">
+            <p class="font-semibold">{{ __('showcase_bulk.policy_title') }}</p>
+            <ul class="mt-2 space-y-1">
+                <li><span class="font-medium">{{ __('showcase_bulk.policy_missing') }}:</span> {{ $policy['missing'] ?? '—' }}</li>
+                <li><span class="font-medium">{{ __('showcase_bulk.policy_exhausted') }}:</span> {{ $policy['exhausted'] ?? '—' }}</li>
+                <li><span class="font-medium">{{ __('showcase_bulk.policy_reuse') }}:</span> {{ $policy['reuse'] ?? '—' }}</li>
+            </ul>
+        </div>
+
         <p class="text-sm text-gray-500 dark:text-gray-400">All other mandatory fields are auto-filled with random values per profile. No manual input.</p>
         <div class="flex gap-3">
             <button type="submit" style="background-color: #059669; color: white; padding: 10px 20px; border-radius: 6px; font-weight: 600; font-size: 14px; border: none; cursor: pointer; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">Create</button>
@@ -84,12 +176,20 @@
                 </thead>
                 <tbody class="divide-y divide-gray-100 dark:divide-gray-700">
                     @foreach ($created as $p)
-                        <tr>
+                        @php $hasNoPhoto = isset($noPhotoIds[$p->id]); @endphp
+                        <tr class="{{ $hasNoPhoto ? 'bg-amber-50/80 dark:bg-amber-950/20' : '' }}">
                             <td class="py-3 pr-4 font-semibold text-gray-900 dark:text-gray-100">#{{ $p->id }}</td>
                             <td class="py-3 pr-4 text-gray-800 dark:text-gray-200">{{ $p->full_name ?? ('Profile #' . $p->id) }}</td>
                             <td class="py-3 pr-4"><span class="inline-flex rounded-full bg-gray-100 px-2 py-0.5 text-xs font-semibold text-gray-700 dark:bg-gray-900 dark:text-gray-200">{{ $p->lifecycle_state ?? '—' }}</span></td>
                             <td class="py-3 pr-4">
-                                <img src="{{ $p->profile_photo_url }}" alt="" class="h-10 w-10 rounded-full object-cover border border-gray-200 dark:border-gray-700" />
+                                @if ($hasNoPhoto || trim((string) ($p->profile_photo ?? '')) === '')
+                                    <span class="inline-flex rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-900 dark:bg-amber-900/50 dark:text-amber-100">{{ __('showcase_bulk.table_no_photo') }}</span>
+                                @else
+                                    <div class="flex items-center gap-2">
+                                        <img src="{{ $p->profile_photo_url }}" alt="" class="h-10 w-10 rounded-full object-cover border border-gray-200 dark:border-gray-700" />
+                                        <span class="text-xs text-gray-500 dark:text-gray-400">{{ __('showcase_bulk.table_has_photo') }}</span>
+                                    </div>
+                                @endif
                             </td>
                             <td class="py-3 pr-4">
                                 <div class="flex flex-wrap gap-2">
@@ -119,7 +219,11 @@
                             <td class="py-3 pr-4 text-gray-800 dark:text-gray-200">{{ $p->full_name ?? ('Profile #' . $p->id) }}</td>
                             <td class="py-3 pr-4"><span class="inline-flex rounded-full bg-gray-100 px-2 py-0.5 text-xs font-semibold text-gray-700 dark:bg-gray-900 dark:text-gray-200">{{ $p->lifecycle_state ?? '—' }}</span></td>
                             <td class="py-3 pr-4">
-                                <img src="{{ $p->profile_photo_url }}" alt="" class="h-10 w-10 rounded-full object-cover border border-gray-200 dark:border-gray-700" />
+                                @if (trim((string) ($p->profile_photo ?? '')) === '')
+                                    <span class="text-xs text-gray-400">—</span>
+                                @else
+                                    <img src="{{ $p->profile_photo_url }}" alt="" class="h-10 w-10 rounded-full object-cover border border-gray-200 dark:border-gray-700" />
+                                @endif
                             </td>
                             <td class="py-3 pr-4">
                                 <div class="flex flex-wrap gap-2">

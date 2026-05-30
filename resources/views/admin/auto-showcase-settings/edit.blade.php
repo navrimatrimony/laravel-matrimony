@@ -197,9 +197,58 @@
                     </div>
                 </div>
 
-                <p class="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-xs text-gray-700">
-                    <strong class="text-gray-900">Profile photo</strong> policy is configured and applied separately — not on this form.
-                </p>
+                @php
+                    $photoPool = $photoPoolPolicy ?? \App\Services\Showcase\ShowcasePhotoPoolSettings::defaults();
+                    $photoMissingAction = old('showcase_photo_missing_folder_action', $photoPool['missing_exact_folder_action'] ?? 'create_without_photo');
+                    $photoExhaustedAction = old('showcase_photo_pool_exhausted_action', $photoPool['pool_exhausted_action'] ?? 'create_without_photo');
+                    $photoAllowReuse = old('showcase_photo_allow_bucket_reuse', ($photoPool['allow_reuse_when_bucket_exhausted'] ?? false) ? '1' : '0');
+                @endphp
+
+                <fieldset class="space-y-4 rounded-xl border border-amber-200 bg-amber-50/40 p-5">
+                    <legend class="text-sm font-bold text-gray-900">{{ __('showcase_photo_pool.section_title') }}</legend>
+                    <p class="text-xs leading-relaxed text-gray-700">{{ __('showcase_photo_pool.section_help') }}</p>
+                    <p class="font-mono text-[11px] text-gray-600">uploads/matrimony_photos/eng/{gender}/{religion}/{marital_status}/{age_bucket}/</p>
+                    <p class="mt-2">
+                        <a href="{{ route('admin.showcase-photo-pool.index') }}" class="text-xs font-semibold text-violet-700 underline decoration-violet-300 underline-offset-2 hover:text-violet-900">{{ __('showcase_photo_pool_admin.link_pool') }}</a>
+                    </p>
+
+                    <div>
+                        <span class="{{ $lbl }}">{{ __('showcase_photo_pool.missing_folder_label') }}</span>
+                        <div class="mt-2 space-y-2 text-sm">
+                            <label class="flex cursor-pointer items-start gap-2">
+                                <input type="radio" name="showcase_photo_missing_folder_action" value="create_without_photo" class="mt-1" @checked($photoMissingAction === 'create_without_photo')>
+                                <span>{{ __('showcase_photo_pool.action_create_without_photo') }}</span>
+                            </label>
+                            <label class="flex cursor-pointer items-start gap-2">
+                                <input type="radio" name="showcase_photo_missing_folder_action" value="skip_profile" class="mt-1" @checked($photoMissingAction === 'skip_profile')>
+                                <span>{{ __('showcase_photo_pool.action_skip_profile') }}</span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <div>
+                        <span class="{{ $lbl }}">{{ __('showcase_photo_pool.pool_exhausted_label') }}</span>
+                        <div class="mt-2 space-y-2 text-sm">
+                            <label class="flex cursor-pointer items-start gap-2">
+                                <input type="radio" name="showcase_photo_pool_exhausted_action" value="create_without_photo" class="mt-1" @checked($photoExhaustedAction === 'create_without_photo')>
+                                <span>{{ __('showcase_photo_pool.action_create_without_photo') }}</span>
+                            </label>
+                            <label class="flex cursor-pointer items-start gap-2">
+                                <input type="radio" name="showcase_photo_pool_exhausted_action" value="skip_profile" class="mt-1" @checked($photoExhaustedAction === 'skip_profile')>
+                                <span>{{ __('showcase_photo_pool.action_skip_profile') }}</span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <label class="flex cursor-pointer items-start gap-2 text-sm text-gray-800">
+                        <input type="hidden" name="showcase_photo_allow_bucket_reuse" value="0">
+                        <input type="checkbox" name="showcase_photo_allow_bucket_reuse" value="1" class="mt-1" @checked($photoAllowReuse === '1')>
+                        <span>
+                            <span class="font-medium">{{ __('showcase_photo_pool.allow_reuse_label') }}</span>
+                            <span class="mt-0.5 block text-xs text-gray-600">{{ __('showcase_photo_pool.allow_reuse_help') }}</span>
+                        </span>
+                    </label>
+                </fieldset>
 
                 @php
                     $bp = $bulkPolicy;

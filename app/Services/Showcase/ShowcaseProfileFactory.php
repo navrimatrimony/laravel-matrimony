@@ -4,6 +4,7 @@ namespace App\Services\Showcase;
 
 use App\Models\MasterGender;
 use App\Models\MatrimonyProfile;
+use App\Models\ProfilePhoto;
 use App\Models\User;
 use App\Services\ExtendedFieldService;
 use App\Services\FieldValueHistoryService;
@@ -26,7 +27,7 @@ class ShowcaseProfileFactory
      * Create one showcase profile (dedicated @system.local user, full autofill).
      *
      * @param  array<string, mixed>  $attributeOverrides  merged on top of {@see ShowcaseProfileDefaultsService::fullAttributesForShowcaseProfile}
-     * @return int|null New matrimony_profiles.id, or null if skipped (e.g. user already owns a profile or missing location)
+     * @return int|null New matrimony_profiles.id, or null if skipped
      */
     public function create(
         int $sequenceIndex,
@@ -37,6 +38,29 @@ class ShowcaseProfileFactory
         ?int $searcherMatrimonyProfileId = null,
         bool $useAdminBulkFieldPolicy = false
     ): ?int {
+        return $this->createWithOutcome(
+            $sequenceIndex,
+            $genderOverride,
+            $actorUserId,
+            $attributeOverrides,
+            $lifecycleState,
+            $searcherMatrimonyProfileId,
+            $useAdminBulkFieldPolicy
+        )->profileId;
+    }
+
+    /**
+     * @param  array<string, mixed>  $attributeOverrides
+     */
+    public function createWithOutcome(
+        int $sequenceIndex,
+        ?string $genderOverride,
+        int $actorUserId,
+        array $attributeOverrides = [],
+        string $lifecycleState = 'draft',
+        ?int $searcherMatrimonyProfileId = null,
+        bool $useAdminBulkFieldPolicy = false
+    ): ShowcaseProfileCreateResult {
         $bulkPolicy = ($useAdminBulkFieldPolicy && $searcherMatrimonyProfileId === null)
             ? ShowcaseBulkCreateSettings::policy()
             : null;
@@ -46,8 +70,38 @@ class ShowcaseProfileFactory
             $attributeOverrides
         );
 
+        $photoSkipReason = null;
+        $photoCategoryLabel = null;
+        $expectedPhotoFolder = null;
+        $hasPhotoOverride = array_key_exists('profile_photo', $attributeOverrides)
+            && trim((string) ($attributeOverrides['profile_photo'] ?? '')) !== '';
+
+        if (! $hasPhotoOverride) {
+            $resolved = ShowcaseProfileDefaultsService::resolveShowcasePhotoForAttributes($attrs);
+            $photoCategoryLabel = $resolved['category_label'];
+            $expectedPhotoFolder = $resolved['expected_folder'];
+            if ($resolved['path'] !== null) {
+                $attrs['profile_photo'] = $resolved['path'];
+            } else {
+                $photoSkipReason = $resolved['reason'];
+                if ($photoSkipReason !== null && ShowcasePhotoPoolSettings::shouldSkipProfile($photoSkipReason)) {
+                    return new ShowcaseProfileCreateResult(
+                        null,
+                        ShowcaseProfileCreateResult::OUTCOME_SKIPPED_NO_PHOTO,
+                        $photoSkipReason,
+                        $photoCategoryLabel,
+                        $expectedPhotoFolder
+                    );
+                }
+                $attrs['profile_photo'] = null;
+            }
+        }
+
         if (empty($attrs['district_id'] ?? null) || empty($attrs['city_id'] ?? null)) {
-            return null;
+            return new ShowcaseProfileCreateResult(
+                null,
+                ShowcaseProfileCreateResult::OUTCOME_SKIPPED_NO_LOCATION
+            );
         }
 
         $fullName = trim((string) ($attrs['full_name'] ?? ''));
@@ -68,7 +122,10 @@ class ShowcaseProfileFactory
             ]
         );
         if ($user->matrimonyProfile) {
-            return null;
+            return new ShowcaseProfileCreateResult(
+                null,
+                ShowcaseProfileCreateResult::OUTCOME_SKIPPED_DUPLICATE_USER
+            );
         }
 
         $user->forceFill([
@@ -88,6 +145,7 @@ class ShowcaseProfileFactory
         $attrs['lifecycle_state'] = 'draft';
 
         $profile = MatrimonyProfile::create($attrs);
+        $this->syncShowcasePrimaryPhotoRow($profile);
         if ($cityIdForResidence > 0 && Schema::hasTable('profile_addresses')) {
             ProfileCanonicalResidenceService::upsertSelfCurrent($profile->id, $cityIdForResidence, null, true, false);
             $workLeaf = isset($attrs['work_city_id']) ? (int) $attrs['work_city_id'] : 0;
@@ -108,7 +166,19 @@ class ShowcaseProfileFactory
         $profile->refresh();
         $this->syncAuthUserWithShowcaseProfile($user->fresh(), $profile);
 
-        return (int) $profile->id;
+        $createdWithoutPhoto = ! $hasPhotoOverride
+            && $photoSkipReason !== null
+            && trim((string) ($profile->profile_photo ?? '')) === '';
+
+        return new ShowcaseProfileCreateResult(
+            (int) $profile->id,
+            $createdWithoutPhoto
+                ? ShowcaseProfileCreateResult::OUTCOME_CREATED_WITHOUT_PHOTO
+                : ShowcaseProfileCreateResult::OUTCOME_CREATED,
+            $createdWithoutPhoto ? $photoSkipReason : null,
+            $photoCategoryLabel,
+            $expectedPhotoFolder
+        );
     }
 
     /**
@@ -151,6 +221,61 @@ class ShowcaseProfileFactory
         $key = $key !== null ? (string) $key : '';
 
         return in_array($key, ['male', 'female'], true) ? $key : 'other';
+    }
+
+    private function syncShowcasePrimaryPhotoRow(MatrimonyProfile $profile): void
+    {
+        if (! Schema::hasTable('profile_photos')) {
+            return;
+        }
+
+        $photoPath = ltrim(str_replace('\\', '/', trim((string) ($profile->profile_photo ?? ''))), '/');
+        if ($photoPath === '' || str_contains($photoPath, '..')) {
+            return;
+        }
+
+        DB::transaction(function () use ($profile, $photoPath): void {
+            $existing = ProfilePhoto::query()
+                ->where('profile_id', $profile->id)
+                ->where('file_path', $photoPath)
+                ->first();
+
+            if ($existing !== null) {
+                ProfilePhoto::query()
+                    ->where('profile_id', $profile->id)
+                    ->where('id', '!=', $existing->id)
+                    ->where('is_primary', true)
+                    ->update(['is_primary' => false]);
+
+                if (! $existing->is_primary || $existing->approved_status !== 'approved') {
+                    $existing->forceFill([
+                        'is_primary' => true,
+                        'approved_status' => 'approved',
+                    ])->save();
+                }
+
+                return;
+            }
+
+            ProfilePhoto::query()
+                ->where('profile_id', $profile->id)
+                ->where('is_primary', true)
+                ->update(['is_primary' => false]);
+
+            $row = [
+                'profile_id' => $profile->id,
+                'file_path' => $photoPath,
+                'is_primary' => true,
+                'uploaded_via' => 'user_web',
+                'approved_status' => 'approved',
+                'watermark_detected' => false,
+            ];
+            if (Schema::hasColumn('profile_photos', 'sort_order')) {
+                $row['sort_order'] = 0;
+            }
+
+            ProfilePhoto::withoutEvents(fn () => ProfilePhoto::query()->create($row));
+        });
     }
 
     /**

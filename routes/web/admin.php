@@ -52,6 +52,7 @@ use App\Http\Controllers\Admin\ShowcaseChatDebugController;
 use App\Http\Controllers\Admin\ShowcaseChatSettingsController;
 use App\Http\Controllers\Admin\ShowcaseConversationController;
 use App\Http\Controllers\Admin\ShowcaseEngineDashboardController;
+use App\Http\Controllers\Admin\ShowcasePhotoPoolController;
 use App\Http\Controllers\Admin\ShowcaseProfileController;
 use App\Http\Controllers\Admin\SubCasteAdminController;
 use App\Http\Controllers\Admin\TranslationController;
@@ -384,6 +385,10 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
 
     Route::get('/auto-showcase-settings', [AutoShowcaseSettingsController::class, 'edit'])->name('auto-showcase-settings.edit');
     Route::post('/auto-showcase-settings', [AutoShowcaseSettingsController::class, 'update'])->name('auto-showcase-settings.update');
+
+    Route::get('/showcase-photo-pool', [ShowcasePhotoPoolController::class, 'index'])->name('showcase-photo-pool.index');
+    Route::post('/showcase-photo-pool', [ShowcasePhotoPoolController::class, 'store'])->name('showcase-photo-pool.store');
+    Route::post('/showcase-photo-pool/delete', [ShowcasePhotoPoolController::class, 'destroy'])->name('showcase-photo-pool.destroy');
 
     Route::get('/showcase-profile/bulk-create', [ShowcaseProfileController::class, 'bulkCreate'])->name('showcase-profile.bulk-create');
     Route::post('/showcase-profiles/bulk', [ShowcaseProfileController::class, 'bulkStore'])->name('showcase-profile.bulk-store');

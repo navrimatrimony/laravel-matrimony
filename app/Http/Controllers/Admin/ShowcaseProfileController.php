@@ -6,6 +6,9 @@ use App\Http\Controllers\Controller;
 use App\Models\MatrimonyProfile;
 use App\Services\Maintenance\MatrimonyProfileDatabasePurger;
 use App\Services\Showcase\AutoShowcaseSettings;
+use App\Services\Showcase\ShowcaseBulkCreateReport;
+use App\Services\Showcase\ShowcasePhotoPoolService;
+use App\Services\Showcase\ShowcaseProfileCreateResult;
 use App\Services\Showcase\ShowcaseProfileFactory;
 use Illuminate\Database\QueryException;
 use Illuminate\Http\Request;
@@ -44,11 +47,31 @@ class ShowcaseProfileController extends Controller
             ->get();
 
         $bulkLifecycle = AutoShowcaseSettings::bulkShowcaseLifecycle();
+        $bulkResult = session('showcase_bulk_result');
+        if (! is_array($bulkResult)) {
+            $bulkResult = null;
+        }
+
+        $noPhotoProfileIds = [];
+        if (is_array($bulkResult['profile_outcomes'] ?? null)) {
+            foreach ($bulkResult['profile_outcomes'] as $row) {
+                if (! is_array($row)) {
+                    continue;
+                }
+                if (($row['outcome'] ?? '') === ShowcaseProfileCreateResult::OUTCOME_CREATED_WITHOUT_PHOTO) {
+                    $noPhotoProfileIds[(int) ($row['profile_id'] ?? 0)] = true;
+                }
+            }
+        }
 
         return view('admin.showcase-profile.bulk-create', [
             'createdProfiles' => $createdProfiles,
             'recentShowcase' => $recentShowcase,
             'bulkShowcaseLifecycle' => $bulkLifecycle,
+            'bulkResult' => $bulkResult,
+            'photoPolicyLabels' => ShowcaseBulkCreateReport::photoPolicyLabels(),
+            'noPhotoProfileIds' => array_keys(array_filter($noPhotoProfileIds)),
+            'poolHealth' => app(ShowcasePhotoPoolService::class)->poolHealthSummary(),
         ]);
     }
 
@@ -65,26 +88,40 @@ class ShowcaseProfileController extends Controller
             : null;
 
         $actorUserId = (int) ($request->user()?->id ?? 0);
-        $created = 0;
-        $createdIds = [];
+        $report = new ShowcaseBulkCreateReport($count);
         $factory = app(ShowcaseProfileFactory::class);
         $lifecycle = AutoShowcaseSettings::bulkShowcaseLifecycle();
         for ($i = 0; $i < $count; $i++) {
-            $newId = $factory->create($i, $genderOverride, $actorUserId, [], $lifecycle, null, true);
-            if ($newId !== null) {
-                $created++;
-                $createdIds[] = $newId;
-            }
+            $report->add($factory->createWithOutcome($i, $genderOverride, $actorUserId, [], $lifecycle, null, true));
         }
 
-        $lifecycleHint = $lifecycle === 'active'
-            ? 'Profiles are active (visible in member search if other visibility rules pass).'
-            : 'Profiles are draft — publish from Showcase profiles to make them visible in member search.';
+        $summary = $report->toSummary();
+        $message = __('showcase_bulk.success_created', [
+            'count' => $summary['created'],
+            'lifecycle' => $lifecycle,
+        ]);
+        $message .= ' '.($lifecycle === 'active'
+            ? __('showcase_bulk.success_lifecycle_active')
+            : __('showcase_bulk.success_lifecycle_draft'));
+        if ($summary['without_photo'] > 0) {
+            $message .= ' '.__('showcase_bulk.success_without_photo', ['count' => $summary['without_photo']]);
+        }
+        if ($summary['skipped_no_photo'] > 0) {
+            $message .= ' '.__('showcase_bulk.success_skipped_photo', ['count' => $summary['skipped_no_photo']]);
+        }
+        if ($summary['skipped_no_location'] > 0) {
+            $message .= ' '.__('showcase_bulk.success_skipped_location', ['count' => $summary['skipped_no_location']]);
+        }
 
         return redirect()
             ->route('admin.showcase-profile.bulk-create')
-            ->with('success', "Created {$created} showcase profile(s) ({$lifecycle}). {$lifecycleHint}")
-            ->with('created_showcase_profile_ids', $createdIds);
+            ->with('success', $message)
+            ->with('created_showcase_profile_ids', $report->createdProfileIds())
+            ->with('showcase_bulk_result', [
+                'summary' => $summary,
+                'grouped_warnings' => $report->groupedPhotoWarnings(),
+                'profile_outcomes' => $report->profileOutcomes(),
+            ]);
     }
 
     public function publish(Request $request, MatrimonyProfile $profile)

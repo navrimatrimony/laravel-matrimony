@@ -67,7 +67,7 @@ class MatrimonyPhotoStoragePathServiceTest extends TestCase
     {
         $this->assertFalse(MatrimonyPhotoStoragePathService::isSafeRelativePath('../etc/passwd'));
         $this->assertFalse(MatrimonyPhotoStoragePathService::isSafeRelativePath('a/../../b'));
-        $this->assertTrue(MatrimonyPhotoStoragePathService::isSafeRelativePath('engagement/female/f1.jpg'));
+        $this->assertTrue(MatrimonyPhotoStoragePathService::isSafeRelativePath('eng/female/hindu/never_married/25-30/f1.jpg'));
         $this->assertTrue(MatrimonyPhotoStoragePathService::isSafeRelativePath('26/03/00/12/x.webp'));
         $this->assertTrue(MatrimonyPhotoStoragePathService::isSafeRelativePath('flat.webp'));
     }
