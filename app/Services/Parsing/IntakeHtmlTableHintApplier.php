@@ -7,10 +7,27 @@ namespace App\Services\Parsing;
 use App\Services\Ocr\OcrNormalize;
 
 /**
- * Phase 3d-2: apply safe HTML table hints to normalized draft core + contacts only.
+ * Phase 3d-2/3d-3: apply safe HTML table hints to normalized draft core, contacts,
+ * addresses, other_relatives_text, and property_summary.
  */
 final class IntakeHtmlTableHintApplier
 {
+    /** @var list<string> */
+    private const OTHER_RELATIVES_POLLUTION = [
+        'अपेक्षा', 'शिक्षण', 'नोकरी', 'मोबाईल', 'मोबाइल', 'संपर्क',
+        'जन्म तारीख', 'जन्म स्थळ', 'प्रॉपर्टी', 'प्रॉपर्टि',
+    ];
+
+    /** @var list<string> */
+    private const OTHER_RELATIVES_HINT_KEYS = [
+        'other_relatives_text', 'other_relatives', 'relatives_other', 'pahune', 'पाहुणे', 'नातेसंबंध',
+    ];
+
+    /** @var list<string> */
+    private const PROPERTY_HINT_KEYS = [
+        'property_summary', 'property', 'other_property', 'इतर प्रॉपर्टी', 'स्थावर', 'शेती', 'प्लॉट', 'फ्लॅट',
+    ];
+
     /** @var list<string> */
     private const AUTHORITATIVE_CORE = [
         'full_name',
@@ -46,6 +63,9 @@ final class IntakeHtmlTableHintApplier
         $core = &$draft['normalized']['core'];
         if ($hints !== []) {
             $this->applyCoreHints($hints, $core);
+            $this->applyAddressHints($hints, $core, $draft['normalized'], $draft);
+            $this->applyOtherRelativesTextHints($hints, $core);
+            $this->applyPropertySummaryHints($hints, $draft['normalized']);
         }
         $this->applyContactsFromHints(
             $hints,
@@ -316,5 +336,271 @@ final class IntakeHtmlTableHintApplier
         }
 
         return null;
+    }
+
+    /**
+     * @param  array<string, string>  $hints
+     * @param  array<string, mixed>  $core
+     * @param  array<string, mixed>  $normalized
+     * @param  array<string, mixed>  $draft
+     */
+    private function applyAddressHints(array $hints, array &$core, array &$normalized, array &$draft): void
+    {
+        $currentRaw = $this->firstHintValue($hints, ['address_current', 'current_address', 'address']);
+        $nativeRaw = $this->firstHintValue($hints, ['address_native', 'native_address']);
+        $parentsRaw = $this->firstHintValue($hints, ['address_parents', 'parents_address']);
+
+        if ($currentRaw === null && $nativeRaw === null && $parentsRaw === null) {
+            return;
+        }
+
+        if (! is_array($normalized['addresses'] ?? null)) {
+            $normalized['addresses'] = [];
+        }
+
+        $seen = [];
+        foreach ($normalized['addresses'] as $existing) {
+            if (! is_array($existing)) {
+                continue;
+            }
+            $line = trim((string) ($existing['address_line'] ?? $existing['raw'] ?? ''));
+            if ($line !== '') {
+                $seen[$this->normalizeAddressKey($line)] = true;
+            }
+        }
+
+        if ($parentsRaw !== null) {
+            $parentsLine = $this->cleanAddressLine($parentsRaw);
+            if ($parentsLine !== '') {
+                if (! is_array($normalized['parents_addresses'] ?? null)) {
+                    $normalized['parents_addresses'] = [];
+                }
+                $parentsKey = $this->normalizeAddressKey($parentsLine);
+                $alreadyStored = false;
+                foreach ($normalized['parents_addresses'] as $existingParent) {
+                    if (! is_array($existingParent)) {
+                        continue;
+                    }
+                    $existingLine = trim((string) ($existingParent['address_line'] ?? $existingParent['raw'] ?? ''));
+                    if ($this->normalizeAddressKey($existingLine) === $parentsKey) {
+                        $alreadyStored = true;
+                        break;
+                    }
+                }
+                if (! $alreadyStored) {
+                    $normalized['parents_addresses'][] = [
+                        'address_line' => $parentsLine,
+                        'raw' => $parentsLine,
+                        'type' => 'parents',
+                    ];
+                }
+
+                $meta = is_array($draft['meta'] ?? null) ? $draft['meta'] : [];
+                $meta['table_hint_parents_address'] = $parentsLine;
+                $draft['meta'] = $meta;
+            }
+        }
+
+        if ($nativeRaw !== null) {
+            $nativeLine = $this->cleanAddressLine($nativeRaw);
+            if ($nativeLine !== '') {
+                $this->upsertTypedAddress($normalized['addresses'], $nativeLine, 'native', $seen);
+            }
+        }
+
+        if ($currentRaw !== null) {
+            $currentLine = $this->cleanAddressLine($currentRaw);
+            if ($currentLine !== '') {
+                $this->upsertTypedAddress($normalized['addresses'], $currentLine, 'current', $seen);
+            }
+            if ($currentLine !== '') {
+                $this->setCoreField($core, 'address_line', $currentLine, true);
+            }
+        }
+    }
+
+    /**
+     * @param  array<string, string>  $hints
+     * @param  array<string, mixed>  $core
+     */
+    private function applyOtherRelativesTextHints(array $hints, array &$core): void
+    {
+        $raw = $this->firstHintValue($hints, self::OTHER_RELATIVES_HINT_KEYS);
+        if ($raw === null) {
+            return;
+        }
+
+        $clean = trim(preg_replace('/\s+/u', ' ', $raw) ?? $raw);
+        if ($clean === '' || $this->otherRelativesTextLooksPolluted($clean)) {
+            return;
+        }
+
+        $current = trim((string) ($core['other_relatives_text'] ?? ''));
+        if ($current !== '' && $this->otherRelativesTextLooksPolluted($current)) {
+            $this->setCoreField($core, 'other_relatives_text', $clean, true);
+
+            return;
+        }
+
+        $this->setCoreField($core, 'other_relatives_text', $clean, true);
+    }
+
+    /**
+     * @param  array<string, string>  $hints
+     * @param  array<string, mixed>  $normalized
+     */
+    private function applyPropertySummaryHints(array $hints, array &$normalized): void
+    {
+        $raw = $this->firstHintValue($hints, self::PROPERTY_HINT_KEYS);
+        if ($raw === null) {
+            return;
+        }
+
+        $summary = $this->buildPropertySummary($raw);
+        if ($summary === null) {
+            return;
+        }
+
+        $normalized['property_summary'] = $summary;
+    }
+
+    /**
+     * @param  array<string, string>  $hints
+     * @param  list<string>  $keys
+     */
+    private function firstHintValue(array $hints, array $keys): ?string
+    {
+        foreach ($keys as $key) {
+            if (! isset($hints[$key])) {
+                continue;
+            }
+            $value = trim((string) $hints[$key]);
+            if ($value !== '') {
+                return $value;
+            }
+        }
+
+        return null;
+    }
+
+    private function cleanAddressLine(string $value): string
+    {
+        $value = trim(preg_replace('/\s+/u', ' ', $value) ?? $value);
+        if ($value === '') {
+            return '';
+        }
+
+        if ($this->extractValidPhones($value) !== []) {
+            $value = trim(preg_replace('/(?:मोबाईल|मोबाइल|संपर्क|Mobile|Phone)\s*(?:नं\.?|नंबर|No\.?)?\s*[:\-]?\s*[\d०-९\s\-\/]+/ui', '', $value) ?? $value);
+            $value = trim(preg_replace('/(?<!\d)([6-9]\d{9})(?!\d)/u', '', OcrNormalize::normalizeDigits($value)) ?? $value);
+        }
+
+        if (preg_match('/^(?:मोबाईल|मोबाइल|संपर्क|Print\s*Shop)/ui', $value)) {
+            return '';
+        }
+
+        return trim(preg_replace('/\s+/u', ' ', $value) ?? $value);
+    }
+
+    private function normalizeAddressKey(string $line): string
+    {
+        return mb_strtolower(trim(preg_replace('/\s+/u', ' ', $line) ?? $line));
+    }
+
+    /**
+     * @param  list<array<string, mixed>>  $addresses
+     * @param  array<string, true>  $seen
+     */
+    private function upsertTypedAddress(array &$addresses, string $line, string $type, array &$seen): void
+    {
+        $key = $this->normalizeAddressKey($line);
+        if ($key === '') {
+            return;
+        }
+
+        foreach ($addresses as &$existing) {
+            if (! is_array($existing)) {
+                continue;
+            }
+            $existingLine = trim((string) ($existing['address_line'] ?? $existing['raw'] ?? ''));
+            if ($existingLine === '' || $this->normalizeAddressKey($existingLine) === $key) {
+                $existing['address_line'] = $line;
+                $existing['raw'] = $line;
+                $existing['type'] = $type;
+                $seen[$key] = true;
+                unset($existing);
+
+                return;
+            }
+        }
+        unset($existing);
+
+        if (isset($seen[$key])) {
+            return;
+        }
+
+        $addresses[] = [
+            'address_line' => $line,
+            'raw' => $line,
+            'type' => $type,
+        ];
+        $seen[$key] = true;
+    }
+
+    private function otherRelativesTextLooksPolluted(string $text): bool
+    {
+        foreach (self::OTHER_RELATIVES_POLLUTION as $marker) {
+            if (mb_stripos($text, $marker) !== false) {
+                return true;
+            }
+        }
+
+        if ($this->extractValidPhones($text) !== []) {
+            return true;
+        }
+
+        return (bool) preg_match('/(?:जन्म\s*तारीख|जन्म\s*स्थळ|इतर\s*प्रॉपर्टी)/u', $text);
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    private function buildPropertySummary(string $raw): ?array
+    {
+        $text = trim(preg_replace('/\s+/u', ' ', $raw) ?? $raw);
+        if ($text === '' || $this->isAddressOnlyPropertyText($text)) {
+            return null;
+        }
+
+        $landAcres = null;
+        if (preg_match('/([0-9०-९]+(?:\.[0-9]+)?)\s*(?:एकर|acre|acres)/ui', $text, $m)) {
+            $digits = OcrNormalize::normalizeDigits($m[1]);
+            if (is_numeric($digits)) {
+                $landAcres = (float) $digits;
+            }
+        }
+
+        $ownsHouse = (bool) preg_match('/(?:स्वत[:ः]?च(?:े|्या)|मालकीच(?:े|्या))\s*(?:घर)?/u', $text);
+        $ownsFlat = (bool) preg_match('/(?:flat|bhk|फ्लॅट|फ्लाट|apartment)/ui', $text);
+        $ownsAgriculture = (bool) preg_match('/(?:शेती|बागायत|जमीन|agri|agriculture|land|एकर)/ui', $text);
+
+        if (! $ownsHouse && ! $ownsFlat && ! $ownsAgriculture && $landAcres === null) {
+            return null;
+        }
+
+        return [
+            'owns_house' => $ownsHouse,
+            'owns_flat' => $ownsFlat,
+            'owns_agriculture' => $ownsAgriculture,
+            'total_land_acres' => $landAcres,
+            'summary_text' => $text,
+            'summary_notes' => $text,
+        ];
+    }
+
+    private function isAddressOnlyPropertyText(string $text): bool
+    {
+        return (bool) preg_match('/^(?:घरचा\s+पत्ता|घराचा\s+पत्ता|सध्याचा\s+पत्ता|गावचा\s+पत्ता|मु\.?\s*पो\.?)/u', $text)
+            && ! preg_match('/(?:स्वत[:ः]?च(?:े|्या)|मालकीच(?:े|्या)|flat|bhk|फ्लॅट|शेती|बागायत|जमीन|एकर)/ui', $text);
     }
 }
