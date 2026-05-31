@@ -145,4 +145,15 @@ return [
     | Env: INTAKE_DEBUG_SHOW_STORED_RAW_OCR=true
     */
     'debug_show_stored_raw_ocr' => filter_var(env('INTAKE_DEBUG_SHOW_STORED_RAW_OCR', false), FILTER_VALIDATE_BOOLEAN),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Normalized draft parser (rules-only gated alternate path)
+    |--------------------------------------------------------------------------
+    | When true, RulesOnlyBiodataParser uses IntakeNormalizedBiodataDraftBuilder +
+    | IntakeNormalizedDraftToParsedJsonMapper instead of BiodataParserService.
+    | AI-first merge/fallback always passes legacy_rules_only and ignores this flag.
+    | Env: INTAKE_USE_NORMALIZED_DRAFT_PARSER (default false)
+    */
+    'use_normalized_draft_parser' => filter_var(env('INTAKE_USE_NORMALIZED_DRAFT_PARSER', false), FILTER_VALIDATE_BOOLEAN),
 ];

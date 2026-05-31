@@ -71,7 +71,7 @@ class AiFirstBiodataParser implements BiodataParserInterface
                 // for those fields when AI either omits them or leaves null.
                 $rules = null;
                 try {
-                    $rules = $this->rulesParser->parse($rawText, $context);
+                    $rules = $this->rulesParser->parse($rawText, $this->rulesParserContext($context));
                 } catch (\Throwable $e) {
                     // Rules parser is a deterministic enhancement, not a hard dependency for AI-first modes.
                     // If it fails (e.g. missing master-data tables in some environments), keep the AI output.
@@ -361,7 +361,16 @@ class AiFirstBiodataParser implements BiodataParserInterface
         }
 
         // Fallback: rules-only parser.
-        return $this->rulesParser->parse($rawText, $context);
+        return $this->rulesParser->parse($rawText, $this->rulesParserContext($context));
+    }
+
+    /**
+     * @param  array<string, mixed>  $context
+     * @return array<string, mixed>
+     */
+    private function rulesParserContext(array $context): array
+    {
+        return array_merge($context, ['legacy_rules_only' => true]);
     }
 
     /**
