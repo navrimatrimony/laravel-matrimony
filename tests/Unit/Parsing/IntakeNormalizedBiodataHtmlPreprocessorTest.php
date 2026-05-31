@@ -56,6 +56,52 @@ HTML;
         $this->assertStringNotContainsString('<table', $text);
     }
 
+    public function test_two_cell_html_table_values_strip_leading_separators(): void
+    {
+        $html = <<<'HTML'
+<table>
+<tr><td>मुलीचे नाव</td><td>: कु. प्राजक्ता सुभाष पानसरे</td></tr>
+<tr><td>जन्मवेळ</td><td>: दु.१. वा.३८.मि</td></tr>
+<tr><td>जन्मस्थळ</td><td>: एखतपूर ता.सांगोला जि.सोलापुर</td></tr>
+<tr><td>शिक्षण</td><td>: B.D.S</td></tr>
+<tr><td>रक्तगट</td><td>: A-ve</td></tr>
+<tr><td>वर्ण</td><td>: गोरा</td></tr>
+<tr><td>इतर नातेवाईक</td><td>: शेंडे, निकम, पवार</td></tr>
+</table>
+HTML;
+
+        $prepared = app(IntakeNormalizedBiodataHtmlPreprocessor::class)->prepare($html);
+        $hints = $prepared['table_hints'];
+
+        $this->assertSame('कु. प्राजक्ता सुभाष पानसरे', $hints['full_name'] ?? null);
+        $this->assertDoesNotMatchRegularExpression('/^\s*:/u', (string) ($hints['birth_time'] ?? ''));
+        $this->assertDoesNotMatchRegularExpression('/^\s*:/u', (string) ($hints['birth_place'] ?? ''));
+        $this->assertSame('B.D.S', $hints['highest_education'] ?? null);
+        $this->assertSame('A-ve', $hints['blood_group'] ?? null);
+        $this->assertSame('गोरा', $hints['complexion'] ?? null);
+        $this->assertSame('शेंडे, निकम, पवार', $hints['other_relatives_text'] ?? null);
+
+        $draft = app(IntakeNormalizedBiodataDraftBuilder::class)->build($html);
+        $this->assertStringNotContainsString(':- :', (string) ($draft['cleaned_text'] ?? ''));
+    }
+
+    public function test_two_cell_html_table_cleanup_preserves_internal_colons(): void
+    {
+        $html = <<<'HTML'
+<table>
+<tr><td>पत्ता</td><td>रा. सोलापूर: मुख्य बाजार</td></tr>
+<tr><td>जन्म वेळ</td><td>वेळ 10:30</td></tr>
+</table>
+HTML;
+
+        $prepared = app(IntakeNormalizedBiodataHtmlPreprocessor::class)->prepare($html);
+
+        $this->assertSame('रा. सोलापूर: मुख्य बाजार', $prepared['table_hints']['address_current'] ?? null);
+        $this->assertSame('वेळ 10:30', $prepared['table_hints']['birth_time'] ?? null);
+        $this->assertStringContainsString('रा. सोलापूर: मुख्य बाजार', $prepared['text']);
+        $this->assertStringContainsString('वेळ 10:30', $prepared['text']);
+    }
+
     public function test_builder_stores_html_metadata_in_draft_meta_only(): void
     {
         $queries = [];

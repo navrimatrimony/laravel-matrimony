@@ -67,6 +67,41 @@ HTML;
         $this->assertSame('9876543210', (string) ($core['primary_contact_number'] ?? ''));
     }
 
+    public function test_two_cell_html_table_leading_separators_do_not_leak_into_normalized_core(): void
+    {
+        $html = <<<'HTML'
+<table>
+<tr><td>मुलीचे नाव</td><td>: कु. प्राजक्ता सुभाष पानसरे</td></tr>
+<tr><td>जन्म वेळ</td><td>: दु.१. वा.३८.मि</td></tr>
+<tr><td>जन्म स्थळ</td><td>: एखतपूर ता.सांगोला जि.सोलापुर</td></tr>
+<tr><td>शिक्षण</td><td>: B.D.S</td></tr>
+<tr><td>रक्तगट</td><td>: A-ve</td></tr>
+<tr><td>वर्ण</td><td>: गोरा</td></tr>
+<tr><td>इतर नातेवाईक</td><td>: शेंडे, निकम, पवार</td></tr>
+</table>
+HTML;
+
+        $draft = app(IntakeNormalizedBiodataDraftBuilder::class)->build($html);
+        $core = $draft['normalized']['core'] ?? [];
+
+        foreach ([
+            'full_name',
+            'birth_time',
+            'birth_place_text',
+            'highest_education',
+            'blood_group',
+            'complexion',
+            'other_relatives_text',
+        ] as $field) {
+            $this->assertDoesNotMatchRegularExpression('/^\s*:/u', (string) ($core[$field] ?? ''), "{$field} should not start with a colon");
+        }
+
+        $this->assertSame('कु. प्राजक्ता सुभाष पानसरे', $core['full_name'] ?? null);
+        $this->assertSame('B.D.S', $core['highest_education'] ?? null);
+        $this->assertSame('गोरा', $core['complexion'] ?? null);
+        $this->assertSame('शेंडे, निकम, पवार', $core['other_relatives_text'] ?? null);
+    }
+
     public function test_html_table_mobile_excludes_footer_phone_from_contacts(): void
     {
         $html = <<<'HTML'

@@ -102,13 +102,13 @@ final class OcrHtmlTableFlattener
         // <td>Label</td><td>:-</td><td>Value…</td>
         if ($n >= 3 && self::isSeparatorCell($cells[1])) {
             $label = $cells[0];
-            $value = trim(implode(' ', array_slice($cells, 2)));
+            $value = self::cleanValueCell(implode(' ', array_slice($cells, 2)));
 
             return $value === '' ? $label : $label.' :- '.$value;
         }
         if ($n >= 2) {
             $label = $cells[0];
-            $value = trim(implode(' ', array_slice($cells, 1)));
+            $value = self::cleanValueCell(implode(' ', array_slice($cells, 1)));
 
             return $value === '' ? $label : $label.' :- '.$value;
         }
@@ -125,6 +125,14 @@ final class OcrHtmlTableFlattener
 
         return preg_match('/^:?\s*-+\s*$/u', $t) === 1
             || preg_match('/^:?\s*[–—]\s*$/u', $t) === 1;
+    }
+
+    private static function cleanValueCell(string $value): string
+    {
+        $value = trim($value);
+        $value = preg_replace('/^\s*(?::-?\s*|[-–—]\s*)+/u', '', $value) ?? $value;
+
+        return trim($value);
     }
 
     private static function innerText(\DOMElement $el): string

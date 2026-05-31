@@ -150,20 +150,20 @@ final class HtmlMarathiBiodataTableExtractor
         $n = count($cells);
         if ($n === 1) {
             if (preg_match('/^(.+?)\s*[:\-]\s*(.+)$/u', $cells[0], $m)) {
-                return [trim($m[1]), trim($m[2])];
+                return [trim($m[1]), self::cleanValueCell($m[2])];
             }
 
             return [trim($cells[0]), ''];
         }
         if ($n >= 3 && self::isSeparatorCell($cells[1])) {
             $label = $cells[0];
-            $value = trim(implode("\n", array_slice($cells, 2)));
+            $value = self::cleanValueCell(implode("\n", array_slice($cells, 2)));
 
             return [trim($label), $value];
         }
         if ($n >= 2) {
             $label = $cells[0];
-            $value = trim(implode("\n", array_slice($cells, 1)));
+            $value = self::cleanValueCell(implode("\n", array_slice($cells, 1)));
 
             return [trim($label), $value];
         }
@@ -182,6 +182,14 @@ final class HtmlMarathiBiodataTableExtractor
         }
 
         return preg_match('/^:?\s*[\-–—]{1,3}\s*$/u', $t) === 1;
+    }
+
+    private static function cleanValueCell(string $value): string
+    {
+        $value = trim($value);
+        $value = preg_replace('/^\s*(?::-?\s*|[-–—]\s*)+/u', '', $value) ?? $value;
+
+        return trim($value);
     }
 
     private static function innerText(\DOMElement $el): string
