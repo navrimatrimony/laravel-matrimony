@@ -6,12 +6,17 @@ use App\Services\Ocr\OcrNormalize;
 
 class IntakeNormalizedBiodataDraftBuilder
 {
+    private const LABEL_SUFFIX = '(?:[\s:：\-\.]|$)';
+
+    private bool $candidateNameFromFallback = false;
+
     /**
      * @param  array<string, mixed>  $context
      * @return array<string, mixed>
      */
     public function build(string $rawText, array $context = []): array
     {
+        $this->candidateNameFromFallback = false;
         $cleanedText = $this->cleanText($rawText);
         $sections = $this->splitSections($cleanedText);
         $normalized = $this->normalizeSectionValues($sections);
@@ -62,14 +67,21 @@ class IntakeNormalizedBiodataDraftBuilder
     {
         $sections = $this->emptySections();
         $current = 'candidate';
+        $relativesClosed = false;
         foreach (explode("\n", $cleanedText) as $line) {
             $line = trim($line);
             if ($line === '') {
                 continue;
             }
-            $detected = $this->detectSection($line, $current);
+            if ($this->isHardSectionBoundary($line)) {
+                $relativesClosed = true;
+            }
+            $detected = $this->detectSection($line, $current, $relativesClosed);
             if ($detected !== null) {
                 $current = $detected;
+            }
+            if ($current === 'relatives' && $relativesClosed) {
+                continue;
             }
             $this->appendLine($sections, $current, $line);
         }
@@ -116,7 +128,7 @@ class IntakeNormalizedBiodataDraftBuilder
         }
 
         foreach (($sections['relatives']['lines'] ?? []) as $line) {
-            if ($this->startsAddressPropertyOrContact($line) || $this->startsPahune($line)) {
+            if ($this->isHardSectionBoundary($line) || $this->startsPahune($line)) {
                 continue;
             }
             if (preg_match('/^(?:मामा|मावशी|आत्या|चुलत\s+भाऊ|नातेसंबंध)\s*[:\-]\s*(.+)$/u', $line, $m)) {
@@ -124,6 +136,11 @@ class IntakeNormalizedBiodataDraftBuilder
                 if ($name !== '') {
                     $relatives[] = ['name' => $name, 'raw' => $line];
                 }
+
+                continue;
+            }
+            if (preg_match('/^(?:श्री\.|कै\.|डॉ\.|श्री\s)/u', $line)) {
+                $relatives[] = ['name' => trim($line), 'raw' => $line];
             }
         }
 
@@ -160,6 +177,9 @@ class IntakeNormalizedBiodataDraftBuilder
         }
         if (($core['full_name'] ?? null) !== null && in_array($core['full_name'], [$core['father_name'] ?? null, $core['mother_name'] ?? null], true)) {
             $flags[] = ['field' => 'core.full_name', 'reason' => 'suspicious_candidate_name_matches_parent', 'raw' => (string) $core['full_name']];
+        }
+        if ($this->candidateNameFromFallback && ($core['full_name'] ?? null) !== null) {
+            $flags[] = ['field' => 'core.full_name', 'reason' => 'candidate_name_from_heading_fallback', 'raw' => (string) $core['full_name']];
         }
         foreach (($draft['normalized']['relatives'] ?? []) as $relative) {
             $blob = implode(' ', array_map('strval', is_array($relative) ? $relative : []));
@@ -221,17 +241,16 @@ class IntakeNormalizedBiodataDraftBuilder
         ];
     }
 
-    private function detectSection(string $line, string $current): ?string
+    private function detectSection(string $line, string $current, bool $relativesClosed = false): ?string
     {
-        if ($this->startsAddressPropertyOrContact($line)) {
-            if (preg_match('/^(?:संपर्क|मोबाईल|मोबाइल|Mobile|Phone)/ui', $line)) {
-                return 'contacts';
-            }
-            if (preg_match('/^(?:प्रोपर्टी|प्रॉपर्टी|स्थावर|शेती|प्लॉट|फ्लॅट|घर)\b/u', $line)) {
-                return 'property';
-            }
-
+        if ($this->startsAddressLine($line)) {
             return 'addresses';
+        }
+        if ($this->startsContactLine($line)) {
+            return 'contacts';
+        }
+        if ($this->startsPropertyLine($line)) {
+            return 'property';
         }
         if ($this->startsPahune($line)) {
             return 'family';
@@ -242,13 +261,13 @@ class IntakeNormalizedBiodataDraftBuilder
         if (preg_match('/^(?:कौटुंबिक\s+माहिती|कौटुंबिक\s+तपशील)/u', $line)) {
             return 'family';
         }
-        if (preg_match('/^(?:रास|राशी|नक्षत्र|देवक|कुलदैवत)\b/u', $line)) {
+        if (preg_match('/^(?:रास|राशी|नक्षत्र|देवक|कुलदैवत)'.self::LABEL_SUFFIX.'/u', $line)) {
             return 'horoscope';
         }
-        if (preg_match('/^(?:शिक्षण|नोकरी|व्यवसाय|वेतन|उत्पन्न|नोकरी\/व्यवसाय)\b/u', $line)) {
+        if (preg_match('/^(?:शिक्षण|नोकरी|व्यवसाय|वेतन|उत्पन्न|नोकरी\/व्यवसाय)'.self::LABEL_SUFFIX.'/u', $line)) {
             return 'education_career';
         }
-        if (preg_match('/^(?:मामा|मावशी|आत्या|चुलत\s+भाऊ|नातेसंबंध)\b/u', $line)) {
+        if (! $relativesClosed && preg_match('/^(?:मामा|मावशी|आत्या|चुलत\s+भाऊ|नातेसंबंध)'.self::LABEL_SUFFIX.'/u', $line)) {
             return 'relatives';
         }
 
@@ -301,15 +320,41 @@ class IntakeNormalizedBiodataDraftBuilder
                 return $this->cleanPersonName($m[1]);
             }
         }
-        foreach ($allLines as $line) {
-            $t = trim(preg_replace('/^#{1,6}\s*/u', '', trim($line)) ?? trim($line));
-            if (preg_match('/^(?:पित्याचे|वडिलांचे|वडीलांचे|आईचे|मातेचे|मामा|मावशी|आत्या)\s+नां?व/u', $t)) {
+
+        $parentRelativeNames = $this->extractParentRelativeNames($allLines);
+        $hasBiodataContext = $this->hasBiodataCandidateContext($allLines);
+
+        foreach ($allLines as $index => $line) {
+            if (preg_match('/^#{1,6}\s*(.+)$/u', trim($line), $m)) {
+                $headingName = $this->cleanPersonName($m[1]);
+                if ($this->isPlausibleCandidateName($headingName)
+                    && ! $this->isParentRelativeName($headingName, $parentRelativeNames)
+                    && ! $this->lineHasRelativeContextMarker($line, $allLines, $index)
+                    && $hasBiodataContext) {
+                    $this->candidateNameFromFallback = true;
+
+                    return $headingName;
+                }
+            }
+        }
+
+        foreach ($allLines as $index => $line) {
+            if ($this->isParentRelativeLabelLine($line) || $this->lineHasRelativeContextMarker($line, $allLines, $index)) {
                 continue;
             }
-            if (preg_match('/^([\p{L}\p{M}.]+\s+[\p{L}\p{M}.]+(?:\s+[\p{L}\p{M}.]+){0,3})$/u', $t, $m)
-                && ! preg_match('/बायोडाटा|वैयक्तिक|कौटुंबिक|श्री\s+साई|गणेश|प्रसन्न/u', $t)) {
-                return $this->cleanPersonName($m[1]);
+            $t = trim(preg_replace('/^#{1,6}\s*/u', '', trim($line)) ?? trim($line));
+            if (! $this->isPlausibleCandidateName($t) || preg_match('/बायोडाटा|वैयक्तिक|कौटुंबिक|श्री\s+साई|गणेश|प्रसन्न/u', $t)) {
+                continue;
             }
+            if ($this->isParentRelativeName($t, $parentRelativeNames)) {
+                continue;
+            }
+            if (! $hasBiodataContext && ! preg_match('/^#{1,6}\s/u', trim($line))) {
+                continue;
+            }
+            $this->candidateNameFromFallback = true;
+
+            return $this->cleanPersonName($t);
         }
 
         return null;
@@ -465,16 +510,20 @@ class IntakeNormalizedBiodataDraftBuilder
      */
     private function extractAddressLine(string $line, array &$addresses): void
     {
-        if (! preg_match('/^(?:घरचा\s+पत्ता|सध्याचा\s+पत्ता|गावचा\s+पत्ता|मुळगाव|मूळगाव)\s*(?::\s*-\s*|[:\-]\s*)(.+)$/u', $line, $m)) {
+        if (! preg_match('/^(?:घरचा\s+पत्ता|घराचा\s+पत्ता|घर\s+पत्ता|सध्याचा\s+पत्ता|गावचा\s+पत्ता|मुळगाव|मूळगाव)\s*(?::\s*-\s*|[:\-]\s*)(.+)$/u', $line, $m)) {
             return;
         }
-        $address = preg_split('/\s+(?:मोबाईल|मोबाइल|संपर्क|प्रोपर्टी|प्रॉपर्टी|स्थावर|कौटुंबिक)\b/u', trim($m[1]), 2)[0] ?? trim($m[1]);
+        $address = preg_split('/\s+(?:मोबाईल|मोबाइल|संपर्क|प्रोपर्टी|प्रॉपर्टी|स्थावर|कौटुंबिक)'.self::LABEL_SUFFIX.'/u', trim($m[1]), 2)[0] ?? trim($m[1]);
         $addresses[] = ['raw' => trim($address), 'address_line' => trim($address)];
     }
 
     private function extractPropertyLine(string $line, mixed &$propertySummary): void
     {
-        if (! preg_match('/^(?:प्रोपर्टी|प्रॉपर्टी|स्थावर|शेती|प्लॉट|फ्लॅट|घर)\s*[:\-]?\s*(.*)$/u', $line, $m)) {
+        if ($this->startsAddressLine($line)) {
+            return;
+        }
+        $isProperty = $this->startsPropertyLine($line) || $this->containsPropertyOwnershipSignal($line);
+        if (! $isProperty) {
             return;
         }
         $text = trim($line);
@@ -485,7 +534,7 @@ class IntakeNormalizedBiodataDraftBuilder
 
     private function extractHoroscopeLine(string $line, mixed &$horoscope): void
     {
-        if (! preg_match('/^(?:रास|राशी|नक्षत्र|देवक|कुलदैवत)\b/u', $line)) {
+        if (! preg_match('/^(?:रास|राशी|नक्षत्र|देवक|कुलदैवत)'.self::LABEL_SUFFIX.'/u', $line)) {
             return;
         }
         $horoscope = is_array($horoscope) ? $horoscope : ['raw' => []];
@@ -575,14 +624,123 @@ class IntakeNormalizedBiodataDraftBuilder
         return (bool) preg_match('/^(?:एक|१|1)(?:\s*\(?\s*अविवाहित\s*\)?)?$/u', $value);
     }
 
-    private function startsAddressPropertyOrContact(string $line): bool
+    private function startsAddressLine(string $line): bool
     {
-        return (bool) preg_match('/^(?:घरचा\s+पत्ता|सध्याचा\s+पत्ता|गावचा\s+पत्ता|मुळगाव|मूळगाव|मोबाईल|मोबाइल|संपर्क|Mobile|Phone|प्रोपर्टी|प्रॉपर्टी|स्थावर|शेती|प्लॉट|फ्लॅट|घर)\b/ui', $line);
+        return (bool) preg_match('/^(?:घरचा\s+पत्ता|घराचा\s+पत्ता|घर\s+पत्ता|सध्याचा\s+पत्ता|गावचा\s+पत्ता|मुळगाव|मूळगाव)'.self::LABEL_SUFFIX.'/u', $line);
+    }
+
+    private function startsContactLine(string $line): bool
+    {
+        return (bool) preg_match('/^(?:मोबाईल|मोबाइल|संपर्क|Mobile|Phone)(?:[\s:：\-\.]|$)/ui', $line);
+    }
+
+    private function startsPropertyLine(string $line): bool
+    {
+        if ($this->startsAddressLine($line)) {
+            return false;
+        }
+        if (preg_match('/^(?:प्रोपर्टी|प्रॉपर्टी|स्थावर|शेती|प्लॉट|फ्लॅट|बंगला)'.self::LABEL_SUFFIX.'/u', $line)) {
+            return true;
+        }
+        if (preg_match('/^(?:स्वत[:ः]?चे\s+घर|मालकीचे\s+घर)'.self::LABEL_SUFFIX.'/u', $line)) {
+            return true;
+        }
+        if (preg_match('/^घर'.self::LABEL_SUFFIX.'/u', $line) && $this->containsPropertyOwnershipSignal($line)) {
+            return true;
+        }
+
+        return false;
+    }
+
+    private function containsPropertyOwnershipSignal(string $line): bool
+    {
+        return (bool) preg_match('/(?:स्वत[:ः]?च(?:े|्या)|मालकीच(?:े|्या)|बंगला|फ्लॅट|प्लॉट|स्थावर|शेती)\s*(?:घर)?/u', $line);
+    }
+
+    private function isHardSectionBoundary(string $line): bool
+    {
+        return $this->startsAddressLine($line)
+            || $this->startsContactLine($line)
+            || $this->startsPropertyLine($line)
+            || $this->startsPahune($line)
+            || (bool) preg_match('/^(?:नातेसंबंध|शिक्षण|नोकरी|व्यवसाय|वेतन|उत्पन्न)'.self::LABEL_SUFFIX.'/u', $line);
     }
 
     private function startsPahune(string $line): bool
     {
-        return (bool) preg_match('/^पाहुणे\b/u', $line);
+        return (bool) preg_match('/^पाहुणे'.self::LABEL_SUFFIX.'/u', $line);
+    }
+
+    /**
+     * @param  list<string>  $allLines
+     * @return list<string>
+     */
+    private function extractParentRelativeNames(array $allLines): array
+    {
+        $names = [];
+        foreach ($allLines as $line) {
+            if (preg_match('/^(?:पित्याचे|वडिलांचे|वडीलांचे|वडील)\s+नां?व\s*(?::\s*-\s*|[:\-]\s*)(.+)$/u', $line, $m)) {
+                $names[] = $this->cleanPersonName($this->splitNameOccupation($m[1])[0]);
+            }
+            if (preg_match('/^(?:आईचे|मातेचे|आई)\s+नां?व\s*(?::\s*-\s*|[:\-]\s*)(.+)$/u', $line, $m)) {
+                $names[] = $this->cleanPersonName($this->splitNameOccupation($m[1])[0]);
+            }
+            if (preg_match('/^(?:मामा|मावशी|आत्या|चुलत|जावई|पाहुणे|नातेसंबंध)\s*[:\-]\s*(.+)$/u', $line, $m)) {
+                $names[] = $this->cleanPersonName(trim($m[1]));
+            }
+        }
+
+        return array_values(array_filter(array_unique($names)));
+    }
+
+    /**
+     * @param  list<string>  $allLines
+     */
+    private function hasBiodataCandidateContext(array $allLines): bool
+    {
+        $blob = implode("\n", $allLines);
+
+        return (bool) preg_match('/(?:बायोडाटा|मुलाचे\s+नां?व|मुलीचे\s+नां?व|वधूचे\s+नां?व|(?:पित्याचे|वडील|आईचे|मातेचे)\s+नां?व|(?:जात|कास्ट)|#{1,6}\s+[\p{L}])/u', $blob);
+    }
+
+    private function isParentRelativeLabelLine(string $line): bool
+    {
+        return (bool) preg_match('/^(?:पित्याचे|वडिलांचे|वडीलांचे|वडील|आईचे|मातेचे|आई|मामा|मावशी|आत्या|चुलत|जावई|पाहुणे|नातेसंबंध)'.self::LABEL_SUFFIX.'/u', $line);
+    }
+
+    /**
+     * @param  list<string>  $allLines
+     */
+    private function lineHasRelativeContextMarker(string $line, array $allLines, int $index): bool
+    {
+        $window = [];
+        for ($i = max(0, $index - 2); $i <= min(count($allLines) - 1, $index + 2); $i++) {
+            $window[] = $allLines[$i];
+        }
+        $blob = implode("\n", $window);
+
+        return (bool) preg_match('/(?:वडील|पित्याचे|आई|मामा|मावशी|आत्या|चुलत|पाहुणे|नातेसंबंध|जावई)(?:[\s:：\-\.]|$)/u', $blob)
+            && ! preg_match('/^#{1,6}\s/u', trim($line));
+    }
+
+    private function isPlausibleCandidateName(string $value): bool
+    {
+        return (bool) preg_match('/^([\p{L}\p{M}.]+\s+[\p{L}\p{M}.]+(?:\s+[\p{L}\p{M}.]+){0,3})$/u', trim($value));
+    }
+
+    /**
+     * @param  list<string>  $parentRelativeNames
+     */
+    private function isParentRelativeName(string $candidate, array $parentRelativeNames): bool
+    {
+        $candidate = $this->cleanPersonName($candidate);
+        foreach ($parentRelativeNames as $name) {
+            if ($candidate === $name || str_contains($name, $candidate) || str_contains($candidate, $name)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private function candidateHonorificConflictsWithFemale(string $candidateText): bool

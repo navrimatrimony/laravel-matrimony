@@ -92,6 +92,7 @@ TXT);
         $this->assertSame('मोहनराव गणपतराव जगताप', $core['father_name']);
         $this->assertSame('मराठा', $core['caste']);
         $this->assertSame('96 कुळी', OcrNormalize::normalizeDigits((string) $core['sub_caste']));
+        $this->assertTrue($this->hasReviewFlag($draft, 'core.full_name', 'candidate_name_from_heading_fallback'));
 
         $phones = $this->phones($draft);
         $this->assertContains('9870879727', $phones);
@@ -112,6 +113,112 @@ TXT);
         $this->assertStringNotContainsString('प्रोपर्टी', $relativeBlob);
         $this->assertStringNotContainsString('मोबाईल', $relativeBlob);
         $this->assertStringNotContainsString('गावचा पत्ता', $relativeBlob);
+    }
+
+    public function test_candidate_heading_rejects_parent_and_relative_names(): void
+    {
+        $draft = app(IntakeNormalizedBiodataDraftBuilder::class)->build(<<<'TXT'
+पित्याचे नाव :- मोहनराव गणपतराव जगताप
+आईचे नाव :- अनिता मोहनराव जगताप
+मामा :- डॉ. वसंतराव मोरे पाटील
+
+## महेशकुमार मोहन जगताप
+TXT);
+
+        $core = $draft['normalized']['core'];
+        $this->assertSame('महेशकुमार मोहन जगताप', $core['full_name']);
+        $this->assertNotSame($core['father_name'], $core['full_name']);
+        $this->assertNotSame($core['mother_name'], $core['full_name']);
+        $this->assertStringNotContainsString('वसंतराव', (string) $core['full_name']);
+    }
+
+    public function test_gharcha_patta_is_address_not_property(): void
+    {
+        $draft = app(IntakeNormalizedBiodataDraftBuilder::class)->build(<<<'TXT'
+घरचा पत्ता :- मु. पो. समडोळी, ता. मिरज, जि. सांगली
+TXT);
+
+        $addressBlob = implode(' ', array_map(
+            static fn ($row) => implode(' ', array_map('strval', is_array($row) ? $row : [])),
+            $draft['normalized']['addresses']
+        ));
+        $this->assertStringContainsString('समडोळी', $addressBlob);
+
+        $propertySummary = (string) ($draft['normalized']['property_summary']['summary_text'] ?? '');
+        $this->assertStringNotContainsString('समडोळी', $propertySummary);
+        $this->assertStringNotContainsString('घरचा पत्ता', $propertySummary);
+    }
+
+    public function test_svatache_ghar_is_property_with_address(): void
+    {
+        $draft = app(IntakeNormalizedBiodataDraftBuilder::class)->build(<<<'TXT'
+सध्याचा पत्ता : स्वराज्य कॉलनी, संगमनगर.
+(स्व:ताच्या मालकीचे घर.)
+TXT);
+
+        $addressBlob = implode(' ', array_map(
+            static fn ($row) => implode(' ', array_map('strval', is_array($row) ? $row : [])),
+            $draft['normalized']['addresses']
+        ));
+        $this->assertStringContainsString('स्वराज्य कॉलनी', $addressBlob);
+
+        $propertySummary = (string) ($draft['normalized']['property_summary']['summary_text'] ?? '');
+        $this->assertMatchesRegularExpression('/मालकीच(?:े|्या)\s*घर/u', $propertySummary);
+    }
+
+    public function test_relative_block_stops_before_address_pahune_and_mobile(): void
+    {
+        $draft = app(IntakeNormalizedBiodataDraftBuilder::class)->build(<<<'TXT'
+मावशी :- कै. संजय बापुसो शिंदे ( समडोळी )
+श्री. ऋषिकेश मोहन सावंत ( कुंडल )
+श्री. नंदकुमार बाळासो जाधव ( शिरोळ )
+घरचा पत्ता :- मु. पो. समडोळी , ता. मिरज , जि. सांगली.
+पाहुणे :- तातुगडे - देशमुख
+मोबाइल नंबर :- 9860956022 / 8668270153
+TXT);
+
+        $this->assertGreaterThanOrEqual(1, count($draft['normalized']['relatives']));
+
+        foreach ($draft['normalized']['relatives'] as $relative) {
+            $blob = implode(' ', array_map('strval', is_array($relative) ? $relative : []));
+            $this->assertStringNotContainsString('घरचा पत्ता', $blob);
+            $this->assertStringNotContainsString('पाहुणे', $blob);
+            $this->assertStringNotContainsString('मोबाइल नंबर', $blob);
+            $this->assertStringNotContainsString('मोबाइल', $blob);
+        }
+
+        $phones = $this->phones($draft);
+        $this->assertContains('9860956022', $phones);
+        $this->assertContains('8668270153', $phones);
+    }
+
+    public function test_caste_without_religion_remains_review_safe(): void
+    {
+        $draft = app(IntakeNormalizedBiodataDraftBuilder::class)->build(<<<'TXT'
+कास्ट :- ९६ कुळी मराठा
+TXT);
+
+        $core = $draft['normalized']['core'];
+        $this->assertSame('मराठा', $core['caste']);
+        $this->assertSame('96 कुळी', OcrNormalize::normalizeDigits((string) $core['sub_caste']));
+        $this->assertNull($core['religion']);
+        $this->assertTrue($this->hasReviewFlag($draft, 'core.religion', 'missing_critical'));
+    }
+
+    public function test_clean_text_preserves_useful_symbols_in_real_biodata_lines(): void
+    {
+        $draft = app(IntakeNormalizedBiodataDraftBuilder::class)->build(<<<'TXT'
+नोकरी :- सांगली जि. म. सह. बँक लि. (क्लर्क परमनंट)
+शिक्षण :- M.com (G.D.C & A)
+मोबाईल नं : 73509 53384/ 96733 50078
+TXT);
+
+        $this->assertStringContainsString('G.D.C & A', $draft['cleaned_text']);
+        $this->assertStringContainsString('क्लर्क परमनंट', $draft['cleaned_text']);
+
+        $phones = $this->phones($draft);
+        $this->assertContains('7350953384', $phones);
+        $this->assertContains('9673350078', $phones);
     }
 
     /**
