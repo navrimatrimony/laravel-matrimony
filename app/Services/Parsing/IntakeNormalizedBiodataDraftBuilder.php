@@ -34,6 +34,7 @@ class IntakeNormalizedBiodataDraftBuilder
             'normalized' => $normalized,
             'review_flags' => [],
         ];
+        $draft = app(IntakeHtmlTableHintApplier::class)->apply($draft);
         $draft['review_flags'] = $this->buildReviewFlags($draft);
 
         return $draft;
