@@ -5468,6 +5468,29 @@ class BiodataParserService
         }
 
         $split = \App\Services\Intake\ParentsBiodataAddressSplitter::split($raw);
+        if (! $this->isDetailedParentsResidenceAddress($raw)) {
+            foreach ($split['phones'] as $i => $phone) {
+                if ($i === 0 && empty($core['father_contact_1'])) {
+                    $core['father_contact_1'] = $phone;
+                } elseif ($i === 1 && empty($core['father_contact_2'])) {
+                    $core['father_contact_2'] = $phone;
+                } elseif ($i === 2 && empty($core['father_contact_3'] ?? null)
+                    && \Illuminate\Support\Facades\Schema::hasColumn('matrimony_profiles', 'father_contact_3')) {
+                    $core['father_contact_3'] = $phone;
+                }
+            }
+
+            $extra = $split['address_line'];
+            if ($split['location_text'] !== '') {
+                $extra = $extra !== '' ? $extra.', '.$split['location_text'] : $split['location_text'];
+            }
+            if ($extra === '') {
+                $extra = trim(preg_replace('/^मु\.?\s*पो\.?\s*:?\s*/u', '', $raw) ?? $raw);
+            }
+            $this->assignFatherExtraInfo($core, $extra);
+
+            return [];
+        }
         foreach ($split['phones'] as $i => $phone) {
             if ($i === 0 && empty($core['father_contact_1'])) {
                 $core['father_contact_1'] = $phone;
@@ -5491,6 +5514,62 @@ class BiodataParserService
             'address_type_key' => 'permanent',
             'address_scope' => 'parents',
         ]];
+    }
+
+    /**
+     * Village-style father मु. पो. (गाव/ता./जि. only) → father_extra_info; detailed residence → parents_addresses.
+     */
+    private function isDetailedParentsResidenceAddress(string $addressText): bool
+    {
+        $t = trim(preg_replace('/\s+/u', ' ', $addressText));
+        if ($t === '') {
+            return false;
+        }
+
+        if (preg_match('/\d/u', $t)) {
+            return true;
+        }
+
+        return preg_match(
+            '/वॉर्ड|वार्ड|Ward|'
+            .'पेठ|गल्ली|गलि\.|'
+            .'Flat|House|Building|Road|Colony|'
+            .'नगर|CHS|H\.?\s*No|'
+            .'घर\s*नं|Plot|बँगला|'
+            .'अपार्ट|apartment|'
+            .'society|सोसायटी|'
+            .'मार्ग|रस्ता|'
+            .'lane|Lane|'
+            .'complex|कॉम्प|'
+            .'ए\s*वॉर्ड/iu',
+            $t
+        ) === 1;
+    }
+
+    /**
+     * @param  array<string, mixed>  $core
+     */
+    private function assignFatherExtraInfo(array &$core, string $value): void
+    {
+        $value = trim(preg_replace('/\s+/u', ' ', $value));
+        if ($value === '') {
+            return;
+        }
+        if (mb_strlen($value) > 255) {
+            $value = mb_substr($value, 0, 255);
+        }
+
+        $existing = trim((string) ($core['father_extra_info'] ?? ''));
+        if ($existing === '') {
+            $core['father_extra_info'] = $value;
+
+            return;
+        }
+        if ($existing === $value || str_contains($existing, $value)) {
+            return;
+        }
+        $combined = $existing.', '.$value;
+        $core['father_extra_info'] = mb_strlen($combined) > 255 ? mb_substr($combined, 0, 255) : $combined;
     }
 
     /**
