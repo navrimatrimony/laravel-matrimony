@@ -25,7 +25,8 @@ final class IntakePreviewNormalizedDraftPresenter
      *     available: bool,
      *     skipped_reason: ?string,
      *     build_error: ?string,
-     *     sections: array<string, list<array{label: string, value: string}>>,
+     *     review_flags_by_field: array<string, list<array{reason: string, raw: string}>>,
+     *     sections: array<string, list<array{label: string, value: string, field: ?string, needs_review: bool, review_reason: ?string, review_hint: ?string}>>,
      *     raw_draft_json: ?string
      * }
      */
@@ -44,19 +45,21 @@ final class IntakePreviewNormalizedDraftPresenter
             $normalized = is_array($draft['normalized'] ?? null) ? $draft['normalized'] : [];
             $core = is_array($normalized['core'] ?? null) ? $normalized['core'] : [];
             $flags = is_array($draft['review_flags'] ?? null) ? $draft['review_flags'] : [];
+            $reviewMap = $this->buildReviewMap($flags);
 
             return [
                 'available' => true,
                 'skipped_reason' => null,
                 'build_error' => null,
+                'review_flags_by_field' => $reviewMap,
                 'sections' => [
-                    'personal' => $this->personalRows($core),
-                    'family' => $this->familyRows($core, $normalized),
-                    'contacts' => $this->contactRows($core, $normalized),
-                    'addresses' => $this->addressRows($core, $normalized),
-                    'property' => $this->propertyRows($normalized),
-                    'horoscope' => $this->horoscopeRows($normalized),
-                    'relatives' => $this->relativeRows($core, $normalized),
+                    'personal' => $this->personalRows($core, $reviewMap),
+                    'family' => $this->familyRows($core, $normalized, $reviewMap),
+                    'contacts' => $this->contactRows($core, $normalized, $reviewMap),
+                    'addresses' => $this->addressRows($core, $normalized, $reviewMap),
+                    'property' => $this->propertyRows($normalized, $reviewMap),
+                    'horoscope' => $this->horoscopeRows($normalized, $reviewMap),
+                    'relatives' => $this->relativeRows($core, $normalized, $reviewMap),
                     'review_needed' => $this->reviewRows($flags),
                 ],
                 'raw_draft_json' => config('app.debug')
@@ -70,6 +73,7 @@ final class IntakePreviewNormalizedDraftPresenter
                 'available' => false,
                 'skipped_reason' => null,
                 'build_error' => $e->getMessage(),
+                'review_flags_by_field' => [],
                 'sections' => $this->emptySections(),
                 'raw_draft_json' => null,
             ];
@@ -81,7 +85,8 @@ final class IntakePreviewNormalizedDraftPresenter
      *     available: bool,
      *     skipped_reason: ?string,
      *     build_error: ?string,
-     *     sections: array<string, list<array{label: string, value: string}>>,
+     *     review_flags_by_field: array<string, list<array{reason: string, raw: string}>>,
+     *     sections: array<string, list<array{label: string, value: string, field: ?string, needs_review: bool, review_reason: ?string, review_hint: ?string}>>,
      *     raw_draft_json: ?string
      * }
      */
@@ -91,13 +96,14 @@ final class IntakePreviewNormalizedDraftPresenter
             'available' => false,
             'skipped_reason' => $reason,
             'build_error' => null,
+            'review_flags_by_field' => [],
             'sections' => $this->emptySections(),
             'raw_draft_json' => null,
         ];
     }
 
     /**
-     * @return array<string, list<array{label: string, value: string}>>
+     * @return array<string, list<array{label: string, value: string, field: ?string, needs_review: bool, review_reason: ?string, review_hint: ?string}>>
      */
     private function emptySections(): array
     {
@@ -114,10 +120,63 @@ final class IntakePreviewNormalizedDraftPresenter
     }
 
     /**
-     * @param  array<string, mixed>  $core
-     * @return list<array{label: string, value: string}>
+     * @param  list<array<string, mixed>>  $flags
+     * @return array<string, list<array{reason: string, raw: string}>>
      */
-    private function personalRows(array $core): array
+    private function buildReviewMap(array $flags): array
+    {
+        $map = [];
+        foreach ($flags as $flag) {
+            if (! is_array($flag)) {
+                continue;
+            }
+            $field = $this->stringify($flag['field'] ?? null);
+            if ($field === '') {
+                continue;
+            }
+            $map[$field][] = [
+                'reason' => $this->stringify($flag['reason'] ?? null),
+                'raw' => $this->stringify($flag['raw'] ?? null),
+            ];
+        }
+
+        return $map;
+    }
+
+    /**
+     * @param  array<string, list<array{reason: string, raw: string}>>  $reviewMap
+     * @return array{label: string, value: string, field: ?string, needs_review: bool, review_reason: ?string, review_hint: ?string}
+     */
+    private function displayRow(string $label, string $value, ?string $reviewFieldKey, array $reviewMap): array
+    {
+        $needsReview = false;
+        $reviewReason = null;
+        $reviewHint = null;
+
+        if ($reviewFieldKey !== null && isset($reviewMap[$reviewFieldKey])) {
+            $needsReview = true;
+            $reviewReason = $reviewMap[$reviewFieldKey][0]['reason'] ?? null;
+            if ($reviewReason === 'candidate_name_from_heading_fallback' && $reviewFieldKey === 'core.full_name') {
+                $reviewHint = __('intake.normalized_draft_full_name_fallback_hint');
+            }
+        }
+
+        return [
+            'label' => $label,
+            'value' => $value,
+            'field' => $reviewFieldKey,
+            'needs_review' => $needsReview,
+            'review_reason' => $reviewReason !== '' ? $reviewReason : null,
+            'review_hint' => $reviewHint,
+        ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $core
+     * @param  array<string, list<array{reason: string, raw: string}>>  $reviewMap
+     * @return list<array{label: string, value: string, field: ?string, needs_review: bool, review_reason: ?string, review_hint: ?string}>
+     */
+    private function personalRows(array $core, array $reviewMap): array
     {
         $rows = [];
         foreach (self::PERSONAL_FIELDS as $field) {
@@ -125,10 +184,12 @@ final class IntakePreviewNormalizedDraftPresenter
             if ($value === '') {
                 continue;
             }
-            $rows[] = [
-                'label' => $this->fieldLabel($field),
-                'value' => $field === 'height_cm' ? $this->formatHeight($value) : $value,
-            ];
+            $rows[] = $this->displayRow(
+                $this->fieldLabel($field),
+                $field === 'height_cm' ? $this->formatHeight($value) : $value,
+                'core.'.$field,
+                $reviewMap
+            );
         }
 
         return $rows;
@@ -137,15 +198,16 @@ final class IntakePreviewNormalizedDraftPresenter
     /**
      * @param  array<string, mixed>  $core
      * @param  array<string, mixed>  $normalized
-     * @return list<array{label: string, value: string}>
+     * @param  array<string, list<array{reason: string, raw: string}>>  $reviewMap
+     * @return list<array{label: string, value: string, field: ?string, needs_review: bool, review_reason: ?string, review_hint: ?string}>
      */
-    private function familyRows(array $core, array $normalized): array
+    private function familyRows(array $core, array $normalized, array $reviewMap): array
     {
         $rows = [];
         foreach (['father_name', 'father_occupation', 'father_extra_info', 'mother_name', 'mother_occupation'] as $field) {
             $value = $this->stringify($core[$field] ?? null);
             if ($value !== '') {
-                $rows[] = ['label' => $this->fieldLabel($field), 'value' => $value];
+                $rows[] = $this->displayRow($this->fieldLabel($field), $value, 'core.'.$field, $reviewMap);
             }
         }
 
@@ -153,7 +215,7 @@ final class IntakePreviewNormalizedDraftPresenter
             if (! array_key_exists($field, $core) || $core[$field] === null || $core[$field] === '') {
                 continue;
             }
-            $rows[] = ['label' => $this->fieldLabel($field), 'value' => (string) $core[$field]];
+            $rows[] = $this->displayRow($this->fieldLabel($field), (string) $core[$field], 'core.'.$field, $reviewMap);
         }
 
         foreach ($normalized['siblings'] ?? [] as $index => $sibling) {
@@ -170,10 +232,12 @@ final class IntakePreviewNormalizedDraftPresenter
             if ($parts === []) {
                 continue;
             }
-            $rows[] = [
-                'label' => __('intake.normalized_draft_sibling_row', ['n' => $index + 1]),
-                'value' => implode(' · ', $parts),
-            ];
+            $rows[] = $this->displayRow(
+                __('intake.normalized_draft_sibling_row', ['n' => $index + 1]),
+                implode(' · ', $parts),
+                null,
+                $reviewMap
+            );
         }
 
         return $rows;
@@ -182,14 +246,20 @@ final class IntakePreviewNormalizedDraftPresenter
     /**
      * @param  array<string, mixed>  $core
      * @param  array<string, mixed>  $normalized
-     * @return list<array{label: string, value: string}>
+     * @param  array<string, list<array{reason: string, raw: string}>>  $reviewMap
+     * @return list<array{label: string, value: string, field: ?string, needs_review: bool, review_reason: ?string, review_hint: ?string}>
      */
-    private function contactRows(array $core, array $normalized): array
+    private function contactRows(array $core, array $normalized, array $reviewMap): array
     {
         $rows = [];
         $primary = $this->stringify($core['primary_contact_number'] ?? null);
         if ($primary !== '') {
-            $rows[] = ['label' => $this->fieldLabel('primary_contact_number'), 'value' => $primary];
+            $rows[] = $this->displayRow(
+                $this->fieldLabel('primary_contact_number'),
+                $primary,
+                'core.primary_contact_number',
+                $reviewMap
+            );
         }
 
         foreach ($normalized['contacts'] ?? [] as $index => $contact) {
@@ -209,7 +279,7 @@ final class IntakePreviewNormalizedDraftPresenter
                 ? implode(' / ', $labelParts)
                 : __('intake.normalized_draft_contact_row', ['n' => $index + 1]);
 
-            $rows[] = ['label' => $label, 'value' => $phone];
+            $rows[] = $this->displayRow($label, $phone, null, $reviewMap);
         }
 
         return $rows;
@@ -218,14 +288,15 @@ final class IntakePreviewNormalizedDraftPresenter
     /**
      * @param  array<string, mixed>  $core
      * @param  array<string, mixed>  $normalized
-     * @return list<array{label: string, value: string}>
+     * @param  array<string, list<array{reason: string, raw: string}>>  $reviewMap
+     * @return list<array{label: string, value: string, field: ?string, needs_review: bool, review_reason: ?string, review_hint: ?string}>
      */
-    private function addressRows(array $core, array $normalized): array
+    private function addressRows(array $core, array $normalized, array $reviewMap): array
     {
         $rows = [];
         $line = $this->stringify($core['address_line'] ?? null);
         if ($line !== '') {
-            $rows[] = ['label' => $this->fieldLabel('address_line'), 'value' => $line];
+            $rows[] = $this->displayRow($this->fieldLabel('address_line'), $line, 'core.address_line', $reviewMap);
         }
 
         foreach ($normalized['addresses'] ?? [] as $index => $address) {
@@ -237,12 +308,14 @@ final class IntakePreviewNormalizedDraftPresenter
                 continue;
             }
             $type = $this->stringify($address['type'] ?? null);
-            $rows[] = [
-                'label' => $type !== ''
+            $rows[] = $this->displayRow(
+                $type !== ''
                     ? __('intake.normalized_draft_address_typed', ['type' => $type])
                     : __('intake.normalized_draft_address_row', ['n' => $index + 1]),
-                'value' => $addrLine,
-            ];
+                $addrLine,
+                null,
+                $reviewMap
+            );
         }
 
         foreach ($normalized['parents_addresses'] ?? [] as $index => $address) {
@@ -253,10 +326,12 @@ final class IntakePreviewNormalizedDraftPresenter
             if ($addrLine === '') {
                 continue;
             }
-            $rows[] = [
-                'label' => __('intake.normalized_draft_parents_address_row', ['n' => $index + 1]),
-                'value' => $addrLine,
-            ];
+            $rows[] = $this->displayRow(
+                __('intake.normalized_draft_parents_address_row', ['n' => $index + 1]),
+                $addrLine,
+                null,
+                $reviewMap
+            );
         }
 
         return $rows;
@@ -264,9 +339,10 @@ final class IntakePreviewNormalizedDraftPresenter
 
     /**
      * @param  array<string, mixed>  $normalized
-     * @return list<array{label: string, value: string}>
+     * @param  array<string, list<array{reason: string, raw: string}>>  $reviewMap
+     * @return list<array{label: string, value: string, field: ?string, needs_review: bool, review_reason: ?string, review_hint: ?string}>
      */
-    private function propertyRows(array $normalized): array
+    private function propertyRows(array $normalized, array $reviewMap): array
     {
         $property = $normalized['property_summary'] ?? null;
         if (! is_array($property)) {
@@ -276,20 +352,22 @@ final class IntakePreviewNormalizedDraftPresenter
         $rows = [];
         $summary = $this->stringify($property['summary_notes'] ?? $property['summary_text'] ?? null);
         if ($summary !== '') {
-            $rows[] = ['label' => $this->fieldLabel('summary_notes'), 'value' => $summary];
+            $rows[] = $this->displayRow($this->fieldLabel('summary_notes'), $summary, null, $reviewMap);
         }
 
         foreach (['owns_house', 'owns_flat', 'owns_agriculture'] as $flag) {
             if (! empty($property[$flag])) {
-                $rows[] = ['label' => $this->fieldLabel($flag), 'value' => 'yes'];
+                $rows[] = $this->displayRow($this->fieldLabel($flag), 'yes', null, $reviewMap);
             }
         }
 
         if (isset($property['total_land_acres']) && $property['total_land_acres'] !== null && $property['total_land_acres'] !== '') {
-            $rows[] = [
-                'label' => $this->fieldLabel('total_land_acres'),
-                'value' => (string) $property['total_land_acres'],
-            ];
+            $rows[] = $this->displayRow(
+                $this->fieldLabel('total_land_acres'),
+                (string) $property['total_land_acres'],
+                null,
+                $reviewMap
+            );
         }
 
         return $rows;
@@ -297,9 +375,10 @@ final class IntakePreviewNormalizedDraftPresenter
 
     /**
      * @param  array<string, mixed>  $normalized
-     * @return list<array{label: string, value: string}>
+     * @param  array<string, list<array{reason: string, raw: string}>>  $reviewMap
+     * @return list<array{label: string, value: string, field: ?string, needs_review: bool, review_reason: ?string, review_hint: ?string}>
      */
-    private function horoscopeRows(array $normalized): array
+    private function horoscopeRows(array $normalized, array $reviewMap): array
     {
         $horoscope = $normalized['horoscope'] ?? null;
         if (! is_array($horoscope)) {
@@ -313,10 +392,12 @@ final class IntakePreviewNormalizedDraftPresenter
             if ($text === '') {
                 continue;
             }
-            $rows[] = [
-                'label' => __('intake.normalized_draft_horoscope_line', ['n' => $index + 1]),
-                'value' => $text,
-            ];
+            $rows[] = $this->displayRow(
+                __('intake.normalized_draft_horoscope_line', ['n' => $index + 1]),
+                $text,
+                null,
+                $reviewMap
+            );
         }
 
         foreach ($horoscope as $key => $value) {
@@ -327,7 +408,7 @@ final class IntakePreviewNormalizedDraftPresenter
             if ($text === '') {
                 continue;
             }
-            $rows[] = ['label' => $this->fieldLabel((string) $key), 'value' => $text];
+            $rows[] = $this->displayRow($this->fieldLabel((string) $key), $text, null, $reviewMap);
         }
 
         return $rows;
@@ -336,16 +417,23 @@ final class IntakePreviewNormalizedDraftPresenter
     /**
      * @param  array<string, mixed>  $core
      * @param  array<string, mixed>  $normalized
-     * @return list<array{label: string, value: string}>
+     * @param  array<string, list<array{reason: string, raw: string}>>  $reviewMap
+     * @return list<array{label: string, value: string, field: ?string, needs_review: bool, review_reason: ?string, review_hint: ?string}>
      */
-    private function relativeRows(array $core, array $normalized): array
+    private function relativeRows(array $core, array $normalized, array $reviewMap): array
     {
         $rows = [];
         $other = $this->stringify($core['other_relatives_text'] ?? null);
         if ($other !== '') {
-            $rows[] = ['label' => $this->fieldLabel('other_relatives_text'), 'value' => $other];
+            $rows[] = $this->displayRow(
+                $this->fieldLabel('other_relatives_text'),
+                $other,
+                'core.other_relatives_text',
+                $reviewMap
+            );
         }
 
+        $relativesFlagged = isset($reviewMap['relatives']);
         foreach ($normalized['relatives'] ?? [] as $index => $relative) {
             if (! is_array($relative)) {
                 continue;
@@ -357,10 +445,12 @@ final class IntakePreviewNormalizedDraftPresenter
             if ($parts === []) {
                 continue;
             }
-            $rows[] = [
-                'label' => __('intake.normalized_draft_relative_row', ['n' => $index + 1]),
-                'value' => implode(' · ', array_unique($parts)),
-            ];
+            $rows[] = $this->displayRow(
+                __('intake.normalized_draft_relative_row', ['n' => $index + 1]),
+                implode(' · ', array_unique($parts)),
+                $relativesFlagged ? 'relatives' : null,
+                $reviewMap
+            );
         }
 
         return $rows;
@@ -368,7 +458,7 @@ final class IntakePreviewNormalizedDraftPresenter
 
     /**
      * @param  list<array<string, mixed>>  $flags
-     * @return list<array{label: string, value: string}>
+     * @return list<array{label: string, value: string, field: ?string, needs_review: bool, review_reason: ?string, review_hint: ?string}>
      */
     private function reviewRows(array $flags): array
     {
@@ -384,10 +474,14 @@ final class IntakePreviewNormalizedDraftPresenter
                 continue;
             }
             $valueParts = array_filter([$reason, $raw]);
-            $rows[] = [
-                'label' => $field !== '' ? $field : __('intake.normalized_draft_review_row', ['n' => $index + 1]),
-                'value' => $valueParts !== [] ? implode(' — ', $valueParts) : '—',
-            ];
+            $row = $this->displayRow(
+                $field !== '' ? $field : __('intake.normalized_draft_review_row', ['n' => $index + 1]),
+                $valueParts !== [] ? implode(' — ', $valueParts) : '—',
+                $field !== '' ? $field : null,
+                [$field => [['reason' => $reason, 'raw' => $raw]]]
+            );
+            $row['needs_review'] = true;
+            $rows[] = $row;
         }
 
         return $rows;

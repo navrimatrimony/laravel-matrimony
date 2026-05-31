@@ -13,16 +13,18 @@ class IntakePreviewNormalizedDraftSectionTest extends TestCase
 {
     use RefreshDatabase;
 
-    private function yuvrajParseInputText(): string
+    private function maheshParseInputText(): string
     {
         return <<<'TXT'
-*प्रतिमा: decorative logo*
-:■:
-वैयक्तिक माहिती
-नाव : कु. युवराज नामदेव घाटेगस्ती.
-जात : हिंदू मराठा {96 कुळी}
-आईचे नाव : सौ. सुनंदा नामदेव घाटेगस्ती. { गृहिणी }
-मोबाईल नं : 73509 53384/ 96733 50078
+कास्ट :- ९६ कुळी मराठा
+पित्याचे नाव :-मोहनराव गणपतराव जगताप
+प्रोपर्टी :- 1BHK Flat (1) 2 BHK Flat (2)
+गावचा पत्ता :- चंद्रेश बिल्डिंग, ठाणे
+
+## महेशकुमार मोहन जगताप
+
+मोबाईल नंबर :- महेश मोहन जगताप (९८७०८७९७२७)
+:- मोहन जगताप (९१३७७९३३७१)
 TXT;
     }
 
@@ -31,16 +33,16 @@ TXT;
         $user = User::factory()->create();
         $parsed = app(IntakeParsedSnapshotSkeleton::class)->ensure([
             'core' => [
-                'full_name' => 'कु. युवराज नामदेव घाटेगस्ती',
+                'full_name' => 'महेशकुमार मोहन जगताप',
                 'gender' => 'male',
                 'date_of_birth' => '1995-01-01',
                 'religion' => 'हिंदू',
                 'caste' => 'मराठा',
                 'sub_caste' => '96 कुळी',
-                'primary_contact_number' => '7350953384',
+                'primary_contact_number' => '9870879727',
             ],
             'contacts' => [
-                ['phone_number' => '7350953384', 'is_primary' => true],
+                ['phone_number' => '9870879727', 'is_primary' => true],
             ],
         ]);
 
@@ -55,7 +57,7 @@ TXT;
 
         $intake = BiodataIntake::create([
             'raw_ocr_text' => 'stored ocr should not be primary',
-            'last_parse_input_text' => $this->yuvrajParseInputText(),
+            'last_parse_input_text' => $this->maheshParseInputText(),
             'uploaded_by' => $user->id,
             'parse_status' => 'parsed',
             'intake_status' => 'DRAFT',
@@ -80,8 +82,11 @@ TXT;
 
         $response->assertOk();
         $response->assertSee(__('intake.normalized_draft_heading'), false);
+        $response->assertSee('Preview only', false);
         $response->assertSee(__('intake.normalized_draft_disclaimer'), false);
-        $response->assertSee('युवराज', false);
+        $response->assertSee(__('intake.normalized_draft_needs_review_badge'), false);
+        $response->assertSee(__('intake.normalized_draft_full_name_fallback_hint'), false);
+        $response->assertSee('महेशकुमार', false);
 
         $intake->refresh();
         $this->assertSame($parsedBefore, json_encode($intake->parsed_json));

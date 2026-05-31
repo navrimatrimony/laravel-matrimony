@@ -95,6 +95,21 @@ TXT;
         $this->assertStringContainsString('9870879727', $contactsBlob);
     }
 
+    public function test_mahesh_full_name_row_marked_needs_review_for_heading_fallback(): void
+    {
+        $out = app(IntakePreviewNormalizedDraftPresenter::class)->present($this->maheshText(), true);
+
+        $fullNameRow = $this->findRowByField($out['sections']['personal'], 'core.full_name');
+        $this->assertNotNull($fullNameRow);
+        $this->assertTrue($fullNameRow['needs_review']);
+        $this->assertSame('candidate_name_from_heading_fallback', $fullNameRow['review_reason']);
+        $this->assertSame(
+            __('intake.normalized_draft_full_name_fallback_hint'),
+            $fullNameRow['review_hint']
+        );
+        $this->assertArrayHasKey('core.full_name', $out['review_flags_by_field']);
+    }
+
     public function test_unavailable_when_not_biodata_text(): void
     {
         $out = app(IntakePreviewNormalizedDraftPresenter::class)->present('AI unavailable message', false);
@@ -110,6 +125,21 @@ TXT;
 
         $this->assertFalse($out['available']);
         $this->assertSame('empty_text', $out['skipped_reason']);
+    }
+
+    /**
+     * @param  list<array<string, mixed>>  $rows
+     * @return array<string, mixed>|null
+     */
+    private function findRowByField(array $rows, string $field): ?array
+    {
+        foreach ($rows as $row) {
+            if (($row['field'] ?? null) === $field) {
+                return $row;
+            }
+        }
+
+        return null;
     }
 
     /**
