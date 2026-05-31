@@ -57,6 +57,7 @@ use App\Http\Controllers\Admin\ShowcaseProfileController;
 use App\Http\Controllers\Admin\SubCasteAdminController;
 use App\Http\Controllers\Admin\TranslationController;
 use App\Http\Controllers\Admin\UserWalletController;
+use App\Http\Controllers\Admin\WhatsAppResponseController;
 use App\Http\Controllers\Internal\Admin\CanonicalLocationAdminController;
 use App\Http\Controllers\Internal\Admin\LocationAliasAdminController;
 use App\Http\Controllers\Internal\Admin\LocationSuggestionAdminController;
@@ -281,6 +282,16 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
     */
     Route::get('/communication-policy', [\App\Http\Controllers\Admin\CommunicationPolicyController::class, 'index'])->name('communication-policy.index');
     Route::put('/communication-policy', [\App\Http\Controllers\Admin\CommunicationPolicyController::class, 'update'])->name('communication-policy.update');
+
+    /*
+    | WhatsApp Response admin controls (manual simulation / settings only)
+    */
+    Route::prefix('whatsapp-response')->name('whatsapp-response.')->group(function () {
+        Route::get('/', [WhatsAppResponseController::class, 'index'])->name('index');
+        Route::post('/settings', [WhatsAppResponseController::class, 'updateSettings'])->name('settings.update');
+        Route::post('/pipeline-update', [WhatsAppResponseController::class, 'runPipelineUpdate'])->name('run-pipeline-update');
+        Route::post('/{mediation_request}/action', [WhatsAppResponseController::class, 'manualAction'])->name('action');
+    });
 
     /*
     | Abuse Reports
