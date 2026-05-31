@@ -17,19 +17,24 @@ class IntakeNormalizedBiodataDraftBuilder
     public function build(string $rawText, array $context = []): array
     {
         $this->candidateNameFromFallback = false;
-        $cleanedText = $this->cleanText($rawText);
+        $prepared = app(IntakeNormalizedBiodataHtmlPreprocessor::class)->prepare($rawText);
+        $cleanedText = $this->cleanText($prepared['text']);
         $sections = $this->splitSections($cleanedText);
         $normalized = $this->normalizeSectionValues($sections);
         $draft = [
             'meta' => [
                 'schema' => 'normalized_biodata_draft_v1',
                 'source' => 'in_memory',
+                'html_table_structured' => $prepared['has_structured_table'],
+                'table_hints' => $prepared['table_hints'],
+                'post_table_body' => $prepared['post_table_body'],
             ],
             'cleaned_text' => $cleanedText,
             'sections' => $sections,
             'normalized' => $normalized,
             'review_flags' => [],
         ];
+        $draft = app(IntakeHtmlTableHintApplier::class)->apply($draft);
         $draft['review_flags'] = $this->buildReviewFlags($draft);
 
         return $draft;
