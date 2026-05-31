@@ -38,6 +38,7 @@ class IntakeNormalizedDraftToParsedJsonMapper
         $parsed['core'] = $core;
         $parsed['contacts'] = $contacts;
         $parsed['addresses'] = $this->mapAddresses($draft);
+        $parsed['parents_addresses'] = $this->mapParentsAddresses($draft);
         $parsed['relatives'] = $this->mapRelatives($draft);
         $parsed['siblings'] = $this->mapSiblings($draft);
         $parsed['property_summary'] = $this->mapPropertySummary($draft);
@@ -171,6 +172,39 @@ class IntakeNormalizedDraftToParsedJsonMapper
                 'address_line' => $line,
                 'raw' => trim((string) ($address['raw'] ?? $line)),
                 'type' => $this->inferAddressType($sourceLine !== '' ? $sourceLine : $line),
+            ];
+        }
+
+        return $mapped;
+    }
+
+    /**
+     * @param  array<string, mixed>  $draft
+     * @return list<array<string, mixed>>
+     */
+    private function mapParentsAddresses(array $draft): array
+    {
+        $rows = $draft['normalized']['parents_addresses'] ?? [];
+        if (! is_array($rows)) {
+            return [];
+        }
+
+        $mapped = [];
+        foreach ($rows as $row) {
+            if (! is_array($row)) {
+                continue;
+            }
+
+            $addressLine = trim((string) ($row['address_line'] ?? ''));
+            $raw = trim((string) ($row['raw'] ?? ''));
+            if ($addressLine === '' && $raw === '') {
+                continue;
+            }
+
+            $mapped[] = [
+                'type' => 'parents',
+                'address_line' => $addressLine !== '' ? $addressLine : null,
+                'raw' => $raw !== '' ? $raw : null,
             ];
         }
 
@@ -364,7 +398,7 @@ class IntakeNormalizedDraftToParsedJsonMapper
             'religion', 'caste', 'sub_caste', 'height_cm', 'complexion', 'blood_group',
             'marital_status', 'father_name', 'father_occupation', 'mother_name', 'mother_occupation',
             'brother_count', 'sister_count', 'highest_education', 'occupation_title',
-            'company_name', 'annual_income', 'work_location_text',
+            'company_name', 'annual_income', 'work_location_text', 'other_relatives_text',
         ];
         $picked = [];
         foreach ($fields as $field) {

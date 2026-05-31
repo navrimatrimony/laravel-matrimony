@@ -132,6 +132,56 @@ class IntakeNormalizedDraftToParsedJsonMapperTest extends TestCase
         }
     }
 
+    public function test_mapper_carries_other_relatives_text_from_normalized_core(): void
+    {
+        $text = 'इतर पाहुणे: मामा पुणे, काका सातारा';
+        $parsed = app(IntakeNormalizedDraftToParsedJsonMapper::class)->map([
+            'normalized' => [
+                'core' => [
+                    'other_relatives_text' => $text,
+                ],
+            ],
+        ]);
+
+        $this->assertSame($text, $parsed['core']['other_relatives_text'] ?? null);
+    }
+
+    public function test_mapper_carries_parent_addresses_without_self_address_overwrite(): void
+    {
+        $parsed = app(IntakeNormalizedDraftToParsedJsonMapper::class)->map([
+            'normalized' => [
+                'parents_addresses' => [
+                    [
+                        'type' => 'parents',
+                        'address_line' => 'मु. पो. विटा, ता. खानापूर, जि. सांगली',
+                        'raw' => 'घरचा पत्ता: मु. पो. विटा, ता. खानापूर, जि. सांगली',
+                    ],
+                ],
+            ],
+        ]);
+
+        $this->assertSame('parents', $parsed['parents_addresses'][0]['type'] ?? null);
+        $this->assertSame('मु. पो. विटा, ता. खानापूर, जि. सांगली', $parsed['parents_addresses'][0]['address_line'] ?? null);
+        $this->assertStringContainsString('घरचा पत्ता:', (string) ($parsed['parents_addresses'][0]['raw'] ?? ''));
+        $this->assertSame([], $parsed['addresses']);
+        $this->assertNull($parsed['core']['address_line'] ?? null);
+    }
+
+    public function test_mapper_skips_empty_or_invalid_parent_address_rows(): void
+    {
+        $parsed = app(IntakeNormalizedDraftToParsedJsonMapper::class)->map([
+            'normalized' => [
+                'parents_addresses' => [
+                    [],
+                    ['address_line' => '', 'raw' => ''],
+                    'not-array',
+                ],
+            ],
+        ]);
+
+        $this->assertSame([], $parsed['parents_addresses']);
+    }
+
     public function test_builder_and_mapper_do_not_persist_to_database(): void
     {
         $queries = [];
