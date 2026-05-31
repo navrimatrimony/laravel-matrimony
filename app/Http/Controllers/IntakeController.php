@@ -250,6 +250,9 @@ class IntakeController extends Controller
         $reviewTextIsBiodata = in_array($previewRawTextSource, ['parse_snapshot', 'ai_vision_cache', 'ocr_transient'], true);
         $rawOcrTextForSuggestions = $reviewTextIsBiodata ? $rawOcrTextForPreview : '';
 
+        $normalizedDraftPreview = app(\App\Services\Intake\IntakePreviewNormalizedDraftPresenter::class)
+            ->present($rawOcrTextForPreview, $reviewTextIsBiodata);
+
         // Preview-only hints (siblings/relatives/taluka): same text as parse input when available (not stored upload OCR).
         $rawTextForPreviewEnhancements = $reviewTextIsBiodata ? $rawOcrTextForPreview : '';
 
@@ -1476,6 +1479,7 @@ class IntakeController extends Controller
             'confidenceMap',
             'criticalFields',
             'missingCriticalFields',
+            'normalizedDraftPreview',
             'requiredCorrectionFields',
             'warningFields',
             'data',
