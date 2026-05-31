@@ -205,6 +205,8 @@ class ExternalAiParsingService
             .'Recognise common Marathi labels: नाव, उंची, वर्ण/रंग, रक्त गट, जन्मतारीख, जात, उपजात, धर्म, लग्नस्थिती, '
             .'नाडी (आध्य/मध्य/अंत्य), गण (देव/मनुष्य/राक्षस), चरण, रास/राशी, नक्षत्र, देवक, कुलदैवत, गोत्र, '
             .'वडील, आई, भाऊ, बहीण, दाजी (sister\'s husband), मामा, आजोळ (maternal), पत्ता, नोकरी, शिक्षण. '
+            .'IMPORTANT PIPELINE: first create canonical_biodata_draft from the raw text, then fill SSOT JSON from that draft. '
+            .'The draft must act like a per-biodata intermediate sheet aligned to our form/database sections, so missing or wrong data can be debugged before profile autofill. '
             .'CRITICAL: Use JSON null for unknown/missing fields. Never output the word "null" as a string. '
             .'Never copy section titles or bare labels (e.g. "शिक्षण", "रास", "नाव") as if they were field values. '
             .'For controlled-option style fields (religion/caste/sub_caste/marital_status/complexion/blood_group etc), extract raw labels conservatively; do not force dropdown decisions. '
@@ -218,23 +220,40 @@ class ExternalAiParsingService
     private function v2UserPrompt(string $rawText): string
     {
         return 'Extract the following biodata into a compact JSON payload. '
-            .'Include only keys you actually found; omit unknown keys instead of filling nulls. '
+            .'Before final SSOT fields, build canonical_biodata_draft as an intermediate normalized biodata sheet matching our form/database sections. '
+            .'Include only values that are present in the biodata text; omit or null unknown values. '
             .'Rules: (1) Marathi dates like १२/०३/१९९६ or 12/03/1996 → YYYY-MM-DD. '
-            .'(2) Height in feet/inch (फूट/इंच) → convert to height_cm (1 ft = 30.48 cm, 1 inch = 2.54 cm). '
+            .'(2) Height in feet/inch (फूट/इंच) → convert to height_cm (1 ft = 30.48 cm, 1 inch = 2.54 cm) and keep original height string in core.height when present. '
             .'(3) Blood group: accept B+, B+ve, B positive → B+; similar for A, AB, O. '
             .'(4) नाडी आध्य/आद्य → nadi=adi; मध्य → madhyam; अंत्य → anty. '
             .'(5) गण देव/मनुष्य/राक्षस → gan=deva/manushya/rakshasa. '
             ."(6) दाजी = sister's husband: put in siblings[].spouse for the matching sister. "
             .'(7) If unsure, use JSON null (not the string "null") and confidence 0.0. Never invent phone numbers or income. '
-            .'(8) Education: put recognised qualifications in core.highest_education (canonical code or short text; comma-separated if multiple). Use core.highest_education_other only when needed for extra free-text. Do not populate education_history (omit it or []). '
+            .'(8) Education: put recognised qualifications in core.highest_education (canonical code or short text; comma-separated if multiple). Use core.highest_education_other only when needed for extra free-text. Do not populate education_history unless the text has separate education rows. '
             .'(9) Horoscope: rashi/nakshatra/devak/kuldaivat/gotra must be only the actual value tokens, not labels like "रास" or "नक्षत्र" alone. '
             .'(10) Strip decorative symbols from caste/jāt strings (e.g. stray % from tables) but keep the caste text itself. '
             .'(11) Do not output guessed *_id values; extract raw textual labels only and keep them conservative when ambiguous. '
             .'(12) Preserve honorifics like श्री./सौ./डॉ. in person names when present. '
             .'(13) For repeated same-relation relatives, output multiple array entries (do not merge). '
-            ."(14) Return ONLY JSON, no backticks.\n\n"
-            ."Top-level keys you MAY use (only include those you found): core, contacts, children, marriages, siblings, relatives, career_history, addresses, property_summary, property_assets, horoscope, preferences, extended_narrative, confidence_map.\n\n"
-            ."Biodata text:\n\n".$rawText;
+            .'(14) Contacts: separate candidate primary, father, mother, sibling, and other contact numbers when labels make that clear; do not duplicate the same phone row across unrelated buckets. '
+            .'(15) Return ONLY JSON, no backticks.\n\n'
+            .'Output schema guidance:\n'
+            .'{\n'
+            .'  "canonical_biodata_draft": {\n'
+            .'    "identity": {"full_name": string|null, "gender": string|null, "date_of_birth": string|null, "birth_time": string|null, "birth_place_text": string|null},\n'
+            .'    "community": {"religion": string|null, "caste": string|null, "sub_caste": string|null, "marital_status": string|null},\n'
+            .'    "physical": {"height": string|null, "height_cm": number|null, "weight_kg": number|null, "complexion": string|null, "blood_group": string|null},\n'
+            .'    "education_career": {"highest_education": string|null, "occupation_title": string|null, "company_name": string|null, "work_location_text": string|null, "annual_income": number|null},\n'
+            .'    "family": {"father_name": string|null, "father_occupation": string|null, "mother_name": string|null, "mother_occupation": string|null, "brother_count": number|null, "sister_count": number|null},\n'
+            .'    "contacts": [], "addresses": [], "siblings": [], "relatives": [], "horoscope": [], "property": [], "preferences": [],\n'
+            .'    "field_sources": {"core.full_name": "exact source line or short evidence"},\n'
+            .'    "missing_expected_fields": ["field names that were not found but are commonly expected"]\n'
+            .'  },\n'
+            .'  "core": {}, "contacts": [], "children": [], "marriages": [], "siblings": [], "relatives": [], "career_history": [], "addresses": [], "property_summary": [], "property_assets": [], "horoscope": [], "preferences": [], "extended_narrative": {}, "confidence_map": {},\n'
+            .'  "extraction_diagnostics": {"used_intermediate_draft": true, "notes": []}\n'
+            .'}\n\n'
+            .'Top-level SSOT keys you MAY use: canonical_biodata_draft, core, contacts, children, marriages, siblings, relatives, career_history, addresses, property_summary, property_assets, horoscope, preferences, extended_narrative, confidence_map, extraction_diagnostics.\n\n'
+            .'Biodata text:\n\n'.$rawText;
     }
 
     /**
@@ -268,7 +287,7 @@ class ExternalAiParsingService
                     ['role' => 'user', 'content' => $user],
                 ],
                 'temperature' => 0.1,
-                'max_tokens' => 2500,
+                'max_tokens' => (int) config('intake.ai_first_v2.max_tokens', 4000),
             ]);
 
             if (! $response->successful()) {
@@ -325,7 +344,7 @@ class ExternalAiParsingService
                     ['role' => 'user', 'content' => $user],
                 ],
                 'temperature' => 0.1,
-                'max_tokens' => 2500,
+                'max_tokens' => (int) config('intake.sarvam_structured.max_tokens', config('intake.ai_first_v2.max_tokens', 4000)),
             ]);
 
             if (! $response->successful()) {
@@ -363,18 +382,18 @@ class ExternalAiParsingService
         }
 
         $requiredKeys = [
-            'core', 'contacts', 'children', 'education_history', 'career_history',
+            'canonical_biodata_draft', 'core', 'contacts', 'children', 'education_history', 'career_history',
             'addresses', 'siblings', 'relatives', 'property_summary', 'property_assets',
-            'horoscope', 'preferences', 'extended_narrative', 'confidence_map',
+            'horoscope', 'preferences', 'extended_narrative', 'confidence_map', 'extraction_diagnostics',
         ];
         foreach ($requiredKeys as $key) {
             if (! array_key_exists($key, $decoded)) {
-                if ($key === 'core') {
-                    $decoded['core'] = [];
-                } elseif ($key === 'confidence_map') {
-                    $decoded['confidence_map'] = [];
+                if ($key === 'core' || $key === 'confidence_map' || $key === 'extraction_diagnostics') {
+                    $decoded[$key] = [];
                 } elseif ($key === 'extended_narrative') {
                     $decoded['extended_narrative'] = ['narrative_about_me' => null, 'narrative_expectations' => null, 'additional_notes' => null];
+                } elseif ($key === 'canonical_biodata_draft') {
+                    $decoded['canonical_biodata_draft'] = $this->defaultCanonicalBiodataDraft();
                 } else {
                     $decoded[$key] = [];
                 }
@@ -386,8 +405,156 @@ class ExternalAiParsingService
         if (! is_array($decoded['confidence_map'])) {
             $decoded['confidence_map'] = [];
         }
+        if (! is_array($decoded['canonical_biodata_draft'])) {
+            $decoded['canonical_biodata_draft'] = $this->defaultCanonicalBiodataDraft();
+        }
+        if (! is_array($decoded['extraction_diagnostics'])) {
+            $decoded['extraction_diagnostics'] = [];
+        }
+        $decoded['canonical_biodata_draft'] = $this->normalizeCanonicalBiodataDraft($decoded['canonical_biodata_draft'], $decoded);
+        $decoded['extraction_diagnostics'] = array_replace([
+            'used_intermediate_draft' => true,
+            'notes' => [],
+        ], $decoded['extraction_diagnostics']);
 
         return $this->skeleton->ensure($decoded);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function defaultCanonicalBiodataDraft(): array
+    {
+        return [
+            'identity' => [
+                'full_name' => null,
+                'gender' => null,
+                'date_of_birth' => null,
+                'birth_time' => null,
+                'birth_place_text' => null,
+            ],
+            'community' => [
+                'religion' => null,
+                'caste' => null,
+                'sub_caste' => null,
+                'marital_status' => null,
+            ],
+            'physical' => [
+                'height' => null,
+                'height_cm' => null,
+                'weight_kg' => null,
+                'complexion' => null,
+                'blood_group' => null,
+            ],
+            'education_career' => [
+                'highest_education' => null,
+                'occupation_title' => null,
+                'company_name' => null,
+                'work_location_text' => null,
+                'annual_income' => null,
+            ],
+            'family' => [
+                'father_name' => null,
+                'father_occupation' => null,
+                'mother_name' => null,
+                'mother_occupation' => null,
+                'brother_count' => null,
+                'sister_count' => null,
+            ],
+            'contacts' => [],
+            'addresses' => [],
+            'siblings' => [],
+            'relatives' => [],
+            'horoscope' => [],
+            'property' => [],
+            'preferences' => [],
+            'field_sources' => [],
+            'missing_expected_fields' => [],
+        ];
+    }
+
+    /**
+     * Keep AI's intermediate draft, but make it predictable and backfill obvious buckets from SSOT output.
+     * This does not infer new data; it only mirrors values already extracted into parsed_json.
+     *
+     * @param  array<string, mixed>  $draft
+     * @param  array<string, mixed>  $decoded
+     * @return array<string, mixed>
+     */
+    private function normalizeCanonicalBiodataDraft(array $draft, array $decoded): array
+    {
+        $out = array_replace_recursive($this->defaultCanonicalBiodataDraft(), $draft);
+        $core = is_array($decoded['core'] ?? null) ? $decoded['core'] : [];
+
+        $out['identity'] = $this->normalizeDraftSection($out['identity'] ?? [], [
+            'full_name' => $core['full_name'] ?? null,
+            'gender' => $core['gender'] ?? null,
+            'date_of_birth' => $core['date_of_birth'] ?? null,
+            'birth_time' => $core['birth_time'] ?? null,
+            'birth_place_text' => $core['birth_place_text'] ?? $core['birth_place'] ?? null,
+        ]);
+        $out['community'] = $this->normalizeDraftSection($out['community'] ?? [], [
+            'religion' => $core['religion'] ?? null,
+            'caste' => $core['caste'] ?? null,
+            'sub_caste' => $core['sub_caste'] ?? null,
+            'marital_status' => $core['marital_status'] ?? null,
+        ]);
+        $out['physical'] = $this->normalizeDraftSection($out['physical'] ?? [], [
+            'height' => $core['height'] ?? null,
+            'height_cm' => $core['height_cm'] ?? null,
+            'weight_kg' => $core['weight_kg'] ?? null,
+            'complexion' => $core['complexion'] ?? null,
+            'blood_group' => $core['blood_group'] ?? null,
+        ]);
+        $out['education_career'] = $this->normalizeDraftSection($out['education_career'] ?? [], [
+            'highest_education' => $core['highest_education'] ?? null,
+            'occupation_title' => $core['occupation_title'] ?? null,
+            'company_name' => $core['company_name'] ?? null,
+            'work_location_text' => $core['work_location_text'] ?? null,
+            'annual_income' => $core['annual_income'] ?? null,
+        ]);
+        $out['family'] = $this->normalizeDraftSection($out['family'] ?? [], [
+            'father_name' => $core['father_name'] ?? null,
+            'father_occupation' => $core['father_occupation'] ?? null,
+            'mother_name' => $core['mother_name'] ?? null,
+            'mother_occupation' => $core['mother_occupation'] ?? null,
+            'brother_count' => $core['brother_count'] ?? null,
+            'sister_count' => $core['sister_count'] ?? null,
+        ]);
+
+        foreach (['contacts', 'addresses', 'siblings', 'relatives', 'horoscope', 'preferences'] as $section) {
+            if (! is_array($out[$section] ?? null) || $out[$section] === []) {
+                $out[$section] = is_array($decoded[$section] ?? null) ? $decoded[$section] : [];
+            }
+        }
+        if (! is_array($out['property'] ?? null) || $out['property'] === []) {
+            $out['property'] = is_array($decoded['property_assets'] ?? null) ? $decoded['property_assets'] : [];
+        }
+        if (! is_array($out['field_sources'] ?? null)) {
+            $out['field_sources'] = [];
+        }
+        if (! is_array($out['missing_expected_fields'] ?? null)) {
+            $out['missing_expected_fields'] = [];
+        }
+
+        return $out;
+    }
+
+    /**
+     * @param  mixed  $section
+     * @param  array<string, mixed>  $fallbacks
+     * @return array<string, mixed>
+     */
+    private function normalizeDraftSection(mixed $section, array $fallbacks): array
+    {
+        $out = is_array($section) ? $section : [];
+        foreach ($fallbacks as $key => $value) {
+            if (! array_key_exists($key, $out) || $out[$key] === null || $out[$key] === '') {
+                $out[$key] = $value;
+            }
+        }
+
+        return $out;
     }
 
     /**
