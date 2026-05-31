@@ -357,7 +357,7 @@ final class IntakePreviewNormalizedDraftPresenter
 
         foreach (['owns_house', 'owns_flat', 'owns_agriculture'] as $flag) {
             if (! empty($property[$flag])) {
-                $rows[] = $this->displayRow($this->fieldLabel($flag), 'yes', null, $reviewMap);
+                $rows[] = $this->displayRow($this->fieldLabel($flag), 'होय', null, $reviewMap);
             }
         }
 
@@ -503,7 +503,7 @@ final class IntakePreviewNormalizedDraftPresenter
             return '';
         }
         if (is_bool($value)) {
-            return $value ? 'true' : 'false';
+            return $value ? 'होय' : 'नाही';
         }
         if (is_scalar($value)) {
             return trim((string) $value);

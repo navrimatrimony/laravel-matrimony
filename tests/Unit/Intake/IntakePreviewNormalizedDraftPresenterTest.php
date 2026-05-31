@@ -110,6 +110,34 @@ TXT;
         $this->assertArrayHasKey('core.full_name', $out['review_flags_by_field']);
     }
 
+    public function test_display_rows_use_clean_unicode_separators(): void
+    {
+        $out = app(IntakePreviewNormalizedDraftPresenter::class)->present($this->swapnilText(), true);
+
+        $blob = $this->sectionBlob($out['sections']['family'])
+            .' '.$this->sectionBlob($out['sections']['relatives'])
+            .' '.$this->sectionBlob($out['sections']['review_needed']);
+
+        $this->assertStringNotContainsString('Â·', $blob);
+        $this->assertStringNotContainsString('â€”', $blob);
+        $this->assertStringContainsString(' · ', $blob);
+    }
+
+    public function test_property_boolean_rows_display_marathi_yes(): void
+    {
+        $out = app(IntakePreviewNormalizedDraftPresenter::class)->present(<<<'HTML'
+<table>
+<tr><td>इतर प्रॉपर्टी</td><td>:-</td><td>स्वतःचे घर, फ्लॅट, शेती 01 एकर</td></tr>
+</table>
+HTML, true);
+        $propertyBlob = $this->sectionBlob($out['sections']['property']);
+
+        $this->assertStringContainsString('होय', $propertyBlob);
+        $this->assertStringNotContainsString('yes', $propertyBlob);
+        $this->assertStringNotContainsString('true', $propertyBlob);
+        $this->assertStringNotContainsString('false', $propertyBlob);
+    }
+
     public function test_unavailable_when_not_biodata_text(): void
     {
         $out = app(IntakePreviewNormalizedDraftPresenter::class)->present('AI unavailable message', false);
