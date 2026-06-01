@@ -50,7 +50,32 @@ TXT;
 TXT;
     }
 
-    public function test_yuvraj_text_returns_available_personal_and_contacts_sections(): void
+    public function test_sections_follow_wizard_order_and_old_sections_are_absent(): void
+    {
+        $out = app(IntakePreviewNormalizedDraftPresenter::class)->present($this->yuvrajText(), true);
+
+        $this->assertSame([
+            'review_needed',
+            'basic-info',
+            'physical',
+            'education-career',
+            'family-details',
+            'siblings',
+            'relatives',
+            'alliance',
+            'property',
+            'horoscope',
+            'about-me',
+            'about-preferences',
+            'photo',
+        ], array_keys($out['sections']));
+
+        foreach (['personal', 'family', 'contacts', 'addresses'] as $oldSection) {
+            $this->assertArrayNotHasKey($oldSection, $out['sections']);
+        }
+    }
+
+    public function test_yuvraj_text_returns_available_basic_info_and_db_free_sections(): void
     {
         $queries = [];
         DB::listen(static function ($query) use (&$queries): void {
@@ -62,44 +87,51 @@ TXT;
         $this->assertTrue($out['available']);
         $this->assertNull($out['skipped_reason']);
         $this->assertNull($out['build_error']);
-        $this->assertNotEmpty($out['sections']['personal']);
-        $this->assertNotEmpty($out['sections']['contacts']);
+        $this->assertNotEmpty($out['sections']['basic-info']);
         $this->assertNotEmpty($out['sections']['review_needed']);
         $this->assertSame([], $queries);
+
+        $basicBlob = $this->sectionBlob($out['sections']['basic-info']);
+        $this->assertStringContainsString('7350953384', $basicBlob);
+        $this->assertStringContainsString('9673350078', $basicBlob);
     }
 
-    public function test_swapnil_text_returns_available_family_and_contacts(): void
+    public function test_swapnil_text_places_gender_contacts_family_counts_and_relatives_in_wizard_sections(): void
     {
         $out = app(IntakePreviewNormalizedDraftPresenter::class)->present($this->swapnilText(), true);
 
         $this->assertTrue($out['available']);
-        $personalBlob = $this->sectionBlob($out['sections']['personal']);
-        $this->assertStringContainsString('male', $personalBlob);
-        $familyBlob = $this->sectionBlob($out['sections']['family']);
+        $basicBlob = $this->sectionBlob($out['sections']['basic-info']);
+        $this->assertStringContainsString('male', $basicBlob);
+        $this->assertStringContainsString('9860956022', $basicBlob);
+
+        $familyBlob = $this->sectionBlob($out['sections']['family-details']);
         $this->assertStringContainsString('0', $familyBlob);
         $this->assertStringContainsString('1', $familyBlob);
-        $contactsBlob = $this->sectionBlob($out['sections']['contacts']);
-        $this->assertStringContainsString('9860956022', $contactsBlob);
+
+        $relativesBlob = $this->sectionBlob($out['sections']['relatives']);
+        $this->assertStringContainsString('इस्लामपूर', $relativesBlob);
+        $this->assertSame('', $this->sectionBlob($out['sections']['siblings']));
     }
 
-    public function test_mahesh_text_returns_available_personal_family_contacts(): void
+    public function test_mahesh_text_returns_available_basic_family_and_contact_rows(): void
     {
         $out = app(IntakePreviewNormalizedDraftPresenter::class)->present($this->maheshText(), true);
 
         $this->assertTrue($out['available']);
-        $personalBlob = $this->sectionBlob($out['sections']['personal']);
-        $this->assertStringContainsString('महेशकुमार मोहन जगताप', $personalBlob);
-        $familyBlob = $this->sectionBlob($out['sections']['family']);
+        $basicBlob = $this->sectionBlob($out['sections']['basic-info']);
+        $this->assertStringContainsString('महेशकुमार मोहन जगताप', $basicBlob);
+        $this->assertStringContainsString('9870879727', $basicBlob);
+
+        $familyBlob = $this->sectionBlob($out['sections']['family-details']);
         $this->assertStringContainsString('मोहनराव गणपतराव जगताप', $familyBlob);
-        $contactsBlob = $this->sectionBlob($out['sections']['contacts']);
-        $this->assertStringContainsString('9870879727', $contactsBlob);
     }
 
     public function test_mahesh_full_name_row_marked_needs_review_for_heading_fallback(): void
     {
         $out = app(IntakePreviewNormalizedDraftPresenter::class)->present($this->maheshText(), true);
 
-        $fullNameRow = $this->findRowByField($out['sections']['personal'], 'core.full_name');
+        $fullNameRow = $this->findRowByField($out['sections']['basic-info'], 'core.full_name');
         $this->assertNotNull($fullNameRow);
         $this->assertTrue($fullNameRow['needs_review']);
         $this->assertSame('candidate_name_from_heading_fallback', $fullNameRow['review_reason']);
@@ -112,9 +144,14 @@ TXT;
 
     public function test_display_rows_use_clean_unicode_separators(): void
     {
-        $out = app(IntakePreviewNormalizedDraftPresenter::class)->present($this->swapnilText(), true);
+        $out = app(IntakePreviewNormalizedDraftPresenter::class)->present(<<<'TXT'
+मुलाचे नांव :- चि. रोहित शिंदे
+भाऊ :- चि. संकेत शिंदे ( अविवाहित ) ( इंजिनियर )
+आत्या :- श्री. भाऊसो कृष्णाजी मोरे रा. इस्लामपूर
+मोबाइल नंबर :- 9860956022 / 8668270153
+TXT, true);
 
-        $blob = $this->sectionBlob($out['sections']['family'])
+        $blob = $this->sectionBlob($out['sections']['siblings'])
             .' '.$this->sectionBlob($out['sections']['relatives'])
             .' '.$this->sectionBlob($out['sections']['review_needed']);
 
@@ -138,13 +175,42 @@ HTML, true);
         $this->assertStringNotContainsString('false', $propertyBlob);
     }
 
+    public function test_values_are_not_duplicated_across_wizard_sections(): void
+    {
+        $out = app(IntakePreviewNormalizedDraftPresenter::class)->present(<<<'HTML'
+<table>
+<tr><td>मुलाचे नाव</td><td>चि. रोहित शिंदे</td></tr>
+<tr><td>उंची</td><td>१७२ सेमी</td></tr>
+<tr><td>शिक्षण</td><td>B.Com</td></tr>
+<tr><td>भाऊ</td><td>चि. संकेत शिंदे ( अविवाहित ) ( इंजिनियर )</td></tr>
+<tr><td>मोबाईल नंबर</td><td>9876543210</td></tr>
+</table>
+HTML, true);
+
+        $basicBlob = $this->sectionBlob($out['sections']['basic-info']);
+        $physicalBlob = $this->sectionBlob($out['sections']['physical']);
+        $educationBlob = $this->sectionBlob($out['sections']['education-career']);
+        $familyBlob = $this->sectionBlob($out['sections']['family-details']);
+        $siblingsBlob = $this->sectionBlob($out['sections']['siblings']);
+
+        $this->assertStringContainsString('cm', $physicalBlob);
+        $this->assertStringNotContainsString('cm', $basicBlob);
+        $this->assertStringContainsString('B.Com', $educationBlob);
+        $this->assertStringNotContainsString('B.Com', $basicBlob);
+        $this->assertStringContainsString('9876543210', $basicBlob);
+        $this->assertStringContainsString('संकेत', $siblingsBlob);
+        $this->assertStringNotContainsString('संकेत', $familyBlob);
+        $this->assertArrayNotHasKey('contacts', $out['sections']);
+    }
+
     public function test_unavailable_when_not_biodata_text(): void
     {
         $out = app(IntakePreviewNormalizedDraftPresenter::class)->present('AI unavailable message', false);
 
         $this->assertFalse($out['available']);
         $this->assertSame('not_biodata_text', $out['skipped_reason']);
-        $this->assertSame([], $out['sections']['personal']);
+        $this->assertSame([], $out['sections']['basic-info']);
+        $this->assertArrayNotHasKey('personal', $out['sections']);
     }
 
     public function test_unavailable_when_text_empty(): void

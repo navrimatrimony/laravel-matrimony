@@ -2,7 +2,14 @@
     $draftPreview = is_array($normalizedDraftPreview ?? null) ? $normalizedDraftPreview : [];
     $draftAvailable = ! empty($draftPreview['available']);
     $draftSections = is_array($draftPreview['sections'] ?? null) ? $draftPreview['sections'] : [];
-    $sectionKeys = ['review_needed', 'personal', 'family', 'contacts', 'addresses', 'property', 'horoscope', 'relatives'];
+    $sectionKeys = array_keys($draftSections);
+    if ($sectionKeys === []) {
+        $sectionKeys = array_values(array_unique(array_merge(
+            ['review_needed'],
+            config('field_catalog.section_order', [])
+        )));
+    }
+    $sectionLabels = config('field_catalog.section_labels', []);
 @endphp
 
 <section
@@ -46,7 +53,7 @@
                         @if ($isReview)
                             {{ __('intake.normalized_draft_review_needed') }}
                         @else
-                            {{ __('intake.normalized_draft_section_'.$sectionKey) }}
+                            {{ __($sectionLabels[$sectionKey] ?? $sectionKey) }}
                         @endif
                     </h3>
 
