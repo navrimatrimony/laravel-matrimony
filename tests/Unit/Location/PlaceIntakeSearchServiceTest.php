@@ -2,19 +2,25 @@
 
 namespace Tests\Unit\Location;
 
-use App\Models\Country;
 use App\Services\Location\PlaceIntakeSearchService;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 class PlaceIntakeSearchServiceTest extends TestCase
 {
+    use RefreshDatabase;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        $this->seedLocationFixtures();
+        app()->setLocale('mr');
+    }
+
     public function test_tasgaon_sangli_returns_town_taluka_with_pincode(): void
     {
-        if (Country::query()->count() === 0) {
-            $this->markTestSkipped('No location data');
-        }
-
-        app()->setLocale('mr');
         $rows = app(PlaceIntakeSearchService::class)->search('तासगाव ता. - तासगाव, जि. - सांगली', 10);
 
         $this->assertNotEmpty($rows);
@@ -28,11 +34,6 @@ class PlaceIntakeSearchServiceTest extends TestCase
 
     public function test_varkute_malavdi_man_satara_finds_village(): void
     {
-        if (Country::query()->count() === 0) {
-            $this->markTestSkipped('No location data');
-        }
-
-        app()->setLocale('mr');
         $rows = app(PlaceIntakeSearchService::class)->search('वरकुटे-मलवडी, ता. माण, जि. सातारा', 10);
 
         $this->assertNotEmpty($rows);
@@ -41,11 +42,6 @@ class PlaceIntakeSearchServiceTest extends TestCase
 
     public function test_confident_match_varkute_returns_single_rural_row(): void
     {
-        if (Country::query()->count() === 0) {
-            $this->markTestSkipped('No location data');
-        }
-
-        app()->setLocale('mr');
         $row = app(PlaceIntakeSearchService::class)->confidentMatch('वरकुटे-मलवडी, ता. माण, जि. सातारा');
 
         $this->assertIsArray($row);
@@ -55,14 +51,116 @@ class PlaceIntakeSearchServiceTest extends TestCase
 
     public function test_tasgaon_sangli_simple_comma_form(): void
     {
-        if (Country::query()->count() === 0) {
-            $this->markTestSkipped('No location data');
-        }
-
-        app()->setLocale('mr');
         $rows = app(PlaceIntakeSearchService::class)->search('तासगाव, सांगली', 5);
 
         $this->assertNotEmpty($rows);
         $this->assertSame(374, (int) ($rows[0]['city_id'] ?? 0));
+    }
+
+    private function seedLocationFixtures(): void
+    {
+        $now = now();
+
+        DB::table('addresses')->insert(array_map(static fn (array $row): array => array_merge([
+            'tag' => null,
+            'pincode' => null,
+        ], $row), [
+            [
+                'id' => 1,
+                'name' => 'India',
+                'name_mr' => 'भारत',
+                'name_en' => 'India',
+                'slug' => 'india',
+                'type' => 'country',
+                'parent_id' => null,
+                'level' => 0,
+                'is_active' => true,
+                'created_at' => $now,
+                'updated_at' => $now,
+            ],
+            [
+                'id' => 2,
+                'name' => 'Maharashtra',
+                'name_mr' => 'महाराष्ट्र',
+                'name_en' => 'Maharashtra',
+                'slug' => 'maharashtra',
+                'type' => 'state',
+                'parent_id' => 1,
+                'level' => 1,
+                'is_active' => true,
+                'created_at' => $now,
+                'updated_at' => $now,
+            ],
+            [
+                'id' => 300,
+                'name' => 'Sangli',
+                'name_mr' => 'सांगली',
+                'name_en' => 'Sangli',
+                'slug' => 'sangli',
+                'type' => 'district',
+                'parent_id' => 2,
+                'level' => 2,
+                'is_active' => true,
+                'created_at' => $now,
+                'updated_at' => $now,
+            ],
+            [
+                'id' => 374,
+                'name' => 'Tasgaon',
+                'name_mr' => 'तासगाव',
+                'name_en' => 'Tasgaon',
+                'slug' => 'tasgaon-town',
+                'type' => 'taluka',
+                'tag' => 'town',
+                'parent_id' => 300,
+                'level' => 3,
+                'pincode' => '416312',
+                'is_active' => true,
+                'created_at' => $now,
+                'updated_at' => $now,
+            ],
+            [
+                'id' => 400,
+                'name' => 'Satara',
+                'name_mr' => 'सातारा',
+                'name_en' => 'Satara',
+                'slug' => 'satara',
+                'type' => 'district',
+                'parent_id' => 2,
+                'level' => 2,
+                'is_active' => true,
+                'created_at' => $now,
+                'updated_at' => $now,
+            ],
+            [
+                'id' => 500,
+                'name' => 'Man',
+                'name_mr' => 'माण',
+                'name_en' => 'Man',
+                'slug' => 'man-taluka',
+                'type' => 'taluka',
+                'tag' => 'taluka',
+                'parent_id' => 400,
+                'level' => 3,
+                'is_active' => true,
+                'created_at' => $now,
+                'updated_at' => $now,
+            ],
+            [
+                'id' => 6316,
+                'name' => 'Varkute Malavdi',
+                'name_mr' => 'वरकुटे मलवडी',
+                'name_en' => 'Varkute Malavdi',
+                'slug' => 'varkute-malavdi',
+                'type' => 'village',
+                'tag' => 'rural',
+                'parent_id' => 500,
+                'level' => 5,
+                'pincode' => '415509',
+                'is_active' => true,
+                'created_at' => $now,
+                'updated_at' => $now,
+            ],
+        ]));
     }
 }

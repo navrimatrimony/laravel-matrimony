@@ -4,15 +4,19 @@ namespace Tests\Unit\Intake;
 
 use App\Models\MatrimonyProfile;
 use App\Services\Intake\IntakePreviewExistingProfileOverlay;
+use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
 class IntakePreviewExistingProfileOverlayTest extends TestCase
 {
+    use RefreshDatabase;
+
     public function test_keeps_profile_full_name_and_surfaces_intake_as_suggestion(): void
     {
-        $profile = new MatrimonyProfile;
-        $profile->full_name = 'Profile Name Existing';
-        $profile->date_of_birth = '1990-01-15';
+        $profile = MatrimonyProfile::factory()->create([
+            'full_name' => 'Profile Name Existing',
+            'date_of_birth' => '1990-01-15',
+        ]);
 
         $coreData = [
             'full_name' => 'Intake Parsed Name',
@@ -44,8 +48,10 @@ class IntakePreviewExistingProfileOverlayTest extends TestCase
 
     public function test_prefills_empty_profile_field_from_intake_without_conflict_flag(): void
     {
-        $profile = new MatrimonyProfile;
-        $profile->full_name = 'Only Name Set';
+        $profile = MatrimonyProfile::factory()->create([
+            'full_name' => 'Only Name Set',
+            'date_of_birth' => null,
+        ]);
 
         $coreData = [
             'full_name' => 'Only Name Set',
@@ -77,7 +83,7 @@ class IntakePreviewExistingProfileOverlayTest extends TestCase
 
     public function test_profile_birth_city_id_stays_visible_when_approval_snapshot_differs(): void
     {
-        $profile = new MatrimonyProfile;
+        $profile = MatrimonyProfile::factory()->create();
         $profile->birth_city_id = 1001;
 
         $coreData = ['birth_city_id' => 6316];
