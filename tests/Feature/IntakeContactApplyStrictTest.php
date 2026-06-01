@@ -3,17 +3,31 @@
 namespace Tests\Feature;
 
 use App\Models\BiodataIntake;
+use App\Models\City;
 use App\Models\ConflictRecord;
 use App\Models\MatrimonyProfile;
 use App\Models\User;
 use App\Services\MutationService;
+use App\Services\Profile\ProfileCanonicalResidenceService;
+use Database\Seeders\MasterLookupSeeder;
+use Database\Seeders\MinimalLocationSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Tests\TestCase;
 
 class IntakeContactApplyStrictTest extends TestCase
 {
     use RefreshDatabase;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        $this->seed(MinimalLocationSeeder::class);
+        $this->seed(MasterLookupSeeder::class);
+        ProfileCanonicalResidenceService::forgetCachedMasters();
+    }
 
     public function test_intake_does_not_replace_existing_primary_contact_and_inserts_alternate_self(): void
     {
@@ -23,6 +37,7 @@ class IntakeContactApplyStrictTest extends TestCase
             'full_name' => 'Test User',
             'lifecycle_state' => 'draft',
         ]);
+        $this->attachResidence($profile);
 
         DB::table('profile_contacts')->insert([
             'profile_id' => $profile->id,
@@ -99,6 +114,7 @@ class IntakeContactApplyStrictTest extends TestCase
             'father_contact_1' => null,
             'lifecycle_state' => 'draft',
         ]);
+        $this->attachResidence($profile);
 
         $snapshot = [
             'snapshot_schema_version' => 1,
@@ -134,5 +150,18 @@ class IntakeContactApplyStrictTest extends TestCase
             ->where('phone_number', '9222222222')
             ->count();
         $this->assertSame(1, $fatherRows);
+    }
+
+    private function attachResidence(MatrimonyProfile $profile): void
+    {
+        $leafId = (int) City::query()->where('name', 'Pune City')->firstOrFail()->id;
+        if (Schema::hasColumn($profile->getTable(), 'location_id')) {
+            DB::table($profile->getTable())->where('id', $profile->id)->update(['location_id' => $leafId]);
+            $profile->refresh();
+
+            return;
+        }
+
+        ProfileCanonicalResidenceService::upsertSelfCurrent((int) $profile->id, $leafId, null, true, false);
     }
 }

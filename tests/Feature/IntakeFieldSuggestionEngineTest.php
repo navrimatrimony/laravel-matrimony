@@ -3,15 +3,30 @@
 namespace Tests\Feature;
 
 use App\Models\BiodataIntake;
+use App\Models\City;
 use App\Models\MatrimonyProfile;
 use App\Models\User;
 use App\Services\MutationService;
+use App\Services\Profile\ProfileCanonicalResidenceService;
+use Database\Seeders\MasterLookupSeeder;
+use Database\Seeders\MinimalLocationSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Tests\TestCase;
 
 class IntakeFieldSuggestionEngineTest extends TestCase
 {
     use RefreshDatabase;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        $this->seed(MinimalLocationSeeder::class);
+        $this->seed(MasterLookupSeeder::class);
+        ProfileCanonicalResidenceService::forgetCachedMasters();
+    }
 
     public function test_applies_full_name_when_profile_full_name_empty(): void
     {
@@ -21,6 +36,7 @@ class IntakeFieldSuggestionEngineTest extends TestCase
             'full_name' => '',
             'height_cm' => null,
         ]);
+        $this->attachResidence($profile);
 
         $snapshot = $this->baseSnapshot($profile, $user->id, [
             'full_name' => 'प्रतिक पाटील',
@@ -42,6 +58,7 @@ class IntakeFieldSuggestionEngineTest extends TestCase
             'user_id' => $user->id,
             'father_name' => 'राम पाटील',
         ]);
+        $this->attachResidence($profile);
 
         $snapshot = $this->baseSnapshot($profile, $user->id, [
             'father_name' => 'राम पाटील',
@@ -63,6 +80,7 @@ class IntakeFieldSuggestionEngineTest extends TestCase
             'user_id' => $user->id,
             'father_name' => 'A',
         ]);
+        $this->attachResidence($profile);
 
         $snapshot = $this->baseSnapshot($profile, $user->id, [
             'father_name' => 'B',
@@ -89,6 +107,7 @@ class IntakeFieldSuggestionEngineTest extends TestCase
             'user_id' => $user->id,
             'mother_occupation' => null,
         ]);
+        $this->attachResidence($profile);
 
         $snapshot = $this->baseSnapshot($profile, $user->id, [
             'mother_occupation' => 'गृहिणी',
@@ -107,6 +126,7 @@ class IntakeFieldSuggestionEngineTest extends TestCase
             'user_id' => $user->id,
             'highest_education' => 'B.E.',
         ]);
+        $this->attachResidence($profile);
 
         $snapshot = $this->baseSnapshot($profile, $user->id, [
             'highest_education' => 'M.Tech',
@@ -174,5 +194,18 @@ class IntakeFieldSuggestionEngineTest extends TestCase
         }
 
         return true;
+    }
+
+    private function attachResidence(MatrimonyProfile $profile): void
+    {
+        $leafId = (int) City::query()->where('name', 'Pune City')->firstOrFail()->id;
+        if (Schema::hasColumn($profile->getTable(), 'location_id')) {
+            DB::table($profile->getTable())->where('id', $profile->id)->update(['location_id' => $leafId]);
+            $profile->refresh();
+
+            return;
+        }
+
+        ProfileCanonicalResidenceService::upsertSelfCurrent((int) $profile->id, $leafId, null, true, false);
     }
 }
