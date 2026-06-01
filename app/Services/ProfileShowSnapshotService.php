@@ -14,7 +14,6 @@ use App\Models\Religion;
 use App\Models\State;
 use App\Services\Location\LocationFormatterService;
 use App\Support\HeightDisplay;
-use App\Support\HeightDisplay;
 use App\Support\ProfileDisplayCopy;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
