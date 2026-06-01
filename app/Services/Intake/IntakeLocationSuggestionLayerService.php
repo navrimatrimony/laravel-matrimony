@@ -184,6 +184,9 @@ class IntakeLocationSuggestionLayerService
             if ($existingApplied === (int) $loc->id && ! empty($core['birth_place_suggestion_applied'])) {
                 return $this->resolveSuccessPayload($loc, $talukaId, $districtId, $stateId);
             }
+            if ($existingApplied > 0 && empty($core['birth_place_suggestion_applied'])) {
+                return ['ok' => false, 'message' => 'Birth place is already resolved.'];
+            }
             $core['birth_city_id'] = (int) $loc->id;
             $core['birth_place_suggestion_applied'] = true;
             if (! is_array($snapshot['birth_place'] ?? null)) {

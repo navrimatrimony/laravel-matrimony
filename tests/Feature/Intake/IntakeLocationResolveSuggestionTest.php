@@ -166,4 +166,39 @@ class IntakeLocationResolveSuggestionTest extends TestCase
             ->assertStatus(422)
             ->assertJsonPath('success', false);
     }
+
+    public function test_resolve_is_idempotent_when_birth_place_suggestion_was_already_applied(): void
+    {
+        $this->withoutMiddleware(EnforceCardOnboarding::class);
+        $this->seed(MinimalLocationSeeder::class);
+        $user = User::factory()->create();
+        $city = City::query()->where('name', 'Pune City')->firstOrFail();
+
+        $intake = BiodataIntake::query()->create([
+            'uploaded_by' => $user->id,
+            'file_path' => 'intakes/test-already-applied.txt',
+            'original_filename' => 'test-already-applied.txt',
+            'file_type' => 'txt',
+            'raw_ocr_text' => 'Birth place Shirur',
+            'intake_status' => 'uploaded',
+            'parse_status' => 'parsed',
+            'approval_snapshot_json' => [
+                'core' => [
+                    'birth_place' => 'Shirur',
+                    'birth_city_id' => $city->id,
+                    'birth_place_suggestion_applied' => true,
+                ],
+            ],
+            'approved_by_user' => false,
+            'intake_locked' => false,
+        ]);
+
+        $this->actingAs($user)
+            ->patchJson(route('intake.resolve-location', $intake), [
+                'field' => 'birth_place',
+                'city_id' => $city->id,
+            ])
+            ->assertOk()
+            ->assertJsonPath('success', true);
+    }
 }
