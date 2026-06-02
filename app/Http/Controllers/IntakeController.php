@@ -9,6 +9,7 @@ use App\Services\EducationService;
 use App\Services\Intake\IntakeExtractionReuseResolver;
 use App\Services\Intake\IntakeLocationSuggestionLayerService;
 use App\Services\Intake\IntakePipelineService;
+use App\Services\Intake\IntakePhotoCandidateApplyService;
 use App\Services\Intake\IntakePhotoCandidateCropService;
 use App\Services\Intake\IntakePreviewExistingProfileOverlay;
 use App\Services\Intake\IntakePreviewLinkedProfileResolver;
@@ -1820,6 +1821,10 @@ class IntakeController extends Controller
         }
 
         $result = app(IntakeApprovalService::class)->approve($intake, (int) auth()->id(), $snapshot);
+        if (($result['mutation_success'] ?? false) === true && ($result['already_applied'] ?? false) !== true) {
+            app(IntakePhotoCandidateApplyService::class)
+                ->applyAfterSuccessfulIntakeMutation($intake->refresh(), $result['profile_id'] ?? null);
+        }
 
         return redirect()->route('intake.status', $intake->id)
             ->with('success', __('intake.approved_successfully'))

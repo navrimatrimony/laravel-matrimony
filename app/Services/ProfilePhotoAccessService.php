@@ -173,13 +173,23 @@ class ProfilePhotoAccessService
         $primaryUrl = $this->primaryPhotoPublicUrl($subject);
         if ($primaryUrl !== null) {
             $slots[] = ['url' => $primaryUrl, 'blur' => $allBlur];
+        } else {
+            $fallback = \App\Services\Image\ProfilePhotoUrlService::primaryNonPendingGalleryRelativePath($subject);
+            if ($fallback !== null) {
+                $primaryUrl = app(\App\Services\Image\ProfilePhotoUrlService::class)->publicUrl($fallback);
+                $slots[] = ['url' => $primaryUrl, 'blur' => $allBlur];
+            }
         }
         foreach ($galleryPhotos as $p) {
             if (empty($p->file_path)) {
                 continue;
             }
+            $url = app(\App\Services\Image\ProfilePhotoUrlService::class)->publicUrl($p->file_path);
+            if ($primaryUrl !== null && $url === $primaryUrl) {
+                continue;
+            }
             $slots[] = [
-                'url' => app(\App\Services\Image\ProfilePhotoUrlService::class)->publicUrl($p->file_path),
+                'url' => $url,
                 'blur' => $allBlur,
             ];
         }
@@ -216,6 +226,6 @@ class ProfilePhotoAccessService
             return null;
         }
 
-        return app(\App\Services\Image\ProfilePhotoUrlService::class)->publicUrl($path);
+        return app(\App\Services\Image\ProfilePhotoUrlService::class)->publicUrl($path, $subject);
     }
 }

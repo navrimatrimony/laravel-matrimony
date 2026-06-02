@@ -505,6 +505,13 @@ class MatrimonyProfileController extends Controller
         // If user has no existing photos, the first uploaded photo becomes primary.
         // Otherwise, new uploads are added as non-primary by default.
         $mainBecomesPrimary = $existingPhotosCount === 0;
+        $currentPrimaryPhoto = ProfilePhoto::query()
+            ->where('profile_id', $profile->id)
+            ->where('is_primary', true)
+            ->first(['id', 'uploaded_via']);
+        $laterUserUploadReplacesIntakePrimary = ! $mainBecomesPrimary
+            && (string) ($currentPrimaryPhoto?->uploaded_via ?? '') === 'intake_crop'
+            && (string) \App\Models\AdminSetting::getValue('intake_photo_later_upload_primary_policy', 'new_upload_primary') !== 'keep_intake_primary';
 
         $targetDir = storage_path('app/public/matrimony_photos');
         if (! is_dir($targetDir)) {
@@ -672,10 +679,11 @@ class MatrimonyProfileController extends Controller
             if (($meta['approved_status'] ?? '') === 'rejected') {
                 $batchHadRejected = true;
             }
+            $rowIsPrimary = $laterUserUploadReplacesIntakePrimary;
             $row = [
                 'profile_id' => $profile->id,
                 'file_path' => $primaryFilename,
-                'is_primary' => false,
+                'is_primary' => $rowIsPrimary,
                 'uploaded_via' => 'user_web',
                 'approved_status' => $meta['approved_status'],
                 'watermark_detected' => false,
@@ -683,7 +691,29 @@ class MatrimonyProfileController extends Controller
             if ($hasModerationScanColumn) {
                 $row['moderation_scan_json'] = $meta['moderation_scan_json'];
             }
-            ProfilePhoto::create($row);
+            if ($rowIsPrimary) {
+                $priorBypass = MatrimonyProfile::$bypassGovernanceEnforcement;
+                MatrimonyProfile::$bypassGovernanceEnforcement = true;
+                try {
+                    \Illuminate\Support\Facades\DB::transaction(function () use ($profile, $primaryFilename, $row, $meta): void {
+                        ProfilePhoto::query()
+                            ->where('profile_id', $profile->id)
+                            ->update(['is_primary' => false]);
+
+                        ProfilePhoto::create($row);
+
+                        $profile->profile_photo = $primaryFilename;
+                        $profile->photo_approved = ($meta['approved_status'] ?? '') === 'approved';
+                        $profile->photo_rejected_at = null;
+                        $profile->photo_rejection_reason = null;
+                        $profile->save();
+                    });
+                } finally {
+                    MatrimonyProfile::$bypassGovernanceEnforcement = $priorBypass;
+                }
+            } else {
+                ProfilePhoto::create($row);
+            }
         }
 
         // Insert additional photos as non-primary by default.

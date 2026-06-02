@@ -36,20 +36,62 @@ class ImageProcessingService
             'path' => $tmpPath,
         ]);
 
+        $this->dispatchProcessingJob($tmpPath, $profileId, 'user_web', ProcessProfilePhoto::PRIMARY_MODE_REPLACE_PRIMARY_UPDATE_EXISTING);
+
+        // Not publicly served; used only as a placeholder so the UI remains consistent until processing finishes.
+        return 'pending/'.$tmpName;
+    }
+
+    /**
+     * Copy an existing local image file to the same temp area used by uploads and dispatch the normal processing job.
+     */
+    public function enqueueExistingProfilePhotoPath(
+        string $sourcePath,
+        int $profileId,
+        string $uploadedVia,
+        string $primaryMode,
+    ): ?string {
+        if (! is_file($sourcePath) || ! is_readable($sourcePath)) {
+            return null;
+        }
+
+        $tmpDir = storage_path('app/tmp');
+        if (! is_dir($tmpDir)) {
+            mkdir($tmpDir, 0775, true);
+        }
+
+        $extension = strtolower(pathinfo($sourcePath, PATHINFO_EXTENSION) ?: 'jpg');
+        $extension = in_array($extension, ['jpg', 'jpeg', 'png', 'webp', 'gif'], true) ? $extension : 'jpg';
+        $tmpName = (string) Str::uuid().'.'.$extension;
+        $tmpPath = $tmpDir.DIRECTORY_SEPARATOR.$tmpName;
+
+        if (! copy($sourcePath, $tmpPath)) {
+            throw new \RuntimeException('Unable to copy existing profile photo candidate to temp processing path.');
+        }
+
+        $this->dispatchProcessingJob($tmpPath, $profileId, $uploadedVia, $primaryMode);
+
+        return 'pending/'.$tmpName;
+    }
+
+    private function dispatchProcessingJob(string $tmpPath, int $profileId, string $uploadedVia, string $primaryMode): void
+    {
         if (config('photo_processing.force_direct_handle', false)) {
             Log::warning('PHOTO JOB: forcing direct handle() (bypassing queue)', [
                 'profile_id' => $profileId,
             ]);
-            app(ProcessProfilePhoto::class, ['tempImagePath' => $tmpPath, 'profileId' => $profileId])->handle(
+            app(ProcessProfilePhoto::class, [
+                'tempImagePath' => $tmpPath,
+                'profileId' => $profileId,
+                'uploadedVia' => $uploadedVia,
+                'primaryMode' => $primaryMode,
+            ])->handle(
                 app(\App\Services\Image\ImageModerationService::class),
                 app(\App\Services\Image\ImageOptimizationService::class),
             );
         } else {
-            ProcessProfilePhoto::dispatch($tmpPath, $profileId);
+            ProcessProfilePhoto::dispatch($tmpPath, $profileId, $uploadedVia, $primaryMode);
         }
-
-        // Not publicly served; used only as a placeholder so the UI remains consistent until processing finishes.
-        return 'pending/'.$tmpName;
     }
 
     private function validateUploadedImage(UploadedFile $file): void

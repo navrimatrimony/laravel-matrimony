@@ -2,17 +2,32 @@
 
 namespace Tests\Feature;
 
+use App\Models\City;
 use App\Models\MasterGender;
 use App\Models\MatrimonyProfile;
 use App\Models\User;
+use App\Services\Profile\ProfileCanonicalResidenceService;
 use App\Services\ProfilePhotoAccessService;
+use Database\Seeders\MasterLookupSeeder;
+use Database\Seeders\MinimalLocationSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
 
 class ProfilePhotoAccessServiceTest extends TestCase
 {
     use RefreshDatabase;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        $this->seed(MinimalLocationSeeder::class);
+        $this->seed(MasterLookupSeeder::class);
+        ProfileCanonicalResidenceService::forgetCachedMasters();
+    }
 
     private function seedGenders(): array
     {
@@ -32,9 +47,8 @@ class ProfilePhotoAccessServiceTest extends TestCase
     {
         $u = User::factory()->create();
 
-        return MatrimonyProfile::factory()->for($u)->create([
+        return $this->createActiveProfileWithResidence($u, [
             'gender_id' => $femaleGid,
-            'lifecycle_state' => 'active',
             'is_suspended' => false,
             'full_name' => $name,
             'profile_photo' => $photoPath,
@@ -50,9 +64,8 @@ class ProfilePhotoAccessServiceTest extends TestCase
         [$maleGid, $femaleGid] = $this->seedGenders();
 
         $viewer = User::factory()->create();
-        MatrimonyProfile::factory()->for($viewer)->create([
+        $this->createActiveProfileWithResidence($viewer, [
             'gender_id' => $maleGid,
-            'lifecycle_state' => 'active',
             'is_suspended' => false,
             'full_name' => 'Viewer No Photo',
             'profile_photo' => '',
@@ -88,9 +101,8 @@ class ProfilePhotoAccessServiceTest extends TestCase
         [$maleGid, $femaleGid] = $this->seedGenders();
 
         $viewer = User::factory()->create();
-        MatrimonyProfile::factory()->for($viewer)->create([
+        $this->createActiveProfileWithResidence($viewer, [
             'gender_id' => $maleGid,
-            'lifecycle_state' => 'active',
             'is_suspended' => false,
             'full_name' => 'Viewer With Photo',
             'profile_photo' => 'me.jpg',
@@ -125,5 +137,27 @@ class ProfilePhotoAccessServiceTest extends TestCase
         $this->assertFalse($pres['slots'][0]['blur']);
         $this->assertTrue($pres['slots'][1]['blur']);
         $this->assertSame('profile.photos_upgrade_to_view_all', $pres['message_key']);
+    }
+
+    /**
+     * @param  array<string, mixed>  $factoryAttributes
+     */
+    private function createActiveProfileWithResidence(User $user, array $factoryAttributes = []): MatrimonyProfile
+    {
+        $profile = MatrimonyProfile::factory()->for($user)->create(array_merge([
+            'lifecycle_state' => 'draft',
+        ], $factoryAttributes));
+
+        $leafId = (int) City::query()->where('name', 'Pune City')->firstOrFail()->id;
+        if (Schema::hasColumn($profile->getTable(), 'location_id')) {
+            DB::table($profile->getTable())->where('id', $profile->id)->update(['location_id' => $leafId]);
+            $profile->refresh();
+        } else {
+            ProfileCanonicalResidenceService::upsertSelfCurrent((int) $profile->id, $leafId, null, true, false);
+        }
+
+        $profile->update(['lifecycle_state' => 'active']);
+
+        return $profile->fresh();
     }
 }

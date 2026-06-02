@@ -11,6 +11,7 @@ use App\Models\MatrimonyProfile;
 use App\Services\ExtendedFieldService;
 use App\Services\Intake\IntakeExtractionReuseResolver;
 use App\Services\Intake\IntakeLocationSuggestionLayerService;
+use App\Services\Intake\IntakePhotoCandidateApplyService;
 use App\Services\Intake\IntakeReviewParseInputTextResolver;
 use App\Services\IntakeApprovalService;
 use App\Services\IntakeManualOcrPreparedService;
@@ -320,6 +321,10 @@ class AdminIntakeController extends Controller
         }
 
         $result = app(IntakeApprovalService::class)->approve($intake, (int) auth()->id(), $intake->approval_snapshot_json);
+        if (($result['mutation_success'] ?? false) === true && ($result['already_applied'] ?? false) !== true) {
+            app(IntakePhotoCandidateApplyService::class)
+                ->applyAfterSuccessfulIntakeMutation($intake->refresh(), $result['profile_id'] ?? null);
+        }
 
         $redirect = redirect()
             ->route('admin.biodata-intakes.show', $intake)

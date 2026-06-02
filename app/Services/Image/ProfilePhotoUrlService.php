@@ -131,9 +131,16 @@ class ProfilePhotoUrlService
      * - new: storage/app/public/matrimony_photos (served via /storage)
      * - old: public/uploads/matrimony_photos (served via /uploads)
      */
-    public function publicUrl(string $filename): string
+    public function publicUrl(string $filename, ?MatrimonyProfile $profile = null): string
     {
         $filename = ltrim($filename, '/');
+
+        if ($profile !== null && self::isPendingPlaceholder($filename)) {
+            $fallback = self::primaryNonPendingGalleryRelativePath($profile);
+            if ($fallback !== null && self::storedFileExistsForRelativePath($fallback)) {
+                return $this->publicUrl($fallback);
+            }
+        }
 
         try {
             if (Storage::disk('public')->exists('matrimony_photos/'.$filename)) {
