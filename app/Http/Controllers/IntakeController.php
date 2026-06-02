@@ -11,6 +11,7 @@ use App\Services\Intake\IntakeLocationSuggestionLayerService;
 use App\Services\Intake\IntakePipelineService;
 use App\Services\Intake\IntakePhotoCandidateApplyService;
 use App\Services\Intake\IntakePhotoCandidateCropService;
+use App\Services\Intake\IntakePhotoCandidateSuggestionService;
 use App\Services\Intake\IntakePreviewExistingProfileOverlay;
 use App\Services\Intake\IntakePreviewLinkedProfileResolver;
 use App\Services\Intake\IntakePreviewProfileHydrator;
@@ -256,6 +257,7 @@ class IntakeController extends Controller
             ->present($rawOcrTextForPreview, $reviewTextIsBiodata);
         $intakePhotoPreview = app(\App\Services\Intake\IntakePhotoCandidatePreviewService::class)
             ->preview($intake);
+        $photoCandidateAutoSaved = false;
 
         // Preview-only hints (siblings/relatives/taluka): same text as parse input when available (not stored upload OCR).
         $rawTextForPreviewEnhancements = $reviewTextIsBiodata ? $rawOcrTextForPreview : '';
@@ -1428,6 +1430,31 @@ class IntakeController extends Controller
         $photoCandidateCropEligible = $photoCandidateCropEnabled && $photoCandidateCropSvc->isImageIntake($intake);
         $photoCandidateOriginalUrl = $photoCandidateCropEligible ? $photoCandidateCropSvc->originalImageUrl($intake) : null;
         $photoCandidateExists = $photoCandidateCropSvc->exists($intake);
+        $photoCandidateSuggestion = $photoCandidateCropEligible
+            ? app(IntakePhotoCandidateSuggestionService::class)->suggest($intake)
+            : null;
+        if (
+            $photoCandidateCropEligible
+            && ! $photoCandidateExists
+            && AdminSetting::getBool('intake_photo_show_in_normalized_preview', false)
+            && is_array($photoCandidateSuggestion)
+            && ($photoCandidateSuggestion['available'] ?? false) === true
+            && (float) ($photoCandidateSuggestion['confidence'] ?? 0.0) >= 0.55
+            && is_array($photoCandidateSuggestion['box'] ?? null)
+        ) {
+            try {
+                $photoCandidateCropSvc->saveFromOriginalBox($intake, $photoCandidateSuggestion['box']);
+                $photoCandidateExists = true;
+                $photoCandidateAutoSaved = true;
+            } catch (\Throwable $e) {
+                Log::warning('Intake profile photo candidate auto-save failed', [
+                    'intake_id' => $intake->id,
+                    'message' => $e->getMessage(),
+                ]);
+            }
+        }
+        $intakePhotoPreview = app(\App\Services\Intake\IntakePhotoCandidatePreviewService::class)
+            ->preview($intake);
 
         $autoCropSuggestion = null;
 
@@ -1484,6 +1511,8 @@ class IntakeController extends Controller
             'photoCandidateCropEligible',
             'photoCandidateOriginalUrl',
             'photoCandidateExists',
+            'photoCandidateSuggestion',
+            'photoCandidateAutoSaved',
             'autoCropSuggestion',
             'ocrQualityEvaluation',
             'showOcrLowQualityWarning',

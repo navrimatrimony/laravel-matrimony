@@ -5,6 +5,8 @@ namespace Tests\Feature;
 use App\Models\AdminSetting;
 use App\Models\BiodataIntake;
 use App\Models\User;
+use App\Services\Intake\IntakePhotoCandidateCropService;
+use App\Services\Intake\IntakePhotoCandidateSuggestionService;
 use App\Services\Parsing\IntakeParsedSnapshotSkeleton;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
@@ -62,10 +64,10 @@ class IntakePhotoCandidateCropTest extends TestCase
         ], $overrides));
     }
 
-    private function createImageIntake(User $user): BiodataIntake
+    private function createImageIntake(User $user, ?string $binary = null): BiodataIntake
     {
         $relativePath = 'intakes/photo-candidate-tests/'.Str::uuid().'.jpg';
-        Storage::disk('local')->put($relativePath, $this->jpegBinary(320, 240));
+        Storage::disk('local')->put($relativePath, $binary ?? $this->jpegBinary(320, 240));
 
         return $this->createParsedIntake($user, [
             'file_path' => $relativePath,
@@ -91,6 +93,34 @@ class IntakePhotoCandidateCropTest extends TestCase
 
         ob_start();
         imagejpeg($image, null, 88);
+        $binary = (string) ob_get_clean();
+        imagedestroy($image);
+
+        return $binary;
+    }
+
+    private function biodataWithPhotoBlockBinary(): string
+    {
+        if (! function_exists('imagecreatetruecolor')) {
+            $this->markTestSkipped('GD extension is required for candidate crop tests.');
+        }
+
+        $image = imagecreatetruecolor(800, 1000);
+        $white = imagecolorallocate($image, 255, 255, 255);
+        $black = imagecolorallocate($image, 40, 40, 40);
+        $blue = imagecolorallocate($image, 70, 130, 210);
+        $green = imagecolorallocate($image, 80, 170, 120);
+        imagefill($image, 0, 0, $white);
+
+        for ($i = 0; $i < 18; $i++) {
+            $y = 90 + ($i * 34);
+            imageline($image, 70, $y, 470, $y, $black);
+        }
+        imagefilledrectangle($image, 540, 80, 689, 279, $blue);
+        imagefilledrectangle($image, 570, 130, 660, 240, $green);
+
+        ob_start();
+        imagejpeg($image, null, 90);
         $binary = (string) ob_get_clean();
         imagedestroy($image);
 
@@ -142,6 +172,8 @@ class IntakePhotoCandidateCropTest extends TestCase
             ->assertJson(['ok' => true]);
 
         $this->assertTrue(Storage::disk('local')->exists('intake-photo-candidates/'.$intake->id.'/candidate.jpg'));
+        $info = getimagesize(app(IntakePhotoCandidateCropService::class)->absolutePath($intake));
+        $this->assertSame([600, 800], [$info[0] ?? null, $info[1] ?? null]);
     }
 
     public function test_admin_can_save_candidate_crop_for_same_intake(): void
@@ -160,6 +192,91 @@ class IntakePhotoCandidateCropTest extends TestCase
             ->assertJson(['ok' => true]);
 
         $this->assertTrue(Storage::disk('local')->exists('intake-photo-candidates/'.$intake->id.'/candidate.jpg'));
+    }
+
+    public function test_candidate_crop_ui_uses_existing_biodata_image_without_duplicate_full_image(): void
+    {
+        $user = User::factory()->create();
+        $intake = $this->createImageIntake($user);
+
+        AdminSetting::setValue('intake_photo_crop_enabled', '1');
+
+        $response = $this->actingAs($user)
+            ->get(route('intake.preview', $intake))
+            ->assertOk()
+            ->assertSee('id="intake-manual-crop-img"', false)
+            ->assertSee('id="intake-photo-candidate-box"', false)
+            ->assertSee('Save profile photo crop', false)
+            ->assertDontSee('id="intake-photo-candidate-crop-section"', false)
+            ->assertDontSee('id="intake-photo-candidate-img"', false);
+
+        $content = $response->getContent() ?: '';
+        $this->assertSame(1, substr_count($content, 'id="intake-manual-crop-img"'));
+        $this->assertSame(0, substr_count($content, 'id="intake-photo-candidate-img"'));
+    }
+
+    public function test_auto_suggestion_finds_colored_profile_photo_block(): void
+    {
+        $user = User::factory()->create();
+        $intake = $this->createImageIntake($user, $this->biodataWithPhotoBlockBinary());
+
+        $suggestion = app(IntakePhotoCandidateSuggestionService::class)->suggest($intake);
+
+        $this->assertTrue($suggestion['available']);
+        $this->assertGreaterThanOrEqual(0.55, $suggestion['confidence']);
+        $box = $suggestion['box'];
+        $this->assertIsArray($box);
+        $this->assertEqualsWithDelta(540, $box['x'], 35);
+        $this->assertGreaterThan(450, $box['x']);
+        $this->assertEqualsWithDelta(80, $box['y'], 35);
+        $this->assertEqualsWithDelta(150, $box['width'], 45);
+        $this->assertEqualsWithDelta(200, $box['height'], 55);
+    }
+
+    public function test_server_can_save_candidate_crop_from_suggested_original_image_box(): void
+    {
+        $user = User::factory()->create();
+        $intake = $this->createImageIntake($user, $this->biodataWithPhotoBlockBinary());
+
+        $suggestion = app(IntakePhotoCandidateSuggestionService::class)->suggest($intake);
+        $this->assertTrue($suggestion['available']);
+        $this->assertIsArray($suggestion['box']);
+
+        app(IntakePhotoCandidateCropService::class)->saveFromOriginalBox($intake, $suggestion['box']);
+
+        $this->assertTrue(Storage::disk('local')->exists('intake-photo-candidates/'.$intake->id.'/candidate.jpg'));
+        $info = getimagesize(app(IntakePhotoCandidateCropService::class)->absolutePath($intake));
+        $this->assertSame([600, 800], [$info[0] ?? null, $info[1] ?? null]);
+    }
+
+    public function test_auto_suggestion_low_confidence_for_blank_text_like_image(): void
+    {
+        $user = User::factory()->create();
+        $intake = $this->createImageIntake($user, $this->jpegBinary(800, 1000));
+
+        $suggestion = app(IntakePhotoCandidateSuggestionService::class)->suggest($intake);
+
+        $this->assertFalse($suggestion['available']);
+        $this->assertLessThan(0.55, $suggestion['confidence']);
+        $this->assertStringContainsString('No reliable', $suggestion['message']);
+    }
+
+    public function test_preview_does_not_claim_auto_detect_for_blank_image(): void
+    {
+        $user = User::factory()->create();
+        $intake = $this->createImageIntake($user, $this->jpegBinary(800, 1000));
+
+        AdminSetting::setValue('intake_photo_crop_enabled', '1');
+        AdminSetting::setValue('intake_photo_show_in_normalized_preview', '1');
+
+        $this->actingAs($user)
+            ->get(route('intake.preview', $intake))
+            ->assertOk()
+            ->assertSee('Could not auto-detect profile photo. Please adjust crop manually.', false)
+            ->assertDontSee('Auto-cropped from biodata image. Adjust and save again if needed.', false)
+            ->assertDontSee('Detected candidate photo area. Adjust if needed, then save.', false);
+
+        $this->assertFalse(Storage::disk('local')->exists('intake-photo-candidates/'.$intake->id.'/candidate.jpg'));
     }
 
     public function test_unauthorized_user_cannot_save_or_view_candidate_crop(): void
@@ -221,6 +338,27 @@ class IntakePhotoCandidateCropTest extends TestCase
         $this->assertSame([], $queries);
     }
 
+    public function test_candidate_crop_save_normalizes_free_ratio_upload_to_standard_profile_ratio(): void
+    {
+        $user = User::factory()->create();
+        $intake = $this->createImageIntake($user);
+
+        AdminSetting::setValue('intake_photo_crop_enabled', '1');
+
+        $this->actingAs($user)
+            ->postJson(route('intake.photo-candidate-crop-save', $intake), [
+                'candidate_image' => UploadedFile::fake()->image('wide-candidate.jpg', 300, 120),
+            ])
+            ->assertOk()
+            ->assertJson(['ok' => true]);
+
+        $info = getimagesize(app(IntakePhotoCandidateCropService::class)->absolutePath($intake));
+        $this->assertSame([
+            IntakePhotoCandidateCropService::PROFILE_CROP_EXPORT_WIDTH,
+            IntakePhotoCandidateCropService::PROFILE_CROP_EXPORT_HEIGHT,
+        ], [$info[0] ?? null, $info[1] ?? null]);
+    }
+
     public function test_normalized_draft_photo_section_shows_thumbnail_after_candidate_crop_exists(): void
     {
         $user = User::factory()->create();
@@ -240,5 +378,27 @@ class IntakePhotoCandidateCropTest extends TestCase
             ->assertOk()
             ->assertSee('Biodata photo candidate preview', false)
             ->assertSee('Preview only. Not saved as profile photo yet.', false);
+    }
+
+    public function test_preview_auto_saves_high_confidence_candidate_and_renders_normalized_draft_thumbnail(): void
+    {
+        $user = User::factory()->create();
+        $intake = $this->createImageIntake($user, $this->biodataWithPhotoBlockBinary());
+
+        AdminSetting::setValue('intake_photo_crop_enabled', '1');
+        AdminSetting::setValue('intake_photo_show_in_normalized_preview', '1');
+
+        $this->assertFalse(Storage::disk('local')->exists('intake-photo-candidates/'.$intake->id.'/candidate.jpg'));
+
+        $this->actingAs($user)
+            ->get(route('intake.preview', $intake))
+            ->assertOk()
+            ->assertSee('Auto-cropped from biodata image. Adjust and save again if needed.', false)
+            ->assertSee('Biodata photo candidate preview', false)
+            ->assertSee('Preview only. Not saved as profile photo yet.', false);
+
+        $this->assertTrue(Storage::disk('local')->exists('intake-photo-candidates/'.$intake->id.'/candidate.jpg'));
+        $info = getimagesize(app(IntakePhotoCandidateCropService::class)->absolutePath($intake));
+        $this->assertSame([600, 800], [$info[0] ?? null, $info[1] ?? null]);
     }
 }

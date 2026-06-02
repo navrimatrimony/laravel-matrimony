@@ -10,6 +10,9 @@ use Illuminate\Support\Facades\Storage;
 
 final class IntakePhotoCandidateCropService
 {
+    public const PROFILE_CROP_EXPORT_WIDTH = 600;
+    public const PROFILE_CROP_EXPORT_HEIGHT = 800;
+
     /** @var list<string> */
     private const IMAGE_EXTENSIONS = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp'];
 
@@ -103,6 +106,54 @@ final class IntakePhotoCandidateCropService
         $this->saveAsJpeg($intake, $image);
     }
 
+    /**
+     * @param  array{x: int, y: int, width: int, height: int}  $box
+     *
+     * @throws \InvalidArgumentException|\RuntimeException
+     */
+    public function saveFromOriginalBox(BiodataIntake $intake, array $box): void
+    {
+        if (! $this->isImageIntake($intake)) {
+            throw new \InvalidArgumentException('intake_source_not_image');
+        }
+
+        $sourcePath = storage_path('app/private/'.trim((string) $intake->file_path));
+        $binary = is_readable($sourcePath) ? file_get_contents($sourcePath) : false;
+        if ($binary === false || $binary === '') {
+            throw new \InvalidArgumentException('candidate_source_not_readable');
+        }
+
+        $source = @imagecreatefromstring($binary);
+        if (! $source instanceof \GdImage) {
+            throw new \InvalidArgumentException('candidate_source_invalid_image');
+        }
+
+        $sourceWidth = imagesx($source);
+        $sourceHeight = imagesy($source);
+        $x = (int) ($box['x'] ?? -1);
+        $y = (int) ($box['y'] ?? -1);
+        $width = (int) ($box['width'] ?? 0);
+        $height = (int) ($box['height'] ?? 0);
+
+        if ($x < 0 || $y < 0 || $width < 80 || $height < 80 || ($x + $width) > $sourceWidth || ($y + $height) > $sourceHeight) {
+            imagedestroy($source);
+            throw new \InvalidArgumentException('candidate_box_invalid');
+        }
+
+        $crop = imagecreatetruecolor($width, $height);
+        if ($crop === false) {
+            imagedestroy($source);
+            throw new \RuntimeException('candidate_crop_canvas_create_failed');
+        }
+
+        $white = imagecolorallocate($crop, 255, 255, 255);
+        imagefill($crop, 0, 0, $white);
+        imagecopyresampled($crop, $source, 0, 0, $x, $y, $width, $height, $width, $height);
+        imagedestroy($source);
+
+        $this->saveAsJpeg($intake, $crop);
+    }
+
     public function delete(BiodataIntake $intake): bool
     {
         $relativePath = $this->relativePath($intake);
@@ -122,10 +173,8 @@ final class IntakePhotoCandidateCropService
             throw new \InvalidArgumentException('candidate_crop_too_small');
         }
 
-        $maxSide = 720;
-        $scale = min($maxSide / max($width, $height), 1.0);
-        $targetWidth = max(1, (int) round($width * $scale));
-        $targetHeight = max(1, (int) round($height * $scale));
+        $targetWidth = self::PROFILE_CROP_EXPORT_WIDTH;
+        $targetHeight = self::PROFILE_CROP_EXPORT_HEIGHT;
 
         $canvas = imagecreatetruecolor($targetWidth, $targetHeight);
         if ($canvas === false) {
