@@ -136,10 +136,15 @@ class IntakeNormalizedBiodataDraftBuilder
             if ($this->isHardSectionBoundary($line) || $this->startsPahune($line)) {
                 continue;
             }
-            if (preg_match('/^(?:मामा|मावशी|आत्या|चुलत\s+भाऊ|नातेसंबंध)\s*[:\-]\s*(.+)$/u', $line, $m)) {
+            if (preg_match('/^\s*[-–—]?\s*(मामा|मावशी|माऊशी|आत्या|चुलते|चुलत\s+भाऊ|इतर\s+नातेवाईक|नातेसंबंध)\s*(?::\s*-\s*|[:\-–—]\s*)(.+)$/u', $line, $m)) {
                 $name = trim($m[1]);
-                if ($name !== '') {
-                    $relatives[] = ['name' => $name, 'raw' => $line];
+                $value = trim($m[2]);
+                if ($value !== '') {
+                    if (preg_match('/^इतर\s+नातेवाईक$/u', $name)) {
+                        $core['other_relatives_text'] = $this->setTextOnce($core['other_relatives_text'] ?? null, $value);
+                    } else {
+                        $relatives[] = ['relation_type' => $name, 'name' => $value, 'raw' => $line];
+                    }
                 }
 
                 continue;
@@ -183,6 +188,9 @@ class IntakeNormalizedBiodataDraftBuilder
         if (($core['full_name'] ?? null) !== null && in_array($core['full_name'], [$core['father_name'] ?? null, $core['mother_name'] ?? null], true)) {
             $flags[] = ['field' => 'core.full_name', 'reason' => 'suspicious_candidate_name_matches_parent', 'raw' => (string) $core['full_name']];
         }
+        if (($core['full_name'] ?? null) !== null && $this->isSuspiciousHeadingAsName((string) $core['full_name'])) {
+            $flags[] = ['field' => 'core.full_name', 'reason' => 'suspicious_heading_as_name', 'raw' => (string) $core['full_name'], 'suggested_section' => 'basic-info'];
+        }
         if ($this->candidateNameFromFallback && ($core['full_name'] ?? null) !== null) {
             $flags[] = ['field' => 'core.full_name', 'reason' => 'candidate_name_from_heading_fallback', 'raw' => (string) $core['full_name']];
         }
@@ -191,6 +199,9 @@ class IntakeNormalizedBiodataDraftBuilder
             if (preg_match('/घरचा\s+पत्ता|सध्याचा\s+पत्ता|मोबाईल|मोबाइल|संपर्क|प्रोपर्टी|स्थावर/u', $blob)) {
                 $flags[] = ['field' => 'relatives', 'reason' => 'relative_address_bleed_risk', 'raw' => $blob];
             }
+        }
+        foreach ($this->unmappedUsefulLineFlags($draft) as $flag) {
+            $flags[] = $flag;
         }
 
         return $flags;
@@ -266,13 +277,13 @@ class IntakeNormalizedBiodataDraftBuilder
         if (preg_match('/^(?:कौटुंबिक\s+माहिती|कौटुंबिक\s+तपशील)/u', $line)) {
             return 'family';
         }
-        if (preg_match('/^(?:रास|राशी|नक्षत्र|देवक|कुलदैवत)'.self::LABEL_SUFFIX.'/u', $line)) {
+        if (preg_match('/^(?:रास|राशी|नक्षत्र|देवक|कुलदैवत|कुलस्वामी|कुळस्वामी|नाडी|गण|चरण|गोत्र)'.self::LABEL_SUFFIX.'/u', $line)) {
             return 'horoscope';
         }
         if (preg_match('/^(?:शिक्षण|नोकरी|व्यवसाय|वेतन|उत्पन्न|नोकरी\/व्यवसाय)'.self::LABEL_SUFFIX.'/u', $line)) {
             return 'education_career';
         }
-        if (! $relativesClosed && preg_match('/^(?:मामा|मावशी|आत्या|चुलत\s+भाऊ|नातेसंबंध)'.self::LABEL_SUFFIX.'/u', $line)) {
+        if (! $relativesClosed && preg_match('/^\s*[-–—]?\s*(?:मामा|मावशी|माऊशी|आत्या|चुलते|चुलत\s+भाऊ|इतर\s+नातेवाईक|नातेसंबंध)'.self::LABEL_SUFFIX.'/u', $line)) {
             return 'relatives';
         }
 
@@ -402,8 +413,16 @@ class IntakeNormalizedBiodataDraftBuilder
             if (preg_match('/जन्म\s+वेळ\s*(?::\s*-\s*|[:\-]\s*)(.+)$/u', $line, $m)) {
                 $core['birth_time'] = trim($m[1]);
             }
+            if ($core['birth_time'] === null
+                && preg_match('/^(?:वार|जन्म\s*वार\s*व\s*वेळ|जन्मवार\s*व\s*वेळ)\s*(?::\s*-\s*|[:\-]\s*)(.+)$/u', $line, $m)
+                && preg_match('/\d{1,2}(?:[.:]\d{1,2})?\s*(?:A\.?M\.?|P\.?M\.?|am|pm)?|सकाळी|दुपारी|सायंकाळी|रात्री/ui', OcrNormalize::normalizeDigits($m[1]))) {
+                $core['birth_time'] = trim($m[1]);
+            }
             if (preg_match('/(?:जन्म\s*(?:ठिकाण|स्थळ)|जन्मठिकाण)\s*(?::\s*-\s*|[:\-]\s*)(.+)$/u', $line, $m)) {
                 $core['birth_place_text'] = trim($m[1]);
+            }
+            if (preg_match('/(?:धर्म|religion)\s*(?::\s*-\s*|[:\-]\s*)(.+)$/ui', $line, $m)) {
+                $core['religion'] = trim($m[1]);
             }
             if (preg_match('/(?:जात|कास्ट)\s*(?::\s*-\s*|[:\-]\s*)(.+)$/u', $line, $m)) {
                 $this->normalizeCasteLine(trim($m[1]), $core);
@@ -444,13 +463,13 @@ class IntakeNormalizedBiodataDraftBuilder
             }
             if (preg_match('/(?:नोकरी\/व्यवसाय|नोकरी|व्यवसाय)\s*(?::\s*-\s*|[:\-]\s*)(.+)$/u', $line, $m)) {
                 $work = trim($m[1]);
-                if (preg_match('/^नोकरी\s*[-–—]\s*([A-Za-z.]+)\s+([^,]+),\s*(.+)$/u', $work, $wm)) {
-                    $core['occupation_title'] = trim($wm[1]);
-                    $core['company_name'] = trim($wm[2]);
-                    $core['work_location_text'] = trim($wm[3]);
-                } else {
-                    $core['occupation_title'] = $work;
-                }
+                $this->parseWorkLine($work, $core);
+            }
+            if (preg_match('/(?:कंपनी|company)\s*(?::\s*-\s*|[:\-]\s*)(.+)$/ui', $line, $m)) {
+                $core['company_name'] = trim($m[1]);
+            }
+            if (preg_match('/(?:कामाचे\s+ठिकाण|नोकरीचे\s+ठिकाण|work\s+location)\s*(?::\s*-\s*|[:\-]\s*)(.+)$/ui', $line, $m)) {
+                $core['work_location_text'] = trim($m[1]);
             }
         }
     }
@@ -492,9 +511,14 @@ class IntakeNormalizedBiodataDraftBuilder
 
                 return;
             }
+            if ($this->isNumericCountValue($value)) {
+                $core['brother_count'] = (int) OcrNormalize::normalizeDigits($value);
+
+                return;
+            }
             $siblings[] = ['relation_type' => 'brother', 'name' => $value];
         }
-        if (preg_match('/(?:बहीण|बहिण)\s*(?::\s*-\s*|[:\-]\s*)(.+)$/u', $line, $m)) {
+        if (preg_match('/(?:बहीण|बहिण|बहिणी)\s*(?::\s*-\s*|[:\-]\s*)(.+)$/u', $line, $m)) {
             $value = trim($m[1]);
             if ($this->isNoSiblingValue($value)) {
                 $core['sister_count'] = 0;
@@ -503,6 +527,11 @@ class IntakeNormalizedBiodataDraftBuilder
             }
             if ($this->isOneCountValue($value)) {
                 $core['sister_count'] = 1;
+
+                return;
+            }
+            if ($this->isNumericCountValue($value)) {
+                $core['sister_count'] = (int) OcrNormalize::normalizeDigits($value);
 
                 return;
             }
@@ -539,11 +568,26 @@ class IntakeNormalizedBiodataDraftBuilder
 
     private function extractHoroscopeLine(string $line, mixed &$horoscope): void
     {
-        if (! preg_match('/^(?:रास|राशी|नक्षत्र|देवक|कुलदैवत)'.self::LABEL_SUFFIX.'/u', $line)) {
+        if (! preg_match('/^(?:रास|राशी|नक्षत्र|देवक|कुलदैवत|कुलस्वामी|कुळस्वामी|नाडी|गण|चरण|गोत्र)'.self::LABEL_SUFFIX.'/u', $line)) {
             return;
         }
         $horoscope = is_array($horoscope) ? $horoscope : ['raw' => []];
         $horoscope['raw'][] = $line;
+        foreach ([
+            'rashi' => ['रास', 'राशी'],
+            'nakshatra' => ['नक्षत्र'],
+            'nadi' => ['नाडी'],
+            'gan' => ['गण'],
+            'devak' => ['देवक'],
+            'kuldaivat' => ['कुलदैवत', 'कुलस्वामी', 'कुळस्वामी'],
+            'charan' => ['चरण'],
+            'gotra' => ['गोत्र'],
+        ] as $field => $labels) {
+            $value = $this->extractLabeledValue($line, $labels);
+            if ($value !== null && ! $this->horoscopeValueLooksPolluted($value)) {
+                $horoscope[$field] = $value;
+            }
+        }
     }
 
     /**
@@ -567,6 +611,9 @@ class IntakeNormalizedBiodataDraftBuilder
             if (preg_match('/हिंद[ुू]/u', $value)) {
                 $core['religion'] = 'हिंदू';
             }
+        }
+        if ($core['caste'] === null && preg_match('/^मराठा$/u', $value)) {
+            $core['caste'] = 'मराठा';
         }
     }
 
@@ -603,7 +650,7 @@ class IntakeNormalizedBiodataDraftBuilder
     private function parseHeightCm(string $value): ?float
     {
         $v = OcrNormalize::normalizeDigits($value);
-        if (preg_match('/([0-9]+)\s*(?:फूट|feet|ft)\s*([0-9]+)?/ui', $v, $m)) {
+        if (preg_match('/([0-9]+)\s*(?:फूट|फुट|feet|ft)\s*(?:([0-9]+)\s*(?:इंच|inch|in)?)?/ui', $v, $m)) {
             $feet = (int) $m[1];
             $inches = isset($m[2]) && $m[2] !== '' ? (int) $m[2] : 0;
 
@@ -627,6 +674,13 @@ class IntakeNormalizedBiodataDraftBuilder
         $value = preg_replace('/\s+/u', ' ', $value) ?? $value;
 
         return (bool) preg_match('/^(?:एक|१|1)(?:\s*\(?\s*अविवाहित\s*\)?)?$/u', $value);
+    }
+
+    private function isNumericCountValue(string $value): bool
+    {
+        $v = trim(OcrNormalize::normalizeDigits($value));
+
+        return (bool) preg_match('/^[0-9]+$/', $v);
     }
 
     private function startsAddressLine(string $line): bool
@@ -660,6 +714,199 @@ class IntakeNormalizedBiodataDraftBuilder
     private function containsPropertyOwnershipSignal(string $line): bool
     {
         return (bool) preg_match('/(?:स्वत[:ः]?च(?:े|्या)|मालकीच(?:े|्या)|बंगला|फ्लॅट|प्लॉट|स्थावर|शेती)\s*(?:घर)?/u', $line);
+    }
+
+    /**
+     * @param  array<string, mixed>  $core
+     */
+    private function parseWorkLine(string $work, array &$core): void
+    {
+        $work = trim($work);
+        if ($work === '') {
+            return;
+        }
+
+        if (preg_match('/^(.+?)\s+(?:at|@|मध्ये)\s+(.+?)(?:,\s*(.+))?$/ui', $work, $m)) {
+            $core['occupation_title'] = trim($m[1]);
+            $core['company_name'] = trim($m[2]);
+            if (isset($m[3]) && trim($m[3]) !== '') {
+                $core['work_location_text'] = trim($m[3]);
+            }
+
+            return;
+        }
+
+        if (preg_match('/^(.+?)\s*[-–—]\s*([^,]+)(?:,\s*(.+))?$/u', $work, $m)) {
+            $core['occupation_title'] = trim($m[1]);
+            $core['company_name'] = trim($m[2]);
+            if (isset($m[3]) && trim($m[3]) !== '') {
+                $core['work_location_text'] = trim($m[3]);
+            }
+
+            return;
+        }
+
+        $core['occupation_title'] = $work;
+    }
+
+    private function setTextOnce(mixed $current, string $value): string
+    {
+        $current = trim((string) $current);
+        $value = trim($value);
+        if ($current === '') {
+            return $value;
+        }
+        if (str_contains($current, $value)) {
+            return $current;
+        }
+
+        return $current.'; '.$value;
+    }
+
+    /**
+     * @param  list<string>  $labels
+     */
+    private function extractLabeledValue(string $line, array $labels): ?string
+    {
+        foreach ($labels as $label) {
+            $pattern = '/'.preg_quote($label, '/').'\s*(?::\s*-\s*|[:\-–—]\s*|\s+)(.+)$/u';
+            if (! preg_match($pattern, $line, $m)) {
+                continue;
+            }
+            $value = trim($m[1]);
+            $value = preg_split(
+                '/\s+(?:रास|राशी|नक्षत्र|देवक|कुलदैवत|कुलस्वामी|कुळस्वामी|नाडी|गण|चरण|गोत्र|ब्लड\s*ग्रुप|रक्त\s*गट|मोबाईल|मोबाइल|संपर्क|प्रोपर्टी|प्रॉपर्टी|स्थावर)'.self::LABEL_SUFFIX.'/u',
+                $value,
+                2
+            )[0] ?? $value;
+            $value = trim($value);
+            if ($value !== '') {
+                return $value;
+            }
+        }
+
+        return null;
+    }
+
+    private function horoscopeValueLooksPolluted(string $value): bool
+    {
+        return (bool) preg_match('/(?:ब्लड\s*ग्रुप|रक्त\s*गट|मोबाईल|मोबाइल|संपर्क|प्रोपर्टी|प्रॉपर्टी|स्थावर|घरचा\s+पत्ता|सध्याचा\s+पत्ता)/u', $value);
+    }
+
+    private function isSuspiciousHeadingAsName(string $value): bool
+    {
+        return (bool) preg_match('/^(?:वैयक्तिक\s+माहिती|कौटुंबिक\s+माहिती|कौटुंबिक\s+तपशील|शिक्षण|नोकरी|व्यवसाय|बायोडाटा)$/u', trim($value));
+    }
+
+    /**
+     * @param  array<string, mixed>  $draft
+     * @return list<array<string, string>>
+     */
+    private function unmappedUsefulLineFlags(array $draft): array
+    {
+        $flags = [];
+        $normalized = is_array($draft['normalized'] ?? null) ? $draft['normalized'] : [];
+        $core = is_array($normalized['core'] ?? null) ? $normalized['core'] : [];
+        $lines = $this->allLines(is_array($draft['sections'] ?? null) ? $draft['sections'] : []);
+
+        foreach ($lines as $line) {
+            $raw = trim($line);
+            if ($raw === '' || mb_strlen($raw) > 220) {
+                continue;
+            }
+            if ($this->lineLooksMixedFieldValue($raw)) {
+                $flags['mixed_field_value|'.$raw] = [
+                    'field' => 'review.missing',
+                    'reason' => 'mixed_field_value',
+                    'raw' => $raw,
+                    'suggested_section' => 'review_needed',
+                ];
+            }
+            if ($this->lineHasMappedValue($raw, $normalized, $core)) {
+                continue;
+            }
+            $flag = $this->reviewFlagForUsefulLine($raw);
+            if ($flag !== null) {
+                $key = $flag['field'].'|'.$flag['reason'].'|'.$flag['raw'];
+                $flags[$key] = $flag;
+            }
+        }
+
+        return array_values($flags);
+    }
+
+    /**
+     * @param  array<string, mixed>  $normalized
+     * @param  array<string, mixed>  $core
+     */
+    private function lineHasMappedValue(string $line, array $normalized, array $core): bool
+    {
+        foreach ($core as $value) {
+            if (is_scalar($value) && trim((string) $value) !== '' && str_contains($line, trim((string) $value))) {
+                return true;
+            }
+        }
+        foreach (['contacts', 'relatives', 'siblings', 'addresses'] as $bucket) {
+            foreach (($normalized[$bucket] ?? []) as $row) {
+                if (! is_array($row)) {
+                    continue;
+                }
+                foreach ($row as $value) {
+                    if (is_scalar($value) && trim((string) $value) !== '' && str_contains($line, trim((string) $value))) {
+                        return true;
+                    }
+                }
+            }
+        }
+        $propertyText = (string) (($normalized['property_summary'] ?? [])['summary_text'] ?? '');
+        if ($propertyText !== '' && str_contains($propertyText, $line)) {
+            return true;
+        }
+        $horoscopeRaw = is_array(($normalized['horoscope'] ?? [])['raw'] ?? null) ? ($normalized['horoscope'] ?? [])['raw'] : [];
+        foreach ($horoscopeRaw as $raw) {
+            if (is_string($raw) && trim($raw) === $line) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * @return array<string, string>|null
+     */
+    private function reviewFlagForUsefulLine(string $line): ?array
+    {
+        $rows = [
+            ['mixed_field_value', 'review_needed', '/(?:जन्म|उंची|जात|शिक्षण|नोकरी|राशी|नाडी|गण|मोबाईल).*(?:जन्म|उंची|जात|शिक्षण|नोकरी|राशी|नाडी|गण|मोबाईल)/u'],
+            ['unmapped_horoscope', 'horoscope', '/(?:रास|राशी|नक्षत्र|देवक|कुलदैवत|कुलस्वामी|कुळस्वामी|नाडी|गण|चरण|गोत्र)/u'],
+            ['unmapped_relatives', 'relatives', '/^\s*[-–—]\s*(?:मामा|मावशी|माऊशी|आत्या|चुलते|इतर\s+नातेवाईक)/u'],
+            ['unmapped_family', 'family-details', '/(?:वडील|आई|भाऊ|बहिण|कुटुंब|कौटुंबिक)/u'],
+            ['unmapped_address', 'basic-info', '/(?:पत्ता|मु\.?\s*पो\.?|रा\.)/u'],
+            ['unmapped_property', 'property', '/(?:प्रोपर्टी|प्रॉपर्टी|स्थावर|शेती|फ्लॅट|प्लॉट|मालकीचे\s+घर)/u'],
+            ['unmapped_contact', 'basic-info', '/(?:मोबाईल|मोबाइल|संपर्क|[6-9][0-9]{9})/u'],
+            ['unmapped_career', 'education-career', '/(?:शिक्षण|नोकरी|व्यवसाय|कंपनी|उत्पन्न|वेतन)/u'],
+        ];
+
+        foreach ($rows as [$reason, $section, $pattern]) {
+            if (preg_match($pattern, OcrNormalize::normalizeDigits($line))) {
+                return [
+                    'field' => $section === 'relatives' ? 'relatives' : 'review.'.$section,
+                    'reason' => $reason,
+                    'raw' => $line,
+                    'suggested_section' => $section,
+                ];
+            }
+        }
+
+        return null;
+    }
+
+    private function lineLooksMixedFieldValue(string $line): bool
+    {
+        preg_match_all('/(?:जन्म\s+वेळ|जन्म\s+तारीख|जन्म\s+स्थळ|उंची|जात|धर्म|शिक्षण|नोकरी|व्यवसाय|राशी|नक्षत्र|नाडी|गण|देवक|मोबाईल|मोबाइल|संपर्क|प्रॉपर्टी|प्रोपर्टी)'.self::LABEL_SUFFIX.'/u', $line, $matches);
+
+        return count($matches[0] ?? []) > 1;
     }
 
     private function isHardSectionBoundary(string $line): bool

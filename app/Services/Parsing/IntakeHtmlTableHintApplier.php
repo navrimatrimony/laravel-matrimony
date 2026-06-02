@@ -66,6 +66,8 @@ final class IntakeHtmlTableHintApplier
             $this->applyAddressHints($hints, $core, $draft['normalized'], $draft);
             $this->applyOtherRelativesTextHints($hints, $core);
             $this->applyPropertySummaryHints($hints, $draft['normalized']);
+            $this->applyHoroscopeHints($hints, $draft['normalized']);
+            $this->applySiblingHints($hints, $core, $draft['normalized']);
         }
         $this->applyContactsFromHints(
             $hints,
@@ -291,6 +293,9 @@ final class IntakeHtmlTableHintApplier
                 $core['religion'] = 'हिंदू';
             }
         }
+        if (($core['caste'] ?? null) === null && preg_match('/^मराठा$/u', $value)) {
+            $core['caste'] = 'मराठा';
+        }
     }
 
     /**
@@ -325,7 +330,7 @@ final class IntakeHtmlTableHintApplier
     private function parseHeightCm(string $value): ?float
     {
         $v = OcrNormalize::normalizeDigits($value);
-        if (preg_match('/([0-9]+)\s*(?:फूट|feet|ft)\s*([0-9]+)?/ui', $v, $m)) {
+        if (preg_match('/([0-9]+)\s*(?:फूट|फुट|feet|ft)\s*(?:([0-9]+)\s*(?:इंच|inch|in)?)?/ui', $v, $m)) {
             $feet = (int) $m[1];
             $inches = isset($m[2]) && $m[2] !== '' ? (int) $m[2] : 0;
 
@@ -466,6 +471,78 @@ final class IntakeHtmlTableHintApplier
 
     /**
      * @param  array<string, string>  $hints
+     * @param  array<string, mixed>  $normalized
+     */
+    private function applyHoroscopeHints(array $hints, array &$normalized): void
+    {
+        $map = [
+            'horoscope_rashi' => 'rashi',
+            'horoscope_nakshatra' => 'nakshatra',
+            'horoscope_nadi' => 'nadi',
+            'horoscope_gan' => 'gan',
+            'horoscope_charan' => 'charan',
+            'devak' => 'devak',
+            'kuldaivat' => 'kuldaivat',
+            'gotra' => 'gotra',
+        ];
+
+        foreach ($map as $hintKey => $field) {
+            $value = trim((string) ($hints[$hintKey] ?? ''));
+            if ($value === '' || $this->horoscopeValueLooksPolluted($value)) {
+                continue;
+            }
+            if (! is_array($normalized['horoscope'] ?? null)) {
+                $normalized['horoscope'] = ['raw' => []];
+            }
+            $normalized['horoscope'][$field] = $value;
+            $rawLine = $this->horoscopeFieldLabel($field).': '.$value;
+            if (! is_array($normalized['horoscope']['raw'] ?? null)) {
+                $normalized['horoscope']['raw'] = [];
+            }
+            if (! in_array($rawLine, $normalized['horoscope']['raw'], true)) {
+                $normalized['horoscope']['raw'][] = $rawLine;
+            }
+        }
+    }
+
+    /**
+     * @param  array<string, string>  $hints
+     * @param  array<string, mixed>  $core
+     * @param  array<string, mixed>  $normalized
+     */
+    private function applySiblingHints(array $hints, array &$core, array &$normalized): void
+    {
+        foreach ([
+            'sibling_brother_line' => ['brother', 'brother_count'],
+            'sibling_sister_line' => ['sister', 'sister_count'],
+        ] as $hintKey => [$relation, $countField]) {
+            $raw = trim((string) ($hints[$hintKey] ?? ''));
+            if ($raw === '') {
+                continue;
+            }
+            foreach (preg_split('/\R/u', $raw) ?: [] as $line) {
+                $line = trim($line);
+                if ($line === '') {
+                    continue;
+                }
+                if ($this->isNoSiblingValue($line)) {
+                    $core[$countField] = 0;
+                    continue;
+                }
+                if ($this->isNumericCountValue($line)) {
+                    $core[$countField] = (int) OcrNormalize::normalizeDigits($line);
+                    continue;
+                }
+                if (! is_array($normalized['siblings'] ?? null)) {
+                    $normalized['siblings'] = [];
+                }
+                $normalized['siblings'][] = ['relation_type' => $relation, 'name' => $line];
+            }
+        }
+    }
+
+    /**
+     * @param  array<string, string>  $hints
      * @param  list<string>  $keys
      */
     private function firstHintValue(array $hints, array $keys): ?string
@@ -602,5 +679,39 @@ final class IntakeHtmlTableHintApplier
     {
         return (bool) preg_match('/^(?:घरचा\s+पत्ता|घराचा\s+पत्ता|सध्याचा\s+पत्ता|गावचा\s+पत्ता|मु\.?\s*पो\.?)/u', $text)
             && ! preg_match('/(?:स्वत[:ः]?च(?:े|्या)|मालकीच(?:े|्या)|flat|bhk|फ्लॅट|शेती|बागायत|जमीन|एकर)/ui', $text);
+    }
+
+    private function horoscopeValueLooksPolluted(string $value): bool
+    {
+        return (bool) preg_match('/(?:ब्लड\s*ग्रुप|रक्त\s*गट|मोबाईल|मोबाइल|संपर्क|प्रोपर्टी|प्रॉपर्टी|स्थावर|घरचा\s+पत्ता|सध्याचा\s+पत्ता)/u', $value);
+    }
+
+    private function horoscopeFieldLabel(string $field): string
+    {
+        return [
+            'rashi' => 'राशी',
+            'nakshatra' => 'नक्षत्र',
+            'nadi' => 'नाडी',
+            'gan' => 'गण',
+            'charan' => 'चरण',
+            'devak' => 'देवक',
+            'kuldaivat' => 'कुलदैवत',
+            'gotra' => 'गोत्र',
+        ][$field] ?? $field;
+    }
+
+    private function isNoSiblingValue(string $value): bool
+    {
+        $value = preg_replace('/^[\s.।:(){}\[\]\-–—]+|[\s.।:(){}\[\]\-–—]+$/u', '', $value) ?? $value;
+        $value = preg_replace('/\s+/u', ' ', $value) ?? $value;
+
+        return (bool) preg_match('/^(?:नाही|None|No|०|0)$/ui', $value);
+    }
+
+    private function isNumericCountValue(string $value): bool
+    {
+        $v = trim(OcrNormalize::normalizeDigits($value));
+
+        return (bool) preg_match('/^[0-9]+$/', $v);
     }
 }

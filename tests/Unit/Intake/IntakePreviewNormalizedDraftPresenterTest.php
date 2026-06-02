@@ -203,6 +203,37 @@ HTML, true);
         $this->assertArrayNotHasKey('contacts', $out['sections']);
     }
 
+    public function test_new_normalized_values_land_in_matching_wizard_sections_with_review_reasons(): void
+    {
+        $out = app(IntakePreviewNormalizedDraftPresenter::class)->present(<<<'TXT'
+मुलीचे नाव :- कु. अंजली पाटील
+वार :- 3.45 A.M रात्री सोमवार
+उंची :- 5 फुट 4 इंच
+राशी :- मेष
+नक्षत्र :- अश्विनी
+नाडी :- आद्य
+गण :- देव
+देवक :- वड
+- मामा - श्री. मोहन कदम पुणे
+नोकरी माहिती उपलब्ध पण format वेगळा आहे
+TXT, true);
+
+        $basicBlob = $this->sectionBlob($out['sections']['basic-info']);
+        $physicalBlob = $this->sectionBlob($out['sections']['physical']);
+        $horoscopeBlob = $this->sectionBlob($out['sections']['horoscope']);
+        $relativesBlob = $this->sectionBlob($out['sections']['relatives']);
+        $reviewBlob = $this->sectionBlob($out['sections']['review_needed']);
+
+        $this->assertStringContainsString('3.45 A.M', $basicBlob);
+        $this->assertStringContainsString('cm', $physicalBlob);
+        $this->assertStringNotContainsString('cm', $basicBlob);
+        $this->assertStringContainsString('मेष', $horoscopeBlob);
+        $this->assertStringContainsString('अश्विनी', $horoscopeBlob);
+        $this->assertStringContainsString('मोहन कदम', $relativesBlob);
+        $this->assertStringContainsString('unmapped_career', $reviewBlob);
+        $this->assertStringContainsString('Suggested section: education-career', $reviewBlob);
+    }
+
     public function test_unavailable_when_not_biodata_text(): void
     {
         $out = app(IntakePreviewNormalizedDraftPresenter::class)->present('AI unavailable message', false);

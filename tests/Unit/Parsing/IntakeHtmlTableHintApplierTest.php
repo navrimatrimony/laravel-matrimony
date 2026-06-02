@@ -269,4 +269,36 @@ HTML;
         $this->assertTrue($property === null || $property === [] || trim((string) (($property['summary_text'] ?? '') ?: ($property['summary_notes'] ?? ''))) === '');
         $this->assertNull((($draft['normalized']['core'] ?? [])['address_line'] ?? null));
     }
+
+    public function test_html_table_horoscope_height_and_sibling_hints_are_normalized(): void
+    {
+        $html = <<<'HTML'
+<table>
+<tr><td>मुलाचे नाव</td><td>चि. रोहित शिंदे</td></tr>
+<tr><td>उंची</td><td>5 फूट 4 इंच</td></tr>
+<tr><td>रास</td><td>मेष</td></tr>
+<tr><td>नक्षत्र</td><td>अश्विनी</td></tr>
+<tr><td>चरण</td><td>२</td></tr>
+<tr><td>नाडी</td><td>आद्य</td></tr>
+<tr><td>गण</td><td>देव</td></tr>
+<tr><td>देवक</td><td>वड</td></tr>
+<tr><td>कुलदैवत</td><td>जोतिबा</td></tr>
+<tr><td>भाऊ</td><td>2</td></tr>
+</table>
+HTML;
+
+        $draft = app(IntakeNormalizedBiodataDraftBuilder::class)->build($html);
+        $core = $draft['normalized']['core'] ?? [];
+        $horoscope = $draft['normalized']['horoscope'] ?? [];
+
+        $this->assertEqualsWithDelta(162.56, (float) ($core['height_cm'] ?? 0), 0.01);
+        $this->assertSame(2, $core['brother_count'] ?? null);
+        $this->assertSame('मेष', $horoscope['rashi'] ?? null);
+        $this->assertSame('अश्विनी', $horoscope['nakshatra'] ?? null);
+        $this->assertSame('२', $horoscope['charan'] ?? null);
+        $this->assertSame('आद्य', $horoscope['nadi'] ?? null);
+        $this->assertSame('देव', $horoscope['gan'] ?? null);
+        $this->assertSame('वड', $horoscope['devak'] ?? null);
+        $this->assertSame('जोतिबा', $horoscope['kuldaivat'] ?? null);
+    }
 }

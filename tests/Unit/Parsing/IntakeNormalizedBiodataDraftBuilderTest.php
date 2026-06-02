@@ -221,6 +221,94 @@ TXT);
         $this->assertContains('9673350078', $phones);
     }
 
+    public function test_candidate_name_does_not_fall_back_to_section_heading(): void
+    {
+        $draft = app(IntakeNormalizedBiodataDraftBuilder::class)->build(<<<'TXT'
+बायोडाटा
+कौटुंबिक माहिती
+वडिलांचे नाव :- श्री. नामदेव पाटील
+आईचे नाव :- सौ. सुनंदा पाटील
+TXT);
+
+        $this->assertNull($draft['normalized']['core']['full_name'] ?? null);
+    }
+
+    public function test_mixed_birth_time_religion_caste_height_horoscope_and_relatives_are_normalized(): void
+    {
+        $draft = app(IntakeNormalizedBiodataDraftBuilder::class)->build(<<<'TXT'
+मुलीचे नाव :- कु. अंजली शंकर पाटील
+जन्म तारीख :- 01/01/1998
+वार :- 3.45 A.M रात्री सोमवार
+धर्म :- हिंदू
+जात :- मराठा
+उंची :- 5 फुट 4 इंच
+राशी :- मेष
+नक्षत्र :- अश्विनी
+चरण :- २
+नाडी :- आद्य
+गण :- देव
+देवक :- वड
+कुलस्वामी :- जोतिबा
+- मामा - श्री. मोहन कदम पुणे
+- माऊशी - सौ. कविता जाधव
+- इतर नातेवाईक - पाटील, कदम, जाधव
+भाऊ :- 2
+बहिणी :- 1
+नोकरी :- Software Engineer - TCS, Pune
+प्रॉपर्टी :- स्वतःचे घर, शेती 2 एकर
+TXT);
+
+        $core = $draft['normalized']['core'];
+        $this->assertSame('कु. अंजली शंकर पाटील', $core['full_name']);
+        $this->assertStringContainsString('3.45 A.M', (string) $core['birth_time']);
+        $this->assertSame('हिंदू', $core['religion']);
+        $this->assertSame('मराठा', $core['caste']);
+        $this->assertEqualsWithDelta(162.56, (float) $core['height_cm'], 0.01);
+        $this->assertSame(2, $core['brother_count']);
+        $this->assertSame(1, $core['sister_count']);
+        $this->assertSame('Software Engineer', $core['occupation_title']);
+        $this->assertSame('TCS', $core['company_name']);
+        $this->assertSame('Pune', $core['work_location_text']);
+        $this->assertStringContainsString('पाटील', (string) ($core['other_relatives_text'] ?? ''));
+
+        $horoscope = $draft['normalized']['horoscope'];
+        $this->assertSame('मेष', $horoscope['rashi']);
+        $this->assertSame('अश्विनी', $horoscope['nakshatra']);
+        $this->assertSame('२', $horoscope['charan']);
+        $this->assertSame('आद्य', $horoscope['nadi']);
+        $this->assertSame('देव', $horoscope['gan']);
+        $this->assertSame('वड', $horoscope['devak']);
+        $this->assertSame('जोतिबा', $horoscope['kuldaivat']);
+
+        $relativeBlob = implode(' ', array_map(
+            static fn ($row) => implode(' ', array_map('strval', is_array($row) ? $row : [])),
+            $draft['normalized']['relatives']
+        ));
+        $this->assertStringContainsString('मोहन कदम', $relativeBlob);
+        $this->assertStringContainsString('कविता जाधव', $relativeBlob);
+        $this->assertStringContainsString('स्वतःचे घर', (string) ($draft['normalized']['property_summary']['summary_text'] ?? ''));
+    }
+
+    public function test_unmapped_useful_lines_are_flagged_without_full_raw_dump(): void
+    {
+        $text = <<<TXT
+बायोडाटा
+अपेक्षा :- शिक्षित मुलगी हवी
+संदिग्ध माहिती :- हा लांब मजकूर review मध्ये पूर्ण biodata dump म्हणून जाऊ नये.
+नोकरी माहिती उपलब्ध पण format वेगळा आहे
+TXT;
+
+        $draft = app(IntakeNormalizedBiodataDraftBuilder::class)->build($text);
+
+        $this->assertTrue($this->hasReviewFlag($draft, 'review.education-career', 'unmapped_career'));
+        $reviewBlob = implode("\n", array_map(
+            static fn ($flag) => (string) ($flag['raw'] ?? ''),
+            $draft['review_flags']
+        ));
+        $this->assertStringContainsString('नोकरी माहिती', $reviewBlob);
+        $this->assertStringNotContainsString($text, $reviewBlob);
+    }
+
     /**
      * @param  array<string, mixed>  $draft
      * @return list<string>

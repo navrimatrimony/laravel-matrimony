@@ -184,6 +184,13 @@ final class IntakePreviewNormalizedDraftPresenter
                 'reason' => $this->stringify($flag['reason'] ?? null),
                 'raw' => $this->stringify($flag['raw'] ?? null),
             ];
+            $suggested = $this->stringify($flag['suggested_section'] ?? null);
+            if ($suggested !== '') {
+                $last = array_key_last($map[$field]);
+                if ($last !== null) {
+                    $map[$field][$last]['suggested_section'] = $suggested;
+                }
+            }
         }
 
         return $map;
@@ -594,10 +601,15 @@ final class IntakePreviewNormalizedDraftPresenter
             $field = $this->stringify($flag['field'] ?? null);
             $reason = $this->stringify($flag['reason'] ?? null);
             $raw = $this->stringify($flag['raw'] ?? null);
+            $suggested = $this->stringify($flag['suggested_section'] ?? null);
             if ($field === '' && $reason === '' && $raw === '') {
                 continue;
             }
-            $valueParts = array_filter([$reason, $raw]);
+            $valueParts = array_filter([
+                $reason,
+                $raw !== '' ? 'Raw: '.$raw : '',
+                $suggested !== '' ? 'Suggested section: '.$suggested : '',
+            ]);
             $row = $this->displayRow(
                 $field !== '' ? $field : __('intake.normalized_draft_review_row', ['n' => $index + 1]),
                 $valueParts !== [] ? implode(' — ', $valueParts) : '—',
