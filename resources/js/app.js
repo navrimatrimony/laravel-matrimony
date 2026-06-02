@@ -1,6 +1,7 @@
 import './bootstrap';
 
 import './floating-panels';
+import './intake-photo-candidate-crop';
 
 import Alpine from 'alpinejs';
 import { plansPricingCatalog } from './plans-catalog';

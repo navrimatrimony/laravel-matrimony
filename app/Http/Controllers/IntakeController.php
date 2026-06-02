@@ -9,6 +9,7 @@ use App\Services\EducationService;
 use App\Services\Intake\IntakeExtractionReuseResolver;
 use App\Services\Intake\IntakeLocationSuggestionLayerService;
 use App\Services\Intake\IntakePipelineService;
+use App\Services\Intake\IntakePhotoCandidateCropService;
 use App\Services\Intake\IntakePreviewExistingProfileOverlay;
 use App\Services\Intake\IntakePreviewLinkedProfileResolver;
 use App\Services\Intake\IntakePreviewProfileHydrator;
@@ -1421,6 +1422,11 @@ class IntakeController extends Controller
             && in_array($uploadExt, ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp'], true);
         $manualCropOriginalUrl = $manualCropEligible ? route('intake.biodata-original', $intake) : null;
         $manualPreparedExists = $manualPreparedSvc->exists($intake);
+        $photoCandidateCropSvc = app(IntakePhotoCandidateCropService::class);
+        $photoCandidateCropEnabled = AdminSetting::getBool('intake_photo_crop_enabled', false);
+        $photoCandidateCropEligible = $photoCandidateCropEnabled && $photoCandidateCropSvc->isImageIntake($intake);
+        $photoCandidateOriginalUrl = $photoCandidateCropEligible ? $photoCandidateCropSvc->originalImageUrl($intake) : null;
+        $photoCandidateExists = $photoCandidateCropSvc->exists($intake);
 
         $autoCropSuggestion = null;
 
@@ -1473,6 +1479,10 @@ class IntakeController extends Controller
             'manualCropEligible',
             'manualCropOriginalUrl',
             'manualPreparedExists',
+            'photoCandidateCropEnabled',
+            'photoCandidateCropEligible',
+            'photoCandidateOriginalUrl',
+            'photoCandidateExists',
             'autoCropSuggestion',
             'ocrQualityEvaluation',
             'showOcrLowQualityWarning',
@@ -3034,6 +3044,89 @@ class IntakeController extends Controller
     }
 
     /**
+     * Authenticated: saved candidate profile-photo crop bytes (preview-only artifact).
+     */
+    public function photoCandidateImage(BiodataIntake $intake, IntakePhotoCandidateCropService $candidate)
+    {
+        if (! $this->intakeManualCropAccessGranted($intake)) {
+            abort(403, __('intake.only_preview_own'));
+        }
+
+        if (! $candidate->exists($intake)) {
+            abort(404);
+        }
+
+        return response()->file($candidate->absolutePath($intake));
+    }
+
+    /**
+     * Store preview-only candidate crop under intake-photo-candidates/{id}/candidate.jpg.
+     */
+    public function savePhotoCandidateCrop(Request $request, BiodataIntake $intake, IntakePhotoCandidateCropService $candidate)
+    {
+        if (! $this->intakeManualCropAccessGranted($intake)) {
+            abort(403, __('intake.only_preview_own'));
+        }
+
+        if (! AdminSetting::getBool('intake_photo_crop_enabled', false)) {
+            return $this->photoCandidateCropResponse($request, false, 'Candidate photo crop is disabled.', null);
+        }
+
+        if ($intake->approved_by_user) {
+            return $this->photoCandidateCropResponse($request, false, 'Approved intake cannot be changed.', null);
+        }
+
+        if (! $candidate->isImageIntake($intake)) {
+            return $this->photoCandidateCropResponse($request, false, 'No uploaded image biodata available.', null);
+        }
+
+        try {
+            $request->validate([
+                'candidate_image' => ['required', 'file', 'max:8192', 'mimes:png,jpeg,jpg,webp'],
+            ]);
+
+            $candidate->saveFromUploadedFile($intake, $request->file('candidate_image'));
+        } catch (\InvalidArgumentException) {
+            return $this->photoCandidateCropResponse($request, false, 'Invalid or too-small candidate crop.', null);
+        } catch (\Throwable $e) {
+            report($e);
+
+            return $this->photoCandidateCropResponse($request, false, 'Candidate photo crop save failed.', null);
+        }
+
+        return $this->photoCandidateCropResponse(
+            $request,
+            true,
+            'Candidate photo crop saved for preview only.',
+            route('intake.preview', $intake)
+        );
+    }
+
+    public function clearPhotoCandidateCrop(Request $request, BiodataIntake $intake, IntakePhotoCandidateCropService $candidate)
+    {
+        if (! $this->intakeManualCropAccessGranted($intake)) {
+            abort(403, __('intake.only_preview_own'));
+        }
+
+        if ($intake->approved_by_user) {
+            return redirect()->back()->with('error', 'Approved intake cannot be changed.');
+        }
+
+        $candidate->delete($intake);
+
+        if ($request->wantsJson()) {
+            return response()->json([
+                'ok' => true,
+                'message' => 'Candidate photo crop cleared.',
+                'redirect' => route('intake.preview', $intake),
+            ]);
+        }
+
+        return redirect()->route('intake.preview', $intake)
+            ->with('success', 'Candidate photo crop cleared.');
+    }
+
+    /**
      * Store manual crop as ocr-manual-prepared/{id}/manual.png and re-queue parse (OCR runs in job).
      */
     public function saveManualOcrPrepared(Request $request, BiodataIntake $intake, IntakeManualOcrPreparedService $manual)
@@ -3156,6 +3249,27 @@ class IntakeController extends Controller
 
         if ($ok) {
             return redirect()->to($redirectUrl ?? route('intake.status', $intake->id))
+                ->with('success', $message);
+        }
+
+        return redirect()->back()->with('error', $message);
+    }
+
+    /**
+     * @return \Illuminate\Http\JsonResponse|\Illuminate\Http\RedirectResponse
+     */
+    private function photoCandidateCropResponse(Request $request, bool $ok, string $message, ?string $redirectUrl)
+    {
+        if ($request->expectsJson() || $request->ajax() || $request->wantsJson() || $request->boolean('json')) {
+            return response()->json([
+                'ok' => $ok,
+                'message' => $message,
+                'redirect' => $redirectUrl,
+            ], $ok ? 200 : 422);
+        }
+
+        if ($ok) {
+            return redirect()->to($redirectUrl ?? url()->previous())
                 ->with('success', $message);
         }
 

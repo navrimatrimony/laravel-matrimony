@@ -77,10 +77,16 @@ Route::middleware(['auth', \App\Http\Middleware\EnforceCardOnboarding::class])->
         ->name('intake.biodata-original');
     Route::get('/intake/manual-prepared/{intake}', [IntakeController::class, 'manualPreparedImage'])
         ->name('intake.manual-prepared-image');
+    Route::get('/intake/photo-candidate/{intake}', [IntakeController::class, 'photoCandidateImage'])
+        ->name('intake.photo-candidate-image');
     Route::post('/intake/manual-crop/{intake}', [IntakeController::class, 'saveManualOcrPrepared'])
         ->name('intake.manual-crop-save');
     Route::post('/intake/manual-crop-clear/{intake}', [IntakeController::class, 'clearManualOcrPrepared'])
         ->name('intake.manual-crop-clear');
+    Route::post('/intake/photo-candidate-crop/{intake}', [IntakeController::class, 'savePhotoCandidateCrop'])
+        ->name('intake.photo-candidate-crop-save');
+    Route::post('/intake/photo-candidate-crop-clear/{intake}', [IntakeController::class, 'clearPhotoCandidateCrop'])
+        ->name('intake.photo-candidate-crop-clear');
     Route::get('/intake/debug/ocr-artifact/{intake}', [IntakeController::class, 'debugOcrArtifact'])
         ->name('intake.debug.ocr-artifact');
     Route::post('/intake/reparse/{intake}', [IntakeController::class, 'reparse'])->name('intake.reparse');

@@ -9,6 +9,10 @@ use App\Models\BiodataIntake;
 
 final class IntakePhotoCandidatePreviewService
 {
+    public function __construct(
+        private readonly IntakePhotoCandidateCropService $candidateCrop,
+    ) {}
+
     /**
      * @return array{
      *     enabled: bool,
@@ -32,8 +36,7 @@ final class IntakePhotoCandidatePreviewService
             return $this->payload($enabled, false, false, null, null, '');
         }
 
-        $relativePath = trim((string) ($intake->file_path ?? ''));
-        if (! $this->hasUploadedImage($relativePath)) {
+        if (! $this->candidateCrop->isImageIntake($intake)) {
             return $this->payload(
                 $enabled,
                 $showInNormalizedPreview,
@@ -41,6 +44,17 @@ final class IntakePhotoCandidatePreviewService
                 null,
                 null,
                 'No uploaded image biodata available.'
+            );
+        }
+
+        if ($this->candidateCrop->exists($intake)) {
+            return $this->payload(
+                $enabled,
+                $showInNormalizedPreview,
+                true,
+                route('intake.photo-candidate-image', $intake),
+                'manual_candidate_crop',
+                'Preview only. Not saved as profile photo yet.'
             );
         }
 
@@ -52,22 +66,6 @@ final class IntakePhotoCandidatePreviewService
             'uploaded_image',
             'Candidate photo extraction is not available yet.'
         );
-    }
-
-    private function hasUploadedImage(string $relativePath): bool
-    {
-        if ($relativePath === '') {
-            return false;
-        }
-
-        $extension = strtolower(pathinfo($relativePath, PATHINFO_EXTENSION));
-        if (! in_array($extension, ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp'], true)) {
-            return false;
-        }
-
-        $fullPath = storage_path('app/private/'.$relativePath);
-
-        return is_file($fullPath) && is_readable($fullPath);
     }
 
     /**

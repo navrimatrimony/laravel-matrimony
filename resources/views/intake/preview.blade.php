@@ -383,6 +383,54 @@
         @vite(['resources/js/intake-preview-crop.js'])
     @endif
 
+    @if (! empty($photoCandidateCropEligible) && ! empty($photoCandidateOriginalUrl))
+        <section id="intake-photo-candidate-crop-section" class="mb-6 rounded-xl border border-sky-300 dark:border-sky-700 bg-sky-50/90 dark:bg-sky-950/30 p-4 sm:p-5" aria-labelledby="intake-photo-candidate-crop-heading">
+            <h2 id="intake-photo-candidate-crop-heading" class="text-lg font-bold text-sky-900 dark:text-sky-100 mb-1">Profile photo candidate crop</h2>
+            <p class="text-sm text-sky-900/90 dark:text-sky-100/90 mb-3">
+                Select only the candidate's photo area from the biodata image. This is not saved as profile photo yet.
+            </p>
+            @if (! empty($photoCandidateExists))
+                <p class="text-xs font-medium text-sky-800 dark:text-sky-200 mb-2">Candidate crop exists. It is preview-only and not approved as a profile photo.</p>
+            @endif
+            <div class="rounded-lg border border-sky-200 dark:border-sky-800 bg-black/[0.03] dark:bg-white/[0.04] p-2 max-h-[70vh] overflow-auto">
+                <div id="intake-photo-candidate-stage" class="relative inline-block">
+                    <img
+                        id="intake-photo-candidate-img"
+                        src="{{ $photoCandidateOriginalUrl }}"
+                        alt=""
+                        class="relative z-0 block max-w-full select-none"
+                        draggable="false"
+                        data-save-url="{{ route('intake.photo-candidate-crop-save', $intake) }}"
+                        data-msg-crop-too-small="Select a larger candidate photo area."
+                        data-msg-save-failed="Candidate photo crop save failed."
+                    >
+                    <div id="intake-photo-candidate-box" class="absolute z-10 border-2 border-sky-500 bg-sky-400/15 cursor-move" style="left: 25%; top: 15%; width: 35%; height: 35%;">
+                        <span class="absolute -right-2 -bottom-2 h-5 w-5 rounded-full border-2 border-white bg-sky-600 shadow cursor-nwse-resize" data-photo-candidate-resize="br"></span>
+                    </div>
+                </div>
+            </div>
+            <div class="mt-4 flex flex-wrap gap-3 items-center">
+                <button
+                    type="button"
+                    id="intake-photo-candidate-save"
+                    class="px-4 py-2 text-sm font-semibold rounded-lg bg-sky-600 hover:bg-sky-700 text-white"
+                    data-saving-text="Saving candidate..."
+                >Save candidate crop</button>
+                @if (! empty($photoCandidateExists))
+                    <button
+                        type="button"
+                        id="intake-photo-candidate-clear"
+                        class="px-4 py-2 text-sm font-medium rounded-lg border border-amber-600 text-amber-800 dark:text-amber-200 bg-white dark:bg-gray-900 hover:bg-amber-50 dark:hover:bg-amber-950/30"
+                        data-confirm-message="Clear saved candidate crop?"
+                    >Clear candidate crop</button>
+                    <form id="intake-photo-candidate-clear-form" method="POST" action="{{ route('intake.photo-candidate-crop-clear', $intake) }}" class="hidden">
+                        @csrf
+                    </form>
+                @endif
+            </div>
+        </section>
+    @endif
+
     <p class="text-gray-600 dark:text-gray-400 text-sm mb-2">{{ __('intake.preview_review_intro') }}</p>
     <p class="text-gray-500 dark:text-gray-500 text-xs mb-4">{{ __('intake.preview_two_column_intro') }}</p>
 
