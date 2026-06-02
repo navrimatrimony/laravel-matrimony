@@ -39,6 +39,8 @@
                 @php
                     $rows = is_array($draftSections[$sectionKey] ?? null) ? $draftSections[$sectionKey] : [];
                     $isReview = $sectionKey === 'review_needed';
+                    $photoPreview = is_array($intakePhotoPreview ?? null) ? $intakePhotoPreview : [];
+                    $showPhotoPreview = $sectionKey === 'photo' && ! empty($photoPreview['show_in_normalized_preview']);
                 @endphp
                 <div @class([
                     'rounded p-3 min-w-0',
@@ -57,7 +59,18 @@
                         @endif
                     </h3>
 
-                    @if ($rows === [])
+                    @if ($showPhotoPreview)
+                        @if (! empty($photoPreview['available']) && ! empty($photoPreview['thumbnail_url']))
+                            <div class="space-y-2 text-xs">
+                                <img src="{{ $photoPreview['thumbnail_url'] }}" alt="Biodata photo candidate preview" class="h-24 w-24 rounded object-cover border border-gray-200 dark:border-gray-600">
+                                <p class="text-gray-500 dark:text-gray-400">Preview only. Not saved as profile photo yet.</p>
+                            </div>
+                        @else
+                            <p class="text-xs text-gray-500 dark:text-gray-400 italic">
+                                {{ $photoPreview['message'] ?? 'Candidate photo extraction is not available yet.' }}
+                            </p>
+                        @endif
+                    @elseif ($rows === [])
                         <p class="text-xs text-gray-500 dark:text-gray-400 italic">
                             @if ($isReview)
                                 {{ __('intake.normalized_draft_no_review_flags') }}

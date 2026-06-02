@@ -252,6 +252,8 @@ class IntakeController extends Controller
 
         $normalizedDraftPreview = app(\App\Services\Intake\IntakePreviewNormalizedDraftPresenter::class)
             ->present($rawOcrTextForPreview, $reviewTextIsBiodata);
+        $intakePhotoPreview = app(\App\Services\Intake\IntakePhotoCandidatePreviewService::class)
+            ->preview($intake);
 
         // Preview-only hints (siblings/relatives/taluka): same text as parse input when available (not stored upload OCR).
         $rawTextForPreviewEnhancements = $reviewTextIsBiodata ? $rawOcrTextForPreview : '';
@@ -1480,6 +1482,7 @@ class IntakeController extends Controller
             'criticalFields',
             'missingCriticalFields',
             'normalizedDraftPreview',
+            'intakePhotoPreview',
             'requiredCorrectionFields',
             'warningFields',
             'data',

@@ -488,7 +488,10 @@
             </div>
         </section>
 
-        @include('intake.partials.normalized-draft-preview', ['normalizedDraftPreview' => $normalizedDraftPreview ?? null])
+        @include('intake.partials.normalized-draft-preview', [
+            'normalizedDraftPreview' => $normalizedDraftPreview ?? null,
+            'intakePhotoPreview' => $intakePhotoPreview ?? null,
+        ])
 
         {{-- Fields with OCR "not found" show empty and get .ocr-field-missing (no placeholder text); server still expects placeholder value on submit when empty. --}}
         <style>
