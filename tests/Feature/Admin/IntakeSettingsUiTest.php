@@ -25,6 +25,7 @@ class IntakeSettingsUiTest extends TestCase
             'intake_parse_retry_limit' => 3,
             'intake_confidence_high_threshold' => 0.85,
             'intake_file_retention_days' => 90,
+            'intake_photo_later_upload_primary_policy' => 'new_upload_primary',
         ], $overrides);
     }
 
@@ -37,7 +38,13 @@ class IntakeSettingsUiTest extends TestCase
             ->assertOk()
             ->assertSee('Processing mode', false)
             ->assertSee('End-to-End', false)
-            ->assertSee('Primary AI provider', false);
+            ->assertSee('Primary AI provider', false)
+            ->assertSee('Biodata photo extraction', false)
+            ->assertSee('Crop candidate profile photo from uploaded biodata image', false)
+            ->assertSee('Show cropped photo thumbnail in Normalized Biodata Draft', false)
+            ->assertSee('Apply cropped biodata photo as profile photo after approval/apply', false)
+            ->assertSee('User-uploaded photo becomes primary later', false)
+            ->assertSee('Keep biodata-cropped photo primary until manually changed', false);
     }
 
     public function test_saving_end_to_end_sarvam_syncs_legacy_keys(): void
@@ -85,5 +92,40 @@ class IntakeSettingsUiTest extends TestCase
         $this->assertSame('tesseract', AdminSetting::getValue('intake_hybrid_ocr_fallback'));
         $this->assertSame('', AdminSetting::getValue('intake_ai_vision_provider'));
         $this->assertSame('tesseract', AdminSetting::getValue('intake_ocr_provider'));
+    }
+
+    public function test_saving_biodata_photo_extraction_settings_persists_enabled_values(): void
+    {
+        $admin = User::factory()->create(['is_admin' => true]);
+
+        $this->actingAs($admin)->post(route('admin.intake-settings.update'), $this->baseIntakePayload([
+            'intake_processing_mode' => 'end_to_end',
+            'intake_primary_ai_provider' => 'openai',
+            'intake_photo_crop_enabled' => 1,
+            'intake_photo_show_in_normalized_preview' => 1,
+            'intake_photo_apply_as_profile_photo' => 1,
+            'intake_photo_later_upload_primary_policy' => 'keep_intake_primary',
+        ]))->assertRedirect(route('admin.intake-settings.index'));
+
+        $this->assertSame('1', AdminSetting::getValue('intake_photo_crop_enabled'));
+        $this->assertSame('1', AdminSetting::getValue('intake_photo_show_in_normalized_preview'));
+        $this->assertSame('1', AdminSetting::getValue('intake_photo_apply_as_profile_photo'));
+        $this->assertSame('keep_intake_primary', AdminSetting::getValue('intake_photo_later_upload_primary_policy'));
+    }
+
+    public function test_saving_biodata_photo_extraction_defaults_persists_disabled_checkboxes(): void
+    {
+        $admin = User::factory()->create(['is_admin' => true]);
+
+        $this->actingAs($admin)->post(route('admin.intake-settings.update'), $this->baseIntakePayload([
+            'intake_processing_mode' => 'end_to_end',
+            'intake_primary_ai_provider' => 'openai',
+            'intake_photo_later_upload_primary_policy' => 'new_upload_primary',
+        ]))->assertRedirect(route('admin.intake-settings.index'));
+
+        $this->assertSame('0', AdminSetting::getValue('intake_photo_crop_enabled'));
+        $this->assertSame('0', AdminSetting::getValue('intake_photo_show_in_normalized_preview'));
+        $this->assertSame('0', AdminSetting::getValue('intake_photo_apply_as_profile_photo'));
+        $this->assertSame('new_upload_primary', AdminSetting::getValue('intake_photo_later_upload_primary_policy'));
     }
 }

@@ -277,6 +277,10 @@ class AdminSettingsController extends Controller
         }
         $retentionDays = (int) AdminSetting::getValue('intake_file_retention_days', '90');
         $keepParsedJson = AdminSetting::getBool('intake_keep_parsed_json_after_purge', true);
+        $photoLaterUploadPrimaryPolicy = (string) AdminSetting::getValue('intake_photo_later_upload_primary_policy', 'new_upload_primary');
+        if (! in_array($photoLaterUploadPrimaryPolicy, ['new_upload_primary', 'keep_intake_primary'], true)) {
+            $photoLaterUploadPrimaryPolicy = 'new_upload_primary';
+        }
 
         return view('admin.intake-settings.index', [
             'dailyLimit' => max(0, $daily),
@@ -299,6 +303,10 @@ class AdminSettingsController extends Controller
             'requireAdminBeforeAttach' => AdminSetting::getBool('intake_require_admin_before_attach', false),
             'fileRetentionDays' => max(0, $retentionDays),
             'keepParsedJsonAfterPurge' => $keepParsedJson,
+            'intakePhotoCropEnabled' => AdminSetting::getBool('intake_photo_crop_enabled', false),
+            'intakePhotoShowInNormalizedPreview' => AdminSetting::getBool('intake_photo_show_in_normalized_preview', false),
+            'intakePhotoApplyAsProfilePhoto' => AdminSetting::getBool('intake_photo_apply_as_profile_photo', false),
+            'intakePhotoLaterUploadPrimaryPolicy' => $photoLaterUploadPrimaryPolicy,
         ]);
     }
 
@@ -348,6 +356,10 @@ class AdminSettingsController extends Controller
             'intake_require_admin_before_attach' => 'nullable|in:0,1',
             'intake_file_retention_days' => 'required|integer|min:0|max:365',
             'intake_keep_parsed_json_after_purge' => 'nullable|in:0,1',
+            'intake_photo_crop_enabled' => 'nullable|in:0,1',
+            'intake_photo_show_in_normalized_preview' => 'nullable|in:0,1',
+            'intake_photo_apply_as_profile_photo' => 'nullable|in:0,1',
+            'intake_photo_later_upload_primary_policy' => 'required|string|in:new_upload_primary,keep_intake_primary',
         ]);
 
         $daily = (string) $request->input('intake_max_daily_per_user', 5);
@@ -412,6 +424,10 @@ class AdminSettingsController extends Controller
         $requireAdminBeforeAttach = $request->has('intake_require_admin_before_attach') ? '1' : '0';
         $fileRetentionDays = (string) $request->input('intake_file_retention_days', 90);
         $keepParsedJson = $request->has('intake_keep_parsed_json_after_purge') ? '1' : '0';
+        $photoCropEnabled = $request->has('intake_photo_crop_enabled') ? '1' : '0';
+        $photoShowInNormalizedPreview = $request->has('intake_photo_show_in_normalized_preview') ? '1' : '0';
+        $photoApplyAsProfilePhoto = $request->has('intake_photo_apply_as_profile_photo') ? '1' : '0';
+        $photoLaterUploadPrimaryPolicy = (string) $request->input('intake_photo_later_upload_primary_policy', 'new_upload_primary');
 
         AdminSetting::setValue('intake_max_daily_per_user', $daily);
         AdminSetting::setValue('intake_max_monthly_per_user', $monthly);
@@ -439,13 +455,17 @@ class AdminSettingsController extends Controller
         AdminSetting::setValue('intake_require_admin_before_attach', $requireAdminBeforeAttach);
         AdminSetting::setValue('intake_file_retention_days', $fileRetentionDays);
         AdminSetting::setValue('intake_keep_parsed_json_after_purge', $keepParsedJson);
+        AdminSetting::setValue('intake_photo_crop_enabled', $photoCropEnabled);
+        AdminSetting::setValue('intake_photo_show_in_normalized_preview', $photoShowInNormalizedPreview);
+        AdminSetting::setValue('intake_photo_apply_as_profile_photo', $photoApplyAsProfilePhoto);
+        AdminSetting::setValue('intake_photo_later_upload_primary_policy', $photoLaterUploadPrimaryPolicy);
 
         AuditLogService::log(
             $request->user(),
             'update_intake_settings',
             'AdminSetting',
             null,
-            "intake_max_daily_per_user={$daily}, intake_max_monthly_per_user={$monthly}, intake_max_pdf_mb={$maxPdfMb}, intake_max_pdf_pages={$maxPdfPages}, intake_max_images_per_intake={$maxImagesPerIntake}, intake_global_daily_cap={$globalDailyCap}, intake_auto_parse_enabled={$autoParse}, intake_processing_mode={$processingMode}, intake_primary_ai_provider={$primaryAiProvider}, intake_hybrid_extraction_provider={$hybridExtraction}, intake_hybrid_parser_provider={$hybridParser}, intake_hybrid_ocr_fallback={$hybridOcrFallback}, intake_active_parser={$activeParser}, intake_ai_vision_provider={$aiVisionProvider}, intake_ocr_provider={$ocrProvider}, intake_ocr_language_hint={$ocrLanguage}, intake_parse_retry_limit={$retryLimit}, intake_confidence_high_threshold={$highThreshold}, intake_auto_apply_fields=".implode(',', $autoApplyFiltered).", intake_require_admin_before_attach={$requireAdminBeforeAttach}, intake_file_retention_days={$fileRetentionDays}, intake_keep_parsed_json_after_purge={$keepParsedJson}",
+            "intake_max_daily_per_user={$daily}, intake_max_monthly_per_user={$monthly}, intake_max_pdf_mb={$maxPdfMb}, intake_max_pdf_pages={$maxPdfPages}, intake_max_images_per_intake={$maxImagesPerIntake}, intake_global_daily_cap={$globalDailyCap}, intake_auto_parse_enabled={$autoParse}, intake_processing_mode={$processingMode}, intake_primary_ai_provider={$primaryAiProvider}, intake_hybrid_extraction_provider={$hybridExtraction}, intake_hybrid_parser_provider={$hybridParser}, intake_hybrid_ocr_fallback={$hybridOcrFallback}, intake_active_parser={$activeParser}, intake_ai_vision_provider={$aiVisionProvider}, intake_ocr_provider={$ocrProvider}, intake_ocr_language_hint={$ocrLanguage}, intake_parse_retry_limit={$retryLimit}, intake_confidence_high_threshold={$highThreshold}, intake_auto_apply_fields=".implode(',', $autoApplyFiltered).", intake_require_admin_before_attach={$requireAdminBeforeAttach}, intake_file_retention_days={$fileRetentionDays}, intake_keep_parsed_json_after_purge={$keepParsedJson}, intake_photo_crop_enabled={$photoCropEnabled}, intake_photo_show_in_normalized_preview={$photoShowInNormalizedPreview}, intake_photo_apply_as_profile_photo={$photoApplyAsProfilePhoto}, intake_photo_later_upload_primary_policy={$photoLaterUploadPrimaryPolicy}",
             false
         );
 

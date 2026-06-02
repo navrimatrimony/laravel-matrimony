@@ -104,6 +104,52 @@
         </div>
 
         <div class="p-4 bg-gray-50 dark:bg-gray-700/30 rounded-lg border border-gray-200 dark:border-gray-600 space-y-3">
+            <p class="font-semibold text-sm text-gray-800 dark:text-gray-100">Biodata photo extraction</p>
+            <p class="text-xs text-gray-500 dark:text-gray-400">
+                These controls prepare future biodata-photo extraction. They do not change text parsing. Applied photos must use the existing photo approval/moderation pipeline.
+            </p>
+            <div class="space-y-3 text-sm">
+                <div>
+                    <label class="inline-flex items-center gap-2">
+                        <input type="checkbox" name="intake_photo_crop_enabled" value="1" {{ $intakePhotoCropEnabled ? 'checked' : '' }} class="rounded border-gray-300 dark:border-gray-600 dark:bg-gray-700">
+                        <span class="text-gray-800 dark:text-gray-100">Crop candidate profile photo from uploaded biodata image</span>
+                    </label>
+                    <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                        Only applies to uploaded image biodata when a reliable candidate photo crop is available. Text-only intake has no photo candidate.
+                    </p>
+                </div>
+                <div>
+                    <label class="inline-flex items-center gap-2">
+                        <input type="checkbox" name="intake_photo_show_in_normalized_preview" value="1" {{ $intakePhotoShowInNormalizedPreview ? 'checked' : '' }} class="rounded border-gray-300 dark:border-gray-600 dark:bg-gray-700">
+                        <span class="text-gray-800 dark:text-gray-100">Show cropped photo thumbnail in Normalized Biodata Draft</span>
+                    </label>
+                    <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                        Preview-only. This does not save the photo to the profile.
+                    </p>
+                </div>
+                <div>
+                    <label class="inline-flex items-center gap-2">
+                        <input type="checkbox" name="intake_photo_apply_as_profile_photo" value="1" {{ $intakePhotoApplyAsProfilePhoto ? 'checked' : '' }} class="rounded border-gray-300 dark:border-gray-600 dark:bg-gray-700">
+                        <span class="text-gray-800 dark:text-gray-100">Apply cropped biodata photo as profile photo after approval/apply</span>
+                    </label>
+                    <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                        When implemented later, this must go through the existing photo approval/moderation pipeline based on admin photo settings.
+                    </p>
+                </div>
+                <div>
+                    <label class="block font-medium text-gray-700 dark:text-gray-200 mb-1">Later user photo upload policy</label>
+                    <select name="intake_photo_later_upload_primary_policy" class="w-full max-w-md rounded border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 px-2 py-1">
+                        <option value="new_upload_primary" {{ $intakePhotoLaterUploadPrimaryPolicy === 'new_upload_primary' ? 'selected' : '' }}>User-uploaded photo becomes primary later</option>
+                        <option value="keep_intake_primary" {{ $intakePhotoLaterUploadPrimaryPolicy === 'keep_intake_primary' ? 'selected' : '' }}>Keep biodata-cropped photo primary until manually changed</option>
+                    </select>
+                    <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                        Default is user-uploaded photo becomes primary later. If biodata-cropped photo is the only photo, it may be primary until another photo is uploaded.
+                    </p>
+                </div>
+            </div>
+        </div>
+
+        <div class="p-4 bg-gray-50 dark:bg-gray-700/30 rounded-lg border border-gray-200 dark:border-gray-600 space-y-3">
             <p class="font-semibold text-sm text-gray-800 dark:text-gray-100">AI &amp; OCR behaviour</p>
             <div class="space-y-3 text-sm">
                 <label class="inline-flex items-center gap-2">
@@ -223,4 +269,3 @@
     </form>
 </div>
 @endsection
-
